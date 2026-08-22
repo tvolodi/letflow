@@ -162,3 +162,39 @@ corrected_by:
               # correction, and added the standing detection mechanism
               # (`mix letflow.check_registration`) so the next form-blind
               # all-clear is caught by a gate instead of by chance
+
+correction_addendum: >
+  ADDENDUM 2026-08-22T03:23:01Z, same run (WF03-ISS0231-20260822). The
+  `correction:` field above says the 21 are unregistered and "still are". That
+  was true when it was written and is NO LONGER TRUE. This addendum is appended
+  rather than editing the correction, for the same reason the correction quotes
+  the false sentence instead of deleting it: a record that silently updates
+  itself teaches nobody anything.
+
+  WHAT CHANGED. While this run was in flight, a sibling session landed c84c27a
+  -- "docs(WF-01): put REQ-115..139 through WF-01 and register all 25 in
+  letflow-queue" (PR #495) -- on `main`. Re-measured against origin/main
+  immediately after rebasing onto it: the `# impl_order: UNREGISTERED` marker
+  count is 0, the registered field-form count is 115, and the requirement-entry
+  count is 115. This run's own detector, run on the rebased tree, agrees:
+  "115 entries = 115 registered + 0 deferred + 0 neither + 0 unclassified".
+
+  So REQ-115..135 are now genuinely registered, by real `register_task` calls
+  rather than by anyone's assertion. The original filing's guess that "That
+  WF-01 run is fixing the 21 requirements' registration" was correct; that run
+  simply had not started when ISS-0231 was dispatched, which is why ORCH
+  verified no such branch existed at that moment and correctly told this run
+  not to wait for it.
+
+  WHY THIS DOES NOT VACATE THE CORRECTION. The correction is about a FALSE
+  CLAIM, not about a count. ISS-0221's note asserted a state that did not hold
+  at the moment of assertion, and that remains true no matter what later work
+  fixed. Had the note been accurate, `main` would have carried 21 unclaimable
+  requirements for a further day with an all-clear on record telling the next
+  reader not to look.
+
+  AND IT IS WHY THE DETECTOR MATTERS MORE NOW, NOT LESS. With 0 deferred there
+  is nothing left for a human to notice. The only thing standing between this
+  repo and a silent recurrence is the gate ISS-0231 shipped --
+  `mix letflow.check_requirements_registration`, wired into `mix letflow.check`
+  -- which hard-fails the moment any entry carries no `impl_order` line at all.

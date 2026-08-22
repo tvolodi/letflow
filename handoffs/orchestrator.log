@@ -1306,3 +1306,5 @@
 2026-08-22T17:27:27Z | DISPATCH | WF-03 | WF03-ISS0279-20260822 | ORCH -> TEST-RUNNER | step-04c-test-runner.json PENDING committed at dispatch time
 2026-08-22T17:38:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0279-20260822 | TEST-RUNNER -> ORCH | step-04c-test-runner.json PASS. Full suite 1797/1801 (4 pre-existing/unrelated failures, none referencing audit_issue_closures). No regression from this branch.
 2026-08-22T17:38:44Z | DISPATCH | WF-03 | WF03-ISS0279-20260822 | ORCH -> ISSUE-FIXER | step-05-issue-fixer.json PENDING committed at dispatch time
+2026-08-22T17:41:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0279-20260822 | ISSUE-FIXER -> ORCH | step-05-issue-fixer.json PASS. docs/issues/ISS-0279.yaml resolved; GH#551 closed with evidence-citing comment.
+2026-08-22T17:41:42Z | DISPATCH | WF-03 | WF03-ISS0279-20260822 | ORCH -> ELIXIR-DEV | step-final-git-merge.json PENDING committed at dispatch time

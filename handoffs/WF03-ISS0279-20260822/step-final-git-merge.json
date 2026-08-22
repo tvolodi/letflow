@@ -1,0 +1,41 @@
+{
+  "handoff_id": "stepfinal-WF03-ISS0279-20260822",
+  "run_id": "WF03-ISS0279-20260822",
+  "workflow_id": "WF-03",
+  "step": "Final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0279-20260822/step-final-git-merge.json",
+  "created_at": "2026-08-22T17:41:42Z",
+  "started_at": "2026-08-22T17:41:42Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0279": "See handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json context.requirement_text for the full original text."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0279-20260822/step-00-git-setup.json",
+      "handoffs/WF03-ISS0279-20260822/step-05-issue-fixer.json"
+    ],
+    "artifacts_in": [],
+    "owned_modules": ["docs/agents/protocols/ISSUE_QUEUE.md", "docs/agents/workflows/WF-03_issue_resolving.md", "lib/mix/tasks/letflow.audit_issue_closures.ex"]
+  },
+  "task": {
+    "description": "Run fn:git-merge per docs/agents/protocols/GIT_MERGE.md for run_id WF03-ISS0279-20260822, branch feature/WF03-ISS0279-20260822. All upstream gates already PASS: Step 1 diagnosis, Step 2/2b design (PASS after 1 rework), Step 3 implementation, Step 3b SECURITY-REVIEWER, Step 3c REVIEWER, Step 4/4b test-design (mutation-verified), Step 4c full-suite test-run (1797/1801, 4 pre-existing/unrelated failures), Step 5 issue closed (GH#551, docs/issues/ISS-0279.yaml). Rebase onto origin/main, re-verify format/compile/test post-rebase per the protocol's step 5d, push, open PR titled 'fix: issue-closure evidence gate + mix letflow.audit_issue_closures [WF03-ISS0279-20260822]', merge squash, clean up locally. Use PR title prefix 'fix' (WF-03 convention). Claim by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "git branch --show-current == feature/WF03-ISS0279-20260822 before starting",
+      "Rebase onto origin/main clean or conflicts resolved per protocol (none expected -- no other run touched these files)",
+      "Post-rebase mix format --check-formatted, mix compile --warnings-as-errors, mix test all checked per protocol step 5d, failures attributed structurally not by count",
+      "PR opened and squash-merged",
+      "Local cleanup: git checkout main, pull --ff-only, branch -d feature/WF03-ISS0279-20260822, verify clean working tree"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

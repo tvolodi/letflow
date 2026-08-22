@@ -63,16 +63,46 @@ Two consequences that shape everything below:
 
 ### 1.2 What a real deferral looked like
 
+> **CORRECTED AT THE STEP-2b GATE (CODE-DESIGN-VALIDATOR).** The original text of this
+> section, of §3.4's closing sentence, of §3.3's `:cancelled` bullet, and of MS1's row all
+> asserted that the 21 historical deferrals were **S8/S9** and that the design "must
+> retroactively classify those 21 as legitimate or it is wrong." That is measurably false
+> and the bar it set was unmet by the design's own ruling. Re-derived below from
+> `75f553d` rather than inherited. The ruling of §3.3 is **unchanged and survives**; only
+> the supporting evidence and the self-imposed bar are corrected.
+
 All 21 pre-PR#495 deferrals carried one identical rationale:
 
 ```
     # impl_order: UNREGISTERED -- see the S8 note above
 ```
 
-Every real deferral this project has ever had was **stage-scoped** — a pointer to a
-stage-level block note deferring a whole S8/S9/S4 batch pending the stage. That is direct
-corpus evidence that a stage-activity signal is the right primary axis (§3), and it means
-the design must retroactively classify those 21 as **legitimate** or it is wrong.
+Their actual **stage composition**, measured at `75f553d` (one awk pass over the entry
+blocks, emitting `stage status deferred?` at each entry boundary):
+
+| ids | stage | own status | that stage's statuses at `75f553d` | stage `:active` per §3.3? |
+|---|---|---|---|---|
+| REQ-115 … REQ-123 (9) | **S8** | pending | 10 pending, 1 cancelled | **inactive** |
+| REQ-124 … REQ-127 (4) | **S9** | pending | 4 pending | **inactive** |
+| REQ-128 … REQ-135 (8) | **S4** | pending | **10 done**, 13 pending, 2 cancelled | **ACTIVE** |
+
+So the corpus splits **13 legitimate / 8 stale**, not 21 legitimate. And the 8 are stale
+for a real reason, not a rule defect: they are **S4** requirements whose rationale reads
+*"see the S8 note above"* — a stage-scoped pointer aimed at the wrong stage, inside a
+stage that was already 10 requirements deep into being worked. They were subsequently
+registered (all 115 entries carry an `impl_order` today, measured §1.1), which confirms
+they were real debt rather than legitimate deferrals.
+
+**This strengthens the design rather than refuting it.** The correct statement of the
+corpus bar is:
+
+> The rule must classify the 13 S8/S9 deferrals **legitimate** and would have flagged the
+> 8 S4 deferrals **stale** — weeks before they were noticed and registered by hand. That
+> is the only piece of real historical evidence this fix has that the gate does useful
+> work, and §7.4 gains a fixture (**F-HISTORICAL-S4-STALE**) reproducing it.
+
+The unchanged conclusion: every real deferral was **stage-scoped**, so a stage-activity
+signal is the right primary axis (§3).
 
 ---
 
@@ -141,9 +171,12 @@ Justification, status by status:
   active, which flags every deferral that has ever existed (mutant MS2).
 - **`:cancelled` — NOT active. Abandonment is not activity.** This is not a judgement
   call; it is measured. S8 holds `1 cancelled + 10 pending`. If `cancelled` conferred
-  activity, S8 would be "active" and **all 21 historical deferrals — every real deferral
-  this project has ever had — would be flagged stale**. A rule that is wrong about 21 of
-  21 known-good cases is refuted (mutant MS1).
+  activity, S8 would become "active" and its **9 historical deferrals would flip from
+  legitimate to stale**, taking the corpus from 13-legitimate/8-stale (§1.2, the correct
+  answer) to 4-legitimate/17-stale. S9 (4 pending, 0 cancelled) is unaffected by this
+  mutant, which is why MS1's detector set is stage-specific. Wrong about 9 of the 13
+  known-good cases is refuted (mutant MS1).
+  *(Numbers corrected at the Step-2b gate; the ruling is unchanged.)*
 
 ### 3.4 Applied to the live corpus (the correctness check on the rule itself)
 
@@ -158,8 +191,10 @@ Justification, status by status:
 | S8 | 10 pending, 1 cancelled | **inactive** |
 | S9 | 4 pending | **inactive** |
 
-This is the correct real-world answer, and it retroactively classifies all 21 historical
-S8/S9 deferrals as **legitimate** — the corpus check §1.2 demanded.
+This is the correct real-world answer. Applied retroactively at `75f553d` it classifies
+the **13** S8/S9 deferrals `:legitimate` and the **8** S4 deferrals `:stale` — which is
+the right verdict on both halves, per the corrected §1.2. (The original text of this
+sentence claimed all 21 legitimate; corrected at the Step-2b gate.)
 
 A stage with **no** requirements (S5/S6/S7) is `:inactive` by the same rule, not by a
 special case: the empty set contains no active status. No exception is written for it.
@@ -170,6 +205,23 @@ The entry under test is **excluded from its own stage's activity set**. Without 
 deferred requirement that is itself `done` would activate its own stage and flag itself —
 a self-reference paradox that produces an unfixable red. It costs one filter and removes
 the case entirely (mutant MS10).
+
+**Checked at the Step-2b gate: this is not gameable.** The exclusion is of *the entry
+under test from its own computation*, not of deferred entries generally, so two deferred
+entries A and B in one stage do **not** mutually excuse each other — A's fold still sees
+B and B's still sees A. Suppressing a real staleness would require marking the entry
+`done`/`in_progress`/`blocked`, which is a far larger and separately visible lie.
+
+**One residual, closed by reporting rather than by a rule** *(added at the Step-2b
+gate)*: self-exclusion means a *lone* deferred entry whose own status is `:done`,
+`:in_progress`, or `:blocked`, in a stage with no other active sibling, is judged
+`:legitimate`. That combination — a requirement simultaneously worked and marked
+never-registered — is an anomaly worth seeing, but it is **registration**-shaped, not
+staleness-shaped, and inventing a rule for it here would widen this gate past its issue.
+So the deferral roster (§5) **annotates** any deferred entry whose own status is in
+`@active_statuses` with `(NOTE: deferred entry is itself <status>)`. Printed, never
+gating — the visible-debt principle, applied to the one case this rule deliberately
+declines to judge.
 
 ### 3.6 Undecidable deferrals
 
@@ -360,6 +412,17 @@ Four properties, each load-bearing:
   rejected — it would be an unfalsifiable self-license.
 - **Free text after it is still required**, so R3's spirit (a human-readable reason)
   survives the hatch rather than being replaced by it.
+- **(fifth property, ADDED AT THE STEP-2b GATE) The hatch graph must be acyclic** (§5,
+  **S6**). The four properties above are individually sound but were *jointly*
+  insufficient: `REQ-A -- blocked-by: REQ-B` together with `REQ-B -- blocked-by: REQ-A`
+  satisfies every one of them — both ids exist, neither is a self-reference, both
+  anchored, both carry free text, and **neither blocker is ever `done` or `cancelled`
+  precisely because each is waiting on the other**. The pair licenses itself forever. A
+  longer chain (A→B→C→A) does the same. Without S6, D6's central claim — *"not an
+  exception list; a machine-checkable assertion that expires on its own"* — is false for
+  any cycle, and I5 is defeated by two lines of rationale text. The one-step case was
+  already caught (self-reference, S3); S6 generalises it to length ≥ 2, which is the same
+  defect and needs the same answer.
 
 **Rejected alternatives, named so nobody re-opens them silently:**
 
@@ -409,6 +472,14 @@ sentence, and (c) the `blocked-by: REQ-NNN` grammar. It registers nothing and ch
   yields a recognised status. A scan finding nothing is never a silent green pass. This
   duplicates part of the registration check's R5 deliberately: the new module must be a
   correct pure function on its own, not correct only because another task ran first.
+- **S6 — the `blocked-by:` graph over deferred entries is acyclic.** *(Added at the
+  Step-2b gate — see §D6's fifth property.)* Violated when following `blocked-by:` edges
+  from a deferred entry returns to that entry. The one-step case (self-reference) is
+  already S3's; S6 is the ≥2-step case, and it is the same defect: a cycle is a set of
+  deferrals that mutually license each other and, because no member can ever reach
+  `:done` or `:cancelled` while it waits on the others, **never expires**. That is a
+  permanent free pass — exactly what D6 claims the hatch is not, and what I5 forbids. The
+  message names every id on the cycle in order.
 
 ### Always printed, never gating
 
@@ -426,7 +497,7 @@ On today's corpus both blocks render with an empty roster and the §3.4 table, e
 
 ### Exit contract
 
-Exits `0` iff S1–S5 all hold; `Mix.raise/1` otherwise, naming every violating entry by
+Exits `0` iff S1–S6 all hold; `Mix.raise/1` otherwise, naming every violating entry by
 exact `REQ-NNN` and rule id, in the shape `format_violation/1` already establishes:
 `[S1] REQ-118 (line 5602): ...`.
 
@@ -461,7 +532,7 @@ exact `REQ-NNN` and rule id, in the shape `format_violation/1` already establish
       }
 
 @type violation :: %{
-        rule: String.t(),               # "S1".."S5"
+        rule: String.t(),               # "S1".."S6"
         id: String.t() | nil,           # REQ-NNN, or nil for the file-level rule S5
         line: pos_integer() | nil,
         message: String.t()
@@ -487,7 +558,7 @@ Pure, and the whole point of the design. Takes **content, not a path**, so herme
 fixture strings go straight in (§1.1's consequence; D1). Internally calls
 `Mix.Tasks.Letflow.CheckRequirementsRegistration.scan/1` on the same content, reads
 `:stage`, `:state`, `:rationale`, and the newly-added `:status` off the returned entries,
-derives stage activity, classifies every `:deferred` entry, and collects S1–S5. Never
+derives stage activity, classifies every `:deferred` entry, and collects S1–S6. Never
 raises on content — a malformed corpus is expressed as violations in the returned audit.
 Raises only on a non-binary argument.
 
@@ -509,6 +580,14 @@ Pure, single-entry — the analogue of `classify_entry/1`, and the unit the fixt
 and most mutants target. Returns exactly one `verdict` per call, with `reason` populated
 in every branch (including `:legitimate`, so a green roster still explains itself). Applies
 self-exclusion (§3.5) against the `stage_facts` witnesses.
+
+**S6 is deliberately NOT this function's job** *(clarified at the Step-2b gate)*. Cycle
+detection over the `blocked-by:` graph is inherently multi-entry and cannot be decided
+from one entry plus a status map, so it is collected in `audit/1` over the full deferral
+list after every entry has been classified, exactly as `duplicate_id_violations/1` sits
+outside `classify_entry/1` in the precedent module. `classify_deferral/3` stays
+single-entry and total; a cycle member's own `verdict` remains whatever the hatch rules
+say, and the S6 violation is what gates.
 
 ```
 @spec parse_scope(rationale :: String.t() | nil) :: scope()
@@ -573,9 +652,13 @@ that dropping the indentation rule sweeps them in.
 | `docs/issues/ISS-0258.yaml` | the issue record — does not exist yet in this worktree (verified); created by the run |
 | `test/mix/tasks/letflow_check_deferral_staleness_test.exs` | **new** — §7, written by TEST-DESIGNER at Step 4, not by ELIXIR-DEV |
 
-**Nothing else.** In particular: no edit to `docs/requirements.yaml`'s data of any kind,
-no `impl_order` or `status` value added, removed, or altered anywhere, and no call to
-`letflow-queue`.
+| `docs/requirements.yaml` | **line 8 only** — the `# Status values:` comment legend gains `cancelled` (OQ-3, upheld at the Step-2b gate). Comment text only. |
+
+**Nothing else.** In particular: no edit to `docs/requirements.yaml`'s **data** of any
+kind — no `impl_order` or `status` value added, removed, or altered anywhere, no entry
+added or removed — and no call to `letflow-queue`. The line-8 row above is the sole
+exception and is confined to comment text; the row was added at the Step-2b gate, where
+the table and OQ-3's ruling were found to contradict each other.
 
 ### 6.5 Moduledoc hazard (must be handled at implementation time)
 
@@ -630,8 +713,8 @@ detects is a coverage hole to close before Step 4 passes.
 
 | # | mutant | what it reproduces | must be caught by |
 |---|---|---|---|
-| **MS1** | Add `:cancelled` to `@active_statuses`. | The refuted rule of §3.3 — S8 (1 cancelled) becomes active and **all 21 historical deferrals flag stale**. | F-CANCELLED-NOT-ACTIVE, F-S8-SHAPE-LEGIT |
-| **MS2** | Add `:pending` to `@active_statuses`. | Every stage with any requirement is active ⇒ every deferral ever written is stale ⇒ the permanently-red gate D3-of-ISS-0231 rejects. | F-PENDING-NOT-ACTIVE, F-S8-SHAPE-LEGIT, T-LIVE-ACTIVITY |
+| **MS1** | Add `:cancelled` to `@active_statuses`. | The refuted rule of §3.3 — S8 (1 cancelled, 10 pending) becomes active and its **9 historical deferrals flip legitimate → stale**. *(Row corrected at the Step-2b gate: S9 has no `cancelled`, so this mutant does NOT move S9, and the 8 S4 deferrals were already stale — the discriminating set is S8's 9.)* | F-CANCELLED-NOT-ACTIVE, F-S8-SHAPE-LEGIT, F-HISTORICAL-S4-STALE |
+| **MS2** | Add `:pending` to `@active_statuses`. | Every stage with any requirement is active ⇒ every deferral ever written is stale (including all 13 known-good S8/S9 ones) ⇒ the permanently-red gate D3-of-ISS-0231 rejects. | F-PENDING-NOT-ACTIVE, F-S8-SHAPE-LEGIT, T-LIVE-ACTIVITY |
 | **MS3** | **Remove `:done` from `@active_statuses`.** | **ISS-0258 reproduced inside its own fix** — nothing is ever active, so no deferral is ever stale and the gate is green forever. **The mandatory mutant**; the analogue of ISS-0231's M1. | F-DONE-IS-ACTIVE, F-STALE-BASIC, T-LIVE-ACTIVITY |
 | **MS4** | Extract `status` as rest-of-line instead of first token (§6.3). | The 8 real `cancelled  # ...` entries become `:unknown` ⇒ S4 fires ⇒ red on day one for a non-reason. | F-STATUS-TRAILING-COMMENT, T-LIVE-GREEN, T-LIVE-STATUS-TOTAL |
 | **MS5** | Read `status:` from unattributed lines (drop the ≥4-space rule). | A 2-space prose block-note `status:` swept into an entry. | F-STATUS-BLOCK-NOTE, T-LIVE-STATUS-TOTAL |
@@ -643,6 +726,9 @@ detects is a coverage hole to close before Step 4 passes.
 | **MS11** | Demote S1 from the violation list to a printed advisory (keep the roster). | The whole gate becomes a report nobody's exit code depends on — ISS-0258's own root cause, one level up again. | F-STALE-EXITS |
 | **MS12** | Treat a deferred entry with no `stage:` as legitimate instead of S2. | A silent exemption reachable by deleting one field. | F-DEFERRED-NO-STAGE |
 | **MS13** | Compare stage ids by prefix/`String.starts_with?` rather than exact equality. | `S1` matching `S10`; activity leaking between stages. | F-STAGE-EXACT-MATCH |
+| **MS14** | *(added at the Step-2b gate)* Accept a `blocked-by:` cycle — drop S6, or implement it as self-reference only. | Two deferrals licensing each other forever (§D6 fifth property). ISS-0258's "green forever" property reintroduced in the one construct that was supposed to be self-expiring. | F-HATCH-CYCLE-2, F-HATCH-CYCLE-3 |
+| **MS15** | *(added at the Step-2b gate)* Drop **S5** — return a green zero-deferral audit for content with no `requirements:` key / zero entries. | A scan that finds nothing passes silently: the ISS-0221 all-clear shape. **S5 was the one rule in §5 with no mutant row**, the exact coverage hole ISS-0231's validator had to hand-write MR4/MR6 for. | F-NO-REQUIREMENTS-KEY, F-EMPTY-SECTION |
+| **MS16** | *(added at the Step-2b gate)* Accept `blocked-by: REQ-042` with no trailing free text. | D6's fourth property, which likewise had **no mutant row**: the hatch degenerates into a bare id and R3's human-readable-reason requirement is silently replaced rather than preserved. | F-HATCH-NO-RATIONALE |
 
 ### 7.4 Test inventory (specs, for TEST-DESIGNER to build from)
 
@@ -656,7 +742,16 @@ minimal corpus with a `requirements:` key and enough entries to make the point.
   ⇒ `:legitimate`, zero violations.
 - **F-S8-SHAPE-LEGIT** — a fixture reproducing the real S8 shape (10 `pending`, 1
   `cancelled`, one entry deferred with `-- see the S8 note above`) ⇒ `:legitimate`. This is
-  the "must not be wrong about the 21 known-good cases" test.
+  the "must not be wrong about the **13** known-good cases" test (count corrected at the
+  Step-2b gate, per §1.2).
+- **F-HISTORICAL-S4-STALE** *(added at the Step-2b gate)* — the other half of the same
+  historical corpus, and the **only real-world evidence this gate does useful work**:
+  reproduce the S4 shape at `75f553d` (a stage holding `done` siblings, plus an entry
+  deferred with the wrong-stage rationale `-- see the S8 note above`) ⇒ `:stale`, an S1
+  violation. Grounded in REQ-128…REQ-135, which were real debt and were later registered
+  by hand. Pair it with F-S8-SHAPE-LEGIT in one test group so the 13/8 split is asserted
+  as a whole — a rule that gets one half right and the other wrong is not detected by
+  either fixture alone.
 - **F-DONE-IS-ACTIVE / F-PENDING-NOT-ACTIVE / F-CANCELLED-NOT-ACTIVE / F-BLOCKED-IS-ACTIVE
   / F-IN-PROGRESS-IS-ACTIVE** — one per status, asserting `stage_activity/1`'s derived
   `activity` directly. These pin §3.3's ruling value by value.
@@ -681,6 +776,12 @@ minimal corpus with a `requirements:` key and enough entries to make the point.
 - **F-HATCH-DANGLING** — `blocked-by: REQ-999` (absent from the corpus) ⇒ S3 violation, and
   **not** treated as a valid hatch.
 - **F-HATCH-SELF** — `blocked-by:` naming the entry's own id ⇒ S3 violation.
+- **F-HATCH-CYCLE-2** *(added at the Step-2b gate)* — `REQ-A -- blocked-by: REQ-B -- <text>`
+  and `REQ-B -- blocked-by: REQ-A -- <text>`, both deferred, both `pending`, both in an
+  active stage ⇒ an **S6** violation naming both ids, **not** two mutually-legitimate
+  entries. This is the fixture that proves D6's self-expiry claim is actually true.
+- **F-HATCH-CYCLE-3** *(added at the Step-2b gate)* — the same over a three-node chain
+  A→B→C→A, so the implementation cannot pass by special-casing pairs.
 - **F-HATCH-ANCHOR** — a rationale whose *middle* contains `blocked-by: REQ-042`, e.g.
   `-- unlike the blocked-by: REQ-042 cases, this one waits on S8` ⇒ scope `:stage_scoped`,
   hatch **not** activated, and the entry judged on stage activity alone.
@@ -747,7 +848,9 @@ over-firing guards plus genuine signal for the status-parsing and activity halve
   never-expiring half changes.
 - **I5.** **No exception list of any kind** — no grandfathering, no wildcard, no id
   allowlist, no prefix suppression. The `blocked-by:` hatch is not an exception list: it
-  is a machine-checkable assertion that expires on its own (D6).
+  is a machine-checkable assertion that expires on its own (D6) — **and S6 is what makes
+  that sentence true**, since a `blocked-by:` cycle would otherwise be an exception list
+  of size ≥ 2 written in rationale text (added at the Step-2b gate).
 - **I6.** The gate is green on `main` at the moment it lands — measured, vacuously so, on
   a corpus with 0 deferrals and 0 unknown statuses — so **any future red is a new fact**.
 - **I7.** `normalise_status/1` is total, and its non-member branch is `:unknown`, which
@@ -769,6 +872,21 @@ discovered as an unstated assumption mid-build.
   `{done, in_progress}`. Measured impact of the difference **today: zero** — no requirement
   anywhere is `blocked`. Reversal is one token in `@active_statuses` plus flipping
   F-BLOCKED-IS-ACTIVE. **REVIEWER should confirm or reverse explicitly at the Step-3 gate.**
+  **STEP-2b GATE: the override is UPHELD, and the flag is closed here rather than carried
+  to Step 3.** Re-measured independently: `grep -cE '^ {4}status: (in_progress|blocked)'
+  docs/requirements.yaml` = **0**, so the override changes nothing on today's corpus. On
+  the merits: the property §3.3 names is *"has this stage been engaged with"*, and
+  `blocked` is not reachable from the initial state without someone starting the work and
+  recording an impediment — it is strictly more engagement than `done` requires in the
+  sense that matters here (a person looked at it). The asymmetric-cost argument also
+  holds as stated and does not rest on the disputed corpus numbers §1.2 corrected: a
+  missed stale deferral is silent and unfalsifiable, a false positive is named by
+  `REQ-NNN`, printed with its witnesses, and closable in one line. The one way the
+  argument could fail — `blocked` being a *long-lived parking state* that means "nobody
+  is working this", which would make it closer to `pending` — is not this project's
+  usage: `docs/requirements.yaml` line 8 lists it as a work state alongside
+  `in_progress`, and it has never been used. If that usage ever emerges, MS2's reasoning
+  applies to `blocked` too and the token comes out.
 - **OQ-2 (blast radius of S4).** Should the unknown-status rule apply to all 115 entries or
   only to entries whose status feeds a deferral's stage? **RULED: all entries.** An
   unrecognised status is a corpus defect regardless of who reads it, the scoped version is
@@ -784,6 +902,19 @@ discovered as an unstated assumption mid-build.
   value the file's own legend denies, and a future reader tightening the legend would
   silently make 8 entries `:unknown`. If REVIEWER prefers this as a separate doc issue, S4's
   known set is unaffected either way; only the doc edit moves.
+  **STEP-2b GATE: UPHELD — in scope for this run, and `docs/requirements.yaml` is added to
+  §6.4's touched-files table for line 8 only.** Verified independently: line 8 reads
+  `# Status values: pending | in_progress | done | blocked`, and 8 entries carry
+  `status: cancelled`. Splitting this into a separate doc issue would mean this run
+  knowingly ships a gate whose accepted-value set contradicts the legend of the very file
+  it gates, with the contradiction parked in a queue — and a later reader who "fixes" the
+  divergence by trusting the legend turns 8 real entries `:unknown` and reds the gate for
+  a non-reason, which is MS4's failure mode arriving by a different road. It is one word
+  in a comment, it changes no requirement data, and it is *caused by* this run's rule. It
+  belongs here. **This is the one qualification to §6.4's "no edit to
+  `docs/requirements.yaml` of any kind": the edit is to line 8's comment legend only — no
+  `status:` value, no `impl_order`, no entry data.** ELIXIR-DEV must not read that
+  sentence as permission to touch anything else in the file.
 - **OQ-4 (alias slot).** Position 3 is recommended and justified (D5), but alias ordering is
   decision-record territory (0005, which legislates slot 1 only). Following ISS-0231's OQ-2
   precedent, the design is indifferent to the exact index and firm only about being in the
@@ -821,3 +952,40 @@ discovered as an unstated assumption mid-build.
 | Testability against a zero-signal live corpus | §D1 (public content-in core), §7.2, §7.3 (13 traps), §7.4 |
 | The moduledoc self-check hazard | §6.5 |
 | The module-name collision class | §D2 |
+| The hatch must not become a permanent free pass | §D6 fifth property, §5 **S6**, MS14 (added at the Step-2b gate) |
+
+---
+
+## 11. Step-2b gate record (CODE-DESIGN-VALIDATOR)
+
+**Verdict: PASS**, on the artefact *as corrected in this file*. Every correction below was
+determined by a measurement run in this worktree, and none changes a public signature, a
+type shape, the exit-code contract, or the §3.3 ruling. Corrections were applied in place
+rather than bounced, per the ISS-0231 design-gate precedent (which demoted that design's
+R5 totality claim and narrowed its M3 the same way).
+
+| # | severity | finding | correction |
+|---|---|---|---|
+| 1 | **MAJOR (false claim; rule survives)** | §1.2/§3.4/§3.3/MS1 asserted the 21 historical deferrals were S8/S9 and that all 21 must classify `:legitimate` or the design "is wrong". Re-derived at `75f553d`: they are **9 S8 + 4 S9 + 8 S4**, and S4 held **10 `done`** ⇒ under this design's own ruling those 8 are `:stale`. The self-imposed bar was unmet and the supporting evidence false. The *rule* is unaffected and is in fact vindicated — the 8 were real debt, later registered by hand. | §1.2 rewritten with the measured table; §3.4 and §3.3's `:cancelled` bullet re-stated as 13/8; MS1's row re-scoped to S8's 9 (S9 has no `cancelled`, so that mutant never moved S9); new fixture **F-HISTORICAL-S4-STALE**, paired with F-S8-SHAPE-LEGIT. |
+| 2 | **MAJOR** | D6's four hatch properties are jointly insufficient. A `blocked-by:` **cycle** (A→B→A, or longer) satisfies every one of them and never expires, because no member can reach `done`/`cancelled` while it waits on the others. D6's central claim ("expires on its own") and I5 were both false for that case. | New rule **S6** (acyclic hatch graph); D6 fifth property; I5 amended; placement clarified as `audit/1`, not `classify_deferral/3`; mutant **MS14**; fixtures **F-HATCH-CYCLE-2** / **F-HATCH-CYCLE-3**. |
+| 3 | MINOR | Two rules had **no mutant row** — the exact coverage-hole class ISS-0231's own gate had to hand-write MR4/MR6 for. **S5** (empty/shapeless corpus) and D6's fourth property (free text still required) had fixtures but nothing forcing those fixtures to discriminate. | Mutants **MS15** and **MS16**, pointed at the existing fixtures. |
+| 4 | MINOR | §6.4's "no edit to `docs/requirements.yaml` of any kind" contradicted OQ-3's ruling that line 8's legend is edited in this run. | Table row added, scoped to comment text only, with an explicit warning against reading it wider. |
+| 5 | MINOR | Self-exclusion (§3.5) leaves one unjudged case: a *lone* deferred entry whose own status is itself active reads `:legitimate`. Not gameable (checked), and registration-shaped rather than staleness-shaped, so not worth a new rule. | Roster **annotation** specified — printed, never gating. |
+
+**Rulings that stood unchanged, each re-measured rather than inherited:** `blocked` in the
+active set (OQ-1 **upheld and closed here** — 0 requirements are `in_progress` or
+`blocked`, measured); `cancelled` out (upheld — the reasoning is corrected, the ruling is
+not); the **8** trailing-comment `status:` lines (counted independently: 7 + 1 = 8, all at
+exactly 4 spaces, 0 deeper — §6.3 / MS4 / F-STATUS-TRAILING-COMMENT close it); `:unknown`
+hard-failing as the structural descendant of `:unclassified` (S4 / I7 — ISS-0231's defence
+is present, not merely claimed); the vacuously-green live corpus (0 deferral markers,
+verified) and the content-in `audit/1` that is the only answer to it; MS3 and MS9 as the
+two mandatory mutants; D4's `status` addition (verified against the shipped source — it
+touches no `:deferred` path, none of R1–R6, and not the exit contract, and the existing
+test file contains **zero** whole-map equality assertions or exhaustive entry-map matches,
+so "provably bounded" is true in fact); slot 3 of the `letflow.check` alias (alias contents
+verified verbatim in `mix.exs`; decision record 0005 legislates the **first** entry only,
+so nothing on record is re-decided); the module name (no branch, tracked file, or existing
+Mix task in the fleet uses `staleness` or `deferral`); and the absence of implementation
+code (zero `def` / `defp` / `defmodule` bodies — signatures, module attributes, and type
+shapes only).

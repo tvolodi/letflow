@@ -1,0 +1,216 @@
+report_id: report-20260823-WF02-REQ076-20260822
+agent: TEST-RUNNER
+requirement: REQ-076
+workflow_step: WF-02 Step 4 (test run)
+branch: feature/WF02-REQ076-20260822
+date: 2026-08-23
+command: "scripts/test_parallel.sh"
+
+toolchain:
+  platform: "Windows 11, Elixir 1.20.3 (Erlang/OTP 29), local toolchain -- no Docker fallback needed"
+
+environment:
+  postgres: >
+    letflow-postgres-1, confirmed via `docker compose up -d` -- reported already
+    Running (2 days uptime), healthy, port 5462. No .env LETFLOW_DB_PORT override
+    present (.env only sets QUEUE_AUTH_TOKEN and LETFLOW_KEYCLOAK_PORT).
+    `docker compose up -d` also attempted to (re)create letflow-keycloak-1 and
+    failed with "port is already allocated" (0.0.0.0:8092 held by something
+    else on this host) -- Postgres itself was unaffected (already Running, not
+    recreated) and the test suite does not need Keycloak, so this did not
+    block the run.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no
+    separate DB-setup step taken here.
+
+# ---------------------------------------------------------------------------
+# Attempt 1 -- default N (nproc = 16). Every partition crashed before any
+# Result: line -- ISS-0219 (documented in scripts/test_parallel.sh's own
+# header): N derived from nproc exceeded what this host's Postgres/build
+# setup can sustain during the concurrent ecto.migrate burst.
+# ---------------------------------------------------------------------------
+
+run_attempt_1:
+  parallel_n: "16 (source: nproc, auto-derived, no TEST_PARALLEL_N override)"
+  result: >
+    All 16 partitions: "WARNING partition N has no Result: line in its log
+    (compile/config/crash abort), exit=1" -- "0 tests, 0 properties,
+    0 failures, exit 1". combined: 0 tests, 0 properties, 0 failures (0/0
+    passed).
+  root_cause: >
+    Partition 1's log (representative of all 16): "Waiting for lock on the
+    build directory (held by process 39468)" followed by
+    "** (DBConnection.ConnectionError) [Elixir.Letflow.Repo] connection not
+    available and request was dropped from queue after 5995ms ...
+    (ecto_sql 3.14.0) lib/ecto/migrator.ex:169: Ecto.Migrator.with_repo/3 ...
+    (ecto_sql 3.14.0) lib/mix/tasks/ecto.migrate.ex:151". This is entirely
+    inside the `mix ecto.migrate` step of each partition's own `test` alias,
+    never inside application or test code -- 0 tests ran in any partition.
+    Matches ISS-0219's documented failure mode verbatim (16 partitions'
+    concurrent ecto.create/ecto.migrate burst exceeding this host's
+    Postgres/build capacity). Discarded as inconclusive, not reported as a
+    real 0/0 pass -- re-ran with TEST_PARALLEL_N=4 per the script header's own
+    documented remedy (4 "has been verified clean on the host this note was
+    written from").
+
+# ---------------------------------------------------------------------------
+# Attempt 2 -- TEST_PARALLEL_N=4. All 4 partitions completed with real
+# Result: lines.
+# ---------------------------------------------------------------------------
+
+run_attempt_2:
+  parallel_n: "4 (source: env override, TEST_PARALLEL_N=4, set explicitly after attempt 1's ISS-0219 burst failure)"
+  result: >
+    test_parallel: TEST_POOL_SIZE=22 (computed: N=4, max_connections=100, headroom=10)
+    partition 1: 454 tests, 2 properties, 1 failures, exit 2
+    partition 2: 410 tests, 1 property, 0 failures, exit 0
+    partition 3: 452 tests, 2 properties, 0 failures, exit 0
+    partition 4: 518 tests, 0 properties, 3 failures, exit 2
+    combined: 1834 tests, 5 properties, 4 failures (1835/1839 passed)
+  exit_code: >
+    [exited with code 0] per test_parallel.sh's own combined-exit convention
+    (tee pipeline masks the script's own exit) -- misleading given 4 failures
+    were parsed; per-partition exit=2 on partitions 1 and 4 is the
+    authoritative per-partition signal, and the parsed combined failure count
+    (4) is authoritative for this report's verdict.
+
+# ---------------------------------------------------------------------------
+# Attribution of the 4 failures (structural, per core-directives.md's
+# "Failure Attribution Is Structural, Never By Count-Matching")
+# ---------------------------------------------------------------------------
+
+failures:
+  - id: "requirement_status_invariants_test.exs:464 (partition 1)"
+    test: >
+      "A9: every indexed volume's declared entries: count equals what is
+      actually on disk" (Letflow.Docs.RequirementStatusInvariantsTest)
+    location: test/docs/requirement_status_invariants_test.exs:464
+    error: >
+      mismatches: [{"docs/status/requirement_status.v3.yaml", 33, 34}]
+      (declared entries: 33 in docs/status/requirement_status.index.yaml,
+      34 actual `- req:` entries on disk in
+      docs/status/requirement_status.v3.yaml).
+    diff_scope: >
+      docs/status/requirement_status.v3.yaml IS in this branch's own working-
+      tree diff (git diff --name-only main shows it modified) -- so per the
+      task's instruction this could NOT be waved through as "not in the diff"
+      (a) without checking further, and was not accepted on the prior
+      "pre-existing" claim's say-so.
+    root_cause_diagnosed: >
+      `git diff main -- docs/status/requirement_status.v3.yaml` shows exactly
+      one hunk: ORCH's own WF-02 Step 00 append of the REQ-076 `started` event
+      (at: 2026-08-22T18:40:59Z), whose own note text says "34 on-disk
+      `- req:` entries in requirement_status.v3.yaml after this append
+      (recounted via grep -c ...)". docs/status/requirement_status.index.yaml
+      (the file that declares the `entries:` count A9 checks against) is
+      UNTOUCHED by this branch (`git status --short` shows no modification to
+      it; it still declares `entries: 33` for volume 3, last recounted by a
+      prior, unrelated run). So this branch's own Step 00 append is the
+      direct cause of the 33-vs-34 drift: it added the 34th on-disk entry to
+      v3.yaml without a companion increment to the index's declared count,
+      which every prior entry in the index's own `note:` history shows is the
+      required practice ("Incremented to N by <run>'s own ... append").
+      verdict: BRANCH-CAUSED, real failure -- NOT pre-existing. The Step
+      2a handoff's claim that this was a pre-existing drift "unrelated to
+      this branch's own changes" does not hold up under the structural check:
+      the file A9 flags as drifted was modified by this branch's own Step 00,
+      and the modifying commit's own note text is the smoking gun (it reports
+      the new count but the companion index file was never told).
+    attribution_form: >
+      in-diff (docs/status/requirement_status.v3.yaml is modified by this
+      branch) AND root-caused directly via the diff hunk + the index file's
+      own recount-history convention -- not (a), not count-matching.
+    disposition: >
+      REWORK -- route to ORCH (not ELIXIR-DEV/FRONTEND-DEV/TEST-DESIGNER;
+      this is a docs/status bookkeeping omission from this run's own Step 00,
+      not application or test code). Fix: append a note to
+      docs/status/requirement_status.index.yaml's volume-3 entry
+      incrementing `entries:` from 33 to 34 (recounted via
+      `grep -c "^  - req:" docs/status/requirement_status.v3.yaml`), per the
+      index's own documented recount-every-time rule, in the same commit/
+      branch that already carries the REQ-076 started-event append.
+
+  - id: "tenant_schema_reaper_test.exs x3 (partition 4)"
+    test: >
+      Letflow.TenantSchemaReaperTest -- "concurrent-invocation liveness guard
+      (ISS-0110) spares an old row while another invocation's connection is
+      open, reclaims it once that connection closes" (test/support/tenant_schema_reaper_test.exs:273),
+      "schema_name format guard skips an old row with a malformed schema_name
+      instead of attempting a drop" (:212), "reclaims an old, well-formed
+      orphaned row drops the real schema and deletes both rows" (:124)
+    error: >
+      Test 1: DBConnection.ConnectionError, "connection not available and
+      request was dropped from queue after 4000ms", at
+      tenant_schema_reaper_test.exs:315 (Postgrex.query!). Tests 2 and 3:
+      `assert skipped >= 1` / `assert reclaimed >= 1` both got `left: 0,
+      right: 1`. Partition 4's log also shows, immediately around these
+      failures: "TenantSchemaReaper.sweep_orphans/2: deferring this sweep
+      entirely -- another mix test invocation (application_name !=
+      ...) is currently connected to this database" (the ISS-0110 guard
+      firing) and a direct Postgrex FATAL: "too_many_connections sorry, too
+      many clients already".
+    diff_scope: >
+      Neither test/support/tenant_schema_reaper_test.exs nor
+      test/support/tenant_schema_reaper.ex appears in
+      `git diff --name-only main` for this branch. The reaper module's only
+      dependency is `Letflow.Repo` (grep of its aliases/uses); it references
+      `Letflow.TenantProvisioning` only in code comments, not as a runtime
+      call -- so tenant_provisioning.ex being in this branch's diff does not
+      make this module in-scope by dependency either.
+    mechanism_measured: >
+      This is exactly the class of interference test_parallel.sh's own header
+      documents under ISS-0222 (transient too_many_connections from a
+      launch-time connection-count spike) and ISS-0217/ISS-0110 (the reaper's
+      own concurrent-invocation guard, designed to defer sweeps when it
+      detects another live mix-test invocation's connection, correctly firing
+      when 4 partitions run concurrently against the same Postgres). Direct
+      measurement in this run's own log: the guard's deferral message fires
+      immediately before test 2 and test 3's `reclaimed`/`skipped` counts come
+      back 0 (deferred sweep = 0 reclaimed, by design), and test 1 hits a real
+      Postgrex "too_many_connections" FATAL from the same concurrent-partition
+      connection pressure. This is the four-partition run itself, not any
+      code this branch touches, producing the interference.
+    attribution_form: >
+      not in diff (a) -- neither the failing module nor test.support file nor
+      any module it actually depends on appears in the branch diff -- AND a
+      measured external mechanism (c): the ISS-0110 guard's own deferral log
+      lines and a real too_many_connections Postgrex FATAL are direct,
+      in-this-run evidence of concurrent-partition connection pressure, not
+      an assertion or a count-match against a prior run.
+    disposition: >
+      REPORT FOR FILING if no existing issue record covers this exact
+      TenantSchemaReaperTest-vs-parallel-partitions interaction (searched
+      docs/issues/ for tenant_schema_reaper/ISS-0110/ISS-0222 by name --
+      ISS-0110 and ISS-0222 exist but describe the guard/pool-sizing
+      mechanisms generally, not this specific test suite hitting them under
+      N=4). Not fixed here -- pre-existing/environmental, out of REQ-076's
+      scope, and TEST-RUNNER does not own test/support/tenant_schema_reaper*.
+
+verdict: FAIL
+
+summary_line: >
+  scripts/test_parallel.sh run to completion twice: attempt 1 (N=16, nproc
+  default) hit ISS-0219's documented connection-burst crash in all 16
+  partitions' `mix ecto.migrate` step (0 tests run anywhere, discarded as
+  inconclusive); attempt 2 (N=4, env override, per the script's own
+  documented remedy) completed all 4 partitions with real results: combined
+  1834 tests, 5 properties, 4 failures (1835/1839 passed). Of the 4 failures:
+  1 (A9, docs/status drift) is BRANCH-CAUSED -- this run's own Step 00 append
+  to requirement_status.v3.yaml raised the on-disk entry count to 34 without
+  a companion increment to requirement_status.index.yaml's declared count
+  (still 33) -- contradicts the Step 2a handoff's "pre-existing, unrelated"
+  claim; REWORK routed to ORCH to add the missing index recount-note. The
+  other 3 (TenantSchemaReaperTest) are pre-existing/environmental --
+  confirmed by diff-scope exclusion (a) and a measured external mechanism (c):
+  the ISS-0110 concurrent-invocation guard correctly deferring sweeps plus a
+  real too_many_connections Postgrex FATAL, both visible in this run's own
+  log, caused by 4 partitions sharing one Postgres instance concurrently, not
+  by anything this branch touches -- reported for filing, not fixed here.
+
+next_action: >
+  FAIL -> Rework ORCH (docs/status/requirement_status.index.yaml volume-3
+  entries: count) for the A9 finding before this run can re-enter Step 4;
+  the 3 TenantSchemaReaperTest failures are forwarded per ISSUE_QUEUE.md
+  (report for filing, not blocking on their own, but the A9 finding does
+  block this run's PASS since it is branch-caused).

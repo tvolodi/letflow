@@ -27,6 +27,35 @@ defmodule Letflow.Routers.Identity do
   * POST   /groups/:id/members           -> Identity.add_group_member/3
   * GET    /groups/:id/members           -> Identity.list_group_members/3 (cursor-paginated — see "Group member listing" below)
   * DELETE /groups/:id/members/:user_id  -> Identity.remove_group_member/3
+  * POST   /tokens                       -> Identity.create_token/3 (REQ-076)
+  * GET    /tokens                       -> Identity.list_tokens/2 (REQ-076)
+  * DELETE /tokens/:id                   -> Identity.revoke_token/2 (REQ-076)
+  * GET    /roles                        -> Letflow.Identity.RoleRegistry.list_roles/0 (REQ-076)
+  * POST   /roles                        -> Letflow.Identity.RoleRegistry.upsert_role/2 (REQ-076)
+
+  ## API tokens (REQ-076, INV-4)
+
+  `POST /tokens` is the **only** handler in this module that ever puts a token
+  plaintext into a response body (`token_created_map/2`) — never re-derivable
+  from a persisted row, since the row never holds the plaintext at all
+  (`Letflow.Identity.ApiToken`'s own moduledoc). `GET /tokens` and `DELETE
+  /tokens/:id` both respond with `token_map/1`, which structurally excludes
+  `token_hash` and has no parameter through which a plaintext could ever reach
+  it. See `lib/letflow/design/req076-identity-tokens-roles-onboarding.md` §6
+  for the full design.
+
+  ## Role registry constraint (REQ-076 AC6)
+
+  `POST /roles`'s `name` field accepts any role name outside R-Co's own
+  five-value `auth.Role` enum — confirmed by direct read of R-Co's
+  `src/identity/role_registry.zig`, which validates only a **format**
+  constraint (non-empty, ≤128 Unicode codepoints, no ASCII control
+  characters), never enum membership. `Letflow.Identity.RoleRegistry.upsert_role/2`
+  (REQ-020, unchanged by this requirement) already enforces exactly this
+  format-only constraint. `POST /roles` returns **200**, not 201 — an upsert,
+  not strictly a create, matching R-Co's own `handleUpsertRole`'s literal
+  `.status_code = 200` (design doc §10 OQ-5 — deliberate, not a status-code
+  bug).
 
   ## Group member listing: one served endpoint, not two (REQ-074 AC6)
 
@@ -101,6 +130,7 @@ defmodule Letflow.Routers.Identity do
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
   alias Letflow.Identity
+  alias Letflow.Identity.RoleRegistry
 
   @users_cursor_prefix "U:"
 
@@ -170,6 +200,36 @@ defmodule Letflow.Routers.Identity do
   delete "/groups/:id/members/:user_id" do
     with_authorized_scope(conn, "DELETE", "/groups/:id/members/:user_id", fn conn, opts ->
       handle_remove_member(conn, conn.params["id"], conn.params["user_id"], opts)
+    end)
+  end
+
+  post "/tokens" do
+    with_authorized_scope(conn, "POST", "/tokens", fn conn, opts ->
+      handle_create_token(conn, opts)
+    end)
+  end
+
+  get "/tokens" do
+    with_authorized_scope(conn, "GET", "/tokens", fn conn, opts ->
+      handle_list_tokens(conn, opts)
+    end)
+  end
+
+  delete "/tokens/:id" do
+    with_authorized_scope(conn, "DELETE", "/tokens/:id", fn conn, opts ->
+      handle_revoke_token(conn, conn.params["id"], opts)
+    end)
+  end
+
+  get "/roles" do
+    with_authorized_scope(conn, "GET", "/roles", fn conn, _opts ->
+      handle_list_roles(conn)
+    end)
+  end
+
+  post "/roles" do
+    with_authorized_scope(conn, "POST", "/roles", fn conn, _opts ->
+      handle_upsert_role(conn)
     end)
   end
 
@@ -576,6 +636,106 @@ defmodule Letflow.Routers.Identity do
     end
   end
 
+  # ── POST /tokens (design §6.1, AC1/AC2/AC3, INV-4) ──────────────────────
+
+  @create_token_schema [
+    %FieldConstraint{name: "user_id", required: true, type: :string, reject_empty_string: true},
+    %FieldConstraint{name: "roles", required: true, type: :array},
+    %FieldConstraint{name: "expires_at", required: false, type: :string}
+  ]
+
+  defp handle_create_token(conn, opts) do
+    case Validation.validate(@create_token_schema, conn.body_params) do
+      {:errors, field_errors} ->
+        Response.send_problem(conn, Validation.problem(field_errors))
+
+      {:ok, %{"user_id" => user_id, "roles" => roles} = attrs} ->
+        case parse_expires_at(Map.get(attrs, "expires_at")) do
+          {:error, :expires_at_invalid} ->
+            Response.unprocessable(conn, "expires_at_invalid")
+
+          {:ok, parsed_expires_at} ->
+            case Identity.create_token(
+                   user_id,
+                   %{roles: roles, expires_at: parsed_expires_at},
+                   opts
+                 ) do
+              {:ok, %{token: token, plaintext: plaintext}} ->
+                Response.created(conn, token_created_map(token, plaintext))
+
+              {:error, :user_not_found} ->
+                Response.not_found(conn)
+
+              {:error, :invalid_role_set} ->
+                Response.unprocessable(conn, "roles_invalid")
+
+              {:error, :expires_at_in_past} ->
+                Response.unprocessable(conn, "expires_at_in_past")
+
+              {:error, %Ecto.Changeset{}} ->
+                Response.unprocessable(conn, "validation failed")
+            end
+        end
+    end
+  end
+
+  defp parse_expires_at(nil), do: {:ok, nil}
+
+  defp parse_expires_at(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, datetime, _offset} -> {:ok, datetime}
+      {:error, _reason} -> {:error, :expires_at_invalid}
+    end
+  end
+
+  # ── GET /tokens (design §6.1, AC1/AC2) ───────────────────────────────────
+
+  defp handle_list_tokens(conn, opts) do
+    {:ok, tokens} = Identity.list_tokens(opts)
+
+    Response.ok(conn, %{"items" => Enum.map(tokens, &token_map/1)})
+  end
+
+  # ── DELETE /tokens/:id (design §6.1, AC4) ────────────────────────────────
+
+  defp handle_revoke_token(conn, id, opts) do
+    case Identity.revoke_token(id, opts) do
+      {:ok, token} -> Response.ok(conn, token_map(token))
+      {:error, :not_found} -> Response.not_found(conn)
+    end
+  end
+
+  # ── GET /roles (design §6.1, AC6) ────────────────────────────────────────
+
+  defp handle_list_roles(conn) do
+    roles = RoleRegistry.list_roles()
+
+    Response.ok(conn, %{"items" => Enum.map(roles, &role_map/1)})
+  end
+
+  # ── POST /roles (design §6.1, AC6) ───────────────────────────────────────
+
+  @upsert_role_schema [
+    %FieldConstraint{name: "name", required: true, type: :string, reject_empty_string: true},
+    %FieldConstraint{name: "group_id", required: true, type: :string, reject_empty_string: true}
+  ]
+
+  defp handle_upsert_role(conn) do
+    case Validation.validate(@upsert_role_schema, conn.body_params) do
+      {:errors, field_errors} ->
+        Response.send_problem(conn, Validation.problem(field_errors))
+
+      {:ok, %{"name" => name, "group_id" => group_id}} ->
+        case RoleRegistry.upsert_role(name, group_id) do
+          {:ok, role} -> Response.ok(conn, role_map(role))
+          {:error, :invalid_role_name} -> Response.unprocessable(conn, "invalid_role_name")
+          {:error, :invalid_group_id} -> Response.unprocessable(conn, "invalid_group_id")
+          {:error, :group_not_found} -> Response.not_found(conn)
+          {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
+        end
+    end
+  end
+
   # ── Response allowlist (design §3, AC5, INV-2) ──────────────────────────
 
   @doc false
@@ -612,6 +772,66 @@ defmodule Letflow.Routers.Identity do
       "created_at" => iso8601(group.inserted_at)
     }
   end
+
+  # The ONLY function in this codebase that ever puts a token plaintext into a
+  # response body (design §6.2, AC1, INV-4). Called exactly once, from
+  # handle_create_token/2's success branch, on the freshly-returned
+  # {token, plaintext} pair -- never re-derivable from a persisted row (the
+  # row never holds the plaintext, Letflow.Identity.ApiToken's own moduledoc).
+  @spec token_created_map(Letflow.Identity.ApiToken.t(), String.t()) :: map()
+  defp token_created_map(%Letflow.Identity.ApiToken{} = token, plaintext) do
+    %{
+      "id" => token.id,
+      "token" => plaintext,
+      "name" => token.name,
+      "user_id" => token.user_id,
+      "roles" => token.roles,
+      "expires_at" => iso8601_or_nil(token.expires_at),
+      "created_at" => iso8601(token.inserted_at)
+    }
+  end
+
+  # Metadata only -- used by GET /tokens and DELETE /tokens/:id. Structurally
+  # excludes token_hash and has no parameter through which a plaintext could
+  # ever reach it (design §6.2, AC1/AC2, INV-4).
+  @spec token_map(Letflow.Identity.ApiToken.t()) :: map()
+  defp token_map(%Letflow.Identity.ApiToken{} = token) do
+    %{
+      "id" => token.id,
+      "name" => token.name,
+      "user_id" => token.user_id,
+      "roles" => token.roles,
+      "status" => token_status(token),
+      "created_at" => iso8601(token.inserted_at),
+      "expires_at" => iso8601_or_nil(token.expires_at),
+      "revoked_at" => iso8601_or_nil(token.revoked_at),
+      "last_used_at" => iso8601_or_nil(token.last_used_at)
+    }
+  end
+
+  defp token_status(%Letflow.Identity.ApiToken{revoked_at: revoked_at})
+       when not is_nil(revoked_at),
+       do: "revoked"
+
+  defp token_status(%Letflow.Identity.ApiToken{expires_at: expires_at})
+       when not is_nil(expires_at) do
+    if DateTime.compare(expires_at, DateTime.utc_now()) == :gt, do: "active", else: "expired"
+  end
+
+  defp token_status(%Letflow.Identity.ApiToken{}), do: "active"
+
+  @spec role_map(Letflow.Identity.TenantRole.t()) :: map()
+  defp role_map(%Letflow.Identity.TenantRole{} = role) do
+    %{
+      "id" => role.id,
+      "name" => role.name,
+      "group_id" => role.group_id,
+      "created_at" => iso8601(role.inserted_at)
+    }
+  end
+
+  defp iso8601_or_nil(nil), do: nil
+  defp iso8601_or_nil(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
 
   # Design §9's ad hoc add-member response shape (matches R-Co's own
   # serializeGroupMemberResult, identity.zig:1017-1023) -- not group_map/1 or

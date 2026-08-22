@@ -996,4 +996,328 @@ defmodule Letflow.Routers.IdentityTest do
       assert conn.status == 404
     end
   end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # REQ-076 — API tokens (POST/GET /tokens, DELETE /tokens/:id) and the role
+  # registry HTTP routes (GET/POST /roles). See test/specs/REQ-076.md for the
+  # full AC-to-test mapping this section implements.
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-076 AC1/AC2/AC3: token issue/list/revoke plaintext discipline" do
+    setup do
+      %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req076-tokens")}
+    end
+
+    test "POST /tokens returns 201 with a plaintext token field matching the lf_tok_ shape (AC1a)",
+         %{tenant: tenant} do
+      user = insert_user!(tenant, username: "token-owner-1")
+
+      conn =
+        build_conn(:post, "/tokens", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"user_id" => user.id, "roles" => ["TASK_WORKER"]}
+        )
+        |> dispatch()
+
+      assert conn.status == 201
+      body = Jason.decode!(conn.resp_body)
+
+      assert is_binary(body["token"])
+      assert body["token"] =~ ~r/^lf_tok_[0-9a-f]{64}$/
+      assert body["user_id"] == user.id
+      assert body["roles"] == ["TASK_WORKER"]
+      assert is_binary(body["id"])
+      assert is_binary(body["name"])
+      assert body["expires_at"] == nil
+      assert is_binary(body["created_at"])
+
+      assert Map.keys(body) |> Enum.sort() == [
+               "created_at",
+               "expires_at",
+               "id",
+               "name",
+               "roles",
+               "token",
+               "user_id"
+             ]
+    end
+
+    test "GET /tokens after creation has no token field and no value equal to the plaintext anywhere in the response (AC1b)",
+         %{tenant: tenant} do
+      user = insert_user!(tenant, username: "token-owner-2")
+
+      create_conn =
+        build_conn(:post, "/tokens", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"user_id" => user.id, "roles" => ["TASK_WORKER"]}
+        )
+        |> dispatch()
+
+      assert create_conn.status == 201
+      plaintext = Jason.decode!(create_conn.resp_body)["token"]
+
+      list_conn =
+        build_conn(:get, "/tokens", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert list_conn.status == 200
+      body = Jason.decode!(list_conn.resp_body)
+
+      for item <- body["items"] do
+        refute Map.has_key?(item, "token")
+        refute Map.has_key?(item, "token_hash")
+      end
+
+      refute list_conn.resp_body =~ plaintext
+
+      # AC5, INV-2-equivalent -- full key-set assertion, so a stray leaked field
+      # under any other name is caught here too.
+      for item <- body["items"] do
+        assert Map.keys(item) |> Enum.sort() == [
+                 "created_at",
+                 "expires_at",
+                 "id",
+                 "last_used_at",
+                 "name",
+                 "revoked_at",
+                 "roles",
+                 "status",
+                 "user_id"
+               ]
+      end
+    end
+
+    test "DELETE /tokens/:id's response also has no token field and no plaintext value (AC1b companion)",
+         %{tenant: tenant} do
+      user = insert_user!(tenant, username: "token-owner-3")
+
+      create_conn =
+        build_conn(:post, "/tokens", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"user_id" => user.id, "roles" => ["TASK_WORKER"]}
+        )
+        |> dispatch()
+
+      created_body = Jason.decode!(create_conn.resp_body)
+      plaintext = created_body["token"]
+      token_id = created_body["id"]
+
+      revoke_conn =
+        build_conn(:delete, "/tokens/#{token_id}", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert revoke_conn.status == 200
+      revoked_body = Jason.decode!(revoke_conn.resp_body)
+
+      refute Map.has_key?(revoked_body, "token")
+      refute Map.has_key?(revoked_body, "token_hash")
+      refute revoke_conn.resp_body =~ plaintext
+      assert revoked_body["status"] == "revoked"
+      refute is_nil(revoked_body["revoked_at"])
+    end
+
+    test "the persisted row's own columns never equal the plaintext, checked across every field (AC2, router-level)",
+         %{tenant: tenant} do
+      user = insert_user!(tenant, username: "token-owner-4")
+
+      conn =
+        build_conn(:post, "/tokens", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"user_id" => user.id, "roles" => ["TASK_WORKER"]}
+        )
+        |> dispatch()
+
+      body = Jason.decode!(conn.resp_body)
+      plaintext = body["token"]
+
+      persisted = Repo.get!(Letflow.Identity.ApiToken, body["id"], prefix: tenant.schema_name)
+
+      persisted
+      |> Map.from_struct()
+      |> Enum.each(fn {field, value} ->
+        refute value == plaintext,
+               "field #{inspect(field)} on the persisted row equals the plaintext -- AC2 violation"
+      end)
+    end
+
+    test "a token's plaintext never appears in captured logs or in either response body, across a successful creation and a deliberately failed one (AC3)",
+         %{tenant: tenant} do
+      user = insert_user!(tenant, username: "token-owner-5")
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          success_conn =
+            build_conn(:post, "/tokens", tenant,
+              roles: ["PLATFORM_ADMIN"],
+              body: %{"user_id" => user.id, "roles" => ["TASK_WORKER"]}
+            )
+            |> dispatch()
+
+          assert success_conn.status == 201
+          plaintext = Jason.decode!(success_conn.resp_body)["token"]
+
+          # A deliberately-failed creation -- an unrecognized role string, per
+          # design §3.1 step 2 ({:error, :invalid_role_set}, 422). This second
+          # request's response body must ALSO never carry the first request's
+          # plaintext (nor any plaintext of its own, since it never generates one).
+          failed_conn =
+            build_conn(:post, "/tokens", tenant,
+              roles: ["PLATFORM_ADMIN"],
+              body: %{"user_id" => user.id, "roles" => ["NOT_A_REAL_ROLE"]}
+            )
+            |> dispatch()
+
+          assert failed_conn.status == 422
+
+          # The FAILED request's error body must never carry the first
+          # request's plaintext (nor any plaintext of its own, since it never
+          # generates one) -- AC3's "no error body" clause. The successful
+          # creation's OWN response body legitimately contains the plaintext
+          # once (AC1's own exception) and is deliberately NOT asserted
+          # against here.
+          refute failed_conn.resp_body =~ plaintext
+
+          send(self(), {:captured_plaintext, plaintext})
+        end)
+
+      assert_received {:captured_plaintext, plaintext}
+      refute log =~ plaintext
+    end
+  end
+
+  describe "REQ-076: token permission gating (:TokensManage, PLATFORM_ADMIN only)" do
+    test "POST /tokens -> 403 for a role without :TokensManage, no row inserted" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req076-tokens-403")
+      user = insert_user!(tenant, username: "token-owner-403")
+      count_before = Repo.aggregate(Letflow.Identity.ApiToken, :count, prefix: tenant.schema_name)
+
+      conn =
+        build_conn(:post, "/tokens", tenant,
+          roles: ["TASK_WORKER"],
+          body: %{"user_id" => user.id, "roles" => ["TASK_WORKER"]}
+        )
+        |> dispatch()
+
+      assert conn.status == 403
+
+      assert Repo.aggregate(Letflow.Identity.ApiToken, :count, prefix: tenant.schema_name) ==
+               count_before
+    end
+  end
+
+  describe "REQ-076 AC6: role registry routes" do
+    # Letflow.Identity.RoleRegistry (REQ-020, unchanged by REQ-076) takes no
+    # `:prefix`/`opts` parameter at all -- design doc §5.2/OQ-2 flags this as a
+    # known, un-fixed cross-tenant gap: `groups`/`tenant_role` resolve via
+    # whatever the connection's own Postgres `search_path` happens to be, not an
+    # explicit schema argument. Mirrors test/letflow/role_registry_test.exs's own
+    # setup exactly (see that file's moduledoc "Sandbox mode: what ACTUALLY
+    # protects against cross-test leakage" section for the full reasoning this
+    # reuses rather than re-derives): after TenantFixture.provisioned_tenant!/1
+    # leaves the sandbox in :auto mode, switch back to a single :manual-mode
+    # checkout BEFORE issuing `SET search_path`, so every unprefixed RoleRegistry
+    # query this describe block's dispatched requests make (including inside
+    # Letflow.Routers.Identity.call/2 itself, run synchronously in this same
+    # process) resolves against the SAME one physical connection carrying that
+    # GUC -- not a random pool connection under :auto mode, which would make the
+    # SET search_path a no-op for most queries.
+    setup do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req076-roles")
+
+      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :manual)
+      :ok = Ecto.Adapters.SQL.Sandbox.checkout(Letflow.Repo)
+
+      # Registered AFTER provisioned_tenant!/1's own on_exit/1 (teardown), so
+      # LIFO ordering runs this FIRST -- forcing :auto mode back on before that
+      # teardown's DROP SCHEMA / DELETE cleanup needs a real, checked-in
+      # connection, exactly like role_registry_test.exs's own on_exit/1 does.
+      on_exit(fn -> Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto) end)
+
+      Repo.query!(~s(SET search_path TO "#{tenant.schema_name}", public))
+
+      %{tenant: tenant}
+    end
+
+    test "GET /roles returns a list with the role_map/1 shape", %{tenant: tenant} do
+      group = insert_group!(tenant, name: "role-registry-group")
+
+      {:ok, _role} =
+        Letflow.Identity.RoleRegistry.upsert_role(
+          "listed-role-#{System.unique_integer([:positive])}",
+          group.id
+        )
+
+      conn =
+        build_conn(:get, "/roles", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert Map.has_key?(body, "items")
+
+      for item <- body["items"] do
+        assert Map.keys(item) |> Enum.sort() == ["created_at", "group_id", "id", "name"]
+      end
+    end
+
+    test "POST /roles accepts a role name outside the five-role enum and returns 200, not 201 (AC6, OQ-5)",
+         %{tenant: tenant} do
+      group = insert_group!(tenant, name: "custom-role-group")
+
+      conn =
+        build_conn(:post, "/roles", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"name" => "CUSTOM_APPROVER", "group_id" => group.id}
+        )
+        |> dispatch()
+
+      # 200, NOT 201 -- an upsert, matching R-Co's own handleUpsertRole literal
+      # status code (design §6.1/§10 OQ-5), not this codebase's usual 201-for-create
+      # convention.
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["name"] == "CUSTOM_APPROVER"
+      assert body["group_id"] == group.id
+    end
+
+    test "POST /roles rejects an invalid role name with 422", %{tenant: tenant} do
+      group = insert_group!(tenant, name: "invalid-role-group")
+
+      conn =
+        build_conn(:post, "/roles", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"name" => "", "group_id" => group.id}
+        )
+        |> dispatch()
+
+      assert conn.status == 422
+    end
+
+    test "POST /roles -> 403 for TASK_WORKER (lacks :RolesManage)", %{tenant: tenant} do
+      group = insert_group!(tenant, name: "denied-role-group")
+
+      conn =
+        build_conn(:post, "/roles", tenant,
+          roles: ["TASK_WORKER"],
+          body: %{"name" => "some-role", "group_id" => group.id}
+        )
+        |> dispatch()
+
+      assert conn.status == 403
+    end
+
+    test "POST /roles -> 200 for PROCESS_DESIGNER, who holds :RolesManage (design §4 point 2)",
+         %{tenant: tenant} do
+      group = insert_group!(tenant, name: "designer-role-group")
+
+      conn =
+        build_conn(:post, "/roles", tenant,
+          roles: ["PROCESS_DESIGNER"],
+          body: %{"name" => "designer-granted-role", "group_id" => group.id}
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+    end
+  end
 end

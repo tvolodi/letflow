@@ -1,0 +1,97 @@
+report_id: report-20260823-WF02-REQ076-20260822-rerun
+agent: TEST-RUNNER
+requirement: REQ-076
+workflow_step: WF-02 Step 4 (test run) -- RE-RUN after attempt 1's FAIL
+branch: feature/WF02-REQ076-20260822
+date: 2026-08-23
+command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+supersedes: test/reports/report-20260823-WF02-REQ076-20260822.yaml (verdict: FAIL)
+
+context: >
+  Attempt 1 (this same branch, same day) FAILed with 4 failures: (1) A9
+  (requirement_status_invariants_test.exs) -- docs/status/requirement_status.index.yaml's
+  volume-3 declared `entries:` count (33) did not match the true on-disk count in
+  docs/status/requirement_status.v3.yaml (34), because this branch's own Step 00 append
+  (REQ-076 started-event) had incremented the real file without a companion increment to
+  the index's declared count. (2)-(4) three TenantSchemaReaperTest failures in
+  partition 4, attributed as pre-existing/environmental (too_many_connections FATAL +
+  ISS-0110 concurrent-invocation guard deferring under 4-partition connection pressure),
+  not caused by this branch's diff. ORCH has since fixed the A9 finding: verified below
+  that docs/status/requirement_status.index.yaml's volume-3 entry now declares
+  `entries: 34`, matching `grep -c "^  - req:" docs/status/requirement_status.v3.yaml` = 34
+  (confirmed directly, both before and implicitly via this run's own green A9 result).
+
+environment:
+  postgres: >
+    `docker compose up -d` run before this test invocation: letflow-postgres-1 reported
+    already "Running" (not recreated); letflow-keycloak-1 reported "Starting" then
+    "Started" (was not already running, unlike attempt 1's report which found Keycloak's
+    port already held by something else -- this time it started cleanly). Postgres itself
+    was unaffected either way; the test suite does not depend on Keycloak.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no separate
+    DB-setup step taken here.
+  parallel_n: >
+    TEST_PARALLEL_N=4 set explicitly per the documented ISS-0219 remedy (default
+    nproc-derived N crashed all partitions in attempt 1's first sub-attempt and in the
+    prior run's attempt 1) -- used directly this time rather than re-discovering it.
+
+run_result: >
+  test_parallel: N=4 (source: env override)
+  test_parallel: TEST_POOL_SIZE=22 (computed: N=4, max_connections=100, headroom=10)
+  partition 1: 454 tests, 2 properties, 0 failures, exit 0
+  partition 2: 410 tests, 1 property, 0 failures, exit 0
+  partition 3: 452 tests, 2 properties, 0 failures, exit 0
+  partition 4: 518 tests, 0 properties, 0 failures, exit 0
+  ---
+  combined: 1834 tests, 5 properties, 0 failures (1839/1839 passed)
+
+partition_source: >
+  4 partitions via `mix test --partitions 4` under test_parallel.sh's own aggregation,
+  TEST_PARALLEL_N=4 explicit env override (not auto-derived from nproc this run).
+
+verification_of_attempt_1_findings:
+  - finding: "A9 (requirement_status.index.yaml volume-3 entries count vs on-disk v3.yaml count)"
+    status: FIXED, CONFIRMED
+    evidence: >
+      docs/status/requirement_status.index.yaml's volume-3 block now declares
+      `entries: 34` with a note: "Incremented to 34 by ORCH's own REQ-076 started-event
+      append (WF02-REQ076-20260822, Step 00) -- 34 on-disk `- req:` entries in
+      requirement_status.v3.yaml ... recounted via `grep -c "^  - req:"
+      docs/status/requirement_status.v3.yaml`". Independently re-verified in this run:
+      `grep -c "^  - req:" docs/status/requirement_status.v3.yaml` = 34, matching the
+      declared count exactly. Partition 1's A9 assertion (which failed in attempt 1)
+      passed clean in this run (partition 1: 0 failures).
+  - finding: "3x TenantSchemaReaperTest failures (partition 4, attempt 1) -- attributed pre-existing/environmental"
+    status: DID NOT RECUR
+    evidence: >
+      Partition 4 this run: 518 tests, 0 properties, 0 failures, exit 0 -- the same
+      partition that carried all 3 TenantSchemaReaperTest failures in attempt 1 passed
+      clean this run with the identical N=4 partitioning. This is consistent with (does
+      not contradict) attempt 1's structural attribution: a transient
+      too_many_connections FATAL plus the ISS-0110 concurrent-invocation guard's
+      deferral behavior, both artifacts of connection pressure at a particular moment
+      during a 4-partition concurrent run, not a deterministic function of this
+      branch's diff. No new failures appeared anywhere else in the suite that would
+      require re-deriving a different attribution.
+
+new_failures: none
+
+verdict: PASS
+
+summary_line: >
+  Re-ran scripts/test_parallel.sh with TEST_PARALLEL_N=4 (the documented ISS-0219
+  remedy, used directly this time). All 4 partitions completed with real Result: lines
+  and zero failures: combined 1834 tests, 5 properties, 0 failures (1839/1839 passed).
+  The A9 finding from attempt 1 is confirmed fixed -- requirement_status.index.yaml's
+  volume-3 `entries:` now declares 34, matching the true on-disk count in
+  requirement_status.v3.yaml, and partition 1 (which carries A9) passed clean. The 3
+  TenantSchemaReaperTest failures from attempt 1's partition 4 did not recur under an
+  identical partition layout, consistent with their prior environmental/connection-
+  pressure attribution rather than a real branch-caused defect.
+
+artifacts_out:
+  - test/reports/report-20260823-WF02-REQ076-20260822-rerun.yaml
+
+next_action: PASS -> Route to RELEASE-VALIDATOR

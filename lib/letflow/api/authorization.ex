@@ -68,6 +68,7 @@ defmodule Letflow.Api.Authorization do
           | :MetricsRead
           | :WebhooksManage
           | :TenantsManage
+          | :RolesManage
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -96,6 +97,7 @@ defmodule Letflow.Api.Authorization do
           | :AdminServicesManage
           | :AdminServicesRead
           | :TenantsManage
+          | :RolesManage
           | :Unknown
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
@@ -117,14 +119,15 @@ defmodule Letflow.Api.Authorization do
     :DlqOperate,
     :MetricsRead,
     :WebhooksManage,
-    :TenantsManage
+    :TenantsManage,
+    :RolesManage
   ]
 
   @doc "All five `Role` values, R-Co's exact names. See `roles_from_strings/1` for untrusted-input conversion."
   @spec roles() :: [role()]
   def roles, do: @roles
 
-  @doc "All fourteen `Permission` values, R-Co's exact names."
+  @doc "All fifteen `Permission` values — R-Co's fourteen plus REQ-076's `:RolesManage`."
   @spec permissions() :: [permission()]
   def permissions, do: @permissions
 
@@ -290,6 +293,23 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("POST", "/tenants/:slug/deactivate"), do: :TenantsManage
   def endpoint_policy_key("POST", "/tenants/:slug/reactivate"), do: :TenantsManage
 
+  # REQ-076 -- onboarding (Letflow.Routers.Onboarding), a top-level sibling
+  # router mounted at /onboarding (not under Letflow.Routers.Identity's own
+  # /identity mount). Reuses the existing :TenantsManage permission -- same
+  # risk class and same PLATFORM_ADMIN-only intent as Letflow.Routers.Tenants
+  # (design doc §8.3). No new permission added for onboarding.
+  def endpoint_policy_key("POST", "/onboarding"), do: :TenantsManage
+  def endpoint_policy_key("GET", "/onboarding/:id"), do: :TenantsManage
+  def endpoint_policy_key("GET", "/onboarding"), do: :TenantsManage
+
+  # REQ-076 -- role registry routes (Letflow.Routers.Identity, mounted
+  # relative to /identity, matching the "/tokens" convention above). A new,
+  # distinct :RolesManage permission -- see role_allows?/2's PROCESS_DESIGNER
+  # clause below for why :UsersGroupsRolesManage cannot be reused here
+  # (design doc §4 point 2).
+  def endpoint_policy_key("GET", "/roles"), do: :RolesManage
+  def endpoint_policy_key("POST", "/roles"), do: :RolesManage
+
   def endpoint_policy_key(_method, _path), do: :Unknown
 
   @doc """
@@ -372,6 +392,7 @@ defmodule Letflow.Api.Authorization do
     do: :UsersGroupsRolesManage
 
   def required_permission(:TenantsManage), do: :TenantsManage
+  def required_permission(:RolesManage), do: :RolesManage
 
   def required_permission(:Unknown), do: :MetricsRead
 
@@ -400,7 +421,8 @@ defmodule Letflow.Api.Authorization do
         :DefinitionsRead,
         :InstancesStart,
         :InstancesRead,
-        :TasksRead
+        :TasksRead,
+        :RolesManage
       ]
 
   def role_allows?(:PROCESS_OPERATOR, permission),

@@ -20,6 +20,55 @@ defmodule Letflow.Plugs.AuthPipeline do
   A request with a missing/malformed bearer token is rejected with 401
   before any DB or claim-mapping work runs (step 1's short-circuit).
 
+  ## API-token branch (REQ-076, 1b/2b alongside the 5-step OIDC list above)
+
+  Immediately after `extract_bearer_token/1` succeeds, `raw_token` is
+  inspected for the literal `"lf_tok_"` prefix `Letflow.Identity.create_token/3`
+  generates (never present in a JWT, which is three `.`-joined base64url
+  segments with no fixed literal prefix) — cheap, unambiguous dispatch, no
+  format ambiguity with a JWT. A match routes to this branch instead of the
+  five OIDC steps above, which run completely unchanged on every other
+  request.
+
+  This branch solves only ONE tenant-identification mechanism for an opaque
+  API-token bearer credential — a caller authenticating with an API token
+  must additionally send `X-Tenant-Slug: <tenant slug>`, since the bearer
+  value itself (unlike a JWT's `iss` claim) carries no tenant hint. It does
+  **not** attempt the general problem of embedding tenant identity inside an
+  opaque bearer token; a future credential type needing a different
+  resolution mechanism (e.g. a tenant segment embedded in a path) is a new
+  branch, not a generalization of this one.
+
+  Five steps, mirroring the OIDC branch's own "tag the step" discipline:
+
+    1. `extract_tenant_slug_header/1` — reads the `x-tenant-slug` request
+       header. Exactly one non-empty value required. Read only on this
+       branch — harmless/ignored on every OIDC-authenticated request.
+    2. `resolve_tenant_by_slug/1` — `Letflow.Identity.get_tenant_by_slug/1`
+       (already shipped, used identically by `Letflow.Routers.TenantConfig`).
+    3. `resolve_schema_name/1` — `Letflow.TenantProvisioning.schema_name_for_tenant/1`,
+       the exact same call `provision_user/3`'s OIDC-branch step 4b already
+       makes (pure derivation from `tenant_id`, no I/O).
+    4. `verify_token_credential/2` — `Letflow.Identity.verify_api_token/2`
+       (unchanged) — the live, uncached, per-call database read that makes
+       revocation take effect on the very next request (AC4).
+    5. `attach_auth_context/4` (existing function, unchanged) — `tenant.id`
+       (step 2's schema-authoritative source, never a token-claimed value),
+       `verified.user_id`, `verified.roles`. No JIT provisioning step exists
+       on this branch: `create_token/3` already requires `user_id` to
+       reference an existing row, so there is nothing to provision.
+
+  A missing header, an unresolvable slug, a garbage token, a revoked token,
+  and an expired token are all byte-identical 401s (`"invalid or expired
+  bearer token"`) — the same anti-oracle discipline the OIDC branch already
+  applies to its own five failure tags, extended here rather than inventing a
+  differently-worded message that would let a caller distinguish "your slug
+  is wrong" from "your token is revoked" by response text. No
+  realm-ownership check, no claim mapping, no JIT provisioning on this
+  branch — all three are OIDC-specific concepts that do not apply to a
+  pre-existing internal user authenticating with a token issued directly by
+  an already-authenticated PLATFORM_ADMIN.
+
   **Mounted since REQ-071.** `Letflow.Plugs.ApiPipeline` (the shared middleware chain for
   every `/api/v1/*` sub-router, forwarded to from `Letflow.Router`) declares
   `plug Letflow.Plugs.AuthPipeline` immediately after `Plug.Parsers` and immediately
@@ -53,8 +102,25 @@ defmodule Letflow.Plugs.AuthPipeline do
   # correct status code (§5) regardless of which callee produced it.
   @impl Plug
   def call(conn, _opts) do
-    with {:ok, raw_token} <- extract_bearer_token(conn),
-         {:ok, claims} <- verify_token(raw_token),
+    case extract_bearer_token(conn) do
+      {:ok, raw_token} ->
+        if api_token?(raw_token) do
+          authenticate_api_token(conn, raw_token)
+        else
+          authenticate_oidc(conn, raw_token)
+        end
+
+      {:error, reason} ->
+        handle_auth_error(conn, {:error, reason})
+    end
+  end
+
+  # Unchanged five-step OIDC chain (steps 1b-5), extracted from the former
+  # single call/2 with clause so it can share handle_auth_error/2 with the new
+  # API-token branch below (REQ-076 §3.5) -- same functions, same order, same
+  # error tags as before this change.
+  defp authenticate_oidc(conn, raw_token) do
+    with {:ok, claims} <- verify_token(raw_token),
          {:ok, realm} <- extract_realm(claims),
          {:ok, tenant} <- resolve_tenant(realm),
          :ok <- guard_realm_ownership(tenant.id, realm),
@@ -62,6 +128,25 @@ defmodule Letflow.Plugs.AuthPipeline do
          {:ok, provisioned} <- provision_user(identity_context, tenant.id, realm) do
       attach_auth_context(conn, tenant.id, provisioned.user.id, identity_context.roles)
     else
+      error -> handle_auth_error(conn, error)
+    end
+  end
+
+  # REQ-076 §3.5's five-step API-token branch -- see moduledoc "API-token
+  # branch" section for the full description of each step.
+  defp authenticate_api_token(conn, raw_token) do
+    with {:ok, slug} <- extract_tenant_slug_header(conn),
+         {:ok, tenant} <- resolve_tenant_by_slug(slug),
+         {:ok, schema_name} <- resolve_schema_name(tenant.id),
+         {:ok, verified} <- verify_token_credential(raw_token, schema_name) do
+      attach_auth_context(conn, tenant.id, verified.user_id, verified.roles)
+    else
+      error -> handle_auth_error(conn, error)
+    end
+  end
+
+  defp handle_auth_error(conn, error) do
+    case error do
       {:error, {:header, _reason}} ->
         reject(conn, 401, "unauthorized", "missing or malformed Authorization header")
 
@@ -88,6 +173,51 @@ defmodule Letflow.Plugs.AuthPipeline do
 
       {:error, {:provision, _reason}} ->
         reject(conn, 500, "internal_error", "user provisioning failed")
+
+      {:error, {:api_token, _reason}} ->
+        reject(conn, 401, "unauthorized", "invalid or expired bearer token")
+    end
+  end
+
+  # Step 1b dispatch (REQ-076 §3.5) -- the literal "lf_tok_" prefix
+  # Letflow.Identity's create_token/3 generates, never present in a JWT.
+  defp api_token?(raw_token), do: String.starts_with?(raw_token, "lf_tok_")
+
+  # API-token step 1 -- the x-tenant-slug request header, read only on this
+  # branch (harmless/ignored on every OIDC-authenticated request).
+  defp extract_tenant_slug_header(conn) do
+    case get_req_header(conn, "x-tenant-slug") do
+      [slug] when byte_size(slug) > 0 -> {:ok, slug}
+      _other -> {:error, {:api_token, :header_missing}}
+    end
+  end
+
+  # API-token step 2 -- Letflow.Identity.get_tenant_by_slug/1 (already
+  # shipped, used identically by Letflow.Routers.TenantConfig).
+  defp resolve_tenant_by_slug(slug) do
+    case Identity.get_tenant_by_slug(slug) do
+      {:ok, tenant} -> {:ok, tenant}
+      {:error, _reason} -> {:error, {:api_token, :tenant_not_found}}
+    end
+  end
+
+  # API-token step 3 -- same pure, no-I/O derivation provision_user/3's
+  # OIDC-branch step 4b already calls.
+  defp resolve_schema_name(tenant_id) do
+    case TenantProvisioning.schema_name_for_tenant(tenant_id) do
+      {:ok, schema_name} -> {:ok, schema_name}
+      {:error, :invalid_tenant_id} -> {:error, {:api_token, :tenant_not_found}}
+    end
+  end
+
+  # API-token step 4 -- Letflow.Identity.verify_api_token/2 (unchanged), the
+  # live, uncached, per-call database read AC4 depends on.
+  defp verify_token_credential(raw_token, schema_name) do
+    case Identity.verify_api_token(raw_token, prefix: schema_name) do
+      {:ok, verified} -> {:ok, verified}
+      {:error, :invalid} -> {:error, {:api_token, :invalid}}
+      {:error, :revoked} -> {:error, {:api_token, :revoked}}
+      {:error, :expired} -> {:error, {:api_token, :expired}}
     end
   end
 

@@ -827,6 +827,339 @@ defmodule Letflow.IdentityTest do
     end
   end
 
+  # ══════════════════════════════════════════════════════════════════════
+  # REQ-076 — API tokens (Identity.create_token/3, list_tokens/1,
+  # revoke_token/2, verify_api_token/2) and onboarding
+  # (Identity.create_onboarding/1, get_onboarding/1,
+  # get_onboarding_by_hostname/1). See test/specs/REQ-076.md for the full
+  # AC-to-test mapping this section implements.
+  # ══════════════════════════════════════════════════════════════════════
+
+  alias Letflow.Identity.ApiToken
+  alias Letflow.Identity.OnboardingRecord
+
+  defp req076_tenant!(slug_prefix) do
+    Letflow.TenantFixture.provisioned_tenant!(slug_prefix: slug_prefix, oidc_mode: :disabled)
+  end
+
+  defp insert_identity_user!(schema_name, username_prefix \\ "token-user") do
+    %User{}
+    |> Ecto.Changeset.change(%{
+      username: "#{username_prefix}-#{System.unique_integer([:positive, :monotonic])}",
+      display_name: "Token Test User",
+      email: "#{username_prefix}-#{System.unique_integer([:positive])}@example.com",
+      password_hash: "__NO_PASSWORD_SET__",
+      status: :active,
+      auth_source: :internal
+    })
+    |> Repo.insert!(prefix: schema_name)
+  end
+
+  # Ecto.UUID.generate/0-derived, NOT System.unique_integer/1 -- the latter is
+  # only unique within a single BEAM VM run, and this module leaves real,
+  # non-rolled-back committed rows behind (Sandbox :auto mode, per
+  # TenantFixture.provisioned_tenant!/1's own moduledoc) that a later `mix test`
+  # invocation's freshly-restarted counter could collide with, exactly the
+  # ISS-0059 failure mode test/support/tenant_slug.ex's own moduledoc documents.
+  defp unique_hostname(prefix \\ "onboard") do
+    "#{prefix}-#{Ecto.UUID.generate()}.example.com"
+  end
+
+  # onboarding_registry.tenant_id has a real FK to tenants -- req076_tenant!/1's
+  # own on_exit/1 (registered inside TenantFixture.provisioned_tenant!/1) deletes
+  # the tenants row at teardown, which fails with a foreign_key_violation unless
+  # any onboarding_registry row this test itself created is deleted first.
+  # Registered AFTER req076_tenant!/1's own on_exit/1, so LIFO ordering runs this
+  # one FIRST, before that teardown's own DELETE FROM tenants.
+  defp cleanup_onboarding_record!(tenant_id) do
+    on_exit(fn ->
+      import Ecto.Query, only: [from: 2]
+      Repo.delete_all(from(o in OnboardingRecord, where: o.tenant_id == ^tenant_id))
+    end)
+  end
+
+  describe "create_token/3 (REQ-076 AC1/AC2/AC3)" do
+    test "issues a token whose plaintext matches the lf_tok_ shape, roles snapshotted onto the row" do
+      %{schema_name: schema_name} = req076_tenant!("req076-token-create")
+      user = insert_identity_user!(schema_name)
+
+      assert {:ok, %{token: %ApiToken{} = token, plaintext: plaintext}} =
+               Identity.create_token(
+                 user.id,
+                 %{roles: ["PLATFORM_ADMIN", "TASK_WORKER"], expires_at: nil},
+                 prefix: schema_name
+               )
+
+      assert plaintext =~ ~r/^lf_tok_[0-9a-f]{64}$/
+      assert token.user_id == user.id
+      assert token.roles == ["PLATFORM_ADMIN", "TASK_WORKER"]
+      assert token.name == "token-" <> String.slice(token.token_hash, 0, 8)
+      assert token.revoked_at == nil
+      assert token.last_used_at == nil
+    end
+
+    test "returns {:error, :user_not_found} for a user_id that does not exist in this schema" do
+      %{schema_name: schema_name} = req076_tenant!("req076-token-nouser")
+
+      assert {:error, :user_not_found} =
+               Identity.create_token(
+                 Ecto.UUID.generate(),
+                 %{roles: ["PLATFORM_ADMIN"], expires_at: nil},
+                 prefix: schema_name
+               )
+    end
+
+    test "returns {:error, :invalid_role_set} for an empty roles list" do
+      %{schema_name: schema_name} = req076_tenant!("req076-token-emptyroles")
+      user = insert_identity_user!(schema_name)
+
+      assert {:error, :invalid_role_set} =
+               Identity.create_token(user.id, %{roles: [], expires_at: nil}, prefix: schema_name)
+    end
+
+    test "returns {:error, :invalid_role_set} for a role string outside the five recognized roles -- not silently dropped like roles_from_strings/1 would" do
+      %{schema_name: schema_name} = req076_tenant!("req076-token-badrole")
+      user = insert_identity_user!(schema_name)
+
+      assert {:error, :invalid_role_set} =
+               Identity.create_token(
+                 user.id,
+                 %{roles: ["NOT_A_REAL_ROLE"], expires_at: nil},
+                 prefix: schema_name
+               )
+    end
+
+    test "returns {:error, :expires_at_in_past} for an expires_at strictly before now" do
+      %{schema_name: schema_name} = req076_tenant!("req076-token-pastexpiry")
+      user = insert_identity_user!(schema_name)
+      past = DateTime.add(DateTime.utc_now(), -1, :second)
+
+      assert {:error, :expires_at_in_past} =
+               Identity.create_token(
+                 user.id,
+                 %{roles: ["PLATFORM_ADMIN"], expires_at: past},
+                 prefix: schema_name
+               )
+    end
+
+    test "the persisted row's own columns never equal the plaintext, checked across every field (AC2)" do
+      %{schema_name: schema_name} = req076_tenant!("req076-token-ac2")
+      user = insert_identity_user!(schema_name)
+
+      assert {:ok, %{token: %ApiToken{id: id}, plaintext: plaintext}} =
+               Identity.create_token(
+                 user.id,
+                 %{roles: ["PLATFORM_ADMIN"], expires_at: nil},
+                 prefix: schema_name
+               )
+
+      # Re-select from Postgres directly, never trust the in-memory reply -- matches
+      # this project's established persistence-test convention
+      # (identity_test.exs's provision_oidc_user/4 tests, role_registry_test.exs).
+      persisted = Repo.get!(ApiToken, id, prefix: schema_name)
+
+      persisted
+      |> Map.from_struct()
+      |> Enum.each(fn {field, value} ->
+        refute value == plaintext,
+               "field #{inspect(field)} on the persisted row equals the plaintext -- AC2 violation"
+      end)
+
+      assert persisted.token_hash != plaintext
+
+      assert persisted.token_hash ==
+               :crypto.hash(:sha256, plaintext) |> Base.encode16(case: :lower)
+    end
+  end
+
+  describe "list_tokens/1 and revoke_token/2 (REQ-076)" do
+    test "list_tokens/1 returns {:ok, []} for an empty tenant schema" do
+      %{schema_name: schema_name} = req076_tenant!("req076-token-listempty")
+
+      assert {:ok, []} = Identity.list_tokens(prefix: schema_name)
+    end
+
+    test "list_tokens/1 lists every issued token in the schema, none dropped" do
+      # Deliberately not asserting exact inserted_at-descending order here: two
+      # inserts issued back-to-back can land in the same `:utc_datetime` second
+      # (Ecto's timestamps() default granularity), which would make an
+      # order-tie-dependent assertion flaky rather than a real proof of
+      # anything -- test_developer_guide.md's "no wall-clock time dependency"
+      # rule extends to not depending on sub-second insert timing either. The
+      # ORDER BY itself is a one-line, low-risk clause (Identity.list_tokens/1's
+      # own @doc); set-membership is what AC-level behavior actually depends on.
+      %{schema_name: schema_name} = req076_tenant!("req076-token-listorder")
+      user = insert_identity_user!(schema_name)
+
+      {:ok, %{token: first}} =
+        Identity.create_token(user.id, %{roles: ["TASK_WORKER"], expires_at: nil},
+          prefix: schema_name
+        )
+
+      {:ok, %{token: second}} =
+        Identity.create_token(user.id, %{roles: ["TASK_WORKER"], expires_at: nil},
+          prefix: schema_name
+        )
+
+      assert {:ok, tokens} = Identity.list_tokens(prefix: schema_name)
+      assert Enum.map(tokens, & &1.id) |> Enum.sort() == Enum.sort([first.id, second.id])
+    end
+
+    test "revoke_token/2 sets revoked_at and is idempotent -- re-revoking returns the same revoked_at, not a later one" do
+      %{schema_name: schema_name} = req076_tenant!("req076-token-revoke")
+      user = insert_identity_user!(schema_name)
+
+      {:ok, %{token: token}} =
+        Identity.create_token(user.id, %{roles: ["TASK_WORKER"], expires_at: nil},
+          prefix: schema_name
+        )
+
+      assert {:ok, %ApiToken{revoked_at: first_revoked_at}} =
+               Identity.revoke_token(token.id, prefix: schema_name)
+
+      refute is_nil(first_revoked_at)
+
+      assert {:ok, %ApiToken{revoked_at: second_revoked_at}} =
+               Identity.revoke_token(token.id, prefix: schema_name)
+
+      assert second_revoked_at == first_revoked_at
+    end
+
+    test "revoke_token/2 returns {:error, :not_found} for a nonexistent token id" do
+      %{schema_name: schema_name} = req076_tenant!("req076-token-revokemissing")
+
+      assert {:error, :not_found} =
+               Identity.revoke_token(Ecto.UUID.generate(), prefix: schema_name)
+    end
+  end
+
+  describe "verify_api_token/2 (REQ-076 AC4/AC5)" do
+    test "AC4 primitive: a revoked token is rejected on the very next verification call, no sleep" do
+      %{schema_name: schema_name} = req076_tenant!("req076-token-ac4primitive")
+      user = insert_identity_user!(schema_name)
+
+      {:ok, %{token: token, plaintext: plaintext}} =
+        Identity.create_token(user.id, %{roles: ["TASK_WORKER"], expires_at: nil},
+          prefix: schema_name
+        )
+
+      assert {:ok, %{user_id: user_id, roles: ["TASK_WORKER"]}} =
+               Identity.verify_api_token(plaintext, prefix: schema_name)
+
+      assert user_id == user.id
+
+      {:ok, _revoked} = Identity.revoke_token(token.id, prefix: schema_name)
+
+      assert {:error, :revoked} = Identity.verify_api_token(plaintext, prefix: schema_name)
+    end
+
+    test "returns {:error, :invalid} for a plaintext that never matches any hash" do
+      %{schema_name: schema_name} = req076_tenant!("req076-token-invalidverify")
+
+      assert {:error, :invalid} =
+               Identity.verify_api_token("lf_tok_" <> String.duplicate("0", 64),
+                 prefix: schema_name
+               )
+    end
+
+    test "returns {:error, :expired} for a token whose expires_at has already passed" do
+      %{schema_name: schema_name} = req076_tenant!("req076-token-expired")
+      user = insert_identity_user!(schema_name)
+      future = DateTime.add(DateTime.utc_now(), 1, :second) |> DateTime.truncate(:second)
+
+      {:ok, %{token: token, plaintext: plaintext}} =
+        Identity.create_token(user.id, %{roles: ["TASK_WORKER"], expires_at: future},
+          prefix: schema_name
+        )
+
+      # Force the already-persisted row's expires_at into the past directly --
+      # avoids a real sleep/wall-clock dependency (test_developer_guide.md's
+      # "no wall-clock time" rule) while still exercising the genuine expiry
+      # comparison inside verify_api_token/2 against a real persisted row.
+      past = DateTime.add(DateTime.utc_now(), -1, :second) |> DateTime.truncate(:second)
+
+      token
+      |> Ecto.Changeset.change(%{expires_at: past})
+      |> Repo.update!(prefix: schema_name)
+
+      assert {:error, :expired} = Identity.verify_api_token(plaintext, prefix: schema_name)
+    end
+
+    test "AC5/INV-1: a token minted under tenant A's schema cannot verify against tenant B's schema" do
+      %{schema_name: schema_a} = req076_tenant!("req076-token-iso-a")
+      %{schema_name: schema_b} = req076_tenant!("req076-token-iso-b")
+      user_a = insert_identity_user!(schema_a)
+
+      {:ok, %{plaintext: plaintext}} =
+        Identity.create_token(user_a.id, %{roles: ["PLATFORM_ADMIN"], expires_at: nil},
+          prefix: schema_a
+        )
+
+      assert {:ok, _verified} = Identity.verify_api_token(plaintext, prefix: schema_a)
+
+      # The row genuinely does not exist under tenant B's schema (per-schema table
+      # isolation) -- {:error, :invalid}, not a status-based rejection.
+      assert {:error, :invalid} = Identity.verify_api_token(plaintext, prefix: schema_b)
+    end
+  end
+
+  describe "Onboarding: create_onboarding/1, get_onboarding/1, get_onboarding_by_hostname/1 (REQ-076)" do
+    test "create_onboarding/1 inserts a row and get_onboarding/1 finds it by id" do
+      %{tenant_id: tenant_id, tenant: tenant} = req076_tenant!("req076-onboard-create")
+      cleanup_onboarding_record!(tenant_id)
+      hostname = unique_hostname()
+
+      assert {:ok, %OnboardingRecord{} = record} =
+               Identity.create_onboarding(%{
+                 tenant_id: tenant_id,
+                 slug: tenant.slug,
+                 hostname: hostname
+               })
+
+      assert record.tenant_id == tenant_id
+      assert record.hostname == hostname
+
+      assert {:ok, ^record} = Identity.get_onboarding(record.id)
+    end
+
+    test "create_onboarding/1 returns {:error, :duplicate_hostname} on a hostname collision" do
+      %{tenant_id: tenant_id_a, tenant: tenant_a} = req076_tenant!("req076-onboard-dup-a")
+      %{tenant_id: tenant_id_b, tenant: tenant_b} = req076_tenant!("req076-onboard-dup-b")
+      cleanup_onboarding_record!(tenant_id_a)
+      hostname = unique_hostname("dup")
+
+      assert {:ok, _first} =
+               Identity.create_onboarding(%{
+                 tenant_id: tenant_id_a,
+                 slug: tenant_a.slug,
+                 hostname: hostname
+               })
+
+      assert {:error, :duplicate_hostname} =
+               Identity.create_onboarding(%{
+                 tenant_id: tenant_id_b,
+                 slug: tenant_b.slug,
+                 hostname: hostname
+               })
+    end
+
+    test "get_onboarding/1 returns {:error, :not_found} for an unknown id" do
+      assert {:error, :not_found} = Identity.get_onboarding(Ecto.UUID.generate())
+    end
+
+    test "get_onboarding_by_hostname/1 finds a bound hostname and misses an unbound one" do
+      %{tenant_id: tenant_id, tenant: tenant} = req076_tenant!("req076-onboard-byhost")
+      cleanup_onboarding_record!(tenant_id)
+      hostname = unique_hostname("byhost")
+
+      {:ok, record} =
+        Identity.create_onboarding(%{tenant_id: tenant_id, slug: tenant.slug, hostname: hostname})
+
+      assert {:ok, ^record} = Identity.get_onboarding_by_hostname(hostname)
+      assert {:error, :not_found} = Identity.get_onboarding_by_hostname(unique_hostname("miss"))
+    end
+  end
+
   # Minimal local helper mirroring Ecto's own test-helper convention (avoids pulling
   # in a full Phoenix-style ConnCase/errors_on just for this one assertion).
   defp errors_on(changeset) do

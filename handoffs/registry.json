@@ -2004,6 +2004,25 @@
       "queue_task_id": 236,
       "queue_agent_id": "tvolodi-orch",
       "note": "WF-02 for REQ-124 (GH#474, queue task 236, stage S9), claimed via get_next_task. Unauthenticated GET /tenant-config for slug-based mobile bootstrap (MOB-2 gate, docs/mobile/build-order.md phase M-0) -- two gaps: (a) Letflow.Routers.TenantConfig route stub (lands in REQ-078, already done) and (b) Letflow.Plugs.ApiPipeline mounting behind Letflow.Plugs.AuthPipeline, which must be resolved explicitly (unauthenticated variant ahead of AuthPipeline, or a documented exemption). depends_on REQ-078 (done, GH#-, merged prior run). SECURITY-REVIEWER in-scope: unauthenticated endpoint returning per-tenant data is a tenant-data path by definition; tenant-enumeration risk on unknown slugs must be addressed. Verified premises stale at claim time: REQ-078 had already resolved the mount-placement gap; the real remaining scope was a new 5-field mobile response shape, distinct from the existing 2-field web-SPA shape -- corrected explicitly in the Step 1 dispatch rather than left for CODE-DESIGNER to rediscover."
+    },
+    {
+      "run_id": "WF03-ISS0273-20260822",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": "S0",
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/mix/tasks/letflow.lint_handoffs.ex",
+        "test/mix/tasks/letflow.lint_handoffs_test.exs"
+      ],
+      "lock_acquired_at": "2026-08-22T12:26:22Z",
+      "lock_released_at": "2026-08-22T13:14:27Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #540 squash-merged (merge commit 155284f). Handoff handoffs/WF03-ISS0273-20260822/step-final-git-merge.json. docs/issues/ISS-0273.yaml marked resolved (severity raised MINOR -> MAJOR, confirmed recurrence of ISS-0262); queue task 273 released with status done; GH#537 closed.",
+      "backfilled": false,
+      "queue_task_id": 273,
+      "queue_agent_id": "tvolodi-orch",
+      "note": "WF-03 for ISS-0273 (GH#537, queue task 273, stage S0), claimed via /tasks/next. mix letflow.lint_handoffs H6 check misclassified test/mix/tasks/letflow.lint_handoffs_test.exs fixtures because @h6_floor_commit (lib/mix/tasks/letflow.lint_handoffs.ex) was left as a BOOTSTRAP placeholder by ISS-0262, re-deriving the floor via `git merge-base HEAD origin/main` on every run instead of being pinned once, per lib/letflow/design/iss0262-h6-floor-commit-addendum.md section 2.3's own unfulfilled instruction (confirmed via git blame: untouched since the 184d846 merge). Design (lib/letflow/design/iss0273-h6-floor-commit-pin.md) pinned @h6_floor_commit to 184d846's parent (c4a8e39729e253397d4f1aa34155a74522930252 -- not 184d846 itself, since --is-ancestor's reflexivity would wrongly grandfather the H6 fixture added in that commit) and deleted resolve_h6_floor_commit/0's runtime fallback + the BOOTSTRAP sentinel entirely. TEST-DESIGNER/TEST-DESIGN-VALIDATOR independently reproduced fail-then-pass via a throwaway worktree at main (17/20) vs. the feature branch (20/20). Full suite 1775/1775, mix letflow.lint_handoffs 0 new violations. No rework cycles -- every gate passed on first attempt."
     }
   ]
 }

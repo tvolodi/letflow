@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0262-20260822/step-08b-code-design-validator-regate.json",
   "created_at": "2026-08-22T09:19:18Z",
   "started_at": "2026-08-22T09:19:18Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-22T09:24:10Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": null,
@@ -34,22 +34,23 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Re-gated lib/letflow/design/iss0262-h6-floor-commit-addendum.md Sec.1.3 only, per task scope. Diffed CODE-DESIGNER's rework commit (1b50956, 'fix(ISS-0262): rewrite H6 addendum Sec.1.3 as prose, remove compilable code') against the version already verified sound in step-08b-code-design-validator-rework.json: the diff touches ONLY Sec.1.3's body -- the compilable Elixir case-branch (concrete variable bindings `pre_floor = pre_floor_file?(...)`, an interpolated `violation_msg`, a full `%{path: ..., hard_new: ..., hard_grandfathered: ..., advisory: ..., parse_error: nil}` map literal) that caused the prior FAIL has been deleted entirely and replaced with prose describing the single substitution (grandfathered?(\"H6\", path) -> pre_floor_file?(path, @h6_floor_commit)) and its three effects on the grandfathered:/message:/hard_new-hard_grandfathered fields. No code block, case/with shape, concrete variable binding, or map literal remains in Sec.1.3 -- function/attribute names appear only as inline prose references, the same style already used throughout Sec.1.1/1.2 of the already-approved document. Confirmed via `git show 1b50956 -- lib/letflow/design/iss0262-h6-floor-commit-addendum.md` that the diff's hunk boundaries are confined to Sec.1.3's body (the section heading, and everything before/after it including Sec.1.1, 1.2, 1.4, 1.5, and Sec.2-7, are byte-identical to what was already independently verified sound in step-08b-code-design-validator-rework.json's 4/5 passing checks) -- no other section changed. Both acceptance criteria of this regate task are met.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0262-20260822",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0262-20260822",
+      "push_status": "skipped -- no code change made by this validator, only handoff bookkeeping",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ORCH routes to ELIXIR-DEV to implement per lib/letflow/design/iss0262-h6-floor-commit-addendum.md (now fully gated, all sections PASS)"
   },
   "rework_count": 1,
   "max_rework": 3,
   "gate_history": [
-    {"iteration": 0, "gated_at": "2026-08-22T09:11:00Z", "status": "FAIL", "summary": "Mechanism sound (4/5 checks independently verified); section 1.3 contained a full compilable function body, not a signature.", "issues": ["Section 1.3 is real code"], "next_action": "Rework CODE-DESIGNER to rewrite section 1.3 as signature/prose only"}
+    {"iteration": 0, "gated_at": "2026-08-22T09:11:00Z", "status": "FAIL", "summary": "Mechanism sound (4/5 checks independently verified); section 1.3 contained a full compilable function body, not a signature.", "issues": ["Section 1.3 is real code"], "next_action": "Rework CODE-DESIGNER to rewrite section 1.3 as signature/prose only"},
+    {"iteration": 1, "gated_at": "2026-08-22T09:24:10Z", "status": "PASS", "summary": "Section 1.3 rewritten as prose only (commit 1b50956); diff confirmed scoped to Sec.1.3 with no other section changed from the previously-verified-sound version.", "issues": [], "next_action": "ORCH routes to ELIXIR-DEV"}
   ]
 }

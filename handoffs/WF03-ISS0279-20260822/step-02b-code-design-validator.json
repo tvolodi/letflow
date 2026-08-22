@@ -1,0 +1,51 @@
+{
+  "handoff_id": "step02b-WF03-ISS0279-20260822",
+  "run_id": "WF03-ISS0279-20260822",
+  "workflow_id": "WF-03",
+  "step": "2b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0279-20260822/step-02b-code-design-validator.json",
+  "created_at": "2026-08-22T16:48:21Z",
+  "started_at": "2026-08-22T16:48:21Z",
+  "completed_at": "2026-08-22T16:53:24Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0279": "See handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json context.requirement_text for the full original text."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0279-20260822/step-02-code-designer.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0279-20260822/step-02-code-designer.json",
+      "lib/letflow/design/iss0279-issue-closure-audit.md",
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "owned_modules": ["docs/agents/protocols/ISSUE_QUEUE.md", "docs/agents/workflows/WF-03_issue_resolving.md", "lib/mix/tasks/letflow.audit_issue_closures.ex"]
+  },
+  "task": {
+    "description": "Validate CODE-DESIGNER's design at lib/letflow/design/iss0279-issue-closure-audit.md (handoff handoffs/WF03-ISS0279-20260822/step-02-code-designer.json) against its own acceptance_criteria. Check: (1) both fix surfaces (doc prose upgrades + letflow.audit_issue_closures Mix.Task design) are fully specified; (2) the exact new/upgraded prose for WF-03_issue_resolving.md Step 5 and ISSUE_QUEUE.md is present and unambiguous enough to paste in verbatim; (3) the Mix.Task design is complete enough to implement without further judgment calls -- @moduledoc, CLI shape, exact gh command(s) and JSON fields, grandfather-list format (compare directly against lib/mix/tasks/letflow.lint_handoffs.ex's real format -- flag any mismatch), exit-code/report format; (4) the live-GitHub-network-in-CI question and the letflow.check-wiring question are BOTH explicitly resolved with stated rationale, not left open or waffled; (5) the design contains NO implementation code (full function bodies) -- flag any that slipped in; (6) nothing in the design contradicts an existing decision record or the ISS-0257 lint_handoffs precedent it's modeled on. If any criterion fails, this is a FAIL -- return specific, actionable rework notes (not vague 'needs more detail'). Complete this handoff: status PASS or FAIL, result.summary stating what was checked and the verdict, result.issues for anything wrong even on a PASS, next_action ('Route to ELIXIR-DEV' on PASS, or 'Return to CODE-DESIGNER for rework' on FAIL). Claim by setting status to IN_PROGRESS only.\n\nRE-VALIDATION (rework iteration 1 of step-02-code-designer.json): CODE-DESIGNER reworked lib/letflow/design/iss0279-issue-closure-audit.md S2.5 to strip the `defp grandfathered?/1` function body down to a bare @spec plus prose, per your prior FAIL. Re-check specifically that S2.5 now contains no implementation code, and re-confirm the other 5 criteria (which passed cleanly last time and were not touched) are still intact. This is not a first dispatch -- flip status to COMPLETED as normal on finishing.",
+    "acceptance_criteria": [
+      "Design independently checked against handoffs/WF03-ISS0279-20260822/step-02-code-designer.json's own six acceptance criteria, one by one, with a stated verdict for each",
+      "Explicit confirmation the grandfather-list format actually matches lint_handoffs.ex's real convention (not just claims to)",
+      "Explicit confirmation no implementation code is present",
+      "Clear PASS/FAIL verdict with actionable rework notes if FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "RE-VALIDATION (rework iteration 1). Re-read lib/letflow/design/iss0279-issue-closure-audit.md in full and re-checked all 6 of CODE-DESIGNER's own acceptance criteria from handoffs/WF03-ISS0279-20260822/step-02-code-designer.json. AC6 (no implementation code) -- the only prior failure -- is now fixed: S2.5 (lines ~345-350) contains only `@spec grandfathered?(pos_integer()) :: boolean()` followed by a prose sentence describing the check ('takes a GitHub issue number and returns whether it appears as the first element of any tuple in @grandfathered'). The prior `defp grandfathered?(number), do: Enum.any?(@grandfathered, fn {n, _, _} -> n == number end)` executable clause is gone -- confirmed by direct read of the current file, not by trusting CODE-DESIGNER's summary. Verified no other executable Elixir code slipped in anywhere else in the document (S2.4's `gh issue view ...` line and the report-format blocks are CLI/output text, not Elixir; all other @spec lines throughout S2.4 are bare signatures with no `do:` bodies). Spot-checked the other 5 criteria against the untouched sections and confirm they are unchanged from the passing prior round: AC1 (both fix surfaces present, S1 doc prose + S2 Mix.Task) intact; AC2 (verbatim block-quoted replacement prose for WF-03_issue_resolving.md Step 5 in S1.1 and ISSUE_QUEUE.md in S1.2) intact and unchanged; AC3 (@moduledoc S2.2, zero-arg CLI shape S2.3, exact `gh issue view --json number,state,comments,closedByPullRequestsReferences` call and consulted fields S2.4, exit-code/report format S2.7) intact; AC4 (S2.1 Q1, live-GitHub-network question) still resolved as (a) LOCAL/ON-DEMAND-ONLY with the same stated rationale, not left open; AC5 (S2.1 Q2, letflow.check wiring) still resolved as NO with the same alias-breaking-risk rationale and explicit rejection of a graceful-skip variant. Non-blocking note carried forward from last round (not a fail): S2.5's @grandfathered tuple shape ({issue_number, date, note}) still structurally differs from lint_handoffs.ex's real {rule, path} 2-tuple (re-confirmed by reading lib/mix/tasks/letflow.lint_handoffs.ex lines 133-176 again this round) -- the design's existing, explicit justification for the deviation (one hard rule here vs. several in lint_handoffs, so a rule slot would be redundant) is unchanged and was correctly preserved rather than reverted, per the rework instruction. All 6 criteria now PASS.",
+    "issues": [
+      "Non-blocking, carried forward and not a rework trigger: the @grandfathered tuple arity ({issue_number, date, note}) structurally differs from lint_handoffs.ex's real {rule, path} shape. The deviation remains explicitly reasoned in the design text (one hard rule vs. several, per-item/dated/traced/no-wildcards convention preserved) -- flagging for ELIXIR-DEV's awareness only."
+    ],
+    "next_action": "Route to ELIXIR-DEV"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

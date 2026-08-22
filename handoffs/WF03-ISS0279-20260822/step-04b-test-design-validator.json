@@ -1,0 +1,48 @@
+{
+  "handoff_id": "step04b-WF03-ISS0279-20260822",
+  "run_id": "WF03-ISS0279-20260822",
+  "workflow_id": "WF-03",
+  "step": "4b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0279-20260822/step-04b-test-design-validator.json",
+  "created_at": "2026-08-22T17:23:55Z",
+  "started_at": "2026-08-22T17:23:55Z",
+  "completed_at": null,
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0279": "See handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json context.requirement_text for the full original text."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0279-20260822/step-04-test-designer.json"],
+    "artifacts_in": [
+      "test/mix/tasks/letflow.audit_issue_closures_test.exs",
+      "lib/mix/tasks/letflow.audit_issue_closures.ex",
+      "test/specs/ISS-0279.md"
+    ],
+    "owned_modules": ["test/mix/tasks/letflow.audit_issue_closures_test.exs"]
+  },
+  "task": {
+    "description": "Validate TEST-DESIGNER's suite at test/mix/tasks/letflow.audit_issue_closures_test.exs (handoff handoffs/WF03-ISS0279-20260822/step-04-test-designer.json) against every acceptance criterion in that handoff. In particular: (1) confirm every real docs/issues/*.yaml github_issue field shape (bare int, bare URL, quoted URL, null/absent) actually has a covering test; (2) confirm classify/1's decision logic (OK-via-comment, OK-via-PR-ref, OK-both, ZERO_EVIDENCE, :not_closed) is fully covered; (3) INDEPENDENTLY APPLY AT LEAST ONE of TEST-DESIGNER's two reported mutants yourself (do not just accept the reported counts -- per core-directives.md 'Every producing step has a validating step', reproduce it) in a throwaway git worktree or in place with a verified revert (git status --porcelain lib/ test/ empty + green re-run, both quoted in your result), and confirm you get the SAME pass/fail counts TEST-DESIGNER reported; (4) confirm no test depends on a live network call to gh (spot-check the PATH-monkey-patched gh.bat fixture approach used for the run/1 integration test); (5) run the full new test file once yourself and quote the real output (`mix test test/mix/tasks/letflow.audit_issue_closures_test.exs`). Complete this handoff: status PASS/FAIL, result.summary (must include which mutant you reproduced, your own counts, and confirmation they match), result.issues, next_action ('Route to TEST-RUNNER' on PASS). Claim by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Every real github_issue field shape confirmed covered by a specific test",
+      "classify/1 decision-branch coverage confirmed complete (OK-via-comment, OK-via-PR-ref, OK-both, ZERO_EVIDENCE, :not_closed)",
+      "At least one mutant independently reproduced by TEST-DESIGN-VALIDATOR itself, in a throwaway worktree or verified in-place revert, with matching pass/fail counts to what TEST-DESIGNER reported",
+      "Confirmed no test makes a live gh network call",
+      "Full test file run once by TEST-DESIGN-VALIDATOR itself, real output quoted",
+      "Clear PASS/FAIL verdict"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Validated test/mix/tasks/letflow.audit_issue_closures_test.exs (18 tests) against every acceptance criterion. (1) Field-shape coverage: F-BARE-INT (github_issue: 205), F-BARE-URL (unquoted https URL), F-QUOTED-URL (quoted https URL), F-NULL-ABSENT (github_issue: null), and F-FIELD-ABSENT each has a dedicated test with isolated Path.expand'd tmp-dir fixtures; F-TRACKED-REAL-CORPUS-NO-CRASH additionally parses the real docs/issues/*.yaml corpus and asserts shape invariants -- all 4 real live shapes covered. (2) classify/1 branch coverage confirmed complete: T-VIOLATION-ARRAY/T-VIOLATION-TOTALCOUNT (both comments-empty shapes -> :violation), T-OK-HAS-COMMENT-ARRAY/T-OK-HAS-COMMENT-TOTALCOUNT (I1), T-OK-HAS-PR-REF (I2), T-OK-BOTH-PRESENT, T-NOT-CLOSED-OPEN, plus T-MISSING-REFS-KEY and T-MISSING-COMMENTS-KEY edge cases -- every classify/1 clause and comments_empty?/1 catch-all is exercised. (3) INDEPENDENTLY REPRODUCED Mutant 1 myself (dropped the closedByPullRequestsReferences check in classify/1: 'if comments_empty?(comments) and refs == [] do' -> 'if comments_empty?(comments) do'), applied directly to lib/mix/tasks/letflow.audit_issue_closures.ex in place. Ran `mix test test/mix/tasks/letflow.audit_issue_closures_test.exs --seed 0`: Result: 17/18 passed, 1 failed -- exactly T-OK-HAS-PR-REF ('Assertion with == failed, left: :violation, right: :ok'), matching TEST-DESIGNER's reported 17/18-passed-with-T-OK-HAS-PR-REF-as-sole-failure exactly. Reverted with `git checkout -- lib/mix/tasks/letflow.audit_issue_closures.ex`; verified `git status --porcelain lib/ test/` returned empty (confirmed via direct command output, no diff), then re-ran the file: Result: 18 passed -- clean. (4) Spot-checked the grandfathered?/1 integration test: PATH is monkey-patched to a fixture gh.bat batch script (restored via on_exit) so System.cmd(\"gh\", ...) in fetch_issue/1 never reaches the real gh binary or network; confirmed no test in the file shells out to real gh. (5) Ran the full file cleanly myself before and after the mutation exercise: `mix test test/mix/tasks/letflow.audit_issue_closures_test.exs --seed 0` -> 'Finished in ~14-21 seconds ... Result: 18 passed' both times, no failures, no skips. No @tag :skip, no TODO markers, no shared hardcoded state between tests (each fixture test uses its own unique tmp dir via System.unique_integer, and the grandfathered?/1 integration test only reads the real, untouched docs/issues/ corpus plus a self-contained fixture gh.bat), and no test depends on another test's side effects. No hardcoded secrets or connection strings found.",
+    "issues": [],
+    "next_action": "Route to TEST-RUNNER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

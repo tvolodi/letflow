@@ -1,0 +1,54 @@
+{
+  "handoff_id": "step04-WF03-ISS0279-20260822",
+  "run_id": "WF03-ISS0279-20260822",
+  "workflow_id": "WF-03",
+  "step": "4",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0279-20260822/step-04-test-designer.json",
+  "created_at": "2026-08-22T17:13:01Z",
+  "started_at": "2026-08-22T17:13:01Z",
+  "completed_at": "2026-08-22T18:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0279": "See handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json context.requirement_text for the full original text."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0279-20260822/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0279-20260822/step-03c-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.audit_issue_closures.ex",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "test/mix/tasks/letflow.lint_handoffs_test.exs"
+    ],
+    "owned_modules": ["test/mix/tasks/letflow.audit_issue_closures_test.exs"]
+  },
+  "task": {
+    "description": "Write a regression test suite for lib/mix/tasks/letflow.audit_issue_closures.ex (net-new module, security- and idiom-reviewed, PASS at both gates). Follow the existing test/mix/tasks/letflow.lint_handoffs_test.exs as your structural model for testing a Mix.Task in this codebase (how it isolates from real repo state, how it invokes the task's internals directly rather than shelling out to `mix` itself, how it fakes/stubs any external command dependency). This module's core logic (tracked_issues/1 parsing docs/issues/*.yaml github_issue fields via regex, classify/1 deciding ZERO_EVIDENCE vs OK from a decoded gh JSON payload, grandfathered?/1 membership check) should be testable WITHOUT a live network call to `gh` -- design your tests to exercise the pure/testable functions directly with fixture data (fabricated docs/issues/ fixture files in a tmp dir, and fabricated gh-JSON-shaped maps/structs passed directly to classify/1), not by invoking the real `gh` CLI. Because this is a net-new module, a fail-then-pass regression test is only meaningful via MUTATION TESTING per docs/agents/workflows/WF-03_issue_resolving.md's 'When the pre-fix failure is non-existence' section (read it -- it is binding on this step): mutate the shipped classify/1 and/or grandfathered?/1 logic in at least 2 targeted ways (e.g. treat a closed issue with comments=0 but a real linked PR as still a violation; treat comments>0 as sufficient even with a self-contradicting/empty comment body; invert the grandfathered?/1 membership check) and record which of your tests fail against each mutant, proving your suite discriminates correct from wrong. Apply mutants in a throwaway git worktree (preferred, per WF-03's Isolation technique) or revert-and-verify in place per that same section's rules -- do NOT leave a mutant in the tree. Write the test file to test/mix/tasks/letflow.audit_issue_closures_test.exs. Do NOT run the suite yourself (TEST-RUNNER's job) beyond what's needed to prove the fail-then-pass mutation results. Complete this handoff: status PASS/FAIL, result.summary (record each mutant and its pass/fail counts, and confirm the mutation revert was verified -- git status --porcelain empty, re-run green), artifacts_out, next_action ('Route to TEST-DESIGN-VALIDATOR'). Claim by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "test/mix/tasks/letflow.audit_issue_closures_test.exs created, covering tracked_issues/1 parsing (all real docs/issues/*.yaml github_issue field shapes: bare integer, bare URL, quoted URL, null/absent), classify/1's ZERO_EVIDENCE vs OK decision, and grandfathered?/1 membership",
+      "Tests use fixture/fabricated data, not a live gh network call",
+      "At least 2 mutants applied to shipped logic, each mutant's per-test pass/fail counts recorded in result.summary, demonstrating the suite is sensitive to each specific trap",
+      "Mutation applied via throwaway worktree OR reverted in place with git status --porcelain empty AND a green re-run, both verified and quoted",
+      "No mutant left in the tree at handoff completion"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/mix/tasks/letflow.audit_issue_closures_test.exs (18 tests) and test/specs/ISS-0279.md against the net-new lib/mix/tasks/letflow.audit_issue_closures.ex. tracked_issues/1 covered against all 4 real github_issue field shapes (bare int, bare URL, quoted URL, null/absent) via isolated tmp-dir fixtures (Path.expand/1'd -- System.tmp_dir!/0 returns a mixed-separator path on Windows that Path.wildcard/1 silently fails to match without normalizing, caught during this run), plus a real-corpus no-crash/shape-invariant test. classify/1 covered directly with 9 fixture-map cases: both violation shapes (bare-array and %{totalCount} comments), both OK-via-comment shapes, OK-via-PR-ref (I2), OK-both, not_closed, and both absent-key edge cases. grandfathered?/1 is private with no exported test seam and run/1 hardcodes @issues_dir, so it is covered via one real end-to-end run/1 integration test against the REAL (untouched) docs/issues corpus with PATH monkey-patched (restored via on_exit) to a fixture gh.bat script -- targets real GH#68 (existing @grandfathered member, ISS-0012.yaml) and real GH#15 (non-member, ISS-0009.yaml), every other real tracked number gets a fixture OPEN response so it never pollutes the assertion. No test calls the real gh binary. Full suite green pre-mutation: 18 passed (14.5s). MUTATION TESTING (net-new module, WF-03 'code under test does not exist' clause): Mutant 1 -- classify/1, dropped the closedByPullRequestsReferences check ('if comments_empty?(comments) and refs == [] do' -> 'if comments_empty?(comments) do'), the handoff-named trap 'treat a closed issue with comments=0 but a real linked PR as still a violation'. Result: 17/18 passed, 1 failed -- exactly T-OK-HAS-PR-REF (I2's dedicated test); T-OK-BOTH-PRESENT correctly still passed since its non-empty comments short-circuit before the mutated refs check. Reverted via 'git checkout -- lib/mix/tasks/letflow.audit_issue_closures.ex'; verified 'git status --porcelain lib/ test/' empty (only the new test file untracked) and re-ran green: 18 passed. Mutant 2 -- grandfathered?/1, inverted the membership check ('Enum.any?(...)' -> 'not Enum.any?(...)'), the handoff-named trap 'invert the grandfathered?/1 membership check'. Result: 17/18 passed, 1 failed -- T-GRANDFATHERED-VS-NEW (print_grandfathered/1 crashed with a MatchError trying to Enum.find/2 GH#15's now-nonexistent @grandfathered tuple, since the inversion misclassified GH#15 as grandfathered and GH#68 as new); every tracked_issues/1 and classify/1 test was unaffected, correctly isolating the mutant's blast radius. Reverted via 'git checkout -- lib/mix/tasks/letflow.audit_issue_closures.ex'; verified 'git status --porcelain lib/ test/' empty and re-ran green: 18 passed. Both mutants applied and reverted sequentially in place (never simultaneously present, no worktree needed); lib/mix/tasks/letflow.audit_issue_closures.ex carries zero diff at handoff completion (git status --porcelain lib/ confirmed empty).",
+    "artifacts_out": [
+      "test/mix/tasks/letflow.audit_issue_closures_test.exs",
+      "test/specs/ISS-0279.md"
+    ],
+    "issues": [],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

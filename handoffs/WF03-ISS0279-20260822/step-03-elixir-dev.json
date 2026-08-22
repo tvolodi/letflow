@@ -1,0 +1,58 @@
+{
+  "handoff_id": "step03-WF03-ISS0279-20260822",
+  "run_id": "WF03-ISS0279-20260822",
+  "workflow_id": "WF-03",
+  "step": "3",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0279-20260822/step-03-elixir-dev.json",
+  "created_at": "2026-08-22T16:54:27Z",
+  "started_at": "2026-08-22T16:54:27Z",
+  "completed_at": "2026-08-22T17:06:38Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0279": "See handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json context.requirement_text for the full original text."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0279-20260822/step-02-code-designer.json",
+      "handoffs/WF03-ISS0279-20260822/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0279-issue-closure-audit.md",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "owned_modules": ["docs/agents/protocols/ISSUE_QUEUE.md", "docs/agents/workflows/WF-03_issue_resolving.md", "lib/mix/tasks/letflow.audit_issue_closures.ex"]
+  },
+  "task": {
+    "description": "Implement the validated design at lib/letflow/design/iss0279-issue-closure-audit.md (read it in full -- it is your complete spec, produced and PASSED by CODE-DESIGNER/CODE-DESIGN-VALIDATOR) for ISS-0279 (GH#551). Two deliverables: (1) apply the exact doc-prose changes it specifies to docs/agents/workflows/WF-03_issue_resolving.md Step 5 and docs/agents/protocols/ISSUE_QUEUE.md (paste the design's verbatim replacement text -- do not paraphrase); (2) implement lib/mix/tasks/letflow.audit_issue_closures.ex exactly per the design's interfaces/@moduledoc/CLI shape/data flow/grandfather-list format/exit-code format, following lib/mix/tasks/letflow.lint_handoffs.ex's real structural conventions for a Mix.Task in this codebase (module naming, Mix.Task behaviour, IO.puts reporting style, Mix.raise on failure). After implementing, RUN the real audit (`mix letflow.audit_issue_closures`) against this repo's actual docs/issues/*.yaml + gh issue data, per the design's section directing you to populate the initial @grandfathered list from real findings -- explicitly EXCLUDE GH#324 and GH#326 from the grandfather list (already resolved with real evidence by WF03-ISS0278-20260822; confirm this yourself by checking `gh issue view 324` and `gh issue view 326` for a comment/PR trail before excluding them -- if either still lacks one, that itself is a finding to report in result.issues, not something to silently paper over). Grandfather any OTHER genuinely pre-existing zero-evidence closures you find, each individually dated/traced per the design's format, never with a wildcard. Confirm the tool compiles and runs cleanly (`mix compile --warnings-as-errors`, then run the task directly and paste its real output into your result.summary). Per this run's earlier design decision, do NOT wire this task into the `letflow.check` alias in mix.exs -- it stays standalone (the design's stated rationale is network-dependency; do not silently override that). Claim by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "docs/agents/workflows/WF-03_issue_resolving.md Step 5 and docs/agents/protocols/ISSUE_QUEUE.md updated with the design's exact verbatim prose",
+      "lib/mix/tasks/letflow.audit_issue_closures.ex implemented per the design, compiles cleanly with mix compile --warnings-as-errors",
+      "mix letflow.audit_issue_closures actually run against real repo data at least once, real output quoted in result.summary",
+      "@grandfathered list populated from real findings, explicitly excludes GH#324/GH#326 only if independently confirmed they now carry evidence, each entry individually dated/traced",
+      "mix.exs's letflow.check alias is NOT modified -- tool stays standalone per the design decision",
+      "No file outside the owned_modules scope + this handoff is touched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented both deliverables per lib/letflow/design/iss0279-issue-closure-audit.md, verbatim where specified. (1) Doc prose: docs/agents/workflows/WF-03_issue_resolving.md Step 5 point 2 replaced with the design's exact hardened wording (evidence-on-close as a HARD requirement, the two-form evidence definition, the GH#324/GH#326 cost citation), and the design's exact one-sentence addition appended to the '## Output' paragraph after 'not just marked done on an agent's say-so.' docs/agents/protocols/ISSUE_QUEUE.md got the new '## Closing an issue's GitHub mirror -- evidence is mandatory' section verbatim, inserted between '## Issue status vocabulary' and '## Picking up a queued issue later'. (2) lib/mix/tasks/letflow.audit_issue_closures.ex implemented per the design's §2.2-§2.7: Mix.Tasks.Letflow.AuditIssueClosures, use Mix.Task, @moduledoc matching the design's exact prose (plus one added 'Discovery notes' section documenting a real-corpus finding, see below), zero-arg run(_args), tracked_issues/1 (File.read!/1 + anchored Regex, no YAML dep, mirrors check_requirements_registration.ex's convention), fetch_issue/1 (System.cmd 'gh issue view <n> --json number,state,comments,closedByPullRequestsReferences', Jason.decode), classify/1 (:ok | :violation | :not_closed per the design's I1-I3), @grandfathered as {number, date, note} tuples with grandfathered?/1, @rule-divided report sections matching §2.7's exact format, Mix.raise/1 on any fetch error OR any new violation. mix.exs was NOT touched -- confirmed via git status, no diff on that file -- the task stays standalone per §2.1 Q2's rationale.\n\nCompile: `mix compile --warnings-as-errors` -> 'Compiling 1 file (.ex)\\nGenerated letflow app', clean, zero warnings.\n\nOne real-corpus deviation from the design's example regex, documented in the module's new 'Discovery notes' moduledoc section and the inline @github_issue_re comment: docs/issues/*.yaml's real github_issue: field is NOT always a bare integer as the design's sketch regex (~r/^github_issue:\\s*(\\d+)/m) assumed -- most entries (URL form, e.g. `github_issue: \"https://github.com/tvolodi/letflow/issues/206\"` or unquoted) would have been silently skipped (0 audited) under the literal example regex. Extended the regex to match bare-int, quoted-URL, and unquoted-URL forms so the audit actually covers the real corpus, which is the design's own stated purpose -- same read mechanism (File.read!/1 + line-oriented Regex, no YAML lib), no architecture change.\n\nRan `mix letflow.audit_issue_closures` for real, twice. First run (empty @grandfathered, per §2.6 step 2): exit 1, 30 new ZERO_EVIDENCE violations, 0 fetch errors, across GH#68/69/72/75/76/78/79/81/82/84/85/86/89/90/108/113/120/127/372/388/392/447/449/452/454/455/461/466/499/524 (docs/issues/ISS-0012/0013/0016/0019/0020/0021/0022/0023/0024/0026/0027/0028/0030/0031/0035/0036/0038/0041/0117/0198/0201/0218/0219/0221/0222/0223/0225/0228/0257/0266.yaml respectively). Independently confirmed GH#324 and GH#326 via `gh issue view 324/326 --json number,state,comments,closedByPullRequestsReferences`: both now CLOSED with real comments (324 has 2, citing WF03-ISS0278-20260822's reconciliation and REVIEWER's REQ-147 decision; 326 has 1, citing the same reconciliation run) and correctly did NOT appear in the violation list -- so per the design's §2.6 step 3, they are excluded from @grandfathered, not included. Populated @grandfathered with all 30 real violations found, each individually dated 2026-08-22 and traced to its docs/issues/ISS-NNNN.yaml path, no wildcards. Second run (populated list): exit 0 -- 'letflow.audit_issue_closures: OK -- 0 new violations across 164 tracked, closed GitHub issues (30 pre-existing grandfathered).' Both runs' full output captured; the clean second run is the evidence this step is done, per the design's §2.6 step 4 and this project's No Speculation rule.",
+    "issues": [],
+    "artifacts_out": [
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "lib/mix/tasks/letflow.audit_issue_closures.ex"
+    ],
+    "next_action": "Route to SECURITY-REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -270,6 +270,33 @@ an error condition, not a second legal form, and
 recorded a reason for is indistinguishable from an oversight, which is the condition
 ISS-0221 was filed about.
 
+**A deferral also goes stale, and staleness is now gated (ISS-0258).** Recording a reason
+is necessary but not sufficient: a rationale that was true when written stays green
+forever unless something re-checks it against the world, which is the ISS-0221 failure
+mode one layer up. `mix letflow.check_deferral_staleness` supplies the missing invariant.
+
+- **The rule.** A deferral is **stale** once its stage becomes active. A stage is
+  *active* iff at least one requirement assigned to it — excluding the deferred entry
+  itself — has `status` `done`, `in_progress`, or `blocked`. `pending` and `cancelled`
+  confer no activity (abandonment is not activity), and a stage with no requirements is
+  inactive. A stale deferral **fails the run**, naming the `REQ-NNN`, its stage, and the
+  sibling ids whose status made the stage active. A deferral pending a not-yet-active
+  stage stays green and is merely reported — the visible-debt principle is unchanged;
+  only its never-expiring half is.
+- **A deferred entry must carry a `stage:`.** Without one, its staleness is undecidable,
+  and an undecidable deferral is a violation rather than the benefit of the doubt.
+- **Scoping a deferral to a sibling requirement instead of a whole stage** uses a
+  recognised prefix inside the same rationale — no new field:
+
+      # impl_order: UNREGISTERED -- blocked-by: REQ-042 -- waiting on the token kernel
+
+  The prefix must be **anchored at the start of the rationale**, the named id must exist
+  in `docs/requirements.yaml`, it may not be the entry's own id, free-text rationale after
+  it is still required, and `blocked-by:` references may not form a cycle. The scope
+  **expires on its own**: once `REQ-042` is `done` or `cancelled`, the deferral is stale
+  again. It is a machine-checkable assertion, not an exemption — there is no exception
+  list, no grandfathering, and no allowlist of any kind.
+
 **As of the `issue_ref` change this warning has a second reason:** for
 `task_type: "issue"`, a guessed id is also a guessed *filename*. Inventing a number now
 produces a `docs/issues/ISS-NNNN.yaml` that can collide with another host's record on the

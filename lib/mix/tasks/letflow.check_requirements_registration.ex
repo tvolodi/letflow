@@ -151,6 +151,11 @@ defmodule Mix.Tasks.Letflow.CheckRequirementsRegistration do
   @marker_form_re ~r/^\s+#\s*impl_order:\s*UNREGISTERED\b\s*(\S.*)?$/
   @well_formed_id_re ~r/^REQ-\d+$/
   @stage_re ~r/^\s+stage:\s*(\S+)/
+  # First whitespace-delimited token only, mirroring @stage_re: 8 real `status:`
+  # lines carry a trailing `# ...` comment, which a rest-of-line capture would
+  # sweep in. Stored raw and uninterpreted -- all status semantics live in
+  # `Mix.Tasks.Letflow.CheckDeferralStaleness` (ISS-0258), never here.
+  @status_re ~r/^\s+status:\s*(\S+)/
 
   @type state :: :registered | :deferred | :neither | :unclassified
 
@@ -158,6 +163,7 @@ defmodule Mix.Tasks.Letflow.CheckRequirementsRegistration do
           id: String.t(),
           line: pos_integer(),
           stage: String.t() | nil,
+          status: String.t() | nil,
           state: state(),
           impl_order: non_neg_integer() | nil,
           rationale: String.t() | nil,
@@ -287,6 +293,7 @@ defmodule Mix.Tasks.Letflow.CheckRequirementsRegistration do
       id: id,
       line: line_no,
       stage: extract_stage(attributed),
+      status: extract_status(attributed),
       state: :unclassified,
       impl_order: nil,
       rationale: nil,
@@ -550,6 +557,16 @@ defmodule Mix.Tasks.Letflow.CheckRequirementsRegistration do
     Enum.find_value(attributed, fn {_n, line} ->
       case Regex.run(@stage_re, line) do
         [_, stage] -> stage
+        nil -> nil
+      end
+    end)
+  end
+
+  @spec extract_status([{pos_integer(), String.t()}]) :: String.t() | nil
+  defp extract_status(attributed) do
+    Enum.find_value(attributed, fn {_n, line} ->
+      case Regex.run(@status_re, line) do
+        [_, status] -> status
         nil -> nil
       end
     end)

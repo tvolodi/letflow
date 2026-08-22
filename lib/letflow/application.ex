@@ -18,7 +18,20 @@ defmodule Letflow.Application do
          %{
            issuer: Keyword.fetch!(oidc_config, :issuer),
            name: Keyword.fetch!(oidc_config, :provider_name),
-           backoff_type: :random
+           backoff_type: :random,
+           # REQ-128: dev/test's local Keycloak serves discovery over plain
+           # HTTP (docker-compose.yml's keycloak service, no TLS termination
+           # in front of it). oidcc's discovery parser otherwise rejects a
+           # non-https userinfo_endpoint outright
+           # (oidcc_provider_configuration.erl's AllowUnsafeHttp quirk,
+           # default false) and the worker never reaches a ready state.
+           # Opt-in only, off by default: config/dev.exs and config/test.exs
+           # set :allow_unsafe_http true; config/prod.exs does not set it at
+           # all, so a real deployed issuer is still held to the safe
+           # default.
+           provider_configuration_opts: %{
+             quirks: %{allow_unsafe_http: Keyword.get(oidc_config, :allow_unsafe_http, false)}
+           }
          }},
         {Registry, keys: :unique, name: Letflow.Registry},
         Letflow.InstanceSupervisor,

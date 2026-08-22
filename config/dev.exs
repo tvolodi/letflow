@@ -48,12 +48,23 @@ config :letflow, Letflow.Repo,
   # so this guard only ever applies here.
   require_dev_db_confirmation: true
 
-# Placeholder — no real Keycloak instance exists yet. Replace with a real
-# per-environment issuer URL once realm provisioning (deferred past S1, see
-# the S1 section note in docs/requirements.yaml) exists.
+# REQ-128: real local Keycloak, replacing the "no real Keycloak instance
+# exists yet" placeholder issuer. Realm import: priv/keycloak/realms/bpm-default.json
+# (docker-compose.yml's keycloak service, `start-dev --import-realm`). Realm
+# name stays "bpm-default" -- NOT renamed -- because it is a pinned domain
+# invariant, not just an OIDC placeholder: Letflow.Identity.Tenant's
+# @default_tenant_slug and its create_changeset/3 pinning both hardcode the
+# literal "bpm-default" as the reserved default-tenant slug AND its required
+# idp_realm_id (see that module, docs/migration/decisions and
+# lib/letflow/design/req019-tenant-realm-binding.md), and dozens of tests
+# (identity_test.exs, claim_mapping_test.exs, auth_pipeline_test.exs, et al.)
+# hardcode "bpm-default" as the realm under test. Renaming the realm would
+# have silently orphaned that whole fixture set from the config it needs.
+# Port is per-workspace local state, same pattern as config/db_port.exs --
+# see config/keycloak_port.exs.
 #
-# client_id: a placeholder OAuth client identifier (REQ-021's OQ-2) — not
-# itself secret. It is only used to build an *unauthenticated*
+# client_id: matches the realm file's `letflow-web` public client (REQ-021's
+# OQ-2 placeholder resolved). It is only used to build an *unauthenticated*
 # Oidcc.ClientContext (no client_secret), since this plug is a resource
 # server that only verifies already-issued bearer tokens, never performs a
 # token exchange. signing_algs: the JWT signing-algorithm allowlist required
@@ -61,18 +72,27 @@ config :letflow, Letflow.Repo,
 # default signing algorithm. token_verifier: which
 # Letflow.Oidc.TokenVerifier implementation Letflow.Plugs.AuthPipeline calls
 # — the real oidcc-backed adapter here, a test double in config/test.exs.
+{keycloak_port, _bindings} = Code.eval_file(Path.expand("keycloak_port.exs", __DIR__))
+
 config :letflow, :oidc,
-  issuer: "https://placeholder-keycloak.invalid/realms/bpm-default",
+  issuer: "http://localhost:#{keycloak_port}/realms/bpm-default",
   provider_name: Letflow.Oidc.DefaultProvider,
-  client_id: "letflow-placeholder-client",
+  client_id: "letflow-web",
   signing_algs: ["RS256"],
-  token_verifier: Letflow.Oidc.TokenVerifier.Oidcc
+  token_verifier: Letflow.Oidc.TokenVerifier.Oidcc,
+  # See lib/letflow/application.ex's provider_configuration_opts comment --
+  # local dev Keycloak serves discovery over plain HTTP, so oidcc's default
+  # https-only validation must be relaxed here. Not set in config/prod.exs.
+  allow_unsafe_http: true
 
 # Per-realm claim-path configuration for Letflow.Oidc.ClaimMapping — distinct
 # from the :oidc key above (that one is REQ-016's provider-worker-startup
 # config, consumed by Letflow.Application; this one is REQ-017's claim-mapping
 # config, consumed by Letflow.Oidc.ClaimMappingConfig.for_realm/1). A realm
 # with no entry here falls back to Letflow.Oidc.ClaimMappingConfig.default/1.
+# Key unchanged (REQ-128 deliberately keeps the realm name "bpm-default" --
+# see the :oidc issuer comment above): this key must match the realm name
+# the token's issuer names.
 config :letflow, :oidc_claim_mapping, %{
   "bpm-default" => %{
     tenant_id_claim: "tenant_id",
@@ -88,6 +108,7 @@ config :letflow, :oidc_claim_mapping, %{
 # (REQ-016's provider-startup config and REQ-017's claim-mapping config).
 # A realm with no entry here falls back to
 # Letflow.Oidc.JitProvisioningConfig.default/1.
+# Key unchanged (REQ-128), same reason as :oidc_claim_mapping above.
 config :letflow, :oidc_jit_provisioning, %{
   "bpm-default" => %{
     enabled: true,

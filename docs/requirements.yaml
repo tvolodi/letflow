@@ -6194,7 +6194,7 @@ requirements:
   - id: REQ-128
     title: Add Keycloak to the dev stack with a Letflow realm and a real issuer
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 234  # letflow-queue task id
     description: >

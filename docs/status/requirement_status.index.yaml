@@ -210,7 +210,7 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 1
+    entries: 3
     note: >
       Opened by ISS-0263's roll (WF03-ISS0263-20260822), successor to volume 2.
       Created with volume 2's header text verbatim (volume number, opening date
@@ -218,6 +218,18 @@ volumes:
       index's `roll_rule.on_exceed` procedure. `entries:` will be incremented
       per HOW-TO-APPEND step 6 as real appends land, starting with this
       closing run's own `done` event.
+      Incremented to 3 by WF02-REQ128-20260822 (ELIXIR-DEV)'s own
+      started+done event pair (2 appends, recounted from the composed file
+      per this note's own recount-every-time rule -- 3 on-disk `- req:`
+      entries in requirement_status.v3.yaml). This run's Step Final rebase
+      found ISS-0263's roll had landed on main mid-run: its own
+      docs/status/requirement_status.v2.yaml commit (written against v2
+      while v2 was still current) conflicted against the closure footer,
+      resolved by discarding the v2 insertion entirely (v2 is now frozen,
+      confirmed byte-identical to origin/main's version by `git diff`) and
+      appending both events to v3.yaml instead, per the same "one run's
+      started/done land one in each volume across a roll boundary" pattern
+      ISS-0263's own entry above establishes.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

@@ -61,7 +61,7 @@ defmodule Letflow.Tasks do
   alias Letflow.Engine.Task
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Identity.GroupMember
-  alias Letflow.Identity.RoleRegistry
+  alias Letflow.Identity.TenantRole
   alias Letflow.Repo
 
   @typedoc "Threaded into every `Repo` call below — `:prefix` derived by the caller from `Letflow.Api.Context.scoped_repo_opts/1`, never from request data."
@@ -204,9 +204,12 @@ defmodule Letflow.Tasks do
   `remove_group_member/3`'s).
 
   Role names: derived, not stored directly — a user "holds" a role iff the
-  role's bound group (`Letflow.Identity.RoleRegistry.list_roles/0`, already
-  shipped, REQ-020) is one of the group ids resolved above. No new role
-  table, no per-user role column anywhere in this schema.
+  role's bound group is one of the group ids resolved above. Resolved via a
+  direct, `:prefix`-scoped read of `Letflow.Identity.TenantRole` (not
+  `Letflow.Identity.RoleRegistry.list_roles/0`, which issues an unprefixed
+  query — see `lib/letflow/design/req083-task-routes-read.md` §3.4 point 2
+  and the Step 2c/rework-1 handoffs this fixes). No new role table, no
+  per-user role column anywhere in this schema.
 
   No caching, no memoization — both queries run fresh on every call,
   consistent with this project's existing per-request-fresh-query precedent
@@ -224,8 +227,13 @@ defmodule Letflow.Tasks do
       )
 
     role_names =
-      RoleRegistry.list_roles()
-      |> Enum.filter(&(&1.group_id in group_ids))
+      Repo.all(
+        from(t in TenantRole,
+          where: t.group_id in ^group_ids,
+          select: %{name: t.name, group_id: t.group_id}
+        ),
+        prefix: prefix
+      )
       |> Enum.map(& &1.name)
 
     %{user_id: user_id, group_ids: group_ids, role_names: role_names}

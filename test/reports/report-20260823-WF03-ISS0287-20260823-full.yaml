@@ -1,0 +1,106 @@
+report_id: report-20260823-WF03-ISS0287-20260823-full
+agent: TEST-RUNNER
+issue: ISS-0287
+workflow_step: WF-03 Step 4 (final test-run gate, "same as WF-02 3/3b/4") -- regression
+  test for the connection-pool headroom clamp-formula fix, plus full-suite end-to-end
+  validation using the corrected TEST_POOL_SIZE=21
+branch: feature/WF03-ISS0287-20260823
+date: 2026-08-23
+
+diff_scope: >
+  scripts/test_parallel.sh, docs/migration/decisions/0009-test-parallel-pool-sizing.md,
+  lib/letflow/design/iss0287-connection-pool-headroom-fix.md,
+  test/scripts/test_parallel_pool_sizing_test.sh, test/specs/ISS-0287.md. No
+  lib/letflow/ application code changed -- confirmed via the commit log
+  (9b329b0..afc7c3e): chore(finding registration), design, fix(test_parallel.sh),
+  test(regression test), test(guard hardening). Any failure elsewhere in the suite
+  would require genuine structural attribution, not assumed pre-existing.
+
+step_1_regression_test:
+  command: "bash test/scripts/test_parallel_pool_sizing_test.sh"
+  exit_code: 0
+  output: >
+    PASS: N=4 all defaults -> new formula (TEST_POOL_SIZE=21)
+    PASS: N=16 all defaults -> unchanged from pre-fix (TEST_POOL_SIZE=5)
+    PASS: N=4, new knobs neutralized -> reproduces OLD pre-fix value (TEST_POOL_SIZE=22)
+    PASS: malformed TEST_SUPERUSER_RESERVED -> ERROR, exit 1 (exit=1, matched error substring)
+    PASS: malformed TEST_NONPOOL_CONNECTION_RESERVE -> ERROR, exit 1 (exit=1, matched error substring)
+    ---
+    test_parallel_pool_sizing_test: 5 passed, 0 failed
+  verdict: PASS (5/5) -- all specified cases confirmed, including both malformed-input
+    ERROR/exit-1 cases and the TEST_POOL_SIZE=21/5/22 values named in the dispatch.
+
+environment:
+  postgres: >
+    `docker compose ps` showed letflow-postgres-1 already "Up ... (healthy)" on
+    0.0.0.0:5462->5432/tcp before this run; `docker compose up -d` not re-invoked since
+    it was already running. No untracked .env LETFLOW_DB_PORT override present (checked
+    .env directly -- contains only QUEUE_AUTH_TOKEN and LETFLOW_KEYCLOAK_PORT), so the
+    default port 5462 was in effect for both compose and Ecto.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no separate
+    DB-setup step taken here.
+  parallel_n: "TEST_PARALLEL_N=4 set explicitly per the dispatch, used directly (not
+    auto-derived from nproc/getconf)."
+
+step_2_full_suite:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  exit_code: 0
+  run_result: >
+    test_parallel: N=4 (source: env override)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=21 (computed: N=4, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    partition 1: 485 tests, 2 properties, 0 failures, exit 0
+    partition 2: 452 tests, 1 property, 0 failures, exit 0
+    partition 3: 486 tests, 2 properties, 0 failures, exit 0
+    partition 4: 470 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 1893 tests, 5 properties, 0 failures (1898/1898 passed)
+  pool_size_confirmation: >
+    TEST_POOL_SIZE=21 was the value actually computed and used by the fixed script (not
+    the pre-fix 22), confirming the corrected clamp formula (superuser_reserved=3,
+    nonpool_reserve=2 factored in alongside headroom=10) is what ran end-to-end, not
+    just what the unit-level regression test asserts in isolation.
+
+failures: []
+
+failure_attribution:
+  method: >
+    Per core-directives.md "Failure Attribution Is Structural, Never By
+    Count-Matching." No failures occurred in either step, so no attribution work was
+    required. Noted here per the dispatch's instruction to do the structural work
+    "if there ARE any failures" -- there were none.
+  note_on_clean_run: >
+    The original ISS-0287 finding (mid-run connection-pool exhaustion) was
+    intermittent under concurrent load, not deterministic every run -- so this single
+    clean run (0/1898 failures) is expected and consistent with the fix working, but
+    does not by itself prove the intermittent failure mode is fully eliminated. It is
+    positive, structurally-relevant evidence: this run used the corrected
+    TEST_POOL_SIZE=21 (down from the pre-fix 22), reducing per-partition pool pressure
+    against Postgres max_connections=100, and produced a fully clean run where the
+    prior WF-02 REQ-076 full run (TEST_POOL_SIZE=22, same TEST_PARALLEL_N=4) had hit
+    pool-exhaustion failures in connection-heavy tests
+    (test/support/tenant_schema_reaper_test.exs,
+    test/letflow/engine_concurrency_test.exs; see
+    test/reports/report-20260823-WF02-REQ076-20260822-full.yaml). Neither of those
+    files is in this branch's diff and neither failed here.
+
+verdict: PASS
+
+summary_line: >
+  Regression test test/scripts/test_parallel_pool_sizing_test.sh: 5/5 passed (exit 0),
+  covering TEST_POOL_SIZE=21 at N=4, =5 at N=16, =22 with the new knobs neutralized,
+  and both malformed-input ERROR/exit-1 cases. Full suite via the fixed
+  scripts/test_parallel.sh at TEST_PARALLEL_N=4: TEST_POOL_SIZE=21 computed and used,
+  combined 1893 tests, 5 properties, 0 failures (1898/1898 passed), exit 0 across all
+  4 partitions. No lib/letflow/ application code in this branch's diff. No failures to
+  attribute. Clean run is expected and consistent with the fix (lower pool size vs.
+  the pre-fix 22, no failures in the previously-affected connection-heavy test files),
+  though the original defect was intermittent so a single clean run is not standalone
+  proof of full elimination.
+
+artifacts_out:
+  - test/reports/report-20260823-WF03-ISS0287-20260823-full.yaml
+
+next_action: PASS -> Route to RELEASE-VALIDATOR

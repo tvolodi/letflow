@@ -43,6 +43,7 @@ defmodule Letflow.Plugs.ApiPipeline do
   forward("/tasks", to: Letflow.Routers.Tasks)
   forward("/promotion", to: Letflow.Routers.Promotion)
   forward("/onboarding", to: Letflow.Routers.Onboarding)
+  forward("/solution-packs", to: Letflow.Routers.SolutionPacks)
   forward("/audit", to: Letflow.Routers.Audit)
   forward("/tenant-config", to: Letflow.Routers.TenantConfig)
   forward("/validation", to: Letflow.Routers.Validation)

@@ -90,7 +90,9 @@ defmodule Letflow.Definitions do
   import Ecto.Query
   import Bitwise
 
+  alias Ecto.Multi
   alias Letflow.Definitions.Graph
+  alias Letflow.Definitions.JsonSchemaShape
   alias Letflow.Definitions.PackUpdateResolution
   alias Letflow.Definitions.ProcessDefinition
   alias Letflow.Definitions.PromotionArtifact
@@ -98,6 +100,7 @@ defmodule Letflow.Definitions do
   alias Letflow.Definitions.PromotionReview
   alias Letflow.Definitions.PromotionReviewStore
   alias Letflow.Definitions.SolutionPackArtefactBase
+  alias Letflow.Engine.VariableSchema
   alias Letflow.Repo
   alias Letflow.SandboxPool
   alias Letflow.SandboxPool.FixtureLoader
@@ -837,6 +840,198 @@ defmodule Letflow.Definitions do
           error
       end
     end
+  end
+
+  # ===================================================================================
+  # REQ-078 -- the SINGLE shared `variable_schemas` registration path
+  # lib/letflow/design/req078-supporting-routes.md §9
+  # ===================================================================================
+
+  @typedoc """
+  One variable-schema registration input. `json_schema` is the ALREADY-DECODED
+  document (a `map()` if well formed). Callers that hold JSON text -- the
+  solution-pack install path, whose wire format carries `schema_content` as a
+  string (R-Co `src/api/routes/solution_packs.zig:299-315`) -- decode it before
+  calling and map a decode failure onto their own error, never onto a
+  half-decoded value passed through here.
+  """
+  @type variable_schema_input :: %{
+          required(:variable_key) => String.t(),
+          required(:json_schema) => term(),
+          optional(:description) => String.t() | nil
+        }
+
+  @typedoc "Every distinct, pattern-matchable failure of the registration path."
+  @type variable_schema_error ::
+          :missing_prefix
+          | :invalid_definition_id
+          | {:duplicate_variable_key, String.t()}
+          | {:blank_variable_key, non_neg_integer()}
+          | {:not_well_formed, variable_key :: String.t(), path :: [String.t()]}
+          | {:schema_too_deep, variable_key :: String.t()}
+
+  @doc """
+  The SINGLE insert path into the tenant-scoped `variable_schemas` table
+  (`Letflow.Engine.VariableSchema`, REQ-109). REQ-078's solution-pack install
+  and REQ-082's definition import both call THIS function; neither adds a
+  second insert path.
+
+  The invariant is about INSERT PATHS, not about text: the only `Repo` insert
+  against `Letflow.Engine.VariableSchema` anywhere in `lib/` is the one inside
+  this function, and no module under `lib/letflow/routers/` performs a `Repo`
+  call of any kind. Documentation that NAMES this table or this function is
+  not a second insert path -- route moduledocs are required to name both, so
+  they point a reader here. See `lib/letflow/design/req078-supporting-routes.md`
+  §18.1 for the three mechanical checks that verify this, and INV-VS-1.
+
+  Behaviour, in this exact order (steps 1-5 issue **zero** queries, so a
+  malformed request never reaches the database):
+
+    1. `opts[:prefix]` missing/nil/empty -> `{:error, :missing_prefix}`;
+       `definition_id` not UUID-shaped -> `{:error, :invalid_definition_id}`.
+    2. `entries == []` -> `{:ok, 0}`. (A pack with no `variable_schemas` array
+       is normal, not an error.)
+    3. A blank or whitespace-only `variable_key` at index `i` ->
+       `{:error, {:blank_variable_key, i}}`.
+    4. A `variable_key` duplicated **within `entries`** ->
+       `{:error, {:duplicate_variable_key, key}}`, checked before any insert --
+       the database's `uq_variable_schema_definition_key` would otherwise
+       surface it as an opaque changeset error mid-transaction.
+    5. Well-formedness of every entry's `json_schema`, via
+       `Letflow.Definitions.JsonSchemaShape.check/1` -- the same predicate
+       `Letflow.Engine.VariableSchema.changeset/2` itself applies. The first
+       failure aborts and nothing is written:
+       `{:error, {:not_well_formed, variable_key, path}}` or
+       `{:error, {:schema_too_deep, variable_key}}`.
+    6. Insert via `Letflow.Engine.VariableSchema.changeset/2` -- REQ-109's
+       changeset, not a second one -- with `prefix: opts[:prefix]` and
+       `on_conflict: :nothing, conflict_target: [:definition_id,
+       :variable_key]`, porting R-Co's
+       `ON CONFLICT (definition_id, variable_key) DO NOTHING`
+       (`src/solution/store.zig:485`) exactly.
+
+  All inserts run in one `Ecto.Multi`, so the function is all-or-nothing.
+  `Letflow.Repo.transaction/1` **joins an already-open transaction** rather
+  than opening a nested one, so when the solution-pack install calls this
+  inside its own transaction, the schema registration and the definitions that
+  install created commit or roll back together (design OQ-5's fixed
+  guarantee). Called outside a transaction, the same call wraps the inserts in
+  one of their own.
+
+  Returns `{:ok, count}`, where `count` counts rows **actually inserted** --
+  a row absorbed by `ON CONFLICT DO NOTHING` is not counted. The mechanism is
+  `created_at`, a `read_after_writes: true` column: a skipped insert returns no
+  row from `RETURNING`, so the field stays `nil`.
+
+  **Row scoping (INV-VS-3).** Rows are keyed to the `definition_id` argument. A
+  pack carrying N definitions calls this function N times with N distinct ids,
+  so the row sets are disjoint and cannot collide with REQ-082 importing a
+  different definition.
+  """
+  @spec register_variable_schemas(
+          definition_id :: Ecto.UUID.t(),
+          entries :: [variable_schema_input()],
+          opts :: opts()
+        ) :: {:ok, non_neg_integer()} | {:error, variable_schema_error()}
+  def register_variable_schemas(definition_id, entries, opts)
+      when is_list(entries) and is_list(opts) do
+    with {:ok, prefix} <- fetch_registration_prefix(opts),
+         {:ok, definition_id} <- cast_registration_definition_id(definition_id),
+         :ok <- check_registration_entries(entries) do
+      insert_variable_schema_rows(definition_id, entries, prefix)
+    end
+  end
+
+  @spec fetch_registration_prefix(opts()) :: {:ok, String.t()} | {:error, :missing_prefix}
+  defp fetch_registration_prefix(opts) do
+    case Keyword.get(opts, :prefix) do
+      prefix when is_binary(prefix) and byte_size(prefix) > 0 -> {:ok, prefix}
+      _missing_or_empty -> {:error, :missing_prefix}
+    end
+  end
+
+  @spec cast_registration_definition_id(term()) ::
+          {:ok, Ecto.UUID.t()} | {:error, :invalid_definition_id}
+  defp cast_registration_definition_id(definition_id) do
+    case Ecto.UUID.cast(definition_id) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, :invalid_definition_id}
+    end
+  end
+
+  # Steps 3-5. Pure -- no query is constructed, let alone issued, until every
+  # entry has passed all three.
+  @spec check_registration_entries([variable_schema_input()]) ::
+          :ok | {:error, variable_schema_error()}
+  defp check_registration_entries(entries) do
+    entries
+    |> Enum.with_index()
+    |> Enum.reduce_while(MapSet.new(), fn {entry, index}, seen ->
+      key = Map.get(entry, :variable_key)
+
+      cond do
+        not is_binary(key) or String.trim(key) == "" ->
+          {:halt, {:error, {:blank_variable_key, index}}}
+
+        MapSet.member?(seen, key) ->
+          {:halt, {:error, {:duplicate_variable_key, key}}}
+
+        true ->
+          case JsonSchemaShape.check(Map.get(entry, :json_schema)) do
+            :ok -> {:cont, MapSet.put(seen, key)}
+            {:error, {:not_well_formed, path}} -> {:halt, {:error, {:not_well_formed, key, path}}}
+            {:error, :too_deep} -> {:halt, {:error, {:schema_too_deep, key}}}
+          end
+      end
+    end)
+    |> case do
+      {:error, _reason} = error -> error
+      %MapSet{} -> :ok
+    end
+  end
+
+  # Step 6. The one and only Repo insert against Letflow.Engine.VariableSchema
+  # in all of lib/ (INV-VS-1).
+  @spec insert_variable_schema_rows(Ecto.UUID.t(), [variable_schema_input()], String.t()) ::
+          {:ok, non_neg_integer()}
+  defp insert_variable_schema_rows(_definition_id, [], _prefix), do: {:ok, 0}
+
+  defp insert_variable_schema_rows(definition_id, entries, prefix) do
+    multi =
+      entries
+      |> Enum.with_index()
+      |> Enum.reduce(Multi.new(), fn {entry, index}, multi ->
+        changeset =
+          VariableSchema.changeset(%VariableSchema{}, %{
+            definition_id: definition_id,
+            variable_key: Map.get(entry, :variable_key),
+            json_schema: Map.get(entry, :json_schema),
+            description: Map.get(entry, :description)
+          })
+
+        Multi.insert(multi, {:variable_schema, index}, changeset,
+          prefix: prefix,
+          on_conflict: :nothing,
+          conflict_target: [:definition_id, :variable_key]
+        )
+      end)
+
+    # Strict match, deliberately: after steps 1-5 the multi cannot return
+    # {:error, _, _, _}. `validate_required/2` is satisfied by construction
+    # (definition_id was cast, variable_key is non-blank, json_schema is a
+    # map), `validate_change(:json_schema, ...)` applies the same predicate
+    # step 5 already ran, and `unique_constraint/3` cannot fire because
+    # `on_conflict: :nothing` suppresses it. A genuine database failure
+    # (missing table, dead connection) raises rather than returning an error
+    # tuple, and belongs on the caller's 500 path.
+    {:ok, changes} = Repo.transaction(multi)
+
+    inserted =
+      Enum.count(changes, fn {_name, %VariableSchema{created_at: created_at}} ->
+        not is_nil(created_at)
+      end)
+
+    {:ok, inserted}
   end
 
   # -----------------------------------------------------------------------------------

@@ -72,6 +72,18 @@ defmodule Letflow.Definitions.ExportImport do
           | Definitions.create_error()
 
   @doc """
+  The single export-document schema-version constant, `"bpm/definition/v1"`.
+
+  Exposed as a function (REQ-078) because
+  `Letflow.Definitions.SolutionPack`'s multi-definition pack document carries
+  the same version string and must not invent a second one — a module
+  attribute is not referenceable from another module. **One version constant
+  in this codebase, not two.**
+  """
+  @spec export_schema_version() :: String.t()
+  def export_schema_version, do: @export_schema_version
+
+  @doc """
   Exports one `process_definitions` row, identified by `id`, into an
   `ExportDocument`. Read-only -- performs no writes (INV-EI-7). `name`, `version`,
   `description` and `graph` are copied verbatim from the fetched row, with no

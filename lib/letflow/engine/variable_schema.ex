@@ -53,33 +53,67 @@ defmodule Letflow.Engine.VariableSchema do
   registered variable schema is stored and looked up"). **The question is
   closed; do not re-open it.**
 
-  ## The registration (INSERT) path is deferred — REQ-078 and REQ-082 carry it
+  ## The registration (INSERT) path — BUILT BY REQ-078, no longer deferred
 
-  REQ-109 builds the table, this schema module, the lookup and the engine
-  wiring. It writes **no** `variable_schemas` row: `Letflow.Engine` only ever
+  REQ-109 built the table, this schema module, the lookup and the engine
+  wiring, and wrote **no** `variable_schemas` row: `Letflow.Engine` only ever
   reads this table. R-Co scoped it identically — variable schemas are
   "created during process definition loading (existing mechanism, not part of
   ISS-202)" (R-Co `src/design/engine-merge.md:173`), with the writes living in
   `src/api/routes/solution_packs.zig:299` (solution-pack install) and
   `src/definition/fixture_loader.zig:32`.
 
-  Those map onto two pending S4 requirements:
+  Those mapped onto two S4 requirements:
 
-    * **REQ-078** — `solution_packs.zig`'s `handleInstall` (L110).
+    * **REQ-078** — `solution_packs.zig`'s `handleInstall` (L110). **Landed;
+      it built the shared function.**
     * **REQ-082** — `definitions.zig`'s `handleImport` (L1126), plus
       `handleCreate`/`handlePut` where the submitted document carries schemas.
+      **Pending; it CALLS the shared function and adds no second
+      implementation.**
 
   **Neither description mentioned `variable_schemas` registration before
-  REQ-109 added the obligation to both.** The registration logic belongs in a
-  **single** shared function on `Letflow.Definitions`; whichever requirement
-  lands first builds it and the second calls it rather than adding a second
-  implementation. A re-import onto the same `definition_id` must **replace**
-  that definition's rows in the same transaction rather than accumulate
-  duplicates against `uq_variable_schema_definition_key`.
+  REQ-109 added the obligation to both.** The registration logic lives in a
+  **single** shared function, `Letflow.Definitions.register_variable_schemas/3`
+  — the one and only insert path into this table anywhere in `lib/`. A
+  re-import onto the same `definition_id` must **replace** that definition's
+  rows in the same transaction rather than accumulate duplicates against
+  `uq_variable_schema_definition_key`; REQ-078's install path never hits that
+  case, because every `definition_id` it writes against was minted by the same
+  transaction (`Letflow.Definitions.SolutionPack`'s moduledoc has the proof).
 
-  Until that path exists the table is empty in production, and
-  `variable_validations/5` legitimately returns `{:ok, %{}}` for every
-  completion.
+  ## OQ-3 (`req109-variable-schemas.md` §11.3) is CLOSED by REQ-078, in favour of validate-before-insert
+
+  A `variable_schemas` row is written by exactly one function —
+  `Letflow.Definitions.register_variable_schemas/3` — and that function rejects
+  any `json_schema` that is not a well-formed JSON Schema document *at every
+  level* with `{:error, {:not_well_formed, variable_key, path}}` before issuing
+  any insert. The well-formedness predicate
+  (`Letflow.Definitions.JsonSchemaShape.check/1`) is additionally wired into
+  `changeset/2` below, so **every** writer is covered — including this
+  module's own test seeds and any future path that bypasses the registration
+  function — not only callers that remember to go through it.
+
+  Consequence for the read path: a top-level non-object `json_schema` can no
+  longer be stored, so `fetch_schemas/3`'s typed `:map` select can no longer
+  raise `ArgumentError` at Ecto load time (**ISS-0089 / GH#306 — closed by
+  construction**), and a nested non-map subschema can no longer be stored
+  either (**ISS-0088 / GH#305 — already resolved separately by the
+  `is_map(subschema)` guard now in
+  `Letflow.EventStore.Registry.JsonSchema.properties_violations/3`; REQ-078
+  makes that guard unreachable as well. GH#305 is closed and must not be
+  reopened**).
+
+  `validations_for/3`'s `{:ok, _not_a_map}` clause and
+  `JsonSchema.properties_violations/3`'s `is_map(subschema)` guard are
+  **deliberately retained** as last-resort guards against a future writer that
+  bypasses `changeset/2` — for example raw SQL inside a migration, or a
+  hand-built `Repo.insert_all/3`, neither of which any changeset can
+  intercept. They are unreachable through every path that exists today. Do not
+  read them as live defences, and do not add a new write path that would make
+  them live again. REQ-078 deletes neither: removing live-looking defensive
+  code in the same change that makes it unreachable removes the safety net at
+  exactly the moment the new guarantee is least proven.
 
   ## Two other consumers remain unwired — REQ-109 changes neither
 
@@ -115,6 +149,7 @@ defmodule Letflow.Engine.VariableSchema do
   require Logger
 
   alias Ecto.Changeset
+  alias Letflow.Definitions.JsonSchemaShape
   alias Letflow.EventStore.Registry.JsonSchema
 
   @primary_key {:id, :binary_id, autogenerate: true}
@@ -145,29 +180,58 @@ defmodule Letflow.Engine.VariableSchema do
   @doc """
   Changeset for a `variable_schemas` row.
 
-  REQ-109 itself writes no rows — this exists because REQ-109's own tests seed
+  REQ-109 itself wrote no rows — this exists because REQ-109's own tests seed
   rows against a provisioned tenant schema, and because REQ-078/REQ-082's
-  shared registration function will need exactly this changeset rather than
-  inventing a second one.
+  shared registration function
+  (`Letflow.Definitions.register_variable_schemas/3`) needs exactly this
+  changeset rather than inventing a second one. REQ-078 has landed and calls
+  it.
 
-  Deliberately minimal: **it does not validate that `json_schema` is itself a
-  well-formed JSON Schema document.** The column is jsonb, which accepts
-  arrays, strings, numbers and booleans as readily as objects. Where that
-  check belongs — here, or in the shared registration function so a bad
-  document is rejected at import/install time with a useful error — is an open
-  question (design §11.3, OQ-3) for whichever of REQ-078/REQ-082 lands first.
-  **That requirement must not assume this changeset already guarantees
-  well-formedness.** The read path defends itself instead: see
-  `validations_for/3`.
+  **`json_schema` IS validated for well-formedness here, at every level**
+  (REQ-078, closing design §11.3's OQ-3 in favour of validate-before-insert —
+  see this module's moduledoc). The column is jsonb, which accepts arrays,
+  strings, numbers and booleans as readily as objects; this changeset is the
+  choke point that stops any of them being stored. A document that is not a
+  JSON object at every level adds a `:json_schema` error and the changeset is
+  invalid.
+
+  This supersedes the earlier text here, which said the changeset "does not
+  validate that `json_schema` is itself a well-formed JSON Schema document"
+  and warned REQ-078/REQ-082 not to assume it does. That warning is now
+  false — the guarantee holds for **every** writer that goes through a
+  changeset, not only for callers of the registration function. Raw SQL in a
+  migration and `Repo.insert_all/3` still bypass it; that is why the read
+  path's defensive branches are retained (see `validations_for/3`).
   """
   @spec changeset(t() | Changeset.t(), map()) :: Changeset.t()
   def changeset(variable_schema, attrs) do
     variable_schema
     |> Changeset.cast(attrs, [:definition_id, :variable_key, :json_schema, :description])
     |> Changeset.validate_required([:definition_id, :variable_key, :json_schema])
+    |> Changeset.validate_change(:json_schema, &validate_json_schema_shape/2)
     |> Changeset.unique_constraint([:definition_id, :variable_key],
       name: :uq_variable_schema_definition_key
     )
+  end
+
+  # REQ-078 §9.3 -- the well-formedness choke point. Delegates to the leaf
+  # module Letflow.Definitions.register_variable_schemas/3 also calls, so
+  # there is exactly one definition of "well formed" in the codebase.
+  # JsonSchemaShape lives in its own module precisely so this Engine module
+  # does not have to call into Letflow.Definitions (wrong dependency
+  # direction -- design OQ-2).
+  @spec validate_json_schema_shape(:json_schema, term()) :: [{:json_schema, String.t()}]
+  defp validate_json_schema_shape(:json_schema, value) do
+    case JsonSchemaShape.check(value) do
+      :ok ->
+        []
+
+      {:error, {:not_well_formed, path}} ->
+        [{:json_schema, "is not a well-formed JSON Schema document at /" <> Enum.join(path, "/")}]
+
+      {:error, :too_deep} ->
+        [{:json_schema, "nesting exceeds the maximum supported depth"}]
+    end
   end
 
   @doc """
@@ -339,6 +403,16 @@ defmodule Letflow.Engine.VariableSchema do
         {:ok, schema} when is_map(schema) ->
           Map.put(acc, key, outcome_for(key, Map.get(incoming_variables, key), schema))
 
+        # UNREACHABLE BY CONSTRUCTION since REQ-078 (see this module's
+        # moduledoc, "OQ-3 ... CLOSED"): changeset/2 now rejects any
+        # json_schema that is not a JSON object at every level, and
+        # Letflow.Definitions.register_variable_schemas/3 is the only insert
+        # path in lib/. This clause is retained as a last-resort guard, NOT as
+        # a live defence -- the only thing that could still fire it is a
+        # writer that bypasses changeset/2 entirely (raw SQL in a migration,
+        # or Repo.insert_all/3). Do not read it as evidence such a row can
+        # exist today, and do not add a write path that would make it live
+        # again.
         {:ok, _not_a_map} ->
           Logger.warning(
             "variable_schemas row has a non-map json_schema; treating as no constraint " <>

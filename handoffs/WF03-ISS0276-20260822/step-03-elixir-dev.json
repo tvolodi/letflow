@@ -1,0 +1,56 @@
+{
+  "handoff_id": "08a79f6c-64c6-487f-8be3-db3c18efd08a",
+  "run_id": "WF03-ISS0276-20260822",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0276-20260822/step-03-elixir-dev.json",
+  "created_at": "2026-08-22T14:59:39Z",
+  "started_at": "2026-08-22T14:59:39Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0276-20260822/step-02-code-designer.json",
+      "handoffs/WF03-ISS0276-20260822/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0276-dev-bootstrap-seed.md",
+      "handoffs/WF03-ISS0276-20260822/step-02b-code-design-validator.json"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.seed.ex", "README.md"]
+  },
+  "task": {
+    "description": "Implement the design at lib/letflow/design/iss0276-dev-bootstrap-seed.md exactly (PASSED by CODE-DESIGN-VALIDATOR, see step-02b-code-design-validator.json). Create lib/mix/tasks/letflow.seed.ex (Mix.Tasks.Letflow.Seed) per the design's module/attrs/idempotency spec, and add the README.md documentation block per the design's exact location. Do not deviate from the design's resolved decisions (idempotency behavior, LETFLOW_DEV_DB_CONFIRMED handling, attrs shape) without flagging back to ORCH first.",
+    "acceptance_criteria": [
+      "lib/mix/tasks/letflow.seed.ex exists, compiles, mix compile --warnings-as-errors clean",
+      "mix format --check-formatted clean",
+      "Task follows the design's call chain: Identity.create_tenant/1 -> TenantProvisioning.provision_tenant_schema/1 -> TenantProvisioning.replay_migrations/1 with the exact attrs and idempotency handling specified",
+      "README.md documents the new mix letflow.seed command at the location the design names",
+      "mix test — no new failures attributable to this change (full suite run, structural attribution per core-directives.md if any pre-existing failures show)"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "Not yet started.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

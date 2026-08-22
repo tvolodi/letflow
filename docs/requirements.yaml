@@ -5846,7 +5846,7 @@ requirements:
   - id: REQ-120
     title: Settle the design-token question -- one token source, or a recorded decision not to have one
     owner: CODE-DESIGNER
-    status: pending
+    status: done
     stage: S8
     impl_order: 239  # letflow-queue task id; depends_on translated to queue task id [232]
     description: >
@@ -6921,3 +6921,58 @@ requirements:
       - "a tenant provisioned BEFORE this change gains the three registry rows after a replay_migrations/2 call, and a second replay_migrations/2 call on the same tenant is a no-op returning success -- one test covers both halves"
       - "the existing seed-count assertion is RETARGETED, not removed: test/letflow/tenant_provisioning_event_seed_test.exs:289's `assert count == 6` becomes `assert count == 9`, and the test name at :278 -- which bakes 'the 6 rows are not duplicated' into its own string -- is updated to match. Quote the diff of both lines and a passing `mix test test/letflow/tenant_provisioning_event_seed_test.exs` run. Deleting or loosening the assertion fails this criterion: re-seed idempotency is a real invariant and the corrected count is the whole point of it"
     depends_on: [REQ-022, REQ-023, REQ-024, REQ-025, REQ-026, REQ-037, REQ-038, REQ-040]
+
+  - id: REQ-141
+    title: Build web/src/styles/tokens.css and migrate web/src/components/ off inline hex literals
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: UNREGISTERED  # drafted by REQ-120's design step; route through REQ-VALIDATOR before assigning a queue task id
+    description: >
+      REQ-120 (lib/letflow/design/req120-design-token-source.md) settled the
+      design-token question: docs/frontend/design-system.md section 2's
+      --color-neutral-*/--color-brand-*/semantic-token palette is the one
+      source of truth. design-tokens/letflow.tokens.json is superseded (a
+      smaller, flatter palette, carried over unused from R-Co's
+      r-co.tokens.json, and internally inconsistent with design-system.md on
+      shared semantic colours -- e.g. primary: #2563EB there vs.
+      --color-brand-600: #228be6 here) and is not adopted. Inline
+      style={{...}} literal hex values are rejected as the standing approach.
+      This requirement builds that decision:
+      1. Create web/src/styles/tokens.css containing exactly the custom
+      properties already specified in design-system.md section 2.1 and 2.2 --
+      copy the palette, do not invent new values here.
+      2. Import it once from the application entry point (web/src/main.tsx or
+      equivalent -- pick the exact site and record why).
+      3. Migrate web/src/components/ from inline hex literals to
+      var(--token-name) references. Real scope as of REQ-120's design step
+      (2026-08-22, re-verify against the tree at this requirement's own start
+      since counts drift): 47 files, 496 hex-literal occurrences, via
+      `grep -rEon "#[0-9a-fA-F]{3,8}" web/src/components/ --include='*.tsx' --include='*.ts'`.
+      If a component needs a color design-system.md's current palette does
+      not cover, that is a design-step addendum (name the new token and why),
+      not a silent invention during implementation.
+      4. Delete design-tokens/letflow.tokens.json and its web/README.md
+      "Known drift" entry -- superseded per REQ-120's decision.
+      5. Tighten the `literal-colour` guard pattern in
+      web/tests/guards/forbidlist.ts (per REQ-120's design artefact section 4)
+      so it also catches a raw color literal inside a JS/TSX inline style
+      object, not only a semicolon-terminated CSS-style declaration --
+      dropping the guard's current semicolon-lookahead requirement is
+      TIGHTENING the pattern to catch more, not weakening it to let something
+      through; keep the existing web/src/styles/tokens.css allowedPaths
+      exemption.
+      6. Update web/README.md's "No stylesheet exists" and
+      "design-tokens/letflow.tokens.json is wired to nothing" drift entries to
+      record resolution.
+      This is REQ-120's own follow-on requirement, drafted and sized by that
+      requirement's design step per its acceptance criteria, not yet routed
+      through REQ-VALIDATOR.
+    acceptance_criteria:
+      - "web/src/styles/tokens.css exists and contains the custom properties specified in design-system.md section 2.1 and 2.2, imported exactly once from the application entry point"
+      - "a fresh grep for `#[0-9a-fA-F]{3,8}` across web/src/components/ (*.tsx, *.ts) returns zero hits outside of comments, or every remaining hit is justified and listed explicitly (e.g. a third-party library requiring a literal it doesn't expose as a CSS variable)"
+      - "design-tokens/letflow.tokens.json no longer exists, and its web/README.md drift entry is removed or marked resolved"
+      - "web/tests/guards/forbidlist.ts's literal-colour pattern flags a raw hex/rgba/hsla literal inside a JS/TSX inline style object (not just a semicolon-terminated CSS declaration), demonstrated by a guard test fixture that fails before the pattern change and passes after"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+      - "no visual/behavioural regression in the migrated components beyond color values matching the design-system.md palette, confirmed by the existing component test suite still passing"
+    depends_on: [REQ-120]

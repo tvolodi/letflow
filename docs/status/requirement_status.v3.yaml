@@ -360,3 +360,40 @@ history:
       passed both before and after (confirmed via git stash), same 3
       pre-existing H6 floor-commit failures unrelated to this change (diff
       touches only the one handoffs/ JSON file, never lib/ or test/).
+  - req: REQ-120
+    event: started
+    agent: CODE-DESIGNER
+    at: "2026-08-22T11:20:23Z"
+    note: >
+      WF02-REQ120-20260822 (queue task 239) started. Settling the
+      design-token question -- one source or a recorded decision not to
+      have one -- among the three unreconciled positions (design-system.md
+      tokens.css model, design-tokens/letflow.tokens.json, inline hex
+      literals).
+  - req: REQ-120
+    event: done
+    agent: CODE-DESIGNER
+    at: "2026-08-22T11:20:23Z"
+    note: >
+      WF02-REQ120-20260822 done. Chose design-system.md's palette as the
+      one source of truth (lib/letflow/design/req120-design-token-source.md).
+      design-tokens/letflow.tokens.json rejected (smaller, no neutral
+      scale, conflicting hex values with design-system.md, wired to
+      nothing per grep). Inline hex literals rejected as no design system
+      at all. literal-colour guard pattern's target change specified
+      (drop semicolon-lookahead, keep tokens.css allowedPaths exemption)
+      -- not implemented here. Follow-on requirement REQ-141 drafted
+      (impl_order: UNREGISTERED) to build tokens.css and migrate
+      web/src/components/'s 47 files / 496 hex-literal occurrences (real
+      grep count, re-verified by CODE-DESIGN-VALIDATOR independently).
+      docs/frontend/design-system.md and web/README.md corrected to match
+      the decision. CODE-DESIGN-VALIDATOR: PASS, all 5 acceptance
+      criteria verified independently, no implementation code found, no
+      file under web/src/components/ modified. SECURITY-REVIEWER out of
+      scope (no tenant-data path -- docs/design artefact only, git diff
+      confirms only docs/frontend/design-system.md, docs/requirements.yaml,
+      web/README.md, and the new lib/letflow/design/ file touched). No
+      executable surface produced (docs-only) -- TEST-DESIGNER/
+      TEST-DESIGN-VALIDATOR/TEST-RUNNER skipped per WF-02's scope test,
+      verified instead by `git diff --stat` confirming zero changes under
+      web/src/components/.

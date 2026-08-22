@@ -1,0 +1,34 @@
+id: ISS-0265
+title: >
+  H1/H3 handoff-lint violation on WF03-ISS0260-20260822
+  step-04d-test-design-validator-recheck.json
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF03-ISS0262-20260822
+discovered_at: "2026-08-22T10:21:47Z"
+severity: MINOR
+description: >
+  `mix letflow.lint_handoffs` reports an [H1] missing/non-string top-level
+  `status` and [H3] non-schema top-level keys violation on
+  handoffs/WF03-ISS0260-20260822/step-04d-test-design-validator-recheck.json:
+  non-schema keys ["acceptance_criteria_coverage", "agent_id", "checks",
+  "fix_commit", "fix_commit_message", "next_action", "prior_step_reference",
+  "timestamp_utc", "type", "verdict"].
+  Introduced by commit dff2270 (PR #515, run WF03-ISS0260-20260822, already
+  merged to main) -- confirmed pre-existing and structurally unrelated to
+  WF03-ISS0262-20260822 (`git diff --stat origin/main...HEAD` for that branch
+  never touches this path; that branch's diff is scoped to
+  lib/mix/tasks/letflow.lint_handoffs.ex, its tests/fixtures, and its own
+  handoffs/WF03-ISS0262-20260822/ files).
+  First surfaced during WF03-ISS0262-20260822 Step Final retry1 and confirmed
+  again on retry2. Grandfathering it was explicitly ruled out of scope for the
+  ISS-0262 H6-floor-commit rework per that fix's own design addendum SS3.1
+  (H1/H3 route separately from the H6 rework).
+affected_files:
+  - handoffs/WF03-ISS0260-20260822/step-04d-test-design-validator-recheck.json
+  - lib/mix/tasks/letflow.lint_handoffs.ex
+related:
+  - ISS-0260
+  - ISS-0262
+queue_task_id: 265
+github_issue: 523
+status: open

@@ -6923,11 +6923,11 @@ requirements:
     depends_on: [REQ-022, REQ-023, REQ-024, REQ-025, REQ-026, REQ-037, REQ-038, REQ-040]
 
   - id: REQ-141
-    title: Build web/src/styles/tokens.css and migrate web/src/components/ off inline hex literals
+    title: Build web/src/styles/tokens.css and wire it into the application entry point
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    impl_order: UNREGISTERED  # drafted by REQ-120's design step; route through REQ-VALIDATOR before assigning a queue task id
+    impl_order: 267  # letflow-queue task id
     description: >
       REQ-120 (lib/letflow/design/req120-design-token-source.md) settled the
       design-token question: docs/frontend/design-system.md section 2's
@@ -6938,41 +6938,209 @@ requirements:
       shared semantic colours -- e.g. primary: #2563EB there vs.
       --color-brand-600: #228be6 here) and is not adopted. Inline
       style={{...}} literal hex values are rejected as the standing approach.
-      This requirement builds that decision:
+      This requirement was originally drafted to also migrate all of
+      web/src/components/ and tighten the literal-colour guard in the same
+      turn; REQ-VALIDATOR FAILed that draft on 2026-08-22 for sizing (47
+      files / 496 occurrences, ~8x this repo's own precedent of ~6 files per
+      mechanical-migration requirement -- see REQ-077/078) and for bundling
+      three qualitatively different deliverables with a real sequencing
+      hazard (the guard tightening is only safe once every component is
+      migrated, or `npm run guards` breaks against files not yet touched).
+      This requirement is narrowed to ONLY the token-source build:
       1. Create web/src/styles/tokens.css containing exactly the custom
       properties already specified in design-system.md section 2.1 and 2.2 --
       copy the palette, do not invent new values here.
       2. Import it once from the application entry point (web/src/main.tsx or
-      equivalent -- pick the exact site and record why).
-      3. Migrate web/src/components/ from inline hex literals to
-      var(--token-name) references. Real scope as of REQ-120's design step
-      (2026-08-22, re-verify against the tree at this requirement's own start
-      since counts drift): 47 files, 496 hex-literal occurrences, via
-      `grep -rEon "#[0-9a-fA-F]{3,8}" web/src/components/ --include='*.tsx' --include='*.ts'`.
-      If a component needs a color design-system.md's current palette does
-      not cover, that is a design-step addendum (name the new token and why),
-      not a silent invention during implementation.
-      4. Delete design-tokens/letflow.tokens.json and its web/README.md
-      "Known drift" entry -- superseded per REQ-120's decision.
-      5. Tighten the `literal-colour` guard pattern in
-      web/tests/guards/forbidlist.ts (per REQ-120's design artefact section 4)
-      so it also catches a raw color literal inside a JS/TSX inline style
-      object, not only a semicolon-terminated CSS-style declaration --
-      dropping the guard's current semicolon-lookahead requirement is
-      TIGHTENING the pattern to catch more, not weakening it to let something
-      through; keep the existing web/src/styles/tokens.css allowedPaths
-      exemption.
-      6. Update web/README.md's "No stylesheet exists" and
-      "design-tokens/letflow.tokens.json is wired to nothing" drift entries to
-      record resolution.
-      This is REQ-120's own follow-on requirement, drafted and sized by that
-      requirement's design step per its acceptance criteria, not yet routed
-      through REQ-VALIDATOR.
+      equivalent -- pick the exact site and record why in the PR/commit).
+      NOT IN THIS REQUIREMENT: no file under web/src/components/ is touched.
+      Component migration is REQ-142..145 (each depends_on: [REQ-141]).
+      Deleting design-tokens/letflow.tokens.json and tightening the
+      literal-colour guard is REQ-146 (depends_on all four migration
+      requirements, since the guard tightening is only safe once every
+      component is migrated off literals).
     acceptance_criteria:
-      - "web/src/styles/tokens.css exists and contains the custom properties specified in design-system.md section 2.1 and 2.2, imported exactly once from the application entry point"
-      - "a fresh grep for `#[0-9a-fA-F]{3,8}` across web/src/components/ (*.tsx, *.ts) returns zero hits outside of comments, or every remaining hit is justified and listed explicitly (e.g. a third-party library requiring a literal it doesn't expose as a CSS variable)"
-      - "design-tokens/letflow.tokens.json no longer exists, and its web/README.md drift entry is removed or marked resolved"
-      - "web/tests/guards/forbidlist.ts's literal-colour pattern flags a raw hex/rgba/hsla literal inside a JS/TSX inline style object (not just a semicolon-terminated CSS declaration), demonstrated by a guard test fixture that fails before the pattern change and passes after"
+      - "web/src/styles/tokens.css exists and contains exactly the custom properties specified in design-system.md section 2.1 and 2.2 (copied, not invented), with a diff/quote showing the two sources match"
+      - "web/src/styles/tokens.css is imported exactly once from the application entry point (web/src/main.tsx or the equivalent picked site), with the exact import site and the reason it was picked recorded in the PR description"
+      - "no file under web/src/components/ is modified by this requirement -- confirmed by `git diff --stat` scoped to this requirement's commits showing no web/src/components/ path"
+      - "design-tokens/letflow.tokens.json is left untouched by this requirement (its deletion is REQ-146's, not this one's)"
+      - "web/tests/guards/forbidlist.ts's literal-colour pattern is left untouched by this requirement (its tightening is REQ-146's, not this one's)"
       - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
-      - "no visual/behavioural regression in the migrated components beyond color values matching the design-system.md palette, confirmed by the existing component test suite still passing"
     depends_on: [REQ-120]
+
+  - id: REQ-142
+    title: Migrate web/src/components/canvas/ off inline hex literals to tokens.css custom properties
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 268  # letflow-queue task id
+    description: >
+      One of four sibling migration requirements splitting REQ-141's original
+      47-file / 496-occurrence component migration (REQ-VALIDATOR FAILed the
+      combined draft for sizing -- see REQ-141's description for the full
+      rationale). This requirement covers web/src/components/canvas/ only:
+      15 files, 118 hex-literal occurrences as re-verified against this
+      worktree on 2026-08-22 via
+      `grep -rEon "#[0-9a-fA-F]{3,8}" web/src/components/canvas/ --include='*.tsx' --include='*.ts'`
+      (re-verify again at this requirement's own start since counts drift).
+      Replace each literal with the matching var(--token-name) from
+      web/src/styles/tokens.css (built by REQ-141). If a component needs a
+      color design-system.md's current palette does not cover, that is a
+      design-step addendum (name the new token and why, get it added to
+      design-system.md and tokens.css), not a silent invention during
+      implementation. This requirement is independent of REQ-143, REQ-144,
+      and REQ-145 -- it touches only canvas/ and does not depend on any of
+      the other three sibling migrations landing first or after.
+    acceptance_criteria:
+      - "a fresh grep for `#[0-9a-fA-F]{3,8}` scoped to web/src/components/canvas/ (*.tsx, *.ts) returns zero hits outside of comments, or every remaining hit is justified and listed explicitly (e.g. a third-party library requiring a literal it doesn't expose as a CSS variable)"
+      - "no file outside web/src/components/canvas/ is modified by this requirement, confirmed by `git diff --stat` scoped to this requirement's commits"
+      - "the existing component test suite for web/src/components/canvas/ passes unchanged (no test assertions altered to accommodate the color-value change)"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: [REQ-141]
+
+  - id: REQ-143
+    title: Migrate web/src/components/promotions/ and instances/ off inline hex literals to tokens.css custom properties
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 269  # letflow-queue task id
+    description: >
+      One of four sibling migration requirements splitting REQ-141's original
+      47-file / 496-occurrence component migration (REQ-VALIDATOR FAILed the
+      combined draft for sizing -- see REQ-141's description for the full
+      rationale). This requirement covers web/src/components/promotions/ (4
+      files, 115 occurrences) and web/src/components/instances/ (8 files, 78
+      occurrences) -- 12 files, 193 occurrences combined, as re-verified
+      against this worktree on 2026-08-22 via
+      `grep -rEon "#[0-9a-fA-F]{3,8}" web/src/components/promotions/ web/src/components/instances/ --include='*.tsx' --include='*.ts'`
+      (re-verify again at this requirement's own start since counts drift).
+      Replace each literal with the matching var(--token-name) from
+      web/src/styles/tokens.css (built by REQ-141). If a component needs a
+      color design-system.md's current palette does not cover, that is a
+      design-step addendum (name the new token and why, get it added to
+      design-system.md and tokens.css), not a silent invention during
+      implementation. This requirement is independent of REQ-142, REQ-144,
+      and REQ-145 -- it touches only promotions/ and instances/ and does not
+      depend on any of the other three sibling migrations landing first or
+      after.
+    acceptance_criteria:
+      - "a fresh grep for `#[0-9a-fA-F]{3,8}` scoped to web/src/components/promotions/ and web/src/components/instances/ (*.tsx, *.ts) returns zero hits outside of comments, or every remaining hit is justified and listed explicitly (e.g. a third-party library requiring a literal it doesn't expose as a CSS variable)"
+      - "no file outside web/src/components/promotions/ and web/src/components/instances/ is modified by this requirement, confirmed by `git diff --stat` scoped to this requirement's commits"
+      - "the existing component test suite for web/src/components/promotions/ and web/src/components/instances/ passes unchanged (no test assertions altered to accommodate the color-value change)"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: [REQ-141]
+
+  - id: REQ-144
+    title: Migrate web/src/components/ui/, forms/, and webhooks/ off inline hex literals to tokens.css custom properties
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 270  # letflow-queue task id
+    description: >
+      One of four sibling migration requirements splitting REQ-141's original
+      47-file / 496-occurrence component migration (REQ-VALIDATOR FAILed the
+      combined draft for sizing -- see REQ-141's description for the full
+      rationale). This requirement covers web/src/components/ui/ (8 files, 64
+      occurrences), web/src/components/forms/ (2 files, 34 occurrences), and
+      web/src/components/webhooks/ (2 files, 35 occurrences) -- 12 files, 133
+      occurrences combined, as re-verified against this worktree on
+      2026-08-22 via
+      `grep -rEon "#[0-9a-fA-F]{3,8}" web/src/components/ui/ web/src/components/forms/ web/src/components/webhooks/ --include='*.tsx' --include='*.ts'`
+      (re-verify again at this requirement's own start since counts drift).
+      Replace each literal with the matching var(--token-name) from
+      web/src/styles/tokens.css (built by REQ-141). If a component needs a
+      color design-system.md's current palette does not cover, that is a
+      design-step addendum (name the new token and why, get it added to
+      design-system.md and tokens.css), not a silent invention during
+      implementation. This requirement is independent of REQ-142, REQ-143,
+      and REQ-145 -- it touches only ui/, forms/, and webhooks/ and does not
+      depend on any of the other three sibling migrations landing first or
+      after.
+    acceptance_criteria:
+      - "a fresh grep for `#[0-9a-fA-F]{3,8}` scoped to web/src/components/ui/, web/src/components/forms/, and web/src/components/webhooks/ (*.tsx, *.ts) returns zero hits outside of comments, or every remaining hit is justified and listed explicitly (e.g. a third-party library requiring a literal it doesn't expose as a CSS variable)"
+      - "no file outside web/src/components/ui/, web/src/components/forms/, and web/src/components/webhooks/ is modified by this requirement, confirmed by `git diff --stat` scoped to this requirement's commits"
+      - "the existing component test suite for web/src/components/ui/, web/src/components/forms/, and web/src/components/webhooks/ passes unchanged (no test assertions altered to accommodate the color-value change)"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: [REQ-141]
+
+  - id: REQ-145
+    title: Migrate web/src/components/layout/, definitions/, and admin/ off inline hex literals to tokens.css custom properties
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 271  # letflow-queue task id
+    description: >
+      One of four sibling migration requirements splitting REQ-141's original
+      47-file / 496-occurrence component migration (REQ-VALIDATOR FAILed the
+      combined draft for sizing -- see REQ-141's description for the full
+      rationale). This requirement covers web/src/components/layout/ (5
+      files, 38 occurrences), web/src/components/definitions/ (1 file, 10
+      occurrences), and web/src/components/admin/ (2 files, 4 occurrences) --
+      8 files, 52 occurrences combined, as re-verified against this worktree
+      on 2026-08-22 via
+      `grep -rEon "#[0-9a-fA-F]{3,8}" web/src/components/layout/ web/src/components/definitions/ web/src/components/admin/ --include='*.tsx' --include='*.ts'`
+      (re-verify again at this requirement's own start since counts drift).
+      Replace each literal with the matching var(--token-name) from
+      web/src/styles/tokens.css (built by REQ-141). If a component needs a
+      color design-system.md's current palette does not cover, that is a
+      design-step addendum (name the new token and why, get it added to
+      design-system.md and tokens.css), not a silent invention during
+      implementation. This requirement is independent of REQ-142, REQ-143,
+      and REQ-144 -- it touches only layout/, definitions/, and admin/ and
+      does not depend on any of the other three sibling migrations landing
+      first or after.
+    acceptance_criteria:
+      - "a fresh grep for `#[0-9a-fA-F]{3,8}` scoped to web/src/components/layout/, web/src/components/definitions/, and web/src/components/admin/ (*.tsx, *.ts) returns zero hits outside of comments, or every remaining hit is justified and listed explicitly (e.g. a third-party library requiring a literal it doesn't expose as a CSS variable)"
+      - "no file outside web/src/components/layout/, web/src/components/definitions/, and web/src/components/admin/ is modified by this requirement, confirmed by `git diff --stat` scoped to this requirement's commits"
+      - "the existing component test suite for web/src/components/layout/, web/src/components/definitions/, and web/src/components/admin/ passes unchanged (no test assertions altered to accommodate the color-value change)"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: [REQ-141]
+
+  - id: REQ-146
+    title: Delete design-tokens/letflow.tokens.json and tighten the literal-colour guard pattern to catch inline JS/TSX style literals
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 272  # letflow-queue task id
+    description: >
+      Final requirement in the REQ-141 split (see REQ-141's description for
+      the full sizing-FAIL rationale). This requirement is deliberately
+      sequenced last -- depends_on all four component-migration requirements
+      -- because tightening the literal-colour guard before every component
+      is migrated would make `npm run guards` fail against files those
+      requirements haven't touched yet.
+      1. Delete design-tokens/letflow.tokens.json (superseded per REQ-120's
+      decision -- docs/frontend/design-system.md section 2's palette is the
+      one source of truth) and remove or mark resolved its web/README.md
+      "Known drift" entry ("design-tokens/letflow.tokens.json is wired to
+      nothing").
+      2. Tighten the `literal-colour` guard pattern in
+      web/tests/guards/forbidlist.ts per REQ-120's design artefact
+      (lib/letflow/design/req120-design-token-source.md section 4): drop the
+      semicolon-lookahead requirement so the pattern also catches a raw
+      hex/rgba/hsla literal inside a JS/TSX inline style object, not only a
+      semicolon-terminated CSS-style declaration. This is TIGHTENING the
+      pattern to catch more, not weakening it to let something through --
+      per docs/agents/workflows/WF-02_requirement_implementation.md Step 2b,
+      note this explicitly in the PR since that step normally flags guard
+      pattern changes for extra scrutiny in the opposite (weakening)
+      direction. Keep the existing web/src/styles/tokens.css allowedPaths
+      exemption unchanged. Add a narrow additional exemption only if a
+      genuine non-token case turns up during this requirement's own work
+      (e.g. a third-party library requiring an inline literal it doesn't
+      expose as a CSS variable); none is known today.
+      3. Update web/README.md's "No stylesheet exists" drift entry to record
+      resolution (tokens.css now exists per REQ-141).
+      Per this repo's established convention for detector/guard logic
+      changes, the guard-pattern change must ship with a fail-first/pass-after
+      mutation-test fixture: a fixture file containing a raw color literal
+      inside a JS/TSX inline style object that the OLD pattern does not flag
+      and the NEW pattern does, proven by running the guard against it before
+      and after the pattern change.
+    acceptance_criteria:
+      - "design-tokens/letflow.tokens.json no longer exists in the tree"
+      - "web/README.md's 'design-tokens/letflow.tokens.json is wired to nothing' and 'No stylesheet exists' drift entries are both removed or marked resolved"
+      - "web/tests/guards/forbidlist.ts's literal-colour pattern flags a raw hex/rgba/hsla literal inside a JS/TSX inline style object (e.g. style={{ color: '#fa5252' }}), demonstrated by a guard test fixture that fails against the OLD pattern and passes against the NEW pattern -- both runs' real output quoted"
+      - "the existing web/src/styles/tokens.css allowedPaths exemption is unchanged and still exercised (guard passes against tokens.css itself)"
+      - "a fresh grep for `#[0-9a-fA-F]{3,8}` across all of web/src/components/ (*.tsx, *.ts) returns zero hits outside of comments before this requirement tightens the guard, confirming REQ-142..145 fully landed first"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: [REQ-142, REQ-143, REQ-144, REQ-145]

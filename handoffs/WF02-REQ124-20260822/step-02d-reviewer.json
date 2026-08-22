@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ124-20260822/step-02d-reviewer.json",
   "created_at": "2026-08-22T10:55:03Z",
   "started_at": "2026-08-22T10:55:03Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-22T10:56:54Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -43,19 +43,27 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "Idiomatic vs. crutch: Letflow.Routers.MobileTenantConfig is a clean, idiomatic Plug.Router sub-router -- plug(:match)/plug(:dispatch), a single GET '/' handler, a catch-all match _ -> Response.not_found/1, hand-built response map, no macro/behaviour machinery. No GenServer standing in for a state machine, no crutch in that sense. Supervision integrity: N/A, correctly -- this is stateless per-request Plug dispatch under Bandit/the existing HTTP acceptor pool, not a supervised long-lived process, so Letflow.InstanceSupervisor and process-per-instance isolation are not implicated at all; nothing here collapses any existing isolation boundary. Scope creep: none -- diff is exactly one new single-purpose router module plus one forward/2 line in Letflow.Router, both scoped tightly to REQ-124; no new abstraction, behaviour, or generic plumbing introduced. Decision-record consistency: mount placement (forwarded from Letflow.Router, declared after /api/tenant-config and before the /api/v1 forward, so it never enters Letflow.Plugs.AuthPipeline) exactly mirrors REQ-078's Letflow.Routers.TenantConfig precedent; Letflow.Plugs.Cors coverage is origin-based so it applies with no change needed, matching the existing module. No divergence from any docs/migration/decisions/ record. Two-module-vs-one verdict: ACCEPT the split itself -- config_map/1 vs mobile_config_map/1 are genuinely different INV-2 allowlists (2-key vs 5-key) built for different callers, matches the project's established one-module-per-concern router pattern (10 existing single-purpose Letflow.Routers.* modules), and keeping them in separate functions/modules is the correct call for auditability, per the design's own §1 reasoning. HOWEVER: safe_get_tenant_by_slug/1 in mobile_tenant_config.ex (lines 186-196) is byte-for-byte identical in logic to Letflow.Routers.TenantConfig.safe_get_tenant_by_slug/1 (lib/letflow/routers/tenant_config.ex:193-203) -- same Identity.get_tenant_by_slug/1 call, same rescue clause, same INV-4 log-the-slug-not-the-exception behavior, differing only in the log message's module-name prefix string. This is not response-shape logic (which legitimately differs and should stay separate) -- it is a generic, security-sensitive (INV-4) lookup-and-rescue wrapper duplicated verbatim across two modules. This is the same class of defect docs/anti-patterns.md's 'Duplicating an Ecto.Query.fragment/1 SQL literal instead of sharing it via a module attribute' entry documents as FAIL/rework grounds: a real, low-risk, mechanical hoist is available (e.g. move this rescue-and-log behavior into Letflow.Identity itself, or a small shared helper both routers call), and leaving it duplicated creates the same silent-drift risk called out in that precedent -- a future INV-4 fix applied to one copy and not the other. This is narrow and does not implicate the two-module split, the response maps, the moduledocs, or the mount placement, all of which PASS.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "type": "crutch/duplication",
+        "severity": "minor",
+        "location": "lib/letflow/routers/mobile_tenant_config.ex:184-196 vs lib/letflow/routers/tenant_config.ex:190-203",
+        "description": "safe_get_tenant_by_slug/1 is duplicated verbatim (rescue clause, INV-4 log-the-slug-not-the-exception behavior, {:error, :lookup_failed} fallback) across the two router modules, differing only in a log-message prefix string. This is generic lookup/rescue plumbing, not response-shape logic, so hoisting it does not couple the two independently-audited response allowlists that the design's two-module split correctly protects.",
+        "suggested_fix": "Hoist the rescue-and-log wrapper into a single shared location both routers call -- e.g. fold it into Letflow.Identity.get_tenant_by_slug/1 itself so it never raises past the context boundary, or a small shared helper (e.g. Letflow.Identity.safe_get_tenant_by_slug/2 taking a caller-label for the log line) -- rather than two near-identical private functions in two router modules."
+      }
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ124-20260822",
       "commit_sha_list": [],
       "remote_branch": null,
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Rework ELIXIR-DEV: hoist the duplicated safe_get_tenant_by_slug/1 rescue-and-log wrapper (identical in lib/letflow/routers/mobile_tenant_config.ex and lib/letflow/routers/tenant_config.ex, differing only in log-message text) into one shared implementation both routers call, per docs/anti-patterns.md's fragment/1-duplication precedent. Everything else in this diff (two-module split, response-map allowlists, mount placement ahead of AuthPipeline, moduledocs) is approved as-is and should not be touched in rework."
   },
   "rework_count": 0,
   "max_rework": 3

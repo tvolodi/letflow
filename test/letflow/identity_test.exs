@@ -790,13 +790,13 @@ defmodule Letflow.IdentityTest do
 
     test "a raise inside get_tenant_by_slug/1 is swallowed into {:error, :lookup_failed}, never propagates" do
       # Passing a non-binary `slug` makes Ecto's own query planner raise
-      # Ecto.QueryError at query-execution time -- confirmed against this
+      # Ecto.Query.CastError at query-execution time -- confirmed against this
       # project's vendored Ecto dependency (deps/ecto/lib/ecto/query/planner.ex,
       # `"value \`#{inspect(v)}\` cannot be dumped to type #{...}"` -> `raise
-      # Ecto.QueryError`). This is a REAL exception raised from inside
+      # Ecto.Query.CastError`). This is a REAL exception raised from inside
       # get_tenant_by_slug/1's own Repo.get_by/2 call, not a simulated or
       # mocked one. If safe_get_tenant_by_slug/2's `rescue` clause were ever
-      # removed, this test would fail with an unhandled Ecto.QueryError
+      # removed, this test would fail with an unhandled Ecto.Query.CastError
       # instead of matching {:error, :lookup_failed} -- see the companion
       # "unwrapped" test below, which pins that this input genuinely raises
       # when NOT going through the wrapper.
@@ -805,7 +805,7 @@ defmodule Letflow.IdentityTest do
     end
 
     test "get_tenant_by_slug/1 itself (unwrapped) DOES raise for the same bad input -- proves the rescue in safe_get_tenant_by_slug/2 is load-bearing, not a no-op" do
-      assert_raise Ecto.QueryError, fn ->
+      assert_raise Ecto.Query.CastError, fn ->
         Identity.get_tenant_by_slug(12_345)
       end
     end

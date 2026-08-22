@@ -229,3 +229,39 @@ content of the realm file, which is the actual substance of decision 0013.
 No other part of this design changed; the verification plan above still
 applies with `bpm-default` in place of `letflow-default` wherever it
 appeared.
+
+## Correction after ISS-0275 (2026-08-22)
+
+This design's "Realm file" section above states:
+
+> This is the mapper the requirement calls non-optional — without it the SPA
+> gets zero roles silently. No audience mapper is added (R-Co's exists for its
+> own resource-server client id check, which Letflow's `Oidcc`-based
+> `TokenVerifier.Oidcc` does not require; adding one unasked would be scope
+> creep — flag only, don't add).
+
+That "No audience mapper is added ... does not require" sentence is
+**factually wrong** and is superseded by this fix. It was written on the
+(unverified) assumption that `Oidcc`'s token validation does not check `aud`;
+the opposite is true — `Oidcc.Token.validate_jwt/3`
+(`deps/oidcc/src/oidcc_token.erl`) unconditionally requires `aud` to contain
+the configured `client_id`, with no configuration flag to disable the check.
+This was not a deliberate library behavior this project chose to route
+around; it was an unverified claim about a dependency's behavior that turned
+out false the first time a real Keycloak-issued token was checked
+(ISS-0275). R-Co's own audience mapper existing for a *different* reason
+(its own resource-server client id check) does not mean Letflow's
+`Oidcc`-based verifier has no such requirement of its own — it does,
+independently, and this project's realm fixture needs the mapper regardless
+of R-Co's original reason for having one.
+
+**Correction actually implemented:** a mapper of type `oidc-audience-mapper`
+now exists on `letflow-web`, named `letflow-web-audience`, appended after
+the existing `realm-roles` mapper in `priv/keycloak/realms/bpm-default.json`.
+See `lib/letflow/design/iss0275-audience-mapper-fix.md` §2 for the exact
+JSON and field-by-field rationale, rather than duplicating it here.
+
+No other part of this design changes — this is an addendum note, not a
+rewrite; the realm name (`bpm-default`, per the "Correction after
+CODE-DESIGN-VALIDATOR PASS" section above), the five roles, the four seeded
+users, and the `realm-roles` mapper all stand as already documented.

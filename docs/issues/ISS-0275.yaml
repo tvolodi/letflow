@@ -24,4 +24,40 @@ affected_files:
   - lib/letflow/plugs/auth_pipeline.ex
 queue_task_id: 275
 github_issue: 545
-status: open
+
+status: resolved
+resolved_in_run: WF03-ISS0275-20260822
+resolved_at: "2026-08-22T15:10:38Z"
+resolution_note: >
+  Root cause confirmed directly against deps/oidcc/src/oidcc_token.erl:
+  Oidcc.Token.validate_jwt/3 rejects any token whose aud claim does not
+  contain the configured client_id ("letflow-web"), unconditionally. The
+  letflow-web client's protocolMappers array had only the pre-existing
+  realm-roles mapper, so no aud claim was ever added to issued tokens.
+  Fix (commit b92a93e, CODE-DESIGNER-designed, CODE-DESIGN-VALIDATOR
+  PASS): appended a standard oidc-audience-mapper protocol mapper to
+  priv/keycloak/realms/bpm-default.json's letflow-web client
+  (included.client.audience: letflow-web, access.token.claim: true,
+  id.token.claim: false), plus a correction addendum to
+  lib/letflow/design/req128-keycloak-dev-stack.md (its original "no
+  audience mapper is added" scope note was based on an incorrect
+  assumption about Oidcc's validation requirements). Verified against a
+  genuinely FRESH Keycloak provisioning (docker compose -p iss0275verify
+  up -d keycloak, distinct project/port from the already-hand-patched
+  live container) -- a password-grant token for operator-user against
+  letflow-web decoded to aud: "letflow-web". SECURITY-REVIEWER PASS
+  (mapper scoped narrowly to letflow-web's own client id, no wildcard/
+  custom-audience broadening, no secret material, no other client
+  touched, no tenant-isolation/field-authz/secrets invariant applies to
+  this realm-config-only change). REVIEWER PASS (diff matches validated
+  design exactly, decision-record correction is genuinely append-only,
+  no scope creep, no lib/letflow/ runtime code touched). Regression test
+  (commit 72bfd12, test/letflow/api/keycloak_realm_audience_mapper_test.exs):
+  static-fixture parse test asserting the mapper's presence and config,
+  plus a regression guard on the untouched realm-roles mapper.
+  TEST-DESIGN-VALIDATOR independently reproduced the fail-then-pass
+  proof itself (pre-fix content swapped to commit 9178d2b: 1/4 passed,
+  3 correctly failed; restored: 4/4 passed, git status --porcelain
+  clean). Full suite (TEST-RUNNER, sh scripts/test_parallel.sh): 1774
+  tests, 5 properties, 0 failures, 1779/1779 passed -- completely clean,
+  no attribution needed.

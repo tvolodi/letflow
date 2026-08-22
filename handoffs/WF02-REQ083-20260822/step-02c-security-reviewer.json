@@ -1,0 +1,68 @@
+{
+  "handoff_id": "a7c3e9d2-5f14-4b8a-9e6c-3d1f8a0b2c94",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ083-20260822/step-02c-security-reviewer.json",
+  "created_at": "2026-08-22T05:57:00Z",
+  "started_at": "2026-08-22T05:50:00Z",
+  "completed_at": "2026-08-22T05:57:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ083-20260822/step-00-git-setup.json",
+      "handoffs/WF02-REQ083-20260822/step-01-code-designer.json",
+      "handoffs/WF02-REQ083-20260822/step-01b-design-validator.json",
+      "handoffs/WF02-REQ083-20260822/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/tasks.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/design/req083-task-routes-read.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2c -- hard security gate on REQ-083's Step 2a implementation (task read routes: GET /tasks, GET /tasks/inbox, GET /tasks/:id), gating against INV-1..INV-8 per security-invariants.md, re-derived from the actual diff (git diff origin/main...HEAD) rather than trusted from the ELIXIR-DEV handoff's self-report.",
+    "acceptance_criteria": [
+      "list_tasks/2 and get_task/2 verified scoped by tenant :prefix on every query path",
+      "get_task/2's not-found vs cross-tenant response verified identical (INV-5) by reading the actual code path",
+      "response builders (task_list_item_map/1, task_detail_map/2) verified as explicit field allowlists, not struct-wholesale encoding (INV-2)",
+      "resolve_principal_scope/2 verified to resolve group/role membership through genuine Letflow.Identity reads, not reimplemented logic, AND verified those reads are themselves tenant-scoped",
+      "endpoint_policy_key(\"GET\", \"/tasks/inbox\") clause verified additive/narrow, no widening of any other route",
+      "no SQL string interpolation of tenant/user input (INV-7)"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "FAIL on INV-1. Re-derived the diff with `git diff origin/main...HEAD` (the branch's local `main` ref is stale in this secondary worktree -- confirmed via `git log --oneline -1 main` = c84c27a vs `origin/main` = b373d08; `origin/main...HEAD` is the correct 12-file, REQ-083-only diff, not the ~75-file diff `main...HEAD` showed, which includes unrelated already-merged work).\n\nScope test: this diff modifies lib/letflow/routers/tasks.ex (new API route handlers reading tenant-scoped task data) and lib/letflow/tasks.ex (a new tenant-data-path context module) -- IN SCOPE, confirming the run's own framing.\n\nInvariant-by-invariant:\n\nINV-1 (tenant data isolation) -- APPLIES. list_tasks/2 and get_task/2 themselves correctly thread `opts[:prefix]` into every Repo call (Repo.all(query, prefix: prefix) at tasks.ex:139, Repo.one(query, prefix: prefix) at tasks.ex:179) -- these two are fine, PASS in isolation. FAILS via resolve_principal_scope/2 (tasks.ex:216-232), which this diff adds and which is on the ROLE-held-task path exercised by both GET /tasks (for a task-worker-only caller, forced via build_list_assignee_scope/3) and GET /tasks/inbox. Its GroupMember read is correctly prefixed (`Repo.all(from(m in GroupMember, ...), prefix: prefix)`, tasks.ex:220-224). Its role-name resolution is NOT: `RoleRegistry.list_roles()` (tasks.ex:227, aliased from Letflow.Identity.RoleRegistry) calls `Letflow.Identity.RoleRegistry.list_roles/0`, whose actual implementation (lib/letflow/identity/role_registry.ex:38-40) is `Repo.all(from(t in TenantRole, order_by: [asc: t.name]))` -- zero `opts`, zero `prefix:` anywhere in that function or anywhere else in role_registry.ex (confirmed by grep, zero hits for \"prefix\" in that file). `tenant_role` is NOT a global table: migration `priv/repo/migrations/20260819000002_create_tenant_role_tenant_scoped.exs` moved it into each tenant's own provisioned schema per Decision 0006, and `priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs` conditionally drops the legacy `public.tenant_role` once each tenant's copy is verified. `RoleRegistry`'s own test file states this explicitly and is unambiguous, not my inference: test/letflow/role_registry_test.exs lines 17-30 -- 'Letflow.Identity.RoleRegistry itself was deliberately NOT modified by REQ-063 ... relying on a future per-request SET search_path mechanism Letflow has \"not built yet\" ... RoleRegistry's unprefixed queries now need a real search_path pointed at a tenant schema to find anything' -- and that test file only passes today because its own setup manually issues `SET search_path TO \"<schema>\", public` on the sandboxed connection before each test body. Grepped lib/ for any production code (outside test/ and design docs) issuing `SET search_path` or an equivalent per-request mechanism: zero hits. So in the actual running application there is no per-request search_path set for the connection RoleRegistry.list_roles/0 uses. Two possible real outcomes in production, both bad: (a) if the legacy `public.tenant_role` has been dropped for this deployment (the normal end state per Decision 0006), this call raises an undefined_table Postgrex error -- an unhandled crash on a path reachable from ordinary tenant-user requests (also implicates INV-8); (b) if the drop guard has not yet run for some tenant (copy incomplete), the legacy global `public.tenant_role` still exists and this call reads it in full, unscoped by any tenant boundary -- a query reaching business data (role-name bindings) with no :prefix-scoping mechanism at all, which is exactly INV-1(a)'s definition of a cross-tenant leak ('a query that reaches business data without going through :prefix-scoping is a cross-tenant leak'), independent of whether the caller's downstream `group_id in group_ids` filter happens, by coincidence of `copy_tenant/2` preserving primary keys verbatim, to usually narrow the result back down to the right tenant. INV-1's own how-to-verify item (a) requires confirming the query is scoped through :prefix 'rather than the default/public schema' -- this query is not, and no branch of this design confirms or falls back safely when it isn't. This is not a pre-existing, already-shipped, exercised-in-production code path being merely inherited: REQ-020 (RoleRegistry) has had no other production caller before this diff (grepped lib/ -- the only non-design, non-test call site of RoleRegistry.list_roles/0 anywhere in the codebase is this diff's own tasks.ex:227), so this diff is the first to reach this gap from a live, tenant-scoped API surface, and REQ-083's own text explicitly names INV-1 as in scope. FAIL.\n\nThe design doc (lib/letflow/design/req083-task-routes-read.md lines 330-341) asserts RoleRegistry.list_roles/0 is 'an existing, already-tested, already-shipped function' as justification for calling it as-is -- that claim is true only inside RoleRegistry's own test harness, which manufactures the search_path RoleRegistry needs; it does not hold for this diff's actual runtime call path. Per HANDOFF_PROTOCOL.md's rule that a handoff's factual premises are checkable and may be wrong, this was verified against the source rather than inherited.\n\nOther invariants, verified independently in case INV-1 is resolved by narrower means than a full rework:\n\nINV-2 (server-side field allowlist) -- APPLIES, PASS. task_list_item_map/1 (routers/tasks.ex:322-335) and task_detail_map/2 (:341-347) are hand-built string-keyed maps (9 and 10 keys respectively), no Jason.Encoder derivation, no Map.from_struct anywhere in the diff (grepped, zero hits). Matches Letflow.Routers.Identity's own user_map/1 discipline as claimed.\n\nINV-5 (not-found/forbidden indistinguishability) -- APPLIES, PASS. get_task/2 (tasks.ex:163-184) has exactly one query and one `case Repo.one(query, prefix: prefix) do nil -> {:error, :not_found}; ... end` -- a cross-tenant id (absent from the caller's own schema, since prefix scopes the query to it) and a genuinely nonexistent id both fall through the identical `nil ->` branch with the identical single round-trip; the router's handle_get_by_id/3 maps both to the identical `Response.not_found(conn)` (routers/tasks.ex:286-287). No branch exists that could distinguish them. PASS.\n\nEndpoint_policy_key(\"GET\", \"/tasks/inbox\") clause -- verified additive/narrow. `git diff origin/main...HEAD -- lib/letflow/api/authorization.ex` shows exactly one new clause (`def endpoint_policy_key(\"GET\", \"/tasks/inbox\"), do: :TasksList`) inserted between the existing \"/tasks\" and \"/tasks/:id\" exact-string clauses; every other clause is unchanged and matched by exact string, so no existing route's resolution can be altered. PASS.\n\nINV-7 (no SQL string interpolation) -- APPLIES, PASS. Grepped `Repo.query` across lib/ and priv/repo/migrations/ touched by this diff: zero hits in the REQ-083 files. Every query in lib/letflow/tasks.ex is Ecto.Query composition with pinned (^) values. PASS.\n\nINV-3, INV-6 (meta, satisfied by this handoff existing) -- N/A / satisfied by process. INV-4 -- APPLIES generally, no new secret-handling code in this diff, no hits. INV-8 -- see INV-1 finding above; the RoleRegistry.list_roles/0 call is also a realistic-failure-path concern (an unhandled Postgrex crash reachable from ordinary tenant-user requests once the legacy public table is dropped), but is reported once under INV-1 since it's the same underlying defect, not double-counted as a separate blocker.\n\nA single FAIL on an applicable invariant terminates validation per this gate's own rule -- INV-1 fails, so overall status is FAIL regardless of the other passing invariants.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ083-20260822/step-02c-security-reviewer.json"
+    ],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "invariant": "INV-1",
+        "description": "Letflow.Tasks.resolve_principal_scope/2 (lib/letflow/tasks.ex:216-232) calls Letflow.Identity.RoleRegistry.list_roles/0 (lib/letflow/identity/role_registry.ex:38-40) to resolve ROLE-held tasks for GET /tasks and GET /tasks/inbox. That function issues Repo.all(from(t in TenantRole, ...)) with no :prefix option and no per-request search_path mechanism exists anywhere in production code (grepped lib/ outside test/ and design docs -- zero hits for SET search_path or equivalent). tenant_role is a per-tenant-schema table since migration 20260819000002_create_tenant_role_tenant_scoped.exs (Decision 0006); the legacy public.tenant_role is conditionally dropped by 20260819000004_drop_legacy_public_identity_tables.exs. Result in production: either an unhandled undefined_table crash (post-drop) or an unscoped read of a stale global table spanning every tenant (pre-drop) -- both fail INV-1's own how-to-verify item (a). test/letflow/role_registry_test.exs's own moduledoc (lines 17-30) documents this gap explicitly as a known, unfinished piece of REQ-063/Decision 0006 ('relying on a future per-request SET search_path mechanism Letflow has \"not built yet\"') -- this diff is the first production caller to reach it (grepped lib/ for other RoleRegistry.list_roles/0 call sites: none). Fix requires either (a) Letflow.Identity.RoleRegistry gaining a prefix-accepting variant of list_roles/0 that this module calls instead, or (b) resolve_principal_scope/2 querying TenantRole directly with an explicit prefix (mirroring how it already reads GroupMember), rather than going through the unprefixed RoleRegistry.list_roles/0. Note for whoever picks this up: this run's own Step 00 handoff scoped owned_modules to explicitly exclude lib/letflow/identity.ex and its submodules ('a read-only dependency, not an owned module') -- option (a) crosses that boundary and may need ORCH/CODE-DESIGNER to widen scope or re-route; option (b) stays inside this run's existing owned_modules (lib/letflow/tasks.ex) and is likely the lower-friction fix, but is a design-level decision (which query mechanism is authoritative for role resolution), not a call for SECURITY-REVIEWER to make unilaterally -- recommend a design revision pass, not a direct ELIXIR-DEV patch, so REVIEWER also sees the resolution before it re-enters the pipeline."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ083-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ083-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework ELIXIR-DEV (INV-1 FAIL) -- recommend routing through CODE-DESIGNER first for a narrow design revision of resolve_principal_scope/2's role-resolution mechanism (see issues[0] for the two candidate fixes and the owned_modules scope question), then back to ELIXIR-DEV to implement, then re-submit to SECURITY-REVIEWER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,195 @@
+report_id: report-20260822-WF02-REQ124-20260822
+agent: TEST-RUNNER
+requirement: REQ-124
+workflow_step: WF-02 Step 4 (test run)
+handoff: handoffs/WF02-REQ124-20260822/step-04-test-runner.json
+branch: feature/WF02-REQ124-20260822
+date: 2026-08-22
+command: "scripts/test_parallel.sh"
+
+toolchain:
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    letflow-postgres-1, confirmed via `docker compose up -d` -- reported already
+    Running (2 days uptime), healthy, port 5462. No .env LETFLOW_DB_PORT override
+    present. `docker compose up -d` also attempted to (re)create letflow-keycloak-1
+    and failed with "port is already allocated" (0.0.0.0:8082 is held by a sibling
+    session's letflow-2-keycloak-1 container) -- Postgres itself was unaffected
+    (already Running, not recreated) and the test suite does not need Keycloak, so
+    this did not block the run.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no
+    separate DB-setup step taken here.
+
+# ---------------------------------------------------------------------------
+# Attempt 1 -- default N (nproc), quoted verbatim (tail)
+# ---------------------------------------------------------------------------
+
+run_attempt_1:
+  parallel_n: "16 (source: nproc, auto-derived, no TEST_PARALLEL_N override)"
+  result: >
+    test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, headroom=10)
+    14 of 16 partitions: "WARNING partition N has no Result: line in its log
+    (compile/config/crash abort), exit=1" -- "0 tests, 0 properties, 0 failures, exit 1"
+    partition 10: 80 tests, 0 properties, 0 failures, exit 0
+    partition 11: 119 tests, 0 properties, 0 failures, exit 0
+    combined (2 completed partitions only): 199 tests, 0 properties, 0 failures (199/199 passed)
+  root_cause: >
+    Every crashed partition's log ends with the same stack trace, at the
+    `mix ecto.migrate` step performed by each partition's own `test` alias
+    (not inside any application or test code):
+    "** (DBConnection.ConnectionError) [Elixir.Letflow.Repo] connection not
+    available and request was dropped from queue after 5990ms ... (db_connection
+    2.10.2) lib/db_connection/ownership.ex:108 ... (ecto_sql 3.14.0)
+    lib/ecto/migrator.ex:169: Ecto.Migrator.with_repo/3 ...
+    lib/mix/tasks/ecto.migrate.ex:151". 16 partitions launching `mix ecto.migrate`
+    concurrently against the same Postgres (max_connections=100) momentarily
+    exceeds capacity during the migration burst -- test_parallel.sh's computed
+    TEST_POOL_SIZE (5, accounting for max_connections/headroom) only covers the
+    steady-state sandboxed test pool, not this concurrent-migration burst at
+    partition startup. This is not test/app code failing -- 0 tests ran in the
+    14 crashed partitions, and the trace never enters any file under lib/ or
+    test/. Not attributed to this branch: no file this branch touches
+    (lib/letflow/routers/mobile_tenant_config.ex, lib/letflow/router.ex,
+    lib/letflow/identity.ex, config/test.exs, docker-compose.yml,
+    scripts/test_parallel.sh) governs pool sizing or migration concurrency, and
+    `git diff --name-only main...HEAD` confirms none of those files are in this
+    branch's diff. Discarded as inconclusive for pass/fail purposes (2 of 16
+    partitions is not the full suite) rather than reported as a real 199/199 --
+    re-ran with a lower N per below to get a genuine full-suite result.
+
+# ---------------------------------------------------------------------------
+# Attempt 2 -- TEST_PARALLEL_N=6 (avoids the migration-burst connection
+# exhaustion above; all 6 partitions completed with real Result: lines)
+# ---------------------------------------------------------------------------
+
+run_attempt_2:
+  parallel_n: "6 (source: env override, TEST_PARALLEL_N=6, set explicitly after attempt 1's burst failure)"
+  result: >
+    test_parallel: TEST_POOL_SIZE=15 (computed: N=6, max_connections=100, headroom=10)
+    partition 1: 315 tests, 2 properties, 3 failures, exit 2
+    partition 2: 299 tests, 0 properties, 0 failures, exit 0
+    partition 3: 272 tests, 0 properties, 0 failures, exit 0
+    partition 4: 271 tests, 0 properties, 1 failures, exit 2
+    partition 5: 272 tests, 1 property, 0 failures, exit 0
+    partition 6: 336 tests, 2 properties, 0 failures, exit 0
+    combined: 1765 tests, 5 properties, 4 failures (1766/1770 passed)
+  exit_code: "[exited with code 0] per test_parallel.sh's own combined-exit convention -- misleading given 4 failures were parsed; see individual partition exit=2 above, which is the authoritative signal."
+
+# ---------------------------------------------------------------------------
+# Attribution of the 4 failures (structural, per core-directives.md)
+# ---------------------------------------------------------------------------
+
+failures:
+  - id: "identity_test.exs:807 (partition 4)"
+    test: >
+      "get_tenant_by_slug/1 itself (unwrapped) DOES raise for the same bad input --
+      proves the rescue in safe_get_tenant_by_slug/2 is load-bearing, not a no-op"
+      (Letflow.IdentityTest)
+    location: test/letflow/identity_test.exs:807-811
+    error: >
+      Expected exception Ecto.QueryError but got Ecto.Query.CastError
+      (deps/ecto/lib/ecto/repo/queryable.ex:504: value `12345` in `where` cannot
+      be cast to type :string in query: from t0 in Letflow.Identity.Tenant,
+      where: t0.slug == ^12345, select: t0)
+      code: assert_raise Ecto.QueryError, fn -> Identity.get_tenant_by_slug(12_345) end
+    diff_scope: >
+      test/letflow/identity_test.exs is one of this branch's own artifacts_in
+      (TEST-DESIGNER's new file for REQ-124 AC5) -- directly in scope, not
+      pre-existing.
+    root_cause: >
+      The test's own comment (lines 792-802) claims the exception type was
+      "confirmed against this project's vendored Ecto dependency" as
+      Ecto.QueryError, but the actual vendored Ecto (ecto 3.14.1, per this
+      run's stacktrace) raises Ecto.Query.CastError for a non-string value
+      compared against a :string-typed column -- a different, more specific
+      exception module than the one hardcoded in the `assert_raise` pin. The
+      companion wrapped-call test (line 803-804, `safe_get_tenant_by_slug(12_345, ...)`)
+      passes, because `safe_get_tenant_by_slug/2`'s `rescue _exception ->` clause
+      is a bare rescue that catches any exception class -- so REQ-124 AC5's
+      actual behavior (the wrapper swallows the raise into
+      `{:error, :lookup_failed}`) is NOT broken. Only this one pinning
+      assertion, which names the wrong specific exception module for the
+      *unwrapped* call, is wrong.
+      verdict: BRANCH-OWNED, real failure -- test-code defect, not an app-code
+      bug. `Identity.safe_get_tenant_by_slug/2`'s rescue behavior is correct as
+      implemented; the test's exception-class assumption is stale/wrong.
+    attribution_form: "in-diff, root-caused directly (test asserts wrong exception module against the real, current Ecto version)"
+    disposition: "REWORK -- route to TEST-DESIGNER to correct the asserted exception type (Ecto.Query.CastError, or assert on a shared ancestor / just `assert_raise` without a specific module) in test/letflow/identity_test.exs:808."
+
+  - id: "lint_handoffs_test.exs x3 (partition 1: F-H6-CONTENT-NEVER-READ, F-H6-FIRES-NEW; T-NEW-AFTER-FLOOR-HARD-FAILS)"
+    test: >
+      Mix.Tasks.Letflow.LintHandoffsTest -- "lint_file/2 -- H6 fires on the
+      non-JSON fixture (un-grandfathered)" (2 tests) and "pre_floor_file?/2 --
+      commit-boundary ancestry, real repo history" (1 test)
+    location: test/mix/tasks/letflow.lint_handoffs_test.exs:106, :127, :297
+    error: >
+      All three: `assert [violation] = result.hard_new` (or `[%{rule: "H6"}]`),
+      `left: [violation]`, `right: []` -- the fixture file
+      (test/fixtures/lint_handoffs/h6/step-01-fixture-non-json.md) is being
+      classified as hard_grandfathered instead of hard_new.
+    diff_scope: >
+      Neither this test file nor its module under test
+      (lib/mix/tasks/letflow.lint_handoffs.ex) appears in
+      `git diff --name-only main...HEAD` for this branch -- confirmed: this
+      branch's diff is docs/requirements.yaml, docs/status/*, handoffs/WF02-REQ124-*,
+      lib/letflow/design/req124-mobile-tenant-config.md, lib/letflow/identity.ex,
+      lib/letflow/router.ex, lib/letflow/routers/mobile_tenant_config.ex,
+      lib/letflow/routers/tenant_config.ex, test/letflow/identity_test.exs,
+      test/letflow/routers/mobile_tenant_config_test.exs, test/specs/REQ-124.md.
+    merge_base_repro: >
+      Reproduced identically at merge-base (git merge-base main HEAD =
+      e5cce4794524401e77e7993a2cd3027c03feb8d1) via a throwaway `git worktree add`
+      (deps/build isolated via MIX_DEPS_PATH pointed at the main checkout's
+      deps/, MIX_BUILD_PATH pointed at a scratch _build dir so the shared cache
+      was untouched) -> `mix test test/mix/tasks/letflow.lint_handoffs_test.exs`
+      gave "Result: 17/20 passed", "Failed: 3 tests" -- same 3 tests, same
+      assertion shapes (`left: [violation]`/`right: []`), same line numbers.
+      Worktree removed via `git worktree remove --force` immediately after;
+      `git worktree list` afterward shows only the main checkout.
+    root_cause_diagnosed: >
+      `lib/mix/tasks/letflow.lint_handoffs.ex`'s `@h6_floor_commit "BOOTSTRAP"`
+      (line 133) resolves dynamically via `git merge-base HEAD origin/main`
+      (`resolve_h6_floor_commit/0`, line ~197) every time the task or its tests
+      run, per its own moduledoc comment: "Step Final has not yet run on this
+      branch, so the real pre-merge origin/main tip is not yet known... MUST
+      edit this literal... each attempt, until one succeeds." Because the fixture
+      file (test/fixtures/lint_handoffs/h6/step-01-fixture-non-json.md) is a
+      real, already-committed file in this repo's history (per its own
+      moduledoc: "a permanent, committed... fixture"), as `origin/main` advances
+      past the fixture's own commit, the dynamically-resolved floor moves later
+      than the fixture's first-appearance commit -- so `pre_floor_file?/2` now
+      classifies it as pre-floor (grandfathered) instead of new, inverting the
+      test's premise that this fixture proves the "un-grandfathered" case. This
+      is a time/git-state-dependent defect in ISS-0262's own floor-commit
+      mechanism (status: resolved, resolved_at 2026-08-22T08:30:00Z) that has
+      regressed since resolution as `main` advanced -- unrelated to REQ-124.
+    attribution_form: "not in diff (a), AND reproduced identically at merge-base (b)"
+    existing_issue_check: >
+      Searched docs/issues/*.yaml for H6/lint_handoffs/hard_new/floor_commit/
+      pre_floor_file? -- ISS-0262 (the original H6 feature, status: resolved)
+      and ISS-0266 (a different lint_handoffs-adjacent test,
+      status: no_defect/superseded_by ISS-0264) both exist but neither
+      describes this specific symptom (floor-commit dynamic resolution making
+      the fixture itself go stale). No existing issue record found for this.
+    disposition: "REPORT FOR FILING -- new finding, not folded into ISS-0262 or ISS-0266. ORCH to file via ISSUE_QUEUE.md; not fixed here (pre-existing, out of REQ-124's scope, and TEST-RUNNER does not own lib/mix/tasks/letflow.lint_handoffs.ex)."
+
+verdict: FAIL
+
+summary_line: >
+  scripts/test_parallel.sh run to completion twice: attempt 1 (N=16, nproc
+  default) hit connection-pool exhaustion at 14/16 partitions' `mix
+  ecto.migrate` step (structural infra burst, 0 tests run in those partitions,
+  discarded as inconclusive); attempt 2 (N=6, env override) completed all 6
+  partitions with real results: combined 1765 tests, 5 properties, 4 failures
+  (1766/1770 passed). Of the 4 failures: 1 is in this branch's own new test
+  file (test/letflow/identity_test.exs:807 -- wrong expected exception module,
+  Ecto.QueryError vs. the actual Ecto.Query.CastError; the app behavior under
+  test, safe_get_tenant_by_slug/2's generic rescue, is NOT broken) --
+  REWORK routed to TEST-DESIGNER. The other 3 are in
+  test/mix/tasks/letflow.lint_handoffs_test.exs, confirmed pre-existing and
+  unrelated to REQ-124 by both diff-scope exclusion and identical reproduction
+  at merge-base e5cce479 -- reported for filing, not fixed here.

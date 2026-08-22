@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step03b-WF03-ISS0279-20260822",
+  "run_id": "WF03-ISS0279-20260822",
+  "workflow_id": "WF-03",
+  "step": "3b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0279-20260822/step-03b-security-reviewer.json",
+  "created_at": "2026-08-22T17:07:48Z",
+  "started_at": "2026-08-22T17:07:48Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0279": "See handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json context.requirement_text for the full original text."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0279-20260822/step-03-elixir-dev.json"],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.audit_issue_closures.ex",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md"
+    ],
+    "owned_modules": ["docs/agents/protocols/ISSUE_QUEUE.md", "docs/agents/workflows/WF-03_issue_resolving.md", "lib/mix/tasks/letflow.audit_issue_closures.ex"]
+  },
+  "task": {
+    "description": "Review ELIXIR-DEV's implementation (handoffs/WF03-ISS0279-20260822/step-03-elixir-dev.json) for ISS-0279 against docs/agents/instructions/security-invariants.md's INV-1..INV-8. This change touches NO tenant-data path in the ordinary sense (no API route, no migration, no auth/tenant-scoping logic, no secrets) -- it is a pure dev-tooling/process Mix.Task (lib/mix/tasks/letflow.audit_issue_closures.ex) that shells out to `gh` and reads local docs/issues/*.yaml, plus two documentation-protocol files. Confirm this scope assessment yourself rather than trusting it: read the actual diff (git diff main...HEAD -- lib/mix/tasks/letflow.audit_issue_closures.ex docs/agents/workflows/WF-03_issue_resolving.md docs/agents/protocols/ISSUE_QUEUE.md) and verify none of it touches lib/letflow/ application code, a migration, a tenant-scoped query, or any secret/credential handling. Also specifically check: does the new Mix.Task shell out safely (no unsanitized string interpolation into a shell command that could allow injection via a crafted docs/issues/*.yaml github_issue field or malicious gh output), and does it avoid printing/leaking anything sensitive (e.g. QUEUE_AUTH_TOKEN, other repo secrets) in its report output. Complete this handoff: status PASS or FAIL, result.summary stating the scope confirmation and invariant-by-invariant applicability (most will be N/A -- say so explicitly, don't just skip them), result.issues, next_action ('Route to REVIEWER' on PASS). Claim by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Diff independently confirmed to touch no lib/letflow/ application code, no migration, no tenant-scoped path",
+      "Command-injection / unsanitized-shell-interpolation risk in the new Mix.Task explicitly checked (it shells out to gh with issue numbers/paths derived from repo files)",
+      "No sensitive value (tokens/secrets) printed by the new tool's report output",
+      "INV-1..INV-8 addressed individually (PASS/N/A per invariant, not blanket-skipped)",
+      "Clear PASS/FAIL verdict"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -113,12 +113,6 @@ defmodule Letflow.Routers.Tasks do
   plug(:match)
   plug(:dispatch)
 
-  @problems_base Application.compile_env(
-                   :letflow,
-                   :problems_base_uri,
-                   "https://bpm.example.com/problems/"
-                 )
-
   get "/inbox" do
     with_authorized_scope(conn, "GET", "/tasks/inbox", fn conn, opts, decision ->
       handle_inbox(conn, opts, decision)
@@ -323,20 +317,7 @@ defmodule Letflow.Routers.Tasks do
   end
 
   defp handle_list_result({:error, :expired}, conn) do
-    Response.send_problem(conn, cursor_expired_error())
-  end
-
-  # OQ-6: a locally-built 410 Error.t() literal for this one call site,
-  # rather than a new Letflow.Api.Error.cursor_expired/0 public constructor
-  # (none of Letflow.Api.Error's existing constructors cover 410 today).
-  # Promote to a shared constructor if a second call site needs one later.
-  defp cursor_expired_error do
-    %Error{
-      type: @problems_base <> "cursor-expired",
-      title: "Cursor Expired",
-      status: 410,
-      detail: "cursor has expired; please restart pagination"
-    }
+    Response.send_problem(conn, Error.cursor_expired())
   end
 
   # ── GET /tasks/:id (design §5.4) ────────────────────────────────────────

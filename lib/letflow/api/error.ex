@@ -263,4 +263,21 @@ defmodule Letflow.Api.Error do
       detail: detail
     }
   end
+
+  @doc """
+  HTTP 410 — Cursor Expired. Promoted from a private literal in
+  `Letflow.Routers.Tasks` (REQ-083) to this shared constructor by REQ-080,
+  its second call site (`Letflow.Routers.Instances`'s `list`/`history`/
+  `timeline` routes) — that module's own comment invited this promotion
+  ("Promote to a shared constructor if a second call site needs one later").
+  """
+  @spec cursor_expired() :: t()
+  def cursor_expired do
+    %__MODULE__{
+      type: @problems_base <> "cursor-expired",
+      title: "Cursor Expired",
+      status: 410,
+      detail: "cursor has expired; please restart pagination"
+    }
+  end
 end

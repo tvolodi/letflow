@@ -4538,7 +4538,7 @@ requirements:
   - id: REQ-080
     title: Instance routes 2/2 -- read path (instances.zig handleGetById/List/History/Timeline/GetPins)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 147  # letflow-queue task id
     description: >

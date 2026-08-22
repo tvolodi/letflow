@@ -201,7 +201,8 @@ defmodule Letflow.Api.Authorization do
              "/instances",
              "/instances/:id",
              "/instances/:id/history",
-             "/instances/:id/timeline"
+             "/instances/:id/timeline",
+             "/instances/:id/pins"
            ],
       do: :InstancesRead
 

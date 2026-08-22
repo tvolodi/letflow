@@ -1266,3 +1266,39 @@ collision anywhere (e.g. push the trailing digits further, `..000101`/`..000102`
 of `..000001`/`..000002`) rather than touching the pre-existing test fixture's constant —
 the fixture's version is that test's own load-bearing detail, not something to
 renumber around a newcomer.
+
+## A self-heal wired into `setup` that is not total over the states it can encounter
+
+`test/letflow/identity_migration_test.exs`'s `with_only_this_tenant_visible!/2` (ISS-0060)
+parks every *other* tenant's `public.tenant_schemas` row in a backup table for the duration
+of one guarded assertion, and `restore_orphaned_guard_backup_rows!/0` (hardened by ISS-0111)
+is the self-heal that puts them back on the next run if a prior run exited abnormally. Its
+restore statement ended `ON CONFLICT (id) DO NOTHING` — which handles a duplicate **primary
+key** and nothing else.
+
+The state that actually occurred (ISS-0229) was a backup row whose **parent tenant no longer
+existed**, so the restore raised `23503 foreign_key_violation`. Because the helper is called
+from `setup`, that one unrestorable row failed **all 10 tests in the file, every run,
+permanently** — and it could never clear itself, because the self-heal was the thing raising.
+
+**Why this is wrong for this project specifically:** ISS-0060's design §6 open question 2 had
+already considered a *unique-constraint* violation on this exact statement and knowingly
+accepted "loud failure" for it. The **foreign-key** case was never considered in either that
+design or ISS-0111's. So the gap was an omission wearing the clothes of an accepted
+trade-off — the kind of thing a later reader skims past, because a nearby sentence looks
+like it already reasoned about failure modes.
+
+**Correct alternative:** a self-heal must be **total over the states the abnormal exit it
+recovers from can leave** — enumerate them, and give each a terminal disposition (restore,
+discard, quarantine). "Loud failure" is a legitimate disposition for ordinary code, but it
+is *not* one for a recovery path: converting a recoverable condition into a permanent one is
+the precise opposite of the job. Note also that the call site multiplies the obligation — a
+self-heal invoked from `setup` fails every test in its file, so it carries a stricter
+totality bar than one called from a single test body. When restoration is genuinely
+impossible (the parent is gone, so the row is already meaningless), **discard the row with a
+log naming it** rather than raising.
+
+**Related trap, same family:** if the recovery path also *installs* the constraint that would
+have prevented the bad state, heal first and constrain second. Adding the constraint while
+the unrecoverable row is still present raises on the constraint's own validating scan and
+bricks the file a second way.

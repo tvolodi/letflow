@@ -1,0 +1,58 @@
+{
+  "handoff_id": "b1c4b7e2-4a6f-4e0a-9b1a-2f7c5e8d3a91",
+  "run_id": "WF03-ISS0226-20260822",
+  "workflow_id": "WF-03",
+  "step": "08",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0226-20260822/step-08-test-design-validator.json",
+  "created_at": "2026-08-22T04:20:00Z",
+  "started_at": "2026-08-22T04:12:00Z",
+  "completed_at": "2026-08-22T04:20:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0226-20260822/step-06-elixir-dev.json",
+      "handoffs/WF03-ISS0226-20260822/step-07-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/sandbox_pool.ex",
+      "test/letflow/sandbox_pool_test.exs",
+      "lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 test-coverage hard gate on the two new ISS-0226 regression tests in test/letflow/sandbox_pool_test.exs (written by ELIXIR-DEV in the same commit as the implementation, b37941d -- no separate TEST-DESIGNER dispatch, per this session's established pattern for tightly-scoped fixes). Since the pre-fix failure mode here is 'the classifying function does not exist yet' (a variant of 'code under test does not exist'), the fail-then-pass rule alone proves nothing about discrimination -- a mutation test against the shipped classify_worker_result/2 is mandatory per WF-03's 'When the pre-fix failure is code under test does not exist' section.",
+    "acceptance_criteria": [
+      "AC3 (a test drives an unexpected run_op/1 return and asserts pool survival + slot-bookkeeping intact) verified by direct reading of both new tests, not by trusting REVIEWER's or ELIXIR-DEV's summaries",
+      "A mutation test applied independently (not just re-reading TEST-DESIGNER/ELIXIR-DEV's reported counts) against classify_worker_result/2's catch-all clause, in a throwaway git worktree, confirming both new tests fail against the mutant",
+      "mix test test/letflow/sandbox_pool_test.exs re-run directly, real count reported",
+      "No @tag :skip or TODO-implement-test markers in the file",
+      "AC4 spot-check: complete_op/3, handle_worker_death/1, and clause B's :DOWN dispatch confirmed untouched in the diff",
+      "Mutant reverted and revert verified (git status --porcelain lib/ test/ empty) before completing this handoff"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS, independently re-derived (not copied from step-07's REVIEWER report).\n\n1. AC3 substance, read directly: both new tests (describe 'handle_info/2 survives an unrecognized worker result', sandbox_pool_test.exs:1196-1309) use :sys.replace_state/2 to inject an in_flight built around a real op (a genuine {:provision,_} op in test 1, a genuine {:drop, purpose: :release} op in test 2), each keyed to a fabricated task_ref = make_ref() never attached to any real Task, then send(pool, {fake_task_ref, :not_a_recognized_shape}) -- this lands exactly on handle_info({ref,result}, state) when is_reference(ref)'s else branch with ref == state.in_flight.task_ref, drives classify_worker_result/2, and (given the current shipped code) resolves to the :invalid branch -- confirmed this is the actual branch reached, not some other clause, by inspecting the diff's case structure directly (sandbox_pool.ex:413-437). Assertions are the strong form, not merely 'did not crash': Process.alive?(pool); in_flight == nil (test 1 via pool_drained?/1 after waiting for the compensating orphan-drop to finish draining, test 2 immediately since a :release-purpose drop enqueues no compensating op); a real subsequent SandboxPool.claim/2 + release/2 round-trip against real Postgres (proving `active`/`db_queue`/pump/1 admit new work, not just that the process is alive); test 1 additionally asserts Process.info(pool, :message_queue_len) == {:message_queue_len, 0} against mailbox double-processing; test 2 additionally asserts the blocked caller receives {:error, :release_failed} on its real reply tag. This is materially stronger than 'the process didn't crash'.\n\n2. Mutation test (mandatory here: ELIXIR-DEV's ordering note states pre-fix classify_worker_result/2 does not exist at all, so a bare fail-then-pass proves only novelty, not discrimination). Created a throwaway detached worktree at ../letflow-mutant-check off commit 95e6ee0 (git worktree add --detach, since the branch itself was already checked out here). Mutated the single highest-value line: sandbox_pool.ex:658, changing `defp classify_worker_result(_op, _result), do: :invalid` to `defp classify_worker_result(_op, result), do: {:ok, result}` -- i.e. the catch-all now accepts anything as legal, exactly the pre-fix defect this whole issue exists to close. Pointed MIX_DEPS_PATH/MIX_BUILD_PATH at the main checkout's deps/_build (no network available for a fresh mix deps.get) and ran `mix test test/letflow/sandbox_pool_test.exs --only describe:\"handle_info/2 survives an unrecognized worker result (ISS-0226 regression, acceptance criterion 3)\"` against the mutant. Result: 0/2 passed, both tests crashed with `** (FunctionClauseError) no function clause matching in Letflow.SandboxPool.complete_op/3` inside handle_info/2 -- the exact FunctionClauseError-crashes-the-GenServer failure mode ISS-0226 exists to eliminate. Both tests correctly report this as a failure (the pool process itself dies, so Process.alive?(pool) et al. never even get asserted -- ExUnit reports the EXIT). This proves the two tests are sensitive to the specific trap (a classifier that stops discriminating) rather than passing regardless of implementation. Reverted: `git worktree remove ../letflow-mutant-check --force` (mutant only ever existed in the throwaway worktree, never in this checkout). Verified: `git status --porcelain lib/ test/` -> empty (confirmed by direct tool output, no output at all).\n\n3. Re-ran mix test test/letflow/sandbox_pool_test.exs directly against the real, unmutated fix branch: Result: 18 passed, 0 failed. Matches ELIXIR-DEV's and REVIEWER's reported 18/18.\n\n4. No @tag :skip, no 'TODO: implement test' anywhere in the file (grep confirmed, zero matches).\n\n5. AC4 spot-check, independent of REVIEWER's step-07 claim: `git diff main...HEAD -- lib/letflow/sandbox_pool.ex` shows exactly 5 hunks total -- (a) `require Logger` addition, (b) the three new @typep lines, (c) handle_info/2's else-branch restructure (demonitor call unchanged in position, case added after it), (d) run_op/1's added @spec only (body untouched), (e) the new classify_worker_result/2 + op_kind/1 + op_sandbox_id/1 functions inserted between op_schema_name/1 and complete_op/3's own @spec line. complete_op/3's four clauses, handle_worker_death/1's body, and clause B's six-case :DOWN dispatch appear nowhere in the diff -- confirmed by direct grep against the diff output, not by re-reading REVIEWER's claim.\n\nNo rework required. Fixture self-sufficiency confirmed: each test starts its own uniquely-named pool via start_pool!/1, builds its own op/in_flight state locally, and depends on no shared or hardcoded state; no test depends on another test having run first. No hardcoded secrets or connection strings introduced by this diff.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0226-20260822/step-08-test-design-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0226-20260822",
+      "commit_sha_list": ["95e6ee0"],
+      "remote_branch": "origin/fix/WF03-ISS0226-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER for the full suite run."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

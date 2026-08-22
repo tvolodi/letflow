@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step01-WF03-ISS0279-20260822",
+  "run_id": "WF03-ISS0279-20260822",
+  "workflow_id": "WF-03",
+  "step": "0.5+1",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json",
+  "created_at": "2026-08-22T16:35:52Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0279": "Found during WF03-ISS0278-20260822, an ORCH reconciliation audit: GH#324 (ISS-0096) and GH#326 (ISS-0098) were both closed on 2026-08-20 with zero comment and no linked/merged PR in their own GitHub timeline (no closedByPullRequestsReferences, no commit_id on the close event). Contrast with two sibling closures in the same audit (GH#329/ISS-0101 via merged PR #337, GH#357/ISS-0107 via merged PR #437) which both trace cleanly to real fix commits. #324/#326 have no such trail at all -- distinct from the separate ISS-0277/GH#548 finding (three issues closed COMPLETED despite an explicit self-contradicting comment on each): here there is no comment of any kind, so the closure cannot even be checked against its own stated reasoning; it is simply undocumented. On reinvestigation, GH#326 turned out to be genuinely resolvable (this run backfilled it with real R-Co evidence), but GH#324 turned out to still be a real open question (a genuine naming divergence between Letflow and R-Co that this run discovered, not previously known) -- meaning the zero-evidence closure pattern is not even safe as a proxy for the underlying work having happened. Recommend a mechanical gate: gh issue close (or an equivalent local flip to status: resolved/no_defect/instrumented) should require either a --comment citing the resolving evidence, or a genuinely linked/merged PR with a Closes/Fixes reference -- and a periodic audit (or a CI check) should flag any closed issue lacking both."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0279-20260822/step-00-git-setup.json"],
+    "artifacts_in": [
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "owned_modules": ["docs/agents/protocols/ISSUE_QUEUE.md", "docs/agents/workflows/WF-03_issue_resolving.md", "lib/mix/tasks/letflow.audit_issue_closures.ex"]
+  },
+  "task": {
+    "description": "ISS-0279 (GH#551, queue task 279) is a PROCESS-GAP issue, not a code defect: GitHub issue/queue-task closures currently carry no mechanical requirement to cite resolving evidence (a comment or a linked/merged PR), so an undocumented, unverifiable closure (as happened for GH#324 and GH#326) is invisible until someone manually reconciles it. Diagnose per WF-03 Step 0.5 (registry lookup -- check docs/issues/ for a prior similar process-gap fix; note the precedent at lib/mix/tasks/letflow.lint_handoffs.ex, a Mix.Task added under ISS-0257/GH#499 as a hard gate wired into the 'letflow.check' alias, which is structurally the same shape of fix: a mechanical lint enforced in CI/local check rather than left to agent diligence) and Step 1 (root cause, not symptom -- this is NOT something to 'reproduce' by running code; the root cause is a missing mechanical enforcement point in two places: (a) WF-03 Step 5 / ISSUE_QUEUE.md's close procedure has no HARD requirement that gh issue close always carries --comment, and (b) nothing audits already-closed issues for evidence after the fact). Do NOT implement the fix yourself. Write a diagnosis identifying: (1) the precise doc locations needing a stated hard requirement (docs/agents/protocols/ISSUE_QUEUE.md and docs/agents/workflows/WF-03_issue_resolving.md Step 5), (2) the shape of a new mechanical audit tool analogous to letflow.lint_handoffs -- e.g. a new Mix.Task `mix letflow.audit_issue_closures` that shells out to `gh issue list --state closed --json number,comments,closedByPullRequestsReferences,timelineItems` (or equivalent) for issues referenced by docs/issues/*.yaml with a github_issue field, and flags any closed issue with zero comments AND no linked/merged PR reference as a violation, exiting non-zero when new (un-grandfathered) violations exist -- following letflow.lint_handoffs's own grandfather-list pattern so this run does not have to retroactively fix every pre-existing violation (GH#324/GH#326 already resolved by WF03-ISS0278-20260822; anything else historical should be grandfathered, not force-failed). Do NOT decide whether this new task runs against live GitHub in CI (no network) vs. only locally/on-demand -- flag that as an open design question for CODE-DESIGNER to resolve (e.g. it may need to read a locally-cached JSON export, or be documented as a manual/local-only check if CI has no GitHub network access -- check existing CI config for GH network access precedent first). Complete this handoff with your diagnosis in result.summary and next_action: 'Route to CODE-DESIGNER for fix design'. Claim by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Step 0.5 registry lookup performed against docs/issues/ for prior similar process-gap/lint-tool fixes, cited in result.summary",
+      "Root cause named precisely: which doc(s) lack a hard evidence requirement on issue close, and what mechanical enforcement is missing",
+      "Diagnosis explicitly identifies the two fix surfaces: (1) doc/protocol wording changes making evidence-on-close mandatory, (2) a new audit tool analogous to lib/mix/tasks/letflow.lint_handoffs.ex, including how it should treat already-closed pre-existing issues (grandfather list) so it doesn't false-positive-fail on history",
+      "Open design question about live-GitHub-network availability in CI is explicitly flagged for CODE-DESIGNER, not silently resolved by ISSUE-FIXER",
+      "No fix implemented in this step -- diagnosis only"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

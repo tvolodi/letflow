@@ -59,8 +59,8 @@
       "commit_sha_list": [
         "349c03b2862c82356989888a8354fb5927f94050"
       ],
-      "remote_branch": null,
-      "push_status": "pending",
+      "remote_branch": "origin/feature/WF02-REQ124-20260822",
+      "push_status": "pushed",
       "pr_url": null,
       "pr_create_error": null
     },

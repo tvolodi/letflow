@@ -5774,7 +5774,7 @@ requirements:
   - id: REQ-118
     title: CORS support on the Letflow side for the browser-origin SPA
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S8
     impl_order: 235  # letflow-queue task id; depends_on translated to queue task id [138]
     description: >

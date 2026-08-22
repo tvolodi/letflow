@@ -979,3 +979,18 @@ history:
       EXECUTION_ERROR. GH#257 confirmed CLOSED via `gh issue view 257`.
       Released via POST /tasks/128/release with status done and an evidence
       note.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-22T18:40:00Z"
+    note: >
+      ISS-0286 (queue task 286, GH#564) filed by a prior fork this session as a
+      watch-item: queue task 70 resurfaced ISS-0029/GH#87 (REQ-027 vacuous
+      refute table_exists_in_schema? assertion) as claimable open work, already
+      resolved 2026-08-18. This is the second stale-duplicate resurfacing this
+      session (first: task 165/ISS-0090). Its own acceptance criterion is
+      conditional -- "if this recurs a third time, investigate" -- not yet met.
+      Handled directly (docs-only, no code change): docs/issues/ISS-0286.yaml
+      written, GH#564 closed noting watch-item status, queue task 286 released
+      done. 32 on-disk `- req:` entries in requirement_status.v3.yaml after this
+      append.

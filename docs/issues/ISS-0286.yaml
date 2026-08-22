@@ -1,0 +1,41 @@
+id: ISS-0286
+title: >
+  Queue task 70 was a stale un-drained duplicate of already-resolved
+  ISS-0029/GH#87 (mislabeled issue_ref: ISS-0070)
+discovered_by: ORCH (fork, WF03-task70-20260822)
+discovered_in_run: session queue-loop processing of task 70
+discovered_at: 2026-08-22T18:33:36Z
+severity: MINOR
+description: >
+  Queue task 70 resurfaced ISS-0029/GH#87 (REQ-027 vacuous
+  `refute table_exists_in_schema?(...)` assertion) as claimable open work,
+  tagged with `issue_ref: ISS-0070` in its own queue metadata even though its
+  body text correctly cited docs/issues/ISS-0029.yaml. Verified: ISS-0029.yaml
+  is `status: resolved` (resolved_in_run: WF03-ISS0029-20260818, resolved_at
+  2026-08-18T01:52:35Z); the vacuous refute is already deleted from
+  test/letflow/definitions/migrations_test.exs (grep finds zero matches);
+  test/specs/REQ-027.md already documents the removal citing ISS-0029/GH#87;
+  the real guard test (test/letflow/event_store/migrations_test.exs section-4
+  guard, line 482) still exists and still owns the `:prefix` property; GH#87
+  is CLOSED/COMPLETED with a real closing comment dated 2026-08-18. No code
+  change was needed -- task 70 released `done` with no commits.
+
+  This is the second time this session a stale queue entry pointed at
+  already-resolved work (see also task 165/ISS-0090). Filed as a watch-item:
+  the underlying mechanism (why a queue task for already-resolved work
+  resurfaces as claimable) is not yet clearly a single root cause worth its
+  own fix task from two occurrences alone.
+affected_files: []
+github_issue: 564
+status: resolved
+resolved_in_run: session queue-loop, ORCH direct (docs-only)
+resolved_at: 2026-08-22T18:40:00Z
+resolution_note: >
+  No code or process fix applied -- this is a watch-item, not an actionable
+  defect on its own. Its own acceptance criterion is conditional: "if this
+  stale-duplicate pattern recurs a third time (beyond task 165/ISS-0090 and
+  task 70/ISS-0029), investigate whether register_task/release_lock calls
+  across concurrent WF-03 runs are somehow re-opening or duplicate-registering
+  already-closed queue entries, rather than treating each occurrence as an
+  isolated one-off." That threshold has not been met (two occurrences).
+  GH#564 closed noting watch-item status. Queue task 286 released `done`.

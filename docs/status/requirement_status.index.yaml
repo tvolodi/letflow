@@ -210,7 +210,7 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 30
+    entries: 32
     note: >
       Incremented to 30 by LOOP-20260822-orch (ORCH)'s own done-event append
       for ISS-0128 -- 30 on-disk `- req:` entries in
@@ -397,6 +397,11 @@ volumes:
       docs/status/requirement_status.v3.yaml` = 30, rather than carrying
       forward any side's independently-computed 28/29, per this note's
       own recount-every-time rule.
+      Incremented to 31 by ISS-0128's own done-event append (queue task 128,
+      stale-duplicate release, no code change), no rebase conflict on this file.
+      Incremented to 32 by ORCH's own ISS-0286 done-event append (watch-item,
+      docs-only, no code change) -- 32 on-disk `- req:` entries in
+      requirement_status.v3.yaml, no rebase conflict on this file.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

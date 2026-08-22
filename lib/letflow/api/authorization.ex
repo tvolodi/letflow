@@ -218,6 +218,14 @@ defmodule Letflow.Api.Authorization do
 
   def endpoint_policy_key("GET", "/tasks/:id"), do: :TasksGetById
   def endpoint_policy_key("POST", "/tasks/:id/complete"), do: :TasksComplete
+
+  # REQ-085 (design doc §2) -- claim is gated by the SAME :TasksComplete
+  # permission /complete uses, not :TasksAssign, matching R-Co's own
+  # handleClaim (evaluateAccess(..., .TasksComplete)): TASK_WORKER holds
+  # :TasksComplete but not :TasksAssign, and a task worker claiming a
+  # group/role-assigned task before completing it is exactly the caller this
+  # endpoint exists for. Additive-only, no existing clause's behavior changes.
+  def endpoint_policy_key("POST", "/tasks/:id/claim"), do: :TasksComplete
   def endpoint_policy_key("POST", "/tasks/:id/assign"), do: :TasksAssign
   def endpoint_policy_key("POST", "/tasks/:id/reassign"), do: :TasksReassign
 

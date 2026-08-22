@@ -1,18 +1,44 @@
 defmodule Letflow.Routers.Tasks do
   @moduledoc """
-  Task read-path sub-router (REQ-083), mounted at `/tasks` by
-  `Letflow.Plugs.ApiPipeline`. Ports `src/api/routes/tasks.zig`'s
-  `handleList` (L89), `handleGetById` (L290), `handleInbox` (L960). See
-  `lib/letflow/design/req083-task-routes-read.md` for the full design.
+  Task read+write sub-router, mounted at `/tasks` by
+  `Letflow.Plugs.ApiPipeline`. REQ-083 built the read path (`handleList`
+  L89, `handleGetById` L290, `handleInbox` L960 of `src/api/routes/tasks.zig`,
+  `lib/letflow/design/req083-task-routes-read.md`). REQ-085 adds the write
+  path (`handleComplete` L341, `handleClaim` L551, `handleAssign` L628,
+  `handleReassign` L736 — same source file — `lib/letflow/design/req085-task-routes-write.md`).
 
-  * GET /tasks        -> `Letflow.Tasks.list_tasks/2` (`:TasksList` policy key)
-  * GET /tasks/inbox  -> `Letflow.Tasks.list_tasks/2`, forced per-principal scope (`:TasksList` policy key)
-  * GET /tasks/:id    -> `Letflow.Tasks.get_task/2` (`:TasksGetById` policy key)
+  * GET  /tasks             -> `Letflow.Tasks.list_tasks/2` (`:TasksList` policy key)
+  * GET  /tasks/inbox       -> `Letflow.Tasks.list_tasks/2`, forced per-principal scope (`:TasksList` policy key)
+  * GET  /tasks/:id         -> `Letflow.Tasks.get_task/2` (`:TasksGetById` policy key)
+  * POST /tasks/:id/complete -> `Letflow.Engine.complete_task/3` (`:TasksComplete` policy key) — the ONLY call this router makes to drive completion; zero `Repo.` calls anywhere in this module (INV-TW85-2). Completion is an engine transition (output variables merge, token advances) — a handler that flipped the `tasks` row to `COMPLETED` directly would leave the owning instance permanently stalled.
+  * POST /tasks/:id/claim   -> `Letflow.Tasks.claim_task/3` (`:TasksComplete` policy key, REQ-085 design §2 — not `:TasksAssign`, matching R-Co's own `handleClaim`)
+  * POST /tasks/:id/assign  -> `Letflow.Tasks.assign_task/4` (`:TasksAssign` policy key)
+  * POST /tasks/:id/reassign -> `Letflow.Tasks.reassign_task/4` (`:TasksAssign` policy key — `required_permission/1` maps both `:TasksAssign`/`:TasksReassign` endpoint keys to the same `:TasksAssign` permission)
 
   Every route is deliberately thin — scoped-prefix resolution, authorization,
   request validation, and a response-shape allowlist, with all persistence
-  delegated to `Letflow.Tasks`. All unmatched requests return the RFC 9457
-  404 problem document.
+  delegated to `Letflow.Tasks`/`Letflow.Engine`. All unmatched requests
+  return the RFC 9457 404 problem document.
+
+  ## Authorization — direct `Authorization.evaluate_access/2` call, temporary pending REQ-131
+
+  REQ-131 (making `Letflow.Api.Authorization` a mandatory router-wide plug) is
+  still `status: pending` (`docs/requirements.yaml`) as of this requirement.
+  `with_authorized_scope/4` below calls `Authorization.evaluate_access/2`
+  directly from this route module — the same established pattern
+  `Letflow.Routers.Identity` and `Letflow.Routers.Tenants` already use for
+  their own write routes, not a new mechanism. This is temporary: once
+  REQ-131 lands, this direct call is expected to be replaced by the
+  mandatory plug.
+
+  ## Concurrency (`claim`/`assign`/`reassign`, AC4)
+
+  `Letflow.Tasks.claim_task/3`/`assign_task/4`/`reassign_task/4` each acquire
+  `SELECT ... FOR UPDATE` on the single `tasks` row via `Letflow.Tasks`'s own
+  private `fetch_and_lock_task/3`, inside one `Ecto.Multi` per call — the
+  same row-lock-then-check-in-Elixir idiom `Letflow.Engine.complete_task/3`
+  already established. This router adds no second locking/concurrency
+  scheme of its own; it only calls those functions and maps their results.
 
   ## Route-match ordering — `/inbox` before `/:id`
 
@@ -70,6 +96,9 @@ defmodule Letflow.Routers.Tasks do
   alias Letflow.Api.Error
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
+  alias Letflow.Api.Validation
+  alias Letflow.Api.Validation.FieldConstraint
+  alias Letflow.Engine
   alias Letflow.Tasks
 
   plug(:match)
@@ -96,6 +125,30 @@ defmodule Letflow.Routers.Tasks do
   get "/:id" do
     with_authorized_scope(conn, "GET", "/tasks/:id", fn conn, opts, _decision ->
       handle_get_by_id(conn, conn.params["id"], opts)
+    end)
+  end
+
+  post "/:id/complete" do
+    with_authorized_scope(conn, "POST", "/tasks/:id/complete", fn conn, opts, _decision ->
+      handle_complete(conn, conn.params["id"], opts)
+    end)
+  end
+
+  post "/:id/claim" do
+    with_authorized_scope(conn, "POST", "/tasks/:id/claim", fn conn, opts, _decision ->
+      handle_claim(conn, conn.params["id"], opts)
+    end)
+  end
+
+  post "/:id/assign" do
+    with_authorized_scope(conn, "POST", "/tasks/:id/assign", fn conn, opts, _decision ->
+      handle_assign(conn, conn.params["id"], opts)
+    end)
+  end
+
+  post "/:id/reassign" do
+    with_authorized_scope(conn, "POST", "/tasks/:id/reassign", fn conn, opts, _decision ->
+      handle_reassign(conn, conn.params["id"], opts)
     end)
   end
 
@@ -291,6 +344,207 @@ defmodule Letflow.Routers.Tasks do
     end
   end
 
+  # ── POST /tasks/:id/complete (REQ-085 design §5.2) ──────────────────────
+  #
+  # INV-TW85-2: this handler performs ZERO Repo. calls and ZERO
+  # Task.complete_changeset/2 calls -- completion is driven entirely by
+  # Letflow.Engine.complete_task/3 (REQ-048), the engine entry point. A
+  # handler that flipped the tasks row to COMPLETED directly, without going
+  # through that function, would leave the owning instance permanently
+  # stalled (output variables never merged, token never advanced) -- the
+  # single most damaging way to get this route wrong. Do not add a Repo call
+  # here under any circumstance.
+  defp handle_complete(conn, id, opts) do
+    output_variables = conn.body_params
+    actor_id = conn.assigns.auth_context.user_id
+    idempotency_key = Ecto.UUID.generate()
+
+    attrs = %{
+      output_variables: output_variables,
+      actor_id: actor_id,
+      idempotency_key: idempotency_key
+    }
+
+    id
+    |> Engine.complete_task(attrs, opts)
+    |> handle_complete_result(conn)
+  end
+
+  defp handle_complete_result({:ok, result}, conn) do
+    Response.ok(conn, complete_result_map(result))
+  end
+
+  defp handle_complete_result({:error, :invalid_task_id}, conn) do
+    Response.bad_request(conn, "task_id is not a valid UUID")
+  end
+
+  defp handle_complete_result({:error, :invalid_output_variables}, conn) do
+    Response.unprocessable(conn, "output_variables must be a JSON object")
+  end
+
+  defp handle_complete_result({:error, :task_not_found}, conn) do
+    Response.not_found(conn)
+  end
+
+  defp handle_complete_result({:error, {:task_not_pending, _status}}, conn) do
+    Response.conflict(conn, "task is not pending")
+  end
+
+  defp handle_complete_result({:error, %Ecto.Changeset{}}, conn) do
+    Response.unprocessable(conn, "validation failed")
+  end
+
+  # Catch-all: every other complete_error() member (:invalid_schema_name,
+  # :instance_not_found, {:instance_not_active, _}, :snapshot_not_found,
+  # {:graph_structure_invalid, _}, {:missing_token_record, _},
+  # {:transition_failed, _}, {:new_token_during_resume_not_supported, _},
+  # {:task_activation_failed, _}, {:event_append_failed, _},
+  # :missing_actor_id, :missing_idempotency_key,
+  # {:instance_execution_error, _, _}, {:error, term()}) -- either
+  # structurally unreachable given this handler's own router-derived inputs,
+  # or a genuine data-integrity/downstream failure this caller cannot fix by
+  # retrying (design §5.5.1). complete_task/3's own catch-all already
+  # guarantees it never raises, so this is a typed-tuple match, not a bare
+  # pattern that can raise (INV-8).
+  defp handle_complete_result({:error, _reason}, conn) do
+    Response.internal_error(conn)
+  end
+
+  # ── POST /tasks/:id/claim (REQ-085 design §5.3) ─────────────────────────
+
+  defp handle_claim(conn, id, opts) do
+    attrs = %{actor_id: conn.assigns.auth_context.user_id}
+
+    id
+    |> Tasks.claim_task(attrs, opts)
+    |> handle_claim_result(conn)
+  end
+
+  defp handle_claim_result({:ok, task}, conn) do
+    Response.ok(conn, task_detail_map(task, nil))
+  end
+
+  defp handle_claim_result({:error, :invalid_task_id}, conn) do
+    Response.bad_request(conn, "task_id is not a valid UUID")
+  end
+
+  defp handle_claim_result({:error, :task_not_found}, conn) do
+    Response.not_found(conn)
+  end
+
+  defp handle_claim_result({:error, {:task_not_pending, _status}}, conn) do
+    Response.conflict(conn, "task is not pending")
+  end
+
+  defp handle_claim_result({:error, :assigned_to_other_user}, conn) do
+    Response.conflict(conn, "task is assigned to a different user")
+  end
+
+  defp handle_claim_result({:error, :assignee_group_not_member}, conn) do
+    Response.conflict(conn, "caller is not a member of the assigned group")
+  end
+
+  defp handle_claim_result({:error, :assignee_role_not_held}, conn) do
+    Response.conflict(conn, "caller does not hold the assigned role")
+  end
+
+  defp handle_claim_result({:error, :not_claimable}, conn) do
+    Response.conflict(conn, "task cannot be claimed")
+  end
+
+  defp handle_claim_result({:error, _reason}, conn) do
+    Response.internal_error(conn)
+  end
+
+  # ── POST /tasks/:id/assign, POST /tasks/:id/reassign (REQ-085 design §5.4) ─
+
+  @user_id_schema [
+    %FieldConstraint{name: "user_id", required: true, type: :string, reject_empty_string: true}
+  ]
+
+  defp handle_assign(conn, id, opts) do
+    case Validation.validate(@user_id_schema, conn.body_params) do
+      {:errors, field_errors} ->
+        Response.send_problem(conn, Validation.problem(field_errors))
+
+      {:ok, %{"user_id" => user_id}} ->
+        id
+        |> Tasks.assign_task(%{user_id: user_id}, opts)
+        |> handle_assign_result(conn)
+    end
+  end
+
+  defp handle_reassign(conn, id, opts) do
+    case Validation.validate(@user_id_schema, conn.body_params) do
+      {:errors, field_errors} ->
+        Response.send_problem(conn, Validation.problem(field_errors))
+
+      {:ok, %{"user_id" => user_id}} ->
+        id
+        |> Tasks.reassign_task(%{user_id: user_id}, opts)
+        |> handle_reassign_result(conn)
+    end
+  end
+
+  defp handle_assign_result({:ok, task}, conn) do
+    Response.ok(conn, task_detail_map(task, nil))
+  end
+
+  defp handle_assign_result({:error, :invalid_task_id}, conn) do
+    Response.bad_request(conn, "task_id is not a valid UUID")
+  end
+
+  # Belt-and-suspenders -- Validation.validate/2 above is expected to
+  # already have rejected a missing/empty user_id before assign_task/4 is
+  # ever reached.
+  defp handle_assign_result({:error, :missing_user_id}, conn) do
+    Response.unprocessable(conn, "user_id is required")
+  end
+
+  defp handle_assign_result({:error, :task_not_found}, conn) do
+    Response.not_found(conn)
+  end
+
+  defp handle_assign_result({:error, {:task_not_pending, _status}}, conn) do
+    Response.conflict(conn, "task is not pending")
+  end
+
+  defp handle_assign_result({:error, :already_assigned}, conn) do
+    Response.conflict(conn, "task is already assigned")
+  end
+
+  defp handle_assign_result({:error, _reason}, conn) do
+    Response.internal_error(conn)
+  end
+
+  defp handle_reassign_result({:ok, task}, conn) do
+    Response.ok(conn, task_detail_map(task, nil))
+  end
+
+  defp handle_reassign_result({:error, :invalid_task_id}, conn) do
+    Response.bad_request(conn, "task_id is not a valid UUID")
+  end
+
+  defp handle_reassign_result({:error, :missing_user_id}, conn) do
+    Response.unprocessable(conn, "user_id is required")
+  end
+
+  defp handle_reassign_result({:error, :task_not_found}, conn) do
+    Response.not_found(conn)
+  end
+
+  defp handle_reassign_result({:error, {:task_not_pending, _status}}, conn) do
+    Response.conflict(conn, "task is not pending")
+  end
+
+  defp handle_reassign_result({:error, :not_currently_assigned}, conn) do
+    Response.conflict(conn, "task is not currently assigned")
+  end
+
+  defp handle_reassign_result({:error, _reason}, conn) do
+    Response.internal_error(conn)
+  end
+
   # ── Query-param parsing helpers ─────────────────────────────────────────
 
   defp parse_status_param(nil), do: {:ok, nil}
@@ -353,5 +607,31 @@ defmodule Letflow.Routers.Tasks do
   # that mapping without re-deriving it via a second lookup table.
   defp task_status_string(status) when is_atom(status) do
     status |> Atom.to_string() |> String.upcase()
+  end
+
+  @doc false
+  # Six keys, mirroring Letflow.Engine.complete_result()'s own six fields
+  # exactly (design §5.6) -- an allowlist restatement of an already-plain
+  # map, not a struct-to-map reduction (complete_result() involves no
+  # %Task{} struct at all on this path). instance_status uses the same
+  # Atom.to_string/1 |> String.upcase/1 convention task_status_string/1
+  # already establishes, producing "ACTIVE"/"COMPLETED".
+  @spec complete_result_map(Letflow.Engine.complete_result()) :: map()
+  defp complete_result_map(%{
+         task_id: task_id,
+         instance_id: instance_id,
+         instance_status: instance_status,
+         current_nodes: current_nodes,
+         variables: variables,
+         completed_at: completed_at
+       }) do
+    %{
+      "task_id" => task_id,
+      "instance_id" => instance_id,
+      "instance_status" => instance_status |> Atom.to_string() |> String.upcase(),
+      "current_nodes" => current_nodes,
+      "variables" => variables,
+      "completed_at" => DateTime.to_iso8601(completed_at)
+    }
   end
 end

@@ -105,4 +105,20 @@ defmodule Letflow.Engine.Task do
     |> cast(attrs, [:status, :output_variables, :completed_by, :completed_at, :cancelled_at])
     |> validate_required([:status])
   end
+
+  @doc """
+  Structural changeset for claim/assign/reassign (REQ-085,
+  `lib/letflow/design/req085-task-routes-write.md` §3.2). Writes
+  `assignee_type`/`assignee_ref` together, always both at once — the same
+  "paired write" discipline `insert_changeset/2` already establishes for
+  task-activation time, restated here for the claim/assign/reassign write
+  path. No I/O.
+  """
+  @spec assignment_changeset(t(), attrs :: %{assignee_type: String.t(), assignee_ref: String.t()}) ::
+          Ecto.Changeset.t()
+  def assignment_changeset(task, attrs) do
+    task
+    |> cast(attrs, [:assignee_type, :assignee_ref])
+    |> validate_required([:assignee_type, :assignee_ref])
+  end
 end

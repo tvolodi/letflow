@@ -1,12 +1,42 @@
 defmodule Letflow.Tasks do
   @moduledoc """
-  Context module for the task read-query surface (REQ-083) — backs the three
-  `Letflow.Routers.Tasks` routes (`GET /tasks`, `GET /tasks/inbox`,
-  `GET /tasks/:id`). Plain Ecto context module, no process, no `gen_statem` —
-  a pure read/query surface over the already-shipped `tasks` table
-  (`Letflow.Engine.Task`, REQ-043/047). See
-  `lib/letflow/design/req083-task-routes-read.md` for the full design this
-  module implements.
+  Context module for the `tasks` table's non-engine-transition surface.
+  REQ-083 built the read path (`get_task/2`, `list_tasks/2`,
+  `resolve_principal_scope/2`) backing `GET /tasks`, `GET /tasks/inbox`,
+  `GET /tasks/:id`. REQ-085 (`lib/letflow/design/req085-task-routes-write.md`)
+  adds the claim/assign/reassign write path (`claim_task/3`, `assign_task/4`,
+  `reassign_task/4`) backing `POST /tasks/:id/claim`, `.../assign`,
+  `.../reassign`. Plain Ecto context module, no process, no `gen_statem` — a
+  surface over the already-shipped `tasks` table (`Letflow.Engine.Task`,
+  REQ-043/047).
+
+  ## Why claim/assign/reassign live here, not in `Letflow.Engine` (REQ-085 design §3.0)
+
+  `Letflow.Engine.complete_task/3` alone drives a real transition — output
+  variables merge into instance variables, the token advances — so
+  `POST /tasks/:id/complete` routes there instead (see
+  `Letflow.Routers.Tasks`). Claim/assign/reassign do neither: none of the
+  three touches `instance_projections` or `tokens`, only this one `tasks`
+  row's `assignee_type`/`assignee_ref` columns. `Letflow.Engine`'s own EE-12
+  lock inventory is scoped to `create/2`/`complete_task/3`/`cancel_instance/3`
+  — three functions that all drive instance/token state — so these three
+  functions belong on this module instead, alongside the
+  `resolve_principal_scope/2` group/role resolution `claim_task/3` needs
+  directly.
+
+  **This module's own lock inventory** (mirroring `Letflow.Engine`'s own
+  EE-12 statement): every `lock("FOR UPDATE")` acquired by `claim_task/3`/
+  `assign_task/4`/`reassign_task/4` is `fetch_and_lock_task/3` (private,
+  below — a distinct function from `Letflow.Engine`'s own private function of
+  the same name), filtered `where t.id == ^task_id`. Single-row, scoped to
+  exactly the one `tasks` row the path parameter names. No lock here ever
+  touches `instance_projections` or `tokens`. No global or table-level lock.
+  Each of the three functions runs its lock-then-check inside one
+  `Ecto.Multi`/`Repo.transaction/1` — the same row-lock-then-check-in-Elixir
+  concurrency idiom `Letflow.Engine.complete_task/3` already established, not
+  a bare `UPDATE ... WHERE` racing without an application-level lock (see
+  `claim_task/3`'s own doc for why two concurrent claims produce exactly one
+  winner).
 
   ## `src/tasks/store.zig` boundary — ported vs. not ported (AC6)
 
@@ -25,6 +55,9 @@ defmodule Letflow.Tasks do
   | `TaskStore.listCursor` (L579-737) | `list_tasks/2` | Cursor prefix `"T:"`, keyset `(inserted_at, id)` — same shape as R-Co; **extended** beyond R-Co's own shipped SQL to add ROLE-held-task scoping (see `resolve_principal_scope/2`'s own doc — R-Co's `listCursor` has no `ROLE` arm at all, only `USER`/`GROUP`; this requirement's own text and acceptance criteria require all three) |
   | `taskStatusToString`/`parseTaskStatus` (L1150-1163, L1143-1149) | `Letflow.Engine.Task`'s existing `Ecto.Enum` cast/dump (already shipped, REQ-043) | No new function needed — `Ecto.Enum` already does this |
   | `parseUuid`/`uuidToHex` | `Ecto.UUID.cast/1` / Ecto's native string-form UUIDs | No raw 16-byte UUID type in ordinary use elsewhere in this codebase |
+  | `TaskStore.claimTask` (L761-849) | `claim_task/3` (REQ-085) | **Not** a port of `claimed_by`-column semantics — see `claim_task/3`'s own doc and the REQ-085 design doc §1 for the full resolution (Letflow has no `claimed_by` column; claim is atomic conditional self-assignment against `assignee_type`/`assignee_ref` instead) |
+  | `TaskStore.assign` (L851-908) | `assign_task/4` (REQ-085) | Ports R-Co's own `WHERE ... assignee_ref IS NULL` precondition exactly |
+  | `TaskStore.reassign`/`reassignInTx` (L910-1002) | `reassign_task/4` (REQ-085) | Ports R-Co's own `WHERE ... assignee_ref IS NOT NULL` precondition exactly |
 
   **Not ported by this module** (every other `pub fn`/error set in
   `store.zig`):
@@ -33,9 +66,8 @@ defmodule Letflow.Tasks do
   |---|---|
   | `TaskStore.list` (L443-577, offset-based) | Superseded entirely by `listCursor` — never called by any of the three read handlers |
   | `TaskStore.createInTx` (L161-237) | Task-activation write path — already covered by REQ-047's `Letflow.Engine.TaskActivation.append_multi/6`, a different module entirely |
-  | `TaskStore.completeInTx` (L304-379), `cancelInTx` (L381-441) | EE-04 task-completion write path — REQ-085's scope, not read |
-  | `TaskStore.claimTask` (L761-849), `assign` (L851-908), `reassign`/`reassignInTx` (L910-1002) | Task claim/assign/reassign write path — REQ-085's scope |
-  | `TaskError`'s `AlreadyTerminated`, `ClaimError`, `AssignError` variants | All write-path error shapes — this module's own error surface only needs the read-path subset (not-found, invalid-input, cursor errors) |
+  | `TaskStore.completeInTx` (L304-379), `cancelInTx` (L381-441) | EE-04 task-completion write path — `Letflow.Engine.complete_task/3` (REQ-048), not this module |
+  | `TaskError`'s `AlreadyTerminated`, `ClaimError`, `AssignError` variants | Not ported by name — this module's `claim_error()`/`assign_error()`/`reassign_error()` unions (REQ-085) cover the same outcomes with Letflow-native atoms, since Letflow's claim has no separate `claimed_by` boolean to be independently true |
   | `insertTaskWaitDescriptorInTx` (L1025-1141) | SCH-03 timer-wait bookkeeping — S6 scope, not invoked by any read handler |
 
   ## Error handling — matches this project's established residual-risk precedent
@@ -57,6 +89,7 @@ defmodule Letflow.Tasks do
 
   import Ecto.Query
 
+  alias Ecto.Multi
   alias Letflow.Api.Pagination
   alias Letflow.Engine.Task
   alias Letflow.EventStore.InstanceProjection
@@ -238,6 +271,254 @@ defmodule Letflow.Tasks do
 
     %{user_id: user_id, group_ids: group_ids, role_names: role_names}
   end
+
+  # =========================================================================
+  # claim_task/3, assign_task/4, reassign_task/4 (REQ-085) -- see
+  # lib/letflow/design/req085-task-routes-write.md §3 for the full design
+  # these implement.
+  #
+  # Lock inventory (mirrors Letflow.Engine's own EE-12 statement, §3.0 of the
+  # design doc): every `lock("FOR UPDATE")` acquired by these three
+  # functions is `fetch_and_lock_task/3` below, filtered `where t.id ==
+  # ^task_id` -- single-row, scoped to exactly the one `tasks` row the path
+  # parameter names. No lock here ever touches `instance_projections` or
+  # `tokens` -- none of the three functions drives an engine transition
+  # (unlike `Letflow.Engine.complete_task/3`); they mutate exactly one
+  # `tasks` row's `assignee_type`/`assignee_ref` columns and nothing else.
+  # No global or table-level lock.
+  # =========================================================================
+
+  @type claim_attrs :: %{required(:actor_id) => Ecto.UUID.t()}
+  @type claim_opts :: opts()
+
+  @type claim_error ::
+          {:error, :invalid_task_id}
+          | {:error, :task_not_found}
+          | {:error, {:task_not_pending, status :: :completed | :cancelled}}
+          | {:error, :assigned_to_other_user}
+          | {:error, :assignee_group_not_member}
+          | {:error, :assignee_role_not_held}
+          | {:error, :not_claimable}
+          | {:error, Ecto.Changeset.t()}
+          | {:error, term()}
+
+  @doc """
+  Atomic conditional self-assignment (REQ-085 design doc §1, §3.4) -- **not**
+  a port of R-Co's `claimTask` (a separate `claimed_by` column this schema
+  does not have, see the design doc's §1 for the full resolution). Claimable
+  when the task is currently unassigned, or assigned to a group/role
+  `attrs.actor_id` belongs to (via `resolve_principal_scope/2`, the same
+  group/role resolution `GET /tasks/inbox` already uses -- no second
+  resolution path). Rejected when assigned to a specific different user or a
+  group/role the caller does not belong to.
+
+  Row-locked via `fetch_and_lock_task/3` (`SELECT ... FOR UPDATE`) inside one
+  `Ecto.Multi`, matching `Letflow.Engine.complete_task/3`'s own established
+  concurrency idiom (design doc §3.1) -- not a bare `UPDATE ... WHERE`. Two
+  concurrent claims of the same task: the second transaction's lock
+  acquisition blocks until the first commits, then observes the first
+  claimer's write and deterministically lands on `{:error,
+  :assigned_to_other_user}` (never a 500).
+
+  Re-claiming a task already claimed by the same caller is a no-op success
+  (idempotent), not an error (design doc §3.4, OQ-2).
+  """
+  @spec claim_task(task_id :: String.t(), attrs :: claim_attrs(), opts :: claim_opts()) ::
+          {:ok, Task.t()} | claim_error()
+  def claim_task(task_id, attrs, opts) when is_map(attrs) and is_list(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+    actor_id = Map.fetch!(attrs, :actor_id)
+
+    with {:ok, task_id} <- cast_task_id(task_id) do
+      Multi.new()
+      |> Multi.run(:task, fn repo, _changes -> fetch_and_lock_task(repo, task_id, prefix) end)
+      |> Multi.run(:scope, fn _repo, _changes ->
+        {:ok, resolve_principal_scope(actor_id, prefix: prefix)}
+      end)
+      |> Multi.run(:apply, fn repo, %{task: task, scope: scope} ->
+        apply_claim(repo, task, actor_id, scope, prefix)
+      end)
+      |> Repo.transaction()
+      |> unwrap_write_result()
+    end
+  end
+
+  defp apply_claim(_repo, %Task{assignee_type: nil} = task, actor_id, _scope, prefix) do
+    write_assignment(task, "USER", actor_id, prefix)
+  end
+
+  defp apply_claim(
+         _repo,
+         %Task{assignee_type: "USER", assignee_ref: ref} = task,
+         actor_id,
+         _scope,
+         _prefix
+       )
+       when ref == actor_id do
+    {:ok, task}
+  end
+
+  defp apply_claim(_repo, %Task{assignee_type: "USER"}, _actor_id, _scope, _prefix) do
+    {:error, :assigned_to_other_user}
+  end
+
+  defp apply_claim(
+         _repo,
+         %Task{assignee_type: "GROUP", assignee_ref: ref} = task,
+         actor_id,
+         scope,
+         prefix
+       ) do
+    if ref in scope.group_ids do
+      write_assignment(task, "USER", actor_id, prefix)
+    else
+      {:error, :assignee_group_not_member}
+    end
+  end
+
+  defp apply_claim(
+         _repo,
+         %Task{assignee_type: "ROLE", assignee_ref: ref} = task,
+         actor_id,
+         scope,
+         prefix
+       ) do
+    if ref in scope.role_names do
+      write_assignment(task, "USER", actor_id, prefix)
+    else
+      {:error, :assignee_role_not_held}
+    end
+  end
+
+  defp apply_claim(_repo, %Task{}, _actor_id, _scope, _prefix), do: {:error, :not_claimable}
+
+  @type assign_attrs :: %{required(:user_id) => String.t()}
+  @type assign_opts :: opts()
+
+  @type assign_error ::
+          {:error, :invalid_task_id}
+          | {:error, :missing_user_id}
+          | {:error, :task_not_found}
+          | {:error, {:task_not_pending, status :: :completed | :cancelled}}
+          | {:error, :already_assigned}
+          | {:error, Ecto.Changeset.t()}
+          | {:error, term()}
+
+  @doc """
+  Assigns an unassigned `PENDING` task to `attrs.user_id` (REQ-085 design doc
+  §3.5) -- ports R-Co's own `TaskStore.assign` precondition exactly (`WHERE
+  ... assignee_ref IS NULL`). No group/role-membership check on the target
+  `user_id` -- matches R-Co exactly, and matches REQ-083's own "assignee_ref
+  is unvalidated free text" treatment of the read side, applied here to the
+  write side. `attrs.user_id`'s presence is this function's own
+  belt-and-suspenders guard (INV-8); the router's `Letflow.Api.Validation`
+  call is the primary enforcement point.
+  """
+  @spec assign_task(task_id :: String.t(), attrs :: assign_attrs(), opts :: assign_opts()) ::
+          {:ok, Task.t()} | assign_error()
+  def assign_task(task_id, attrs, opts) when is_map(attrs) and is_list(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    with {:ok, task_id} <- cast_task_id(task_id),
+         {:ok, user_id} <- fetch_target_user_id(attrs) do
+      Multi.new()
+      |> Multi.run(:task, fn repo, _changes -> fetch_and_lock_task(repo, task_id, prefix) end)
+      |> Multi.run(:apply, fn _repo, %{task: task} ->
+        case task do
+          %Task{assignee_ref: nil} -> write_assignment(task, "USER", user_id, prefix)
+          %Task{} -> {:error, :already_assigned}
+        end
+      end)
+      |> Repo.transaction()
+      |> unwrap_write_result()
+    end
+  end
+
+  @type reassign_attrs :: %{required(:user_id) => String.t()}
+  @type reassign_opts :: opts()
+
+  @type reassign_error ::
+          {:error, :invalid_task_id}
+          | {:error, :missing_user_id}
+          | {:error, :task_not_found}
+          | {:error, {:task_not_pending, status :: :completed | :cancelled}}
+          | {:error, :not_currently_assigned}
+          | {:error, Ecto.Changeset.t()}
+          | {:error, term()}
+
+  @doc """
+  Changes the assignee of an already-assigned `PENDING` task to
+  `attrs.user_id` (REQ-085 design doc §3.6) -- ports R-Co's own
+  `TaskStore.reassign` precondition exactly (`WHERE ... assignee_ref IS NOT
+  NULL`), unconditionally overwriting whatever `assignee_type`/`assignee_ref`
+  was there before (`"USER"`/`"GROUP"`/`"ROLE"`). Same "no group/role check
+  on target `user_id`" note as `assign_task/4`.
+  """
+  @spec reassign_task(task_id :: String.t(), attrs :: reassign_attrs(), opts :: reassign_opts()) ::
+          {:ok, Task.t()} | reassign_error()
+  def reassign_task(task_id, attrs, opts) when is_map(attrs) and is_list(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    with {:ok, task_id} <- cast_task_id(task_id),
+         {:ok, user_id} <- fetch_target_user_id(attrs) do
+      Multi.new()
+      |> Multi.run(:task, fn repo, _changes -> fetch_and_lock_task(repo, task_id, prefix) end)
+      |> Multi.run(:apply, fn _repo, %{task: task} ->
+        case task do
+          %Task{assignee_ref: nil} -> {:error, :not_currently_assigned}
+          %Task{} -> write_assignment(task, "USER", user_id, prefix)
+        end
+      end)
+      |> Repo.transaction()
+      |> unwrap_write_result()
+    end
+  end
+
+  # ── claim/assign/reassign shared helpers ────────────────────────────────
+
+  # M1 -- row-lock + fetch the tasks row, identical shape to
+  # Letflow.Engine's own private fetch_and_lock_task/3 (a distinct function,
+  # unreachable outside engine.ex) -- deliberately duplicated (a three-line
+  # query, not worth a cross-module extraction for one duplicate), matching
+  # this design's own stated reasoning (design doc §3.0).
+  defp fetch_and_lock_task(repo, task_id, prefix) do
+    Task
+    |> where([t], t.id == ^task_id)
+    |> lock("FOR UPDATE")
+    |> repo.one(prefix: prefix)
+    |> case do
+      nil -> {:error, :task_not_found}
+      %Task{status: :pending} = task -> {:ok, task}
+      %Task{status: status} -> {:error, {:task_not_pending, status}}
+    end
+  end
+
+  defp write_assignment(task, assignee_type, assignee_ref, prefix) do
+    task
+    |> Task.assignment_changeset(%{assignee_type: assignee_type, assignee_ref: assignee_ref})
+    |> Repo.update(prefix: prefix)
+  end
+
+  defp fetch_target_user_id(attrs) do
+    case Map.get(attrs, :user_id) do
+      value when is_binary(value) and value != "" -> {:ok, value}
+      _other -> {:error, :missing_user_id}
+    end
+  end
+
+  defp cast_task_id(task_id) do
+    case Ecto.UUID.cast(task_id) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, :invalid_task_id}
+    end
+  end
+
+  # Unwraps an Ecto.Multi transaction result down to this module's own
+  # {:ok, Task.t()} | {:error, reason} contract -- the identical catch-all
+  # shape Letflow.Engine's own interpret_complete_result/1 tail establishes
+  # (engine.ex), restated here since this is a different module.
+  defp unwrap_write_result({:ok, %{apply: task}}), do: {:ok, task}
+  defp unwrap_write_result({:error, _failed_step, reason, _changes}), do: {:error, reason}
 
   # ── list_tasks/2 private helpers ────────────────────────────────────────
 

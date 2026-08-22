@@ -55,8 +55,17 @@ volumes:
     path: docs/status/requirement_status.v2.yaml
     status: current
     opened: 2026-08-21
-    entries: 38
+    entries: 39
     note: >
+      Incremented to 38 in the same commit as WF03-ISS0260-20260822's own done-event
+      append (Step 5/Step Final, ISSUE-FIXER) -- 38 on-disk `- req:` entries at that
+      point. That run's Step Final rebase conflicted at this file's tail against
+      REQ-119's done-event (landed on main after this run's own Step 5 commit) and
+      composed both appends -- REQ-119 done (08:24:39Z) then ISS-0260 done
+      (08:36:06Z), kept in that chronological order -- re-deriving 39 from the
+      composed file (39 on-disk `- req:` entries), per this note's own stated rule:
+      recount from the composed file every time, never carry the previous attempt's
+      number forward.
       Opened by ISS-0119's fix. Successor to volume 1. `entries:` corrected
       2026-08-21 (ISS-0199, run WF03-ISS0199-20260821) from a stale declared 0
       to the real on-disk count of 7 -- HOW-TO-APPEND step 6 previously had no

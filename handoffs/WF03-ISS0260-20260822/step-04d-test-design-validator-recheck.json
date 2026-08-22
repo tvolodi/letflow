@@ -1,0 +1,44 @@
+{
+  "agent_id": "TEST-DESIGN-VALIDATOR",
+  "step": "04d",
+  "type": "recheck",
+  "verdict": "PASS",
+  "prior_step_reference": "handoffs/WF03-ISS0260-20260822/step-04b-test-design-validator.json (commit 7223b92) -- PASSed the original ISS-0260 tests but missed the on_exit env-var teardown leak later found by TEST-RUNNER (step-04c, commit 5e79121, FAIL).",
+  "fix_commit": "1fbd86b",
+  "fix_commit_message": "test(ISS-0260): fix env-var teardown leak in ac1_timing_multiplier tests",
+  "checks": [
+    {
+      "id": "diff_review",
+      "description": "git show 1fbd86b -- test/letflow/engine_concurrency_test.exs read in full.",
+      "result": "PASS",
+      "notes": "setup/0 now captures System.get_env(\"TEST_PARALLEL_GROUP\") and System.get_env(\"TEST_AC1_TIMING_MULTIPLIER\") into original_parallel_group/original_ac1_multiplier BEFORE any test body mutates them, and on_exit conditionally restores: System.put_env(var, original) when the captured value was truthy (var was previously set), else System.delete_env(var) (var was previously unset). This is a genuine capture-and-restore, not a relocation of the same unconditional-delete bug -- both branches (was-set / was-unset) are handled for both vars."
+    },
+    {
+      "id": "isolated_file_run",
+      "description": "mix test test/letflow/engine_concurrency_test.exs (file alone, random seed).",
+      "result": "PASS",
+      "evidence": "Result: 10 passed / Finished in 8.7 seconds (0.00s async, 8.7s sync)"
+    },
+    {
+      "id": "exact_repro_scenario",
+      "description": "Independently reproduced TEST-RUNNER's original failure scenario: TEST_PARALLEL_GROUP=tp_repro2 mix test test/letflow/engine_concurrency_test.exs --seed 531662 --no-color --trace",
+      "result": "PASS",
+      "evidence": "Running ExUnit with seed: 531662, max_cases: 1. --trace output confirms the same ordering TEST-RUNNER and TEST-DESIGNER both found: the ISS-0260 describe-block tests (defaults/30, TEST_AC1_TIMING_MULTIPLIER-overrides-unset, TEST_AC1_TIMING_MULTIPLIER-precedence, TEST_PARALLEL_GROUP=tp12345-returns-60) run and complete BEFORE 'test AC1 -- 100 concurrent task completions...' runs. AC1 passed (3264.2ms). Final: Result: 10 passed, 0 failures -- TEST_PARALLEL_GROUP was not wiped out by the time AC1 ran."
+    },
+    {
+      "id": "broader_leakage_check",
+      "description": "Re-read setup/on_exit code for both branches (value-was-set vs value-was-unset) for both env vars; ran additional scenarios beyond the one known seed.",
+      "result": "PASS",
+      "notes": "Code (quoted above) correctly branches on `if original_parallel_group do ... else System.delete_env ... end` and the same shape for original_ac1_multiplier -- so a var that was NOT originally set is deleted again (not left stale), and a var that WAS originally set is restored to its exact pre-existing value, not just 'not deleted'. Additional runs performed for confidence beyond the single known-bad seed:",
+      "additional_runs": [
+        {"scenario": "file alone, no TEST_PARALLEL_GROUP pre-set, random seed 313958", "result": "Result: 10 passed"},
+        {"scenario": "file alone, TEST_PARALLEL_GROUP=shellgroup1 pre-set from shell (value-was-set branch), random seed 711240", "result": "Result: 10 passed"},
+        {"scenario": "file alone, TEST_AC1_TIMING_MULTIPLIER=45 pre-set from shell (value-was-set branch for the second var), seed 531662 (the known-bad ordering seed)", "result": "Result: 10 passed"}
+      ],
+      "residual_risk": "None identified for this file. Note: setup at describe level plus per-test capture means each of the 4 ISS-0260 tests that mutate these vars captures the ALREADY-RESTORED value left by the previous test's on_exit, not a stale one -- verified by reading test bodies at lines 389-437, each of which explicitly sets/deletes both vars at the start of its own body regardless of what a prior test in the same describe block left behind, so intra-describe-block ordering is also safe independent of the setup/on_exit fix."
+    }
+  ],
+  "acceptance_criteria_coverage": "Unchanged from step-04b (all ISS-0260 unit-test ACs and AC1 integration coverage remain mapped 1:1 to runnable, non-skipped tests) -- this recheck is scoped to the teardown-leak defect TEST-RUNNER found, not a full re-review of coverage.",
+  "next_action": "Route to TEST-RUNNER for full-suite re-run",
+  "timestamp_utc": "2026-08-22T13:30:00Z"
+}

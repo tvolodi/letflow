@@ -1,0 +1,40 @@
+{
+  "run_id": "WF03-ISS0260-20260822",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0260-20260822/step-04-test-designer.json",
+  "status": "COMPLETED",
+  "context": {
+    "artifacts_in": [
+      "test/letflow/engine_concurrency_test.exs",
+      "lib/letflow/design/iss0260-ac1-timing-flake.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4 regression test for ISS-0260 / GH#507 -- AC1's flaky wall-clock proxy assertion fix (commit 3c08067, new private helper ac1_timing_multiplier/0 in test/letflow/engine_concurrency_test.exs)."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added 7 new ExUnit unit tests, describe \"ISS-0260 -- ac1_timing_multiplier/0\" in test/letflow/engine_concurrency_test.exs, covering the private helper directly (legal -- tests in the same module can call defp functions): default 30x (no env vars), parallel 60x (TEST_PARALLEL_GROUP set), override applies (TEST_AC1_TIMING_MULTIPLIER, TEST_PARALLEL_GROUP unset), override precedence (TEST_AC1_TIMING_MULTIPLIER wins when both set), and validation rejection of 'abc'/'-1'/'0' via flunk. Each test explicitly sets/clears both env vars and a setup-level on_exit clears them, so no state leaks across tests or files. Full file: 10 passed (3 original AC1/AC2/AC4 + 7 new), 0 failures.\n\nPre-fix commit 3c08067 introduces ac1_timing_multiplier/0 as brand-new code -- checking out pre-fix and running the new tests would raise UndefinedFunctionError for a trivial reason (function doesn't exist), proving nothing about whether the tests discriminate correct from wrong logic. Per WF-03 Step 4's 'code under test does not exist' procedure, mutated the shipped logic three ways in place, ran the new describe block against each, then reverted with `git checkout -- test/letflow/engine_concurrency_test.exs` and verified `git status --porcelain` empty before applying the next mutant.\n\nMUTANT-KILL MATRIX:\n1) Drop load-awareness -- `nil -> @ac1_timing_multiplier_default` unconditionally (deletes the TEST_PARALLEL_GROUP branch): 6/7 passed, 1 failed (\"returns 60 when TEST_PARALLEL_GROUP is set...\").\n2) Skip override validation -- Integer.parse/1 falls back to @ac1_timing_multiplier_default instead of flunk on parse failure: 4/7 passed, 3 failed (all three 'rejects a ... override value' tests: non-numeric, negative, zero).\n3) Invert precedence -- checks TEST_PARALLEL_GROUP first, only falls through to TEST_AC1_TIMING_MULTIPLIER when it's unset: 6/7 passed, 1 failed (\"TEST_AC1_TIMING_MULTIPLIER takes precedence over TEST_PARALLEL_GROUP, not the other way round\").\n\nEach mutant killed exactly the test(s) targeting its specific trap and no others. All three mutants reverted; final `git status --porcelain` on test/letflow/engine_concurrency_test.exs is empty, and the full file re-runs green at 10 passed, 0 failed (confirmed after each revert, not just the last one).\n\nSpec written/appended at test/specs/REQ-055.md, new 'ISS-0260 regression' section with the fail-then-pass rationale, the mutant table, and per-case coverage. Test commit: 7475fdb ('test(ISS-0260): unit-test ac1_timing_multiplier/0 default/parallel/override/validation').",
+    "artifacts_out": [
+      "test/letflow/engine_concurrency_test.exs",
+      "test/specs/REQ-055.md"
+    ],
+    "issues": [],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR",
+    "post_handoff_fix_20260822": {
+      "reported_by": "TEST-RUNNER",
+      "bug": "The describe \"ISS-0260 -- ac1_timing_multiplier/0\" block's setup-level on_exit unconditionally called System.delete_env(\"TEST_PARALLEL_GROUP\") / System.delete_env(\"TEST_AC1_TIMING_MULTIPLIER\") after every test in the block. System.delete_env/1 is OS-process-global, and scripts/test_parallel.sh sets TEST_PARALLEL_GROUP for an entire partition process's whole lifetime (all tests in that partition share one BEAM VM). ExUnit's suite-wide seed-randomized order meant that when these new tests ran before the real AC1 test in the same partition, the on_exit deleted the env var test_parallel.sh had set for the whole partition, silently making AC1 fall back to the 30x default multiplier instead of the intended 60x -- reintroducing exactly the flake ISS-0260 exists to fix. TEST-RUNNER reproduced deterministically with `TEST_PARALLEL_GROUP=tp_repro2 mix test test/letflow/engine_concurrency_test.exs --seed 531662 --no-color --trace`.",
+      "fix": "setup now captures System.get_env(\"TEST_PARALLEL_GROUP\") and System.get_env(\"TEST_AC1_TIMING_MULTIPLIER\") BEFORE any test in the block mutates them, and on_exit restores each captured value (System.put_env with the original value) if one existed, or deletes the var only if it did not previously exist -- so a value set by the surrounding process (e.g. test_parallel.sh) survives these tests.",
+      "verification": {
+        "solo_run": "mix test test/letflow/engine_concurrency_test.exs -> Result: 10 passed (0 failures)",
+        "repro_scenario": "TEST_PARALLEL_GROUP=tp_repro2 mix test test/letflow/engine_concurrency_test.exs --seed 531662 --no-color --trace -> same test ordering as TEST-RUNNER's repro (ISS-0260 describe-block tests run before AC1 -- see [L#392],[L#406],[L#437] before AC1 at [L#297] in the trace), AC1 passed (2674.3ms), Result: 10 passed (0 failures)",
+        "test_parallel_sh": "sh scripts/test_parallel.sh test/letflow/engine_concurrency_test.exs -> partition 1 (the one the file-filtered run lands in): 10 tests, 0 failures; combined: 10 tests, 0 failures (10/10 passed). Other 15 partitions report 0 tests/exit 1 because a single-file filter only assigns the file to one partition, consistent with ISSUE-FIXER's earlier documented finding -- not a new problem."
+      },
+      "fix_commit": "test(ISS-0260): fix env-var teardown leak in ac1_timing_multiplier tests"
+    }
+  }
+}

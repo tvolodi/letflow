@@ -29,4 +29,57 @@ affected_files:
   - test/letflow/engine_concurrency_test.exs
 queue_task_id: 260
 github_issue: 507
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0260-20260822
+resolved_at: "2026-08-22T08:36:06Z"
+resolution_note: >
+  Root cause (ISSUE-FIXER Step 1 diagnosis): the AC1 wall-clock proxy assertion
+  (concurrent_micros < baseline_micros * 30) is a deliberately loose "no global lock"
+  check, not a perf bound (design doc lib/letflow/design/req-055-concurrent-instance-
+  isolation.md Section 3.4/Section 6 OQ2). Reproduced directly: two real
+  scripts/test_parallel.sh (16-way parallel) runs on this host gave ratios of approx
+  34.0x (matching the originally filed failure: concurrent_micros=1103564,
+  baseline_micros=32460) and approx 29.42x (passed, but within noise of the 30x
+  threshold). Both are far below the approx 100x a genuine global-lock/serializer
+  regression would produce, confirming the flake is load-regime contention, not a
+  correctness regression -- but the fixed 30x constant sits inside the noise band under
+  this repo's own documented default full-parallelism operating mode (REQ-113/REQ-114),
+  so it kept intermittently failing.
+
+  Fix (CODE-DESIGNER design lib/letflow/design/iss0260-ac1-timing-flake.md, 4 design-
+  gate rounds; ELIXIR-DEV commit 3c08067): made the assertion load-aware instead of
+  uniformly loosening it or converting it to a non-blocking benchmark (rejected --
+  this repo has no CI, so a log-only ratio would be equivalent to deleting the check).
+  Split into @ac1_timing_multiplier_default = 30 (unchanged, TEST_PARALLEL_GROUP unset)
+  and @ac1_timing_multiplier_parallel = 60 (TEST_PARALLEL_GROUP set -- the existing
+  signal scripts/test_parallel.sh already exports and config/test.exs already reads for
+  ISS-0217), plus a TEST_AC1_TIMING_MULTIPLIER override validated as a positive integer
+  (mirroring decision 0009's TEST_MAX_CONNECTIONS validation style,
+  scripts/test_parallel.sh:124-127) with a named-value error message on rejection. 60x
+  preserves detection power: still under half the approx 100x global-lock signature,
+  while giving approx 1.75x headroom over the worst observed 34.0x.
+
+  TEST-DESIGNER added 7 unit tests for the new ac1_timing_multiplier/0 helper
+  (commit 7475fdb), proven discriminating via mutation testing (helper is new code, so
+  ordinary fail-then-pass would only prove UndefinedFunctionError) -- 3 targeted mutants
+  each killed exactly their intended test(s), independently re-confirmed by
+  TEST-DESIGN-VALIDATOR applying one mutant itself. TEST-RUNNER's first full-suite run
+  (scripts/test_parallel.sh) caught a real regression the earlier gates missed: the new
+  tests' on_exit unconditionally deleted TEST_PARALLEL_GROUP/TEST_AC1_TIMING_MULTIPLIER
+  (OS-process-global), which under real seed-randomized ExUnit ordering wiped the env
+  var before the real AC1 test ran later in the same partition process, silently
+  defeating the fix (reproduced deterministically at seed 531662). TEST-DESIGNER fixed
+  this (commit 1fbd86b, capture-and-restore instead of unconditional delete);
+  TEST-DESIGN-VALIDATOR and TEST-RUNNER both independently re-verified against the same
+  seed plus two full fresh scripts/test_parallel.sh runs (commits cdd0178, cba37f0) --
+  both runs: 1694/1695 passed, the one remaining failure being ISS-0119's own
+  pre-existing, structurally unrelated requirement_status.v2.yaml roll-rule-ceiling
+  failure (untouched by this branch's diff). AC1 and all 7 new tests passed cleanly in
+  both runs, across two different TEST_PARALLEL_GROUP values/partition
+  assignments/seeds.
+
+  Files changed: test/letflow/engine_concurrency_test.exs,
+  lib/letflow/design/req-055-concurrent-instance-isolation.md (Section 3.4/Section 6
+  OQ2 updated to record the split, kept honest per this run's own constraint), new
+  design doc lib/letflow/design/iss0260-ac1-timing-flake.md, test/specs/REQ-055.md
+  (ISS-0260 regression section).

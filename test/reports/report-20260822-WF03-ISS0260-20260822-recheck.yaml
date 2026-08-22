@@ -1,0 +1,108 @@
+report_id: report-20260822-WF03-ISS0260-20260822-recheck
+agent: TEST-RUNNER
+issue: ISS-0260
+github: "#507"
+workflow_step: WF-03 Step 4e (re-run of final test-execution gate, after TEST-DESIGNER
+  fix commit 1fbd86b and TEST-DESIGN-VALIDATOR recheck PASS at cdd0178)
+branch: fix/WF03-ISS0260-20260822
+date: 2026-08-22
+command: "sh scripts/test_parallel.sh (real 16-way parallel, N derived from nproc), run twice"
+
+toolchain:
+  platform: "Windows 11"
+
+environment:
+  db_port: "LETFLOW_DB_PORT=5472, read from this worktree's untracked .env (already present, copied ahead of this run)."
+  postgres: >
+    `docker compose up -d` failed again with the same port-5472-already-bound error
+    as the prior run (letflow-2-postgres-1, Up 26h, healthy -- the main checkout's
+    own container that this worktree's .env already points at). The stray `Created`
+    container (agent-aa36286ffc0ed70e9-postgres-1) was removed with `docker rm`; the
+    already-healthy shared letflow-2-postgres-1 container was used for both runs
+    below, same as the prior TEST-RUNNER pass.
+  first_attempt_infra_note: >
+    The very first `sh scripts/test_parallel.sh` invocation this session hit an
+    unrelated Windows/Mix infrastructure fault in partition 8: "Waiting for lock on
+    the build directory (held by process 20744)" followed by "could not create hard
+    link ... permission denied", so partition 8 produced 0 tests / no Result: line
+    and the whole run aborted with exit 1 before any of its assigned tests ran. This
+    is a global Mix OS-concurrency-lock/hardlink contention issue (likely a
+    concurrent mix process from another checkout/worktree on this same machine
+    holding the same OS-level temp lock file under
+    C:\Users\tvolo\AppData\Local\Temp\mix_lock_user0\...), not something in this
+    worktree's _build directory or this branch's diff. Discarded and re-run; the two
+    full runs recorded below both completed all 16 partitions successfully.
+
+full_suite_run_1:
+  n_partitions: 16
+  n_source: nproc
+  test_parallel_group: "tp3971126 (real, shared by all 16 partitions)"
+  combined_result_line: "combined: 1690 tests, 5 properties, 1 failures (1694/1695 passed)"
+  exit_code: 1
+
+full_suite_run_2:
+  n_partitions: 16
+  n_source: nproc
+  test_parallel_group: "tp3971644 (real, shared by all 16 partitions)"
+  combined_result_line: "combined: 1690 tests, 5 properties, 1 failures (1694/1695 passed)"
+  exit_code: 1
+
+failures_found_per_run: 1
+
+failure_1:
+  test: "A3: the current volume is within the roll-rule ceilings (Letflow.Docs.RequirementStatusInvariantsTest)"
+  location: "test/docs/requirement_status_invariants_test.exs:105"
+  partition: 1 (both runs)
+  attribution: PRE-EXISTING, UNRELATED TO THIS BRANCH
+  reasoning: >
+    Identical failure text, path, and measurements in both runs as the prior
+    TEST-RUNNER pass (step-04c): docs/status/requirement_status.v2.yaml is over its
+    documented roll-rule ceiling (1262 lines / 83561 bytes vs. 1200-line/120000-byte
+    ceiling) -- this is ISS-0119 itself, by the test's own failure message.
+    `git diff --stat origin/main...HEAD` for this branch touches only
+    test/letflow/engine_concurrency_test.exs, lib/letflow/design/iss0260-ac1-timing-flake.md,
+    lib/letflow/design/req-055-concurrent-instance-isolation.md, test/specs/REQ-055.md,
+    test/reports/report-20260822-WF03-ISS0260-20260822.yaml, and files under
+    handoffs/WF03-ISS0260-20260822/ -- never docs/status/requirement_status.v2.yaml
+    or its index. Structural, not count-matched. Confirmed still present, expected,
+    not a blocker for this branch.
+
+ac1_status:
+  test: "AC1 -- 100 concurrent task completions across 100 distinct instances every completion succeeds, no cross-instance corruption, no global serialization (Letflow.EngineConcurrencyTest)"
+  location: "test/letflow/engine_concurrency_test.exs:297"
+  result: PASSED in both full runs, no failure entry for this test or for any test
+    in the `describe "ISS-0260 -- ac1_timing_multiplier/0"` block in either run's
+    16 partition logs.
+  verification_method: >
+    grep across all 32 partition logs (16 per run x 2 runs) for any `  N) test`
+    ExUnit failure header found exactly one match in each run, both times the
+    RequirementStatusInvariantsTest A3 failure above -- zero matches for AC1 or any
+    ac1_timing_multiplier/0 sub-test in either run.
+  fix_holding: >
+    TEST-DESIGNER's fix (commit 1fbd86b) replaced the describe block's
+    unconditional `System.delete_env("TEST_PARALLEL_GROUP")` on_exit with a
+    capture-and-restore pattern. Under two independent real 16-way parallel runs
+    with distinct ExUnit seeds/partition assignments per run (test_parallel.sh
+    generates a fresh TEST_PARALLEL_GROUP value and mix test's own seed is
+    time-derived per invocation, so partition-to-file assignment and in-file test
+    order both varied run to run), AC1 passed both times with no sign of the
+    TEST_PARALLEL_GROUP-wipe defect recurring. This directly exercises the same
+    class of ordering risk (other ac1_timing_multiplier/0 sub-tests running before
+    the real AC1 test within the same partition process) that caused the original
+    failure, and the fix held under it twice.
+
+verdict: PASS
+merge_safe: true
+summary: >
+  Two independent full 16-way parallel runs, each: 1690 tests, 5 properties, 1
+  failure (1694/1695 passed), exit 1. The single failure in both runs is the
+  pre-existing, structurally-unrelated ISS-0119 ceiling failure
+  (RequirementStatusInvariantsTest A3) -- untouched by this branch's diff, already
+  known from the prior TEST-RUNNER pass. The AC1-related failure from the prior
+  run is gone: AC1 itself, and every sub-test in the new
+  ac1_timing_multiplier/0 describe block, passed cleanly in both runs, with no
+  TEST_PARALLEL_GROUP-related failure anywhere in either run's 32 combined
+  partition logs. TEST-DESIGNER's capture-and-restore fix (1fbd86b) is confirmed
+  holding under real parallel load across two independently-seeded runs, not just
+  the single reproduction TEST-DESIGN-VALIDATOR re-ran. This branch is safe to
+  route onward.

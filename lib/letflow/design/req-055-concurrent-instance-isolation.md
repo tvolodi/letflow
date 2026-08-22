@@ -344,8 +344,8 @@ the test file alone (without this design doc open) still sees why no such test e
     tag) and `projection.status == :completed`.
   - No-cross-contention (portable proxy for "no global lock," since asserting on
     Postgres's internal lock table is not portably assertable from ExUnit): assert
-    total wall-clock time for the `Task.await_many/2` call is `< `some multiple (e.g.
-    3x) of a single, independently-measured `complete_task/3` call's own wall-clock time
+    total wall-clock time for the `Task.await_many/2` call is `<` a multiple of a
+    single, independently-measured `complete_task/3` call's own wall-clock time
     against a freshly-started 101st instance measured immediately before the concurrent
     batch — a single cross-instance mutex/singleton-GenServer/table-lock design would
     make total time scale roughly linearly with the number of instances (each
@@ -353,7 +353,18 @@ the test file alone (without this design doc open) still sees why no such test e
     them to overlap; this assertion is deliberately loose (a multiple, not a tight
     bound) to avoid CI flakiness from ordinary scheduler/connection-pool variance, while
     still failing decisively against an accidentally-reintroduced global serialization
-    point (which would show close to 100x, not ~1-3x).
+    point (which would show close to 100x, not a small multiple).
+    **ISS-0260 update:** the multiplier actually shipped as 30x (already tuned past
+    this doc's original "e.g. 3x" placeholder text by the time REQ-055 was
+    implemented), and as of ISS-0260 is regime-dependent rather than a single
+    constant: 30x under plain `mix test` (unchanged), 60x under a real
+    `scripts/test_parallel.sh` N-way partition (detected via `TEST_PARALLEL_GROUP`,
+    the same env var `config/test.exs` already reads for ISS-0217's
+    `application_name` tagging), with an explicit `TEST_AC1_TIMING_MULTIPLIER`
+    override escape hatch. See
+    `lib/letflow/design/iss0260-ac1-timing-flake.md` for the full derivation
+    (30x/60x constants, why they're split by regime, and the ~100x
+    detection-power argument, which is unchanged by this split).
 - This is AC1's own literal "real Postgres, actual test output quoted" requirement —
   TEST-RUNNER's Step 4 report and RELEASE-VALIDATOR's Step 5 re-run both quote this
   test's actual `mix test` output per `docs/anti-patterns.md`'s Docker-based
@@ -498,6 +509,19 @@ No acceptance criterion is left as "TBD" or silently resolved.
    their own step — not a design defect requiring rework, provided the assertion's
    *purpose* (catch an accidentally-reintroduced global/singleton serialization point)
    is preserved.
+   **ISS-0260 update:** that tuning latitude has since been exercised twice — once
+   informally (the "e.g. 3x" placeholder here became 30x by the time REQ-055 shipped)
+   and once formally, as ISS-0260: the 30x constant flaked under real
+   `scripts/test_parallel.sh` 16-way contention (two independent measurements: 34.0x
+   observed once, 29.42x observed once, both far below the ~100x a genuine
+   global-lock regression would produce), which motivated splitting the single
+   constant into a load-aware pair — 30x under plain `mix test` (unchanged, no
+   evidence motivated changing this regime), 60x under a real
+   `scripts/test_parallel.sh` partition (derived from the observed 34.0x worst case
+   plus explicit headroom) — plus a validated `TEST_AC1_TIMING_MULTIPLIER` override.
+   See `lib/letflow/design/iss0260-ac1-timing-flake.md` for the full derivation.
+   This is tuning within the latitude this OQ already granted, not a reopening of
+   REQ-055's design.
 3. **`start_n_instances!/3`'s sequential 100-call setup cost** (§3.3) is not itself
    under concurrency test — only the subsequent task-completion step is. If a future
    requirement wants instance *creation* itself verified under concurrency (100

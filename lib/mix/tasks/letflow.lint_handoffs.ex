@@ -35,6 +35,10 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
     * **H5** -- registry coverage: every `run_id` implied by a
       `handoffs/<run_id>/` directory appears in `handoffs/registry.json`'s
       `runs[].run_id`, and vice versa.
+    * **H6** -- every discovered handoff-shaped file (basename starts with
+      `step`) is JSON. A non-`.json` file is a discovery-completeness defect
+      in its own right, independent of what its content happens to be;
+      grandfathering is per-file only, exactly like H1-H4.
 
   A hard violation on a file not in this module's grandfather maps is a
   **new** regression and fails the run. A hard violation on a grandfathered
@@ -124,13 +128,31 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   # class as the three ISS-0117 markers, not yet formalised into the schema
   # either) + 2 H2 (a negative started_at/completed_at gap, the timestamp
   # class ISS-0117/HANDOFF_PROTOCOL.md §1.2 already documents separately).
+  #
+  # 2026-08-22, ISS-0262/GH#510: 10 pre-existing Markdown handoff files from
+  # the already-closed WF03-ISS0258-20260822 run, invisible to every check
+  # before this fix broadened discovery; grandfathered per H6 rather than
+  # converted -- see
+  # `lib/letflow/design/iss0262-lint-handoffs-non-json-discovery.md` §3 for
+  # the reasoning. No wildcard: a NEW non-JSON file introduced later is not
+  # covered by this list and fails the build.
   @grandfathered [
     {"H3", "handoffs/WF02-REQ023-20260816/step-06-doc-updater.json"},
     {"H2", "handoffs/WF02-REQ025-20260817/step-01b-code-design-validator.json"},
     {"H3", "handoffs/WF02-REQ027-20260816/step-02d-reviewer.json"},
     {"H3", "handoffs/WF02-REQ037-20260817/step-02c-rework1-security-reviewer.json"},
     {"H3", "handoffs/WF02-REQ062-20260819/step-03-test-designer.json"},
-    {"H2", "handoffs/WF03-ISS0047-20260818/step-03-elixir-dev.json"}
+    {"H2", "handoffs/WF03-ISS0047-20260818/step-03-elixir-dev.json"},
+    {"H6", "handoffs/WF03-ISS0258-20260822/step-01-issue-fixer.md"},
+    {"H6", "handoffs/WF03-ISS0258-20260822/step-02-code-designer.md"},
+    {"H6", "handoffs/WF03-ISS0258-20260822/step-02b-code-design-validator.md"},
+    {"H6", "handoffs/WF03-ISS0258-20260822/step-03-elixir-dev-MISSING-RETRACTED.md"},
+    {"H6", "handoffs/WF03-ISS0258-20260822/step-03-elixir-dev.md"},
+    {"H6", "handoffs/WF03-ISS0258-20260822/step-03b-security-scope-test.md"},
+    {"H6", "handoffs/WF03-ISS0258-20260822/step-03c-reviewer.md"},
+    {"H6", "handoffs/WF03-ISS0258-20260822/step-04-test-designer.md"},
+    {"H6", "handoffs/WF03-ISS0258-20260822/step-04b-test-design-validator.md"},
+    {"H6", "handoffs/WF03-ISS0258-20260822/step-04c-test-design-validator-regate.md"}
   ]
 
   @spec grandfathered?(String.t(), String.t()) :: boolean()
@@ -183,12 +205,16 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
 
   # -- discovery ----------------------------------------------------------
 
-  @spec handoff_files() :: [String.t()]
-  defp handoff_files do
-    Path.wildcard(Path.join(@handoffs_dir, "**/*.json"))
-    |> Enum.reject(&(&1 == @registry_file))
+  @spec handoff_files(dir :: String.t()) :: [String.t()]
+  def handoff_files(dir \\ @handoffs_dir) do
+    Path.wildcard(Path.join(dir, "**/step*.*"))
+    |> Enum.filter(&File.regular?/1)
+    |> Enum.reject(&(&1 == registry_file(dir)))
     |> Enum.sort()
   end
+
+  @spec registry_file(dir :: String.t()) :: String.t()
+  defp registry_file(dir), do: Path.join(dir, "registry.json")
 
   # -- §4.1(b) schema, read live from HANDOFF_PROTOCOL.md ------------------
 
@@ -231,43 +257,74 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
 
   # -- per-file lint --------------------------------------------------------
 
-  defp lint_file(path, not_agent_attested_schema) do
-    with {:ok, raw} <- File.read(path),
-         {:ok, data} <- Jason.decode(raw) do
-      hard = []
-
-      hard = hard ++ check_h1_status(path, data)
-      hard = hard ++ check_h2_timestamps(path, data)
-      hard = hard ++ check_h3_keys(path, data)
-      hard = hard ++ check_h4_not_agent_attested(path, data, not_agent_attested_schema)
-
-      {grandfathered, new} = Enum.split_with(hard, & &1.grandfathered)
-
-      advisory = check_advisory(path, data)
-
-      %{
-        path: path,
-        hard_new: new,
-        hard_grandfathered: grandfathered,
-        advisory: advisory,
-        parse_error: nil
-      }
+  @spec handoff_kind(path :: String.t()) :: :json | :non_json
+  def handoff_kind(path) do
+    if String.downcase(Path.extname(path)) == ".json" do
+      :json
     else
-      {:error, reason} ->
+      :non_json
+    end
+  end
+
+  @spec lint_file(path :: String.t(), not_agent_attested_schema :: map()) :: map()
+  def lint_file(path, not_agent_attested_schema) do
+    case handoff_kind(path) do
+      :non_json ->
+        v =
+          violation(
+            path,
+            "H6",
+            "non-JSON handoff-shaped file: #{path} has extension " <>
+              "#{inspect(Path.extname(path))}, expected .json",
+            grandfathered?("H6", path)
+          )
+
         %{
           path: path,
-          hard_new: [
+          hard_new: if(v.grandfathered, do: [], else: [v]),
+          hard_grandfathered: if(v.grandfathered, do: [v], else: []),
+          advisory: %{path: path, warnings: [], size_info: %{desc_len: 0, summary_len: 0}},
+          parse_error: nil
+        }
+
+      :json ->
+        with {:ok, raw} <- File.read(path),
+             {:ok, data} <- Jason.decode(raw) do
+          hard = []
+
+          hard = hard ++ check_h1_status(path, data)
+          hard = hard ++ check_h2_timestamps(path, data)
+          hard = hard ++ check_h3_keys(path, data)
+          hard = hard ++ check_h4_not_agent_attested(path, data, not_agent_attested_schema)
+
+          {grandfathered, new} = Enum.split_with(hard, & &1.grandfathered)
+
+          advisory = check_advisory(path, data)
+
+          %{
+            path: path,
+            hard_new: new,
+            hard_grandfathered: grandfathered,
+            advisory: advisory,
+            parse_error: nil
+          }
+        else
+          {:error, reason} ->
             %{
               path: path,
-              rule: "PARSE",
-              message: "could not read/decode: #{inspect(reason)}",
-              grandfathered: false
+              hard_new: [
+                %{
+                  path: path,
+                  rule: "PARSE",
+                  message: "could not read/decode: #{inspect(reason)}",
+                  grandfathered: false
+                }
+              ],
+              hard_grandfathered: [],
+              advisory: [],
+              parse_error: inspect(reason)
             }
-          ],
-          hard_grandfathered: [],
-          advisory: [],
-          parse_error: inspect(reason)
-        }
+        end
     end
   end
 

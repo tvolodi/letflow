@@ -871,6 +871,44 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       assert Enum.all?(report.entries, &(is_binary(&1.status) or is_nil(&1.status)))
     end
   end
+
+  # ==================================================================
+  # T-ALIAS-* : ISS-0258 AC2 -- "wired into an actual gate, not built and
+  # left unwired". `mix letflow.check` is the ONLY gate surface this repo
+  # has (design section 1.1: no .github, no .gitlab-ci.yml, no .circleci),
+  # so alias membership IS the wiring. Without this test the line can be
+  # deleted from mix.exs and the whole suite stays green -- measured.
+  # Precedent for reading mix.exs from a test:
+  # test/letflow/engine/lua_script_audit_test.exs, "mix.exs and moduledoc
+  # guardrails".
+  # ==================================================================
+
+  describe "the letflow.check alias wiring (AC2)" do
+    setup do
+      %{aliases: Mix.Project.config()[:aliases][:"letflow.check"]}
+    end
+
+    test "T-ALIAS-WIRED -- the detector is a step of `mix letflow.check`", %{aliases: aliases} do
+      assert "letflow.check_deferral_staleness" in aliases,
+             "the detector is unwired -- `mix letflow.check` steps are: #{inspect(aliases)}"
+    end
+
+    test "T-ALIAS-SLOT -- it runs after registration and before the slow steps (D5)", %{
+      aliases: aliases
+    } do
+      # Design D5 rules slot 3: immediately after the check it shares a parse
+      # with, and BEFORE `format --check-formatted` / `compile
+      # --warnings-as-errors` / the test run, so a stale deferral is reported
+      # in a second rather than after a full compile+test cycle. Asserted as
+      # relative order, not a hard index, per OQ-4.
+      at = &Enum.find_index(aliases, fn step -> step == &1 end)
+
+      assert at.("letflow.check_requirements_registration") <
+               at.("letflow.check_deferral_staleness")
+
+      assert at.("letflow.check_deferral_staleness") < at.("format --check-formatted")
+    end
+  end
 end
 
 defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTaskTest do

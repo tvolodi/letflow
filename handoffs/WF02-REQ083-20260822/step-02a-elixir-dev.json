@@ -1,0 +1,71 @@
+{
+  "handoff_id": "b3f6e0c1-9a4d-4e2b-8f0a-1c7d5e6f2a83",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ083-20260822/step-02a-elixir-dev.json",
+  "created_at": "2026-08-22T05:46:53Z",
+  "started_at": "2026-08-22T05:46:53Z",
+  "completed_at": "2026-08-22T05:46:53Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "requirement_text": {
+      "REQ-083": "Port the read half of src/api/routes/tasks.zig (1,085 lines / 7 handlers -- split two ways with REQ-085): handleList (L89, EE-03/API-04, cursor paginated), handleGetById (L290) and handleInbox (L960). REQ-043's description named this surface as deferred: its tasks-table boundary note states \"the standalone task query/list surface (src/tasks/store.zig's own list/filter operations) is NOT ported here and belongs with S4's tasks routes or its own later requirement.\" This is that requirement. R-Co's task query logic lives in src/tasks/store.zig (1,202 lines) outside src/api/ -- port only the query/filter operations these three handlers actually invoke, and state in the moduledoc which parts of store.zig were and were not ported, so the boundary is explicit rather than approximate. handleInbox is per-principal, not merely per-tenant: it returns the tasks assigned to the calling user (directly, or via a group or role they hold). That is a second scoping dimension on top of REQ-072's tenant prefix, and both must hold -- an inbox that returns another user's tasks within the same tenant is a real authorisation defect even though it is not a cross-tenant leak. Read REQ-047's assignee_type/assignee_ref model (USER|GROUP|ROLE) and resolve group and role membership through Letflow.Identity rather than reimplementing the resolution. SECURITY (INV-1, INV-2, INV-5)."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ083-20260822/step-00-git-setup.json",
+      "handoffs/WF02-REQ083-20260822/step-01-code-designer.json",
+      "handoffs/WF02-REQ083-20260822/step-01b-design-validator.json"
+    ],
+    "artifacts_in": ["lib/letflow/design/req083-task-routes-read.md"],
+    "owned_modules": [
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/tasks.ex",
+      "lib/letflow/api/authorization.ex"
+    ],
+    "branch_name": "feature/WF02-REQ083-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 2a -- implement REQ-083's read path per the approved design (lib/letflow/design/req083-task-routes-read.md, PASSED at step-01b): Letflow.Tasks (new context module: list_tasks/2, get_task/2, resolve_principal_scope/2) and Letflow.Routers.Tasks (replacing the 12-line stub with the three routes), plus the one narrow additive Letflow.Api.Authorization.endpoint_policy_key/2 clause the design flagged as OQ-8 and Step 1b independently confirmed against R-Co source. owned_modules extended to include lib/letflow/api/authorization.ex since this run now actually touches it, per the run's own instructions.",
+    "acceptance_criteria": [
+      "each of the three handlers has an end-to-end test through the real router asserting status and response shape, with list and inbox cursor-paginated via REQ-067 across at least two pages",
+      "the inbox for user X returns tasks assigned directly to X, tasks assigned to a group X belongs to, and tasks assigned to a role X holds, and returns no task assigned only to a different user Y in the same tenant -- four assertions in explicit tests",
+      "a task id belonging to another tenant returns the same response as a nonexistent id, demonstrated by a test (INV-5)",
+      "listing tasks as a tenant A caller returns no tenant B task when both tenants have tasks on identically-named nodes, demonstrated by a test seeding both (INV-1)",
+      "the serialised task response contains an explicit field allowlist and does not encode the Ecto struct wholesale, demonstrated by a test asserting the full key set (INV-2)",
+      "the moduledoc states which src/tasks/store.zig query operations were ported and which were not, rather than describing the boundary approximately",
+      "a caller without TasksRead receives 403 on all three endpoints"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented per lib/letflow/design/req083-task-routes-read.md, built directly from its §-by-§ spec (no re-design). Three files changed:\n\n1. lib/letflow/tasks.ex (new) -- Letflow.Tasks context module: list_tasks/2 (cursor-paginated, prefix \"T:\", keyset (inserted_at, id) descending, three assignee_scope variants -- :unfiltered / {:explicit_user, user_id} / {:principal, principal_scope} -- per design §3.1), get_task/2 (Ecto.UUID.cast/1 pre-check, single left_join query against instance_projections for correlation_key, one code path for cross-tenant and true-not-found per design §3.2/INV-5), resolve_principal_scope/2 (direct GroupMember read inverted from group_id-keying, role names derived by filtering RoleRegistry.list_roles/0 to roles whose group_id is in the resolved group_ids -- zero new Letflow.Identity functions, per design §3.4 and the run's own read-only-dependency constraint). Moduledoc states the full ported/not-ported src/tasks/store.zig boundary table verbatim in substance (AC6) -- ported: TaskStore.getById, listCursor (extended with a ROLE arm R-Co's own shipped listCursor never had, flagged explicitly), taskStatusToString/parseTaskStatus (via existing Ecto.Enum, no new function), parseUuid/uuidToHex (via Ecto.UUID.cast/1); not ported: TaskStore.list (offset, superseded), createInTx (REQ-047's concern), completeInTx/cancelInTx/claimTask/assign/reassign (REQ-085's concern), the write-path TaskError variants, insertTaskWaitDescriptorInTx (S6/SCH-03).\n\n2. lib/letflow/routers/tasks.ex (replaced the 12-line stub) -- three routes (get \"/inbox\", get \"/\", get \"/:id\", in that declared order so /inbox matches before the :id wildcard, per Plug.Router first-match-wins and the mount-relative path shape Letflow.Routers.Identity already established for its own /identity mount). with_authorized_scope/4 mirrors Letflow.Routers.Identity's own preamble (scoped-prefix resolution, then evaluate_access/2, Deny403 short-circuits to 403, before any Repo call) but threads decision through to the handler (one parameter more than Identity's own helper, per design §5.1 point 5, since GET /tasks needs decision.task_scope to build assignee_scope). GET /tasks/inbox forces {:principal, resolve_principal_scope(...)} for a task-worker-only caller (Authorization.is_task_worker_only?/1, called directly since it's already public) and :unfiltered for every other role, matching R-Co's own handleInbox behavior exactly (an operator's inbox is the whole queue, not a bug). GET /tasks likewise forces {:principal, _} whenever decision.task_scope is {:own_user_and_groups, user_id} (AllowWithRowFilter), regardless of any caller-supplied assignee_id -- INV-2. task_list_item_map/1 (9 keys) and task_detail_map/2 (10 keys, +correlation_key/+updated_at) are hand-built string-keyed maps, no Jason.Encoder derivation, matching Letflow.Routers.Identity's own user_map/1 discipline. A locally-built 410 Error.t() literal (module-attribute @problems_base, set at module body per Application.compile_env/3's own restriction against being called inside a function body) handles cursor expiry per design OQ-6, rather than a new Letflow.Api.Error public constructor.\n\n3. lib/letflow/api/authorization.ex -- one additive clause, def endpoint_policy_key(\"GET\", \"/tasks/inbox\"), do: :TasksList, inserted between the existing \"/tasks\" and \"/tasks/:id\" clauses with an inline comment naming REQ-083/OQ-8 and the R-Co source lines (tasks.zig L960-982) Step 1b already independently verified show handleInbox performing no authorization call of its own. Purely additive -- every other endpoint_policy_key/2 clause is matched by exact string, so this cannot alter any existing route's resolution; confirmed by mix compile succeeding with zero warnings across the whole app, not just this file.\n\nCorrection made vs. the design doc's literal text: the design cites 'Letflow.Engine.InstanceProjection' for the correlation_key join (§3.2, §6). Direct inspection of lib/letflow/ found no such module -- the actual, already-shipped schema is Letflow.EventStore.InstanceProjection (lib/letflow/event_store/instance_projection.ex, REQ-023/043), with primary key :instance_id (not :id, autogenerate: false). Implemented against the real module (Letflow.EventStore.InstanceProjection, joined on ip.instance_id == t.instance_id) rather than the design's misnamed reference -- flagging this explicitly for REVIEWER since it's a real (if minor, purely-naming) divergence from the design's literal text, not a silent fix. No other design-vs-source discrepancy found; Letflow.Identity.RoleRegistry.list_roles/0's signature (no :prefix option, confirmed by direct read of lib/letflow/identity/role_registry.ex) matches the design's own call exactly, so no deviation there.\n\nAll design open questions (OQ-1 through OQ-8) were followed as specified, not re-decided: OQ-1 (claimed_by omitted entirely), OQ-4 (hand-built %{items:,next_cursor:,count:} response map, not Pagination.page_response/2 -- ELIXIR-DEV's own call per the design, chosen for direct parity with the exact key set named in design §5.2 point 5), OQ-5 (no new index added -- correctness-at-scale performance question, not correctness; flagged, not resolved, per the design's own framing), OQ-6 (local 410 literal, implemented as specified), OQ-7 (form_schema/output_variables/completed_by/completed_at/cancelled_at all excluded from task_detail_map/2, implemented as specified), OQ-8 (the one Authorization clause, implemented as specified and now formally in this run's owned_modules).",
+    "artifacts_out": [
+      "lib/letflow/tasks.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/api/authorization.ex"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Design doc lib/letflow/design/req083-task-routes-read.md cites 'Letflow.Engine.InstanceProjection' throughout §2/§3.2/§6, but no such module exists in lib/letflow/ -- the real, already-shipped schema for the instance_projections table is Letflow.EventStore.InstanceProjection (lib/letflow/event_store/instance_projection.ex). Implemented against the real module. Purely a naming/namespace discrepancy in the design's prose (the table, columns, and correlation_key field the design describes all match the real module exactly) -- no behavioral or scoping impact. Flagged for REVIEWER awareness; no design rework requested since the actual implementation is unambiguous and correct."
+      }
+    ],
+    "verification": {
+      "mix_compile_warnings_as_errors": "PASS -- `mix compile --warnings-as-errors` exits 0, zero warnings, full app (`Generated letflow app`). Run via full path `/c/Program Files/Elixir/bin/mix` (Elixir 1.20.3 / OTP 29, matching the pinned toolchain).",
+      "mix_format_check_formatted": "PASS -- `mix format --check-formatted` exits 0 after one `mix format` pass on the three changed files (fixed a multi-clause function-head wrapping style in lib/letflow/tasks.ex's filter_by_assignee_scope/2; lib/letflow/routers/tasks.ex and lib/letflow/api/authorization.ex needed no changes).",
+      "migration": "None -- design §7 states no DB objects are touched (tasks/instance_projections/group_members/tenant_role all already exist with every column this design reads). Confirmed no priv/repo/migrations/ file added by this run.",
+      "mix_test": "Not run by this step -- no test file exists yet for this surface (TEST-DESIGNER's job, next in the pipeline after SECURITY-REVIEWER/REVIEWER per WF-02). Self-review confirmed no existing test references Letflow.Routers.Tasks or Letflow.Tasks (grep, zero hits in test/), so this change cannot have broken an existing test.",
+      "self_review_checklist": "No SQL string interpolation of tenant/user input (grep for Repo.query/string interpolation in lib/letflow/tasks.ex -- zero hits; every query is Ecto.Query composition). No unresolved `{:ok, _} =` match on external I/O -- every Repo/Pagination/Ecto.UUID call is pattern-matched via case/with, never a bare `{:ok,_} =`. Every call site of Authorization.endpoint_policy_key/2 (grep across lib/) still compiles -- confirmed by the full-app `mix compile --warnings-as-errors` pass, which touches every caller. Every new public function (Letflow.Tasks.list_tasks/2, get_task/2, resolve_principal_scope/2) has a full @doc, not just a one-line stub. process_instance.ex/instance_supervisor.ex untouched -- no ASCII state-diagram update needed in README.md (this requirement adds no state transition, it is a pure read surface)."
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

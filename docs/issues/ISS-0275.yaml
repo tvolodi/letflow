@@ -1,0 +1,27 @@
+id: ISS-0275
+title: "Seeded Keycloak letflow-web client issues tokens with no aud claim, causing every API request to 401"
+discovered_by: REQ-116 (frontend/API contract sweep)
+discovered_in_run: WF02-REQ116-20260822
+discovered_at: 2026-08-22T14:38:35Z
+severity: MAJOR
+description: >
+  priv/keycloak/realms/bpm-default.json's letflow-web client has no
+  oidc-audience-mapper, so a token it issues carries no aud claim.
+  Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/2 calls
+  Oidcc.Token.validate_jwt/3, which rejects any token missing aud outright
+  ({:error, {:missing_claim, "aud", ...}}) before Letflow.Plugs.AuthPipeline
+  ever reaches tenant resolution -- every request 401s identically regardless
+  of route. Discovered live during REQ-116's read-only frontend/API contract
+  sweep (docs/frontend/contract-gaps.md, Environment notes item 1) and worked
+  around live against the running container only (added an
+  oidc-audience-mapper with included.client.audience: letflow-web to the
+  letflow-web client via the Keycloak Admin REST API) -- not committed to the
+  tracked realm JSON, since fixing priv/keycloak/realms/bpm-default.json was
+  outside REQ-116's read-only scope.
+affected_files:
+  - priv/keycloak/realms/bpm-default.json
+  - lib/letflow/oidc/token_verifier/oidcc.ex
+  - lib/letflow/plugs/auth_pipeline.ex
+queue_task_id: 275
+github_issue: 545
+status: open

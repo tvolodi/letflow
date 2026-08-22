@@ -1,0 +1,26 @@
+id: ISS-0276
+title: "No dev-bootstrap path creates a default tenant row, blocking any fresh dev DB from authenticating at all"
+discovered_by: REQ-116 (frontend/API contract sweep)
+discovered_in_run: WF02-REQ116-20260822
+discovered_at: 2026-08-22T14:38:36Z
+severity: MAJOR
+description: >
+  With a fresh dev database, Letflow.Identity.resolve_tenant_by_realm("bpm-default")
+  returns {:error, :not_found} because no tenants row has idp_realm_id =
+  "bpm-default" -- there is no priv/repo/seeds.exs and no dev-bootstrap path
+  that creates one. Only test fixtures (test/support/tenant_fixture.ex) create
+  such a row, and only for the test DB. Discovered live during REQ-116's
+  read-only frontend/API contract sweep (docs/frontend/contract-gaps.md,
+  Environment notes item 2) and worked around live via a throwaway,
+  non-committed script (scratch/bootstrap_tenant.exs, scratch/ is gitignored)
+  that called the real already-shipped lib/ functions directly --
+  Letflow.Identity.create_tenant/1 -> Letflow.TenantProvisioning.provision_tenant_schema/1
+  -> Letflow.TenantProvisioning.replay_migrations/1, the same three calls
+  Letflow.Routers.Tenants's own POST /tenants handler makes.
+affected_files:
+  - priv/repo/seeds.exs
+  - lib/letflow/identity.ex
+  - lib/letflow/tenant_provisioning.ex
+queue_task_id: 276
+github_issue: 546
+status: open

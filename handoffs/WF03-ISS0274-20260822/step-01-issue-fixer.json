@@ -1,0 +1,54 @@
+{
+  "handoff_id": "3d8e9f5b-2b4c-5d6e-af70-8b9c0d1e2f13",
+  "run_id": "WF03-ISS0274-20260822",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0274-20260822/step-01-issue-fixer.json",
+  "created_at": "2026-08-22T13:43:10Z",
+  "started_at": "2026-08-22T13:43:10Z",
+  "completed_at": "2026-08-22T13:52:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-115", "REQ-138"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "web/tsconfig.json",
+      "web/tsconfig.app.json",
+      "web/tsconfig.node.json",
+      "web/package.json"
+    ],
+    "owned_modules": ["web/tsconfig.json", "web/package.json"]
+  },
+  "task": {
+    "description": "Diagnose queue task 274 / ISS-0274 (GH#542): web/tsconfig.json is solution-style ('files': [] plus references-only), making 'npm run type-check' (tsc --noEmit against the root config) a no-op that compiles zero files and always passes regardless of real type errors in the referenced project configs.",
+    "acceptance_criteria": [
+      "Step 0.5 registry lookup performed and result stated",
+      "Reproduced directly with real command output (or explicit explanation why not runnable, plus evidence from source instead)",
+      "Root cause traced to the specific config field and invocation mismatch",
+      "Diagnosis written into result.summary; do NOT implement the fix; next_action names CODE-DESIGNER"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "STEP 0.5 (registry lookup): searched docs/issues/*.yaml for prior resolved entries mentioning tsconfig/type-check/solution-style. One textual match, docs/issues/ISS-0046.yaml, is unrelated (an Elixir mix compile --warnings-as-errors struct-update type-inference warning in lib/letflow/engine/transition.ex, not a frontend tsconfig issue) -- ruled out. No prior resolved entry matches ISS-0274's symptoms. This is a first occurrence, not a recurrence.\n\nSTEP 1 (diagnose): Reproduced directly on this branch (feature/WF03-ISS0274-20260822), npm/npx are runnable in this environment.\n\nEvidence read from source: web/tsconfig.json is exactly:\n```\n{\n  \"files\": [],\n  \"references\": [\n    { \"path\": \"./tsconfig.app.json\" },\n    { \"path\": \"./tsconfig.node.json\" }\n  ]\n}\n```\nThis is TypeScript's documented 'solution style' root config -- an empty file list plus project references only, meant to be driven exclusively by 'tsc -b' (build mode), never by a plain 'tsc' invocation. web/package.json's type-check script (line 10) is: `\"type-check\": \"tsc --noEmit\"` -- a plain (non -b) tsc invocation with no explicit project argument, so it resolves the root web/tsconfig.json.\n\nDirect reproduction: ran `npm run type-check` in web/ -- output is just the npm script banner ('> letflow-web@0.1.0 type-check' / '> tsc --noEmit'), no diagnostics, exit code 0 (confirmed separately via `npm run type-check; echo EXIT:$?` -> EXIT:0). To prove this is a zero-file no-op rather than a real clean pass, ran `npx tsc --noEmit --listFiles` in the same directory: output is completely empty (0 lines) -- tsc compiled and type-checked NO files at all under the root config, because 'files': [] gives it nothing to check and a plain (non -b) tsc invocation does not descend into 'references' automatically. Contrast: ran `npx tsc -b tsconfig.json --dry`, which reports 'A non-dry build would build project .../tsconfig.app.json' and '.../tsconfig.node.json' -- i.e. build (-b) mode is the invocation that actually walks the referenced projects' real source files (src/** via tsconfig.app.json's \"include\": [\"src\"], and vite.config.ts via tsconfig.node.json's \"include\": [\"vite.config.ts\"]). A real `npx tsc -b tsconfig.json` run (non-dry) exited 0 with no output, meaning the codebase currently has no type errors under the referenced projects -- consistent with REQ-115/REVIEWER/RELEASE-VALIDATOR's finding that the gate itself is a no-op, not that it happens to be passing a real check.\n\nROOT CAUSE: web/tsconfig.json's 'files': [] (solution-style, references-only) field combined with web/package.json's type-check script invoking plain `tsc --noEmit` with no '-b' flag and no explicit project file. A solution-style root tsconfig is only meaningful to tsc in build mode ('tsc -b'); invoked any other way, tsc resolves the root config, sees an empty file list and no 'include', and has zero files to type-check -- it exits 0 unconditionally, independent of any real type errors in tsconfig.app.json's or tsconfig.node.json's projects (which DO have real 'include' globs and are where all actual application/vite-config source lives). This is a pure invocation/config mismatch, not a bug in tsconfig.app.json or tsconfig.node.json themselves -- both of those referenced configs are otherwise correctly formed (each has 'noEmit': true already set, each has a real 'include').\n\nWHAT A FIX NEEDS TO CHANGE: web/package.json's \"type-check\" script (currently `tsc --noEmit`) needs to invoke tsc in a way that actually walks both referenced projects, e.g. `tsc -b tsconfig.json` (or equivalently `tsc -b tsconfig.app.json tsconfig.node.json`, or bare `tsc -b` since tsconfig.json is the default project file and already declares both references). Because both tsconfig.app.json and tsconfig.node.json already set \"noEmit\": true in their own compilerOptions, '-b' mode will type-check without writing output -- no extra '--noEmit' flag is needed or applicable to '-b' mode (tsc -b does not accept '--noEmit' as a per-invocation override the way non-build mode does; emit is controlled by each project's own noEmit setting, which is already correct here). Note web/package.json's existing \"build\" script (line 8) already correctly uses `tsc -b && vite build` -- the fix should make \"type-check\" consistent with that established pattern rather than inventing a new one. CODE-DESIGNER should also consider whether '-b' mode's incremental build-info caching (.tsbuildinfo files) could mask a real error on a second run without a clean rebuild (i.e. whether '--force' or a cache-clear step is needed for a CI fail-fast gate to be reliable across multiple invocations) -- I did not test repeated invocations against a deliberately broken file, so this is flagged as an open design question rather than a confirmed finding.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0274-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0274-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER for fix design: change web/package.json's \"type-check\" script from `tsc --noEmit` to a build-mode invocation that actually walks tsconfig.app.json and tsconfig.node.json (e.g. `tsc -b tsconfig.json` or `tsc -b`), matching the existing `build` script's `tsc -b && vite build` pattern, and decide whether incremental build-info caching needs a --force/clean step for CI fail-fast reliability. See result.summary above for full reproduction evidence (empty --listFiles output under the current no-op invocation vs. tsc -b --dry actually targeting both referenced projects)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

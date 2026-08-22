@@ -932,3 +932,19 @@ history:
       status left open pending that check -- only the Letflow-side
       tracking/cross-link deliverable is done. Released via POST
       /tasks/285/release with status done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-22T18:35:00Z"
+    note: >
+      ISS-0128 (queue task 128, github_issue_number 257) released done with
+      no code change: another stale duplicate matching the ISS-0285 pattern
+      -- GH#257 was already resolved and closed via docs/issues/ISS-0072.yaml
+      (fix commit eb69dd7, merged main via PR #293). Verified live:
+      eb69dd7 confirmed an ancestor of main, and
+      lib/letflow/tenant_provisioning.ex's maybe_seed_platform_event_types/2
+      (lines 640, 667, 681, 709, 736) currently seeds TASK_COMPLETED,
+      INSTANCE_CANCELLED, INSTANCE_PINS_REBOUND, SUB_PROCESS_COMPLETED, and
+      EXECUTION_ERROR. GH#257 confirmed CLOSED via `gh issue view 257`.
+      Released via POST /tasks/128/release with status done and an evidence
+      note.

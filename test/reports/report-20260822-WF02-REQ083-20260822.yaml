@@ -1,0 +1,137 @@
+report_id: report-20260822-WF02-REQ083-20260822
+agent: TEST-RUNNER
+requirement: REQ-083
+workflow_step: WF-02 Step 4 (full-suite test run)
+handoff: handoffs/WF02-REQ083-20260822/step-04-test-runner.json
+branch: feature/WF02-REQ083-20260822
+date: 2026-08-22
+command: "scripts/test_parallel.sh"
+
+toolchain:
+  platform: "Windows 11 (Git Bash)"
+
+environment:
+  postgres: >
+    letflow-postgres-1, confirmed via `docker compose up -d` -- reported already
+    Running, not freshly started this run.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no separate
+    DB-setup step taken here.
+  parallel_n: >
+    Left to auto-derivation (no $TEST_PARALLEL_N set) -- script derived N=16 via nproc.
+
+# ---------------------------------------------------------------------------
+# Run
+# ---------------------------------------------------------------------------
+
+run:
+  command: "scripts/test_parallel.sh"
+  result: >
+    test_parallel: N=16 (source: nproc)
+    partition 1: 77 tests, 0 properties, 0 failures, exit 0
+    partition 2: 48 tests, 2 properties, 0 failures, exit 0
+    partition 3: 100 tests, 0 properties, 0 failures, exit 0
+    partition 4: 127 tests, 0 properties, 1 failures, exit 2
+    partition 5: 76 tests, 0 properties, 0 failures, exit 0
+    partition 6: 126 tests, 0 properties, 0 failures, exit 0
+    partition 7: 77 tests, 0 properties, 0 failures, exit 0
+    partition 8: 122 tests, 2 properties, 0 failures, exit 0
+    partition 9: 65 tests, 0 properties, 0 failures, exit 0
+    partition 10: 93 tests, 0 properties, 0 failures, exit 0
+    partition 11: 127 tests, 0 properties, 0 failures, exit 0
+    partition 12: 126 tests, 0 properties, 0 failures, exit 0
+    partition 13: 115 tests, 0 properties, 0 failures, exit 0
+    partition 14: 128 tests, 0 properties, 0 failures, exit 0
+    partition 15: 75 tests, 1 property, 0 failures, exit 0
+    partition 16: 119 tests, 0 properties, 0 failures, exit 0
+    combined: 1601 tests, 5 properties, 1 failures (1605/1606 passed)
+  exit_code: 1
+  failures_found: 1
+
+verdict: PASS
+
+summary_line: >
+  1605/1606 passed (1601 tests + 5 properties combined). One failure, in
+  Letflow.EngineConcurrencyTest (partition 4), structurally cleared as unrelated to this
+  branch (route 1 attribution below) and unattributed to any existing issue record --
+  reported below for filing, not blocking this step's PASS verdict per
+  core-directives.md's "Unblock-Everything" scope boundary.
+
+# ---------------------------------------------------------------------------
+# Failure attribution -- structural, per core-directives.md
+# ---------------------------------------------------------------------------
+
+failure_1:
+  test: >
+    Letflow.EngineConcurrencyTest "AC1 -- 100 concurrent task completions across 100
+    distinct instances every completion succeeds, no cross-instance corruption, no
+    global serialization" (test/letflow/engine_concurrency_test.exs:266, assertion at
+    :306)
+  partition: 4
+  error: >
+    Assertion with < failed
+    code:  assert concurrent_micros < baseline_micros * 30
+    left:  1103564
+    right: 973800
+  nature: >
+    A wall-clock timing assertion (deliberately loose 30x multiplier per the test's own
+    comment, "catches only gross regressions like an accidentally-reintroduced global
+    mutex/singleton serializer") comparing measured microseconds for 100 concurrent
+    Task.async completions against a single-instance baseline x30. Not a correctness
+    assertion -- both the baseline call and the concurrent batch completed successfully
+    (all {:ok, %{instance_status: :completed}} assertions above it passed); only the
+    timing ratio tripped.
+  attribution: >
+    ROUTE 1 (structural -- branch cannot have caused it). git diff --name-only
+    origin/main...HEAD (full list reproduced below) does not include
+    test/letflow/engine_concurrency_test.exs, lib/letflow/engine.ex, or any module the
+    test exercises (Letflow.Engine, Letflow.InstanceProjection). The one lib/ file this
+    branch DOES touch that is anywhere near "task" naming -- lib/letflow/tasks.ex -- was
+    checked directly: `grep -rn "Letflow.Tasks" lib/letflow/engine.ex` returns no match,
+    so Engine.complete_task/3 (what this test calls) does not call through the changed
+    module at all. No causal path from this branch's diff to this failure exists.
+    Additionally, and consistent with route 1 rather than substituting for it: this is a
+    wall-clock-sensitive assertion running as one of 16 concurrent `mix test --partitions`
+    processes sharing one Postgres instance and this host's CPU -- exactly the load
+    profile scripts/test_parallel.sh's own header comments (ISS-0219, ISS-0222) already
+    document as a source of timing variance on this host, though that is offered as
+    plausible mechanism, not as the attribution itself; the diff-absence check above is
+    what actually clears it.
+  existing_issue_record: >
+    Searched docs/issues/*.yaml for "EngineConcurrencyTest", "engine_concurrency_test",
+    "concurrent_micros", "baseline_micros" -- five files reference
+    Letflow.EngineConcurrencyTest (ISS-0073, ISS-0078, ISS-0110, ISS-0112, ISS-0114), but
+    all five describe a DIFFERENT failure signature: a 42P01 undefined_table /
+    tenant-schema-provisioning race (ISS-0109/ISS-0110/ISS-0114 family) or the
+    copy-pasted-fixture consolidation tracked by ISS-0112. None mention a timing/
+    concurrent_micros assertion failure. NO EXISTING ISSUE RECORD COVERS THIS FAILURE --
+    reported here for ORCH to file per ISSUE_QUEUE.md; TEST-RUNNER does not call the
+    queue or gh directly.
+  disposition: >
+    Filed for tracking, not fixed on this branch (Unblock-Everything's scope boundary:
+    structurally cleared as unrelated, so it is reported and forwarded, not a blocker
+    for REQ-083's own acceptance criteria).
+
+branch_diff_files: >
+  docs/requirements.yaml, docs/status/requirement_status.index.yaml,
+  docs/status/requirement_status.v2.yaml, handoffs/WF02-REQ083-20260822/*,
+  handoffs/registry.json, lib/letflow/api/authorization.ex,
+  lib/letflow/design/req083-task-routes-read.md, lib/letflow/routers/tasks.ex,
+  lib/letflow/tasks.ex, test/letflow/routers/tasks_test.exs, test/specs/REQ-083.md
+
+# ---------------------------------------------------------------------------
+# REQ-083's own tests
+# ---------------------------------------------------------------------------
+
+req083_tests:
+  files: "test/letflow/routers/tasks_test.exs (23 tests)"
+  verification_method: >
+    Part of the tracked test/ tree exercised by every partition of this full-suite run
+    (test_parallel.sh partitions the entire test/ directory with no exclusions). None of
+    the 1 combined failure is in this file (it is in
+    test/letflow/engine_concurrency_test.exs, partition 4, see failure_1 above) --
+    confirmed by grepping partition logs for "tasks_test" and finding zero failure
+    entries. Consistent with TEST-DESIGN-VALIDATOR's own prior independent run (23/23
+    passed in isolation, per this run's dispatch).
+  result: "0 failures in tasks_test.exs specifically; all 23 tests included in the green count."

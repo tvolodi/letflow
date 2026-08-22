@@ -1,0 +1,67 @@
+{
+  "handoff_id": "fdbe3096-8282-4f71-a26e-783ef5b390b1",
+  "run_id": "WF03-ISS0227-20260822",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0227-20260822/step-03-elixir-dev.json",
+  "created_at": "2026-08-22T04:12:00Z",
+  "started_at": "2026-08-22T04:12:00Z",
+  "completed_at": "2026-08-22T04:24:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["9c1f4a02-7d3e-4b8a-a6c1-2f5e8d0b31aa"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0227-sandbox-pool-dead-field-removal.md",
+      "handoffs/WF03-ISS0227-20260822/step-02b-code-design-validator.json",
+      "lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md",
+      "lib/letflow/sandbox_pool.ex",
+      "docs/agents/instructions/core-directives.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3 (implementation) for ISS-0227 (GH#465, queue task 227) on branch fix/WF03-ISS0227-20260822 at HEAD 233af04. Execute lib/letflow/design/iss0227-sandbox-pool-dead-field-removal.md as written: apply R1-R5 (§2) to lib/letflow/sandbox_pool.ex -- remove provision_op()'s write-only owner_pid field and the in_flight record's write-only schema_name field, plus the private op_schema_name/1 helper that loses its only call site -- and apply C1-C5 (§5.2-§5.6) to lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md using the in-place supersede-marker convention §5.1 established from three in-repo precedents. Exactly two files. owner_ref stays everywhere; the local owner_pid = elem(from, 0) at sandbox_pool.ex:527 stays (it is read at :528). No accessor helper, no unrelated improvements, no deletion of the superseded lines from iss0224-...md. RT-9 (design §4.2) is TEST-DESIGNER's at Step 4 -- ELIXIR-DEV writes no test. Run and quote four post-change checks: mix format --check-formatted, mix compile --warnings-as-errors (must exit 0), the three-file scoped mix test, and GH #465 acceptance criterion 4's code-file-restricted git grep. No commit, no push, no branch.",
+    "acceptance_criteria": [
+      "R1: the line `owner_pid: pid(),` is deleted from @typep provision_op in lib/letflow/sandbox_pool.ex",
+      "R2: the line `owner_pid: owner_pid,` is deleted from reserve_slot/2's {:provision, %{...}} literal, while the local binding at :527 and the Process.monitor/1 call at :528 are left untouched",
+      "R3: `schema_name: String.t()` is deleted from the in_flight: block of the state-shape comment, with the now-trailing comma dropped from task_pid: pid()",
+      "R4: `schema_name: op_schema_name(op)` is deleted from pump/1's in_flight = %{...} literal, with the now-trailing comma dropped from task_pid: task.pid",
+      "R5: both clause heads of defp op_schema_name/1 are deleted",
+      "owner_ref is untouched everywhere in lib/letflow/sandbox_pool.ex",
+      "C1-C5 applied to lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md: in-place removal markers in §5's provision_op() and in_flight() blocks, §7 step 2's literal edited plus a one-line removal note, a new §17 extension section, and a top-of-file ISS-0227 pointer after the Status line -- with nothing in §5.7's do-not-edit list changed",
+      "No test file of any kind is created or modified",
+      "mix format --check-formatted, mix compile --warnings-as-errors (exit 0), the three-file scoped mix test, and the code-file-restricted AC-4 git grep are all run synchronously in-turn and their real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All five code removals (R1-R5) and all five companion design edits (C1-C5) applied exactly as the design specifies; two files changed, nothing else. `git diff --stat`: `lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md | 62 +++++++++++--` and `lib/letflow/sandbox_pool.ex | 11 +---`, 2 files changed, 60 insertions(+), 13 deletions(-). No test file was touched -- RT-9 is left for TEST-DESIGNER at Step 4 per design §8 item 7.\n\nCODE DIFF, R-number by R-number (lib/letflow/sandbox_pool.ex): R1 -- deleted `owner_pid: pid(),` from @typep provision_op (was :160), leaving from/owner_ref/sandbox_id/schema_name/owner_down?. R2 -- deleted `owner_pid: owner_pid,` from reserve_slot/2's {:provision, %{...}} literal (was :535); the local `owner_pid = elem(from, 0)` (:527) and `owner_ref = Process.monitor(owner_pid)` (:528) are byte-for-byte untouched, confirmed both by the diff (neither line appears in it) and by the clean compile. R3 -- deleted `#                  schema_name: String.t()` from the in_flight: block of the state-shape comment (was :316) and dropped the trailing comma from the preceding `#                  task_pid:    pid(),`. R4 -- deleted `schema_name: op_schema_name(op)` from pump/1's in_flight literal (was :572) and dropped the trailing comma from `task_pid: task.pid,`. R5 -- deleted both clause heads of `defp op_schema_name/1` (was :592-593) and the blank line that followed them. `owner_ref` is untouched everywhere; no accessor helper was added; no rename, reorder or extra typespec was introduced.\n\nDESIGN DIFF, C-number by C-number (lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md): C1 -- §5's provision_op() block, `  owner_pid:   pid(),` (:502) replaced IN PLACE by `  # owner_pid REMOVED by ISS-0227 (2026-08-22) -- write-only; derive as elem(p.from, 0). See §17.`; the surviving five fields are neither reordered nor renumbered. C2 -- §5's in_flight() block, `  schema_name: String.t()` (:521) replaced IN PLACE by the two-line removal marker naming the derivation from in_flight.op, and the trailing comma dropped from `  task_pid:    pid(),` (:520) so op/task_ref/task_pid form a well-formed map. C3 -- §7 step 2, :804's enumerated literal now reads `{:provision, %{from:, owner_ref:, sandbox_id:, schema_name:, owner_down?: false}}` and is immediately followed by the added line `**`owner_pid` was removed from this literal by ISS-0227 (2026-08-22)** — see §17.`; :802's prose about the two surviving LOCAL bindings is unchanged, as §5.4 requires. C4 -- new `## 17. Extension (ISS-0227, 2026-08-22) — two write-only fields removed` appended after the former last line (:1902), following precedent 2's heading shape, carrying all five required contents: the removal and its authority (naming iss0227-sandbox-pool-dead-field-removal.md), the two derivations with their equivalence arguments, op_schema_name/1's removal and the measured warnings-as-errors reason, §6's explicit no-invariant-change statement enumerating INV-SP-A1..A7 / INV-SP-1..7 / DOWN-1..5 / T1..T5 plus the owner-monitor and no-external-behaviour-change statements, and a pointer back to C1/C2/C3's in-place markers. C5 -- the dated ISS-0227 blockquote pointer inserted immediately after the Status line (:4), BEFORE the round-1 REWORK NOTICE blockquote. Nothing in §5.7's do-not-edit list was changed: no INV-SP-* statement, no §7 step 3 clause A/B or case 4b, no §10 RT contract, no §11/§13/§14/§15/§16, neither REWORK NOTICE, no F-/R2-F- row, and §12's file table.\n\nFOUR CHECKS, REAL OUTPUT:\n\n(1) `mix format --check-formatted` -> no output, `EXIT=0`.\n\n(2) `mix compile --warnings-as-errors` -> `EXIT=0`. Full dependency tree compiled from cold (mime, plug_crypto, hpax, jose, decimal, jason, telemetry_registry, oidcc, thousand_island, db_connection, ecto, plug, ueberauth, ueberauth_oidcc, postgrex, ecto_sql, websock, bandit), ending `==> letflow / Compiling 104 files (.ex) / Generated letflow app / EXIT=0`. NO `function op_schema_name/1 is unused` warning (so R5 was not skipped) and NO undefined-variable report at :528 (so the :527 local was not deleted in error). The only warnings printed were pre-existing and not from letflow's own sources: jose's 22 Erlang `'catch ...' is deprecated` warnings from src/jwa/jose_jwa.erl and src/jose_server.erl, and a Mix-level `\"xref: [exclude: ...]\" in your mix.exs file is deprecated` notice emitted while compiling the ueberauth_oidcc dependency. Neither category is a letflow compiler warning and neither affected the exit code, which was 0.\n\n(3) `mix test test/letflow/sandbox_pool_test.exs test/letflow/sandbox_pool_call_timeout_test.exs test/letflow/definitions/promotion_assertion_rerun_test.exs` -> `Finished in 65.1 seconds (0.00s async, 65.1s sync)` / `Result: 32 passed`. Zero failures, zero skipped, zero invalid; seed 866464, max_cases 32. The 32 decomposes as 16 (sandbox_pool_test.exs) + 4 (sandbox_pool_call_timeout_test.exs) = the stated 20-passed baseline for the first two files, unchanged, plus 12 (promotion_assertion_rerun_test.exs). This matches design §4's finding that no existing test reads either removed field. Ran against LETFLOW_DB_PORT=5472 from the worktree's own .env; the run's own log lines confirm it saw the sibling workspace via application_name and deferred TenantSchemaReaper's orphan sweep rather than reaping across workspaces.\n\n(4) GH #465 acceptance criterion 4, run code-file-restricted per design §4.1 / §12 (an unrestricted pattern trips on this repo's own design-doc prose -- docs/anti-patterns.md:1195): `git grep -nE \"owner_pid:|schema_name: op_schema_name|op_schema_name\" -- 'lib/**/*.ex' 'test/**/*.exs'` -> NO OUTPUT, `EXIT=1`. Exactly the post-fix result §12 predicts. The pre-fix control, same command against the branch's starting commit -- `git grep -nE \"owner_pid:|schema_name: op_schema_name|op_schema_name\" 233af04 -- 'lib/**/*.ex' 'test/**/*.exs'` -> `EXIT=0` with exactly the five removal-set lines and nothing else: `233af04:lib/letflow/sandbox_pool.ex:160:           owner_pid: pid(),`, `:535:         owner_pid: owner_pid,`, `:572:          schema_name: op_schema_name(op)`, `:592:  defp op_schema_name({:provision, %{schema_name: schema_name}}), do: schema_name`, `:593:  defp op_schema_name({:drop, %{schema_name: schema_name}}), do: schema_name`. Five before, zero after -- R1, R2, R4 and R5 are each accounted for by a line that was there and is not now. (R3 is a comment-only edit and is by design not matched by this pattern; it is visible in the diff.)\n\nNothing in the design could not be executed as written. Every line citation in §2 and §5 landed on exactly the content the design said it would, at exactly the stated line numbers. All four checks were run synchronously in this turn as foreground blocking calls, with no backgrounding and no wakeup expectation, per core-directives.md's No Background Wait rule.",
+    "artifacts_out": [
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md",
+      "handoffs/WF03-ISS0227-20260822/step-03-elixir-dev.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0227-20260822",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ISSUE-FIXER commits the working tree (two files plus this handoff). The change is NOT self-cleared: route to SECURITY-REVIEWER (design §6.2 states no tenant-data path, no route, no query, no migration and no config is touched, and schema_name values remain non-caller-supplied -- but that judgement is the gate's to make, not mine) and then to REVIEWER, whose idiom gate is the named discharge for R1 per design §4.2's coverage map, since a @typep is erased at compile time and no runtime test can observe it. Only after both gates does TEST-DESIGNER write RT-9 at Step 4, with its pre-fix run made against 233af04."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

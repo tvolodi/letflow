@@ -158,7 +158,6 @@ defmodule Letflow.SandboxPool do
   # worker's half-created schema would be unnameable and leak permanently.
   @typep provision_op :: %{
            from: GenServer.from(),
-           owner_pid: pid(),
            owner_ref: reference(),
            sandbox_id: String.t(),
            schema_name: String.t(),
@@ -325,8 +324,7 @@ defmodule Letflow.SandboxPool do
   #     in_flight: nil | %{              # NEW -- at most one; nil means "idle"
   #                  op:          op(),
   #                  task_ref:    reference(),
-  #                  task_pid:    pid(),
-  #                  schema_name: String.t()
+  #                  task_pid:    pid()
   #                }
   #   }
   @impl true
@@ -573,7 +571,6 @@ defmodule Letflow.SandboxPool do
       {:provision,
        %{
          from: from,
-         owner_pid: owner_pid,
          owner_ref: owner_ref,
          sandbox_id: sandbox_id,
          schema_name: schema_name,
@@ -609,8 +606,7 @@ defmodule Letflow.SandboxPool do
         in_flight = %{
           op: op,
           task_ref: task.ref,
-          task_pid: task.pid,
-          schema_name: op_schema_name(op)
+          task_pid: task.pid
         }
 
         %{state | db_queue: rest, in_flight: in_flight}
@@ -631,9 +627,6 @@ defmodule Letflow.SandboxPool do
   end
 
   defp run_op({:drop, %{schema_name: schema_name}}), do: drop_schema(schema_name)
-
-  defp op_schema_name({:provision, %{schema_name: schema_name}}), do: schema_name
-  defp op_schema_name({:drop, %{schema_name: schema_name}}), do: schema_name
 
   # ISS-0226 §3.2/§4.3: the single enforcement point for worker_result()'s closed
   # type. Total over (op(), term()) -- the four legal (op-kind, result) pairings
@@ -658,8 +651,11 @@ defmodule Letflow.SandboxPool do
   defp classify_worker_result(_op, _result), do: :invalid
 
   # ISS-0226 §6: small accessors for the Logger.error/1 call in handle_info/2's new
-  # :invalid branch -- mirrors op_schema_name/1's existing per-op-kind idiom rather
-  # than inventing a new one.
+  # :invalid branch -- one clause per op kind rather than a new idiom. ISS-0226 wrote
+  # this comment citing `op_schema_name/1` as the idiom being mirrored; ISS-0227
+  # removed that function (it was the only reader of the `in_flight.schema_name` copy
+  # it also removed), so the citation now points at `run_op/1` just above, which has
+  # the same shape and is not going anywhere.
   @spec op_kind(op :: op()) :: :provision | :drop
   defp op_kind({:provision, _}), do: :provision
   defp op_kind({:drop, _}), do: :drop

@@ -3,6 +3,11 @@
 **Run:** `WF03-ISS0224-20260822` (GH#457, queue task 224) · **Author:** CODE-DESIGNER ·
 **Status:** proposed — **REWORK ROUND 2** applied 2026-08-22, awaiting CODE-DESIGN-VALIDATOR
 
+> **ISS-0227 (2026-08-22):** §5's `provision_op()` no longer carries `owner_pid` and its
+> `in_flight()` record no longer carries `schema_name` — both were write-only. **§17 is
+> authoritative for those two fields;** §5 and §7 step 2 are marked in place and otherwise left
+> as the historical record. Nothing else in this document is affected.
+
 > ## REWORK NOTICE — round 1 (2026-08-22)
 >
 > CODE-DESIGN-VALIDATOR returned FAIL with six findings. F1 and F2 were required to be
@@ -499,7 +504,7 @@ op() :: {:provision, provision_op()} | {:drop, drop_op()}
 
 provision_op() :: %{
   from:        GenServer.from(),
-  owner_pid:   pid(),
+  # owner_pid REMOVED by ISS-0227 (2026-08-22) -- write-only; derive as elem(p.from, 0). See §17.
   owner_ref:   reference(),
   sandbox_id:  String.t(),
   schema_name: String.t(),
@@ -517,8 +522,9 @@ drop_op() :: %{
 in_flight() :: %{
   op:          op(),
   task_ref:    reference(),
-  task_pid:    pid(),
-  schema_name: String.t()
+  task_pid:    pid()
+  # schema_name REMOVED by ISS-0227 (2026-08-22) -- write-only; derive from in_flight.op
+  #   ({:provision, %{schema_name: n}} | {:drop, %{schema_name: n}} -> n). See §17.
 }
 ```
 
@@ -801,7 +807,8 @@ END
 
 `reserve_slot/2`: `owner_pid = elem(from, 0)`; `owner_ref = Process.monitor(owner_pid)`;
 `{sandbox_id, schema_name} = mint_sandbox_identity()`; enqueue
-`{:provision, %{from:, owner_pid:, owner_ref:, sandbox_id:, schema_name:, owner_down?: false}}`.
+`{:provision, %{from:, owner_ref:, sandbox_id:, schema_name:, owner_down?: false}}`.
+**`owner_pid` was removed from this literal by ISS-0227 (2026-08-22)** — see §17.
 
 `pump/1`: if `in_flight != nil` or `db_queue` is empty, return unchanged. Otherwise pop the
 head op and spawn `Task.Supervisor.async_nolink(@task_supervisor, …)` — running
@@ -1900,3 +1907,50 @@ and explicitly named a set of items as not to be re-litigated. None of them was 
   8/8 at 3; all three failures `{:error, :provision_failed}` at `:257`/`:362`/`:410`). Still
   reported, still not fixed here.
 - **The absence of implementation code**, re-checked before this round's edits and after.
+
+---
+
+## 17. Extension (ISS-0227, 2026-08-22) — two write-only fields removed
+
+Authority for this change: `lib/letflow/design/iss0227-sandbox-pool-dead-field-removal.md`.
+
+**What was removed.** `provision_op()`'s `owner_pid` and the `in_flight()` record's
+`schema_name` were both **written and never read** — every path that could have wanted either
+already held the same value under a different name, or could reach it in one hop from a field
+sitting beside it in the same record. Both are gone from `lib/letflow/sandbox_pool.ex`.
+
+**Derivations, with their equivalence.**
+
+- `owner_pid` → `elem(p.from, 0)` for a provision op `p`. `from` is a `GenServer.from()`, i.e.
+  `{pid(), tag}`, and was the source the removed field was computed from, in the same map
+  literal. It is **never rewritten on a provision op** — the only in-place rewrite this module
+  performs on one is `owner_down?: true` (§7 step 3 clause B case 2) — so the two could not
+  diverge.
+- `in_flight.schema_name` → the schema name of `in_flight.op`
+  (`{:provision, %{schema_name: n}}` or `{:drop, %{schema_name: n}}` → `n`). `in_flight.op` is
+  replaced wholesale, never patched in a way that changes its schema name: case 4b's rewrite
+  changes only `from`/`owner_ref`/`purpose`, and §7 step 3's own note already says the worker
+  holds only the schema-name STRING and is unaffected.
+
+**`op_schema_name/1` went with them.** After the `in_flight` field was removed it had no call
+site left, and an unused `defp` fails `mix compile --warnings-as-errors` — measured, not
+assumed (that gate runs at `docs/agents/protocols/GIT_MERGE.md:166` and as step 3 of `mix.exs`'s
+`letflow.check` alias). It may be re-introduced the moment something genuinely calls it.
+
+**No invariant changes.** Nothing in this document's invariant set is added, removed, weakened,
+strengthened or restated by ISS-0227: INV-SP-A1 counts ops by kind, INV-SP-A2 replies to `from`,
+INV-SP-A3 classifies `reference()` values (`owner_pid` was a `pid()`; `in_flight.schema_name` a
+`String.t()`), INV-SP-A4's five death paths all turn on `owner_ref` and on the **pre-minted**
+`schema_name` of `provision_op()`/`drop_op()` — both retained — and INV-SP-A5 tests `in_flight`
+for `nil`, not for any field. INV-SP-A6/A7, INV-SP-1..7, INV-SP-DOWN-1..5 and INV-SP-T1..T5 are
+likewise untouched, and **no new invariant is introduced**: after this change there is no second
+copy left that could disagree. In particular **`owner_ref` and the owner-monitor mechanism are
+unchanged** — the monitor is still established on the calling process at reservation time,
+strictly before any schema exists, from a surviving local `owner_pid` binding. There is no
+external behaviour change either: no `@spec`, arity, return value, error atom, timeout or reply
+timing moves, and the serialized single DB worker is unaffected.
+
+**In-place markers.** The two superseded declarations are marked where they lived rather than
+deleted — §5's `provision_op()` block and its `in_flight()` block — and §7 step 2's enumerated
+`{:provision, _}` literal carries a one-line removal note. Everything else in this document is
+ISS-0224's historical record and stands as written.

@@ -1,0 +1,56 @@
+{
+  "handoff_id": "d6cd067e-d3b4-438e-8815-17bc94b3b79b",
+  "run_id": "WF03-ISS0262-20260822",
+  "workflow_id": "WF-03",
+  "step": "08",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0262-20260822/step-08-code-designer-rework.json",
+  "created_at": "2026-08-22T09:01:58Z",
+  "started_at": "2026-08-22T09:01:58Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "lib/letflow/design/iss0262-lint-handoffs-non-json-discovery.md",
+      "handoffs/WF03-ISS0262-20260822/step-final-git-merge.json",
+      "handoffs/WF03-ISS0262-20260822/step-final-git-merge-retry1.json"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"]
+  },
+  "task": {
+    "description": "CHANGE-APPROACH REWORK (ORCHESTRATOR.md Section 5's change-approach rule): the SAME root cause has now failed Step Final twice in a row with different files each time -- main keeps moving (WF03-ISS0261-20260822 then WF03-ISS0260-20260822, both already-merged, unrelated runs) faster than the per-file @grandfathered list added in this run's original design can keep up with, because H6 is new and every non-JSON/malformed handoff file that has EVER existed anywhere in handoffs/ history becomes a violation the instant H6 ships, regardless of when it was created. Repeating the identical strategy (add N more exact-path entries, retry merge, discover N more) is not a fix -- it will recur indefinitely as long as any other run is concurrently landing handoff files on main. REDESIGN the grandfathering mechanism for H6 specifically (leave H1-H4's existing per-file @grandfathered entries and mechanism untouched) as a COMMIT-BOUNDARY rule instead of a per-file list, mirroring this same file's own EXISTING precedent: @artifacts_out_rule_commit (a named commit sha used as a floor, resolved via `git show -s --format=%cI <sha>`, compared against each handoff's created_at) already solves exactly this class of problem for the ARTIFACTS_OUT_SELF_REF advisory check. Design: H6 should NOT fire on a non-JSON handoff-shaped file whose file content already existed in git history (i.e. was already committed to a commit that is an ancestor of, or equal to, a named 'H6 introduction' floor commit) BEFORE this fix's own H6 check was introduced -- state precisely how to determine 'already existed before the floor' for a file (first-commit-touching-this-path via `git log --follow --diff-filter=A -- <path>` or equivalent, compared against the floor commit's timestamp or ancestry) since, unlike ARTIFACTS_OUT_SELF_REF's created_at-inside-the-JSON approach, a non-JSON file has no created_at field to read -- git history is the only source of truth here. A file first added to git AFTER the floor commit must still hard-fail H6 (that is the entire point of the original ISS-0262 fix: catch NEW non-JSON handoffs going forward). State the exact floor commit to use (the commit that will land THIS fix, i.e. cannot be known until it lands -- consider whether the floor should instead be 'the moment ORCH's Step Final actually runs', using this run's own branch point or HEAD's parent commit at merge time, and how that interacts with squash-merge; state your reasoning and pick one mechanically well-defined choice). Update the existing 10+2 grandfathered path entries: decide whether they can now be REMOVED from the explicit list (superseded by the boundary rule) or must remain as a documented example/regression-test fixture -- do not leave both mechanisms silently overlapping without stating which one governs.",
+    "acceptance_criteria": [
+      "Design states the exact mechanism for determining a file's git-history introduction point, with a concrete command/algorithm, not just prose intent",
+      "Design states the exact floor-commit choice and justifies it against the squash-merge timing problem (the floor commit literally cannot name itself, same constraint HANDOFF_PROTOCOL.md's own commit_sha_list section already documents for a different field -- read that section's reasoning and either reuse it or state why it doesn't transfer)",
+      "Design states the disposition of the existing 12 @grandfathered H6 entries under the new rule (removed, or kept as documented precedent/test fixtures) -- no silent overlap",
+      "Design explicitly re-verifies: a handoff file added to git AFTER the floor must still hard-fail H6 (this is checked, not assumed)",
+      "No implementation code -- signatures/pseudocode only",
+      "This design does not touch or weaken H1-H4's existing per-file @grandfathered mechanism"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

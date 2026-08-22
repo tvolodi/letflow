@@ -55,7 +55,7 @@ volumes:
     path: docs/status/requirement_status.v2.yaml
     status: current
     opened: 2026-08-21
-    entries: 29
+    entries: 30
     note: >
       Opened by ISS-0119's fix. Successor to volume 1. `entries:` corrected
       2026-08-21 (ISS-0199, run WF03-ISS0199-20260821) from a stale declared 0
@@ -86,6 +86,15 @@ volumes:
       a pre-REQ-075 base and re-derived it as 27 after composing its own
       done-event append onto the REQ-075 and ISS-0224 entries that had landed
       on main in the interim -- the same composition rule, applied again.
+      Incremented to 29 by WF03-ISS0229-20260822 Step Final, which had
+      computed 25 against a pre-REQ-075 base; its rebase conflicted against a
+      declared 28 on main, and the value was re-derived from the composed file
+      itself (29 on-disk `- req:` entries) rather than taken from either side
+      of the conflict. Its own done-event (04:49:20Z) sorts after all three
+      entries it composed with, so no reordering was needed. Re-derived again as
+      30 when that same Step Final rebased a second time onto a further-advanced
+      main; the count is taken from the composed file each time, never carried
+      over from the previous attempt.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

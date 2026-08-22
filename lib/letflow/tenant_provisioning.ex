@@ -124,7 +124,7 @@ defmodule Letflow.TenantProvisioning do
       explicitly accepting that read gap is part of the decision, not something
       `:migrating` hands you for free.
 
-  What is owed here is an **invocable** recovery entry point — a function an
+  What REQ-076 owes is an **invocable** recovery entry point — a function an
   operator or a test calls with a `tenant_id`. An automatic reconciliation
   sweep is deliberately *not* in scope: it needs a scheduler, there is no
   scheduler subsystem to hang one on, and adding a supervision-tree child for

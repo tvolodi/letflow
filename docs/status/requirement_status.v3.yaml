@@ -765,6 +765,44 @@ history:
       annotated with R-Co citations, five docs/issues/ files updated/added).
   - req: SCOPE-CHANGE
     event: done
+    agent: REVIEWER
+    at: "2026-08-22T16:19:49Z"
+    note: >
+      WF03-ISS0096-20260822 (queue task 280, GH#324) done. REVIEWER decided
+      the OQ-6 naming divergence flagged by WF03-ISS0278-20260822 should be
+      RECONCILED to R-Co's naming (option a: rename
+      pack_update_resolutions.resolution's Ecto.Enum values from
+      [:keep_theirs, :take_incoming, :custom] to [:keep_local, :take_incoming,
+      :merged], matching R-Co/src/definition/pack_update.zig:25-29's
+      ResolutionKind), not kept as a documented divergence (option b) --
+      reasoning: Letflow is a systematic concept-for-concept migration of
+      R-Co, so every future R-Co-comparison reader would otherwise
+      rediscover this exact two-of-three name mismatch, while the real fix
+      cost is small and the schema's write path was never built (REQ-041's
+      own scope), so no live tenant data depends on the old names -- this
+      is a rename of an unused enum, not a live-data migration. Real grep
+      counts (2026-08-22): `grep -rln "keep_theirs" lib/ test/` = 3 files
+      (2 real code files + the design doc), `grep -rln ":custom\b" lib/
+      test/` = 2 files (1 real code file + the design doc). Fails
+      docs/agents/ORCHESTRATOR.md section 10's direct-action sizing rule
+      on multiple grounds (more than one file, adds a migration, changes a
+      test-asserted value), so drafted as docs/requirements.yaml REQ-147
+      (impl_order: UNREGISTERED, owner ELIXIR-DEV, stage S2) rather than
+      implemented directly in this REVIEWER role. docs/issues/ISS-0096.yaml
+      updated to status: in_progress with the full decision reasoning in
+      resolution_note, citing REQ-147; left in_progress (not resolved)
+      since the code divergence itself is not yet fixed. GH#324 closed with
+      a comment stating the decision. NOTE: REQ-147's `impl_order:
+      UNREGISTERED` deferral marker is genuinely STALE under
+      mix letflow.check_deferral_staleness (S2 is already active) --
+      the drafted requirement is NOT merged to main as part of this
+      commit; it is left on this run's own branch/PR pending ORCH calling
+      `register_task` to give it a real impl_order, per
+      docs/agents/protocols/TASK_QUEUE.md's "an individual agent never
+      calls register_task directly" rule. Queue task 280 released with
+      status: blocked, not done, for this reason.
+  - req: SCOPE-CHANGE
+    event: done
     agent: ORCH
     at: "2026-08-22T16:20:15Z"
     note: >

@@ -9,7 +9,7 @@
   "created_at": "2026-08-22T17:07:48Z",
   "started_at": "2026-08-22T17:07:48Z",
   "completed_at": null,
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S0",
@@ -36,7 +36,12 @@
       "Clear PASS/FAIL verdict"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Scope confirmed independently via `git diff main...HEAD -- lib/mix/tasks/letflow.audit_issue_closures.ex docs/agents/workflows/WF-03_issue_resolving.md docs/agents/protocols/ISSUE_QUEUE.md` plus `git diff main...HEAD --name-only -- lib/letflow/` (only hit: lib/letflow/design/iss0279-issue-closure-audit.md, a design doc, not application code). No lib/letflow/ runtime code, no priv/repo/migrations/*.exs, no API route, no tenant-scoped query, no secret-resolution code touched. INV-1 (tenant data isolation): N/A -- no Ecto schema, migration, or tenant-scoped table touched. INV-2 (server-side field authorisation): N/A -- no API response type. INV-3 (sandboxing): N/A -- S5 not started, and this isn't tenant-script execution anyway. INV-4 (secrets by reference only): APPLIES (live) -- verified PASS. The task reads only public docs/issues/*.yaml fields and calls `gh issue view --json number,state,comments,closedByPullRequestsReferences`; no System.get_env, no token/secret literal, no config read anywhere in the file (grep for password|secret|token patterns: no hits beyond doc prose describing QUEUE_AUTH_TOKEN in ISSUE_QUEUE.md, which is pre-existing reference text, not a new secret-handling code path). Error/report output (print_new/print_grandfathered/print_fetch_errors) only echoes issue numbers, file paths, and gh's own stdout/stderr text -- no secret ever enters that data. INV-5 (not-found/forbidden indistinguishability): N/A -- no lookup-by-ID endpoint. INV-6 (new data-access paths prove scoping): N/A -- not a tenant data-access path; this handoff itself is the required proof-of-scope statement. INV-7 (no SQL string interpolation): N/A -- no SQL, no Ecto.Adapters.SQL.query/Repo.query anywhere in the diff. INV-8 (no unhandled crashes on realistic failure paths): APPLIES -- verified PASS. fetch_issue/1 wraps System.cmd and Jason.decode in a case that returns {:ok, _} | {:error, _} for every branch (non-zero exit, decode failure, and success all handled); audit_one/1 pattern-matches on that tagged tuple exhaustively (:ok and :error cases both present) rather than asserting {:ok, x} =. No bare `{:ok, _} = external_call()` pattern found (confirmed via read of the full 334-line file; the grep heuristic in INV-8 finds nothing in this file). Command-injection check (acceptance criterion): System.cmd(\"gh\", args, stderr_to_stdout: true) passes args as a literal list of strings (issue number coerced via Integer.to_string/1 after String.to_integer/1 parsing, plus fixed literal flags) -- System.cmd does not invoke a shell, so there is no interpolation-into-shell-string vector regardless of what a crafted docs/issues/*.yaml github_issue field or malicious gh JSON output contains; a crafted field can at worst fail to match @github_issue_re (silently skipped) or parse to a large/invalid integer (gh itself would error, caught by the {:error, {:gh_exit, ...}} branch). No secret-leakage vector found in report output (acceptance criterion): confirmed above under INV-4.",
+    "issues": [],
+    "next_action": "Route to REVIEWER"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

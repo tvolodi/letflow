@@ -4722,7 +4722,7 @@ requirements:
   - id: REQ-083
     title: Task routes 1/2 -- read path (tasks.zig handleList/handleGetById/handleInbox)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S4
     impl_order: 150  # letflow-queue task id
     description: >

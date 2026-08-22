@@ -1076,6 +1076,26 @@ history:
       handoffs -- restrict the path, do not reword the prose), and a new entry
       recording that `elixirc --warnings-as-errors` exits 0 where `mix compile
       --warnings-as-errors` exits 1 on the same unused private function.
+
+  - req: REQ-083
+    event: started
+    agent: ELIXIR-DEV
+    at: "2026-08-22T05:23:40Z"
+    note: >
+      ORCH dispatched WF-02 Step 00 (queue task 150, GH#290) for run
+      WF02-REQ083-20260822. Ports the read half of src/api/routes/tasks.zig
+      (handleList/handleGetById/handleInbox), split from REQ-085's write half.
+      Dependency REQ-072 confirmed done on main. This checkout is a secondary
+      git worktree (letflow-wt2 holds local main), so the Worktree variant of
+      GIT_SETUP.md applied: git fetch origin main, then
+      git checkout -b feature/WF02-REQ083-20260822 origin/main -- never
+      touched local main. Branch created and pushed (Step 00). Status flipped
+      pending -> in_progress here. handleInbox is per-principal (assignee_type
+      USER|GROUP|ROLE per REQ-047), resolved through Letflow.Identity, on top
+      of REQ-072's tenant-prefix scoping -- a second scoping dimension this
+      requirement's own text calls out as a real authorisation risk distinct
+      from cross-tenant leakage (INV-1, INV-2, INV-5).
+
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH

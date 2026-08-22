@@ -197,3 +197,73 @@ history:
       them -- filed as a finding for ORCH to register (ISS-0263 itself
       stays scoped to the roll). New current volume (v3.yaml) is 168 lines /
       10032 bytes, well under ceiling.
+  - req: REQ-128
+    event: started
+    agent: ELIXIR-DEV
+    at: "2026-08-22T09:26:00Z"
+    note: >
+      WF02-REQ128-20260822. Add Keycloak to the dev stack: docker-compose
+      service, five-role realm import (decisions/0013), real local issuer
+      in config/dev.exs/test.exs. Appended here (volume 3), not volume 2
+      (chronologically current when this run's own started-event first
+      landed): ISS-0263's roll (commit b6cf798, merged during this run)
+      closed and froze volume 2 byte-for-byte, so this event lands in
+      whatever volume is current now, per that volume's own rule -- same
+      as ISS-0263's own started/done pair landed one in each volume across
+      its roll boundary.
+  - req: REQ-128
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-08-22T10:04:09Z"
+    note: >
+      Implemented per the CODE-DESIGN-VALIDATOR-approved design
+      (lib/letflow/design/req128-keycloak-dev-stack.md): keycloak service
+      added to docker-compose.yml (host port via LETFLOW_KEYCLOAK_PORT/
+      config/keycloak_port.exs, default 8082 -- avoids R-Co's 8081/5432/
+      5433, verified by reading R-Co's own docker-compose.yml directly),
+      priv/keycloak/realms/bpm-default.json defining all five
+      Letflow.Api.Authorization roles per decisions/0013 (operator-user
+      seeded with PROCESS_OPERATOR, not R-Co's PLATFORM_ADMIN), a
+      realm-roles protocol mapper projecting a flat top-level roles claim,
+      no nginx gateway. config/dev.exs and config/test.exs point :oidc at
+      the real local issuer; config/prod.exs deliberately unchanged
+      (git diff 96ac42f..HEAD -- config/prod.exs empty) -- no real
+      production issuer exists yet. Realm kept named bpm-default, NOT
+      renamed, after implementation-time discovery that it is a pinned
+      domain invariant (Letflow.Identity.Tenant's @default_tenant_slug and
+      create_changeset/3 pinning, plus dozens of existing tests) --
+      documented as a correction in the design doc rather than silently
+      diverging from the validated design. A second commit added
+      :allow_unsafe_http (default false, set true only in dev.exs/test.exs)
+      threaded into Oidcc.ProviderConfiguration.Worker's
+      provider_configuration_opts, required because oidcc rejects a
+      non-https userinfo_endpoint by default and the local Keycloak has no
+      TLS termination -- config/prod.exs does not set the key, so a real
+      deployed issuer keeps oidcc's safe https-only validation.
+      SECURITY-REVIEWER PASSed (INV-4 applies/satisfied; INV-1/2/3/5/6/7/8
+      not applicable -- no schema/migration/API-route/SQL touched).
+      REVIEWER PASSed (idiom, the bpm-default correction judged correct
+      not scope creep, no ownership violation, decision-record
+      consistency). TEST-DESIGNER's first pass concluded zero new test
+      code was needed; TEST-DESIGN-VALIDATOR FAILed that (the
+      allow_unsafe_http default-false branch in application.ex had no
+      regression guard); TEST-DESIGNER added
+      test/letflow/application_test.exs's new test reading config/prod.exs
+      directly via Config.Reader.read!/2 and asserting no :allow_unsafe_http
+      key; TEST-DESIGN-VALIDATOR re-ran PASS (verified by mutating
+      config/prod.exs, confirming the test fails, then reverting). Full
+      suite: 1717/1719 passed (2 pre-existing, unrelated failures --
+      RequirementStatusInvariantsTest A3, now fixed on main by ISS-0263's
+      roll and no longer expected to fail post-rebase; and
+      CheckDeferralStalenessTest's S8/S9 staleness check against
+      docs/requirements.yaml, still open, unrelated -- neither touches
+      OIDC/Keycloak/application.ex). All nine acceptance criteria verified
+      live against the running Keycloak container: healthcheck healthy,
+      discovery document fetched (issuer matches), five roles read back
+      via Admin REST API, operator-user confirmed PROCESS_OPERATOR only,
+      decoded token payload shows flat top-level roles claim,
+      Oidcc.ProviderConfiguration.Worker reached ready state (no retry)
+      via a throwaway mix run script. RELEASE-VALIDATOR independently
+      re-derived all nine criteria and the test attribution from scratch
+      (not trusting this run's own reports) -- PASS. Status flipped
+      pending -> done here.

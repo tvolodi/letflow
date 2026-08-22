@@ -31,4 +31,21 @@ related:
   - ISS-0258
 queue_task_id: 266
 github_issue: 524
-status: open
+status: no_defect
+superseded_by: ISS-0264
+verdict_in_run: WF03-ISS0262-20260822
+verdict_at: "2026-08-22T10:34:00Z"
+verdict_note: >
+  Duplicate of ISS-0264, discovered independently and concurrently: a
+  different, already-completed run (WF03-ISS0264-20260822) filed and
+  resolved the identical T-LIVE-ACTIVITY finding (same test, same assertion,
+  same S8/S9 root cause) at 2026-08-22T10:13:48Z, before this record's
+  filing (10:22:10Z) landed on main via this run's own merge (commit
+  184d846, PR #525). Confirmed by direct comparison: ISS-0264.yaml's
+  description and resolution_note describe the exact same failure signature
+  (`active == ["S0","S1","S2","S3","S4","S8","S9"]` vs the test's hardcoded
+  `["S0","S1","S2","S3","S4"]`) and the same root cause (REQ-119/REQ-127
+  activating S8/S9). No independent defect remains for this record to
+  track -- ISS-0264 is the canonical record and already carries
+  `status: resolved`.
+

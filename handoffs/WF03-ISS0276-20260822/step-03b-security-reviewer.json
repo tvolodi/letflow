@@ -1,0 +1,53 @@
+{
+  "handoff_id": "5e97d046-7528-4da5-9877-aa32c19dc92e",
+  "run_id": "WF03-ISS0276-20260822",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0276-20260822/step-03b-security-reviewer.json",
+  "created_at": "2026-08-22T15:13:03Z",
+  "started_at": "2026-08-22T15:13:03Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0276-20260822/step-03-elixir-dev.json"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0276-20260822/step-03-elixir-dev.json",
+      "lib/mix/tasks/letflow.seed.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate per docs/agents/instructions/security-invariants.md on the diff introduced at Step 3 (lib/mix/tasks/letflow.seed.ex, README.md doc addition). Run git diff main...HEAD (or git diff against the branch's pre-Step-3 commit) to see the actual change. State a scope test (in scope: new tenant-provisioning code path / out of scope: reason) and a verdict per invariant INV-1..INV-8 -- APPLIES or NOT-APPLICABLE for each, with reasoning for each APPLIES verdict.",
+    "acceptance_criteria": [
+      "Every invariant INV-1..INV-8 has an explicit APPLIES/NOT-APPLICABLE verdict",
+      "Each APPLIES verdict is backed by reasoning against the actual diff, not general impression",
+      "Verdict independently derived from the diff, not from ELIXIR-DEV's own result.summary",
+      "PASS or FAIL with itemized BLOCKER issues if FAIL"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "Not yet started.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -6878,7 +6878,13 @@ requirements:
       %{event_id: event_id} and surfaces that id in a client-visible response
       body and in the persisted superseded_by column, so a stub or a
       fabricated id is not acceptable -- the id must be the one actually
-      written to `events`.
+      written to `events`. A SECOND declaration of the same callback exists --
+      promotion.ex:110's inline promote_opts() types it as {:ok, term()} --
+      but that is strictly WIDER, not conflicting: its only consumer,
+      promotion.ex:327, matches {:ok, _}, so one appender returning the
+      structured map satisfies both declarations and no code change is
+      implied. Reconciling the two declarations is explicitly NOT in scope
+      for this requirement.
       SEEDING AND BACKFILL. Append the three types to
       @platform_event_type_seed_attrs and correct the now-false comment at
       tenant_provisioning.ex:~617-622. Already-provisioned tenants need no
@@ -6904,9 +6910,11 @@ requirements:
       - "re-appending with the same deterministic idempotency key yields exactly one `events` row, asserted by a count query, and both calls return the SAME event_id rather than a second one"
       - "each of DEFINITION_PROMOTED, DEFINITION_VERSION_ROLLED_BACK and PROMOTION_ASSERTION_TEARDOWN_FAILED validates against its newly seeded json_schema using the attrs map its real producer builds -- the test obtains that map by invoking the producer (promotion.ex:~306, definitions.ex:~1305, definitions.ex:~1767) with an injected event_appender that captures it, never by hand-writing the map; three separate tests, one per type"
       - "PROMOTION_ASSERTION_TEARDOWN_FAILED appends successfully despite its producer's attrs map carrying tenant_id and no actor_id, verified by a test asserting neither {:error, :tenant_id_not_accepted} nor {:error, :missing_actor_id} occurs and that the persisted row's actor_id equals platform_actor_id/0"
-      - "the appender satisfies definitions.ex:595-597's event_appender_fun type -- a test asserts finish_rollback's client-visible response body and the persisted superseded_by column both carry the same event_id that append_platform_event/2 returned, proving no stub id is in play"
-      - "`git diff` on lib/letflow/event_store.ex shows append/2 and its M1/M6 helpers unchanged, and the pre-existing EventStore test file passes with zero failures -- both quoted in the result"
+      - "the appender satisfies definitions.ex:595-597's event_appender_fun type -- a test asserts that the :event_id key of the map finish_rollback/8 returns (definitions.ex:1321-1327) and the persisted superseded_by column both carry the same event_id that append_platform_event/2 returned, proving no stub id is in play. Assert that returned map's key, NOT a client-visible response body: no rollback route exists yet -- that is REQ-077 section 7.6's rollback_map/1, and REQ-077 is blocked on this requirement"
+      - "the superseded_by half of the criterion above is non-vacuous: the fixture seeds EXACTLY ONE promotion_reviews row in :applied or :approved status for the process_key, because supersede_matching_review/3 (definitions.ex:1351-1360) returns nil and writes nothing on zero matches AND on more than one, so any other fixture asserts nil == nil"
+      - "`git diff` on lib/letflow/event_store.ex shows append/2 and its M1/M6 helpers unchanged, and `mix test test/letflow/event_store_test.exs test/letflow/event_store/` passes with zero failures -- both quoted in the result. Those exact paths, not 'the EventStore test file': there are six candidates (event_store_test.exs plus json_array/migrations/registry/retention_policy/schemas_test.exs under test/letflow/event_store/) and append/2's own coverage lives in test/letflow/event_store_test.exs"
       - "no new file appears under priv/repo/migrations/ -- `git status` is quoted, and the result cites create_events.exs:43 and create_instance_sequence.exs:21 as the verified reason no FK forces one"
-      - "the comment at tenant_provisioning.ex:~617-622 claiming these three types are unseeded 'because no production writer exists' no longer says so -- grep for 'no production writer exists' over lib/ is quoted and returns no hit for these three types"
+      - "the comment at tenant_provisioning.ex:~617-622 claiming these three types are unseeded 'because no production writer exists' no longer says so -- `grep -n \"no production writer exists\" lib/letflow/tenant_provisioning.ex` is quoted and returns no hit. Scope the grep to that one file: lib/letflow/design/iss072-event-type-registration.md:83 carries the same phrase naming PROMOTION_ASSERTION_TEARDOWN_FAILED, and that is a completed requirement's historical record of a then-true fact, DELIBERATELY LEFT UNCHANGED -- a repo-wide grep would be satisfiable only by editing an artefact this requirement has no business touching (the hazard class at docs/anti-patterns.md:1195)"
       - "a tenant provisioned BEFORE this change gains the three registry rows after a replay_migrations/2 call, and a second replay_migrations/2 call on the same tenant is a no-op returning success -- one test covers both halves"
+      - "the existing seed-count assertion is RETARGETED, not removed: test/letflow/tenant_provisioning_event_seed_test.exs:289's `assert count == 6` becomes `assert count == 9`, and the test name at :278 -- which bakes 'the 6 rows are not duplicated' into its own string -- is updated to match. Quote the diff of both lines and a passing `mix test test/letflow/tenant_provisioning_event_seed_test.exs` run. Deleting or loosening the assertion fails this criterion: re-seed idempotency is a real invariant and the corrected count is the whole point of it"
     depends_on: [REQ-022, REQ-023, REQ-024, REQ-025, REQ-026, REQ-037, REQ-038, REQ-040]

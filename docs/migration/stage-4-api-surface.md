@@ -607,3 +607,47 @@ recommendation), the shipped `lib/letflow/plugs/tenant_status.ex`, and
 
 No rework requested — this is a forward-authorizing consult, not a review of
 already-written code.
+
+**2026-08-22 (REQ-075, Step 2d post-implementation gate) — PASS.** Standard
+idiom/scope gate on ELIXIR-DEV's Step 2a implementation, after SECURITY-REVIEWER's
+Step 2c PASS. Primary job: decide OQ-5 (design doc §7.1), carried forward
+unresolved by both the design and SECURITY-REVIEWER — whether `POST /tenants`'s
+`Identity.create_tenant/1` → `TenantProvisioning.provision_tenant_schema/1` →
+`TenantProvisioning.replay_migrations/2` orchestration needs a compensating
+rollback if a downstream step fails after the tenant row is already committed.
+
+- **Decision: no compensating rollback.** Read `lib/letflow/tenant_provisioning.ex`
+  directly rather than assuming: `provision_tenant_schema/1` is explicitly,
+  deliberately idempotent by its own `@doc` ("calling this twice for the same
+  `tenant_id` is not an error"), via a transaction-scoped advisory lock +
+  `CREATE SCHEMA IF NOT EXISTS` + insert-or-fetch-on-conflict registration.
+  `replay_migrations/2` delegates to `Ecto.Migrator.run/4`, which only applies
+  pending migrations — also safely re-callable after a partial failure.
+- **A rollback would be the worse fix, not a neutral safety net.** If
+  `provision_tenant_schema/1` had already succeeded and only
+  `replay_migrations/2` failed, deleting the just-created `tenants` row would
+  orphan a real Postgres schema plus its `tenant_schemas` registration row,
+  pointing at a `tenant_id` no longer present in `tenants` — trading a
+  recoverable partial state for an unrecoverable orphan. The right remediation
+  is a future idempotent retry/reconciliation path (re-invoke the same two
+  functions with the same `tenant_id`, or a periodic sweep), not delete-on-failure.
+  Filed as ISS-0230 (non-blocking) rather than left unrecorded.
+- **Idiom.** `with_authorization/4` is a clean continuation of REQ-073/074's
+  established pattern; `TenantStatus.call/2`'s restructure (one shared
+  `Repo.get`, then a linear `cond`) is a genuine improvement, not an awkward
+  refactor. No supervision/process concern applies — this diff is stateless
+  request-handling code.
+- **Scope.** `git diff main...HEAD --stat` matches Step 2c's confirmed file
+  list exactly; the `TenantStatus` extension is scoped precisely to the
+  shape this file's own prior entry authorized — re-confirmed directly against
+  the shipped `call/2`, not assumed from Step 1c's approval alone.
+- **AC6/AC7 moduledoc text** — read the actual shipped `@moduledoc` in
+  `lib/letflow/routers/tenants.ex` (lines 1-106): the risk statement, the
+  own-tenant rule (AC3), the REQ-076 relationship (AC7), and the
+  deactivation-status statement (AC5) all appear as literal prose, none
+  paraphrased away.
+- **No `docs/migration/decisions/*.md` contradiction** beyond what this file's
+  own prior REQ-075 entry already checked for the `TenantStatus` change
+  specifically.
+
+No rework requested.

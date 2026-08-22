@@ -1,0 +1,67 @@
+{
+  "handoff_id": "d7086cc1-1e83-0ff2-e318-3b4aa7b2da8a",
+  "run_id": "WF02-REQ074-20260822",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ074-20260822/step-02a-elixir-dev.json",
+  "created_at": "2026-08-22T00:44:17Z",
+  "started_at": "2026-08-22T00:44:17Z",
+  "completed_at": "2026-08-22T00:44:17Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-074"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ074-20260822/step-01-code-designer.json",
+      "handoffs/WF02-REQ074-20260822/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": ["lib/letflow/design/req074-identity-group-routes.md"],
+    "branch_name": "feature/WF02-REQ074-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 2a -- implement REQ-074 (six group/group-membership routes extending lib/letflow/routers/identity.ex) exactly per the PASS-gated design doc, resolving OQ-2/OQ-6/OQ-7/OQ-8/OQ-9 as ELIXIR-DEV's own judgment call while preserving OQ-1/OQ-3 as open questions for REVIEWER, not silently deciding them.",
+    "acceptance_criteria": [
+      "AC1: basic end-to-end coverage for all six routes",
+      "AC2/INV-1/INV-5: cross-tenant-membership -- byte-identical 404, zero membership rows inserted, verified by direct table query",
+      "AC3: tenant isolation on group-listing and group-member-listing",
+      "AC4: group-member listing is cursor-paginated across at least two pages",
+      "AC5: delete-with-members returns the same 404 as a nonexistent group; group row survives; empty-group delete succeeds",
+      "AC6: @moduledoc extended with the six new route lines plus the section 1/1b findings' substance verbatim"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented all six REQ-074 routes exactly per the design doc. New files: priv/repo/migrations/20260822000101_alter_groups_add_display_name_description.exs (adds display_name/description to groups, unique index on name), priv/repo/migrations/20260822000102_create_group_members_tenant_scoped.exs (new group_members join table, on_delete: :nothing on both FKs), lib/letflow/identity/group_member.ex (new GroupMember schema, no surrogate id). Both migrations registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0. Extended lib/letflow/identity/group.ex with create_changeset/2 (display_name defaults to name, description nil-if-empty). Added six functions to lib/letflow/identity.ex: create_group/2, add_group_member/3, list_groups/1, delete_group/2, list_group_members/3, remove_group_member/3. Added six routes + group_map/1 + member_result_map/3 + moduledoc extension (route table plus section-1/1b findings verbatim, including R-Co's exact main.zig line citations for the unrouted handlers and the live bulk-remove-all behavior) to lib/letflow/routers/identity.ex. Also updated test/support/tenant_fixture.ex's @expected_tenant_tables oracle list (added group_members, 19->20) and its corresponding assertion in test/letflow/support/tenant_fixture_test.exs, since the new tenant-scoped tables would otherwise trip that file's own oracle-rot guard (design section 8a/8b never mentioned this fixture, found it independently while tracing every consumer of tenant_scoped_migrations/0).\n\nJudgment calls (OQ-2/6/7/8/9): OQ-2 -- preserved R-Co's dual user_id/user_ids[0] body-parsing fallback verbatim (costs nothing, no caller depends on simplifying it). OQ-6 -- used Ecto.Query's not exists/1 for delete_group/2's guarded delete, not raw SQL; empirically verified via Ecto.Adapters.SQL.to_sql/3 against a real (test-env) connection that Repo.delete_all(query, prefix: prefix) propagates the prefix uniformly to both the outer query and the not exists/1 subquery, so no raw-SQL escape hatch was needed (documented finding, not assumed). OQ-7 -- no surrogate :id PK on group_members; every call operates on (group_id, user_id), the composite unique index is its real identity. OQ-8 -- omitted member_count from group_map/1 (no AC requires it, avoids an extra query/join per group in list_groups/1). OQ-9 -- omitted added_at from the add-member response (no AC depends on it).\n\nDeviation from a literal reading of design section 3.2's insert-then-recheck reuse instruction: add_group_member/3 uses select-first/insert-if-absent (matching upsert_by_external_identity/4's own shape, same module) rather than provision_oidc_user/4's insert-first/recheck-by-surrogate-id shape -- flagged and explained in identity.ex's own doc comment: the insert-first/recheck trick depends on a surrogate id unique to the call, which group_members deliberately does not have (OQ-7), so a post-insert recheck by (group_id, user_id) cannot distinguish created-vs-not-created at all (it would always find a row). Select-first sidesteps this and is already an established pattern in the same module.\n\nTwo regressions found and fixed during verification, both pre-existing-code interactions with this change, not scope creep: (1) lib/letflow/identity_migration.ex's copy_groups/2 did a bare `from(g in Group, ...)` with no `select:`, which now selects every Group schema field including the two new columns -- broke against the legacy, frozen public.groups table (recreated by test/letflow/identity_migration_test.exs) which never had them. Fixed by restricting the select to the four columns that table actually has (select: struct(g, [:id, :name, :inserted_at, :updated_at])); documented inline why. (2) The two new migrations' initial version numbers (20_260_822_000_001/_002, chosen the same way every prior migration in this repo derives its version) collided with test/letflow/api/context_test.exs's own hardcoded @probe_migration_version 20_260_822_000_001 -- Ecto.Migrator silently skipped that test's own probe-table migration as already-applied (same version, different module), causing a downstream 42P01 in an unrelated test file. Renumbered both new migrations to 20260822000101/000102 (files renamed on disk, manifest updated) rather than touching the pre-existing test fixture's constant. Added a new docs/anti-patterns.md entry (\"A migration version can collide with a test fixture's hardcoded version constant, not just another migration file\") since this class wasn't previously documented and the existing migration_filenames_test.exs guard cannot catch it (only one real migration file is involved).\n\nDeliberately NOT resolved (per the task's explicit instruction) -- OQ-1 and OQ-3 remain open questions for REVIEWER, exactly as the design flags them: OQ-1 (single-member removal at DELETE /groups/:id/members/:user_id, a route R-Co's own table never binds to that handler, vs. R-Co's live bulk-remove-all at the bodyless DELETE /groups/:id/members) and OQ-3 (dropping handleListGroupMembers's R-Co-only PLATFORM_ADMIN-exclusive gate in favor of the shared :GroupsManage policy). Both are preserved verbatim in the router's own @moduledoc per AC6, not just in this handoff.\n\nReal test output: `mix compile --warnings-as-errors --force` -> clean, 0 warnings. `mix format --check-formatted` -> clean after one `mix format` pass (two spots needed reformatting: the not-exists/1 where-clause and a tuple-building line in list_group_members/3's pagination helper). Full suite: `MIX_ENV=test MIX_TEST_PARTITION=0 mix test` -> 1506 passed (5 properties, 1501 tests), 0 failures, run to completion twice (once before the two regressions above were found/fixed at 1497/1506, once after at 1506/1506). test/letflow/routers/identity_test.exs alone: 47 passed (28 new REQ-074 tests: AC1 x10, AC2/cross-tenant-membership x1, AC5/delete-with-members x2, AC3/tenant-isolation x2, AC4/pagination x2, validation/error-coverage x6, plus the display_name-empty-string edge case discovered while writing tests -- design section 3.1's own field-constraint schema sets reject_empty_string: true on display_name, so an empty string 422s at the router's validation layer before ever reaching Group.create_changeset/2's nil-if-empty/default-to-name normalization, which is therefore only reachable for an OMITTED key through this router, not an empty one -- noted in the test file's own comment, not silently worked around).",
+    "artifacts_out": [
+      "priv/repo/migrations/20260822000101_alter_groups_add_display_name_description.exs",
+      "priv/repo/migrations/20260822000102_create_group_members_tenant_scoped.exs",
+      "lib/letflow/identity/group_member.ex",
+      "lib/letflow/identity/group.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/identity_migration.ex",
+      "test/letflow/routers/identity_test.exs",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/support/tenant_fixture_test.exs",
+      "docs/anti-patterns.md",
+      "handoffs/WF02-REQ074-20260822/step-02a-elixir-dev.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "OQ-1 and OQ-3 remain open, explicitly preserved for REVIEWER per the task's instruction -- see the router's own @moduledoc (AC6) and this handoff's summary for the full framing. Not a blocker for this step; REVIEWER is the intended gate."
+      },
+      {
+        "severity": "MINOR",
+        "description": "Two pre-existing-code regressions were found and fixed during verification (identity_migration.ex's copy_groups/2 select, and a migration-version collision with a test fixture constant) -- see summary for full detail. Both are fixed and covered by the full green suite, but SECURITY-REVIEWER/REVIEWER should independently confirm the copy_groups/2 fix doesn't change any INV-1/INV-7 property of that legacy cutover path (it only narrows the SELECT's column list; the WHERE/tenant-scoping logic is untouched)."
+      }
+    ],
+    "next_action": "Route to SECURITY-REVIEWER (this change touches a tenant-data path: new migration, new join table, new routes reading/writing tenant-scoped users/groups data) per WF-02 Step 2b, then REVIEWER per Step 2c/2d for OQ-1/OQ-3 sign-off, before TEST-DESIGNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

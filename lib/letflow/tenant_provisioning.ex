@@ -359,7 +359,11 @@ defmodule Letflow.TenantProvisioning do
     {20_260_821_000_001, Letflow.Repo.Migrations.CreateInstanceStateSnapshots,
      "20260821000001_create_instance_state_snapshots.exs"},
     {20_260_821_000_002, Letflow.Repo.Migrations.CreateVariableSchemas,
-     "20260821000002_create_variable_schemas.exs"}
+     "20260821000002_create_variable_schemas.exs"},
+    {20_260_822_000_101, Letflow.Repo.Migrations.AlterGroupsAddDisplayNameDescription,
+     "20260822000101_alter_groups_add_display_name_description.exs"},
+    {20_260_822_000_102, Letflow.Repo.Migrations.CreateGroupMembersTenantScoped,
+     "20260822000102_create_group_members_tenant_scoped.exs"}
   ]
 
   @doc """

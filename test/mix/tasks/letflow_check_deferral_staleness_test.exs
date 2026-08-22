@@ -447,6 +447,25 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       assert deferral(result, "REQ-901").verdict == :stale
     end
 
+    test "F-STATUS-RAW-TOKEN -- the parser stores the first token, not rest-of-line (MS4)" do
+      # Closes a coverage hole found by measurement at Step 4. The trailing-
+      # comment trap is defended TWICE -- `@status_re` in the parser and the
+      # token split in `normalise_status/1` -- so mutating `@status_re` alone
+      # is absorbed by the second layer and no behavioural test can see it.
+      # The raw stored token is the only observable that distinguishes them,
+      # and design D4 states explicitly that this field is stored raw.
+      body =
+        req("REQ-900", [
+          "stage: S4",
+          "status: cancelled  # MVP-1 milestone dropped, see REQ-101's note",
+          "impl_order: 7"
+        ])
+
+      assert [entry] = Registration.scan(doc(body)).entries
+      assert entry.status == "cancelled"
+      assert Check.normalise_status(entry.status) == :cancelled
+    end
+
     test "F-STATUS-BLOCK-NOTE -- an unattributed `status:` is not swept in (MS5)" do
       # A 2-space `status:` line between entries stands for any block-level or
       # mis-indented key. The >= 4-space attribution rule is what keeps it out

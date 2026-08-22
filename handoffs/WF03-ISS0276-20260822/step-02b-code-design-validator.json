@@ -1,0 +1,59 @@
+{
+  "handoff_id": "729298b5-beb7-4563-b018-53ddcb451800",
+  "run_id": "WF03-ISS0276-20260822",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0276-20260822/step-02b-code-design-validator.json",
+  "created_at": "2026-08-22T14:57:37Z",
+  "started_at": "2026-08-22T14:57:37Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0276-20260822/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0276-20260822/step-02-code-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0276-dev-bootstrap-seed.md",
+      "handoffs/WF03-ISS0276-20260822/step-02-code-designer.json",
+      "handoffs/WF03-ISS0276-20260822/step-01-issue-fixer.json",
+      "lib/letflow/repo.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's design at lib/letflow/design/iss0276-dev-bootstrap-seed.md, per docs/agents/workflows/WF-03_issue_resolving.md Step 2 (same gate as WF-02 Step 1b). Independently re-derive your verdict from the design doc itself, not from CODE-DESIGNER's own summary in step-02-code-designer.json's result -- read that only for what was asked, not as evidence of what was delivered.",
+    "acceptance_criteria": [
+      "All 3 of ISS-0276's acceptance criteria (see step-01-issue-fixer.json's context.source_text for the verbatim list) map to a concrete design element",
+      "Idempotency behavior on re-run is explicitly and unambiguously specified, not left open",
+      "The LETFLOW_DEV_DB_CONFIRMED=1 interaction is explicitly resolved, and independently verified against the actual guard in lib/letflow/repo.ex/config/dev.exs -- do not just accept the design doc's claim",
+      "Documentation location and content are named exactly (file + section)",
+      "No .ex function bodies / compilable implementation code anywhere in the design doc -- signatures and prose only",
+      "PASS or FAIL with specific, itemized gaps if FAIL"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "Not yet started.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

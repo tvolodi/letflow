@@ -79,7 +79,11 @@ config :letflow, :oidc,
   provider_name: Letflow.Oidc.DefaultProvider,
   client_id: "letflow-web",
   signing_algs: ["RS256"],
-  token_verifier: Letflow.Oidc.TokenVerifier.Oidcc
+  token_verifier: Letflow.Oidc.TokenVerifier.Oidcc,
+  # See lib/letflow/application.ex's provider_configuration_opts comment --
+  # local dev Keycloak serves discovery over plain HTTP, so oidcc's default
+  # https-only validation must be relaxed here. Not set in config/prod.exs.
+  allow_unsafe_http: true
 
 # Per-realm claim-path configuration for Letflow.Oidc.ClaimMapping — distinct
 # from the :oidc key above (that one is REQ-016's provider-worker-startup

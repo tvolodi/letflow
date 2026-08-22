@@ -82,7 +82,10 @@ config :letflow, :oidc,
   provider_name: Letflow.Oidc.DefaultProvider,
   client_id: "letflow-web",
   signing_algs: ["RS256"],
-  token_verifier: Letflow.Oidc.TokenVerifierDouble
+  token_verifier: Letflow.Oidc.TokenVerifierDouble,
+  # Same as config/dev.exs -- see lib/letflow/application.ex's
+  # provider_configuration_opts comment. Not set in config/prod.exs.
+  allow_unsafe_http: true
 
 # Duplicated from config/dev.exs (this repo's config files don't cascade —
 # see the :oidc key's comment above for the same note). Per-realm

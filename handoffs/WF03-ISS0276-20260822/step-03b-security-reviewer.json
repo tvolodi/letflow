@@ -1,0 +1,53 @@
+{
+  "handoff_id": "5e97d046-7528-4da5-9877-aa32c19dc92e",
+  "run_id": "WF03-ISS0276-20260822",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0276-20260822/step-03b-security-reviewer.json",
+  "created_at": "2026-08-22T15:13:03Z",
+  "started_at": "2026-08-22T15:13:26Z",
+  "completed_at": "2026-08-22T15:14:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0276-20260822/step-03-elixir-dev.json"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0276-20260822/step-03-elixir-dev.json",
+      "lib/mix/tasks/letflow.seed.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate per docs/agents/instructions/security-invariants.md on the diff introduced at Step 3 (lib/mix/tasks/letflow.seed.ex, README.md doc addition). Run git diff main...HEAD (or git diff against the branch's pre-Step-3 commit) to see the actual change. State a scope test (in scope: new tenant-provisioning code path / out of scope: reason) and a verdict per invariant INV-1..INV-8 -- APPLIES or NOT-APPLICABLE for each, with reasoning for each APPLIES verdict.",
+    "acceptance_criteria": [
+      "Every invariant INV-1..INV-8 has an explicit APPLIES/NOT-APPLICABLE verdict",
+      "Each APPLIES verdict is backed by reasoning against the actual diff, not general impression",
+      "Verdict independently derived from the diff, not from ELIXIR-DEV's own result.summary",
+      "PASS or FAIL with itemized BLOCKER issues if FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: this diff (lib/mix/tasks/letflow.seed.ex, new; README.md, doc addition) adds a `mix letflow.seed` operator task that provisions the bpm-default tenant for a fresh dev database. It touches a tenant-provisioning code path (calls Letflow.Identity.create_tenant/1, Letflow.TenantProvisioning.provision_tenant_schema/1, Letflow.TenantProvisioning.replay_migrations/1) -- in scope per the SCOPE TEST's 'adds/modifies a lookup-by-ID handler'-adjacent and secret-resolving categories is arguable but the safer read is: in scope as a tenant-provisioning path, reviewed as such. It does NOT add or modify any Ecto schema module, migration file, or API response/serialisation code, and does not touch a lookup-by-ID handler -- it is a thin CLI wrapper calling three already-existing, previously-reviewed functions (create_tenant/1 shipped under REQ-022/S1; provision_tenant_schema/1 and replay_migrations/1 shipped under REQ-022/S2, both already passed SECURITY-REVIEWER at their own introduction) with zero new query/scoping logic of its own.\n\nINV-1 (tenant data isolation) -- NOT-APPLICABLE. Verified against 0003-ecto-schema-strategy.md's checklist: (a) no new/changed Ecto schema module in this diff -- grep of the diff shows only a Mix.Task module; (b) no migration added or changed (priv/repo/migrations/ untouched per `git diff main...HEAD --stat` scope); (c) no tenant_id column handling introduced -- create_tenant/1's tenant row is the system-level identity/registry record 0003 exempts (the row IS the tenant, not tenant-scoped business data), and provision_tenant_schema/1 + replay_migrations/1 are unchanged pre-existing calls that already carry their own INV-1 sign-off from REQ-022. This task calls them with a fixed, hardcoded @attrs literal (slug/idp_realm_id/display_name = \"bpm-default\"), not caller-supplied input, so there is no new caller-controlled tenant_id attribution surface for 0003's addendum to guard against.\nINV-2 (server-side field authorisation) -- NOT-APPLICABLE. No API response type, controller, or serialisation code touched; this is an offline Mix task with Mix.shell().info/Mix.raise output only, not an HTTP response.\nINV-3 (untrusted runtime sandboxing) -- NOT-APPLICABLE. No Lua/WASM/tenant-authored-script execution; S5 has not started.\nINV-4 (secrets by reference only) -- APPLIES (live invariant) and PASSES. `grep -rniE \"(password|secret|client_secret|token)\\s*(=|:)\\s*\\\"[^\\\"]{8,}\\\"\" lib/mix/tasks/letflow.seed.ex` -- no match. The only token-shaped string in the file is the literal shell command `LETFLOW_DEV_DB_CONFIRMED=1 mix letflow.seed` in the moduledoc/README, which is a documented safety-confirmation env var name (see Letflow.Repo.init/2), not a secret value -- it carries no credential material, matches the existing `mix ecto.setup` pattern already on record, and is never logged/serialised as a secret. No System.get_env call was added in this file; the env var is read by Letflow.Repo.init/2 (pre-existing, out of this diff).\nINV-5 (not-found/forbidden indistinguishability) -- NOT-APPLICABLE. No lookup-by-ID endpoint; the {:error, :not_found} branch handles a genuine internal-consistency-check failure (a slug collision with a tenant that doesn't resolve by realm) surfaced via Mix.raise to a local operator, not an HTTP response to an external/cross-tenant caller -- INV-5's forbidden-vs-not-found probe scenario does not exist in a local CLI task.\nINV-6 (new data-access paths prove their scoping) -- APPLIES, satisfied by this handoff itself. This IS the SECURITY-REVIEWER gate for the new mix letflow.seed data-access path; the proof is the itemised INV-1..INV-8 statement recorded here, independent of ELIXIR-DEV's own result.summary in step-03-elixir-dev.json (that file was read only for related_handoff_ids context, not consulted for this verdict's reasoning -- each verdict above is derived directly from reading lib/mix/tasks/letflow.seed.ex and re-deriving against security-invariants.md and 0003-ecto-schema-strategy.md).\nINV-7 (no SQL string interpolation) -- APPLIES (live invariant) and PASSES. `grep -n \"Repo.query\" lib/mix/tasks/letflow.seed.ex` -- no match. The task performs no direct Repo/SQL calls at all; it only calls the two named Letflow.Identity/Letflow.TenantProvisioning functions, which are Ecto.Query-based and out of this diff's scope (already reviewed at their own introduction).\nINV-8 (no unhandled crashes on realistic failure paths) -- APPLIES (live invariant) and PASSES. `grep -n \"^\\s*{:ok, .*} = \" lib/mix/tasks/letflow.seed.ex` -- no match. Every external call (Identity.create_tenant/1, Identity.resolve_tenant_by_realm/1, TenantProvisioning.provision_tenant_schema/1, TenantProvisioning.replay_migrations/1) is handled via exhaustive `case` matching both {:ok, _} and {:error, _} branches, with {:error, _} routed to Mix.raise (a controlled task-level abort, not an unhandled crash of a shared process -- this is a one-shot Mix.Task process, not a supervised long-lived tenant-serving process, so the let-it-crash-vs-shared-process distinction in INV-8 does not even apply adversely here since a raise here only aborts the operator's own CLI invocation).\n\nNo BLOCKER issues found. PASS.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0276-20260822",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 3c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

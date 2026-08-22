@@ -98,6 +98,18 @@ migration by hand), use the already-isolated test database instead:
 `MIX_ENV=test MIX_TEST_PARTITION=<N> mix run -e '...'`.
 
 ```
+LETFLOW_DEV_DB_CONFIRMED=1 mix letflow.seed
+```
+
+Provisions the `bpm-default` tenant (slug and `idp_realm_id` both
+`bpm-default`) that authenticated requests bearing a
+`bpm-default`-realm token resolve against
+(`Letflow.Identity.resolve_tenant_by_realm/1`, used by `AuthPipeline`'s
+tenant-resolution step). Required once per fresh `letflow_dev`
+database (a fresh `docker compose up -d` volume, or after a `mix
+ecto.reset`); safe to re-run.
+
+```
 curl -s localhost:4000/health
 # {"status": "ok"}
 ```

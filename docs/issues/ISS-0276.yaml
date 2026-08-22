@@ -23,4 +23,6 @@ affected_files:
   - lib/letflow/tenant_provisioning.ex
 queue_task_id: 276
 github_issue: 546
-status: in_progress
+status: resolved
+resolved_in_run: WF03-ISS0276-20260822
+resolved_at: 2026-08-22T15:36:22Z

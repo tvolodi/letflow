@@ -1,0 +1,63 @@
+{
+  "handoff_id": "713ab2d9-e200-4983-bb0b-91a2b4633f86",
+  "run_id": "WF03-ISS0276-20260822",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0276-20260822/step-04-test-designer.json",
+  "created_at": "2026-08-22T15:18:10Z",
+  "started_at": "2026-08-22T15:18:44Z",
+  "completed_at": "2026-08-22T15:23:51Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/agents/workflows/WF-03_issue_resolving.md": "Step 4's test must be shown to fail against the pre-fix code and pass against the post-fix code. When the pre-fix failure is \"the code under test does not exist\": the fail-then-pass rule is trivially satisfiable when the fix adds a module (pre-fix failure is UndefinedFunctionError for every test, proving the module is new but nothing about whether the tests discriminate a correct implementation from a wrong one). So: where the pre-fix failure is non-existence, the fail-first requirement is satisfied ONLY by additionally MUTATING the shipped logic and recording which tests fail for each mutant. The mutants must target the specific traps the fix exists to handle, not arbitrary breakage. A mutant is a TEMPORARY PROBE -- leaving one in the tree is a step failure. Preferred: apply mutants in a throwaway git worktree of the branch so the working checkout is never mutated at all; remove the worktree when done. Or, if applied in place, revert with git checkout -- <path> and VERIFY the revert (git status --porcelain lib/ test/ empty, and the test file re-runs green) before completing the handoff."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0276-20260822/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0276-20260822/step-03c-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.seed.ex",
+      "lib/letflow/design/iss0276-dev-bootstrap-seed.md",
+      "test/support/tenant_fixture.ex"
+    ],
+    "owned_modules": ["test/mix/tasks/letflow.seed_test.exs"]
+  },
+  "task": {
+    "description": "Write the regression test for ISS-0276's fix (lib/mix/tasks/letflow.seed.ex, a brand-new module). This is the 'code under test does not exist pre-fix' case named in context.source_text -- satisfy the fail-then-pass rule via mutation testing, not merely by observing UndefinedFunctionError. Write test/mix/tasks/letflow.seed_test.exs covering: (1) running the task against a freshly-migrated empty DB creates a tenant row with idp_realm_id='bpm-default' (ISS-0276 AC1); (2) after running it, Letflow.Identity.resolve_tenant_by_realm('bpm-default') succeeds and returns a tenant whose realm/aud a token-bearing request could resolve past AuthPipeline's tenant-resolution step (ISS-0276 AC2 -- test at the level resolve_tenant_by_realm/1 and the returned tenant's fields, not a full HTTP+Keycloak round trip unless one is already feasible in this suite's existing patterns); (3) idempotency -- running the task twice does not crash and results in exactly one bpm-default tenant. Then MUTATE lib/mix/tasks/letflow.seed.ex in at least 2 ways that target the specific traps this fix exists to handle (e.g. omit idp_realm_id from the attrs map; break the idempotency fallback so a second run raises/duplicates) and record, per mutant, which of your new tests fail -- proving the tests are sensitive to the fix's real logic, not just its existence. Prefer a throwaway git worktree for the mutation so the working checkout is never mutated; if mutating in place, you MUST revert with git checkout -- and verify (git status --porcelain lib/ test/ empty, tests re-run green) before completing this handoff.",
+    "acceptance_criteria": [
+      "test/mix/tasks/letflow.seed_test.exs covers ISS-0276's 3 acceptance criteria (seed creates the row; resolve_tenant_by_realm succeeds post-seed; documented -- doc coverage may simply cite Step 3's README change, no test needed for prose)",
+      "At least 2 distinct mutants applied to lib/mix/tasks/letflow.seed.ex, each targeting a real trap the fix handles (not arbitrary syntax breakage), with per-mutant fail counts recorded in result.summary",
+      "Post-fix (unmutated) run of the new test file is 100% green, with real command output quoted",
+      "If mutated in place: git status --porcelain lib/ test/ is empty and the test file re-runs green AFTER the revert, both confirmed and quoted in result.summary",
+      "Do NOT run the full suite or diagnose other issues -- scope is this one test file",
+      "next_action names TEST-DESIGN-VALIDATOR"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/mix/tasks/letflow.seed_test.exs (4 tests) + test/specs/ISS-0276.md covering ISS-0276's 3 ACs: AC1 (fresh-DB run creates the bpm-default row with idp_realm_id set), AC2 (resolve_tenant_by_realm/1 succeeds post-seed + the tenant's Postgres schema is actually provisioned/migrated, checked via information_schema), and idempotency (2nd run returns :ok, exactly 1 row, resolve still succeeds). AC3 (documented) needs no test -- prose-only, covered by Step 3's README change per task.description.\n\nPOST-FIX (unmutated) run, real output: `MIX_ENV=test mix test test/mix/tasks/letflow.seed_test.exs` -> `Finished in 3.2 seconds (0.00s async, 3.2s sync)` / `Result: 4 passed`, zero failures.\n\nThis is the 'code under test does not exist pre-fix' case (lib/mix/tasks/letflow.seed.ex is a brand-new module) -- UndefinedFunctionError fail-then-pass would be trivial and prove nothing, so per WF-03 Step 4 I mutated the shipped implementation in a throwaway git worktree (`git worktree add ../letflow-mutant-wt HEAD`, deps/build reused from main checkout via MIX_DEPS_PATH/MIX_BUILD_PATH env vars to avoid re-fetching with no network access) so the main checkout's lib/ was never touched at any point.\n\nMUTANT A -- omit \"idp_realm_id\" from @attrs (reintroduces ISS-0276's original root-cause shape inside the fix itself). Real measured result: `Result: 0/4 passed` / `Failed: 4 tests` -- all 4 tests fail, each with `** (Mix.Error) mix letflow.seed: FAILED -- create_tenant/1 rejected the seed attrs: [idp_realm_id: {\"can't be blank\", [validation: :required]}]` (the changeset now rejects the attrs outright since idp_realm_id is a required field, so every test's own `Seed.run([])` call raises). Reverted with `git checkout -- lib/mix/tasks/letflow.seed.ex` before applying Mutant B.\n\nMUTANT B -- break the idempotency fallback: the `{:error, :duplicate_slug}` branch now unconditionally `Mix.raise/1`s instead of resolving-and-continuing via resolve_tenant_by_realm/1. Real measured result: `Result: 3/4 passed` / `Failed: 1 test` -- exactly the idempotency test fails, with `** (Mix.Error) mix letflow.seed: FAILED -- a tenant with slug \"bpm-default\" already exists (MUTANT B: idempotency fallback disabled).` raised on the 2nd `Seed.run([])` call; AC1/AC2 (each running the task exactly once) stayed green as expected.\n\nBoth mutants applied and reverted entirely inside ../letflow-mutant-wt; the worktree was then removed (`git worktree remove ../letflow-mutant-wt --force`). Main checkout was never mutated at any point -- confirmed: `git status --porcelain lib/ test/` in the main checkout shows only the two new untracked files this step adds (test/mix/tasks/letflow.seed_test.exs, test/specs/ISS-0276.md), lib/ is fully clean throughout (no revert needed there since the mutation never touched the main checkout's lib/ at all).",
+    "artifacts_out": [
+      "test/mix/tasks/letflow.seed_test.exs",
+      "test/specs/ISS-0276.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0276-20260822",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

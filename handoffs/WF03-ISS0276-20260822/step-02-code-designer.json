@@ -1,0 +1,57 @@
+{
+  "handoff_id": "063b9c3b-1f16-46c1-9df1-7749b7e64226",
+  "run_id": "WF03-ISS0276-20260822",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0276-20260822/step-02-code-designer.json",
+  "created_at": "2026-08-22T14:53:29Z",
+  "started_at": "2026-08-22T14:54:05Z",
+  "completed_at": "2026-08-22T14:57:10Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0276-20260822/step-01-issue-fixer.json"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0276-20260822/step-01-issue-fixer.json",
+      "lib/letflow/identity.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/routers/tenants.ex",
+      "lib/mix/tasks"
+    ],
+    "owned_modules": ["priv/repo/seeds.exs", "lib/mix/tasks/letflow.seed.ex", "README.md"]
+  },
+  "task": {
+    "description": "Produce the fix design for ISS-0276 per docs/agents/workflows/WF-03_issue_resolving.md Step 2. Read handoffs/WF03-ISS0276-20260822/step-01-issue-fixer.json's result.summary in full -- it is ISSUE-FIXER's complete diagnosis and 'WHAT A FIX MUST ADD' section naming the exact call chain, idempotency question, LETFLOW_DEV_DB_CONFIRMED question, and documentation requirement. Design a new Mix.Task (mix letflow.seed, matching the lib/mix/tasks/ naming convention) that provisions a default tenant (slug bpm-default, idp_realm_id bpm-default) via Letflow.Identity.create_tenant/1 -> Letflow.TenantProvisioning.provision_tenant_schema/1 -> Letflow.TenantProvisioning.replay_migrations/1. Your design must explicitly resolve: (a) the exact attrs map passed to create_tenant/1, (b) idempotency behavior when a bpm-default tenant already exists (create_tenant/1 returns {:error, :duplicate_slug} today), (c) whether/how the task interacts with the LETFLOW_DEV_DB_CONFIRMED=1 guard in lib/letflow/repo.ex, (d) where documentation of the new command goes (README.md or docs/) satisfying AC3. Design artefact only -- signatures, @specs, module/function shapes, and prose describing behavior. NO implementation code bodies.",
+    "acceptance_criteria": [
+      "Design covers all 3 of ISS-0276's stated acceptance criteria (fresh-DB seed creates the row; an authenticated bpm-default-realm request then resolves a tenant; the path is documented)",
+      "Design explicitly states the mix task's module name, invocation (mix letflow.seed), and its call sequence against the three named Identity/TenantProvisioning functions",
+      "Design explicitly resolves idempotency (re-run behavior) and the LETFLOW_DEV_DB_CONFIRMED interaction -- not left as an open question for ELIXIR-DEV to invent",
+      "Design names the exact doc location and what text is added",
+      "No .ex function bodies / no compilable implementation code in the design doc -- signatures and prose only",
+      "Design artefact written to lib/letflow/design/iss0276-dev-bootstrap-seed.md"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design artefact written to lib/letflow/design/iss0276-dev-bootstrap-seed.md, produced from ISSUE-FIXER's step-01 diagnosis (read in full) plus direct reading of lib/letflow/identity.ex, lib/letflow/tenant_provisioning.ex, lib/letflow/routers/tenants.ex, lib/letflow/repo.ex, config/dev.exs, an existing lib/mix/tasks/*.ex task for style precedent, and README.md's 'Running it' section for doc-insertion style. Designs Mix.Tasks.Letflow.Seed (lib/mix/tasks/letflow.seed.ex, invocation `mix letflow.seed`), calling Letflow.Identity.create_tenant/1 with %{\"slug\" => \"bpm-default\", \"display_name\" => \"Default Tenant\", \"idp_realm_id\" => \"bpm-default\"}, then Letflow.TenantProvisioning.provision_tenant_schema/1, then Letflow.TenantProvisioning.replay_migrations/1 on the resulting tenant_id -- matching POST /tenants's own chain. Explicitly resolves all four required points: (a) exact attrs map (above); (b) idempotency -- a {:error, :duplicate_slug} from create_tenant/1 is not a failure: the task resolves the existing tenant via resolve_tenant_by_realm(\"bpm-default\") and continues the same provision/replay chain against it (already-idempotent per those functions' own docs), only Mix.raise/1-ing if resolve_tenant_by_realm/1 instead returns :not_found (a genuine slug collision with a differently-configured tenant); (c) LETFLOW_DEV_DB_CONFIRMED -- resolved as NO special-cased logic needed: config/dev.exs's require_dev_db_confirmation: true means Mix.Task.run(\"app.start\") inside the task already triggers Letflow.Repo.init/2's existing guard before any task code runs, so the task is not exempted and needs no duplicate check; (d) documentation -- README.md 'Running it' section, new fenced `LETFLOW_DEV_DB_CONFIRMED=1 mix letflow.seed` block inserted directly after the existing ecto.setup/mix run block (before the curl health-check block), plus the task's own @moduledoc/@shortdoc as the mix-help-reachable copy. Also specifies explicit Mix.raise/1 error handling for every non-ok branch of all three calls, and lists two open questions (display_name literal choice; regression-test invocation strategy, left to TEST-DESIGNER) rather than silently deciding them. No .ex function bodies included -- signatures, @spec shapes, and prose only.",
+    "artifacts_out": ["lib/letflow/design/iss0276-dev-bootstrap-seed.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0276-20260822",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to validate the design"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

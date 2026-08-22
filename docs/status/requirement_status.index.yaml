@@ -210,7 +210,7 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 9
+    entries: 11
     note: >
       Opened by ISS-0263's roll (WF03-ISS0263-20260822), successor to volume 2.
       Created with volume 2's header text verbatim (volume number, opening date
@@ -264,6 +264,18 @@ volumes:
       started+done event pair (2 appends, recounted from the composed file
       per this note's own recount-every-time rule -- 9 on-disk `- req:`
       entries in requirement_status.v3.yaml).
+      Composed to 11 by WF02-REQ126-20260822 (ELIXIR-DEV)'s Step Final
+      rebase, which had appended its own started+done event pair against a
+      base declaring 6 and computed 8; its rebase found main advanced to 9
+      (ISS-0265 done, REQ-120 started+done) and conflicted at this file's
+      tail in both requirement_status.v3.yaml and here. Composed in
+      chronological `at:` order -- ISS-0265 done (10:35:22Z), REQ-126
+      started (11:15:00Z), REQ-120 started (11:20:23Z), REQ-120 done
+      (11:20:23Z), REQ-126 done (11:30:40Z) -- REQ-126's started-event
+      sorted between ISS-0265's done and REQ-120's started, so it was
+      reordered into that position; REQ-126's own done-event sorted last
+      and needed no reordering. Recounted from the composed file: 11
+      on-disk `- req:` entries in requirement_status.v3.yaml.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

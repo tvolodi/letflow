@@ -38,6 +38,39 @@ defmodule Letflow.Tasks do
   `claim_task/3`'s own doc for why two concurrent claims produce exactly one
   winner).
 
+  ## Form version pinning (REQ-126, MOB-3) — a new read, not new pin machinery
+
+  `get_task/2`/`list_tasks/2` also surface `form_id`/`form_version` (REQ-126,
+  `lib/letflow/design/req126-form-version-pinning.md`) so a task payload
+  names the exact pinned form version MOB-3 requires, and never silently
+  substitutes the currently-active one. `form_id` is the task's own
+  `node_id` (§4.3 of that design — every `tasks` row is activated only from
+  a `:HUMAN_TASK` node, `Letflow.Engine.TaskActivation`'s own moduledoc, so
+  the node the task was activated from already *is* the form's identity;
+  no new node attribute, no forms catalog). `form_version` is
+  `instance_definition_snapshots.definition_ver` (`Letflow.Definitions.InstanceDefinitionSnapshot`,
+  REQ-027/033), looked up by the task's `instance_id` via a `left_join`.
+
+  **This is deliberately not an instance of `Letflow.Engine.PinResolver`
+  (REQ-059).** `PinResolver` pins *external, mutable-catalog* references —
+  `catalog_entry`/`module` — things that live outside a process
+  definition's own row and need an active `resolve/4` step against an
+  injectable `Lookup`, recorded into the `INSTANCE_STARTED` event payload
+  because no other durable place exists to freeze them. A form reference has
+  no such external catalog: it is already *inside* the definition's own
+  `instance_definition_snapshots` row, a write-once record
+  (`InstanceDefinitionSnapshot` exposes no `update_changeset/2` at all) that
+  was already immutable and already frozen at instance-start time for an
+  unrelated reason (REQ-027/033's PD-08 "read-only after creation"
+  contract) — one that shipped before `PinResolver` (REQ-059) existed.
+  Promoting a new `process_definitions` version afterward creates a new row
+  there and never touches an existing instance's snapshot, so there is
+  nothing left to actively pin: none of `PinResolver`'s four concerns
+  (`resolve/4`, `merge_effective_pins/3`, `apply_inheritance/2`,
+  `pin_for/3` — override, inheritance, rebind) has a form counterpart to
+  build. `get_form_version/2` below is a single scalar read of an
+  already-pinned column, nothing more.
+
   ## `src/tasks/store.zig` boundary — ported vs. not ported (AC6)
 
   R-Co's task query/filter/list logic lives in `src/tasks/store.zig` (1,202
@@ -91,6 +124,7 @@ defmodule Letflow.Tasks do
 
   alias Ecto.Multi
   alias Letflow.Api.Pagination
+  alias Letflow.Definitions.InstanceDefinitionSnapshot
   alias Letflow.Engine.Task
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Identity.GroupMember
@@ -151,9 +185,19 @@ defmodule Letflow.Tasks do
   `:invalid_base64`/`:invalid_cursor` atoms into one, matching R-Co's own
   single `INVALID_CURSOR`/422 branch for those cases) and
   `{:error, :expired}` for one past its freshness window.
+
+  Each item is a `{Task.t(), form_version}` pair (REQ-126) — `form_version`
+  comes from a `left_join` against `instance_definition_snapshots`, added
+  purely for the pinned-form-version read (see this module's moduledoc);
+  pagination itself is still keyed on the `Task` half only
+  (`inserted_at`/`id`), unaffected by the join.
   """
   @spec list_tasks(list_tasks_params(), opts()) ::
-          {:ok, %{items: [Task.t()], next_cursor: String.t() | nil}}
+          {:ok,
+           %{
+             items: [{Task.t(), form_version :: String.t() | nil}],
+             next_cursor: String.t() | nil
+           }}
           | {:error, :invalid_cursor | :wrong_endpoint | :expired}
   def list_tasks(params, opts) do
     prefix = Keyword.fetch!(opts, :prefix)
@@ -168,6 +212,8 @@ defmodule Letflow.Tasks do
         |> filter_by_list_cursor(cursor_seek)
         |> order_by([t], desc: t.inserted_at, desc: t.id)
         |> limit(^(page_size + 1))
+        |> join(:left, [t], s in InstanceDefinitionSnapshot, on: s.instance_id == t.instance_id)
+        |> select([t, s], {t, s.definition_ver})
 
       rows = Repo.all(query, prefix: prefix)
       {page, next_cursor} = split_list_page(rows, page_size)
@@ -178,7 +224,9 @@ defmodule Letflow.Tasks do
 
   @doc """
   Fetches a single task by id, joined to `instance_projections` for
-  `correlation_key` (a plain `left_join`, matching R-Co's own `LEFT JOIN`).
+  `correlation_key` (a plain `left_join`, matching R-Co's own `LEFT JOIN`),
+  and to `instance_definition_snapshots` for `form_version` (REQ-126 — see
+  this module's moduledoc "Form version pinning" section).
 
   `Ecto.UUID.cast/1` is checked first — an invalid UUID never reaches the DB
   (`{:error, :invalid_id}`, no round-trip). A cross-tenant `id` and a
@@ -191,7 +239,8 @@ defmodule Letflow.Tasks do
   `prefix` is supplied by the caller.
   """
   @spec get_task(id :: String.t(), opts()) ::
-          {:ok, {Task.t(), correlation_key :: String.t() | nil}}
+          {:ok,
+           {Task.t(), correlation_key :: String.t() | nil, form_version :: String.t() | nil}}
           | {:error, :not_found | :invalid_id}
   def get_task(id, opts) do
     prefix = Keyword.fetch!(opts, :prefix)
@@ -205,15 +254,46 @@ defmodule Letflow.Tasks do
           from(t in Task,
             left_join: ip in InstanceProjection,
             on: ip.instance_id == t.instance_id,
+            left_join: s in InstanceDefinitionSnapshot,
+            on: s.instance_id == t.instance_id,
             where: t.id == ^id,
-            select: {t, ip.correlation_key}
+            select: {t, ip.correlation_key, s.definition_ver}
           )
 
         case Repo.one(query, prefix: prefix) do
           nil -> {:error, :not_found}
-          {task, correlation_key} -> {:ok, {task, correlation_key}}
+          {task, correlation_key, form_version} -> {:ok, {task, correlation_key, form_version}}
         end
     end
+  end
+
+  @doc """
+  Fetches the pinned form version (REQ-126) for a task's owning instance,
+  independent of `get_task/2`/`list_tasks/2` — used by the claim/assign/
+  reassign write-path handlers below, which only get a bare `Task.t()` back
+  from `Repo.update/2` (no join already in hand the way `get_task/2` has
+  one). A narrow, single-column `select` (not
+  `Letflow.Definitions.SnapshotStore.get_by_instance_id/2`, which would
+  additionally pull the full `graph` map over the wire for a response that
+  never reads it — see `lib/letflow/design/req126-form-version-pinning.md`
+  §9 OQ-2).
+
+  Returns `nil`, never raises, when no snapshot row exists for
+  `instance_id` (INV-8) — the same near-impossible-in-practice, non-crashing
+  fallback `get_task/2`'s own `left_join` already establishes for this
+  column.
+  """
+  @spec get_form_version(instance_id :: Ecto.UUID.t(), opts()) :: String.t() | nil
+  def get_form_version(instance_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    Repo.one(
+      from(s in InstanceDefinitionSnapshot,
+        where: s.instance_id == ^instance_id,
+        select: s.definition_ver
+      ),
+      prefix: prefix
+    )
   end
 
   @doc """
@@ -586,6 +666,9 @@ defmodule Letflow.Tasks do
     {String.to_integer(ts_str), id_str}
   end
 
+  # `rows` are now `{Task.t(), form_version}` pairs (REQ-126's
+  # instance_definition_snapshots left_join) -- pagination itself stays keyed
+  # on the Task half only; the tuple just rides along unchanged.
   defp split_list_page(rows, page_size) when length(rows) > page_size do
     {page, [_extra_row]} = Enum.split(rows, page_size)
     {page, build_list_next_cursor(List.last(page))}
@@ -593,7 +676,7 @@ defmodule Letflow.Tasks do
 
   defp split_list_page(rows, _page_size), do: {rows, nil}
 
-  defp build_list_next_cursor(%Task{id: id, inserted_at: inserted_at}) do
+  defp build_list_next_cursor({%Task{id: id, inserted_at: inserted_at}, _form_version}) do
     inserted_at_us = DateTime.to_unix(inserted_at, :microsecond)
 
     @list_cursor_prefix

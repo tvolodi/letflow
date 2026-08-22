@@ -745,3 +745,52 @@ history:
       independent re-check of R-Co's routing behavior. README.md checked
       directly (grep for "group"): no hit needing an update -- no
       externally-visible behavior documented there changes.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-22T01:49:44Z"
+    note: >
+      ISS-0224 (GH#457, queue task 224) resolved in run WF03-ISS0224-20260822.
+      Letflow.SandboxPool ran provision_sandbox/0 synchronously inside
+      handle_provision_now/2 and service_next_waiter/1, so the pool processed no
+      messages for a whole provisioning -- including a parked waiter's own
+      {:claim_timeout, ref} timer -- and max_wait_ms, documented as the bound on
+      queue parking only, was not honoured. Reproduced with measurement, not
+      inferred: at max_wait_ms 200 a waiter overshot by 263-320 ms against a
+      control of 4-11 ms, and in every defect run the waiter's reply latency
+      equalled the concurrent provisioning's latency to the millisecond. Stated
+      honestly, one provisioning here is 411-1460 ms, so at max_wait_ms 1000 there
+      is no violation at all on a quiet host -- the defect is not that the
+      overshoot is always large, it is that it is bounded by nothing the contract
+      names. Fix moves all pool-side Repo work -- provisioning AND drop_schema/1 --
+      into one serialized Task.Supervisor.async_nolink worker behind a db_queue
+      FIFO with at most one op in flight, leaving no Repo call in any pool
+      callback; slots are reserved and owners monitored before any DB work starts,
+      closing the window in which a claim-in-progress had no monitor. Serializing
+      BOTH op kinds rather than only provisioning is load-bearing and came from the
+      design gate: moving provisioning alone makes the pool a third concurrent DB
+      actor (peak demand 3 vs the synchronous module's 2) and fails at pool_size 2,
+      which is exactly decision 0009's TEST_MIN_POOL_SIZE floor -- measured 3/3 fail
+      for that shape against 5/5 pass for the serialized worker. INV-SP-T4 is split
+      rather than reworded: T4a is a new real guarantee (post-fix waiter overshoot
+      1-3 ms), T4b is retained as a limit because provisioning is still serialized.
+      release_call_timeout/0 deliberately not shrunk despite ISS-0220 OQ-3
+      anticipating this run, to keep the two changes independently revertable.
+      CODE-DESIGN-VALIDATOR FAILed twice, both rounds material: round 0 caught the
+      peak-demand-3 regression and an RT-2 assertion that held 0/20, 3/20 and 5/20
+      across three windows (a coin flip, deleted not repaired); round 2 caught that
+      the fix for the first finding put one reference in two collections at once,
+      making INV-SP-A3 false and leaving an owner-death interleaving unhandled.
+      SECURITY-REVIEWER PASS in scope, REVIEWER PASS, TEST-DESIGN-VALIDATOR PASS
+      having re-run the fail-first in its own worktree rather than accepting
+      reported numbers. Fail-first is behavioural, not UndefinedFunctionError:
+      RT-2(d) t_w2 507 against t_w1 520 and RT-7(c) t_probe 453 against t_b 486,
+      both premise guards met, red 4/4 seeds and independently reproduced. Five
+      death paths covered, each asserting no slot leak and no schema leak and pool
+      survival. Verified by six green TEST_PARALLEL_N=4 runs, 1456/1456 each. A
+      verification run caught a real flake in this branch's own RT-2 -- it polled
+      for a state that exists only for the waiter's 50 ms window -- which was
+      reproduced deterministically, replaced with a message barrier requiring no new
+      constant, and re-verified under two concurrent 4-partition suites rather than
+      shipped.

@@ -210,8 +210,11 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 41
+    entries: 42
     note: >
+      Incremented to 42 by WF03-ISS0287-20260823 (ORCH)'s own done-event
+      append -- 42 on-disk `- req:` entries in requirement_status.v3.yaml,
+      no rebase conflict on this file.
       Recounted to 41 by WF02-REQ076-20260822's Step Final rebase, which
       conflicted at requirement_status.v3.yaml's tail against
       WF02-REQ079-20260822's, WF02-REQ080-20260823's, and

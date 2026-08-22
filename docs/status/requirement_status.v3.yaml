@@ -1181,3 +1181,35 @@ history:
       directly from `grep -c "^  - req:" docs/status/requirement_status.v3.yaml`
       = 41 after REQ-076's own started+done pair was composed in above,
       per this note's own recount-every-time rule).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-22T23:21:37Z"
+    note: >
+      ISS-0287 resolved (WF03-ISS0287-20260823, queue task 287, GH#569 closed).
+      Registered from a new finding TEST-RUNNER surfaced mid-WF02-REQ076-20260822
+      Step 4: even at the documented TEST_PARALLEL_N=4 remedy for ISS-0219, the
+      suite could still intermittently fail MID-RUN with real Postgres
+      connection-pool exhaustion in tenant_schema_reaper_test.exs and
+      engine_concurrency_test.exs. ISSUE-FIXER diagnosed the root cause:
+      scripts/test_parallel.sh's headroom clamp formula didn't account for
+      Postgres's own superuser_reserved_connections (measured 3) or an
+      unbudgeted raw non-pooled Postgrex connection opened by the reaper test's
+      ISS-0110 guard, both of which could collide with engine_concurrency_test's
+      deliberate full-pool-saturation test under load. CODE-DESIGNER designed,
+      CODE-DESIGN-VALIDATOR PASSed (independently re-verified arithmetic),
+      ELIXIR-DEV implemented two new env knobs (TEST_SUPERUSER_RESERVED=3,
+      TEST_NONPOOL_CONNECTION_RESERVE=2) in scripts/test_parallel.sh plus an
+      addendum to docs/migration/decisions/0009-test-parallel-pool-sizing.md
+      (commit 39c7364), SECURITY-REVIEWER PASS (out of scope, no tenant-data
+      path), REVIEWER PASS. TEST-DESIGNER wrote
+      test/scripts/test_parallel_pool_sizing_test.sh with a genuine fail-then-pass
+      regression test (5 cases; 3/5 failed against the pre-fix commit, 5/5 passed
+      post-fix) -- TEST-DESIGN-VALIDATOR's first pass FAILed it on a fragile
+      marker-based script-extraction mechanism that would silently over-capture
+      and eval later script stages if a comment header were ever reworded;
+      TEST-DESIGNER hardened the extraction with an explicit closed-vs-EOF guard
+      plus a token/line-count bound (commit afc7c3e), re-validated PASS.
+      TEST-RUNNER ran the full suite at the corrected TEST_POOL_SIZE=21: 1898/1898
+      clean, 0 failures. Merged to main via PR #570 (squash commit b7a5c05).
+      docs/issues/ISS-0287.yaml: status: resolved.

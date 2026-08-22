@@ -440,4 +440,80 @@ file's own threadlocal-translation note above.
   `0006-*.md` (which removed `tenant_id` from schema-isolated tables entirely) —
   re-confirmed directly against both records, not re-derived from scratch.
 
+**2026-08-22 (REQ-074) — PASS.** Reviewed `lib/letflow/identity.ex`'s six new
+group/group-membership functions and `lib/letflow/routers/identity.ex`'s six
+new routes (`lib/letflow/design/req074-identity-group-routes.md`) against
+idiom/scope/decision-record consistency, plus this run's two load-bearing
+deliverables — **OQ-1 and OQ-3 sign-off**, both explicitly deferred to this
+gate rather than to CODE-DESIGN-VALIDATOR or SECURITY-REVIEWER.
+
+- **OQ-1 (§1b/§10) — PASS, single-member removal at `DELETE
+  /groups/:id/members/:user_id` is the right port target; no code change
+  requested.** The requirement's own text names `handleRemoveGroupMember`
+  specifically — a single-`(group_id, user_id)` handler — and no acceptance
+  criterion here asks for bulk removal. R-Co's live bodyless `DELETE
+  /groups/:id/members` route does something else entirely (an inline
+  bulk-remove-ALL-members loop, `main.zig:1400-1430`, that silently swallows
+  per-member errors via `catch {}`) — that is a materially worse operation to
+  port as-is: a single caller error or race deletes every membership row in
+  the group with no per-row feedback, which is the opposite of the
+  care this design otherwise takes (idempotent, scoped, explicit-error-tuple
+  operations throughout `identity.ex`). Porting it "additionally, at the
+  bodyless path" as the design's own OQ-1 floats would mean shipping a new
+  route this requirement's ACs never asked for, whose only behavioral
+  precedent is dead code's error-swallowing loop — that is scope creep in the
+  wrong direction, not a gap. Read `lib/letflow/routers/identity.ex`'s shipped
+  `@moduledoc` (the "Group member removal" section, lines ~54-74) directly:
+  it states plainly that this is a **new route shape** R-Co's own table never
+  binds to that handler, not merely a pagination-shape choice — an honest
+  finding, matching AC6. Verdict: ship single-member removal only; bulk-remove
+  stays unported and unrequested.
+- **OQ-3 (§3.5/§10) — PASS, uniform `:GroupsManage` policy is correct; no code
+  change requested.** `handleListGroupMembers`'s `PLATFORM_ADMIN`-exclusive
+  gate (`identity.zig:533`) is itself dead code in R-Co — `grep -n
+  "handleListGroupMembers(" src/main.zig` (already run at Step 1b) has zero
+  route-table hits, so this gate carries no live operational precedent to
+  preserve; it was never actually enforced against real traffic in R-Co
+  either. Every other route in this file (created by REQ-073 and this
+  requirement alike) resolves to `:GroupsManage` via one shared wildcard
+  authorization clause — introducing a single handler-local role-literal
+  exception here, for a listing operation with no acceptance criterion
+  requesting extra restriction, would itself be the kind of undocumented
+  divergence `docs/migration/decisions/` is supposed to gate, not a fidelity
+  win. Judgment: correct as shipped. Flagged forward, not a blocker — if a
+  later stage's product requirements call for narrower listing access, that
+  should be a new, explicit decision (and likely its own
+  `docs/migration/decisions/000x-*.md` entry), not silently re-derived from
+  R-Co's unrouted code.
+- **Idiomatic Ecto, no crutch.** `delete_group/2`'s `not exists/1`-guarded
+  `Repo.delete_all/2` and `list_group_members/3`'s `join`+cursor query
+  (`identity.ex:435-449`, `:479-505`) are both plain `Ecto.Query` pipelines —
+  no raw SQL, no hand-rolled state machine standing in for a query. Confirmed
+  `delete_group/2`'s single `prefix:` option propagates to both the outer
+  query and the `not exists/1` subquery (re-derived independently of
+  SECURITY-REVIEWER's own confirmation of the same fact at Step 2c).
+- **AC6 moduledoc check.** Both flagged findings — §1's member-listing
+  duplication (`handleListGroupMembersArray` vs. `handleListGroupMembers`) and
+  §1b's member-removal routing gap — appear verbatim in the shipped
+  `@moduledoc`, not only in the design doc (read directly, lines ~31-74 of
+  `lib/letflow/routers/identity.ex`).
+- **Scope.** `git diff main...HEAD --stat` touches exactly the expected set:
+  two migrations, `identity/group.ex` (extended) and the new
+  `identity/group_member.ex`, `identity.ex`, the router, `tenant_provisioning.ex`
+  (manifest registration), the test file, the design doc, and bookkeeping. The
+  two pre-existing-regression fixes (`identity_migration.ex`'s narrowed
+  `copy_groups/2` select, and the migration renumbering to avoid a test-fixture
+  collision) are both proportionate, single-purpose fixes with inline
+  rationale, not scope creep riding along with this requirement.
+- **Decision-record consistency.** The new `group_members` migration is
+  tenant-scoped (`if prefix() do`, prefixed create/index calls) matching
+  `docs/migration/decisions/0003-ecto-schema-strategy.md` Dimension B and
+  `0006-identity-tables-schema-per-tenant.md`'s schema-per-tenant convention —
+  no contradiction.
+
+No rework requested. SECURITY-REVIEWER's ISS-0225 (orphaned `group_members`
+row on future hard user-deletion, MINOR) is out of this gate's scope — already
+filed, non-blocking, and not a type-safety gap this review would separately
+file.
+
 No rework requested.

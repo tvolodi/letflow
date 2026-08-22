@@ -33,11 +33,21 @@ defmodule Letflow.Identity do
   Each takes `opts :: [prefix: String.t()]`, matching this module's existing
   convention — `:prefix` is always derived by the caller from
   `Letflow.Api.Context.scoped_repo_opts/1`, never supplied by request data.
+
+  `create_group/2`, `add_group_member/3`, `list_groups/1`, `delete_group/2`,
+  `list_group_members/3`, and `remove_group_member/3` (below) are REQ-074's
+  additions — group-management and group-membership functions backing the
+  six new `Letflow.Routers.Identity` group routes. See
+  `lib/letflow/design/req074-identity-group-routes.md` §8 for the full
+  design. Same `opts :: [prefix: String.t()]` convention as REQ-073's
+  functions.
   """
 
   import Ecto.Query
 
   alias Letflow.Api.Pagination
+  alias Letflow.Identity.Group
+  alias Letflow.Identity.GroupMember
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
   alias Letflow.Oidc.IdentityContext
@@ -295,6 +305,324 @@ defmodule Letflow.Identity do
         |> User.status_changeset(%{status: status})
         |> Repo.update(prefix: prefix)
     end
+  end
+
+  @typedoc "Params accepted by `list_group_members/3` — see its own @doc."
+  @type list_group_members_params :: %{
+          optional(:cursor) => Pagination.Cursor.t() | nil,
+          optional(:page_size) => pos_integer()
+        }
+
+  @doc """
+  Inserts a new group. Ports `identity_service.createGroup`, design §8 gap 1
+  — thin, changeset (`Group.create_changeset/2`) + `Repo.insert/2`.
+
+  `attrs` is a caller-validated map (`Letflow.Api.Validation.validate/2`'s
+  output) with keys `"name"`/optionally `"display_name"`/`"description"`.
+  `display_name` defaults to `name`, and an empty `description` is
+  normalized to `nil`, both inside `Group.create_changeset/2` itself (design
+  §3.1) — this function passes `attrs` through unchanged.
+
+  Returns `{:error, :duplicate_group_name}` on a `name` unique-constraint
+  violation.
+  """
+  @spec create_group(attrs :: map(), opts :: opts()) ::
+          {:ok, Group.t()} | {:error, :duplicate_group_name} | {:error, Ecto.Changeset.t()}
+  def create_group(attrs, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+    changeset = Group.create_changeset(%Group{}, attrs)
+
+    case Repo.insert(changeset, prefix: prefix) do
+      {:ok, group} ->
+        {:ok, group}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        if group_name_unique_conflict?(changeset) do
+          {:error, :duplicate_group_name}
+        else
+          {:error, changeset}
+        end
+    end
+  end
+
+  @doc """
+  Adds a user to a group, idempotently. Ports `identity_service.addGroupMember`,
+  design §8 gap 2.
+
+  Looks up the group (→ `:group_not_found`) then the user (→
+  `:user_not_found`), both scoped to `opts[:prefix]` — this existence check is
+  the exact mechanism the cross-tenant-membership test (design §4) depends
+  on: a `user_id` belonging to a different tenant simply does not exist as a
+  row under this tenant's own schema, so it 404s the same way a genuinely
+  nonexistent user id does, with no membership row ever inserted.
+
+  Select-first, insert-if-absent — the same "check, then conditionally
+  insert" shape `upsert_by_external_identity/4` (this module, above) already
+  uses. `provision_oidc_user/4`'s sibling `insert_or_fetch/4` instead
+  inserts first and re-selects by its own freshly-generated surrogate id to
+  tell "genuinely inserted" from "suppressed by ON CONFLICT" apart — that
+  trick depends on the id being unique to *this* call, which doesn't hold
+  here: `group_members` has no surrogate id (OQ-7), so a post-insert
+  re-select by `(group_id, user_id)` would find a row regardless of whether
+  *this* call or an earlier one wrote it, and couldn't distinguish
+  created-vs-not at all. Checking existence *before* attempting the insert
+  sidesteps that — the only remaining ambiguity is a genuine concurrent
+  race between the existence check and the insert, handled by re-selecting
+  once more after an `on_conflict: :nothing` insert that could have been
+  suppressed by that race.
+
+  Returns `{:ok, %{member: GroupMember.t(), created: created?}}` —
+  `created?` is `false` when the membership already existed.
+  """
+  @spec add_group_member(group_id :: Ecto.UUID.t(), user_id :: Ecto.UUID.t(), opts :: opts()) ::
+          {:ok, %{member: GroupMember.t(), created: boolean()}}
+          | {:error, :group_not_found}
+          | {:error, :user_not_found}
+  def add_group_member(group_id, user_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    case Repo.get(Group, group_id, prefix: prefix) do
+      nil ->
+        {:error, :group_not_found}
+
+      %Group{} ->
+        case Repo.get(User, user_id, prefix: prefix) do
+          nil -> {:error, :user_not_found}
+          %User{} -> insert_or_fetch_group_member(group_id, user_id, prefix)
+        end
+    end
+  end
+
+  @doc """
+  Lists all groups, unpaginated (design §8 gap 3 — R-Co's own `handleListGroups`
+  is a flat, unpaginated list; no acceptance criterion for this requirement
+  calls for cursor pagination on this endpoint, unlike `list_group_members/3`).
+
+  Ordered by `name` ascending (OQ-5 — this design's own reasonable default,
+  not confirmed against `registry.zig`'s own `listGroups` ordering).
+
+  Always returns `{:ok, _}`.
+  """
+  @spec list_groups(opts :: opts()) :: {:ok, %{groups: [Group.t()], total: non_neg_integer()}}
+  def list_groups(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    query = from(g in Group, order_by: [asc: g.name])
+
+    groups = Repo.all(query, prefix: prefix)
+    total = Repo.aggregate(Group, :count, prefix: prefix)
+
+    {:ok, %{groups: groups, total: total}}
+  end
+
+  @doc """
+  Deletes a group, refusing (rather than cascading) if it still has members —
+  design §8 gap 4/§5. Mirrors R-Co's `deleteGroupIfEmpty`'s own guarded
+  `DELETE ... WHERE NOT EXISTS (...)`: a group with ≥1 member and a
+  genuinely nonexistent group both return `{:error,
+  :not_found_or_has_members}` — one unified error atom, deliberately, so a
+  caller cannot branch on a distinction R-Co's own handler never exposes
+  either (§5).
+
+  Uses `Ecto.Query`'s `not exists/1` (OQ-6, ELIXIR-DEV's choice over raw
+  SQL) — empirically verified that a single `prefix:` option passed to
+  `Repo.delete_all/2` propagates uniformly to both the outer query and the
+  `not exists/1` subquery (no separate per-source prefix needed), so this
+  stays inside `Ecto.Query` without a raw-SQL escape hatch.
+  """
+  @spec delete_group(id :: Ecto.UUID.t() | String.t(), opts :: opts()) ::
+          :ok | {:error, :not_found_or_has_members}
+  def delete_group(id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    query =
+      from(g in Group,
+        as: :group,
+        where: g.id == ^id,
+        where: not exists(from(m in GroupMember, where: parent_as(:group).id == m.group_id))
+      )
+
+    case Repo.delete_all(query, prefix: prefix) do
+      {1, _} -> :ok
+      {0, _} -> {:error, :not_found_or_has_members}
+    end
+  end
+
+  @doc """
+  Lists a group's members, cursor-paginated (design §8 gap 5/§1/§3.5 — the
+  one member-listing endpoint this requirement ships, using the
+  cursor-paginated mechanism `handleListGroupMembers` built but R-Co never
+  routed, rather than the bare-array shape `handleListGroupMembersArray`
+  actually serves).
+
+  Looks up the group first (→ `:group_not_found`; this single scoped lookup
+  is what collapses R-Co's separate `GroupNotFound`/`CrossTenantAccessDenied`
+  cases into one, per §3.5), then joins `GroupMember` to `User` on
+  `user_id`, both filtered by `opts[:prefix]`. Ordered by
+  `GroupMember.inserted_at` ascending, then `user_id` ascending (tiebreaker,
+  OQ-4 — same OQ-1-shaped choice as `list_users/2`).
+
+  Cursor prefix is `"G:"` (distinct from `list_users/2`'s `"U:"`), reusing
+  R-Co's own unrouted `handleListGroupMembers`'s cursor-prefix literal
+  (`identity_service.zig:1107`). Same mint-time-vs-row-time care as
+  `list_users/2`'s `build_next_cursor/1` — the cursor's expiry-checked slot
+  carries the mint time, not `inserted_at`, so an old membership row's
+  cursor never appears pre-expired the instant it's minted.
+  """
+  @spec list_group_members(
+          group_id :: Ecto.UUID.t(),
+          params :: list_group_members_params(),
+          opts :: opts()
+        ) ::
+          {:ok, %{members: [User.t()], next_cursor: String.t() | nil}}
+          | {:error, :group_not_found}
+  def list_group_members(group_id, params, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    case Repo.get(Group, group_id, prefix: prefix) do
+      nil ->
+        {:error, :group_not_found}
+
+      %Group{} ->
+        page_size = Map.fetch!(params, :page_size)
+
+        query =
+          from(m in GroupMember,
+            join: u in User,
+            on: u.id == m.user_id,
+            where: m.group_id == ^group_id,
+            select: {u, m.inserted_at}
+          )
+          |> filter_group_members_by_cursor(Map.get(params, :cursor))
+          |> order_by([m, u], asc: m.inserted_at, asc: m.user_id)
+          |> limit(^(page_size + 1))
+
+        rows = Repo.all(query, prefix: prefix)
+        {page, next_cursor} = split_group_members_page(rows, page_size)
+
+        {:ok, %{members: page, next_cursor: next_cursor}}
+    end
+  end
+
+  @doc """
+  Removes a user from a group, idempotently (design §8 gap 6/§1b/§3.6 —
+  single-member removal at `DELETE /groups/:id/members/:user_id`, ported
+  from `handleRemoveGroupMember`'s never-routed signature; see OQ-1 for the
+  open question about whether this is the right port target versus R-Co's
+  live bulk-remove-all route, flagged for REVIEWER, not resolved here).
+
+  Looks up the group first (→ `:group_not_found`), then deletes the matching
+  membership row if one exists — `Repo.delete_all/2` on zero matching rows
+  is still `:ok`, matching R-Co's own idempotent `removeGroupMember` (no
+  "member didn't exist" error variant).
+  """
+  @spec remove_group_member(
+          group_id :: Ecto.UUID.t(),
+          user_id :: Ecto.UUID.t(),
+          opts :: opts()
+        ) :: :ok | {:error, :group_not_found}
+  def remove_group_member(group_id, user_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    case Repo.get(Group, group_id, prefix: prefix) do
+      nil ->
+        {:error, :group_not_found}
+
+      %Group{} ->
+        from(m in GroupMember, where: m.group_id == ^group_id and m.user_id == ^user_id)
+        |> Repo.delete_all(prefix: prefix)
+
+        :ok
+    end
+  end
+
+  # ── create_group/2 / add_group_member/3 private helpers ─────────────────
+
+  @spec group_name_unique_conflict?(changeset :: Ecto.Changeset.t()) :: boolean()
+  defp group_name_unique_conflict?(%Ecto.Changeset{errors: errors}) do
+    Enum.any?(errors, fn
+      {:name, {_message, keyword}} -> Keyword.get(keyword, :constraint) == :unique
+      _other -> false
+    end)
+  end
+
+  defp insert_or_fetch_group_member(group_id, user_id, prefix) do
+    case get_group_member(group_id, user_id, prefix) do
+      %GroupMember{} = existing ->
+        {:ok, %{member: existing, created: false}}
+
+      nil ->
+        changeset =
+          %GroupMember{}
+          |> Ecto.Changeset.change(%{group_id: group_id, user_id: user_id})
+
+        {:ok, inserted} =
+          Repo.insert(changeset,
+            on_conflict: :nothing,
+            conflict_target: [:group_id, :user_id],
+            prefix: prefix
+          )
+
+        # Race window between the existence check above and this insert: if
+        # a concurrent caller won it, our own insert was suppressed by
+        # on_conflict: :nothing and `inserted` doesn't reflect a real row --
+        # re-select to return the authoritative one, still `created: true`
+        # from THIS caller's perspective (it observed no prior membership).
+        case get_group_member(group_id, user_id, prefix) do
+          %GroupMember{} = member -> {:ok, %{member: member, created: true}}
+          nil -> {:ok, %{member: inserted, created: true}}
+        end
+    end
+  end
+
+  defp get_group_member(group_id, user_id, prefix) do
+    Repo.get_by(GroupMember, [group_id: group_id, user_id: user_id], prefix: prefix)
+  end
+
+  # ── list_group_members/3 private helpers ────────────────────────────────
+
+  @group_members_cursor_prefix "G:"
+
+  defp filter_group_members_by_cursor(query, nil), do: query
+
+  defp filter_group_members_by_cursor(query, %Pagination.Cursor{} = cursor) do
+    {inserted_at_us, user_id} = decode_group_members_cursor(cursor)
+    ts = naive_datetime_from_us(inserted_at_us)
+
+    from([m, u] in query,
+      where: m.inserted_at > ^ts or (m.inserted_at == ^ts and m.user_id > ^user_id)
+    )
+  end
+
+  # Same deliberate field-slot repurposing as decode_users_cursor/1 -- see
+  # that function's own comment for the full rationale (mint time in the
+  # expiry-checked first slot, real sort key/tiebreaker in the other two).
+  defp decode_group_members_cursor(%Pagination.Cursor{inner: inner}) do
+    prefix_len = byte_size(@group_members_cursor_prefix)
+    rest = binary_part(inner, prefix_len, byte_size(inner) - prefix_len)
+    [_mint_time_us_str, inserted_at_us_str, user_id_str] = String.split(rest, ":", parts: 3)
+    {String.to_integer(inserted_at_us_str), user_id_str}
+  end
+
+  defp split_group_members_page(rows, page_size) when length(rows) > page_size do
+    {page, [_extra_row]} = Enum.split(rows, page_size)
+    {last_user, last_inserted_at} = List.last(page)
+
+    {Enum.map(page, fn {u, _ts} -> u end),
+     build_group_members_next_cursor(last_user, last_inserted_at)}
+  end
+
+  defp split_group_members_page(rows, _page_size) do
+    {Enum.map(rows, fn {u, _ts} -> u end), nil}
+  end
+
+  defp build_group_members_next_cursor(%User{id: user_id}, inserted_at) do
+    mint_time_us = System.system_time(:microsecond)
+    inserted_at_us = us_from_naive_datetime(inserted_at)
+
+    @group_members_cursor_prefix
+    |> Pagination.build_raw_cursor_timestamp_key(mint_time_us, inserted_at_us, user_id)
+    |> Pagination.encode_cursor()
   end
 
   # ── list_users/2 private helpers ────────────────────────────────────────

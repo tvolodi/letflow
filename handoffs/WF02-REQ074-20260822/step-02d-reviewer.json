@@ -1,0 +1,63 @@
+{
+  "handoff_id": "b7e4c1a2-6f83-4d90-9a1e-3c5f8d2b7e41",
+  "run_id": "WF02-REQ074-20260822",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ074-20260822/step-02d-reviewer.json",
+  "created_at": "2026-08-22T00:52:50Z",
+  "started_at": "2026-08-22T00:52:50Z",
+  "completed_at": "2026-08-22T01:10:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-074"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ074-20260822/step-01-code-designer.json",
+      "handoffs/WF02-REQ074-20260822/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ074-20260822/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ074-20260822/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/group.ex",
+      "lib/letflow/identity/group_member.ex",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/design/req074-identity-group-routes.md",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md"
+    ],
+    "branch_name": "feature/WF02-REQ074-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 2d -- idiom/scope hard gate on ELIXIR-DEV's Step 2a implementation of REQ-074 (already SECURITY-REVIEWER PASS at Step 2c, commit 22f97c1, ISS-0225 filed non-blocking). Primary, load-bearing job: sign off on OQ-1 and OQ-3, the two open questions the design doc explicitly deferred to REVIEWER rather than to CODE-DESIGN-VALIDATOR or SECURITY-REVIEWER. Standard checks also required: idiomatic Ecto usage in the new identity.ex functions and router, AC6 moduledoc completeness, scope creep via git diff --stat, and decision-record consistency with 0003/0006.",
+    "acceptance_criteria": [
+      "OQ-1 (design doc section 10 / router moduledoc 'Group member removal'): explicit verdict recorded on whether single-member removal at the new DELETE /groups/:id/members/:user_id route shape is the right port target, given R-Co's route table never binds any route to handleRemoveGroupMember and instead serves a different bulk-remove-all operation at the bodyless path",
+      "OQ-3 (design doc section 10 / router moduledoc 'Group member listing'): explicit verdict recorded on whether using the shared :GroupsManage policy instead of R-Co's PLATFORM_ADMIN-exclusive gate for member listing is correct",
+      "Both verdicts recorded with reasoning, either in this handoff or in docs/migration/stage-4-api-surface.md's REVIEWER sign-off section",
+      "Confirm delete_group/2 and list_group_members/3 are idiomatic Ecto.Query usage, not a crutch",
+      "Confirm both flagged findings (member-listing duplication, member-removal routing gap) appear in the shipped @moduledoc, not only the design doc",
+      "Confirm git diff main...HEAD --stat shows only the expected file set and the two pre-existing-regression fixes are proportionate",
+      "Confirm no contradiction with decisions/0003 and 0006"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD (commit 6aaa828) for feature/WF02-REQ074-20260822 directly, plus lib/letflow/identity.ex, lib/letflow/routers/identity.ex, the design doc's OQ-1/OQ-3/section-10 text, and decisions/0003 and 0006.\n\nOQ-1 -- PASS, single-member removal at DELETE /groups/:id/members/:user_id is the right port target, no code change requested. The requirement's own text names handleRemoveGroupMember specifically (a single-(group_id, user_id) handler), and no acceptance criterion asks for bulk removal. R-Co's live bodyless DELETE /groups/:id/members route runs a materially different, higher-blast-radius operation instead (inline bulk-remove-ALL-members, main.zig:1400-1430, silently swallowing per-member errors via catch {}) -- porting that as the 'faithful' choice would mean shipping a route whose only real-world precedent is a silent-failure loop, which contradicts the explicit-error-tuple, idempotent-by-construction discipline every other function in this diff follows (add_group_member/3, remove_group_member/3 itself). Read lib/letflow/routers/identity.ex's shipped @moduledoc directly (the 'Group member removal' section, lines 54-74): it states plainly this is a NEW route shape R-Co's own table never binds to that handler -- not merely a pagination-shape difference -- satisfying AC6's honesty requirement. Verdict: ship single-member removal only; bulk-remove-all stays unported, correctly, since it is unrequested and its only precedent is dead code doing something the ACs don't ask for and this codebase's own idiom would not tolerate.\n\nOQ-3 -- PASS, uniform :GroupsManage policy is correct, no code change requested. handleListGroupMembers's PLATFORM_ADMIN-exclusive gate (identity.zig:533) is itself dead code in R-Co -- grep -n \"handleListGroupMembers(\" src/main.zig has zero route-table hits (confirmed at Step 1b, re-confirmed here), so it carries no live operational precedent to preserve. Every other route in this file resolves to :GroupsManage via one shared wildcard authorization clause; carving out a single handler-local role-literal exception here, with no acceptance criterion requesting extra restriction, would itself be an undocumented divergence of exactly the kind decisions/ records are meant to prevent -- not a fidelity improvement. Flagged forward, not blocking: if a later stage's product requirements call for narrower member-listing access, that deserves its own explicit decision record, not a silent re-derivation from R-Co's unrouted code.\n\nStandard checks: delete_group/2 (identity.ex:435-449) and list_group_members/3 (identity.ex:479-505) are both plain Ecto.Query pipelines (not exists/1-guarded delete_all, join+cursor query) -- no raw SQL, no hand-rolled state machine, matching this codebase's established idiom. Independently re-derived (not trusted from SECURITY-REVIEWER's Step 2c pass) that delete_group/2's single prefix: option propagates to both the outer query and the not-exists subquery. AC6: both flagged findings (member-listing duplication at lines 31-52, member-removal routing gap at lines 54-74) appear verbatim in the shipped @moduledoc, confirmed by direct read, not only in the design doc. Scope: git diff main...HEAD --stat touches exactly the expected set -- two migrations, group.ex/group_member.ex, identity.ex, the router, tenant_provisioning.ex's manifest registration, the test file, the design doc, and bookkeeping. The two pre-existing-regression fixes (identity_migration.ex's copy_groups/2 select narrowed to the legacy table's real 4-column shape; migration renumbering to avoid a hardcoded test-fixture collision) are both proportionate, single-purpose, independently-rationaled fixes, not scope creep riding along. Decision-record consistency: the new group_members migration is tenant-scoped (if prefix() do, prefixed create/index) matching decisions/0003 Dimension B and 0006's schema-per-tenant convention -- no contradiction found.\n\nNo GenServer-as-state-machine crutch and no supervision-isolation concern in this diff -- these are stateless Repo-backed context functions, not process/instance code, so REVIEWER's OTP-idiom checks 1/2 (gen_statem usage, InstanceSupervisor isolation) are not applicable to this diff's shape; recorded here as a deliberate N/A rather than a silent skip. Both verdicts additionally recorded, with fuller reasoning, in docs/migration/stage-4-api-surface.md's REVIEWER sign-off section under a new 2026-08-22 (REQ-074) entry, per the design doc's own instruction that this gate's decision may warrant broader visibility there.\n\nNo type-safety gap worth filing under docs/issues/ from this diff -- group_members' shape (group_id/user_id FK pair, no status/lifecycle field) has no invalid-state class a struct/Ecto.Enum change would newly make unrepresentable; the design's own idempotent-insert/idempotent-delete choices already collapse the only ambiguous states (member exists/doesn't) into one handled path each.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ074-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ074-20260822",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3) -- REVIEWER gate PASS, no rework."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,41 @@
+{
+  "handoff_id": "b2e6f4a1-9c3d-4f7e-8a1b-5d0e6c2f9a37",
+  "run_id": "WF02-REQ074-20260822",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ074-20260822/step-05-release-validator.json",
+  "created_at": "2026-08-22T06:15:00Z",
+  "started_at": "2026-08-22T06:07:00Z",
+  "completed_at": "2026-08-22T06:15:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "max_rework": 3,
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-074"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ074-20260822/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/identity.ex",
+      "test/letflow/routers/identity_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ074-20260822"
+  },
+  "task": {
+    "description": "Independently re-verify all 6 REQ-074 acceptance criteria against the actual shipped code and tests (not prior reports), and independently re-run the full test suite."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read REQ-074 verbatim from docs/requirements.yaml (lines 4157-4189). Verified all 6 ACs independently:\n\nAC1 (e2e for all 6 routes): confirmed all 6 routes present in lib/letflow/routers/identity.ex (POST/GET/DELETE /groups, POST/GET/DELETE /groups/:id/members) and matching tests exist under 'REQ-074 AC1' describe block. Ran test/letflow/routers/identity_test.exs standalone: 47/47 passed.\n\nAC2 (cross-tenant-membership, INV-1/INV-5, load-bearing): read add_group_member/3 (lib/letflow/identity.ex:381-394) myself -- Repo.get(Group, group_id, prefix: prefix) then Repo.get(User, user_id, prefix: prefix), both scoped to the caller's own tenant prefix, so a tenant-B-only user_id simply does not exist as a row in tenant A's schema and 404s identically to a genuinely nonexistent id. Read the AC2 test (lines 760-784): seeds two real provisioned tenants, asserts resp_cross_tenant.status == resp_never_existed.status == 404, resp_body equality, AND a direct Repo.aggregate(GroupMember, :count, prefix: tenant_a.schema_name) == 0 DB-level check -- not just trusting the HTTP status. Given Step 2c's SECURITY-REVIEWER already structurally traced this exact prefix-propagation (including the guarded-delete subquery) and Step 3b judged a repeat mutation test unnecessary because it reuses REQ-072's already-mutation-tested scoping primitive, and my own independent code read confirms the same mechanism, I judge this sufficient without an additional mutation run -- the scoping primitive itself (Repo.get with prefix:) is identical to what REQ-072 already mutation-tested, and this requirement adds no new scoping logic, only a second call site.\n\nAC3 (tenant isolation on group-listing and group-member-listing): read both tests (lines 828-861) -- both seed two real TenantFixture.provisioned_tenant! tenants with identically-named/shaped data and assert only the caller's own tenant's rows return.\n\nAC4 (cursor pagination, >=2 pages): read the test (lines 867-901) -- seeds 2 distinct members, page_size=1, confirms page 1 returns 1 item with a non-nil next_cursor, page 2 (using that cursor) returns the OTHER member with next_cursor nil, and confirms the two returned ids are exactly the two seeded user ids. Genuine two-page progression, not a fabricated single-page repeat.\n\nAC5 (delete-with-members): read delete_group/2 (lib/letflow/identity.ex:435-449) myself -- Ecto not exists/1 subquery guarding the DELETE, matching R-Co's deleteGroupIfEmpty exactly. Independently re-verified the R-Co claim myself (third independent check this run, after Step 1b's design validation): grepped src/identity/registry.zig's deleteGroupIfEmpty directly in the R-Co source tree -- confirmed it is a guarded 'DELETE FROM groups g WHERE g.id = $1 AND NOT EXISTS (SELECT 1 FROM group_members gm WHERE gm.group_id = g.id ...)', i.e. refuse-not-cascade, matching the shipped code and moduledoc. Read both tests (lines 790-822): has-members case asserts 404 identical to a nonexistent group plus the group row surviving; empty case asserts 204 plus the row being gone.\n\nAC6 (moduledoc records both findings): read the actual shipped @moduledoc in lib/letflow/routers/identity.ex myself (lines 2-90ish). Confirmed it states both findings explicitly: handleListGroupMembers vs handleListGroupMembersArray (only the array variant is routed in R-Co's main.zig; this port ships the cursor-paginated mechanism instead, needed for AC4), and handleRemoveGroupMember being unrouted in R-Co (R-Co's live DELETE /groups/:id/members is actually an inline bulk-remove-all, not single-member removal). Independently re-verified both routing claims by grepping R-Co's own src/main.zig myself: 'handleListGroupMembers(' and 'handleRemoveGroupMember' both return zero route-table hits, confirming the moduledoc's claims rather than trusting CODE-DESIGN-VALIDATOR's prior verification alone.\n\nFull suite re-run (independent, not TEST-RUNNER's report): ran `bash scripts/test_parallel.sh` myself as a blocking foreground call (never backgrounded, never Monitor'd) with TEST_PARALLEL_N auto-derived via nproc=16. Result: 16/16 partitions exit 0, combined 1501 tests + 5 properties, 0 failures (1506/1506 passed) -- matches TEST-RUNNER's step-04 report exactly, independently reproduced. Migrations: both new migrations (20260822000101 alter_groups, 20260822000102 create_group_members_tenant_scoped) applied cleanly as part of every partition's per-tenant schema provisioning cycle (dozens of tenant provisions across the full run, each replaying all migrations) with zero migration-related errors in any partition.\n\nVerdict: all 6 ACs independently confirmed met against actual shipped code, not history narration. PASS.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ074-20260822/step-05-release-validator.json"
+    ],
+    "issues": [],
+    "next_action": "Route to DOC-UPDATER to flip REQ-074 status to done and append the status-history event."
+  }
+}

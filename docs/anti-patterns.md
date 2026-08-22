@@ -1220,3 +1220,49 @@ compliance with it — word the invariant's prose description so it doesn't rein
 the flagged substring (paraphrase the call shape, don't quote it), and verify the grep
 against the final wording before treating the AC as satisfied, rather than assuming
 "documented" and "not present" are independent facts about the same file.
+
+## A migration version can collide with a test fixture's hardcoded version constant, not just another migration file
+
+**Found:** 2026-08-22, ELIXIR-DEV, REQ-074 (`WF02-REQ074-20260822`). Two new tenant-scoped
+migrations were added with versions `20_260_822_000_001`/`20_260_822_000_002`, registered
+in `Letflow.TenantProvisioning.tenant_scoped_migrations/0` — a plausible-looking pair of
+timestamps derived from the current date, same as every prior migration in this
+codebase. `mix test` initially reported 1497/1506 passing; `test/letflow/api/context_test.exs`'s
+own cross-tenant-404 test failed with `** (Postgrex.Error) ERROR 42P01 (undefined_table)
+relation "tenant_....req072_probe" does not exist`.
+
+Root cause: `test/letflow/api/context_test.exs` hardcodes
+`@probe_migration_version 20_260_822_000_001` and replays it via an explicit
+`TenantProvisioning.replay_migrations(tenant_id, [{@probe_migration_version,
+ProbeMigration}])` call *after* `TenantFixture.provisioned_tenant!/1` has already run the
+**real** manifest (which, with the new entry, now also records version
+`20_260_822_000_001` — for a *different* module, `AlterGroupsAddDisplayNameDescription`).
+`Ecto.Migrator` sees that version already present in `schema_migrations` for that tenant
+schema and skips it as already-applied, so `ProbeMigration`'s `create table(:req072_probe,
+...)` never runs — the probe table silently never gets created, and the test's own
+`Repo.insert!` against it 42P01s. This is the exact "two independently-chosen migration
+version numbers collide" class already documented above ("Two independently-merged Ecto
+migrations picking the same version-number prefix"), but the *second* colliding side was
+a hardcoded version constant inside a **test fixture module**, not another
+`priv/repo/migrations/*.exs` file — so
+`test/letflow/migration_filenames_test.exs`'s existing "no two migration files share a
+version prefix" guard cannot catch it at all, since only one real migration file was
+involved.
+
+**Why this is easy to miss:** `grep -rn "20_260_822"` across `priv/repo/migrations/` alone
+looks clean (only the new files' own version literals appear there), and `mix compile`
+gives no signal either — the failure only shows up as a downstream `mix test` failure in
+an entirely different, seemingly-unrelated test file, whose own diff was never touched by
+this work.
+
+**Correct alternative:** before picking a new tenant-scoped migration's version number,
+also grep test fixtures/support files for the same literal, not only
+`priv/repo/migrations/`: `grep -rn "20_260_822\|20260822" test/ lib/` (both the
+underscored-integer and bare-digit forms — Elixir integer literals are commonly written
+with `_` every three digits, and a hardcoded version constant in a test file may use
+either form). If a collision is found against a test fixture's own version constant
+(rather than another real migration), renumber the *new* migration to a value with no
+collision anywhere (e.g. push the trailing digits further, `..000101`/`..000102` instead
+of `..000001`/`..000002`) rather than touching the pre-existing test fixture's constant —
+the fixture's version is that test's own load-bearing detail, not something to
+renumber around a newcomer.

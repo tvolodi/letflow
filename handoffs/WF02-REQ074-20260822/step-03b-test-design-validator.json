@@ -1,0 +1,65 @@
+{
+  "handoff_id": "d3f8a6b1-9c72-4e5a-8b1d-6f4e2a9c1d70",
+  "run_id": "WF02-REQ074-20260822",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ074-20260822/step-03b-test-design-validator.json",
+  "created_at": "2026-08-22T00:57:56Z",
+  "started_at": "2026-08-22T00:57:56Z",
+  "completed_at": "2026-08-22T01:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-074"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ074-20260822/step-01-code-designer.json",
+      "handoffs/WF02-REQ074-20260822/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ074-20260822/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ074-20260822/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ074-20260822/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "test/letflow/routers/identity_test.exs",
+      "lib/letflow/design/req074-identity-group-routes.md",
+      "lib/letflow/identity.ex",
+      "lib/letflow/routers/identity.ex"
+    ],
+    "branch_name": "feature/WF02-REQ074-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 3b -- hard gate on test coverage for REQ-074's six group/group-membership routes. Ordering deviation noted: Step 3 (TEST-DESIGNER authoring) was merged into Step 2a -- the validated design doc (commit fb58ab4) fully specified test cases in sections 4/5/6/7, and ELIXIR-DEV wrote the actual test code in the same commit (4a0af45) as the implementation, rather than as a separate TEST-DESIGNER dispatch. This gate independently re-derives whether the 6 acceptance criteria are actually covered, regardless of which agent authored the tests.",
+    "acceptance_criteria": [
+      "AC1: each of the six ported handlers has an end-to-end test through the real router asserting status code and response shape",
+      "AC2/INV-1/INV-5: cross-tenant-membership fails with byte-identical 404 + zero membership rows via direct table query -- load-bearing",
+      "AC3: tenant-isolation on group-listing and group-member-listing, demonstrated by seeding both tenants",
+      "AC4: cursor pagination for group-member listing across >=2 pages",
+      "AC5: delete-with-members behavior matches R-Co's observed refusal (named in moduledoc, already confirmed by REVIEWER); test half confirmed here",
+      "AC6: moduledoc records the handleListGroupMembers/Array finding (doc-only, already confirmed by REVIEWER) -- confirm no silent test obligation was skipped"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read docs/requirements.yaml's REQ-074 entry verbatim, lib/letflow/design/req074-identity-group-routes.md (sections 4/5/6/7 in full), and test/letflow/routers/identity_test.exs directly (all 999 lines, both the pre-existing REQ-073 section and the new REQ-074 section starting line 531).\n\nOrdering deviation confirmed and flagged (non-blocking, same pattern as prior runs this session): Step 3 (TEST-DESIGNER) was folded into Step 2a -- ELIXIR-DEV wrote the 24 new REQ-074 tests in commit 4a0af45, following the design doc's own fully-specified test cases (sections 4/5/6/7 contain near-literal test bodies) rather than TEST-DESIGNER authoring them separately. Since the design doc itself specified the test cases in detail and was already validated at Step 1b, and since this gate independently re-derives coverage from the actual test file rather than trusting either agent's claim, the gate is unaffected by who typed the code.\n\nAC-by-AC mapping, verified by direct read of test/letflow/routers/identity_test.exs:531-998:\n- AC1: 'REQ-074 AC1: basic end-to-end coverage for all six group routes' describe block (lines 537-755) contains 11 tests covering POST /groups (create + display_name-default + empty-string-422), GET /groups (flat list), DELETE /groups/:id (empty group 204), POST /groups/:id/members (insert 201 + idempotent 200), GET /groups/:id/members (cursor page), DELETE /groups/:id/members/:user_id (remove 204 + idempotent 204 + 404-on-nonexistent-group) -- all six routes have a real, runnable, non-placeholder test asserting status code and full response-key-set shape. PASS.\n- AC2: lines 759-784, the load-bearing test. Read directly -- confirmed real: it dispatches POST /groups/:id/members with a tenant-B-only user id and a genuinely-nonexistent uuid, asserts identical 404 status and byte-identical resp_body, THEN asserts Repo.aggregate(GroupMember, :count, prefix: tenant_a.schema_name) == 0. This aggregate is not vacuously zero -- the test's own group_a fixture has zero members before the attempt and the assertion is placed AFTER the cross-tenant POST attempt specifically, so a bug that incorrectly inserted a row on the cross-tenant path would flip this assertion, not merely restate a pre-existing empty count. PASS.\n- AC3: lines 827-861, two describe-block tests -- group-listing isolation (identically-named tenant B group, asserts only 1 item returned) and group-member-listing isolation (both tenants seeded with a same-named group and same-username member, asserts only tenant A's user id comes back). Both seed both tenants as required. PASS.\n- AC4: lines 866-914. The pagination test (867-901) seeds exactly 2 members, requests page_size=1, asserts page 1 has 1 item with a non-nil next_cursor, then requests page 2 with that cursor, asserts page 2 has 1 distinct item (explicit != assertion between the two items' ids) and next_cursor is nil on the last page, plus a sorted-id-set equality check across both pages. This is genuinely two distinct pages with progression, not a single page dressed up -- PASS. A second test in this block covers the invalid-cursor 400 case (bonus coverage, not itself an AC).\n- AC5: lines 789-822, two distinct tests -- 'deleting a group with existing members' (seeds 1 member, asserts 404 status/body byte-identical to a genuinely-nonexistent-group 404, AND asserts the group row still exists via Repo.get!) and 'deleting an empty group succeeds' (asserts 204 and Repo.get returns nil). Both cases are real and clearly distinct (member-seeded vs. empty), matching the design doc's R-Co-refusal finding. PASS.\n- AC6: doc-only, already confirmed by REVIEWER (step-02d handoff) reading the shipped @moduledoc directly. No test obligation is implied beyond what's already covered by AC1's end-to-end tests exercising the one ported member-listing route; nothing silently skipped.\n\nNo @tag :skip anywhere in the file (grep confirmed). No 'TODO: implement test' text found. Fixtures: every describe block/test provisions its own tenant via TenantFixture.provisioned_tenant!/1 with a unique slug_prefix (grep of slug_prefix values shows no reuse across tests), and IDs are Ecto.UUID.generate()-derived -- no shared hardcoded state, no cross-test pollution, no test depends on another test's side effects (each test is fully self-provisioning). No hardcoded secrets or connection strings (only match is the literal sentinel string \"__NO_PASSWORD_SET__\" used as a non-secret placeholder attribute default, same as REQ-073's own fixture, and its own negative assertion refute Map.has_key?(body, \"password_hash\") -- not a real credential).\n\nRe-ran tests myself (mix test, not trusting ELIXIR-DEV's report): `mix test test/letflow/routers/identity_test.exs --seed 0` -> Result: 47 passed, 0 failures -- CONFIRMS the handoff's claimed total. However the handoff's claimed breakdown ('28 new REQ-074 tests: AC1 x10, AC2 x1, AC5 x2, AC3 x2, AC4 x2, validation/error-coverage x6') is arithmetically wrong even on its own numbers (10+1+2+2+2+6=23, not 28) and does not match my own count: grep -c of literal 'test \"' lines in the REQ-074 section (line 531 onward) gives 24, and the AC1 block alone has 11 tests, not 10 (I enumerated all 11 above). Total file count (47) still checks out because the pre-existing REQ-073 section's 'for {roles_label, roles} <- [...]' template (3 literal test lines run twice each) contributes 20 literal lines -> 23 actual runs, and 23 + 24 = 47. So the total is correct but the claimed per-bucket 'new' breakdown is a real miscount -- flagged as MINOR below, not a gate failure, since actual coverage (verified directly, not from the count) satisfies every AC.\n\nRegression check: `mix test test/letflow/identity_test.exs test/letflow/identity_migration_test.exs test/letflow/support/tenant_fixture_test.exs test/letflow/identity/` -> Result: 70 passed, 0 failures. No regression in identity-adjacent files.\n\nMutation-test judgment on AC2 (point 5 of my procedure): judged existing coverage sufficient, no mutation run performed. add_group_member/3 (identity.ex:381-394) resolves user_id existence via Repo.get(User, user_id, prefix: prefix) -- prefix is Keyword.fetch!(opts, :prefix), the exact same opts[:prefix]-scoping primitive as REQ-072's scoped_repo_opts/1 (lib/letflow/api/context.ex), which was already mutation-tested in its own WF02-REQ072-20260822 run (confirmed via handoffs/WF02-REQ072-20260822/step-05-release-validator.json and step-06-doc-updater.json referencing that exercise) and again exercised by REQ-073's own analogous cross-tenant test. This is not a new scoping mechanism introduced by this diff -- it is direct reuse of an already-mutation-verified primitive applied to a new column (user_id instead of whatever REQ-072/073 scoped), so repeating the mutation exercise here would be re-verifying the same mechanism a third time with no new code path at risk. Sufficient without repeating.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "ELIXIR-DEV's step-02a handoff claims '28 new REQ-074 tests: AC1 x10, AC2 x1, AC5 x2, AC3 x2, AC4 x2, validation/error-coverage x6' -- this arithmetic is internally inconsistent (sums to 23, not 28) and does not match the actual file, which has 24 new REQ-074 test definitions (AC1 block alone has 11, not 10). The suite-wide total of 47 is independently confirmed correct by my own re-run, and every acceptance criterion has genuine, non-placeholder coverage verified by direct read -- so this does not block the gate, but the per-bucket count in that handoff is wrong and should not be copied forward as fact by a later agent."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ074-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ074-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4) -- TEST-DESIGN-VALIDATOR gate PASS, no rework."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,48 @@
+id: ISS-0225
+title: >
+  group_members on_delete: :nothing has no application-layer guard for a
+  future user-deletion path -- orphaned membership rows risk
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF02-REQ074-20260822
+discovered_at: "2026-08-22T00:47:00Z"
+severity: MINOR
+
+description: >
+  priv/repo/migrations/20260822000102_create_group_members_tenant_scoped.exs
+  uses `on_delete: :nothing` on both `group_members` FKs (`group_id`,
+  `user_id`). This is a deliberate, documented tradeoff: `delete_group/2`
+  refuses deletion of a non-empty group at the application layer (a `NOT
+  EXISTS` guard), so the `group_id` FK's `on_delete` clause is never really
+  exercised against a non-empty group.
+
+  However, no equivalent application-layer guard exists yet for deleting a
+  USER who still has group memberships -- if a future user-deletion path is
+  added without an equivalent not-exists guard (or without accompanying
+  application-level cleanup of that user's `group_members` rows),
+  `on_delete: :nothing` would leave orphaned `group_members` rows referencing
+  a deleted `user_id`. `list_group_members/3`'s join would then silently
+  exclude such rows (INNER JOIN to a nonexistent user just drops the row)
+  rather than error -- not a cross-tenant leak, but a data-integrity gap worth
+  flagging now before it is forgotten.
+
+  Not a blocker for REQ-074 itself: this requirement does not add or change
+  any user-deletion path, and the current design's only mutation of
+  `group_members` membership is add/remove-by-group, both of which correctly
+  clean up their own rows. Recommend tracking this for whichever future
+  requirement adds hard user deletion.
+
+affected_files:
+  - priv/repo/migrations/20260822000102_create_group_members_tenant_scoped.exs
+  - lib/letflow/identity.ex
+
+related:
+  - REQ-074  # the run whose security gate raised it
+
+queue_task_id: 225
+github_issue: 461
+github_issue_note: >
+  register_task created both the queue task (225) and its mirrored GitHub
+  issue (461) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  deliberately not called separately.
+
+status: open

@@ -123,10 +123,28 @@ defmodule Letflow.IdentityMigration do
   # place in the codebase that legitimately still queries a `tenant_id`
   # column post-D2: it targets the about-to-be-dropped legacy public tables,
   # not any of the ten D2 tables.
+  # `select: struct(g, [...])` below is deliberately restricted to the four
+  # columns the legacy `public.groups` table actually has -- REQ-074 added
+  # `display_name`/`description` to the `Letflow.Identity.Group` schema
+  # module (for the NEW per-tenant-schema `groups` table only, via its own
+  # tenant-scoped migration), and a bare `from(g in Group, ...)` with no
+  # `select:` selects every column the schema module declares, which would
+  # otherwise query `display_name`/`description` against this legacy source
+  # table that was never migrated to carry them (it predates D1/D2 and is
+  # frozen -- this whole module only ever reads it, never writes it new
+  # columns). Restricting the select here keeps this one-time cutover copy
+  # correct against the legacy table's real, frozen shape without touching
+  # the destination schema's newer column set at all (those columns simply
+  # come across as `nil` for migrated legacy rows, which is fine -- they are
+  # nullable and no legacy row ever had a display_name/description value to
+  # preserve in the first place).
   defp copy_groups(tenant_id, schema_name) do
     rows =
       Repo.all(
-        from(g in Group, where: fragment("? = ?", g.tenant_id, type(^tenant_id, Ecto.UUID)))
+        from(g in Group,
+          where: fragment("? = ?", g.tenant_id, type(^tenant_id, Ecto.UUID)),
+          select: struct(g, [:id, :name, :inserted_at, :updated_at])
+        )
       )
 
     insert_all_preserving_id(rows, schema_name)

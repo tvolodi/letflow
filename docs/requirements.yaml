@@ -4157,7 +4157,7 @@ requirements:
   - id: REQ-074
     title: Identity routes 2/4 -- groups and group membership (identity.zig 7 group handlers)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 141  # letflow-queue task id
     description: >

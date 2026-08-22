@@ -1,0 +1,45 @@
+{
+  "handoff_id": "c4a2b8e3-7d5f-4b2a-8e3c-9f1a2d4e6b57",
+  "run_id": "WF02-REQ074-20260822",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ074-20260822/step-01b-code-design-validator.json",
+  "created_at": "2026-08-22T01:10:00Z",
+  "started_at": "2026-08-22T00:45:00Z",
+  "completed_at": "2026-08-22T01:10:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-074"],
+    "related_handoff_ids": ["handoffs/WF02-REQ074-20260822/step-01-code-designer.json"],
+    "artifacts_in": ["lib/letflow/design/req074-identity-group-routes.md"],
+    "branch_name": "feature/WF02-REQ074-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 1b -- hard gate on CODE-DESIGNER's req074-identity-group-routes.md design against REQ-074's 6 acceptance criteria, with extra scrutiny on: (1) the R-Co routing claims for handleListGroupMembers/handleListGroupMembersArray/handleRemoveGroupMember, verified against src/main.zig directly rather than trusting the design doc; (2) the AC5 delete-behavior claim against src/identity/registry.zig's deleteGroupIfEmpty; (3) full AC coverage including AC6's moduledoc requirement; (4) no implementation code; (5) OQ-1's framing as an open question for REVIEWER; (6) the new migration's conformance to this codebase's tenant-scoped migration convention; (7) the reused provision_oidc_user insert-then-recheck pattern; (8) the cross-tenant-membership test's reuse of REQ-072/REQ-073 mechanisms.",
+    "acceptance_criteria": [
+      "Every acceptance criterion maps to a concrete design element",
+      "No implementation code present",
+      "Function signatures fully specified including error shape",
+      "Cross-module dependencies listed",
+      "No TBD/deferral language on load-bearing decisions"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. All load-bearing R-Co-behavior claims independently re-verified against source, not taken on the design doc's word. (1) Routing claims: read src/main.zig:1377-1442 directly -- confirmed GET /groups/:id/members binds to handleListGroupMembersArray (line 1393, exact match to design's citation), and `grep -n \"handleListGroupMembers(\\|handleRemoveGroupMember\" src/main.zig` returns zero hits, confirming both handlers are genuinely unrouted. Also confirmed the bodyless DELETE /groups/:id/members branch (lines 1400-1430) runs inline logic -- id_svc.listGroupMembers(...) then a loop of id_svc.removeGroupMember(...) per member with `catch {}` swallowing errors -- not identity_routes.handleRemoveGroupMember at all, exactly as the design states. Also confirmed (by grepping seg6/seg7 usage across main.zig) there is no dispatch branch anywhere that reads a further path segment after 'members', meaning R-Co's route table has literally no path shaped like /groups/:id/members/:user_id -- the design is honest that this route is a new REST shape implied by the handler's signature, not a re-routed existing path. (2) AC5 claim: read src/identity/registry.zig:1178-1216 (deleteGroupIfEmpty) and src/identity/service.zig:997-1012 (deleteGroup) directly -- confirmed the exact SQL (`DELETE FROM groups WHERE id=$1 AND NOT EXISTS (SELECT 1 FROM group_members ...) RETURNING 1`) and confirmed `if (!deleted) return error.GroupNotFound` is the only failure path -- no separate 409, matching the design's claim precisely. (3) All 6 ACs map to concrete design elements: AC1 via Sec 3.1-3.6's per-handler request/response composition + the Dispatch Mechanism section (same standard the REQ-073 design-validator precedent accepted for the isomorphic AC1 wording -- checked handoffs/WF02-REQ073-20260822/step-01b-code-design-validator.json for precedent); AC2 via Sec 4's cross-tenant test (byte-identical-404 assertion plus a real DB-level Repo.aggregate(GroupMember, :count, ...) == 0 check, not just a status check); AC3 via Sec 6; AC4 via Sec 7 (pagination test, two pages); AC5 via Sec 5 (two tests: refuse-with-members, succeed-when-empty); AC6 via Sec 1/1b (findings) plus Sec 2a's explicit, required @moduledoc table-and-paragraph instruction -- this explicitly avoids REQ-073's own first-pass gap (that design initially FAILed for stating a finding only in the design doc, not requiring it in the actual module's @moduledoc; REQ-074's design correctly learned from that and requires it in @moduledoc directly). (4) No implementation code found -- only signatures, type shapes, migration DSL sketches, and ExUnit test-spec sketches (established convention per this project's prior gates). (5) OQ-1: correctly and explicitly framed as an open question for REVIEWER (Sec 1b + Open Questions list), with the reasoning for the design's own chosen interpretation stated (requirement text names handleRemoveGroupMember specifically, a single-member handler; no AC mentions bulk removal) -- not silently resolved past REVIEWER, and not stated ambiguously. This is a legitimate PASS-with-flagged-open-question per this project's convention, not a FAIL condition. (6) Migration shape: read priv/repo/migrations/20260819000001_create_groups_tenant_scoped.exs -- confirmed the `if prefix() do` guard, prefix()-scoped table/index creation, and registration-in-tenant_scoped_migrations/0 convention the design's Sec 8a/8b proposal follows exactly. `on_delete: :nothing` has no exact precedent in this migrations directory (most FKs use the Ecto default or explicit :restrict) but the design gives an explicit, sound rationale (deletion is refused at the application layer before ever reaching a non-empty group, per Sec 5's finding) and does not contradict any existing convention -- acceptable, not a gap. (7) Read lib/letflow/identity.ex:392-491 (insert_or_fetch/upsert_by_external_identity) directly -- confirmed the exact 'Repo.insert with on_conflict: :nothing, returning: true, then Repo.get to distinguish suppressed-vs-real-insert' pattern the design's Sec 8 gap 2 cites is real, documented (identity.ex:423-437's own comment), and structurally reusable for add_group_member/3's created?/boolean distinction. (8) Confirmed test/letflow/routers/identity_test.exs:32 defines build_conn/4 exactly as the design's Sec 4/8/Dispatch-mechanism section describes, and that Sec 4's cross-tenant test's DB-level zero-membership-rows assertion is a real Repo.aggregate query, not merely an HTTP-status check.",
+    "artifacts_out": ["handoffs/WF02-REQ074-20260822/step-01b-code-design-validator.json"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "OQ-1 through OQ-9 remain open by design, all explicitly flagged for REVIEWER/ELIXIR-DEV judgment as appropriate -- none block implementation. OQ-1 (bulk-remove-all vs. single-member port) and OQ-3 (dropping the PLATFORM_ADMIN-only gate on member listing) are the two REVIEWER should weigh most carefully given their behavioral-divergence size, per the design's own framing."
+      }
+    ],
+    "next_action": "Route to ELIXIR-DEV for Step 2a implementation."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

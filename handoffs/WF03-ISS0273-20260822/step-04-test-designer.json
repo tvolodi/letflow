@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0273-20260822/step-04-test-designer.json",
   "created_at": "2026-08-22T12:47:55Z",
   "started_at": "2026-08-22T12:47:55Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-22T12:50:43Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S0",
@@ -38,18 +38,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "This is the ordinary existing-behavior fail-then-pass case, not the mutant/non-existence clause: h6_floor_commit/0, resolve_h6_floor_commit/0 (removed by this fix), and pre_floor_file?/2 are all pre-existing functions from ISS-0262, and the 3 regression tests already exist -- confirmed by the test file's own moduledoc note (lines 10-20) recording the same conclusion for its original ISS-0262 authorship. Independently reproduced BOTH halves myself, isolated via a throwaway `git worktree add --detach ../wt-iss0273-prefix main` (git fetch origin main -q first; origin/main == local main == 8e3a9644073fae9dc44cf61bdfcda2c798a0e01d, confirmed pre-fix via `git show main:lib/mix/tasks/letflow.lint_handoffs.ex | grep -n h6_floor_commit` showing `@h6_floor_commit \"BOOTSTRAP\"` still literal on line 133, i.e. main does NOT have the ISS-0273 fix). Diffed the current branch's test file against the worktree's copy first (`diff test/mix/tasks/letflow.lint_handoffs_test.exs ../wt-iss0273-prefix/...` -> identical, 0 output) -- confirming ELIXIR-DEV's claim of 'no test file changes' directly rather than trusting it, so no file copy was actually needed to satisfy 'plus ONLY the current test file'; the fixture test/fixtures/lint_handoffs/h6/step-01-fixture-non-json.md already exists on main (added in the same commit, 184d846, as the H6 check itself).\n\nPRE-FIX (worktree at main, `mix test test/mix/tasks/letflow.lint_handoffs_test.exs`): 'Result: 17/20 passed, Failed: 3 tests' -- the exact same 3: (1) T-NEW-AFTER-FLOOR-HARD-FAILS at line 297, `assert [violation] = result.hard_new` got `right: []`; (2) F-H6-CONTENT-NEVER-READ at line 127, `assert [%{rule: \"H6\"}] = result.hard_new` got `right: []`; (3) F-H6-FIRES-NEW at line 106, `assert [violation] = result.hard_new` got `right: []`. This matches Step 01's ISSUE-FIXER report exactly, but is now independently demonstrated rather than inherited.\n\nWorktree removed immediately after: `git worktree remove ../wt-iss0273-prefix --force`, confirmed via `git worktree list` showing only the main checkout remains.\n\nPOST-FIX (current feature branch, same command): confirmed `@h6_floor_commit` is pinned to `c4a8e39729e253397d4f1aa34155a74522930252` via grep, then `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` -> 'Result: 20 passed', 0 failures.\n\nEXISTING COVERAGE ADEQUACY: sufficient, no additional tests added. Reasoning: the 3 failing-then-passing assertions exercise lint_file/2's real production call path (no explicit floor arg) end to end through h6_floor_commit/0 -> pre_floor_file?/2 -> ancestor_or_equal?/2, which is exactly the mechanism ISS-0273's bug lived in (the now-deleted resolve_h6_floor_commit/0 dynamic re-resolution). The fail run proves the suite is sensitive to the specific defect (a moving floor misclassifying a genuinely-new file as grandfathered); the pass run proves the fix removes it. The other 17 tests (JSON H1-H5 behavior, T-PRE-FLOOR-* direct pre_floor_file?/2 unit tests, T-H6-ZERO-NEW corpus check) were unaffected in both runs, confirming isolation -- no unrelated coverage regressed or was needed to make this pass.\n\nCleanup verification: `git status --porcelain` in the main working tree shows only this handoff file (`M handoffs/WF03-ISS0273-20260822/step-04-test-designer.json`) -- the one intentional edit this step makes; `git worktree list` shows no leftover worktree. No test file or lib/ file was modified by this step.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0273-20260822",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0273-20260822",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-DESIGN-VALIDATOR to independently verify this fail-then-pass reproduction (re-run both halves itself per core-directives' 'every producing step has a validating step') and confirm the 3 existing tests (T-NEW-AFTER-FLOOR-HARD-FAILS, F-H6-CONTENT-NEVER-READ, F-H6-FIRES-NEW) are adequate regression coverage for ISS-0273 with no gaps."
   },
   "rework_count": 0,
   "max_rework": 3

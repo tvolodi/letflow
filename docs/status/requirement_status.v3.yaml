@@ -848,3 +848,29 @@ history:
       finding. Re-verified: mix test ... A9 still green after this entry's
       own append (24 on-disk entries, declared count corrected to 24 in
       the same commit per HOW-TO-APPEND step 6).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-22T17:20:00Z"
+    note: >
+      WF03-ISS0277-20260822 resolved ISS-0277 (GH#548, queue task 277).
+      Root cause established: GH#360/#366/#367 (ISS-0108/ISS-0112/ISS-0113)
+      were each closed by a prior ORCH release_lock(status: "done") call --
+      confirmed via PR #436/#430/#428, each of whose own body explicitly
+      says "left open" / "not closing" / "not fixed" -- because those runs'
+      Step Final PASSed cleanly (diagnosis, triage, or a reverted fix with
+      recorded evidence, no crash/escalation), and "done" was read as "the
+      run finished" rather than "the issue is resolved". The queue's
+      release_lock(status: "done") best-effort-closes the linked GitHub
+      Issue unconditionally (docs/agents/protocols/TASK_QUEUE.md's own
+      documented behavior), so all three GitHub mirrors closed despite
+      their own comments saying the opposite. Local docs/issues/ISS-0108.yaml,
+      ISS-0112.yaml, ISS-0113.yaml were already `status: open` (never
+      incorrectly flipped) -- only the GitHub-visible layer was wrong.
+      Fix: all three GitHub issues reopened with a comment citing this
+      root cause; docs/agents/protocols/TASK_QUEUE.md's release_lock
+      section amended with an explicit "done means resolved, not merely
+      finished" rule instructing ORCH to release without a status (hand-back,
+      stays open) whenever a run's own final report describes an
+      investigation, partial finding, or reverted attempt rather than a
+      shipped fix or delivered requirement.

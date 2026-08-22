@@ -383,6 +383,22 @@ below for the bounded fallback.
   genuinely dead (no active handoff, no recent activity) rather than just slow. State
   the reasoning in the handoff/log entry when using `force`.
 
+**`status: "done"` means the issue/requirement is resolved, not that the run merely
+finished cleanly.** This distinction matters because `status: "done"` best-effort
+closes the linked GitHub Issue (see "GitHub Issues visibility" below) — closing it is a
+claim that the underlying defect is fixed or the requirement is delivered, read by
+every future run and by the human skimming closed-issue state. A WF-03 run that
+completes its Step Final PASS gate by producing a *diagnosis*, a *triage/re-scoping*, or
+an *attempted-and-reverted fix with recorded evidence* has finished cleanly as a run,
+but has NOT resolved the issue — release it WITHOUT a `status` (leaving it `open`,
+per the hand-back path below) so the GitHub mirror stays open too. Confusing "the run
+finished" with "the issue is resolved" caused three issues (#360/#366/#367, ISS-0108/
+ISS-0112/ISS-0113) to be auto-closed by a `status: "done"` release out from under a
+closing comment that itself said "left open, not fixed" — see ISS-0277's resolution
+for the full account. Before calling `release_lock(status: "done")`, confirm the
+run's own final report describes a shipped fix or delivered requirement, not an
+investigation, partial finding, or reverted attempt.
+
 ```bash
 curl -X POST https://queue-test.ai-dala.com/tasks/42/release \
   -H "Authorization: Bearer $QUEUE_AUTH_TOKEN" \

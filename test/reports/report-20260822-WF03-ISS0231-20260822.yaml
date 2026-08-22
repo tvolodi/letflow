@@ -1,0 +1,164 @@
+report_id: report-20260822-WF03-ISS0231-20260822
+agent: TEST-RUNNER
+issue: ISS-0231
+workflow_step: WF-03 Step 4 (verification)
+branch: fix/WF03-ISS0231-20260822
+base: c84c27a
+date: 2026-08-22
+command: "mix letflow.check (x3), plus two targeted mix test runs"
+
+toolchain:
+  platform: "Windows 11"
+  elixir: "1.20.3 / OTP 29 (matches .tool-versions -- letflow.check_toolchain OK)"
+
+environment:
+  db_port: >
+    LETFLOW_DB_PORT=5472, read from this worktree's untracked .env. Confirmed before
+    starting anything. config/db_port.exs reads .env directly, so no export was needed;
+    Ecto did NOT fall back to 5462 (the sibling `letflow` workspace's live database).
+  postgres: >
+    letflow-2-postgres-1 already Up 21 hours (healthy), publishing 0.0.0.0:5472->5432.
+    `docker compose up` was deliberately NOT run from this worktree, per
+    docs/anti-patterns.md "Running `docker compose up` from a secondary worktree
+    checkout". Health confirmed via `docker ps` / `docker exec ... psql` instead.
+  concurrency_hazard: >
+    A sibling session was running `mix test` against the SAME letflow-2 Postgres
+    during runs 1 and 3. Confirmed directly: `psql` itself was refused with
+    FATAL 53300 "sorry, too many clients already", and every sweep in the run logged
+    TenantSchemaReaper's ISS-0110 liveness guard deferring because another
+    letflow_mixtest_* application_name was connected. This is the sole cause of every
+    failure observed, and it is environmental, not a property of this branch.
+
+new_step_under_test:
+  task: mix letflow.check_requirements_registration
+  position: 2 in the letflow.check alias, immediately after letflow.check_toolchain
+  verdict: PASS
+  runs_observed: 3
+  output_identical_across_all_3_runs: true
+  exit_code: 0
+  actual_output: |
+    ========================================================================
+    mix letflow.check_requirements_registration -- docs/requirements.yaml
+    ========================================================================
+    DEFERRED (visible debt -- always reported, never gates): none
+    ------------------------------------------------------------------------
+    115 entries = 115 registered + 0 deferred + 0 neither + 0 unclassified
+    ========================================================================
+  notes: >
+    Matches the dispatch's expected line exactly. The alias proceeded past this step
+    into `format --check-formatted` and `compile --warnings-as-errors` (both clean,
+    all 3 runs) and on into letflow.check.test. Deferred set is empty (0, not 21)
+    because PR #495 registered REQ-115..139 mid-run -- expected, and the tests are
+    property-based rather than pinned to that number.
+
+new_test_suite:
+  file: test/mix/tasks/letflow_check_requirements_registration_test.exs
+  command: "mix test test/mix/tasks/letflow_check_requirements_registration_test.exs"
+  result: "29 passed"
+  failures: 0
+  runtime: "0.5 seconds (0.5s async, 0.02s sync)"
+  verdict: PASS (matches the expected 29)
+
+alias_runs:
+  - run: 1
+    started_utc: "2026-08-22T03:47:32Z"
+    ended_utc: "2026-08-22T03:56:41Z"
+    wall_clock: "9m 09s"
+    suite_runtime: "542.9 seconds (7.8s async, 535.1s sync)"
+    result_line: "Result: 1540/1543 passed (5/5 properties, 1535/1538 tests)"
+    failed: 3
+    alias_exit: 1
+    failing_tests:
+      - "Letflow.TenantSchemaReaperTest: sweep_orphans/2 reclaims an old, well-formed orphaned row (test/support/tenant_schema_reaper_test.exs:124) -- assert reclaimed >= 1, left: 0"
+      - "Letflow.TenantSchemaReaperTest: sweep_orphans/2 schema_name format guard (test/support/tenant_schema_reaper_test.exs:212) -- assert skipped >= 1, left: 0"
+      - "Letflow.TenantSchemaReaperTest: sweep_orphans/2 concurrent-invocation liveness guard ISS-0110 (test/support/tenant_schema_reaper_test.exs:273) -- assert reclaimed >= 1, left: 0"
+    diagnosis: >
+      Environmental, not a defect. All three assert that a sweep reclaimed/skipped at
+      least one row, and all three got 0 because the sweep never ran at all: the log
+      shows, immediately before each failure, "deferring this sweep entirely -- another
+      mix test invocation is currently connected to this database (ISS-0110)". A
+      concurrent sibling mix test held connections on 5472 for the whole run.
+  - run: 2
+    suite_runtime: "444.6 seconds (7.3s async, 437.2s sync)"
+    result_line: "Result: 1543 passed (5 properties, 1538 tests)"
+    failed: 0
+    alias_exit: 1
+    note: >
+      DB was quiet for this run -- ZERO test failures, full suite green. The alias still
+      exited 1, but at a different gate: letflow.check.test's unused-default-arg warning
+      scan (ISS-0069's class). See preexisting_failures below.
+  - run: 3
+    suite_runtime: "744.5 seconds (16.2s async, 728.3s sync)"
+    result_line: "Result: 1538/1543 passed (5/5 properties, 1533/1538 tests)"
+    failed: 5
+    alias_exit: 1
+    note: >
+      Sibling load returned -- this run opened with Postgrex FATAL 53300
+      too_many_connections during startup. Same 3 TenantSchemaReaperTest failures as
+      run 1, plus 2 more that are DB-contention shaped:
+      Letflow.SandboxPoolTest RT-7 (ISS-0224 regression, asserts a DB-free claim(0) is
+      answered *immediately* -- a latency assertion, first casualty of a saturated pool)
+      and Letflow.Engine.VariableSchemaTest AC2 (FK/constraint introspection).
+      Runtime inflated 68% over run 2 (744s vs 444s) by the same contention.
+
+flakiness_resample:
+  command: "mix test test/support/tenant_schema_reaper_test.exs"
+  condition: "run on a quiet DB (verified 6 total connections, 0 letflow_mixtest_* connections)"
+  result: "6 passed"
+  failures: 0
+  runtime: "0.3 seconds"
+  conclusion: >
+    The 3 reaper failures do not reproduce in isolation. Confirmed flaky-under-
+    concurrency, not broken.
+
+preexisting_failures_not_caused_by_this_branch:
+  - id: unused-default-arg warnings (ISS-0069 class recurrence)
+    detected_by: "mix letflow.check.test"
+    message: |
+      ** (Mix) mix letflow.check.test: FAILED -- "default values for the optional
+      arguments" warning found (ISS-0069's own class recurring):
+          warning: default values for the optional arguments in the private function unique_idempotency_key/1 are never used
+          warning: default values for the optional arguments in the private function entry/2 are never used
+    locations:
+      - "test/letflow/engine_sub_process_test.exs:96:8 (Letflow.EngineSubProcessTest) -- defp unique_idempotency_key(prefix \\\\ \"req062-idk\")"
+      - "test/letflow/engine/sub_process_test.exs:44:8 (Letflow.Engine.SubProcessTest) -- defp entry(name, opts \\\\ [])"
+    attribution_evidence: >
+      Both emitting files, and the detecting task lib/mix/tasks/letflow.check.test.ex,
+      are byte-identical to base c84c27a -- `git diff --name-only c84c27a...HEAD --
+      test/letflow/` returns empty, and letflow.check.test.ex is absent from the diff.
+      Last commits touching them: engine/sub_process_test.exs at c6c1e0e (2026-08-19,
+      REQ-062 #258), engine_sub_process_test.exs at ca8c9d0 (2026-08-20, #351),
+      the detector at 7f73f30 (2026-08-19, ISS-0069 #254). All predate this branch.
+      The warning is a deterministic function of those unchanged sources, so it
+      reproduces identically on origin/main. Both are REQ-062-era files that appear to
+      have landed the pattern shortly after ISS-0069's sweep closed the gate.
+      Notably, the branch's OWN new test file also defines three defaulted private
+      helpers (registered_entry/1, deferred_entry/1, neither_entry/1) and none of them
+      appear in the warning list -- their defaults are genuinely used.
+    routing: "New issue for ELIXIR-DEV -- drop the two unused defaults. Not a blocker on this branch."
+  - id: DB-contention flakes under concurrent mix test on a shared workspace Postgres
+    affected: "Letflow.TenantSchemaReaperTest (3), Letflow.SandboxPoolTest RT-7, Letflow.Engine.VariableSchemaTest AC2"
+    routing: >
+      Environmental. Worth flagging separately: two sessions running `mix test` against
+      the same letflow-2 database exhaust max_connections outright (FATAL 53300), which
+      is a harder failure than the ISS-0110 guard was designed to absorb.
+
+files_changed_by_this_branch:
+  application: "lib/mix/tasks/letflow.check_requirements_registration.ex (new), mix.exs (+1 line: alias entry)"
+  tests: "test/mix/tasks/letflow_check_requirements_registration_test.exs (new)"
+  docs_and_handoffs: "8 files under docs/ and handoffs/"
+  touched_no_existing_lib_or_test_code: true
+
+verdict: PASS
+merge_safe: true
+summary: >
+  The change under test is correct and proven in the real alias. The new step runs at
+  position 2, prints the expected "115 entries = 115 registered + 0 deferred + 0 neither
+  + 0 unclassified", exits 0, and lets the alias continue -- identically across 3
+  independent runs. Its 29-test suite passes. Run 2, with a quiet database, put the
+  entire suite at 1543/1543 green, so there is no test failure attributable to this
+  branch. The alias's non-zero exit is caused by two pre-existing conditions on main:
+  an unused-default-arg warning pair in REQ-062-era test files, and reaper/pool tests
+  that flake when a sibling mix test saturates the shared workspace Postgres. Neither
+  is a blocker on this branch; the warning pair should be routed as its own fix so the
+  alias can go green on main.

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0262-20260822/step-02-code-designer.json",
   "created_at": "2026-08-22T07:35:00Z",
   "started_at": "2026-08-22T07:35:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-22T07:31:30Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -34,18 +34,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Design written to lib/letflow/design/iss0262-lint-handoffs-non-json-discovery.md. Re-verified ISSUE-FIXER's diagnosis first-hand (handoff_files/0 at lint_handoffs.ex:186-191 globs only **/*.json) and re-measured the WF03-ISS0258-20260822 directory myself: exactly 10 .md files, matching ISSUE-FIXER's corrected count. Found and corrected a flaw in ISSUE-FIXER's literal suggested glob (**/step-*.*): 14 existing, currently-linted .json files under WF02-REQ018/019/021 are named without a hyphen (step00-git-setup.json, step01-code-design.json, ...); a hyphen-requiring glob would have stopped discovering them -- a regression. Design instead classifies a 'handoff-shaped' file as any basename starting with the literal 'step' (Path.wildcard(Path.join(dir, \"**/step*.*\"))), which covers both naming styles and, measured against the real handoffs/ tree, naturally excludes registry.json, orchestrator.log, escalations.yaml, one redraft-*.md file and three *-verdict.md files -- none of their basenames start with 'step' -- with @registry_file's reject kept as stated defense-in-depth. handoff_files/0 becomes handoff_files/1 with a default arg (dir \\\\ @handoffs_dir) so TEST-DESIGNER can point discovery at an isolated fixture tree without ever touching or mutating the real handoffs/ corpus. H6 classification (handoff_kind/1, pure, extension-only, content never consulted) gives exactly the three outcomes ISSUE-FIXER specified: .json+decodes -> existing H1-H4 path unchanged; .json+decode fails -> existing PARSE path unchanged; non-.json (any content) -> new H6, hard/gating, reusing the existing violation map and grandfather-tuple shape verbatim. All 10 WF03-ISS0258-20260822 .md paths are individually grandfathered under rule tag \"H6\" (exact paths listed in the design's SS3.1, verified against Glob output this session, not assumed) so the fix does not turn today's green build red; a stated second-order consequence is that WF03-ISS0258-20260822 will newly appear in H5's (advisory-only, non-gating) missing_from_registry report, which is correct and intentional. Test fixture: a real, permanent, committed file at test/fixtures/lint_handoffs/h6/step-01-fixture-non-json.md, outside handoffs/ entirely, exercised directly via handoff_files/1 (proves discovery) and lint_file/2 (proves H6 classification and violation shape) so TEST-DESIGNER never needs a temp dir or touches the grandfather list. Backward compatibility (existing grandfathered H1-H3 entries, existing valid .json handoffs, orchestrator.log/registry.json exclusion) stated explicitly in SS5 and SS1.1's classification table. No implementation code -- @spec signatures, one glob pattern, pseudocode case shapes, and grandfather-list data only.",
+    "artifacts_out": ["lib/letflow/design/iss0262-lint-handoffs-non-json-discovery.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0262-20260822",
       "commit_sha_list": [],
       "remote_branch": null,
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to gate this design before ELIXIR-DEV implements it."
   },
   "rework_count": 0,
   "max_rework": 3

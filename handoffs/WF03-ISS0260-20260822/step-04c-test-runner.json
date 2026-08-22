@@ -1,0 +1,33 @@
+{
+  "run_id": "WF03-ISS0260-20260822",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0260-20260822/step-04c-test-runner.json",
+  "status": "COMPLETED",
+  "context": {
+    "artifacts_in": [
+      "test/letflow/engine_concurrency_test.exs",
+      "handoffs/WF03-ISS0260-20260822/step-04b-test-design-validator.json"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Ran the FULL suite via `sh scripts/test_parallel.sh` -- real 16-way parallel (N=16 from nproc), TEST_PARALLEL_GROUP=tp3958030 genuinely exported and shared by all 16 partitions per the script's own design. Combined result: 'combined: 1690 tests, 5 properties, 2 failures (1693/1695 passed)', exit 1.\n\nFailure 1 (partition 1): RequirementStatusInvariantsTest A3 -- ISS-0119 itself (docs/status/requirement_status.v2.yaml over its roll-rule size ceiling). PRE-EXISTING, structurally unrelated: `git diff --stat origin/main...HEAD` never touches that file or its index -- only test/letflow/engine_concurrency_test.exs, two design docs, test/specs/REQ-055.md, and handoffs/.\n\nFailure 2 (partition 4): the AC1 test itself -- 'AC1 timing ratio 36.11x exceeded multiplier 30x (TEST_PARALLEL_GROUP unset)'. THIS IS A REAL REGRESSION CAUSED BY THIS BRANCH, confirmed by reproduction, not a coincidence of load. Root cause: the branch's own new `describe \"ISS-0260 -- ac1_timing_multiplier/0\"` block (engine_concurrency_test.exs:366-428) registers a describe-level `on_exit(fn -> System.delete_env(\"TEST_PARALLEL_GROUP\"); ... end)` that runs after every test in that block. System.delete_env/1 is OS-process-global. ExUnit's execution order is seed-randomized suite-wide (async:false only rules out CONCURRENT races within the file, not sequential ordering against other tests scheduled before/after it by the seed). When the seed schedules 'returns 60 when TEST_PARALLEL_GROUP is set' before the real AC1 test in the same partition process, that test's own on_exit deletes the TEST_PARALLEL_GROUP variable test_parallel.sh set for the WHOLE partition's lifetime, so AC1 silently falls back to the 30x default multiplier -- reintroducing exactly the flake ISS-0260 exists to fix.\n\nReproduced deterministically: `export TEST_PARALLEL_GROUP=tp_repro2; mix test test/letflow/engine_concurrency_test.exs --seed 531662 --no-color --trace` (partition 4's own seed). --trace confirms 'ISS-0260 ... returns 60 when TEST_PARALLEL_GROUP is set' runs immediately before AC1. AC1 happened to finish in 4616.4ms this time (under the 30x threshold by luck) but System.get_env(\"TEST_PARALLEL_GROUP\") was provably nil for it -- same mechanism, same defect, just a faster run. TEST-DESIGN-VALIDATOR's own step-04b run didn't catch this because it never set TEST_PARALLEL_GROUP externally before invoking mix test, so there was nothing for the on_exit to delete.\n\nAC1 itself did NOT reliably run under the intended 60x parallel multiplier in this real 16-way run -- confirmed to have run (and failed) under the 30x default despite TEST_PARALLEL_GROUP being genuinely set for the whole partition.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0260-20260822/step-04c-test-runner.json",
+      "test/reports/report-20260822-WF03-ISS0260-20260822.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "blocking",
+        "location": "test/letflow/engine_concurrency_test.exs:366-428 (describe \"ISS-0260 -- ac1_timing_multiplier/0\", setup/on_exit)",
+        "description": "describe-level on_exit unconditionally calls System.delete_env(\"TEST_PARALLEL_GROUP\"), which is OS-process-global, not per-test. Under real seed-randomized ExUnit ordering this can delete the partition-wide TEST_PARALLEL_GROUP value scripts/test_parallel.sh exports for the whole partition process, before the real AC1 test in the same file/process runs -- causing AC1 to run under the wrong (30x default) multiplier and fail. Reproduced deterministically outside the full suite run (see report yaml).",
+        "fix_belongs_in": "test code (this branch's own new tests), not application code",
+        "suggested_fix": "Capture System.get_env(\"TEST_PARALLEL_GROUP\") (and TEST_AC1_TIMING_MULTIPLIER) at setup time, and in on_exit restore exactly that captured value (put_env if it was originally set, delete_env only if it was originally nil) instead of unconditionally delete_env."
+      }
+    ],
+    "next_action": "Return to TEST-DESIGNER to fix the on_exit teardown bug in the ISS-0260 ac1_timing_multiplier/0 describe block, then back through TEST-DESIGN-VALIDATOR and TEST-RUNNER before this branch can merge. Do NOT route to Step 5 (ISSUE-FIXER close) -- ISS-0260's own fix is not yet verified stable under the real parallel regime it targets."
+  }
+}

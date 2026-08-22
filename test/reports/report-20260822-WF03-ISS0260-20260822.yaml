@@ -1,0 +1,128 @@
+report_id: report-20260822-WF03-ISS0260-20260822
+agent: TEST-RUNNER
+issue: ISS-0260
+github: "#507"
+workflow_step: WF-03 Step 4 (final test-execution gate before merge)
+branch: fix/WF03-ISS0260-20260822
+date: 2026-08-22
+command: "sh scripts/test_parallel.sh (real 16-way parallel, N derived from nproc)"
+
+toolchain:
+  platform: "Windows 11"
+
+environment:
+  db_port: "LETFLOW_DB_PORT=5472, read from this worktree's untracked .env."
+  postgres: >
+    `docker compose up -d` was attempted per procedure but failed: port 5472 already
+    bound by `letflow-2-postgres-1` (Up 26h, healthy) -- the main checkout's own
+    container. This worktree's .env already points at that same port, so it shares
+    the main checkout's container rather than owning its own, per the pre-existing
+    "don't run docker compose up in a checkout told it shares another checkout's
+    container" rule. The stray `Created` (never started) container and network this
+    attempt left behind (agent-aa36286ffc0ed70e9-postgres-1 /
+    agent-aa36286ffc0ed70e9_default) were removed with `docker rm`; the shared,
+    already-healthy letflow-2-postgres-1 was used for the actual run.
+
+full_suite_run:
+  n_partitions: 16
+  n_source: nproc
+  test_parallel_group: "tp3958030 (real, shared by all 16 partitions, per scripts/test_parallel.sh)"
+  combined_result_line: "combined: 1690 tests, 5 properties, 2 failures (1693/1695 passed)"
+  exit_code: 1
+
+failures_found: 2
+
+failure_1:
+  test: "A3: the current volume is within the roll-rule ceilings (Letflow.Docs.RequirementStatusInvariantsTest)"
+  location: "test/docs/requirement_status_invariants_test.exs:105"
+  partition: 1
+  attribution: PRE-EXISTING, UNRELATED TO THIS BRANCH
+  reasoning: >
+    This is ISS-0119 itself, by the test's own failure message: the run-history
+    volume docs/status/requirement_status.v2.yaml is over its documented roll-rule
+    ceilings (1262 lines / 83561 bytes vs. 1200-line/120000-byte ceiling). This
+    branch's diff (`git diff --stat origin/main...HEAD`) touches only
+    test/letflow/engine_concurrency_test.exs, test/specs/REQ-055.md,
+    lib/letflow/design/iss0260-ac1-timing-flake.md,
+    lib/letflow/design/req-055-concurrent-instance-isolation.md, and files under
+    handoffs/WF03-ISS0260-20260822/ -- it never touches
+    docs/status/requirement_status.v2.yaml or its index, so it cannot be the cause
+    of this file exceeding its size ceiling. Structural, not count-matched.
+
+failure_2:
+  test: "AC1 -- 100 concurrent task completions across 100 distinct instances every completion succeeds, no cross-instance corruption, no global serialization (Letflow.EngineConcurrencyTest)"
+  location: "test/letflow/engine_concurrency_test.exs:297"
+  partition: 4
+  message: >
+    AC1 timing ratio 36.11x exceeded multiplier 30x (TEST_PARALLEL_GROUP unset) --
+    baseline_micros=31129, concurrent_micros=1124044
+  attribution: CAUSED BY THIS BRANCH -- confirmed root cause, not the flake this
+    branch set out to fix
+  root_cause: >
+    The AC1 test read TEST_PARALLEL_GROUP as unset even though
+    scripts/test_parallel.sh genuinely exported it (tp3958030) before forking all
+    16 partitions, and it stayed exported for the whole partition-4 OS process.
+    Root cause: this branch's own new `describe "ISS-0260 -- ac1_timing_multiplier/0"`
+    block (test/letflow/engine_concurrency_test.exs:366-428) has a describe-level
+    `setup do on_exit(fn -> System.delete_env("TEST_PARALLEL_GROUP"); ... end) end`
+    that runs after EVERY test in that describe block, including
+    "returns 60 when TEST_PARALLEL_GROUP is set (real test_parallel.sh partition)".
+    System.delete_env/1 is OS-process-global, not per-ExUnit-test. ExUnit's global
+    test-execution order is seed-randomized even though this file is `async: false`
+    (async:false only rules out concurrent races WITHIN the file, not sequential
+    ordering against tests scheduled before/after it in the suite-wide seed
+    queue -- and even within this one file, the 10 tests here are not run in
+    source order). Whenever seed order happens to schedule the
+    ac1_timing_multiplier/0 describe block before the real AC1 test in the SAME
+    partition process, that describe block's on_exit permanently deletes the
+    TEST_PARALLEL_GROUP variable test_parallel.sh set for the entire partition's
+    lifetime, so AC1 falls back to the 30x default multiplier instead of the
+    intended 60x -- reintroducing exactly the flake ISS-0260 was written to fix.
+  reproduction: >
+    Reproduced deterministically outside the full 16-way run:
+    `export TEST_PARALLEL_GROUP=tp_repro2; mix test
+    test/letflow/engine_concurrency_test.exs --seed 531662 --no-color --trace`
+    (same seed partition 4 used). --trace output confirms the exact ordering:
+    "ISS-0260 -- ac1_timing_multiplier/0 returns 60 when TEST_PARALLEL_GROUP is
+    set (real test_parallel.sh partition)" runs immediately before "AC1 -- 100
+    concurrent task completions...". On this particular repro run AC1 finished in
+    4616.4ms, under the 30x fallback threshold by luck, so it happened to pass --
+    but System.get_env("TEST_PARALLEL_GROUP") was provably nil for it (the same
+    mechanism as partition 4's real failure), meaning it was running under the
+    WRONG (lower) multiplier the whole time, purely by luck of a fast run.
+    TEST-DESIGN-VALIDATOR's own step-04b run (`mix test
+    test/letflow/engine_concurrency_test.exs` -> 10/10 passed) did not catch this
+    because it never set TEST_PARALLEL_GROUP externally before invoking mix test --
+    so there was nothing for the on_exit to delete, and the gap never surfaced.
+    Confirms this is a real defect in the new test's teardown, not a fluke of the
+    16-way run's own load.
+  routing: >
+    Test-code bug in code this branch itself added (test/letflow/engine_concurrency_test.exs,
+    owned by TEST-RUNNER/TEST-DESIGNER per docs/agents/AGENT_SYSTEM.md) -- not an
+    application bug, not a candidate for ELIXIR-DEV. Fix belongs in the
+    ac1_timing_multiplier/0 describe block's `setup`/`on_exit`: it must restore
+    (or leave untouched) whatever TEST_PARALLEL_GROUP value existed before the
+    describe block ran, rather than unconditionally deleting it -- e.g. capture
+    System.get_env("TEST_PARALLEL_GROUP") at setup time and restore that captured
+    value (put_env if it was set, delete_env only if it was originally nil) in
+    on_exit, instead of always delete_env. Needs to go back through
+    TEST-DESIGNER -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER before this branch can
+    merge.
+
+verdict: FAIL
+merge_safe: false
+summary: >
+  Combined 16-way run: 1690 tests, 5 properties, 2 failures (1693/1695 passed),
+  exit 1. One failure (RequirementStatusInvariantsTest A3 / ISS-0119) is
+  pre-existing and structurally unrelated to this branch's diff. The other --
+  the AC1 test itself, in the file this branch's diff most directly touches --
+  is a real, reproduced regression caused by this branch's own new
+  ac1_timing_multiplier/0 unit tests: their on_exit hook unconditionally deletes
+  TEST_PARALLEL_GROUP, which under real seed-randomized ExUnit ordering can wipe
+  out the partition-wide env var test_parallel.sh depends on before the real AC1
+  test runs, silently downgrading it to the 30x fallback multiplier and
+  reintroducing the exact flake ISS-0260 was supposed to fix. This branch is not
+  safe to merge as-is. AC1 itself did NOT reliably run under the intended 60x
+  parallel multiplier in this run -- it is confirmed to have run (and failed)
+  under the 30x default multiplier despite TEST_PARALLEL_GROUP being genuinely
+  set for the whole partition process.

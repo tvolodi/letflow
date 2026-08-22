@@ -24,6 +24,17 @@
       "test/specs/REQ-055.md"
     ],
     "issues": [],
-    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+    "next_action": "Route to TEST-DESIGN-VALIDATOR",
+    "post_handoff_fix_20260822": {
+      "reported_by": "TEST-RUNNER",
+      "bug": "The describe \"ISS-0260 -- ac1_timing_multiplier/0\" block's setup-level on_exit unconditionally called System.delete_env(\"TEST_PARALLEL_GROUP\") / System.delete_env(\"TEST_AC1_TIMING_MULTIPLIER\") after every test in the block. System.delete_env/1 is OS-process-global, and scripts/test_parallel.sh sets TEST_PARALLEL_GROUP for an entire partition process's whole lifetime (all tests in that partition share one BEAM VM). ExUnit's suite-wide seed-randomized order meant that when these new tests ran before the real AC1 test in the same partition, the on_exit deleted the env var test_parallel.sh had set for the whole partition, silently making AC1 fall back to the 30x default multiplier instead of the intended 60x -- reintroducing exactly the flake ISS-0260 exists to fix. TEST-RUNNER reproduced deterministically with `TEST_PARALLEL_GROUP=tp_repro2 mix test test/letflow/engine_concurrency_test.exs --seed 531662 --no-color --trace`.",
+      "fix": "setup now captures System.get_env(\"TEST_PARALLEL_GROUP\") and System.get_env(\"TEST_AC1_TIMING_MULTIPLIER\") BEFORE any test in the block mutates them, and on_exit restores each captured value (System.put_env with the original value) if one existed, or deletes the var only if it did not previously exist -- so a value set by the surrounding process (e.g. test_parallel.sh) survives these tests.",
+      "verification": {
+        "solo_run": "mix test test/letflow/engine_concurrency_test.exs -> Result: 10 passed (0 failures)",
+        "repro_scenario": "TEST_PARALLEL_GROUP=tp_repro2 mix test test/letflow/engine_concurrency_test.exs --seed 531662 --no-color --trace -> same test ordering as TEST-RUNNER's repro (ISS-0260 describe-block tests run before AC1 -- see [L#392],[L#406],[L#437] before AC1 at [L#297] in the trace), AC1 passed (2674.3ms), Result: 10 passed (0 failures)",
+        "test_parallel_sh": "sh scripts/test_parallel.sh test/letflow/engine_concurrency_test.exs -> partition 1 (the one the file-filtered run lands in): 10 tests, 0 failures; combined: 10 tests, 0 failures (10/10 passed). Other 15 partitions report 0 tests/exit 1 because a single-file filter only assigns the file to one partition, consistent with ISSUE-FIXER's earlier documented finding -- not a new problem."
+      },
+      "fix_commit": "test(ISS-0260): fix env-var teardown leak in ac1_timing_multiplier tests"
+    }
   }
 }

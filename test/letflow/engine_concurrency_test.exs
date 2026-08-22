@@ -359,15 +359,31 @@ defmodule Letflow.EngineConcurrencyTest do
   # depending on for correctness signal.
   #
   # async: false at the file level (Letflow.DataCase, async: false above) already
-  # rules out cross-test env-var races within this file; each test still clears the
-  # vars it sets via on_exit so no state leaks to other test files either.
+  # rules out cross-test env-var races within this file; each test restores the
+  # PRE-EXISTING value (if any) of the vars it touches via on_exit, rather than
+  # unconditionally deleting them, so state set by the surrounding OS process (e.g.
+  # scripts/test_parallel.sh setting TEST_PARALLEL_GROUP for a whole partition's
+  # lifetime) survives these tests instead of being wiped out from under a later
+  # test in the same partition/BEAM VM.
   # ---------------------------------------------------------------------------------
 
   describe "ISS-0260 -- ac1_timing_multiplier/0" do
     setup do
+      original_parallel_group = System.get_env("TEST_PARALLEL_GROUP")
+      original_ac1_multiplier = System.get_env("TEST_AC1_TIMING_MULTIPLIER")
+
       on_exit(fn ->
-        System.delete_env("TEST_PARALLEL_GROUP")
-        System.delete_env("TEST_AC1_TIMING_MULTIPLIER")
+        if original_parallel_group do
+          System.put_env("TEST_PARALLEL_GROUP", original_parallel_group)
+        else
+          System.delete_env("TEST_PARALLEL_GROUP")
+        end
+
+        if original_ac1_multiplier do
+          System.put_env("TEST_AC1_TIMING_MULTIPLIER", original_ac1_multiplier)
+        else
+          System.delete_env("TEST_AC1_TIMING_MULTIPLIER")
+        end
       end)
 
       :ok

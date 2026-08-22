@@ -1,0 +1,53 @@
+{
+  "handoff_id": "b56f3804-7a4f-449d-8720-cec35f36e49f",
+  "run_id": "WF03-ISS0262-20260822",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0262-20260822/step-03b-security-reviewer.json",
+  "created_at": "2026-08-22T07:42:02Z",
+  "started_at": "2026-08-22T07:42:02Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "handoffs/WF03-ISS0262-20260822/step-03-elixir-dev.json",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"]
+  },
+  "task": {
+    "description": "Run the scope test against `git diff main...HEAD` for this branch (feature/WF03-ISS0262-20260822). Determine in-scope/out-of-scope per security-invariants.md, then state a verdict for each invariant (APPLIES->PASS/FAIL or NOT-APPLICABLE) per the worked example in HANDOFF_PROTOCOL.md. This diff touches a dev-tooling mix task (lint_handoffs) and a test fixture file, plus a completion-timestamp correction inside a handoff JSON file (ELIXIR-DEV flagged this as an out-of-scope fix in step-03-elixir-dev.json's result.issues -- confirm whether that correction is acceptable or should be reworked).",
+    "acceptance_criteria": [
+      "Scope test run against the real diff, not assumed",
+      "Verdict stated per invariant (INV-1..INV-8), APPLIES/NOT-APPLICABLE with reasoning",
+      "Explicit ruling on whether ELIXIR-DEV's out-of-scope timestamp correction in step-02-code-designer.json is acceptable to leave in this branch's diff",
+      "PASS/FAIL verdict, next_action naming REVIEWER on PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

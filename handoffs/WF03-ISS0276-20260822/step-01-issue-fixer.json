@@ -1,0 +1,58 @@
+{
+  "handoff_id": "5ef1c877-1222-4cc0-b8fc-4a2a23d02f76",
+  "run_id": "WF03-ISS0276-20260822",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0276-20260822/step-01-issue-fixer.json",
+  "created_at": "2026-08-22T14:47:31Z",
+  "started_at": "2026-08-22T14:47:31Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0276.yaml": "With a fresh dev database, Letflow.Identity.resolve_tenant_by_realm(\"bpm-default\") returns {:error, :not_found} because no tenants row has idp_realm_id = \"bpm-default\" -- there is no priv/repo/seeds.exs and no dev-bootstrap path that creates one. Only test fixtures (test/support/tenant_fixture.ex) create such a row, and only for the test DB. Discovered live during REQ-116's read-only frontend/API contract sweep (docs/frontend/contract-gaps.md, Environment notes item 2) and worked around live via a throwaway, non-committed script (scratch/bootstrap_tenant.exs, scratch/ is gitignored) that called the real already-shipped lib/ functions directly -- Letflow.Identity.create_tenant/1 -> Letflow.TenantProvisioning.provision_tenant_schema/1 -> Letflow.TenantProvisioning.replay_migrations/1, the same three calls Letflow.Routers.Tenants's own POST /tenants handler makes.\n\nFix direction (from the filing, not binding on CODE-DESIGNER's actual design -- the design step still owns the real approach): add a mix letflow.seed task (or documented bootstrap step) that provisions a default tenant (slug bpm-default, idp_realm_id bpm-default) against a fresh dev database, using the same shipped Identity/TenantProvisioning functions.\n\nAcceptance criteria (for the fix, and thus for the regression test):\n1. Running the new seed task/step against a freshly-migrated, empty dev database creates a tenant row with idp_realm_id = \"bpm-default\".\n2. After running it, an authenticated request bearing a valid bpm-default-realm token with a correct aud claim resolves a tenant and proceeds past AuthPipeline's tenant-resolution step.\n3. The seed path is documented (README or docs/) so a developer setting up a fresh environment finds it without reading this issue."
+    },
+    "related_handoff_ids": ["handoffs/WF03-ISS0276-20260822/step-00-git-setup.json"],
+    "artifacts_in": [
+      "docs/issues/ISS-0276.yaml",
+      "lib/letflow/identity.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/support/tenant_fixture.ex",
+      "lib/letflow/routers/tenants.ex"
+    ],
+    "owned_modules": ["priv/repo/seeds.exs", "lib/letflow/identity.ex", "lib/letflow/tenant_provisioning.ex", "mix.exs"]
+  },
+  "task": {
+    "description": "Perform WF-03 Step 0.5 (registry lookup) and Step 1 (diagnose) for ISS-0276 (queue task 276, GH#546) in one handoff, per docs/agents/workflows/WF-03_issue_resolving.md. Full issue description, fix direction, and acceptance criteria are in context.source_text under docs/issues/ISS-0276.yaml -- read that in full before starting. Step 0.5: search docs/issues/*.yaml for a prior resolved entry with similar symptoms (missing dev-bootstrap/seed data, tenant resolution failures) and state whether this is a recurrence. Step 1: reproduce directly -- start/verify a fresh dev DB state (or reason precisely from source if a live DB is not available in this environment, per core-directives.md's No Speculation rule -- state explicitly which you did), call Letflow.Identity.resolve_tenant_by_realm(\"bpm-default\") and confirm the {:error, :not_found} result, trace the root cause to the exact missing code path, and identify precisely what a fix needs to add (a mix task, its call chain, and what it must create). Do NOT implement the fix.",
+    "acceptance_criteria": [
+      "Step 0.5 registry lookup performed and result stated (recurrence or first occurrence)",
+      "Reproduced directly with real command/output evidence, or an explicit, evidenced explanation of why direct reproduction wasn't possible in this environment plus a source-derived equivalent",
+      "Root cause traced to the specific missing code path (not just the symptom)",
+      "result.summary states precisely what a fix needs to add/change, for CODE-DESIGNER to design from",
+      "Fix is NOT implemented in this step; next_action names CODE-DESIGNER"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "Not yet started.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

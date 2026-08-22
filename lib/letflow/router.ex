@@ -31,6 +31,19 @@ defmodule Letflow.Router do
   change `GET /health`'s response headers, which the health-check contract
   above pins.
 
+  `Letflow.Plugs.Cors` (REQ-118) **is** mounted on this router, ahead of
+  `plug(:match)`/`plug(:dispatch)`, so it runs for every route below —
+  `/health`, `/api/tenant-config`, and (falling through the forward) every
+  `/api/v1/*` route — with one plug. It has to cover `/api/tenant-config`
+  too: that's the SPA's login-bootstrap call, cross-origin from a built SPA
+  just like `/api/v1/*`, and it has no token yet to authenticate with, so it
+  can't go through `Letflow.Plugs.ApiPipeline` either. Mounting CORS here
+  does not change `GET /health`'s pinned status/JSON-body contract — it only
+  adds response headers, which `test/letflow/router_test.exs` does not
+  assert on for that route. See `lib/letflow/design/req118-cors.md` for the
+  full design (allowed-origin config, credentials decision, preflight
+  handling).
+
   Readiness endpoint (R-Co routes/health.zig handleReady, backed by
   src/api/health/readiness.zig + subsystems.zig) is deliberately not ported — it
   requires S6 observability subsystem probes that do not yet exist. Only the liveness
@@ -55,6 +68,7 @@ defmodule Letflow.Router do
 
   use Plug.Router
 
+  plug(Letflow.Plugs.Cors)
   plug(:match)
   plug(:dispatch)
 

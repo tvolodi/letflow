@@ -39,7 +39,7 @@
       "branch_name": "feature/WF02-REQ116-20260822",
       "remote_branch": "origin/feature/WF02-REQ116-20260822",
       "push_status": "pushed"
-    }
-  },
-  "next_action": "Route to FRONTEND-DEV (Step A: produce docs/frontend/contract-gaps.md)"
+    },
+    "next_action": "Route to FRONTEND-DEV (Step A: produce docs/frontend/contract-gaps.md)"
+  }
 }

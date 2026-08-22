@@ -210,8 +210,11 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 28
+    entries: 29
     note: >
+      Incremented to 29 by LOOP-20260822-orch (ORCH)'s own done-event append
+      for ISS-0285 -- 29 on-disk `- req:` entries in
+      requirement_status.v3.yaml, no rebase conflict on this file.
       Incremented to 28 by WF03-ISS0129-20260822 (ORCH)'s own done-event append
       -- 28 on-disk `- req:` entries in requirement_status.v3.yaml, no rebase
       conflict on this file.

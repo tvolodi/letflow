@@ -906,3 +906,29 @@ history:
       WF03-ISS0072-20260819. Verified live: mix test
       test/letflow/engine/pin_rebind_test.exs -> 19 passed, 0 failures. Released
       via POST /tasks/129/release with status done and an evidence note.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-22T18:35:00Z"
+    note: >
+      ISS-0285 (queue task 285, GH#562) registered and released done. Per
+      the /loop iteration instruction, this iteration first registered a
+      new issue-type task tracking a repeat pattern: two consecutive prior
+      /loop iterations on 2026-08-22 (ISS-0164/GH#310, then ISS-0129/GH#269)
+      each claimed a get_next_task result that was a stale duplicate of an
+      already-resolved local issue matching by github_issue_number.
+      docs/issues/ISS-0285.yaml written and committed. Cloned
+      tvolodi/letflow-queue and read lib/letflow_queue/tasks.ex
+      (get_next_task/1, import_open_github_issues/0, import_github_issue/1,
+      release_lock/2) -- no mechanism in that code reproduces the observed
+      behaviour on its own (status='open' claim filter, github_issue_number
+      exists? re-import guard, and status committed before best-effort
+      GitHub close all look sound in isolation). Filed
+      tvolodi/letflow-queue#5 with the diagnosis and two remaining
+      hypotheses (a distinct new GH issue number for an already-fixed
+      defect; a prior Letflow-side release_lock call omitting status:
+      "done"), asking the queue-service maintainer to check production
+      history for the two affected task rows. docs/issues/ISS-0285.yaml
+      status left open pending that check -- only the Letflow-side
+      tracking/cross-link deliverable is done. Released via POST
+      /tasks/285/release with status done.

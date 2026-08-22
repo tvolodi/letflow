@@ -1,0 +1,69 @@
+{
+  "handoff_id": "c4d8f1a3-6e29-4c7b-a15d-2f9b3e6c8a17",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ083-20260822/step-01b-design-validator-rework1.json",
+  "created_at": "2026-08-22T05:58:48Z",
+  "started_at": "2026-08-22T05:58:48Z",
+  "completed_at": "2026-08-22T05:58:48Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ083-20260822/step-00-git-setup.json",
+      "handoffs/WF02-REQ083-20260822/step-01-code-designer.json",
+      "handoffs/WF02-REQ083-20260822/step-01b-design-validator.json",
+      "handoffs/WF02-REQ083-20260822/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ083-20260822/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ083-20260822/step-01-code-designer-rework1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req083-task-routes-read.md",
+      "handoffs/WF02-REQ083-20260822/step-01-code-designer-rework1.json",
+      "handoffs/WF02-REQ083-20260822/step-02c-security-reviewer.json",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/tenant_role.ex",
+      "lib/letflow/identity/role_registry.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/tasks.ex"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 1b RE-VALIDATION (rework attempt 1 of 3) -- independently confirm CODE-DESIGNER's rework of lib/letflow/design/req083-task-routes-read.md genuinely closes SECURITY-REVIEWER's Step 2c INV-1 FAIL (resolve_principal_scope/2's role resolution previously routed through the unscoped Letflow.Identity.RoleRegistry.list_roles/0), and re-run the full Step 1b 5-point checklist against the whole design doc, not just the changed section.",
+    "acceptance_criteria": [
+      "New spec queries Letflow.Identity.TenantRole directly with an explicit :prefix option passed to Repo.all/2 -- not RoleRegistry.list_roles/0, not any other new unscoped path",
+      ":prefix value genuinely derived from tenant context (Context.scoped_repo_opts/1 convention), not hardcoded/caller-supplied",
+      "Repo.all(query, prefix: prefix) convention confirmed real by spot-checking cited precedent in lib/letflow/identity.ex",
+      "USER/GROUP resolution paths left untouched",
+      "No new file crossed outside owned_modules",
+      "Full Step 1b 5-point checklist re-run against the entire revised doc"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived the verdict from the actual artefacts, not from either handoff's self-report.\n\n1. Prefix-scoped query, correct target. Read lib/letflow/design/req083-task-routes-read.md section 3.4 point 2 directly (lines 349-393). The revised spec is: `from(t in Letflow.Identity.TenantRole, where: t.group_id in ^group_ids_from_step_1, select: %{name: t.name, group_id: t.group_id}) |> Repo.all(prefix: prefix)`. This queries Letflow.Identity.TenantRole (a plain public Ecto.Schema, confirmed by reading lib/letflow/identity/tenant_role.ex in full -- no encapsulation over it) directly, with an explicit `prefix:` option on `Repo.all/2`. It does not call Letflow.Identity.RoleRegistry.list_roles/0 anywhere -- confirmed by reading role_registry.ex's list_roles/0 (lines 38-40, still `Repo.all(from(t in TenantRole, order_by: [asc: t.name]))`, genuinely zero :prefix, unchanged by this rework since Identity is read-only/untouched) and confirming no reference to RoleRegistry remains in section 3.4's new text. No other new unscoped path was introduced -- section 3.4 point 1 (GroupMember read) is unchanged from the original PASSed design.\n\n2. Prefix provenance is genuine, not spoofable. Section 3.4's own @spec takes `opts :: [prefix: String.t()]` and the prose states this prefix is 'the same prefix value already threaded into this function's own opts (Sec4's [prefix: String.t()] -- sourced, transitively, from Context.scoped_repo_opts/1's tenant-schema name, never a path/query/header value)'. Cross-checked against section 4 ('Tenant scoping'): every handler resolves Context.scoped_repo_opts/1 first, whose own structural guarantee (REQ-072 sec3.1, already REVIEWER-confirmed, cited and not re-litigated here) is that its only input is conn.assigns[:auth_context][:tenant_id], never a caller-suppliable value. resolve_principal_scope/2 receives this same opts value from the router, not a fresh caller-supplied string -- no spoofing surface.\n\n3. Precedent verified real, not fabricated. Spot-checked the two cited lib/letflow/identity.ex line numbers directly: line 247 is `rows = Repo.all(query, prefix: prefix)` inside list_users/2, and line 412 is `groups = Repo.all(query, prefix: prefix)` inside list_groups/2. Both are real, both match the exact `Repo.all(query, prefix: prefix)` shape the rework claims as precedent. The convention is genuine, not invented for this rework.\n\n4. USER/GROUP paths untouched. Section 3.1 point 4 (assignee_scope's :unfiltered/{:explicit_user,_}/{:principal,_} clauses, including the USER/GROUP arms of the :principal case) and section 3.4 point 1 (the GroupMember query) are byte-for-byte the same as the original PASSed design -- the rework's own diff (git show --stat 8bb33d3) touched only lib/letflow/design/req083-task-routes-read.md (92 lines changed) and the rework handoff itself, confirming no code file was touched at all at this stage, so there is no risk these paths were altered outside the design doc either. Read section 3.1 and the GroupMember portion of 3.4 point 1 directly -- unchanged text, matches SECURITY-REVIEWER's PASS scope exactly.\n\n5. owned_modules boundary held. `git diff origin/main...HEAD --name-only` scoped to the run's owned files plus the pre-cleared authorization.ex touch shows exactly: lib/letflow/api/authorization.ex, lib/letflow/design/req083-task-routes-read.md, lib/letflow/routers/tasks.ex, lib/letflow/tasks.ex -- no lib/letflow/identity.ex, lib/letflow/identity/role_registry.ex, or lib/letflow/identity/tenant_role.ex appear in the diff (all three were read-only inputs for this rework, never modified). The rework commit itself (8bb33d3, `git show --stat`) touched only the design doc and its own handoff -- no lib/ file at all, consistent with this still being a Step 1 design-only rework.\n\n6. Full Step 1b checklist re-run against the entire revised document (not just section 3.4), since the doc changed: (a) every one of REQ-083's 7 acceptance criteria still maps to a concrete design element -- verified against section 9's traceability table, unchanged rows for AC1/AC3/AC5/AC6/AC7/AC8, and AC2's row (section 3.1 point 4 + section 3.4 + section 5.3 point 2) still holds since the mechanism producing role_names changed but the {:principal,_} scope clause and its semantics did not; no 'TBD'/'to be implemented' language anywhere (grepped the full file for TBD/to be (implemented|decided)/TODO -- zero hits). (b) Function signatures remain fully specified: list_tasks/2, get_task/2, resolve_principal_scope/2 all carry complete @spec blocks with named error atoms (section 3.1, 3.2, 3.4). (c) Error handling shape stated throughout -- {:ok,_}|{:error, atom} tuples named explicitly for every function, and section 3.5 states the deliberate no-catch-all-rescue policy for DB-level failures, consistent with established precedent. (d) Cross-module dependencies listed in section 6's table, now correctly showing Letflow.Identity.TenantRole (not RoleRegistry) as the direct-read dependency for resolve_principal_scope/2, with an inline rework note -- accurate to the current design. (e) No implementation code anywhere in the file -- grepped for `def foo(...) do` bodies (a top-level function-definition-with-body pattern): zero hits; every code block is a @spec, a type declaration, an Ecto.Query composition shown as a query-shape fragment (matching every other S4 design doc's established convention of showing query pipelines without wrapping them in `def ... do ... end`), or a field/table enumeration.\n\nNo failed check. PASS.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ083-20260822/step-01b-design-validator-rework1.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ083-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ083-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a rework) -- update resolve_principal_scope/2's role-name resolution in lib/letflow/tasks.ex to the revised section 3.4 point 2 spec, then re-submit to SECURITY-REVIEWER (Step 2c) for re-verification of INV-1."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

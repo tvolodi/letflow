@@ -23,3 +23,42 @@ affected_files:
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/324
 status: open
+reconciliation_note: >
+  GH#324 was found CLOSED (closedAt 2026-08-20T05:12:34Z) during ORCH's
+  2026-08-22 GitHub/local/queue reconciliation audit (WF03-ISS0278-20260822),
+  despite this local record still saying status: open and despite the design
+  doc it names never having been updated. The GitHub issue's own timeline has
+  zero comments and no linked/merged PR (`closedByPullRequestsReferences`
+  empty, no `commit_id` on the close event) -- unlike GH#329/#357 (ISS-0101,
+  ISS-0107), which trace to real merged PRs (#337, #437), this one has no
+  evidence trail of any kind. Reopened via `gh issue reopen` as a mistaken
+  closure; this local record's status is left `open` per WF-03 Step 5's
+  outcome (b), NOT resolved.
+
+  R-Co WAS checked this run (R-Co/src/definition/pack_update.zig, reachable at
+  c:\Users\tvolo\dev\ai-dala\R-Co, lines 1-30), and it surfaces a REAL,
+  previously-unverified divergence rather than confirming the design's
+  choice: R-Co's own `ResolutionKind` enum is
+  `{ keep_local, take_incoming, merged }` (pack_update.zig:25-29, and its
+  moduledoc comment line 5 names the same three: "a `keep_local`,
+  `take_incoming`, or `merged` resolution"). Letflow's design
+  (lib/letflow/design/req041-pack-update-diff-schema.md:266, §9 OQ-6) chose
+  `[:keep_theirs, :take_incoming, :custom]` -- same three concepts
+  (keep-the-local-side / take-the-incoming-side / a merged custom value) but
+  DIFFERENT atom names on two of the three (`keep_theirs` vs `keep_local`,
+  `custom` vs `merged`). This is not cosmetic: `Ecto.Enum` values are the
+  literal `varchar(255)` values persisted to `pack_update_resolutions.resolution`
+  (priv/repo/migrations/20260817083803_create_pack_update_resolutions.exs),
+  and the schema is already implemented and tested
+  (lib/letflow/definitions/pack_update_resolution.ex,
+  test/letflow/definitions/pack_update_migration_test.exs) -- so reconciling
+  the naming, if REVIEWER decides it should be reconciled, is a real code
+  change (migration + schema + call-site rename), not a doc-only fix, and is
+  out of this reconciliation run's scope per its own hard constraints.
+
+  So: the underlying OQ-6 question is now ACTUALLY answerable (it was not,
+  at design time, per §0's stated access gap) and the answer is "R-Co uses
+  different names for the same three states" -- worth a REVIEWER decision on
+  whether to rename Letflow's enum to match R-Co's naming or keep the current
+  naming with this citation recorded as the reason it diverges deliberately.
+  Neither the design doc nor the shipped code was changed by this run.

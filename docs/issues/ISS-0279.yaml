@@ -1,0 +1,55 @@
+id: ISS-0279
+title: "Process gap: GitHub issues closed with zero evidence trail (no comment, no linked PR) go undetected until manual reconciliation"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0278-20260822
+discovered_at: "2026-08-22T15:17:22Z"
+severity: MINOR
+tags:
+  - process-gap
+  - issue-hygiene
+  - reconciliation
+description: >
+  Found during WF03-ISS0278-20260822's reconciliation of four issues closed
+  COMPLETED with no explanatory comment: GH#324 (ISS-0096) and GH#326
+  (ISS-0098) were both closed 2026-08-20 with zero comment and no
+  linked/merged PR anywhere in their own GitHub timeline (no
+  `closedByPullRequestsReferences`, no `commit_id` on the `closed` timeline
+  event). Contrast with the other two issues reconciled in the same run,
+  GH#329 (ISS-0101) and GH#357 (ISS-0107), which both trace cleanly to real
+  merged PRs (#337, #437) despite also carrying no closing comment -- so a
+  PR reference alone is a real evidence trail even without a comment, but
+  #324/#326 have neither.
+
+  This is a DIFFERENT mechanism from the sibling finding ISS-0277/GH#548
+  (three issues closed COMPLETED despite an explicit, self-contradicting
+  "investigated but not fixed" comment on each) -- that one is a false
+  positive on top of real investigative work; this one is a closure with no
+  trail of any kind, so it cannot even be checked against its own stated
+  reasoning at the time it happened.
+
+  On reinvestigation this run: GH#326 turned out to be genuinely resolvable
+  (backfilled with real R-Co evidence gathered this run). GH#324 turned out
+  to still be a real open question -- reinvestigation surfaced a genuine,
+  previously-undocumented naming divergence between Letflow's design and
+  R-Co's actual enum (`docs/issues/ISS-0096.yaml`'s `reconciliation_note`).
+  So the zero-evidence-trail pattern is not even a safe proxy for "the
+  underlying work happened" -- one of the two turned out fine, the other did
+  not, and there was no way to tell which from the GitHub state alone.
+affected_files:
+  - docs/issues/ISS-0096.yaml
+  - docs/issues/ISS-0098.yaml
+recommendation: >
+  A mechanical gate, not another documentation reminder: closing an issue
+  (`gh issue close`, or the local status flip to resolved/no_defect/
+  instrumented) should require either a `--comment` citing the resolving
+  evidence, or a genuinely linked/merged PR carrying a Closes/Fixes
+  reference. A periodic audit (or CI check) should flag any GitHub issue
+  that is closed but has neither, the same way this run's manual audit
+  found these two by hand.
+queue_task_id: 279
+github_issue: 551
+status: open
+related:
+  - ISS-0096
+  - ISS-0098
+  - ISS-0278

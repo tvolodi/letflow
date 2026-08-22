@@ -1,0 +1,137 @@
+id: ISS-0278
+title: >
+  Four GitHub issues (GH#324/#326/#329/#357) closed COMPLETED with zero
+  explanatory comment while their local docs/issues/ISS-NNNN.yaml records
+  still said status: open -- reconciliation and per-issue verdicts
+discovered_by: ORCH
+discovered_in_run: reconciliation-audit-20260822
+discovered_at: "2026-08-22T14:48:52Z"
+severity: MINOR
+
+description: >
+  Filed by ORCH during a 2026-08-22 GitHub/local-docs/queue reconciliation
+  audit. Four GitHub issues, all originating from REQ-112 (a docs-only
+  triage requirement that explicitly does not read R-Co source to answer
+  the OQ-style questions it raises) or from incidental test-infrastructure
+  discovery, were closed with GitHub stateReason COMPLETED and zero
+  comment, while their local docs/issues/ISS-NNNN.yaml records still read
+  status: open:
+
+    - GH#324 / ISS-0096 -- pack-update conflict-resolution enum
+      (:keep_theirs/:take_incoming/:custom) not sourced from R-Co. No
+      comment, no linked PR.
+    - GH#326 / ISS-0098 -- cancel_instance/3 reason/note field +
+      branch-event teardown mechanism not verified against R-Co. No
+      comment, no linked PR.
+    - GH#329 / ISS-0101 -- sub-process output-merge variable-type schema
+      question (OQ-2). No comment, but PR #337 is linked (merged).
+    - GH#357 / ISS-0107 -- letflow_check_test_test.exs's fake-mix fixture
+      is POSIX-only, corrupts shared test DB state on Windows timeout. No
+      comment, but PR #437 is linked (merged).
+
+  Each was investigated on its own evidence, per WF-03 Step 1's "reproduce,
+  don't diagnose from prose alone" rule, rather than assumed resolved or
+  assumed mistaken as a block.
+
+affected_files:
+  - docs/issues/ISS-0096.yaml
+  - docs/issues/ISS-0098.yaml
+  - docs/issues/ISS-0101.yaml
+  - docs/issues/ISS-0107.yaml
+  - docs/issues/ISS-0171.yaml
+  - lib/letflow/design/req041-pack-update-diff-schema.md
+  - lib/letflow/design/req052-instance-cancellation.md
+
+related:
+  - ISS-0096
+  - ISS-0098
+  - ISS-0101
+  - ISS-0107
+  - ISS-0171
+  - ISS-0277  # sibling reconciliation finding (GH#548) -- different mechanism, see resolution_note
+  - ISS-0279  # process-gap follow-up filed by this run
+
+queue_task_id: 278
+github_issue: 549
+
+status: resolved
+resolved_in_run: WF03-ISS0278-20260822
+resolved_at: "2026-08-22T15:14:15Z"
+resolution_note: >
+  Per-issue verdicts, each backed by real evidence (PR content, R-Co source
+  lines, or GitHub timeline data) rather than assumed from the closure
+  state:
+
+  GH#329/ISS-0101 -- GENUINELY RESOLVED. PR #337 (merged 2026-08-20T04:28:01Z,
+  "Fixes #329") found and fixed a real pre-existing gap:
+  lib/letflow/engine/sub_process.ex's build_completion_multi_from_merge/12
+  hardcoded VariableMerge.merge(..., nil), silently skipping the registry
+  variable-type-schema check on sub-process output merges. Verified R-Co's
+  own instance.zig mergeVariables (both the sub-process call site line 4956
+  and the task-completion call site line 1856) use the identical
+  variable_schemas lookup keyed only on definition_id -- OQ-2's answer is
+  yes. lib/letflow/design/req062-sub-process-runtime.md:745 already carries
+  "OQ-2 -- RESOLVED 2026-08-20, GH#329" and the fix's own regression test
+  (test/letflow/engine_sub_process_test.exs, "OQ-2/GH#329" describe block)
+  is on main today. ISS-0101.yaml backfilled to resolved.
+
+  GH#357/ISS-0107 -- GENUINELY RESOLVED, but under a DIFFERENT local
+  filename. PR #437 (merged 2026-08-21T14:28:43Z, "Closes #357 (ISS-0171)")
+  is on main: test/mix/tasks/letflow_check_test_test.exs's install_fake_mix/2
+  now branches on :os.type/0, writing mix.bat + a type-based companion
+  output file and joining PATH with ";" on Windows, plus a fail-fast guard.
+  PR body reports 3/3 passed in 0.3s on a real Windows host (was 2x60s
+  timeout + 1 error) and 43/43 for the surrounding suite. The fix landed
+  under docs/issues/ISS-0171.yaml, not this file, because queue task 171's
+  own description pointed at a stale/wrong filename (ISS-0106.yaml, which
+  belongs to an unrelated issue) -- a second, independent instance of the
+  documented ISS-number/filename collision class (docs/anti-patterns.md),
+  not a mistaken closure. ISS-0107.yaml backfilled to resolved, cross-linked
+  to ISS-0171.yaml; ISS-0171.yaml's own related: list updated to point back.
+
+  GH#326/ISS-0098 -- GENUINELY RESOLVED, verified live by THIS run (the
+  closure itself had zero evidence trail, but the underlying question is
+  now actually answerable and the design's assumptions turn out correct).
+  R-Co/src/engine/instance.zig, unreachable when the design was first
+  written, is reachable now. cancelInstance's real signature
+  (instance.zig:2513) has no reason/note parameter, confirming OQ-1. Its
+  documented 8-step algorithm (steps d/e) issues direct SQL UPDATE
+  statements against tasks and timers rather than driving per-branch events
+  through R-Co's own transition machinery, confirming OQ-2 and the design's
+  independent §4 reasoning. lib/letflow/design/req052-instance-cancellation.md's
+  §0 access-gap note and §11 OQ-1/OQ-2 updated in this run to cite this
+  evidence and marked RESOLVED. No code change needed -- cancel_instance/3
+  already implements both confirmed behaviours. ISS-0098.yaml backfilled to
+  resolved.
+
+  GH#324/ISS-0096 -- MISTAKEN CLOSURE, REOPENED. Zero comment, no linked PR,
+  no commit_id on the close event -- the only one of the four with no
+  evidence trail of any kind (unlike #329/#357, which had real merged PRs
+  even without a comment). Investigated directly against R-Co's now-reachable
+  pack_update.zig, and it surfaces a REAL, previously-unknown divergence:
+  R-Co's ResolutionKind enum is {keep_local, take_incoming, merged}
+  (pack_update.zig:25-29), while Letflow's design chose
+  {:keep_theirs, :take_incoming, :custom} -- same three concepts, different
+  atom names on two of three. The schema is already implemented and tested
+  (lib/letflow/definitions/pack_update_resolution.ex,
+  priv/repo/migrations/20260817083803_create_pack_update_resolutions.exs),
+  so reconciling the naming is a real code change requiring REVIEWER
+  sign-off, out of this reconciliation run's scope. Reopened GH#324 via
+  `gh issue reopen` with this finding; local record left status: open per
+  WF-03 Step 5 outcome (b). lib/letflow/design/req041-pack-update-diff-schema.md's
+  OQ-6 annotated with the citation and left unresolved.
+
+  ISS-0277 connection, checked explicitly: NOT the same mechanism.
+  ISS-0277/GH#548 is three issues closed COMPLETED despite each one's own
+  comment explicitly stating the fix was NOT shipped (investigation-only
+  runs, wrongly marked done -- either a release_lock status:"done" mistake
+  or a queue auto-close firing on a PR's Closes/Fixes keyword even for an
+  investigation-only PR). This run's four issues have NO comment at all on
+  three of them (#324/#326/#357) and none on #329 either -- so unlike
+  ISS-0277, there is no self-contradicting record to have been overridden;
+  #329/#357 traced to real completed fixes via their PRs regardless of the
+  missing comment, and #324/#326 had no PR at all. Different root cause,
+  filed as its own process-gap issue rather than folded into ISS-0277:
+  ISS-0279 ("GitHub issues closed with zero evidence trail go undetected
+  until manual reconciliation"), registered via register_task as queue
+  task 279 / GH#551.

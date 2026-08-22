@@ -28,4 +28,32 @@ affected_files:
   - lib/letflow/design/req062-sub-process-runtime.md
 queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
 github_issue: https://github.com/tvolodi/letflow/issues/329
-status: open
+status: resolved
+resolved_in_run: unknown (backfill) -- fix landed via PR #337, "fix(sub_process): apply registry variable-type schemas to output merge, close GH#329", merged 2026-08-20T04:28:01Z
+resolved_at: 2026-08-20T04:28:01Z
+resolution_note: >
+  Backfilled 2026-08-22 by ORCH's GitHub/local/queue reconciliation audit
+  (WF03-ISS0278-20260822). GH#329 was closed with zero comment and no visible
+  cross-reference in the issue timeline itself, but PR #337 (merged, state
+  MERGED, mergedAt 2026-08-20T04:28:01Z) carries "Fixes #329" and its own body
+  states the real finding: R-Co's `instance.zig` `mergeVariables` (the
+  sub-process completion call site at line 4956) uses the exact same
+  `variable_schemas` lookup, keyed only on `definition_id`, as every other
+  merge call site (line 1856, the task-completion path) -- i.e. OQ-2's answer
+  is yes, the parent's registered variable-type schemas DO apply to a
+  sub-process output merge. PR #337 found and fixed a real pre-existing gap:
+  `lib/letflow/engine/sub_process.ex`'s `build_completion_multi_from_merge/12`
+  hardcoded `VariableMerge.merge(seed_state.variables, merge_variables, nil)`,
+  silently skipping the registry check. Fixed to call
+  `Letflow.Engine.VariableSchema.variable_validations/5` first, matching
+  `Letflow.Engine.merge_output_variables/7`'s already-shipped pattern, routing
+  a `:rejected` outcome into `ExecutionError.append_multi/3`.
+  Independently re-verified here: `lib/letflow/design/req062-sub-process-runtime.md:745`
+  now reads "**OQ-2 — RESOLVED 2026-08-20, GH#329.**" and cites the same
+  R-Co evidence; `test/letflow/engine_sub_process_test.exs`'s "OQ-2/GH#329"
+  describe block exists on `main` today, asserting an output value that
+  passes the interface's own per-output json_schema (SPC-01) but violates a
+  stricter registry row for the same key is still rejected. This local
+  record's `status:` was never flipped when the fix landed -- the pipeline's
+  actual fix work (PR #337) is genuine and complete; only this bookkeeping
+  record was stale.

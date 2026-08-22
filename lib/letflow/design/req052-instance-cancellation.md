@@ -108,17 +108,30 @@ design element. No implementation code — signatures/shapes only, matching
   - `test/letflow/parallel_approval_test.exs` (existence confirmed via `grep -rl`, not read
     in full — its removal is ELIXIR-DEV's job alongside the module's own deletion, per §2).
 
-**Access gap, stated explicitly, matching REQ-051's own precedent (its §0):** this
-environment has no `R-Co/src/engine/instance.zig` or `R-Co/src/design/engine.md` reachable
-(`find / -iname "instance.zig"` and `find / -iname "engine.md" -path "*design*"` both return
-no match). This design is built entirely from this run's `context.requirement_text.REQ-052`
-(already ORCH's own summary of EE-08) plus the shipped precedent in `req045`/`req048`/
-`req051`'s design docs and the actual shipped code they describe. Two things this design
-cannot verify against R-Co's literal source: (a) whether `cancelInstance` accepts a
-caller-supplied cancellation reason/note beyond `actor_id`/`idempotency_key` (§3's own
-open question, §11 OQ-1), and (b) whether R-Co's own teardown drives per-branch
-`{:cancel_branch, _}`-equivalent events through its transition function or cancels tasks
-directly (§4's own reasoning is this design's independent resolution, flagged there).
+**Access gap — RESOLVED 2026-08-22, GH#326 (WF03-ISS0278-20260822).** At design time this
+environment had no `R-Co/src/engine/instance.zig` reachable, so OQ-1 and OQ-2 below were
+left as this design's own unverified resolutions. `R-Co/src/engine/instance.zig` is
+reachable now (`c:\Users\tvolo\dev\ai-dala\R-Co`), and both questions are settled by its
+`cancelInstance` (EE-08, line 2513 on):
+
+- **OQ-1 (reason/note field): CONFIRMED, no field expected.** The real signature is
+  `pub fn cancelInstance(self: *InstanceStore, allocator: std.mem.Allocator, task_store: *const task_mod.TaskStore, instance_id: Uuid, actor_id: []const u8) CancelInstanceError!void` —
+  no `reason`/`note` parameter of any kind. `cancel_attrs()`'s omission (§3) matches R-Co
+  exactly.
+- **OQ-2 (per-branch teardown mechanism): CONFIRMED, direct UPDATE, not per-branch
+  transition events.** R-Co's own doc-comment states the 8-step algorithm explicitly (steps
+  d/e): `UPDATE tasks SET status='CANCELLED' ... WHERE instance_id=$1 AND status='PENDING'`
+  and `UPDATE timers SET status='cancelled' ... WHERE instance_id=$1 AND status='pending'`,
+  both plain SQL UPDATEs issued directly inside the single `cancelInstance` transaction —
+  there is no per-branch event driven through R-Co's own transition/graph machinery
+  anywhere in this path. §4's reasoning below (not driving `{:cancel_branch, branch_id}`
+  through `Transition`) is the same shape R-Co itself uses, not merely a plausible
+  independent choice.
+
+This design is otherwise unchanged — §4's own machinery (Ecto transactional multi vs. R-Co's
+SQL transaction) was already reasoned independently and remains a legitimate implementation
+choice; only the *mechanism* question (direct update vs. per-event) was open, and it is now
+confirmed to match.
 
 ---
 
@@ -576,13 +589,13 @@ Also states, per §2's own required content: the `Letflow.ParallelApproval`/
 
 ## 11. Open questions — explicitly listed, not silently resolved
 
-**OQ-1 (MINOR).** `cancel_attrs()` (§3) carries no cancellation-reason/note field. No
-acceptance criterion names one, and R-Co's own literal `cancelInstance` signature is
-unreachable in this environment (§0's access gap). Flagged for REVIEWER to confirm no
-`reason`/`note` field is expected, or to add one as a small follow-up if S4's future
-`POST /instances/:id/cancel` body needs to carry one through.
+**OQ-1 (MINOR) — RESOLVED 2026-08-22, GH#326.** `cancel_attrs()` (§3) carries no
+cancellation-reason/note field. R-Co's own literal `cancelInstance` signature
+(`R-Co/src/engine/instance.zig:2513`) confirms this: its parameter list is
+`(self, allocator, task_store, instance_id, actor_id)` — no `reason`/`note` field at all.
+No S4 follow-up needed on this point.
 
-**OQ-2 (MAJOR).** §4's decision **not** to drive `{:cancel_branch, branch_id}` through
+**OQ-2 (MAJOR) — RESOLVED 2026-08-22, GH#326.** §4's decision **not** to drive `{:cancel_branch, branch_id}` through
 `Transition` for `cancel_instance/3`'s own whole-instance cancellation, and the
 "agreement by construction" argument offered in its place, is this design's own resolution
 of a genuinely ambiguous AC ("an instance CANCELLED by the all-branches-cancelled path and

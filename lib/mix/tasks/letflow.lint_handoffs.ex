@@ -136,6 +136,13 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   # `lib/letflow/design/iss0262-lint-handoffs-non-json-discovery.md` §3 for
   # the reasoning. No wildcard: a NEW non-JSON file introduced later is not
   # covered by this list and fails the build.
+  #
+  # 2026-08-22, ISS-0262 Step Final rework (rework_count 1): 2 more
+  # pre-existing Markdown handoff files, discovered only after this branch
+  # was rebased onto a `main` that had since gained the already-closed,
+  # already-merged WF03-ISS0261-20260822 run (PR #513). Same disposition as
+  # the original 10 above and for the identical reason -- confirmed by
+  # ISSUE-FIXER in handoffs/WF03-ISS0262-20260822/step-06-issue-fixer-rework.json.
   @grandfathered [
     {"H3", "handoffs/WF02-REQ023-20260816/step-06-doc-updater.json"},
     {"H2", "handoffs/WF02-REQ025-20260817/step-01b-code-design-validator.json"},
@@ -152,7 +159,9 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
     {"H6", "handoffs/WF03-ISS0258-20260822/step-03c-reviewer.md"},
     {"H6", "handoffs/WF03-ISS0258-20260822/step-04-test-designer.md"},
     {"H6", "handoffs/WF03-ISS0258-20260822/step-04b-test-design-validator.md"},
-    {"H6", "handoffs/WF03-ISS0258-20260822/step-04c-test-design-validator-regate.md"}
+    {"H6", "handoffs/WF03-ISS0258-20260822/step-04c-test-design-validator-regate.md"},
+    {"H6", "handoffs/WF03-ISS0261-20260822/step-01-issue-fixer.md"},
+    {"H6", "handoffs/WF03-ISS0261-20260822/step-03c-reviewer.md"}
   ]
 
   @spec grandfathered?(String.t(), String.t()) :: boolean()

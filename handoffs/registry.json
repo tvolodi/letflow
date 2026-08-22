@@ -2100,16 +2100,16 @@
       "workflow_id": "WF-03",
       "requirement_ids": [],
       "stage": "S0",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": ["docs/agents/protocols/ISSUE_QUEUE.md", "docs/agents/workflows/WF-03_issue_resolving.md", "lib/mix/tasks/letflow.audit_issue_closures.ex"],
       "lock_acquired_at": "2026-08-22T16:35:52Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 COMPLETED PASS -- branch feature/WF03-ISS0279-20260822 pushed.",
+      "lock_released_at": "2026-08-22T18:11:36Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #561 squash-merged (0170372). Handoff handoffs/WF03-ISS0279-20260822/step-final-git-merge.json. docs/issues/ISS-0279.yaml marked resolved; queue task 279 released with status done; GH#551 closed.",
       "backfilled": false,
       "queue_task_id": 279,
       "queue_agent_id": "tvolodi-orch",
-      "note": "WF-03 for ISS-0279 (GH#551, queue task 279, stage S0 -- process gap: GitHub issues closed with zero evidence trail (no comment, no linked PR) go undetected until manual reconciliation, found during WF03-ISS0278-20260822's reconciliation audit on GH#324/GH#326). Recommends a mechanical gate on issue closure (require a resolving --comment or a linked/merged PR) plus a periodic/CI audit that flags closed issues lacking both."
+      "note": "WF-03 for ISS-0279 (GH#551, queue task 279, stage S0 -- process gap: GitHub issues closed with zero evidence trail (no comment, no linked PR) go undetected until manual reconciliation, found during WF03-ISS0278-20260822's reconciliation audit on GH#324/GH#326). Fix: hardened evidence-on-close prose in docs/agents/workflows/WF-03_issue_resolving.md Step 5 and a new docs/agents/protocols/ISSUE_QUEUE.md closing section (mandatory --comment or linked/merged PR), plus a new standalone mix letflow.audit_issue_closures backstop tool (lib/mix/tasks/letflow.audit_issue_closures.ex, modeled on letflow.lint_handoffs.ex's grandfather-list pattern; deliberately NOT wired into letflow.check due to its gh/network dependency). Design gate failed once (rework 1/3: a design artefact contained a real function body instead of a bare @spec) then passed on re-check. Net-new module so regression coverage used mutation testing per WF-03's own rule: 2 mutants applied to classify/1 and grandfathered?/1, each isolating exactly its targeted test, both independently reproduced by TEST-DESIGN-VALIDATOR. Full suite post-rebase: 1796/1801, 5 failures all structurally attributed to unrelated pre-existing DB-provisioning-timing flakes (Letflow.IdentityMigrationTest, Letflow.TenantSchemaReaperTest x3, Letflow.SandboxPoolTest), none touching this branch's files. ELIXIR-DEV's real audit run against the actual repo found 30 pre-existing zero-evidence closures, individually dated/traced into the grandfather list; independently confirmed GH#324/#326 now carry real evidence (from WF03-ISS0278-20260822) and were correctly excluded from grandfathering."
     }
   ]
 }

@@ -22,7 +22,9 @@
       "docs/issues/",
       "docs/agents/workflows/WF-03_issue_resolving.md"
     ],
-    "owned_modules": ["lib/letflow/sandbox_pool.ex"]
+    "owned_modules": [
+      "lib/letflow/sandbox_pool.ex"
+    ]
   },
   "task": {
     "description": "WF-03 Step 0.5 (registry lookup) and Step 1 (root-cause diagnosis) for ISS-0227 / GH#465 / queue task 227. REVIEWER filed, during WF03-ISS0224-20260822, that Letflow.SandboxPool carries two fields written but never read and derivable from state the pool already holds: `owner_pid`, and `schema_name` on the `in_flight` record. Confirm both are genuinely write-only across all of lib/ and test/ (not just sandbox_pool.ex), state the derivation for each, and route to CODE-DESIGNER. Do NOT implement the fix.",
@@ -49,7 +51,18 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to CODE-DESIGNER for fix design (WF-03 Step 2)."
+    "next_action": "Route to CODE-DESIGNER for fix design (WF-03 Step 2).",
+    "corrections": [
+      {
+        "id": "C-01",
+        "raised_by": "CODE-DESIGN-VALIDATOR (finding D3, handoff step-02b-code-design-validator.json), applied by ISSUE-FIXER",
+        "at": "2026-08-22T04:20:00Z",
+        "what_was_wrong": "result.summary's FIELD 2 section states the exhaustive check as `git grep -nohE \"in_flight[a-z_]*\\.[a-z_]+\" -- lib test | sort | uniq -c` and reports '32 field accesses'. Both the command and the figure are wrong. The command is not restricted to code files, and `lib/` contains `lib/letflow/design/*.md`; and the `-n` flag prefixes every line with its line number, which makes every line unique and defeats `uniq -c` entirely, so 32 was a count of distinct prefixed lines rather than of grouped accesses.",
+        "what_is_correct": "The command must be code-file-restricted and must drop `-n`: `grep -rohE --include=*.ex --include=*.exs \"in_flight[a-z_]*\\.[a-z_]+\" lib test | sort | uniq -c` returns 12 hits -- `in_flight.op` x7, `in_flight.task_ref` x4, `in_flight.task_pid` x1, and ZERO `.schema_name`. Reproduced independently by CODE-DESIGN-VALIDATOR.",
+        "does_the_conclusion_survive": "YES, unchanged. The claim this figure supported -- that no code anywhere in lib/ or test/ ever reads `in_flight.schema_name` -- is true and was re-derived twice. Verified additionally at the pre-design commit f851aba, where `git grep -nE \"in_flight[a-z_]*\\.schema_name\" f851aba -- lib test` returns nothing at all, so the original run's zero-`.schema_name` observation was accurate for the tree it was made against. Every `.schema_name` hit an unrestricted grep returns today lives in one file -- lib/letflow/design/iss0227-sandbox-pool-dead-field-removal.md, this run's own design doc -- which is an instance of docs/anti-patterns.md:1195 and is recorded as such in that doc's section 4.1.",
+        "note": "Recorded rather than silently edited: the false figure is left visible above so a later reader can see what was corrected and why, per this project's audit-trail discipline. Do not cite the 32."
+      }
+    ]
   },
   "rework_count": 0,
   "max_rework": 3

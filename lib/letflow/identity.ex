@@ -536,6 +536,209 @@ defmodule Letflow.Identity do
     end
   end
 
+  # ── Tenant administration (REQ-075) ─────────────────────────────────────
+  #
+  # None of these six functions take an `opts`/`:prefix` parameter — the
+  # structural difference from every function above. `tenants` lives in
+  # Postgres's default schema, not inside any tenant's own schema, so there
+  # is nothing to `:prefix`-scope by. See
+  # `lib/letflow/design/req075-tenant-administration-routes.md` §7 for the
+  # full design, and that design's own intro / this module's callers
+  # (`Letflow.Routers.Tenants`) for why the only protection on these six is
+  # a PLATFORM_ADMIN role check, not tenant scoping.
+
+  @typedoc "Params accepted by `list_tenants/1` — see its own @doc."
+  @type list_tenants_params :: %{
+          search: String.t() | nil,
+          cursor: Pagination.Cursor.t() | nil,
+          page_size: pos_integer()
+        }
+
+  @doc """
+  Creates a tenant row via `Tenant.create_changeset/3`, no business logic
+  beyond that. `attrs` is a caller-validated map (`Letflow.Api.Validation.validate/2`'s
+  output) with keys `"slug"`/`"display_name"`/optionally `"idp_realm_id"`.
+
+  **`oidc_mode` (REQ-075 OQ-4 — a pre-existing REQ-019 §8 OQ-1 gap, not
+  resolved here):** no global OIDC-enabled/disabled config key exists yet in
+  this codebase. `:disabled` is passed, matching the only existing
+  precedent for this exact gap — `Letflow.TenantFixture.provisioned_tenant!/1`'s
+  own `opts[:oidc_mode]` default (`test/support/tenant_fixture.ex`). This is
+  a reuse of an already-established placeholder, not a new resolution of
+  REQ-019's open question.
+
+  Returns `{:error, :duplicate_slug}` on a `slug` unique-constraint
+  violation, or `{:error, Ecto.Changeset.t()}` for any other changeset
+  failure. Does **not** provision the tenant's Postgres schema or replay its
+  migrations — `Letflow.Routers.Tenants`'s `POST /tenants` handler
+  orchestrates `Letflow.TenantProvisioning.provision_tenant_schema/1` and
+  `Letflow.TenantProvisioning.replay_migrations/2` itself, immediately after
+  this function returns `{:ok, tenant}` — matching `TenantProvisioning`'s
+  own "two separate, composable primitives, neither calls the other"
+  invariant, extended to this third primitive (design §7.1).
+  """
+  @spec create_tenant(attrs :: map()) ::
+          {:ok, Tenant.t()} | {:error, :duplicate_slug} | {:error, Ecto.Changeset.t()}
+  def create_tenant(attrs) do
+    changeset = Tenant.create_changeset(%Tenant{}, attrs, :disabled)
+
+    case Repo.insert(changeset) do
+      {:ok, tenant} ->
+        {:ok, tenant}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        if slug_unique_conflict?(changeset) do
+          {:error, :duplicate_slug}
+        else
+          {:error, changeset}
+        end
+    end
+  end
+
+  @doc """
+  Lists tenants, filtered by an optional `search` substring (`ILIKE` across
+  `slug`/`display_name`), cursor-paginated via `Letflow.Api.Pagination`.
+  Sorted by `inserted_at` ascending, then `id` ascending as a tiebreaker —
+  same convention as `list_users/2`.
+
+  Always returns `{:ok, _}` — an empty or last page is `{:ok, %{tenants: [],
+  next_cursor: nil}}`, never an error tuple.
+  """
+  @spec list_tenants(list_tenants_params()) ::
+          {:ok, %{tenants: [Tenant.t()], next_cursor: String.t() | nil}}
+  def list_tenants(params) do
+    page_size = Map.fetch!(params, :page_size)
+
+    query =
+      Tenant
+      |> filter_tenants_by_search(Map.get(params, :search))
+      |> filter_tenants_by_cursor(Map.get(params, :cursor))
+      |> order_by([t], asc: t.inserted_at, asc: t.id)
+      |> limit(^(page_size + 1))
+
+    rows = Repo.all(query)
+    {page, next_cursor} = split_tenants_page(rows, page_size)
+
+    {:ok, %{tenants: page, next_cursor: next_cursor}}
+  end
+
+  @doc "Fetches a single tenant by its (globally unique) `slug`."
+  @spec get_tenant_by_slug(slug :: String.t()) :: {:ok, Tenant.t()} | {:error, :not_found}
+  def get_tenant_by_slug(slug) do
+    case Repo.get_by(Tenant, slug: slug) do
+      %Tenant{} = tenant -> {:ok, tenant}
+      nil -> {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Partial-update of a tenant's `display_name` only, via
+  `Tenant.admin_patch_changeset/2` — see that changeset's own @doc for why
+  `:status` is structurally excluded from this path.
+  """
+  @spec patch_tenant(slug :: String.t(), attrs :: map()) ::
+          {:ok, Tenant.t()} | {:error, :not_found} | {:error, Ecto.Changeset.t()}
+  def patch_tenant(slug, attrs) do
+    case Repo.get_by(Tenant, slug: slug) do
+      nil ->
+        {:error, :not_found}
+
+      %Tenant{} = tenant ->
+        tenant
+        |> Tenant.admin_patch_changeset(attrs)
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Sets a tenant's `status` to `:inactive`, via `Tenant.status_changeset/2`.
+  Idempotent (design §6.5/§9 OQ-2): re-deactivating an already-`:inactive`
+  tenant succeeds as a no-op, same final state — there is no
+  `:invalid_transition` error variant, matching this codebase's own
+  established idempotency precedent for
+  `TenantProvisioning.provision_tenant_schema/1`.
+  """
+  @spec deactivate_tenant(slug :: String.t()) :: {:ok, Tenant.t()} | {:error, :not_found}
+  def deactivate_tenant(slug), do: set_tenant_status(slug, :inactive)
+
+  @doc """
+  Sets a tenant's `status` to `:active`, via `Tenant.status_changeset/2`.
+  Idempotent, same reasoning as `deactivate_tenant/1`.
+  """
+  @spec reactivate_tenant(slug :: String.t()) :: {:ok, Tenant.t()} | {:error, :not_found}
+  def reactivate_tenant(slug), do: set_tenant_status(slug, :active)
+
+  defp set_tenant_status(slug, status) do
+    case Repo.get_by(Tenant, slug: slug) do
+      nil ->
+        {:error, :not_found}
+
+      %Tenant{} = tenant ->
+        tenant
+        |> Tenant.status_changeset(%{status: status})
+        |> Repo.update()
+    end
+  end
+
+  # ── Tenant administration private helpers ───────────────────────────────
+
+  @spec slug_unique_conflict?(changeset :: Ecto.Changeset.t()) :: boolean()
+  defp slug_unique_conflict?(%Ecto.Changeset{errors: errors}) do
+    Enum.any?(errors, fn
+      {:slug, {_message, keyword}} -> Keyword.get(keyword, :constraint) == :unique
+      _other -> false
+    end)
+  end
+
+  @tenants_cursor_prefix "T:"
+
+  defp filter_tenants_by_search(query, nil), do: query
+  defp filter_tenants_by_search(query, ""), do: query
+
+  defp filter_tenants_by_search(query, search) do
+    like = "%#{search}%"
+
+    from(t in query, where: ilike(t.slug, ^like) or ilike(t.display_name, ^like))
+  end
+
+  defp filter_tenants_by_cursor(query, nil), do: query
+
+  defp filter_tenants_by_cursor(query, %Pagination.Cursor{} = cursor) do
+    {inserted_at_us, id} = decode_tenants_cursor(cursor)
+    ts = naive_datetime_from_us(inserted_at_us)
+
+    from(t in query,
+      where: t.inserted_at > ^ts or (t.inserted_at == ^ts and t.id > ^id)
+    )
+  end
+
+  # Payload shape: "T:<mint_time_us>:<inserted_at_us>:<id>" — same
+  # field-slot repurposing as decode_users_cursor/1 above (see that
+  # function's comment for the full expiry-vs-sort-key reasoning, which
+  # applies identically here).
+  defp decode_tenants_cursor(%Pagination.Cursor{inner: inner}) do
+    prefix_len = byte_size(@tenants_cursor_prefix)
+    rest = binary_part(inner, prefix_len, byte_size(inner) - prefix_len)
+    [_mint_time_us_str, inserted_at_us_str, id_str] = String.split(rest, ":", parts: 3)
+    {String.to_integer(inserted_at_us_str), id_str}
+  end
+
+  defp split_tenants_page(rows, page_size) when length(rows) > page_size do
+    {page, [_extra_row]} = Enum.split(rows, page_size)
+    {page, build_tenants_next_cursor(List.last(page))}
+  end
+
+  defp split_tenants_page(rows, _page_size), do: {rows, nil}
+
+  defp build_tenants_next_cursor(%Tenant{id: id, inserted_at: inserted_at}) do
+    mint_time_us = System.system_time(:microsecond)
+    inserted_at_us = us_from_naive_datetime(inserted_at)
+
+    @tenants_cursor_prefix
+    |> Pagination.build_raw_cursor_timestamp_key(mint_time_us, inserted_at_us, id)
+    |> Pagination.encode_cursor()
+  end
+
   # ── create_group/2 / add_group_member/3 private helpers ─────────────────
 
   @spec group_name_unique_conflict?(changeset :: Ecto.Changeset.t()) :: boolean()

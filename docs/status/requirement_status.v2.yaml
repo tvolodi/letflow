@@ -746,6 +746,30 @@ history:
       directly (grep for "group"): no hit needing an update -- no
       externally-visible behavior documented there changes.
 
+  - req: REQ-075
+    event: started
+    agent: ORCH
+    at: "2026-08-22T01:30:00Z"
+    note: >
+      Picking up queue task 142 (GH#282) via get_next_task, immediately following
+      REQ-074's close. Dependency REQ-073 (id 140, not REQ-074) confirmed done on
+      main. Third of four split requirements (REQ-073..076) porting identity.zig's
+      user-management group; this one is the requirement's own text flags as
+      categorically different and higher-risk than every other route requirement
+      in the batch: tenant-administration handlers (create/list/get/patch/
+      deactivate/reactivate) operate on the GLOBAL tenant_schemas table, outside
+      any single tenant's schema, so REQ-072's per-tenant prefix scoping does NOT
+      protect them -- a bug here is a platform-wide cross-tenant leak, not a
+      single-tenant one. PLATFORM_ADMIN role-gating is the ONLY protection.
+      Explicit investigations required before design: whether a tenant admin may
+      read/patch their OWN tenant record (R-Co's actual rule, not assumed);
+      exactly how tenant creation here relates to REQ-022's TenantProvisioning and
+      REQ-076's onboarding flow, so there is one provisioning path, not two; and
+      how a deactivated tenant's subsequent requests interact with
+      Letflow.Plugs.TenantStatus (REQ-021/071) without a second, conflicting
+      status rule. Branch feature/WF02-REQ075-20260822 created off origin/main and
+      pushed (Step 00). Status flipped pending -> in_progress here.
+
   - req: SCOPE-CHANGE
     event: done
     agent: ISSUE-FIXER
@@ -794,3 +818,55 @@ history:
       reproduced deterministically, replaced with a message barrier requiring no new
       constant, and re-verified under two concurrent 4-partition suites rather than
       shipped.
+
+  - req: REQ-075
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-22T02:59:48Z"
+    note: >
+      Shipped the third of four split identity-route requirements: a new
+      Letflow.Routers.Tenants module (6 routes -- create/list/get/patch/
+      deactivate/reactivate) operating entirely outside REQ-072's per-tenant
+      prefix scoping (the global tenant_schemas table is the isolation
+      boundary itself), gated exclusively by a new :TenantsManage permission
+      restricted to PLATFORM_ADMIN. Given this run's own text flagging it as
+      the highest-risk requirement in its batch, it received the heaviest
+      gate scrutiny of any REQ-073..076 run: an OUT-OF-SEQUENCE
+      pre-implementation REVIEWER sign-off (Step 1c, recorded in
+      docs/migration/stage-4-api-surface.md's 2026-08-22 entry) on extending
+      the already-shipped Letflow.Plugs.TenantStatus (REQ-021/071) with a new
+      :inactive check BEFORE any code was written -- approved shape: all
+      methods (not just writes), 403, PLATFORM_ADMIN-exempt, matching R-Co's
+      actual behavior rather than a narrower write-only alternative. The
+      authorization-ordering guarantee was mutation-tested three separate
+      times by three different agents breaking three different parts of the
+      mechanism -- TEST-DESIGN-VALIDATOR (Step 3b) inverting Deny/Allow
+      branches (0/20 caught, reverted, 20/20 restored), RELEASE-VALIDATOR
+      (Step 5) breaking role_allows?/2's role-matching directly, a different
+      mechanism -- and all three caught the regression. REVIEWER's Step 2d
+      decided OQ-5 (no compensating rollback for partial tenant-provisioning
+      failure): a rollback was judged the WORSE choice, since
+      provision_tenant_schema/1 and replay_migrations/2 are genuinely
+      idempotent and deleting the tenant row after a partial failure would
+      orphan a real schema instead; filed as ISS-0230, a non-blocking
+      follow-on for future retry/reconciliation tooling, deliberately not
+      fixed here. Full gate chain: Step 1 design (65f6c9c) -> Step 1b
+      CODE-DESIGN-VALIDATOR PASS (4d88e18) -> Step 1c REVIEWER pre-approval
+      (680bc09) -> Step 2a ELIXIR-DEV (dc5a7ac, 1542/1542 clean) -> Step 2c
+      SECURITY-REVIEWER PASS (8ff0872) -> Step 2d REVIEWER PASS (d060f86) ->
+      Step 3b TEST-DESIGN-VALIDATOR PASS (e610c51) -> Step 4 TEST-RUNNER PASS
+      (17f21d9, full suite 1542/1542) -> Step 5 RELEASE-VALIDATOR PASS
+      (424ef4a, all 7 ACs independently re-verified). Doc gap found, not
+      papered over: docs/migration/stage-4-api-surface.md contains only ONE
+      dated REQ-075 REVIEWER entry (Step 1c's pre-implementation consult,
+      2026-08-22) -- Step 2d's OQ-5 decision was recorded in
+      handoffs/WF02-REQ075-20260822/step-02d-reviewer.json but never added as
+      its own dated entry in this file, unlike REQ-074's precedent of
+      recording both an out-of-sequence consult and its own-gate decision
+      separately. Not authored here since no REQ-075 acceptance criterion
+      names this file directly; flagging for ORCH/REVIEWER rather than
+      silently fixed by DOC-UPDATER. README.md checked directly (grep for
+      "tenant"): all four hits are pre-existing S4-deferral/provisioning
+      prose unrelated to this requirement's new routes -- no
+      externally-visible behavior documented there changes, no update
+      needed.

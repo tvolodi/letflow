@@ -1943,6 +1943,26 @@
       "queue_task_id": 141,
       "queue_agent_id": "tvolo-win-orch",
       "note": "WF-02 for REQ-074 (GH#281, queue task 141, stage S4), claimed via get_next_task immediately after REQ-073's close. Dep REQ-073 confirmed done on main (329c6f0). Second of four split requirements (REQ-073..076) porting identity.zig's user-management group; this one takes the 7 group-management handlers, extending lib/letflow/routers/identity.ex per REQ-073's architecture, plus a new group_members join table. No rework cycles this run. CODE-DESIGNER found and CODE-DESIGN-VALIDATOR/RELEASE-VALIDATOR each independently re-verified (against R-Co's real src/main.zig route table) that both handleListGroupMembers and handleRemoveGroupMember are real R-Co code never actually wired to any live route -- both findings recorded in the shipped moduledoc (AC6). REVIEWER gave explicit sign-off on both resulting design choices (OQ-1: single-member removal at a new route shape, not R-Co's live bulk-remove-all; OQ-3: uniform :GroupsManage policy, not R-Co's dead-code PLATFORM_ADMIN-only gate), recorded in stage-4-api-surface.md. ELIXIR-DEV found and fixed two pre-existing regressions incidentally (a legacy migration SELECT broken by new groups columns; a migration-number collision with a test fixture). SECURITY-REVIEWER traced the cross-tenant-membership join and the guarded-delete subquery's prefix propagation structurally, filed ISS-0225 (non-blocking, orphaned-row risk for a future user-deletion path). Full pipeline: Step 1 design (5c7f312) -> 1b PASS (fb58ab4) -> 2a implement (4a0af45) -> 2c security PASS (22f97c1) -> 2d REVIEWER PASS + OQ sign-off (5f07679) -> 3b PASS (b4dbdca) -> 4 TEST-RUNNER PASS 1506/1506, new migrations verified clean (9c10394) -> 5 RELEASE-VALIDATOR PASS, all 6 ACs independently re-verified incl. a third independent R-Co source check (e95eeb0) -> 6 DOC-UPDATER flipped to done (c5c6878) -> Step Final merged (b2ef518, PR #462, 1503/1506 post-rebase, 3 pre-existing ISS-0217 failures structurally unrelated)."
+    },
+    {
+      "run_id": "WF02-REQ075-20260822",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-075"],
+      "stage": "S4",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/routers/identity.ex",
+        "lib/letflow/identity.ex",
+        "lib/letflow/tenant_provisioning.ex"
+      ],
+      "lock_acquired_at": "2026-08-22T01:29:36Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 PASS — branch feature/WF02-REQ075-20260822 created and pushed, commit fda9a59. Next: Step 1 (CODE-DESIGNER).",
+      "backfilled": false,
+      "queue_task_id": 142,
+      "queue_agent_id": "tvolo-win-orch",
+      "note": "WF-02 for REQ-075 (GH#282, queue task 142, stage S4), claimed via get_next_task immediately after REQ-074's close. Third of four split requirements (REQ-073..076) porting identity.zig's user-management group; this one is the requirement's OWN TEXT flags as categorically higher-risk than every other route requirement in the batch -- tenant-administration handlers operate on the global tenant_schemas table, outside REQ-072's per-tenant prefix scoping entirely, so PLATFORM_ADMIN role-gating is the ONLY protection and a bug here is a platform-wide cross-tenant leak. Explicit investigations required before design: whether a tenant admin may access their own tenant record (R-Co's real rule), how tenant creation here relates to REQ-022's TenantProvisioning and REQ-076's onboarding flow (one path, not two), and how tenant deactivation interacts with the already-mounted Letflow.Plugs.TenantStatus without a second conflicting status rule. Every gate in this run gets extra scrutiny given the requirement's own explicit high-risk framing."
     }
   ]
 }

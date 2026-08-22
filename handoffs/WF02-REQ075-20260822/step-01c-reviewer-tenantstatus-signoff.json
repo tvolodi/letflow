@@ -1,0 +1,66 @@
+{
+  "handoff_id": "d719919e-fd75-47c1-9b64-e9c396c199f8",
+  "run_id": "WF02-REQ075-20260822",
+  "workflow_id": "WF-02",
+  "step": "01c",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ075-20260822/step-01c-reviewer-tenantstatus-signoff.json",
+  "created_at": "2026-08-22T01:50:00Z",
+  "started_at": "2026-08-22T01:50:00Z",
+  "completed_at": "2026-08-22T01:58:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-075"],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ075-20260822/step-01-code-designer.json",
+      "handoffs/WF02-REQ075-20260822/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req075-tenant-administration-routes.md",
+      "lib/letflow/plugs/tenant_status.ex",
+      "lib/letflow/identity/tenant.ex",
+      "docs/migration/decisions/",
+      "docs/migration/stage-4-api-surface.md"
+    ],
+    "owned_modules": [
+      "docs/migration/stage-4-api-surface.md"
+    ]
+  },
+  "task": {
+    "description": "OUT-OF-SEQUENCE pre-implementation consult, not the normal WF-02 Step 2d post-implementation gate -- there is no implementation to review yet. The validated REQ-075 design doc (`lib/letflow/design/req075-tenant-administration-routes.md` SS4.2, OQ-7) makes a research-confirmed recommendation that it explicitly refuses to let ELIXIR-DEV implement without prior REVIEWER sign-off: extending `Letflow.Plugs.TenantStatus` (an already-shipped, already-`done` REQ-021 module, mounted by REQ-071) with a NEW check for `status == :inactive`, applying to EVERY HTTP method (not just writes), returning 403 (not the existing 503), with a PLATFORM_ADMIN exemption -- a real behavior-contract change to a module the pipeline already marked `done`. Decide whether to approve this shape as-is or authorize a narrower alternative (e.g. write-methods-only), record the decision and full reasoning in `docs/migration/stage-4-api-surface.md`'s REVIEWER sign-off section, and state the exact implementable shape so Step 2a (ELIXIR-DEV) has zero ambiguity.",
+    "acceptance_criteria": [
+      "Design doc SS4 (both SS4.1 R-Co evidence and SS4.2 recommendation) read in full before deciding",
+      "Shipped lib/letflow/plugs/tenant_status.ex and lib/letflow/identity/tenant.ex read directly, not assumed from the design doc's quotes",
+      "A decision is reached and recorded: approve the all-methods/403/PLATFORM_ADMIN-exempt shape, or a stated narrower alternative -- either is an acceptable PASS, silence is not",
+      "The all-methods-vs-write-only tradeoff is reasoned through explicitly, including whether INV-8's crash-isolation concerns are actually at stake (they are not -- this is a normal authorization check)",
+      "Confirmed no contradiction with docs/migration/decisions/*.md",
+      "Confirmed no DB migration is needed (status column has no DB-level constraint)",
+      "Exact implementable shape stated for ELIXIR-DEV: trigger condition, status code, response body shape, method scope, exemption rule",
+      "Decision recorded as a dated entry in docs/migration/stage-4-api-surface.md's REVIEWER sign-off section, matching the established per-requirement entry format, AND in this handoff file"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reached and recorded a decision: approve SS4.2's recommended shape as-is -- Letflow.Plugs.TenantStatus gets a new check running for ALL HTTP methods, before the existing :migrating write-only check, triggering on status == :inactive AND caller roles not including PLATFORM_ADMIN, rejecting with 403 body {\"error\": \"tenant_inactive\", \"detail\": \"tenant is deactivated\"} (no Retry-After header), PLATFORM_ADMIN exempt -- matching R-Co's actual auth.zig/service.zig behavior precisely, not the narrower write-only alternative. Reasoning: :migrating already exists as this codebase's write-pause mechanism; making :inactive also write-only would leave a deactivated tenant's callers with full, indefinite read access, which contradicts what deactivation (REQ-075 AC5) is for. INV-8 (crash isolation) does not favor the narrower alternative -- this is a plain authorization branch reusing the plug's existing Repo.get(Tenant, tenant_id) lookup, not a new failure mode needing process-isolation containment; the all-methods tradeoff (a deactivated tenant's caller loses read access, including in-flight polling) was weighed directly and judged correct, not waved through. Checked all 13 docs/migration/decisions/*.md records: no contradiction -- 0003/0006 (schema-per-tenant) don't apply since tenants is already a default-schema table outside that mechanism, and this adds an enum value, not a scoping mechanism; 0013 (five-role matrix) isn't implicated since this reads the same conn.assigns.auth_context.roles source REQ-069/071 already established, no new role. Confirmed directly (not assumed from the design doc's quote) that lib/letflow/identity/tenant.ex:56's status field is Ecto.Enum on a plain :string column with no DB CHECK constraint (priv/repo/migrations/20260816000001_create_tenants.exs) -- no migration needed, only an application-layer values: list extension. Full reasoning and the exact ELIXIR-DEV-ready shape (8 numbered points: enum extension, restructured call/2, trigger condition, exact 403 body/headers, no-trigger fallthrough, unchanged edge cases, single shared Repo.get call preserving fail-closed behavior, moduledoc update) recorded in docs/migration/stage-4-api-surface.md's REVIEWER sign-off section, dated 2026-08-22 (REQ-075, out-of-sequence pre-implementation consult).",
+    "artifacts_out": [
+      "docs/migration/stage-4-api-surface.md",
+      "handoffs/WF02-REQ075-20260822/step-01c-reviewer-tenantstatus-signoff.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ075-20260822",
+      "commit_sha_list": ["680bc09"],
+      "remote_branch": "origin/feature/WF02-REQ075-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH may dispatch Step 2a (ELIXIR-DEV) for REQ-075 -- the SS4.2/OQ-7 gate is now resolved; ELIXIR-DEV must implement Letflow.Plugs.TenantStatus's new :inactive check exactly per the 8-point shape recorded in docs/migration/stage-4-api-surface.md's 2026-08-22 (REQ-075) entry, alongside the rest of the design's six route handlers"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

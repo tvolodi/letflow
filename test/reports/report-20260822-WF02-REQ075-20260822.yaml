@@ -1,0 +1,102 @@
+report_id: report-20260822-WF02-REQ075-20260822
+agent: TEST-RUNNER
+requirement: REQ-075
+workflow_step: WF-02 Step 4 (full-suite test run)
+handoff: handoffs/WF02-REQ075-20260822/step-04-test-runner.json
+branch: feature/WF02-REQ075-20260822
+date: 2026-08-22
+command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+
+toolchain:
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    letflow-postgres-1, confirmed via `docker compose up -d` -- reported already
+    Running, not freshly started this run.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no separate
+    DB-setup step taken here.
+  parallel_n: >
+    Set explicitly via TEST_PARALLEL_N=4 per dispatch instructions (ISS-0219: this
+    host's auto-derived nproc value crashes every partition outright). Not left to
+    auto-derivation.
+
+# ---------------------------------------------------------------------------
+# Run
+# ---------------------------------------------------------------------------
+
+run:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  result: >
+    test_parallel: N=4 (source: env override)
+    partition 1: 311 tests, 0 properties, 0 failures, exit 0
+    partition 2: 373 tests, 0 properties, 0 failures, exit 0
+    partition 3: 377 tests, 1 property, 0 failures, exit 0
+    partition 4: 476 tests, 4 properties, 0 failures, exit 0
+    combined: 1537 tests, 5 properties, 0 failures (1542/1542 passed)
+  exit_code: 0
+  failures_found: 0
+
+verdict: PASS
+
+summary_line: >
+  1542/1542 passed (1537 tests + 5 properties combined), 0 failures across all four
+  partitions. Nothing needs failure attribution since nothing failed.
+
+# ---------------------------------------------------------------------------
+# S4-pipeline regression check (this run modified an already-shipped plug,
+# Letflow.Plugs.TenantStatus)
+# ---------------------------------------------------------------------------
+
+s4_pipeline_regression_check:
+  files_identified_as_exercising_the_full_or_shared_S4_pipeline: >
+    test/letflow/plugs/api_pipeline_integration_test.exs (mounts Letflow.Plugs.ApiPipeline
+    directly), test/letflow/routers/identity_test.exs (REQ-073/074, dispatches through the
+    router pipeline), test/letflow/api/response_test.exs (shared response-shaping
+    contract used across S4 routes). None of these belong to REQ-075's own diff
+    (confirmed absent from `git diff --name-only main...HEAD`).
+  method: >
+    The combined test_parallel.sh result already covers every test file in test/, so a
+    failure in any of the three files above would show up in the 0-failures combined
+    total -- there is no partial-suite shortcut that would miss them. Additionally
+    grepped all four partition logs for Postgrex/exception patterns and migration
+    failure patterns; only the two pre-existing, deliberately-injected test fixtures
+    (RuntimeError "boom", RuntimeError "plugin blew up") appear, both unrelated to
+    TenantStatus and both intentional test fixtures, not real failures.
+  result: "0 failures anywhere in the suite -- no regression from the TenantStatus change."
+
+# ---------------------------------------------------------------------------
+# REQ-075's own tests (already independently verified twice by
+# TEST-DESIGN-VALIDATOR at step 3b, including a mutation test)
+# ---------------------------------------------------------------------------
+
+req075_tests:
+  files: >
+    test/letflow/routers/tenants_test.exs, test/letflow/plugs/tenant_status_test.exs,
+    test/letflow/identity/tenant_test.exs, test/letflow/api/authorization_test.exs
+  verification_method: >
+    These four files are part of the tracked test/ tree exercised by every partition of
+    this full-suite run. The combined result (1542/1542 passed, 0 failures) necessarily
+    includes their tests since test_parallel.sh partitions the entire test/ directory
+    with no exclusions. Per-file breakdown was not separately reproducible from the
+    default (non---trace) mix test log output, but the aggregate 0-failure result is a
+    strictly stronger guarantee than a per-file rerun would be, and is consistent with
+    TEST-DESIGN-VALIDATOR's own independent rerun at step 3b (74/74 passed) plus its
+    mutation test confirming with_authorization/4's ordering guarantee is genuinely
+    discriminating.
+  result: "0 failures, consistent with the twice-prior independent verification at 74/74 passed."
+
+attribution: "not needed -- full suite green, no failures to attribute"
+
+branch_diff_files: >
+  docs/issues/ISS-0230.yaml, docs/migration/stage-4-api-surface.md,
+  docs/requirements.yaml, docs/status/requirement_status.index.yaml,
+  docs/status/requirement_status.v2.yaml, handoffs/WF02-REQ075-20260822/*,
+  handoffs/orchestrator.log, handoffs/registry.json,
+  lib/letflow/api/authorization.ex, lib/letflow/design/req075-tenant-administration-routes.md,
+  lib/letflow/identity.ex, lib/letflow/identity/tenant.ex, lib/letflow/plugs/api_pipeline.ex,
+  lib/letflow/plugs/tenant_status.ex, lib/letflow/routers/tenants.ex,
+  test/letflow/api/authorization_test.exs, test/letflow/identity/tenant_test.exs,
+  test/letflow/plugs/tenant_status_test.exs, test/letflow/routers/tenants_test.exs

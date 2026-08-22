@@ -1,0 +1,63 @@
+{
+  "handoff_id": "f1a2b3c4-5d6e-7f80-9a1b-2c3d4e5f6071",
+  "run_id": "WF02-REQ075-20260822",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ075-20260822/step-03b-test-design-validator.json",
+  "created_at": "2026-08-22T02:35:00Z",
+  "started_at": "2026-08-22T02:20:00Z",
+  "completed_at": "2026-08-22T02:35:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-075"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ075-20260822/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ075-20260822/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "test/letflow/routers/tenants_test.exs",
+      "test/letflow/plugs/tenant_status_test.exs",
+      "test/letflow/identity/tenant_test.exs",
+      "test/letflow/api/authorization_test.exs",
+      "lib/letflow/routers/tenants.ex",
+      "lib/letflow/design/req075-tenant-administration-routes.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 3b -- hard gate on REQ-075's test coverage. ORDERING DEVIATION FLAGGED: Step 3 (TEST-DESIGNER authoring) was merged into Step 2a -- ELIXIR-DEV wrote the tests in the same commit (dc5a7ac) as the implementation, rather than a separate TEST-DESIGNER step. Applied extra scrutiny given this requirement's own highest-risk framing (PLATFORM_ADMIN role check is the only protection, no :prefix scoping at all).",
+    "acceptance_criteria": [
+      "all 7 REQ-075 ACs mapped to a real runnable test",
+      "AC1 full-body 403 assertion checked directly, not paraphrased",
+      "AC2's four row-unchanged tests checked directly",
+      "AC3's both-directions own-tenant test checked directly for the correct property (target == caller's own tenant in both cases)",
+      "AC5's plug-level dispatch checked directly (not a vacuous bare sub-router call)",
+      "no @tag :skip, no TODO placeholders, no shared hardcoded fixture state",
+      "independent re-run of the four test files",
+      "mutation test on with_authorization/4's ordering guarantee"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Independently re-ran `mix test test/letflow/routers/tenants_test.exs test/letflow/plugs/tenant_status_test.exs test/letflow/identity/tenant_test.exs test/letflow/api/authorization_test.exs`: 74 passed, 0 failed. No @tag :skip, no 'TODO: implement test' anywhere in any of the four files (grep confirmed). Each fixture (TenantFixture.provisioned_tenant!/1 with a unique slug_prefix per test) is self-generated per test, no shared hardcoded state, and tests read only their own setup's rows -- self-sufficient, no ordering dependency observed or plausible.\n\nAC-by-AC: AC1 (tenants_test.exs:73-92) -- full Jason.decode!/1 equality against the exact 5-key problem-document literal (type/title/status/detail/trace_id), plus three redundant substring refutations (other tenant's slug, 'items', 'count') exactly as the design specifies; a regression that leaked a partial shape would fail the equality assertion even before the refutations run. AC2 (tenants_test.exs:105-160) -- four separate tests, one per verb (GET/PATCH/deactivate/reactivate), each snapshots tenant_b's row via Repo.get! before the cross-tenant call and re-asserts equality (or, for reactivate, the specific :status field) after; genuinely re-fetches rather than re-checking only the status code. AC3 (tenants_test.exs:166-205) -- read directly: both tests target admin_tenant.tenant.slug / own_tenant.tenant.slug, i.e. the SAME tenant as the caller's own auth_context.tenant_id in both the allow (PLATFORM_ADMIN) and deny (PROCESS_DESIGNER) cases -- this genuinely proves the own-tenant carve-out does not exist, not accidentally testing against a stranger's tenant. AC4 (tenants_test.exs:350-397) -- queries information_schema.tables directly for the 'events' table inside the real provisioned schema, not trusting the 201; :auto sandbox mode set first, matching the design's stated reason. AC6/AC7 -- doc-only, already REVIEWER-confirmed at Step 2d against the literal shipped @moduledoc text; re-spot-checked, still present verbatim.\n\nAC5 -- read tenant_status_test.exs's 'REQ-075 AC5' describe blocks (lines ~215-260) directly. Dispatch is NOT via Letflow.Plugs.ApiPipeline as the design's illustrative test sketch showed, nor is it a bare Letflow.Routers.Tenants sub-router call (which was the design's actual concern -- that path would never invoke TenantStatus and would pass vacuously). Instead these tests call Letflow.Plugs.TenantStatus.call/2 directly with a constructed conn.assigns.auth_context, which is the SAME plug function the full ApiPipeline chain invokes -- this is a legitimate, non-vacuous equivalent: it exercises the actual :inactive-check logic directly rather than through an unnecessary full-pipeline detour, and matches this same test file's own already-established pattern for the pre-existing :migrating check. Judgment: satisfies AC5 and the 'or equivalent' clause of the gate; not a gap.\n\nMutation test (gate point 8): ran one myself rather than relying on the two prior structural reads. In a clean worktree (git status --porcelain lib/ test/ empty beforehand), inverted lib/letflow/routers/tenants.ex's with_authorization/4 case branches (:Deny403 -> call fun.(conn); allow -> Response.forbidden/2), i.e. exactly backwards. Ran `mix test test/letflow/routers/tenants_test.exs`: Result: 0/20 passed, Failed: 20 tests -- every single test in the file caught the inversion. Reverted with `git checkout -- lib/ test/`; confirmed via `git status --porcelain lib/ test/` (empty) and a fresh `mix test test/letflow/routers/tenants_test.exs` re-run: Result: 20 passed. The suite genuinely discriminates a correct authorization ordering from an inverted one, not merely a suite that happens to pass either way.\n\nNo rework required. Ordering deviation (Step 3 merged into Step 2a) is noted per instruction but does not affect this gate's outcome -- the shipped tests meet the same bar this gate would apply to a separately-authored TEST-DESIGNER submission.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ075-20260822/step-03b-test-design-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ075-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ075-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER for WF-02 Step 4 (full-suite run), per docs/agents/workflows/WF-02_requirement_implementation.md."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

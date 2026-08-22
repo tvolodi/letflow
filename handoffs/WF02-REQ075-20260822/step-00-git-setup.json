@@ -1,0 +1,54 @@
+{
+  "handoff_id": "a3199b48-1559-4431-9e31-7d8a68fc4bf5",
+  "run_id": "WF02-REQ075-20260822",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ075-20260822/step-00-git-setup.json",
+  "created_at": "2026-08-22T01:30:00Z",
+  "started_at": "2026-08-22T01:30:00Z",
+  "completed_at": "2026-08-22T01:32:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-075"],
+    "requirement_text": {
+      "REQ-075": "Port the tenant-administration handler group of src/api/routes/identity.zig: handleCreateTenant (L222), handleListTenants (L674), handleGetTenant (L695), handlePatchTenant (L713), handleDeactivateTenant (L822), handleReactivateTenant (L851). THIS GROUP IS DIFFERENT FROM EVERY OTHER ROUTE REQUIREMENT IN THIS BATCH AND MUST NOT BE TREATED AS ROUTINE. Tenants are the isolation boundary itself, so these handlers operate on the public/global schema (tenant_schemas per REQ-022, and decision 0006 D3's list of tables that legitimately keep a tenant_id foreign key) rather than inside a single tenant's schema. REQ-072's prefix-scoping therefore does NOT protect them -- a bug here is a platform-wide cross-tenant leak, not a single-tenant one. The gate is REQ-069's PLATFORM_ADMIN role: listing, reading, patching, deactivating or reactivating any tenant requires it. A caller with any other role -- including a tenant's own administrator -- must not be able to enumerate tenants or read another tenant's record. Whether a tenant admin may read or patch their OWN tenant record is a real question R-Co's handlers answer; read handleGetTenant and handlePatchTenant and port R-Co's actual rule, stating it explicitly in the moduledoc. Tenant creation overlaps REQ-022's Letflow.TenantProvisioning (schema creation plus migration replay) and REQ-076's onboarding flow. This requirement routes to TenantProvisioning; it does NOT reimplement provisioning, and it must state in the moduledoc how handleCreateTenant relates to the onboarding endpoint so the two are not two divergent creation paths. Deactivation interacts with Letflow.Plugs.TenantStatus (REQ-021, mounted by REQ-071): confirm what a deactivated tenant's subsequent requests receive and that the answer is consistent with that plug's :migrating handling rather than a second, conflicting status rule. SECURITY (INV-1, INV-2, INV-6): this is the highest-risk requirement in the batch."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/tenant_provisioning.ex"
+    ],
+    "branch_name": "feature/WF02-REQ075-20260822"
+  },
+  "task": {
+    "description": "WF-02 Step 00 — Git setup for REQ-075 (Identity routes 3/4 -- tenant administration).\n\nProcedure per docs/agents/protocols/GIT_SETUP.md:\n1. git checkout main\n2. git pull --ff-only origin main — STOP and FAIL if non-fast-forward\n3. git checkout -b feature/WF02-REQ075-20260822\n4. git branch --show-current — must equal feature/WF02-REQ075-20260822\n5. git push -u origin feature/WF02-REQ075-20260822\n\n**This requirement's own text explicitly flags it as categorically higher-risk than every other requirement in this S4 batch — treat every gate in this pipeline with extra scrutiny, not routine pass-through.** Tenant-administration handlers operate on the global tenant_schemas table, OUTSIDE any single tenant's schema, so REQ-072's per-tenant :prefix scoping mechanism does NOT apply here at all — the only protection is REQ-069's PLATFORM_ADMIN role check. A bug here is a platform-wide cross-tenant data leak (any tenant's admin could potentially enumerate or read every other tenant's record), not a single-tenant leak like every other route requirement in S4.\n\nThree investigations are explicitly required before design can proceed, all named in the requirement text itself:\n1. Whether a tenant admin may read/patch their OWN tenant record — read R-Co's actual handleGetTenant/handlePatchTenant implementation to determine the real rule, do not assume either way.\n2. How handleCreateTenant relates to REQ-022's Letflow.TenantProvisioning (the actual schema-creation/migration-replay mechanism) and to REQ-076's still-pending onboarding flow — this requirement must route to TenantProvisioning, not reimplement it, and must state explicitly why there is one provisioning path, not two.\n3. How a deactivated tenant's subsequent authenticated requests interact with the already-mounted Letflow.Plugs.TenantStatus (REQ-021/071) — confirm the expected status code is consistent with that plug's existing :migrating handling, not a second, conflicting status rule invented here.\n\nComplete the handoff: set status COMPLETED, fill result.git_evidence with branch_name and push_status, set next_action to 'Route to CODE-DESIGNER (Step 1)'.",
+    "acceptance_criteria": [
+      "git branch --show-current == 'feature/WF02-REQ075-20260822'",
+      "git push -u origin feature/WF02-REQ075-20260822 succeeds (exit 0 or * [new branch] in output)",
+      "local main was fast-forward with origin/main before branching"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Feature branch created from fast-forward main and pushed to origin successfully. docs/requirements.yaml REQ-075 status flipped pending -> in_progress; started event appended to docs/status/requirement_status.v2.yaml (verified via git diff --numstat: 23 insertions, 0 deletions, plus a tail re-read confirming exact text); index's volume-2 entries count incremented 23 -> 24 in the same commit (fda9a59).",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ075-20260822",
+      "commit_sha_list": ["fda9a59"],
+      "remote_branch": "origin/feature/WF02-REQ075-20260822",
+      "push_status": "* [new branch] feature/WF02-REQ075-20260822 -> feature/WF02-REQ075-20260822",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER (Step 1)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

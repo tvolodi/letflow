@@ -37,6 +37,7 @@ defmodule Letflow.Plugs.ApiPipeline do
   plug(:dispatch)
 
   forward("/identity", to: Letflow.Routers.Identity)
+  forward("/tenants", to: Letflow.Routers.Tenants)
   forward("/instances", to: Letflow.Routers.Instances)
   forward("/definitions", to: Letflow.Routers.Definitions)
   forward("/tasks", to: Letflow.Routers.Tasks)

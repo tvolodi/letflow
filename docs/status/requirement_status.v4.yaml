@@ -254,3 +254,21 @@ history:
       decision record. Fixed directly (2-line citation-path correction,
       no content change). 4 on-disk `- req:` entries in
       requirement_status.v4.yaml before this append; 5 after.
+  - req: REQ-125
+    event: started
+    agent: ELIXIR-DEV
+    at: "2026-08-22T23:25:09Z"
+    note: >
+      WF02-REQ125-20260823 Step 00. Definition delta-sync endpoint (MOB-3
+      offline cache), GET /definitions/delta?since=<cursor>. Genuinely new
+      work, no R-Co source (flagged "may be new" in R-Co's own spec).
+      depends_on REQ-081 (done). Branch feature/WF02-REQ125-20260823 created
+      and pushed. This entry was originally appended to
+      requirement_status.v3.yaml before that volume's roll; WF02-REQ125-20260823's
+      Step Final rebase found volume 3 had already been closed independently
+      by WF02-REQ082-20260823's own Step Final roll (landed on main first), so
+      this started-event is composed here in volume 4 instead, per the
+      established "one run's started/done land one in each volume across a
+      roll boundary" pattern (see requirement_status.index.yaml's ISS-0263
+      note). 5 on-disk `- req:` entries in requirement_status.v4.yaml before
+      this append; 6 after.

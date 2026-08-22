@@ -1,0 +1,68 @@
+id: ISS-0258
+title: >
+  The requirements-registration DEFERRED bucket has no expiry -- a requirement can
+  sit deferred indefinitely with a green gate
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0231-20260822
+discovered_at: "2026-08-22T04:12:00Z"
+severity: MINOR
+
+description: >
+  Follow-up from ISS-0231 (merge d16f3c8), which built
+  `lib/mix/tasks/letflow.check_requirements_registration.ex` -- a detector that
+  gates `mix letflow.check` on whether every requirement in
+  `docs/requirements.yaml` carries a real `impl_order`. REVIEWER raised this
+  residual gap during that run, and ISS-0231's own `follow_ups:` block records
+  it verbatim.
+
+  That detector's `DEFERRED` bucket (a requirement explicitly marked deferred
+  with a non-empty rationale, per its rule R3) accepts ANY non-empty rationale
+  and NEVER expires. R3 is the only rule touching `:deferred` and fires only
+  when the rationale is `nil` or `""`:
+
+      defp entry_violations(%{state: :deferred, rationale: r} = e) when r in [nil, ""] do
+
+  and the renderer states the bucket "never gates". So a requirement can sit
+  DEFERRED indefinitely while `mix letflow.check` reports PASS and prints the
+  same roster for months -- the same idle-pipeline failure mode ISS-0221 and
+  ISS-0231 already fixed for UNREGISTERED, displaced one layer up. UNREGISTERED
+  is now watched; DEFERRED is the state nothing notices.
+
+  ROOT CAUSE. Not a logic defect in the ISS-0231 detector, which is correct for
+  the failure class it was scoped to. The root cause is a MISSING INVARIANT: the
+  project has a written rule for whether a deferral is DOCUMENTED
+  (`docs/agents/protocols/TASK_QUEUE.md`: marker plus non-empty rationale
+  mandatory) and no rule at all for whether a deferral is still JUSTIFIED. R3
+  checks that a reason is present; nothing checks that the reason is still true.
+  A free-text rationale is unfalsifiable by construction -- the same
+  unfalsifiability that let ISS-0221's false all-clear survive a day.
+
+  THIS IS NOT A RECURRENCE. ISS-0231's fix held and is green on `main`. This is
+  the residual gap that run explicitly recorded and declined to fix, on the
+  ruling that it is a different detector.
+
+acceptance_criteria:
+  - "A mechanism exists that surfaces a DEFERRED requirement whose stage has since become active, distinct from one legitimately deferred pending a not-yet-active stage"
+  - "The mechanism is wired into an actual gate or report a human/CI will see -- not built and left unwired (the exact failure ISS-0231 itself just fixed for a sibling case)"
+  - "The design states explicitly why this is a separate detector from letflow.check_requirements_registration rather than an extension of it"
+
+affected_files:
+  - lib/mix/tasks/letflow.check_deferral_staleness.ex
+  - lib/mix/tasks/letflow.check_requirements_registration.ex
+  - lib/letflow/design/iss0258-deferral-staleness-detection.md
+  - mix.exs
+  - docs/agents/protocols/TASK_QUEUE.md
+  - docs/requirements.yaml
+
+related:
+  - ISS-0231  # the run that built the detector and recorded this gap in its follow_ups
+  - ISS-0221  # the original idle-pipeline failure, one layer down
+
+queue_task_id: 258
+github_issue: 500
+github_issue_note: >
+  `register_task` created both the queue task (258) and its mirrored GitHub
+  issue (500) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  deliberately not called separately.
+
+status: open

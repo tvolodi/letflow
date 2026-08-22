@@ -153,51 +153,42 @@ end
 
 ### 4.2 New shape
 
-```elixir
-def handle_info({ref, result}, state) when is_reference(ref) do
-  if state.in_flight == nil or ref != state.in_flight.task_ref do
-    {:noreply, state}
-  else
-    # Demonitor BEFORE branching on validity -- unconditionally, exactly as today. A
-    # pending :DOWN(:normal) for this same ref will otherwise arrive right after this
-    # callback returns and be misread by clause B case 1 as a SECOND worker death for
-    # an in_flight that this callback is about to clear -- see INV-SP-A3(ii)'s existing
-    # "flush, so a normally-returning worker never ALSO delivers a :DOWN" reasoning,
-    # which applies identically whether the returned value was legal or not.
-    Process.demonitor(ref, [:flush])
+Clause A's outer structure is unchanged: the same message pattern
+(`{ref, result}` guarded `is_reference(ref)`), the same `if/else` on whether `state.in_flight`
+is `nil` or `ref` doesn't match `state.in_flight.task_ref` (returning `{:noreply, state}`
+unchanged in that case). The change is entirely inside the `else` branch, and proceeds in this
+order:
 
-    case classify_worker_result(state.in_flight.op, result) do
-      {:ok, validated_result} ->
-        # UNCHANGED from today: legal shapes reach complete_op/3 exactly as before.
-        new_state =
-          state
-          |> complete_op(state.in_flight.op, validated_result)
-          |> service_next_waiter()
-          |> pump()
+1. **Demonitor first, unconditionally — exactly as today, before any branching on validity.**
+   A pending `:DOWN(:normal)` for this same `ref` will otherwise arrive right after this callback
+   returns and be misread by clause B case 1 as a *second* worker death for an `in_flight` this
+   callback is about to clear — see INV-SP-A3(ii)'s existing "flush, so a normally-returning
+   worker never ALSO delivers a `:DOWN`" reasoning, which applies identically whether the
+   returned value turns out to be legal or not. This step's position (before classification, not
+   after) is load-bearing and must not move.
 
-        {:noreply, new_state}
+2. **Classify the result.** Call `classify_worker_result(state.in_flight.op, result)` (§3.2).
+   Being total by construction, it returns exactly one of two tags, and the rest of the body
+   branches on which:
 
-      :invalid ->
-        # NEW: the worker returned a value complete_op/3 was never written to accept.
-        # See §5 for why handle_worker_death/1 is the correct, already-proven recovery
-        # for exactly this uncertainty, rather than a new bespoke branch.
-        Logger.error(
-          "Letflow.SandboxPool worker returned an unrecognized result for " <>
-            "#{inspect(op_kind(state.in_flight.op))} op " <>
-            "(sandbox_id=#{inspect(op_sandbox_id(state.in_flight.op))}): #{inspect(result)}"
-        )
+   - **`{:ok, validated_result}` — the legal-shape branch, unchanged from today's behavior.**
+     Run the existing pipeline unchanged: `complete_op(state, state.in_flight.op,
+     validated_result)`, then `service_next_waiter/1`, then `pump/1`; return `{:noreply,
+     new_state}` with the resulting state. Nothing about this branch's logic, ordering, or
+     output differs from what clause A does today for a legal result — only the fact that the
+     result passed through `classify_worker_result/2` first is new.
 
-        new_state =
-          state
-          |> handle_worker_death()
-          |> service_next_waiter()
-          |> pump()
-
-        {:noreply, new_state}
-    end
-  end
-end
-```
+   - **`:invalid` — the new branch, for a result `complete_op/3` was never written to accept.**
+     First, log the event at `Logger.error/1` level with three pieces of information: the op
+     kind (`op_kind(state.in_flight.op)`), the sandbox id (`op_sandbox_id(state.in_flight.op)`),
+     and the raw unexpected `result` value itself (via `inspect/1`), so an operator can find the
+     root cause without needing a crash dump. Then run the *recovery* pipeline in place of
+     `complete_op/3`: `handle_worker_death(state)`, then `service_next_waiter/1`, then `pump/1` —
+     the same two trailing steps as the legal branch, only the first stage differs. Return
+     `{:noreply, new_state}` with that resulting state. §5 gives the reasoning for why
+     `handle_worker_death/1` — the same function clause B case 1 already calls on an actual
+     worker crash — is the correct, already-proven recovery for this case rather than a new
+     bespoke branch.
 
 **Totality argument.** Clause A's own head (`{ref, result}` guarded `is_reference(ref)`) already
 accepts *any* term as `result` — that part was never the gap. The `if/else` branches on whether
@@ -287,8 +278,8 @@ defp op_kind(op)
 defp op_sandbox_id(op)
 
 # CHANGED (body, not signature): handle_info({ref, result}, state) when is_reference(ref) --
-# see §4.2 for the full new body. Public contract (message shape matched, {:noreply, state}
-# return) is unchanged.
+# see §4.2 for the algorithm-level description of the new else-branch logic (ELIXIR-DEV writes
+# the actual body). Public contract (message shape matched, {:noreply, state} return) unchanged.
 ```
 
 `handle_worker_death/1`, `complete_op/3`, `pump/1`, `enqueue_op/2`, and every other existing

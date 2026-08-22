@@ -1,0 +1,60 @@
+{
+  "handoff_id": "c1a9e3d2-7b5f-4a1e-9c8b-2e6f0a4d7b1c",
+  "run_id": "WF03-ISS0226-20260822",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0226-20260822/step-04-code-designer-rework1.json",
+  "created_at": "2026-08-22T00:00:00Z",
+  "started_at": "2026-08-22T00:00:00Z",
+  "completed_at": "2026-08-22T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "5c24c6de-2689-4675-aac4-1326a44409c7",
+      "b7e2f4b0-4a2f-4e1b-9b3c-9f0a2b6a1d5e"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md",
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md",
+      "handoffs/WF03-ISS0226-20260822/step-03-code-design-validator.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md"
+    ]
+  },
+  "task": {
+    "description": "Rework in response to CODE-DESIGN-VALIDATOR's single BLOCKER: section 4.2 ('New shape') contained a complete, real Elixir handle_info/2 clause-A function body (full case, real Logger.error/1 call, real pipe chain, both {:noreply, state} returns) -- forbidden by the 'no implementation code, no function bodies' design-doc rule. Validator's correction_instructions explicitly stated every other substantive design decision (closed type, totality argument, recovery-mechanism reasoning, invariant-preservation checklist, test design) was independently re-verified sound and needed no rework.",
+    "acceptance_criteria": [
+      "Section 4.2 no longer contains a literal `def handle_info(...) do ... end` code block or any other compilable Elixir function body",
+      "Section 4.2 still conveys, as prose/algorithm steps, the exact totality argument: demonitor-before-branching ordering, classify_worker_result/2's two-tag totality, the {:ok, _} branch running complete_op/3 |> service_next_waiter/1 |> pump/1 unchanged, the :invalid branch logging then running handle_worker_death/1 |> service_next_waiter/1 |> pump/1",
+      "Section 6 no longer implies section 4.2 contains 'the full new body' now that it does not",
+      "No other section altered -- same design decisions, same scope, same recovery mechanism, same test design"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Rewrote lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md section 4.2 ('New shape') from a literal Elixir handle_info/2 function body into numbered prose/algorithm steps, matching the style the validator pointed to (REQ-073-style plain-English steps with light pseudocode references, not compilable code). The rewrite preserves every substantive point the validator confirmed sound: (1) demonitor-before-branching ordering stated as load-bearing, with the same INV-SP-A3(ii) stray-:DOWN reasoning; (2) classify_worker_result/2's call and its two-tag totality; (3) the {:ok, validated_result} branch described as running the unchanged complete_op/3 |> service_next_waiter/1 |> pump/1 pipeline, explicitly noting only the pre-classification step is new; (4) the :invalid branch described as logging (op kind, sandbox_id, raw result via Logger.error/1) then running handle_worker_death/1 |> service_next_waiter/1 |> pump/1 in place of complete_op/3, with a forward reference to section 5's reasoning. The 'Totality argument' paragraph immediately following section 4.2 (unchanged) still holds against the new prose description. Section 4.1 (citing the CURRENT, pre-fix code verbatim as read-only reference) was left untouched per the validator's own instruction that this is not the same defect. Section 6's handle_info/2 comment line, which previously read '-- see section 4.2 for the full new body' (an implicit admission section 4.2 was a body), now reads '-- see section 4.2 for the algorithm-level description of the new else-branch logic (ELIXIR-DEV writes the actual body)'. Re-scanned every remaining ```elixir block in the doc (lines 22-24 pump/1 citation, 37-42 complete_op/3 citation with elided '...' bodies, 96-100 @typep declarations, 121-124 @spec declaration, 136-152 section 4.1's labeled current-code citation, 253+ section 6 signatures/typeps) -- none is a new implementation body; all are either pre-existing-code citations or signature/type declarations. No other section's content, decisions, or wording changed.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0226-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/fix/WF03-ISS0226-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for re-review of the reworked section 4.2/6."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

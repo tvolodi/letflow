@@ -6795,3 +6795,118 @@ requirements:
       - "grep over docs/agents/protocols/GIT_MERGE.md for 'REQ-013' is quoted in the result, and every surviving mention is consistent with REQ-013 being done"
       - "no change is made to the file's 'What \"reported green\" means here' paragraph or to the standing-failures attribution rule -- git diff confirms, since those are a separate concern this requirement does not touch"
     depends_on: [REQ-136]
+
+  - id: REQ-140
+    title: Platform event append path (EventStore.append_platform_event/2) and the three promotion event appenders
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: UNREGISTERED  # not yet through register_task -- do not guess a queue task id
+    description: >
+      REQ-077 ports six promotion-pipeline route modules; four of its ten
+      routes reach context functions that `Keyword.fetch!` an
+      `opts[:event_appender]`, and no production event appender exists
+      anywhere in lib/. This requirement builds it. It was split out rather
+      than absorbed into REQ-077 because
+      lib/letflow/design/req026-event-read-archive-platform-sentinels.md:144
+      already records it as deferred -- "Real emission of scheduler/platform
+      events using the three sentinel constants | A later stage's engine
+      work" -- and because not one of REQ-077's six acceptance criteria
+      mentions an event. REQ-077 consumes what this delivers; it does not
+      build it.
+      THE PROBLEM. Letflow.EventStore.append/2 structurally cannot write a
+      platform-scoped event. Its Multi step M1, active_instance_guard/3
+      (lib/letflow/event_store.ex:357-370), returns {:error,
+      :instance_not_started} unless attrs[:instance_id] names an existing
+      instance_projections row, and platform_instance_id/0
+      (event_store.ex:637-648) is documented "Never inserted into
+      `instance_projections`" -- restated in
+      priv/repo/migrations/20260816120001_create_events.exs's header. So all
+      three promotion event types stay unseeded in
+      @platform_event_type_seed_attrs (lib/letflow/tenant_provisioning.ex
+      :~614-622, "because no production writer exists").
+      THE SHAPE. Add Letflow.EventStore.append_platform_event/2, a sibling of
+      append/2, guard-restricted to accept only platform_instance_id/0 and
+      to refuse any other instance_id. It SKIPS M1 (the projection row will
+      never exist) and also skips M6, update_projection/3
+      (event_store.ex:545-557), whose head pattern-matches
+      `active_instance_guard: %InstanceProjection{} = projection` -- that
+      binding never exists for the sentinel, so omitting M6 is structurally
+      forced, not a judgement call. It REUSES M2 assign_sequence, M3
+      claim_idempotency and M4 insert_event verbatim. M2 is safe here:
+      instance_sequence is a separate table from instance_projections, keyed
+      on instance_id with on_conflict: :nothing and no FK, and
+      priv/repo/migrations/20260816120002_create_instance_sequence.exs's own
+      header says it "inserts this row before any projection row necessarily
+      exists". No migration is needed -- neither `events` nor
+      `instance_sequence` declares a foreign key on instance_id (both
+      migration headers say so explicitly: create_events.exs:43 "NO foreign
+      keys, deliberately", create_instance_sequence.exs:21 "NO foreign key on
+      instance_id"). Verify both before relying on it. append/2 itself must
+      be left byte-unchanged.
+      THE TRANSLATION LAYER, which is why this is a requirement and not a
+      one-line change. The three domain producers build attrs maps that
+      append/2 would reject as-is, so the function passed as `event_appender`
+      is a real adapter, not a passthrough:
+      (1) append/2 rejects :tenant_id outright -- reject_tenant_id/1,
+      event_store.ex:216-222, {:error, :tenant_id_not_accepted} -- but
+      append_teardown_failure_event/6 builds a map containing tenant_id:
+      (lib/letflow/definitions.ex:~1767-1782).
+      (2) append/2 requires :payload and :idempotency_key (fetch_payload/1,
+      fetch_idempotency_key/1, called around event_store.ex:184-186) and
+      NONE of the three producers supplies either. The adapter must relocate
+      the producer's domain fields into a JSON payload and mint a
+      DETERMINISTIC idempotency key per event -- otherwise a retried rollback
+      double-appends.
+      (3) append/2 also requires :actor_id (fetch_uuid(attrs, :actor_id,
+      :missing_actor_id)). DEFINITION_PROMOTED and
+      DEFINITION_VERSION_ROLLED_BACK carry one;
+      PROMOTION_ASSERTION_TEARDOWN_FAILED does NOT -- its attrs map is
+      run_id/sandbox_id/tenant_id/error only. The adapter must supply
+      platform_actor_id/0 for that case rather than failing.
+      (4) Registry.validate_payload/3 (event_store.ex:188) means each seeded
+      json_schema must match what its producer actually builds. The three
+      producer call sites are lib/letflow/definitions/promotion.ex:~306-323
+      (DEFINITION_PROMOTED), lib/letflow/definitions.ex:~1305-1317
+      (DEFINITION_VERSION_ROLLED_BACK) and lib/letflow/definitions.ex
+      :~1767-1782 (PROMOTION_ASSERTION_TEARDOWN_FAILED). Getting one wrong
+      fails exactly the way ISS-0072/GH#257 already did -- a silent {:error,
+      :unknown_event_type}.
+      THE RETURN CONTRACT is fixed at lib/letflow/definitions.ex:595-597:
+      `(event_attrs :: map(), prefix :: String.t() -> {:ok, %{event_id:
+      Ecto.UUID.t()}} | {:error, term()})`. finish_rollback destructures
+      %{event_id: event_id} and surfaces that id in a client-visible response
+      body and in the persisted superseded_by column, so a stub or a
+      fabricated id is not acceptable -- the id must be the one actually
+      written to `events`.
+      SEEDING AND BACKFILL. Append the three types to
+      @platform_event_type_seed_attrs and correct the now-false comment at
+      tenant_provisioning.ex:~617-622. Already-provisioned tenants need no
+      new code: replay_migrations/2 is public (tenant_provisioning.ex:~303)
+      and its maybe_seed_platform_event_types/2 step (~L763-765) is
+      idempotent by construction, treating {:error,
+      :duplicate_event_type_version} as success.
+      NOTE FOR THE DESIGN, not a defect: every platform event in a tenant
+      shares platform_instance_id/0, hence one instance_sequence row and one
+      uq_event_sequence lock -- a per-tenant serialization point for all
+      platform writes. Correct, matches R-Co, fine at S4 volumes, but write
+      it down rather than let it be rediscovered under load.
+      OPEN QUESTION (do not silently resolve): whether the three adapter
+      functions belong in Letflow.EventStore, in a new
+      Letflow.EventStore.PlatformEvents module, or beside their producers in
+      Letflow.Definitions. CODE-DESIGNER decides and records the reasoning;
+      if it rises to a cross-cutting convention it belongs in
+      docs/migration/decisions/, not in a code comment.
+    acceptance_criteria:
+      - "EventStore.append_platform_event/2 appends successfully for a tenant with NO instance_projections row for platform_instance_id/0, verified by a test asserting that table is empty for that id both before and after the call, and that the returned event_id names a real row in `events`"
+      - "append_platform_event/2 called with any instance_id other than platform_instance_id/0 returns an error tuple and writes nothing, verified by a test asserting the `events` row count is unchanged -- a randomly generated UUID and a real started instance's id are both covered"
+      - "three successive append_platform_event/2 calls under the shared sentinel receive sequence_number 1, 2, 3, asserted by reading the rows back ordered by sequence_number, demonstrating M2 assign_sequence works with no projection row present"
+      - "re-appending with the same deterministic idempotency key yields exactly one `events` row, asserted by a count query, and both calls return the SAME event_id rather than a second one"
+      - "each of DEFINITION_PROMOTED, DEFINITION_VERSION_ROLLED_BACK and PROMOTION_ASSERTION_TEARDOWN_FAILED validates against its newly seeded json_schema using the attrs map its real producer builds -- the test obtains that map by invoking the producer (promotion.ex:~306, definitions.ex:~1305, definitions.ex:~1767) with an injected event_appender that captures it, never by hand-writing the map; three separate tests, one per type"
+      - "PROMOTION_ASSERTION_TEARDOWN_FAILED appends successfully despite its producer's attrs map carrying tenant_id and no actor_id, verified by a test asserting neither {:error, :tenant_id_not_accepted} nor {:error, :missing_actor_id} occurs and that the persisted row's actor_id equals platform_actor_id/0"
+      - "the appender satisfies definitions.ex:595-597's event_appender_fun type -- a test asserts finish_rollback's client-visible response body and the persisted superseded_by column both carry the same event_id that append_platform_event/2 returned, proving no stub id is in play"
+      - "`git diff` on lib/letflow/event_store.ex shows append/2 and its M1/M6 helpers unchanged, and the pre-existing EventStore test file passes with zero failures -- both quoted in the result"
+      - "no new file appears under priv/repo/migrations/ -- `git status` is quoted, and the result cites create_events.exs:43 and create_instance_sequence.exs:21 as the verified reason no FK forces one"
+      - "the comment at tenant_provisioning.ex:~617-622 claiming these three types are unseeded 'because no production writer exists' no longer says so -- grep for 'no production writer exists' over lib/ is quoted and returns no hit for these three types"
+      - "a tenant provisioned BEFORE this change gains the three registry rows after a replay_migrations/2 call, and a second replay_migrations/2 call on the same tenant is a no-op returning success -- one test covers both halves"
+    depends_on: [REQ-022, REQ-023, REQ-024, REQ-025, REQ-026, REQ-037, REQ-038, REQ-040]

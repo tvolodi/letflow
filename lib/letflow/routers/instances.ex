@@ -141,12 +141,16 @@ defmodule Letflow.Routers.Instances do
 
   alias Letflow.Api.Authorization
   alias Letflow.Api.Context
+  alias Letflow.Api.Error
+  alias Letflow.Api.Pagination
   alias Letflow.Api.Response
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
   alias Letflow.Engine
   alias Letflow.Engine.PinRebind
+  alias Letflow.Engine.PinResolver
   alias Letflow.Engine.Reconstruction
+  alias Letflow.Instances
 
   @idempotency_key_header "idempotency-key"
   @max_idempotency_key_bytes 255
@@ -173,6 +177,30 @@ defmodule Letflow.Routers.Instances do
 
   post "/" do
     handle_create(conn)
+  end
+
+  # REQ-080 read routes. MUST precede `get "/:id"` below -- same hazard
+  # class Letflow.Routers.Tasks's `/inbox`-before-`/:id` note documents;
+  # `Plug.Router` first-match-wins would otherwise have `/:id` swallow each
+  # of these with `id` bound to the literal suffix.
+  get "/:id/history" do
+    handle_history(conn, conn.params["id"])
+  end
+
+  get "/:id/timeline" do
+    handle_timeline(conn, conn.params["id"])
+  end
+
+  get "/:id/pins" do
+    handle_get_pins(conn, conn.params["id"])
+  end
+
+  get "/:id" do
+    handle_get_by_id(conn, conn.params["id"])
+  end
+
+  get "/" do
+    handle_list(conn)
   end
 
   match _ do
@@ -460,6 +488,243 @@ defmodule Letflow.Routers.Instances do
   defp render_reconstruct(conn, {:error, _internal}), do: Response.internal_error(conn)
 
   defp token_map(token), do: %{"node_id" => token.node_id, "branch_id" => token.branch_id}
+
+  # ── GET /instances/:id (design §"Router"/get_by_id) ────────────────────
+
+  defp handle_get_by_id(conn, raw_id) do
+    with_authorized_scope(conn, "GET", "/instances/:id", fn conn, opts, _actor_id ->
+      case cast_instance_id(raw_id) do
+        {:ok, id} ->
+          render_get_by_id(conn, Instances.get_by_id(id, opts))
+
+        {:error, :invalid_instance_id} ->
+          Response.unprocessable(conn, "instance_id is not a valid UUID")
+      end
+    end)
+  end
+
+  defp render_get_by_id(conn, {:ok, projection}), do: Response.ok(conn, instance_map(projection))
+  defp render_get_by_id(conn, {:error, :not_found}), do: Response.not_found(conn)
+
+  defp render_get_by_id(conn, {:error, :invalid_id}),
+    do: Response.unprocessable(conn, "instance_id is not a valid UUID")
+
+  defp instance_map(projection) do
+    %{
+      "instance_id" => projection.instance_id,
+      "definition_id" => projection.definition_id,
+      "correlation_key" => projection.correlation_key,
+      "status" => status_string(projection.status),
+      "variables" => projection.variables,
+      "started_at" => DateTime.to_iso8601(projection.started_at),
+      "completed_at" => optional_iso8601(projection.completed_at),
+      "cancelled_at" => optional_iso8601(projection.cancelled_at),
+      "error_detail" => projection.error_detail
+    }
+  end
+
+  defp optional_iso8601(nil), do: nil
+  defp optional_iso8601(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+
+  # ── GET /instances (design §"Router"/list) ──────────────────────────────
+
+  defp handle_list(conn) do
+    with_authorized_scope(conn, "GET", "/instances", fn conn, opts, _actor_id ->
+      conn = fetch_query_params(conn)
+      query = conn.query_params
+
+      with {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+           {:ok, page_size} <- Pagination.validate_page_size(raw_page_size),
+           {:ok, started_after} <- parse_optional_timestamp(Map.get(query, "started_after")),
+           {:ok, started_before} <- parse_optional_timestamp(Map.get(query, "started_before")) do
+        params = %{
+          status: Map.get(query, "status"),
+          definition_id: Map.get(query, "definition_id"),
+          correlation_key: Map.get(query, "correlation_key"),
+          started_after: started_after,
+          started_before: started_before,
+          cursor: Map.get(query, "cursor"),
+          page_size: page_size
+        }
+
+        Instances.list(params, opts) |> render_page_result(conn, &list_item_map/1)
+      else
+        {:error, :invalid_page_size} ->
+          Response.bad_request(conn, "invalid page_size")
+
+        {:error, :page_size_too_large} ->
+          Response.bad_request(conn, "page_size out of range")
+
+        {:error, :invalid_timestamp} ->
+          Response.unprocessable(
+            conn,
+            "started_after/started_before must be valid ISO 8601 timestamps"
+          )
+      end
+    end)
+  end
+
+  defp list_item_map(projection) do
+    %{
+      "instance_id" => projection.instance_id,
+      "definition_id" => projection.definition_id,
+      "correlation_key" => projection.correlation_key,
+      "status" => status_string(projection.status),
+      "started_at" => DateTime.to_iso8601(projection.started_at)
+    }
+  end
+
+  # ── GET /instances/:id/history (design §"Router"/history) ──────────────
+
+  defp handle_history(conn, raw_id) do
+    with_authorized_scope(conn, "GET", "/instances/:id/history", fn conn, opts, _actor_id ->
+      conn = fetch_query_params(conn)
+      query = conn.query_params
+
+      with {:ok, id} <- cast_instance_id(raw_id),
+           {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+           {:ok, page_size} <- Pagination.validate_page_size(raw_page_size),
+           {:ok, from} <- parse_optional_timestamp(Map.get(query, "from")),
+           {:ok, to} <- parse_optional_timestamp(Map.get(query, "to")) do
+        params = %{
+          event_type: Map.get(query, "event_type"),
+          from: from,
+          to: to,
+          cursor: Map.get(query, "cursor"),
+          page_size: page_size
+        }
+
+        Instances.history(id, params, opts) |> render_page_result(conn, &history_item_map/1)
+      else
+        {:error, :invalid_instance_id} ->
+          Response.unprocessable(conn, "instance_id is not a valid UUID")
+
+        {:error, :invalid_page_size} ->
+          Response.bad_request(conn, "invalid page_size")
+
+        {:error, :page_size_too_large} ->
+          Response.bad_request(conn, "page_size out of range")
+
+        {:error, :invalid_timestamp} ->
+          Response.unprocessable(conn, "from/to must be valid ISO 8601 timestamps")
+      end
+    end)
+  end
+
+  defp history_item_map(event) do
+    %{
+      "event_id" => event.event_id,
+      "event_type" => event.event_type,
+      "sequence_number" => event.sequence_number,
+      "created_at" => DateTime.to_iso8601(event.created_at),
+      "payload" => event.payload
+    }
+  end
+
+  # ── GET /instances/:id/timeline (design §"Router"/timeline) ────────────
+
+  defp handle_timeline(conn, raw_id) do
+    with_authorized_scope(conn, "GET", "/instances/:id/timeline", fn conn, opts, _actor_id ->
+      conn = fetch_query_params(conn)
+      query = conn.query_params
+
+      with {:ok, id} <- cast_instance_id(raw_id),
+           {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+           {:ok, page_size} <- Pagination.validate_page_size(raw_page_size) do
+        params = %{cursor: Map.get(query, "cursor"), page_size: page_size}
+        Instances.timeline(id, params, opts) |> render_page_result(conn, &timeline_item_map/1)
+      else
+        {:error, :invalid_instance_id} ->
+          Response.unprocessable(conn, "instance_id is not a valid UUID")
+
+        {:error, :invalid_page_size} ->
+          Response.bad_request(conn, "invalid page_size")
+
+        {:error, :page_size_too_large} ->
+          Response.bad_request(conn, "page_size out of range")
+      end
+    end)
+  end
+
+  defp timeline_item_map(item) do
+    %{
+      "event_id" => item.event_id,
+      "event_type" => item.event_type,
+      "sequence_number" => item.sequence_number,
+      "instance_id" => item.instance_id,
+      "created_at" => DateTime.to_iso8601(item.created_at),
+      "node_id" => item.node_id,
+      "task_id" => item.task_id,
+      "metadata" => item.metadata
+    }
+  end
+
+  # ── Shared page-result rendering (list/history/timeline) ────────────────
+
+  defp render_page_result({:ok, %{items: items, next_cursor: next_cursor}}, conn, item_fn) do
+    Response.ok(conn, %{
+      "items" => Enum.map(items, item_fn),
+      "next_cursor" => next_cursor,
+      "count" => length(items)
+    })
+  end
+
+  defp render_page_result({:error, :not_found}, conn, _item_fn), do: Response.not_found(conn)
+
+  defp render_page_result({:error, :invalid_id}, conn, _item_fn),
+    do: Response.unprocessable(conn, "instance_id is not a valid UUID")
+
+  defp render_page_result({:error, :invalid_status}, conn, _item_fn),
+    do: Response.unprocessable(conn, "status is not a recognised value")
+
+  defp render_page_result({:error, :invalid_cursor}, conn, _item_fn),
+    do: Response.unprocessable(conn, "cursor is not valid for this endpoint")
+
+  defp render_page_result({:error, :wrong_endpoint}, conn, _item_fn),
+    do: Response.unprocessable(conn, "cursor is not valid for this endpoint")
+
+  defp render_page_result({:error, :expired}, conn, _item_fn),
+    do: Response.send_problem(conn, Error.cursor_expired())
+
+  defp parse_optional_timestamp(nil), do: {:ok, nil}
+
+  defp parse_optional_timestamp(raw) when is_binary(raw) do
+    case DateTime.from_iso8601(raw) do
+      {:ok, dt, _offset} -> {:ok, dt}
+      {:error, _reason} -> {:error, :invalid_timestamp}
+    end
+  end
+
+  # ── GET /instances/:id/pins (design §"Router"/get_pins) ─────────────────
+
+  defp handle_get_pins(conn, raw_id) do
+    with_authorized_scope(conn, "GET", "/instances/:id/pins", fn conn, opts, _actor_id ->
+      case cast_instance_id(raw_id) do
+        {:ok, id} ->
+          render_get_pins(conn, id, PinResolver.reconstruct_effective_pins(id, opts))
+
+        {:error, :invalid_instance_id} ->
+          Response.unprocessable(conn, "instance_id is not a valid UUID")
+      end
+    end)
+  end
+
+  defp render_get_pins(conn, id, {:ok, pins}) do
+    Response.ok(conn, %{"instance_id" => id, "pins" => Enum.map(pins, &pin_map/1)})
+  end
+
+  defp render_get_pins(conn, _id, {:error, :instance_not_found}), do: Response.not_found(conn)
+  defp render_get_pins(conn, _id, {:error, _internal}), do: Response.internal_error(conn)
+
+  defp pin_map(pin) do
+    %{
+      "kind" => Atom.to_string(pin.kind),
+      "ref" => pin.ref,
+      "resolved_id" => pin.resolved_id,
+      "version" => pin.version,
+      "source" => Atom.to_string(pin.source)
+    }
+  end
 
   # Exhaustive over InstanceState.status/0's closed 4-atom union (create_result()
   # only ever produces :active/:completed, a subset -- shared here rather than

@@ -1044,3 +1044,46 @@ history:
       grep and pinned by an explicit test. 35 on-disk `- req:` entries in
       requirement_status.v3.yaml after this append (33 pre-existing + this
       run's own started+done pair).
+  - req: REQ-080
+    event: started
+    agent: ORCH
+    at: "2026-08-23T00:32:00Z"
+    note: >
+      WF02-REQ080-20260823. Instance routes 2/2 (read path): get_by_id/list/
+      history/timeline/pins. Sibling to REQ-079 (write path, shipped PR #565).
+  - req: REQ-080
+    event: done
+    agent: ORCH
+    at: "2026-08-23T01:45:00Z"
+    note: >
+      New context module lib/letflow/instances.ex (get_by_id/2, list/2,
+      history/2, timeline/2) plus five new GET routes on the existing
+      lib/letflow/routers/instances.ex. Cursor pagination reuses
+      Letflow.Tasks.list_tasks/2's established idiom. get_pins delegates
+      directly to Letflow.Engine.PinResolver.reconstruct_effective_pins/2
+      (already shipped, REQ-078) -- no wrapper. Promoted
+      Letflow.Api.Error.cursor_expired/0 to a shared constructor (was a
+      private literal in Letflow.Routers.Tasks, whose own comment invited
+      this promotion as its second call site). Added the missing
+      "/instances/:id/pins" GET policy-key clause to
+      Letflow.Api.Authorization.endpoint_policy_key/2. Design doc:
+      lib/letflow/design/req080-instance-routes-read.md, including two
+      deliberate non-ports (ADP-06 pipeline_run_id filter, actor_display_name/
+      description timeline synthesis -- neither has Letflow backing) and one
+      follow-up flagged, not fixed here (list/2's cursor-expiry basis reuses
+      list_tasks/2's row-timestamp pattern verbatim rather than wall-clock
+      "now", for consistency with that already-shipped sibling; history/2 and
+      timeline/2 use wall-clock correctly since they have no existing
+      precedent to match). 33 new tests in test/letflow/routers/instances_test.exs
+      covering all 6 ACs (pagination completeness for list/history/timeline,
+      four cross-tenant-is-same-as-404 tests, tenant-isolation filter test,
+      SQL-metacharacter-inert test + grep, 403-without-InstancesRead across
+      all five endpoints). Full suite verified clean in isolation: 1834/1834
+      passed (mix test, no concurrent invocation). A later `mix letflow.check`
+      run showed 3 failures, all in Letflow.TenantSchemaReaperTest
+      (ISS-0110's own documented concurrent-invocation-liveness test) --
+      confirmed via the run's own log line ("another mix test invocation ...
+      is currently connected to this database") to be a live collision with
+      a concurrently-running sibling test process, not a REQ-080 regression;
+      mix letflow.lint_handoffs: OK, 0 new violations. 37 on-disk `- req:`
+      entries in requirement_status.v3.yaml after this append.

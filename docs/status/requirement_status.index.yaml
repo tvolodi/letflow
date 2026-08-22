@@ -210,7 +210,7 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 35
+    entries: 37
     note: >
       Recounted to 33 during LOOP-20260822-orch (ORCH)'s Step Final rebase for
       ISS-0119: this run's own done-event (18:39:00Z) conflicted at
@@ -424,6 +424,10 @@ volumes:
       own recount-every-time rule.
       Incremented to 35 by WF02-REQ079-20260822 (ORCH acting directly through
       the full pipeline)'s own started+done event pair (2 appends) -- 35
+      on-disk `- req:` entries in requirement_status.v3.yaml, no rebase
+      conflict on this file.
+      Incremented to 37 by WF02-REQ080-20260823 (fork of ORCH, full pipeline
+      executed directly)'s own started+done event pair (2 appends) -- 37
       on-disk `- req:` entries in requirement_status.v3.yaml, no rebase
       conflict on this file.
 

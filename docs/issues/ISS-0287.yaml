@@ -1,0 +1,45 @@
+id: ISS-0287
+title: "Mid-run Postgres connection-pool exhaustion at documented TEST_PARALLEL_N=4 remedy"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ076-20260822 (Step 4, full-suite run)
+discovered_at: "2026-08-23T00:00:00Z"
+severity: MINOR
+description: >
+  TEST-RUNNER (WF02-REQ076-20260822 Step 4, test/reports/report-20260823-WF02-REQ076-20260822-full.yaml)
+  found a connection-pool-exhaustion failure mode distinct from ISS-0219. ISS-0219 covers
+  start-of-run crashes caused by an auto-derived TEST_PARALLEL_N being too large for the
+  host, remedied by setting TEST_PARALLEL_N=4 explicitly. This new finding occurs even
+  WITH TEST_PARALLEL_N=4 already in place: mid-run, two connection-heavy test files
+  (test/support/tenant_schema_reaper_test.exs and test/letflow/engine_concurrency_test.exs)
+  intermittently fail with real Postgres pool-exhaustion signatures -- two
+  FATAL 53300 (too_many_connections) errors, two DBConnection.ConnectionError checkout
+  timeouts, and one contention-attributed timing-ratio overrun (EngineConcurrencyTest AC1,
+  84.73x vs 60x multiplier). TEST_POOL_SIZE=22 x 4 partitions = 88 connections against
+  Postgres max_connections=100 (headroom=10) is evidently still exhaustible mid-run when
+  these connection-heavy tests run concurrently with the other partitions, even though it
+  does not crash at start like ISS-0219 did.
+
+  A same-day re-run of the WF02-REQ076-20260822 branch under identical TEST_PARALLEL_N=4
+  partitioning did NOT reproduce the failures (1839/1839 clean), confirming this is
+  intermittent/load-dependent rather than deterministic -- consistent with genuine
+  pool-pressure timing rather than a logic defect. Neither failing test file is in the
+  REQ-076 branch diff, and no identity/onboarding/auth-token test (the actual REQ-076
+  AC9/AC10 surface) failed in either run.
+affected_files:
+  - test/support/tenant_schema_reaper_test.exs
+  - test/letflow/engine_concurrency_test.exs
+  - scripts/test_parallel.sh
+queue_task_id: 287
+github_issue: 569
+status: open
+related:
+  - ISS-0219  # start-of-run auto-derived-N crash, different mechanism
+  - ISS-0220
+  - ISS-0222
+  - ISS-0110  # TenantSchemaReaper concurrent-invocation liveness guard
+  - ISS-0217
+  - ISS-0264
+source: >
+  test/reports/report-20260823-WF02-REQ076-20260822-full.yaml (failures + new_finding_for_orch
+  sections) and test/reports/report-20260823-WF02-REQ076-20260822-rerun.yaml (non-recurrence
+  confirmation), both from WF02-REQ076-20260822.

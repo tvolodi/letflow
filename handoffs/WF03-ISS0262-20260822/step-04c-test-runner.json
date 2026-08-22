@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0262-20260822/step-04c-test-runner.json",
   "created_at": "2026-08-22T07:58:47Z",
   "started_at": "2026-08-22T07:58:47Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-22T08:20:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -34,18 +34,27 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Ran the full suite for real via scripts/test_parallel.sh (N=16 partitions), plus mix letflow.lint_handoffs and mix letflow.check, on this branch (feature/WF03-ISS0262-20260822). docker compose up -d: letflow-postgres-1 already Running, no .env LETFLOW_DB_PORT override. FULL SUITE (3 attempts, quoted verbatim): attempt 1 -- partition 5 aborted with 'could not create hard link ... permission denied' (Windows Mix build-lock race, not a test failure) leaving 'combined: 1598 tests, 5 properties, 0 failures (1603/1603 passed)' among the 15 completed partitions; attempt 2 -- partition 1 hit the identical hard-link-lock abort, 'combined: 1600 tests, 5 properties, 0 failures (1605/1605 passed)' among completed partitions; attempt 3 -- all 16 partitions completed, 'combined: 1674 tests, 5 properties, 1 failures (1678/1679 passed)', the 1 failure being test/letflow/api/context_test.exs:125-126 'scoped_repo_opts/1 ignores request-supplied tenant hints (INV-1, AC3) scoped_repo_opts/1 is 1-arity' -- 'Expected truthy, got false / code: assert function_exported?(Context, :scoped_repo_opts, 1)'. DIAGNOSIS of that failure: this branch's diff (git diff --stat main...HEAD) touches only lib/mix/tasks/letflow.lint_handoffs.ex, its test/fixture/spec, and the design doc -- never lib/letflow/api/context.ex or its test. Reproduced standalone on this branch (`mix test test/letflow/api/context_test.exs` -> 'Result: 10/11 passed, Failed: 1 test', same assertion). Reproduced identically at main@99ec378 in a throwaway `git worktree add ../letflow-ctx-check main` (deps/build isolated via MIX_DEPS_PATH/MIX_BUILD_PATH so the shared cache was never touched) -- 'Result: 10/11 passed, Failed: 1 test', same failing test/assertion -- confirming this is pre-existing on main, unrelated to this diff. Worktree removed via `git worktree remove --force` immediately after; `git worktree list` afterward shows only the main tree. Further evidence this is order/parallelism-dependent flakiness, not a deterministic break: mix letflow.check's own sequential `mix test` run (single process, not partitioned) later in this same session passed all: 'Result: 1679 passed (5 properties, 1674 tests)', 0 failures, including ContextTest. LINT_HANDOFFS: `mix letflow.lint_handoffs` run standalone, real exit code captured separately from any pipe (`mix letflow.lint_handoffs > out; echo $?`) = 0. Tail of real output: 'letflow.lint_handoffs: OK -- 0 new violations across 783 handoff files (16 pre-existing grandfathered, traced to ISS-0190).' MIX LETFLOW.CHECK: first run exited 1 at the format-check step: 'mix format failed due to --check-formatted' on test/mix/tasks/letflow.lint_handoffs_test.exs (TEST-DESIGNER's new file from Step 4, within TEST-RUNNER's 'new test files under test/' ownership) -- ran `mix format test/mix/tasks/letflow.lint_handoffs_test.exs` (pure whitespace/style, no assertion or logic touched), re-ran the file's own suite to confirm still 'Result: 15 passed', then re-ran the full `mix letflow.check`. Second run: lint_handoffs step again OK exit 0, full test run 'Result: 1679 passed (5 properties, 1674 tests)' with 0 failures, but the alias still exited 1 at its final `letflow.check.test` compiler-warning gate: 'FAILED -- \"default values for the optional arguments\" warning found (ISS-0069's own class recurring)' citing `entry/2`, `unique_idempotency_key/1`, `insert_user!/2`. Traced each: `defp entry/2` in test/letflow/engine/sub_process_test.exs:44, `defp unique_idempotency_key/1` variants across test/letflow/engine*_test.exs files (already flagged in test/reports/report-20260822-WF03-ISS0231-20260822.yaml), `defp insert_user!/2` in test/letflow/routers/tasks_test.exs:95 -- none of these files are in this branch's diff; this is the pre-existing, already-named ISS-0069 recurring warning class, unrelated to ISS-0262. VERDICT: PASS. Both non-trivial findings (ContextTest order-dependent flake, ISS-0069 warning-class recurrence) are pre-existing and demonstrably unrelated to this branch's diff, not masked or worked around in test logic; the one in-scope fix applied (mix format on the new test file) is a pure formatting change with the test re-verified green after.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "id": "context-test-order-dependent-flake",
+        "description": "test/letflow/api/context_test.exs 'scoped_repo_opts/1 ... assert function_exported?(Context, :scoped_repo_opts, 1)' fails when run standalone or under certain parallel-partition assignments (10/11 passed) but passes under mix letflow.check's single-process sequential full run (1679/1679). Reproduces identically at main@99ec378, so pre-existing, not introduced by ISS-0262. Not fixed here -- out of TEST-RUNNER's ownership (test/letflow/process_instance_test.exs and new test files under test/ only) and out of this branch's diff scope. Recommend a dedicated issue for ISSUE-FIXER to root-cause the function_exported?/module-load ordering dependency separately from ISS-0262."
+      },
+      {
+        "id": "iss-0069-warning-class-recurrence",
+        "description": "mix letflow.check.test's compiler-warning gate still fires on 'default values for the optional arguments' in entry/2, unique_idempotency_key/1, insert_user!/2 across several pre-existing test files (test/letflow/engine/sub_process_test.exs, test/letflow/engine_sub_process_test.exs, test/letflow/routers/tasks_test.exs, etc.), none touched by this branch. Same named class as ISS-0069 (design doc lib/letflow/design/iss0069-unused-default-warnings-fix.md) recurring in files that were not part of that fix's original scope or have regressed since. Unrelated to ISS-0262; flagged for a separate issue rather than fixed here."
+      }
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0262-20260822",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0262-20260822",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to ISSUE-FIXER (Step 5, close issue)"
   },
   "rework_count": 0,
   "max_rework": 3

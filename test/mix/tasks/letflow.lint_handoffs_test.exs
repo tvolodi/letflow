@@ -100,7 +100,13 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
       assert violation.message =~ "expected .json"
 
       assert result.hard_grandfathered == []
-      assert result.advisory == %{path: @fixture_file, warnings: [], size_info: %{desc_len: 0, summary_len: 0}}
+
+      assert result.advisory == %{
+               path: @fixture_file,
+               warnings: [],
+               size_info: %{desc_len: 0, summary_len: 0}
+             }
+
       assert result.parse_error == nil
     end
 
@@ -121,7 +127,12 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
 
   describe "existing .json handoff behavior (H1-H5) is unaffected" do
     setup do
-      dir = Path.join(System.tmp_dir!(), "letflow-lint-handoffs-#{System.unique_integer([:positive])}")
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "letflow-lint-handoffs-#{System.unique_integer([:positive])}"
+        )
+
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)
       %{dir: dir}
@@ -223,6 +234,7 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
 
         assert violation.rule == "H6"
         assert violation.grandfathered == true
+
         assert result.hard_new == [],
                "#{path}: a grandfathered H6 file must never contribute to hard_new (it must not fail the build)"
       end

@@ -55,7 +55,7 @@ volumes:
     path: docs/status/requirement_status.v2.yaml
     status: current
     opened: 2026-08-21
-    entries: 32
+    entries: 34
     note: >
       Opened by ISS-0119's fix. Successor to volume 1. `entries:` corrected
       2026-08-21 (ISS-0199, run WF03-ISS0199-20260821) from a stale declared 0
@@ -114,6 +114,19 @@ volumes:
       re-derived 32 from the composed file (32 on-disk `- req:` entries),
       per this note's own stated rule -- recount from the composed file,
       never carry the previous attempt's number forward.
+      Then to 33 by WF02-REQ083-20260822's Step Final rebase (first attempt),
+      whose own base declared 32; that rebase conflicted at the file's tail
+      against ISS-0227's done-event (landed on main after this run's Step 00
+      commit) and composed both appends -- ISS-0227 done (05:10:23Z) then
+      REQ-083 started (05:23:40Z), kept in that chronological order -- to 33.
+      Main advanced again before the PR could merge (ISS-0258, done
+      06:40:00Z), and a second rebase re-derived 34 from the newly composed
+      file: REQ-083 started (05:23:40Z), REQ-083 done (06:33:39Z), ISS-0258
+      done (06:40:00Z), each conflict composed in chronological order by
+      `at:` timestamp rather than either side's count being carried forward
+      -- the same recount-every-time rule this note already states, applied
+      across two rebase attempts in one run, as WF03-ISS0227-20260822's entry
+      above illustrates for a different run.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

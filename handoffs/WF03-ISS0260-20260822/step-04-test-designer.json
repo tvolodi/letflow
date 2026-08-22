@@ -1,0 +1,29 @@
+{
+  "run_id": "WF03-ISS0260-20260822",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0260-20260822/step-04-test-designer.json",
+  "status": "COMPLETED",
+  "context": {
+    "artifacts_in": [
+      "test/letflow/engine_concurrency_test.exs",
+      "lib/letflow/design/iss0260-ac1-timing-flake.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4 regression test for ISS-0260 / GH#507 -- AC1's flaky wall-clock proxy assertion fix (commit 3c08067, new private helper ac1_timing_multiplier/0 in test/letflow/engine_concurrency_test.exs)."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added 7 new ExUnit unit tests, describe \"ISS-0260 -- ac1_timing_multiplier/0\" in test/letflow/engine_concurrency_test.exs, covering the private helper directly (legal -- tests in the same module can call defp functions): default 30x (no env vars), parallel 60x (TEST_PARALLEL_GROUP set), override applies (TEST_AC1_TIMING_MULTIPLIER, TEST_PARALLEL_GROUP unset), override precedence (TEST_AC1_TIMING_MULTIPLIER wins when both set), and validation rejection of 'abc'/'-1'/'0' via flunk. Each test explicitly sets/clears both env vars and a setup-level on_exit clears them, so no state leaks across tests or files. Full file: 10 passed (3 original AC1/AC2/AC4 + 7 new), 0 failures.\n\nPre-fix commit 3c08067 introduces ac1_timing_multiplier/0 as brand-new code -- checking out pre-fix and running the new tests would raise UndefinedFunctionError for a trivial reason (function doesn't exist), proving nothing about whether the tests discriminate correct from wrong logic. Per WF-03 Step 4's 'code under test does not exist' procedure, mutated the shipped logic three ways in place, ran the new describe block against each, then reverted with `git checkout -- test/letflow/engine_concurrency_test.exs` and verified `git status --porcelain` empty before applying the next mutant.\n\nMUTANT-KILL MATRIX:\n1) Drop load-awareness -- `nil -> @ac1_timing_multiplier_default` unconditionally (deletes the TEST_PARALLEL_GROUP branch): 6/7 passed, 1 failed (\"returns 60 when TEST_PARALLEL_GROUP is set...\").\n2) Skip override validation -- Integer.parse/1 falls back to @ac1_timing_multiplier_default instead of flunk on parse failure: 4/7 passed, 3 failed (all three 'rejects a ... override value' tests: non-numeric, negative, zero).\n3) Invert precedence -- checks TEST_PARALLEL_GROUP first, only falls through to TEST_AC1_TIMING_MULTIPLIER when it's unset: 6/7 passed, 1 failed (\"TEST_AC1_TIMING_MULTIPLIER takes precedence over TEST_PARALLEL_GROUP, not the other way round\").\n\nEach mutant killed exactly the test(s) targeting its specific trap and no others. All three mutants reverted; final `git status --porcelain` on test/letflow/engine_concurrency_test.exs is empty, and the full file re-runs green at 10 passed, 0 failed (confirmed after each revert, not just the last one).\n\nSpec written/appended at test/specs/REQ-055.md, new 'ISS-0260 regression' section with the fail-then-pass rationale, the mutant table, and per-case coverage. Test commit: 7475fdb ('test(ISS-0260): unit-test ac1_timing_multiplier/0 default/parallel/override/validation').",
+    "artifacts_out": [
+      "test/letflow/engine_concurrency_test.exs",
+      "test/specs/REQ-055.md"
+    ],
+    "issues": [],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  }
+}

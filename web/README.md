@@ -78,6 +78,7 @@ See [`.env.example`](.env.example) for every environment variable the app reads.
 
 | Script | What it does |
 |---|---|
+| `npm run check` | Runs type-check, lint, test, and guards, in that order, stopping at the first failure — the frontend's counterpart to `mix letflow.check` |
 | `npm run dev` | Vite dev server with the API proxy |
 | `npm run build` | `tsc -b && vite build` → `dist/` |
 | `npm run type-check` | `tsc --noEmit` |

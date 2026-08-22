@@ -23,6 +23,24 @@ defmodule Letflow.Plugs.ApiPipeline do
   | `Letflow.Plugs.QuotaEnforcement` | `quota_enforcement.zig`  | S4 (to port)                              |
   | `Letflow.Plugs.OutboxCap`        | `outbox_cap.zig`         | S6 (outbox subsystem)                     |
   | `Letflow.Plugs.AgentAuth`        | `agent_auth.zig`         | post-S6 (runtime-agent subsystem)         |
+
+  ## Mount changes made by REQ-078
+
+    * **`/solution-packs` added** — `Letflow.Routers.SolutionPacks`, a new
+      sub-router. R-Co's `{tenant_id}` path segment is deliberately **not**
+      carried (INV-1); see that module's moduledoc.
+    * **`/validation` removed**, and `Letflow.Routers.Validation` deleted with
+      it. R-Co has **no `/validation` URL prefix anywhere** — the endpoint is
+      `POST /api/v1/definitions/:id/validate`, which now lives on
+      `Letflow.Routers.Definitions`. The stub was an artefact of REQ-070
+      grouping by Zig *filename* rather than by URL, and `forward/2` is
+      prefix-exclusive so it could never have carried the real path.
+    * **`/tenant-config` removed** — `Letflow.Routers.TenantConfig` is now
+      forwarded from `Letflow.Router` at `/api/tenant-config`, **outside this
+      pipeline**, because it is a public login-bootstrap endpoint and
+      `Letflow.Plugs.AuthPipeline` has no bypass: behind auth it is
+      unreachable by the only caller that needs it. The module file did not
+      move; only its mount did. See its moduledoc.
   """
 
   use Plug.Router
@@ -45,8 +63,6 @@ defmodule Letflow.Plugs.ApiPipeline do
   forward("/onboarding", to: Letflow.Routers.Onboarding)
   forward("/solution-packs", to: Letflow.Routers.SolutionPacks)
   forward("/audit", to: Letflow.Routers.Audit)
-  forward("/tenant-config", to: Letflow.Routers.TenantConfig)
-  forward("/validation", to: Letflow.Routers.Validation)
   forward("/metrics", to: Letflow.Routers.Metrics)
 
   match _ do

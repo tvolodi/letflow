@@ -843,6 +843,123 @@ defmodule Letflow.Definitions do
   end
 
   # ===================================================================================
+  # REQ-078 -- definition-graph validation endpoint backing (design §7.2)
+  # ===================================================================================
+
+  @typedoc "The merged outcome of REQ-028/029's three graph validators over one stored definition."
+  @type graph_validation_result :: %{
+          definition_id: Ecto.UUID.t(),
+          valid: boolean(),
+          violations: [Graph.Violation.t()]
+        }
+
+  @doc """
+  Runs REQ-028/029's three graph validators over one **stored** definition's
+  graph and merges their outcomes. Backs
+  `POST /api/v1/definitions/:id/validate` (`Letflow.Routers.Definitions`).
+
+  **The composition lives here, not in the route, and that is the point.**
+  REQ-078's AC4 requires the endpoint to produce the same outcome as calling
+  REQ-028/029's validators directly on the same graph. That is only
+  *structurally* guaranteed if the route contains no validation logic at all —
+  so it contains none, and this function contains no rule of its own either.
+
+  Behaviour:
+
+    1. `get_by_id/2` — prefix-scoped. `{:error, :not_found}` propagates
+       unchanged; that is also the cross-tenant case (INV-5 — the route
+       renders it as a detail-free 404, byte-identical to a genuinely absent
+       id, on the same code path and with the same query count).
+    2. `Letflow.Definitions.Graph.from_map/1`. `:error` ->
+       `{:error, :graph_structure_invalid}` — a stored graph that will not
+       even parse.
+    3. Exactly these three, in this order:
+       `Graph.validate_graph/1` (REQ-028 structural),
+       `Graph.validate_node_attributes/1` (REQ-029 node attributes),
+       `Graph.validate_edge_conditions/1` (REQ-029 edge conditions).
+    4. The three `:violations` lists are concatenated in that order.
+       Duplicates are **not** deduplicated: the three validators produce
+       disjoint `Graph.Violation.code()` sets. `valid` is `violations == []`.
+
+  **Adds no rule of its own, and calls no other validator.** In particular it
+  does **not** call
+  `Letflow.Definitions.ServiceScopeValidator.validate/3`, which `activate/2`
+  does call. Service-scope validation needs an injected `Lookup.t()` this
+  endpoint has no source for, and including it would break AC4's equality with
+  "REQ-028/029's validators directly". That exclusion is deliberate, and
+  `activate/2` remains its owning path.
+
+  Issues exactly one query (`get_by_id/2`); everything after step 1 is pure.
+  """
+  @spec validate_definition_graph(id :: Ecto.UUID.t(), opts :: opts()) ::
+          {:ok, graph_validation_result()}
+          | {:error, :not_found}
+          | {:error, :graph_structure_invalid}
+          | common_error()
+  def validate_definition_graph(id, opts) when is_list(opts) do
+    with {:ok, %ProcessDefinition{} = definition} <- get_by_id(id, opts),
+         {:ok, graph} <- convert_graph(definition.graph) do
+      violations =
+        Graph.validate_graph(graph).violations ++
+          Graph.validate_node_attributes(graph).violations ++
+          Graph.validate_edge_conditions(graph).violations
+
+      {:ok,
+       %{
+         definition_id: definition.id,
+         valid: violations == [],
+         violations: violations
+       }}
+    end
+  end
+
+  # ===================================================================================
+  # REQ-078 -- metrics counters (design §11.4)
+  # ===================================================================================
+
+  # The closed enum from ProcessDefinition's own `status` field. Declared
+  # before its only reader, since a module attribute is read at expansion
+  # time.
+  @definition_status_zero_fill %{draft: 0, active: 0, deprecated: 0, archived: 0}
+
+  @doc """
+  Counts `process_definitions` rows by `status`, scoped to `opts[:prefix]`.
+  One query. Backs `GET /api/v1/metrics` (`Letflow.Routers.Metrics`).
+
+  Every status in the closed enum is present in the returned map,
+  zero-valued if unseen, so the response shape is stable.
+
+  The `group_by`/`select` is composed over the **schema field**, never the raw
+  column, so Ecto's enum loader maps stored values back to atoms before the
+  zero-fill sees them. `process_definitions.status` is a bare-atom enum where
+  the distinction would not bite, but
+  `Letflow.Engine.count_instances_by_status/1` and `count_tasks_by_status/1`
+  operate on keyword-mapped enums where it very much does — all three are
+  written the same way on purpose.
+
+  `opts[:prefix]` is validated via
+  `Letflow.TenantProvisioning.tenant_id_for_schema_name/1` **before** the
+  query is constructed, the same guard `Letflow.EventStore.read_global/1`
+  uses. Composed with `Ecto.Query` and bound parameters only (INV-7).
+  """
+  @spec count_definitions_by_status(opts :: opts()) ::
+          {:ok, %{status() => non_neg_integer()}} | common_error()
+  def count_definitions_by_status(opts) when is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      counts =
+        ProcessDefinition
+        |> group_by([d], d.status)
+        |> select([d], {d.status, count(d.id)})
+        |> Repo.all(prefix: prefix)
+        |> Map.new()
+
+      {:ok, Map.merge(@definition_status_zero_fill, counts)}
+    end
+  end
+
+  # ===================================================================================
   # REQ-078 -- the SINGLE shared `variable_schemas` registration path
   # lib/letflow/design/req078-supporting-routes.md §9
   # ===================================================================================

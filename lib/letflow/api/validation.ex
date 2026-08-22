@@ -185,6 +185,23 @@ defmodule Letflow.Api.Validation do
   short-circuit before any `FieldConstraint` is evaluated — the same
   early-return shape as `validate/4`'s own "must be an object" check
   (`validation.zig:377-386`).
+
+  ## Two different R-Co files are called `validation.zig`. They are unrelated.
+
+    * `src/api/validation.zig` (592 lines) is the **request-body validator** —
+      API-07, which checks an *incoming JSON request payload* against a
+      field-constraint schema and returns RFC 9457 field errors. **That is
+      this module** (REQ-068).
+    * `src/api/routes/validation.zig` (173 lines) is the **definition-graph
+      validation endpoint** — `POST /api/v1/definitions/:id/validate`,
+      VLD-01/02/03, which runs validators over a *stored process-definition
+      graph*. It has nothing to do with request bodies. **That is ported by
+      REQ-078, onto `Letflow.Routers.Definitions`.**
+
+  Do not conflate them, and do not "consolidate" them: they validate different
+  things at different layers. `Letflow.Routers.Definitions`'s moduledoc
+  carries the full statement of this distinction, so a reader arriving from
+  either side finds it.
   """
   @spec validate(schema(), term()) :: {:ok, map()} | {:errors, [FieldError.t(), ...]}
   def validate(schema, body) when is_list(schema) do

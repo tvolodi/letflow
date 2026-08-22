@@ -3,7 +3,10 @@
 **Issue:** ISS-0231 (WF-03, run `WF03-ISS0231-20260822`)
 **Owner of implementation:** `ELIXIR-DEV`
 **Author:** `CODE-DESIGNER`
-**Status:** design, pending CODE-DESIGN-VALIDATOR
+**Status:** **PASS** — CODE-DESIGN-VALIDATOR gate cleared (WF-03 Step 2b). See §11 for the
+verdict, the independent re-derivation of §7.2's M1 claim, one MAJOR correction (§11.4),
+five MINOR corrections (§11.7), and the binding rulings that close all five of §9's open
+questions (§11.5–11.6). **§11 supersedes §§1–10 wherever the two differ.**
 
 ---
 
@@ -619,3 +622,287 @@ needs a stated decision rather than a silent one.
 | Nothing that registers, guesses `impl_order`, or calls letflow-queue | I2, §6.4 ("Nothing else") |
 | Robust to a scan matching only one legal surface form | §3 (a)–(d); mutants M1, M2, M8 |
 | Regression-test story with named mutants, per WF-03's non-existence clause | §7, and §7.2's warning that the corpus test cannot catch M1 |
+
+---
+
+## 11. CODE-DESIGN-VALIDATOR verdict
+
+**Verdict: PASS**, with one MAJOR correction and five MINOR corrections recorded below,
+and all five open questions of §9 ruled. **§9 is closed** — nothing in it remains open for
+the implementer to decide. Where a ruling changes what ships, the ruling in this section
+supersedes the corresponding text above; ELIXIR-DEV and TEST-DESIGNER build to §11 where
+the two differ.
+
+Validated by re-derivation from `docs/requirements.yaml`, `mix.exs`,
+`docs/agents/protocols/TASK_QUEUE.md`, `docs/agents/shared/HANDOFF_PROTOCOL.md`,
+`docs/migration/decisions/0005-pin-formatting-toolchain.md`,
+`lib/mix/tasks/letflow.lint_handoffs.ex`, and `lib/mix/tasks/letflow.check.test.ex` — not
+from the design's own summary of them.
+
+### 11.1 Independent re-derivation of the §7.2 M1 claim (the load-bearing one)
+
+§7.2 asserts that under **M1** the live corpus classifies **111 / 0 / 0 / 0** and a
+corpus-only test still passes. **Confirmed.** Both the designed classifier and M1 were
+implemented as one-off `awk` passes over the live `docs/requirements.yaml` and run:
+
+```
+$ awk 'NR>162 { ... indent>=4 attribution; strict field/marker shapes ... }' docs/requirements.yaml
+entries=111 registered=90 deferred=21 neither=0 unclassified=0
+M1 (any attributed impl_order line => registered): registered=111 deferred=0 neither=0 unclassified=0
+```
+
+Supporting counts, each measured directly:
+
+```
+$ grep -cE "^  - id: REQ-" docs/requirements.yaml                 -> 111
+$ grep -cE "^\s+impl_order: [0-9]" docs/requirements.yaml         -> 90
+$ grep -c  "# impl_order: UNREGISTERED" docs/requirements.yaml    -> 21
+$ grep -c  "impl_order" docs/requirements.yaml                    -> 115   (90+21+4 prose)
+$ grep -c  "impl_order:" docs/requirements.yaml                   -> 112   (90+21+1 prose)
+$ grep -nE "^  [^ ].*impl_order" docs/requirements.yaml           -> 5552, 5554, 5900, 6081
+$ grep -nE "^[a-z_]+:" docs/requirements.yaml                     -> 39:stages:  162:requirements:
+```
+
+Consequence, and it is exactly as §7.2 states: under M1 the report contains no
+`:neither` and no `:unclassified` entry, and `111 == 111 + 0 + 0 + 0`, so **R1, R2 and R5
+all still hold** and **T-LIVE-GREEN, T-TOTALITY-LIVE and T-LIVE-INVARIANTS all still
+pass**. A suite built only against the live corpus is vacuous against the very bug this
+fix exists to prevent. §7.2's prohibition therefore stands as written and is binding on
+TEST-DESIGNER: the hermetic-fixture group is mandatory, not a convenience, and §6.1's
+decision to make `scan/1` and `classify_entry/1` public is upheld for the same reason.
+
+### 11.2 The gate is genuinely GREEN on `main` today (R1–R6, each measured)
+
+| rule | measurement | result |
+|---|---|---|
+| R1 `:neither` = 0 | awk pass above | 0 — **green** |
+| R2 `:unclassified` = 0 | awk pass above | 0 — **green** |
+| R3 every marker has trailing text | `grep -nE "^\s+#\s*impl_order:\s*UNREGISTERED\s*$"` → no match; all 21 are the single distinct string `# impl_order: UNREGISTERED -- see the S8 note above` | **green** |
+| R4 ids unique | `grep -oE "^  - id: REQ-[0-9]+" \| sort \| uniq -d` → empty | **green** |
+| R5 totality, `entry_count > 0` | `111 = 90 + 21 + 0 + 0`, `111 > 0` | **green** |
+| R6 file readable, `requirements:` key present | key at line 162 | **green** |
+
+Also confirmed for the roster's grouping: **all 111 entries carry a `stage:` field**
+(`entries=111 stage_fields=111`), so `render/1`'s group-by-stage cannot hit a `nil` on
+today's corpus.
+
+The gate does **not** ship red. D3's split is therefore defensible on its own terms and is
+**upheld**: hard-failing `:neither`/`:unclassified` while printing `:deferred`
+unconditionally is the only split that is simultaneously green today and informative
+tomorrow. I4 holds as stated.
+
+### 11.3 Placement claims (D1) — verified
+
+- **`mix letflow.lint_handoffs` is wired into nothing. Confirmed.** `mix.exs` contains no
+  reference to it (the `letflow.check` alias at `mix.exs:64-69` is exactly
+  `["letflow.check_toolchain", "format --check-formatted", "compile --warnings-as-errors",
+  "letflow.check.test"]`), and `HANDOFF_PROTOCOL.md:1352` says only "Every validator role
+  and ORCH **may** now run this task as part of its own gate." D1's counter-example is
+  real.
+- **Stronger than the design knew, and worth recording:** `git ls-files` matching
+  `.github` / `.gitlab-ci` / `azure-pipelines` / `Jenkinsfile` returns **nothing** — this
+  repository has **no CI configuration at all**. `mix letflow.check` is not merely the
+  primary gate surface, it is the *only* one. That removes the remaining doubt about D1:
+  a check outside the alias is a check that never runs anywhere.
+- **Decision record 0005 constrains position 1 only. Confirmed.** 0005:205 ("It runs
+  **first** in the alias, so the warning is on screen before...") and 0005:406 ("prepend
+  `letflow.check_toolchain` as the **first** entry") legislate the first slot and say
+  nothing about positions 2+. Inserting at position 2 neither contradicts nor re-decides
+  0005, so no REVIEWER escalation under CLAUDE.md's decision-record rule is required.
+- Precedent claims spot-checked and accurate: `lint_handoffs.ex` exposes only
+  `def run(_args)` with every helper `defp` (so §6.1's stated deviation is a real
+  deviation, correctly justified), and `check.test.ex` uses `@impl Mix.Task` /
+  `def run(_args)` — the shape §6.3 copies.
+
+### 11.4 MAJOR-1 — §3(c)'s "independently-derived denominator" is not independent, and M3's detection map is wrong
+
+**The defect.** §3(c) claims the totality assertion R5 is falsifiable because
+`entry_count` "comes from a different pattern than any of the four classifiers, so a
+classifier that over- or under-matches breaks the equality rather than being absorbed by
+it." That is false as designed. §4.2 splits entries on `^  - id: ` and §3(c) derives
+`entry_count` from "the `- id:` lines in the requirements section" — **the same pattern**,
+over the same sectioned content. Meanwhile §6.3 specifies that `classify_entry/1` returns
+**exactly one** `state` per call. So each entry contributes exactly 1 to exactly one
+bucket by construction, and
+
+```
+sum(counts) === length(entries) === entry_count
+```
+
+holds **identically**, for every possible input. A mis-matching *classifier* cannot break
+the equality, because a classifier only chooses among four states — it cannot change a
+count. Only the *splitter* could, and the splitter defines both sides of the equation.
+R5's equality half is a tautology. This is the failure mode `docs/anti-patterns.md:1006`
+("Re-deriving the count while inheriting the unit being counted") names — cited by §3(c)
+itself, and then committed anyway.
+
+**Consequence for Step 4, which is the part that would have caused real damage.** §7.3
+lists **M3** as "delete R5, **or weaken its `==` to `<=`**", to be caught by F-TOTALITY and
+T-TOTALITY-LIVE. Neither test catches it. F-TOTALITY and T-TOTALITY-LIVE assert
+`sum(counts) == entry_count == length(entries)` *on the report*, and that identity still
+holds under M3 — the tests pass. By §7.3's own rule ("A mutant that no test detects is a
+coverage hole to be closed before Step 4 passes"), M3 as written is a coverage hole that
+TEST-DESIGNER would have chased indefinitely.
+
+**Ruling (binding).** R5 stays in the shipped rules — it is nearly free, and its
+`entry_count > 0` half is *not* tautological and does real work. But the design's
+description of it must stop overclaiming, and M3 must be corrected:
+
+1. **§3(c) is demoted from a structural defence to a sanity check.** Strike the claim that
+   a mis-matching classifier breaks the equality. What R5 actually guards is (i)
+   `entry_count > 0` — the "a scan that finds zero entries is a hard failure" rule of §4.1,
+   which is genuinely falsifiable — and (ii) an aggregation fault in `render/1`/`scan/1`'s
+   fold. The real structural defences against the ISS-0231 failure class are **§3(b)** (the
+   fallback bucket is a failure, not a bucket) and **§3(d)** (the bare `impl_order` token
+   triggers classification; shape only discriminates). Those two are sound as written, are
+   independently sufficient, and are what M1/M2/M8 actually exercise. The fix does not
+   depend on §3(c).
+2. **M3 is narrowed to "delete R5 entirely", detected by F-EMPTY-SECTION.** The
+   `== → <=` variant is **struck** — it is undetectable by construction, not by an
+   oversight in the test inventory. F-EMPTY-SECTION (`requirements:` present, zero entries
+   → R5 violation) fails if R5 is deleted, so the narrowed M3 has a real detector.
+   F-TOTALITY and T-TOTALITY-LIVE remain in the inventory as invariant assertions but are
+   **removed from M3's "must be caught by" column** — they detect no mutant, and §7.3 must
+   not claim otherwise.
+
+No change to `lib/` behaviour follows from this ruling; it changes §3(c)'s claim and M3's
+row only. That is why it is MAJOR-and-corrected rather than FAIL: the shipped module is
+unaffected, and the correction is stated precisely enough that neither ELIXIR-DEV nor
+TEST-DESIGNER has anything left to infer.
+
+### 11.5 Ruling on OQ-1 (D4) — IN SCOPE, ships in this run, exact text below
+
+**Ruled: in scope. It ships in this run, in the same commit as the new module.** The
+alternative — demoting `:neither` — is rejected: `:neither` is the *only* rule that
+addresses the condition ISS-0221 was actually filed about (a requirement silently carrying
+no `impl_order`), and a mechanism that reports it without gating on it reproduces the
+"advisory check nobody acts on" failure this design argues against in D1. So the protocol
+must state the rule the gate enforces. CODE-DESIGNER's recommendation is upheld; D4 as
+written did not specify the sentence or its insertion point, which is what would have let
+the implementer improvise. It is specified here.
+
+**Insertion point.** `docs/agents/protocols/TASK_QUEUE.md`, **line 264** — the final
+sentence of the paragraph beginning "**An unregistered requirement carries no `impl_order`
+at all — never a guessed one.**" (verified present at that line).
+
+**Replace exactly this sentence:**
+
+```
+If a requirement has not yet been through `register_task`, leave `impl_order` absent (or note `# UNREGISTERED`) rather than filling it with a placeholder that reads as a real id.
+```
+
+**with exactly this:**
+
+```
+If a requirement has not yet been through `register_task`, record the deferral as a comment line `# impl_order: UNREGISTERED -- <rationale>` at the entry's own field indentation, rather than filling it with a placeholder that reads as a real id. The marker and a non-empty rationale after `UNREGISTERED` are **mandatory**: bare absence of any `impl_order` line is an error condition, not a second legal form, and `mix letflow.check_requirements_registration` fails on it (R1) — a deferral nobody recorded a reason for is indistinguishable from an oversight, which is the condition ISS-0221 was filed about.
+```
+
+This registers nothing, invents no `impl_order` value, and leaves the "never a guessed
+one" rule at the head of that paragraph untouched — it narrows *how a deferral is
+recorded*, nothing else. Line 264 is the only occurrence of the permissive wording in
+`TASK_QUEUE.md`; the other `impl_order` mentions (lines 108, 121, 128, 131, 220, 240, 250,
+256–257, 288, 291, 335, 397) concern queue mechanics and are not touched.
+
+**Note for the implementer:** line 240 reads "new `impl_order:` field, **or a comment** —
+see the migration note below". That phrasing survives the edit unchanged and stays
+correct, because the comment form remains legal — it is bare *absence* that stops being
+legal. No second edit is needed.
+
+### 11.6 Rulings on OQ-2 through OQ-5
+
+**OQ-2 (alias position) — RULED: position 2 as designed. Closed, no REVIEWER
+escalation.** Verified in 11.3: 0005 legislates the first slot only and is not contradicted
+by an insertion at 2. D1's two exclusion arguments both hold — position 1 is spoken for by
+0005, and a slot after `letflow.check.test` would be invisible for minutes and skipped
+entirely on any host without a database. Ship at index 1 (0-based), i.e. immediately after
+`"letflow.check_toolchain"`.
+
+**OQ-3 (`lint_handoffs` wired into nothing) — RULED: out of scope for ISS-0231, confirmed,
+and it is NOT dropped.** The scope call is right: wiring it in would change what a green
+`letflow.check` means for every in-flight branch, which is a different blast radius from
+adding a check that is green today. But `core-directives.md`'s "No Issue Left Local-Only"
+makes filing it mandatory, not optional, and the design's "should be filed" is too weak.
+**Obligation, assigned:** the discovering agent reports the finding to **ORCH**, which
+calls `register_task` and allocates the id — per `ISSUE_QUEUE.md`, neither ELIXIR-DEV nor
+any other role files it directly or picks an id. Suggested title: *"`mix
+letflow.lint_handoffs` is built but wired into no gate — `HANDOFF_PROTOCOL.md` only says
+agents *may* run it"*. Severity: MINOR. This must appear in this run's `result.issues`.
+
+**OQ-4 (marker tolerance) — RULED: keep the loose form. Closed.** Any non-empty text after
+`UNREGISTERED` satisfies R3, as §4.4/R3 specify. A stricter rule (must name a stage note or
+an issue id) would be a red-gate risk over a formatting nit, which is D3's own argument
+turned on itself; and today's corpus gives no evidence a stricter rule would catch
+anything, since all 21 markers are the single byte-identical string. Revisit only if an
+uninformative rationale is ever observed in practice.
+
+**OQ-5 (T-ROSTER staleness) — RULED: use the UNPINNED form. This overturns the design's
+recommendation, on a factual correction.** §9's OQ-5 argues the pinned-`REQ-115` version is
+"stronger against M1" and that the unpinned alternative is "weaker". That is wrong.
+Re-derived in 11.1: **under M1 the deferred bucket is empty (0 of 111)**. So "the roster
+names `REQ-115`" and "the roster is non-empty" both fail under M1 — the two forms are
+*exactly equally* discriminating against the mutant that matters, and the pinned form buys
+nothing in exchange for a test that goes stale the day S8 is registered. Therefore:
+
+> **T-ROSTER (revised).** `render/1`'s output on the real `docs/requirements.yaml` names at
+> least one id, the printed deferred count is greater than zero, and **every id printed in
+> the roster appears in the `:deferred` bucket of the same report** (and no `:registered` id
+> does). No literal `REQ-NNN` is pinned.
+
+The third clause is what keeps the unpinned form honest — it is not merely "something was
+printed", it is "the roster and the classification agree" — and it survives S8/S9/S4 being
+registered later without an edit. TEST-DESIGNER should still note in the test file that
+this test legitimately fails if the deferred set ever empties completely, and that such a
+failure means "the deferred set is now empty, confirm that is intended and retire this
+test", not "regression".
+
+### 11.7 MINOR findings (corrections, not blockers)
+
+- **MINOR-1 — §7.4 does not say which fixture tests go through `scan/1` and which through
+  `classify_entry/1`, and it matters.** `classify_entry/1` returns an `entry()`, which has
+  no violations field, so it **cannot** express R3–R6. Every test whose assertion names a
+  rule id — **F-NEITHER-EXIT, F-BARE-MARKER (R3), F-TOTALITY, F-NO-REQUIREMENTS-KEY (R6),
+  F-EMPTY-SECTION (R5)** — must go through **`scan/1`** and assert on `report.violations`.
+  Only the pure state-assignment tests (F-REGISTERED-BASIC, F-DEFERRED-BASIC, F-NEITHER,
+  F-NOVEL-FORM, F-NONINT-VALUE, F-BOTH-FORMS, F-ANCHOR, F-BAD-ID) may use
+  `classify_entry/1` directly. Binding on TEST-DESIGNER.
+- **MINOR-2 — the `rationale` field's value for a bare marker is unspecified, and
+  F-BARE-MARKER depends on it.** §6.2 says `rationale` is "set iff state == :deferred",
+  which leaves a bare `# impl_order: UNREGISTERED` (state `:deferred`, no trailing text)
+  with no defined value. **Ruled:** `rationale` is `nil` when the marker carries no trailing
+  text, the `iff` in §6.2 is relaxed to "non-`nil` only when `state == :deferred`", and R3
+  fires exactly when `state == :deferred and rationale in [nil, ""]`. Binding on ELIXIR-DEV.
+- **MINOR-3 — §4.4's field-form pattern requires whitespace after the colon, so
+  `impl_order:42` (no space) lands in `:unclassified`.** That is consistent with §4.4's
+  "never coerced, never defaulted" prose and is the right call, but it is an unstated
+  consequence. Recorded so it is not later read as a bug. Optionally add a fixture case for
+  it alongside F-NONINT-VALUE.
+- **MINOR-4 — §D2's state table describes the marker form as
+  `# impl_order: UNREGISTERED <rationale>`, implying the rationale is part of what makes an
+  entry `:deferred`.** §4.4 and R3 are the accurate statement: the rationale is **not** part
+  of the recognition shape (a bare marker still classifies `:deferred`); it is a separate
+  rule that then fires. §4.4/R3 govern; D2's table is a summary and its wording should not
+  be implemented from.
+- **MINOR-5 — §7.3's M9 row cites F-STAGES-SECTION, whose §7.4 spec asserts only that
+  stage entries "contribute nothing to any bucket".** Under M9 (section guard removed) the
+  10 real `stages:` entries become `:neither`, so for the fixture to discriminate it must
+  assert the *stronger* form: the report from a fixture containing both sections has
+  `counts.neither == 0` and `entry_count` equal to the requirement-entry count **only**.
+  Stated so the fixture is built to fail under M9 rather than merely to describe the
+  intended behaviour.
+
+### 11.8 Standard checklist
+
+| check | result |
+|---|---|
+| Every stated concern of the dispatch brief has a corresponding design element | **PASS** — §10's traceability table re-checked row by row against §§2–7; each resolves to real content, not a forward reference |
+| No "TBD" / deferral language in the design body | **PASS** — the only deferrals were §9's five open questions, all ruled in 11.5–11.6; §9 is now closed |
+| Every named function has a fully specified contract | **PASS** — `scan/1`, `classify_entry/1`, `render/1`, `run/1` all carry `@spec`, purity, and failure behaviour; error shape is specified concretely (`violation()` with `rule`/`id`/`line`/`message`, `Mix.raise/1` on non-empty violations, exit 0 otherwise), with MINOR-2's gap closed above |
+| Cross-module dependencies listed | **PASS** — §6.4's four-file table is exhaustive and correct; the module depends on `Mix.Task`/`Mix.raise` and the standard library only, adds no dependency to `mix.exs`, and §4's no-YAML-parser rationale is verified against `mix.exs`'s actual dep list |
+| **No implementation code present** | **PASS** — types, `@spec`s, anchored regexes and a `mix.exs` alias literal only. No `.ex`/`.exs` function bodies anywhere. The `mix.exs` snippet in D1 is the exact configuration change under design, which is the correct level of specificity for a design doc, not implementation logic |
+| Does not register requirements, invent an `impl_order`, or call letflow-queue | **PASS** — asserted in §1, I2 and §6.4, and confirmed by reading the whole document: no proposed write to `docs/requirements.yaml`'s data, no value assignment, no queue call. OQ-3's `register_task` reference is ORCH filing a *separate future issue*, which is `ISSUE_QUEUE.md`-mandated and not an act of this design |
+| TEST-DESIGNER can build §7.4 without inventing anything | **PASS**, conditional on 11.4's M3 narrowing and MINOR-1/-2/-5 above. With those applied, all 15 fixture specs, 4 live-corpus specs and 2 task-level specs name their input shape, their expected state or rule id, and the mutant they discriminate |
+
+**Gate outcome: PASS.** Proceed to Step 3 (ELIXIR-DEV). ELIXIR-DEV ships the module, the
+`mix.exs` alias insertion at position 2, and the `TASK_QUEUE.md` sentence replacement of
+11.5 verbatim. TEST-DESIGNER at Step 4 builds §7.4 **as amended by 11.4 and 11.7**, and
+must not treat any live-corpus test as discrimination against M1 (11.1).

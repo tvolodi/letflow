@@ -785,3 +785,28 @@ history:
       WF03-ISS0278-20260822, already on main before this branch rebased) --
       structurally unattributed to this branch, flagged for a follow-up
       issue rather than fixed here.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-22T16:29:20Z"
+    note: >
+      WF03-ISS0281-20260822 resolved ISS-0281 (GH#554, queue task 281) --
+      A9 (declared-vs-actual entries: count for this volume) re-run on main
+      HEAD (commit ba0e543) and found ALREADY GREEN: mix test
+      test/docs/requirement_status_invariants_test.exs, 20/20 passed, no
+      A9 failure. Root cause named: commit 2687547 (WF03-ISS0278-20260822,
+      PR #552) landed on main leaving this volume's declared entries: at 21
+      while a concurrently-landed SCOPE-CHANGE done-event had already
+      pushed the true on-disk count to 22 -- the same self-reported-vs-
+      actual drift class as ISS-0263 on v2.yaml. WF03-ISS0276-20260822's
+      own Step Final commit (d88b4ec, landed 2026-08-22T16:21:53Z) then
+      recounted from the composed file and corrected the declared count to
+      23 (matching on-disk) as an ordinary side effect of its own
+      recount-every-time append -- fixing the drift roughly 20 seconds
+      *before* that same run's Step Final filed ISS-0281 (commit ba0e543,
+      16:22:13Z) against the transient failing state it had observed
+      earlier in that run, before d88b4ec landed. No code or test change
+      needed here; docs/issues/ISS-0281.yaml marked resolved with this
+      finding. Re-verified: mix test ... A9 still green after this entry's
+      own append (24 on-disk entries, declared count corrected to 24 in
+      the same commit per HOW-TO-APPEND step 6).

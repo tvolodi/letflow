@@ -23,4 +23,29 @@ affected_files:
   - test/docs/requirement_status_invariants_test.exs
 queue_task_id: 281
 github_issue: 554
-status: open
+status: resolved
+resolution:
+  resolved_by: ORCH (WF03-ISS0281-20260822)
+  resolved_at: "2026-08-22T16:29:20Z"
+  root_cause: >
+    Commit 2687547 (WF03-ISS0278-20260822, PR #552) landed on main leaving
+    requirement_status.v3.yaml's declared entries: at 21 while a
+    concurrently-landed run's own SCOPE-CHANGE done-event had already pushed
+    the true on-disk count to 22 -- the same self-reported-vs-actual drift
+    class as ISS-0263's prior instance on v2.yaml.
+  finding: >
+    Already fixed before this issue was picked up. WF03-ISS0276-20260822's
+    own Step Final commit (d88b4ec, 2026-08-22T16:21:53Z) recounted from the
+    composed file and corrected the declared count to 23 (matching on-disk)
+    as an ordinary side effect of its own recount-every-time append -- about
+    20 seconds before that same run's later commit (ba0e543, 16:22:13Z)
+    filed this issue against the transient failing state it had observed
+    earlier in the run, before d88b4ec landed. Re-run on main HEAD:
+    mix test test/docs/requirement_status_invariants_test.exs -- 20/20
+    passed, A9 green, no fix needed to code or test.
+  action_taken: >
+    No code/test change. Appended this run's own done-event to
+    requirement_status.v3.yaml (24th on-disk entry) and corrected the
+    declared entries: count to 24 in the same commit, per HOW-TO-APPEND
+    step 6. Re-ran the full test after the append to confirm A9 stayed
+    green post-fix, not just pre-fix.

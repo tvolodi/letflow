@@ -1,0 +1,62 @@
+{
+  "handoff_id": "2a0f836e-040f-45e8-bef7-26147af895c4",
+  "run_id": "WF03-ISS0274-20260822",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0274-20260822/step-05-issue-fixer.json",
+  "created_at": "2026-08-22T13:56:34Z",
+  "started_at": "2026-08-22T13:56:34Z",
+  "completed_at": "2026-08-22T13:56:34Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0274-20260822/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0274-20260822/step-02-code-designer.json",
+      "handoffs/WF03-ISS0274-20260822/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0274-20260822/step-03-frontend-dev.json",
+      "handoffs/WF03-ISS0274-20260822/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0274-20260822/step-03c-reviewer.json",
+      "handoffs/WF03-ISS0274-20260822/step-04-test-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/issues/ISS-0274.yaml",
+      "handoffs/WF03-ISS0274-20260822/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0274-20260822/step-03-frontend-dev.json",
+      "handoffs/WF03-ISS0274-20260822/step-04-test-designer.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Close ISS-0274 per WF-03_issue_resolving.md Step 5. Root cause (web/tsconfig.json is solution-style with \"files\": [], so `tsc --noEmit` against the root config compiled zero files and silently no-op'd regardless of real type errors in the referenced project configs) has been fixed by changing web/package.json's type-check script to `tsc -b tsconfig.json` (build mode, walks the real referenced project configs, 964 files). Verified by a fail-then-pass command-output proof (build-config-only change, no ExUnit/vitest surface, per WF-02 Step 3's project-configuration exemption confirmed independently by TEST-DESIGNER in Step 4): npm run type-check failed with TS2322 against a deliberately injected type error in web/src/main.tsx, then passed after reverting it; npm run build and the combined npm run check gate (type-check + lint + 178 vitest unit tests + 48 guard tests) both remained green post-fix. Set docs/issues/ISS-0274.yaml status to resolved with resolved_in_run/resolved_at per ISSUE_QUEUE.md's vocabulary. github_issue is 542 -- close it via gh with a comment per ISSUE_QUEUE.md's resolved-status comment template, citing this run-id and the regression proof.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0274.yaml status: resolved with correct resolved_in_run/resolved_at keys (real UTC timestamp)",
+      "GH#542 closed with an accurate comment citing the run-id and regression proof",
+      "next_action names Step Final (git merge)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Closed ISS-0274 per WF-03 Step 5. Status set to resolved in docs/issues/ISS-0274.yaml with resolved_in_run: WF03-ISS0274-20260822 and resolved_at: 2026-08-22T13:56:34Z (real UTC timestamp from the clock), plus a resolution_notes field summarizing the fix and its verification. Root cause: web/tsconfig.json is a solution-style root config (\"files\": [], project references only to tsconfig.app.json/tsconfig.node.json), so the previous type-check script `tsc --noEmit` compiled zero files against the root config and silently passed regardless of real type errors in the referenced project configs. Fix (Step 3, FRONTEND-DEV, security gate out-of-scope, idiom review PASS): web/package.json's type-check script changed to `tsc -b tsconfig.json`, which runs in build mode and walks the real referenced project configs (964 files per --listFiles). Verified via fail-then-pass command-output proof rather than a new test file, since Step 4 (TEST-DESIGNER) independently confirmed this is a build-config-only change with no ExUnit/vitest-exercisable surface, matching WF-02 Step 3's project/build-configuration exemption: npm run type-check failed with TS2322 (Type 'string' is not assignable to type 'number') against a deliberately injected type error in web/src/main.tsx, then passed at exit 0 after the injected line was reverted (confirmed via zero-diff git diff --stat); npm run build and the combined npm run check gate (type-check + lint + 178 vitest unit tests + 48 guard tests) both remained green post-fix. Full command output is in handoffs/WF03-ISS0274-20260822/step-03-frontend-dev.json. github_issue 542 was reachable via gh: closed with `gh issue close 542 --comment \"Fixed in WF03-ISS0274-20260822. See docs/issues/ISS-0274.yaml. web/package.json's type-check script changed from tsc --noEmit (compiled zero files against the solution-style root tsconfig) to tsc -b tsconfig.json (build mode, walks the real referenced project configs -- 964 files). Regression proof (build-config-only change, no ExUnit/vitest surface): npm run type-check failed with TS2322 against a deliberately injected type error, then passed after reverting it. See handoffs/WF03-ISS0274-20260822/step-03-frontend-dev.json for full command output.\"` -- confirmed closed via `gh issue close` output: 'Closed issue tvolodi/letflow#542'. Comment claims only what this run actually did, per ISSUE_QUEUE.md's resolved-status template.",
+    "artifacts_out": ["docs/issues/ISS-0274.yaml"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0274-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0274-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step Final (git merge) -- issue resolved, GH#542 closed, all gates green."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

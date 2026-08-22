@@ -1292,3 +1292,5 @@
 2026-08-22T16:50:53Z | REWORK | WF-03 | WF03-ISS0279-20260822 | ORCH -> CODE-DESIGNER | step-02-code-designer.json REWORK ITERATION 1 -- strip defp grandfathered?/1 body to @spec-only, keep everything else
 2026-08-22T16:52:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0279-20260822 | CODE-DESIGNER -> ORCH | step-02-code-designer.json rework 1 PASS. Stripped grandfathered?/1 body to bare @spec, nothing else changed.
 2026-08-22T16:52:33Z | DISPATCH | WF-03 | WF03-ISS0279-20260822 | ORCH -> CODE-DESIGN-VALIDATOR | step-02b-code-design-validator.json re-validation PENDING committed at dispatch time
+2026-08-22T16:52:33Z | STEP_COMPLETE | WF-03 | WF03-ISS0279-20260822 | CODE-DESIGN-VALIDATOR -> ORCH | step-02b-code-design-validator.json re-validation PASS. Implementation code removed from S2.5, all else intact.
+2026-08-22T16:54:27Z | DISPATCH | WF-03 | WF03-ISS0279-20260822 | ORCH -> ELIXIR-DEV | step-03-elixir-dev.json PENDING committed at dispatch time

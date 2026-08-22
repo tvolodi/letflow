@@ -1,0 +1,48 @@
+{
+  "handoff_id": "step03-WF03-ISS0279-20260822",
+  "run_id": "WF03-ISS0279-20260822",
+  "workflow_id": "WF-03",
+  "step": "3",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0279-20260822/step-03-elixir-dev.json",
+  "created_at": "2026-08-22T16:54:27Z",
+  "started_at": "2026-08-22T16:54:27Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0279": "See handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json context.requirement_text for the full original text."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0279-20260822/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0279-20260822/step-02-code-designer.json",
+      "handoffs/WF03-ISS0279-20260822/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0279-issue-closure-audit.md",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "owned_modules": ["docs/agents/protocols/ISSUE_QUEUE.md", "docs/agents/workflows/WF-03_issue_resolving.md", "lib/mix/tasks/letflow.audit_issue_closures.ex"]
+  },
+  "task": {
+    "description": "Implement the validated design at lib/letflow/design/iss0279-issue-closure-audit.md (read it in full -- it is your complete spec, produced and PASSED by CODE-DESIGNER/CODE-DESIGN-VALIDATOR) for ISS-0279 (GH#551). Two deliverables: (1) apply the exact doc-prose changes it specifies to docs/agents/workflows/WF-03_issue_resolving.md Step 5 and docs/agents/protocols/ISSUE_QUEUE.md (paste the design's verbatim replacement text -- do not paraphrase); (2) implement lib/mix/tasks/letflow.audit_issue_closures.ex exactly per the design's interfaces/@moduledoc/CLI shape/data flow/grandfather-list format/exit-code format, following lib/mix/tasks/letflow.lint_handoffs.ex's real structural conventions for a Mix.Task in this codebase (module naming, Mix.Task behaviour, IO.puts reporting style, Mix.raise on failure). After implementing, RUN the real audit (`mix letflow.audit_issue_closures`) against this repo's actual docs/issues/*.yaml + gh issue data, per the design's section directing you to populate the initial @grandfathered list from real findings -- explicitly EXCLUDE GH#324 and GH#326 from the grandfather list (already resolved with real evidence by WF03-ISS0278-20260822; confirm this yourself by checking `gh issue view 324` and `gh issue view 326` for a comment/PR trail before excluding them -- if either still lacks one, that itself is a finding to report in result.issues, not something to silently paper over). Grandfather any OTHER genuinely pre-existing zero-evidence closures you find, each individually dated/traced per the design's format, never with a wildcard. Confirm the tool compiles and runs cleanly (`mix compile --warnings-as-errors`, then run the task directly and paste its real output into your result.summary). Per this run's earlier design decision, do NOT wire this task into the `letflow.check` alias in mix.exs -- it stays standalone (the design's stated rationale is network-dependency; do not silently override that). Claim by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "docs/agents/workflows/WF-03_issue_resolving.md Step 5 and docs/agents/protocols/ISSUE_QUEUE.md updated with the design's exact verbatim prose",
+      "lib/mix/tasks/letflow.audit_issue_closures.ex implemented per the design, compiles cleanly with mix compile --warnings-as-errors",
+      "mix letflow.audit_issue_closures actually run against real repo data at least once, real output quoted in result.summary",
+      "@grandfathered list populated from real findings, explicitly excludes GH#324/GH#326 only if independently confirmed they now carry evidence, each entry individually dated/traced",
+      "mix.exs's letflow.check alias is NOT modified -- tool stays standalone per the design decision",
+      "No file outside the owned_modules scope + this handoff is touched"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

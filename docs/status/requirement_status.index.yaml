@@ -210,7 +210,7 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 11
+    entries: 12
     note: >
       Opened by ISS-0263's roll (WF03-ISS0263-20260822), successor to volume 2.
       Created with volume 2's header text verbatim (volume number, opening date
@@ -276,6 +276,9 @@ volumes:
       reordered into that position; REQ-126's own done-event sorted last
       and needed no reordering. Recounted from the composed file: 11
       on-disk `- req:` entries in requirement_status.v3.yaml.
+      Incremented to 12 by WF02-REQ129-20260822 (ELIXIR-DEV)'s own
+      done-event append (12 on-disk `- req:` entries in
+      requirement_status.v3.yaml), no rebase conflict on this file.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

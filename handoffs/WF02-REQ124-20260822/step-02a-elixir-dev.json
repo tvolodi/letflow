@@ -1,0 +1,65 @@
+{
+  "handoff_id": "d5b9f3a2-6c1e-4d7b-9a28-4e5c7f1b3d6a",
+  "run_id": "WF02-REQ124-20260822",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ124-20260822/step-02a-elixir-dev.json",
+  "created_at": "2026-08-22T10:47:55Z",
+  "started_at": "2026-08-22T10:47:55Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-124"],
+    "requirement_text": {
+      "REQ-124": "MOB-2 (docs/mobile/requirements.md) needs GET /tenant-config to return { realm_url, locales, default_locale, branding, environment_kind } WITHOUT a bearer token: the mobile app calls it to discover which realm to authenticate against, so by definition it has no token yet. Verified against lib/ on 2026-08-21, this is two gaps, not one: (a) Letflow.Routers.TenantConfig is a stub whose routes land in REQ-078; and (b) Letflow.Plugs.ApiPipeline mounts it behind Letflow.Plugs.AuthPipeline, so implementing the route is not sufficient -- it would still demand the token the caller cannot have. Resolve (b) explicitly: either an unauthenticated variant mounted ahead of AuthPipeline, or a documented exemption inside it. Pick one and record why in the moduledoc. This is the gate for the entire mobile tier -- without it the app cannot reach a login screen -- which is why it is sequenced first in docs/mobile/build-order.md phase M-0. Security scope: an unauthenticated endpoint returning per-tenant data is a tenant-data path by definition and needs SECURITY-REVIEWER. The response must expose only what bootstrap requires. Check the shape field-by-field against docs/agents/instructions/security-invariants.md -- in particular whether an unauthenticated caller enumerating slugs can learn which tenants exist, and what the answer should be for a slug that does not exist."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["b3f7d1e2-8a4c-4b6e-9f21-5c7a2d9e4b1f", "c4a8e2f1-7b3d-4c5a-8e19-3f6b1d8a2c7e"],
+    "artifacts_in": [
+      "lib/letflow/design/req124-mobile-tenant-config.md",
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/router.ex",
+      "lib/letflow/identity.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/routers/tenant_config.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/router.ex"
+    ]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req124-mobile-tenant-config.md exactly: a new module Letflow.Routers.MobileTenantConfig (new file, e.g. lib/letflow/routers/mobile_tenant_config.ex) mounted at GET /api/mobile/tenant-config, forwarded from Letflow.Router immediately after the existing /api/tenant-config forward and before /api/v1 -- ahead of and outside Letflow.Plugs.ApiPipeline (so it never passes through Letflow.Plugs.AuthPipeline), mirroring exactly how Letflow.Routers.TenantConfig is already mounted. Do NOT modify Letflow.Plugs.ApiPipeline or Letflow.Plugs.AuthPipeline's plug chains, and do NOT modify Letflow.Routers.TenantConfig's existing 2-field response -- both stay untouched per the design's §10. Write the module's moduledoc per the design's §7 outline (must restate locally: why mounted ahead of ApiPipeline/AuthPipeline, the never-error rule, the exact 5-key allowlist statement with the 'adding a 6th key is a security change' framing, the unknown-slug/anti-enumeration justification, and OQ-1's explicit 'these four fields are global, not per-tenant' framing). Implement mobile_config_map/1 as a hand-built 5-key map literal (never derived from %Letflow.Identity.Tenant{} or Map.from_struct/1), resolve_realm_id/1 keyed only on ?slug= (no ?host= branch, per design OQ-2), and safe_get_tenant_by_slug/1 with the same exception-swallowing/no-exception-logging pattern as the existing module's safe_get_tenant_by_slug/1 (log only the caller-supplied slug, never the exception -- INV-4). Use the design's proposed literal defaults for locales/default_locale/branding/environment_kind (OQ-1/OQ-3, both design-validator-accepted as adjustable placeholders, not load-bearing) -- read from env at point of use where the design specifies (LETFLOW_ENVIRONMENT_KIND), hardcoded defaults otherwise. One MINOR fix from the design gate: use required(String.t()) not required(String) in any @spec/@type you write for the response map, per CODE-DESIGN-VALIDATOR's note. After implementing: mix compile --warnings-as-errors (fix and retry on FAIL), mix ecto.migrate is a no-op here since no migration is added -- confirm no migration file was created, mix format --check-formatted (fix formatting if it fails), then run the Step 2a self-review checklist below.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "No migration file created under priv/repo/migrations/ (design adds none -- OQ-1 explicitly rejects one)",
+      "No SQL string interpolation of tenant/user data (this route reads via Letflow.Identity.get_tenant_by_slug/1 only, no raw SQL)",
+      "All existing callers still compile -- no change to any existing function signature",
+      "mobile_config_map/1 returns exactly 5 keys (realm_url, locales, default_locale, branding, environment_kind), hand-built, never derived from the Tenant struct",
+      "Letflow.Plugs.ApiPipeline and Letflow.Plugs.AuthPipeline are unchanged -- diff must show zero lines touched in either file",
+      "Letflow.Routers.TenantConfig's existing 2-field response and behavior are unchanged -- diff must show zero lines touched in that file",
+      "Every code path (resolvable slug, unknown slug, missing slug, DB error) returns 200 with the full 5-field body -- no 404, no partial body"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

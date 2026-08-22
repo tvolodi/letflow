@@ -47,9 +47,9 @@
     ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0262-20260822",
-      "commit_sha_list": ["ddd5dd1"],
-      "remote_branch": "origin/feature/WF03-ISS0262-20260822 (pre-rebase tip -- local branch rebased onto fb5c251 but not yet pushed)",
-      "push_status": "skipped",
+      "commit_sha_list": ["ddd5dd1", "2ef3094"],
+      "remote_branch": "origin/feature/WF03-ISS0262-20260822 (republished at 2ef3094, rebased onto fb5c251, via git push --force-with-lease per GIT_MERGE.md step 6 -- non-fast-forward rejection observed on the plain push first, as expected after a rebase)",
+      "push_status": "success (force-with-lease, own branch only)",
       "pr_url": null,
       "pr_create_error": null
     },

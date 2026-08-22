@@ -1,0 +1,51 @@
+{
+  "handoff_id": "b6c9e2a1-1f7d-4e3b-8a02-5d6f9c1e4b70",
+  "run_id": "WF02-REQ075-20260822",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ075-20260822/step-05-release-validator.json",
+  "created_at": "2026-08-22T02:57:29Z",
+  "started_at": "2026-08-22T02:40:00Z",
+  "completed_at": "2026-08-22T02:57:29Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-075"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ075-20260822/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml#REQ-075"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 5 -- independently re-derive, from shipped code and tests (not from any prior handoff's narrative), whether all seven of REQ-075's acceptance criteria are genuinely met, before REQ-075 is marked done.",
+    "acceptance_criteria": [
+      "each of the 7 ACs independently re-checked against actual code/tests",
+      "full test suite independently re-run (not trusted from TEST-RUNNER's report)",
+      "an independent mutation test on the authorization mechanism itself, distinct from TEST-DESIGN-VALIDATOR's, given AC2's consequence",
+      "PASS only if all 7 ACs are confirmed; FAIL on any doubt regarding AC1/AC2/AC5"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified all seven REQ-075 acceptance criteria against actual shipped code (not prior handoff narratives).\n\nAC1 (non-admin GET /tenants -> 403, zero data, full-body): read lib/letflow/routers/tenants.ex's with_authorization/4 (evaluate_access/2 called before any Repo call; Deny403 short-circuits) and test/letflow/routers/tenants_test.exs's 'AC1' describe block -- asserts the exact full problem-detail body plus refute on other.tenant.slug/'items'/'count' substrings. Confirmed met.\n\nAC2 (4 verbs cross-tenant rejection, row unchanged): read all four tests (GET/PATCH/deactivate/reactivate) in the 'AC2' describe block -- each asserts 403 AND Repo.get!/1 row-equality (or status) unchanged. Traced Letflow.Api.Authorization: :TenantsManage is granted only via role_allows?(:PLATFORM_ADMIN, _) -> true; no other role clause lists :TenantsManage (verified full role_allows?/2 body, lines 362-397). Ran my OWN independent mutation test distinct from TEST-DESIGN-VALIDATOR's (which inverted with_authorization/4's Deny/Allow branch handling): I instead injected a role_allows?(_role, :TenantsManage) -> true clause ahead of the real matrix, breaking role-matching itself rather than branch ordering. Result: 7/20 tenants_test.exs tests failed under this mutation (mix test test/letflow/routers/tenants_test.exs -> 13/20 passed), then reverted (git status --short clean afterward) and reconfirmed 20/20 passed. This is a second, structurally different mechanism than TEST-DESIGN-VALIDATOR's step-03b mutation, both now independently proving the authorization gate is load-bearing. AC2 confirmed met with high confidence.\n\nAC3 (own-tenant rule, both directions): read the moduledoc's 'Own-tenant rule (AC3)' section -- states no carve-out, ported as-is from R-Co. Read Letflow.Identity.get_tenant_by_slug/1 and patch_tenant/2 -- both Repo.get_by(Tenant, slug: slug) with no actor-identity comparison, so PLATFORM_ADMIN-gating is identical whether or not the target is the caller's own tenant. Read both directions' tests in the 'AC3' describe block: PLATFORM_ADMIN GET/PATCH on own tenant -> 200 (allowed direction), non-PLATFORM_ADMIN GET/PATCH on own tenant -> 403 + row unchanged (denied direction). Trusted the twice-independently-verified R-Co source claim (Step 1/1b) per task guidance and focused on shipped code matching it -- it does. Confirmed met.\n\nAC4 (real migration replay via information_schema, not trusting the 201): read the 'AC4/AC7' test -- switches Sandbox to :auto, POSTs, then independently queries information_schema.tables for table_name='events' in the newly provisioned schema (not merely checking the 201 status). Confirmed met -- not trusting the 201 alone.\n\nAC5 (deactivated tenant, TenantStatus, all methods, 403, PLATFORM_ADMIN-exempt): read lib/letflow/plugs/tenant_status.ex's call/2 line-by-line myself -- cond clause 'tenant.status == :inactive and @platform_admin not in roles -> reject_inactive(conn)' runs unconditionally on every method (no method guard on this branch, unlike the :migrating branch which is write-method-gated), checked before the :migrating branch. reject_inactive/1 returns 403 'tenant_inactive'. Read test/letflow/plugs/tenant_status_test.exs's AC5 describe blocks: GET and POST both -> 403 for non-admin; PLATFORM_ADMIN GET/POST both pass through unchanged; no-roles caller also rejected; :active/:migrating tenants unaffected. This is the piece requiring the out-of-sequence REVIEWER pre-approval (step-01c) -- gave it its own independent read rather than trusting the sign-off summary, and the shipped cond ordering and exemption match exactly what step-01c authorized. Confirmed met.\n\nAC6 (moduledoc risk statement): read the shipped @moduledoc's 'THIS IS THE HIGHEST-RISK ROUTE GROUP IN S4 (AC6)' section verbatim -- states operation outside REQ-072 prefix-scoping, names PLATFORM_ADMIN as the only protection, and explains why (no second isolation layer, platform-wide vs single-tenant blast radius). Confirmed met.\n\nAC7 (moduledoc REQ-076 relationship): read the shipped @moduledoc's 'Relationship to REQ-076 (AC7)' section verbatim -- states both POST /tenants and REQ-076's onboarding endpoint call the same Letflow.TenantProvisioning primitives, one platform-admin path and one self-service path, neither reimplementing provisioning. Confirmed met.\n\nIndependently re-ran the full test suite as a normal blocking foreground call (mix test, no Monitor/background wait): Result: 1542 passed (5 properties, 1537 tests), exit code 0, matching TEST-RUNNER's step-04 aggregate exactly. Also independently reran the four REQ-075-specific test files together (test/letflow/routers/tenants_test.exs, test/letflow/plugs/tenant_status_test.exs, test/letflow/identity/tenant_test.exs, test/letflow/api/authorization_test.exs): 74/74 passed, 0 failures.\n\nVerdict: PASS. All seven acceptance criteria independently confirmed met from actual shipped code and tests, not from any prior handoff's narrative. No doubt on AC1, AC2, or AC5.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ075-20260822",
+      "commit_sha_list": ["17f21d96814bff3a126a6eb55ba99ef82a058cfe"],
+      "remote_branch": "origin/feature/WF02-REQ075-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER to flip REQ-075's status to done and append the status-history event."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

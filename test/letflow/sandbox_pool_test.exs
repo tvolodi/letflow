@@ -1251,7 +1251,6 @@ defmodule Letflow.SandboxPoolTest do
         :provision,
         %{
           from: from,
-          owner_pid: self(),
           owner_ref: owner_ref,
           sandbox_id: sandbox_id,
           schema_name: schema_name,
@@ -1264,8 +1263,7 @@ defmodule Letflow.SandboxPoolTest do
       injected_in_flight = %{
         op: provision_op,
         task_ref: fake_task_ref,
-        task_pid: self(),
-        schema_name: schema_name
+        task_pid: self()
       }
 
       :sys.replace_state(pool, fn state -> %{state | in_flight: injected_in_flight} end)
@@ -1326,8 +1324,7 @@ defmodule Letflow.SandboxPoolTest do
       injected_in_flight = %{
         op: drop_op,
         task_ref: fake_task_ref,
-        task_pid: self(),
-        schema_name: schema_name
+        task_pid: self()
       }
 
       :sys.replace_state(pool, fn state -> %{state | in_flight: injected_in_flight} end)

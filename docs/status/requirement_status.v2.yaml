@@ -1199,3 +1199,37 @@ history:
       requirements" design measurement was refreshed by addendum, not edited in place.
       Historical-corpus count corrected mid-run from an initial wrong "21 S8-scoped"
       reading to the real 8 S4 + 9 S8 + 4 S9 split.
+
+  - req: REQ-078
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-08-22T07:08:07Z"
+    note: >
+      Run WF02-REQ078-20260822, queue task 145, resumed after a model switch
+      mid-run (implementation and one gate-finding-fix commit were already on
+      the branch). Ported all six route surfaces -- audit, definition-graph
+      validation, tenant config, solution packs (export/install), pin rebind,
+      metrics -- as designed (3 design rounds, gate-passed). sandbox_access.zig
+      deliberately NOT ported. Authorization uses direct
+      Letflow.Api.Authorization.evaluate_access/2 calls, named explicitly as
+      temporary in each moduledoc pending REQ-131 (confirmed still `pending`),
+      matching the pattern tenants.ex/identity.ex already established.
+      SECURITY-REVIEWER PASS, REVIEWER PASS (both fresh re-runs; two earlier
+      attempts under this run were killed mid-report by ORCH and their partial
+      output discarded). TEST-DESIGNER added 24 tests
+      (test/letflow/routers/req078_supporting_routes_test.exs) covering all 8
+      acceptance criteria plus two supplemental INV-5 cross-tenant-404 cases;
+      TEST-DESIGN-VALIDATOR PASS (independently re-derived the AC-to-test
+      mapping, reproduced 24/24 twice with different seeds). TEST-RUNNER: full
+      suite via TEST_PARALLEL_N=4 sh scripts/test_parallel.sh, 1574/1574
+      passed, 0 failures. RELEASE-VALIDATOR PASS, independently reproducing
+      every acceptance criterion and the full suite itself (one transient
+      infra hiccup during its own run -- two concurrent full-suite invocations
+      racing for the DB after a tooling mistake -- diagnosed and re-run clean,
+      not attributed to this branch). mix compile --force and mix format
+      --check-formatted clean throughout. No handoff artefact was recoverable
+      for a second child agent mentioned at resume ("Close TDV MAJOR: alias
+      guardrail") -- not found in handoffs/, registry.json, orchestrator.log,
+      or any dangling/unreachable git commit; treated as lost with no residue,
+      since no test files existed yet at resume and none were later found
+      contradicting that.

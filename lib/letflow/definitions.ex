@@ -91,6 +91,7 @@ defmodule Letflow.Definitions do
   import Bitwise
 
   alias Ecto.Multi
+  alias Letflow.Api.Pagination
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.JsonSchemaShape
   alias Letflow.Definitions.PackUpdateResolution
@@ -210,6 +211,31 @@ defmodule Letflow.Definitions do
           {:error, :query_empty}
           | {:error, :query_too_long}
           | common_error()
+
+  # ---------------------------------------------------------------------------------
+  # REQ-081 types -- lib/letflow/design/req081-definition-routes-read.md §3
+  # ---------------------------------------------------------------------------------
+
+  # `page_size` is REQUIRED here, not optional -- the design doc's own @type
+  # says `optional(:page_size)` but its prose (§3.1) describes an
+  # already-validated, required page_size the way `Letflow.Instances.list/2`
+  # receives it (`Map.fetch!/2`, not `Map.get/2` with a default). This
+  # follows the prose/idiom, not the type declaration -- flagged by
+  # CODE-DESIGN-VALIDATOR as a minor gap, resolved here per ELIXIR-DEV's
+  # handoff instructions.
+  @type list_paginated_filters :: %{
+          optional(:name) => String.t() | nil,
+          optional(:status) => status() | nil,
+          optional(:stage) => String.t() | nil,
+          optional(:cursor) => String.t() | nil,
+          page_size: pos_integer()
+        }
+
+  @type paginated_result :: %{items: [ProcessDefinition.t()], next_cursor: String.t() | nil}
+
+  @type search_paginated_opts :: [prefix: String.t()]
+
+  @type search_paginated_result :: %{items: [search_result()], next_cursor: String.t() | nil}
 
   @doc """
   Computes a solution-pack update three-way diff plan for one tenant's
@@ -486,6 +512,48 @@ defmodule Letflow.Definitions do
   end
 
   @doc """
+  Cursor-paginated sibling of `list/2` -- REQ-081, `GET /definitions`. Reuses
+  `where_name/2`/`where_status/2`/`where_stage/2` verbatim; does **not** use
+  `list/2`'s `after_created` filter, which is superseded by real keyset
+  pagination here (design §3.1/§8 OQ-1 -- `list/2` itself is untouched and
+  keeps serving its own non-HTTP callers).
+
+  Sorted `created_at` DESC, `id` DESC (keyset pagination) -- the same
+  `(timestamp, id)` compound tiebreak `Letflow.Instances.list/2` and
+  `Letflow.Identity.list_users/2` both already use.
+
+  `page_size` is expected already-validated by the caller (the router, via
+  `Letflow.Api.Pagination.parse_page_size_param/1` + `validate_page_size/1`),
+  the same split of responsibility `Letflow.Instances.list/2` uses -- this
+  function does `limit(^(page_size + 1))` internally to detect a next page.
+  """
+  @spec list_paginated(filters :: list_paginated_filters(), opts :: opts()) ::
+          {:ok, paginated_result()}
+          | {:error, :invalid_cursor | :wrong_endpoint | :expired}
+          | common_error()
+  def list_paginated(filters, opts) when is_map(filters) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+    page_size = Map.fetch!(filters, :page_size)
+
+    with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, cursor_seek} <- decode_definitions_list_cursor(Map.get(filters, :cursor)) do
+      query =
+        ProcessDefinition
+        |> where_name(Map.get(filters, :name))
+        |> where_status(Map.get(filters, :status))
+        |> where_stage(Map.get(filters, :stage))
+        |> filter_by_definitions_list_cursor(cursor_seek)
+        |> order_by([d], desc: d.created_at, desc: d.id)
+        |> limit(^(page_size + 1))
+
+      rows = Repo.all(query, prefix: prefix)
+      {page, next_cursor} = split_definitions_list_page(rows, page_size)
+
+      {:ok, %{items: page, next_cursor: next_cursor}}
+    end
+  end
+
+  @doc """
   Activates a DRAFT process definition (PD-03), atomically deprecating any prior
   ACTIVE definition sharing the same `name` in the same transaction (AC3). Called on
   an already-ACTIVE definition, this is a no-op that returns
@@ -585,6 +653,59 @@ defmodule Letflow.Definitions do
         |> offset(^effective_offset)
 
       {:ok, Repo.all(ecto_query, prefix: prefix)}
+    end
+  end
+
+  @doc """
+  Cursor-paginated sibling of `search/2` -- REQ-081, `GET /definitions/search`.
+  Same result shape (`search_result()` maps: `%{definition: ..., rank:
+  ...}`), same `query` validation (`check_query_not_empty/1` then
+  `check_query_not_too_long/1`, run before any cursor decode or DB query --
+  same order `search/2` already uses).
+
+  Lives in this module (not a separate context module) so it can reference
+  `@rank_case_sql` directly -- see this module's `search/2`-adjacent
+  `@rank_case_sql` comment for why that has to be a same-module compile-time
+  literal, not something a different module's `fragment/1` call could share.
+  The keyset WHERE clause reuses the exact same fragment call
+  `select_with_rank/3`/`order_by_rank/3` already make (same two bound values,
+  `search_query`/`pattern`), so WHERE/SELECT/ORDER BY can never disagree
+  about a row's rank.
+
+  `nil` cursor (first page) is a no-op passthrough, same idiom every other
+  `filter_by_*_cursor` function in this codebase already uses.
+  """
+  @spec search_paginated(
+          query :: String.t(),
+          params :: %{optional(:cursor) => String.t() | nil, page_size: pos_integer()},
+          opts :: search_paginated_opts()
+        ) ::
+          {:ok, search_paginated_result()}
+          | search_error()
+          | {:error, :invalid_cursor | :wrong_endpoint | :expired}
+  def search_paginated(query, params, opts)
+      when is_binary(query) and is_map(params) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+    page_size = Map.fetch!(params, :page_size)
+
+    with :ok <- check_query_not_empty(query),
+         :ok <- check_query_not_too_long(query),
+         {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, cursor_seek} <- decode_definitions_search_cursor(Map.get(params, :cursor)) do
+      pattern = "%" <> query <> "%"
+
+      ecto_query =
+        ProcessDefinition
+        |> where_search_match(pattern)
+        |> select_with_rank(query, pattern)
+        |> filter_by_search_cursor(query, pattern, cursor_seek)
+        |> order_by_rank_paginated(query, pattern)
+        |> limit(^(page_size + 1))
+
+      rows = Repo.all(ecto_query, prefix: prefix)
+      {page, next_cursor} = split_definitions_search_page(rows, page_size)
+
+      {:ok, %{items: page, next_cursor: next_cursor}}
     end
   end
 
@@ -1299,6 +1420,65 @@ defmodule Letflow.Definitions do
   end
 
   # -----------------------------------------------------------------------------------
+  # list_paginated/2 helpers (design §3.1/§3.3) -- mirrors
+  # Letflow.Instances.list/2's filter_by_list_cursor/2 tuple-comparison
+  # keyset pattern (same `(timestamp, id)` compound key, adapted to
+  # ProcessDefinition's created_at/id columns), per ELIXIR-DEV's handoff gap
+  # resolution.
+  # -----------------------------------------------------------------------------------
+
+  @definitions_list_cursor_prefix "DL:"
+
+  defp filter_by_definitions_list_cursor(query, nil), do: query
+
+  defp filter_by_definitions_list_cursor(query, {id, created_at_us}) do
+    ts = DateTime.from_unix!(created_at_us, :microsecond)
+    from(d in query, where: {d.created_at, d.id} < {^ts, ^id})
+  end
+
+  defp decode_definitions_list_cursor(nil), do: {:ok, nil}
+
+  defp decode_definitions_list_cursor(raw) when is_binary(raw) do
+    case Pagination.decode_cursor(
+           raw,
+           @definitions_list_cursor_prefix,
+           byte_size(@definitions_list_cursor_prefix)
+         ) do
+      {:ok, %Pagination.Cursor{} = cursor} -> {:ok, decode_definitions_list_seek(cursor)}
+      {:error, :wrong_endpoint} -> {:error, :wrong_endpoint}
+      {:error, :expired} -> {:error, :expired}
+      {:error, _invalid_base64_or_invalid_cursor} -> {:error, :invalid_cursor}
+    end
+  end
+
+  # `inner` is `"DL:<mint_time_us>:<id>:<created_at_us>"` -- same
+  # Letflow.Identity.list_users/2 field-slot idiom (§0 of the design doc): the
+  # first slot after the prefix is always the mint-time timestamp
+  # decode_cursor/4's expiry check reads, never a domain value.
+  defp decode_definitions_list_seek(%Pagination.Cursor{inner: inner}) do
+    prefix_len = byte_size(@definitions_list_cursor_prefix)
+    rest = binary_part(inner, prefix_len, byte_size(inner) - prefix_len)
+    [_mint_time_us_str, id_str, created_at_us_str] = String.split(rest, ":", parts: 3)
+    {id_str, String.to_integer(created_at_us_str)}
+  end
+
+  defp split_definitions_list_page(rows, page_size) when length(rows) > page_size do
+    {page, [_extra_row]} = Enum.split(rows, page_size)
+    {page, build_definitions_list_next_cursor(List.last(page))}
+  end
+
+  defp split_definitions_list_page(rows, _page_size), do: {rows, nil}
+
+  defp build_definitions_list_next_cursor(%ProcessDefinition{id: id, created_at: created_at}) do
+    mint_time_us = System.system_time(:microsecond)
+    created_at_us = DateTime.to_unix(created_at, :microsecond)
+
+    @definitions_list_cursor_prefix
+    |> Pagination.build_raw_cursor_timestamp_key(mint_time_us, id, created_at_us)
+    |> Pagination.encode_cursor()
+  end
+
+  # -----------------------------------------------------------------------------------
   # search/2 helpers (design §4/§5/§7)
   # -----------------------------------------------------------------------------------
 
@@ -1373,6 +1553,108 @@ defmodule Letflow.Definitions do
         ),
       desc: d.created_at
     )
+  end
+
+  # -----------------------------------------------------------------------------------
+  # search_paginated/3 helpers (design §3.2/§3.3)
+  # -----------------------------------------------------------------------------------
+
+  @definitions_search_cursor_prefix "DS:"
+
+  # Same order/tiebreak as order_by_rank_paginated/3 below: rank DESC,
+  # created_at DESC, id DESC. Reuses @rank_case_sql a third time (alongside
+  # select_with_rank/3's and order_by_rank/3's existing uses) via the exact
+  # same fragment call, so WHERE/SELECT/ORDER BY can never disagree about a
+  # row's rank (design §3.2).
+  defp filter_by_search_cursor(query, _search_query, _pattern, nil), do: query
+
+  defp filter_by_search_cursor(
+         query,
+         search_query,
+         pattern,
+         {cursor_rank, cursor_created_at_us, cursor_id}
+       ) do
+    ts = DateTime.from_unix!(cursor_created_at_us, :microsecond)
+
+    where(
+      query,
+      [d],
+      fragment(@rank_case_sql, d.name, ^search_query, d.name, ^pattern) < ^cursor_rank or
+        (fragment(@rank_case_sql, d.name, ^search_query, d.name, ^pattern) == ^cursor_rank and
+           d.created_at < ^ts) or
+        (fragment(@rank_case_sql, d.name, ^search_query, d.name, ^pattern) == ^cursor_rank and
+           d.created_at == ^ts and d.id < ^cursor_id)
+    )
+  end
+
+  defp order_by_rank_paginated(queryable, search_query, pattern) do
+    order_by(
+      queryable,
+      [d],
+      desc:
+        fragment(
+          @rank_case_sql,
+          d.name,
+          ^search_query,
+          d.name,
+          ^pattern
+        ),
+      desc: d.created_at,
+      desc: d.id
+    )
+  end
+
+  defp decode_definitions_search_cursor(nil), do: {:ok, nil}
+
+  defp decode_definitions_search_cursor(raw) when is_binary(raw) do
+    case Pagination.decode_cursor(
+           raw,
+           @definitions_search_cursor_prefix,
+           byte_size(@definitions_search_cursor_prefix)
+         ) do
+      {:ok, %Pagination.Cursor{} = cursor} -> {:ok, decode_definitions_search_seek(cursor)}
+      {:error, :wrong_endpoint} -> {:error, :wrong_endpoint}
+      {:error, :expired} -> {:error, :expired}
+      {:error, _invalid_base64_or_invalid_cursor} -> {:error, :invalid_cursor}
+    end
+  end
+
+  # `inner` is `"DS:<mint_time_us>:<rank_int>|<id>:<created_at_us>"` --
+  # `rank_int` is `trunc(rank)`, always exactly 1, 2 or 3 per @rank_case_sql's
+  # three WHEN/ELSE branches, so no precision is lost storing it as an
+  # integer. Two domain values (rank_int, id) share the `key` slot of
+  # build_raw_cursor_timestamp_key/4 since only two non-expiry slots exist
+  # for three domain values (rank, created_at, id) -- design §3.3.
+  defp decode_definitions_search_seek(%Pagination.Cursor{inner: inner}) do
+    prefix_len = byte_size(@definitions_search_cursor_prefix)
+    rest = binary_part(inner, prefix_len, byte_size(inner) - prefix_len)
+    [_mint_time_us_str, rank_and_id_str, created_at_us_str] = String.split(rest, ":", parts: 3)
+    [rank_int_str, id_str] = String.split(rank_and_id_str, "|", parts: 2)
+    {String.to_integer(rank_int_str) * 1.0, String.to_integer(created_at_us_str), id_str}
+  end
+
+  defp split_definitions_search_page(rows, page_size) when length(rows) > page_size do
+    {page, [_extra_row]} = Enum.split(rows, page_size)
+    {page, build_definitions_search_next_cursor(List.last(page))}
+  end
+
+  defp split_definitions_search_page(rows, _page_size), do: {rows, nil}
+
+  defp build_definitions_search_next_cursor(%{
+         definition: %ProcessDefinition{id: id, created_at: created_at},
+         rank: rank
+       }) do
+    mint_time_us = System.system_time(:microsecond)
+    created_at_us = DateTime.to_unix(created_at, :microsecond)
+    rank_int = trunc(rank)
+
+    @definitions_search_cursor_prefix
+    |> Pagination.build_raw_cursor_timestamp_key(
+      mint_time_us,
+      "#{rank_int}|#{id}",
+      created_at_us
+    )
+    |> Pagination.encode_cursor()
   end
 
   # -----------------------------------------------------------------------------------

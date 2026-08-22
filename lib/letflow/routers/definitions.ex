@@ -4,13 +4,58 @@ defmodule Letflow.Routers.Definitions do
   `Letflow.Plugs.ApiPipeline`.
 
   REQ-078 adds **exactly one** route to it — the definition-graph validation
-  endpoint. The rest of this module's surface is reserved for **REQ-081 and
-  REQ-082**, which co-own this file; REQ-078 does not touch the `match _`
-  catch-all and modifies no existing route.
+  endpoint. REQ-081 adds the five read routes below. The rest of this
+  module's surface (create/update/patch/activate/deprecate/archive/import) is
+  reserved for **REQ-082**, which co-owns this file; neither REQ-078 nor
+  REQ-081 touches the `match _` catch-all or modifies an existing route.
 
-  | Handler  | Method/path                    | Delegate                                              | Permission | Response |
-  |----------|--------------------------------|-------------------------------------------------------|------------|----------|
-  | validate | `POST /definitions/:id/validate` | `Letflow.Definitions.validate_definition_graph/2`    | none in REQ-078 (REQ-131) | 200 valid / 422 findings |
+  | Handler               | Method/path                       | Delegate                                              | Permission        | Response |
+  |------------------------|-----------------------------------|--------------------------------------------------------|-------------------|----------|
+  | validate               | `POST /definitions/:id/validate`  | `Letflow.Definitions.validate_definition_graph/2`       | none in REQ-078 (REQ-131) | 200 valid / 422 findings |
+  | get_active_by_name     | `GET /definitions/active/:name`   | `Letflow.Definitions.get_active_by_name/2`              | `DefinitionsRead` | 200 / 404 |
+  | search                 | `GET /definitions/search`         | `Letflow.Definitions.search_paginated/3`                | `DefinitionsRead` | 200 / 400 |
+  | export                 | `GET /definitions/:id/export`     | `Letflow.Definitions.ExportImport.export/2`             | `DefinitionsRead` | 200 / 404 |
+  | get_by_id              | `GET /definitions/:id`            | `Letflow.Definitions.get_by_id/2`                       | `DefinitionsRead` | 200 / 404 |
+  | list                   | `GET /definitions`                | `Letflow.Definitions.list_paginated/2`                  | `DefinitionsRead` | 200 |
+
+  ## REQ-081 — read routes (design: `lib/letflow/design/req081-definition-routes-read.md`)
+
+  Five `GET` handlers, all delegating into `Letflow.Definitions`/
+  `Letflow.Definitions.ExportImport` (both already shipped, except
+  `list_paginated/2`/`search_paginated/3` which REQ-081 adds). Every one is
+  wrapped in `with_authorized_scope/4`, copied structurally from
+  `Letflow.Routers.Instances`'s own private helper of the same name and
+  shape (temporary direct duplication, pending REQ-131's consolidation —
+  same precedent, not a shared/imported module).
+
+  ### Route ordering
+
+  `/active/:name`, `/search`, and `/:id/export` are declared **above**
+  `/:id`, which is declared above `/`, matching R-Co's own registration
+  order (`main.zig`) and the same hazard class `Letflow.Routers.Instances`'s
+  `/:id/history`-before-`/:id` note documents: `Plug.Router` is first-match-
+  wins, so a bare `GET "/:id"` declared above any of the three would swallow
+  it with `id` bound to the literal suffix.
+
+  ### `handle_search`'s three-way HTTP contract (AC2/AC3)
+
+  `Definitions.search_paginated/3` returns `{:error, :query_empty}`/
+  `{:error, :query_too_long}` for a validation failure (mapped to **400**,
+  matching REQ-081's acceptance criteria text verbatim — a deliberate
+  divergence from R-Co's own 422 for both), and a genuinely-valid,
+  zero-match query returns `{:ok, %{items: [], next_cursor: nil}}` (**200**,
+  empty array) — never conflated. `render_search_result/1`'s clause list
+  keeps these as three separate code paths.
+
+  ### `get_by_id`/`export` inherit `get_by_id/2`'s not-found collapse (OQ-2)
+
+  Neither handler pre-casts `:id` to a UUID the way `Letflow.Routers.Instances`
+  does for `instance_id` — `Letflow.Definitions.get_by_id/2` (REQ-030) already
+  internally maps a cast failure to `{:error, :not_found}` (its own
+  `cast_uuid/1`), so a malformed UUID and a genuinely-absent-but-well-formed
+  UUID collapse to the same 404. This is a **stronger** INV-5 guarantee than
+  R-Co's own 422-vs-404 split, flagged in the design doc for REVIEWER
+  sign-off rather than silently decided.
 
   ## Two different R-Co files are called `validation.zig`. They are unrelated.
 
@@ -112,14 +157,41 @@ defmodule Letflow.Routers.Definitions do
 
   use Plug.Router
 
+  alias Letflow.Api.Authorization
   alias Letflow.Api.Context
   alias Letflow.Api.Error
+  alias Letflow.Api.Pagination
   alias Letflow.Api.Response
   alias Letflow.Definitions
+  alias Letflow.Definitions.ExportImport
+  alias Letflow.Definitions.ExportImport.ExportDocument
   alias Letflow.Definitions.Graph
+  alias Letflow.Definitions.ProcessDefinition
 
   plug(:match)
   plug(:dispatch)
+
+  # REQ-081 read routes. MUST precede `get "/:id"` below -- see this
+  # module's moduledoc "Route ordering".
+  get "/active/:name" do
+    handle_get_active_by_name(conn, conn.params["name"])
+  end
+
+  get "/search" do
+    handle_search(conn)
+  end
+
+  get "/:id/export" do
+    handle_export(conn, conn.params["id"])
+  end
+
+  get "/:id" do
+    handle_get_by_id(conn, conn.params["id"])
+  end
+
+  get "/" do
+    handle_list(conn)
+  end
 
   post "/:id/validate" do
     handle_validate(conn, conn.params["id"])
@@ -179,6 +251,246 @@ defmodule Letflow.Routers.Definitions do
   # No 503 branch -- Ecto surfaces pool exhaustion as a raised
   # DBConnection.ConnectionError, never an error tuple.
   defp render_validation(conn, {:error, _common_error}), do: Response.internal_error(conn)
+
+  # ── GET /definitions/:id (design §4.3) ─────────────────────────────────
+  #
+  # No pre-cast of `:id` -- see this module's moduledoc "get_by_id/export
+  # inherit get_by_id/2's not-found collapse (OQ-2)".
+
+  defp handle_get_by_id(conn, raw_id) do
+    with_authorized_scope(conn, "GET", "/definitions/:id", fn conn, opts ->
+      render_get_by_id(conn, Definitions.get_by_id(raw_id, opts))
+    end)
+  end
+
+  defp render_get_by_id(conn, {:ok, definition}),
+    do: Response.ok(conn, definition_map(definition))
+
+  defp render_get_by_id(conn, {:error, :not_found}), do: Response.not_found(conn)
+  defp render_get_by_id(conn, {:error, _common_error}), do: Response.internal_error(conn)
+
+  # ── GET /definitions (design §4.3) ─────────────────────────────────────
+
+  defp handle_list(conn) do
+    with_authorized_scope(conn, "GET", "/definitions", fn conn, opts ->
+      conn = fetch_query_params(conn)
+      query = conn.query_params
+
+      with {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+           {:ok, page_size} <- Pagination.validate_page_size(raw_page_size) do
+        filters = %{
+          name: Map.get(query, "name"),
+          status: parse_status(Map.get(query, "status")),
+          stage: Map.get(query, "stage"),
+          cursor: Map.get(query, "cursor"),
+          page_size: page_size
+        }
+
+        render_list_result(conn, Definitions.list_paginated(filters, opts))
+      else
+        {:error, :invalid_page_size} -> Response.bad_request(conn, "invalid page_size")
+        {:error, :page_size_too_large} -> Response.bad_request(conn, "page_size out of range")
+      end
+    end)
+  end
+
+  # `status` is compared against ProcessDefinition.status/0's lowercase atoms
+  # inside Definitions.list_paginated/2's where_status/2 (unchanged, existing
+  # helper) -- absent/unrecognised values pass through as a plain lowercased
+  # string/atom-cast attempt is deliberately NOT done here: where_status/2
+  # itself does a plain `==` comparison against the stored (already-atom)
+  # column, so an unrecognised string simply matches no rows rather than
+  # raising, matching this module's existing no-extra-validation-layer style.
+  defp parse_status(nil), do: nil
+
+  defp parse_status(status) when is_binary(status) do
+    status |> String.downcase() |> safe_to_existing_atom()
+  end
+
+  defp safe_to_existing_atom(value) do
+    String.to_existing_atom(value)
+  rescue
+    ArgumentError -> nil
+  end
+
+  defp render_list_result(conn, {:ok, %{items: items, next_cursor: next_cursor}}) do
+    Response.ok(conn, %{
+      "items" => Enum.map(items, &definition_map/1),
+      "next_cursor" => next_cursor
+    })
+  end
+
+  defp render_list_result(conn, {:error, :invalid_cursor}),
+    do: Response.bad_request(conn, "invalid cursor")
+
+  defp render_list_result(conn, {:error, :wrong_endpoint}),
+    do: Response.bad_request(conn, "cursor is not valid for this endpoint")
+
+  defp render_list_result(conn, {:error, :expired}),
+    do: Response.send_problem(conn, Error.cursor_expired())
+
+  defp render_list_result(conn, {:error, _common_error}), do: Response.internal_error(conn)
+
+  # ── GET /definitions/active/:name (design §4.3) ────────────────────────
+
+  defp handle_get_active_by_name(conn, name) do
+    with_authorized_scope(conn, "GET", "/definitions/active/:name", fn conn, opts ->
+      render_get_by_id(conn, Definitions.get_active_by_name(name, opts))
+    end)
+  end
+
+  # ── GET /definitions/search (design §4.4 -- the requirement's stated trap) ──
+
+  defp handle_search(conn) do
+    with_authorized_scope(conn, "GET", "/definitions/search", fn conn, opts ->
+      conn = fetch_query_params(conn)
+      query = conn.query_params
+
+      with {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+           {:ok, page_size} <- Pagination.validate_page_size(raw_page_size) do
+        q = Map.get(query, "q") || ""
+        params = %{cursor: Map.get(query, "cursor"), page_size: page_size}
+
+        render_search_result(conn, Definitions.search_paginated(q, params, opts))
+      else
+        {:error, :invalid_page_size} -> Response.bad_request(conn, "invalid page_size")
+        {:error, :page_size_too_large} -> Response.bad_request(conn, "page_size out of range")
+      end
+    end)
+  end
+
+  # Five clauses, one per outcome -- query_empty/query_too_long are
+  # validation failures (400), never routed through the {:ok, ...} clause's
+  # empty-array path and never mapped to 404. See this module's moduledoc.
+  defp render_search_result(conn, {:ok, %{items: items, next_cursor: next_cursor}}) do
+    Response.ok(conn, %{
+      "items" => Enum.map(items, &search_result_map/1),
+      "next_cursor" => next_cursor
+    })
+  end
+
+  defp render_search_result(conn, {:error, :query_empty}),
+    do: Response.bad_request(conn, "q must not be empty")
+
+  defp render_search_result(conn, {:error, :query_too_long}),
+    do: Response.bad_request(conn, "q must not exceed 512 bytes")
+
+  defp render_search_result(conn, {:error, :invalid_cursor}),
+    do: Response.bad_request(conn, "invalid cursor")
+
+  defp render_search_result(conn, {:error, :wrong_endpoint}),
+    do: Response.bad_request(conn, "cursor is not valid for this endpoint")
+
+  defp render_search_result(conn, {:error, :expired}),
+    do: Response.bad_request(conn, "cursor has expired")
+
+  defp render_search_result(conn, {:error, _common_error}), do: Response.internal_error(conn)
+
+  defp search_result_map(%{definition: definition, rank: rank}) do
+    %{"definition" => definition_map(definition), "rank" => rank}
+  end
+
+  # ── GET /definitions/:id/export (design §4.3) ──────────────────────────
+  #
+  # No pre-cast of `:id` -- same OQ-2 rationale as handle_get_by_id/2, since
+  # ExportImport.export/2 delegates its own read entirely to
+  # Definitions.get_by_id/2.
+
+  defp handle_export(conn, raw_id) do
+    with_authorized_scope(conn, "GET", "/definitions/:id/export", fn conn, opts ->
+      render_export(conn, ExportImport.export(raw_id, opts))
+    end)
+  end
+
+  defp render_export(conn, {:ok, document}), do: Response.ok(conn, export_document_map(document))
+  defp render_export(conn, {:error, :not_found}), do: Response.not_found(conn)
+  defp render_export(conn, {:error, _common_error}), do: Response.internal_error(conn)
+
+  # ── Response allowlists (INV-2, design §6) ─────────────────────────────
+
+  @spec definition_map(ProcessDefinition.t()) :: map()
+  defp definition_map(%ProcessDefinition{} = definition) do
+    %{
+      "id" => definition.id,
+      "name" => definition.name,
+      "version" => definition.version,
+      "description" => definition.description,
+      "status" => status_string(definition.status),
+      "graph" => definition.graph,
+      "created_by" => definition.created_by,
+      "created_at" => DateTime.to_iso8601(definition.created_at),
+      "updated_at" => DateTime.to_iso8601(definition.updated_at),
+      "archived_at" => optional_iso8601(definition.archived_at),
+      "stage" => definition.stage
+    }
+  end
+
+  @spec export_document_map(ExportDocument.t()) :: map()
+  defp export_document_map(%ExportDocument{} = document) do
+    %{
+      "bpm_export_schema_version" => document.bpm_export_schema_version,
+      "id" => document.id,
+      "name" => document.name,
+      "version" => document.version,
+      "description" => document.description,
+      "graph" => document.graph,
+      "exported_at" => document.exported_at
+    }
+  end
+
+  defp optional_iso8601(nil), do: nil
+  defp optional_iso8601(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+
+  defp status_string(:draft), do: "DRAFT"
+  defp status_string(:active), do: "ACTIVE"
+  defp status_string(:deprecated), do: "DEPRECATED"
+  defp status_string(:archived), do: "ARCHIVED"
+
+  # ── Authorization (temporary direct call, pending REQ-131) ────────────────
+  #
+  # Copied structurally from Letflow.Routers.Instances's own
+  # with_authorized_scope/4 -- see this module's moduledoc "REQ-081 -- read
+  # routes". No Repo call of any kind happens before both steps (scope, then
+  # permission) have run and the permission check has returned
+  # :Allow/:AllowWithRowFilter. Unlike Instances's version this one has no
+  # actor_id to thread through (none of the five REQ-081 handlers need one),
+  # so `fun` is arity 2 (`conn`, `opts`), not arity 3.
+  defp with_authorized_scope(conn, method, path_template, fun) do
+    case scoped_repo_opts(conn) do
+      {:ok, opts} ->
+        case actor_id(conn) do
+          {:ok, actor_id} ->
+            ctx = %Authorization.AccessContext{
+              user_id: actor_id,
+              roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles)
+            }
+
+            decision =
+              Authorization.evaluate_access(
+                ctx,
+                Authorization.endpoint_policy_key(method, path_template)
+              )
+
+            case decision.kind do
+              :Deny403 -> Response.forbidden(conn, "insufficient permissions")
+              _allow_or_allow_with_row_filter -> fun.(conn, opts)
+            end
+
+          {:error, :missing_scope} ->
+            Response.internal_error(conn)
+        end
+
+      {:error, :missing_scope} ->
+        Response.internal_error(conn)
+    end
+  end
+
+  defp actor_id(conn) do
+    case conn.assigns[:auth_context] do
+      %{user_id: user_id} when is_binary(user_id) -> {:ok, user_id}
+      _other -> {:error, :missing_scope}
+    end
+  end
 
   # ── Helpers ───────────────────────────────────────────────────────────────
 

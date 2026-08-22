@@ -7,7 +7,7 @@
   "to_agent": "REVIEWER",
   "file": "handoffs/WF03-ISS0276-20260822/step-03c-reviewer.json",
   "created_at": "2026-08-22T15:15:46Z",
-  "started_at": "2026-08-22T15:15:46Z",
+  "started_at": "2026-08-22T15:16:07Z",
   "completed_at": null,
   "status": "PENDING",
   "priority": "NORMAL",

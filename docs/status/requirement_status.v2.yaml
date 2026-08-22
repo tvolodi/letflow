@@ -1405,3 +1405,60 @@ history:
       requirement's scope). RELEASE-VALIDATOR independently re-ran the
       suite and re-verified all 7 acceptance criteria against the shipped
       code and tests directly -- PASS. Status flipped pending -> done here.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ISSUE-FIXER
+    at: "2026-08-22T09:06:05Z"
+    note: >
+      WF03-ISS0263-20260822 (queue task 263, GH#518) started. This volume
+      (requirement_status.v2.yaml) is over its own declared roll_rule
+      ceiling (max_lines: 1200) at 1407 lines / 92601 bytes / 43 entries,
+      confirmed by `mix test test/docs/requirement_status_invariants_test.exs`
+      failing A3 ("the current volume is within the roll-rule ceilings":
+      measured lines=1407 > max_lines=1200). Root cause: no run since this
+      volume crossed the ceiling has executed the roll procedure in this
+      file's own "WHEN THIS VOLUME IS FULL" section -- entries kept landing
+      (43 on-disk `- req:` entries, many via composed rebase conflicts per
+      this volume's index note) with nobody checking `wc -l`/`wc -c` after
+      appending. Fixing per that section's exact 4-step procedure: close
+      this volume with a closure footer, open requirement_status.v3.yaml
+      with the same header and an empty history, mark it current in the
+      index. This started-event is appended here, to the volume still
+      current at the moment this run began, per this run's own closeout
+      instructions; the corresponding done-event lands in the new current
+      volume once the roll is complete.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 2 — CLOSED 2026-08-22. DO NOT APPEND TO THIS FILE.
+#
+# This volume holds the complete requirement run history from 2026-08-21 through
+# 2026-08-22 (44 entries, lines 1-1429). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed under ISS-0263 (WF03-ISS0263-20260822)
+# because it crossed its own declared roll_rule ceiling (max_lines: 1200) at 1407
+# lines / 92601 bytes / 43 entries -- confirmed failing
+# test/docs/requirement_status_invariants_test.exs's assertion A3 ("the current
+# volume is within the roll-rule ceilings"). Reads of this volume are TARGETED
+# reads only -- a line range or a pattern match, never a whole-file read (1429
+# lines exceeds the 1200-line roll ceiling, though it remains under the Read
+# tool's own 2000-line/256KB hard limit). Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v3.yaml
+#
+# Why this file was closed: ISS-0263. No prior run since this volume crossed the
+# roll ceiling had executed the roll procedure documented in this file's own
+# (now-frozen) "WHEN THIS VOLUME IS FULL" section -- entries kept landing (many
+# via composed rebase conflicts, per this volume's index note) with nobody
+# re-checking `wc -l`/`wc -c` after appending.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none declared. (Volume 1's three
+# `event: SCOPE-CHANGE` anomalies and three shape anomalies remain declared
+# against volume 1 only; this volume introduced no new ones as far as this
+# closure's own review found.)
+# ─────────────────────────────────────────────────────────────────────────────

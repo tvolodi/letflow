@@ -5628,7 +5628,7 @@ requirements:
   - id: REQ-115
     title: Single fail-fast frontend check command (mix letflow.check equivalent for web/)
     owner: FRONTEND-DEV
-    status: in_progress
+    status: done
     stage: S8
     impl_order: 241  # letflow-queue task id
     description: >

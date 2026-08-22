@@ -41,6 +41,11 @@ carried over, and the drift it arrived with, and
 type-checks, lints, and passes 178 unit + 47 guard tests on its own; it
 does **not** yet work end-to-end against Letflow, because the API
 surface it needs (S4) is still being built. That integration is S8.
+`npm run check` (run from `web/`) is the frontend's counterpart to
+`mix letflow.check` below — type-check, lint, test, and guards in that
+order, fail-fast (REQ-115); see `web/README.md`'s script table. Not yet
+wired into CI (no `.github/workflows/` exists in this repository yet —
+that's REQ-138).
 
 The same migration brought over the **mobile tier specification**
 (`docs/mobile/`) as stage S9 — a Flutter app that is a generic

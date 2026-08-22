@@ -582,3 +582,30 @@ history:
       chaining type-check -> lint -> test -> guards fail-fast, and
       documents it in web/README.md's script table. No .github/workflows/
       file created by this requirement -- REQ-138 owns wiring it into CI.
+
+  - req: REQ-115
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-22T13:31:45Z"
+    note: >
+      WF02-REQ115-20260822 (queue task 241, GH#479) done. Added
+      `npm run check` to web/package.json (type-check && lint && test &&
+      guards, fail-fast) and documented it in web/README.md's script
+      table. CODE-DESIGNER/CODE-DESIGN-VALIDATOR PASS. FRONTEND-DEV
+      implemented per design. SECURITY-REVIEWER PASS (out of scope, no
+      tenant-data path). REVIEWER PASS (no scope creep, idiomatic &&
+      chain). TEST-DESIGNER: no executable surface (package.json script
+      declaration + README doc row), routed directly to
+      RELEASE-VALIDATOR per WF-02's config-only exemption.
+      RELEASE-VALIDATOR PASS, independently re-ran `npm run check`
+      (clean: type-check/lint clean, test 178/178, guards 48/48
+      including full vite build) and independently reproduced the
+      fail-fast demo. Note: AC2's fail-fast demo triggered at the lint
+      step rather than type-check, because web/'s type-check npm script
+      is currently a no-op (root tsconfig.json is solution-style,
+      tsc --noEmit compiles zero files) -- a pre-existing, out-of-scope
+      defect confirmed independently by both REVIEWER and
+      RELEASE-VALIDATOR; ORCH will file this as a new issue separately.
+      No .github/workflows/ file created; REQ-138 is the consumer that
+      wires this into CI, REQ-136 is backend-only. Status flipped
+      in_progress -> done here.

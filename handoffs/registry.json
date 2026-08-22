@@ -1983,6 +1983,27 @@
       "queue_task_id": 150,
       "queue_agent_id": "tvolodi-orch",
       "note": "WF-02 for REQ-083 (GH#290, queue task 150, stage S4), claimed via get_next_task. Ports tasks.zig's read path (handleList/handleGetById/handleInbox) plus the store.zig query/filter operations those three handlers invoke -- REQ-043 explicitly deferred this boundary to this requirement. handleInbox has a second scoping dimension beyond REQ-072's tenant prefix: per-principal (direct USER assignment, GROUP membership, ROLE membership), resolved through Letflow.Identity per REQ-047's assignee_type/assignee_ref model, not reimplemented. depends_on REQ-072 (done, GH#-, merged prior run). SECURITY (INV-1, INV-2, INV-5) -- Step 2c will be in-scope, not skippable."
+    },
+    {
+      "run_id": "WF02-REQ124-20260822",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-124"],
+      "stage": "S9",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/routers/tenant_config.ex",
+        "lib/letflow/plugs/api_pipeline.ex",
+        "lib/letflow/plugs/auth_pipeline.ex",
+        "lib/letflow/router.ex"
+      ],
+      "lock_acquired_at": "2026-08-22T10:32:29Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 DISPATCHED -- handoff handoffs/WF02-REQ124-20260822/step-00-git-setup.json committed (712ce18), ELIXIR-DEV spawning now.",
+      "backfilled": false,
+      "queue_task_id": 236,
+      "queue_agent_id": "tvolodi-orch",
+      "note": "WF-02 for REQ-124 (GH#474, queue task 236, stage S9), claimed via get_next_task. Unauthenticated GET /tenant-config for slug-based mobile bootstrap (MOB-2 gate, docs/mobile/build-order.md phase M-0) -- two gaps: (a) Letflow.Routers.TenantConfig route stub (lands in REQ-078, already done) and (b) Letflow.Plugs.ApiPipeline mounting behind Letflow.Plugs.AuthPipeline, which must be resolved explicitly (unauthenticated variant ahead of AuthPipeline, or a documented exemption). depends_on REQ-078 (done, GH#-, merged prior run). SECURITY-REVIEWER in-scope: unauthenticated endpoint returning per-tenant data is a tenant-data path by definition; tenant-enumeration risk on unknown slugs must be addressed."
     }
   ]
 }

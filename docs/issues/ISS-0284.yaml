@@ -1,0 +1,61 @@
+id: ISS-0284
+title: >
+  mix letflow.check.test fails on pre-existing unused-default-value warnings
+  in unique_idempotency_key/1, entry/2, insert_user!/2 -- broader than
+  ISS-0069's original 2 files
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0283-20260822
+discovered_at: 2026-08-22T17:10:36Z
+severity: MINOR
+description: >
+  A clean single `mix letflow.check` run on main (8bfe8e4) showed all 1783
+  tests passing but the overall check failing on warnings-as-errors during
+  the test-file compile pass: three private-function default-value
+  warnings (unique_idempotency_key/1, entry/2, insert_user!/2). ISS-0069
+  (already status: resolved, GH#231 closed 2026-08-19) had previously
+  diagnosed and fixed the identical warning class across 9 other test
+  files -- these three are a fresh, unrelated recurrence of the same
+  class, not a re-opening of ISS-0069's own scope. The queue task's own
+  description claimed ISS-0069 was "still open/undiagnosed"; that was
+  stale -- confirmed by reading docs/issues/ISS-0069.yaml directly, which
+  is fully resolved with a resolution_note. No correction to ISS-0069.yaml
+  was needed.
+affected_files:
+  - test/letflow/engine_sub_process_test.exs
+  - test/letflow/engine/sub_process_test.exs
+  - test/letflow/routers/tasks_test.exs
+github_issue: 559
+status: resolved
+resolved_in_run: WF03-ISS0284-20260822
+resolved_at: 2026-08-22T18:28:43Z
+resolution_note: >
+  Root cause, per function, matching ISS-0069's own established pattern
+  exactly: a private `defp` test-helper carried a `\\ <default>` argument
+  value that no call site within its own module ever relied on (every
+  call site in that file passes the argument explicitly), so the compiler
+  correctly flags the default as dead code.
+
+    - test/letflow/engine_sub_process_test.exs:96 --
+      `defp unique_idempotency_key(prefix \\ "req062-idk")`; all 3 call
+      sites (lines 290, 301, 846) pass an explicit prefix.
+    - test/letflow/engine/sub_process_test.exs:44 --
+      `defp entry(name, opts \\ [])`; all 8 call sites pass explicit opts.
+    - test/letflow/routers/tasks_test.exs:112 --
+      `defp insert_user!(tenant, attrs \\ %{})`; all 3 call sites pass
+      explicit attrs.
+
+  Fix: dropped the unused default value from each signature (no other
+  change), the same mechanical, behavior-preserving fix
+  lib/letflow/design/iss0069-unused-default-warnings-fix.md already
+  established for 9 earlier files.
+
+  Verification (serialized after two earlier attempts collided against a
+  concurrently-running sibling `mix test` invocation on the shared
+  Postgres test DB and were discarded as spurious -- confirmed via the
+  DB's own `letflow_mixtest_%` liveness-guard log lines, not a defect in
+  this fix): a clean, uncontended `mix letflow.check.test` run -- OK, no
+  test failures, no ISS-0069-class warnings. Full `mix letflow.check` --
+  OK end to end: 1783/1783 tests passed (5 properties, 1778 tests),
+  letflow.check_toolchain OK, letflow.lint_handoffs OK (0 new
+  violations, 25 pre-existing grandfathered), letflow.check_requirements_registration
+  and letflow.check_deferral_staleness both clean.

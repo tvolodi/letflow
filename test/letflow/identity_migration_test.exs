@@ -51,6 +51,8 @@ defmodule Letflow.IdentityMigrationTest do
 
   import Ecto.Query
 
+  require Logger
+
   alias Letflow.Identity.Tenant
   alias Letflow.IdentityMigration
   alias Letflow.TenantProvisioning
@@ -244,6 +246,27 @@ defmodule Letflow.IdentityMigrationTest do
   # lib/letflow/design/iss060-migration-guard-test-race-fix.md section 3.
   # Never dropped by on_exit/1: it must survive a BEAM crash to do its job
   # (section 5's crash-safety argument).
+  #
+  # ISS-0229 section 2.3(a): the inline CONSTRAINT below closes the referential
+  # blind spot for FRESH databases. public.tenant_schemas carries
+  # tenant_schemas_tenant_id_fkey, so a tenant cannot be deleted while a
+  # registry row still points at it -- but a row PARKED here used to carry no
+  # such protection, suspending that invariant for every tenant but one for the
+  # duration of with_only_this_tenant_visible!/2's critical section. A parked
+  # row must carry its protection with it. NO ACTION (no ON DELETE clause) is
+  # deliberate: byte-for-byte the same semantics tenant_schemas_tenant_id_fkey
+  # already has (ISS-0229 section 2.2 rules out CASCADE -- which would silently
+  # vaporise the parked row -- and SET NULL/RESTRICT). Column list, order and
+  # types are UNCHANGED, so this stays the exact structural mirror of
+  # public.tenant_schemas that the `SELECT *` restore depends on; a named table
+  # constraint adds no column.
+  #
+  # Because this is CREATE TABLE IF NOT EXISTS, it is a no-op on every database
+  # where the table already exists -- those converge via
+  # ensure_backup_table_fk!/0 instead. This helper deliberately does NOT call
+  # that one; see restore_orphaned_guard_backup_rows!/0 for why the ordering
+  # matters.
+  @spec ensure_backup_table!() :: :ok
   defp ensure_backup_table! do
     Repo.query!("""
     CREATE TABLE IF NOT EXISTS public.iss060_tenant_schemas_guard_backup (
@@ -251,11 +274,168 @@ defmodule Letflow.IdentityMigrationTest do
       tenant_id uuid NOT NULL,
       schema_name text NOT NULL,
       migrations_applied_at timestamp,
-      provisioned_at timestamp NOT NULL
+      provisioned_at timestamp NOT NULL,
+      CONSTRAINT iss060_tenant_schemas_guard_backup_tenant_id_fkey
+        FOREIGN KEY (tenant_id) REFERENCES public.tenants (id)
     )
     """)
 
     :ok
+  end
+
+  # ISS-0229 section 2.3(b): convergence path for ALREADY-EXISTING databases,
+  # where ensure_backup_table!/0's CREATE TABLE IF NOT EXISTS is a no-op and the
+  # table would otherwise never gain the constraint.
+  #
+  # The pg_constraint pre-check is load-bearing, not decoration: it makes the
+  # second and every later call execute no DDL at all, rather than merely
+  # swallowing a 42710 after the fact. ALTER TABLE ... ADD CONSTRAINT ... FOREIGN
+  # KEY takes ACCESS EXCLUSIVE on the backup table AND SHARE ROW EXCLUSIVE on
+  # public.tenants, which conflicts with the ROW EXCLUSIVE every concurrent
+  # INSERT/UPDATE/DELETE on tenants holds -- unguarded, it would briefly block
+  # every concurrent invocation's tenant writes on every test in this file.
+  # Guarded, it is a genuinely one-time cost per database.
+  #
+  # to_regclass/1 (rather than '...'::regclass) so the block is inert, not an
+  # error, if the table somehow does not exist yet. Plain ADD CONSTRAINT, NOT
+  # `NOT VALID`: the validating scan is over a table with single-digit rows, and
+  # NOT VALID would leave the constraint permanently unvalidated without a second
+  # VALIDATE CONSTRAINT while reducing no lock. The check-then-act is not atomic
+  # against a concurrent identical ALTER, which is acceptable and bounded: every
+  # caller first holds @guard_lock_key, and no code outside this module touches
+  # this table.
+  @spec ensure_backup_table_fk!() :: :ok
+  defp ensure_backup_table_fk! do
+    Repo.query!("""
+    DO $$
+    DECLARE
+      v_rel regclass := to_regclass('public.iss060_tenant_schemas_guard_backup');
+    BEGIN
+      IF v_rel IS NOT NULL AND NOT EXISTS (
+           SELECT 1
+           FROM pg_constraint
+           WHERE conrelid = v_rel
+             AND conname  = 'iss060_tenant_schemas_guard_backup_tenant_id_fkey'
+         ) THEN
+        ALTER TABLE public.iss060_tenant_schemas_guard_backup
+          ADD CONSTRAINT iss060_tenant_schemas_guard_backup_tenant_id_fkey
+          FOREIGN KEY (tenant_id) REFERENCES public.tenants (id);
+      END IF;
+    END
+    $$;
+    """)
+
+    :ok
+  end
+
+  # ISS-0229 section 4.1: the single, total move-back statement, defined once as
+  # a module attribute so its two call sites
+  # (restore_orphaned_guard_backup_rows!/0 and with_only_this_tenant_visible!/2's
+  # after block) cannot drift -- they previously held byte-identical copies of a
+  # weaker CTE.
+  #
+  # `taken` empties the backup table UNCONDITIONALLY, exactly as the old CTE's
+  # `restored` step did; restorable and unrestorable rows leave by the same
+  # DELETE and differ only in whether they are re-inserted. That is what makes
+  # the helper total: afterwards the table is empty in every case, so the
+  # poisoned state cannot persist. `restorable` expresses "restorable iff the
+  # parent tenant is still there"; AS MATERIALIZED (PG 12+) because it is
+  # referenced twice. `restored` keeps `INSERT ... SELECT * FROM restorable` with
+  # no explicit column list, preserving
+  # iss060-migration-guard-test-race-fix.md section 3's column-drift safety --
+  # the classification is a FILTER, never an added column, precisely so that
+  # stays true. ON CONFLICT (id) DO NOTHING is retained unchanged (the
+  # duplicate-PK case ISS-0060 section 6 reasoned about, orthogonal to the FK
+  # case). `restored` is never referenced by the outer query and that is fine:
+  # PostgreSQL executes data-modifying WITH sub-statements exactly once and
+  # always to completion regardless of whether the primary query reads their
+  # output. The final SELECT returns exactly the DISCARDED rows (taken minus
+  # restorable); NOT IN is safe because restorable.id is the primary key and can
+  # never be NULL, and the ::text casts spare the caller any Ecto.UUID handling.
+  # Still one statement, hence one implicit transaction -- delete, restore and
+  # discard commit together or not at all, so section 5's crash-safety argument
+  # carries over verbatim.
+  @restore_or_discard_sql """
+  WITH taken AS (
+    DELETE FROM public.iss060_tenant_schemas_guard_backup
+    RETURNING *
+  ),
+  restorable AS MATERIALIZED (
+    SELECT t.*
+    FROM taken t
+    WHERE EXISTS (SELECT 1 FROM public.tenants tn WHERE tn.id = t.tenant_id)
+  ),
+  restored AS (
+    INSERT INTO public.tenant_schemas
+    SELECT * FROM restorable
+    ON CONFLICT (id) DO NOTHING
+    RETURNING id
+  )
+  SELECT t.id::text, t.tenant_id::text, t.schema_name
+  FROM taken t
+  WHERE t.id NOT IN (SELECT id FROM restorable)
+  """
+
+  # ISS-0229 section 3.4: the total move-back. Restores every parked row whose
+  # parent tenant still exists and DISCARDS every row whose parent is gone,
+  # logging each discard. Never raises on an unrestorable row.
+  #
+  # A row whose parent tenant no longer exists cannot be restored into
+  # public.tenant_schemas (tenant_schemas_tenant_id_fkey forbids it) and
+  # describes a schema some teardown has already dropped -- it is meaningless
+  # data. Discarding it costs nothing; raising costs the enclosing test, and at
+  # the setup call site it cost EVERY test in this file, on every run, forever
+  # (ISS-0229 section 7: a self-heal wired into setup carries a stricter
+  # totality obligation than one called from a test body).
+  #
+  # Preconditions, which both call sites already satisfy: executing inside a
+  # Repo.checkout/2 callback, holding @guard_lock_key.
+  @spec restore_or_discard_backup_rows!() :: :ok
+  defp restore_or_discard_backup_rows! do
+    discarded = run_restore_or_discard_with_one_retry!()
+
+    Enum.each(discarded, fn [id, tenant_id, schema_name] ->
+      Logger.warning(
+        "ISS-0229: discarded unrestorable guard-backup row id=#{id} " <>
+          "tenant_id=#{tenant_id} schema_name=#{schema_name} -- parent tenant " <>
+          "no longer exists in public.tenants"
+      )
+    end)
+
+    :ok
+  end
+
+  # ISS-0229 section 3.4's bounded retry: exactly once, on 23503 only.
+  #
+  # @restore_or_discard_sql is a single statement, so a failure rolled the whole
+  # thing back and the rows are still in the backup table -- the retry is a
+  # genuine, side-effect-free redo, not a blanket rescue. The only way the first
+  # attempt can raise 23503 is section 8.1's snapshot race (a tenant deleted and
+  # committed between this statement's snapshot and the FK trigger's own, which
+  # is reachable only BEFORE the backup table's own FK has converged); the
+  # retry's fresh snapshot then sees the tenant as absent and classifies the row
+  # as a discard. Rescuing only :foreign_key_violation, and only once, means a
+  # genuine defect (a typo'd column, a missing table, a lock timeout) -- and a
+  # 23503 from the retry itself -- still fails loudly.
+  @spec run_restore_or_discard_with_one_retry!() :: [[String.t()]]
+  defp run_restore_or_discard_with_one_retry! do
+    Repo.query!(@restore_or_discard_sql).rows
+  rescue
+    error in Postgrex.Error ->
+      case error do
+        %Postgrex.Error{postgres: %{code: :foreign_key_violation}} ->
+          Logger.warning(
+            "ISS-0229: guard-backup move-back raised a foreign_key_violation " <>
+              "(a parent tenant was deleted and committed between this " <>
+              "statement's snapshot and the FK trigger's own) -- retrying once " <>
+              "with a fresh snapshot"
+          )
+
+          Repo.query!(@restore_or_discard_sql).rows
+
+        _other ->
+          reraise(error, __STACKTRACE__)
+      end
   end
 
   # ISS-0060 section 5 self-heal: if the backup table is non-empty when any
@@ -264,6 +444,7 @@ defmodule Letflow.IdentityMigrationTest do
   # move-back statements -- restore those orphaned rows before the next test
   # proceeds, mirroring ISS-0048's reaper pattern (detect-and-heal-on-next-run
   # rather than an unbounded, growing-until-noticed orphan).
+  @spec restore_orphaned_guard_backup_rows!() :: :ok
   defp restore_orphaned_guard_backup_rows! do
     ensure_backup_table!()
 
@@ -281,15 +462,24 @@ defmodule Letflow.IdentityMigrationTest do
       acquire_guard_lock!()
 
       try do
-        Repo.query!("""
-        WITH restored AS (
-          DELETE FROM public.iss060_tenant_schemas_guard_backup
-          RETURNING *
-        )
-        INSERT INTO public.tenant_schemas
-        SELECT * FROM restored
-        ON CONFLICT (id) DO NOTHING
-        """)
+        # ISS-0229 section 3.3: heal FIRST, constrain SECOND. This ordering is
+        # load-bearing and reversing it breaks the fix. ALTER TABLE ... ADD
+        # CONSTRAINT ... FOREIGN KEY validates existing rows, so on a
+        # currently-poisoned database an ALTER attempted BEFORE the heal would
+        # itself raise 23503 on the orphan row -- turning the convergence step
+        # into a second, new way for setup to fail all 10 tests in this file.
+        # Healing first guarantees the table is empty (or holds only restorable
+        # rows) when the validating scan runs. This is also why
+        # ensure_backup_table_fk!/0 is not folded into ensure_backup_table!/0:
+        # that helper is also called from with_only_this_tenant_visible!/2 and
+        # directly from a test, neither of which is preceded by a heal.
+        #
+        # Both steps run while @guard_lock_key is held, on the single connection
+        # pinned by Repo.checkout/2, so a concurrent invocation of this module
+        # can be neither mid-move-out during the ALTER nor racing the
+        # pg_constraint pre-check.
+        restore_or_discard_backup_rows!()
+        ensure_backup_table_fk!()
 
         :ok
       after
@@ -341,15 +531,20 @@ defmodule Letflow.IdentityMigrationTest do
         try do
           fun.()
         after
-          Repo.query!("""
-          WITH restored AS (
-            DELETE FROM public.iss060_tenant_schemas_guard_backup
-            RETURNING *
-          )
-          INSERT INTO public.tenant_schemas
-          SELECT * FROM restored
-          ON CONFLICT (id) DO NOTHING
-          """)
+          # ISS-0229 section 4.2: this site ran a byte-identical copy of the old
+          # move-back CTE against the same table under the same conditions, and
+          # it is in fact the FIRST site to raise in the real sequence -- a
+          # concurrent teardown destroys the tenant while this snapshot is held,
+          # so the very next thing to touch the row is this move-back, whose
+          # 23503 is what strands the row in the first place (setup's failure on
+          # every later run is the second-order symptom). Fixing only setup would
+          # leave this raising from an `after` block mid-test, masking the test's
+          # real result. Same total helper, same discard rule.
+          #
+          # Note this site deliberately does NOT call ensure_backup_table_fk!/0:
+          # convergence belongs to the composed heal-then-constrain entry point
+          # (section 3.3), not to the middle of a critical section.
+          restore_or_discard_backup_rows!()
         end
       after
         release_guard_lock!()
@@ -888,6 +1083,342 @@ defmodule Letflow.IdentityMigrationTest do
         )
 
       assert backup_count == 0
+    end
+  end
+
+  # ISS-0229 section 5: regression coverage for the guard-backup table's
+  # referential blind spot. A row parked in
+  # public.iss060_tenant_schemas_guard_backup had no foreign key of its own
+  # while public.tenant_schemas.tenant_id did, so a concurrent teardown could
+  # destroy the parked row's parent tenant; the move-back then raised 23503 and
+  # -- because it runs from this file's own setup -- failed every test in this
+  # file, permanently, on every later run.
+  #
+  # The failing state cannot be built by simply INSERTing an orphan row once the
+  # constraint exists (the seeding INSERT would itself raise 23503). These tests
+  # therefore reproduce the real pre-convergence shape -- constraint dropped,
+  # orphan parked -- exactly as ISS-0229 section 5.1 prescribes.
+  #
+  # Nothing here names ensure_backup_table_fk!/0 or
+  # restore_or_discard_backup_rows!/0 (section 5.1.1's naming rule): the block
+  # names only helpers that already existed before the fix, so it still compiles
+  # against reverted helper bodies and the fail-first demonstration is a
+  # behavioural 23503 rather than a compile error. Everything the new helpers
+  # own is observed without naming them -- constraint presence, confdeltype and
+  # enforcement are read straight out of pg_constraint / proven by a rejected
+  # INSERT.
+  #
+  # Cleanup follows section 5.1.1's mandated three-callback shape. on_exit/1 is
+  # LIFO (ExUnit.OnExitHandler.add/3 appends, run/2 reverses), so callbacks are
+  # registered in the reverse of the order they must run: (A) first, carrying
+  # step 4; (B) after the real Tenant insert, carrying steps 2-3; (C) after the
+  # backup-row ids exist and before any DDL/DML, carrying step 1. Execution is
+  # (C) -> (B) -> (A) = backup rows removed, then the tenant, then
+  # heal-then-constrain last over an already-empty table -- which is the
+  # precondition the validating ALTER needs. Each is a BARE on_exit/1 with no
+  # name argument: ExUnit.OnExitHandler.add/3 keys on name_or_ref, so reusing a
+  # name would silently REPLACE the previous callback instead of appending and
+  # collapse the whole scheme.
+  describe "ISS-0229: total guard-backup heal" do
+    test "orphan discarded+logged, live row restored, FK converged and enforced" do
+      # (A) -- cleanup step 4. Registered before anything else in the body so it
+      # runs however early the body fails, and runs LAST. It is deliberately
+      # restore_orphaned_guard_backup_rows!/0, the composed heal-then-constrain
+      # entry point, never a direct ALTER: healing first is what stops the
+      # validating scan from raising 23503 on anything still parked.
+      on_exit(fn -> restore_orphaned_guard_backup_rows!() end)
+
+      # A real, FK-satisfying tenant with no tenant_schemas row of its own
+      # (deliberately not provisioned_tenant!/0 -- tenant_schemas has a UNIQUE
+      # index on tenant_id, which a provisioned tenant's own row would collide
+      # with when the restorable backup row below is moved back). Its id is only
+      # knowable after the insert: Tenant's :id is autogenerate: true and is not
+      # castable by create_changeset/3.
+      live_owner =
+        %Tenant{}
+        |> Tenant.create_changeset(
+          %{slug: unique_slug(), display_name: "ISS-0229 restorable owner"},
+          :disabled
+        )
+        |> Repo.insert!()
+
+      # (B) -- cleanup steps 2 and 3, in that order: the restored
+      # tenant_schemas row carries a real FK to tenants.id, so it must go first.
+      on_exit(fn ->
+        Repo.query!("DELETE FROM public.tenant_schemas WHERE tenant_id = $1", [
+          Ecto.UUID.dump!(live_owner.id)
+        ])
+
+        Repo.delete_all(from(t in Tenant, where: t.id == ^live_owner.id))
+      end)
+
+      # Every id this test can put into the backup table, generated BEFORE any
+      # DDL or DML so cleanup step 1 covers them regardless of how far the body
+      # got. Ecto.UUID.generate/0 touches no database.
+      orphan_id = Ecto.UUID.generate()
+      absent_tenant_id = Ecto.UUID.generate()
+      restorable_id = Ecto.UUID.generate()
+      rejected_id = Ecto.UUID.generate()
+
+      seeded_backup_ids =
+        Enum.map([orphan_id, restorable_id, rejected_id], &Ecto.UUID.dump!/1)
+
+      # (C) -- cleanup step 1, closing over the FULL pre-generated id list, not
+      # over whatever the body managed to insert. A targeted DELETE on the
+      # REFERENCING side is never FK-checked, so this cannot raise whatever
+      # state the body left, and ids that were never inserted are a no-op.
+      on_exit(fn ->
+        Repo.query!(
+          "DELETE FROM public.iss060_tenant_schemas_guard_backup WHERE id = ANY($1)",
+          [seeded_backup_ids]
+        )
+      end)
+
+      ensure_backup_table!()
+
+      %{rows: [[absent_parent_count]]} =
+        Repo.query!("SELECT count(*) FROM public.tenants WHERE id = $1", [
+          Ecto.UUID.dump!(absent_tenant_id)
+        ])
+
+      assert absent_parent_count == 0,
+             "fixture premise: the orphan's parent tenant must genuinely not exist"
+
+      Repo.query!("""
+      ALTER TABLE public.iss060_tenant_schemas_guard_backup
+        DROP CONSTRAINT IF EXISTS iss060_tenant_schemas_guard_backup_tenant_id_fkey
+      """)
+
+      orphan_schema_name = "iss0229_orphan_" <> String.replace(orphan_id, "-", "")
+      restorable_schema_name = "iss0229_restorable_" <> String.replace(restorable_id, "-", "")
+      provisioned_at = ~N[2026-08-22 12:34:56]
+      migrations_applied_at = ~N[2026-08-22 12:35:57]
+
+      insert_backup_row = fn id, tenant_id, schema_name ->
+        Repo.query!(
+          """
+          INSERT INTO public.iss060_tenant_schemas_guard_backup
+            (id, tenant_id, schema_name, migrations_applied_at, provisioned_at)
+          VALUES ($1, $2, $3, $4, $5)
+          """,
+          [
+            Ecto.UUID.dump!(id),
+            Ecto.UUID.dump!(tenant_id),
+            schema_name,
+            migrations_applied_at,
+            provisioned_at
+          ]
+        )
+      end
+
+      # Both rows seeded in the SAME call, so the assertions below also prove
+      # the restore/discard classification is per-row, not per-call.
+      insert_backup_row.(orphan_id, absent_tenant_id, orphan_schema_name)
+      insert_backup_row.(restorable_id, live_owner.id, restorable_schema_name)
+
+      # Assertion 1 (no raise) + assertion 4 (the discard is logged and names
+      # the row). Pre-fix this call raises Postgrex.Error 23503 from
+      # tenant_schemas_tenant_id_fkey.
+      discard_log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert restore_orphaned_guard_backup_rows!() == :ok
+        end)
+
+      assert discard_log =~ orphan_id
+      assert discard_log =~ absent_tenant_id
+
+      # Assertion 2: discarded, not left parked.
+      %{rows: [[orphan_backup_count]]} =
+        Repo.query!(
+          "SELECT count(*) FROM public.iss060_tenant_schemas_guard_backup WHERE id = $1",
+          [Ecto.UUID.dump!(orphan_id)]
+        )
+
+      assert orphan_backup_count == 0
+
+      # Assertion 3: discarded, not force-inserted into tenant_schemas.
+      %{rows: [[orphan_visible_count]]} =
+        Repo.query!("SELECT count(*) FROM public.tenant_schemas WHERE tenant_id = $1", [
+          Ecto.UUID.dump!(absent_tenant_id)
+        ])
+
+      assert orphan_visible_count == 0
+
+      # Assertion 5, the anti-regression that matters most: a row whose parent
+      # genuinely exists is still RESTORED, with every column preserved. An
+      # implementation that simply DELETEs the whole backup table passes 1-4
+      # while destroying live data; it cannot pass this.
+      %{rows: [[got_tenant_id, got_schema_name, got_migrations_applied_at, got_provisioned_at]]} =
+        Repo.query!(
+          """
+          SELECT tenant_id::text, schema_name, migrations_applied_at, provisioned_at
+          FROM public.tenant_schemas
+          WHERE id = $1
+          """,
+          [Ecto.UUID.dump!(restorable_id)]
+        )
+
+      assert got_tenant_id == live_owner.id
+      assert got_schema_name == restorable_schema_name
+      assert got_migrations_applied_at == migrations_applied_at
+      assert got_provisioned_at == provisioned_at
+
+      %{rows: [[restorable_backup_count]]} =
+        Repo.query!(
+          "SELECT count(*) FROM public.iss060_tenant_schemas_guard_backup WHERE id = $1",
+          [Ecto.UUID.dump!(restorable_id)]
+        )
+
+      assert restorable_backup_count == 0
+
+      # Assertion 6: the FK converged, and it is the RIGHT one. confdeltype 'a'
+      # is NO ACTION -- asserting it is what stops a later "fix" from quietly
+      # switching to CASCADE, which section 2.2 rejects.
+      %{rows: [[contype, references_tenants, confdeltype, convalidated]]} =
+        Repo.query!("""
+        SELECT contype::text,
+               (confrelid = 'public.tenants'::regclass),
+               confdeltype::text,
+               convalidated
+        FROM pg_constraint
+        WHERE conrelid = 'public.iss060_tenant_schemas_guard_backup'::regclass
+          AND conname = 'iss060_tenant_schemas_guard_backup_tenant_id_fkey'
+        """)
+
+      assert contype == "f"
+      assert references_tenants == true
+      assert confdeltype == "a"
+      assert convalidated == true
+
+      # Assertion 7: the FK is actually ENFORCED (not left NOT VALID) -- the
+      # very INSERT that succeeded above, replayed against an absent parent, is
+      # now rejected. Repo.query/3 (non-bang) so the rejection is asserted
+      # rather than aborting the test.
+      assert {:error, %Postgrex.Error{postgres: %{code: :foreign_key_violation}}} =
+               Repo.query(
+                 """
+                 INSERT INTO public.iss060_tenant_schemas_guard_backup
+                   (id, tenant_id, schema_name, migrations_applied_at, provisioned_at)
+                 VALUES ($1, $2, $3, NULL, now())
+                 """,
+                 [
+                   Ecto.UUID.dump!(rejected_id),
+                   Ecto.UUID.dump!(absent_tenant_id),
+                   "iss0229_rejected_" <> String.replace(rejected_id, "-", "")
+                 ]
+               )
+
+      # Assertion 8: idempotence -- a second call is a no-op, discards nothing
+      # (so logs nothing), and does not add a second constraint.
+      second_log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert restore_orphaned_guard_backup_rows!() == :ok
+        end)
+
+      refute second_log =~ "discarded unrestorable guard-backup row"
+
+      %{rows: [[constraint_count]]} =
+        Repo.query!("""
+        SELECT count(*)
+        FROM pg_constraint
+        WHERE conrelid = 'public.iss060_tenant_schemas_guard_backup'::regclass
+          AND conname = 'iss060_tenant_schemas_guard_backup_tenant_id_fkey'
+        """)
+
+      assert constraint_count == 1
+    end
+
+    # Assertion 9 (section 4.2): the SECOND call site inherits the totality.
+    # This is in fact the first site to raise in the real sequence -- the
+    # concurrent teardown destroys the tenant while this critical section holds
+    # its snapshot, so the move-back in the inner `after` block is what strands
+    # the row; setup's failure on every later run is the second-order symptom.
+    #
+    # This path deliberately does NOT converge the constraint (section 3.3), so
+    # it finishes with the constraint still dropped -- which is exactly why the
+    # full three-callback cleanup, and in particular step 4, is mandatory here:
+    # a test that asserts this property and leaves the constraint off would
+    # silently disarm the FK for every test that runs after it.
+    test "with_only_this_tenant_visible!/2 completes with an orphan parked" do
+      # (A) -- cleanup step 4, and the only thing that puts the constraint back.
+      on_exit(fn -> restore_orphaned_guard_backup_rows!() end)
+
+      focus_tenant =
+        %Tenant{}
+        |> Tenant.create_changeset(
+          %{slug: unique_slug(), display_name: "ISS-0229 visibility focus"},
+          :disabled
+        )
+        |> Repo.insert!()
+
+      # (B) -- cleanup steps 2 and 3.
+      on_exit(fn ->
+        Repo.query!("DELETE FROM public.tenant_schemas WHERE tenant_id = $1", [
+          Ecto.UUID.dump!(focus_tenant.id)
+        ])
+
+        Repo.delete_all(from(t in Tenant, where: t.id == ^focus_tenant.id))
+      end)
+
+      orphan_id = Ecto.UUID.generate()
+      absent_tenant_id = Ecto.UUID.generate()
+      seeded_backup_ids = [Ecto.UUID.dump!(orphan_id)]
+
+      # (C) -- cleanup step 1.
+      on_exit(fn ->
+        Repo.query!(
+          "DELETE FROM public.iss060_tenant_schemas_guard_backup WHERE id = ANY($1)",
+          [seeded_backup_ids]
+        )
+      end)
+
+      ensure_backup_table!()
+
+      %{rows: [[absent_parent_count]]} =
+        Repo.query!("SELECT count(*) FROM public.tenants WHERE id = $1", [
+          Ecto.UUID.dump!(absent_tenant_id)
+        ])
+
+      assert absent_parent_count == 0,
+             "fixture premise: the orphan's parent tenant must genuinely not exist"
+
+      Repo.query!("""
+      ALTER TABLE public.iss060_tenant_schemas_guard_backup
+        DROP CONSTRAINT IF EXISTS iss060_tenant_schemas_guard_backup_tenant_id_fkey
+      """)
+
+      Repo.query!(
+        """
+        INSERT INTO public.iss060_tenant_schemas_guard_backup
+          (id, tenant_id, schema_name, migrations_applied_at, provisioned_at)
+        VALUES ($1, $2, $3, NULL, now())
+        """,
+        [
+          Ecto.UUID.dump!(orphan_id),
+          Ecto.UUID.dump!(absent_tenant_id),
+          "iss0229_visorphan_" <> String.replace(orphan_id, "-", "")
+        ]
+      )
+
+      # Pre-fix, the inner `after` block's move-back CTE raises 23503 here and
+      # the return value is never produced. The contract under test is
+      # unchanged: it returns whatever fun.() returned.
+      assert with_only_this_tenant_visible!(focus_tenant.id, fn -> :guard_ran end) == :guard_ran
+
+      %{rows: [[orphan_backup_count]]} =
+        Repo.query!(
+          "SELECT count(*) FROM public.iss060_tenant_schemas_guard_backup WHERE id = $1",
+          [Ecto.UUID.dump!(orphan_id)]
+        )
+
+      assert orphan_backup_count == 0
+
+      %{rows: [[orphan_visible_count]]} =
+        Repo.query!("SELECT count(*) FROM public.tenant_schemas WHERE tenant_id = $1", [
+          Ecto.UUID.dump!(absent_tenant_id)
+        ])
+
+      assert orphan_visible_count == 0
     end
   end
 end

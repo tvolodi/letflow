@@ -1,0 +1,150 @@
+id: ISS-0229
+title: >
+  identity_migration_test.exs red-lights all 10 tests under plain `mix test`:
+  restore_orphaned_guard_backup_rows!/0 raises 23503 on an orphaned
+  iss060_tenant_schemas_guard_backup row whose parent tenant no longer exists
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0224-20260822
+discovered_at: "2026-08-22T01:55:00Z"
+severity: MAJOR
+
+description: >
+  Surfaced during WF03-ISS0224-20260822's verification.
+  `MIX_ENV=test mix test test/letflow/identity_migration_test.exs` reports
+  `Result: 0/10 passed`. Every test dies in `setup`, before its own body runs:
+
+    ** (Postgrex.Error) ERROR 23503 (foreign_key_violation) insert or update on
+    table "tenant_schemas" violates foreign key constraint
+    "tenant_schemas_tenant_id_fkey"
+        Key (tenant_id)=(a45c5245-e1e7-4542-b74b-9c605a9fc386) is not present in
+        table "tenants".
+        test/letflow/identity_migration_test.exs:284: anonymous fn/0 in
+          Letflow.IdentityMigrationTest.restore_orphaned_guard_backup_rows!/0
+        test/letflow/identity_migration_test.exs:376:
+          Letflow.IdentityMigrationTest.__ex_unit_setup_1/1
+
+  `public.iss060_tenant_schemas_guard_backup` in `letflow_test` held exactly one
+  row (id 75163622-df56-481e-977d-9efd35d659fb, tenant_id
+  a45c5245-e1e7-4542-b74b-9c605a9fc386, schema_name
+  tenant_a45c5245e1e74542b74b9c605a9fc386, both timestamps 2026-08-21 08:26:27)
+  while `public.tenant_schemas` and `public.tenants` were both empty.
+
+  ISS-0111's self-heal (`restore_orphaned_guard_backup_rows!/0`) is the code that
+  raises, so it does not and cannot absorb this: an FK violation is not a
+  recoverable state for its restore CTE, whose only conflict handling is
+  `ON CONFLICT (id) DO NOTHING` (primary key only).
+
+affected_files:
+  - test/letflow/identity_migration_test.exs
+
+related:
+  - ISS-0060  # introduced the guard-backup snapshot mechanism
+  - ISS-0111  # added the advisory lock and the self-heal that now raises
+  - ISS-0107  # established that a nested `mix test` shares the same database
+
+queue_task_id: 229
+github_issue: 467
+
+status: resolved
+resolved_in_run: WF03-ISS0229-20260822
+resolved_at: "2026-08-22T04:48:34Z"
+resolution_note: >
+  ORIGIN FINDING — this was a real code path, NOT crash residue, and that is the
+  headline. `public.iss060_tenant_schemas_guard_backup` carried a PRIMARY KEY and
+  nothing else — no foreign key at all — while `public.tenant_schemas.tenant_id`
+  has `FOREIGN KEY (tenant_id) REFERENCES tenants(id)` with NO ACTION (both read
+  from `pg_constraint`, not inferred). So for the duration of
+  `with_only_this_tenant_visible!/2`'s critical section, every other tenant's
+  registry row sat in a table where the constraint that normally BLOCKS
+  `DELETE FROM tenants` was not in force. The ~40 per-test teardowns across
+  `test/` uniformly do `delete_all(Registration where tenant_id)` then
+  `delete_all(Tenant where id)` — with the registration row parked, the first
+  matches zero rows and the second destroys the tenant unopposed. The move-back
+  CTE then raised 23503 and the row was stranded permanently. The move-out
+  silently strips referential protection: that is the mechanism.
+
+  The evidence that settles residue-vs-code-path is the shape of the observed
+  state, which a crash cannot produce. The orphan's physical schema
+  `tenant_a45c5245e1e74542b74b9c605a9fc386` did not exist (zero `tenant_%`
+  schemas remained) and `public.tenants` was empty. A BEAM crash mid-critical-
+  section drops no schema and deletes no tenant — it would have left both intact.
+  Something ran `DROP SCHEMA ... CASCADE` and `DELETE FROM tenants` to completion,
+  i.e. an orderly teardown. Ruled out as the actor: the reaper
+  (`test/support/tenant_schema_reaper.ex:229-231`) drives off `tenant_schemas`
+  rows, and the parked row is by construction absent from that table, so it could
+  not have selected it. The concurrency source is a second `mix test` invocation
+  on the same database — this file is `use Letflow.DataCase, async: false`, so no
+  test in its own invocation overlaps it — which ISS-0107/ISS-0111 already
+  established as real (`lib/mix/tasks/letflow.check.test.ex:100` spawns a nested
+  `mix test` via `Port.open` inheriting `LETFLOW_DB_PORT`). The orphan was in
+  `letflow_test`, i.e. the plain `mix test` database (`config/test.exs:21`);
+  partition databases `letflow_test1..4` were clean, so `scripts/test_parallel.sh`
+  did not produce it.
+
+  ISS-0111's self-heal SHOULD have covered the FK case — recorded as a principle,
+  not a one-off. `restore_orphaned_guard_backup_rows!/0` exists to recover rows
+  left by an abnormal exit, but its only conflict handling was
+  `ON CONFLICT (id) DO NOTHING` (primary key only). ISS-0060's design section 6
+  open question 2 explicitly considered a UNIQUE-constraint violation and
+  knowingly accepted "loud failure"; the FOREIGN KEY case was never considered in
+  either that design or ISS-0111's, so this was an omission wearing the clothes of
+  an accepted trade-off. Because the helper runs from `setup`, one unrestorable
+  row failed all 10 tests in the file permanently instead of degrading one — a
+  self-heal wired into `setup` carries a stricter totality obligation, and neither
+  prior design noted that. Added to `docs/anti-patterns.md`.
+
+  FIX (design `lib/letflow/design/iss0229-guard-backup-orphan-fk-fix.md`, all in
+  `test/letflow/identity_migration_test.exs`): (a) mirror the FK onto the backup
+  table so the protection travels with the parked row and a concurrent
+  `DELETE FROM tenants` is blocked exactly as it would be without the snapshot;
+  (b) make the self-heal total via a shared `@restore_or_discard_sql` — restore
+  rows whose parent tenant still exists, DISCARD rows whose parent is gone with a
+  `Logger.warning` naming the row — used at BOTH CTE sites, since
+  `with_only_this_tenant_visible!/2`'s `after` block had identical exposure and is
+  in fact the first site to raise; (c) converge existing databases with a
+  `pg_constraint`-guarded `ALTER TABLE ... ADD CONSTRAINT` run strictly AFTER the
+  heal (reversing that order makes the validating scan raise on the orphan and
+  bricks the file a second way — proven empirically by the gate inside a
+  rolled-back transaction). The pre-existing orphan healed itself on the first
+  post-fix run with no hand-run DELETE, exactly as designed; the one-shot
+  confirmation was captured before it was gone:
+  "ISS-0229: discarded unrestorable guard-backup row
+  id=75163622-df56-481e-977d-9efd35d659fb
+  tenant_id=a45c5245-e1e7-4542-b74b-9c605a9fc386
+  schema_name=tenant_a45c5245e1e74542b74b9c605a9fc386 -- parent tenant no longer
+  exists in public.tenants".
+
+  GATES: CODE-DESIGN-VALIDATOR FAILed three times, every round on a real defect —
+  the section 2.4 reaper argument claiming impossibility where the reaper's bulk
+  SELECT and its per-row `DELETE FROM tenants` are separated by an unbounded loop;
+  a cleanup spec that inverted heal-before-constrain and made fail-first a compile
+  error; a residue paragraph that contradicted its own cleanup step; and a mandate
+  to pre-generate the `Tenant` id, impossible because `create_changeset/3` does not
+  cast `:id`. SECURITY-REVIEWER PASS (INV-1/4/6/7/8 assessed; rated the change a net
+  improvement on INV-8, replacing an unconditional-raise path with a total one).
+  REVIEWER PASS. TEST-DESIGN-VALIDATOR PASS having independently reproduced the
+  fail-first and applied three mutants of its own: reversed heal/constrain ordering
+  11/12, indiscriminate discard 9/12 (caught by assertion 5), silenced discard log
+  11/12 (caught by assertion 4), each reverted and the revert verified by SHA.
+
+  VERIFICATION: fail-first is behavioural, not UndefinedFunctionError — pre-fix
+  `Result: 10/12 passed` with 23503 raised from `restore_orphaned_guard_backup_rows!/0`
+  and from `with_only_this_tenant_visible!/2`'s inner `after`, reproduced
+  independently by the test gate. Post-fix, plain `mix test` full suite on
+  `letflow_test` (the database the bug lived in): `Result: 1516 passed`, zero
+  failures, zero `23503` anywhere in the run. Partitioned path per REQ-114
+  (`TEST_PARALLEL_N=4 sh scripts/test_parallel.sh`): 1516/1516, 0 failures, against
+  a pre-fix baseline of 1514/1514 — the partition databases never held the orphan,
+  which is why only the plain path was ever red.
+
+  Attribution note: an earlier plain full-suite run showed 3 `TenantSchemaReaperTest`
+  failures. Attributed structurally per core-directives route 3 (demonstrated
+  mechanism), not by count-matching: the run's own log carried
+  "TenantSchemaReaper.sweep_orphans/2: deferring this sweep entirely -- another mix
+  test invocation ... is currently connected", a foreign invocation
+  (`letflow_mixtest_23812`, 32 connections on `letflow_test`) was enumerated in
+  `pg_stat_activity` and confirmed genuinely active, the same three tests were made
+  to fail on demand by running that file alongside a deliberately started second
+  invocation (`assert reclaimed >= 1` / `left: 0`, no 23503 and no reference to the
+  new FK), and the file passes 6/6 with no sibling connected. Both final full-suite
+  runs above were taken on a verified-quiet database.

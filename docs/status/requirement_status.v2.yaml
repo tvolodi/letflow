@@ -975,3 +975,59 @@ history:
       by scan not reservation). AC3 and AC6 are reachable today; AC1, AC2, AC4
       and one of AC5's four cases are gated on that requirement. Not merged to
       main: branch feature/WF02-REQ077-20260822 holds the design and the draft.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-22T04:49:20Z"
+    note: >
+      ISS-0229 (GH#467, queue task 229) resolved in run WF03-ISS0229-20260822.
+      `identity_migration_test.exs` reported `Result: 0/10 passed` under plain
+      `mix test` -- every test dying in `setup`, not in its body, on a 23503 from
+      `restore_orphaned_guard_backup_rows!/0`. The origin question mattered more
+      than the fix and was settled by evidence, not assumed: this is a REAL CODE
+      PATH, not crash residue. `public.iss060_tenant_schemas_guard_backup` carried
+      a primary key and NO foreign key at all, while `tenant_schemas.tenant_id`
+      references `tenants(id)` with NO ACTION -- so while
+      `with_only_this_tenant_visible!/2` parked every other tenant's registry row,
+      the constraint that normally blocks `DELETE FROM tenants` was not in force.
+      The ~40 teardowns uniformly delete Registration then Tenant; with the
+      registration parked the first matches zero rows and the second destroys the
+      tenant unopposed. What rules out a crash is the shape of the state: the
+      orphan's physical schema did not exist and `public.tenants` was empty, and a
+      BEAM crash drops no schema and deletes no tenant -- an orderly teardown ran to
+      completion. The reaper was excluded as the actor because it drives off
+      `tenant_schemas` rows and the parked row is by construction absent from that
+      table. ISS-0111's self-heal SHOULD have covered the FK case: its only conflict
+      handling was `ON CONFLICT (id) DO NOTHING`, and ISS-0060's own open question 2
+      had considered a UNIQUE violation while the FOREIGN KEY case was never
+      considered at all -- an omission wearing the clothes of an accepted trade-off,
+      amplified because `setup` is the call site, so one unrestorable row failed all
+      10 tests permanently rather than degrading one. Fix mirrors the FK onto the
+      backup table, makes the self-heal total (restore-or-discard with a
+      `Logger.warning` per discard) at BOTH CTE sites rather than only the `setup`
+      one, and converges existing databases with a `pg_constraint`-guarded ALTER run
+      strictly AFTER the heal -- reversing that order bricks the file a second way,
+      proven empirically inside a rolled-back transaction. The pre-existing orphan
+      healed itself on the first post-fix run with no hand-run DELETE, and the
+      one-shot log line naming it was captured before it was gone. CODE-DESIGN-
+      VALIDATOR FAILed three times, every round on a real defect (an impossibility
+      claim about the reaper that the source refutes; a cleanup spec that inverted
+      heal-before-constrain and turned fail-first into a compile error; a residue
+      paragraph contradicting its own cleanup step; a mandate to pre-generate a
+      `Tenant` id that `create_changeset/3` cannot accept). SECURITY-REVIEWER PASS,
+      rating the change a net improvement on INV-8. REVIEWER PASS.
+      TEST-DESIGN-VALIDATOR PASS having reproduced the fail-first itself and applied
+      three of its own mutants (reversed ordering 11/12, indiscriminate discard 9/12,
+      silenced log 11/12), each reverted and the revert verified by SHA. Fail-first
+      is behavioural, not UndefinedFunctionError: 10/12 pre-fix. Verified post-fix by
+      plain `mix test` full suite on `letflow_test` (the database the bug lived in)
+      at 1516 passed / 0 failures with zero 23503 anywhere, and the REQ-114
+      partitioned path at 1516/1516 against a 1514/1514 pre-fix baseline -- the
+      partition databases never held the orphan, which is why only the plain path was
+      ever red. Three `TenantSchemaReaperTest` failures seen in an earlier run were
+      attributed structurally via core-directives route 3, not by count-matching: a
+      foreign invocation holding 32 connections was enumerated in `pg_stat_activity`
+      and confirmed active, the failures were reproduced on demand by running that
+      file alongside a deliberately started second invocation, and the file passes
+      6/6 when none is connected. Anti-pattern added: a self-heal wired into `setup`
+      must be total over the states it can encounter.

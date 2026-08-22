@@ -109,7 +109,7 @@ defmodule Letflow.Routers.TasksTest do
     |> Repo.insert!(prefix: tenant.schema_name)
   end
 
-  defp insert_user!(tenant, attrs \\ %{}) do
+  defp insert_user!(tenant, attrs) do
     default = %{
       username: "user-#{Ecto.UUID.generate()}",
       display_name: "A User",

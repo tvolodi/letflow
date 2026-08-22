@@ -210,7 +210,7 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 29
+    entries: 30
     note: >
       Incremented to 29 by LOOP-20260822-orch (ORCH)'s own done-event append
       for ISS-0285 -- 29 on-disk `- req:` entries in
@@ -376,6 +376,24 @@ volumes:
       docs/status/requirement_status.v3.yaml` = 25, rather than carrying
       forward either side's independently-computed 24, per this note's own
       recount-every-time rule.
+      Incremented to 28 by WF03-ISS0284-20260822 (ORCH)'s own done-event
+      append -- 28 on-disk `- req:` entries in requirement_status.v3.yaml,
+      no rebase conflict on this file, THIS run's own pre-push count.
+      Separately, and concurrently, incremented to 28 by
+      WF03-ISS0129-20260822 (ORCH)'s own done-event append and to 29 by
+      LOOP-20260822-orch (ORCH)'s own ISS-0285 done-event append -- both
+      landed on main, each accurate for the file its own run produced,
+      from the same shared base of 27 (WF03-ISS0283-20260822's own
+      done-event) this run also started from. Composing all three onto
+      this branch's own rebase found all three done-events already
+      present in requirement_status.v3.yaml with NO conflict on that file
+      needing more than chronological `at:` reordering: ISS-0129 done
+      (18:19:15Z), ISS-0284 done (18:28:43Z), ISS-0285 done (18:35:00Z) --
+      only this index file's declared count and narrative needed manual
+      composition. Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v3.yaml` = 30, rather than carrying
+      forward any side's independently-computed 28/29, per this note's
+      own recount-every-time rule.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

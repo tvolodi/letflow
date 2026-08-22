@@ -41,7 +41,7 @@ defmodule Letflow.Engine.SubProcessTest do
     }
   end
 
-  defp entry(name, opts \\ []) do
+  defp entry(name, opts) do
     %{
       name: name,
       json_schema: Keyword.get(opts, :json_schema, %{"type" => "string"}),

@@ -909,6 +909,37 @@ history:
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH
+    at: "2026-08-22T18:28:43Z"
+    note: >
+      WF03-ISS0284-20260822 resolved ISS-0284 (GH#559, queue task 284) --
+      three private test-helper functions (unique_idempotency_key/1 in
+      test/letflow/engine_sub_process_test.exs, entry/2 in
+      test/letflow/engine/sub_process_test.exs, insert_user!/2 in
+      test/letflow/routers/tasks_test.exs) each carried an unused
+      `\ default` argument value, matching ISS-0069's already-resolved
+      warning class exactly. Confirmed each function's every call site in
+      its own module passes the argument explicitly, so the default was
+      dead. Fixed with ISS-0069's own established fix (drop the default
+      value, no other change) -- mechanical, behavior-preserving.
+      docs/issues/ISS-0069.yaml was found ALREADY status: resolved (GH#231
+      closed 2026-08-19) -- the queue task's own description claiming it
+      was "still open/undiagnosed" was stale; these three warnings are a
+      fresh, unrelated recurrence of the same class, not a re-opening of
+      ISS-0069's original two/three files. No correction needed to
+      ISS-0069.yaml itself.
+      Verification (serialized -- two earlier attempts collided against a
+      concurrently-running sibling `mix test` invocation on the shared
+      Postgres test DB and were discarded as spurious, per the DB's own
+      `letflow_mixtest_%` liveness-guard log lines): a clean, uncontended
+      run of `mix letflow.check.test` -- OK, no test failures, no
+      ISS-0069-class warnings. Full `mix letflow.check` -- OK end to end:
+      1783/1783 tests passed (5 properties, 1778 tests),
+      letflow.check_toolchain OK, letflow.lint_handoffs OK (0 new
+      violations), letflow.check_requirements_registration and
+      letflow.check_deferral_staleness both clean.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
     at: "2026-08-22T18:35:00Z"
     note: >
       ISS-0285 (queue task 285, GH#562) registered and released done. Per

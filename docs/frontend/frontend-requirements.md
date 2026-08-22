@@ -62,6 +62,103 @@ The frontend has no business logic of its own. All data mutations go through the
 
 ---
 
+## Locale policy (`REQ-127`, 2026-08-22)
+
+**Finding: there is no locale policy today.** `web/` is effectively English-only
+with unmediated browser-locale date formatting. This was verified by reading
+`web/src/` directly (not inferred from this document, which is the thing that
+was under-specified), and by `web/package.json` — the finding below, established
+2026-08-22.
+
+- **No i18n library.** `web/package.json` declares no `react-intl`, `i18next`,
+  `formatjs`, or equivalent, in either `dependencies` or `devDependencies`.
+  `grep -rln "react-intl\|i18next\|formatjs" web/src/` returns nothing.
+- **No supported locale set, no fallback chain.** Nothing in `web/src/` reads
+  `navigator.language` or `navigator.languages`, and nothing constructs an
+  `Intl.DateTimeFormat` or `Intl.NumberFormat` with an explicit locale list.
+  There is no concept of "supported locales" for the session to fall back
+  through — the runtime's default locale (whatever the browser/OS is set to)
+  is used implicitly wherever a locale-sensitive call is made.
+- **25 date/time formatting call sites, all bare `.toLocale*()` calls, one
+  inconsistent.** `grep -rn "toLocaleDateString\|toLocaleTimeString\|toLocaleString" web/src/`
+  finds 25 call sites (27 grep-matched lines; `web/src/pages/tasks/TaskInboxPage.tsx:213`
+  makes two calls on one line) across 20 files:
+  `src/components/definitions/DraftBanner.tsx:46`,
+  `src/components/instances/EventHistoryPanel.tsx:202`,
+  `src/components/instances/TimelineFeedItem.tsx:18`,
+  `src/components/promotions/PromotionReviewStateMachine.tsx:62`,
+  `src/components/webhooks/WebhookDeliveryAttemptsTable.tsx:11`,
+  `src/components/webhooks/WebhookSubscriptionDetailPanel.tsx:31`,
+  `src/pages/admin/AuditLogPage.tsx:174`,
+  `src/pages/admin/HealthDashboardPage.tsx:37,68`,
+  `src/pages/admin/modules/ProcessModulesPage.tsx:100,102,139`,
+  `src/pages/admin/tenants/TenantsPage.tsx:212`,
+  `src/pages/admin/TokensPage.tsx:37`,
+  `src/pages/admin/users/UsersPage.tsx:142`,
+  `src/pages/admin/UsersPage.tsx:352`,
+  `src/pages/definitions/DefinitionListPage.tsx:276,313`,
+  `src/pages/dlq/DlqPage.tsx:111`,
+  `src/pages/dlq/WebhooksPage.tsx:285`,
+  `src/pages/instances/InstanceBoardPage.tsx:26,31`,
+  `src/pages/instances/InstanceDetailPage.tsx:35,40`,
+  `src/pages/instances/timelineUtils.ts:55`,
+  `src/pages/tasks/TaskInboxPage.tsx:213,338`.
+  24 of the 25 calls pass no locale argument (`.toLocaleString()`,
+  `.toLocaleDateString()`, `.toLocaleTimeString()`), so they resolve to
+  whatever locale the JS runtime's default is (in a browser, the OS/browser
+  language setting) — this is what "displayed in the user's browser locale"
+  in the constraint above actually means in code: an emergent property of
+  calling the unparameterised `Intl` default, not a configured policy. One
+  call, `src/pages/admin/UsersPage.tsx:352`, hardcodes
+  `.toLocaleDateString('en-US')` — the one place in the codebase where a
+  locale literal appears — which makes that one row format as US-style
+  regardless of the viewer's own browser locale, inconsistent with every
+  other date in the app.
+- **No tenant-authored `{locale: value}` content map exists.** `web/src/types/`
+  contains exactly `api.ts` and `forms.ts`. Neither declares a locale-keyed
+  map; the closest shapes are generic `Record<string, unknown>` fields (JSON
+  payloads, schemas, variables) with no locale semantics. `grep -rn -i
+  "locale\|translat\|i18n" web/src/types/` returns nothing. There is no
+  tenant content anywhere in `web/src/` that resolves against a session
+  locale — session locale itself isn't a concept the app has.
+- **User-visible strings are hardcoded English JSX text, not resource-backed.**
+  A grep for JSX text nodes matching `>[A-Za-z...]<` across `web/src/**/*.tsx`
+  (`grep -rEn ">[A-Z][a-zA-Z ,.'!?-]{3,}<" web/src --include="*.tsx" | wc -l`)
+  counts 315 matches across the 86 `.tsx` files under `web/src/`. This is a
+  lower bound (it only catches text directly between tags, not JSX
+  expressions or attribute strings) but establishes the order of magnitude.
+
+**What adopting a real policy would require, concretely:**
+
+1. **A locale library.** None is installed; `react-intl` or `i18next` (with
+   `react-i18next`) would need to be added to `web/package.json` — a new
+   runtime dependency, not currently forbidden by anything in
+   `docs/agents/instructions/` but outside FRONTEND-DEV's existing toolset
+   (React Router / TanStack Query / Zustand) and therefore a decision for
+   REVIEWER, not a FRONTEND-DEV unilateral pick.
+2. **Externalizing ~315 hardcoded strings** (the grep count above) out of
+   JSX into resource files, plus wiring every component that renders them
+   through the chosen library's translation hook/component.
+3. **Replacing the 25 bare `.toLocale*()` call sites** listed above with
+   locale-aware formatting driven by a session locale (e.g.
+   `Intl.DateTimeFormat(sessionLocale, opts)` or the i18n library's date
+   formatter), including fixing the one hardcoded `'en-US'` outlier so it's
+   no longer the sole inconsistent case.
+4. **A session-locale concept** — where it comes from (`Accept-Language`,
+   a user preference, a query param), how it's stored, and a fallback chain
+   when the requested locale isn't supported — none of which exists today
+   and all of which would need a design decision, not just code.
+5. **A tenant-content locale map**, if/when tenant-authored localized
+   content (the shape `MOB-7` in `docs/mobile/requirements.md` refers to)
+   is introduced — no such shape exists in `web/src/types/` today, so this
+   is new modeling work, not a resolution of an existing gap.
+
+None of the above has been started. This section records the finding, not a
+commitment to do the work — see `docs/requirements.yaml`'s `REQ-127` for the
+investigation that produced it.
+
+---
+
 ## Stage F1 — Application Shell & Authentication
 
 **Goal:** A running web application with login, role-aware navigation, and an empty workspace per role. The foundation all other views build on.

@@ -1322,3 +1322,41 @@ history:
       remaining failure is ISS-0119's own pre-existing unrelated roll-rule-ceiling
       failure on this very file). Merged to main, GH#507 closed, queue task 260
       released.
+  - req: REQ-127
+    event: started
+    agent: FRONTEND-DEV
+    at: "2026-08-22T08:44:37Z"
+    note: >
+      WF02-REQ127-20260822 -- investigating whether web/ has a locale policy
+      (MOB-7 prerequisite). Reading web/src/ and web/package.json directly,
+      not inferring from docs/frontend/.
+  - req: REQ-127
+    event: done
+    agent: FRONTEND-DEV
+    at: "2026-08-22T08:52:00Z"
+    note: >
+      WF02-REQ127-20260822 -- verified against web/src/ and web/package.json:
+      no locale policy exists. No i18n library (react-intl/i18next/formatjs
+      absent from web/package.json and unimported in web/src/). No
+      navigator.language/navigator.languages reads and no parameterised
+      Intl.DateTimeFormat/NumberFormat calls anywhere. 25 date-formatting
+      call sites (27 grep-matched lines, one line with two calls) across 20
+      files, all bare .toLocale*() with no locale argument except one
+      hardcoded .toLocaleDateString('en-US') outlier at
+      web/src/pages/admin/UsersPage.tsx:352. No {locale: value}-shaped
+      tenant-content type in web/src/types/ (api.ts, forms.ts only -- no
+      locale/translat/i18n hits). ~315 hardcoded English JSX text nodes
+      (grep lower bound) across 86 .tsx files as the string-externalization
+      cost. Recorded as a new "Locale policy" section in
+      docs/frontend/frontend-requirements.md with the full file:line
+      citation list and the concrete five-point adoption cost (library
+      choice, ~315 strings, 25 call sites, session-locale concept, tenant
+      locale map -- none started). docs/mobile/requirements.md's MOB-7
+      Letflow note updated from "verification not done" to point at this
+      finding and state MOB-7 has nothing to match until web/ adopts a
+      policy. No web/src/ file modified (docs-only). Pipeline:
+      CODE-DESIGNER skipped -- pure investigation-and-record requirement,
+      no implementation to design. SECURITY-REVIEWER out of scope -- no
+      tenant-data path, docs-only. REVIEWER checked for accuracy against
+      the greps and idiom consistency with REQ-119/REQ-120's prior
+      docs/frontend/ correction style.

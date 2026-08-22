@@ -174,12 +174,23 @@ policy.
 - Date and number formatting follow the session locale.
 
 **Letflow note.** R-Co's text said to verify the SPA's configured locales and
-reuse them rather than assuming a set. That verification has **not** been done
-against the migrated `web/`: it declares `intl`-style locale handling nowhere
-obvious, and `docs/frontend/` states only that dates render in the browser
-locale with UTC ISO 8601 on the wire. Establishing the platform's locale policy
-is prerequisite work for this requirement, and it is a **frontend** question
-before it is a mobile one.
+reuse them rather than assuming a set. That verification is **done** —
+`REQ-127` (2026-08-22, `FRONTEND-DEV`) read `web/src/` directly and recorded
+the finding in `docs/frontend/frontend-requirements.md`'s "Locale policy"
+section: **there is no locale policy today.** No i18n library is installed,
+no supported locale set or fallback chain exists, all 25 date-formatting call
+sites use the bare unparameterised `Intl` default (one inconsistently
+hardcodes `'en-US'`), and no `{locale: value}`-shaped tenant-content map
+exists anywhere in `web/src/types/`. ~315 hardcoded English JSX strings would
+need externalizing to adopt one.
+
+This requirement therefore has nothing to "match" yet — `MOB-7`'s locale set
+and fallback chain cannot be defined by reference to a web policy that
+doesn't exist. Either the web platform adopts a real locale policy first (see
+the concrete adoption cost in `docs/frontend/frontend-requirements.md`), or
+this mobile requirement defines its own locale set/fallback chain
+independently and accepts that it will not match the web tier, since the web
+tier currently has none to match.
 
 ---
 

@@ -55,7 +55,7 @@ volumes:
     path: docs/status/requirement_status.v2.yaml
     status: current
     opened: 2026-08-21
-    entries: 39
+    entries: 41
     note: >
       Incremented to 38 in the same commit as WF03-ISS0260-20260822's own done-event
       append (Step 5/Step Final, ISSUE-FIXER) -- 38 on-disk `- req:` entries at that
@@ -173,6 +173,11 @@ volumes:
       entries. Both prior notes in this composed block (the "35" and "34"
       narrations) are left as written, per the recount-every-time rule they
       each state.
+      Incremented to 41 by WF02-REQ127-20260822 (FRONTEND-DEV), which appended
+      its own started-event and done-event against a base declaring 39
+      on-disk `- req:` entries and recounted 41 from the file it produced,
+      per the same recount-every-time rule. Will be corrected again at Step
+      Final if the rebase finds main advanced further.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

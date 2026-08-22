@@ -906,3 +906,46 @@ history:
       successor is a requirement, and a new open issue would thrash
       get_next_task's LIFO issue priority exactly as ISS-0225 hit live. No code
       behaviour changed; mix compile clean.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-22T03:48:16Z"
+    note: >
+      ISS-0231 resolved in WF03-ISS0231-20260822 (queue task 231, GH#469).
+      Two parts. (1) ISS-0221's `resolution_note` carried a FALSE all-clear -- it
+      claimed every requirement already had `impl_order`; 21 (REQ-115..135) carried
+      the marker form, and the same 21 come back from the fix commit 75f553d
+      itself, so the claim was false when written, not regressed since. Root
+      cause: the verifying scan matched the substring `impl_order:` anywhere on a
+      line, and the deferral marker `# impl_order: UNREGISTERED` contains that
+      substring -- measured 112 hits over 111 entries, where the real registered
+      count was 90. Corrected in place per ISS-0076's precedent: the false
+      sentence is quoted and labelled rather than deleted, the "No further action
+      taken on that front" framing retracted, `corrected_by` traced. (2) Shipped
+      the detector that class of gap had none of:
+      `mix letflow.check_requirements_registration`, wired into the
+      `letflow.check` alias at position 2. Four states, with an unrecognised form
+      falling into a FAILING bucket instead of being absorbed into a passing one
+      -- that is the actual defence against the original bug. Hard rules R1-R6;
+      the deferred roster prints unconditionally and never gates, because a gate
+      permanently red for a documented intended state gets ignored as surely as a
+      check nobody runs. TASK_QUEUE.md's permissive "absent (or note
+      UNREGISTERED)" sentence tightened in the same commit so R1 does not gate a
+      rule the protocol never stated. Mid-run, a sibling session landed PR #495
+      registering REQ-115..139, so the live count went 21 to 0 under this run; an
+      addendum was APPENDED to ISS-0221 rather than editing the correction, since
+      a self-updating record is the same dishonesty class the correction exists to
+      fix. Gates: CODE-DESIGN-VALIDATOR PASS (one MAJOR corrected -- R5's totality
+      equality is a tautology, mutant M3 narrowed accordingly), SECURITY-REVIEWER
+      OUT_OF_SCOPE, REVIEWER PASS with no MAJOR or MINOR, TEST-DESIGN-VALIDATOR
+      PASS having re-applied eight mutants itself after inspecting each resulting
+      diff, plus two it hand-wrote to close R4 and R6. Fail-first is
+      mutation-based, not UndefinedFunctionError: M1, the substring blindness that
+      caused the original false all-clear, takes the suite to 19/29 with all ten
+      red tests hermetic and zero live-corpus tests red -- because #495 emptied
+      the deferred set, M1 is now invisible to any live test, making the hermetic
+      group the entire regression value. Deliberately NOT done: registering
+      REQ-115..135, and `docs/requirements.yaml` is byte-identical to main on this
+      branch. Two follow-ups recorded for ORCH to register: `lint_handoffs` wired
+      into no gate, and the deferred bucket having no expiry.

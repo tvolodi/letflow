@@ -1,83 +1,186 @@
 id: ISS-0231
 title: >
-  ISS-0221 closed on a false all-clear -- 21 requirements were left UNREGISTERED
-  and unclaimable, and nothing detects the condition
+  ISS-0221 closed on a false all-clear: 21 requirements were left UNREGISTERED
+  and unclaimable, and nothing detects that class of gap
 discovered_by: ORCH
-discovered_in_run: WF01-REQ115-135-20260822
-discovered_at: "2026-08-22T02:48:09Z"
+discovered_in_run: ORCH-20260822-queue-loop
+discovered_at: "2026-08-22T02:48:10Z"
 severity: MAJOR
 
 description: >
-  ISS-0221 ("WF-01 never tells ORCH to register the requirement in letflow-queue,
-  so a correctly-produced requirement is unclaimable") was resolved 2026-08-21.
-  Its documentation fix is correct and stands: WF-01 gained an explicit Step 3,
-  and this issue does not reopen that.
+  ISS-0221 (WF-01 never told ORCH to register a requirement in letflow-queue)
+  was resolved 2026-08-21 with a correct documentation fix -- WF-01 gained an
+  explicit Step 3. But its `resolution_note` also asserted: "every requirement
+  in the current `docs/requirements.yaml` (checked via a full-file scan, not a
+  sample) already carries `impl_order`, so the practical backfill this filing's
+  symptom described has since been completed by other work" and "No further
+  action taken on that front."
 
-  What is wrong is the second half of its `resolution_note`, which asserts:
-  "every requirement in the current `docs/requirements.yaml` (checked via a
-  full-file scan, not a sample) already carries `impl_order`, so the practical
-  backfill this filing's symptom described has since been completed by other
-  work, separate from this issue's own scope ... No further action taken on that
-  front."
+  That statement was FALSE, and was false when written. Verified against the fix
+  commit itself: `git show 75f553d:docs/requirements.yaml | grep -c
+  '# impl_order: UNREGISTERED'` returns 21. REQ-115..135 all carried the marker
+  at that exact moment and still did on `main` when this issue was filed. So
+  ISS-0221 closed while its own symptom -- validated-looking requirements that
+  `get_next_task` can never return -- was live in 21 places, and the note's
+  all-clear is exactly what would stop a later reader from re-checking.
 
-  That statement is false, and was false when written -- not merely stale.
-  Verified against ISS-0221's own fix commit:
+  ROOT CAUSE OF THE FALSE CLAIM. `docs/agents/protocols/TASK_QUEUE.md` permitted
+  TWO surface forms for an unregistered requirement: "leave `impl_order` absent
+  (or note `# UNREGISTERED`)". The verifying scan matched the substring
+  `impl_order:` anywhere on a line. The deferral marker `# impl_order:
+  UNREGISTERED` contains that substring, so all 21 unregistered entries were
+  counted as registered. Measured on the 111-entry corpus: the substring scan
+  returned 112 hits over 111 entries -- more hits than entries -- which is what
+  "every requirement already carries impl_order" was read off. The strict
+  registered-field-form count was 90.
 
-    git show 75f553d:docs/requirements.yaml | grep -c 'impl_order: UNREGISTERED'
-    => 21
+  IMPACT. The S8/S9 frontend+mobile batch and the S4 identity-infrastructure
+  batch were both invisible to the queue. The failure is silent by construction:
+  no error is raised, the requirement simply never appears in `get_next_task`,
+  and the only symptom is an idle pipeline. Nothing in the pipeline re-checks
+  registration state, so a false all-clear about it was unfalsifiable by any
+  gate. That is why it sat for a day.
 
-  REQ-115..135 all carried the UNREGISTERED marker at that exact commit, and
-  still did on `main` at the time of this filing. So ISS-0221 closed while its
-  own symptom -- well-formed requirements that `get_next_task` can never return
-  -- was live in 21 places. The all-clear in the note is the active harm: it is
-  precisely what would stop a later reader from re-checking.
+  SCOPE. This issue covers the two things ISS-0221's own fix did not:
+  (1) ISS-0221's resolution note is on record with a false all-clear that needs
+  correcting, and (2) nothing detects this class of gap. Actually REGISTERING
+  the 21 requirements is explicitly NOT in scope -- that is separate work
+  (its own WF-01 batch), and `TASK_QUEUE.md` is explicit that an unregistered
+  requirement carries no `impl_order` at all, "never a guessed one".
 
-  Probable mechanism: the scan matched only the `impl_order:` YAML field form and
-  missed the `# impl_order: UNREGISTERED` comment form -- which is the very form
-  `TASK_QUEUE.md` prescribes for an unregistered requirement ("If a requirement
-  has not yet been through `register_task`, leave `impl_order` absent (or note
-  `# UNREGISTERED`) rather than filling it with a placeholder that reads as a
-  real id"). A scan looking for the presence of a field will therefore always
-  report a clean file, no matter how many requirements are unregistered.
-
-  Impact: the S8/S9 frontend+mobile batch (REQ-115..127, migrated from R-Co
-  2026-08-21) and the S4 identity-infrastructure batch (REQ-128..135) were both
-  invisible to the queue -- the exact "well-formed, validated, and permanently
-  unclaimable" state ISS-0221 was filed to prevent, with the same silent failure
-  mode: no error, just an idle pipeline.
-
-  Two things remain, neither covered by the WF-01 run that found this:
-
-  1. ISS-0221's `resolution_note` is on record with a false all-clear and needs
-     correcting, so the next reader is not misled by it. The rest of that note
-     (the WF-01 Step 3 fix, and the WF-03 asymmetry analysis) is accurate and
-     should be preserved.
-
-  2. Nothing detects this class of gap. A requirement can sit UNREGISTERED
-     indefinitely with no error raised anywhere -- which is ISS-0221's own thesis,
-     left unaddressed for the data half. Consider a check that greps for the
-     `impl_order: UNREGISTERED` marker (and for a requirement carrying neither an
-     `impl_order:` field nor the marker) and reports it, so the next occurrence
-     surfaces on its own instead of waiting for someone to notice the pipeline is
-     idle. Note that any such check must match the comment form, not just the
-     field -- that is the specific thing this issue's own mechanism got wrong.
-
-  Discovered while pushing REQ-115..135 through WF-01 properly (run
-  WF01-REQ115-135-20260822), which is registering the 21 requirements themselves;
-  that run does not touch either item above.
+acceptance_criteria:
+  - "docs/issues/ISS-0221.yaml records, in place and without rewriting history, that its all-clear was false when written, with the real count and the root cause named"
+  - "a standing mechanism detects requirement-registration drift and runs as part of an existing gate rather than on request"
+  - "the mechanism is not fooled by the same form-blindness that caused the original false claim, demonstrated by a mutant that reproduces it"
+  - "docs/requirements.yaml is not modified and no impl_order value is invented"
 
 affected_files:
-  - docs/issues/ISS-0221.yaml  # the false all-clear in resolution_note
-  - docs/requirements.yaml     # the 21 UNREGISTERED entries the note missed
+  - docs/issues/ISS-0221.yaml
+  - docs/agents/protocols/TASK_QUEUE.md
+  - mix.exs
+  - lib/mix/tasks/letflow.check_requirements_registration.ex
 
 related:
-  - ISS-0221  # this issue is a remediation gap left by its resolution, not a reopen
+  - ISS-0221  # the issue whose resolution_note carried the false all-clear
+  - ISS-0076  # precedent for correcting a closed issue in place via a `correction:` field
+  - ISS-0092  # the guessed-impl_order incident TASK_QUEUE.md's "never a guessed one" rule came from
 
 queue_task_id: 231
 github_issue: 469
 github_issue_note: >
-  `register_task` created both the queue task (231) and its mirrored GitHub issue
-  (469) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  `register_task` created both the queue task (231) and its mirrored GitHub
+  issue (469) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
   deliberately not called separately.
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0231-20260822
+resolved_at: "2026-08-22T03:46:57Z"
+resolution_note: >
+  Two parts, matching the two the filing scoped.
+
+  PART 1 -- THE RECORD. `docs/issues/ISS-0221.yaml` gained a top-level
+  `correction:` field, following ISS-0076's precedent for amending a closed
+  issue honestly. Nothing was rewritten: the false sentence is left in place
+  inside `resolution_note`, quoted and labelled, with the surrounding paragraph
+  redirecting the reader to the correction; the "No further action taken on
+  that front" framing is explicitly retracted, since that framing is what let
+  the gap sit undetected. The correction gives the real count (21), names the
+  root cause (a substring scan that matched `impl_order:` anywhere on the line,
+  so the `# impl_order: UNREGISTERED` marker form counted as registered),
+  re-verifies it at the fix commit as well as live, and states plainly that the
+  21 are DELIBERATELY deferred with inline rationale and are not this issue's
+  to register. A `corrected_by: [ISS-0231]` field makes the amendment
+  traceable from the record itself.
+
+  PART 1b -- AN ADDENDUM, BECAUSE THE WORLD MOVED MID-RUN. While this run was
+  in flight, a sibling session landed c84c27a ("docs(WF-01): put REQ-115..139
+  through WF-01 and register all 25 in letflow-queue", PR #495). After rebasing
+  onto it the count is 0 unregistered of 115. Rather than editing the
+  correction to match -- which would have made the record silently
+  self-updating, the same dishonesty class the correction exists to fix -- a
+  `correction_addendum:` field was APPENDED recording what changed, and why it
+  does not vacate the correction: the correction is about a claim that was
+  false when asserted, which no later work changes.
+
+  PART 2 -- THE DETECTOR.
+  `lib/mix/tasks/letflow.check_requirements_registration.ex`, wired into the
+  `letflow.check` alias in `mix.exs` at position 2 (immediately after
+  `letflow.check_toolchain`; decision record 0005 legislates slot 1 only, so
+  this re-decides nothing). Placement was the load-bearing choice: this repo
+  has NO CI configuration at all, so `mix letflow.check` is not merely the
+  primary gate surface but the only one, and `mix letflow.lint_handoffs` is the
+  local counter-example of a good check wired into nothing.
+
+  It classifies every requirement entry into four states -- `:registered`
+  (an `impl_order: <int>` field), `:deferred` (the `# impl_order: UNREGISTERED
+  -- <rationale>` marker), `:neither` (no `impl_order` line of any form), and
+  `:unclassified` (a novel or malformed shape). The fourth state is the whole
+  defence against the original bug: an unrecognised form falls into a FAILING
+  bucket instead of being silently absorbed into a passing one, so a scan that
+  fails to recognise a form surfaces as a violation rather than as a clean
+  report.
+
+  Hard rules R1-R6 (no silent absence, no unrecognised form, every deferral
+  carries a rationale, ids unique, partition total with a non-empty corpus,
+  file present and shaped). The `:deferred` roster is printed unconditionally
+  on green runs and NEVER gates. That split was argued and upheld at the design
+  gate: a gate permanently red for a known, documented, intended state gets
+  ignored just as surely as a check nobody runs, and the roster under a loud
+  header is what makes an ISS-0221-style claim self-refuting without muting
+  anything.
+
+  `docs/agents/protocols/TASK_QUEUE.md`'s permissive sentence was tightened in
+  the same commit, because R1 otherwise gates a rule the protocol did not
+  state: the marker plus a non-empty rationale is now MANDATORY and bare
+  absence of an `impl_order` line is an error condition, not a second legal
+  form. The comment form stays legal; only bare absence stopped being.
+
+  VERIFICATION. All quoted from real runs, not claimed. On the pre-rebase
+  corpus the task reported `111 entries = 90 registered + 21 deferred + 0
+  neither + 0 unclassified`; post-rebase, `115 entries = 115 registered + 0
+  deferred + 0 neither + 0 unclassified`, exit 0 both times. Deleting one
+  marker line from an in-memory copy produced `[R1] REQ-115 ... carries no
+  `impl_order` line of any form`, naming the exact id. The original bug was
+  reproduced against the shipped code: the substring scan returns 112 hits over
+  111 entries where the real registered count is 90.
+
+  FAIL-FIRST IS MUTATION-BASED, NOT UndefinedFunctionError. The fix adds a
+  module, so WF-03's "when the pre-fix failure is non-existence" clause
+  applies. Twelve mutants were applied to the shipped logic and run.
+  TEST-DESIGN-VALIDATOR independently re-applied eight of them after reading
+  the harness and inspecting each resulting `lib/` diff, and hand-wrote two
+  more (MR4, MR6) to close R4 and R6, the two rules the harness had no mutant
+  for; every count matched. M1 -- the field-form/substring blindness that
+  caused ISS-0221's false all-clear -- takes the suite to 19/29, and all ten
+  red tests are hermetic with zero live-corpus tests red. That is the headline
+  result: because PR #495 emptied the deferred set, M1 is now invisible to any
+  live-corpus test, so the hermetic fixture group is the entire regression
+  value and the design's insistence on a public pure core was load-bearing
+  rather than stylistic.
+
+  GATES. CODE-DESIGN-VALIDATOR PASS (one MAJOR corrected in place: R5's
+  totality equality is a tautology, so mutant M3 was narrowed and the design's
+  claim demoted; all five open questions ruled). SECURITY-REVIEWER
+  OUT_OF_SCOPE, scope test applied to the real diff -- no migration, no Ecto
+  schema, no tenant-scoped query, no route; INV-4/6/7/8 PASS. REVIEWER PASS,
+  no MAJOR, no MINOR. TEST-DESIGN-VALIDATOR PASS.
+
+  NOT DONE, DELIBERATELY: REQ-115..135 were not registered by this run, and
+  `docs/requirements.yaml` is byte-identical to `main` on this branch.
+
+follow_ups:
+  - >
+    `mix letflow.lint_handoffs` is built but wired into no gate --
+    `HANDOFF_PROTOCOL.md` only says agents *may* run it, and `mix.exs`
+    references it nowhere. Severity MINOR. Ruled out of scope for ISS-0231 at
+    the design gate (wiring it in changes what a green `letflow.check` means
+    for every in-flight branch, a different blast radius from adding a check
+    that is green today), but explicitly NOT dropped: ORCH to `register_task`.
+  - >
+    The `:deferred` bucket is green forever, with no expiry. R3 accepts any
+    non-empty rationale by design, so a requirement can sit deferred
+    indefinitely while the gate reports PASS and prints the same roster for
+    months -- an idle pipeline again, with a green gate. Raised by REVIEWER as
+    a residual gap rather than a defect in this detector; it is a different
+    detector (a staleness/expiry rule, probably keyed on whether the
+    requirement's stage has become active). ORCH to `register_task` if wanted.

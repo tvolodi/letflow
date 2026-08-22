@@ -1,0 +1,37 @@
+id: ISS-0285
+title: "letflow-queue re-surfaces already-resolved issues as claimable tasks (duplicate github_issue_number)"
+discovered_by: ORCH (/loop iteration, 2026-08-22)
+discovered_in_run: LOOP-20260822-orch
+discovered_at: 2026-08-22T18:21:29Z
+severity: MINOR
+description: >
+  Two consecutive ORCH /loop iterations on 2026-08-22 each claimed a
+  get_next_task result that turned out to be a stale duplicate of an
+  already-resolved issue, matching an existing local issue record by
+  github_issue_number: (1) ISS-0164/GH#310, (2) ISS-0129/GH#269. Both were
+  pre-existing resolved issues that re-surfaced as claimable queue tasks;
+  both runs performed a WF-03 Step 0.5-style duplicate check, found no code
+  change was needed, and released the task done with evidence rather than
+  redoing completed work. This is a repeat pattern (2 back-to-back
+  occurrences) worth tracking rather than letting it recur silently. The
+  probable root cause is in letflow-queue itself -- a separate,
+  independently deployed service (own repo: tvolodi/letflow-queue) -- most
+  likely its GitHub-issue-import step re-importing/re-surfacing a task whose
+  github_issue_number already matches a resolved local record, or its own
+  task table retaining/reopening a duplicate row. A real fix likely requires
+  filing against tvolodi/letflow-queue rather than changing anything in this
+  repo. Filed here first via register_task so the pattern is not lost, per
+  ISSUE_QUEUE.md's protocol, before attempting to file against the queue
+  service's own repo.
+affected_files:
+  - docs/agents/protocols/TASK_QUEUE.md
+  - docs/agents/protocols/ISSUE_QUEUE.md
+queue_task_id: 285
+github_issue: 562
+status: open
+follow_up: >
+  File the equivalent issue against tvolodi/letflow-queue (its own repo,
+  not this one) once that repo/tracker is reachable from this environment,
+  and cross-link back to this task (ISS-0285 / GH#562). Do not attempt a
+  code fix in this repo -- the defect, if real, lives in letflow-queue's
+  own get_next_task / GitHub-import logic.

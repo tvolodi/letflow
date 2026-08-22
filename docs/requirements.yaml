@@ -6255,7 +6255,7 @@ requirements:
   - id: REQ-129
     title: Prove the role set agrees across the matrix, the realm, and the SPA
     owner: TEST-DESIGNER
-    status: pending
+    status: done
     stage: S4
     impl_order: 240  # letflow-queue task id; depends_on translated to queue task id [234]
     description: >

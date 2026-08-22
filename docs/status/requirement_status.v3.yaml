@@ -451,3 +451,52 @@ history:
       mix compile and the router test file itself, confirmed web/ untouched
       and no migration added -- PASS. Status flipped pending -> done here.
       No FAIL-then-fix cycles -- every gate passed on first attempt.
+  - req: REQ-129
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-08-22T12:07:32Z"
+    note: >
+      WF02-REQ129-20260822 (queue task 240) done. Proving requirement, no
+      role set changes. Verified the three sources -- Letflow.Api.Authorization.roles/0,
+      priv/keycloak/realms/bpm-default.json, web/src/components/layout/AppShell.tsx's
+      Role union -- actually agree today: matrix and realm both hold the
+      same five roles (including AGENT_RUNNER), AppShell's four-role union
+      is a strict subset (missing only AGENT_RUNNER, exactly as
+      decisions/0013-authorization-role-set.md anticipated). No genuine
+      discrepancy found. Added
+      test/letflow/api/authorization_role_realm_test.exs (bidirectional
+      string-sorted equality, realm vs. Authorization.roles/0 -- string
+      comparison chosen over String.to_existing_atom/1 after that first
+      draft failed nondeterministically on mix's incremental-compile/module-load
+      ordering, not on a real discrepancy) and web/tests/guards/role-set.spec.ts
+      (one-directional: AppShell's Role union subset-checked against roles
+      extracted live via regex from lib/letflow/api/authorization.ex's
+      @roles attribute, not hand-copied, so the guard itself cannot drift
+      from the Elixir source). Both asymmetry and its reasoning stated
+      explicitly in each file's moduledoc/docblock and in the TS test's own
+      it() name, per the requirement's explicit ask. web/package.json's
+      guards script extended to include the new spec; default npm run test
+      continues to exclude tests/guards/**, and mix test needs no tagging
+      since the new Elixir test is plain ExUnit.Case. Fail-first
+      demonstrated on both sides by temporarily removing AGENT_RUNNER from
+      the realm file (real failure quoted, reverted, reconfirmed green),
+      temporarily adding an extra role to the matrix only (real failure
+      quoted, reverted, reconfirmed green), and temporarily adding an
+      unknown role to AppShell's Role union (real failure quoted, reverted,
+      reconfirmed green). CODE-DESIGNER skipped: change was small and
+      precisely specified per the handoff, satisfying ORCHESTRATOR.md
+      section 10's sizing rule. SECURITY-REVIEWER skipped: test-only
+      change, no tenant-data path touched (confirmed via empty
+      git diff -- priv/keycloak/realms/bpm-default.json
+      lib/letflow/api/authorization.ex web/src/components/layout/AppShell.tsx).
+      REVIEWER PASS (idiom matches sibling authorization_test.exs,
+      AGENT_RUNNER asymmetry stated explicitly, no source drift, no scope
+      creep, consistent with decision 0013). TEST-DESIGN-VALIDATOR PASS
+      (all 5 ACs covered, independently reproduced both fail-first
+      failures, confirmed no vacuous-pass risk in the regex-based role
+      extraction, reran both tests green). Full suite: mix test 1757/1760
+      passed, the 3 failures are pre-existing Mix.Tasks.Letflow.LintHandoffsTest
+      commit-boundary fixture failures unrelated to this change; npm run
+      test 178/178 passed unmodified; npm run guards 48/48 passed including
+      the new spec. Status flipped pending -> done here. No FAIL-then-fix
+      cycles -- every gate passed on first attempt.

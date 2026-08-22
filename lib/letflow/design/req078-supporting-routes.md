@@ -41,7 +41,7 @@ and **false of the sixth**:
 |---|---|---|
 | `audit.zig` | `Letflow.EventStore.read_global/1` (`event_store.ex:761`) — exists; needs four additive filter opts | thin ✅ |
 | `validation.zig` | `Graph.validate_graph/1` / `validate_node_attributes/1` / `validate_edge_conditions/1` (`graph.ex:289/317/343`) — exist; needs one small composing function | thin ✅ |
-| `tenant_config.zig` | `Identity.get_tenant_by_slug/1` (`identity.ex:627`), `resolve_tenant_by_realm/1` (`identity.ex:128`) — exist | thin ✅ *(after §12's scope correction)* |
+| `tenant_config.zig` | `Identity.get_tenant_by_slug/1` (`identity.ex:627`) — exists. *(`resolve_tenant_by_realm/1`, `identity.ex:128`, was listed here in the first draft; after the OQ-8 ruling it is **not** used by this route — `get_tenant_by_slug/1` is the sole delegate. See §12.3.)* | thin ✅ *(after §12's scope correction)* |
 | `pin_rebind.zig` | `Letflow.Engine.PinRebind.rebind_pins/3` (`pin_rebind.ex:162`) — **exists, complete, no new context function at all** | thin ✅ |
 | `metrics.zig` | nothing exists; needs three `COUNT(*)`-shaped context functions | thin ✅ |
 | **`solution_packs.zig`** | **NOTHING.** `grep -rn "export_pack\|install_pack\|SolutionPackDocument" lib/` → **zero hits.** `Letflow.Definitions.SolutionPackInstall`'s entire public surface is `insert_changeset/2` (`solution_pack_install.ex:83`) — it is an Ecto schema, not an engine. REQ-041 delivered the *three-way diff* (`compute_pack_update_plan/5`, `definitions.ex:250`) plus three tables, **not** export/install. `Letflow.Definitions.ExportImport.export/2`/`import/3` (`export_import.ex:87/120`) are **single-definition**, not multi-definition pack documents. | **NOT thin ❌** |
@@ -776,19 +776,25 @@ with a compiler version. Letflow has ported neither. Claiming `"semantically_val
 overclaim what was actually checked, and `compiler_version` has no value to report. Letflow
 emits `"valid"` and omits `compiler_version`. **Must be named in the moduledoc.**
 
-**422 — findings present** (`Response.send_problem/2` with a hand-built
-`%Letflow.Api.Error{}`): `Letflow.Api.Error`'s `errors` extension member already serialises a
-non-empty list (`error.ex:110-116`), so the problem document is:
+**422 — findings present** (`Response.send_problem/2`): `Letflow.Api.Error`'s `errors`
+extension member already serialises a non-empty list (`error.ex:110`).
+
+**Build the problem document with the existing constructor-then-override idiom, NOT by
+hand-writing the struct:**
 
 ```
-%Letflow.Api.Error{
-  type:   <problems_base> <> "unprocessable-entity",
-  title:  "Unprocessable Entity",
-  status: 422,
-  detail: "definition graph failed validation",
-  errors: [ %{"code" => "<Violation.code() as string>", "message" => "<Violation.message>"}, ... ]
-}
+%{Letflow.Api.Error.unprocessable("definition graph failed validation") | errors: violation_maps}
 ```
+
+`@problems_base` (`error.ex:55`) is a **private compile-env module attribute** and is not
+referenceable from another module, so the `type` field cannot be written literally — it must
+come from the constructor. This is exactly the idiom `Letflow.Api.Validation.problem/1` already
+uses (`validation.ex:225`), and reusing it keeps the `type`/`title`/`status` triple
+consistent with every other 422 in the system.
+
+Resulting body: `type` `<problems_base> <> "unprocessable-entity"`, `title`
+`"Unprocessable Entity"`, `status` `422`, `detail` `"definition graph failed validation"`,
+`errors` `[%{"code" => "<Violation.code() as string>", "message" => "<Violation.message>"}, …]`.
 
 The `errors` list is built by a private map builder over `[Graph.Violation.t()]` with exactly
 those two keys — `Violation` has exactly two fields (`graph.ex:113`), so this is a total
@@ -876,10 +882,17 @@ larger than "port a route", and it is the shape `stage-4-api-surface.md:101-108`
    `SolutionPackInstall.insert_changeset/2`) plus the one new registration function §9 builds
    anyway.
 
-**OQ-1 is BLOCKING and is for ORCH/REVIEWER to answer before Step 2a:** accept the added scope
-inside REQ-078, or split solution packs into their own requirement — in which case AC3 and AC8
-cannot be satisfied by REQ-078 and the requirement text needs amending. **Do not let
-ELIXIR-DEV decide this by starting to type.**
+Also note `Letflow.Definitions.ExportImport.export/2`/`import/3` (`export_import.ex:87`/`120`)
+are **single-definition** paths and are **not** a substitute — a pack document is
+multi-definition and additionally carries `variable_schemas`. They are reused only for the
+shared `@export_schema_version` constant (§8.3), never as the export/install engine.
+
+**Ruling recorded (OQ-1(a), §20): build it here, in commit 1.** The reason the split was
+declined is that AC3 and AC8 could not travel with it safely — AC8 exists precisely because an
+earlier requirement dropped the `variable_schemas` insert path and shipped the table empty
+(ISS-0063 / GH#212), so splitting to tidy the port risked re-creating that exact failure mode.
+**DOC-UPDATER: amend REQ-078's "one-to-three-handler surface" sentence to except solution
+packs** (§20 C-2), so the next reader is not misled the way this run was.
 
 ### 8.2 Pack document — what Letflow supports, and what it drops
 
@@ -1108,10 +1121,17 @@ sentence belongs in the moduledoc too.
 
 ### 8.4 Role checklist
 
-`role_mapping_checklist` is `Enum.map(document.manifest.required_roles, fn name ->
-%{role_name: name, bound: name in Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1)} end)`.
-Read-only; no role is created, nothing is bound. This is a narrowed port of
-`store.zig:589`'s `checkRoleGate` and must be named as narrowed in the moduledoc.
+`role_mapping_checklist` has one `role_checklist_entry()` per name in
+`document.manifest.required_roles`, in the order the document lists them. Each entry's
+`role_name` is that name verbatim; its `bound` is `true` iff the name matches one of the five
+closed role atoms `Letflow.Api.Authorization.roles/0` returns (`authorization.ex:125`),
+compared as strings.
+
+**Read-only: no role is created, none is bound, and the checklist never affects whether the
+install succeeds.** It is advisory output for the operator. This is a narrowed port of
+`store.zig:589`'s `checkRoleGate` — R-Co's gate can *reject* an install; Letflow's reports and
+proceeds. **The narrowing must be named in the moduledoc**, since "checklist" could otherwise
+be read as an enforced precondition.
 
 ### 8.5 Route contracts and error maps
 
@@ -1812,7 +1832,8 @@ But `docs/issues/ISS-0088.yaml` is `status: resolved`, and
 **C-2 — solution packs are not "a thin surface over existing context functions".** REQ-078's
 description asserts that all six modules are. For solution packs it is false: R-Co delegates to
 `src/solution/store.zig` (~700 lines), of which Letflow has ported **nothing**. See §8.1 and
-**OQ-1** — this needs an ORCH decision before Step 2a.
+**OQ-1 — RULED: build it here, do not split** (§20). Nothing blocks Step 2a.
+**DOC-UPDATER: amend REQ-078's description sentence to except solution packs.**
 
 **C-3 — four of REQ-070's reserved mount points do not match R-Co's URLs.**
 `lib/letflow/design/req070-router-decomposition.md:133-136` reserves `/validation`,
@@ -1948,7 +1969,7 @@ MUST NOT add a second insert path.
 | **AC1** | each of the six modules has ≥1 end-to-end test through the real router asserting status and response shape | §6 (`GET /api/v1/audit`), §7 (`POST /api/v1/definitions/:id/validate`), §12 (`GET /api/tenant-config`), §8 (`POST /api/v1/solution-packs/export` and `/install`), §10 (`POST /api/v1/instances/:id/rebind-pins`), §11 (`GET /api/v1/metrics`) — response shapes at §6.2, §7.3, §12.1, §8.3, §10.4, §11.5 | **T-01..T-07**: one `Plug.Test.conn/3` request per endpoint through `Letflow.Router` (**not** the sub-router directly — the tenant-config test in particular must go through `Letflow.Router` to prove it is reachable without a token), asserting status and the exact top-level key set |
 | **AC2** | audit list returns only the calling tenant's events when both tenants are seeded in the same window; caller without `AuditRead` gets 403 (INV-1) | §5 (`scoped_repo_opts/1` is the only tenant input), §6.1, §6.5 (`:prefix`-scoped `read_global/1`), §4.2 (`:AuditRead` → `:Deny403` → 403), §4.4 | **T-08**: provision tenants A and B, append events to both inside one timestamp window, request as A, assert every returned `resource_id` is an A instance and no B `event_id` appears. **T-09**: request as a `TASK_WORKER`-only caller (no `:AuditRead` per `authorization.ex:394-395`), assert **403** and an RFC 9457 body |
 | **AC3** | pack export as tenant A contains no tenant B artefact; install as A writes only into A's schema, verified by querying both schemas after (INV-1) | §8.3 (`export/3` reads with A's prefix only; `install/3` writes with A's prefix only; the one global row's `tenant_id` is derived from that prefix), §2.6 (no path tenant id) | **T-10**: seed definitions in A and B; export as A naming an A id and a B id; assert 422 and that no B artefact appears in any successful export. **T-11**: install as A, then `Repo.all(..., prefix: <B schema>)` over `process_definitions` and `variable_schemas` and assert **zero** rows added in B, and the expected rows in A |
-| **AC4** | the validation endpoint returns the same outcome as calling REQ-028/029's validator directly on the same graph — proving the route adds no second rule | §7.2 (the composition lives in `Letflow.Definitions.validate_definition_graph/2`, calls exactly the three `Graph.validate_*` functions, and explicitly does **not** call `ServiceScopeValidator.validate/3`) | **T-12**: for both a valid and an invalid stored graph, call the endpoint and independently call `Graph.validate_graph/1` + `validate_node_attributes/1` + `validate_edge_conditions/1` on the same `%Graph{}`; assert the endpoint's `findings` list equals the concatenated violations, code for code and message for message |
+| **AC4** | the validation endpoint returns the same outcome as calling REQ-028/029's validator directly on the same graph — proving the route adds no second rule | §7.2 (the composition lives in `Letflow.Definitions.validate_definition_graph/2`, calls exactly the three `Graph.validate_*` functions, and explicitly does **not** call `ServiceScopeValidator.validate/3`) | **T-12**, in two halves against two different response keys — see §18.2 |
 | **AC5** | the metrics tenant-exposure rule is stated in the moduledoc (aggregate-only or per-tenant) and enforced by a test that a tenant A caller sees no tenant B figure | §11.3 (the rule, required verbatim in `Letflow.Routers.Metrics`'s moduledoc), §11.4 (all three counters `:prefix`-scoped), §11.5 (`"scope" => "tenant"`) | **T-13**: seed A with 1 active instance and B with 7; request as A; assert `instances.active == 1` and that **no** value in the body equals 7 or 8 — i.e. neither B's figure nor a platform total is present. **T-14**: a doc test / `Code.fetch_docs/1` assertion that the moduledoc contains the phrase "PER-TENANT-SCOPED" |
 | **AC6** | the moduledoc distinguishes `routes/validation.zig` from `src/api/validation.zig` so the two are not conflated | §7.4 (the required section in `Letflow.Routers.Definitions`, plus the pointer added to `Letflow.Api.Validation`) | **T-15**: `Code.fetch_docs/1` on `Letflow.Routers.Definitions` asserting the moduledoc names **both** `routes/validation.zig` and `src/api/validation.zig` and attributes the latter to REQ-068 / `Letflow.Api.Validation` |
 | **AC7** | `metrics.zig`'s moduledoc states no metrics subsystem is built here and names S6 observability as its owner | §11.5 (the required AC7 paragraph, placed immediately after §11.2's divergence table) | **T-16**: `Code.fetch_docs/1` on `Letflow.Routers.Metrics` asserting the moduledoc contains both "No metrics subsystem is built here" and "S6 observability" |
@@ -1985,6 +2006,42 @@ assert on the specific call shapes above rather than on bare module names. If TE
 finds textual stripping too brittle, checks 1 and 2 may instead be expressed against the
 compiled module's remote-call set — the guarantee is what matters, not the technique.
 
+### 18.2 T-12 in full — violations live under a DIFFERENT key per status (F5)
+
+An earlier draft's T-12 asserted a `findings` key for both the valid and the invalid graph.
+**`findings` does not exist on the 422 path.** §7.3 routes an invalid graph through
+`Response.send_problem/2` with an `%Letflow.Api.Error{}` whose violations live in the RFC 9457
+`errors` extension member. The two response shapes are:
+
+| Outcome | Status | Body | Where violations live |
+|---|---|---|---|
+| `{:ok, %{valid: true}}` | **200** | `Response.ok/2` success map | **`"findings"`** — always `[]` |
+| `{:ok, %{valid: false, violations: vs}}` | **422** | RFC 9457 problem document | **`"errors"`** — `[%{"code" => …, "message" => …}, …]` |
+
+There is no key that carries violations on both paths, by construction: RFC 9457 defines the
+extension member as `errors`, and `Letflow.Api.Error.serialise/1` (`error.ex:104`/`110`) emits
+it only when non-empty. A success body is not a problem document and must not carry
+problem-document members.
+
+**T-12 is therefore two assertions, both required:**
+
+* **T-12a (valid graph):** stored graph that passes all three validators. Assert **200**, assert
+  `body["status"] == "valid"`, and assert `body["findings"] == []`. Independently call
+  `Graph.validate_graph/1`, `validate_node_attributes/1` and `validate_edge_conditions/1` on
+  the same `%Graph{}` and assert all three return zero violations — i.e. the endpoint and the
+  direct calls agree that there is nothing to report.
+* **T-12b (invalid graph):** stored graph that fails at least one validator, ideally more than
+  one so concatenation order is exercised. Assert **422**, assert the body is the problem
+  document, and assert `body["errors"]` equals the concatenation of the three validators'
+  `:violations` lists **in the §7.2 step 3 order** (structural, then node attributes, then edge
+  conditions), compared **code for code and message for message** against the same
+  `%Graph{}` — mapped through the same two-key shape (`"code"` via `Atom.to_string/1` on
+  `Violation.code()`, `"message"` verbatim).
+
+T-12b is the half that actually discharges AC4 — it is what proves the route and
+`validate_definition_graph/2` add no rule of their own and drop none. T-12a alone would pass
+against an endpoint that silently validated nothing.
+
 Additional non-AC tests the design implies (for TEST-DESIGNER): cursor round-trip across two
 pages on `/audit` (§6.4); `from > to` → 422 (§6.5); `pipeline_run_id` → 422 (§6.3);
 `resource_type=definition` → empty page (§6.3); tenant-config returns the **same** default body
@@ -1998,15 +2055,19 @@ nonexistent instance (§4.4, INV-RT-5).
 
 ## 19. Open questions — explicitly NOT resolved by guessing
 
-**OQ-1 — BLOCKING. Should solution packs (+ the shared registration function) be split out of
-REQ-078?** Full statement, reasoning and proposed split: **§0**. Short form: Letflow has no
-backing context for pack export/install (§8.1), so this requirement would have to build
+**OQ-1 — Should solution packs (+ the shared registration function) be split out of REQ-078? —
+RULED: (a) accept the added scope; DO NOT split.** Finding and reasoning: **§0**, **§8.1**.
+Short form: Letflow has no backing context for pack export/install, so this requirement builds
 `Letflow.Definitions.SolutionPack` from scratch, plus
 `Letflow.Definitions.register_variable_schemas/3` and a change to a `done` S3 module — while
-the other five modules are genuinely thin. **My recommendation: split** (§0.3), with AC3 and
-AC8 travelling to the new requirement and the `variable_schemas` obligation travelling *with
-them*, never dropped. Both paths are fully designed here, so ORCH can decide either way and
-Step 2a can start immediately. **ORCH's call, not CODE-DESIGNER's.**
+the other five modules are genuinely thin. A split was proposed (§0.3) and **declined**.
+*Rationale (ORCH):* splitting would strand AC3 and AC8, and AC8 exists precisely because an
+earlier requirement dropped the `variable_schemas` insert path and shipped the table empty
+(ISS-0063 / GH#212) — splitting to tidy the port would re-create the exact failure mode the
+criterion was added to prevent. Amending the requirement text would need a separate WF-01 pass
+and would block queue task 145 indefinitely. **Condition: solution packs (§8) + the
+registration function (§9) are committed as their own commit, BEFORE the five thin routes**
+(§0.4). **Nothing here blocks Step 2a.**
 
 **OQ-2 — Where does the well-formedness predicate live? — RULED: a dedicated module.**
 `Letflow.Definitions.JsonSchemaShape.check/1`, in
@@ -2114,6 +2175,43 @@ ruling wins and the affected section has been updated to match.**
 | **C-2** | **Recorded correction to REQ-078's description.** **DOC-UPDATER: amend the "one-to-three-handler surface over existing context functions" sentence to except solution packs**, so the next reader is not misled the way ORCH was. | §0.1, §8.1, §14 C-2 |
 | **C-3** | **Resolved per §2; no change needed.** Deleting `lib/letflow/routers/validation.ex` and its forward is correct — a module whose moduledoc promises "Routes added by REQ-078" cannot be left behind unfulfilled. | §2.3, §14 C-3 |
 | **C-4** | See OQ-7. Keep as written. | §14 C-4 |
+
+### 20.0 CODE-DESIGN-VALIDATOR rework pass — the six FAIL findings and their fixes
+
+First gate verdict: **FAIL**, six blocking findings. All six fixed; nothing the validator
+passed was restructured.
+
+| # | Finding | Fix | Sections |
+|---|---|---|---|
+| **F1** | §18 T-19 mandated a test asserting no route file contains the substrings `VariableSchema`/`variable_schemas` — but §8.6 item 4 mandates a moduledoc sentence containing both. The mandated test failed on the mandated moduledoc. | Restated as an **insert-path** rule, which is what AC8 actually asks. T-19 is now three mechanical checks (no `Repo.` call in the route layer; no changeset/insert call shapes there; exactly one insert against the schema in all of `lib/`), with comments and moduledoc prose **explicitly exempt**. | §18.1 (new), INV-VS-1 |
+| **F2** | `installed_definition.status` enumerated `"skipped"` with no step able to produce it. | **Deleted `"skipped"`; install is all-or-nothing.** Evidenced: `create/2` (`definitions.ex:400`) has no upsert/skip branch and errors with `:duplicate_name_version`, which §8.5 maps to a 409 that aborts. Also surfaced a consequence the draft had not named — Letflow returns 409 on re-install where R-Co's `buildIdempotentInstallResult` (`store.zig:680`) returns a synthetic success — now recorded as a **non-port**. | §8.3.1 (new), §8.3, §8.5, §8.6 |
+| **F3** | The variable-schema conflict pre-check compared on `(definition name, variable_key)` but the table is keyed by `definition_id`, ran before the ids were minted, and named no lookup function. | **Recorded as a deliberate non-port, with unreachability *proved*, not asserted:** `ProcessDefinition`'s PK is `autogenerate: true` (`process_definition.ex:85`) and `create/2` never returns a pre-existing row, so every id install writes against is fresh and cannot collide. `{:variable_schema_conflict, _, _}` removed from `install_error()` and §8.5. A **standing condition** is recorded for the case that makes it reachable again. | §8.3.2 (new), §8.3, §8.5, §8.6 |
+| **F4** | The OQ-1 ruling was not propagated: §8.1 still said "BLOCKING … do not let ELIXIR-DEV decide by starting to type" and §19's OQ-1 still recommended splitting — two sections telling the implementer to wait for a ruling already made. | §8.1 re-headed **"RULED (OQ-1(a))"** with a ruling banner and the blocking language stripped; §19's OQ-1 rewritten in the same "— RULED:" form as OQ-2..OQ-10, carrying the §0.4 commit-order condition. | §8.1, §19 |
+| **F5** | §18 T-12 asserted a `findings` key for both valid and invalid graphs, but §7.3 emits `findings` only on 200 — the 422 path carries violations in the RFC 9457 `errors` member. AC4's only test asserted a key that never existed on the path that matters. | Split into **T-12a** (200 → `findings`) and **T-12b** (422 → `errors`), with a per-status key table and a note that T-12b is the half that actually discharges AC4. | §18.2 (new), §18 |
+| **F6** | **Evidence integrity.** `router.ex`, `context.ex` and `response.ex` were cited with line numbers past EOF. | **All re-derived with per-file `grep -n`**, now citing single anchor lines. Root cause found and recorded so it cannot recur: the three files were read in one `cat -n` over four concatenated files, which numbers the *stream*, not each file — constant offsets +60/+115/+347. Every wrong citation was wrong by exactly its file's offset, which is why every substantive claim was still correct. | §0.5 citation-integrity note (new), §2.4, §3.2, §5, §6.2, §11.2, §12.4, §15, §19 OQ-9 |
+
+**Correction to the F6 follow-up list itself.** Three of its proposed line-number fixes did not
+survive re-derivation and are **not** applied, because the originals were right — `grep -n`
+gives `authorization.ex` catch-all at **265** (not 264), `error.ex` `@type t` at **85** (not
+87–94), and `error.ex` `serialise/1` clauses at **104**/**110** (not 105–117). Flagged so a
+re-gate against that list does not bounce a correct citation. The `evaluate_access/2` anchors
+are now cited as single lines (272/274/281) to remove the range ambiguity that caused the
+disagreement. The other minor corrections were right and are applied:
+`validations_for/3`'s `{:ok, _not_a_map}` at **342**, `pin_rebind.ex` `rebind_result` at
+**116**, `graph.ex` `Violation` defstruct at **119**, `tenant_scoped_migrations/0` at **500**,
+`validation.ex` `validate/2` at **190** and `problem/1` at **225**.
+
+**One ruling rests on a citation that was wrong.** OQ-9 was issued citing "`router.ex:74-76`"
+for the `deploy/redeploy-test.sh` contract. That range does not exist in a 55-line file; the
+real basis is the moduledoc note at **line 16**, which does say the `/health` contract is
+"preserved exactly for `deploy/redeploy-test.sh`'s post-deploy health check". **The ruling's
+substance is unaffected** — the constraint it relies on is real — but the citation is corrected
+throughout.
+
+Non-blocking items from the same pass, all applied: the `%{Error.unprocessable(…) | errors: …}`
+idiom named in §7.3 (`@problems_base` is private and unreferenceable); §8.4's inline `Enum.map`
+replaced with a contract sentence plus the R-Co narrowing note; §0.1's stale
+`resolve_tenant_by_realm/1` mention annotated as superseded by the OQ-8 ruling.
 
 ### 20.1 No migration in this requirement — checkable at review
 

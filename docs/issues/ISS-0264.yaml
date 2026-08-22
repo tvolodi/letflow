@@ -1,0 +1,117 @@
+id: ISS-0264
+title: >
+  T-LIVE-ACTIVITY's hardcoded active/inactive stage literal went stale the
+  moment S8/S9 became genuinely active
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0263-20260822
+discovered_at: "2026-08-22T09:30:45Z"
+severity: MINOR
+
+description: >
+  `test/mix/tasks/letflow_check_deferral_staleness_test.exs`'s
+  `T-LIVE-ACTIVITY -- S0..S4 active, S8/S9 inactive (MS1, MS2, MS3)` test
+  asserted, against the live `docs/requirements.yaml` corpus:
+
+      assert active == ["S0", "S1", "S2", "S3", "S4"]
+      assert inactive == ["S8", "S9"]
+
+  S8 and S9 became genuinely active stages during the 2026-08-21/22
+  frontend/mobile migration and REQ-115..139 registration work
+  (`docs/migration/decisions/0011-frontend-ownership.md`,
+  `0012-mobile-tier-stack.md`) -- real requirements under those stages moved
+  to `in_progress`/`done` (e.g. REQ-119, REQ-127, both `done`). The test's
+  hardcoded expectation did not track this, so it started failing:
+
+      1) test T-LIVE-ACTIVITY -- S0..S4 active, S8/S9 inactive (MS1, MS2, MS3)
+         left:  ["S0", "S1", "S2", "S3", "S4", "S8", "S9"]
+         right: ["S0", "S1", "S2", "S3", "S4"]
+
+  Reproduced directly: `mix test test/mix/tasks/letflow_check_deferral_staleness_test.exs`
+  -> 56/57 passed, this test the sole failure. Independently re-derived the
+  true current values by calling `Mix.Tasks.Letflow.CheckDeferralStaleness.audit/1`
+  against the live corpus: `active: ["S0","S1","S2","S3","S4","S8","S9"]`,
+  `inactive: []` -- exact match to the failure's `left:` value.
+
+  Root cause is NOT a bug in `lib/mix/tasks/letflow.check_deferral_staleness.ex`
+  (ISS-0258's detector) -- that module's own derivation logic is correct and
+  unchanged; the real corpus data changed underneath a test that pinned a
+  point-in-time snapshot. This was explicitly anticipated in advance: the
+  detector's own design doc
+  (`lib/letflow/design/iss0258-deferral-staleness-detection.md`, "OQ-5
+  (future staleness of T-LIVE-ACTIVITY)") states verbatim: "It will change
+  legitimately when S5/S6/S7 are expanded, or when S8 starts ... a future
+  failure reads as 'expected update', not 'regression'." This run is exactly
+  that anticipated event.
+
+  Considered and rejected converting the test to an unpinned/derived form
+  (the pattern ISS-0231's T-ROSTER was converted to, per that design's own
+  OQ-5 ruling in `lib/letflow/design/iss0231-requirement-registration-drift-detection.md`
+  section 11.6): T-ROSTER was unpinned because the pinned and unpinned forms
+  were proven exactly equally discriminating against the mutant that
+  mattered there (M1), so pinning bought nothing. T-LIVE-ACTIVITY is
+  different -- ISS-0258's own mutant table (section 7.3) cites
+  `T-LIVE-ACTIVITY` as a genuine, currently-discriminating detector for
+  mutants MS2 (`Add :pending to @active_statuses`) and MS3 (`Remove :done
+  from @active_statuses` -- "the mandatory mutant", ISS-0258 reproduced
+  inside its own fix), and section 7.2 explicitly names it one of only four
+  tests ("except MS1, MS2, MS4 and MS5") where "the live corpus genuinely
+  discriminates". Unpinning it would lose that discriminating power for no
+  gain. So the design (CODE-DESIGNER, validated by CODE-DESIGN-VALIDATOR
+  across two rounds -- the first round caught a factual error in the design's
+  own citation of MS1 as a third detected mutant, which the table does not
+  support; corrected and re-passed) kept the test pinned and updated the
+  literal to the current true values, extending the existing "Design OQ-5"
+  comment with this run's context for the next reader.
+
+  Checked for sibling hardcoding (this issue's own AC4-shaped concern):
+  `grep -rn '"S0", "S1", "S2", "S3", "S4"'` and broader `active ==`/
+  `inactive ==` patterns across `test/` found no other test hardcoding a
+  live-corpus stage-activity snapshot. The file's two other `"S8  INACTIVE"`
+  string occurrences (`F-ROSTER-GREEN`, `T-TASK-PRINTS-ON-GREEN`) build their
+  bodies from local hermetic fixtures, not `@live_corpus`, so they are
+  unaffected by the corpus's real data changing.
+
+affected_files:
+  - test/mix/tasks/letflow_check_deferral_staleness_test.exs
+  - lib/letflow/design/iss0264-deferral-staleness-test-literal-update.md
+
+related:
+  - ISS-0258   # the detector this test exercises; detector logic unchanged
+  - ISS-0263   # the run that discovered and filed this issue
+
+queue_task_id: 264
+github_issue: 520
+
+status: resolved
+resolved_in_run: WF03-ISS0264-20260822
+resolved_at: "2026-08-22T10:13:48Z"
+resolution_note: >
+  Updated `test/mix/tasks/letflow_check_deferral_staleness_test.exs`'s
+  `T-LIVE-ACTIVITY` test literal to the current true values
+  (`active == ["S0","S1","S2","S3","S4","S8","S9"]`, `inactive == []`),
+  extended its "Design OQ-5" comment with this run's context, per
+  CODE-DESIGNER's design (`lib/letflow/design/iss0264-deferral-staleness-test-literal-update.md`,
+  CODE-DESIGN-VALIDATOR PASS after one rework round). `lib/mix/tasks/letflow.check_deferral_staleness.ex`
+  and `docs/requirements.yaml` are both unchanged -- this was a test-data-only
+  fix. REVIEWER PASS (scope confirmed limited to the one test file plus the
+  design doc; SECURITY-REVIEWER out of scope, no tenant-data path).
+  TEST-DESIGNER/TEST-DESIGN-VALIDATOR confirmed this existing test IS the
+  fail-then-pass regression proof (no new test needed -- the bug was the
+  test's own assertion; pre-fix failure independently reproduced twice, once
+  by ISSUE-FIXER directly and once by TEST-DESIGN-VALIDATOR via a disposable
+  worktree against `main`, both showing 56/57 with this test the sole
+  failure; post-fix `mix test test/mix/tasks/letflow_check_deferral_staleness_test.exs`
+  -> 57/57 passed, confirmed independently three times across this run).
+  Full suite (TEST-RUNNER, `scripts/test_parallel.sh` TEST_PARALLEL_N=4):
+  1360/1718 passed, 358 failures, all attributed structurally to shared-host
+  contention (~15 concurrent sibling worktrees tonight) -- not this branch:
+  `git diff --name-only main...HEAD` shows only the two files above changed;
+  357 of the 358 failures were `UndefinedFunctionError`/module-unavailable
+  errors against modules not in this branch's diff, inconsistent per
+  partition (a real missing symbol fails identically everywhere), and
+  directly reproduced as a false positive by re-running one such file
+  (`registry_test.exs`, 93 of the 357) standalone: 28/28 passed, 0 failures;
+  the remaining 1 failure and 43 `too_many_connections` errors landed in the
+  same partition, consistent with the documented ISS-0110 pool-exhaustion
+  pattern under concurrent `mix test` sessions. The changed test file itself
+  appears in no failure listing anywhere.

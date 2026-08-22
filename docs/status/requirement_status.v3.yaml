@@ -267,3 +267,33 @@ history:
       re-derived all nine criteria and the test attribution from scratch
       (not trusting this run's own reports) -- PASS. Status flipped
       pending -> done here.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-22T10:13:48Z"
+    note: >
+      WF03-ISS0264-20260822 (queue task 264, GH#520) done. Fixed
+      test/mix/tasks/letflow_check_deferral_staleness_test.exs's
+      T-LIVE-ACTIVITY test, whose hardcoded active/inactive stage literal
+      went stale once S8/S9 became genuinely active tonight (real
+      REQ-115..139 requirements registered, some done/in_progress).
+      Detector logic (lib/mix/tasks/letflow.check_deferral_staleness.ex) and
+      docs/requirements.yaml both unchanged -- test-data-only fix, per
+      CODE-DESIGNER's design (lib/letflow/design/iss0264-deferral-staleness-test-literal-update.md,
+      CODE-DESIGN-VALIDATOR PASS after one rework round correcting a
+      mis-cited mutant in the design's own supporting narrative). Chose to
+      keep the test pinned (not converted to the unpinned/derived T-ROSTER
+      pattern from ISS-0231), because ISS-0258's own design already ruled
+      this test a genuine MS2/MS3 discriminator, unlike T-ROSTER where
+      pinned and unpinned forms were equally discriminating. REVIEWER PASS
+      (scope: only the test file + design doc changed; SECURITY-REVIEWER out
+      of scope, no tenant-data path). TEST-DESIGNER/TEST-DESIGN-VALIDATOR
+      confirmed the existing test itself is the fail-then-pass regression
+      proof (pre-fix 56/57 with this test the sole failure, reproduced twice
+      independently; post-fix 57/57, confirmed three times). Full suite via
+      scripts/test_parallel.sh: 1360/1718 passed, 358 failures, all
+      structurally attributed to shared-host contention (~15 concurrent
+      sibling worktrees tonight) and not this branch -- git diff shows only
+      the two files above changed, and a standalone re-run of one heavily
+      affected file (registry_test.exs, 93 of the 358 failures) passed
+      28/28 clean.

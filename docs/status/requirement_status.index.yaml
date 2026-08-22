@@ -210,7 +210,7 @@ volumes:
     path: docs/status/requirement_status.v3.yaml
     status: current
     opened: 2026-08-22
-    entries: 3
+    entries: 4
     note: >
       Opened by ISS-0263's roll (WF03-ISS0263-20260822), successor to volume 2.
       Created with volume 2's header text verbatim (volume number, opening date
@@ -230,6 +230,16 @@ volumes:
       appending both events to v3.yaml instead, per the same "one run's
       started/done land one in each volume across a roll boundary" pattern
       ISS-0263's own entry above establishes.
+      Incremented to 4 by WF03-ISS0264-20260822 (ISSUE-FIXER)'s Step Final
+      rebase, which conflicted at requirement_status.v3.yaml's tail against
+      WF02-REQ128-20260822's own started+done pair (landed on main after this
+      run's Step 00 commit). Composed both sides in chronological `at:` order
+      -- REQ-128 started (09:26:00Z), REQ-128 done (10:04:09Z), ISS-0264 done
+      (10:13:48Z) -- no reordering needed since this run's own done-event
+      already sorted last. Recounted from the composed file per the
+      recount-every-time rule: 4 on-disk `- req:` entries in
+      requirement_status.v3.yaml (up from 3 declared pre-rebase and 2
+      computed by this run's own pre-rebase commit against its stale base).
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

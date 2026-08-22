@@ -285,6 +285,14 @@ defmodule Letflow.Routers.SolutionPacks do
   defp render_install(conn, {:error, {:blank_variable_key, _index}}),
     do: Response.unprocessable(conn, "variable_key must not be blank")
 
+  # Same echo convention as `:blank_variable_key` above, and for the same two
+  # reasons: the payload is an index into the caller's own document, and the
+  # offending key itself is unfit to echo -- it is by definition longer than
+  # the 255-byte column, so echoing it would put an unbounded caller-controlled
+  # blob into the response body. The limit is named instead.
+  defp render_install(conn, {:error, {:variable_key_too_long, _index}}),
+    do: Response.unprocessable(conn, "variable_key must not exceed 255 bytes")
+
   defp render_install(conn, {:error, :duplicate_pack_install}),
     do: Response.conflict(conn, "pack already installed")
 
@@ -312,6 +320,14 @@ defmodule Letflow.Routers.SolutionPacks do
 
   defp render_install(conn, {:error, %Ecto.Changeset{}}),
     do: Response.unprocessable(conn, "validation failed")
+
+  # `common_error()`'s tuple member. It is a NAMED member of `install_error()`,
+  # so by section 8.5's completeness rule it may not reach the last-resort
+  # clause below, even though both produce the same 500. It needs a clause of
+  # its own rather than an entry in the guard above, because that guard's
+  # `reason in [...]` list can only hold atoms and this member is a 2-tuple.
+  defp render_install(conn, {:error, {:transaction_failed, _exception}}),
+    do: Response.internal_error(conn)
 
   # Clause of last resort, for genuinely unexpected failures only. Every named
   # member of `install_error()` is mapped above; when that type gains a

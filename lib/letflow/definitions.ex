@@ -972,6 +972,11 @@ defmodule Letflow.Definitions do
   calling and map a decode failure onto their own error, never onto a
   half-decoded value passed through here.
   """
+  # The width of `variable_schemas.variable_key`
+  # (`priv/repo/migrations/20260821000002_create_variable_schemas.exs`, a
+  # `:string` column, i.e. `varchar(255)`).
+  @max_variable_key_bytes 255
+
   @type variable_schema_input :: %{
           required(:variable_key) => String.t(),
           required(:json_schema) => term(),
@@ -984,6 +989,7 @@ defmodule Letflow.Definitions do
           | :invalid_definition_id
           | {:duplicate_variable_key, String.t()}
           | {:blank_variable_key, non_neg_integer()}
+          | {:variable_key_too_long, non_neg_integer()}
           | {:not_well_formed, variable_key :: String.t(), path :: [String.t()]}
           | {:schema_too_deep, variable_key :: String.t()}
 
@@ -1009,7 +1015,16 @@ defmodule Letflow.Definitions do
     2. `entries == []` -> `{:ok, 0}`. (A pack with no `variable_schemas` array
        is normal, not an error.)
     3. A blank or whitespace-only `variable_key` at index `i` ->
-       `{:error, {:blank_variable_key, i}}`.
+       `{:error, {:blank_variable_key, i}}`; a `variable_key` at index `i`
+       longer than #{@max_variable_key_bytes} bytes ->
+       `{:error, {:variable_key_too_long, i}}`. The bound is the width of the
+       `variable_schemas.variable_key` column (`varchar(255)`), applied in
+       BYTES, which is the same conservative rule `create/2` applies to a
+       definition `name`: Postgres counts `varchar(n)` in characters, so a
+       byte bound can never admit a value the column would reject. Without
+       this check a caller-supplied pack document reaches the INSERT and
+       Postgres raises `Postgrex.Error` (SQLSTATE 22001) -- a bare 500 where
+       every comparable pack defect returns a typed 422.
     4. A `variable_key` duplicated **within `entries`** ->
        `{:error, {:duplicate_variable_key, key}}`, checked before any insert --
        the database's `uq_variable_schema_definition_key` would otherwise
@@ -1089,6 +1104,9 @@ defmodule Letflow.Definitions do
       cond do
         not is_binary(key) or String.trim(key) == "" ->
           {:halt, {:error, {:blank_variable_key, index}}}
+
+        byte_size(key) > @max_variable_key_bytes ->
+          {:halt, {:error, {:variable_key_too_long, index}}}
 
         MapSet.member?(seen, key) ->
           {:halt, {:error, {:duplicate_variable_key, key}}}

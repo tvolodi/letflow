@@ -281,8 +281,39 @@ defmodule Letflow.Routers.Instances do
     end
   end
 
+  # The bound stays in BYTES, because the column is `varchar(255)` and Postgres
+  # counts that in characters -- a byte bound can never admit a value the column
+  # would reject, while a grapheme bound would let a 255-grapheme multibyte key
+  # exceed it.
+  #
+  # Do NOT "simplify" this back to a bare `binary_part/3`. A header value is
+  # arbitrary caller-supplied bytes, so byte 255 can land inside a multibyte
+  # UTF-8 sequence and leave an invalid binary. Nothing downstream catches it:
+  # Ecto's `:string` cast does not reject invalid UTF-8, and
+  # `Letflow.EventStore.Event`'s `validate_length(:idempotency_key, max: 255)`
+  # counts graphemes. Postgres is the first thing to object, with
+  # `invalid byte sequence for encoding UTF8` -> `Postgrex.Error` -> a bare 500.
+  # `trim_to_codepoint_boundary/1` walks back at most 3 bytes to the last whole
+  # codepoint, so the result is both valid UTF-8 and still <= max_bytes.
   defp truncate(value, max_bytes) when byte_size(value) <= max_bytes, do: value
-  defp truncate(value, max_bytes), do: binary_part(value, 0, max_bytes)
+
+  defp truncate(value, max_bytes) do
+    value
+    |> binary_part(0, max_bytes)
+    |> trim_to_codepoint_boundary()
+  end
+
+  defp trim_to_codepoint_boundary(binary) when byte_size(binary) == 0, do: binary
+
+  defp trim_to_codepoint_boundary(binary) do
+    if String.valid?(binary) do
+      binary
+    else
+      binary
+      |> binary_part(0, byte_size(binary) - 1)
+      |> trim_to_codepoint_boundary()
+    end
+  end
 
   # ── Response allowlist (INV-2) ────────────────────────────────────────────
 

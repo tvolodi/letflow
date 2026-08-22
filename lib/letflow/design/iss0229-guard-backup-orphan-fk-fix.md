@@ -228,7 +228,7 @@ must not assert more than it can support.
 *Why the construction argument fails.* "A tenant's registry row is either in `tenant_schemas` or
 parked in the backup table, never both" is true, but it is an **instantaneous** invariant, and the
 reaper's decision is not instantaneous. `sweep_orphans/2` selects its entire candidate set in one
-query (`test/support/tenant_schema_reaper.ex:142-146`) and then iterates; `reclaim_row/2` issues
+query (`test/support/tenant_schema_reaper.ex:141-144`) and then iterates; `reclaim_row/2` issues
 its `DELETE FROM tenants` (line 231) potentially many rows later. A concurrent invocation's
 move-out can park an already-selected row inside that window. Line 230's `DELETE FROM
 tenant_schemas` then matches 0 rows and line 231 raises `23503` under the new FK. So the FK *can*
@@ -238,8 +238,9 @@ in principle block the reaper. The conclusion below survives; the reasoning is d
 
 1. **The precondition is near-eliminated by the reaper's own deferral.** Reaching that window at
    all requires a second `mix test` invocation to be mid-critical-section — and `sweep_orphans/2`
-   checks for exactly that first: `concurrent_invocation_present?/2` (line 128) hard-returns
-   `{:ok, %{reclaimed: 0, skipped_invalid_format: 0}}` and reaps nothing whenever another
+   checks for exactly that first: `concurrent_invocation_present?/2` (called at line 127, defined
+   at line 201) makes `sweep_orphans/2` hard-return `{:ok, %{reclaimed: 0,
+   skipped_invalid_format: 0}}` at line 136, reaping nothing whenever another
    invocation is connected (ISS-0110/ISS-0217's `application_name` tag). The sweep that could
    collide is precisely the sweep that does not run. The residual is the narrow race in which the
    other invocation connects *after* that check and reaches its move-out before this sweep's loop
@@ -527,12 +528,28 @@ and clean up any tenant it created." **That is wrong on two counts and must not 
   would be an `undefined function` compile error — precisely the module-nonexistence shape §5
   rules out — rather than the behavioural 23503 the fail-then-pass rule demands.
 
+**Registration order is mandated, not left to taste — it is what makes step 1 total.** Every
+test in the new block MUST, in this order: (i) generate **every** id it will ever seed —
+the orphan backup row's `id`, its absent `tenant_id`, the restorable row's `id`, and the real
+`Tenant`'s id — **before** issuing any DDL or DML; (ii) register its `on_exit` with that
+complete id list already captured in the closure; (iii) only then run the `DROP CONSTRAINT`
+and the seeding `INSERT`s. TEST-DESIGNER must not re-derive this. The failure it prevents is
+concrete: if ids are generated inline and `on_exit` is registered after seeding, a body that
+raises part-way through seeding leaves a row that step 1 does not target, step 4's validating
+`ALTER` then raises 23503 inside `on_exit`, and the constraint is left off with an orphan
+parked — exactly the state §5.1.1 exists to prevent. Generating ids first costs nothing
+(`Ecto.UUID.generate/0` touches no database) and makes the cleanup's coverage independent of
+how far the body got.
+
 **Mandatory cleanup, in this order, for every test in the new block** (including assertion 9's
 scenario, per §5.2):
 
-1. `DELETE FROM public.iss060_tenant_schemas_guard_backup WHERE id = ANY($1)` with the ids this
-   test seeded. A targeted `DELETE` on the *referencing* side is never FK-checked, so this cannot
-   raise regardless of what state the body left, and it removes only what this test created.
+1. `DELETE FROM public.iss060_tenant_schemas_guard_backup WHERE id = ANY($1)`, bound to the
+   **full pre-generated id list** from (i) above — not to whatever the body managed to insert. A
+   targeted `DELETE` on the *referencing* side is never FK-checked, so this cannot raise
+   regardless of what state the body left; passing ids that were never inserted is a harmless
+   no-op; and it removes only what this test could have created. This step is what guarantees the
+   backup table is empty before step 4, which is the precondition step 4's `ALTER` needs.
 2. `DELETE FROM public.tenant_schemas WHERE tenant_id = $1` for any real tenant the test created,
    **before** deleting the tenant itself — the same ordering the two existing ISS-0060 tests
    already use, for the same FK reason.
@@ -567,13 +584,27 @@ the test too. The demonstration is therefore:
    test violates §5.1.1's naming rule and must be rewritten, not worked around.
 3. Restore the §3 helper bodies and re-run the same command; the block passes.
 
-**Expected residue of the pre-fix run, and why nobody should hand-clean it:** in step 2 the
-cleanup's own step 4 also raises (pre-fix, `restore_orphaned_guard_backup_rows!/0` is exactly the
-function that cannot survive an orphan), so the seeded orphan is left in the backup table with no
-constraint — i.e. the same shape as the state ISS-0229 was filed for. That is self-correcting by
-design: step 3's first run heals it via §6's exact path and then converges the constraint. Do not
-`DELETE` it by hand; doing so would discard the best available end-to-end confirmation that §6
-works.
+**The pre-fix run leaves no residue — stated explicitly, because an earlier draft of this
+paragraph claimed the opposite and was wrong.** That draft said the cleanup's step 4 also raises
+pre-fix and so leaves the seeded orphan parked with no constraint. Both clauses are false *by
+§5.1.1's own design*: `on_exit` runs after the body raises, and **step 1** removes the seeded
+orphan by id — which is precisely what step 1 exists for, and which §5.1.1 states cannot raise
+regardless of what state the body left. The backup table is therefore **empty** by the time step
+4 runs, so pre-fix step 4 executes the old CTE over zero rows, inserts nothing and returns `:ok`.
+Correct end state of the pre-fix run: **no orphan and no constraint** — the database's ordinary
+pre-fix shape — and step 3's run then converges the constraint. Nothing is left for anyone to
+hand-clean, and any reading on which step 1 does *not* remove the orphan is a misreading that
+would reinstate the raising `on_exit` §5.1.1 was written to eliminate.
+
+**Where §6's end-to-end confirmation actually comes from, then.** Not from this test — the
+regression test deliberately cleans up after itself, so it cannot double as evidence that the
+self-heal converges a genuinely poisoned database. That evidence comes independently, from the
+**live orphan currently sitting in `letflow_test`** (`75163622-df56-481e-977d-9efd35d659fb`,
+§1): the first post-fix run of this file heals and discards it via §6's exact path, with the
+`Logger.warning/1` naming it in the run output. TEST-RUNNER should capture that log line as the
+§6 confirmation. It is a one-shot observation — once healed, the state is gone — so it must be
+recorded on the first post-fix run rather than reconstructed later, and the orphan must not be
+deleted by hand before then.
 
 ### 5.2 What must be asserted
 

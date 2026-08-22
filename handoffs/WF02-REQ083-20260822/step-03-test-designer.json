@@ -1,0 +1,65 @@
+{
+  "handoff_id": "9d3a7c1e-4b6f-4a2d-8e5c-1f7b9a0d3c62",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ083-20260822/step-03-test-designer.json",
+  "created_at": "2026-08-22T06:16:04Z",
+  "started_at": "2026-08-22T06:16:04Z",
+  "completed_at": "2026-08-22T06:16:04Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ083-20260822/step-00-git-setup.json",
+      "handoffs/WF02-REQ083-20260822/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/tasks.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/design/req083-task-routes-read.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 3 -- test design for REQ-083's read path (GET /tasks, GET /tasks/inbox, GET /tasks/:id), following the scope test in WF-02_requirement_implementation.md Step 3. Real application-executable surface exists (lib/letflow/tasks.ex context module, lib/letflow/routers/tasks.ex router) so the full test-design procedure applies, not the docs-only skip.",
+    "acceptance_criteria": [
+      "test/specs/REQ-083.md written with criterion, test case(s), and rationale (not a restatement) for every acceptance criterion",
+      "AC1: all three handlers tested end-to-end through the real router; list and inbox cursor-paginated across at least two pages",
+      "AC2: inbox returns direct/group/role-assigned tasks and never a different user's task -- four explicit assertions",
+      "AC3: cross-tenant task id returns response identical to nonexistent id (status AND body)",
+      "AC4: tenant A sees no tenant B task even with identically-named nodes",
+      "AC5: full response key-set asserted (not just presence)",
+      "AC6: documentation-only, no test required (confirmed already verified by REVIEWER)",
+      "AC7: caller without TasksRead gets 403 on all three endpoints",
+      "ROLE-resolution rework path (the :prefix-scoped TenantRole query) specifically exercised, including a cross-tenant no-leak case",
+      "No test depends on wall-clock time or unseeded randomness",
+      "Tests actually run and pass against the real implementation"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read the full REQ-083 requirement text (step-00 handoff), the post-rework1 design doc (lib/letflow/design/req083-task-routes-read.md), the shipped implementation (lib/letflow/tasks.ex, lib/letflow/routers/tasks.ex), REVIEWER's Step 2d PASS handoff, and lib/letflow/api/authorization.ex's role/permission matrix (is_task_worker_only?/1, role_allows?/2) to determine exactly which role shape (TASK_WORKER only, no PLATFORM_ADMIN/DESIGNER/OPERATOR) is required to reach the AllowWithRowFilter/principal-scope branch under test.\n\nAlso read test/letflow/routers/identity_test.exs in full as the established convention for this test class (per this run's own dispatch instructions) and matched its shape exactly: Letflow.DataCase real-Postgres tests, Letflow.TenantFixture.provisioned_tenant!/1 for real tenant schemas, direct Letflow.Routers.Tasks.call/2 dispatch with conn.assigns[:auth_context] set manually (bypassing AuthPipeline, since no OIDC token double can mint a non-VIEWER role), same insert_*! fixture-helper shape, same cross-tenant-identical-404 idiom (asserting status AND resp_body bytes), same full-Map.keys()-sorted-equality discipline for the allowlist AC.\n\nWrote test/specs/REQ-083.md (AC -> test-case mapping with 'why this test exists' rationale for each, not a restatement of the criterion -- e.g. AC1's pagination cases are motivated by the specific page_size+1/has_next off-by-one risk in list_tasks/2 §3.1 points 5-9, AC2's role-inclusion case is motivated by the design's own statement that R-Co's shipped listCursor has NO role arm at all, and AC5 is motivated by 'contains N expected keys' being insufficient to catch an unintended extra key).\n\nWrote test/letflow/routers/tasks_test.exs (23 tests). Built insert_task!/2, a fixture helper that constructs the mandatory FK chain (instance_projections -> tokens -> tasks, per priv/repo/migrations/20260818110003_create_tasks.exs's two references/2 columns) via each schema's own insert_changeset/2, plus insert_user!/insert_group!/insert_group_member!/insert_role! helpers (insert_role!/3 writes directly to the :prefix-scoped Letflow.Identity.TenantRole table, mirroring the design's own rework-1 fix rather than going through RoleRegistry.upsert_role/2 which is unprefixed and would write to the wrong -- or no -- schema in a multi-tenant test).\n\nCoverage: AC1 (GET /tasks/:id e2e, GET /tasks 2-page cursor pagination, GET /tasks/inbox 2-page cursor pagination for an operator's whole-queue scope) -- AC2 (inbox for a TASK_WORKER-only caller: 4 explicit assert/refute lines for direct/group/role inclusion and different-user exclusion, plus an EXTRA test beyond the named AC specifically targeting the reworked resolve_principal_scope/2 path: a role of the same name bound to a group in a DIFFERENT tenant does not leak a role-assigned task into the caller's own-tenant inbox -- this is the one scenario an unscoped RoleRegistry.list_roles/0 call, the pre-rework design, would have silently leaked) -- AC3/INV-5 (cross-tenant vs nonexistent id: status AND resp_body byte-identical) -- AC4/INV-1 (two tenants, both seeded with a task on an identically-named node, tenant A's list contains only its own task) -- AC5/INV-2 (full sorted key-set assertion for both the 9-key list-item shape and 10-key detail shape, plus individual refute Map.has_key?/2 checks for each of the design's named exclusions: claimed_by, form_schema, output_variables, completed_by, completed_at, cancelled_at) -- AC6 (no test written; per this run's own dispatch instructions and REVIEWER's step-02d finding 6, already confirmed against the real moduledoc text, a pure documentation criterion) -- AC7 (403 on all three endpoints for a no-roles caller, plus a 4th test for AGENT_RUNNER -- a real recognized role that role_allows?/2 grants zero permissions to, distinguishing 'wrong role' denial from 'no role' denial).\n\nAdditional non-AC-named but design-load-bearing coverage: route-match ordering (/inbox not swallowed by /:id), the router's OWN 400-vs-R-Co's-422 divergence for status/instance_id/malformed-id (explicitly NOT copying identity_test.exs's 400-for-cursor precedent, since this router's handle_list_result/2 maps :invalid_cursor to Response.unprocessable/2 (422), not bad_request/2 (400) -- verified this by reading the router source directly rather than assuming parity with Identity), the assignee_id filter for an :all-scope caller, INV-2 (a task-worker's row scope is never widened by a caller-supplied assignee_id naming a different user -- tested directly on GET /tasks, not only inferred from the inbox test), a status filter case, a genuinely-nonexistent-id 404 (distinct from AC3's cross-tenant case), and the router's own RFC 9457 catch-all for an unmatched sub-path.\n\nNo test depends on wall-clock time or unseeded randomness -- every id is Ecto.UUID.generate/0, and the pagination tests' ordering relies on each row's own real DB-assigned inserted_at from sequential inserts, not a frozen or derived clock.\n\nRan the suite for real: `mix test test/letflow/routers/tasks_test.exs` -- fixed two real failures found during this run (not merely written and assumed correct): (1) the first AC2 draft used bare Ecto.UUID.generate() strings for user_x/user_y, which raised Ecto.ConstraintError on group_members_user_id_fkey since GroupMember.user_id has a real FK to users -- fixed by inserting real Letflow.Identity.User rows first; (2) @task_detail_keys was built as an unsorted list concatenation compared against a caller-sorted actual value -- fixed by wrapping the expected list in Enum.sort/1 too. Final run: `Result: 23 passed`, 0 failed. Also ran `mix compile --warnings-as-errors` -- clean, no warnings.",
+    "artifacts_out": [
+      "test/specs/REQ-083.md",
+      "test/letflow/routers/tasks_test.exs"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ083-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ083-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

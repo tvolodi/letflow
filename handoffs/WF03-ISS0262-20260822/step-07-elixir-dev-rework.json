@@ -1,0 +1,52 @@
+{
+  "handoff_id": "8d77d0ed-ecb7-4fb5-bb7d-d3c613176d20",
+  "run_id": "WF03-ISS0262-20260822",
+  "workflow_id": "WF-03",
+  "step": "07",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0262-20260822/step-07-elixir-dev-rework.json",
+  "created_at": "2026-08-22T08:55:06Z",
+  "started_at": "2026-08-22T08:55:06Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "handoffs/WF03-ISS0262-20260822/step-06-issue-fixer-rework.json"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1 -- extend @grandfathered in lib/mix/tasks/letflow.lint_handoffs.ex with exactly 2 new entries, per ISSUE-FIXER's confirmed diagnosis in step-06-issue-fixer-rework.json: {\"H6\", \"handoffs/WF03-ISS0261-20260822/step-01-issue-fixer.md\"} and {\"H6\", \"handoffs/WF03-ISS0261-20260822/step-03c-reviewer.md\"}. Follow the exact same shape and dated-comment convention as the existing 10-entry block added for WF03-ISS0258-20260822 (same file, same @grandfathered list). Run mix compile --warnings-as-errors and mix letflow.lint_handoffs for real afterward and quote output confirming 0 new violations, 18 grandfathered total. Then, once this passes, this branch is ready for git-merge to be re-attempted from GIT_MERGE.md step 5 (rebase check, since main may have moved again) -- but do NOT run Step Final yourself; ORCH will dispatch that as a separate step once you report back.",
+    "acceptance_criteria": [
+      "@grandfathered gains exactly 2 new {\"H6\", <path>} entries matching ISSUE-FIXER's confirmed file list, no more no fewer",
+      "mix compile --warnings-as-errors clean",
+      "mix letflow.lint_handoffs run for real, output quoted, 0 new violations, 18 grandfathered (16 prior + 2 new)",
+      "Completion commit pushed to feature/WF03-ISS0262-20260822"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

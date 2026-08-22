@@ -1,0 +1,63 @@
+{
+  "handoff_id": "e3f7a2c9-4b8d-4e1a-9c6f-7d2b5a0e8f31",
+  "run_id": "WF02-REQ083-20260822",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "DOC-UPDATER",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ083-20260822/step-06-doc-updater.json",
+  "created_at": "2026-08-22T06:33:39Z",
+  "started_at": "2026-08-22T06:33:39Z",
+  "completed_at": "2026-08-22T06:33:39Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-083"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ083-20260822/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v2.yaml",
+      "docs/migration/stage-4-api-surface.md",
+      "README.md",
+      "handoffs/WF02-REQ083-20260822/step-05-release-validator.json",
+      "handoffs/WF02-REQ083-20260822/step-02d-reviewer.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 6 (documentation update) for REQ-083, per docs/agents/workflows/WF-02_requirement_implementation.md's Step 6 procedure: flip REQ-083's status to done, append the run-history done event, update README.md only if documented behavior changed, and check docs/migration/stage-4-*.md for a per-requirement tracking entry.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-083 status: in_progress -> done",
+      "one done event appended (never rewritten) to the current run-history volume, with a real UTC clock timestamp",
+      "git diff --numstat on the run-history volume shows 0 deletions",
+      "README.md updated only if it documented the task-routes API surface (checked directly, it did not)",
+      "docs/migration/stage-4-api-surface.md checked for a REQ-083 tracking entry gap and the finding stated explicitly"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Flipped docs/requirements.yaml's REQ-083 entry (line 4725) status: in_progress -> done. Appended one `done` event for REQ-083 to the current run-history volume (docs/status/requirement_status.v2.yaml, index confirmed via `grep -n 'status: current' -B 2 docs/status/requirement_status.index.yaml` before writing), timestamped 2026-08-22T06:33:39Z from the clock (`date -u`). Read the full current volume before appending (1051 lines / 69,863 bytes, both well under the roll-rule ceilings) per the header's HOW-TO-APPEND procedure. `git diff --numstat docs/status/requirement_status.v2.yaml` after the append showed `44\t0` -- 44 insertions, 0 deletions, confirming append-only. Re-read the tail of the file to confirm the note text landed intact (no backtick/command-substitution loss). Post-append the volume measures 1095 lines / 72,662 bytes, still under the roll rule's 1200-line/120,000-byte ceilings, so no volume roll was needed this run. Updated docs/status/requirement_status.index.yaml's volume-2 `entries:` count 31 -> 32 to match the new on-disk count (`grep -c '^  - req:'` = 32) in the same commit, per the header's step 6.\n\nREADME.md check: `grep -n -i \"task\" README.md` returns exactly one hit (line 140, an unrelated sentence about scripts/test_parallel.sh not being a mix task). No task-routes HTTP API surface, endpoint table, or 'Running it' section text is documented there for this change to update -- no README edit made.\n\ndocs/migration/stage-4-api-surface.md check: REQ-083 appears only in the requirements list at line 24 (a plain enumeration, not a tracking table/checklist). No REQ-083 acceptance criterion names this file or any docs/migration/decisions/*.md file (confirmed by re-reading docs/requirements.yaml's REQ-083 entry, lines 4722-4758). The file's own header states it deliberately keeps no per-requirement status snapshot, docs/requirements.yaml being the sole authority (ISS-0022's fix). Checked whether REVIEWER's Step 2d added a dated sign-off entry here the way it did for REQ-074/REQ-075 (grep for 'REQ-083' under the '## REVIEWER sign-off' section: no hit) -- REVIEWER's REQ-083 Step 2d PASS (handoffs/WF02-REQ083-20260822/step-02d-reviewer.json) recorded its finding only in the handoff file, which is consistent with REQ-073's identical precedent (that run's own done-event note states 'no REQ-073 acceptance criterion names this file... no edit made there'). Not every route requirement in this batch gets a dated stage-4 entry -- only the ones REVIEWER itself chose to record one for (REQ-065, REQ-071, REQ-072, REQ-074, REQ-075's Step 1c). No gap found to flag; no edit made to this file.\n\nNo docs/migration/decisions/*.md file was named by REQ-083's acceptance criteria (verified directly against the requirement text), so that check is N/A here.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v2.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ083-20260822/step-06-doc-updater.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ083-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ083-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV for Step Final"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

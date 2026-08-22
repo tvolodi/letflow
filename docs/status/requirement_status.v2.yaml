@@ -1096,6 +1096,51 @@ history:
       requirement's own text calls out as a real authorisation risk distinct
       from cross-tenant leakage (INV-1, INV-2, INV-5).
 
+  - req: REQ-083
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-22T06:33:39Z"
+    note: >
+      Shipped the read half of the S4 task-routes surface: Letflow.Tasks
+      (lib/letflow/tasks.ex, list_tasks/2, get_task/2,
+      resolve_principal_scope/2) and Letflow.Routers.Tasks
+      (lib/letflow/routers/tasks.ex, GET /tasks, GET /tasks/inbox,
+      GET /tasks/:id), replacing the REQ-070 stub, plus one additive
+      Letflow.Api.Authorization.endpoint_policy_key/2 clause for
+      GET /tasks/inbox -> :TasksList. handleInbox resolves a second
+      scoping dimension on top of REQ-072's tenant prefix -- USER/GROUP/ROLE
+      assignee_type per REQ-047, via Letflow.Identity, not reimplemented.
+      Gate chain, two rework cycles: Step 1/1b design reworked once,
+      Step 2a/2c (SECURITY-REVIEWER) reworked once, Step 2d REVIEWER PASS
+      (idiom, no supervision touch, no scope creep on the additive
+      Authorization clause, confirmed the design doc's InstanceProjection
+      module-name divergence is naming-only and AC6's moduledoc boundary
+      claim is accurate against the real file), Step 3/3b TEST-DESIGN-VALIDATOR
+      PASS, Step 4 TEST-RUNNER PASS. Step 5 RELEASE-VALIDATOR PASS
+      (handoffs/WF02-REQ083-20260822/step-05-release-validator.json):
+      independent scripts/test_parallel.sh re-run 1606/1606 clean (N=16),
+      all 7 acceptance criteria independently confirmed directly against
+      lib/letflow/tasks.ex, lib/letflow/routers/tasks.ex and
+      test/letflow/routers/tasks_test.exs. A Letflow.EngineConcurrencyTest
+      timing flake TEST-RUNNER saw was re-derived structurally (route 1,
+      git diff --name-only origin/main...HEAD contains no engine/
+      InstanceProjection file, and lib/letflow/tasks.ex itself has no
+      Engine/process/GenServer reference) as unrelated to this branch and
+      is already filed as ISS-0260/GH#507 -- not fixed here, not this
+      run's regression. docs/migration/stage-4-api-surface.md checked
+      directly: REQ-083 appears only in the requirements list (line 24),
+      no acceptance criterion names this file or any
+      docs/migration/decisions/*.md file, the doc's own header states it
+      deliberately keeps no per-requirement status snapshot
+      (docs/requirements.yaml is the authority, per ISS-0022), and unlike
+      REQ-074/075's REVIEWER sign-off entries, Step 2d's REVIEWER pass here
+      recorded its finding only in the handoff file -- consistent with
+      REQ-073's identical precedent (no AC requires it), so no gap to flag
+      and no edit made there. README.md checked directly (grep -i "task"):
+      the sole hit is an unrelated line about scripts/test_parallel.sh not
+      being a mix task -- no task-routes API surface is documented there,
+      so no README update needed.
+
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH

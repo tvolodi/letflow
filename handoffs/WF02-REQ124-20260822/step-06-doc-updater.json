@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ124-20260822/step-06-doc-updater.json",
   "created_at": "2026-08-22T12:03:12Z",
   "started_at": "2026-08-22T12:03:12Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-22T12:05:48Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -43,19 +43,24 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "REQ-124 flipped pending/in_progress -> done in docs/requirements.yaml. Shipped: Letflow.Routers.MobileTenantConfig at GET /api/mobile/tenant-config (unauthenticated, mounted on Letflow.Router ahead of Letflow.Plugs.ApiPipeline/AuthPipeline, mirroring REQ-078's Letflow.Routers.TenantConfig precedent), hand-built 5-field response allowlist (realm_url/locales/default_locale/branding/environment_kind), shared safe_get_tenant_by_slug/2 hoisted onto Letflow.Identity (shared with the existing 2-field web-SPA endpoint after a REVIEWER-driven rework). This is the MOB-2 gate for build-order.md phase M-0 -- checked build-order.md and it names no per-requirement tracked checklist item (M-0's row is a structural dependency table, not a checklist), so left unchanged. One incidental issue, ISS-0273 (lint_handoffs H6 floor-commit regression), was filed during this run and is forwarded, not fixed here. Appended a 'done' event to requirement_status.v3.yaml (current volume per the index), verified insertions-only via git diff --numstat (27/0), re-read the tail to confirm content, and incremented the index's volume-3 entries: count from 7 to 8 (real on-disk count) with a matching narrative note, in the same commit. Also updated README.md's stale 'Router now serves only GET /health' claim to reflect the real current route table (tenant-config, mobile tenant-config, CORS), since it directly concerns the router this requirement changed.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v3.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "README.md"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ124-20260822",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to ELIXIR-DEV for Step Final"
   },
   "rework_count": 0,
   "max_rework": 3

@@ -460,6 +460,33 @@ history:
       mix compile and the router test file itself, confirmed web/ untouched
       and no migration added -- PASS. Status flipped pending -> done here.
       No FAIL-then-fix cycles -- every gate passed on first attempt.
+  - req: REQ-124
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-22T12:04:29Z"
+    note: >
+      WF02-REQ124-20260822 (queue task 236, GH#474, stage S9) done. Added
+      Letflow.Routers.MobileTenantConfig at GET /api/mobile/tenant-config
+      (unauthenticated, mounted on Letflow.Router ahead of
+      Letflow.Plugs.ApiPipeline/Letflow.Plugs.AuthPipeline, mirroring
+      REQ-078's Letflow.Routers.TenantConfig precedent). Hand-built
+      5-field response allowlist (realm_url/locales/default_locale/
+      branding/environment_kind) -- an exact-shape assertion, not a
+      subset check, per the acceptance criteria. Shared
+      safe_get_tenant_by_slug/2 hoisted onto Letflow.Identity, now shared
+      with the existing 2-field web-SPA endpoint after a REVIEWER-driven
+      rework. Unknown-slug behaviour decided, tested, and justified
+      against tenant-enumeration risk in the moduledoc; every other
+      route under Letflow.Plugs.ApiPipeline confirmed still to require
+      authentication via a test that would fail if the exemption were
+      pipeline-wide. This is the MOB-2 gate for the mobile tier's
+      build-order phase M-0 (docs/mobile/build-order.md) -- checked that
+      file for a tracked checklist item naming REQ-124/MOB-2 to close;
+      it has none (M-0's row is a structural dependency table, not a
+      per-requirement checklist), so build-order.md was read but left
+      unchanged. One incidental issue, ISS-0273 (lint_handoffs H6
+      floor-commit regression), was filed during this run and is NOT
+      fixed here -- forwarded as separate, queued work.
   - req: REQ-129
     event: done
     agent: ELIXIR-DEV

@@ -49,7 +49,7 @@
     ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0262-20260822",
-      "commit_sha_list": ["fc205c3", "fd2e35d"],
+      "commit_sha_list": ["fc205c3", "00d0252"],
       "remote_branch": "origin/feature/WF03-ISS0262-20260822 (NOT updated -- rebase performed locally onto 96ac42f, 46 commits replayed, but push was never attempted since step 5d failed first; local and remote have diverged: 51 local vs 45 remote commits per git status)",
       "push_status": "not attempted (step 5d failed before step 6)",
       "pr_url": null,

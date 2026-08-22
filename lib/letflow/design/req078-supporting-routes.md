@@ -115,7 +115,7 @@ half-built `install/3` would produce exactly the half-built write path AC8 exist
 |---|---|---|
 | `docs/requirements.yaml` | REQ-078 entry in full (description + all **eight** acceptance criteria + `depends_on`) | §1, §12 |
 | `lib/letflow/routers/tenants.ex` | 1–117 (moduledoc), **181–194** (`with_authorization/4`), 356–381 (response allowlist) | §3.1 exemplar, §4 |
-| `lib/letflow/routers/identity.ex` | 1–108 (moduledoc), **187–213** (`with_authorized_scope/4`), 586–637 (map builders) | §3.1 exemplar, §4 |
+| `lib/letflow/routers/identity.ex` | 1–108 (moduledoc), **187–213** (`with_authorized_scope/4`), **585–638** (map builders) | §3.1 exemplar, §4 |
 | `lib/letflow/routers/{audit,metrics,tenant_config,validation}.ex` | 1–12 each (the four reserved stubs) | §2 |
 | `lib/letflow/routers/{instances,definitions}.ex` | 1–12 each (empty stubs, "Routes added by REQ-079/080" and "REQ-081/082") | §2.3, §2.5 |
 | `lib/letflow/plugs/api_pipeline.ex` | 16–26 (deferred-plug table), 32–37 (chain), **39–49** (the eleven forwards) | §2, §11 |
@@ -124,20 +124,20 @@ half-built `install/3` would produce exactly the half-built write path AC8 exist
 | `lib/letflow/api/context.ex` | **232 lines total.** `scoped_repo_opts/1` — `@spec` **211**, `def` **213**; INV-5 moduledoc heading **66**; AC6 no-tenant-arg heading **48**; `:pipeline_run_id` reservation 21–27 and its assigns-table row **97**; `assign_trace_id/1` `@spec` 155 / `def` 156; `generate_trace_id/0` 167–168 | §3.2, §5 |
 | `lib/letflow/api/response.ex` | **188 lines total.** Content-type constants **56–57**; `send_json/3` 68–69; `ok/2` 76–77; `send_problem/2` 110–111; `bad_request/2` 120–121; `forbidden/2` 131–132; `not_found/1` 141–142; `conflict/2` 145–146; `unprocessable/2` 161–162; `internal_error/1` 177–178 | §6 error maps |
 | `lib/letflow/api/error.ex` | `@problems_base` **55** (private compile-env attr); `defstruct` **65**; `@type t` **85**; `serialise/1` clauses **104** (`errors: nil`) and **110** (`errors: [_\|_]`); `unprocessable/1` `def` **214** | §6.2 |
-| `lib/letflow/api/pagination.ex` | 43–56 (`Cursor`), 59–78 (`Page`), 111–113, 133–135, 153–154, 164–165, **188–194** (`decode_cursor/4`), 268–269 (`build_raw_cursor/3`) | §6.1 |
+| `lib/letflow/api/pagination.ex` | 43–57 (`Cursor`), 59–75 (`Page`), 111–113, 133–135, 153–154, 164–165, **188–194** (`decode_cursor/4`), 268–269 (`build_raw_cursor/3`) | §6.1 |
 | `lib/letflow/api/validation.ex` | `FieldConstraint` defmodule 1, `FieldError` defmodule 40; `validate/2` `def` **190**; `problem/1` `def` **225** — the `%{Error.unprocessable(…) \| errors: …}` idiom §7.3 must use | §6, §7, §8 |
 | `lib/letflow/api/authorization.ex` | **227** (`endpoint_policy_key("GET", "/audit") -> :AuditRead`), **232** (`("GET","/metrics") -> :MetricsRead`), **265** (catch-all `_,_ -> :Unknown`), `evaluate_access/2` `def` **272** with the `:Unknown` PLATFORM_ADMIN-only branch at **274** and the `:MetricsRead` unconditional-Allow short-circuit at **281**, 336 (`required_permission(:AuditRead)`), 366–397 (`role_allows?/2` matrix; `:PROCESS_OPERATOR` holds `:AuditRead` at 388) | §4, §5 |
-| `lib/letflow/event_store.ex` | **726–741** (`read_global_opts`/`read_global_result`/`read_global_error`), **759–761** (`read_global/1` `@spec`), 903–907 (`clamp_read_global_limit/1`) | §6.1 |
+| `lib/letflow/event_store.ex` | **726–741** (`read_global_opts`/`read_global_result`/`read_global_error`), **759–760** (`read_global/1` `@spec`), **761** (`def`), 903–907 (`clamp_read_global_limit/1`) | §6.1 |
 | `lib/letflow/event_store/event.ex` | **79–90** (the `events` schema field list) | §6.1 field mapping |
 | `lib/letflow/definitions.ex` | 400 (`create/2`), 424 (`get_by_id/2`), 466 (`list/2`), 250/254 (`compute_pack_update_plan/5`), 107–210 (types). **Zero occurrences of `variable_schema` in this file** | §7, §8, §9 |
 | `lib/letflow/definitions/graph.ex` | `Node` defstruct 80, `Edge` defstruct 99; `Violation` defmodule **110**, its `defstruct [:code, :message]` **119**, its `@type code` union **121**; `Graph` defstruct 161; `from_map/1` 190/201; `validate_graph/1` `@spec` **288**/`def` **289**; `validate_node_attributes/1` **317**; `validate_edge_conditions/1` **343** | §7 |
 | `lib/letflow/definitions/service_scope_validator.ex` | 162 (`build/1`), **184** (`validate/3`) | §7 (deliberate non-call) |
-| `lib/letflow/definitions/solution_pack_install.ex` | 60–72 (schema), **83** (`insert_changeset/2`) — **the only public function; no export/install engine here** | §8, OQ-1 |
-| `lib/letflow/definitions/solution_pack_artefact_base.ex` | 50 (schema), 100 (unique constraint) | §8 |
-| `lib/letflow/definitions/pack_update_resolution.ex` | 56–71 (schema), 84 (`insert_changeset/2`) | §8 |
-| `lib/letflow/definitions/export_import.ex` | 33 (`@export_schema_version "bpm/definition/v1"`), 35–62 (`ExportDocument`), 65–72 (error types), **87** (`export/2`), **120** (`import/3`) | §8 |
+| `lib/letflow/definitions/solution_pack_install.ex` | 60–69 (schema), **83** (`insert_changeset/2`) — **the only public function; no export/install engine here** | §8, OQ-1 |
+| `lib/letflow/definitions/solution_pack_artefact_base.ex` | 50 (schema), **99** (unique constraint) | §8 |
+| `lib/letflow/definitions/pack_update_resolution.ex` | 56–69 (schema), 84 (`insert_changeset/2`) | §8 |
+| `lib/letflow/definitions/export_import.ex` | 33 (`@export_schema_version "bpm/definition/v1"`), **35–63** (`ExportDocument`), 65–72 (error types), **87** (`export/2`), **120** (`import/3`) | §8 |
 | `lib/letflow/engine/pin_rebind.ex` | `@type rebind_attrs` **100** (requires `:idempotency_key`), `@type rebind_result` **116**, plus the `rebind_error()` union; `rebind_pins/3` `def` **162** — the module's only public function | §10 |
-| `lib/letflow/engine/pin_resolver.ex` | 179 (`kind()`), 199–205 (`override_entry()`), 284–290 (`default_lookup/0` + the `json_schema: nil` stub) | §10 |
+| `lib/letflow/engine/pin_resolver.ex` | 179 (`kind()`), **205–210** (`override_entry()`; 199–204 is its `@typedoc`), 284–290 (`default_lookup/0` + the `json_schema: nil` stub) | §10 |
 | `lib/letflow/engine/variable_schema.ex` | `schema "variable_schemas"` **122**; `changeset/2` `def` **164** (its `@doc` above carries the OQ-3 warning §9.4 must rewrite); `fetch_schemas/3` `@spec` **257**/`def` **262** — the ISS-0089 site; `validations_for/3` `def` **332** and its `{:ok, _not_a_map}` clause **342**; the "registration path is deferred" moduledoc section 56–82 | §9 |
 | `lib/letflow/event_store/registry/json_schema.ex` | 32 (`validate/2`, the only public fn), **146–173** (`properties_violations/3` — **already carries the ISS-0088 `is_map(subschema)` guard**) | §9 |
 | `lib/letflow/event_store/instance_projection.ex` | **124–128** (`instance_projections` schema, `status` enum `[:active, :completed, :cancelled, :error]`), 132 (`definition_id`) | §11 |
@@ -145,7 +145,7 @@ half-built `install/3` would produce exactly the half-built write path AC8 exist
 | `lib/letflow/definitions/process_definition.ex` | **91–94** (`status` enum `[:draft, :active, :deprecated, :archived]`) | §11 |
 | `lib/letflow/identity.ex` | 128 (`resolve_tenant_by_realm/1`), 145 (`resolve_realm_by_tenant/1`), **627** (`get_tenant_by_slug/1`), 582/609/641/661/668 | §12 |
 | `lib/letflow/tenant_provisioning.ex` | **166** (`schema_name_for_tenant/1`), **195/208** (`tenant_id_for_schema_name/1`), `tenant_scoped_migrations/0` `def` **500**, variable_schemas manifest entry 426–427 | §5, §9 |
-| `lib/letflow/oidc/claim_mapping_config.ex` | 20–54 (struct), 57 (`for_realm/1`), 88 (`default/1`) | §12 (deliberate non-use) |
+| `lib/letflow/oidc/claim_mapping_config.ex` | **25–49** (struct), 57 (`for_realm/1`), 88 (`default/1`) | §12 (deliberate non-use) |
 | `lib/letflow/design/req070-router-decomposition.md` | 100–140 (sub-router roster + module template), 202–205 (the four forwards) | §2 |
 | `lib/letflow/design/req109-variable-schemas.md` | 78–184 (migration/schema/changeset), §11.3 OQ-3 | §9 |
 | `docs/issues/ISS-0089.yaml` | full (`status: open`, GH#306, both candidate resolutions) | §9.4 |
@@ -157,7 +157,7 @@ half-built `install/3` would produce exactly the half-built write path AC8 exist
 | `web/src/auth/tenantConfig.ts` | 40–52 (the `/api/tenant-config` call with `realm`-or-`host` params) | §12 |
 | `web/src/api/metrics.ts` | 126–128 (`client.getText('/metrics')`, Prometheus text) | §11, OQ-6 |
 
-### ⚠ Citation-integrity note — how the first draft's line numbers went wrong, and what changed
+### ⚠ Citation-integrity note — applies to BOTH tables (Letflow above, R-Co below)
 
 The first draft of this table cited `router.ex`, `context.ex` and `response.ex` with line
 numbers **past end-of-file** (e.g. "`context.ex` 116–347" for a 232-line file). Caught by
@@ -170,35 +170,58 @@ boundaries — giving constant offsets of **+60** for `router.ex`, **+115** for 
 is why every *substantive* claim was still correct: the text was read accurately, only the
 coordinates were mislabelled.
 
-**Every citation in this table has since been re-derived with per-file `grep -n`**, and cites
-a **single anchor line** (the `def`, `@spec`, `defstruct` or heading) rather than a range
-wherever one exists, so a reviewer can verify any of them with one `sed -n 'Np'`.
+**Round 2 correction, and it matters more than the original defect.** The first remediation
+claimed "every citation in this table has since been re-derived". That was true of the
+**Letflow** table above and **false of the R-Co table below it**, which had not been touched —
+and it still contained a past-EOF citation of exactly the F6 kind (`tenant_config.zig:235` in a
+207-line file, cited in §12.1 for the `bpm-default` constant that is really at **62**). Same
+mechanism, same cause: `tenant_config.zig` had been read in one `cat -n` after
+`validation.zig`. **Restating a remediation claim more broadly than the work performed is worse
+than the original error**, because it converts a checkable defect into a false assurance. The
+claim below is now scoped to what was actually done, and the work has been done on both sides.
 
-**Never cite line numbers from a multi-file `cat -n`.** Read one file per command, or use
-`grep -n`, which always reports per-file line numbers.
+**Both tables — Letflow and R-Co — have now been fully re-derived with per-file `grep -n`.**
+Each cites a **single anchor line** (the `def`/`pub fn`, `@spec`, `defstruct`, `const` or
+comment line) rather than a range wherever one exists, so a reviewer can verify any of them
+with one `sed -n 'Np'`. Where a range is genuinely meant (a function body, a doc block) both
+endpoints were derived, not estimated.
 
-Three of the corrections proposed in the F6 follow-up list did not survive re-derivation and
-are **not** applied — the originals were right. Verified by `grep -n`:
-`authorization.ex` catch-all `_,_ -> :Unknown` is at **265** (not 264); `error.ex`'s
-`@type t ::` is at **85** (not 87–94); `error.ex`'s `serialise/1` clauses are at **104** and
-**110** (not 105–117). The `evaluate_access/2`, `:Unknown` and `:MetricsRead` anchors are now
-cited as the single `def`/branch lines 272/274/281 to remove the range ambiguity that produced
-the disagreement.
+**Never cite line numbers from a multi-file `cat -n`.** It numbers the concatenated stream, not
+each file. Read one file per command, or use `grep -n`, which always reports per-file line
+numbers. This is the single root cause of every citation defect in both rounds.
+
+**Round 2 also removed a fabricated identifier.** §8.3.1 cited R-Co's
+`buildIdempotentInstallResult`. **No such function exists anywhere in R-Co.** The real one is
+`buildIdempotentResult`, declared at `src/solution/store.zig:682` and called from `:337`. The
+substance (R-Co has an idempotent-reinstall path, Letflow does not) was correct; the name was
+invented. A wrong identifier is worse than a wrong line number — a line number fails loudly
+when someone opens the file, an identifier fails silently under `grep` and reads as authority.
+`store.zig`'s row now carries both anchors, whose absence is why the first sweep missed it.
+
+**Three corrections proposed on the review side were declined, because the originals were
+right.** The wrong numbers there came from **`sed`-range counting rather than `grep -n`** — a
+review-side artefact, not a design-side one; this design never carried those three wrong.
+Verified by `grep -n`: `authorization.ex` catch-all `_,_ -> :Unknown` at **265** (review said
+264); `error.ex` `@type t ::` at **85** (review said 87–94); `error.ex` `serialise/1` clauses at
+**104** and **110** (review said 105–117). Confirmed independently by the round-2 gate. The
+`evaluate_access/2`, `:Unknown` and `:MetricsRead` anchors are now cited as single `def`/branch
+lines 272/274/281 to remove the range ambiguity that produced the disagreement in the first
+place.
 
 ### R-Co (`C:\Users\tvolo\dev\ai-dala\R-Co\`)
 
 | File | Lines cited | Used for |
 |---|---|---|
-| `src/api/routes/audit.zig` | 10–19 (`ListAuditParams`), **21–52** (`handleList` + the whole error map), 54–77 (`serializeList` — the `{items,next_cursor,count}` body), 79–126 (`appendItem` — the nine per-entry keys) | §6.1 |
-| `src/obs/audit.zig` | 26–50 (`AuditEntry`), 51–61 (`ListFilters`), 63–72 (`ListResult`), **74–107** (`list/3`, `FROM audit_entries`) | §6.1 |
-| `src/api/routes/validation.zig` | **1–31** (header: path, auth, tenant-scoping, "cross-tenant reads fall through as `DefinitionNotFound` (HTTP 404)"), 60–74 (the documented status map), **75–139** (`handleValidate`) | §7 |
-| `src/api/validation.zig` | 1–16 (header: "Input validation module … API-07 … validates incoming request payloads"), 28–52 (`FieldError`) | §7.4 (the AC6 distinction) |
-| `src/api/routes/tenant_config.zig` | **1–6** (header: "Public endpoint (no auth required)", OIDC-F-05), 20–27 (`TenantConfigResponse`), **44–115** (`handleTenantConfig` — realm-then-host precedence and the never-error fallback), 117–155 (`resolveTenantBySlug`), 157–207 (`queryRealmByHostname`) | §12 |
-| `src/api/routes/solution_packs.zig` | 1–5 (the two SOL-01/02 paths), **29–92** (`handleExport` + its error map), **110–145** (`handleInstall` + its error map), 146–345 (`parseDocument`), **287–318** (the `variable_schemas` array: `definition_id`/`schema_name`/`schema_content`), 351–424 (`serializeDocument`), **426–463** (`serializeInstallResult`) | §8 |
-| `src/solution/store.zig` | 11–21 (re-exported types), **46** (`exportPack`), 126–145 (per-definition `SELECT variable_key, json_schema FROM variable_schemas`), **284–289** (`installPack`), **415–441** (the `VariableSchemaConflict` pre-check), **480–493** (`INSERT INTO variable_schemas … ON CONFLICT (definition_id, variable_key) DO NOTHING`), 589 (`checkRoleGate`) | §8, §9 |
-| `src/api/routes/pin_rebind.zig` | **1–3** (`POST /api/v1/instances/:id/rebind-pins`), **24–44** (the documented request body, success body, and nine error codes), 45–163 (`handleRebindPins`), 165–170 (`parsePinKind`) | §10 |
-| `src/api/routes/metrics.zig` | **1–59**; esp. 8 (`collectGlobalPrometheusText`), **20** (`// /metrics is intentionally unauthenticated (OBS-02).`), 21–25 (`content_type = PROMETHEUS_CONTENT_TYPE`), 32/48 (`bpm_active_instances_total`, `bpm_task_completions_total{definition_id=…}`) | §11 |
-| `src/main.zig` | 17–18, 54–55, 92–93, 100 (module registrations); **457** (`/metrics`), **462–464** (`/api/tenant-config`, commented "public — no auth required"), **777–784** (`POST …/definitions/:id/validate`), **847–849** (`POST …/instances/:id/rebind-pins`), **1189–1214** (`GET /api/v1/audit`, incl. the hardcoded `actor.role = .PLATFORM_ADMIN` at 1190–1196 and the consequently-dead `!= PLATFORM_ADMIN -> 403` branch at 1198), **1541–1553** (`POST /api/v1/tenants/{tenant_id}/solution-packs/{export,install}`) | §2, §4 |
+| `src/api/routes/audit.zig` | **146 lines.** `ListAuditParams` **10**; `handleList` **21**-52 incl. `invalid_time_range` **28** and the error map **42-45** (`InvalidCursor`->422, `CursorExpired`->**410**, `InvalidFilter`->422, `PoolExhausted`->503); `serializeList` **54** (the `{items,next_cursor,count}` body); `appendItem` **79** (the nine per-entry keys) | §6.1 |
+| `src/obs/audit.zig` | **498 lines.** `AuditEntry` **26**; `ListFilters` **52**; `ListResult` **63**; `list/3` `pub fn` **74**, running to **231**, with `FROM audit_entries` at **107** | §6.1 |
+| `src/api/routes/validation.zig` | **173 lines.** Header 1-31 -- the path at **6**, `"semantically_valid"` at **8**, "cross-tenant reads fall through as `DefinitionNotFound` (HTTP 404)" at **31**; documented status map 60-74; `handleValidate` `pub fn` **75**-139, `invalid id format` **84**, `DefinitionNotFound`->404 **108** | §7 |
+| `src/api/validation.zig` | **592 lines.** Header **1** ("Input validation module for the BPM Platform REST API"), **3** ("Implements API-07: validates incoming request payloads"); `FieldError` **30** | §7.4 (the AC6 distinction) |
+| `src/api/routes/tenant_config.zig` | **207 lines.** Header 1-7 -- "Public endpoint (no auth required)" at **3**, OIDC-F-05 at **7**; `TenantConfigResponse` **26**-29; never-error rule **50-51**; `handleTenantConfig` `pub fn` **52**-123; env defaults **59** (`BPM_IDP_BASE_URL`->`KEYCLOAK_BASE_URL`->`http://localhost:8081`), **60** (`OIDC_CLIENT_ID`->`bpm-platform-api`), **62** (`bpm-default`); Step 1 `?realm=` **65-66**, Step 2 `?host=` **81-83**; `resolveTenantBySlug` **127**-163; `queryRealmByHostname` **167**-207 | §12 |
+| `src/api/routes/solution_packs.zig` | **550 lines.** SOL-01/02 paths 1-5; `handleExport` `pub fn` **29**-**94**, `invalid_body` **45**, `DEFINITION_NOT_FOUND` **82**, `MODULE_NON_EXPORTABLE` **83**; `handleInstall` `pub fn` **110**-**147**, `empty_body` **116**, `INVALID_PACK_DOCUMENT` **120**/**126**, `TenantInactive` **127**, `CATALOG_CONFLICT` **135**, `VARIABLE_SCHEMA_CONFLICT` **136**; `parseDocument` **153**-**351**, its `variable_schemas` array **299**; `serializeDocument` **357**-**424**, its `variable_schemas` output **406**; `serializeInstallResult` **426** | §8 |
+| `src/solution/store.zig` | **705 lines.** Re-exported types 11-21; `exportPack` **46**; per-definition `SELECT variable_key, json_schema::text FROM variable_schemas` **129**; `installPack` **284**; **the idempotent-reinstall call site `buildIdempotentResult(allocator, doc)` at `:337` and its `fn buildIdempotentResult(` declaration at `:682` (body to 705)** -- see §8.3.1; `SELECT json_schema::text FROM variable_schemas` pre-check **419** returning `VariableSchemaConflict` **437**; `INSERT INTO variable_schemas ... ON CONFLICT (definition_id, variable_key) DO NOTHING` **485**; `checkRoleGate` **589** | §8, §9 |
+| `src/api/routes/pin_rebind.zig` | **221 lines.** Path **1-3**; documented request/success body and the nine error codes **24-44** (codes themselves **36-41**); `handleRebindPins` `pub fn` **45**-163, `INVALID_INSTANCE_ID` **53**, `MALFORMED_JSON` **64**/**68**, `UNKNOWN_PIN_REF` **124**, `INSTANCE_NOT_REBINDABLE` **125**, `INSTANCE_NOT_FOUND` **126**, `CONCURRENT_MODIFICATION` **128**; `parsePinKind` **165** | §10 |
+| `src/api/routes/metrics.zig` | **59 lines.** `handleMetrics` `pub fn` **8**, its `metrics.collectGlobalPrometheusText(allocator)` call **9**; `// /metrics is intentionally unauthenticated (OBS-02).` **20**; `content_type = metrics.PROMETHEUS_CONTENT_TYPE` **24**. Metric names appear only in this file's own tests: `bpm_active_instances_total` **39**/**57**, `bpm_task_completions_total{definition_id=...}` **58** | §11 |
+| `src/main.zig` | Module registrations **20** (`validation_routes`), **53** (`metrics_routes`), **54** (`tenant_config_routes`), **55** (`audit_routes`), **93** (`pin_rebind_routes`), **100** (`solution_pack_routes`); call sites **457** (`/metrics`), **463** (`/api/tenant-config`, commented "public -- no auth required"), **784** (`POST .../definitions/:id/validate`), **849** (`POST .../instances/:id/rebind-pins`), **1189** (`GET /api/v1/audit` branch, with the hardcoded `.role = .PLATFORM_ADMIN` at **1192** and the consequently-dead `actor.role != .PLATFORM_ADMIN -> 403` at **1198**), **1547**/**1551** (solution-pack export/install) | §2, §4 |
 
 **Not read, and why:** `src/api/routes/sandbox_access.zig` — deliberately out of scope, see §13.
 
@@ -226,7 +249,7 @@ mount point to any of the six, so these are genuinely open and are decided here.
 
 ### 2.1 Audit — `Letflow.Routers.Audit` at `/audit` — **stub kept as-is** ✅
 
-R-Co: `GET /api/v1/audit` (`main.zig:1189-1214`). Letflow: `GET /api/v1/audit`. Identical.
+R-Co: `GET /api/v1/audit` (`main.zig:1189-1214` (branch head `:1189`)). Letflow: `GET /api/v1/audit`. Identical.
 `Letflow.Api.Authorization.endpoint_policy_key("GET", "/audit")` already returns `:AuditRead`
 (`authorization.ex:227`), and `web/src/api/audit.ts:59` already calls exactly this path.
 Nothing changes about the mount.
@@ -273,7 +296,7 @@ The same note applies to `Letflow.Routers.Instances` (§2.5) and REQ-079/080.
 ### 2.4 Tenant config — **moves out of the authenticated pipeline to the top-level router**
 
 R-Co: `GET /api/tenant-config?host=…` (or `?realm=…`), **explicitly public**
-(`tenant_config.zig:1-4`: "Public endpoint (no auth required)"; `main.zig:462` carries the
+(`tenant_config.zig:3`: "Public endpoint (no auth required)"; `main.zig:462` carries the
 same comment). Its purpose is login-page bootstrap: the SPA calls it to learn which OIDC
 authority to redirect to. `web/src/auth/tenantConfig.ts:46` calls exactly `/api/tenant-config`.
 
@@ -494,7 +517,7 @@ explicitly, naming REQ-131, so the gap is visible rather than silent. Recorded a
 | `POST /definitions/:id/validate` — `:id` belongs to another tenant | **404** | `Definitions.get_by_id/2` with the caller's `:prefix` returns `{:error, :not_found}` → `Response.not_found/1`. Byte-identical to a genuinely absent id (`Error.not_found/0` takes no detail). Matches `validation.zig:31`'s own documented behaviour. |
 | `POST /definitions/:id/validate` — `:id` genuinely absent | **404** | same call, same code path, same bytes, same query count. |
 | `POST /instances/:id/rebind-pins` — instance in another tenant | **404** | `PinRebind.rebind_pins/3` with the caller's `:prefix` returns `{:error, :instance_not_found}` → `Response.not_found/1`. |
-| `POST /solution-packs/export` — a `definition_id` in another tenant | **422 `DEFINITION_NOT_FOUND`** | The prefix-scoped read finds nothing; the export reports it as a not-found definition id, exactly as R-Co does (`solution_packs.zig:80`). This is the *body-parameter* not-found case, not a resource-URL 404. |
+| `POST /solution-packs/export` — a `definition_id` in another tenant | **422 `DEFINITION_NOT_FOUND`** | The prefix-scoped read finds nothing; the export reports it as a not-found definition id, exactly as R-Co does (`solution_packs.zig:82`). This is the *body-parameter* not-found case, not a resource-URL 404. |
 | Any of the above with a caller whose `auth_context` is missing/invalid | **500** | `scoped_repo_opts/1` returns `{:error, _}` → `Response.internal_error/1`, matching `identity.ex:189-190`. Never falls through to an unscoped query. |
 
 **No handler may add a cross-tenant existence check to produce a nicer message.** This is
@@ -528,7 +551,7 @@ design and reads only the **global** `tenants` table (§12).
 
 | Item | Value |
 |---|---|
-| R-Co source | `src/api/routes/audit.zig:21-52` (`handleList`), body shape at L54-126; backing store `src/obs/audit.zig:74-107` |
+| R-Co source | `src/api/routes/audit.zig:21-52` (`handleList`), body shape at L54-126; backing store `src/obs/audit.zig:74-231` |
 | Method + path | `GET /api/v1/audit` |
 | Mount | `Letflow.Routers.Audit`, existing forward `api_pipeline.ex:46` |
 | Permission | `:AuditRead`, via the route-local `with_authorization/4` (§4.2) — **403** on `:Deny403` |
@@ -594,22 +617,45 @@ an endpoint prefix and an expiry-timestamp offset.
   `"T:"` (`tenants.ex:130`) and `"U:"` (`identity.ex:107`); `decode_cursor/4`'s
   `{:error, :wrong_endpoint}` is what makes a cursor from another endpoint fail.
 * Cursor `key` = the last returned row's `global_seq`, rendered as a decimal string.
-* Decoding: `Pagination.decode_cursor(raw, "A:", byte_size("A:"))`, then
-  `Pagination.parse_int_from_cursor/3` to recover `global_seq`, passed as `read_global/1`'s
-  `:after_global_seq`.
+* **Raw cursor layout, before base64url encoding:** `"A:<expiry_ts_us>:<global_seq>"` — the
+  three-part `prefix:timestamp:key` shape `Pagination.build_raw_cursor/3`
+  (`pagination.ex:268-269`) produces, with `key` = the last returned row's `global_seq` as a
+  decimal string. The expiry-timestamp offset passed to `decode_cursor/4` is
+  `byte_size(@audit_cursor_prefix)`, i.e. **2**, matching `tenants.ex:283`'s use of its own
+  prefix's byte size.
+* Decoding: `Pagination.decode_cursor(raw, "A:", byte_size("A:"))` returns
+  `{:ok, %Pagination.Cursor{inner: raw_decoded}}` (`pagination.ex:43-57`). Recover the
+  `global_seq` from `cursor.inner` by locating the **second** colon with
+  `Pagination.find_nth_colon(cursor.inner, 2)` (`pagination.ex:318`) and reading the remainder
+  via `Pagination.parse_int_from_cursor/3` (`pagination.ex:296-298`). That integer is passed as
+  `read_global/1`'s `:after_global_seq`. **This is the only place the cursor's internal layout
+  is interpreted; no other module in this requirement parses it.**
 * `next_cursor` is `nil` when `has_more` is `false`, else a freshly built cursor over the last
   row's `global_seq`. `read_global/1`'s own `@doc` (`event_store.ex:754-757`) documents
   `has_more` as a heuristic; that boundary case is inherited unchanged and named in the
   moduledoc.
 
-Cursor error mapping mirrors `tenants.ex:280-290`: every `decode_cursor/4` failure
-(`:invalid_base64` / `:wrong_endpoint` / `:expired` / `:invalid_cursor`) collapses to one
-route-level `{:error, :invalid_cursor}`. **Divergence from R-Co, stated deliberately:** R-Co
-distinguishes `422 invalid_cursor` from `410 cursor_expired` (`audit.zig:42-43`). Letflow
-collapses both to **422 `invalid cursor`**, because `Pagination.decode_cursor/4`'s expiry
-result is already folded into the same failure family everywhere else in this codebase
-(`tenants.ex:287`), and adding a 410 here would be the only endpoint in Letflow that does it.
-Recorded as **OQ-4**.
+Cursor errors are handled in **two separate steps**, and the distinction matters because an
+earlier draft conflated them:
+
+1. **The collapse** — `parse_cursor_param/1` (`tenants.ex:280-290`, `identity.ex` likewise)
+   folds every `decode_cursor/4` failure (`:invalid_base64` / `:wrong_endpoint` / `:expired` /
+   `:invalid_cursor`) into one route-level `{:error, :invalid_cursor}`. That range establishes
+   the **collapse**, not the status.
+2. **The status** — decided separately in the `else` block, at `tenants.ex:275-276`, and it is
+   **`Response.bad_request(conn, "invalid cursor")`, i.e. 400.**
+
+**Letflow uses 400** (OQ-4, re-ruled). Verified against every existing call site in the
+codebase — `tenants.ex:276`, `identity.ex:295`, `identity.ex:550` — all three are
+`Response.bad_request(conn, "invalid cursor")`. `/audit` matches them.
+
+**Two deliberate divergences from R-Co follow, and both must be in the moduledoc (§6.7):**
+
+* R-Co maps `InvalidCursor` → **422** (`audit.zig:42`); Letflow returns **400**. Uniform
+  cursor-error handling across the whole Letflow API beats per-endpoint R-Co fidelity.
+* R-Co maps `CursorExpired` → **410** (`audit.zig:43`); Letflow has no 410 anywhere, because
+  expiry is already inside the step-1 collapse. `/audit` must not become the only Letflow
+  endpoint that emits 410.
 
 ### 6.5 New context function — `Letflow.EventStore.read_global/1` gains filter opts
 
@@ -667,7 +713,7 @@ returns 422 on `:gt` — no query issued.
 | `scoped_repo_opts/1` → `{:error, _}` | 500 | `Response.internal_error/1` |
 | `from` or `to` not ISO 8601 | 422 | `Response.unprocessable(conn, "invalid time range")` |
 | `from > to` | 422 | `Response.unprocessable(conn, "invalid time range")` (R-Co `invalid_time_range`) |
-| cursor fails `decode_cursor/4` (any reason, incl. expiry) | 422 | `Response.unprocessable(conn, "invalid cursor")` — see OQ-4 |
+| cursor fails `decode_cursor/4` (any reason, incl. expiry) | **400** | `Response.bad_request(conn, "invalid cursor")` — matches `tenants.ex:276`, `identity.ex:295`, `identity.ex:550`; see OQ-4 |
 | `page_size` non-integer / `{:error, :invalid_page_size}` | 400 | `Response.bad_request(conn, "invalid page_size")` |
 | `{:error, :page_size_too_large}` | 400 | `Response.bad_request(conn, "page_size out of range")` |
 | `pipeline_run_id` supplied non-empty | 422 | `Response.unprocessable(conn, "invalid filter")` (R-Co `invalid_filter`) |
@@ -691,7 +737,7 @@ applies to every other 503 in this requirement (§8.5, §10.3).
 4. The full filter-disposition table from §6.3, including the two unsupported params and why
    each is unsupported rather than silently ignored.
 5. `before_state`/`after_state` are always `null`, and `payload` is a Letflow addition.
-6. The 410-collapse divergence (OQ-4) and the no-503 non-port (§6.6).
+6. **Both cursor divergences from R-Co** — `InvalidCursor` 422→**400**, and `CursorExpired` 410 collapsed into that same 400 (§6.4, OQ-4) — and the no-503 non-port (§6.6).
 7. "Ordering guarantee" section per §3.2.
 8. **INV-1 statement:** the only tenant input is `scoped_repo_opts/1`'s prefix; there is no
    query parameter, header, or body field through which another tenant's events could be
@@ -896,7 +942,7 @@ packs** (§20 C-2), so the next reader is not misled the way this run was.
 
 ### 8.2 Pack document — what Letflow supports, and what it drops
 
-R-Co's `SolutionPackDocument` (`solution_packs.zig:146-345`) has four content arrays:
+R-Co's `SolutionPackDocument` (`solution_packs.zig:153-351`) has four content arrays:
 
 | R-Co array | Letflow | Reason |
 |---|---|---|
@@ -976,6 +1022,10 @@ New file `lib/letflow/definitions/solution_pack.ex`. Two public functions.
         | {:error, {:unknown_schema_version, actual :: String.t()}}
         | {:error, :unsupported_pack_section}
         | {:error, {:malformed_variable_schema, variable_key :: String.t(), reason :: Letflow.Definitions.variable_schema_error()}}
+        # register_variable_schemas/3's own union, propagated unwrapped from step 7.
+        # Every member is mapped by name in section 8.5 -- none may fall through to 500
+        # via a bare {:error, term()} clause.
+        | {:error, Letflow.Definitions.variable_schema_error()}
         | {:error, :duplicate_pack_install}
         | Letflow.Definitions.create_error()
         | Letflow.Definitions.common_error()
@@ -1022,13 +1072,13 @@ Behaviour, in one `Ecto.Multi` executed by `Letflow.Repo.transaction/2`:
 1. Reject `document.service_catalog_entries != []` → `{:error, :unsupported_pack_section}`.
 2. Reject `document.bpm_export_schema_version != @export_schema_version` →
    `{:error, {:unknown_schema_version, actual}}` (R-Co: `INVALID_PACK_DOCUMENT`,
-   `solution_packs.zig:170-172`).
+   `solution_packs.zig:168-172`).
 3. **Well-formedness pre-check on every `variable_schemas` entry, before any insert** — §9.3.
    `schema_content` is decoded with `Jason.decode/1` and checked by
    `Letflow.Definitions.JsonSchemaShape.check/1`. Any failure aborts the whole transaction
    with `{:error, {:malformed_variable_schema, variable_key, reason}}`. **Nothing is written.**
 4. **No conflict pre-check. `VARIABLE_SCHEMA_CONFLICT` is a deliberate non-port** — see
-   §8.3.2 for the proof of unreachability. R-Co's check at `store.zig:415-441` has no
+   §8.3.2 for the proof of unreachability. R-Co's check at `store.zig:419-441` has no
    Letflow analogue to perform.
 5. Insert `SolutionPackInstall.insert_changeset/2` (`solution_pack_install.ex:83`) with
    `tenant_id` derived from the prefix via
@@ -1044,7 +1094,7 @@ Behaviour, in one `Ecto.Multi` executed by `Letflow.Repo.transaction/2`:
    `source_definition_id -> new_definition_id`.
 7. For each `packed_variable_schema`, resolve its `definition_id` through that mapping (an
    entry whose `definition_id` matches no packed definition is **skipped and reported in
-   `warnings`**, matching R-Co's `continue` at `store.zig:482`), then call
+   `warnings`**, matching R-Co's `continue` at `store.zig:483`), then call
    **`Letflow.Definitions.register_variable_schemas/3` — the single shared registration
    function (§9)**. `variable_schemas_written` is that function's returned count summed over
    all definitions.
@@ -1059,7 +1109,7 @@ This is AC3's second clause and AC8's "none into any other tenant's schema".
 An earlier draft's `installed_definition.status` enumerated `"installed" | "skipped"` with no
 step that could produce `"skipped"`. **Corrected: `status` is always `"installed"`.**
 
-Evidence. `Letflow.Definitions.create/2` (`definitions.ex` `@spec` **399**, `def` **400**) has
+Evidence. `Letflow.Definitions.create/2` (`definitions.ex` `@spec` **398**, `def` **400**) has
 **no upsert, no skip and no idempotent branch**: it inserts, or it returns
 `{:error, :duplicate_name_version}` when `uq_definition_version` fires — its own `@doc`
 (`definitions.ex:393-396`) states that two concurrent calls with an identical `(name, version)`
@@ -1070,7 +1120,7 @@ this call, and any that was not aborted the transaction before a result map exis
 Consequence, which must be stated in `Letflow.Routers.SolutionPacks`'s moduledoc:
 **re-installing a pack whose `(name, version)` pairs already exist in the caller's schema is a
 409, not a no-op.** This is a real behavioural divergence from R-Co, whose
-`buildIdempotentInstallResult` (`store.zig:680-700`) returns a synthetic success for an
+`buildIdempotentResult` (`store.zig:682`, called from `:337`) returns a synthetic success for an
 already-installed pack. Letflow has no such path today; `uq_solution_pack_install_active`
 (`solution_pack_install.ex:89`) additionally makes a second install of the same
 `(tenant_id, pack_id)` a `{:error, :duplicate_pack_install}` 409. **Named as a non-port with
@@ -1142,7 +1192,7 @@ Request schema (`[%FieldConstraint{}]`, `Letflow.Api.Validation.validate/2`):
 | Field | Required | Type | Constraints |
 |---|---|---|---|
 | `definition_ids` | yes | `:array` | `min_items: 1` |
-| `version` | no | `:string` | `reject_empty_string: true`, `max_length: 64`; default `"1.0.0"` (R-Co `solution_packs.zig:59-65`) |
+| `version` | no | `:string` | `reject_empty_string: true`, `max_length: 64`; default `"1.0.0"` (R-Co `solution_packs.zig:59-66`) |
 
 Element-level "every id is a string" is checked in the route after `validate/2` (the
 `FieldConstraint` vocabulary has no per-element type rule) and maps to R-Co's
@@ -1157,7 +1207,7 @@ Element-level "every id is a string" is checked in the route after `validate/2` 
 | `scoped_repo_opts/1` `{:error, _}` / `common_error()` | 500 | `Response.internal_error/1` | `internal_error` |
 | success | 200 | `Response.ok/2` (the pack document) | — |
 
-`MODULE_NON_EXPORTABLE` (`solution_packs.zig:81`) is **not ported** — Letflow has no
+`MODULE_NON_EXPORTABLE` (`solution_packs.zig:83`) is **not ported** — Letflow has no
 process-module packaging (`process_modules.zig` is group (b), S5). Named as a non-port.
 
 **`POST /api/v1/solution-packs/install`**
@@ -1171,13 +1221,31 @@ Request body is the pack document itself.
 | `{:error, {:unknown_schema_version, _}}` | 422 | `Response.unprocessable(conn, "invalid pack document")` | `INVALID_PACK_DOCUMENT` |
 | `{:error, :unsupported_pack_section}` | 422 | `Response.unprocessable(conn, "pack contains an unsupported section")` | *(Letflow-only, §8.2)* |
 | `{:error, {:malformed_variable_schema, key, _reason}}` | 422 | `Response.unprocessable(conn, "variable schema is not a well-formed JSON Schema document")` — **`key` is echoed, `reason` is not** (`key` is the caller's own submitted value; `reason` is internal) | *(Letflow-only, §9.3)* |
+| `{:error, {:not_well_formed, key, _path}}` | 422 | same detail as the row above, echoing `key` only | *(Letflow-only, §9.2)* |
+| `{:error, {:schema_too_deep, key}}` | 422 | `Response.unprocessable(conn, "variable schema nesting exceeds the maximum depth")`, echoing `key` | *(Letflow-only, §9.3)* |
+| `{:error, {:duplicate_variable_key, key}}` | 422 | `Response.unprocessable(conn, "duplicate variable_key in pack document")`, echoing `key` | *(Letflow-only, §9.2 step 4)* |
+| `{:error, {:blank_variable_key, _index}}` | 422 | `Response.unprocessable(conn, "variable_key must not be blank")` — index **not** echoed | *(Letflow-only, §9.2 step 3)* |
+| `{:error, :missing_prefix}` / `{:error, :invalid_definition_id}` | 500 | `Response.internal_error/1` — route-construction bugs, not caller errors, matching §10.3's treatment of `:missing_actor_id` | — |
 | `{:error, :duplicate_pack_install}` | 409 | `Response.conflict(conn, "pack already installed")` | *(Letflow-only, from `uq_solution_pack_install_active`)* |
 | `{:error, :duplicate_name_version}` from `Definitions.create/2` | 409 | `Response.conflict(conn, "definition already exists")` — **aborts the whole install**, §8.3.1 | — |
 | other `create_error()` / `%Ecto.Changeset{}` | 422 | `Response.unprocessable(conn, "validation failed")` | — |
 | `common_error()` / `{:error, term()}` | 500 | `Response.internal_error/1` | `internal_error` |
 | success | 200 | `Response.ok/2` (`install_result()`) | — |
 
-No 503 (§6.6). No 409 `CATALOG_CONFLICT`, no 409 `TenantInactive` (§8.2).
+No 503 (§6.6). No 409 `CATALOG_CONFLICT`, no 409 `TenantInactive` (§8.2), no 409
+`VARIABLE_SCHEMA_CONFLICT` (§8.3.2).
+
+**Completeness rule for this table (`docs/anti-patterns.md:894` — type-table-vs-error-map
+drift).** Every member of `install_error()` — including all six members of
+`Letflow.Definitions.variable_schema_error()` propagated from step 7 — is mapped **by name**
+above. The bare `{:error, term()}` → 500 row is the clause of last resort for genuinely
+unexpected failures **only**; no named error may reach it. Two of the six were previously
+reaching it: `{:duplicate_variable_key, _}` and `{:blank_variable_key, _}` are pure
+caller-supplied pack-document defects with no pre-check anywhere in §8.3's eight steps, so a
+pack with two `variable_schemas` entries sharing a `schema_name`, or one with a blank
+`schema_name`, would have returned **500** while every other caller malformation returned 422.
+Both are now 422. **When `variable_schema_error()` gains a member, this table gains a row in
+the same change.**
 
 ### 8.6 Moduledoc obligations — `Letflow.Routers.SolutionPacks`
 
@@ -1238,9 +1306,15 @@ calling and map a decode failure onto `{:invalid_json, key}`.
 The SINGLE insert path into the tenant-scoped `variable_schemas` table
 (`Letflow.Engine.VariableSchema`, REQ-109). REQ-078's solution-pack install and
 REQ-082's definition import both call THIS function; neither adds a second
-insert path. `grep -rn "VariableSchema" lib/letflow/routers/` must return zero
-hits, and the only `Repo` insert against that schema anywhere in lib/ must be
-the one inside this function.
+insert path.
+
+The invariant is about INSERT PATHS, not about text: the only `Repo` insert
+against `Letflow.Engine.VariableSchema` anywhere in `lib/` is the one inside
+this function, and no module under `lib/letflow/routers/` performs a `Repo`
+call of any kind. Documentation that NAMES this table or this function is not
+a second insert path -- route moduledocs are required to name both, so they
+point a reader here. See the design's section 18.1 for the three mechanical
+checks that verify this, and INV-VS-1.
 """
 @spec register_variable_schemas(
         definition_id :: Ecto.UUID.t(),
@@ -1268,7 +1342,7 @@ Behaviour contract:
    `%{definition_id: definition_id, variable_key: ..., json_schema: ..., description: ...}`,
    `Repo.insert/2` with `prefix: opts[:prefix]` and
    `on_conflict: :nothing, conflict_target: [:definition_id, :variable_key]` — porting
-   R-Co's `ON CONFLICT (definition_id, variable_key) DO NOTHING` (`store.zig:485-491`) exactly.
+   R-Co's `ON CONFLICT (definition_id, variable_key) DO NOTHING` (`store.zig:485`) exactly.
 7. All inserts run inside one `Ecto.Multi`, so the function is all-or-nothing. **It does not
    open its own transaction** — it returns a shape the caller can run inside its own
    `Ecto.Multi` (the install path already has one, §8.3), so the pack install and the schema
@@ -1358,7 +1432,7 @@ module above, so no Engine→Definitions dependency is created. The placement in
 **What happens to the two read-side defensive branches.**
 
 * `Letflow.EventStore.Registry.JsonSchema.properties_violations/3`'s `is_map(subschema)` guard
-  (`json_schema.ex:159-172`) — **KEEP.** *(And note: ISS-0088/GH#305 is **already
+  (`json_schema.ex:159`) — **KEEP.** *(And note: ISS-0088/GH#305 is **already
   `status: resolved`** — see §14 C-1.)*
 * `Letflow.Engine.VariableSchema.validations_for/3`'s `{:ok, _not_a_map}` clause
   (`variable_schema.ex:344-350`) — **KEEP, but its comment must be rewritten.** ISS-0089's
@@ -1609,6 +1683,21 @@ with `0` so the response shape is stable, from these closed enums:
 * tasks: `[:pending, :completed, :cancelled]` (`task.ex:59-62`)
 * definitions: `[:draft, :active, :deprecated, :archived]` (`process_definition.ex:91-94`)
 
+**Group by the schema field, never the raw column.** `instance_projections.status`
+(`instance_projection.ex:125-128`) and `tasks.status` (`task.ex:59-62`) are **keyword-mapped**
+`Ecto.Enum`s — `[active: "ACTIVE", completed: "COMPLETED", …]` and
+`[pending: "PENDING", …]` — so the values stored in Postgres are the **uppercase strings**, not
+the atom names. A `group_by` written against the raw column therefore yields keys like
+`"ACTIVE"`, which would never match the `:active` atoms the zero-fill uses, silently producing
+an all-zero map plus unexpected extra keys. Compose the `group_by`/`select` over the **schema
+field** (`from(p in InstanceProjection, group_by: p.status, select: {p.status, count(p.id)})`)
+so Ecto's enum loader maps each value back to its atom before it reaches the zero-fill. Only
+`process_definitions.status` (`process_definition.ex:91-94`) is a bare-atom enum where the
+distinction would not bite — do it uniformly anyway.
+
+The `status_counts :: %{atom() => non_neg_integer()}` type and the three atom sets above are
+correct as written; this note is about how the query must be built to actually produce them.
+
 ### 11.5 Response and moduledoc
 
 ```
@@ -1624,8 +1713,20 @@ with `0` so the response shape is stable, from these closed enums:
 `"scope" => "tenant"` is a constant, present specifically so a reader of a captured response
 can see at a glance that it is not platform-wide.
 
-Error map: `scoped_repo_opts/1` `{:error, _}` → 500; any of the three
-`{:error, :invalid_schema_name}` → 500; otherwise 200. No 503 (§6.6).
+Error map — **stated as a positive rule, because "otherwise 200" is unsafe here.** An earlier
+draft said "`scoped_repo_opts/1` error → 500; any of the three `:invalid_schema_name` → 500;
+otherwise 200", which built literally sends **200 with a malformed body** on
+`{:error, {:transaction_failed, _}}` — the other member of `Letflow.Definitions.common_error()`
+(`definitions.ex:157-159`). Corrected:
+
+> **200 is emitted only when `scoped_repo_opts/1` returns `{:ok, _}` and all three counter
+> functions return `{:ok, _}`. Any other result — from any of the four calls, whatever its
+> reason — is `Response.internal_error/1` (500).** There is no fall-through-to-200 branch, and
+> no partially-populated body is ever emitted: a counter that could not be computed must not be
+> rendered as `0`, because a silent zero in a metrics response is indistinguishable from a true
+> zero and is worse than an error.
+
+No 503 (§6.6).
 
 **AC7 statement, required verbatim-in-substance, placed immediately after the divergence
 table (§11.2):**
@@ -1635,7 +1736,7 @@ table (§11.2):**
 > registry, no collector, no gauge, no histogram, no scrape target and no in-memory counter
 > state. **S6 observability is the owning stage for Letflow's metrics subsystem** — see
 > `docs/migration/stage-4-api-surface.md`'s group-(b) table and R-Co's own `obs_metrics`
-> module (`src/api/routes/metrics.zig:8`, `collectGlobalPrometheusText`), which Letflow has
+> module (`src/api/routes/metrics.zig:9`, `collectGlobalPrometheusText`), which Letflow has
 > not ported. When S6 lands, this endpoint is expected to be superseded or rewritten; it is a
 > placeholder shape, not the design.
 
@@ -1657,7 +1758,7 @@ Plus: the three-divergence table (§11.2), the tenant-exposure rule verbatim (§
 | Auth | **none** — outside `ApiPipeline` entirely, like `GET /health` |
 | Delegate | `Letflow.Identity.get_tenant_by_slug/1` (`identity.ex:627`) — **the only delegate; no new context function** (§12.3) |
 
-Precedence, porting `tenant_config.zig:59-95`:
+Precedence, porting `tenant_config.zig:65-102`:
 
 1. If `?realm=<slug>` is present, resolve the tenant by slug; if it resolves and has a non-nil
    `idp_realm_id`, that wins and **the host branch is skipped**.
@@ -1665,7 +1766,7 @@ Precedence, porting `tenant_config.zig:59-95`:
    through to the default realm**, which is R-Co's own answer for an unbound hostname.
 3. Else, or on any miss, or on **any** error: fall through to the default realm.
 
-Response, always **200**, always this exact two-key shape (`tenant_config.zig:20-27`,
+Response, always **200**, always this exact two-key shape (`tenant_config.zig:26-29`,
 `web/src/auth/tenantConfig.ts:10-13`):
 
 ```
@@ -1675,15 +1776,15 @@ Response, always **200**, always this exact two-key shape (`tenant_config.zig:20
 `idp_base` from `System.get_env("BPM_IDP_BASE_URL")`, falling back to
 `System.get_env("KEYCLOAK_BASE_URL")`, falling back to `"http://localhost:8081"`;
 `client_id` from `System.get_env("OIDC_CLIENT_ID")` falling back to `"bpm-platform-api"`;
-default realm `"bpm-default"`. All four values ported verbatim from `tenant_config.zig:46-49`
-and `L235`. **Read at the point of use via `System.get_env/1`, never threaded through a struct
+default realm `"bpm-default"`. All four values ported verbatim from `tenant_config.zig:59`/`:60`
+and `:62` (`bpm-default`). **Read at the point of use via `System.get_env/1`, never threaded through a struct
 field or logged** (INV-4). None of the four is secret material — an OIDC authority URL and a
 public client id are values the browser must learn in order to log in at all — but the
 resolution style follows INV-4 regardless.
 
 ### 12.2 The never-error rule is load-bearing (INV-5), not an R-Co quirk
 
-`tenant_config.zig:41-43` states it outright: *"Never returns an error to the caller — DB
+`tenant_config.zig:50-51` states it outright: *"Never returns an error to the caller — DB
 failures fall through to the default tenant config so the frontend login page always renders."*
 
 This must be ported **exactly**, and for two independent reasons:
@@ -1713,7 +1814,7 @@ their own login page. The disclosure boundary must be stated in the moduledoc:
 ### 12.3 The `?host=` branch — NO new table, NO migration, deferred with a named owner
 
 R-Co resolves `?host=` by joining `tenant_hostnames` → `tenant`
-(`tenant_config.zig:157-207`, its own helper comment: *"Query tenant_hostnames -> tenant to
+(`tenant_config.zig:167-207`, its own helper comment: *"Query tenant_hostnames -> tenant to
 resolve idp_realm_id for a given hostname"*). **Letflow has no host→tenant binding of any
 kind** — verified: `grep -rn "tenant_hostname\|hostname" lib/ priv/repo/migrations/` returns
 **zero** hits. Letflow has only the realm→tenant and slug→tenant directions
@@ -1736,13 +1837,13 @@ Three options were weighed:
 
 1. `?realm=<slug>` — fully supported, via `Letflow.Identity.get_tenant_by_slug/1`
    (`identity.ex:627`), reading `tenant.idp_realm_id`. This is a faithful port of
-   `tenant_config.zig:59-72`'s step 1, which does exactly the same slug lookup
-   (`resolveTenantBySlug`, `tenant_config.zig:117-155`, `SELECT idp_realm_id FROM public.tenant
+   `tenant_config.zig:65-80`'s step 1, which does exactly the same slug lookup
+   (`resolveTenantBySlug`, `tenant_config.zig:127-163`, `SELECT idp_realm_id FROM public.tenant
    WHERE slug = $1`). Nothing about this branch diverges from R-Co.
 2. `?host=<hostname>` — **accepted and, today, always falls through to the default realm.**
    Not an error, not a 404, not a 400: the parameter is honoured syntactically and produces the
    default config, which is byte-identical to what R-Co produces for an unbound hostname
-   (`tenant_config.zig:82-95` — an unmatched hostname leaves `realm_id = "bpm-default"`).
+   (`tenant_config.zig:81-102` — an unmatched hostname leaves `realm_id = "bpm-default"`).
    **So this is not a behavioural divergence for any hostname Letflow could have resolved
    anyway** — Letflow has no bindings at all, so every hostname is unbound, and R-Co's own
    unbound-hostname answer is the one served.
@@ -1768,7 +1869,7 @@ requirement.**
 There is none by design: every path returns **200** with either the resolved config or the
 default config. Any `{:error, _}` from either lookup is caught, logged at `:warning` naming the
 slug/hostname (both caller-supplied, so safe to log) and **never** the exception, and falls
-through to the default — porting `tenant_config.zig:74-80` and `L88-94`.
+through to the default — porting `tenant_config.zig:72-79` and `:85-92`.
 
 Because the module is outside `ApiPipeline`, it does **not** get `Plug.Parsers`, `AuthPipeline`,
 `TenantStatus`, or `Letflow.Api.Context.assign_trace_id/1`. It is a `GET` with no body, so
@@ -1825,7 +1926,7 @@ Flagged rather than silently reconciled, as instructed.
 **C-1 — ISS-0088 / GH#305 is already closed.** REQ-078's "WELL-FORMEDNESS, NOT JUST PRESENCE"
 paragraph describes two *live* read-side defects and instructs closing both GH#306 and GH#305.
 But `docs/issues/ISS-0088.yaml` is `status: resolved`, and
-`lib/letflow/event_store/registry/json_schema.ex:146-172` already carries the
+`lib/letflow/event_store/registry/json_schema.ex:159` already carries the
 `is_map(subschema)` guard with a comment naming "ISS-0088 / GH#305 fix". **Only GH#306
 (ISS-0089) remains open and is closed by this design (§9.4).** GH#305 must not be reopened.
 
@@ -2088,13 +2189,29 @@ permission check may be invented to fill it** — REQ-069's whole point is one m
 `GET /audit` stays gated via the route-local `evaluate_access/2` call, as a **third private
 copy** of the `tenants.ex:181-194` / `identity.ex:187-213` helper, not an extraction (§4.1).
 
-**OQ-4 — 410 `cursor_expired` collapsed into 422 — RULED: accepted, keep the collapse.**
-R-Co distinguishes them (`audit.zig:42-43`); Letflow folds expiry into one
-`{:error, :invalid_cursor}` because `Pagination.decode_cursor/4`'s expiry result is already
-folded that way at every existing call site (`tenants.ex:287`). *Rationale (ORCH):* consistency
-with every existing `decode_cursor/4` call site beats R-Co fidelity here; making `/audit` the
-only endpoint in the system that can emit 410 is a worse outcome than losing the distinction.
-Keep the divergence note in the moduledoc (§6.4, §6.7 item 6).
+**OQ-4 — cursor-error status — RE-RULED (round 2): use 400, not 422.**
+
+*First ruling (superseded):* "accepted, keep the collapse … 422", justified as "consistency with
+every existing `decode_cursor/4` call site beats R-Co fidelity".
+
+*Why it was withdrawn:* the stated rationale was false about the codebase it invoked. **Every
+existing call site returns 400, not 422** — `tenants.ex:276`, `identity.ex:295`,
+`identity.ex:550`, all `Response.bad_request(conn, "invalid cursor")` (re-verified this round).
+So the ruling's own reason — consistency — entailed **400**, while the ruling's stated status
+was 422, which is the *R-Co-fidelity* answer (`audit.zig:42`) that the same sentence said to
+subordinate. The ruling contradicted itself and the design built the half that matched neither
+rationale.
+
+***NEW RULING: 400, `Response.bad_request(conn, "invalid cursor")`.*** It is what the original
+reasoning entailed; it keeps cursor-error handling uniform across the entire API; and it still
+achieves the thing the first ruling actually cared about — `/audit` does not become the only
+Letflow endpoint emitting **410** for an expired cursor, because expiry remains inside the
+`parse_cursor_param/1` collapse and surfaces as the same single error.
+
+*Consequence:* **two** divergences from `audit.zig` are now recorded, not one — 422→400 for
+`InvalidCursor` **and** 410→400 for `CursorExpired`. Design updated at §6.4 (which also no
+longer misattributes the *status* to `tenants.ex:280-290`; that range is the **collapse**, the
+status is at **275-276**), §6.6's error row, and §6.7 item 6's moduledoc obligation.
 
 **OQ-5 — transaction composition of `register_variable_schemas/3` — RULED: as written; ELIXIR-DEV
 settles the shape.** §9.2 step 7 wants the
@@ -2171,7 +2288,7 @@ ruling wins and the affected section has been updated to match.**
 | **OQ-8** | **Smaller option, overruling this design's first specified path.** Drop the `tenant_hostnames` table, Ecto schema, migration and `resolve_realm_by_hostname/1`. Serve `?realm=` only; `?host=` falls through to default. A table with no writer is the REQ-056 failure mode this requirement invokes twice against `sandbox_access.zig`. Owner named: **REQ-076**. | §12.1, §12.3, §12.5, §15, §17 |
 | **OQ-9** | **Accepted as-is.** Do not mount `assign_trace_id/1` on `Letflow.Router` — it would change `GET /health`'s response headers, which `deploy/redeploy-test.sh` pins (`router.ex:16`). | §12.4, §19 |
 | **OQ-10** | **DOC-UPDATER annotates, does not rewrite.** REQ-070's design and `stage-4-api-surface.md`'s group-(a) table are historical artefacts. Routed at closeout. | §19 |
-| **C-1** | **Design is right; REQ-078's text is wrong.** GH#305/ISS-0088 is already `resolved` and `json_schema.ex:146-172` already carries the `is_map(subschema)` guard. **Do NOT reopen GH#305.** Only GH#306/ISS-0089 is closed by §9.4. **DOC-UPDATER: REQ-078's "WELL-FORMEDNESS, NOT JUST PRESENCE" paragraph is stale on this point and should be corrected.** | §9.3, §9.4, §14 C-1 |
+| **C-1** | **Design is right; REQ-078's text is wrong.** GH#305/ISS-0088 is already `resolved` and `json_schema.ex:159` already carries the `is_map(subschema)` guard. **Do NOT reopen GH#305.** Only GH#306/ISS-0089 is closed by §9.4. **DOC-UPDATER: REQ-078's "WELL-FORMEDNESS, NOT JUST PRESENCE" paragraph is stale on this point and should be corrected.** | §9.3, §9.4, §14 C-1 |
 | **C-2** | **Recorded correction to REQ-078's description.** **DOC-UPDATER: amend the "one-to-three-handler surface over existing context functions" sentence to except solution packs**, so the next reader is not misled the way ORCH was. | §0.1, §8.1, §14 C-2 |
 | **C-3** | **Resolved per §2; no change needed.** Deleting `lib/letflow/routers/validation.ex` and its forward is correct — a module whose moduledoc promises "Routes added by REQ-078" cannot be left behind unfulfilled. | §2.3, §14 C-3 |
 | **C-4** | See OQ-7. Keep as written. | §14 C-4 |
@@ -2184,17 +2301,19 @@ passed was restructured.
 | # | Finding | Fix | Sections |
 |---|---|---|---|
 | **F1** | §18 T-19 mandated a test asserting no route file contains the substrings `VariableSchema`/`variable_schemas` — but §8.6 item 4 mandates a moduledoc sentence containing both. The mandated test failed on the mandated moduledoc. | Restated as an **insert-path** rule, which is what AC8 actually asks. T-19 is now three mechanical checks (no `Repo.` call in the route layer; no changeset/insert call shapes there; exactly one insert against the schema in all of `lib/`), with comments and moduledoc prose **explicitly exempt**. | §18.1 (new), INV-VS-1 |
-| **F2** | `installed_definition.status` enumerated `"skipped"` with no step able to produce it. | **Deleted `"skipped"`; install is all-or-nothing.** Evidenced: `create/2` (`definitions.ex:400`) has no upsert/skip branch and errors with `:duplicate_name_version`, which §8.5 maps to a 409 that aborts. Also surfaced a consequence the draft had not named — Letflow returns 409 on re-install where R-Co's `buildIdempotentInstallResult` (`store.zig:680`) returns a synthetic success — now recorded as a **non-port**. | §8.3.1 (new), §8.3, §8.5, §8.6 |
+| **F2** | `installed_definition.status` enumerated `"skipped"` with no step able to produce it. | **Deleted `"skipped"`; install is all-or-nothing.** Evidenced: `create/2` (`definitions.ex:400`) has no upsert/skip branch and errors with `:duplicate_name_version`, which §8.5 maps to a 409 that aborts. Also surfaced a consequence the draft had not named — Letflow returns 409 on re-install where R-Co's `buildIdempotentResult` (`store.zig:682`, called from `:337`) returns a synthetic success — now recorded as a **non-port**. | §8.3.1 (new), §8.3, §8.5, §8.6 |
 | **F3** | The variable-schema conflict pre-check compared on `(definition name, variable_key)` but the table is keyed by `definition_id`, ran before the ids were minted, and named no lookup function. | **Recorded as a deliberate non-port, with unreachability *proved*, not asserted:** `ProcessDefinition`'s PK is `autogenerate: true` (`process_definition.ex:85`) and `create/2` never returns a pre-existing row, so every id install writes against is fresh and cannot collide. `{:variable_schema_conflict, _, _}` removed from `install_error()` and §8.5. A **standing condition** is recorded for the case that makes it reachable again. | §8.3.2 (new), §8.3, §8.5, §8.6 |
 | **F4** | The OQ-1 ruling was not propagated: §8.1 still said "BLOCKING … do not let ELIXIR-DEV decide by starting to type" and §19's OQ-1 still recommended splitting — two sections telling the implementer to wait for a ruling already made. | §8.1 re-headed **"RULED (OQ-1(a))"** with a ruling banner and the blocking language stripped; §19's OQ-1 rewritten in the same "— RULED:" form as OQ-2..OQ-10, carrying the §0.4 commit-order condition. | §8.1, §19 |
 | **F5** | §18 T-12 asserted a `findings` key for both valid and invalid graphs, but §7.3 emits `findings` only on 200 — the 422 path carries violations in the RFC 9457 `errors` member. AC4's only test asserted a key that never existed on the path that matters. | Split into **T-12a** (200 → `findings`) and **T-12b** (422 → `errors`), with a per-status key table and a note that T-12b is the half that actually discharges AC4. | §18.2 (new), §18 |
 | **F6** | **Evidence integrity.** `router.ex`, `context.ex` and `response.ex` were cited with line numbers past EOF. | **All re-derived with per-file `grep -n`**, now citing single anchor lines. Root cause found and recorded so it cannot recur: the three files were read in one `cat -n` over four concatenated files, which numbers the *stream*, not each file — constant offsets +60/+115/+347. Every wrong citation was wrong by exactly its file's offset, which is why every substantive claim was still correct. | §0.5 citation-integrity note (new), §2.4, §3.2, §5, §6.2, §11.2, §12.4, §15, §19 OQ-9 |
 
-**Correction to the F6 follow-up list itself.** Three of its proposed line-number fixes did not
-survive re-derivation and are **not** applied, because the originals were right — `grep -n`
-gives `authorization.ex` catch-all at **265** (not 264), `error.ex` `@type t` at **85** (not
-87–94), and `error.ex` `serialise/1` clauses at **104**/**110** (not 105–117). Flagged so a
-re-gate against that list does not bounce a correct citation. The `evaluate_access/2` anchors
+**Three review-side corrections DECLINED — the design was right.** Three proposed line-number
+fixes did not survive re-derivation. The wrong numbers came from the **review side**, produced
+by `sed`-range counting rather than `grep -n`; **this design never carried those three wrong**,
+and the round-2 gate independently confirmed the originals. `grep -n` gives `authorization.ex`
+catch-all at **265** (review said 264), `error.ex` `@type t` at **85** (review said 87–94), and
+`error.ex` `serialise/1` clauses at **104**/**110** (review said 105–117). Stated with the
+authorship named because the neutral phrasing was misread twice. The `evaluate_access/2` anchors
 are now cited as single lines (272/274/281) to remove the range ambiguity that caused the
 disagreement. The other minor corrections were right and are applied:
 `validations_for/3`'s `{:ok, _not_a_map}` at **342**, `pin_rebind.ex` `rebind_result` at
@@ -2212,6 +2331,31 @@ Non-blocking items from the same pass, all applied: the `%{Error.unprocessable(�
 idiom named in §7.3 (`@problems_base` is private and unreferenceable); §8.4's inline `Enum.map`
 replaced with a contract sentence plus the R-Co narrowing note; §0.1's stale
 `resolve_tenant_by_realm/1` mention annotated as superseded by the OQ-8 ruling.
+
+### 20.0b Round-2 gate — the six findings and their fixes
+
+Second gate verdict: **FAIL**, six findings. Round-2 gate confirmed 5 of the 6 round-1 fixes
+genuinely landed, confirmed the three declines above were right to decline, and confirmed all
+eight ACs covered, no implementation code, `sandbox_access.zig` correctly excluded, and
+INV-1/INV-5 structurally discharged. The six below are fixed.
+
+| # | Finding | Fix | Sections |
+|---|---|---|---|
+| **R2-1** | **The round-1 remediation claim was broader than the work.** §0.5 said "every citation in this table has since been re-derived" — true of the Letflow table, **false of the R-Co table**, which still held a past-EOF citation of the same F6 kind (`tenant_config.zig:235` in a 207-line file). | **All ten R-Co rows re-derived with per-file `grep -n`**, single anchors throughout; inline cites fixed in §8.5, §11.5, §12.1, §12.2, §12.3; `L235` replaced with **59/60/62**. §0.5's claim rewritten to state what was actually done, on both tables, and to say plainly that over-claiming a remediation is worse than the original defect. | §0.5, §6.1, §8.5, §11.5, §12.1–12.3 |
+| **R2-2** | **A fabricated R-Co identifier.** §8.3.1 and §20.0 cited `buildIdempotentInstallResult`; **no such function exists in R-Co**. | Corrected to **`buildIdempotentResult`, `src/solution/store.zig:682`, called from `:337`**. Both anchors added to `store.zig`'s row — their absence is why the round-1 sweep missed it. §0.5 now calls out that a wrong identifier is worse than a wrong line number: it fails silently under `grep` and reads as authority. | §0.5, §8.3.1, §20.0 |
+| **R2-3** | **Error-map drift** (`docs/anti-patterns.md:894`): `install_error()` omitted `variable_schema_error()` as a member, so all six of `register_variable_schemas/3`'s errors fell to `{:error, term()}` → **500** — including `{:duplicate_variable_key, _}` and `{:blank_variable_key, _}`, pure caller-supplied pack defects with no pre-check in §8.3's steps. | `variable_schema_error()` added to `install_error()`; six rows added to §8.5 — four caller defects → **422** (echoing the key, not the reason), `:missing_prefix`/`:invalid_definition_id` → **500** as route-construction bugs, matching §10.3's `:missing_actor_id`. A **completeness rule** now binds the table to the type. | §8.3, §8.5 |
+| **R2-4** | **§11.5's metrics map returned 200 on a failed query.** "otherwise 200" sent `{:error, {:transaction_failed, _}}` — the other member of `common_error()` (`definitions.ex:157-159`) — to a 200 with a malformed body. | Restated as a positive rule: **200 only when all four calls return `{:ok, _}`; any other result → 500.** Added the reason a partial body is not an option — a counter rendered as `0` because it could not be computed is indistinguishable from a true zero. | §11.5 |
+| **R2-5** | **OQ-4's rationale was false about the codebase it invoked** — "consistency with every existing `decode_cursor/4` call site" entails **400**, since all three existing sites are `Response.bad_request`, but the ruling said 422. Self-contradictory; the design built the wrong half. **Review-side error, re-ruled by ORCH.** | **NEW RULING: 400.** §6.4 rewritten to separate the **collapse** (`tenants.ex:280-290`) from the **status** (`tenants.ex:275-276`), which the draft had conflated; §6.6's row → 400; §6.7 item 6 now records **two** divergences from `audit.zig` (422→400 and 410→400). Verified: `tenants.ex:276`, `identity.ex:295`, `identity.ex:550`. | §6.4, §6.6, §6.7, §19 OQ-4 |
+| **R2-6** | **The substring rule survived in §9.2's mandated `@doc`** ("`grep -rn \"VariableSchema\" lib/letflow/routers/` must return zero hits") — the exact discipline §18.1 and INV-VS-1 were rewritten to remove, in a section the F1 fix did not touch. It held only because no mandated moduledoc happened to use the CamelCase form. | `@doc` reworded to the insert-path form and pointed at §18.1 and INV-VS-1. | §9.2 |
+
+Non-blocking items from round 2, all applied: ten Letflow-side range slips (single anchors were
+all correct); a new §11.4 paragraph requiring the metrics `group_by` to be composed over the
+**schema field** rather than the raw column, since `instance_projections.status` and
+`tasks.status` are keyword-mapped enums storing `"ACTIVE"`/`"PENDING"` and a raw-column group-by
+would silently produce an all-zero map; the `json_schema.ex` guard now cited by one consistent
+anchor (**159**); and §6.4 now states the `"A:<expiry_ts_us>:<global_seq>"` cursor layout and
+how the `global_seq` is recovered (`find_nth_colon/2` at `pagination.ex:318`, `Cursor{inner:}`
+at `pagination.ex:43-57`), closing the last remaining guess in §6.
 
 ### 20.1 No migration in this requirement — checkable at review
 

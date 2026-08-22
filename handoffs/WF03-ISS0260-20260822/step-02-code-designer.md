@@ -1,10 +1,34 @@
 # WF03-ISS0260-20260822 — Step 2 — CODE-DESIGNER
 
-**Verdict:** PASS
+**Verdict:** PASS (revised — see "Revision after CODE-DESIGN-VALIDATOR FAIL" below)
 **Design artefact:** `lib/letflow/design/iss0260-ac1-timing-flake.md`
-**next_action:** Route to CODE-DESIGN-VALIDATOR (WF-03 Step 2b).
+**next_action:** Route to CODE-DESIGN-VALIDATOR for a re-check of the §3.3/§7 OQ-B
+delta only (validator already confirmed the rest of the design sound independently).
 
-## Summary
+## Revision 2 — citation fix after second CODE-DESIGN-VALIDATOR FAIL
+
+CODE-DESIGN-VALIDATOR FAILed the original design on one point only: §3.3/§7 OQ-B claimed
+decision 0009's env knobs (`TEST_MAX_CONNECTIONS` etc.) "do not validate either," and
+used that as the rationale for leaving `TEST_AC1_TIMING_MULTIPLIER` unvalidated. That
+premise was checked directly against `scripts/test_parallel.sh:120-126` and confirmed
+**wrong** — the script explicitly regex-validates `TEST_MAX_CONNECTIONS` as a positive
+integer (`^[1-9][0-9]*$`) and exits 1 with a named-value error message before use.
+Decision 0009's actual precedent is therefore "validate a knob that feeds a bound
+comparison, with a clear message" — the opposite of what the design originally cited.
+
+Fixed, scoped to §3.3 and §7 OQ-B only:
+1. §3.3 now states the corrected decision-0009 precedent and specifies
+   `TEST_AC1_TIMING_MULTIPLIER` MUST be validated as a positive integer
+   (`^[1-9][0-9]*$`) at the multiplier-selection point, rejecting with a named-value
+   error message mirroring `test_parallel.sh`'s own `TEST_MAX_CONNECTIONS` message
+   shape.
+2. §7 OQ-B is now marked resolved (not open), states the correction, and asks
+   TEST-DESIGNER for an explicit invalid-value test case.
+
+Nothing else in the design changed — §1, §2, §3.1/§3.2/§3.4/§3.5, §4, §5, §6, and OQ-A
+are untouched, matching what CODE-DESIGN-VALIDATOR already confirmed sound.
+
+## Summary (original, still accurate except the §3.3/OQ-B correction above)
 
 Designed the fix for ISS-0260's AC1 timing-assertion flake
 (`test/letflow/engine_concurrency_test.exs:306`,

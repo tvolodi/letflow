@@ -126,7 +126,7 @@ forward, without needing another design-doc cycle for a pure numeric retune.
 
 **Correction (post CODE-DESIGN-VALIDATOR review):** an earlier revision of this section
 claimed decision 0009's own knobs are unvalidated. That was checked against the actual
-shipped source and is **wrong** — `scripts/test_parallel.sh:120-123` explicitly
+shipped source and is **wrong** — `scripts/test_parallel.sh:124-127` explicitly
 regex-validates `TEST_MAX_CONNECTIONS` (`printf '%s' "$max_conn" | grep -Eq
 '^[1-9][0-9]*$'`) and exits 1 with a named error message
 (`"test_parallel: ERROR TEST_MAX_CONNECTIONS='$max_conn' is not a positive integer"`)
@@ -237,7 +237,7 @@ land in the same PR.
   positive integer (§3.3) before use, with a named-value error message on rejection.
   This corrects an earlier draft of this doc, which claimed decision 0009's knobs are
   unvalidated and used that as grounds to skip validation here — that claim was checked
-  against `scripts/test_parallel.sh:120-126` and found false: `TEST_MAX_CONNECTIONS` is
+  against `scripts/test_parallel.sh:124-127` and found false: `TEST_MAX_CONNECTIONS` is
   explicitly regex-validated there with exactly this style of error message. §3.3 now
   follows that actual precedent. TEST-DESIGNER should include an explicit
   invalid-value test case (e.g. `TEST_AC1_TIMING_MULTIPLIER=abc` or `"-1"`) asserting

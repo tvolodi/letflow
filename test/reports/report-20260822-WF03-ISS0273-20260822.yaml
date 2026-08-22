@@ -1,0 +1,77 @@
+report_id: report-20260822-WF03-ISS0273-20260822
+agent: TEST-RUNNER
+issue: ISS-0273
+workflow_step: WF-03 Step 4c (full-suite test run + lint_handoffs)
+handoff: handoffs/WF03-ISS0273-20260822/step-04c-test-runner.json
+branch: feature/WF03-ISS0273-20260822
+date: 2026-08-22
+command: "docker compose up -d; scripts/test_parallel.sh; mix letflow.lint_handoffs"
+
+toolchain:
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    `docker compose up -d` -- letflow-postgres-1 already Running, letflow-keycloak-1
+    started fresh this run. No .env LETFLOW_DB_PORT override present (5462 default).
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no separate
+    DB-setup step taken here.
+  parallel_n: "16 (source: nproc, auto-derived, no TEST_PARALLEL_N override given)"
+
+# ---------------------------------------------------------------------------
+# Full suite (quoted verbatim)
+# ---------------------------------------------------------------------------
+
+run:
+  result: >
+    test_parallel: N=16 (source: nproc)
+    partition 1: 120 tests, 0 properties, 0 failures, exit 0
+    partition 2: 82 tests, 0 properties, 0 failures, exit 0
+    partition 3: 95 tests, 0 properties, 0 failures, exit 0
+    partition 4: 125 tests, 0 properties, 0 failures, exit 0
+    partition 5: 107 tests, 0 properties, 0 failures, exit 0
+    partition 6: 130 tests, 0 properties, 0 failures, exit 0
+    partition 7: 127 tests, 0 properties, 0 failures, exit 0
+    partition 8: 100 tests, 2 properties, 0 failures, exit 0
+    partition 9: 166 tests, 2 properties, 0 failures, exit 0
+    partition 10: 82 tests, 0 properties, 0 failures, exit 0
+    partition 11: 80 tests, 0 properties, 0 failures, exit 0
+    partition 12: 119 tests, 0 properties, 0 failures, exit 0
+    partition 13: 122 tests, 0 properties, 0 failures, exit 0
+    partition 14: 116 tests, 0 properties, 0 failures, exit 0
+    partition 15: 113 tests, 0 properties, 0 failures, exit 0
+    partition 16: 86 tests, 1 property, 0 failures, exit 0
+    combined: 1770 tests, 5 properties, 0 failures (1775/1775 passed)
+  exit_code: 0
+  attribution: >
+    All 16 partitions completed with exit 0, no failures anywhere in the run --
+    clean run, no regressions to attribute (no order-dependence flake reproduced
+    this time, unlike ISS-0262's report). Nothing to route to ISSUE-FIXER as a
+    pre-existing bug.
+
+# ---------------------------------------------------------------------------
+# mix letflow.lint_handoffs
+# ---------------------------------------------------------------------------
+
+lint_handoffs:
+  command: "mix letflow.lint_handoffs; echo EXIT:$?"
+  exit_code: 0
+  output_summary: >
+    Same pre-existing GRANDFATHERED (25 items, traced to ISS-0190) and ADVISORY
+    (WARN-only, does not affect exit code) sections as recent prior runs (H-SIZE-1/2
+    under-specified/cite-and-restate notices, ARTIFACTS_OUT_SELF_REF notices, H5
+    registry-coverage gaps for run_ids on disk vs in registry.json) -- none new,
+    none blocking.
+  output_tail: >
+    letflow.lint_handoffs: OK -- 0 new violations across 836 handoff files
+    (25 pre-existing grandfathered, traced to ISS-0190).
+
+verdict: PASS
+
+summary_line: >
+  Full suite: 1775/1775 passed (0 failures) across all 16 partitions, exit 0
+  throughout. mix letflow.lint_handoffs: exit 0, "OK -- 0 new violations across
+  836 handoff files (25 pre-existing grandfathered)". No regressions found;
+  nothing to attribute to this branch's change since nothing failed.

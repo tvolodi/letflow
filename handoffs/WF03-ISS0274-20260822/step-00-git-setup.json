@@ -1,0 +1,48 @@
+{
+  "handoff_id": "7d85508d-58fb-4703-ac1e-c815ed76a94c",
+  "run_id": "WF03-ISS0274-20260822",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF03-ISS0274-20260822/step-00-git-setup.json",
+  "created_at": "2026-08-22T13:40:52Z",
+  "started_at": "2026-08-22T13:40:52Z",
+  "completed_at": "2026-08-22T13:40:52Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/agents/protocols/GIT_SETUP.md"],
+    "owned_modules": ["web/tsconfig.json", "web/package.json"]
+  },
+  "task": {
+    "description": "Run fn:git-setup per docs/agents/protocols/GIT_SETUP.md for run_id WF03-ISS0274-20260822 (branch feature/WF03-ISS0274-20260822). Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "git pull --ff-only origin main exited 0",
+      "git branch --show-current outputs feature/WF03-ISS0274-20260822",
+      "git push -u origin feature/WF03-ISS0274-20260822 exited 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Ran fn:git-setup per GIT_SETUP.md (single-worktree case, steps 1-8; not the worktree variant -- `git worktree list` showed only one entry). `git checkout main` -> 'Already on main'. `git pull --ff-only origin main` -> 'Already up to date.' (exit 0). `git branch --list feature/WF03-ISS0274-20260822` returned empty, so no stale branch to delete. `git checkout -b feature/WF03-ISS0274-20260822` -> 'Switched to a new branch'. `git branch --show-current` -> 'feature/WF03-ISS0274-20260822' (matches required branch name). `git push -u origin feature/WF03-ISS0274-20260822` -> '[new branch] feature/WF03-ISS0274-20260822 -> feature/WF03-ISS0274-20260822', 'branch set up to track origin/feature/WF03-ISS0274-20260822' (exit 0). All three acceptance criteria satisfied.",
+    "artifacts_out": ["branch: feature/WF03-ISS0274-20260822"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0274-20260822",
+      "commit_sha_list": ["92be7c1d12dab055cdd8e3b83127cc7161cd6a96"],
+      "remote_branch": "origin/feature/WF03-ISS0274-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to next step per active workflow"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

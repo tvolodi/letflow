@@ -7,9 +7,9 @@
   "to_agent": "TEST-DESIGNER",
   "file": "handoffs/WF02-REQ124-20260822/step-03-test-designer.json",
   "created_at": "2026-08-22T11:08:06Z",
-  "started_at": "2026-08-22T11:08:06Z",
-  "completed_at": "2026-08-22T11:20:00Z",
-  "status": "COMPLETED",
+  "started_at": "2026-08-22T11:36:36Z",
+  "completed_at": null,
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -35,13 +35,14 @@
     ]
   },
   "task": {
-    "description": "Write tests for lib/letflow/routers/mobile_tenant_config.ex and the new lib/letflow/identity.ex function (Letflow.Identity.safe_get_tenant_by_slug/2), per WF-02 Step 3's standard procedure. This has real application-executable surface (a new Plug router module, a new public context function) so the full Step 3/3b/4 sequence applies, not the docs-only skip. Existing test/letflow/routers/tenant_config_test.exs is your reference for the router-dispatched test style already established for this endpoint family (Letflow.Router.call/2, no Authorization header). Cover, at minimum, every acceptance criterion below -- in particular AC3's exact-shape assertion must be a sorted-key-set equality check (Map.keys(body) |> Enum.sort() == [...]), not a subset/pattern match, and AC5 needs a test against a real Letflow.Plugs.ApiPipeline-mounted route (e.g. GET /api/v1/tenants with no Authorization header) asserting 401, to prove the exemption is route-specific and not pipeline-wide. Also test: known slug with idp_realm_id set -> realm_url reflects it; slug with nil/empty idp_realm_id -> default; unknown slug -> default, byte-identical to the missing-slug case; missing ?slug= param -> default; every branch returns HTTP 200 (never 404/500); locales/default_locale/branding/environment_kind are identical across every branch (only realm_url varies); no Authorization header is sent by any test (that's the whole point of this endpoint). Write test/specs/REQ-124.md (requirement text, test cases, why each exists) and test code under test/letflow/ (test/letflow/routers/mobile_tenant_config_test.exs, plus identity_test.exs additions for the new safe_get_tenant_by_slug/2 function if lib/letflow/identity.ex doesn't already have adequate coverage of it -- check test/letflow/identity_test.exs first).",
+    "description": "Write tests for lib/letflow/routers/mobile_tenant_config.ex and the new lib/letflow/identity.ex function (Letflow.Identity.safe_get_tenant_by_slug/2), per WF-02 Step 3's standard procedure. This has real application-executable surface (a new Plug router module, a new public context function) so the full Step 3/3b/4 sequence applies, not the docs-only skip. Existing test/letflow/routers/tenant_config_test.exs is your reference for the router-dispatched test style already established for this endpoint family (Letflow.Router.call/2, no Authorization header). Cover, at minimum, every acceptance criterion below -- in particular AC3's exact-shape assertion must be a sorted-key-set equality check (Map.keys(body) |> Enum.sort() == [...]), not a subset/pattern match, and AC5 needs a test against a real Letflow.Plugs.ApiPipeline-mounted route (e.g. GET /api/v1/tenants with no Authorization header) asserting 401, to prove the exemption is route-specific and not pipeline-wide. Also test: known slug with idp_realm_id set -> realm_url reflects it; slug with nil/empty idp_realm_id -> default; unknown slug -> default, byte-identical to the missing-slug case; missing ?slug= param -> default; every branch returns HTTP 200 (never 404/500); locales/default_locale/branding/environment_kind are identical across every branch (only realm_url varies); no Authorization header is sent by any test (that's the whole point of this endpoint). Write test/specs/REQ-124.md (requirement text, test cases, why each exists) and test code under test/letflow/ (test/letflow/routers/mobile_tenant_config_test.exs, plus identity_test.exs additions for the new safe_get_tenant_by_slug/2 function if lib/letflow/identity.ex doesn't already have adequate coverage of it -- check test/letflow/identity_test.exs first).\n\nREWORK ITERATION 1: TEST-RUNNER (Step 4, handoffs/WF02-REQ124-20260822/step-04-test-runner.json) FAILed on one narrow ground -- everything else in test/specs/REQ-124.md and both test files is unaffected and must NOT be touched in this rework. The one issue: test/letflow/identity_test.exs:808 asserts `assert_raise Ecto.QueryError, fn -> ... end` for Identity.get_tenant_by_slug(12_345), but against the vendored Ecto 3.14.1 in this repo, passing a non-binary slug into Repo.get_by/2 actually raises Ecto.Query.CastError, not Ecto.QueryError -- confirmed by TEST-RUNNER's own real test run output. This is a test-code bug (wrong exception-module assumption), not an app bug: Letflow.Identity.safe_get_tenant_by_slug/2's bare `rescue` still correctly swallows whichever exception is raised (the companion wrapped-call test in the same describe block already passes). Fix: change the asserted exception module at line 808 (and the companion assert_raise a few lines below it, if it makes the same assumption) from Ecto.QueryError to Ecto.Query.CastError. Do not weaken the assertion to a bare rescue/catch-all -- keep it a specific assert_raise so a future change to the wrapped function's failure mode is still caught. After the fix: confirm the two identity_test.exs assertions parse and are mix-format-clean, then complete this handoff as normal (status COMPLETED/FAILED, result filled in fresh) -- this is not a first dispatch, so there is no separate claim step beyond the usual IN_PROGRESS->COMPLETED flow.",
     "acceptance_criteria": [
       "GET /tenant-config [/api/mobile/tenant-config] returns the five specified fields for a known tenant slug with no Authorization header, demonstrated by a test that sends no token",
       "a test asserts that the endpoint exposes no field beyond the five specified -- an exact-shape assertion (sorted key-set equality), not a subset check",
       "the behaviour for an unknown tenant slug is tested and shown byte-identical to the default/missing-slug branch",
       "every other route under Letflow.Plugs.ApiPipeline still requires authentication, proven by a test that would fail if the exemption were pipeline-wide (e.g. GET /api/v1/tenants with no token -> 401)",
-      "Letflow.Identity.safe_get_tenant_by_slug/2's exception-swallowing behavior is tested (raises inside get_tenant_by_slug/1 -> {:error, :lookup_failed}, never propagates)"
+      "Letflow.Identity.safe_get_tenant_by_slug/2's exception-swallowing behavior is tested (raises inside get_tenant_by_slug/1 -> {:error, :lookup_failed}, never propagates)",
+      "REWORK ITERATION 1: test/letflow/identity_test.exs:808's assert_raise targets Ecto.Query.CastError, not Ecto.QueryError, matching what Repo.get_by/2 actually raises against this repo's vendored Ecto version"
     ]
   },
   "result": {
@@ -65,6 +66,6 @@
     },
     "next_action": "Route to TEST-DESIGN-VALIDATOR"
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

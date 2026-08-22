@@ -1261,3 +1261,41 @@ history:
       `grep -c "^  - req:" docs/status/requirement_status.v3.yaml` = 43
       after REQ-076's own started+done pair and ISS-0287's own done-event
       were composed in above, per this note's own recount-every-time rule.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 3 — CLOSED 2026-08-23. DO NOT APPEND TO THIS FILE.
+#
+# This volume holds the complete requirement run history from 2026-08-22 through
+# 2026-08-23 (43 entries, lines 1-1263). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed under WF02-REQ082-20260823's Step
+# Final rebase because it crossed its own declared roll_rule ceiling
+# (max_lines: 1200) at 1263 lines / 76551 bytes / 43 entries -- confirmed
+# failing test/docs/requirement_status_invariants_test.exs's assertion A3
+# ("the current volume is within the roll-rule ceilings"). Reads of this volume
+# are TARGETED reads only -- a line range or a pattern match, never a
+# whole-file read (1263 lines exceeds the 1200-line roll ceiling, though it
+# remains under the Read tool's own 2000-line/256KB hard limit). Use whichever
+# your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v4.yaml
+#
+# Why this file was closed: REQ-082's Step Final rebase composed
+# WF02-REQ076-20260822's and WF03-ISS0287-20260823's completions (landed on
+# main independently) with REQ-082's own done-event, bringing the on-disk
+# count to 43 across 1263 lines -- over the roll ceiling. No prior run since
+# this volume crossed the roll ceiling had executed the roll procedure
+# documented in this file's own (now-frozen) "WHEN THIS VOLUME IS FULL"
+# section; this run does so as part of its own Step Final, per that section's
+# instructions.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none declared. Volumes 1/2's declared
+# anomalies remain declared against those volumes only; this volume introduced
+# no new ones as far as this closure's own review found.
+# ─────────────────────────────────────────────────────────────────────────────

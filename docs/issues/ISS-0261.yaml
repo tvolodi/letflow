@@ -1,0 +1,138 @@
+id: ISS-0261
+title: >
+  No tracked, general-purpose mutation-testing helper -- WF-03 runs keep
+  reinventing/deleting a throwaway single-occurrence mutator ad hoc
+discovered_by: TEST-DESIGN-VALIDATOR
+discovered_in_run: WF03-ISS0258-20260822
+discovered_at: "2026-08-22T06:35:00Z"
+severity: MINOR
+
+description: >
+  Follow-up from ISS-0258 (merge 836a25b). WF-03's own regression-test
+  procedure (docs/agents/workflows/WF-03_issue_resolving.md, "When the
+  pre-fix failure is 'the code under test does not exist'") requires
+  mutation testing whenever a fix ADDS a module, since a fail-then-pass
+  test against a nonexistent module proves nothing about whether the
+  suite discriminates a correct implementation from a wrong one.
+  WF03-ISS0258-20260822's TEST-DESIGN-VALIDATOR wrote a throwaway
+  `tdv_mutate.py` to do this against
+  lib/mix/tasks/letflow.check_deferral_staleness.ex -- a single-
+  occurrence-enforcing string replacer (refuses to write unless the
+  target string occurs exactly once in the file, so a mis-typed or
+  drifted mutant fails loudly rather than silently no-op'ing) -- then
+  deleted it per its own handoff
+  (handoffs/WF03-ISS0258-20260822/step-04b-test-design-validator.md,
+  section 7), correctly ruling that promoting a reusable tool was
+  outside a validator's remit for that run, and recommending ORCH route
+  a small follow-up to move it to scripts/ and reference it from
+  WF-03's own mutant-isolation section.
+
+  ROOT CAUSE. Not a logic defect -- the throwaway script worked
+  correctly for its one run. The root cause is a MISSING ARTEFACT: every
+  WF-03 run whose fix adds a module must independently reconstruct (or
+  skip) the same single-occurrence-substitution machinery, with no
+  shared, documented calling convention. That is real toil repeated
+  across runs (this issue itself had to reconstruct the original
+  script's interface from a deleted-file handoff description rather
+  than from a live script), and it invites the exact failure the
+  original script was built to make loud: a mutant that never actually
+  landed producing a false KILLED/SURVIVED reading.
+
+acceptance_criteria:
+  - "A tracked, general-purpose mutation-testing helper exists under scripts/, usable against an arbitrary lib/ module -- not hardcoded to ISS-0258's detector"
+  - "It preserves the single-occurrence guard (refuses to mutate unless the target string occurs exactly once) that made the original throwaway script trustworthy"
+  - "A real demonstration exists: run against a real small module in this codebase with actual kill/survive output quoted, not a synthetic self-test"
+  - "The calling convention is documented well enough (header comment or scripts/README.md) that a future TEST-DESIGNER/TEST-DESIGN-VALIDATOR can invoke it directly without re-deriving it"
+  - "The change stays small and scoped to a mutation-testing helper -- not expanded into a general test-quality framework"
+
+affected_files:
+  - scripts/mutate.py
+  - scripts/README.md
+  - docs/issues/ISS-0258.yaml
+  - handoffs/WF03-ISS0258-20260822/step-04b-test-design-validator.md
+
+related:
+  - ISS-0258  # the run whose TEST-DESIGN-VALIDATOR built and deleted the throwaway original, and recorded this follow-up
+
+queue_task_id: 261
+github_issue: 509
+github_issue_note: >
+  ORCH registered queue task 261 / GitHub issue 509 ahead of this run per
+  ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called
+  separately.
+
+status: resolved
+resolved_in_run: WF03-ISS0261-20260822
+resolved_at: "2026-08-22T07:30:00Z"
+resolution_note: >
+  Built `scripts/mutate.py`, a tracked, general-purpose mutation-testing
+  helper, plus `scripts/README.md` documenting it as the index entry for
+  `scripts/`.
+
+  LANGUAGE CHOICE: Python, stdlib only -- kept, not ported to a mix task
+  or shell script, for the same reason the original was Python: this
+  project's dev hosts are Windows (docs/anti-patterns.md logs more than
+  one Windows `sed -i`/quoting/line-ending hazard), a mix task cannot run
+  against code that is expected to be broken by the very mutation it is
+  testing (the unmutated project must compile first), and a raw shell
+  one-liner cannot portably enforce "exactly one occurrence" or handle
+  UTF-8/newlines correctly on Windows the way stdlib Python does.
+
+  INTERFACE (AC1, AC2, AC4): `python scripts/mutate.py <file> <old> <new>
+  -- <test-command...>`. Preserves the original's single-occurrence
+  guard verbatim in spirit (refuses to write unless <old> occurs exactly
+  once in <file>, exit 2, nothing written) and generalises it: applies
+  the mutant, runs <test-command>, reports MUTANT_KILLED (exit 0,
+  nonzero test exit) or MUTANT_SURVIVED (exit 1, zero test exit), then
+  ALWAYS reverts the file to its exact original bytes (try/finally, so a
+  crashed or interrupted test command still reverts) and verifies the
+  revert byte-identical before exiting. Full usage/exit-codes/mutant-
+  taxonomy documented in the script's own header docstring plus
+  scripts/README.md's `mutate.py` section (worked example, origin note,
+  and guidance on when to still prefer the throwaway-git-worktree
+  isolation technique for a multi-mutant pass).
+
+  MUTANT TAXONOMY (matches this project's own WF-03 precedent, not
+  invented fresh): a mutant is a single-occurrence substitution --
+  operator swap, comparison flip, constant perturbation, or deletion
+  (<new> = '') -- hand-chosen by the calling agent to target a specific
+  trap the fix under test exists to catch, per WF-03's own "mutants must
+  target the specific traps the fix exists to handle" rule. Matches the
+  MS/MV-numbered mutant style WF03-ISS0258-20260822 itself used.
+
+  REAL DEMONSTRATION (AC3), not synthetic: reproduced
+  WF03-ISS0258-20260822's own MS3 mutant against
+  lib/mix/tasks/letflow.check_deferral_staleness.ex --
+  `@active_statuses [:done, :in_progress, :blocked]` ->
+  `@active_statuses [:in_progress, :blocked]`. Baseline
+  `mix test test/mix/tasks/letflow_check_deferral_staleness_test.exs`:
+  57 passed. Mutated run: 43/57 passed, 14 failed -- the exact same
+  14-test red set WF03-ISS0258-20260822 recorded by hand for this mutant
+  (that run's suite had 55 tests at the time, 41/55 passed, 14 red; the
+  suite has since grown to 57 tests by an unrelated later change, still
+  14 red). `scripts/mutate.py` reported MUTANT_KILLED, exit 0. Revert
+  verified byte-identical; `git status --porcelain lib/ test/` empty
+  both before and after; suite re-ran 57/57 green post-revert with no
+  manual cleanup. The single-occurrence guard was also demonstrated
+  directly: a 0-occurrence target string refuses with exit 2, writes
+  nothing (`git status --porcelain lib/` empty).
+
+  DOCUMENTATION (AC4): full header docstring in scripts/mutate.py
+  (usage, exit codes, output format, guarantees, mutant taxonomy, why
+  Python) plus scripts/README.md's dedicated section (worked example
+  transcript, origin note pointing back to this issue and
+  WF03-ISS0258-20260822, guidance on when to still use the throwaway-
+  worktree technique instead).
+
+  SCOPE (AC5): scripts/mutate.py plus scripts/README.md only -- no
+  changes to any lib/, test/, or mix.exs file; no attempt at an
+  AST-level mutation framework, automatic mutant generation, or
+  operator-coverage matrix, deliberately (documented in the script's own
+  header as an explicit non-goal).
+
+  SECURITY-REVIEWER: OUT OF SCOPE, stated explicitly rather than skipped
+  -- a Python helper script under scripts/, not a tenant-data path, no
+  HTTP surface, no migration, no secret.
+
+  REVIEWER: see handoff at handoffs/WF03-ISS0261-20260822/ for the full
+  verdict.

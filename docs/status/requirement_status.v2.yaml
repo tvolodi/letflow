@@ -1233,3 +1233,30 @@ history:
       or any dangling/unreachable git commit; treated as lost with no residue,
       since no test files existed yet at resume and none were later found
       contradicting that.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-22T07:23:05Z"
+    note: >
+      WF03-ISS0261-20260822. Follow-up from ISS-0258: promoted the throwaway
+      `tdv_mutate.py` TEST-DESIGN-VALIDATOR wrote and deleted during
+      WF03-ISS0258-20260822 into a tracked, general-purpose mutation-testing
+      helper, `scripts/mutate.py` (plus `scripts/README.md`). Python, stdlib
+      only, kept for the same cross-platform reason the original was written
+      in Python (this repo's dev hosts are Windows; `sed -i` and shell
+      quoting are documented hazards). Generalises the original single-
+      occurrence-substitution guard by also running the given test command
+      and always reverting the mutated file (try/finally, byte-identical
+      verified), rather than leaving both steps to the calling agent's own
+      shell commands. Real demonstration: reproduced WF03-ISS0258-20260822's
+      own MS3 mutant against
+      lib/mix/tasks/letflow.check_deferral_staleness.ex
+      (@active_statuses [:done, :in_progress, :blocked] ->
+      [:in_progress, :blocked]) -- 43/57 passed, 14 red, matching that run's
+      recorded 14-test red set exactly; MUTANT_KILLED, revert verified,
+      suite re-ran 57/57 green afterward. Guard also demonstrated directly:
+      a 0-occurrence target refuses with exit 2 and writes nothing.
+      SECURITY-REVIEWER out of scope (tooling under scripts/, no tenant-data
+      path -- explicit scope test recorded in the design/review handoff, not
+      silently skipped). REVIEWER: see handoff for verdict. Full detail:
+      docs/issues/ISS-0261.yaml.

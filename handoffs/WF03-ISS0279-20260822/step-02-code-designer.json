@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0279-20260822/step-02-code-designer.json",
   "created_at": "2026-08-22T16:42:54Z",
   "started_at": "2026-08-22T16:42:54Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-22T16:47:23Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S0",
@@ -38,7 +38,13 @@
       "No implementation code in the design artefact"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Design artefact written to lib/letflow/design/iss0279-issue-closure-audit.md covering both fix surfaces per the handoff brief. (1) DOC PROSE: exact replacement wording for WF-03_issue_resolving.md Step 5 point 2 (evidence-on-close stated as a HARD requirement -- comment or genuinely linked/merged PR, GH#324/#326 cited as the concrete cost of skipping it) plus one added sentence after Step 5's output paragraph; and a new ISSUE_QUEUE.md section 'Closing an issue's GitHub mirror -- evidence is mandatory' (currently that file only covers filing, not closing) restating the same rule and pointing at the new audit tool. (2) TOOL DESIGN: mix letflow.audit_issue_closures (Mix.Tasks.Letflow.AuditIssueClosures), modeled structurally on letflow.lint_handoffs.ex -- full @moduledoc text, zero-arg CLI shape, data flow (docs/issues/*.yaml discovery via File.read!+Regex, matching check_requirements_registration.ex's existing convention since this project has no YAML-parsing dependency; one `gh issue view <n> --json number,state,comments,closedByPullRequestsReferences` call per tracked issue; Jason decode), grandfather-list format ({issue_number, date, note} tuples, mirroring lint_handoffs's per-item no-blanket-suppression convention but simplified since there is only one hard rule, ZERO_EVIDENCE), and exact exit-code/report format (three-section stdout report, FETCH ERRORS forces non-zero distinctly from violations, OK line on a clean run). Section 2.6 directs ELIXIR-DEV to run the real audit once implemented and populate @grandfathered from actual findings, explicitly excluding GH#324/GH#326 (already resolved with real evidence by WF03-ISS0278-20260822, must not be grandfathered as if still violating). BOTH OPEN QUESTIONS RESOLVED (not left open): Q1 (live-GitHub-network) resolved as (a) -- the tool requires gh CLI + live network and is documented plainly as LOCAL/ON-DEMAND-ONLY, never assumed to run in a sandboxed/offline environment; rationale: repo has no .github/workflows, mix letflow.check is the CI substitute per ISS-0257, and every step currently in that alias (check_toolchain, check_requirements_registration, check_deferral_staleness, lint_handoffs, format --check-formatted, compile --warnings-as-errors, check.test) reads only local filesystem/git state with zero network dependency -- confirmed by reading mix.exs's aliases/0 directly. Q2 (letflow.check wiring) resolved as NO -- stays standalone, not added to aliases/0, because folding a network-dependent step into an alias every agent runs (including sandboxed/offline) would make it spuriously fail for reasons unrelated to code correctness; a graceful-skip-when-gh-unavailable variant was explicitly considered and rejected too, since a hard gate that silently no-ops under an undetectable condition manufactures false confidence rather than an honest absence -- WF-03 Step 5's hardened prose is the forward gate, this tool is the periodic after-the-fact backstop. No implementation code included -- interfaces, @moduledoc prose, CLI shape, data shapes, exact doc prose, and grandfather/report formats only.",
+    "artifacts_out": ["lib/letflow/design/iss0279-issue-closure-audit.md"],
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

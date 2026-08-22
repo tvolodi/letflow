@@ -10,9 +10,24 @@ route needs, moduledoc content obligations, changed-file list, traceability, ope
 
 ---
 
-## 0. ⚠ BLOCKING SIZING FINDING — read this before anything else
+## 0. Sizing finding — RAISED, and RULED ON by ORCH: **do not split**
 
-**REQ-078 as written is two requirements, and I recommend splitting it.** This is a
+> **RULING (ORCH, WF02-REQ078-20260822): OQ-1 = option (a). Accept the added scope inside
+> REQ-078. Do not split.** Splitting would strand AC3 and AC8, and AC8 exists precisely because
+> an earlier requirement dropped the `variable_schemas` insert path and shipped the table empty
+> (ISS-0063 / GH#212) — splitting to tidy the port would re-create the exact failure mode the
+> criterion was added to prevent. **Implementation condition ORCH will enforce:** solution
+> packs (§8) + the registration function (§9) are committed as **their own commit, before** the
+> five thin routes, so the load-bearing half is landed first. Full ruling: §20.
+>
+> §0.1–§0.3 below are retained **as the raised finding and its reasoning**, not as a live
+> recommendation. §0.4 is now the operative instruction.
+
+The finding as raised follows. This was a considered judgement made *after* doing the full
+design below, not an estimate made instead of it. Both halves are designed here in full, so
+either decision was executable immediately — which is why ORCH could rule in one pass.
+
+**REQ-078 as written is arguably two requirements.** This is a
 considered judgement made *after* doing the full design below, not an estimate made instead
 of it. Both halves are designed here in full, so either decision is executable immediately.
 
@@ -47,7 +62,7 @@ its moduledoc, plus the resolution of a `done`-stage open question (`req109-vari
 storage-contract decision on a **done** S3 module, which happens to be triggered by the pack
 install being the first writer.
 
-### 0.3 Recommended split
+### 0.3 The split that was proposed — **NOT TAKEN** (ORCH ruled against it; kept for the record)
 
 | | Keeps | Acceptance criteria |
 |---|---|---|
@@ -69,15 +84,26 @@ shipped an empty table (ISS-0063 / GH#212). If REQ-078b is deferred rather than 
 REQ-082 inherits the obligation to build `register_variable_schemas/3` — and REQ-082's own
 text already says so ("whichever of the two lands FIRST builds that function").
 
-### 0.4 If ORCH decides NOT to split
+### 0.4 OPERATIVE — execute the whole document as one requirement
 
 Everything needed is in this document; nothing is under-designed to make it fit. §8 specifies
-the full solution-pack context module, §9 the full registration contract. Execute the whole
-document as one turn. **What must not happen is a partial build** — shipping
-`Letflow.Routers.SolutionPacks` over a stubbed or half-built `install/3` would produce exactly
-the half-built write path AC8 exists to prevent.
+the full solution-pack context module, §9 the full registration contract. **What must not
+happen is a partial build** — shipping `Letflow.Routers.SolutionPacks` over a stubbed or
+half-built `install/3` would produce exactly the half-built write path AC8 exists to prevent.
 
-**This is ORCH's call, not CODE-DESIGNER's. It is `OQ-1` below, and it is BLOCKING for Step 2a.**
+**Commit order (ORCH's condition):**
+
+1. **Commit 1 — the load-bearing half.** `Letflow.Definitions.JsonSchemaShape` (§9.3),
+   `Letflow.Definitions.register_variable_schemas/3` (§9.2), the
+   `Letflow.Engine.VariableSchema.changeset/2` + moduledoc changes (§9.3/§9.4),
+   `Letflow.Definitions.SolutionPack` (§8.3), `Letflow.Routers.SolutionPacks` (§8.5) and its
+   forward.
+2. **Commit 2 — the five thin routes.** Audit (§6), definition validation (§7), tenant config
+   (§12), pin rebind (§10), metrics (§11), plus the `event_store.ex` / `engine.ex` /
+   `definitions.ex` counter and filter additions and the `router.ex` / `api_pipeline.ex`
+   mount changes.
+
+**Sizing finding stands as a recorded correction to the requirement text** — see §20 item C-2.
 
 ---
 
@@ -954,7 +980,7 @@ Behaviour, in one `Ecto.Multi` executed by `Letflow.Repo.transaction/2`:
    `solution_packs.zig:170-172`).
 3. **Well-formedness pre-check on every `variable_schemas` entry, before any insert** — §9.3.
    `schema_content` is decoded with `Jason.decode/1` and checked by
-   `Letflow.Definitions.well_formed_json_schema?/1`. Any failure aborts the whole transaction
+   `Letflow.Definitions.JsonSchemaShape.check/1`. Any failure aborts the whole transaction
    with `{:error, {:malformed_variable_schema, variable_key, reason}}`. **Nothing is written.**
 4. Conflict pre-check, porting `store.zig:415-441`: for each entry, if a row already exists in
    the caller's schema for the same `(definition name, variable_key)` with a **different**
@@ -1145,25 +1171,38 @@ collide with REQ-082 importing a different definition — REQ-078's own stated i
 well formed at EVERY level BEFORE insert, and reject a malformed one with a typed error at
 install/import time.**
 
-New public predicate on `Letflow.Definitions`:
+**Home module — ruled by ORCH (OQ-2): a dedicated module, `Letflow.Definitions.JsonSchemaShape`,
+in `lib/letflow/definitions/json_schema_shape.ex`.** Both `Letflow.Definitions` (the
+registration path) and `Letflow.Engine.VariableSchema` (the changeset) call it. An Engine
+module calling into `Letflow.Definitions` would be the wrong dependency direction; a leaf
+module both may depend on has no such problem. The module is pure — no `Repo`, no clock, no
+`Plug.Conn` — and has exactly one public function.
 
 ```
+defmodule Letflow.Definitions.JsonSchemaShape
+
+@max_depth 32
+
 @doc """
 True iff `document` is a well-formed JSON Schema document AT EVERY LEVEL:
 it is a map, every value of a `"properties"` map is itself well formed, and an
-`"items"` value, when present, is itself well formed. Bounded by
-`@max_json_schema_depth 32` — a deeper document returns `false` rather than
-recursing without limit on caller-supplied input (INV-8).
+`"items"` value, when present, is itself well formed. Bounded by `@max_depth`
+(32) — a deeper document returns `{:error, :too_deep}` rather than recursing
+without limit on caller-supplied input (INV-8).
+
+Returns the JSON-pointer-style segment path to the FIRST offending level, so a
+caller can tell the submitter where the document went wrong. `[]` means the
+top level itself is not a map.
 """
-@spec well_formed_json_schema?(document :: term()) :: boolean()
-def well_formed_json_schema?(document)
+@spec check(document :: term()) ::
+        :ok | {:error, {:not_well_formed, path :: [String.t()]}} | {:error, :too_deep}
+def check(document)
 ```
 
-`register_variable_schemas/3` maps `false` to
-`{:error, {:not_well_formed, variable_key, path}}`, where `path` is the JSON-pointer-style
-segment list to the first offending level (`[]` for a non-map top level). Depth exhaustion maps
-to `{:error, {:schema_too_deep, variable_key}}` — a distinct reason so the two are
-distinguishable in a log.
+`register_variable_schemas/3` maps `JsonSchemaShape.check/1`'s
+`{:error, {:not_well_formed, path}}` to `{:error, {:not_well_formed, variable_key, path}}`, and
+its `{:error, :too_deep}` to `{:error, {:schema_too_deep, variable_key}}` — two distinct
+reasons so the two failure modes stay distinguishable in a log.
 
 **Why (a) and not (b).**
 
@@ -1187,20 +1226,18 @@ distinguishable in a log.
 4. **`Letflow.Api.Validation` already establishes reject-at-the-boundary as this API's
    contract** (REQ-068). This is the same discipline applied to a nested document.
 
-**Placement — a strengthening beyond the minimum.** The check is *also* wired into
-`Letflow.Engine.VariableSchema.changeset/2` (`variable_schema.ex:164`) as a
-`validate_change(:json_schema, ...)` calling `Definitions.well_formed_json_schema?/1`. That
-makes the changeset — which REQ-109's `@doc` explicitly warns "does not validate that
-`json_schema` is itself a well-formed JSON Schema document" — the real choke point for
-**every** writer, including REQ-109's own test seeds and any future path that bypasses
-`register_variable_schemas/3`. Without this, (a) would guarantee well-formedness only for
-callers that remember to use the registration function.
+**Placement — a strengthening beyond the minimum, and NOT negotiable.** The check is *also*
+wired into `Letflow.Engine.VariableSchema.changeset/2` (`variable_schema.ex:164`) as a
+`validate_change(:json_schema, ...)` calling `JsonSchemaShape.check/1`, adding a
+`:json_schema` changeset error on `{:error, _}`. That makes the changeset — which REQ-109's
+`@doc` explicitly warns "does not validate that `json_schema` is itself a well-formed JSON
+Schema document" — the real choke point for **every** writer, including REQ-109's own test
+seeds and any future path that bypasses `register_variable_schemas/3`. Without this, (a) would
+guarantee well-formedness only for callers that remember to use the registration function.
 
-*(Note the resulting module-reference direction: `Letflow.Engine.VariableSchema` would call
-`Letflow.Definitions`. If REVIEWER judges that dependency direction wrong, the predicate moves
-to its own tiny module, e.g. `Letflow.Definitions.JsonSchemaShape`, called by both. Recorded
-as **OQ-2**; the *placement in the changeset* is not negotiable, only which module the
-predicate lives in.)*
+*(OQ-2, ruled: the predicate's home is the dedicated `Letflow.Definitions.JsonSchemaShape`
+module above, so no Engine→Definitions dependency is created. The placement inside
+`changeset/2` was never in question.)*
 
 **What happens to the two read-side defensive branches.**
 
@@ -1631,8 +1668,11 @@ document). Recorded as **OQ-9**.
 2. The never-error rule and **both** justifications (§12.2).
 3. The disclosure-boundary paragraph verbatim-in-substance (§12.2).
 4. The realm-then-host precedence.
-5. That `tenant_hostnames` is new in this requirement, is global, is not tenant-scoped, and is
-   written by nothing yet (OQ-8).
+5. That `?host=` is accepted but currently always falls through to the default config; that
+   Letflow has **no** `tenant_hostnames` table and adding one here was **considered and
+   rejected** as a producerless subsystem (the REQ-056 failure mode, §13); and that **REQ-076
+   (tenant onboarding)** is the proposed owner of hostname→tenant binding. **A later reader
+   must not "fix" this by adding a migration without an owning requirement** (OQ-8).
 6. The missing trace id (OQ-9).
 
 ---
@@ -1704,6 +1744,7 @@ with `realm`-or-`host`).
 |---|---|
 | `lib/letflow/routers/solution_packs.ex` | `Letflow.Routers.SolutionPacks` — two routes (§8) |
 | `lib/letflow/definitions/solution_pack.ex` | `Letflow.Definitions.SolutionPack` — `export/3`, `install/3` (§8.3) |
+| `lib/letflow/definitions/json_schema_shape.ex` | `Letflow.Definitions.JsonSchemaShape` — `check/1`, the pure well-formedness predicate both `Letflow.Definitions` and `Letflow.Engine.VariableSchema` call (§9.3, OQ-2 ruling) |
 
 **No migration is written by this requirement, and no Ecto schema is created.** The
 `tenant_hostnames` table R-Co's `?host=` branch needs is deliberately **not** added (§12.3,
@@ -1722,7 +1763,7 @@ OQ-8) — it belongs to REQ-076, not to a route port.
 | `lib/letflow/plugs/api_pipeline.ex` | **removes** the `/validation` forward (L48); **removes** the `/tenant-config` forward (L47); **adds** `forward("/solution-packs", to: Letflow.Routers.SolutionPacks)`; moduledoc note on all three |
 | `lib/letflow/router.ex` | **adds** `forward("/api/tenant-config", to: Letflow.Routers.TenantConfig)` before the `/api/v1` forward; route-table row; note that the deferred-routes table (L83-97) is unchanged — none of these six modules is in it |
 | `lib/letflow/event_store.ex` | widens `read_global_opts()` by four keys and `read_global_error()` by two; extends `read_global/1`'s filtering; `@doc` update (§6.5) |
-| `lib/letflow/definitions.ex` | adds `validate_definition_graph/2` (§7.2), `register_variable_schemas/3` (§9.2), `well_formed_json_schema?/1` (§9.3), `count_definitions_by_status/1` (§11.4) + the three new `@type`s |
+| `lib/letflow/definitions.ex` | adds `validate_definition_graph/2` (§7.2), `register_variable_schemas/3` (§9.2), `count_definitions_by_status/1` (§11.4) + the new `@type`s (`graph_validation_result`, `variable_schema_input`, `variable_schema_error`) |
 | `lib/letflow/engine.ex` | adds `count_instances_by_status/1`, `count_tasks_by_status/1`, `status_counts()` (§11.4) |
 | `lib/letflow/engine/variable_schema.ex` | `changeset/2` gains the well-formedness `validate_change`; its `@doc` is rewritten (the OQ-3 warning is now false); moduledoc gains the §9.4 OQ-3 closing section; `validations_for/3`'s `{:ok, _not_a_map}` comment rewritten as unreachable-by-construction (§9.3) |
 | `lib/letflow/api/validation.ex` | moduledoc gains the `routes/validation.zig` vs `src/api/validation.zig` pointer (§7.4) |
@@ -1784,7 +1825,10 @@ Letflow.Router
         │                               ├── Letflow.Definitions.{get_by_id/2, create/2}
         │                               ├── Letflow.Engine.VariableSchema.fetch_schemas/3      (export)
         │                               ├── Letflow.Definitions.register_variable_schemas/3    [NEW, the single insert path]
+        │                               │      ├── Letflow.Definitions.JsonSchemaShape.check/1 [NEW leaf module]
         │                               │      └── Letflow.Engine.VariableSchema.changeset/2   [gains well-formedness check]
+        │                               │             └── Letflow.Definitions.JsonSchemaShape.check/1
+        │                               │                (leaf module -- no Engine -> Definitions dependency, OQ-2)
         │                               ├── Letflow.Definitions.SolutionPackInstall.insert_changeset/2
         │                               ├── Letflow.TenantProvisioning.tenant_id_for_schema_name/1
         │                               └── Letflow.Api.Authorization.roles/0                  (role checklist, read-only)
@@ -1837,66 +1881,149 @@ AC8 travelling to the new requirement and the `variable_schemas` obligation trav
 them*, never dropped. Both paths are fully designed here, so ORCH can decide either way and
 Step 2a can start immediately. **ORCH's call, not CODE-DESIGNER's.**
 
-**OQ-2 — Where does `well_formed_json_schema?/1` live?** §9.3 places it on
-`Letflow.Definitions`, which makes `Letflow.Engine.VariableSchema` (Engine) call into
-`Letflow.Definitions`. If REVIEWER judges that dependency direction wrong, it moves to a small
-dedicated module (e.g. `Letflow.Definitions.JsonSchemaShape`) that both call. **The placement
-of the check inside `changeset/2` is not negotiable; only the predicate's home module is.**
+**OQ-2 — Where does the well-formedness predicate live? — RULED: a dedicated module.**
+`Letflow.Definitions.JsonSchemaShape.check/1`, in
+`lib/letflow/definitions/json_schema_shape.ex`, called by both `Letflow.Definitions` and
+`Letflow.Engine.VariableSchema`. *Rationale (ORCH):* placing it on `Letflow.Definitions` would
+make an Engine module call into Definitions — the wrong dependency direction and a REVIEWER
+finding waiting to happen. A leaf module both may depend on has no such problem. **The
+placement of the check inside `changeset/2` was never in question and is unchanged.** Design
+updated at §9.3.
 
-**OQ-3 — Five of the seven endpoints ship with no permission gate.** Only `GET /audit` is
-gated. `POST /definitions/:id/validate`, both `/solution-packs` routes, and
-`POST /instances/:id/rebind-pins` have no `endpoint_policy_key/2` clause and are therefore
+**OQ-3 — Five of the seven endpoints ship with no permission gate — RULED: accepted.**
+Only `GET /audit` is gated. `POST /definitions/:id/validate`, both `/solution-packs` routes,
+and `POST /instances/:id/rebind-pins` have no `endpoint_policy_key/2` clause and are therefore
 authenticated-but-unauthorized; `GET /metrics` deliberately does not call `evaluate_access/2`
-because that call is a constant `:Allow` (§11.3). This is REQ-130/131's scope, not something to
-invent here. **Each affected moduledoc must name the gap and name REQ-131.** ORCH should confirm
-that shipping these five ungated is acceptable for the interval before REQ-131 lands.
+because that call is a constant `:Allow` (§11.3). *Ruling conditions (ORCH):* (1) every
+affected moduledoc names the gap explicitly and names **REQ-131** as the closer; (2) **no local
+permission check may be invented to fill it** — REQ-069's whole point is one matrix; (3)
+`GET /audit` stays gated via the route-local `evaluate_access/2` call, as a **third private
+copy** of the `tenants.ex:181-194` / `identity.ex:187-213` helper, not an extraction (§4.1).
 
-**OQ-4 — 410 `cursor_expired` collapsed into 422.** R-Co distinguishes them
-(`audit.zig:42-43`); Letflow folds expiry into one `{:error, :invalid_cursor}` because
-`Pagination.decode_cursor/4`'s expiry result is already folded that way at every existing call
-site (`tenants.ex:287`). A deliberate divergence; reversible if REVIEWER prefers fidelity, but
-it would make `/audit` the only Letflow endpoint emitting 410.
+**OQ-4 — 410 `cursor_expired` collapsed into 422 — RULED: accepted, keep the collapse.**
+R-Co distinguishes them (`audit.zig:42-43`); Letflow folds expiry into one
+`{:error, :invalid_cursor}` because `Pagination.decode_cursor/4`'s expiry result is already
+folded that way at every existing call site (`tenants.ex:287`). *Rationale (ORCH):* consistency
+with every existing `decode_cursor/4` call site beats R-Co fidelity here; making `/audit` the
+only endpoint in the system that can emit 410 is a worse outcome than losing the distinction.
+Keep the divergence note in the moduledoc (§6.4, §6.7 item 6).
 
-**OQ-5 — transaction composition of `register_variable_schemas/3`.** §9.2 step 7 wants the
+**OQ-5 — transaction composition of `register_variable_schemas/3` — RULED: as written; ELIXIR-DEV
+settles the shape.** §9.2 step 7 wants the
 registration to commit atomically with the pack install. Whether that is best expressed as the
 function returning an `Ecto.Multi` for the caller to merge, or as the function detecting an
 open transaction, is an implementation-shape question ELIXIR-DEV should settle — but the
 **guarantee** is fixed: a failed registration must roll back the definitions the same install
 created (T-18 asserts exactly this).
 
-**OQ-6 — the `idempotency-key` header convention.** §10.2 introduces the first HTTP-layer
-idempotency convention in this codebase (header, else generated UUID). REQ-079/080 must adopt
-the same one rather than inventing a second. Not validated against any R-Co precedent —
-R-Co's rebind body simply has no such field.
+**OQ-6 — the `idempotency-key` header convention — RULED: accepted.** §10.2 introduces the
+**first HTTP-layer idempotency convention in this codebase**: read the `idempotency-key`
+request header if present and non-empty (truncated to 255 bytes), else generate
+`Ecto.UUID.generate/0`. Not validated against any R-Co precedent — R-Co's rebind body simply
+has no such field. *Ruling condition (ORCH):* `Letflow.Routers.Instances`'s moduledoc must
+carry an **explicit sentence stating that REQ-079 and REQ-080 must adopt this same convention
+rather than inventing a second one.**
 
-**OQ-7 — `web/`'s metrics page breaks.** `web/src/api/metrics.ts:127` expects Prometheus text
+**OQ-7 — `web/`'s metrics page breaks — RULED: accepted as a known, recorded breakage; out of
+scope for REQ-078.** `web/src/api/metrics.ts:127` expects Prometheus text
 at top-level `/metrics`; this design serves JSON at `/api/v1/metrics`.
 `web/src/pages/admin/MetricsPage.tsx` and `parsePrometheusText` will need a FRONTEND-DEV
 follow-up. **Out of scope for REQ-078** (which is backend-only), but it is a real, known
 breakage and must not be discovered in UAT. ORCH should queue the follow-up.
 
-**OQ-8 — nothing populates `tenant_hostnames`.** §12.3 creates the table and the read path; no
-route in this requirement writes to it, so the `?host=` branch will always fall through to the
-default realm until something does. The `?realm=<slug>` branch works immediately via
-`Identity.get_tenant_by_slug/1`, and `web/src/auth/tenantConfig.ts:44-45` prefers `realm` when
-available, so the endpoint is useful on day one. Which requirement owns hostname binding
-(tenant onboarding, REQ-076?) is unresolved.
-*Alternative if OQ-8 is judged scope creep:* drop `resolve_realm_by_hostname/1`, the schema and
-the migration entirely, serve only `?realm=`, and let `?host=` always fall through to default.
-That is strictly smaller and loses nothing that works today. **This design specifies the table
-because R-Co's endpoint has the host branch and dropping it silently would be a functional
-non-port — but ORCH may prefer the smaller option.**
+**OQ-8 — the `?host=` branch has no Letflow binding — RULED: take the smaller option. NO table,
+NO Ecto schema, NO migration, NO new context function.** Serve `?realm=<slug>` only, via the
+existing `Letflow.Identity.get_tenant_by_slug/1` (`identity.ex:627`); `?host=` parses and always
+falls through to the default config. *Rationale (ORCH, overruling this design's first specified
+path):* **creating a table that no route in this requirement — and no requirement currently on
+the board — ever writes to is a partial backing subsystem shipped with no producer. That is the
+REQ-056 failure mode, and REQ-078's own text invokes it twice as the reason `sandbox_access.zig`
+is not ported (§13). We cannot decline to port a guard with no caller in one paragraph and add a
+table with no writer in the next.** `web/src/auth/tenantConfig.ts:44-45` prefers `realm` when
+available, so the endpoint is fully useful on day one, and `?host=` still returns a valid
+default config — graceful degradation, not a functional non-port (R-Co returns the same default
+for any unbound hostname). Owner of hostname→tenant binding: **REQ-076 (tenant onboarding)**,
+named in the moduledoc. Design updated at §12.3; §15 updated. **Consequence, checkable at
+review: this requirement adds NO migration at all.**
 
-**OQ-9 — `/api/tenant-config` has no trace id.** Mounted outside `ApiPipeline`, it never runs
+**OQ-9 — `/api/tenant-config` has no trace id — RULED: accepted as-is; do not mount
+`assign_trace_id/1` on `Letflow.Router`.** Mounted outside `ApiPipeline`, it never runs
 `Letflow.Api.Context.assign_trace_id/1`, so no `x-trace-id` response header is set. Harmless
 today (the endpoint emits no problem document), but it is an inconsistency with every other
 Letflow endpoint. Fixable later by mounting `assign_trace_id/1` on `Letflow.Router` itself;
 not done here because that would change `GET /health`'s response headers, which
 `deploy/redeploy-test.sh` pins (`router.ex:74-76`).
 
-**OQ-10 — REQ-070's roster is now stale.** `lib/letflow/design/req070-router-decomposition.md:126-136`
-lists ten sub-routers including `Letflow.Routers.Validation` at `/validation` and
-`Letflow.Routers.TenantConfig` under `ApiPipeline`. After this requirement, one is deleted and
-one is mounted elsewhere, and `Letflow.Routers.SolutionPacks` is an eleventh. DOC-UPDATER should
-annotate that design (it is a historical artefact, so annotate rather than rewrite) and the
-group-(a) table in `docs/migration/stage-4-api-surface.md`.
+**OQ-10 — REQ-070's roster is now stale — RULED: DOC-UPDATER annotates, does not rewrite.**
+`lib/letflow/design/req070-router-decomposition.md:126-136` lists ten sub-routers including
+`Letflow.Routers.Validation` at `/validation` and `Letflow.Routers.TenantConfig` under
+`ApiPipeline`. After this requirement, one is deleted and one is mounted elsewhere, and
+`Letflow.Routers.SolutionPacks` is an eleventh. *Ruling (ORCH):* REQ-070's design is a
+**historical artefact** — annotate it, never rewrite it. Same treatment for the group-(a) table
+in `docs/migration/stage-4-api-surface.md`. ORCH routes this at closeout.
+
+---
+
+## 20. ORCH rulings — run `WF02-REQ078-20260822`
+
+Every open question and contradiction raised by this design, with the ruling ORCH issued after
+reading it. Each is also folded inline at its own OQ (§19) and at the design section it affects.
+**These rulings are the operative instruction; where §0–§18 was written before a ruling, the
+ruling wins and the affected section has been updated to match.**
+
+| ID | Ruling | Where the design was updated |
+|---|---|---|
+| **OQ-1** | **(a) — accept the added scope; DO NOT split.** Splitting would strand AC3/AC8, and AC8 exists because an earlier requirement dropped the `variable_schemas` insert path and shipped the table empty (ISS-0063/GH#212) — splitting to tidy the port would re-create that exact failure mode. The two mitigating facts carry it: Letflow supports 2 of R-Co's 4 pack arrays, and both handlers compose functions that already exist plus the registration function §9 builds anyway. Amending the requirement text would need a separate WF-01 pass and would block queue task 145 indefinitely. **Condition: solution packs (§8) + the registration function (§9) are committed as their own commit, BEFORE the five thin routes** (§0.4). | §0 header, §0.3 heading, §0.4 |
+| **OQ-2** | **Dedicated module.** `Letflow.Definitions.JsonSchemaShape.check/1`. An Engine→Definitions dependency is the wrong direction. Placement inside `changeset/2` unchanged. | §9.3, §15, §17 |
+| **OQ-3** | **Accepted** — five endpoints ship authenticated-but-ungated. Conditions: each moduledoc names the gap and names REQ-131; **no local permission check may be invented**; `GET /audit` stays gated via a **third private helper copy**, not an extraction. | §4.1, §4.3, §19 |
+| **OQ-4** | **Accepted** — keep the 422 collapse; consistency with every existing `decode_cursor/4` call site beats R-Co fidelity, and `/audit` must not become the only endpoint emitting 410. | §6.4, §19 |
+| **OQ-5** | **As written.** ELIXIR-DEV settles `Ecto.Multi`-vs-open-transaction; the guarantee is fixed and T-18 asserts it. | §9.2, §19 |
+| **OQ-6** | **Accepted** — `idempotency-key` header, else generated UUID. Condition: an explicit sentence in `Letflow.Routers.Instances`'s moduledoc that **REQ-079/080 must adopt this same convention**, since it is the first HTTP-layer idempotency convention in the codebase. | §10.2, §10.5, §19 |
+| **OQ-7** | **Accepted as a known, recorded breakage; out of scope.** ORCH carries the FRONTEND-DEV follow-up in the run report so it is not discovered in UAT. C-4 stays exactly as written. | §14 C-4, §19 |
+| **OQ-8** | **Smaller option, overruling this design's first specified path.** Drop the `tenant_hostnames` table, Ecto schema, migration and `resolve_realm_by_hostname/1`. Serve `?realm=` only; `?host=` falls through to default. A table with no writer is the REQ-056 failure mode this requirement invokes twice against `sandbox_access.zig`. Owner named: **REQ-076**. | §12.1, §12.3, §12.5, §15, §17 |
+| **OQ-9** | **Accepted as-is.** Do not mount `assign_trace_id/1` on `Letflow.Router` — it would change `GET /health`'s response headers, which `deploy/redeploy-test.sh` pins (`router.ex:74-76`). | §12.4, §19 |
+| **OQ-10** | **DOC-UPDATER annotates, does not rewrite.** REQ-070's design and `stage-4-api-surface.md`'s group-(a) table are historical artefacts. Routed at closeout. | §19 |
+| **C-1** | **Design is right; REQ-078's text is wrong.** GH#305/ISS-0088 is already `resolved` and `json_schema.ex:146-172` already carries the `is_map(subschema)` guard. **Do NOT reopen GH#305.** Only GH#306/ISS-0089 is closed by §9.4. **DOC-UPDATER: REQ-078's "WELL-FORMEDNESS, NOT JUST PRESENCE" paragraph is stale on this point and should be corrected.** | §9.3, §9.4, §14 C-1 |
+| **C-2** | **Recorded correction to REQ-078's description.** **DOC-UPDATER: amend the "one-to-three-handler surface over existing context functions" sentence to except solution packs**, so the next reader is not misled the way ORCH was. | §0.1, §8.1, §14 C-2 |
+| **C-3** | **Resolved per §2; no change needed.** Deleting `lib/letflow/routers/validation.ex` and its forward is correct — a module whose moduledoc promises "Routes added by REQ-078" cannot be left behind unfulfilled. | §2.3, §14 C-3 |
+| **C-4** | See OQ-7. Keep as written. | §14 C-4 |
+
+### 20.1 No migration in this requirement — checkable at review
+
+**REQ-078 adds zero files under `priv/repo/migrations/`.** After the OQ-8 ruling, the only
+migration this design ever contemplated is gone. Verification at review:
+`git diff --name-only origin/main... -- priv/repo/migrations/` must be **empty**.
+`Letflow.TenantProvisioning.tenant_scoped_migrations/0` (`tenant_provisioning.ex:499`) is
+likewise unchanged.
+
+### 20.2 Sub-router files co-owned with pending requirements — for the queue
+
+| File | Gains from REQ-078 | Reserved for | Action |
+|---|---|---|---|
+| `lib/letflow/routers/definitions.ex` | **exactly one** route, `post "/:id/validate"` (§2.3, §7) | REQ-081 / REQ-082 (both `pending`) | **Sequence REQ-081/082 after REQ-078, or rebase them.** |
+| `lib/letflow/routers/instances.ex` | **exactly one** route, `post "/:id/rebind-pins"` (§2.5, §10) | REQ-079 / REQ-080 (both `pending`) | **Sequence REQ-079/080 after REQ-078, or rebase them.** REQ-079 must additionally keep any future `post "/:id"` **after** this route (`main.zig:848`). |
+| `lib/letflow/definitions.ex` | 3 new public functions in disjoint areas (§7.2, §9.2, §11.4) | REQ-082 will add `register_variable_schemas/3` **callers**, never a second implementation | REQ-082 calls it; adds no second insert path (§9.1). |
+
+Neither route module's `match _` catch-all is touched, and no existing route anywhere is
+modified — the additions are purely additive.
+
+### 20.3 No `Repo.` call in any route module — checkable at review
+
+**No file under `lib/letflow/routers/` in this design contains a `Repo.` call of any kind.**
+Verification at review: `grep -n "Repo\." lib/letflow/routers/*.ex` must return **zero hits**
+(INV-RT-1, §3.3). Each of the seven handlers delegates as follows:
+
+| # | Handler | Delegates to | New? |
+|---|---|---|---|
+| 1 | `GET /api/v1/audit` | `Letflow.EventStore.read_global/1` | existing, **opts widened** (§6.5) |
+| 2 | `POST /api/v1/definitions/:id/validate` | `Letflow.Definitions.validate_definition_graph/2` | **new** (§7.2) |
+| 3 | `GET /api/tenant-config` | `Letflow.Identity.get_tenant_by_slug/1` | existing, unchanged (§12.3) |
+| 4 | `POST /api/v1/solution-packs/export` | `Letflow.Definitions.SolutionPack.export/3` | **new** (§8.3) |
+| 5 | `POST /api/v1/solution-packs/install` | `Letflow.Definitions.SolutionPack.install/3` | **new** (§8.3) |
+| 6 | `POST /api/v1/instances/:id/rebind-pins` | `Letflow.Engine.PinRebind.rebind_pins/3` | existing, **unchanged** (§10.1) |
+| 7 | `GET /api/v1/metrics` | `Letflow.Engine.count_instances_by_status/1`, `Letflow.Engine.count_tasks_by_status/1`, `Letflow.Definitions.count_definitions_by_status/1` | **all three new** (§11.4) |
+
+Plus the one non-route delegate every solution-pack install goes through:
+`Letflow.Definitions.register_variable_schemas/3` (§9.2) — **the single insert path into
+`variable_schemas`** (INV-VS-1, AC8), itself calling
+`Letflow.Definitions.JsonSchemaShape.check/1` and `Letflow.Engine.VariableSchema.changeset/2`.

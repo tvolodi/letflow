@@ -763,3 +763,25 @@ history:
       periodic audit should flag closures with neither. No code changes to
       lib/ or test/ -- pure documentation reconciliation (two design docs
       annotated with R-Co citations, five docs/issues/ files updated/added).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-22T16:20:15Z"
+    note: >
+      WF03-ISS0276-20260822 resolved ISS-0276 (GH#546, queue task 276, stage
+      S0) -- no dev-bootstrap path created a default bpm-default tenant row,
+      blocking any fresh dev DB from authenticating. Fix: new mix
+      letflow.seed task (lib/mix/tasks/letflow.seed.ex) provisioning slug/
+      idp_realm_id "bpm-default" via the existing Identity.create_tenant/1
+      -> TenantProvisioning.provision_tenant_schema/1 -> replay_migrations/1
+      chain, idempotent on re-run, documented in README.md "Running it".
+      Regression test test/mix/tasks/letflow.seed_test.exs, fail-then-pass
+      proven via mutation testing (module is net-new) -- two mutants applied,
+      TEST-DESIGN-VALIDATOR independently reproduced one. Merged as
+      b2248b5 via PR #553; queue task 276 released done; GH#546 closed.
+      No rework cycles -- every gate passed on first attempt. One unrelated
+      pre-existing test failure surfaced post-rebase (A9 declared-vs-actual
+      entry-count drift on this very file, traced to commit 2687547 /
+      WF03-ISS0278-20260822, already on main before this branch rebased) --
+      structurally unattributed to this branch, flagged for a follow-up
+      issue rather than fixed here.

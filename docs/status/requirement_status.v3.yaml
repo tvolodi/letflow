@@ -609,3 +609,31 @@ history:
       No .github/workflows/ file created; REQ-138 is the consumer that
       wires this into CI, REQ-136 is backend-only. Status flipped
       in_progress -> done here.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-22T14:01:51Z"
+    note: >
+      WF03-ISS0274-20260822 (queue task 274, GH#542) done. ISS-0274 filed
+      this run (flagged during the prior REQ-115 run by REVIEWER and
+      RELEASE-VALIDATOR: web/tsconfig.json is solution-style, `"files": []`,
+      so `npm run type-check` compiled zero files and always exited 0).
+      Diagnosed by ISSUE-FIXER: root config only meaningful under `tsc -b`
+      build mode; `npx tsc -b tsconfig.json --dry` confirmed it actually
+      walks tsconfig.app.json/tsconfig.node.json's real source (964
+      files). CODE-DESIGNER/CODE-DESIGN-VALIDATOR PASS (design:
+      lib/letflow/design/iss0274-typecheck-solution-style-fix.md).
+      FRONTEND-DEV changed web/package.json's `type-check` script from
+      `tsc --noEmit` to `tsc -b tsconfig.json`. SECURITY-REVIEWER PASS
+      (out of scope, no tenant-data path). REVIEWER PASS (idiomatic,
+      matches existing `build` script's `-b` pattern, no scope creep).
+      TEST-DESIGNER: no executable surface (single npm-script value
+      change), routed directly to Step 5 per WF-02 Step 3's build-config
+      exemption; fail-then-pass proof captured in Step 3 instead of a new
+      test file (deliberate type error -> TS2322 exit 2; reverted ->
+      exit 0), plus `npm run check` full green (178/178 unit + 48/48
+      guards). docs/issues/ISS-0274.yaml marked resolved; GH#542 closed.
+      PR #543 squash-merged (beb846b). Queue task 274 released with
+      status done. No rework cycles -- every gate passed on first
+      attempt.

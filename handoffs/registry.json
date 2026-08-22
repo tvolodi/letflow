@@ -1,5 +1,5 @@
 {
-  "_comment": "Per-run lock/status registry backing docs/agents/ORCHESTRATOR.md \u00a77's owned_modules collision check and AGENT_SYSTEM.md \u00a77's pre-start check. Append-only per HANDOFF_PROTOCOL.md \u00a75 -- never shrink, never regenerate wholesale. Created 2026-08-16 to close ISS-0010 (this file had never existed; REQ-015 through REQ-021 all ran and merged without it). Entries below for REQ-018/019/020/021 are a best-effort backfill reconstructed from each run's own handoffs/<run_id>/step-*.json files and docs/status/requirement_status.yaml, not live-recorded at the time -- see each entry's backfilled: true flag. Every run listed is already merged to main (Step Final PASS), so all are status COMPLETED with released_lock: true; none represent an active lock.",
+  "_comment": "Per-run lock/status registry backing docs/agents/ORCHESTRATOR.md §7's owned_modules collision check and AGENT_SYSTEM.md §7's pre-start check. Append-only per HANDOFF_PROTOCOL.md §5 -- never shrink, never regenerate wholesale. Created 2026-08-16 to close ISS-0010 (this file had never existed; REQ-015 through REQ-021 all ran and merged without it). Entries below for REQ-018/019/020/021 are a best-effort backfill reconstructed from each run's own handoffs/<run_id>/step-*.json files and docs/status/requirement_status.yaml, not live-recorded at the time -- see each entry's backfilled: true flag. Every run listed is already merged to main (Step Final PASS), so all are status COMPLETED with released_lock: true; none represent an active lock.",
   "runs": [
     {
       "run_id": "WF02-REQ018-20260816",
@@ -137,7 +137,7 @@
         "handoffs/WF02-REQ021-20260816/step-06-doc-updater.json",
         "PR #41 (merged)"
       ],
-      "note": "This is the only run of the four with a complete on-disk handoff trail (step-01 through step-06), though registry.json itself was still never updated live during the run -- the gap ISS-0010 describes. This entry is the first live-accurate backfill; future runs should update this file directly per HANDOFF_PROTOCOL.md \u00a74 step 4 rather than requiring another backfill."
+      "note": "This is the only run of the four with a complete on-disk handoff trail (step-01 through step-06), though registry.json itself was still never updated live during the run -- the gap ISS-0010 describes. This entry is the first live-accurate backfill; future runs should update this file directly per HANDOFF_PROTOCOL.md §4 step 4 rather than requiring another backfill."
     },
     {
       "run_id": "WF02-REQ022-20260816",
@@ -158,7 +158,7 @@
       "backfilled": false,
       "queue_task_id": 36,
       "queue_agent_id": "tvolodi-orch",
-      "note": "Claimed live via letflow-queue get_next_task (not the requirements.yaml fallback) -- first run since the queue's S2 backlog was registered this session. Updated live per HANDOFF_PROTOCOL.md \u00a74 step 4, not backfilled. Step 5 (RELEASE-VALIDATOR) PASSed (handoffs/WF02-REQ022-20260816/step-05-release-validator.json); Step 6 (DOC-UPDATER) flipped docs/requirements.yaml REQ-022 to done and appended the done event. Step Final (ELIXIR-DEV): origin/main had moved (56b7540, TASK_QUEUE S2-backlog registration) but was already an ancestor of this branch's HEAD, so the rebase was a no-op with zero conflicts; mix compile --warnings-as-errors and mix test (146/146) re-verified green post-fetch; pushed, opened PR #66, squash-merged (--delete-branch), and returned to a clean main at da73c15. No CI existed to wait on (.github/workflows/ absent, REQ-013 still pending) -- proceeded per GIT_MERGE.md's documented interim behavior for that case. Lock released (released_lock: true) and run marked COMPLETED."
+      "note": "Claimed live via letflow-queue get_next_task (not the requirements.yaml fallback) -- first run since the queue's S2 backlog was registered this session. Updated live per HANDOFF_PROTOCOL.md §4 step 4, not backfilled. Step 5 (RELEASE-VALIDATOR) PASSed (handoffs/WF02-REQ022-20260816/step-05-release-validator.json); Step 6 (DOC-UPDATER) flipped docs/requirements.yaml REQ-022 to done and appended the done event. Step Final (ELIXIR-DEV): origin/main had moved (56b7540, TASK_QUEUE S2-backlog registration) but was already an ancestor of this branch's HEAD, so the rebase was a no-op with zero conflicts; mix compile --warnings-as-errors and mix test (146/146) re-verified green post-fetch; pushed, opened PR #66, squash-merged (--delete-branch), and returned to a clean main at da73c15. No CI existed to wait on (.github/workflows/ absent, REQ-013 still pending) -- proceeded per GIT_MERGE.md's documented interim behavior for that case. Lock released (released_lock: true) and run marked COMPLETED."
     },
     {
       "run_id": "WF02-REQ028-20260816",
@@ -339,7 +339,7 @@
       "queue_task_id": 59,
       "queue_agent_id": "hetzner-orch",
       "worktree": "/home/tvolodi/letflow (Hetzner host ubuntu-16gb-nbg1-1)",
-      "note": "Doc-only rationale-gap fix (ISS-0020, GH#76): three non-blocking gaps REVIEWER filed during REQ-023's Step 2d gate (which PASSED). Handled directly by ORCH under ORCHESTRATOR.md \u00a710's sizing exception (scoped, low-ambiguity, exact required content specified by the issue's own description), but still obtained independent REVIEWER sign-off before committing rather than skipping validation -- REVIEWER PASSed after independently re-verifying all three claims against actual schema/migration code and empirically re-testing the corrected \u00a72.4 mechanism claim in this environment, flagging one non-blocking phrasing tightening applied before commit. Zero implementation code changed. mix compile --warnings-as-errors clean, mix format --check-formatted clean, mix test 4 properties + 306 tests 0 failures, both pre-merge and re-verified again on main's actual merged tip (985ef74) post-merge."
+      "note": "Doc-only rationale-gap fix (ISS-0020, GH#76): three non-blocking gaps REVIEWER filed during REQ-023's Step 2d gate (which PASSED). Handled directly by ORCH under ORCHESTRATOR.md §10's sizing exception (scoped, low-ambiguity, exact required content specified by the issue's own description), but still obtained independent REVIEWER sign-off before committing rather than skipping validation -- REVIEWER PASSed after independently re-verifying all three claims against actual schema/migration code and empirically re-testing the corrected §2.4 mechanism claim in this environment, flagging one non-blocking phrasing tightening applied before commit. Zero implementation code changed. mix compile --warnings-as-errors clean, mix format --check-formatted clean, mix test 4 properties + 306 tests 0 failures, both pre-merge and re-verified again on main's actual merged tip (985ef74) post-merge."
     },
     {
       "run_id": "WF03-ISS0011-20260817",
@@ -994,7 +994,7 @@
       "queue_task_id": null,
       "queue_agent_id": null,
       "worktree": "c:\\Users\\tvolo\\dev\\ai-dala\\letflow (primary worktree)",
-      "note": "ISS-0046 (own finding, filed by ORCH while verifying the compile gate before starting WF02-REQ063-20260818): mix compile --warnings-as-errors failed on main with 3 struct-update type-inference warnings in lib/letflow/engine/transition.ex. ISSUE-FIXER's Step 1 diagnosis CORRECTED this run's own filed hypothesis: the gap was not in dispatch_node/4's catch-all clause but one call-level below -- dispatch_start/4, dispatch_end/3, and dispatch_human_task/3 are private functions with no @spec and no struct pattern match of their own, so Elixir 1.20's type checker re-infers their parameter types rather than inheriting the caller's already-narrowed %InstanceState{}/%Token{} type. Also corrected the dispatch_start/4 warning's attribution (Token, not InstanceState). Fix: explicit struct pattern matches added to the 3 functions' own parameter lists, matching dispatch_node/4's own established idiom. A 4th warning surfaced only after the first edit + gate re-run, fixed the same way. Fail-first regression proof via git stash. Post-merge, independently re-verified by ORCH: mix compile --warnings-as-errors exit 0 (git log -1 on main confirms 13e78e1), PR #175 state MERGED at 2026-08-18T08:44:13Z. One MINOR issue flagged by ISSUE-FIXER (this run's own step-01 handoff started_at was left null by ORCH at dispatch, against HANDOFF_PROTOCOL.md \u00a73) -- noted for future dispatches, not corrected retroactively since it doesn't affect this run's own completed outcome."
+      "note": "ISS-0046 (own finding, filed by ORCH while verifying the compile gate before starting WF02-REQ063-20260818): mix compile --warnings-as-errors failed on main with 3 struct-update type-inference warnings in lib/letflow/engine/transition.ex. ISSUE-FIXER's Step 1 diagnosis CORRECTED this run's own filed hypothesis: the gap was not in dispatch_node/4's catch-all clause but one call-level below -- dispatch_start/4, dispatch_end/3, and dispatch_human_task/3 are private functions with no @spec and no struct pattern match of their own, so Elixir 1.20's type checker re-infers their parameter types rather than inheriting the caller's already-narrowed %InstanceState{}/%Token{} type. Also corrected the dispatch_start/4 warning's attribution (Token, not InstanceState). Fix: explicit struct pattern matches added to the 3 functions' own parameter lists, matching dispatch_node/4's own established idiom. A 4th warning surfaced only after the first edit + gate re-run, fixed the same way. Fail-first regression proof via git stash. Post-merge, independently re-verified by ORCH: mix compile --warnings-as-errors exit 0 (git log -1 on main confirms 13e78e1), PR #175 state MERGED at 2026-08-18T08:44:13Z. One MINOR issue flagged by ISSUE-FIXER (this run's own step-01 handoff started_at was left null by ORCH at dispatch, against HANDOFF_PROTOCOL.md §3) -- noted for future dispatches, not corrected retroactively since it doesn't affect this run's own completed outcome."
     },
     {
       "run_id": "WF02-REQ063-20260818",
@@ -1432,7 +1432,7 @@
         188,
         189
       ],
-      "note": "New capability proposal from the project owner (2026-08-21): parallelize mix test via Elixir's native --partitions flag, backed by a real hetzner-prod measurement (7.6x speedup, 4 partitions, matching baseline test totals, see test/reports/report-20260820-WF02-REQ066-20260820.yaml for the baseline). Fails ORCHESTRATOR.md \u00a710's sizing checklist (new script under scripts/, changes TEST-RUNNER/RELEASE-VALIDATOR's mix test step across multiple workflow docs, no existing test asserts today's plain-mix-test behavior would survive unchanged) so routed through full WF-01 rather than ORCH acting directly, per the user's own request. WF-01 is docs-only (no owned_modules lock needed, per ORCHESTRATOR.md's git-wrapper exception). letflow-queue confirmed reachable (GET /health = ok) and $QUEUE_AUTH_TOKEN present in ./.env at run start. REQ-ANALYST drafted REQ-113 (script build+validate, owner ELIXIR-DEV) and REQ-114 (wire into TEST-RUNNER Step 4 / RELEASE-VALIDATOR Step 5, owner DOC-UPDATER, depends_on REQ-113), both stage S0 initially. REQ-VALIDATOR FAILed rework iteration 0 on stage-fit (S0 is a closed, already-done itemized list REQ-013 matched but this doesn't) and REQ-114's owner-consistency (DOC-UPDATER's documented remit didn't cover docs/agents/workflows/*.md). ORCH filed docs/migration/decisions/0008-cross-cutting-tooling-stage-and-doc-ownership.md naming both gaps as options with provisional picks (stage: S4 = currently-active-stage-at-draft-time; DOC-UPDATER's remit widened for workflow-doc edits a requirement's acceptance_criteria names) rather than deciding unilaterally, flagged for REVIEWER to confirm/override at REQ-114's own WF-02 Step 2d gate. REQ-ANALYST rework iteration 1 applied both picks with inline citations; REQ-VALIDATOR's re-check PASSed (faithful application confirmed against actual file text, no regression on previously-passed checks). Registered in letflow-queue: REQ-113 = task 188 (GH#376, depends_on []), REQ-114 = task 189 (GH#377, depends_on [188]) -- correctly dependency-chained on the queue's own task ids, not REQ-NNN strings. impl_order written back into docs/requirements.yaml for both. Both requirements remain status: pending in docs/requirements.yaml per WF-01's own output contract (WF-01 confirms well-formed, does not flip pending->in_progress -- that's WF-02 Step 00's job when a host next claims one via get_next_task)."
+      "note": "New capability proposal from the project owner (2026-08-21): parallelize mix test via Elixir's native --partitions flag, backed by a real hetzner-prod measurement (7.6x speedup, 4 partitions, matching baseline test totals, see test/reports/report-20260820-WF02-REQ066-20260820.yaml for the baseline). Fails ORCHESTRATOR.md §10's sizing checklist (new script under scripts/, changes TEST-RUNNER/RELEASE-VALIDATOR's mix test step across multiple workflow docs, no existing test asserts today's plain-mix-test behavior would survive unchanged) so routed through full WF-01 rather than ORCH acting directly, per the user's own request. WF-01 is docs-only (no owned_modules lock needed, per ORCHESTRATOR.md's git-wrapper exception). letflow-queue confirmed reachable (GET /health = ok) and $QUEUE_AUTH_TOKEN present in ./.env at run start. REQ-ANALYST drafted REQ-113 (script build+validate, owner ELIXIR-DEV) and REQ-114 (wire into TEST-RUNNER Step 4 / RELEASE-VALIDATOR Step 5, owner DOC-UPDATER, depends_on REQ-113), both stage S0 initially. REQ-VALIDATOR FAILed rework iteration 0 on stage-fit (S0 is a closed, already-done itemized list REQ-013 matched but this doesn't) and REQ-114's owner-consistency (DOC-UPDATER's documented remit didn't cover docs/agents/workflows/*.md). ORCH filed docs/migration/decisions/0008-cross-cutting-tooling-stage-and-doc-ownership.md naming both gaps as options with provisional picks (stage: S4 = currently-active-stage-at-draft-time; DOC-UPDATER's remit widened for workflow-doc edits a requirement's acceptance_criteria names) rather than deciding unilaterally, flagged for REVIEWER to confirm/override at REQ-114's own WF-02 Step 2d gate. REQ-ANALYST rework iteration 1 applied both picks with inline citations; REQ-VALIDATOR's re-check PASSed (faithful application confirmed against actual file text, no regression on previously-passed checks). Registered in letflow-queue: REQ-113 = task 188 (GH#376, depends_on []), REQ-114 = task 189 (GH#377, depends_on [188]) -- correctly dependency-chained on the queue's own task ids, not REQ-NNN strings. impl_order written back into docs/requirements.yaml for both. Both requirements remain status: pending in docs/requirements.yaml per WF-01's own output contract (WF-01 confirms well-formed, does not flip pending->in_progress -- that's WF-02 Step 00's job when a host next claims one via get_next_task)."
     },
     {
       "run_id": "ADHOC-20260821-001",
@@ -1725,7 +1725,9 @@
     {
       "run_id": "WF02-REQ043-20260818-resume",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-043"],
+      "requirement_ids": [
+        "REQ-043"
+      ],
       "stage": "S3",
       "status": "COMPLETED",
       "owned_modules": [],
@@ -1829,7 +1831,9 @@
     {
       "run_id": "WF02-REQ070-20260821",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-070"],
+      "requirement_ids": [
+        "REQ-070"
+      ],
       "stage": "S4",
       "status": "COMPLETED",
       "owned_modules": [
@@ -1848,7 +1852,9 @@
     {
       "run_id": "WF02-REQ067-20260821",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-067"],
+      "requirement_ids": [
+        "REQ-067"
+      ],
       "stage": "S4",
       "status": "COMPLETED",
       "owned_modules": [
@@ -1871,7 +1877,9 @@
     {
       "run_id": "WF02-REQ071-20260821",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-071"],
+      "requirement_ids": [
+        "REQ-071"
+      ],
       "stage": "S4",
       "status": "COMPLETED",
       "owned_modules": [
@@ -1892,7 +1900,9 @@
     {
       "run_id": "WF02-REQ072-20260822",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-072"],
+      "requirement_ids": [
+        "REQ-072"
+      ],
       "stage": "S4",
       "status": "COMPLETED",
       "owned_modules": [
@@ -1910,7 +1920,9 @@
     {
       "run_id": "WF02-REQ073-20260822",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-073"],
+      "requirement_ids": [
+        "REQ-073"
+      ],
       "stage": "S4",
       "status": "COMPLETED",
       "owned_modules": [
@@ -1928,7 +1940,9 @@
     {
       "run_id": "WF02-REQ074-20260822",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-074"],
+      "requirement_ids": [
+        "REQ-074"
+      ],
       "stage": "S4",
       "status": "COMPLETED",
       "owned_modules": [
@@ -1947,7 +1961,9 @@
     {
       "run_id": "WF02-REQ075-20260822",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-075"],
+      "requirement_ids": [
+        "REQ-075"
+      ],
       "stage": "S4",
       "status": "COMPLETED",
       "owned_modules": [
@@ -1967,7 +1983,9 @@
     {
       "run_id": "WF02-REQ083-20260822",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-083"],
+      "requirement_ids": [
+        "REQ-083"
+      ],
       "stage": "S4",
       "status": "COMPLETED",
       "owned_modules": [
@@ -1987,7 +2005,9 @@
     {
       "run_id": "WF02-REQ124-20260822",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-124"],
+      "requirement_ids": [
+        "REQ-124"
+      ],
       "stage": "S9",
       "status": "COMPLETED",
       "owned_modules": [
@@ -2023,6 +2043,25 @@
       "queue_task_id": 273,
       "queue_agent_id": "tvolodi-orch",
       "note": "WF-03 for ISS-0273 (GH#537, queue task 273, stage S0), claimed via /tasks/next. mix letflow.lint_handoffs H6 check misclassified test/mix/tasks/letflow.lint_handoffs_test.exs fixtures because @h6_floor_commit (lib/mix/tasks/letflow.lint_handoffs.ex) was left as a BOOTSTRAP placeholder by ISS-0262, re-deriving the floor via `git merge-base HEAD origin/main` on every run instead of being pinned once, per lib/letflow/design/iss0262-h6-floor-commit-addendum.md section 2.3's own unfulfilled instruction (confirmed via git blame: untouched since the 184d846 merge). Design (lib/letflow/design/iss0273-h6-floor-commit-pin.md) pinned @h6_floor_commit to 184d846's parent (c4a8e39729e253397d4f1aa34155a74522930252 -- not 184d846 itself, since --is-ancestor's reflexivity would wrongly grandfather the H6 fixture added in that commit) and deleted resolve_h6_floor_commit/0's runtime fallback + the BOOTSTRAP sentinel entirely. TEST-DESIGNER/TEST-DESIGN-VALIDATOR independently reproduced fail-then-pass via a throwaway worktree at main (17/20) vs. the feature branch (20/20). Full suite 1775/1775, mix letflow.lint_handoffs 0 new violations. No rework cycles -- every gate passed on first attempt."
+    },
+    {
+      "run_id": "WF03-ISS0274-20260822",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": "S8",
+      "status": "COMPLETED",
+      "owned_modules": [
+        "web/tsconfig.json",
+        "web/package.json"
+      ],
+      "lock_acquired_at": "2026-08-22T13:38:26Z",
+      "lock_released_at": "2026-08-22T14:02:24Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #543 squash-merged (beb846b). Handoff handoffs/WF03-ISS0274-20260822/step-final-git-merge.json. docs/issues/ISS-0274.yaml marked resolved; queue task 274 released with status done; GH#542 closed.",
+      "backfilled": false,
+      "queue_task_id": 274,
+      "queue_agent_id": "tvolodi-orch",
+      "note": "WF-03 for ISS-0274 (GH#542, queue task 274, stage S8), filed by ORCH this same session (flagged during REQ-115 run by REVIEWER/RELEASE-VALIDATOR) and claimed via /tasks/next immediately after registration. web/tsconfig.json is a solution-style root config, so npm run type-check (tsc --noEmit) compiled zero files and always passed. Fix: web/package.json type-check script changed to tsc -b tsconfig.json (build mode), matching the existing build scripts -b pattern. No application-executable surface (build-config-only), so TEST-DESIGNER routed directly to Step 5 per WF-02 Step 3 precedent; fail-then-pass proof captured via command run instead of a test file. No rework cycles -- every gate passed on first attempt."
     }
   ]
 }

@@ -1989,7 +1989,7 @@
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-124"],
       "stage": "S9",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/routers/tenant_config.ex",
         "lib/letflow/plugs/api_pipeline.ex",
@@ -1997,13 +1997,13 @@
         "lib/letflow/router.ex"
       ],
       "lock_acquired_at": "2026-08-22T10:32:29Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 DISPATCHED -- handoff handoffs/WF02-REQ124-20260822/step-00-git-setup.json committed (712ce18), ELIXIR-DEV spawning now.",
+      "lock_released_at": "2026-08-22T12:23:03Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #539 squash-merged (merge_commit 243ef54e34c2472100ab7545888f5f29cfe80ba0). Handoff handoffs/WF02-REQ124-20260822/step-final-git-merge.json. Requirement REQ-124 marked done in docs/requirements.yaml; queue task 236 released with status done. Two rework cycles this run: Step 2a (safe_get_tenant_by_slug/1 duplication, hoisted to Letflow.Identity.safe_get_tenant_by_slug/2, re-verified PASS by SECURITY-REVIEWER and REVIEWER) and Step 3/4 (wrong Ecto exception class asserted in a test, fixed, full suite re-run PASS). One incidental issue filed and forwarded, not fixed in this branch: ISS-0273 (queue task 273, GH#537, lint_handoffs H6 floor-commit regression, pre-existing and unrelated to this diff).",
       "backfilled": false,
       "queue_task_id": 236,
       "queue_agent_id": "tvolodi-orch",
-      "note": "WF-02 for REQ-124 (GH#474, queue task 236, stage S9), claimed via get_next_task. Unauthenticated GET /tenant-config for slug-based mobile bootstrap (MOB-2 gate, docs/mobile/build-order.md phase M-0) -- two gaps: (a) Letflow.Routers.TenantConfig route stub (lands in REQ-078, already done) and (b) Letflow.Plugs.ApiPipeline mounting behind Letflow.Plugs.AuthPipeline, which must be resolved explicitly (unauthenticated variant ahead of AuthPipeline, or a documented exemption). depends_on REQ-078 (done, GH#-, merged prior run). SECURITY-REVIEWER in-scope: unauthenticated endpoint returning per-tenant data is a tenant-data path by definition; tenant-enumeration risk on unknown slugs must be addressed."
+      "note": "WF-02 for REQ-124 (GH#474, queue task 236, stage S9), claimed via get_next_task. Unauthenticated GET /tenant-config for slug-based mobile bootstrap (MOB-2 gate, docs/mobile/build-order.md phase M-0) -- two gaps: (a) Letflow.Routers.TenantConfig route stub (lands in REQ-078, already done) and (b) Letflow.Plugs.ApiPipeline mounting behind Letflow.Plugs.AuthPipeline, which must be resolved explicitly (unauthenticated variant ahead of AuthPipeline, or a documented exemption). depends_on REQ-078 (done, GH#-, merged prior run). SECURITY-REVIEWER in-scope: unauthenticated endpoint returning per-tenant data is a tenant-data path by definition; tenant-enumeration risk on unknown slugs must be addressed. Verified premises stale at claim time: REQ-078 had already resolved the mount-placement gap; the real remaining scope was a new 5-field mobile response shape, distinct from the existing 2-field web-SPA shape -- corrected explicitly in the Step 1 dispatch rather than left for CODE-DESIGNER to rediscover."
     }
   ]
 }

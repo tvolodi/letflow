@@ -1,0 +1,55 @@
+{
+  "handoff_id": "eebe1f3b-cc7e-495e-82b8-d254ef2a2423",
+  "run_id": "WF03-ISS0262-20260822",
+  "workflow_id": "WF-03",
+  "step": "08b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0262-20260822/step-08b-code-design-validator-rework.json",
+  "created_at": "2026-08-22T09:10:06Z",
+  "started_at": "2026-08-22T09:10:06Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0262-h6-floor-commit-addendum.md",
+      "lib/letflow/design/iss0262-lint-handoffs-non-json-discovery.md",
+      "handoffs/WF03-ISS0262-20260822/step-08-code-designer-rework.json",
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"]
+  },
+  "task": {
+    "description": "Hard-gate lib/letflow/design/iss0262-h6-floor-commit-addendum.md against step-08-code-designer-rework.json's task.acceptance_criteria. Specifically stress-test the bootstrap: (1) confirm the floor-commit capture point (pre-merge origin/main tip, captured at GIT_MERGE.md step 4's fetch) is genuinely available before H6 runs in the actual Step Final procedure -- trace through GIT_MERGE.md's real step order and confirm nothing runs H6 (i.e. mix test / mix letflow.lint_handoffs) before that fetch happens; (2) construct or reason through a concrete worked example proving a file added to main AFTER the floor still hard-fails H6 -- do not accept prose assurance, verify the git plumbing (`git log --follow --diff-filter=A`, `git merge-base --is-ancestor`) actually behaves this way for at least one real case in this repo's history; (3) confirm the fail-safe direction (any git-probe error treated as hard_new, not grandfathered) is stated and is the safer of the two options for a hard gate; (4) confirm removal of the 12 per-file H6 grandfather entries doesn't silently break anything else (grep the file for any other reference to those paths); (5) confirm this doesn't touch or weaken H1-H4's per-file grandfathering.",
+    "acceptance_criteria": [
+      "Floor-commit availability at the correct point in GIT_MERGE.md's real procedure confirmed by tracing the actual document, not assumed",
+      "Post-floor-file-still-fails claim verified against real git plumbing on at least one concrete case (construct a throwaway test file+commit if needed to prove the mechanism, clean up after)",
+      "Fail-safe direction (errors => hard_new) confirmed present and correctly reasoned for a hard gate",
+      "Confirmed no dangling references to the removed 12-entry list elsewhere in the codebase",
+      "PASS/FAIL verdict, next_action naming ELIXIR-DEV on PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

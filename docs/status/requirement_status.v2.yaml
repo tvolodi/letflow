@@ -746,6 +746,30 @@ history:
       directly (grep for "group"): no hit needing an update -- no
       externally-visible behavior documented there changes.
 
+  - req: REQ-075
+    event: started
+    agent: ORCH
+    at: "2026-08-22T01:30:00Z"
+    note: >
+      Picking up queue task 142 (GH#282) via get_next_task, immediately following
+      REQ-074's close. Dependency REQ-073 (id 140, not REQ-074) confirmed done on
+      main. Third of four split requirements (REQ-073..076) porting identity.zig's
+      user-management group; this one is the requirement's own text flags as
+      categorically different and higher-risk than every other route requirement
+      in the batch: tenant-administration handlers (create/list/get/patch/
+      deactivate/reactivate) operate on the GLOBAL tenant_schemas table, outside
+      any single tenant's schema, so REQ-072's per-tenant prefix scoping does NOT
+      protect them -- a bug here is a platform-wide cross-tenant leak, not a
+      single-tenant one. PLATFORM_ADMIN role-gating is the ONLY protection.
+      Explicit investigations required before design: whether a tenant admin may
+      read/patch their OWN tenant record (R-Co's actual rule, not assumed);
+      exactly how tenant creation here relates to REQ-022's TenantProvisioning and
+      REQ-076's onboarding flow, so there is one provisioning path, not two; and
+      how a deactivated tenant's subsequent requests interact with
+      Letflow.Plugs.TenantStatus (REQ-021/071) without a second, conflicting
+      status rule. Branch feature/WF02-REQ075-20260822 created off origin/main and
+      pushed (Step 00). Status flipped pending -> in_progress here.
+
   - req: SCOPE-CHANGE
     event: done
     agent: ISSUE-FIXER

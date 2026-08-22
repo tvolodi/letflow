@@ -1,0 +1,56 @@
+id: ISS-0230
+title: >
+  No idempotent retry/reconciliation path for a tenants row left in a
+  partial-provisioning state after POST /tenants fails downstream
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ075-20260822
+discovered_at: "2026-08-22T02:27:46Z"
+severity: MINOR
+
+description: >
+  `POST /tenants` (`lib/letflow/routers/tenants.ex`, `provision_and_respond/2`)
+  orchestrates `Identity.create_tenant/1` -> `TenantProvisioning.
+  provision_tenant_schema/1` -> `TenantProvisioning.replay_migrations/2` in
+  sequence. If either downstream call fails after the `tenants` row is already
+  committed, the request returns 500 and a `tenants` row exists with no
+  matching, or only partially migrated, Postgres schema.
+
+  No rollback is implemented (deliberately), and no retry/reconciliation path
+  exists anywhere in this codebase today. Both `provision_tenant_schema/1` and
+  `replay_migrations/2` are already safely re-callable with the same
+  `tenant_id` (confirmed by direct read of `lib/letflow/tenant_provisioning.ex`:
+  `provision_tenant_schema/1` is explicitly documented idempotent via a
+  transaction-scoped advisory lock + `CREATE SCHEMA IF NOT EXISTS` +
+  insert-or-fetch registration; `replay_migrations/2` delegates to
+  `Ecto.Migrator.run/4`, which only applies pending migrations).
+
+  A compensating rollback (deleting the just-created tenant row) was
+  deliberately NOT implemented -- REVIEWER confirmed this is the correct call,
+  not a gap: if `provision_tenant_schema/1` had already succeeded and only
+  `replay_migrations/2` failed, deleting the tenant row would orphan a real
+  Postgres schema + `tenant_schemas` registration row pointing at a `tenant_id`
+  no longer present in `tenants` -- trading a recoverable partial state for an
+  unrecoverable orphan. The right remediation is a future idempotent
+  retry/reconciliation mechanism (re-invoke the same two functions with the
+  same `tenant_id`, or a periodic sweep for `tenants` rows with no matching
+  migrated schema) -- not implemented anywhere yet. This overlaps REQ-076's
+  self-service onboarding path and `TenantProvisioning`'s own moduledoc, which
+  already names a future tenant-onboarding orchestration requirement as the
+  natural home for this.
+
+affected_files:
+  - lib/letflow/routers/tenants.ex
+  - lib/letflow/tenant_provisioning.ex
+
+related:
+  - REQ-075  # the run whose Step 2d review raised it
+  - REQ-076  # future onboarding requirement, likely home for the fix
+
+queue_task_id: 230
+github_issue: 468
+github_issue_note: >
+  register_task created both the queue task (230) and its mirrored GitHub
+  issue (468) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  deliberately not called separately.
+
+status: open

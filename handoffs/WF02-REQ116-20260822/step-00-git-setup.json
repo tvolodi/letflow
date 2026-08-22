@@ -1,0 +1,45 @@
+{
+  "handoff_id": "a1e2b3c4-0116-4a1a-9b2c-req116step00",
+  "run_id": "WF02-REQ116-20260822",
+  "workflow_id": "ADHOC-20260822-001",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ116-20260822/step-00-git-setup.json",
+  "created_at": "2026-08-22T14:06:24Z",
+  "started_at": "2026-08-22T14:06:24Z",
+  "completed_at": "2026-08-22T14:06:24Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-116"],
+    "requirement_text": {
+      "REQ-116": "stage-8-frontend-cutover.md says the contract gaps are \"where undocumented behavior the earlier stages' route-by-route port missed will actually surface.\" Nobody has looked yet. Before any gap can be closed, the gaps have to be enumerated against a running system rather than guessed at by reading route modules. Start Letflow (LETFLOW_DEV_DB_CONFIRMED=1 mix run --no-halt), the Keycloak REQ-128 adds (docker compose up -d), and web/ (npm run dev -- the proxy already defaults to :4000). LOG IN FIRST, then load every route in web/src/router.tsx and record for each one what the SPA requested, what Letflow returned, and what the SPA expected. Logging in is not optional and is why this requirement depends on REQ-128. REQ-071 mounted Letflow.Plugs.AuthPipeline, so every /api/v1 route now demands a bearer token; without an identity provider an unauthenticated sweep records one identical 401 per route and collapses the NOT-YET-IMPLEMENTED versus SHAPE-MISMATCH distinction this requirement exists to draw. Record the authenticated response for every route; if a route is genuinely unreachable even authenticated, say which and why rather than logging a bare 401. Produce docs/frontend/contract-gaps.md: one row per gap, with the failing request, the expected shape (cited from web/src/types/api.ts or the calling module in web/src/api/), the actual response, and the S4 requirement that owns the route if one exists. This requirement produces an INVENTORY, not fixes. Do not change lib/ and do not change web/src/ to work around anything found -- a gap closed while cataloguing is a gap nobody sized. Many routes will fail simply because S4 is incomplete (REQ-071..085 still pending); \"not implemented yet\" is a valid and expected row, and distinguishing it from \"implemented but shaped wrong\" is the substance of this requirement."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/agents/protocols/GIT_SETUP.md"],
+    "owned_modules": ["docs/frontend/contract-gaps.md"]
+  },
+  "task": {
+    "description": "Run fn:git-setup per docs/agents/protocols/GIT_SETUP.md for run_id WF02-REQ116-20260822 (branch feature/WF02-REQ116-20260822). Run performed directly by ORCH (mechanical git operations, no judgement call).",
+    "acceptance_criteria": [
+      "git pull --ff-only origin main exited 0",
+      "git branch --show-current outputs feature/WF02-REQ116-20260822",
+      "git push -u origin feature/WF02-REQ116-20260822 exited 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "git checkout main -> already on main. git pull --ff-only origin main -> already up to date (exit 0). git checkout -b feature/WF02-REQ116-20260822 -> switched. git branch --show-current -> feature/WF02-REQ116-20260822 (matches). git push -u origin feature/WF02-REQ116-20260822 -> [new branch] pushed, tracking set up (exit 0). ORCH flipped REQ-116 pending -> in_progress in docs/requirements.yaml and appended a started event to docs/status/requirement_status.v3.yaml. ROUTING NOTE: this requirement is read-only against lib/ and web/src/ (produces only docs/frontend/contract-gaps.md, no application-executable surface) so it is routed as ADHOC-20260822-001 rather than WF-02's literal code-design/implementation steps, which assume a code change exists to design and implement. Sequence: Step 00 (this) -> Step A (FRONTEND-DEV: drive running Letflow+Keycloak+web stack, produce inventory) -> Step B (SECURITY-REVIEWER: scope check) -> Step C (REVIEWER: idiom/scope-creep gate, confirms no lib/ or web/src/ diff) -> Step D (RELEASE-VALIDATOR: independently re-verify acceptance criteria against the actual file) -> Step E (DOC-UPDATER: flip status, append done event) -> Step Final (git merge).",
+    "artifacts_out": ["branch: feature/WF02-REQ116-20260822"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ116-20260822",
+      "remote_branch": "origin/feature/WF02-REQ116-20260822",
+      "push_status": "pushed"
+    }
+  },
+  "next_action": "Route to FRONTEND-DEV (Step A: produce docs/frontend/contract-gaps.md)"
+}

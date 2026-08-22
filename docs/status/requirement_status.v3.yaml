@@ -637,3 +637,18 @@ history:
       PR #543 squash-merged (beb846b). Queue task 274 released with
       status done. No rework cycles -- every gate passed on first
       attempt.
+
+  - req: REQ-116
+    event: started
+    agent: ORCH
+    at: "2026-08-22T14:06:24Z"
+    note: >
+      ADHOC-20260822-001 (queue task 242, GH#480), branch
+      feature/WF02-REQ116-20260822. API-contract gap inventory -- drives
+      the migrated SPA against a running Letflow+Keycloak instance and
+      records docs/frontend/contract-gaps.md. Read-only against lib/ and
+      web/src/; no code design/implementation surface, so routed as an
+      ad-hoc workflow (WF-02's Step 1/2 code-design-and-implement shape
+      does not fit an investigation-only requirement) rather than the
+      literal WF-02 steps. Depends_on REQ-071 (queue 138) and REQ-128
+      (queue 234), both done. Status flipped pending -> in_progress here.

@@ -2062,6 +2062,22 @@
       "queue_task_id": 274,
       "queue_agent_id": "tvolodi-orch",
       "note": "WF-03 for ISS-0274 (GH#542, queue task 274, stage S8), filed by ORCH this same session (flagged during REQ-115 run by REVIEWER/RELEASE-VALIDATOR) and claimed via /tasks/next immediately after registration. web/tsconfig.json is a solution-style root config, so npm run type-check (tsc --noEmit) compiled zero files and always passed. Fix: web/package.json type-check script changed to tsc -b tsconfig.json (build mode), matching the existing build scripts -b pattern. No application-executable surface (build-config-only), so TEST-DESIGNER routed directly to Step 5 per WF-02 Step 3 precedent; fail-then-pass proof captured via command run instead of a test file. No rework cycles -- every gate passed on first attempt."
+    },
+    {
+      "run_id": "WF02-REQ116-20260822",
+      "workflow_id": "ADHOC-20260822-001",
+      "requirement_ids": ["REQ-116"],
+      "stage": "S8",
+      "status": "IN_PROGRESS",
+      "owned_modules": ["docs/frontend/contract-gaps.md"],
+      "lock_acquired_at": "2026-08-22T14:06:24Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 COMPLETED PASS -- branch feature/WF02-REQ116-20260822 pushed. Handoff handoffs/WF02-REQ116-20260822/step-00-git-setup.json.",
+      "backfilled": false,
+      "queue_task_id": 242,
+      "queue_agent_id": "tvolodi-orch",
+      "note": "Ad-hoc workflow ADHOC-20260822-001 for REQ-116 (GH#480, queue task 242, stage S8), claimed via /tasks/next. Read-only API-contract gap inventory against a running Letflow+Keycloak+web stack -- no code-design/implementation surface, so routed as an ad-hoc sequence (Step 00 git-setup -> FRONTEND-DEV inventory -> SECURITY-REVIEWER -> REVIEWER -> RELEASE-VALIDATOR -> DOC-UPDATER -> git merge) rather than WF-02's literal Step 1/2 code-design-and-implement shape, which assumes a code change to design. depends_on REQ-071 (queue 138) and REQ-128 (queue 234), both done."
     }
   ]
 }

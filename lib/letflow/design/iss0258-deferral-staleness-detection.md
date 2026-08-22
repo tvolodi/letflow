@@ -989,3 +989,43 @@ so nothing on record is re-decided); the module name (no branch, tracked file, o
 Mix task in the fleet uses `staleness` or `deferral`); and the absence of implementation
 code (zero `def` / `defp` / `defmodule` bodies — signatures, module attributes, and type
 shapes only).
+
+---
+
+## 12. Measurement addendum — the world moved mid-run (appended by ISSUE-FIXER)
+
+Closes REVIEWER MINOR 3. Appended, **not** edited into §3.3, for the reason ISS-0231
+gave for its own `correction_addendum:`: silently refreshing a measurement makes the
+record self-updating, which is the dishonesty class these corrections exist to prevent.
+The original sentence stands where it was written.
+
+**The stale sentence.** §3.3 justifies `:blocked` counting as active partly with
+"Measured cost of this override today: **zero — no requirement anywhere is currently
+`blocked`.**" That was true when measured against `8b728d7`, and is **false now.**
+
+**What changed.** While this run was in flight, `origin/main` advanced
+`8b728d7 → b373d08 → 126d5cf → 6394b8c` (PRs #503, #504, #505, #506). PR #503 landed
+**REQ-077 with `status: blocked`, `stage: S4`**, and added REQ-140, taking the corpus to
+116 entries.
+
+**Whether the ruling survives — measured, not assumed.** REVIEWER ran this branch's
+`audit/1` against the `6394b8c` corpus directly:
+
+    entries=116 deferrals=0 stale=0 violations=0
+    S4: 15 witnesses, 14 of them `done`
+    "S4 active without :blocked?" -> true
+
+So S4 is active **via its `done` requirements regardless**, and the live `blocked`
+instance flips no stage verdict, no deferral verdict, and no violation. **The §3.3
+ruling stands; only its supporting measurement changed.** The reasoning that carries it
+was never the count — it was the property ("has this stage been engaged with") and the
+asymmetric error cost, both untouched by this.
+
+**Two things this addendum buys beyond honesty.** First, OQ-1 now has a *live* instance
+rather than a hypothetical one, so the ruling has been exercised against reality instead
+of only against argument. Second, because the gate was measured against the
+**post-rebase** corpus before the rebase happened, Step Final cannot turn it red by
+surprise.
+
+**Still zero deferrals (0 markers at `6394b8c`), so the gate remains vacuously green and
+no grandfather clause is needed** — the §6 conclusion is unchanged.

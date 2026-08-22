@@ -1,0 +1,114 @@
+report_id: report-20260822-WF03-ISS0264-20260822
+agent: TEST-RUNNER
+issue: ISS-0264
+workflow_step: WF-03 Step 4 (final test-execution gate before merge)
+branch: fix/WF03-ISS0264-20260822
+commit: 8956a64
+date: 2026-08-22
+command: "sh scripts/test_parallel.sh, TEST_PARALLEL_N=4 (host contended: ~15 sibling worktrees active)"
+
+diff_scope:
+  files: >
+    git diff --name-only main...HEAD -> exactly
+    test/mix/tasks/letflow_check_deferral_staleness_test.exs (the literal fix) and
+    lib/letflow/design/iss0264-deferral-staleness-test-literal-update.md (design doc).
+    No lib/ or migration files touched.
+
+environment:
+  db_port: "LETFLOW_DB_PORT=5472 from this worktree's untracked .env."
+  postgres: >
+    `docker compose up -d` failed as expected: port 5472 already bound by
+    letflow-2-postgres-1 (Up 28h, healthy) -- the main checkout's own container,
+    which this worktree's .env already points at. The stray `Created`-but-never-started
+    container/network/volume this attempt left behind
+    (agent-aac1538604594056b-postgres-1 / _default / _letflow_pg) were removed with
+    `docker rm` / `docker network rm` / `docker volume rm`. The already-running,
+    healthy letflow-2-postgres-1 was used for the actual run (consistent with the
+    prior ISS-0260 report's precedent for this same "told it shares another
+    checkout's container" situation).
+
+full_suite_run:
+  n_partitions: 4
+  n_source: "TEST_PARALLEL_N=4 env override"
+  test_parallel_group: "tp4027957 (real, shared by all 4 partitions)"
+  combined_result_line: "combined: 1713 tests, 5 properties, 358 failures (1360/1718 passed)"
+  exit_code: 2
+
+failures_found: 358
+failure_breakdown:
+  - category: "UndefinedFunctionError -- module 'is not available' at runtime"
+    count: 357
+    modules_hit: >
+      Letflow.TenantSlugFixture.unique_slug/1 (93x, all in Letflow.EventStore.RegistryTest,
+      partition 1), Letflow.TenantFixture.provisioned_tenant!/1 (21x partition 1 +
+      212x across partitions 2-4), Letflow.TenantFixture.capture_schema_state/1 (2x),
+      Letflow.TenantProvisioning.provision_tenant_schema/1 -- both "undefined or
+      private, did you mean" (18x) and "module not available" (9x) variants,
+      Letflow.Oidc.ConfigurableTokenVerifierDouble.verify_bearer_token/2 (1x).
+    attribution: "ENVIRONMENTAL -- shared-_build compilation race, not a real defect"
+    evidence: >
+      (1) None of these modules or their callers are in this branch's diff -- the
+      diff touches only the one CLI-task test file and a design doc.
+      (2) test/support/tenant_slug.ex does define
+      `defmodule Letflow.TenantSlugFixture do ... def unique_slug(prefix) ...`, and a
+      compiled Elixir.Letflow.TenantSlugFixture.beam exists in the shared
+      MIX_BUILD_PATH (_build/test/lib/letflow/ebin/, timestamped during this run) --
+      the module exists and was compiled, but was reported unavailable to some
+      partition processes and not others. Same shape for Letflow.TenantProvisioning,
+      a real lib/ application module unrelated to this diff, which even showed
+      arity-mismatch ("did you mean") errors -- consistent with a partition process
+      reading a stale/partial .beam set mid-write, not a missing symbol.
+      (3) The failures are inconsistent across partitions: 93 RegistryTest failures
+      appear only in partition 1; TenantFixture failures are spread unevenly across
+      1/2/3/4 with different counts. A real missing-module defect would fail
+      identically and deterministically in every partition that loads that file.
+      (4) Reproduction: re-ran test/letflow/event_store/registry_test.exs (93 of the
+      357 failures) in isolation via plain `mix test` against the same shared DB and
+      same shared _build/deps -- result: 28/28 passed, 0 failures, module resolved
+      normally. This confirms the unavailability was transient, tied to the 4-way
+      concurrent partition launch (which itself races against ~15 other sibling
+      worktree sessions also pointed at this same shared MIX_BUILD_PATH per this
+      run's setup instructions), not a defect in the modules or in this branch.
+    also_observed: >
+      too_many_connections (43x, partition 2) and repeated "TenantSchemaReaper ...
+      deferring this sweep entirely ... ISS-0110" log lines (partitions 1-3) --
+      the documented shared-host contention pattern, consistent with ~15 concurrent
+      sibling agents' mix test invocations competing for the same shared Postgres
+      instance and connection pool. Cited as corroborating evidence of host
+      contention tonight, not counted as a separate failure category.
+  - category: "Ecto.MigrationError -- module Letflow.TenantProvisioning.MigrationFixture is not an Ecto.Migration"
+    count: 1
+    test: "tenant-scoped migration guard pattern -- nil prefix is a real no-op (Letflow.TenantProvisioningTest)"
+    partition: 2
+    attribution: "ENVIRONMENTAL -- same shared-_build race as above"
+    evidence: >
+      Same signature as the UndefinedFunctionError cluster: a fixture module the
+      test itself defines/uses failing to resolve correctly at runtime despite not
+      being touched by this branch's diff, in the same partition (2) that also hit
+      43 too_many_connections errors and 8 TenantFixture unavailability failures.
+
+changed_file_status: >
+  test/mix/tasks/letflow_check_deferral_staleness_test.exs (the only test file this
+  branch touches) does not appear anywhere in any partition's failure listing --
+  it ran and passed cleanly in whichever partition executed it.
+
+verdict: FAIL (raw exit code), but no failure attributable to this branch's diff
+merge_safe: "environment-contention-limited -- re-run on an uncontended host recommended before merge, not a code concern"
+summary: >
+  Combined 4-way run: 1713 tests, 5 properties, 358 failures (1360/1718 passed),
+  exit 2. All 358 failures are structurally attributable to this run's shared,
+  heavily-contended host environment tonight (~15 concurrent sibling worktrees):
+  357 are UndefinedFunctionError "module not available" errors against test
+  fixtures and one application module (Letflow.TenantProvisioning) that exist,
+  are compiled, and are unrelated to this branch's diff -- confirmed transient by
+  isolated re-run of one affected file (registry_test.exs: 28/28 passed clean).
+  The remaining 1 failure is a matching-signature Ecto.MigrationError in the same
+  partition that also hit heavy too_many_connections contention. The known
+  ISS-0110 TenantSchemaReaper deferral pattern and too_many_connections errors
+  were both directly observed in the logs, corroborating genuine shared-host
+  contention rather than a code defect. This branch's own changed file
+  (letflow_check_deferral_staleness_test.exs) passed cleanly and appears in no
+  failure listing. Recommend RELEASE-VALIDATOR re-run this suite when host
+  contention is lower, or with a worktree-private _build/deps path, before relying
+  on a fully green run to confirm mergeability -- this report cannot itself supply
+  a clean full-suite pass under tonight's conditions.

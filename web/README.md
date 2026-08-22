@@ -131,27 +131,39 @@ requirement, not something this migration changed:
   installed and locked version is **React 18.3.1** (`web/package-lock.json`).
   Both docs now state 18.3.1; this entry is kept as a record of the drift that
   existed at migration, not as a live discrepancy.
-- **No stylesheet exists — tracked by `REQ-120`, not yet resolved.**
+- **No stylesheet exists yet — decided by `REQ-120`, built by a follow-on
+  requirement (`impl_order: UNREGISTERED`, pending `REQ-VALIDATOR`).**
   `docs/frontend/design-system.md` §2 says all colours live as CSS custom
   properties in `web/src/styles/tokens.css`. That file does not exist and
   never did — there is no `.css` file in `src/` at all, and components use
   inline `style={{...}}` objects with literal hex values. The `literal-colour`
   guard pattern only matches CSS-style declarations ending in `;`, so inline JS
-  style strings slip past it. `REQ-119` marked `design-system.md` §2 as
-  not-yet-implemented with a pointer to `REQ-120` rather than deleting or
-  silently fixing the claim; `REQ-120` is the design requirement that will
-  pick one of build-`tokens.css`, adopt-the-JSON-token-file, or
-  record-inline-styles-as-accepted, and correct the doc (and the guard, if
-  applicable) to match. The design system stays aspirational in exactly the
-  place it claims to be enforced until that lands.
+  style strings slip past it. `REQ-120`
+  (`lib/letflow/design/req120-design-token-source.md`) settled the question:
+  `design-system.md` §2's palette is the one source of truth —
+  `design-tokens/letflow.tokens.json` is superseded (smaller, and disagrees
+  with §2's palette on the same semantic colours) and inline styles are
+  rejected as "no design system at all." Building `tokens.css`, migrating the
+  47 components that currently use inline hex literals (496 occurrences, real
+  count from `grep -rEon "#[0-9a-fA-F]{3,8}" web/src/components/ --include='*.tsx' --include='*.ts'`),
+  deleting `design-tokens/letflow.tokens.json`, and tightening the
+  `literal-colour` guard to catch inline JS style literals (not just
+  semicolon-terminated CSS declarations) is that follow-on requirement's scope
+  — drafted in `docs/requirements.yaml` but not yet registered with a queue
+  task id. The design system stays aspirational in exactly the place it claims
+  to be enforced until that follow-on requirement lands.
 - **Bundle size.** The production build emits a single 1.66 MB chunk
   (442 kB gzipped) and Vite warns about it. No code-splitting is configured
   beyond one lazy `autoLayout` chunk.
 - **Duplicated admin user pages.** Both `pages/admin/UsersPage.tsx` (16 984 bytes,
   the one `src/router.tsx` imports) and `pages/admin/users/UsersPage.tsx`
   (9 407 bytes, imported by nothing) exist.
-- **`design-tokens/letflow.tokens.json` is wired to nothing.** Carried over from
-  R-Co's `design-tokens/r-co.tokens.json`. No source file, test, or build step
-  reads it, and its palette is a different one from the `--color-neutral-*` scale
-  in `docs/frontend/design-system.md` — so the project currently has two
-  unreconciled token definitions and zero enforcement of either.
+- **`design-tokens/letflow.tokens.json` is wired to nothing — superseded by
+  `REQ-120`, deletion is the follow-on requirement's scope, not yet deleted.**
+  Carried over from R-Co's `design-tokens/r-co.tokens.json`. No source file,
+  test, or build step reads it, and its palette disagrees with the
+  `--color-neutral-*` scale in `docs/frontend/design-system.md` on shared
+  semantic colours (e.g. `primary: #2563EB` here vs. `--color-brand-600:
+  #228be6` there). `REQ-120` decided `design-system.md`'s palette is the one
+  source of truth; this file is not adopted and is deleted by the follow-on
+  requirement that builds `tokens.css`, not by `REQ-120` itself.

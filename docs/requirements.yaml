@@ -5,7 +5,7 @@
 # one owner, one deliverable, acceptance criteria an agent can check
 # itself before reporting done.
 #
-# Status values: pending | in_progress | done | blocked
+# Status values: pending | in_progress | done | blocked | cancelled
 #
 # Early development produced a handful of one-off findings (idiomatic
 # OTP usage, dev-loop feel, process-per-instance design, static-typing

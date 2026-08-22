@@ -64,6 +64,11 @@ defmodule Letflow.MixProject do
       "letflow.check": [
         "letflow.check_toolchain",
         "letflow.check_requirements_registration",
+        # ISS-0258: positioned immediately after the registration check per design
+        # D5 -- it shares a parse of docs/requirements.yaml with that check, so a
+        # stale deferral is reported in a second rather than after a full
+        # compile+test cycle. T-ALIAS-SLOT asserts this ordering.
+        "letflow.check_deferral_staleness",
         # ISS-0257: wired in as a hard gate, matching check_requirements_registration's
         # own precedent ("a check nobody runs is not a check") -- verified green on
         # main and against both open PRs' own new content before landing (neither adds

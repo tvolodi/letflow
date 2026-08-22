@@ -1,0 +1,56 @@
+{
+  "handoff_id": "44eaf461-9162-4ec5-b4bc-0b1b53a0a68c",
+  "run_id": "WF03-ISS0227-20260822",
+  "workflow_id": "WF-03",
+  "step": "0.5+1",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0227-20260822/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-08-22T03:40:29Z",
+  "started_at": "2026-08-22T03:40:29Z",
+  "completed_at": "2026-08-22T03:40:29Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md",
+      "docs/issues/",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "owned_modules": ["lib/letflow/sandbox_pool.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup) and Step 1 (root-cause diagnosis) for ISS-0227 / GH#465 / queue task 227. REVIEWER filed, during WF03-ISS0224-20260822, that Letflow.SandboxPool carries two fields written but never read and derivable from state the pool already holds: `owner_pid`, and `schema_name` on the `in_flight` record. Confirm both are genuinely write-only across all of lib/ and test/ (not just sandbox_pool.ex), state the derivation for each, and route to CODE-DESIGNER. Do NOT implement the fix.",
+    "acceptance_criteria": [
+      "Registry lookup performed over docs/issues/*.yaml; recurrence status stated",
+      "Every write site of both fields located by git grep and cited by line",
+      "Confirmed neither field is ever read, pattern-matched, used in a guard/condition, or accessed dynamically, anywhere in lib/ or test/",
+      "A derivation from already-held state stated for each field, with the equivalence argument",
+      "No fix implemented; next_action routes to CODE-DESIGNER"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "STEP 0.5 -- REGISTRY LOOKUP. Surveyed docs/issues/*.yaml (ISS-0001..ISS-0231 on disk) for a resolved entry with matching symptoms; grepped the whole directory for 'write-only|never read|dead field|derivable'. Three files matched on prose only and none is this defect class: ISS-0077 (VariableMerge.merge/3 validating only overwrite candidates, MAJOR, resolved), ISS-0079 (PinResolver trusting caller-supplied pin overrides, MAJOR, resolved), ISS-0112 (MINOR, still open, unrelated subject). No prior entry concerns SandboxPool state fields, and no prior entry alleges a write-only-derivable-field defect anywhere. THIS IS NOT A RECURRENCE -- no earlier fix failed to hold -- so no severity escalation applies. Severity stands at MINOR: a latent-hazard/hygiene defect with no manifest behavioural symptom.\n\nSTEP 1 -- DIAGNOSIS. Verified live against the current lib/letflow/sandbox_pool.ex on origin/main (f851aba, i.e. post-ISS-0224's b8ebfb0 reshape), not against the filing's prose. The filing's description holds verbatim; nothing shifted.\n\nRe-verification note first: this defect is a LATENT hazard, not a manifest failure, so 'reproduce the failing scenario' has no runtime form -- there is no output to read, because a write-only field produces none by definition. The reproducible artefact is the static one, and it was produced first-hand rather than inherited: the exhaustive greps below, plus a green pre-change baseline run of the scoped suite (`mix test test/letflow/sandbox_pool_test.exs test/letflow/sandbox_pool_call_timeout_test.exs` -> 'Finished in 36.8 seconds (0.00s async, 36.8s sync) / Result: 20 passed'), which establishes that no current test exercises either field and therefore that the removal must be a strict no-op on behaviour. `MIX_ENV=test mix compile` is clean; `mix.exs:67` runs `compile --warnings-as-errors` in the `letflow.check` alias, so any private function left callerless by the removal would break CI -- relevant to the fix design, flagged to CODE-DESIGNER.\n\nFIELD 1 -- `owner_pid` in `provision_op()`.\nDeclared: lib/letflow/sandbox_pool.ex:160 (inside `@typep provision_op`).\nWritten: lib/letflow/sandbox_pool.ex:535, the op map literal in `reserve_slot/2`, from the local `owner_pid = elem(from, 0)` bound at :527.\nLegitimate non-field use that MUST SURVIVE: :528, `owner_ref = Process.monitor(owner_pid)`. That is the local variable, not the struct field. `owner_ref` is load-bearing (INV-SP-A3/A4, the whole owner-monitor reclaim mechanism) and is NOT in scope for removal -- only the redundant `owner_pid` copy stored alongside it is.\nRead sites: NONE. `git grep -nE \"p\\.owner_pid|\\.owner_pid|owner_pid:\" -- lib test` returns exactly four lines, all in lib/letflow/sandbox_pool.ex (:160 declaration, :527 local bind, :528 local use, :535 write), plus two prose lines in lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md (:502, :804) which are documentation of the shape, not code. `git grep -n \"owner_pid\" -- lib test` additionally surfaces test/letflow/sandbox_pool_test.exs:420/443/444/445 and test/specs/ISS-0048.md:29/51 -- inspected individually, all of those bind or use an unrelated LOCAL variable named `owner_pid` for a process the TEST spawns and then kills; none reads the op field. No guard, no pattern match, no `Map.get/fetch/take/has_key` and no `op[...]` access anywhere.\nDERIVATION AT ANY FUTURE POINT OF USE: `elem(p.from, 0)`.\nEQUIVALENCE: `from` is a required field of `provision_op()` and is retained on the op for the op's entire lifetime. `owner_pid` was computed as `elem(from, 0)` from that same `from` at that same instant in `reserve_slot/2`, and `from` is written once at reservation and never reassigned -- the only in-place rewrites of a provision op are `owner_down?: true` (handle_info/2 clause B case 2, :448) and, for drop ops, the `:release` -> `:release_orphaned` purpose rewrite; neither touches `from`. So `elem(p.from, 0)` at any later point returns bit-for-bit what the removed field held. Note that the two-copies-can-disagree hazard REVIEWER named is exactly this: `from` and `owner_pid` are two recordings of one fact, and a future edit to either has no mechanical force keeping them in step.\n\nFIELD 2 -- `schema_name` on the `in_flight` record.\nDeclared: lib/letflow/sandbox_pool.ex:316 (in the state-shape comment's `in_flight` block, :307-318) and mirrored in the design's §5 `in_flight()` shape.\nWritten: lib/letflow/sandbox_pool.ex:572, in `pump/1`, as `schema_name: op_schema_name(op)`.\nRead sites: NONE. Exhaustive check rather than a spot check -- `git grep -nohE \"in_flight[a-z_]*\\.[a-z_]+\" -- lib test` enumerates all 32 field accesses on an `in_flight` record across lib/ and test/; every one is `.op`, `.task_ref` or `.task_pid`, and ZERO are `.schema_name`. Separately confirmed no map pattern destructures `schema_name` out of `in_flight` (`git grep -nE \"in_flight\\s*[:=].*schema_name|%\\{[^}]*schema_name[^}]*\\}\\s*=\\s*state\\.in_flight\" -- lib test` returns nothing), and no dynamic access (`in_flight[`, `Map.get/fetch/take/has_key` on in_flight) exists. The function-head patterns that match on in_flight (:669, :690, :723-727, :785, :820-822) bind only `op`.\nSECONDARY FINDING: `op_schema_name/1` (:592-593) has exactly one caller, the :572 write site. Removing the field leaves it callerless -- and because `mix.exs:67`'s `letflow.check` alias compiles with `--warnings-as-errors`, a callerless private function is a CI failure, not a cosmetic leftover. The fix must therefore either delete `op_schema_name/1` too or give it a real caller. CODE-DESIGNER must decide this explicitly.\nDERIVATION AT ANY FUTURE POINT OF USE: `op_schema_name(state.in_flight.op)` (or the equivalent inline destructure).\nEQUIVALENCE: `in_flight.op` IS the very op that `op_schema_name/1` was applied to at :572 when the record was built, and it is retained on the record. The op's `schema_name` is set once -- pre-minted pool-side by `mint_sandbox_identity/0` for provision ops, copied from the `active` entry for drop ops -- and no in-place op rewrite alters it (again, `owner_down?` and `purpose` are the only two, per the ISS-0224 design §5). So deriving from `in_flight.op` returns exactly what the removed copy held.\nCORROBORATION THAT THE DERIVATION IS ALREADY THE HOUSE STYLE: the tests that need the in-flight schema name already do it the derived way, not via the field -- test/letflow/sandbox_pool_test.exs:920 and :1007 both do `{:provision, %{schema_name: o_schema}} = state.in_flight.op`. That is direct evidence the stored copy was never the access path anyone actually used.\n\nWHY NO EXISTING TEST CAUGHT THIS. None could have. Both fields are write-only, so no behaviour depends on them and no black-box assertion can distinguish their presence from their absence; the ISS-0224 suite's white-box `:sys.get_state/1` probes deliberately assert on the fields they need (`.op`, `.task_ref`, `.task_pid`, `active`'s shape) rather than on the whole state map, so an extra key is invisible to them too. This defect class is reachable only by reading, or by a structural assertion on the exact key set -- which is what the Step 4 regression test will have to be, since there is no behavioural pre-fix failure to reproduce.\n\nWHAT A FIX NEEDS TO CHANGE. (a) Delete `owner_pid:` from the `@typep provision_op` at :160 and from the `reserve_slot/2` op literal at :535, keeping the :527/:528 local bind and `Process.monitor/1` call exactly as they are. (b) Delete `schema_name:` from the `in_flight` record built in `pump/1` at :572 and from the state-shape comment at :307-318. (c) Resolve `op_schema_name/1`'s now-callerless status. (d) Amend lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md §5's recorded state shape (the `provision_op()` block ~:502, the `in_flight()` block, and the §7-step-2 prose at ~:804) so the design record stops asserting fields that no longer exist, annotated as superseded by ISS-0227 rather than silently deleted. NO invariant changes: INV-SP-A1..A7 are untouched, `owner_ref` and the owner-monitor reclaim mechanism are untouched, the serialized DB worker is untouched, and there is no external behaviour change and no new invariant. NO test bound moves: zero assertions reference either field, so no test needs rewriting.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0227-20260822/step-01-issue-fixer-diagnosis.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0227-20260822",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER for fix design (WF-03 Step 2)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

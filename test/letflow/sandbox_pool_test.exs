@@ -1182,4 +1182,129 @@ defmodule Letflow.SandboxPoolTest do
       assert Process.alive?(pool)
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0226 regression: an unrecognized run_op/1 return (a fifth shape complete_op/3
+  # was never written to accept) must not crash the pool via a FunctionClauseError
+  # inside handle_info/2. Direct state injection via :sys.replace_state/2 -- the write
+  # side of the same :sys.get_state/1 idiom this file already uses -- lets these tests
+  # drive an unrecognized worker return deterministically, with a fabricated task_ref
+  # no real Task will ever message, rather than relying on a race against a real
+  # worker. See lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md §7.
+  # ---------------------------------------------------------------------------------
+
+  describe "handle_info/2 survives an unrecognized worker result (ISS-0226 regression, acceptance criterion 3)" do
+    test "invalid result during a {:provision, _} op: pool survives, in_flight recovers, subsequent claim/release still work" do
+      pool = start_pool!(max_concurrent: 1)
+
+      owner_ref = Process.monitor(self())
+      from = {self(), make_ref()}
+      sandbox_id = Ecto.UUID.generate()
+      schema_name = "sandbox_" <> String.replace(sandbox_id, "-", "")
+
+      provision_op = {
+        :provision,
+        %{
+          from: from,
+          owner_pid: self(),
+          owner_ref: owner_ref,
+          sandbox_id: sandbox_id,
+          schema_name: schema_name,
+          owner_down?: false
+        }
+      }
+
+      fake_task_ref = make_ref()
+
+      injected_in_flight = %{
+        op: provision_op,
+        task_ref: fake_task_ref,
+        task_pid: self(),
+        schema_name: schema_name
+      }
+
+      :sys.replace_state(pool, fn state -> %{state | in_flight: injected_in_flight} end)
+
+      send(pool, {fake_task_ref, :not_a_recognized_shape})
+
+      # THE POOL SURVIVES.
+      assert Process.alive?(pool)
+
+      # BOOKKEEPING RECOVERS -- the invalid-result path clears in_flight exactly as a
+      # real worker death would (handle_worker_death/1 reused, not duplicated), and
+      # then pumps its own compensating orphan-drop for the pre-minted schema name, so
+      # wait for the pool to fully drain rather than reading a possibly-transient
+      # intermediate state.
+      drained =
+        wait_until_pool_state(
+          pool,
+          "the pool drains after the invalid provision result",
+          &pool_drained?/1
+        )
+
+      assert drained.in_flight == nil
+
+      # NO MAILBOX DOUBLE-PROCESSING: a :sys.get_state/1 round trip serializes on the
+      # pool's own mailbox, so by the time it returns any message this event could have
+      # produced has already been handled.
+      :sys.get_state(pool)
+      assert Process.info(pool, :message_queue_len) == {:message_queue_len, 0}
+
+      # A SUBSEQUENT claim/release ROUND-TRIP STILL WORKS -- proving `active` and
+      # `db_queue`/pump/1 admit new work correctly, not merely "did not crash".
+      assert {:ok, %SandboxClaim{sandbox_id: new_id}} = SandboxPool.claim(1_000, pool)
+      assert :ok = SandboxPool.release(new_id, pool)
+    end
+
+    test "invalid result during a {:drop, purpose: :release} op: pool survives, in_flight recovers, and the blocked caller is told :release_failed" do
+      pool = start_pool!(max_concurrent: 1)
+
+      owner_ref = Process.monitor(self())
+      reply_tag = make_ref()
+      from = {self(), reply_tag}
+      sandbox_id = Ecto.UUID.generate()
+      schema_name = "sandbox_" <> String.replace(sandbox_id, "-", "")
+
+      drop_op = {
+        :drop,
+        %{
+          schema_name: schema_name,
+          sandbox_id: sandbox_id,
+          from: from,
+          owner_ref: owner_ref,
+          purpose: :release
+        }
+      }
+
+      fake_task_ref = make_ref()
+
+      injected_in_flight = %{
+        op: drop_op,
+        task_ref: fake_task_ref,
+        task_pid: self(),
+        schema_name: schema_name
+      }
+
+      :sys.replace_state(pool, fn state -> %{state | in_flight: injected_in_flight} end)
+
+      send(pool, {fake_task_ref, :not_a_recognized_shape})
+
+      # THE POOL SURVIVES.
+      assert Process.alive?(pool)
+
+      # BOOKKEEPING RECOVERS -- no compensating op is enqueued for a :release-purpose
+      # drop (handle_worker_death/1's drop clause only replies and clears in_flight),
+      # so in_flight is nil immediately, no draining wait needed.
+      assert :sys.get_state(pool).in_flight == nil
+
+      # THE BLOCKED CALLER IS TOLD THE HONEST ANSWER -- mirroring
+      # handle_worker_death/1's existing :release branch, exercised here via the
+      # invalid-result path instead of an actual worker crash.
+      assert_receive {^reply_tag, {:error, :release_failed}}, @rendezvous_slack_ms
+
+      # A SUBSEQUENT claim/release ROUND-TRIP STILL WORKS.
+      assert {:ok, %SandboxClaim{sandbox_id: new_id}} = SandboxPool.claim(1_000, pool)
+      assert :ok = SandboxPool.release(new_id, pool)
+    end
+  end
 end

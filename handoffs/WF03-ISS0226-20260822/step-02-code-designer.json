@@ -1,0 +1,57 @@
+{
+  "handoff_id": "5c24c6de-2689-4675-aac4-1326a44409c7",
+  "run_id": "WF03-ISS0226-20260822",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0226-20260822/step-02-code-designer.json",
+  "created_at": "2026-08-22T03:41:18Z",
+  "started_at": "2026-08-22T03:41:18Z",
+  "completed_at": "2026-08-22T03:41:18Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/sandbox_pool.ex",
+      "lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md"
+    ]
+  },
+  "task": {
+    "description": "Letflow.SandboxPool's async DB worker (ISS-0224, Task.Supervisor.async_nolink/3 spawned from pump/1) returns an UNTYPED result to handle_info/2's clause A. complete_op/3 pattern-matches on exactly four (op-kind, result) shapes with NO catch-all clause -- if run_op/1 (via provision_sandbox/2 or drop_schema/1) ever returns a fifth shape, complete_op/3 raises FunctionClauseError inside a GenServer callback, crashing the single supervised pool process that holds ALL slot bookkeeping (active, waiting, db_queue, in_flight), with no reclaim and no cleanup for every in-flight claim. Design: (1) a closed, explicit type for the worker's legal return values: (2) a TOTAL handle_info/2 clause-A body -- every legal value routed to today's complete_op/3 path unchanged, every illegal value routed to a non-crashing recovery path, with reasoning for the chosen recovery (not just a declared mechanism); (3) a test design that deliberately drives an unexpected worker return and asserts the pool survives with slot bookkeeping intact (a subsequent claim/1 still works). Do NOT change INV-SP-A1 (reservation/quota), INV-SP-A2 (exactly-one-reply), INV-SP-A3 (ref classification), or the owner-monitor reclaim semantics -- read lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md in full first; if the fix seemed to require touching any of those, stop and flag it as a blocking finding instead of proceeding (it does not). Design-artefact discipline: signatures, type shapes, and precise algorithm/test-case description only -- no .ex implementation bodies.",
+    "acceptance_criteria": [
+      "A closed, explicit type is defined for run_op/1's legal return values (stated as a tagged-tuple union or a struct, with the choice justified)",
+      "handle_info/2's clause A is redesigned to be total over that type: every legal value reaches complete_op/3 exactly as today, every illegal value is caught by an explicit final case with no path that can raise FunctionClauseError",
+      "The recovery mechanism for an illegal value is specified with reasoning for why it is correct (not merely declared), and does not crash the pool",
+      "INV-SP-A1, INV-SP-A2, INV-SP-A3, and the owner-monitor reclaim semantics are explicitly confirmed unchanged, with a stated argument for each, not just an assertion",
+      "A precise test-case description exists that deliberately drives an unexpected run_op/1-equivalent return and asserts the pool survives with active/in_flight bookkeeping intact and a subsequent claim/1 still working",
+      "No implementation code (.ex bodies) is present in the design doc -- signatures and type shapes only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md. Root cause re-derived from source: run_op/1 (sandbox_pool.ex:586-590) has no @spec: complete_op/3 (:597-665) is four exact-match clauses with no catch-all, so a fifth return shape raises FunctionClauseError inside handle_info/2 (a GenServer callback), crashing the single pool process holding all slot bookkeeping. Design: (1) a closed tagged-tuple union `@typep worker_result :: provision_result() | drop_result()` -- chosen over a wrapping struct because the four legal values already ARE these exact tuples/atoms today, so the type formalizes the existing shapes rather than requiring provision_sandbox/2, drop_schema/1, and complete_op/3's four clauses to be rewritten to unwrap a struct (would violate the no-touch scope on invariant-bearing code). (2) A new private `classify_worker_result(op, result) :: {:ok, worker_result()} | :invalid`, five clauses (four legal pairings + catch-all), called inside handle_info/2's clause A BEFORE complete_op/3; on {:ok, _} the existing complete_op/3 path runs completely unchanged (its own four clauses need no catch-all, since classify_worker_result/2 already guarantees only those four shapes reach it -- proof in doc section 4.3); on :invalid, logs the unexpected shape (op kind, sandbox_id, raw value) via Logger.error/1 and calls handle_worker_death/1 -- the SAME function clause-B case 1 already uses for an outright worker crash. Reasoning given (section 5): an unrecognized reply and a crash-without-returning are the same kind of uncertainty from the pool's perspective (unknown DB side-effect outcome), and handle_worker_death/1 already encodes the correct conservative recovery per op kind (compensating orphan-drop for a provision, {:error, :release_failed} reply for a release, unconditional in_flight clear) with an existing correctness proof this reuse inherits for free. Process.demonitor(ref, [:flush]) ordering preserved identically on both the valid and invalid branches (documented as load-bearing, section 4.2, to avoid a stray :DOWN(:normal) double-processing as a second death). Test design (section 7): :sys.replace_state/2 injects a well-formed in_flight entry with a fabricated task_ref (never attached to a real Task, so deterministic, no race), send(pool, {fake_ref, garbage}) drives the exact clause-A path, then asserts Process.alive?(pool), in_flight == nil, and a REAL subsequent claim/2 + release/2 round-trip succeeds end-to-end against a real DB -- proving recovery, not just survival. Companion case for the :drop/:release op kind included so both handle_worker_death/1 branches get regression coverage. Section 8 states the invariant-preservation argument for each of INV-SP-A1/A2/A3 and owner-monitor semantics explicitly (not merely asserted) -- none required touching, so no blocking finding was raised. No implementation code present -- signatures, @typep declarations, and algorithm/test-case prose only. Two open questions recorded (telemetry convention parity; provision_sandbox/2's rescue clause as the likeliest future source of a fifth shape) -- neither silently resolved.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0226-sandbox-pool-worker-result-typing.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0226-20260822",
+      "commit_sha_list": ["09fd3b0"],
+      "remote_branch": "origin/fix/WF03-ISS0226-20260822",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for the hard gate on this design."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

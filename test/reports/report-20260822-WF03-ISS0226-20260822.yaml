@@ -1,0 +1,86 @@
+report_id: report-20260822-WF03-ISS0226-20260822
+agent: TEST-RUNNER
+issue: ISS-0226
+workflow_step: WF-03 Step 9 (full-suite test run)
+handoff: handoffs/WF03-ISS0226-20260822/step-09-test-runner.json
+branch: fix/WF03-ISS0226-20260822
+date: 2026-08-22
+command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+
+toolchain:
+  platform: "Windows 11"
+
+environment:
+  postgres: >
+    letflow-postgres-1, confirmed via `docker compose up -d` -- reported already
+    Running, not freshly started this run.
+  db_setup: >
+    Each test_parallel.sh partition's own `mix test` invocation performs
+    ecto.create/ecto.migrate --quiet automatically via the `test` alias -- no separate
+    DB-setup step taken here.
+  parallel_n: >
+    Set explicitly via TEST_PARALLEL_N=4 per dispatch instructions (ISS-0219: this
+    host's auto-derived value is unreliable). Not left to auto-derivation.
+
+# ---------------------------------------------------------------------------
+# Run
+# ---------------------------------------------------------------------------
+
+run:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  result: >
+    test_parallel: N=4 (source: env override)
+    partition 1: 321 tests, 0 properties, 0 failures, exit 0
+    partition 2: 373 tests, 0 properties, 0 failures, exit 0
+    partition 3: 377 tests, 1 property, 0 failures, exit 0
+    partition 4: 476 tests, 4 properties, 0 failures, exit 0
+    combined: 1547 tests, 5 properties, 0 failures (1552/1552 passed)
+  exit_code: 0
+  failures_found: 0
+
+verdict: PASS
+
+summary_line: >
+  1552/1552 passed (1547 tests + 5 properties combined), 0 failures across all four
+  partitions. Nothing needs failure attribution since nothing failed.
+
+# ---------------------------------------------------------------------------
+# SandboxPool-adjacent regression check (this fix touches
+# Letflow.SandboxPool's worker-result classification / handle_info/2 totality)
+# ---------------------------------------------------------------------------
+
+sandbox_pool_regression_check:
+  files_checked: >
+    test/letflow/sandbox_pool_test.exs (18 tests incl. the 2 new ISS-0226 regression
+    tests, describe "handle_info/2 survives an unrecognized worker result"),
+    test/letflow/sandbox_pool/fixture_loader_test.exs, and
+    test/letflow/definitions/promotion_assertion_rerun_test.exs (a downstream consumer
+    of SandboxPool via the promotion-assertion-rerun feature).
+  observation: >
+    Two [error]-level log lines appear in partition-1's log: "SandboxPool: worker
+    returned an unrecognized result for op_kind=:provision ... :not_a_recognized_shape"
+    and the same for op_kind=:drop. Confirmed by direct read of
+    test/letflow/sandbox_pool_test.exs lines 1228 and 1290 that these are deliberate:
+    the two new regression tests send(pool, {fake_task_ref, :not_a_recognized_shape})
+    to exercise the exact catch-all classify_worker_result/2 branch this fix closes.
+    The log lines are the expected Logger.error/1 call inside the fixed handle_info/2,
+    not a crash or a real anomaly -- both tests passed (part of the 18/18 for this
+    file, part of the overall 0-failure combined total).
+  promotion_assertion_rerun_test_exs: >
+    Ran as part of the same full-suite pass (test_module=Letflow.Definitions.
+    PromotionAssertionRerunTest visible in partition-2's log across ~12 distinct test
+    names, each with its own tenant fixture teardown). All passed -- no crash, no
+    unexpected sandbox-release failure, consistent with SandboxPool's public
+    claim/release contract being unchanged by this fix (per REVIEWER's step-07 and
+    TEST-DESIGN-VALIDATOR's step-08 diff spot-checks: complete_op/3, handle_worker_death/1,
+    and the :DOWN dispatch clause are untouched).
+  result: "No SandboxPool-adjacent regression. The only SandboxPool-related log noise is the fix's own intended defensive logging, exercised on purpose by the new tests."
+
+attribution: "not needed -- full suite green, no failures to attribute"
+
+branch_diff_note: >
+  `git diff --name-only main...HEAD` on this branch is wider than ISS-0226's own
+  files because main has not yet merged the concurrently-landed WF02-REQ075 work this
+  checkout also carries; ISS-0226's actual content is confined to lib/letflow/sandbox_pool.ex
+  and test/letflow/sandbox_pool_test.exs (see step-06/07/08 handoffs' git_evidence).
+  Not relevant to attribution here since there were no failures.

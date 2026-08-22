@@ -1,0 +1,56 @@
+{
+  "handoff_id": "c3e7f1a4-9d2b-4e6f-8a1c-5b7d9e2f4c6a",
+  "run_id": "WF03-ISS0226-20260822",
+  "workflow_id": "WF-03",
+  "step": "09",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-ISS0226-20260822/step-09-test-runner.json",
+  "created_at": "2026-08-22T09:20:00Z",
+  "started_at": "2026-08-22T09:05:00Z",
+  "completed_at": "2026-08-22T09:20:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0226-20260822/step-08-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/sandbox_pool.ex",
+      "test/letflow/sandbox_pool_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 9: run the full test suite via scripts/test_parallel.sh with TEST_PARALLEL_N=4 (known-good value for this host per ISS-0219), report real pass/fail counts, and check specifically for SandboxPool-adjacent regressions given this fix touches Letflow.SandboxPool.",
+    "acceptance_criteria": [
+      "Full suite run via scripts/test_parallel.sh, combined pass/fail totals across all partitions quoted verbatim, not one partition's log",
+      "TEST_PARALLEL_N=4 set explicitly",
+      "test/letflow/sandbox_pool_test.exs, test/letflow/sandbox_pool/fixture_loader_test.exs, and test/letflow/definitions/promotion_assertion_rerun_test.exs checked for any sign of regression",
+      "Any failure attributed per core-directives.md's structural attribution rule (absent from diff, reproduces at merge-base, or demonstrated mechanism with measurement) -- never by count-matching",
+      "test/reports/report-<date>-<run-id>.yaml written with real counts and output"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Ran `TEST_PARALLEL_N=4 bash scripts/test_parallel.sh` as a blocking foreground call (docker compose up -d confirmed letflow-postgres-1 already Running first). Combined result: partition 1: 321 tests, 0 properties, 0 failures; partition 2: 373 tests, 0 properties, 0 failures; partition 3: 377 tests, 1 property, 0 failures; partition 4: 476 tests, 4 properties, 0 failures. Combined: 1547 tests, 5 properties, 0 failures (1552/1552 passed). Exit 0 on all partitions.\n\nSandboxPool-adjacent check: test/letflow/sandbox_pool_test.exs (18 tests, including the 2 new ISS-0226 regression tests) ran and passed. Two [error]-level Logger lines appear in partition-1's log (\"SandboxPool: worker returned an unrecognized result for op_kind=:provision ...\" and the :drop equivalent, both citing :not_a_recognized_shape) -- confirmed by direct read of test/letflow/sandbox_pool_test.exs lines 1228 and 1290 that these are the two new regression tests deliberately sending an unrecognized worker result to exercise the fixed handle_info/2's defensive logging; not a crash, not an anomaly, both tests passed. test/letflow/sandbox_pool/fixture_loader_test.exs ran as part of the same full-suite pass (included in the combined total; no separate failure). test/letflow/definitions/promotion_assertion_rerun_test.exs ran (visible in partition-2's log across ~12 distinct test names with individual tenant-fixture teardowns) -- all passed, no unexpected sandbox-release failures, consistent with complete_op/3, handle_worker_death/1, and the :DOWN dispatch clause being untouched by this diff (per REVIEWER step-07 and TEST-DESIGN-VALIDATOR step-08's independent diff spot-checks).\n\nNo failures anywhere in the suite, so no failure attribution was needed (attribution rule not invoked -- structurally moot on a 0-failure run, not skipped).\n\nWrote test/reports/report-20260822-WF03-ISS0226-20260822.yaml with the full breakdown.",
+    "artifacts_out": [
+      "test/reports/report-20260822-WF03-ISS0226-20260822.yaml",
+      "handoffs/WF03-ISS0226-20260822/step-09-test-runner.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/WF03-ISS0226-20260822",
+      "commit_sha_list": ["a2a5305"],
+      "remote_branch": "origin/fix/WF03-ISS0226-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to RELEASE-VALIDATOR for independent re-verification (re-runs the suite itself rather than trusting this report)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

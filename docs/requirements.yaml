@@ -6004,7 +6004,7 @@ requirements:
   - id: REQ-124
     title: Unauthenticated tenant-config endpoint for slug-based mobile bootstrap (MOB-2 gate)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S9
     impl_order: 236  # letflow-queue task id; depends_on translated to queue task id [145]
     description: >

@@ -360,6 +360,15 @@ history:
       passed both before and after (confirmed via git stash), same 3
       pre-existing H6 floor-commit failures unrelated to this change (diff
       touches only the one handoffs/ JSON file, never lib/ or test/).
+  - req: REQ-124
+    event: started
+    agent: ORCH
+    at: "2026-08-22T10:37:27Z"
+    note: >
+      WF02-REQ124-20260822 (queue task 236, GH#474, stage S9) started. Step 00
+      git-setup PASS (ELIXIR-DEV): branch feature/WF02-REQ124-20260822 pushed.
+      Unauthenticated GET /tenant-config for slug-based mobile bootstrap
+      (MOB-2 gate). depends_on REQ-078 (done).
   - req: REQ-126
     event: started
     agent: ELIXIR-DEV

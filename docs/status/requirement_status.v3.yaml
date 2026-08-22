@@ -267,6 +267,15 @@ history:
       re-derived all nine criteria and the test attribution from scratch
       (not trusting this run's own reports) -- PASS. Status flipped
       pending -> done here.
+  - req: REQ-118
+    event: started
+    agent: ELIXIR-DEV
+    at: "2026-08-22T10:09:04Z"
+    note: >
+      WF02-REQ118-20260822 (queue task 235) started. CORS support for the
+      browser-origin SPA -- allowed-origin list from config (mirroring
+      :problems_base_uri's Application.compile_env pattern), no wildcard
+      default, tenant-data-path change so SECURITY-REVIEWER is a hard gate.
   - req: SCOPE-CHANGE
     event: done
     agent: ISSUE-FIXER

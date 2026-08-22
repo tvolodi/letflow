@@ -374,6 +374,17 @@ FROM taken t
 WHERE t.id NOT IN (SELECT id FROM restorable)
 ```
 
+**Verified, not assumed:** this exact statement was run through `EXPLAIN` (planning only — no
+execution, no mutation) against `letflow_test` on the live PG 16.13 server during this design.
+It plans cleanly, and the plan confirms the intended structure: `CTE taken` → `Delete on
+iss060_tenant_schemas_guard_backup`; `CTE restorable` → `Hash Join` against `tenants`; `CTE
+restored` → `Insert on tenant_schemas / Conflict Resolution: NOTHING / Conflict Arbiter Indexes:
+tenant_schemas_pkey`; outer `CTE Scan on taken t` with `Filter: (NOT (hashed SubPlan 4))` reading
+`restorable` a second time. The `pg_constraint` guard predicate of §2.3(b) was likewise executed
+read-only and returns `false` today (constraint absent), and `tenant_schemas_tenant_id_fkey` was
+confirmed to have `contype = 'f'`, `confdeltype = 'a'` — the value §5.2 assertion 6 requires the
+new constraint to match.
+
 Every clause justified, so none is "tidied away":
 
 - **`taken` empties the backup table unconditionally**, exactly as the current CTE's `restored`

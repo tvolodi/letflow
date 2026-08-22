@@ -5549,14 +5549,28 @@ requirements:
   # docs/migration/decisions/0011-frontend-ownership.md and
   # docs/migration/stage-8-frontend-cutover.md.
   #
-  # NOTE ON impl_order: none of REQ-115..127 carry one. Per
-  # docs/agents/protocols/TASK_QUEUE.md ("An unregistered requirement
-  # carries no impl_order at all -- never a guessed one"), they are
-  # UNREGISTERED in letflow-queue. They were drafted directly rather
-  # than through WF-01, so REQ-VALIDATOR has not passed them and the
-  # register_task trigger has not fired. ORCH registers them when their
-  # stage becomes active; registering them now would make S8/S9 work
-  # claimable by a sibling host ahead of the stages it depends on.
+  # NOTE ON impl_order (updated 2026-08-22, run WF01-REQ115-139-20260822):
+  # REQ-115..139 were originally drafted directly rather than through
+  # WF-01, so they carried no impl_order and were UNREGISTERED -- passing
+  # neither REQ-VALIDATOR (Step 2) nor register_task (Step 3). That state
+  # is the silent failure ISS-0221 describes: a well-formed requirement
+  # that get_next_task can never return, with no error raised anywhere.
+  # They have since been put through WF-01 properly: REQ-VALIDATOR gated
+  # them (two rework rounds; the batch's factual premises were re-derived
+  # against the tree rather than trusted), and ORCH registered all 25 in
+  # letflow-queue as tasks 232-256. Every entry now carries a real
+  # impl_order from register_task's response.
+  #
+  # An earlier concern -- that registering S8/S9 work early would make it
+  # claimable by a sibling host ahead of the stages it depends on -- does
+  # not apply: get_next_task only returns tasks whose depends_on are
+  # satisfied, and each requirement's depends_on was translated to queue
+  # task ids at registration. Stage gates remain ORCH's to enforce
+  # (ORCHESTRATOR.md Section 8); the queue enforces dependencies, not stages.
+  #
+  # See ISS-0231 for the remediation gap this surfaced: ISS-0221 closed
+  # asserting every requirement already carried impl_order, which was
+  # false at the time of writing -- these 21 (then) entries did not.
   # ---------------------------------------------------------------
 
   - id: REQ-115
@@ -5564,7 +5578,7 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 241  # letflow-queue task id
     description: >
       web/ has four separate quality commands (type-check, lint, test,
       guards) and no single entry point that runs them fail-fast, so
@@ -5578,18 +5592,26 @@ requirements:
       guards is the most expensive because bundle-scan runs a full
       `vite build`.
       This requirement does NOT create .github/workflows/ -- that
-      directory does not exist in this repository at all, and the
-      backend's own CI is S0's REQ-013 (still pending). Wiring the
-      frontend check into CI is a follow-on to REQ-013, not this
-      requirement. Name that dependency explicitly in the result rather
-      than silently creating a workflow file whose backend counterpart
-      does not exist.
+      directory does not exist in this repository at all, and no
+      CI-as-a-service requirement had been written for it either. S0's
+      REQ-013 is done, but what it delivered was a LOCAL single-command
+      gate (`mix letflow.check`); it never covered GitHub Actions, and
+      being done it will not reopen to cover it. That gap is now split
+      across two requirements: REQ-136 ("Introduce GitHub Actions CI
+      running the backend gate") owns the backend job and wires `mix
+      letflow.check`, and REQ-138 ("Add the frontend gate job to GitHub
+      Actions CI") owns wiring this requirement's `npm run check`.
+      REQ-138, not REQ-136, is this requirement's consumer -- REQ-136 is
+      backend-only and carries an acceptance criterion requiring
+      web/package.json to be unchanged entirely.
+      Do not create a workflow file here: this requirement delivers the
+      command REQ-138 will invoke, nothing more.
     acceptance_criteria:
       - "`npm run check` exists in web/package.json and runs type-check, lint, test, and guards in that order"
       - "the command exits non-zero on the first failing step and does not run subsequent steps, demonstrated by temporarily introducing a type error and quoting the actual output showing lint/test/guards did not run"
       - "a clean run of `npm run check` is quoted in full in the result -- real output, not a claim that it passes"
       - "web/README.md's script table lists `check` with a one-line description"
-      - "the result states explicitly that CI wiring is deferred to REQ-013 and no .github/workflows/ file was created"
+      - "no .github/workflows/ file is created by this requirement, confirmed by git diff, and the result names REQ-138 as the requirement that wires this command into CI (REQ-136 owns the backend job only)"
     depends_on: []
 
   - id: REQ-116
@@ -5597,18 +5619,30 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 242  # letflow-queue task id; depends_on translated to queue task ids [138, 234]
     description: >
       stage-8-frontend-cutover.md says the contract gaps are "where
       undocumented behavior the earlier stages' route-by-route port
       missed will actually surface." Nobody has looked yet. Before any
       gap can be closed, the gaps have to be enumerated against a
       running system rather than guessed at by reading route modules.
-      Start Letflow (LETFLOW_DEV_DB_CONFIRMED=1 mix run --no-halt) and
-      web/ (npm run dev -- the proxy already defaults to :4000), load
-      every route in web/src/router.tsx, and record for each one what
-      the SPA requested, what Letflow returned, and what the SPA
+      Start Letflow (LETFLOW_DEV_DB_CONFIRMED=1 mix run --no-halt), the
+      Keycloak REQ-128 adds (docker compose up -d), and web/ (npm run
+      dev -- the proxy already defaults to :4000). LOG IN FIRST, then
+      load every route in web/src/router.tsx and record for each one
+      what the SPA requested, what Letflow returned, and what the SPA
       expected.
+      Logging in is not optional and is why this requirement depends on
+      REQ-128. REQ-071 mounted Letflow.Plugs.AuthPipeline, so every
+      /api/v1 route now demands a bearer token; without an identity
+      provider (docker-compose.yml declares only postgres today, and
+      config/dev.exs, config/test.exs and config/prod.exs all point at
+      https://placeholder-keycloak.invalid/...), an unauthenticated
+      sweep records one identical 401 per route and collapses the
+      NOT-YET-IMPLEMENTED versus SHAPE-MISMATCH distinction this
+      requirement exists to draw. Record the authenticated response for
+      every route; if a route is genuinely unreachable even
+      authenticated, say which and why rather than logging a bare 401.
       Produce docs/frontend/contract-gaps.md: one row per gap, with the
       failing request, the expected shape (cited from
       web/src/types/api.ts or the calling module in web/src/api/), the
@@ -5622,20 +5656,21 @@ requirements:
       distinguishing it from "implemented but shaped wrong" is the
       substance of this requirement.
     acceptance_criteria:
-      - "docs/frontend/contract-gaps.md exists with one row per route in web/src/router.tsx, including the routes that worked"
+      - "docs/frontend/contract-gaps.md has one row per route declared in web/src/router.tsx, including the routes that worked; the row count is reconciled against `grep -c \"path:\" web/src/router.tsx` (26 at the time of drafting -- 24 content routes plus /auth/callback plus the / layout route), and any route deliberately excluded (a layout or callback route that issues no API request) is listed by path with a one-line reason rather than treated as a count discrepancy"
       - "each gap row cites the actual observed response (status code and body), not a predicted one"
-      - "each gap row is classified as either NOT-YET-IMPLEMENTED (the route is pending S4 work, with the owning REQ id named) or SHAPE-MISMATCH (the route exists but returns something the SPA cannot consume)"
+      - "each gap row is classified as either NOT-YET-IMPLEMENTED (the route is pending S4 work, with the owning REQ id named) or SHAPE-MISMATCH (the route exists but returns something the SPA cannot consume), and the classification is derived from an AUTHENTICATED response -- no row may be classified from a 401"
       - "the SHAPE-MISMATCH rows each cite the specific field/status/cursor the SPA expects and the file in web/src/ that expects it"
       - "git diff shows no change to lib/ or web/src/ -- this requirement is read-only against both"
       - "the result states which Letflow commit the inventory was taken against, since it goes stale as S4 lands"
-    depends_on: [REQ-071]
+      - "the result names the seeded user the sweep was authenticated as and quotes one request showing the bearer token was accepted, so a reader can tell an authenticated sweep from an anonymous one"
+    depends_on: [REQ-071, REQ-128]
 
   - id: REQ-117
     title: Wire web/ to Letflow's API -- base URL, auth token, and the login path
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 246  # letflow-queue task id; depends_on translated to queue task id [242]
     description: >
       The migration set web/vite.config.ts's dev-proxy default to
       http://localhost:4000 and wrote web/.env.example, and that is all
@@ -5643,12 +5678,25 @@ requirements:
       realm (web/src/auth/OidcManager.ts and tenantConfig.ts both
       default to http://localhost:8081/realms/bpm-default) and its token
       handling was built against the Zig backend's contract.
-      Make the SPA authenticate against Letflow: confirm which OIDC
-      authority Letflow's own S1 identity work expects (read
-      docs/migration/stage-1-identity.md and
+      SCOPE NARROWED 2026-08-22 (WF-01 rework). REQ-133 (S4) is now the
+      single owner of the SPA's OIDC authority configuration --
+      web/src/auth/OidcManager.ts, web/src/auth/tenantConfig.ts and
+      web/.env.example. Both requirements previously set those same
+      defaults from the same R-Co value, which meant whichever ran first
+      did the other's work and left the second unable to report honestly
+      against its own criteria. REQ-133 owns it because REQ-128, the
+      requirement that actually picks Keycloak's host port, is S4;
+      leaving it here would have stranded an S4 login proof behind S7
+      and S8. Do NOT re-set those defaults here. Read them as given.
+      This requirement's remaining S8 scope is the non-overlapping
+      part: verify, from S8's own vantage after the cutover, that the
+      authority REQ-133 set is still the one Letflow's S1 position calls
+      for (read docs/migration/stage-1-identity.md and
       docs/migration/decisions/0002-oidc-integration.md -- do not assume
-      the R-Co realm carries over), set the defaults accordingly, and
-      verify a real login produces a token the API accepts.
+      the R-Co realm carries over), and that the SPA's token handling
+      still satisfies FNFR-06 against the post-cutover build. Report a
+      divergence as a finding routed through ORCH rather than editing
+      the authority files here.
       Use web/'s EXISTING token storage and injection pattern. Do not
       introduce a new one -- FNFR-06 in
       docs/frontend/frontend-requirements.md forbids
@@ -5664,10 +5712,11 @@ requirements:
       narrower scope as this requirement's.
     acceptance_criteria:
       - "a real login against a running Letflow instance produces a token that an authenticated API call accepts, evidenced by a quoted request/response pair"
-      - "the OIDC authority and client-id defaults cite Letflow's own S1/decision-0002 position by name -- not carried over from R-Co unexamined"
+      - "the authority and client-id REQ-133 set are read back and checked against Letflow's own S1/decision-0002 position, cited by name; agreement is asserted, and a divergence is reported as a finding rather than fixed here"
+      - "git diff shows web/src/auth/OidcManager.ts, web/src/auth/tenantConfig.ts and web/.env.example unchanged by this requirement -- REQ-133 owns them"
       - "web/'s existing token storage mechanism is unchanged, confirmed by git diff over web/src/auth/"
       - "no token is written to localStorage or sessionStorage, confirmed by grep over web/src/ and by inspecting browser storage after a real login"
-      - "web/.env.example is updated if any default changed, and the frontend check command still passes"
+      - "`npm run check` passes against the post-cutover tree, with the real output quoted"
     depends_on: [REQ-116]
 
   - id: REQ-118
@@ -5675,7 +5724,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S8
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 235  # letflow-queue task id; depends_on translated to queue task id [138]
     description: >
       In development the SPA runs on :5173 and Letflow on :4000. The
       Vite dev proxy hides this for `npm run dev`, but it does not hide
@@ -5708,7 +5757,7 @@ requirements:
     owner: DOC-UPDATER
     status: pending
     stage: S8
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 232  # letflow-queue task id
     description: >
       docs/frontend/ was migrated verbatim on purpose, so that a later
       reconciliation had an honest baseline to diff against. This is
@@ -5747,7 +5796,7 @@ requirements:
     owner: CODE-DESIGNER
     status: pending
     stage: S8
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 239  # letflow-queue task id; depends_on translated to queue task id [232]
     description: >
       The frontend currently holds THREE unreconciled positions on
       colour:
@@ -5786,7 +5835,7 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 247  # letflow-queue task id; depends_on translated to queue task id [241]
     description: >
       Two admin user pages arrived from R-Co:
       web/src/pages/admin/UsersPage.tsx (16,984 bytes -- the one
@@ -5818,7 +5867,7 @@ requirements:
     owner: TEST-DESIGNER
     status: pending
     stage: S8
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 252  # letflow-queue task id; depends_on translated to queue task id [246]
     description: >
       37 *.e2e.spec.ts files plus two shared helpers came over intact
       and none has ever run against Letflow. They need a live backend
@@ -5853,7 +5902,7 @@ requirements:
     owner: REVIEWER
     status: pending
     stage: S8
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 256  # letflow-queue task id; depends_on translated to queue task id [252]
     description: >
       docs/migration/stage-8-frontend-cutover.md records this as the
       stage's one remaining open decision, and deliberately does not
@@ -5905,7 +5954,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S9
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 236  # letflow-queue task id; depends_on translated to queue task id [145]
     description: >
       MOB-2 (docs/mobile/requirements.md) needs GET /tenant-config to
       return { realm_url, locales, default_locale, branding,
@@ -5945,7 +5994,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S9
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 237  # letflow-queue task id; depends_on translated to queue task id [148]
     description: >
       MOB-3 needs GET /definitions/delta?since=<cursor> returning only
       the definitions changed since that point, so a device can warm an
@@ -5981,7 +6030,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S9
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 238  # letflow-queue task id; depends_on translated to queue task id [150]
     description: >
       MOB-3 requires that a task payload carry { form_id, form_version }
       so a client renders the exact pinned form version and never
@@ -6013,7 +6062,7 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S9
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 233  # letflow-queue task id
     description: >
       MOB-7 says mobile i18n must match "the platform's web locale
       policy", and R-Co's own text said to VERIFY the SPA's configured
@@ -6075,11 +6124,19 @@ requirements:
   #     the whole suite passes without an IdP. No test in this repo has
   #     ever exercised a real token. That is why none of the above has
   #     surfaced as a failure.
-  #   - Letflow.Api.Authorization (REQ-069, done) is referenced by
-  #     nothing. The matrix is correct and unreachable.
+  #   - Letflow.Api.Authorization (REQ-069, done) was believed to be
+  #     referenced by nothing. CORRECTED 2026-08-22 (WF01-REQ115-139-20260822):
+  #     lib/letflow/routers/identity.ex wires it into all 11 identity
+  #     routes via with_authorized_scope/4 (lines 187-213), landed by
+  #     REQ-073 (329c6f0) and REQ-074 (b2ef518). What is actually true is
+  #     narrower: the other NINE sub-routers (audit, definitions,
+  #     instances, metrics, onboarding, promotion, tasks, tenant_config,
+  #     validation) have zero Authorization references -- they are 12-line
+  #     stubs whose routes arrive with REQ-077..085. REQ-130/131 are
+  #     scoped to that real gap, not to a wholly-unreachable matrix.
   #
-  # See the S8 note above for the impl_order convention -- REQ-128..135
-  # are UNREGISTERED for the same reason.
+  # impl_order: REQ-128..139 were registered in letflow-queue on
+  # 2026-08-22 along with the rest of the batch -- see the S8 note above.
   # ---------------------------------------------------------------
 
   - id: REQ-128
@@ -6087,7 +6144,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 234  # letflow-queue task id
     description: >
       Give Letflow an identity provider to run against. Add a Keycloak
       service to docker-compose.yml with realm import from a tracked
@@ -6110,10 +6167,16 @@ requirements:
       revisit this if a real header-size failure appears.
       The realm MUST carry a protocol mapper that projects realm roles
       onto a flat top-level `roles` claim (R-Co's is named `realm-roles`,
-      claim.name `roles`). This is not optional polish: web/src/auth/
-      tokenUtils.ts reads payload.roles and nothing else, so without the
-      mapper the SPA gets an authenticated session with zero roles and an
-      empty nav, with no error anywhere. Letflow.Oidc.ClaimMapping
+      claim.name `roles`). This is not optional polish. The SPA reads the
+      flat claim directly in two files -- web/src/auth/AuthProvider.tsx
+      at lines 87 and 114, and web/src/pages/OidcCallbackPage.tsx at
+      lines 39 and 64, all four reading payload.roles -- and both files
+      treat an absent or empty roles array as "no roles" rather than as
+      an error. Do NOT look in web/src/auth/tokenUtils.ts: an earlier
+      draft of this requirement cited it, and it contains no roles
+      reference at all. So without the mapper the SPA gets an
+      authenticated session with zero roles and an empty nav, with no
+      error anywhere. Letflow.Oidc.ClaimMapping
       already accepts both "realm_access.roles" and "roles", so the
       backend will not catch this for you.
       Port selection: pick a host port that does not collide with R-Co's
@@ -6132,7 +6195,8 @@ requirements:
       - "the seeded operator account holds PROCESS_OPERATOR and NOT PLATFORM_ADMIN, asserted explicitly"
       - "a token obtained from the running Keycloak carries a flat top-level `roles` claim, demonstrated by decoding a real token and quoting the payload"
       - "Oidcc.ProviderConfiguration.Worker starts against the real issuer and reaches a ready state instead of retrying, evidenced from a running node"
-      - "the Keycloak host port follows the repo's per-workspace .env pattern rather than being hardcoded, and does not collide with R-Co's stack"
+      - "the Keycloak host port follows the repo's per-workspace .env pattern rather than being hardcoded"
+      - "the chosen default host port is not 8081 and is not any port already mapped in R-Co's docker-compose.yml, verified by reading that file and quoting its ports: entries -- not by checking whether R-Co happens to be running"
       - "config/prod.exs is unchanged and the result states why"
     depends_on: []
 
@@ -6141,7 +6205,7 @@ requirements:
     owner: TEST-DESIGNER
     status: pending
     stage: S4
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 240  # letflow-queue task id; depends_on translated to queue task id [234]
     description: >
       decisions/0013-authorization-role-set.md settles WHAT the role set
       is. This requirement makes a future divergence fail loudly.
@@ -6171,69 +6235,121 @@ requirements:
       - "a frontend-side check asserts AppShell's Role union contains no role absent from the matrix, deliberately one-directional to allow AGENT_RUNNER"
       - "the AGENT_RUNNER asymmetry is explained in the test name or docstring, not left for a reader to infer"
       - "no role is added to or removed from any of the three sources by this requirement"
-      - "both checks run as part of an existing gate (mix test / the frontend check command) rather than as a script someone has to remember"
+      - "the Elixir-side check runs under `mix test` in the default suite, and the SPA-side check runs under web/'s `npm run guards` script -- named explicitly because web/package.json carries several commands and the default `npm run test` excludes tests/guards/**, where tests/guards/source-scan.spec.ts already lives; neither check is a standalone script someone must remember to run"
     depends_on: [REQ-128]
 
   - id: REQ-130
-    title: Design the authorization plug -- policy-key derivation across forwarded sub-routers
+    title: Design how per-route authorization generalizes to the nine unwired sub-routers
     owner: CODE-DESIGNER
     status: pending
     stage: S4
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 243  # letflow-queue task id; depends_on translated to queue task ids [137, 140, 141]
     description: >
       Letflow.Api.Authorization (REQ-069, done) is a pure matrix that
       answers "is this action allowed" given an AccessContext and an
-      endpoint_policy_key. Nothing calls it. It is correct, tested, and
-      completely unreachable -- grep for the module name across lib/
-      returns only its own definition.
-      Design the plug that makes it load-bearing: read
-      conn.assigns[:auth_context] (populated by Letflow.Plugs.AuthPipeline),
-      convert its role strings via roles_from_strings/1, derive the
-      endpoint_policy_key, call evaluate_access/2, and turn a Deny403 into
-      REQ-066's RFC 9457 problem document.
-      The hard part, and the reason this is a design requirement rather
-      than a straight implementation: endpoint_policy_key/2 takes a PATH
-      TEMPLATE ("/definitions/:id"), not a concrete path. Letflow.Plugs.
-      ApiPipeline forwards to ten sub-routers, and Plug's forward/2
-      rewrites conn.path_info, so by the time a request reaches a
-      sub-router the plug can no longer see the full template. Decide
-      explicitly where the plug sits and how it recovers the template --
-      per-sub-router with a scoped key, a route table consulted before
-      forwarding, Plug.Router's private route metadata, or something else.
-      Say which and why. A wrong choice here produces a plug that
-      silently authorizes the wrong policy key, which is worse than no
-      plug at all.
-      Also design for the failure mode where no policy key matches the
-      request. endpoint_policy_key/2 is a function-head-per-route
-      dispatch; an unmatched (method, path) must fail CLOSED. Name the
-      mechanism that guarantees that, and be explicit that adding a route
-      without adding its policy key must not yield an unguarded route.
-      INV-5 boundary: this plug answers "is this action allowed", never
-      "does this resource exist". A cross-tenant lookup is REQ-072's 404,
-      not this plug's 403 -- Api.Authorization's own moduledoc is explicit
-      that routing a cross-tenant lookup through it would let a prober
+      endpoint_policy_key. It is already reachable, but only from ONE of
+      the ten sub-routers.
+      Current state, verified 2026-08-22 by grep over lib/letflow/routers/:
+      lib/letflow/routers/identity.ex holds 7 references to
+      Letflow.Api.Authorization and calls roles_from_strings/1,
+      endpoint_policy_key/2 and evaluate_access/2 through a private
+      helper, with_authorized_scope/4 (identity.ex:187-213), which wraps
+      all 11 identity routes and converts a :Deny403 decision into
+      Response.forbidden/2. That wiring shipped with REQ-073 (329c6f0)
+      and REQ-074 (b2ef518), both done and both gated. The other NINE
+      sub-routers -- audit.ex, definitions.ex, instances.ex, metrics.ex,
+      onboarding.ex, promotion.ex, tasks.ex, tenant_config.ex and
+      validation.ex -- contain ZERO references to Authorization. So the
+      matrix is load-bearing for identity and inert everywhere else.
+      This requirement designs how that pattern generalizes to the nine.
+      It is not "make an unreachable module reachable"; that framing was
+      wrong and cost a validation cycle.
+      The central decision. The incumbent convention passes the path
+      template as a LITERAL STRING CONSTANT at each call site, and
+      with_authorized_scope/4's own in-code comment states the reason:
+      "never derived from conn.request_path, so a handler's own policy
+      key can never accidentally vary with the literal path matched."
+      That property is what makes the incumbent safe, and it is why
+      Plug's forward/2 rewriting conn.path_info is not a problem for it.
+      Decide explicitly and with reasoning whether that convention
+      SCALES to the remaining nine sub-routers as-is, or should be
+      replaced by a plug that recovers the template some other way
+      (a route table consulted before forwarding, Plug.Router private
+      route metadata, per-sub-router scoped keys, or something else).
+      Name the incumbent, weigh it, and pick one -- do not present the
+      question as open. If the design picks a plug, this requirement's
+      scope INCLUDES migrating the 11 existing identity call sites off
+      with_authorized_scope/4 onto it, and the design must say so and
+      say how, because leaving two authorization mechanisms in the same
+      router tree is the outcome this requirement exists to prevent.
+      Design for the no-matching-policy-key case, and state its real
+      semantics rather than an idealised one. endpoint_policy_key/2 is a
+      function-head-per-route dispatch whose final clause returns
+      :Unknown, and evaluate_access/2 (lib/letflow/api/authorization.ex:
+      257-262) branches on :Unknown FIRST: it returns Allow when the
+      caller holds PLATFORM_ADMIN and Deny403 for everyone else. That is
+      a deliberate port of R-Co's evaluateAccess and this requirement
+      does not change it. So the guarantee is fail-closed-EXCEPT-ADMIN,
+      not fail-closed. State it that way, and state the consequence: a
+      route added without a policy key is unguarded for PLATFORM_ADMIN
+      and denied to everyone else -- name the mechanism (a test, a
+      compile-time check, a review rule) that makes such a route
+      visible rather than silently accepted.
+      INV-5 boundary: this answers "is this action allowed", never "does
+      this resource exist". A cross-tenant lookup is REQ-072's 404, not
+      a 403 -- Api.Authorization's own moduledoc is explicit that
+      routing a cross-tenant lookup through it would let a prober
       distinguish "exists, not yours" from "never existed". The design
       must state the ordering that keeps that true.
       Design only. No implementation code.
     acceptance_criteria:
-      - "a design artefact exists under lib/letflow/design/ naming one mechanism for recovering the path template across forward/2, with the reasoning, not a list of options"
-      - "the design states where the plug is mounted relative to AuthPipeline, TenantStatus, and the forward/2 calls in Letflow.Plugs.ApiPipeline"
-      - "the fail-closed behaviour for an unmatched (method, path) is specified, including what happens when a new route is added without a policy key"
-      - "the INV-5 ordering (cross-tenant resolves to 404 before this plug can return 403) is stated explicitly"
+      - "a design artefact exists under lib/letflow/design/ that states the current state accurately: identity.ex authorized via with_authorized_scope/4 from REQ-073/REQ-074, and the nine unwired sub-routers named individually (audit, definitions, instances, metrics, onboarding, promotion, tasks, tenant_config, validation)"
+      - "the design picks ONE mechanism for the nine -- extend the literal-string-per-call-site convention, or replace it with a plug -- names the incumbent convention and its stated safety property (the template is never derived from conn.request_path) in the reasoning, and does not leave the choice open as a list of options"
+      - "if the design picks a plug, it explicitly owns migrating identity.ex's 11 existing with_authorized_scope/4 call sites onto it and says how; if it keeps the incumbent, it states why the convention scales to nine more sub-routers without a per-route reviewer catching each one -- noting that those nine are currently 12-line stubs with ZERO routes (their routes arrive with REQ-077..REQ-085, all pending), so the design reasons about the mechanism they will adopt, not about routes that exist today"
+      - "the unmatched-(method, path) semantics are stated as fail-closed-except-PLATFORM_ADMIN, citing evaluate_access/2's :Unknown branch at lib/letflow/api/authorization.ex:257-262, not as unconditional fail-closed"
+      - "the design names the mechanism that makes a route added without a policy key visible, given that such a route is allowed for PLATFORM_ADMIN rather than denied outright"
+      - "the INV-5 ordering (cross-tenant resolves to 404 before a 403 can be returned) is stated explicitly"
       - "the design says how AllowWithRowFilter is surfaced to a route handler, without specifying any single route's implementation -- REQ-132 applies it"
       - "no implementation code appears in the artefact"
-    depends_on: []
+    depends_on: [REQ-070, REQ-073, REQ-074]
 
   - id: REQ-131
-    title: Implement and mount the authorization plug
+    title: Implement REQ-130's authorization mechanism and make it mandatory router-wide
     owner: ELIXIR-DEV
     status: pending
     stage: S4
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 248  # letflow-queue task id; depends_on translated to queue task id [243]
     description: >
-      Build REQ-130's design. Mount it so that every tenant-scoped route
-      is authorized, and make Letflow.Api.Authorization reachable for the
-      first time.
+      Build REQ-130's chosen mechanism and make it the single, mandatory
+      authorization path for the whole router tree.
+      READ THIS BEFORE SCOPING THE WORK: the nine sub-routers are EMPTY.
+      Verified 2026-08-22 by direct count over lib/letflow/routers/ --
+      audit.ex, definitions.ex, instances.ex, metrics.ex, onboarding.ex,
+      promotion.ex, tasks.ex, tenant_config.ex and validation.ex are each
+      a 12-line stub with ZERO routes: a @moduledoc, plug(:match),
+      plug(:dispatch), and a single `match _` returning
+      Letflow.Api.Response.not_found/1. Every request to them 404s today.
+      Their routes arrive with REQ-077..REQ-085, all pending. Only
+      identity.ex has routes -- 11 of them, across 639 lines, already
+      authorized through with_authorized_scope/4 (identity.ex:187-213) by
+      REQ-073 and REQ-074.
+      So this requirement CANNOT prove authorization per sub-router:
+      there is nothing there to authorize. Doing so would require waiting
+      on eight route requirements and is far past one agent turn. What it
+      delivers instead is the MECHANISM: implement REQ-130's pick, prove
+      it end-to-end on the routes that exist (identity's 11), and make it
+      available and MANDATORY for the nine -- so that when each route
+      requirement lands, its routes cannot be added unauthorized.
+      Per-sub-router proof is deferred to those route requirements as
+      they land; it is deliberately NOT an acceptance criterion here.
+      "Mandatory" must be a real enforcement artefact, not a convention
+      in prose -- a test that fails when a route reachable through
+      lib/letflow/routers/ has no policy key, or an equivalent
+      compile-time or CI check. Whichever REQ-130 named, build that.
+      If REQ-130's design replaced the literal-string-per-call-site
+      convention with a plug, this requirement also migrates identity.ex's
+      11 existing call sites onto it, per that design -- the router tree
+      must end with exactly one authorization mechanism, not two.
       Deny403 responses go through REQ-066's Letflow.Api.Error /
       Letflow.Api.Response contract -- one error shape across the whole
       surface, Content-Type application/problem+json. Do not invent a
@@ -6245,18 +6361,25 @@ requirements:
       Api.Authorization.roles_from_strings/1 -- an unrecognized string is
       dropped, never widened, and String.to_existing_atom/1 is NOT used
       (an unbounded-atom-creation vector the module's own moduledoc calls
-      out). And an unmatched route must deny, not allow.
+      out).
       Do not modify Letflow.Api.Authorization. It is a done, ported,
-      tested module and this requirement consumes it. If the matrix turns
-      out to be wrong, that is a separate finding routed through ORCH --
-      not an edit made while wiring the caller.
+      tested module and this requirement consumes it. In particular its
+      :Unknown branch (lib/letflow/api/authorization.ex:257-262) allows
+      PLATFORM_ADMIN and denies every other role -- a deliberate port of
+      R-Co's evaluateAccess. Match that behaviour; do not "fix" it into
+      an unconditional deny while wiring the caller. If the matrix turns
+      out to be wrong, that is a separate finding routed through ORCH.
     acceptance_criteria:
-      - "a request with a valid token but insufficient role receives 403 as an RFC 9457 problem document via Letflow.Api.Response, asserted on both body shape and Content-Type"
-      - "a request with a sufficient role passes through to the route, proven against a real route rather than a test-only endpoint"
-      - "an unmatched (method, path) denies rather than allows, with a test that would fail if the fallback were permissive"
+      - "a request with a valid token but insufficient role receives 403 as an RFC 9457 problem document via Letflow.Api.Response, asserted on both body shape and Content-Type, exercised against a real identity.ex route"
+      - "REQ-130's mechanism guards all 11 existing identity.ex routes: for each, a sufficient role passes through and an insufficient role is denied -- proven against those real routes, not a test-only endpoint, and the test names the route it exercised"
+      - "the mechanism is wired into the nine currently-empty sub-routers (audit, definitions, instances, metrics, onboarding, promotion, tasks, tenant_config, validation) such that a route added to any of them is authorized WITHOUT that route's author adding the mechanism themselves; the result quotes, for one of the nine, the diff that makes this true and states which of REQ-077..REQ-085 will be the first to exercise it"
+      - "an enforcement artefact exists that FAILS when a route reachable through lib/letflow/routers/ carries no policy key -- demonstrated by temporarily adding one unguarded route to a stub sub-router, quoting the actual failure output, and reverting it before the requirement completes"
+      - "an unmatched (method, path) denies for every role EXCEPT PLATFORM_ADMIN, matching evaluate_access/2's ported :Unknown branch, with a test asserting both halves -- the non-admin denial and the admin allow"
       - "a token carrying an unrecognized role string is treated as holding no role, not as holding an unknown-but-accepted one"
       - "git diff shows lib/letflow/api/authorization.ex unchanged"
-      - "the plug's position in the pipeline matches REQ-130's design, and a test demonstrates it runs after AuthPipeline has populated auth_context"
+      - "the mechanism's position in the pipeline matches REQ-130's design, and a test demonstrates it runs after AuthPipeline has populated auth_context"
+      - "exactly one authorization mechanism remains in lib/letflow/routers/: either with_authorized_scope/4 extended to all ten sub-routers, or the plug REQ-130 chose with identity.ex's 11 call sites migrated onto it -- confirmed by grep over lib/letflow/routers/ quoted in the result"
+      - "no acceptance criterion here is satisfied by asserting behaviour against a route in one of the nine stubs, because none exists yet -- per-sub-router proof belongs to REQ-077..REQ-085 as each lands"
     depends_on: [REQ-130]
 
   - id: REQ-132
@@ -6264,17 +6387,28 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 253  # letflow-queue task id; depends_on translated to queue task ids [248, 150]
     description: >
       Letflow.Api.Authorization returns three decision kinds, and REQ-131
       only makes two of them real (allow, Deny403). The third,
-      AllowWithRowFilter, means "allowed, but restricted to the caller's
-      own rows" -- a TASK_WORKER may list tasks, but only their own.
-      Apply it on the task read path (REQ-083's handleList/handleInbox).
-      A decision that is returned and then ignored is worse than one that
-      was never computed: it reads as enforced.
-      The row scope MUST come from the AccessContext's own user_id and
-      from nothing else. Api.Authorization's moduledoc states this is
+      AllowWithRowFilter, means "allowed, but restricted to the scope the
+      matrix computed" -- a TASK_WORKER may list tasks, but not all of
+      them. Apply it on the task read path (REQ-083's
+      handleList/handleInbox). A decision that is returned and then
+      ignored is worse than one that was never computed: it reads as
+      enforced.
+      Follow the decision's task_scope TUPLE, not an intuition about what
+      "own rows" means. For :TasksList with a task-worker-only role,
+      evaluate_access/2 returns kind: :AllowWithRowFilter with
+      task_scope: {:own_user_and_groups, ctx.user_id} -- the scope is
+      GROUPS-INCLUSIVE, covering tasks assigned to the caller AND tasks
+      assigned to groups the caller belongs to. Narrowing it to
+      assignee_id == user_id would be a silent behaviour change to a
+      done, ported module's semantics, made in the caller. Implement
+      exactly what the tuple says; the other kinds (:Allow with
+      task_scope :all, and :Deny403) keep their existing meaning.
+      The row scope MUST come from that task_scope tuple, whose user_id
+      the matrix took from the AccessContext, and from nothing else. Api.Authorization's moduledoc states this is
       structural, not merely tested -- evaluate_access/2 takes no third
       parameter through which a request-supplied assignee_id filter could
       reach it. Preserve that: a caller passing ?assignee_id=<someone
@@ -6283,10 +6417,10 @@ requirements:
       row filter want to feed the same Ecto where clause.
       Needs SECURITY-REVIEWER (INV-2).
     acceptance_criteria:
-      - "a TASK_WORKER listing tasks receives only rows where they are the assignee, asserted against seeded data containing another user's tasks"
+      - "a TASK_WORKER listing tasks receives exactly the rows the decision's {:own_user_and_groups, user_id} scope permits -- tasks assigned to them AND tasks assigned to a group they belong to -- and no others, asserted against seeded data containing a third user's task, a group task the caller is a member of, and a group task the caller is NOT a member of"
       - "a caller supplying an assignee_id query parameter naming a different user does NOT receive that user's rows -- an explicit test, since this is the intended attack"
       - "a role whose decision is a plain allow (not AllowWithRowFilter) still sees the unfiltered set, so the filter is not applied indiscriminately"
-      - "the row scope is derived from the AccessContext user_id in code, verifiable by reading the query construction, not from any request-supplied value"
+      - "the row scope is derived from the AccessDecision's task_scope tuple in code, whose user_id the matrix took from the AccessContext, verifiable by reading the query construction -- never from any request-supplied value"
       - "the tenant scoping from REQ-072 still applies underneath the row filter, proven by a test where the other user's tasks belong to another tenant"
     depends_on: [REQ-131, REQ-083]
 
@@ -6295,7 +6429,7 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S4
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 254  # letflow-queue task id; depends_on translated to queue task ids [234, 248]
     description: >
       Make a human able to log in. This is the requirement that proves
       the whole chain: SPA redirect -> Keycloak -> callback -> token ->
@@ -6307,10 +6441,22 @@ requirements:
       localStorage, per FNFR-06 -- keep it that way). What is missing is
       pointing it at the realm REQ-128 creates, and the redirect
       URI / webOrigins entries that let the browser complete the flow.
-      Note that web/src/auth/OidcManager.ts and tenantConfig.ts both
-      default to http://localhost:8081/realms/bpm-default. That is R-Co's
-      nginx gateway port, not Letflow's Keycloak. Update the defaults and
-      web/.env.example together.
+      THIS REQUIREMENT IS THE SINGLE OWNER of the SPA's OIDC authority
+      configuration. web/src/auth/OidcManager.ts and
+      web/src/auth/tenantConfig.ts both default to
+      http://localhost:8081/realms/bpm-default -- that is R-Co's nginx
+      gateway port, not Letflow's Keycloak. Set those defaults to the
+      issuer and host port REQ-128 actually chose (read it back from
+      docker-compose.yml and config/dev.exs rather than assuming a
+      port), and update web/.env.example in the same change so all
+      three agree.
+      REQ-117 (S8) previously also claimed this file set. It has been
+      narrowed to its S8 remainder and now defers to this requirement
+      for the authority defaults; do not treat REQ-117 as a prerequisite
+      and do not wait for it. Ownership was consolidated here because
+      REQ-128 -- the requirement that picks the port -- is S4, and an S4
+      login proof cannot depend on an S8 requirement without inverting
+      the migration's stage order.
       Verify by actually logging in as each of the seeded users and
       confirming the nav differs by role -- a PLATFORM_ADMIN sees admin
       entries, a TASK_WORKER does not. A green build proves nothing here.
@@ -6327,16 +6473,17 @@ requirements:
       - "at least one authenticated API call returns real data from Letflow, with the request and response quoted"
       - "an authenticated call to a route the caller's role does not permit returns REQ-131's 403 problem document, observed from the browser rather than from a unit test"
       - "no token is written to localStorage or sessionStorage, confirmed by inspecting browser storage after login"
-      - "OidcManager.ts, tenantConfig.ts, and web/.env.example agree on the authority, and the frontend check command passes"
+      - "web/src/auth/OidcManager.ts, web/src/auth/tenantConfig.ts and web/.env.example all name the same authority, and that authority equals the issuer REQ-128 configured -- shown by quoting the value from each of the three files alongside the issuer line in config/dev.exs"
+      - "the frontend gates that exist today pass, with the real output of each quoted: `npm run type-check`, `npm run lint` and `npm run test` run from web/. Do NOT use `npm run check` -- that script does not exist in web/package.json and is created by REQ-115, which is S8; depending on it from this S4 requirement would invert the migration stage order, which is exactly the defect this wording replaces"
       - "the result lists which routes worked and which 404'd due to pending S4 work, rather than claiming blanket success"
-    depends_on: [REQ-128, REQ-131, REQ-117]
+    depends_on: [REQ-128, REQ-131]
 
   - id: REQ-134
     title: Exercise a real Keycloak-issued token in the test suite
     owner: TEST-DESIGNER
     status: pending
     stage: S4
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 255  # letflow-queue task id; depends_on translated to queue task ids [234, 248]
     description: >
       config/test.exs sets token_verifier: Letflow.Oidc.TokenVerifierDouble,
       so the entire suite passes with no identity provider running. That
@@ -6371,11 +6518,11 @@ requirements:
     depends_on: [REQ-128, REQ-131]
 
   - id: REQ-135
-    title: Design per-tenant realm provisioning, and size the port
+    title: Survey R-Co's Keycloak provider adapter and fix the port boundary
     owner: CODE-DESIGNER
     status: pending
     stage: S4
-    # impl_order: UNREGISTERED -- see the S8 note above
+    impl_order: 244  # letflow-queue task id; depends_on translated to queue task id [234]
     description: >
       Letflow is multi-tenant and binds each tenant to an identity realm:
       tenants.idp_realm_id, with a real unique partial index, and
@@ -6383,43 +6530,216 @@ requirements:
       from a token's issuer. Nothing creates a realm. Letflow.
       TenantProvisioning provisions database SCHEMAS only, and its own
       moduledoc is explicit that onboarding orchestration is not built
-      there.
-      So today a tenant can exist in the database with an idp_realm_id
-      pointing at a realm that has never been created, and no code path
-      would notice until a login failed.
-      Design the port of R-Co's Keycloak provider adapter
-      (src/identity/provider/, 4,193 lines across 14 files -- provider.zig
-      alone is 1,626, bootstrap.zig 573, manager.zig 169, plus a
-      jwks_cache, a standards_verifier, and a stub adapter used for
-      testing). Establish: which parts are genuinely needed for realm
-      creation versus which duplicate what the oidcc library already
-      gives Letflow; whether the interface/adapter split (keycloak +
-      stub) is worth preserving; how realm creation composes with
-      TenantProvisioning's schema provisioning and REQ-076's onboarding
-      routes without either implicitly chaining the other -- REQ-022's
-      "No implicit chaining invariant" is deliberate and must not be
-      quietly dropped; and what happens when realm creation succeeds and
-      schema provisioning then fails, or the reverse.
-      That last point is the substance. This is a distributed transaction
-      across Postgres and Keycloak, and R-Co handled it with compensating
-      deletes plus a realm-existence guard on replay
-      (onboarding.zig's realm_guard). Say what Letflow does. A design that
-      omits the partial-failure path has not designed the hard half.
-      Deliverable is a design plus a SIZED implementation plan -- how many
-      requirements, what each covers -- not the implementation. Expect the
-      implementation to be its own batch; folding it into REQ-076's
-      onboarding routes would hide a multi-thousand-line subsystem inside
-      a route requirement.
-      Do not assume the whole adapter must be ported. Letflow uses oidcc
-      for verification where R-Co hand-rolled; the honest answer may be
-      that a much smaller admin-API client suffices. Establish that by
-      reading both, and state the line count you expect rather than
-      leaving it open.
+      there. So today a tenant can exist in the database with an
+      idp_realm_id pointing at a realm that has never been created, and
+      no code path would notice until a login failed.
+      Before anyone can design the fix, someone has to read the prior art
+      and decide what of it survives the port. That reading is this
+      requirement, and it is deliberately split from the design (REQ-137)
+      because it does not fit one turn alongside it: R-Co's
+      src/identity/provider/ is 4,193 lines across 14 files, with
+      provider.zig alone at 1,626, bootstrap.zig at 573 and manager.zig at
+      169, plus a jwks_cache, a standards_verifier, and a stub adapter used
+      for testing.
+      Produce a port-boundary finding: for EACH of the 14 files, a verdict
+      of PORT or DROP, its R-Co line count, and the reason. DROP is
+      expected to be the common verdict and must be justified concretely --
+      Letflow uses the oidcc library where R-Co hand-rolled verification
+      and JWKS caching, so those files are likely already covered. Do not
+      assume the whole adapter ports.
+      Also decide, with reasoning, whether R-Co's interface/adapter split
+      (keycloak + stub) is worth preserving in Letflow, given that REQ-128
+      gives the test suite a real Keycloak to run against and
+      config/test.exs already carries a TokenVerifierDouble seam.
+      Finding only. No design of the provisioning flow itself and no
+      implementation code -- REQ-137 owns both, and folding them in here is
+      what made the original single requirement unsizable.
     acceptance_criteria:
-      - "a design artefact exists under lib/letflow/design/ covering realm creation, and states which parts of R-Co's 4,193-line provider subsystem are ported, which are dropped, and why -- per file, not as a blanket judgement"
-      - "the partial-failure path is designed explicitly: realm created then schema provisioning fails, and the reverse, including what a retry does"
-      - "the design states how realm provisioning composes with TenantProvisioning without violating REQ-022's no-implicit-chaining invariant"
-      - "an implementation plan names how many follow-on requirements it takes and what each covers, with an expected size for each rather than an open-ended estimate"
+      - "a finding artefact exists under lib/letflow/design/ containing a table with one row per file in R-Co's src/identity/provider/ -- 14 rows -- each carrying the file's R-Co line count, a PORT or DROP verdict, and a one-sentence reason; a blanket per-directory judgement does not satisfy this"
+      - "the row line counts sum to the total the quoted command reports, and the result states whether that total still equals the 4,193 this requirement was drafted against; the result quotes the command used to obtain the counts from R-Co's tree so the total is measured rather than copied from this requirement's text. A drift from 4,193 is a finding to report, not a failure of this criterion"
+      - "every DROP verdict names the Letflow facility that already covers it (oidcc, a Letflow.Oidc.* module, REQ-128's realm file) or states an explicit reason it is not needed -- a bare 'not needed' fails this criterion"
+      - "the finding states an expected total ported size in lines for the PORT rows as a single number, not a range and not an open estimate"
+      - "the interface/adapter (keycloak + stub) question is answered with one decision and its reasoning, not listed as an open option"
+      - "no design of the realm-creation flow, no partial-failure design, and no implementation code appear in the artefact -- those are REQ-137"
+    depends_on: [REQ-128]
+
+  - id: REQ-136
+    title: Introduce GitHub Actions CI running the backend gate
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 245  # letflow-queue task id
+    description: >
+      This repository has no .github/workflows/ directory at all. Nothing
+      runs on push or on a pull request, which is why
+      docs/agents/protocols/GIT_MERGE.md still carries a precondition
+      saying no CI exists and why agents merge on locally-quoted output
+      alone.
+      No existing requirement closes this. S0's REQ-013 is done, and what
+      it delivered was a LOCAL single-command gate -- `mix letflow.check`
+      running format-check, compile-with-warnings-as-errors and test. It
+      never covered CI-as-a-service, and being done it does not reopen.
+      SCOPE: the BACKEND job only. `mix letflow.check` exists today, so
+      this requirement depends on nothing pending and can land
+      immediately. The frontend job is REQ-138, which waits on REQ-115's
+      `npm run check`. They are split deliberately: a repository with no
+      CI at all gains more from the backend gate landing now than from
+      both landing together, and pairing them would have parked the
+      repository's only automated gate behind an S8 requirement.
+      STAGE TAG: S4, per docs/migration/decisions/0008-cross-cutting-
+      tooling-stage-and-doc-ownership.md Question 1, confirmed Option A
+      -- cross-cutting tooling is tagged with whichever stage is active
+      at draft time (S4 as of 2026-08-22), exactly as REQ-113 and
+      REQ-114 are. Option C (tag with the downstream stage the tooling
+      unblocks) was considered and REJECTED in that record as too vague
+      for a requirement serving every future WF-02/03/04 run rather than
+      one stage, which is precisely this requirement. Do not re-tag this
+      S8 without a REVIEWER sign-off amending 0008.
+      Add .github/workflows/ci.yml with a backend job running `mix
+      letflow.check` against a postgres service whose image matches
+      docker-compose.yml, triggered on push and on pull_request. Do not
+      invent new check commands here -- CI invokes the one that already
+      exists; if the gate is missing a step, that is a change to
+      REQ-013's command and is filed as its own finding. Structure the
+      workflow so REQ-138 adds its frontend job alongside rather than
+      rewriting the file.
+      The GIT_MERGE.md edit is REQ-138's sibling requirement's concern
+      only insofar as it must stay accurate; it is owned HERE and by
+      DOC-UPDATER, not by ELIXIR-DEV -- see the ownership note in
+      REQ-139.
+    acceptance_criteria:
+      - ".github/workflows/ci.yml exists and declares a backend job invoking `mix letflow.check`, triggered on both push and pull_request"
+      - "an actual CI run on this branch is quoted -- the run id and every job's conclusion from `gh run view <run-id> --json jobs` -- rather than a claim that the workflow is correct"
+      - "the backend job's postgres service image matches the one in docker-compose.yml, verified by quoting both lines side by side"
+      - "a deliberately introduced single formatting violation is shown to turn the backend job red, with the CI log line proving it quoted, and the violation is reverted before the requirement completes"
+      - "no check command is newly invented -- git diff shows mix.exs's letflow.check alias unchanged, and web/package.json unchanged entirely"
+      - "the workflow file is structured so a second job can be appended by REQ-138 without restructuring the existing job, stated in the result"
+    depends_on: []
+
+  - id: REQ-137
+    title: Design per-tenant realm provisioning and its partial-failure path, and size the port
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S4
+    impl_order: 249  # letflow-queue task id; depends_on translated to queue task id [244]
+    description: >
+      REQ-135 established WHAT of R-Co's src/identity/provider/ ports and
+      what is dropped. This requirement designs the thing itself: how a
+      realm gets created for a tenant, and what happens when half of it
+      succeeds.
+      Establish how realm creation composes with Letflow.
+      TenantProvisioning's schema provisioning and with REQ-076's
+      onboarding routes without either implicitly chaining the other --
+      REQ-022's "No implicit chaining invariant" is deliberate and must not
+      be quietly dropped.
+      The partial-failure path is the substance, and a design that omits it
+      has not designed the hard half. This is a distributed transaction
+      across Postgres and Keycloak. R-Co handled it with compensating
+      deletes plus a realm-existence guard on replay (onboarding.zig's
+      realm_guard). Say what Letflow does, in both directions: realm
+      created then schema provisioning fails, and schema provisioned then
+      realm creation fails, plus what a retry of each does.
+      Deliver a design plus a SIZED implementation plan. The implementation
+      is its own batch; folding it into REQ-076's onboarding routes would
+      hide a multi-thousand-line subsystem inside a route requirement.
+      REQ-076 (identity routes 4/4 -- tokens/roles plus onboarding, still
+      pending) is the requirement whose boundary this design CONSTRAINS.
+      It is deliberately NOT a depends_on: both REQ-076-facing criteria
+      below are design-time boundary statements -- how realm provisioning
+      composes with TenantProvisioning, and what REQ-076 may call versus
+      must not absorb -- and neither needs REQ-076's code to exist. The
+      second is BETTER written before REQ-076 lands, since its whole
+      purpose is to bound what REQ-076 is allowed to absorb; making this
+      design wait on the implementation it constrains would invert the
+      ordering, and REQ-135's own text says the implementation "is its
+      own batch," which only holds if the design precedes it.
+      Design only. No implementation code.
+    acceptance_criteria:
+      - "a design artefact exists under lib/letflow/design/ covering realm creation for a tenant, built on REQ-135's PORT/DROP table and citing that artefact by path rather than re-deriving it"
+      - "the partial-failure path is designed explicitly in both directions -- realm created then schema provisioning fails, and schema provisioned then realm creation fails -- each naming its compensating action and what a retry of that same operation does"
+      - "the design states how realm provisioning composes with TenantProvisioning without violating REQ-022's no-implicit-chaining invariant, naming which component calls which"
+      - "the implementation plan is a numbered list of follow-on requirements where EACH entry states (i) an expected implementation size in lines as a single number, (ii) the named R-Co source files it ports or the named Letflow modules it adds or changes, and (iii) that it is sized to one agent turn -- an entry missing any of the three fails this criterion"
       - "the relationship to REQ-076 (onboarding routes) is stated -- what REQ-076 calls, and what it must not absorb"
       - "no implementation code appears in the artefact"
-    depends_on: [REQ-128]
+    depends_on: [REQ-135]
+
+  - id: REQ-138
+    title: Add the frontend gate job to GitHub Actions CI
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 250  # letflow-queue task id; depends_on translated to queue task ids [241, 245]
+    description: >
+      REQ-136 created .github/workflows/ci.yml with the backend gate
+      (`mix letflow.check`). This requirement adds the frontend job
+      alongside it. The two were split because REQ-115's `npm run check`
+      does not exist yet -- verified 2026-08-22, web/package.json's
+      scripts are dev, build, preview, type-check, lint, test,
+      test:watch, test:coverage, guards, test:e2e, test:e2e:list and
+      test:e2e:obs04 -- and pairing the jobs would have held the
+      backend gate behind an S8 requirement.
+      This one is genuinely S8: it depends on REQ-115, which is S8, so
+      the tag follows its real dependency rather than being a
+      cross-cutting-tooling judgement call. REQ-136 carries the S4 tag
+      that decisions/0008 Question 1 Option A prescribes for the
+      cross-cutting half.
+      Add a frontend job running `npm ci && npm run check` with web/ as
+      its working directory, on push and pull_request, appended to the
+      existing workflow WITHOUT restructuring REQ-136's backend job. Do
+      not invent a new check command -- REQ-115 owns what `npm run
+      check` runs.
+    acceptance_criteria:
+      - ".github/workflows/ci.yml declares a frontend job invoking `npm ci && npm run check` with web/ as its working directory, triggered on both push and pull_request"
+      - "git diff on .github/workflows/ci.yml shows REQ-136's backend job unchanged -- the frontend job is added alongside it, not a rewrite of the file"
+      - "an actual CI run is quoted -- the run id and every job's conclusion from `gh run view <run-id> --json jobs` -- showing both the backend and frontend jobs, rather than a claim that the workflow is correct"
+      - "a deliberately introduced single type error under web/src/ is shown to turn the frontend job red, with the CI log line proving it quoted, and the error is reverted before the requirement completes"
+      - "no check command is newly invented -- git diff shows web/package.json's check script unchanged from what REQ-115 delivered"
+    depends_on: [REQ-115, REQ-136]
+
+  - id: REQ-139
+    title: Correct GIT_MERGE.md's stale no-CI and REQ-013-pending premises
+    owner: DOC-UPDATER
+    status: pending
+    stage: S4
+    impl_order: 251  # letflow-queue task id; depends_on translated to queue task id [245]
+    description: >
+      docs/agents/protocols/GIT_MERGE.md's "Precondition" section carries
+      two premises that are already false and one instruction that is
+      already live and unsatisfiable. Verified 2026-08-22 at
+      GIT_MERGE.md:19-21 and :27-28.
+      The exact current wording at lines 19-21 is: "**As of this writing,
+      Letflow has no `.github/workflows/` CI configured yet** — that is
+      S0's REQ-013 (`mix letflow.check` / equivalent gate), still
+      `pending`." Note there is NO string "no CI exists yet" anywhere in
+      that file -- an earlier draft of this work quoted that phrase and
+      an implementer grepping for it would find nothing. Quote and match
+      the real text above.
+      Two separate errors live in that passage. First, REQ-013 is DONE,
+      not pending -- this is the third instance of that same stale
+      premise, after REQ-115's description and decision 0011, and it is
+      the reason this batch exists. Second, lines 27-28 say to insert a
+      "wait for GitHub Actions check to report success on the PR" step
+      between steps 7 and 8 "Once REQ-013 lands" -- REQ-013 HAS landed,
+      so that conditional instruction is already triggered and cannot be
+      satisfied, because REQ-013 delivered a local gate and never
+      GitHub Actions. The condition that should gate that step is
+      REQ-136 landing, not REQ-013.
+      OWNERSHIP: this is DOC-UPDATER's, not ELIXIR-DEV's, per
+      docs/migration/decisions/0008-cross-cutting-tooling-stage-and-doc-
+      ownership.md Question 2, confirmed Option A -- DOC-UPDATER's remit
+      covers docs/agents/ pipeline docs when a requirement's acceptance
+      criteria explicitly name them, and that record explicitly REJECTED
+      Option B (widening the implementing role for "wire a tool I just
+      built into the pipeline docs that invoke it"), which is exactly
+      this shape of work. ELIXIR-DEV's remit is lib/ + migrations +
+      config and covers neither docs/agents/protocols/ nor
+      .github/workflows/.
+      Sequence this AFTER REQ-136 so the replacement text describes CI
+      that actually exists rather than CI that is planned.
+    acceptance_criteria:
+      - "the result quotes GIT_MERGE.md's before and after wording for lines 19-21, and the before quote matches the file's real text -- the phrase 'still `pending`' applied to REQ-013 no longer appears anywhere in the file"
+      - "the after text states that REQ-013 is done and delivered a LOCAL gate (`mix letflow.check`), and separately that GitHub Actions CI is REQ-136 -- the two are not conflated, since conflating them is what produced the stale premise"
+      - "the 'Once REQ-013 lands, insert ...' instruction at lines 27-28 is corrected so its condition names REQ-136 (or states the step is now active because REQ-136 has landed), with before and after quoted -- leaving a triggered-but-unsatisfiable instruction in place fails this criterion"
+      - "grep over docs/agents/protocols/GIT_MERGE.md for 'REQ-013' is quoted in the result, and every surviving mention is consistent with REQ-013 being done"
+      - "no change is made to the file's 'What \"reported green\" means here' paragraph or to the standing-failures attribution rule -- git diff confirms, since those are a separate concern this requirement does not touch"
+    depends_on: [REQ-136]

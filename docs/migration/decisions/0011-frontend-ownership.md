@@ -108,9 +108,14 @@ files (`ADM-UI`, `DLQ-UI`, `IN-UI`, `PD-UI`, `SH`, `TK-UI`, `WH-UI`).
   guard pattern to make a change pass is now a Letflow anti-pattern, not an
   R-Co one.
 - `web/` needs a CI job — but so does everything else. There is no
-  `.github/workflows/` directory in this repository at all (the backend's own CI
-  is S0's `REQ-013`, still `pending`, which is why
-  `docs/agents/protocols/GIT_MERGE.md` carries an explicit "no CI exists yet"
-  precondition). A frontend gate equivalent to `mix letflow.check` —
+  `.github/workflows/` directory in this repository at all. The backend's own CI
+  is S0's `REQ-013`, which is `done` — but what REQ-013 delivered was a
+  *local* single-command gate (`mix letflow.check`), never GitHub Actions,
+  which is why `docs/agents/protocols/GIT_MERGE.md` still carries a
+  precondition stating that no `.github/workflows/` CI is configured yet.
+  CI-as-a-service is split in two: `REQ-136` (backend job) and `REQ-138`
+  (frontend job); `REQ-139` corrects the stale `GIT_MERGE.md` precondition
+  once `REQ-136` lands. A frontend gate equivalent to
+  `mix letflow.check` —
   `type-check` + `lint` + `test` + `guards` — is filed as S8 requirement work
   rather than bolted on inline here.

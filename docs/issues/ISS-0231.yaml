@@ -1,0 +1,83 @@
+id: ISS-0231
+title: >
+  ISS-0221 closed on a false all-clear -- 21 requirements were left UNREGISTERED
+  and unclaimable, and nothing detects the condition
+discovered_by: ORCH
+discovered_in_run: WF01-REQ115-135-20260822
+discovered_at: "2026-08-22T02:48:09Z"
+severity: MAJOR
+
+description: >
+  ISS-0221 ("WF-01 never tells ORCH to register the requirement in letflow-queue,
+  so a correctly-produced requirement is unclaimable") was resolved 2026-08-21.
+  Its documentation fix is correct and stands: WF-01 gained an explicit Step 3,
+  and this issue does not reopen that.
+
+  What is wrong is the second half of its `resolution_note`, which asserts:
+  "every requirement in the current `docs/requirements.yaml` (checked via a
+  full-file scan, not a sample) already carries `impl_order`, so the practical
+  backfill this filing's symptom described has since been completed by other
+  work, separate from this issue's own scope ... No further action taken on that
+  front."
+
+  That statement is false, and was false when written -- not merely stale.
+  Verified against ISS-0221's own fix commit:
+
+    git show 75f553d:docs/requirements.yaml | grep -c 'impl_order: UNREGISTERED'
+    => 21
+
+  REQ-115..135 all carried the UNREGISTERED marker at that exact commit, and
+  still did on `main` at the time of this filing. So ISS-0221 closed while its
+  own symptom -- well-formed requirements that `get_next_task` can never return
+  -- was live in 21 places. The all-clear in the note is the active harm: it is
+  precisely what would stop a later reader from re-checking.
+
+  Probable mechanism: the scan matched only the `impl_order:` YAML field form and
+  missed the `# impl_order: UNREGISTERED` comment form -- which is the very form
+  `TASK_QUEUE.md` prescribes for an unregistered requirement ("If a requirement
+  has not yet been through `register_task`, leave `impl_order` absent (or note
+  `# UNREGISTERED`) rather than filling it with a placeholder that reads as a
+  real id"). A scan looking for the presence of a field will therefore always
+  report a clean file, no matter how many requirements are unregistered.
+
+  Impact: the S8/S9 frontend+mobile batch (REQ-115..127, migrated from R-Co
+  2026-08-21) and the S4 identity-infrastructure batch (REQ-128..135) were both
+  invisible to the queue -- the exact "well-formed, validated, and permanently
+  unclaimable" state ISS-0221 was filed to prevent, with the same silent failure
+  mode: no error, just an idle pipeline.
+
+  Two things remain, neither covered by the WF-01 run that found this:
+
+  1. ISS-0221's `resolution_note` is on record with a false all-clear and needs
+     correcting, so the next reader is not misled by it. The rest of that note
+     (the WF-01 Step 3 fix, and the WF-03 asymmetry analysis) is accurate and
+     should be preserved.
+
+  2. Nothing detects this class of gap. A requirement can sit UNREGISTERED
+     indefinitely with no error raised anywhere -- which is ISS-0221's own thesis,
+     left unaddressed for the data half. Consider a check that greps for the
+     `impl_order: UNREGISTERED` marker (and for a requirement carrying neither an
+     `impl_order:` field nor the marker) and reports it, so the next occurrence
+     surfaces on its own instead of waiting for someone to notice the pipeline is
+     idle. Note that any such check must match the comment form, not just the
+     field -- that is the specific thing this issue's own mechanism got wrong.
+
+  Discovered while pushing REQ-115..135 through WF-01 properly (run
+  WF01-REQ115-135-20260822), which is registering the 21 requirements themselves;
+  that run does not touch either item above.
+
+affected_files:
+  - docs/issues/ISS-0221.yaml  # the false all-clear in resolution_note
+  - docs/requirements.yaml     # the 21 UNREGISTERED entries the note missed
+
+related:
+  - ISS-0221  # this issue is a remediation gap left by its resolution, not a reopen
+
+queue_task_id: 231
+github_issue: 469
+github_issue_note: >
+  `register_task` created both the queue task (231) and its mirrored GitHub issue
+  (469) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was
+  deliberately not called separately.
+
+status: open

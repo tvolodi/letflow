@@ -4343,7 +4343,7 @@ requirements:
   - id: REQ-077
     title: Promotion pipeline routes (promotion_review.zig, promotions.zig, promotion_read.zig, promotion_assertion.zig, promotion.zig, definition_rollback.zig)
     owner: ELIXIR-DEV
-    status: pending
+    status: blocked
     stage: S4
     impl_order: 144  # letflow-queue task id
     description: >

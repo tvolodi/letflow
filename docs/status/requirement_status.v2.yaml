@@ -949,3 +949,29 @@ history:
       REQ-115..135, and `docs/requirements.yaml` is byte-identical to main on this
       branch. Two follow-ups recorded for ORCH to register: `lint_handoffs` wired
       into no gate, and the deferred bucket having no expiry.
+  - req: REQ-077
+    event: blocked
+    agent: ELIXIR-DEV
+    at: "2026-08-22T04:43:51Z"
+    note: >
+      Run WF02-REQ077-20260822 blocked at WF-02 Step 1b/2a. Design artefact
+      lib/letflow/design/req077-promotion-pipeline-routes.md is complete and
+      CODE-DESIGN-VALIDATOR PASS (round 2; round 1 FAILed on one BLOCKER, since
+      fixed). No lib/ code written -- deliberately, because REVIEWER blocked
+      implementation. Cause: four of the ten routes (apply, run-assertions,
+      rollback, ENV-03 promote) reach context functions that Keyword.fetch! an
+      opts[:event_appender], and no production event appender exists anywhere in
+      lib/. EventStore.append/2 structurally cannot write a platform-scoped
+      event -- its M1 active_instance_guard/3 (event_store.ex:357-370) requires
+      an instance_projections row, while platform_instance_id/0 is documented
+      "Never inserted into instance_projections". The three promotion event
+      types are correspondingly unseeded in TenantProvisioning "because no
+      production writer exists". REVIEWER ruled the writer must be SPLIT into
+      its own requirement rather than absorbed, because
+      req026-event-read-archive-platform-sentinels.md:144 already records
+      platform event emission as deferred to "a later stage's engine work" and
+      no REQ-077 acceptance criterion mentions an event. Drafted as REQ-140
+      (DRAFT -- not through REQ-VALIDATOR, impl_order UNREGISTERED, id derived
+      by scan not reservation). AC3 and AC6 are reachable today; AC1, AC2, AC4
+      and one of AC5's four cases are gated on that requirement. Not merged to
+      main: branch feature/WF02-REQ077-20260822 holds the design and the draft.

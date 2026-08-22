@@ -1,0 +1,65 @@
+{
+  "handoff_id": "c4d7e8a1-2f6b-4a9c-8e1d-5b3f7c9a0d2e",
+  "run_id": "WF02-REQ075-20260822",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ075-20260822/step-02d-reviewer.json",
+  "created_at": "2026-08-22T03:15:00Z",
+  "started_at": "2026-08-22T02:55:00Z",
+  "completed_at": "2026-08-22T03:15:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-075"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ075-20260822/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ075-20260822/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/routers/tenants.ex",
+      "lib/letflow/plugs/tenant_status.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/tenant.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/design/req075-tenant-administration-routes.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2d -- hard idiom/scope gate on REQ-075's Step 2a implementation, after SECURITY-REVIEWER's Step 2c PASS. Primary job: decide OQ-5 (compensating rollback vs. accepted partial state for POST /tenants's create-then-provision-then-migrate orchestration), carried forward unresolved by both the design doc and SECURITY-REVIEWER.",
+    "acceptance_criteria": [
+      "OQ-5 decided on its actual idempotency/retry properties, not assumed",
+      "with_authorization/4 wrapper and restructured TenantStatus.call/2 checked for idiom",
+      "AC6/AC7 moduledoc text verified against the actual shipped @moduledoc, not paraphrased",
+      "git diff main...HEAD --stat scope confirmed against Step 1c's authorization",
+      "no contradiction with docs/migration/decisions/*.md",
+      "no hardcoded role or header-sourced identity re-confirmed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. OQ-5 decision: no compensating rollback needed -- the current accepted-partial-state design in lib/letflow/routers/tenants.ex's provision_and_respond/2 is correct, not a gap. Read lib/letflow/tenant_provisioning.ex directly rather than assuming: provision_tenant_schema/1 (lines 159-202) is explicitly, deliberately idempotent -- 'Calling this twice for the same tenant_id is not an error' (its own @doc), implemented via a transaction-scoped advisory lock + CREATE SCHEMA IF NOT EXISTS + insert-or-fetch-on-conflict registration row; a second call after a first failure simply completes the work. replay_migrations/2 (lines 204-264) delegates to Ecto.Migrator.run/4 with :prefix, which only applies pending migrations -- also safely re-callable after a partial failure, and its own moduledoc documents the ISS-0019/GH#75 fix that put default-manifest resolution inside the same try/rescue as the migration run itself, so every failure path already returns the tagged {:error, _} shape rather than raising raw. Given both downstream primitives are genuinely idempotent, a compensating rollback (delete the just-created tenant row) is not just unnecessary but the WORSE fix: if provision_tenant_schema/1 already succeeded and only replay_migrations/2 failed, deleting the tenant row would orphan a real Postgres schema + tenant_schemas registration row pointing at a tenant_id that no longer exists in tenants -- trading a recoverable partial state for an unrecoverable orphan. The right remediation for this failure mode is a future idempotent retry/reconciliation path (re-calling the same two functions with the same tenant_id, or a periodic job scanning for tenants rows with no matching migrated schema), not a delete-on-failure. This matches ELIXIR-DEV's as-instructed implementation exactly and confirms it as the correct call, not merely an acceptable placeholder. Filing this as a MINOR non-blocking finding via ISSUE_QUEUE.md's convention (see issues[] below) rather than only recording it here, so it becomes claimable future work.\n\nStandard checks:\n\n1. Idiomatic OTP/Elixir -- lib/letflow/routers/tenants.ex's with_authorization/4 (lines 170-183) is a clean, consistent continuation of REQ-073/074's established pattern: builds AccessContext from conn.assigns only, calls evaluate_access/2, short-circuits on :Deny403, otherwise invokes the handler closure. No process/state-machine work in this router at all (a stateless Plug.Router is the correct shape here -- no :gen_statem concern applies, there is no per-instance lifecycle in tenant administration). TenantStatus.call/2's restructure (single Repo.get/2 feeding a 3-clause cond, replacing the prior method-guarded first clause) is a genuine improvement, not an awkward refactor: it removes duplicate lookup logic, and the ordering (inactive-check first, migrating-check second, both against one shared tenant struct) is easy to read top-to-bottom and matches its own moduledoc's stated intent. No crutch pattern found.\n\n2. Supervision -- no change to InstanceSupervisor or any per-instance process boundary in this diff; tenants.ex and identity.ex are both stateless request-handling code, not OTP processes, so this check is not applicable to this diff's shape. Confirmed no singleton/spawn/shared-state introduced anywhere in the changed files.\n\n3. Type-safety gaps -- Tenant.status is already an Ecto.Enum ([:active, :migrating, :inactive]), so the state space this diff adds (:inactive) is already unrepresentable-invalid by construction; no new gap introduced here worth a fresh issue.\n\n4. Scope creep -- git diff main...HEAD --stat matches exactly the file set SECURITY-REVIEWER already confirmed at Step 2c (routers/tenants.ex new, identity.ex, identity/tenant.ex, plugs/tenant_status.ex, plugs/api_pipeline.ex, api/authorization.ex, their test files, docs/handoff bookkeeping, stage-4-api-surface.md). TenantStatus's extension is scoped exactly to the REVIEWER-authorized 8-point shape from Step 1c -- re-confirmed by reading the shipped call/2 directly (single Repo.get, 3-clause cond, inactive-then-migrating ordering, PLATFORM_ADMIN exemption on the inactive check only). No abstraction (behaviour, macro, generic plumbing) appears ahead of REQ-075's actual need -- tenant_map/1 is a plain hand-built map, not a new Jason.Encoder-derivation framework; :TenantsManage is one permission atom added through the existing catch-all pattern, not a new authorization mechanism.\n\n5. AC6/AC7 moduledoc verification -- read the actual shipped @moduledoc in lib/letflow/routers/tenants.ex lines 1-106 directly. AC6's risk statement appears verbatim as a top-level heading: 'THIS IS THE HIGHEST-RISK ROUTE GROUP IN S4 (AC6)' followed by the full PLATFORM_ADMIN-as-only-protection paragraph. AC3's own-tenant rule appears as its own heading with the 'no carve-out... ported as-is' statement. AC7's REQ-076 relationship appears verbatim, naming both TenantProvisioning functions as the shared primitives. AC5's deactivation-status statement appears verbatim, citing the exact R-Co source lines it ports. All four present as literal prose, none paraphrased away or dropped.\n\n6. Decision-record consistency -- no contradiction found with any docs/migration/decisions/*.md record. The TenantStatus change was already checked against decision records at Step 1c (this REVIEWER's own prior sign-off); the remainder of the diff (routers/tenants.ex, identity.ex, tenant.ex, authorization.ex) introduces no framework/library choice and does not touch anything 0001-0006 govern.\n\n7. R-Co dead-code non-port -- light re-confirmation per the task brief (SECURITY-REVIEWER already did the full derivation at Step 2c): with_authorization/4 sources roles exclusively from conn.assigns.auth_context.roles, no hardcoded role or header-sourced identity found anywhere in the new files. Consistent with Step 2c's finding.\n\nNo rework required.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ075-20260822/step-02d-reviewer.json"
+    ],
+    "issues": [
+      "MINOR, non-blocking, recommend filing via ISSUE_QUEUE.md convention (ORCH to register_task; REVIEWER does not call letflow-queue directly): no idempotent retry/reconciliation path exists yet for a tenants row left in a partial-provisioning state (schema not created, or migrations not fully replayed) after POST /tenants's provision_and_respond/2 returns 500. Both TenantProvisioning.provision_tenant_schema/1 and replay_migrations/2 are already safely re-callable with the same tenant_id (confirmed by direct read of lib/letflow/tenant_provisioning.ex), so the fix this deserves is a retry/reconciliation mechanism (re-invoke the same two functions, or a periodic sweep for tenants rows with no matching migrated schema) -- NOT a compensating rollback, which would risk orphaning a real schema if provisioning had already partially succeeded. No such retry path exists anywhere in this codebase today; worth tracking as follow-on work for whichever future requirement builds tenant-onboarding operational tooling (this overlaps REQ-076's self-service signup path and TenantProvisioning's own moduledoc, which already names a future 'tenant-onboarding orchestration requirement' as the place this belongs)."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ075-20260822",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ075-20260822",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER for WF-02 Step 3 (test specs/code covering REQ-075's acceptance criteria), per docs/agents/workflows/WF-02_requirement_implementation.md. TEST-DESIGN-VALIDATOR gates that step before TEST-RUNNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

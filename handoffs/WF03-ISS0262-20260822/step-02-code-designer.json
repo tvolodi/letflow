@@ -1,0 +1,52 @@
+{
+  "handoff_id": "a98bd7fd-accf-4322-ad11-6156adc4f287",
+  "run_id": "WF03-ISS0262-20260822",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0262-20260822/step-02-code-designer.json",
+  "created_at": "2026-08-22T07:35:00Z",
+  "started_at": "2026-08-22T07:35:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "handoffs/WF03-ISS0262-20260822/step-01-issue-fixer.json"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"]
+  },
+  "task": {
+    "description": "Read handoffs/WF03-ISS0262-20260822/step-01-issue-fixer.json's result.summary in full -- it is ISSUE-FIXER's complete diagnosis and recommendation for ISS-0262 (GH#510). Design a fix per its recommendation: broaden handoff_files/0's discovery beyond the hardcoded `handoffs/**/*.json` glob, and add a new hard check (ISSUE-FIXER suggests naming it H6) that flags any handoff-shaped file under handoffs/<run_id>/ that is NOT valid JSON (or does not carry the expected .json extension) as a violation, gating the exit code the same way H1-H4 do. Design must state precisely: (a) the new discovery glob/pattern, distinguishing a handoff-shaped file from incidental non-handoff files that might live under handoffs/ (e.g. registry.json and orchestrator.log themselves must stay excluded -- check how @registry_file is already excluded and preserve that plus exclude orchestrator.log by the same mechanism); (b) the H6 check's exact classification logic (three outcomes per ISSUE-FIXER: .json+valid -> existing path, .json+invalid -> existing PARSE path, non-.json extension -> new H6 violation) as @spec-style signatures/pseudocode, not implementation bodies; (c) the exact disposition for the 10 (not 9 -- ISSUE-FIXER corrected the original count) pre-existing Markdown files under handoffs/WF03-ISS0258-20260822/ -- ISSUE-FIXER recommends grandfathering them individually by exact path mirroring the existing @grandfathered list pattern (rule tag \"H6\", one entry per file), not converting them to JSON; state the exact 10 file paths to grandfather (list them, do not just say 'the 10 files' -- verify the count and names yourself against the actual directory rather than trusting the diagnosis's number). Also design the test fixture requirement: a real non-JSON handoff-shaped fixture file TEST-DESIGNER will use to prove H6 catches a violation (e.g. under a throwaway test-only handoffs-shaped directory or an in-repo fixture path -- decide and specify exactly where it lives and what it's named). No implementation code -- signatures, data shapes, and the grandfather-list additions as data, not function bodies.",
+    "acceptance_criteria": [
+      "Design doc under lib/letflow/design/ (or a suitable location per this project's design-artefact convention) covers: new discovery mechanism, H6 check logic and violation message shape, exact grandfather-list additions (all real file paths, verified against disk, not assumed count), and the test fixture's exact location/shape",
+      "No .ex implementation function bodies present -- signatures and pseudocode only",
+      "Design explicitly addresses backward compatibility: existing grandfathered H1-H4 entries and existing valid .json handoffs must not newly violate H6",
+      "Design states how orchestrator.log and registry.json remain excluded from H6's scope"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

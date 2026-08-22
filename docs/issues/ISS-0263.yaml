@@ -1,0 +1,102 @@
+id: ISS-0263
+title: >
+  docs/status/requirement_status.v2.yaml exceeded its own declared roll_rule
+  ceiling (max_lines: 1200) without being rolled
+discovered_by: ORCH
+discovered_in_run: (filed directly by the project owner, ISS-0263, ahead of a
+  dedicated discovery run -- three independent runs hit A3 failing tonight)
+discovered_at: "2026-08-22T09:06:05Z"
+severity: MAJOR
+
+description: >
+  docs/status/requirement_status.v2.yaml (volume 2 of the requirement run-history
+  log) had grown to 1,407 lines / 92,601 bytes / 43 entries -- over its own
+  declared roll_rule ceiling (docs/status/requirement_status.index.yaml:
+  max_lines: 1200, max_bytes: 120000). The file's own header explains why the
+  ceiling matters: the append-only safeguard requires reading the current volume
+  in full before appending to it, and a volume too large to read cannot deliver
+  its own schema. Confirmed by direct reproduction, not inferred: `mix test
+  test/docs/requirement_status_invariants_test.exs` failed assertion A3 ("the
+  current volume is within the roll-rule ceilings") with `measured: {:error,
+  %{bytes: 92601, lines: 1407, max_bytes: 120000, over: [:lines], max_lines:
+  1200}}`, 19/20 passed.
+
+  Root cause: no run since this volume crossed the ceiling had executed the
+  roll procedure documented in its own "WHEN THIS VOLUME IS FULL" header
+  section. Entries kept landing -- 43 on-disk `- req:` entries, many arriving
+  via composed rebase conflicts across concurrent WF-02/WF-03 runs, per the
+  index's own volume-2 note narrating repeated recounts (25 -> 41 and beyond)
+  -- with no run checking `wc -l`/`wc -c` after its own append and triggering
+  the roll, even though the roll rule and the A3 test both already existed
+  (added under ISS-0119). This is a process gap (a mandatory post-append check
+  silently skipped by every run that pushed the count higher), not a defect in
+  the roll rule's design or the A3 test itself -- both worked exactly as
+  intended the moment this run actually invoked them.
+
+affected_files:
+  - docs/status/requirement_status.v2.yaml
+  - docs/status/requirement_status.v3.yaml
+  - docs/status/requirement_status.index.yaml
+
+related:
+  - ISS-0119   # original roll-rule design and the A3 test this issue's fix satisfies
+  - ISS-0199   # prior volume-2 entries: count drift, same class of "nobody checked" gap
+
+queue_task_id: 263
+github_issue: 518
+
+status: resolved
+resolved_in_run: WF03-ISS0263-20260822
+resolved_at: "2026-08-22T09:30:45Z"
+resolution_note: >
+  Rolled docs/status/requirement_status.v2.yaml per its own "WHEN THIS VOLUME
+  IS FULL" procedure. Steps taken, in order: (1) appended this run's own
+  `started` event to v2.yaml while it was still the current volume (43 -> 44
+  entries, 1429 frozen-prefix lines); (2) appended v2.yaml's closure footer,
+  modeled on volume 1's precedent footer, declaring it closed under ISS-0263;
+  (3) computed frozen_prefix_sha256 over lines 1..1429 with CRLF normalised to
+  LF (`head -n 1429 requirement_status.v2.yaml | tr -d '\r' | sha256sum` =
+  895b92989ccfcc3ebda222ab448e9303ddd5c201df5aad4fdc1540ffff62879e), matching
+  the ISS-0119 design's normative definition; (4) in
+  docs/status/requirement_status.index.yaml, set volume 2's status: closed with
+  its entries/lines/bytes_working_tree/frozen_prefix_lines/frozen_prefix_sha256
+  filled in, and added volume 3 (docs/status/requirement_status.v3.yaml) with
+  status: current; (5) created requirement_status.v3.yaml containing volume 2's
+  header text verbatim, with only the volume number, opening date and
+  predecessor-path references updated, followed by an empty `history:` list;
+  (6) appended this run's own `done` event as v3.yaml's first entry, and
+  updated the index's volume-3 entries: count to 1 in the same commit.
+
+  RECONCILIATION (before/after entry counts): v2.yaml held 43 entries
+  immediately before this run touched it. After: the closed v2.yaml holds 44
+  entries (the 43 pre-existing + this run's own `started` event, appended
+  before the roll while v2.yaml was still current), and the new current
+  v3.yaml holds 1 entry (this run's own `done` event). 43 pre-existing + 2
+  entries this run added (1 in each volume) = 45 entries total across both
+  files, none rewritten, reordered, or deleted -- confirmed via `git diff
+  --numstat docs/status/requirement_status.v2.yaml` showing insertions-only
+  (57 insertions, 0 deletions: 22 lines for the started-event, 35 for the
+  closure footer) across the whole run, and via `grep -c '^  - req:'` before
+  (43) and after (44) the started-event append, matching by hand-count.
+
+  VERIFICATION: `mix test test/docs/requirement_status_invariants_test.exs`:
+  19/20 before the fix (A3 failing, as reproduced above), 20/20 after (all
+  assertions including A3 and A9 green). New current volume v3.yaml measured
+  at 199 lines / 12,005 bytes / 1 entry, well under the 1200-line/120000-byte
+  ceiling. `mix compile --warnings-as-errors`: 0 warnings. Full suite `mix
+  test`: 1717/1718 passed; the 1 failure
+  (Mix.Tasks.Letflow.CheckDeferralStalenessTest, an S8/S9 requirements.yaml
+  staleness assertion) is structurally unrelated to this fix -- `git status
+  --porcelain` for this run's whole working tree shows only
+  docs/status/requirement_status.{index,v2,v3}.yaml changed, and neither that
+  test file nor its module nor docs/requirements.yaml (its dependency) is
+  among them. Flagged to ORCH as a separate finding rather than fixed here
+  (out of this issue's scope), per "No Issue Left Local-Only" -- not yet
+  independently registered as its own queue task/GH issue by this run.
+
+  No concurrent writer was detected: `git fetch origin main` before and
+  immediately before branching returned the same SHA (96ac42f), and an MD5
+  hash of v2.yaml taken before branching (573ed6a2bb07cc30bf4ace92f9a64ff5)
+  matched the hash taken immediately after `git checkout -b` from
+  origin/main, confirming no drift occurred between the initial read and the
+  start of this run's edits.

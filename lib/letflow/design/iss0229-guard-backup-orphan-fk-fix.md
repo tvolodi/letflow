@@ -528,24 +528,52 @@ and clean up any tenant it created." **That is wrong on two counts and must not 
   would be an `undefined function` compile error — precisely the module-nonexistence shape §5
   rules out — rather than the behavioural 23503 the fail-then-pass rule demands.
 
-**Registration order is mandated, not left to taste — it is what makes step 1 total.** Every
-test in the new block MUST, in this order: (i) generate **every** id it will ever seed —
-the orphan backup row's `id`, its absent `tenant_id`, the restorable row's `id`, and the real
-`Tenant`'s id — **before** issuing any DDL or DML; (ii) register its `on_exit` with that
-complete id list already captured in the closure; (iii) only then run the `DROP CONSTRAINT`
-and the seeding `INSERT`s. TEST-DESIGNER must not re-derive this. The failure it prevents is
-concrete: if ids are generated inline and `on_exit` is registered after seeding, a body that
-raises part-way through seeding leaves a row that step 1 does not target, step 4's validating
-`ALTER` then raises 23503 inside `on_exit`, and the constraint is left off with an orphan
-parked — exactly the state §5.1.1 exists to prevent. Generating ids first costs nothing
-(`Ecto.UUID.generate/0` touches no database) and makes the cleanup's coverage independent of
-how far the body got.
+**Registration order is mandated, not left to taste — it is what makes the cleanup total.** An
+earlier draft of this paragraph required pre-generating *every* id "including the real `Tenant`'s
+id" before any DDL/DML. **That was not implementable and is withdrawn.** `Letflow.Identity.Tenant`
+declares `@primary_key {:id, :binary_id, autogenerate: true}` (`lib/letflow/identity/tenant.ex:52`)
+and `create_changeset/3` casts only `[:slug, :display_name, :status, :idp_realm_id]` — `:id` is
+not castable — so a pre-generated tenant id cannot be supplied through the idiom all three
+tenant-creating tests in this same file already use (`%Tenant{} |> Tenant.create_changeset(…) |>
+Repo.insert!()`, lines 114, 647, 816), and the tenant's id is only knowable *after* the insert.
+The rule below therefore applies pre-generation **only** to ids inserted by raw SQL into the
+backup table, where it genuinely is free, and handles the tenant with its own separately
+registered callback instead. No Ecto internals and no departure from the file's existing idiom
+are involved.
 
-**Mandatory cleanup, in this order, for every test in the new block** (including assertion 9's
-scenario, per §5.2):
+**`on_exit` is LIFO — the callbacks run in reverse registration order.** Verified against the
+implementation, not assumed: `ExUnit.OnExitHandler.add/3` appends via `List.keystore/4`, and
+`run/2` executes `Enum.reverse(callbacks)`. So *register cleanup in the reverse of the order you
+want it to run.* Three callbacks, registered in this order:
+
+- **(A) First, before anything else in the test body** — carries step 4 alone. Registered
+  unconditionally at the very top so it runs no matter how early the body fails; being last to
+  execute is exactly what makes step 4's `ALTER` see an already-emptied table.
+- **(B) Immediately after the real `Tenant` insert** (which the test does first, since the
+  restorable row of §5.2 assertion 5 needs a live parent) — carries steps 2 and 3. If the insert
+  itself raises there is no tenant to clean, so nothing is missed by this callback not existing.
+- **(C) After generating the backup-table ids, and before the `DROP CONSTRAINT` and the seeding
+  `INSERT`s** — carries step 1, closing over the **full pre-generated id list**. Generate
+  whichever of the following that test seeds — the orphan backup row's `id`, its deliberately
+  absent `tenant_id`, the restorable row's `id` — before issuing any DDL or DML;
+  `Ecto.UUID.generate/0` touches no database, so this costs nothing and makes the cleanup's
+  coverage independent of how far the body got.
+
+The failure this prevents is concrete: if step 1's ids were generated inline and its callback
+registered only after seeding, a body raising part-way through seeding would leave a row step 1
+does not target, step 4's validating `ALTER` would then raise 23503 inside `on_exit`, and the
+constraint would be left off with an orphan parked — exactly the state §5.1.1 exists to prevent.
+
+Reverse-registration execution is therefore **(C) → (B) → (A)**, which yields steps 1, 2, 3, 4 in
+the numbered order below — backup rows removed, then the tenant's registry row and the tenant,
+then heal-then-constrain last, ending with the constraint in force over an empty table.
+TEST-DESIGNER must not re-derive any of this.
+
+**Mandatory cleanup — the four steps, in the execution order the registration above produces**
+(this applies to every test in the new block, including assertion 9's scenario, per §5.2):
 
 1. `DELETE FROM public.iss060_tenant_schemas_guard_backup WHERE id = ANY($1)`, bound to the
-   **full pre-generated id list** from (i) above — not to whatever the body managed to insert. A
+   **full pre-generated id list** from (C) — not to whatever the body managed to insert. A
    targeted `DELETE` on the *referencing* side is never FK-checked, so this cannot raise
    regardless of what state the body left; passing ids that were never inserted is a harmless
    no-op; and it removes only what this test could have created. This step is what guarantees the
@@ -645,7 +673,7 @@ Minimum set; each line is a distinct failure mode a partial fix could pass witho
    assertions 1-8, this path does **not** converge the constraint: per §3.3,
    `with_only_this_tenant_visible!/2` calls `restore_or_discard_backup_rows!/0` but **not**
    `ensure_backup_table_fk!/0`, so the scenario finishes with the constraint still dropped. Its
-   `on_exit` must therefore run §5.1.1's four steps in full — in particular step 4's
+   cleanup must therefore use §5.1.1's three-callback registration in full — in particular step 4's
    `restore_orphaned_guard_backup_rows!/0`, which is the only thing that puts the constraint
    back, and which must run *after* steps 1-3 have emptied the backup table so the validating
    `ALTER` cannot raise. A test that asserts this property and then leaves the constraint off

@@ -5807,7 +5807,7 @@ requirements:
   - id: REQ-119
     title: Correct the factual drift in docs/frontend/ carried over from R-Co
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S8
     impl_order: 232  # letflow-queue task id
     description: >

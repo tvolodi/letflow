@@ -1260,3 +1260,39 @@ history:
       path -- explicit scope test recorded in the design/review handoff, not
       silently skipped). REVIEWER: see handoff for verdict. Full detail:
       docs/issues/ISS-0261.yaml.
+  - req: REQ-119
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-22T08:24:39Z"
+    note: >
+      Run WF02-REQ119-20260822, queue task 232. Docs-only reconciliation of
+      two known-false statements in docs/frontend/, carried over verbatim
+      from R-Co on purpose per web/README.md's "Known drift" section. (a)
+      "React 19" claims in docs/frontend/frontend-requirements.md and
+      docs/guides/frontend_developer_guide.md corrected to React 18.3.1,
+      quoted from web/package-lock.json's `node_modules/react` entry
+      ("version": "18.3.1"), not from package.json's ^18.3.0 range. Grep for
+      "React 19" across docs/ confirmed no remaining hit asserts it as
+      current fact -- all are retrospective ("used to say", historical
+      requirement descriptions in docs/requirements.yaml left untouched on
+      purpose, since editing historical requirement text would misrepresent
+      history). (b) design-system.md section 2's tokens.css claim was NOT
+      corrected the same way -- reframed with a "Not yet implemented" note
+      pointing to REQ-120 (confirmed still `pending` at implementation time,
+      not yet landed), listing REQ-120's three live options neutrally
+      (build tokens.css / adopt design-tokens/letflow.tokens.json / accept
+      inline styles) without picking one, and leaving the original
+      descriptive text intact below it rather than deleting the section.
+      web/README.md's Known-drift entries updated to mark the React item
+      fixed-by-REQ-119 and the tokens.css item tracked-by-REQ-120 (not
+      resolved). docs/frontend/README.md's "Accuracy warning" section
+      updated to match. No file under web/src/ modified (git diff --stat
+      confirmed empty) and docs/requirements.yaml's own historical text
+      left alone. Pipeline: CODE-DESIGNER skipped -- precisely-specified
+      doc correction with two named cases and explicit constraints, no
+      design ambiguity to resolve. SECURITY-REVIEWER out of scope -- no
+      tenant-data path, no code, docs-only (explicit scope test, not
+      silently skipped). REVIEWER PASS -- idiom/voice consistent per doc,
+      cross-references consistent across the three touched docs, confirmed
+      REQ-120 not silently settled, confirmed web/src/ and
+      docs/requirements.yaml scope boundaries held.

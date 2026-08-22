@@ -17,7 +17,8 @@ integration boundary to Letflow's API.
 
 ## 1. What you are working on
 
-`web/` — React 18.3 + TypeScript 5 + Vite. Start with
+`web/` — React 18.3.1 + TypeScript 5 + Vite (React version as locked in
+`web/package-lock.json`). Start with
 [`../../web/README.md`](../../web/README.md): it has the layout, the scripts, the
 verified state at migration, and the known drift carried over from R-Co.
 
@@ -110,19 +111,19 @@ gated the same way backend work is. What that means concretely:
 
 ## 6. Known-false statements in `docs/frontend/`
 
-The specification was migrated verbatim and was not all current in R-Co. Two things it
-asserts are not true of the code:
+The specification was migrated verbatim and was not all current in R-Co. One thing it
+still asserts is not true of the code:
 
-- It says the stack is **React 19**. It is **React 18.3.1** (from `package-lock.json`,
-  which is the version that matters — `package.json`'s `^18.3.0` range is not).
 - `design-system.md` §2 says colours live as CSS custom properties in
   `web/src/styles/tokens.css`. That file does not exist. There is no `.css` file under
   `web/src/` at all; components use inline `style={{...}}` objects with literal hex
   values, which the `literal-colour` guard does not catch because it only matches
   declarations ending in `;`.
 
-`REQ-119` corrects the first. `REQ-120` decides what to do about the second — it is a
-design question with more than one defensible answer, so don't settle it in passing.
+`REQ-120` decides what to do about this — it is a design question with more than one
+defensible answer, so don't settle it in passing. (`REQ-119` corrected the other
+known-false statement this section used to list — the spec said "React 19"; the code
+is React 18.3.1, per `web/package-lock.json`.)
 
 ## 7. Self-review checklist
 

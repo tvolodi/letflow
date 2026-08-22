@@ -38,14 +38,20 @@ do**, not as a work queue.
 ## Accuracy warning
 
 These documents were written against R-Co and were not all kept current there.
-At least two statements are known-false against the code as migrated:
+One statement remains known-false against the code as migrated:
 
-- The stack line says **React 19**; the locked version is **React 18.3.1**.
 - `design-system.md` §2 says colours live in `web/src/styles/tokens.css`; that
-  file does not exist and `src/` contains no CSS at all.
+  file does not exist and `src/` contains no CSS at all. Marked in §2 itself as
+  not-yet-implemented, pointing to `REQ-120` (undecided as of 2026-08-22).
 
-`web/README.md`'s "Known drift" section is the current list. Fixing the drift —
-either by correcting the doc or by building what it describes — is S8
+The stack line's version claim ("React 19") was the other known-false
+statement here; `REQ-119` corrected it to **React 18.3.1**, the version
+actually locked in `web/package-lock.json`.
+
+`web/README.md`'s "Known drift" section is the current list. Fixing further
+drift — either by correcting a doc or by building what it describes — is S8
 requirement work. **Nothing here was silently edited during the migration**; the
 files are as R-Co had them, so that a later reconciliation has an honest
-baseline to diff against.
+baseline to diff against. This directory's own docs may now diverge from that
+frozen baseline as individual drift items get resolved — see each requirement's
+status in `../requirements.yaml`.

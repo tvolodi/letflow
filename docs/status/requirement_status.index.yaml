@@ -55,7 +55,7 @@ volumes:
     path: docs/status/requirement_status.v2.yaml
     status: current
     opened: 2026-08-21
-    entries: 34
+    entries: 35
     note: >
       Opened by ISS-0119's fix. Successor to volume 1. `entries:` corrected
       2026-08-21 (ISS-0199, run WF03-ISS0199-20260821) from a stale declared 0
@@ -127,6 +127,30 @@ volumes:
       -- the same recount-every-time rule this note already states, applied
       across two rebase attempts in one run, as WF03-ISS0227-20260822's entry
       above illustrates for a different run.
+      Incremented to 33 by WF02-REQ078-20260822's Step Final rebase, which had
+      appended its own started-event against a base declaring 28; its rebase
+      found main advanced to 32 (ISS-0231, REQ-077 blocked, ISS-0229,
+      ISS-0258) and re-derived 33 from the composed file (33 on-disk `- req:`
+      entries in requirement_status.v2.yaml), per this note's own stated rule.
+      This run's started-event (04:58:01Z) sorted between ISS-0229's done
+      (04:49:20Z) and ISS-0258's done (06:40:00Z), so it was reordered into
+      that chronological position rather than appended after ISS-0258's
+      entry. The run's own done-event (07:08:07Z) is later than every entry
+      composed here and needs no reordering when it lands.
+      Both of the two notes immediately above describe genuinely concurrent
+      runs (WF02-REQ083-20260822 and WF02-REQ078-20260822) that each computed
+      their own count independently from a shared base of 32 and diverged
+      from there -- neither is wrong, each was accurate for the file its own
+      rebase produced at the time. Composed here at 35, in
+      WF02-REQ078-20260822's second Step Final rebase, which found main had
+      advanced past its first rebase (REQ-083 started, REQ-083 done, both
+      landed via PR #511) and re-derived 35 from the fully composed file (35
+      on-disk `- req:` entries in requirement_status.v2.yaml) -- this run's
+      own started-event (04:58:01Z) already sat, unmoved, between ISS-0229's
+      done (04:49:20Z) and ISS-0227's done (05:10:23Z) in the v2.yaml
+      three-way merge, which applied cleanly with no conflict on that file;
+      only this index file's declared count and narrative needed manual
+      composition.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

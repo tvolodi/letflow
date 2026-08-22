@@ -56,7 +56,22 @@ description: >
   AC2 verbatim from docs/requirements.yaml before filing this.
 affected_files:
   - docs/requirements.yaml
-status: open
+status: resolved
+resolved_in_run: unknown (backfill)
+resolved_at: 2026-08-20T00:00:00Z
+resolution_note: >
+  Backfilled 2026-08-22 by ORCH's GitHub/local/queue reconciliation audit.
+  GH#308 closed 2026-08-20T06:31:15Z: "Fixed in 9467d13: REQ-109 AC4's text
+  now reads 'records the overwrite in the TASK_COMPLETED event's
+  payload.merged_variable_events, with no separate VARIABLE_OVERWRITTEN event
+  appended (REQ-048 INV-EE48-5)', matching the shipped behaviour and the
+  existing test coverage in test/letflow/engine_variable_schema_merge_test.exs.
+  No code or test changes needed -- the AC text was the only defect."
+  Independently re-verified here: `docs/requirements.yaml` line 5101 carries
+  this exact wording today. This local record's `status:` was never flipped
+  when the fix landed. `resolved_at` is the GitHub closedAt date with time
+  zeroed, the best available approximation -- the actual fix-landing run id
+  was not recorded in the closing comment.
 github_issue: https://github.com/tvolodi/letflow/issues/308
 related:
   - ISS-0063

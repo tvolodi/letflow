@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0262-20260822/step-final-git-merge-retry2.json",
   "created_at": "2026-08-22T09:38:17Z",
   "started_at": "2026-08-22T09:38:17Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-22T10:38:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": null,
@@ -55,14 +55,14 @@
       }
     ],
     "git_evidence": {
-      "branch_name": "feature/WF03-ISS0262-20260822",
-      "commit_sha_list": ["PLACEHOLDER_FILLED_AFTER_COMMIT"],
-      "remote_branch": "origin/feature/WF03-ISS0262-20260822",
-      "push_status": "PLACEHOLDER",
-      "pr_url": "PLACEHOLDER",
+      "branch_name": "feature/WF03-ISS0262-20260822 (squash-merged into main, branch deleted both locally and on origin)",
+      "commit_sha_list": ["squash-merged as 184d846 on main -- per HANDOFF_PROTOCOL.md, individual pre-squash shas are invalidated and not restated"],
+      "remote_branch": null,
+      "push_status": "pushed (force-with-lease for the rebased feature branch; plain push for the post-merge main housekeeping commit)",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/525",
       "pr_create_error": null
     },
-    "next_action": "ORCH marks WF03-ISS0262-20260822 COMPLETED and releases owned_modules lock (lib/mix/tasks/letflow.lint_handoffs.ex, test/mix/tasks/letflow.lint_handoffs_test.exs). ISS-0265 and ISS-0266 are open in the queue for a future WF-03 run to pick up independently."
+    "next_action": "ORCH marks WF03-ISS0262-20260822 COMPLETED and releases owned_modules lock (lib/mix/tasks/letflow.lint_handoffs.ex, test/mix/tasks/letflow.lint_handoffs_test.exs). ISS-0265 (queue 265, GH#523) is open in the queue for a future WF-03 run. ISS-0266 (queue 266, GH#524) was discovered by this run but turned out to be a duplicate of ISS-0264 (resolved concurrently by a different run moments earlier) -- corrected to status: no_defect / superseded_by: ISS-0264 and queue task 266 released as done in a follow-up commit (c26f0e8) on main after the merge, once the duplication was noticed post-merge."
   },
   "rework_count": 2,
   "max_rework": 3

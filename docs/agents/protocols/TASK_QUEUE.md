@@ -261,8 +261,14 @@ the shared queue. This is not a hypothetical: REQ-109/110/111/112 shipped with
 file-max+1 values commented `# letflow-queue task id`, and acting on one of them
 (believing it was REQ-109's task) transitioned an unrelated open task to `done` and
 closed the wrong GitHub issue (ISS-0092/GH#314). If a requirement has not yet been
-through `register_task`, leave `impl_order` absent (or note `# UNREGISTERED`) rather
-than filling it with a placeholder that reads as a real id.
+through `register_task`, record the deferral as a comment line
+`# impl_order: UNREGISTERED -- <rationale>` at the entry's own field indentation, rather
+than filling it with a placeholder that reads as a real id. The marker and a non-empty
+rationale after `UNREGISTERED` are **mandatory**: bare absence of any `impl_order` line is
+an error condition, not a second legal form, and
+`mix letflow.check_requirements_registration` fails on it (R1) — a deferral nobody
+recorded a reason for is indistinguishable from an oversight, which is the condition
+ISS-0221 was filed about.
 
 **As of the `issue_ref` change this warning has a second reason:** for
 `task_type: "issue"`, a guessed id is also a guessed *filename*. Inventing a number now

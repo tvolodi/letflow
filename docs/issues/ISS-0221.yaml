@@ -78,12 +78,123 @@ resolution_note: >
   hold on the WF-03 side. No WF-03 edit needed.
 
   Also checked whether the 35 unregistered `pending` requirements the original
-  filing observed live still exist: they do not -- every requirement in the
-  current `docs/requirements.yaml` (checked via a full-file scan, not a
-  sample) already carries `impl_order`, so the practical backfill this
-  filing's symptom described has since been completed by other work, separate
-  from this issue's own scope (a documentation fix, not a data-remediation
-  task). No further action taken on that front.
+  filing observed live still exist. THE PARAGRAPH THAT STOOD HERE CLAIMED THEY
+  DO NOT. THAT CLAIM WAS FALSE WHEN IT WAS WRITTEN -- see the `correction:`
+  field below, which is the authoritative reading of this paragraph. It is
+  quoted rather than deleted, because what it got wrong is the point. It read:
+  "they do not -- every requirement in the current `docs/requirements.yaml`
+  (checked via a full-file scan, not a sample) already carries `impl_order`,
+  so the practical backfill this filing's symptom described has since been
+  completed by other work, separate from this issue's own scope (a
+  documentation fix, not a data-remediation task). No further action taken on
+  that front." Twenty-one requirements were unregistered at that moment and
+  still are. The scan behind the claim was form-blind, and the "No further
+  action taken on that front" framing is precisely what let the gap sit
+  undetected. This issue did NOT establish anything about the registration
+  state of `docs/requirements.yaml`; read the correction, not the quoted
+  sentence.
 
   Docs-only change (one file), self-gated per `docs/agents/ORCHESTRATOR.md`
   §10's direct-action allowance.
+
+correction: >
+  CORRECTED 2026-08-22T02:52:16Z by ISSUE-FIXER in run WF03-ISS0231-20260822
+  (queue task 231, GH#469). THIS ISSUE'S RESOLUTION NOTE CONTAINED A FALSE
+  ALL-CLEAR. Only the quoted paragraph inside `resolution_note` is affected --
+  the actual fix this issue shipped (WF-01's new Step 3 and the Overview
+  diagram box) is real, was verified, and stands. The AC4 finding about WF-03
+  also stands. Nothing is being rewritten here: the false sentence is left in
+  place, quoted and labelled, and this field carries the true state.
+
+  WHAT WAS CLAIMED: "every requirement in the current `docs/requirements.yaml`
+  (checked via a full-file scan, not a sample) already carries `impl_order`",
+  and therefore "the practical backfill this filing's symptom described has
+  since been completed by other work" and "No further action taken on that
+  front."
+
+  WHAT IS TRUE. Re-verified live 2026-08-22 against this run's worktree, and
+  separately against the fix commit itself:
+
+    $ grep -c "# impl_order: UNREGISTERED" docs/requirements.yaml
+    21
+    $ grep -cE "^\s+impl_order: [0-9]" docs/requirements.yaml
+    90
+    $ grep -cE "^  - id: REQ-" docs/requirements.yaml
+    111
+
+  90 + 21 = 111, i.e. the partition is total: every requirement carries
+  exactly one of the two forms, and 21 of them are unregistered. The same
+  count comes back from `git show 75f553d:docs/requirements.yaml | grep -c
+  '# impl_order: UNREGISTERED'` -- 21 AT THE FIX COMMIT ITSELF. The claim was
+  false when written, not something that regressed afterwards.
+
+  The 21 are exactly REQ-115..REQ-135: REQ-115..123 (S8), REQ-124..127 (S9),
+  REQ-128..135 (S4).
+
+  ROOT CAUSE OF THE FALSE CLAIM -- A FORM-BLIND SCAN.
+  `docs/agents/protocols/TASK_QUEUE.md` permits TWO surface forms for an
+  unregistered requirement: "leave `impl_order` absent (or note
+  `# UNREGISTERED`)". The verifying scan matched only the registered *field*
+  form, `impl_order:`. The comment form `# impl_order: UNREGISTERED` contains
+  that same substring, so all 21 unregistered entries were counted as hits and
+  the scan concluded zero. The scan was self-consistent and could not reveal
+  its own blind spot -- the same circular-verification shape recorded in
+  ISS-0076's own `correction:` field.
+
+  WHY IT WENT UNNOTICED FOR A DAY. Nothing in the pipeline re-checks
+  registration state, so a false all-clear about it is unfalsifiable by any
+  gate. The only symptom of the underlying condition is an idle pipeline,
+  which is exactly how the original ISS-0221 condition surfaced in the first
+  place -- by someone noticing, not by a check firing.
+
+  WHAT THIS CORRECTION DOES NOT DO. It does not register REQ-115..135. Those
+  21 are DELIBERATELY unregistered and say so inline: the block comment above
+  REQ-115 in `docs/requirements.yaml` records that registering S8/S9 now would
+  make that work claimable by a sibling host ahead of the stages it depends
+  on, and the block above REQ-128 defers to the same note. Registering them is
+  separate work (its own WF-01 batch), out of ISS-0231's scope, and the count
+  must never be driven to zero by inventing values -- TASK_QUEUE.md:
+  "An unregistered requirement carries no `impl_order` at all -- never a
+  guessed one."
+
+corrected_by:
+  - ISS-0231  # WF03-ISS0231-20260822 -- filed the false all-clear, wrote this
+              # correction, and added the standing detection mechanism
+              # (`mix letflow.check_registration`) so the next form-blind
+              # all-clear is caught by a gate instead of by chance
+
+correction_addendum: >
+  ADDENDUM 2026-08-22T03:23:01Z, same run (WF03-ISS0231-20260822). The
+  `correction:` field above says the 21 are unregistered and "still are". That
+  was true when it was written and is NO LONGER TRUE. This addendum is appended
+  rather than editing the correction, for the same reason the correction quotes
+  the false sentence instead of deleting it: a record that silently updates
+  itself teaches nobody anything.
+
+  WHAT CHANGED. While this run was in flight, a sibling session landed c84c27a
+  -- "docs(WF-01): put REQ-115..139 through WF-01 and register all 25 in
+  letflow-queue" (PR #495) -- on `main`. Re-measured against origin/main
+  immediately after rebasing onto it: the `# impl_order: UNREGISTERED` marker
+  count is 0, the registered field-form count is 115, and the requirement-entry
+  count is 115. This run's own detector, run on the rebased tree, agrees:
+  "115 entries = 115 registered + 0 deferred + 0 neither + 0 unclassified".
+
+  So REQ-115..135 are now genuinely registered, by real `register_task` calls
+  rather than by anyone's assertion. The original filing's guess that "That
+  WF-01 run is fixing the 21 requirements' registration" was correct; that run
+  simply had not started when ISS-0231 was dispatched, which is why ORCH
+  verified no such branch existed at that moment and correctly told this run
+  not to wait for it.
+
+  WHY THIS DOES NOT VACATE THE CORRECTION. The correction is about a FALSE
+  CLAIM, not about a count. ISS-0221's note asserted a state that did not hold
+  at the moment of assertion, and that remains true no matter what later work
+  fixed. Had the note been accurate, `main` would have carried 21 unclaimable
+  requirements for a further day with an all-clear on record telling the next
+  reader not to look.
+
+  AND IT IS WHY THE DETECTOR MATTERS MORE NOW, NOT LESS. With 0 deferred there
+  is nothing left for a human to notice. The only thing standing between this
+  repo and a silent recurrence is the gate ISS-0231 shipped --
+  `mix letflow.check_requirements_registration`, wired into `mix letflow.check`
+  -- which hard-fails the moment any entry carries no `impl_order` line at all.

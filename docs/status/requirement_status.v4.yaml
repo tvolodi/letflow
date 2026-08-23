@@ -457,3 +457,34 @@ history:
       authorization" section updated to reflect Letflow.Api.Authorization is
       no longer unreachable. 12 on-disk `- req:` entries in
       requirement_status.v4.yaml before this append; 13 after.
+  - req: REQ-137
+    event: started
+    agent: ORCH
+    at: "2026-08-23T05:14:28Z"
+    note: "WF02-REQ137-20260823 Step 00 (git setup) PASS; design-only requirement, no implementation code -- realm provisioning design + sized implementation plan, constrains REQ-076's boundary"
+  - req: REQ-137
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-23T05:25:58Z"
+    note: >
+      Design-only requirement. lib/letflow/design/req137-realm-provisioning.md
+      shipped: realm creation designed on top of REQ-135's PORT/DROP table
+      (cited by path), realm name committed to tenant.idp_realm_id at
+      tenant-creation time (no write-back needed, REQ-019's immutability
+      respected), idempotent create_tenant_realm/1 primitive with a live
+      Keycloak existence guard as the R-Co realm_guard analog. Partial-failure
+      path designed in both directions with no compensating deletes in
+      either (extends the existing TenantProvisioning/ISS-0230 no-rollback
+      policy) -- retry-safe via the same existence guard. Composition with
+      TenantProvisioning/TenantOnboarding stated: three primitives, none
+      calls another (REQ-022 no-implicit-chaining extended, not violated),
+      TenantOnboarding.provision_and_migrate/1 named as the sole explicit
+      sequencer. REQ-076 boundary stated: calls provision_and_migrate/1
+      unchanged plus supplies idp_realm_id/oidc_mode at creation, must not
+      call RealmProvisioning/ProviderAdmin directly or build its own retry
+      machinery. Sized implementation plan: 4 numbered entries (150+300+180+50
+      = 680 lines), each with line count, named R-Co source ports or Letflow
+      modules, and a one-agent-turn justification. No implementation code.
+      RELEASE-VALIDATOR independently re-verified all 6 acceptance criteria
+      PASS. 13 on-disk `- req:` entries in requirement_status.v4.yaml before
+      this append; 14 after.

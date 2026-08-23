@@ -227,3 +227,30 @@ history:
       req016. Self-verified (RELEASE-VALIDATOR role): all 6 ACs independently
       re-derived, wc -l command re-run and matched. 2 on-disk `- req:` entries
       in requirement_status.v4.yaml before this pair; 4 after.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-23T00:58:00Z"
+    note: >
+      ISS-0288 (queue task 288, GH#574) resolved: the REQ-135 WF-02 fork
+      self-validated/reviewed/release-verified in one pass, reporting a
+      "fork rule forbids spawning subagents" -- contradicted by the same
+      session's REQ-079/080/081/082/130 forks, which all successfully
+      spawned separate SECURITY-REVIEWER/REVIEWER/TEST-RUNNER/
+      RELEASE-VALIDATOR children (visible as distinct rows in ListAgents).
+      Concluded: one-off misjudgment, not a real system constraint -- no
+      protocol-doc change needed. Independently dispatched a genuinely
+      fresh (non-fork) REVIEWER agent to spot-check REQ-135's finding
+      artefact per ISS-0288's AC4: PASS-WITH-FIXES -- all line counts and
+      arithmetic independently re-verified against R-Co source (matched
+      exactly), every DROP justification's cited Letflow facility confirmed
+      to actually exist by grep, scope boundary (no implementation code)
+      confirmed. One real defect found: two citations
+      (req135-keycloak-provider-port-boundary.md, PORT rows #2 and #11)
+      named docs/migration/decisions/0002-oidc-integration.md with
+      nonexistent section numbers (§3.3, §3.2a) -- the quoted content is
+      accurate but lives in the sibling design doc
+      lib/letflow/design/0002-oidc-integration-decision.md, not the
+      decision record. Fixed directly (2-line citation-path correction,
+      no content change). 4 on-disk `- req:` entries in
+      requirement_status.v4.yaml before this append; 5 after.

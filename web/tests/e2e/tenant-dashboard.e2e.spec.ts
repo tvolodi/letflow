@@ -17,7 +17,7 @@
  * Infrastructure:
  *   - Frontend: http://127.0.0.1:4173 (Vite dev server, playwright.config.ts)
  *   - Backend API: http://127.0.0.1:8080 (env BPM_TEST_URL)
- *   - Keycloak: http://localhost:8081 (env BPM_IDP_BASE_URL)
+ *   - Keycloak: http://localhost:8082 (env BPM_IDP_BASE_URL)
  *   - Test user: admin-user / admin-pass (PLATFORM_ADMIN, bpm-default realm)
  */
 
@@ -25,7 +25,7 @@ import { test, expect } from '@playwright/test'
 import type { APIRequestContext, Page } from '@playwright/test'
 import * as fs from 'fs'
 import * as path from 'path'
-import { getKeycloakToken } from './helpers'
+import { getKeycloakToken, BPM_IDP_BASE_URL } from './helpers'
 import { navigateSpa } from './pipeline'
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -34,10 +34,7 @@ const SCREENSHOTS_DIR = 'tests/screenshots'
 const TEST_ADMIN_USER = process.env.TEST_ADMIN_USER ?? 'admin-user'
 const TEST_ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD ?? 'admin-pass'
 const API_BASE_URL = (process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080').replace(/\/$/, '')
-const KEYCLOAK_BASE_URL = (process.env.BPM_IDP_BASE_URL ?? 'http://localhost:8081')
-  .replace('://127.0.0.1', '://localhost')
-  .replace(/\/$/, '')
-const KEYCLOAK_DISCOVERY_URL = `${KEYCLOAK_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
+const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 // ── Screenshot helper ─────────────────────────────────────────────────────────
 

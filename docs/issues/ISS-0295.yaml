@@ -1,0 +1,95 @@
+id: ISS-0295
+title: >
+  web/tests/e2e/*.ts hardcode a stale Keycloak port (8081) and client_id
+  (bpm-platform-api) across 33 files, with no shared constant/override
+  mechanism
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0295-20260823
+discovered_at: 2026-08-23T00:00:00Z
+severity: MINOR
+description: >
+  52 matches across 33 files under web/tests/e2e/ hardcoded a stale Keycloak
+  IdP base URL (port 8081) and client_id (bpm-platform-api) rather than
+  reading them from a single shared, overridable source. Every spec file
+  independently redeclared its own copy of these values, so a real IdP
+  config change (e.g. moving to port 8082 / client_id letflow-web) required
+  editing all 33 files individually with no override mechanism for
+  environment-specific runs. Confirmed live via grep at diagnosis time (52
+  matches / 33 files) before any fix was applied.
+
+  Diagnosis-time discrepancy worth recording: the issue's originating report
+  asserted that REQ-133 had already corrected the SPA's own OIDC defaults
+  (web/src/auth/OidcManager.ts, tenantConfig.ts, etc.). That premise is
+  FALSE — REQ-133 was still `pending` on main with no merged work at the
+  time of this fix, and remains pending after it. This issue's fix is
+  scoped ONLY to the e2e test suite's own hardcoded config; it does not
+  touch and does not substitute for REQ-133's separate, still-open work on
+  the SPA's own OIDC defaults. A future reader should not assume the OIDC
+  config story is fully resolved end-to-end just because this issue is
+  closed.
+affected_files:
+  - web/tests/e2e/helpers.ts
+  - web/tests/e2e/pipeline.ts
+  - web/tests/e2e/admin/services.e2e.spec.ts
+  - web/tests/e2e/env04.e2e.spec.ts
+  - web/tests/e2e/f2-canvas-shoulds.e2e.spec.ts
+  - web/tests/e2e/f2-canvas.e2e.spec.ts
+  - web/tests/e2e/f2-definition-list.e2e.spec.ts
+  - web/tests/e2e/f4-task-inbox.e2e.spec.ts
+  - web/tests/e2e/f5-admin-groups-tokens.e2e.spec.ts
+  - web/tests/e2e/f5-admin-observability.e2e.spec.ts
+  - web/tests/e2e/f5-admin-users.e2e.spec.ts
+  - web/tests/e2e/f6-dlq.e2e.spec.ts
+  - web/tests/e2e/f6-webhooks.e2e.spec.ts
+  - web/tests/e2e/iss-0063-oidc-redirect-loop.e2e.spec.ts
+  - web/tests/e2e/oidcf-login.e2e.spec.ts
+  - web/tests/e2e/oidcf2-subdomain.e2e.spec.ts
+  - web/tests/e2e/onboarding/onb-ui-01.e2e.spec.ts
+  - web/tests/e2e/onboarding/onb-ui-02.e2e.spec.ts
+  - web/tests/e2e/onboarding/onb-ui-03.e2e.spec.ts
+  - web/tests/e2e/onboarding/onb-ui-04.e2e.spec.ts
+  - web/tests/e2e/pdui07-export-import.e2e.spec.ts
+  - web/tests/e2e/pdui08-debounced-search.e2e.spec.ts
+  - web/tests/e2e/pipelines/admin-user-lifecycle.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/onboarding-wizard.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/sim-admin-processes.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/sim-company-onboarding.pipeline.e2e.spec.ts
+  - web/tests/e2e/rnd-ui-05.rate-limit-backpressure.e2e.spec.ts
+  - web/tests/e2e/sh01-04.shell.e2e.spec.ts
+  - web/tests/e2e/tenant-dashboard.e2e.spec.ts
+  - web/tests/e2e/tenants.e2e.spec.ts
+  - web/tests/e2e/uat-alice-login.e2e.spec.ts
+  - web/tests/e2e/uat-eo-003-004-v5.e2e.spec.ts
+  - web/tests/e2e/uat-tenant-url.e2e.spec.ts
+  - lib/letflow/design/iss0295-e2e-keycloak-config-consolidation.md
+  - web/tests/unit/iss-0295-e2e-idp-config.test.ts
+queue_task_id: 295
+github_issue: 591
+status: resolved
+resolved_in_run: WF03-ISS0295-20260823
+resolved_at: 2026-08-23T10:29:29Z
+resolution_note: >
+  Root cause removed, not just masked: web/tests/e2e/helpers.ts now exports
+  shared, overridable BPM_IDP_BASE_URL (default port 8082) and
+  BPM_IDP_CLIENT_ID (default letflow-web) constants; all 33 e2e spec files
+  were converged onto them (commit f7aec1d). Verified live post-fix: zero
+  remaining matches for 8081 or bpm-platform-api under web/tests/e2e/.
+  Design produced and independently validated (CODE-DESIGNER /
+  CODE-DESIGN-VALIDATOR, lib/letflow/design/iss0295-e2e-keycloak-config-consolidation.md).
+  SECURITY-REVIEWER and REVIEWER both PASS (test-only, non-secret config;
+  no scope creep; assertion rewrites preserve original regression intent).
+  New regression test web/tests/unit/iss-0295-e2e-idp-config.test.ts
+  (commit 3b652a9, comment fix bb962d0) independently fail-then-pass
+  verified twice by TEST-DESIGN-VALIDATOR: against pre-fix main (275e9f1)
+  it failed 4/4 with 49 hardcoded literals found; against the fix branch it
+  passed 4/4. TEST-RUNNER confirmed the full web/ suite green: type-check
+  clean, lint clean, 184/184 unit tests passed (including the new 4),
+  48/48 guards passed against a real production build, and Playwright
+  discovery parsed 228 tests / 37 files with zero errors. No rework was
+  needed anywhere in this run.
+
+  Scope note: this fix covers only web/tests/e2e/'s own hardcoded IdP
+  config. REQ-133 (SPA-side OIDC defaults in web/src/auth/OidcManager.ts
+  and tenantConfig.ts) remains separately pending on main and was NOT
+  touched by this fix -- see description above for the discrepancy this
+  run caught in the issue's original premise.

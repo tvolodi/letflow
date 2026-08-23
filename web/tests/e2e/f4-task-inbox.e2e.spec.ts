@@ -1,11 +1,10 @@
 import { expect, test } from '@playwright/test'
 import * as fs from 'fs'
 import * as path from 'path'
-import { loginWithToken } from './helpers'
+import { loginWithToken, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
 
 const SCREENSHOTS_DIR = 'tests/screenshots'
-const KEYCLOAK_TOKEN_URL = 'http://localhost:8081/realms/bpm-default/protocol/openid-connect/token'
-const KEYCLOAK_CLIENT_ID = 'bpm-platform-api'
+const KEYCLOAK_TOKEN_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/protocol/openid-connect/token`
 const KEYCLOAK_WORKER_USERNAME = 'worker-user'
 const KEYCLOAK_WORKER_PASSWORD = 'worker-pass'
 const KEYCLOAK_OPERATOR_USERNAME = 'operator-user'
@@ -34,7 +33,7 @@ async function getKeycloakToken(
   const response = await request.post(KEYCLOAK_TOKEN_URL, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     form: {
-      client_id: KEYCLOAK_CLIENT_ID,
+      client_id: BPM_IDP_CLIENT_ID,
       username,
       password,
       grant_type: 'password',

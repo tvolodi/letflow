@@ -4,6 +4,7 @@ import {
   keycloakTokenUrl,
   resolveTenantContext,
 } from './pipeline'
+import { BPM_IDP_BASE_URL } from './helpers'
 
 function decodeJwtPayload(token: string): { iss?: string } {
   const payload = token.split('.')[1]
@@ -19,7 +20,7 @@ async function requireBackendReady(request: APIRequestContext): Promise<void> {
 }
 
 async function requireIdpReady(request: APIRequestContext): Promise<void> {
-  const idpBaseUrl = (process.env.BPM_IDP_BASE_URL ?? 'http://localhost:8081').replace(/\/$/, '')
+  const idpBaseUrl = BPM_IDP_BASE_URL
   const response = await request.get(`${idpBaseUrl}/health/ready`)
   if (!response.ok()) {
     throw new Error(`IdP readiness check failed (${response.status()}) at ${idpBaseUrl}/health/ready`)

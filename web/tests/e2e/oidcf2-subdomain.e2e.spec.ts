@@ -19,12 +19,13 @@
  * Infrastructure:
  *   - Frontend: http://127.0.0.1:4173 (Vite dev server, started by playwright.config.ts)
  *   - Backend API: available at same origin via Vite proxy (/api → localhost:3000)
- *   - Default Keycloak realm: http://localhost:8081/realms/bpm-default
+ *   - Default Keycloak realm: http://localhost:8082/realms/bpm-default
  */
 
 import { test, expect } from '@playwright/test'
 import * as fs from 'fs'
 import * as path from 'path'
+import { BPM_IDP_CLIENT_ID } from './helpers'
 
 const SCREENSHOTS_DIR = 'tests/screenshots'
 const KEYCLOAK_AUTH_PATTERN = '**/realms/**/protocol/openid-connect/auth**'
@@ -57,7 +58,7 @@ test.describe('OIDC-F-05 — Tenant-config endpoint: unknown hostname', () => {
     expect(body.oidc_authority).toContain('bpm-default')
 
     // client_id must match the platform default
-    expect(body.client_id).toBe('bpm-platform-api')
+    expect(body.client_id).toBe(BPM_IDP_CLIENT_ID)
 
     await shot(page, 'TC01-02-after-api-call')
     // VERDICT: Screen shows app; API returned default tenant config for unknown.example.com

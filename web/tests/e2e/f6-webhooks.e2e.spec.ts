@@ -2,14 +2,12 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
-import { loginWithToken } from './helpers'
+import { loginWithToken, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
 
 const SCREENSHOTS_DIR = 'tests/screenshots'
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_BASE_URL = process.env.BPM_IDP_BASE_URL ?? 'http://127.0.0.1:8081'
-const KEYCLOAK_DISCOVERY_URL = `${KEYCLOAK_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
-const KEYCLOAK_TOKEN_URL = `${KEYCLOAK_BASE_URL}/realms/bpm-default/protocol/openid-connect/token`
-const KEYCLOAK_CLIENT_ID = 'bpm-platform-api'
+const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
+const KEYCLOAK_TOKEN_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/protocol/openid-connect/token`
 const API_PREFIX = '/api/v1'
 const DLQ_ALERT_THRESHOLD = Number(process.env.VITE_DLQ_ALERT_THRESHOLD ?? '10')
 
@@ -51,7 +49,7 @@ async function getKeycloakToken(request: APIRequestContext, username: string, pa
   const response = await request.post(KEYCLOAK_TOKEN_URL, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     form: {
-      client_id: KEYCLOAK_CLIENT_ID,
+      client_id: BPM_IDP_CLIENT_ID,
       username,
       password,
       grant_type: 'password',

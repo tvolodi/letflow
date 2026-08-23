@@ -25,6 +25,7 @@ import {
   loginWithToken,
   navigateSpa,
 } from '../pipeline'
+import { BPM_IDP_BASE_URL } from '../helpers'
 
 // Env-var injection — allows UAT-RUNNER to drive the test with a canonical slug.
 // When absent: falls back to random generation (existing behaviour).
@@ -37,8 +38,7 @@ const INJECTED_ADMIN_DISPLAY: string | undefined  = process.env.ONBOARDING_PIPEL
 test.setTimeout(300_000)
 
 const API_BASE_URL       = process.env.BPM_TEST_URL     ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_BASE_URL  = process.env.BPM_IDP_BASE_URL ?? 'http://localhost:8081'
-const KEYCLOAK_DISCOVERY = `${KEYCLOAK_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
+const KEYCLOAK_DISCOVERY = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 interface OnboardingWizardState {
   adminToken:   string

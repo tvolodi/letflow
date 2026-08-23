@@ -19,16 +19,13 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
-import { getKeycloakToken, loginWithToken } from './helpers'
+import { getKeycloakToken, loginWithToken, BPM_IDP_BASE_URL } from './helpers'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const SCREENSHOTS_DIR = 'tests/screenshots'
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_BASE_URL = (process.env.BPM_IDP_BASE_URL ?? 'http://localhost:8081')
-  .replace('://127.0.0.1', '://localhost')
-  .replace(/\/$/, '')
-const KEYCLOAK_DISCOVERY_URL = `${KEYCLOAK_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
+const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -8,8 +8,7 @@
  */
 import { test } from '@playwright/test'
 import { getKeycloakToken, loginWithToken } from './pipeline'
-
-const KEYCLOAK_BASE_URL = process.env.BPM_IDP_BASE_URL ?? 'http://localhost:8081'
+import { BPM_IDP_BASE_URL } from './helpers'
 
 test.setTimeout(60_000)
 
@@ -25,7 +24,7 @@ test('EO-003+EO-004: Alice logs in to swiftroute workspace and sees dashboard', 
   }
 
   // Step EO-003: Navigate to Keycloak account page for swiftroute realm, then fill credentials
-  await page.goto(`${KEYCLOAK_BASE_URL}/realms/swiftroute/account`, { waitUntil: 'networkidle' })
+  await page.goto(`${BPM_IDP_BASE_URL}/realms/swiftroute/account`, { waitUntil: 'networkidle' })
   // If login page appears, fill credentials and submit
   const usernameField = page.locator('input[name="username"], input[id="username"]')
   if (await usernameField.isVisible({ timeout: 5_000 }).catch(() => false)) {

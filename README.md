@@ -135,6 +135,16 @@ Every error body in the application goes through the one
 mix test
 ```
 
+`mix test`/`scripts/test_parallel.sh` exclude one deliberately-tagged suite by default:
+`test/letflow/integration/keycloak_auth_pipeline_test.exs` (`@moduletag :keycloak`)
+drives a genuine token from the running Keycloak through `Letflow.Plugs.AuthPipeline`
+end to end (REQ-134) and needs `docker compose up -d keycloak` first. Run it
+deliberately with:
+
+```
+mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs
+```
+
 To run format-check + compile-with-warnings-as-errors + test as a
 single fail-fast gate (equivalent to R-Co's `zig build check`):
 

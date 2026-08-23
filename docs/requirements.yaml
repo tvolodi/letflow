@@ -6549,7 +6549,7 @@ requirements:
   - id: REQ-134
     title: Exercise a real Keycloak-issued token in the test suite
     owner: TEST-DESIGNER
-    status: in_progress
+    status: done
     stage: S4
     impl_order: 255  # letflow-queue task id; depends_on translated to queue task ids [234, 248]
     description: >

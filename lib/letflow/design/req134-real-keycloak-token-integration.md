@@ -92,14 +92,24 @@ setup_all do
 end
 ```
 
-runs a single reachability probe against Keycloak's OIDC discovery endpoint before any
-test in the module executes, and returns `{:skip, message}` on failure — the ExUnit
-mechanism that marks every test in the `describe`/module block "skipped" (not
-"failed") with `message` shown in the run summary, the same semantic
-`web/tests/e2e/onboarding/onb-ui-01.e2e.spec.ts`'s `assertServicesReady/1` achieves via
-a thrown `Error`, adapted to ExUnit's own skip idiom rather than a raised exception
-(a raised exception would report as a *failure*, not a *skip* — AC5 explicitly asks for
-a skip, not an obscure failure).
+**As shipped, this raises `RuntimeError` with the message text below, not
+`{:skip, message}` as originally designed here.** This section originally specified a
+single reachability probe against Keycloak's OIDC discovery endpoint before any test in
+the module executes, returning `{:skip, message}` on failure — the ExUnit mechanism that
+marks every test in the `describe`/module block "skipped" (not "failed") with `message`
+shown in the run summary, the same semantic `web/tests/e2e/onboarding/onb-ui-01.e2e.spec.ts`'s
+`assertServicesReady/1` achieves via a thrown `Error`. TEST-DESIGNER found at
+implementation time that this repo's installed ExUnit (1.20.3) does not support a dynamic
+runtime `{:skip, message}` return from `setup_all` (confirmed by TEST-DESIGN-VALIDATOR via
+direct probing) — `setup_all`'s skip mechanism there is static/tag-based only, not a value
+a callback can return at runtime. The shipped module instead `raise`s a plain `RuntimeError`
+with the same message text this section originally specified, from the same `setup_all`
+probe. REVIEWER (step2d) and RELEASE-VALIDATOR (step5) both reviewed this deviation and
+ruled it compliant with AC5 in spirit: AC5's requirement is about the developer-facing
+outcome — a message naming exactly what must be running, rather than an obscure failure —
+not about which internal ExUnit counter (`Failures` vs. `Skipped`) increments, and the
+raised message is the first and only thing a developer sees, identical in content to the
+`{:skip, message}` text below.
 
 Probe target: the realm's discovery document, matching `config/test.exs`'s already-real
 issuer (`http://localhost:<keycloak_port>/realms/bpm-default`, `keycloak_port` read via

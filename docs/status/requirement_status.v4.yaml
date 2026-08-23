@@ -659,3 +659,23 @@ history:
       on both backend and frontend gates (PR #588, merge e49948a). 22
       on-disk `- req:` entries in requirement_status.v4.yaml before this
       append; 23 after.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-23T09:38:00Z"
+    note: >
+      ISS-0294 (queue task 294, GH#590) resolved directly, no code change
+      (per its own AC4 -- process/prompt-clarity investigation only). Root
+      cause: ORCH's own ad-hoc fork-dispatch prompts this session combined
+      "dispatch each pipeline role exactly once, in strict sequence" with
+      "do not self-review" in wording that a fork could plausibly
+      over-generalize into "don't spawn subagents at all" -- the same
+      belief surfaced independently by both the REQ-135 fork (ISS-0288)
+      and the ISS-0291 fork. Since this prompt text is generated per-dispatch
+      rather than stored in a repo file, the fix is behavioral: saved a
+      persistent memory (fork-dispatch-wording-clarity, cross-session) that
+      states both halves explicitly and separately in every future fork
+      dispatch -- "you ARE expected to spawn Agent children for each
+      pipeline role" stated apart from "exactly once, not double-dispatch."
+      23 on-disk `- req:` entries in requirement_status.v4.yaml before this
+      append; 24 after.

@@ -1,0 +1,39 @@
+id: ISS-0294
+title: >
+  Second occurrence: a fork (ISS-0291) again claimed forks cannot dispatch
+  Agent children -- ISS-0288 concluded this was a one-off, worth re-checking
+discovered_by: ORCH
+discovered_in_run: session queue-loop, ISS-0291 fork's own final report
+discovered_at: 2026-08-23T09:35:37Z
+severity: MINOR
+description: >
+  ISS-0288 (2026-08-23) investigated a fork (REQ-135) claiming it could not
+  spawn Agent children for pipeline roles, and concluded -- based on multiple
+  other forks in the same session successfully spawning children -- that this
+  was a one-off misjudgment, not a real system constraint. The ISS-0291 fork
+  made the identical claim: "caught via self-review after I mistakenly
+  dispatched a subagent, which I am not permitted to do as a fork,
+  self-corrected." A second occurrence of the same belief, both times
+  self-correcting into self-review rather than surfacing it loudly.
+  ISS-0291's actual output was independently spot-checked and held up (3
+  consecutive local test runs green, full mix letflow.check clean, real CI
+  green), so no defect in the delivered work.
+affected_files: []
+github_issue: 590
+status: resolved
+resolved_in_run: session queue-loop, ORCH direct (no code change)
+resolved_at: 2026-08-23T09:38:00Z
+resolution_note: >
+  Root cause: ORCH's own ad-hoc fork-dispatch prompts this session combine
+  "dispatch each pipeline role exactly once, in strict sequence" with "do not
+  self-review" in wording a fork could plausibly over-generalize into "don't
+  spawn subagents at all." Since this prompt text is generated per-dispatch
+  by ORCH rather than stored in a repo-tracked file, there is no protocol doc
+  to edit -- the fix is behavioral. Saved a persistent, cross-session memory
+  (fork-dispatch-wording-clarity, in ORCH's own memory store, not this repo)
+  that states both halves explicitly and separately in every future fork
+  dispatch: "you ARE expected to spawn Agent children for each pipeline
+  role" stated apart from "exactly once, not double-dispatch." No code
+  change needed, matching this issue's own AC4. Two known occurrences to
+  date, both self-corrected with no bad output -- low severity, tracked
+  here for awareness if a third occurs.

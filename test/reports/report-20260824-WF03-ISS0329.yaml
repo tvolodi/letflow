@@ -31,6 +31,53 @@ partitions:
     failures: 0
     exit: 0
 
+# ── RERUN ──────────────────────────────────────────────────────────────────
+rerun:
+  reason: "step-02b-code-design-validator.json result.summary was a map; normalized to string in commit f46313a; re-run to clear T-H6-ZERO-NEW"
+  trigger_commit: f46313a
+  timestamp_utc: "2026-08-24T00:50:00Z"
+  test_command: "TEST_PARALLEL_N=4 bash scripts/test_parallel.sh (via Git Bash)"
+
+  combined_result: "combined: 1991 tests, 5 properties, 0 failures (1996/1996 passed)"
+  exit_code: 0
+  failures: 0
+  verdict: PASS
+
+  partitions:
+    - partition: 1
+      tests: 532
+      properties: 0
+      failures: 0
+      exit: 0
+    - partition: 2
+      tests: 442
+      properties: 4
+      failures: 0
+      exit: 0
+    - partition: 3
+      tests: 540
+      properties: 1
+      failures: 0
+      exit: 0
+    - partition: 4
+      tests: 477
+      properties: 0
+      failures: 0
+      exit: 0
+      excluded: 3
+
+  iss0329_specific:
+    file: "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"
+    failures: 0
+    result: "PASS — 0 failures in the ISS-0329 fix file across all partitions"
+
+  notes: |
+    All 4 partitions completed with Result: lines and zero Failed: lines.
+    The prior T-H6-ZERO-NEW failure (FunctionClauseError in String.length/1)
+    is cleared after normalizing step-02b result.summary to a plain string.
+    ISS-0329 fix (auth_pipeline_configurable_verifier_test.exs) continues
+    to show 0 failures. Suite is fully green.
+
 iss0329_specific:
   file: "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"
   failures: 0

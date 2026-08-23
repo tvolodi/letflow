@@ -728,6 +728,15 @@ history:
       Queue task 295 released with status done, GH#591 closed with resolution
       comment citing docs/issues/ISS-0295.yaml. 25 on-disk `- req:` entries in
       requirement_status.v4.yaml before this append; 26 after.
+  - req: REQ-134
+    event: started
+    agent: ORCH
+    at: "2026-08-23T10:43:56Z"
+    note: >
+      WF02-REQ134-20260823 Step 00 -- exercise a real Keycloak-issued token
+      through Letflow.Plugs.AuthPipeline in a tagged, excluded-by-default
+      integration path. depends_on REQ-128/REQ-131 both done. Branch
+      feature/WF02-REQ134-20260823 pushed.
   - req: REQ-133
     event: blocked
     agent: FRONTEND-DEV

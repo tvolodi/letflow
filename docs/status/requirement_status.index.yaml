@@ -521,7 +521,7 @@ volumes:
     path: docs/status/requirement_status.v4.yaml
     status: current
     opened: 2026-08-23
-    entries: 27
+    entries: 28
     note: >
       Opened by WF02-REQ082-20260823's own Step Final roll, successor to
       volume 3. Created with volume 3's header text verbatim (volume number,
@@ -603,8 +603,16 @@ volumes:
       Incremented to 26 by ORCH's own ISS-0295 done-event append (WF-03
       full pipeline, merged via PR #592, no rebase conflict on this file)
       -- 26 on-disk `- req:` entries in requirement_status.v4.yaml.
-      Incremented to 27 by FRONTEND-DEV's own REQ-133 blocked-event append
-      -- 27 on-disk `- req:` entries in requirement_status.v4.yaml.
+      Incremented to 27 by ORCH's own REQ-134 started-event append (Step 00),
+      against a base declaring 26. This run's Step Final rebase found main
+      had independently advanced to 27 via FRONTEND-DEV's own REQ-133
+      blocked-event append (landed after this run's Step 00 commit).
+      Composed both in chronological `at:` order -- REQ-134 started
+      (10:43:56Z) then REQ-133 blocked (13:50:00Z) -- REQ-134's own entry
+      sorted first and needed no reordering. Recounted directly from
+      `grep -c "^  - req:" docs/status/requirement_status.v4.yaml` = 28,
+      rather than carrying forward either side's independently-computed 27,
+      per this note's own recount-every-time rule.
 
 
 known_anomalies:

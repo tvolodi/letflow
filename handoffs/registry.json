@@ -2110,6 +2110,22 @@
       "queue_task_id": 279,
       "queue_agent_id": "tvolodi-orch",
       "note": "WF-03 for ISS-0279 (GH#551, queue task 279, stage S0 -- process gap: GitHub issues closed with zero evidence trail (no comment, no linked PR) go undetected until manual reconciliation, found during WF03-ISS0278-20260822's reconciliation audit on GH#324/GH#326). Fix: hardened evidence-on-close prose in docs/agents/workflows/WF-03_issue_resolving.md Step 5 and a new docs/agents/protocols/ISSUE_QUEUE.md closing section (mandatory --comment or linked/merged PR), plus a new standalone mix letflow.audit_issue_closures backstop tool (lib/mix/tasks/letflow.audit_issue_closures.ex, modeled on letflow.lint_handoffs.ex's grandfather-list pattern; deliberately NOT wired into letflow.check due to its gh/network dependency). Design gate failed once (rework 1/3: a design artefact contained a real function body instead of a bare @spec) then passed on re-check. Net-new module so regression coverage used mutation testing per WF-03's own rule: 2 mutants applied to classify/1 and grandfathered?/1, each isolating exactly its targeted test, both independently reproduced by TEST-DESIGN-VALIDATOR. Full suite post-rebase: 1796/1801, 5 failures all structurally attributed to unrelated pre-existing DB-provisioning-timing flakes (Letflow.IdentityMigrationTest, Letflow.TenantSchemaReaperTest x3, Letflow.SandboxPoolTest), none touching this branch's files. ELIXIR-DEV's real audit run against the actual repo found 30 pre-existing zero-evidence closures, individually dated/traced into the grandfather list; independently confirmed GH#324/#326 now carry real evidence (from WF03-ISS0278-20260822) and were correctly excluded from grandfathering."
+    },
+    {
+      "run_id": "WF02-REQ134-20260823",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-134"],
+      "stage": "S4",
+      "status": "ACTIVE",
+      "owned_modules": ["test/letflow/", "test/support/", "config/test.exs", "scripts/", "docs/guides/"],
+      "lock_acquired_at": "2026-08-23T10:43:56Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 COMPLETED PASS -- branch feature/WF02-REQ134-20260823 pushed.",
+      "backfilled": false,
+      "queue_task_id": 255,
+      "queue_agent_id": "tvolodi-orch",
+      "note": "WF-02 for REQ-134 (GH#493, queue task 255, stage S4 -- exercise a real Keycloak-issued token through Letflow.Plugs.AuthPipeline end to end: real JWKS signature verification, JIT provisioning, authorization plug, as a tagged/excluded-by-default integration path per docs/requirements.yaml's own description, keeping TokenVerifierDouble as the unit-suite default). depends_on REQ-128 (Keycloak dev stack, done) and REQ-131 (mandatory router-wide authorization, done). No duplicate found: no existing test file exercises a real Keycloak token, no matching resolved issue in docs/issues/*.yaml."
     }
   ]
 }

@@ -1543,3 +1543,25 @@ distinguished Cloudflare-vs-service here, and would have on its own: it returned
 while the `POST` 403'd — that asymmetry *is* the diagnosis, and no write was needed to
 learn it). Where a write genuinely must be tested, retire the artifact in the same turn
 and say so plainly rather than leaving it for a later reader to wonder about.
+
+**Recurrence, same session, ~20 minutes later (ORCH).** Having just written the entry
+above, I ran `get_next_task` with `agent_id=orch-verify-probe-DONOTUSE` to "verify the
+queue state is correct" after registering S5. Naming the probe `DONOTUSE` shows I knew it
+was a probe and still sent it to the one endpoint `TASK_QUEUE.md` already singles out by
+name as unsafe for probing. It returned `200` and locked **task 267 (REQ-141)** — a real,
+unrelated requirement another host could have been about to claim. Released back to
+`open` within the same turn (`release_lock` with no `status`, which is the correct
+hand-back form and leaves no residue).
+
+Two lessons beyond the original entry:
+
+1. **"Verify" is the dangerous word.** Both this and the original probe were framed as
+   verification, not as work — which is exactly why the write-side effect wasn't
+   front-of-mind. Wanting to confirm state is not a reason to call a claiming endpoint;
+   there was no read-only way to get what I wanted, and the correct move was therefore to
+   *not check* rather than to check destructively.
+2. **Writing the anti-pattern down does not inoculate you against it.** This mirrors the
+   `git worktree remove --force` recurrence recorded above, where the entry existed and
+   was violated twice more. The mitigation that actually works is mechanical: before any
+   call to `get_next_task`, `set_lock`, or `register_task`, state explicitly whether you
+   intend to *do the work it returns*. If not, do not make the call.

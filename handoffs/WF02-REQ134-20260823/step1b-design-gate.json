@@ -1,0 +1,54 @@
+{
+  "handoff_id": "step1b-WF02-REQ134-20260823",
+  "run_id": "WF02-REQ134-20260823",
+  "workflow_id": "WF-02",
+  "step": "1b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ134-20260823/step1b-design-gate.json",
+  "created_at": "2026-08-23T10:54:37Z",
+  "started_at": "2026-08-23T10:59:50Z",
+  "completed_at": "2026-08-23T11:04:12Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-134"],
+    "related_handoff_ids": ["step1-WF02-REQ134-20260823"],
+    "artifacts_in": [
+      "lib/letflow/design/req134-real-keycloak-token-integration.md"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 1b hard gate on CODE-DESIGNER's REQ-134 design artefact per WF-02_requirement_implementation.md's Step 1b procedure. Re-validation (rework attempt 1 of 3) after commit 2e8a570 claims to have rewritten S7.1-S7.4 as prose/assertion-contract descriptions.",
+    "acceptance_criteria": [
+      "a test obtains a genuine token from the running Keycloak and drives it through Letflow.Plugs.AuthPipeline end to end, with the real assertion output quoted",
+      "the token's signature is verified against the live JWKS via the real verifier, not TokenVerifierDouble -- demonstrated by the test failing if pointed at a tampered token",
+      "JIT provisioning creates a real user row on first authentication and reuses it on the second, asserted across two calls",
+      "the default mix test run still passes with Keycloak stopped, quoted as evidence",
+      "the real-token tests skip with a message naming exactly what must be running, rather than failing obscurely",
+      "the result states the exact command a developer runs to execute them"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-validated lib/letflow/design/req134-real-keycloak-token-integration.md at commit 2e8a570 (branch feature/WF02-REQ134-20260823) from scratch -- read the artefact directly, not CODE-DESIGNER's summary, and re-ran every Step 1b check rather than trusting which ones 'already passed'. Grepped the full file for `test \"`, `setup do`, `assert(`, `refute(`, and bare `assert `/`refute ` tokens: zero matches anywhere, including S7.1-S7.4, which is the section the prior FAIL was on. Read S7.1-S7.4 in full: each is now a numbered-step prose/assertion-contract description (what is provisioned, what call is made, what shape/value must hold), in the same signature-plus-prose register S4.1 (KeycloakTestClient) already used and that the prior gate held up as the correct pattern -- no compilable setup/test bodies remain, and no substantive content was dropped in the rewrite (the real-verifier override's on-entry/on-exit behavior in S7.1; the genuine-token-through-AuthPipeline + auth_context-shape check in S7.2/AC1; the tamper-then-401-under-the-real-verifier check in S7.3/AC2; and the three-count-query (0->1->1) plus user_id-equality two-call JIT check in S7.4/AC3 are all still concretely specified, not vaguer than the pre-rework version). The remaining code fences in the file (S2's one-line `ExUnit.start(exclude: [:keycloak])` diff, S3.1's `setup_all do # ... end` placeholder skeleton, S4.1's @spec/@type/prose-comment block, S5's @spec-plus-comment ensure_bpm_default_tenant!/0 sketch, S6's module skeleton with `...`) all contain declarations/type-shapes/comments only, no function bodies -- re-checked each individually rather than assuming they were unaffected by the S7 rewrite. Re-checked all five Step 1b checks from scratch, not only the one that failed last time: (a) every AC1-6 maps to a concrete design element with no TBD/deferral language -- confirmed via S10's cross-reference table and a grep for TBD/'left open'/'to be determined', the only two hits being the design explicitly declaring something IS decided, not an actual deferral; (b) function signatures fully specified -- S4.1's KeycloakTestClient carries full @spec + input/output types + prose error-branch description for ensure_started/0, discovery_reachable?/1, direct_access_token/4, and tamper_signature/1, and S5's ensure_bpm_default_tenant!/0 likewise; (c) error-handling shapes stated -- token_error() type (:http_error/:transport_error/:unexpected_response) and {:ok,_}/{:error,_} tags used throughout, discovery_reachable?/1's boolean-never-raises contract stated explicitly; (d) cross-module dependencies listed -- S1's file table plus inline references to AuthPipeline, TokenVerifier.Oidcc, Letflow.Identity/User/Tenant, TenantProvisioning, TenantFixture; (e) no implementation code present -- confirmed above, this is the check that failed last time and it now passes. Independently re-confirmed the three items named in the re-validation task: config/test.exs:85 still pins `token_verifier: Letflow.Oidc.TokenVerifierDouble` unconditionally (grepped directly, the design does not touch this line); the exclusion mechanism (test/test_helper.exs's ExUnit.start(exclude: [:keycloak])) applies at suite-collection time before Mix's --partitions splitting, so plain `mix test` and every scripts/test_parallel.sh partition are unaffected by Keycloak's state, and scripts/test_parallel.sh itself is not modified by this design; grepped docs/migration/decisions/ for OIDC/Keycloak-related records -- only 0002-oidc-integration.md (the oidcc-library choice) is relevant, and the design's use of Letflow.Oidc.TokenVerifier.Oidcc is consistent with, not a re-decision of, that record. No BLOCKER or MINOR issue found. All five Step 1b checks pass; verdict is PASS.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to ELIXIR-DEV/TEST-DESIGNER for implementation"
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-08-23T10:54:37Z",
+      "status": "FAIL",
+      "summary": "FAIL on check (e) -- 'no implementation code present (no actual .ex/.exs code blocks -- signatures and type shapes only, not bodies)'. lib/letflow/design/req134-real-keycloak-token-integration.md contains fully written ExUnit implementation code, not signatures/type shapes, in violation of WF-02 Step 1b's check 2e. Sections 7.1-7.4 each contain a complete, runnable function body -- not a signature: 7.1's `setup do ... end` block has the real Application.fetch_env!/put_env/on_exit sequence written out; 7.2's, 7.3's, and 7.4's `test \"...\" do ... end` blocks contain real Plug.Test.conn/3 pipelines, real Letflow.Plugs.AuthPipeline.call/2 invocations, real Ecto.Query.from/Repo.aggregate queries with actual where-clauses and prefix bindings, and real ExUnit assert/refute statements with concrete match patterns. Other checks (a/b/c/d) did not independently fail, but per the workflow's no-partial-credit rule the verdict is FAIL on (e) alone.",
+      "issues": [
+        "Sections 7.1-7.4 contain compilable ExUnit test bodies rather than a signature/type-shape/assertion-contract description of the test structure"
+      ],
+      "next_action": "Rework CODE-DESIGNER: rewrite section 7 to describe the test module's structure as prose + assertion-contract descriptions only, in section 4.1's own style, without removing any substantive content (setup/teardown behavior, tamper mechanism, two-call JIT provisioning check, skip logic)"
+    }
+  ]
+}

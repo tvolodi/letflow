@@ -507,13 +507,16 @@ volumes:
     path: docs/status/requirement_status.v4.yaml
     status: current
     opened: 2026-08-23
-    entries: 2
+    entries: 4
     note: >
       Opened by WF02-REQ082-20260823's own Step Final roll, successor to
       volume 3. Created with volume 3's header text verbatim (volume number,
       opening date and predecessor path updated) and an empty `history:`
       list, per this index's `roll_rule.on_exceed` procedure. `entries:`
       will be incremented per HOW-TO-APPEND step 6 as real appends land.
+      Incremented to 4 by WF02-REQ135-20260823 (ORCH)'s own started+done
+      event pair (2 appends, no rebase conflict on this file) -- 4 on-disk
+      `- req:` entries in requirement_status.v4.yaml.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

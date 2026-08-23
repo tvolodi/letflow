@@ -6581,7 +6581,7 @@ requirements:
   - id: REQ-135
     title: Survey R-Co's Keycloak provider adapter and fix the port boundary
     owner: CODE-DESIGNER
-    status: pending
+    status: done
     stage: S4
     impl_order: 244  # letflow-queue task id; depends_on translated to queue task id [234]
     description: >

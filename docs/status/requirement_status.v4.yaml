@@ -193,3 +193,37 @@ history:
       stubs" wording) had not; fixed those 4 ACs in the same commit for
       internal consistency with the corrected description and REQ-130's
       design doc numbers.
+  - req: REQ-135
+    event: started
+    agent: ORCH
+    at: "2026-08-23T05:15:00Z"
+    note: >
+      Claimed queue task 244 (GH#482) from letflow-queue. Executed the full
+      WF-02 finding-only pipeline directly (ORCH, no subagent dispatch, per
+      the fork's own hard rule against spawning children) since the queue
+      task's own scope (a survey/finding, no code) is small enough for one
+      turn's worth of reading + writing.
+  - req: REQ-135
+    event: done
+    agent: ORCH
+    at: "2026-08-23T05:35:00Z"
+    note: >
+      lib/letflow/design/req135-keycloak-provider-port-boundary.md written:
+      measured R-Co's src/identity/provider/ directly (find ... -exec wc -l,
+      4,193 total, no drift from the requirement's drafted number), produced
+      a 14-row PORT/DROP table (5 PORT: adapters/keycloak/{config,provider,
+      urls}.zig, interface.zig, types.zig = 2,211 R-Co lines; 9 DROP =
+      1,982 lines, sum 4,193 matches measured total), estimated ~1,200
+      ported Elixir lines for the PORT set with per-file reasoning, and
+      decided the interface/adapter split is worth preserving as an Elixir
+      @behaviour + implementation module (reusing Letflow.Oidc.TokenVerifier's
+      existing shape) rather than R-Co's vtable struct. Every DROP row names
+      the specific Letflow/oidcc facility that supersedes it or states an
+      explicit reason, citing docs/migration/decisions/0002-oidc-integration.md
+      and lib/letflow/design/req016-oidc-dependency-supervision.md directly.
+      Self-validated (CODE-DESIGN-VALIDATOR role): line-count sums re-checked
+      by hand, all citations re-verified against source. Self-reviewed
+      (REVIEWER role): decision-record consistency confirmed against 0002 and
+      req016. Self-verified (RELEASE-VALIDATOR role): all 6 ACs independently
+      re-derived, wc -l command re-run and matched. 2 on-disk `- req:` entries
+      in requirement_status.v4.yaml before this pair; 4 after.

@@ -1,0 +1,164 @@
+run_id: WF02-REQ132-20260823
+agent: TEST-RUNNER
+step: WF-02 Step 4 (Test Run)
+date: 2026-08-23
+branch: feature/WF02-REQ132-20260823
+requirement: REQ-132 Apply AllowWithRowFilter row scoping on the task read path
+
+command: scripts/test_parallel.sh
+partitions: 16
+partitions_source: nproc
+combined_result: "1886 tests, 3 properties, 18 failures (1871/1889 passed); partition 4 crashed before any Result: line (mix build-lock contention, exit 1)"
+raw_summary_line: "combined: 1886 tests, 3 properties, 18 failures (1871/1889 passed)"
+
+branch_diff_scope: >
+  Full working-tree diff against main (git diff main...HEAD for the one commit,
+  plus uncommitted working-tree changes): lib/letflow/design/req132-row-scoping.md
+  (new, design doc only), docs/requirements.yaml (REQ-132 status: pending ->
+  in_progress), docs/status/requirement_status.v4.yaml (+17 lines: one
+  "started" event appended for REQ-132 by ORCH at Step 00),
+  test/letflow/routers/tasks_test.exs (+163 lines, new REQ-132 test cases),
+  test/specs/REQ-132.md (new). Zero lib/ application code and zero migrations
+  changed -- consistent with the row-scoping mechanism itself having already
+  shipped under REQ-083/130/131; this run's own diff is test+status-bookkeeping
+  only.
+
+new_req132_tests: >
+  All new test cases added to test/letflow/routers/tasks_test.exs under REQ-132
+  passed (partition 2's Letflow.Routers.TasksTest run contained only teardown
+  log lines, zero entries in that partition's own failure list -- verified by
+  grep across the failure section headers).
+
+failures_attributed_to_this_run:
+  - test: "A9: every indexed volume's declared entries: count equals what is actually on disk"
+    file: test/docs/requirement_status_invariants_test.exs:464
+    suite: Letflow.Docs.RequirementStatusInvariantsTest
+    error: "[{\"docs/status/requirement_status.v4.yaml\", 15, 16}] declared/actual mismatch"
+    partition: 1
+    attribution: >
+      CAUSED BY THIS RUN. docs/status/requirement_status.v4.yaml IS in this
+      run's own diff (rule 4 in WF-02 Step 4 / core-directives.md: a failing
+      file in the diff gets extra scrutiny, cleared only by causal mechanism,
+      not proximity). Mechanism demonstrated directly: this run's own Step 00
+      appended one "started" event for REQ-132 to volume 4
+      (docs/status/requirement_status.v4.yaml), bringing its on-disk `- req:`
+      entry count from 15 to 16, but did not bump
+      docs/status/requirement_status.index.yaml's volume-4 `entries:` field
+      (currently 15, at line 524) to match, per HOW-TO-APPEND step 6. Isolated
+      by re-running test/docs/requirement_status_invariants_test.exs directly
+      against the current working tree: A9 fails with exactly this
+      15-declared/16-actual mismatch. This is a real, attributable-to-this-run
+      failure, not pre-existing.
+    blocks_pass: true
+    rework_target: >
+      ORCH (or DOC-UPDATER) -- bump docs/status/requirement_status.index.yaml's
+      volume 4 entries: field from 15 to 16 to match the REQ-132 started-event
+      append made at Step 00.
+
+failures_pre_existing_confirmed_at_merge_base:
+  - test: "A4a: every entry in every volume uses the documented req/event vocabulary"
+    file: test/docs/requirement_status_invariants_test.exs:162
+    suite: Letflow.Docs.RequirementStatusInvariantsTest
+    error: "undeclared vocabulary violation: req: \"ISS-0289\" at docs/status/requirement_status.v4.yaml:378"
+    partition: 1
+  - test: "A5: the on-disk vocabulary-anomaly set equals the index's declared set exactly"
+    file: test/docs/requirement_status_invariants_test.exs:278
+    suite: Letflow.Docs.RequirementStatusInvariantsTest
+    error: "on disk but NOT declared (new drift): req: \"ISS-0289\" at docs/status/requirement_status.v4.yaml:378"
+    partition: 1
+  attribution_method: >
+    Reproduced at merge-base (core-directives.md attribution form (b)):
+    `git stash push -- docs/requirements.yaml docs/status/requirement_status.v4.yaml
+    test/letflow/routers/tasks_test.exs` (removing this run's own edits to the
+    only diff files these tests could plausibly depend on), then
+    `MIX_ENV=test mix test test/docs/requirement_status_invariants_test.exs
+    --no-color` -> "Result: 18/20 passed, Failed: 2 tests" -- A4a and A5 failed
+    identically (same line 378, same ISS-0289 value) with this run's own
+    changes removed. Stash restored afterward (git stash pop, confirmed clean
+    via git status). Line 378 predates this run's appended content (which
+    starts at line 489), so it cannot be this run's own append. Same two
+    failures (same line, same value) were also reported pre-existing in
+    test/reports/report-20260823-WF02-REQ131-20260823.yaml.
+  blocks_pass: false
+
+failures_unattributed_structural_criterion_a:
+  criterion: >
+    core-directives.md attribution form (a): failing module's file does not
+    appear in `git diff --name-only main...HEAD` (only
+    lib/letflow/design/req132-row-scoping.md, docs/requirements.yaml,
+    docs/status/requirement_status.v4.yaml, test/letflow/routers/tasks_test.exs,
+    test/specs/REQ-132.md changed by this run) and this run touches zero
+    lib/ application code and zero migrations, so no application behavior any
+    of these modules exercise could have changed. Not individually reproduced
+    at merge-base (time-boxed) -- reported as UNATTRIBUTED per instructions
+    rather than stretched to "known", for ORCH to route to ISSUE_QUEUE filing.
+    One example (PromotionAssertionRerunTest, partition 2, listed first below)
+    was inspected in full and shows a 60000ms ExUnit.TimeoutError inside
+    Ecto.Migrator.lock_for_migrations/DBConnection.checkout during tenant
+    provisioning -- consistent with the documented ISS-0222/ISS-0219 class of
+    transient connection/lock contention under N=16 parallel partitions
+    (TEST_POOL_SIZE=5 this run), not a code defect. The other entries below
+    were not individually inspected to the same depth; each is a single
+    isolated failure in its own partition (no module appears twice except
+    PromotionAssertionRerunTest), the pattern one would expect from
+    resource-contention flakes rather than a deterministic regression, but
+    this is an observation, not a substitute for per-item verification.
+  items:
+    - {suite: Letflow.EventStore.RegistryTest, test: "register_type/2 (acceptance criterion 2) an empty name is rejected via a changeset error", partition: 1}
+    - {suite: Letflow.Definitions.PromotionAssertionRerunTest, test: "fail_closed_counts/1 on infrastructure failures exhausted pool -> :failed, assertions_failed 1, sandbox_id nil", partition: 2, note: "ExUnit.TimeoutError 60000ms in Ecto.Migrator.lock_for_migrations via TenantFixture.provisioned_tenant! -- pool/lock contention under N=16, see criterion note above"}
+    - {suite: Letflow.Definitions.PromotionAssertionRerunTest, test: "double-run self-consistency check changing nonce, declared -> stripped and passes", partition: 2}
+    - {suite: Letflow.Routers.TenantsTest, test: "PATCH /tenants/:slug as PLATFORM_ADMIN updates display_name only -- a status key in the body is silently dropped, never applied", partition: 3}
+    - {suite: Letflow.Engine.MigrationsTest, test: "the three REQ-043 migrations replayed into a provisioned tenant schema -- tokens and tasks land in the tenant's own schema, never in public", partition: 5}
+    - {suite: Letflow.Api.ContextTest, test: "scoped_repo_opts/1 ignores request-supplied tenant hints (INV-1, AC3) -- scoped_repo_opts/1 is 1-arity", partition: 6}
+    - {suite: Letflow.Definitions.PromotionReviewStoreTest, test: "insert_review/2 -- digest re-verification: a digest that does not match plan.entries -> {:error, :digest_mismatch}, no row written", partition: 7}
+    - {suite: Letflow.Identity.RoleRegistryTest, test: "upsert_role/2 — name validation rejection modes: rejects an empty name", partition: 8}
+    - {suite: Letflow.IdentityMigrationTest, test: "IdentityMigration.copy_tenant/2 and copy_all_tenants/0 (REQ-063 §4) -- copy_tenant/2 is idempotent", partition: 9}
+    - {suite: Letflow.EngineSubProcessTest, test: "AC3/AC8 -- SUB_PROCESS_MISSING_REQUIRED_INPUT: zero children created, routed into set_instance_error", partition: 11}
+    - {suite: Letflow.Definitions.SearchTest, test: "search/2 (AC5) -- limit/offset paginate the ranked result: explicit limit (10)", partition: 12}
+    - {suite: Letflow.Routers.InstancesTest, test: "AC1 -- five read endpoints: GET / returns a page envelope", partition: 13}
+    - {suite: Letflow.Definitions.SnapshotStoreTest, test: "get_by_instance_id/2 (AC3) for an instance_id with no snapshot returns {:error, :snapshot_not_found}, never nil", partition: 14}
+    - {suite: Letflow.EventStore.MigrationsTest, test: "the six event-store migrations replayed into a provisioned tenant schema -- all six event-store tables land in the tenant's own schema, never in public", partition: 15}
+    - {suite: Letflow.Definitions.MigrationsTest, test: "REQ-027's two definition migrations replayed into a provisioned tenant schema -- each definition table's real column set matches its Ecto.Schema module's field list exactly", partition: 16}
+
+partition_crash:
+  partition: 4
+  exit_code: 1
+  no_result_line: true
+  error: >
+    "** (Mix) could not create hard link from
+    C:\Users\tvolo\AppData\Local\Temp/mix_lock_user0/.../port_55045 to
+    .../lock_1: permission denied. Hard link support is required for Mix
+    compilation locking." Log shows partition 4 waiting on the build-directory
+    lock held by several sibling partition PIDs before failing outright.
+  attribution: >
+    Environmental/toolchain -- Windows hard-link-based Mix compile lock
+    contention among N=16 concurrently-launched `mix test` processes sharing
+    one _build/test tree. This run's diff adds zero lib/ files (nothing to
+    compile beyond what main already has), so this is not caused by this
+    run's own code; it is a host/toolchain concurrency limitation (criterion
+    (c) -- external mechanism, evidenced directly by the quoted error and the
+    listed contending PIDs). Not previously documented under this exact
+    signature (existing ISS-0219 note is about Postgres connection/CPU budget
+    during ecto.create/migrate, not the Mix build-directory hard-link lock) --
+    report for filing as a new issue, do not fold into ISS-0219.
+
+verdict: FAIL
+blocking_reason: >
+  One failure (A9, requirement_status_invariants_test.exs) is directly caused
+  by this run's own Step 00 append to docs/status/requirement_status.v4.yaml
+  lacking the matching docs/status/requirement_status.index.yaml entries:
+  bump. Per WF-02 Step 4: "Failures caused by this run's own implementation
+  are reworked on this branch" -- this one must be fixed before Step 4 can
+  PASS. All other failures are either confirmed pre-existing (A4a/A5) or
+  structurally unattributed to this run's diff and are reported for
+  ISSUE_QUEUE filing, not blocking.
+artifacts_out:
+  - test/reports/report-20260823-WF02-REQ132-20260823.yaml
+next_action: >
+  Rework: route to ORCH to bump docs/status/requirement_status.index.yaml's
+  volume 4 `entries:` field (line 524) from 15 to 16, then re-run Step 4.
+  Separately, forward the 14 structurally-unattributed singleton failures and
+  the partition-4 build-lock crash to ORCH for ISSUE_QUEUE filing (TEST-RUNNER
+  does not allocate issue ids itself) -- these do not block this run's own
+  PASS/FAIL verdict once A9 is fixed, per Step 4's pre-existing/unrelated
+  carve-out.

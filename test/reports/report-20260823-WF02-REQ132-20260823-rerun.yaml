@@ -1,0 +1,92 @@
+run_id: WF02-REQ132-20260823-rerun
+agent: TEST-RUNNER
+step: WF-02 Step 4 (Test Run) -- re-run after ORCH's A9 index fix
+date: 2026-08-23
+branch: feature/WF02-REQ132-20260823
+requirement: REQ-132 Apply AllowWithRowFilter row scoping on the task read path
+supersedes: test/reports/report-20260823-WF02-REQ132-20260823.yaml
+
+command: scripts/test_parallel.sh
+partitions: 16
+partitions_source: nproc
+combined_result: "1984 tests, 5 properties, 2 failures (1987/1989 passed)"
+raw_summary_line: "combined: 1984 tests, 5 properties, 2 failures (1987/1989 passed)"
+
+a9_check: >
+  CONFIRMED FIXED. docs/status/requirement_status.index.yaml line 524 now
+  reads `entries: 16`, matching `grep -c "^  - req:" docs/status/requirement_status.v4.yaml`
+  = 16 (verified directly before the run). A9 (requirement_status_invariants_test.exs)
+  did not appear among this run's 2 failures -- it passed.
+
+req132_tests: >
+  Ran test/letflow/routers/tasks_test.exs directly (MIX_ENV=test mix test
+  test/letflow/routers/tasks_test.exs): "Finished in 44.4 seconds ... Result:
+  54 passed" -- all 54 tests pass, 0 failures. Also present and clean inside
+  the full parallel run (no tasks_test.exs entries in any partition's failure
+  section).
+
+branch_diff_scope: >
+  Committed diff (git diff --name-only main...HEAD): lib/letflow/design/req132-row-scoping.md
+  only. Working-tree uncommitted changes on top: docs/requirements.yaml,
+  docs/status/requirement_status.index.yaml, docs/status/requirement_status.v4.yaml,
+  test/letflow/routers/tasks_test.exs (modified), plus untracked
+  test/reports/report-20260823-WF02-REQ132-20260823.yaml and test/specs/REQ-132.md.
+  Combined effective diff is still test+doc+status-bookkeeping only -- zero
+  lib/ application code and zero migrations, matching the description in this
+  task's briefing.
+
+failures_this_run:
+  - test: "A4a: every entry in every volume uses the documented req/event vocabulary"
+    file: test/docs/requirement_status_invariants_test.exs:162
+    suite: Letflow.Docs.RequirementStatusInvariantsTest
+    error: "undeclared vocabulary violation: req: \"ISS-0289\" at docs/status/requirement_status.v4.yaml:378"
+    partition: 1
+  - test: "A5: the on-disk vocabulary-anomaly set equals the index's declared set exactly, and every declared record cites a closed, pinned, warranted volume"
+    file: test/docs/requirement_status_invariants_test.exs:278
+    suite: Letflow.Docs.RequirementStatusInvariantsTest
+    error: "on disk but NOT declared (new drift): req: \"ISS-0289\" at docs/status/requirement_status.v4.yaml:378"
+    partition: 1
+  attribution: >
+    PRE-EXISTING, not caused by this run. Line 378 of
+    docs/status/requirement_status.v4.yaml is the ISS-0289 "done" entry, added
+    by commit 6e5e3ee (PR #578, "WF03-ISS0289-20260823"), which predates this
+    branch's own work and is confirmed by `git log --oneline -1 -- docs/status/requirement_status.v4.yaml`
+    -> `397438d REQ-137: per-tenant realm provisioning design (#580)`, i.e. main
+    history unrelated to REQ-132. This run's own appended content is further
+    down the file (starting well after line 378) and does not touch line 378.
+    Same two tests (same line, same ISS-0289 value) were already reported
+    pre-existing in the prior report-20260823-WF02-REQ132-20260823.yaml and in
+    report-20260823-WF02-REQ131-20260823.yaml before that -- identical
+    signature across three independent runs on three different branches is
+    itself strong evidence this is a standing repo-wide vocabulary-drift issue,
+    not something either branch introduced.
+  blocks_pass: false
+
+other_failures_reproducible_check: >
+  The prior run's 14 structurally-unattributed singleton failures (across
+  Letflow.EventStore.RegistryTest, Letflow.Definitions.PromotionAssertionRerunTest
+  x2, Letflow.Routers.TenantsTest, Letflow.Engine.MigrationsTest,
+  Letflow.Api.ContextTest, Letflow.Definitions.PromotionReviewStoreTest,
+  Letflow.Identity.RoleRegistryTest, Letflow.IdentityMigrationTest,
+  Letflow.EngineSubProcessTest, Letflow.Definitions.SearchTest,
+  Letflow.Routers.InstancesTest, Letflow.Definitions.SnapshotStoreTest,
+  Letflow.EventStore.MigrationsTest, Letflow.Definitions.MigrationsTest) did
+  NOT reproduce this run -- none of those modules appear in this run's 2
+  failures. The partition-4 Windows Mix build-lock crash also did NOT
+  reproduce -- all 16 partitions completed with a Result: line and exit 0
+  except partition 1 (exit 2, the two ISS-0289 failures above). This is
+  consistent with both being transient, load/timing-dependent flakes
+  (resource contention under N=16 parallel `mix test` processes sharing one
+  Postgres pool and one _build/test tree) rather than deterministic failures
+  tied to any code path -- their non-reproduction on an unchanged lib/ tree
+  is expected for that failure class, not evidence they were spurious to
+  begin with. Nothing to file as newly confirmed against this branch's diff;
+  ORCH's existing plan to file the prior run's list under ISSUE_QUEUE for
+  separate flake-tracking still stands (this run neither confirms nor
+  clears those items -- flaky-by-nature failures need repeated-run tracking,
+  not a single re-run's absence, to be conclusively triaged).
+
+verdict: PASS
+artifacts_out:
+  - test/reports/report-20260823-WF02-REQ132-20260823-rerun.yaml
+next_action: "Route to RELEASE-VALIDATOR"

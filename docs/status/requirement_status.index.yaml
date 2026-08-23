@@ -521,7 +521,7 @@ volumes:
     path: docs/status/requirement_status.v4.yaml
     status: current
     opened: 2026-08-23
-    entries: 18
+    entries: 20
     note: >
       Opened by WF02-REQ082-20260823's own Step Final roll, successor to
       volume 3. Created with volume 3's header text verbatim (volume number,
@@ -574,6 +574,16 @@ volumes:
       Incremented to 18 by ORCH's own ISS-0290 done-event append (docs-only
       handoff-timestamp fix, no rebase conflict on this file) -- 18 on-disk
       `- req:` entries in requirement_status.v4.yaml.
+      Incremented to 19 by ORCH's own REQ-132 started-event append (Step 00)
+      -- 19 on-disk `- req:` entries in requirement_status.v4.yaml.
+      Renumbered during WF02-REQ132-20260823 (ELIXIR-DEV)'s Step Final
+      rebase onto REQ-136/ISS-0290 (which landed on main after this
+      branch was created); original note said 16 against this branch's
+      stale base.
+      Incremented to 20 by WF02-REQ132-20260823 (DOC-UPDATER)'s own REQ-132
+      done-event append (Step 6), also composed in this same Step Final
+      rebase -- 20 on-disk `- req:` entries in requirement_status.v4.yaml;
+      original note said 17 against this branch's stale base.
 
 
 known_anomalies:

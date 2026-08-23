@@ -6446,7 +6446,7 @@ requirements:
   - id: REQ-132
     title: Apply AllowWithRowFilter row scoping on the task read path
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 253  # letflow-queue task id; depends_on translated to queue task ids [248, 150]
     description: >

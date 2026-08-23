@@ -541,3 +541,53 @@ history:
       reconfirmed clean (0 new violations, 25 pre-existing grandfathered).
       17 on-disk `- req:` entries in requirement_status.v4.yaml before this
       append; 18 after.
+  - req: REQ-132
+    event: started
+    agent: ORCH
+    at: "2026-08-23T05:33:42Z"
+    note: >
+      Claimed via letflow-queue get_next_task (queue task id 253, GH#491).
+      depends_on REQ-131 and REQ-083, both status done. No duplicate found
+      under docs/issues/ for GH#491 (a coincidental "491" substring match in
+      ISS-0227.yaml was a commit-hash fragment, not this issue). Applies
+      Letflow.Api.Authorization's AllowWithRowFilter kind (returned but not
+      yet enforced after REQ-131) on the task read path, per REQ-132's own
+      text: task_scope {:own_user_and_groups, user_id} is GROUPS-INCLUSIVE,
+      row scope must come from the AccessDecision tuple alone (never a
+      request-supplied assignee_id). WF-02 Step 00 complete via ELIXIR-DEV:
+      branch feature/WF02-REQ132-20260823 created off up-to-date main and
+      pushed. 18 on-disk `- req:` entries in requirement_status.v4.yaml
+      before this append; 19 after (renumbered during Step Final rebase
+      onto REQ-136/ISS-0290, which landed on main after this branch was
+      created; original note said 14/15 against this branch's stale base).
+  - req: REQ-132
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-23T06:50:05Z"
+    note: >
+      Row-scoping mechanism found ALREADY IMPLEMENTED on main (landed
+      incidentally under REQ-083/130/131) -- zero lib/ or migration diff this
+      run. This run produced: lib/letflow/design/req132-row-scoping.md
+      (design doc citing and confirming the existing mechanism, passed
+      CODE-DESIGN-VALIDATOR after one rework round removing embedded code
+      blocks), test/specs/REQ-132.md, and new coverage in
+      test/letflow/routers/tasks_test.exs (5 new describe blocks, AC1/AC2/
+      AC3/AC5 for GET /tasks specifically -- previously only GET
+      /tasks/inbox had this coverage; AC4 documented as code-reading
+      evidence, not a runnable test). Full suite: 1984 tests / 5 properties,
+      2 pre-existing unrelated failures (ISS-0289 vocabulary-drift
+      assertions in test/docs/requirement_status_invariants_test.exs,
+      confirmed structurally pre-existing/off-branch by RELEASE-VALIDATOR).
+      Gates passed: CODE-DESIGN-VALIDATOR (1 rework round),
+      SECURITY-REVIEWER (INV-1/2/6/7/8 all PASS), REVIEWER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER (1 rework round for an unrelated
+      index-consistency bookkeeping fix), RELEASE-VALIDATOR -- all
+      ultimately PASS, all 5 acceptance criteria independently confirmed.
+      No docs/migration/stage-N-*.md or docs/migration/decisions/ file
+      named in REQ-132's acceptance criteria; none updated. README.md not
+      updated -- no documented user-facing behavior changed, the mechanism
+      was already live; this closed a compliance/test-coverage gap only.
+      19 on-disk `- req:` entries in requirement_status.v4.yaml before this
+      append; 20 after (renumbered during Step Final rebase onto
+      REQ-136/ISS-0290; original note said 15/16 against this branch's
+      stale base).

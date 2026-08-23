@@ -711,6 +711,169 @@ defmodule Letflow.Routers.TasksTest do
     end
   end
 
+  # ══════════════════════════════════════════════════════════════════════
+  # REQ-132 -- AllowWithRowFilter row scoping on GET /tasks specifically
+  # (design lib/letflow/design/req132-row-scoping.md, "Open questions" #2:
+  # the mechanism is already shipped and covered for GET /tasks/inbox above,
+  # but not yet for GET /tasks itself). See test/specs/REQ-132.md for the
+  # full acceptance-criterion -> test-case mapping and rationale.
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-132 AC1: GET /tasks for a TASK_WORKER-only caller returns exactly the {:own_user_and_groups, user_id} scope" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req132-ac1")}
+
+    test "own-assigned task and member-group task are returned; a different user's task and a non-member-group task are not",
+         %{tenant: tenant} do
+      user_x = insert_user!(tenant, %{username: "req132-ac1-x"}).id
+      user_y = insert_user!(tenant, %{username: "req132-ac1-y"}).id
+
+      member_group = insert_group!(tenant, name: "req132-ac1-member-group")
+      insert_group_member!(tenant, member_group.id, user_x)
+
+      non_member_group = insert_group!(tenant, name: "req132-ac1-non-member-group")
+      # user_x deliberately never added as a member of non_member_group
+
+      task_own = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: user_x})
+
+      task_via_member_group =
+        insert_task!(tenant, %{assignee_type: "GROUP", assignee_ref: member_group.id})
+
+      task_other_user = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: user_y})
+
+      task_via_non_member_group =
+        insert_task!(tenant, %{assignee_type: "GROUP", assignee_ref: non_member_group.id})
+
+      conn =
+        build_conn(:get, "/?page_size=50", tenant,
+          roles: ["TASK_WORKER"],
+          user_id: user_x
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      returned_ids = item_ids(body)
+
+      assert task_own.id in returned_ids
+      assert task_via_member_group.id in returned_ids
+      refute task_other_user.id in returned_ids
+      refute task_via_non_member_group.id in returned_ids
+    end
+  end
+
+  # AC2: assignee_id widening attack, with a group-task fixture -- distinct
+  # from AC1's plain coverage (no query-param attack) and from the existing
+  # INV-2 test above (no group fixture, so it can't show the caller's own
+  # scope stays intact alongside the exclusion).
+  describe "REQ-132 AC2: assignee_id widening attack with a group-task fixture" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req132-ac2")}
+
+    test "?assignee_id=<different user> excludes that user's task but keeps own+group tasks",
+         %{tenant: tenant} do
+      user_x = insert_user!(tenant, %{username: "req132-ac2-x"}).id
+      user_y = insert_user!(tenant, %{username: "req132-ac2-y"}).id
+
+      group = insert_group!(tenant, name: "req132-ac2-group")
+      insert_group_member!(tenant, group.id, user_x)
+
+      task_own = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: user_x})
+      task_via_group = insert_task!(tenant, %{assignee_type: "GROUP", assignee_ref: group.id})
+      task_y = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: user_y})
+
+      conn =
+        build_conn(:get, "/?assignee_id=#{user_y}&page_size=50", tenant,
+          roles: ["TASK_WORKER"],
+          user_id: user_x
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      returned_ids = item_ids(body)
+
+      # The attack: naming user_y via the query param must not surface user_y's task.
+      refute task_y.id in returned_ids
+      # The caller's own {:own_user_and_groups, _} scope is untouched by the
+      # (ignored) query param -- still returns own + group tasks.
+      assert task_own.id in returned_ids
+      assert task_via_group.id in returned_ids
+    end
+  end
+
+  describe "REQ-132 AC3: GET /tasks for a plain-:Allow role (task_scope: :all) stays unfiltered" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req132-ac3")}
+
+    test "a PLATFORM_ADMIN caller sees tasks assigned to three different users/groups, none of which are their own",
+         %{tenant: tenant} do
+      user_a = Ecto.UUID.generate()
+      user_b = Ecto.UUID.generate()
+      some_group = insert_group!(tenant, name: "req132-ac3-group")
+
+      task_a = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: user_a})
+      task_b = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: user_b})
+
+      task_group =
+        insert_task!(tenant, %{assignee_type: "GROUP", assignee_ref: some_group.id})
+
+      conn =
+        build_conn(:get, "/?page_size=50", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      returned_ids = item_ids(body)
+
+      # No AllowWithRowFilter narrowing applies to a plain :Allow (task_scope:
+      # :all) decision -- every task shows up regardless of who/what it is
+      # assigned to, proving the row-filter mechanism is not applied
+      # indiscriminately.
+      assert task_a.id in returned_ids
+      assert task_b.id in returned_ids
+      assert task_group.id in returned_ids
+    end
+  end
+
+  describe "REQ-132 AC5: GET /tasks -- REQ-072 tenant scoping still applies underneath the row filter" do
+    test "a task-worker's own-tenant group task is returned, but a same-user task belonging to a different tenant is not" do
+      tenant_a = TenantFixture.provisioned_tenant!(slug_prefix: "req132-ac5-a")
+      tenant_b = TenantFixture.provisioned_tenant!(slug_prefix: "req132-ac5-b")
+
+      # group_members.user_id carries a foreign key onto the tenant-schema
+      # users table, so user_x must be a real row in tenant_a specifically
+      # (the id value itself is reused, unenforced, as the same "user" in
+      # tenant_b's insert_task!/2 fixture below -- group_members's FK does
+      # not apply there since that insert never touches group_members).
+      user_x = insert_user!(tenant_a, %{username: "req132-ac5-x"}).id
+
+      # Tenant A: user_x is a member of a group with a group-assigned task --
+      # the one row the {:principal, _} scope should surface.
+      group_a = insert_group!(tenant_a, name: "req132-ac5-group-a")
+      insert_group_member!(tenant_a, group_a.id, user_x)
+      task_in_a = insert_task!(tenant_a, %{assignee_type: "GROUP", assignee_ref: group_a.id})
+
+      # Tenant B: a task directly assigned to the SAME user_id, in a
+      # different tenant schema -- must never leak into tenant A's listing,
+      # proving the :prefix scoping from REQ-072 still governs underneath
+      # the {:own_user_and_groups, _} row filter, not merely user-id
+      # matching alone.
+      task_in_b = insert_task!(tenant_b, %{assignee_type: "USER", assignee_ref: user_x})
+
+      conn =
+        build_conn(:get, "/?page_size=50", tenant_a,
+          roles: ["TASK_WORKER"],
+          user_id: user_x
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      returned_ids = item_ids(body)
+
+      assert task_in_a.id in returned_ids
+      refute task_in_b.id in returned_ids
+    end
+  end
+
   describe "GET /tasks/:id 404s for a genuinely nonexistent id (not just cross-tenant)" do
     test "returns 404" do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req083-notfound")

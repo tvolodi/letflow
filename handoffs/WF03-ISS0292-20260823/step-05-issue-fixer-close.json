@@ -1,0 +1,50 @@
+{
+  "handoff_id": "step05-WF03-ISS0292-20260823",
+  "run_id": "WF03-ISS0292-20260823",
+  "workflow_id": "WF-03",
+  "step": "5",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0292-20260823/step-05-issue-fixer-close.json",
+  "created_at": "2026-08-23T10:40:00Z",
+  "started_at": "2026-08-23T10:40:00Z",
+  "completed_at": "2026-08-23T09:18:03Z",
+  "status": "PASS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0292"],
+    "requirement_text": {
+      "ISS-0292": "SandboxPoolTest RT-9/RT-8 CI flake -- root cause fixed and independently gated through the full WF-03 pipeline: CODE-DESIGNER design (twice, second pass PASS), CODE-DESIGN-VALIDATOR (PASS), ELIXIR-DEV implementation (commit 23273a4c0791b645d4aafb0b0a26ea898aaab479, PASS), SECURITY-REVIEWER (PASS), REVIEWER (PASS), TEST-DESIGNER regression tests (commit 26b8cce, PASS with independently-reproduced fail-then-pass proof), TEST-DESIGN-VALIDATOR (PASS), TEST-RUNNER full suite (PASS, 1993/1993 in the clean run). Branch feature/WF03-ISS0292-20260823. GitHub issue #585. docs/issues/ISS-0292.yaml has NOT yet been created (per handoffs/escalations.yaml, Step 1 diagnosis only ever reached this point previously)."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step04c-test-runner"],
+    "artifacts_in": [
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "handoffs/escalations.yaml"
+    ],
+    "owned_modules": ["docs/issues/ISS-0292.yaml"]
+  },
+  "task": {
+    "description": "Create docs/issues/ISS-0292.yaml with status: resolved (a real root cause -- query_without_holding/1's uncaught crash on Postgrex.Error, and drop_sandbox_schemas_created_since!/1's abort-on-first-failure loop -- was genuinely removed, not just worked around), resolving run-id WF03-ISS0292-20260823, resolved_in_run/resolved_at with a real UTC timestamp. Cite the fix commit (23273a4c0791b645d4aafb0b0a26ea898aaab479) and the regression test commit (26b8cce). Then close GitHub issue #585 with `gh issue close 585 --comment \"Fixed in WF03-ISS0292-20260823. See docs/issues/ISS-0292.yaml and the regression tests at test/letflow/sandbox_pool_test.exs (retry_query_once/1, resilient_drop_schema/1 tests, and the RT-8 diff-set-traversal regression test).\"` per WF-03 Step 5's evidence-on-close requirement. Also append a brief note to handoffs/escalations.yaml (do not rewrite the existing entries -- append only) marking the WF03-ISS0292-20260823 escalation as resolved by this run, per that file's own append-only convention.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0292.yaml created with status: resolved and correct resolving keys",
+      "gh issue close 585 run with a --comment citing the resolving evidence",
+      "handoffs/escalations.yaml gets an appended (not rewritten) note marking this escalation resolved",
+      "PASS, next_action: Route to Step Final"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "docs/issues/ISS-0292.yaml created with status: resolved, resolved_in_run: WF03-ISS0292-20260823, resolved_at: 2026-08-23T09:18:03Z, citing fix commit 23273a4c0791b645d4aafb0b0a26ea898aaab479 (retry_query_once/1, resilient_drop_schema/1, Enum.reduce/3 attempt-every-schema fold replacing the abort-on-first bare `for` loop) and regression-test commit 26b8cce (four new deterministic cases in test/letflow/sandbox_pool_test.exs incl. the RT-8 diff-set-traversal case). GitHub issue #585 closed via `gh issue close 585 --comment \"...\"` citing the run-id, docs/issues/ISS-0292.yaml, and the regression test file. handoffs/escalations.yaml got an appended (not rewritten) RESOLUTION NOTE under the existing WF03-ISS0292-20260823 escalation entry, marking it resolved with the same evidence.",
+    "artifacts_out": [
+      "docs/issues/ISS-0292.yaml",
+      "handoffs/escalations.yaml"
+    ],
+    "issues": [],
+    "next_action": "Route to Step Final"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

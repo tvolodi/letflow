@@ -1,7 +1,12 @@
 # Design: ISS-0292 — resilient cleanup helpers in `sandbox_pool_test.exs`
 
 **Run:** WF03-ISS0292-20260823 (GH#585, queue task 292) · **Author:** CODE-DESIGNER ·
-**Status:** proposed — awaiting CODE-DESIGN-VALIDATOR
+**Status:** Passes 1–3 below (§0–§8) are REJECTED — see `handoffs/escalations.yaml`
+run_id `WF03-ISS0292-20260823`, `escalated_at: 2026-08-23T08:05:46Z`, for the full
+CODE-DESIGN-VALIDATOR findings. Kept verbatim, not deleted, per the post-escalation
+restart's own instruction that prior findings stay readable. **§9 below ("Pass 4 —
+post-escalation restart") is the current, superseding design.** Do not implement §0–§8;
+implement §9.
 
 **Scope: TEST CODE ONLY.** Every change in this design lands in
 `test/letflow/sandbox_pool_test.exs`. No `lib/` file, no migration, no `config/*.exs` is
@@ -398,3 +403,338 @@ arithmetic gap in this chain is anticipated.
 | Check for an existing "resilient cleanup" pattern to reuse | §0.2 — `TenantSchemaReaper.reclaim_row/1`/`sweep_orphans/2`, reused as the model for §3.4 |
 | No implementation code in the design | Every code-shaped block above is a `@spec`, a named-constant formula, or a paste-in-place comment string — no `.ex` function body is written |
 | ExUnit per-test-timeout budget does not kill a test before the new outer rendezvous bound fires | §3.5 / OQ-3 — module-wide `@moduletag timeout: 120_000`, derived with `31_000` ms margin above the worst-case `89_000` ms cleanup call |
+
+---
+
+## 9. Pass 4 (post-escalation restart) — SUPERSEDES §0–§8
+
+**Run:** WF03-ISS0292-20260823, restart after `max_rework` (3/3) escalation ·
+**Source of the mandated approach:** `handoffs/WF03-ISS0292-20260823/step-02-code-designer.json`
+`task.description`, itself a synthesis of escalation options (a)/(c) — see
+`handoffs/escalations.yaml` `run_id: WF03-ISS0292-20260823`, `next_step` (a), (b), (c).
+**Status:** proposed — awaiting CODE-DESIGN-VALIDATOR.
+
+### 9.0 Why passes 1–3 are rejected, restated in one sentence each
+
+- **Pass 1** (§2–§3, `cleanup_query_timeout_ms() = 44_000`, retry-once, no outer-bound
+  change): the retry-once total (`88_000` ms) could exceed the *unwidened*
+  `pool_op_rendezvous_timeout()` (`45_000` ms) it still ran inside, so the outer
+  `receive…after` could fire and `flunk` mid-retry — reproducing the exact orphan-leak
+  defect the fix exists to close (OQ-1).
+- **Pass 2** (§3.0, `query_without_holding/2`, `cleanup_query_rendezvous_timeout() =
+  89_000`): fixed OQ-1 by widening the *outer* bound at the two cleanup call sites to
+  `89_000` ms — but that now exceeded ExUnit's untouched **default 60_000 ms per-test
+  timeout** (no `@moduletag`/`@tag timeout` existed anywhere in this file), so ExUnit's
+  own test-kill supervisor could fire before the widened inner bound ever got a chance
+  (OQ-3, found by CODE-DESIGN-VALIDATOR's 2nd pass).
+- **Pass 3** (§3.5, `@moduletag timeout: 120_000`): fixed OQ-3 for a *single* worst-case
+  cleanup call (`120_000 - 89_000 = 31_000` ms margin) — but RT-1..RT-5 call the
+  cleanup helpers (or their internals: baseline `sandbox_schema_names/0`, final
+  `sandbox_schema_names/0`, `on_exit`'s `drop_sandbox_schemas_created_since!/1` — which
+  itself calls `sandbox_schema_names/0` again plus one `query_without_holding` per
+  orphaned schema) **more than once per test body**. Two genuinely-stuck calls alone
+  (`2 * 89_000 = 178_000` ms) exceed the `120_000` ms module timeout — the margin was
+  derived against a single-call worst case, not this file's actual multi-call-per-test
+  pattern.
+
+Escalation verdict (`handoffs/escalations.yaml`, `diagnosis`): each pass's fix
+introduced a new timing-budget gap **one layer further out** than the one it closed
+(retry budget → outer rendezvous bound → ExUnit per-test timeout → per-test call
+count). **Pass 4 does not add a fourth layer.** It fits the retry entirely inside the
+one budget that was never the problem — the existing, unmodified
+`pool_op_rendezvous_timeout()` (`45_000` ms) — and changes nothing outside
+`sandbox_pool_test.exs`'s function bodies. No new named timeout constant is
+introduced at all; the retry reuses Postgrex's own unconfigured client-side default,
+exactly as today's code already implicitly does.
+
+### 9.1 The one structural difference from passes 1–3
+
+Passes 1–3 all added a **second, explicit timeout argument to `query_without_holding/1`**
+(making it `/2`) so the *outer* rendezvous bound could be widened for the two cleanup
+call sites. Pass 4 does **not** touch `query_without_holding/1` at all — no new arity,
+no new argument, no new constant governing it. Instead, the retry loop runs entirely
+**inside the 0-arity `fun` that is already passed into the existing, unmodified
+`spawn_monitor`** (`:517`). From `query_without_holding/1`'s point of view nothing
+changes: it still spawns one process, still waits on the same unmodified
+`pool_op_rendezvous_timeout()` (`45_000` ms today), still relays a normal return or
+turns a crash into `flunk`. The retry is invisible to it — which is exactly why this
+approach cannot repeat the pass-1/pass-2 failure mode: there is no second outer bound
+to keep in sync with a growing inner one, because the inner one now fits inside the
+bound that was already there.
+
+### 9.2 New helper: `retry_query_once/1` — the shared retry primitive
+
+```
+@spec retry_query_once(fun :: (-> term())) :: term()
+```
+
+Calls `fun.()`. On `Postgrex.Error` or `DBConnection.ConnectionError`: log a warning
+(`Logger.warning/1`, same message shape as `TenantSchemaReaper.reclaim_row/1`,
+`test/support/tenant_schema_reaper.ex:233-241` — naming the error and what was being
+attempted), then call `fun.()` again — **the identical call, unchanged, with no
+`:timeout` option added or overridden anywhere in this design**. If the second attempt
+also raises, **let it propagate un-rescued** (no second `rescue`). Placed as a private
+function alongside `query_without_holding/1` (`:513` area), used only from inside `fun`
+arguments passed to `query_without_holding/1` — never called standalone, never wraps
+`query_without_holding/1` itself.
+
+This is the entire retry mechanism. There is no `cleanup_query_timeout_ms/0`, no
+`cleanup_query_rendezvous_timeout/0`, no `@rendezvous_slack_ms`-derived constant added
+for it (contrast passes 1–3's §2) — because neither `Repo.query!` call this design
+touches (`sandbox_schema_names/0`'s `SELECT`, the DROP loop's `DROP SCHEMA … CASCADE`)
+passes a `:timeout` option today, so both attempts of a retried call keep running under
+**Postgrex's own unconfigured client-side default (`15_000` ms)** — literally the same
+timeout behavior these two queries already have today, just possibly invoked twice
+instead of once.
+
+### 9.3 `sandbox_schema_names/0` — one-line body change, unchanged wrapper
+
+```
+@spec sandbox_schema_names() :: MapSet.t(String.t())
+```
+
+Signature and return shape unchanged (`:537-546`). Its inner `Repo.query!(...)` call
+(the `SELECT … information_schema.schemata …`) is passed as the `fun` argument to
+`retry_query_once/1` (§9.2) instead of being called directly; `retry_query_once/1`'s
+result (the raw `Repo.query!` result) then flows into the same row-to-`MapSet`
+conversion the function does today, unchanged. The surrounding
+`query_without_holding(fn -> ... end)` wrapper is called exactly as today — **1-arg,
+no second argument, no changed default** (`:538`).
+
+If `retry_query_once/1` exhausts its one retry and still raises, that exception now
+crashes the spawned process exactly as the current unrescued `Repo.query!` call
+already does — `query_without_holding/1`'s existing `:DOWN` → `flunk` branch
+(`:524-525`) is completely unmodified and still fires. This is deliberate: there is no
+loop around `sandbox_schema_names/0` to protect, so a genuinely-stuck schema listing
+must still flunk loudly, exactly per acceptance criterion "still surfaces as a real,
+loud test failure."
+
+### 9.4 New helper: `resilient_drop_schema/1` — never raises, used only by the DROP loop
+
+```
+@spec resilient_drop_schema(schema_name :: String.t()) :: :ok | {:error, Exception.t()}
+```
+
+Calls `retry_query_once/1` (§9.2) with a `fun` that issues the same
+`DROP SCHEMA IF EXISTS "..." CASCADE` query the current code already issues for
+`schema_name`. Adds exactly one `rescue` clause around that call, sitting *outside*
+`retry_query_once/1` — i.e. `retry_query_once/1` itself is unchanged/shared and
+unaware of this wrapper. On success, returns `:ok`. On the rescued exception (meaning
+`retry_query_once/1`'s own retry was already exhausted), logs a warning naming
+`schema_name` and the exception — same message shape as
+`TenantSchemaReaper.reclaim_row/1` — and returns `{:error, exception}` instead of
+letting the exception propagate.
+
+This is the one place this design's shape diverges deliberately from
+`retry_query_once/1`'s "let the second failure propagate" contract, for the same
+reason pass 3's `resilient_drop_schema/1` (§3.2 above) diverged from its own
+`resilient_cleanup_query!/2`: **this function's caller is a loop whose entire purpose
+is to keep going after one item's exhausted retries** (§9.5), so its exhausted-retry
+outcome must be a normal return value, not a crash. The added `rescue` layer matches
+`TenantSchemaReaper.reclaim_row/1`'s exact shape (`repo.query!(...)` calls inside a
+`def`, one `rescue` at the bottom, `Logger.warning` + a non-raising return, never
+raises to the caller — `test/support/tenant_schema_reaper.ex:228-242`) rather than
+inventing a new one.
+
+Called as `query_without_holding(fn -> resilient_drop_schema(schema_name) end)` —
+again 1-arg, unmodified. Because `resilient_drop_schema/1` never raises, the spawned
+process always reaches its normal `send(test_pid, {ref, fun.()})` line
+(`query_without_holding/1:517`) regardless of outcome; the unmodified `45_000` ms
+outer bound is never at risk of firing on the exhausted-retry *success* path (it only
+returns `{:error, _}`, it doesn't hang).
+
+### 9.5 `drop_sandbox_schemas_created_since!/1` — attempt every schema, one combined report
+
+```
+@spec drop_sandbox_schemas_created_since!(baseline :: MapSet.t(String.t())) :: :ok
+```
+
+Signature and return type unchanged (`:552`). Body restructured from the current
+`for schema_name <- MapSet.difference(...) do query_without_holding(...) end` (which
+discards each result and aborts the whole `for` on the first crash — the RT-8 defect)
+to an accumulating fold over `schemas_to_drop = MapSet.difference(sandbox_schema_names(),
+baseline)` (unchanged computation, now benefiting from §9.3's retry transparently),
+matching `TenantSchemaReaper.sweep_orphans/2`'s own accumulate-and-continue shape
+(`test/support/tenant_schema_reaper.ex:146-163`) rather than inventing a new one:
+
+- Walk every schema name in `schemas_to_drop` once, calling
+  `query_without_holding(fn -> resilient_drop_schema(schema_name) end)` for each and
+  accumulating a `{schema_name, reason}` pair into a failure list wherever the call
+  returns `{:error, reason}`; a `:ok` result contributes nothing to the accumulator.
+  The walk never stops and never raises mid-pass on any one iteration's outcome —
+  the fold's accumulator is what carries state forward, not a raised exception.
+- Every schema in `schemas_to_drop` is attempted **exactly once** by this walk (each
+  attempt internally may retry once, per §9.2/§9.4 — so at most 2 raw `DROP` attempts
+  per schema, never unbounded, never a second pass over the same schema).
+- After the full pass, if the accumulated failure list is non-empty, raise **one**
+  `flunk/1` naming every still-undropped schema and its last error — the single loud
+  final report, closing acceptance criterion "genuinely-stuck schema... still surfaces
+  as a real, loud test failure — not silently swallowed." If the list is empty, return
+  `:ok` exactly as today.
+
+This is the change that closes the RT-8 gap: a cancelled/interrupted DROP for schema N
+no longer prevents schemas N+1..last in the same diff set from being attempted —
+closing acceptance criterion (c), the critical one.
+
+### 9.6 Arithmetic: the retry fits inside the existing, unwidened outer bound
+
+**Every constant named below is read from the current source, not re-derived or
+hand-picked:**
+
+```
+lib/letflow/sandbox_pool.ex:145   @default_provision_timeout_ms 44_000
+lib/letflow/sandbox_pool.ex:264   release_call_timeout() = provision_timeout_ms()      = 44_000 ms (default)
+test/letflow/sandbox_pool_test.exs:74   @rendezvous_slack_ms 1_000
+test/letflow/sandbox_pool_test.exs:90-92
+  pool_op_rendezvous_timeout() = release_call_timeout() + @rendezvous_slack_ms
+                                = 44_000 + 1_000 = 45_000 ms   <- UNCHANGED by this design
+```
+
+**Per-attempt cost.** Neither `Repo.query!` call this design touches passes a
+`:timeout` option (confirmed: `sandbox_schema_names/0`'s `SELECT`, `:539-543`; the
+DROP loop's `Repo.query!`, `:555`) — both already run, today, under Postgrex's own
+unconfigured client-side default. That default is `15_000` ms (Postgrex's documented
+default for `Postgrex.query/4`'s `:timeout` option when the caller supplies none).
+This design introduces no new timeout value here — retry #2 uses the exact same
+un-overridden call as attempt #1.
+
+```
+worst-case retry_query_once/1 total  = attempt 1 + attempt 2
+                                      = 15_000 + 15_000 = 30_000 ms
+existing outer bound (unwidened)     = pool_op_rendezvous_timeout() = 45_000 ms
+margin                               = 45_000 - 30_000 = 15_000 ms  (33% headroom)
+```
+
+Because `30_000 ms < 45_000 ms` with `15_000` ms of margin to spare, the unmodified
+`query_without_holding/1`'s `after pool_op_rendezvous_timeout() -> … flunk(...)` branch
+(`:526-529`) cannot fire while `retry_query_once/1` still has legitimate retry budget
+remaining — including the pathological case where *both* attempts individually consume
+the full `15_000` ms Postgrex default before failing. No constant anywhere in this
+chain (`provision_timeout_ms/0`, `release_call_timeout/0`, `@rendezvous_slack_ms`,
+`pool_op_rendezvous_timeout/0`) changes value. This is the property that makes this
+design immune to the three-layer stacking failure passes 1–3 hit: there is only one
+budget in play (the pre-existing `45_000` ms outer bound), the retry is sized to fit
+strictly inside it with margin, and nothing about it depends on how many times a given
+test body happens to call these helpers — each individual call is still bounded by the
+same unmodified `45_000` ms it always was, worst case now `30_000` ms of that consumed
+by an actual retry instead of near-zero.
+
+**No `@moduletag timeout` is added, and ExUnit's default (60_000 ms) per-test timeout
+is untouched** — required by this task's acceptance criteria, and consistent with 9.7's
+residual-risk note below, which explains why that omission is deliberate rather than
+an oversight.
+
+### 9.7 Residual risk, stated explicitly rather than silently resolved (per this design's own no-speculation rule)
+
+This design does **not** attempt to prove that an arbitrarily large number of
+simultaneous retry-consuming calls within one test body can never approach ExUnit's
+`60_000` ms default (e.g. three sequential `sandbox_schema_names/0` calls in one RT-1
+body — baseline, final, and `on_exit`'s internal diff call — each independently hitting
+its own worst-case `30_000` ms retry total would sum past `60_000` ms). This is an
+explicit, named departure from passes 1–3's approach (which tried to size an
+ever-widening outer budget against exactly this compounding scenario, and failed three
+times because the budget it needed kept moving).
+
+Pass 4 does not chase that budget for two stated reasons, not asserted as fact but
+given here for CODE-DESIGN-VALIDATOR to weigh:
+
+1. **The compounding event is a rare event compounding on itself.** A single
+   `query_canceled`/connection error on one of these two queries has zero recurrence
+   across the last 5 CI runs on `main` (cited in this task's acceptance criterion (a),
+   already established by ISSUE-FIXER's Step 1 diagnosis and not re-litigated here).
+   For the scenario in this section to actually threaten the `60_000` ms default, two
+   or more *independent* calls within the *same* test body would need to hit that
+   already-rare error *and* have their retry also fail — a compounding of independently
+   rare events, not a realistic steady-state CI hazard.
+2. **This task's own acceptance criteria forbid the mitigation passes 1–3 used.** "No
+   new or widened `@moduletag` timeout, no change to ExUnit's default per-test timeout"
+   is a hard constraint from `step-02-code-designer.json`'s `task.acceptance_criteria`,
+   not a gap left unnoticed — closing this residual risk the way passes 1–3 tried to
+   (an outer timeout widened to cover the compounding case) is explicitly out of
+   bounds for this restart.
+
+If CODE-DESIGN-VALIDATOR or a later run judges this residual risk unacceptable despite
+(1)/(2), the only remaining lever consistent with "reduce the worst case instead of
+widening the budget around it" (escalation option (c)) is to **remove the retry
+entirely** for one or both call sites (single-attempt, same as today, relying solely on
+§9.5's loop-continuation fix for criterion (c) and on a separate sweep-style mechanism
+per escalation option (b) — not built by this design — for criterion (b)'s "cannot
+recur" case). That trade-off is flagged here as **OQ-4** rather than decided silently.
+
+**OQ-4 — not resolved by this design:** should the retry (§9.2) be removed entirely
+(zero-retry, single-attempt, matching option (c) literally) if a future review judges
+even the rare compounding risk in this section unacceptable, deferring all
+transient-error resilience to a separate sweep mechanism (option (b), not part of this
+design)? This design keeps the one retry because the task's mandated approach (step-02
+handoff `task.description`, point 1) explicitly specifies "retry ... exactly once," but
+the tension between that instruction and a theoretically compoundable multi-call risk
+is named here rather than quietly assumed away.
+
+### 9.8 TEST CODE ONLY — reverified independently for Pass 4
+
+Reverified directly against Pass 4's own actual changes (not inherited from §0.1):
+
+- `retry_query_once/1`, `resilient_drop_schema/1`, the `sandbox_schema_names/0` and
+  `drop_sandbox_schemas_created_since!/1` body changes are all private functions
+  inside `test/letflow/sandbox_pool_test.exs`, calling only `Repo.query!/1`/`/2` and
+  `Logger.warning/1` — no call into `Letflow.SandboxPool` (`lib/letflow/sandbox_pool.ex`)
+  itself, and no touched line references `SandboxPool.provision_timeout_ms/0` or
+  `release_call_timeout/0` (confirmed by 9.6's citations being read-only references for
+  arithmetic, not calls added to the implementation).
+- No `:timeout` value, named or otherwise, is introduced anywhere in Pass 4 — the
+  retry relies entirely on Postgrex's own unconfigured default, so there is nothing
+  here that could motivate a `lib/letflow/sandbox_pool.ex` change, a
+  `priv/repo/migrations/*` change, or a `config/*.exs` change (no `parameters:`/
+  `statement_timeout`/`lock_timeout` GUC is touched, same as §0.1's finding, reconfirmed
+  for Pass 4's actual diff rather than assumed to still hold).
+- Grep confirms zero references to `Letflow.SandboxPool` module attributes or private
+  functions from the new/changed code in this design (only the two public functions
+  `provision_timeout_ms/0`/`release_call_timeout/0` are *read* for the arithmetic in
+  §9.6, and only as already-existing call sites in this same test file, `:90-92`,
+  unmodified).
+
+### 9.9 Files touched — Pass 4
+
+| File | Change | Owner |
+|---|---|---|
+| `test/letflow/sandbox_pool_test.exs` | Add `retry_query_once/1` (§9.2) and `resilient_drop_schema/1` (§9.4) as new private helpers near `query_without_holding/1` (`:513` area); change `sandbox_schema_names/0`'s body (§9.3, `:537-546`) to wrap its `Repo.query!` call in `retry_query_once/1`; rewrite `drop_sandbox_schemas_created_since!/1`'s body (§9.5, `:552-560`) from a bare `for` to an accumulating `Enum.reduce/3` plus one final `flunk/1`. **No change to `query_without_holding/1` itself** (`:513-531`, signature and body both unmodified) and **no `@moduletag`/`@tag timeout` added anywhere in the file.** | ELIXIR-DEV (or TEST-DESIGNER, per whichever role this WF-03 run assigns test-file edits to) |
+
+No other file — reconfirmed at §9.8.
+
+### 9.10 Invariants — Pass 4
+
+- **INV-T1 — every schema in a `drop_sandbox_schemas_created_since!/1` diff set is
+  attempted exactly once**, regardless of any other schema's outcome in the same call
+  (§9.5). Unchanged from passes 1–3's statement of this invariant; the mechanism
+  achieving it is the only thing that changed.
+- **INV-T2 — a genuinely-stuck cleanup query (both attempts exhausted) is never
+  silently swallowed.** `sandbox_schema_names/0` still flunks directly via the
+  unmodified `query_without_holding/1` crash path (§9.3); the DROP loop still flunks,
+  once, naming every unresolved schema (§9.5).
+- **INV-T3 — no test-observable behavior changes on the success path.** Every existing
+  assertion in this file that calls `sandbox_schema_names/0` or relies on
+  `drop_sandbox_schemas_created_since!/1`'s `on_exit` cleanup sees identical results
+  when no Postgres error occurs (the overwhelming common case, and per the cited CI
+  scan, the only case observed in the last 5 runs) — the retry/rescue paths are
+  additive and only ever engage after a real `Postgrex`/`DBConnection` error.
+- **INV-T4 (new for Pass 4) — no timeout/retry constant used anywhere in this file
+  changes value, and no new one is introduced.** `provision_timeout_ms/0`,
+  `release_call_timeout/0`, `@rendezvous_slack_ms`, `pool_op_rendezvous_timeout/0`,
+  `claim_call_timeout/1`, ExUnit's default per-test timeout — all unchanged, all
+  reconfirmed by direct citation in §9.6/§9.8 rather than assumed. This is the
+  structural property that distinguishes Pass 4 from passes 1–3 and is the reason it
+  does not repeat their "fix stacks a new layer further out" failure mode.
+
+### 9.11 Acceptance-criteria traceability — Pass 4
+
+| Acceptance criterion (from `step-02-code-designer.json`) | Design element |
+|---|---|
+| Explicitly rejects a 4th outer-timeout-widening patch and states why | §9.0 |
+| Retry happens inside the existing `pool_op_rendezvous_timeout()` budget, no change to that constant's value, arithmetic shown | §9.1 (structural: no new argument to `query_without_holding/1`), §9.6 (`30_000 ms <= 45_000 ms`, `15_000 ms` margin) |
+| No new or widened `@moduletag` timeout, no change to ExUnit's default per-test timeout | §9.6 (last paragraph), §9.9 (files-touched note) |
+| DROP loop continues past one schema's post-retry failure instead of aborting, reusing `tenant_schema_reaper.ex`'s rescue-log-continue shape | §9.4 (shape lifted from `reclaim_row/1`), §9.5 (`Enum.reduce/3` accumulate-and-continue, modeled on `sweep_orphans/2`) |
+| A genuinely-stuck schema (fails twice) still surfaces as a real, loud test failure | §9.3 (`sandbox_schema_names/0` still crashes → `flunk` via unmodified `query_without_holding/1`), §9.5 (DROP loop's single combined `flunk/1` naming every still-failed schema) |
+| Independently re-verifies TEST CODE ONLY scope | §9.8 |
+| Exact file-by-file / line-level change list | §9.9 |
+| No implementation code in the design | §9.2–§9.5 give only `@spec` signatures plus prose description of control flow (rescue/retry/accumulate shape and the reasoning behind it) for ELIXIR-DEV to implement — no fenced Elixir syntax block with a real `fn`/`case`/`if`/`rescue` function body appears anywhere in §9, matching the §3.1–§3.4 style CODE-DESIGN-VALIDATOR already confirmed as prose/@spec-only |
+| Prior three rejected passes remain readable | §0–§8 preserved unedited above; §9.0 cross-references each by name and OQ number |

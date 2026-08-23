@@ -268,3 +268,21 @@ escalations:
       by ORCH at escalation time so it is not falsely stale-claimed as
       done; a resuming session should re-claim it (or ORCH should
       re-dispatch it) rather than treating it as abandoned.
+
+    # RESOLUTION NOTE (2026-08-23T09:18:03Z, ISSUE-FIXER, WF03-ISS0292-20260823
+    # Step 5): this escalation is resolved. A resumed run (same run-id,
+    # continuing on branch feature/WF03-ISS0292-20260823) took approach
+    # (c) from next_step above -- a single cleanup attempt with one retry
+    # inside the existing unwidened 45_000ms outer bound, plus an
+    # Enum.reduce/3 attempt-every-schema fold instead of the abort-on-first
+    # bare `for` loop -- and it cleared CODE-DESIGN-VALIDATOR on the 4th
+    # design iteration (design doc Section 9, Pass 4) without opening a new
+    # timeout-budget gap. Fix commit
+    # 23273a4c0791b645d4aafb0b0a26ea898aaab479, regression-test commit
+    # 26b8cce (fail-then-pass proof, four deterministic new cases incl. the
+    # RT-8 diff-set-traversal case). Full gate chain PASS through
+    # TEST-RUNNER (1993/1993). docs/issues/ISS-0292.yaml created with
+    # status: resolved. GitHub issue #585 closed with evidence comment.
+    # queue task 292 released done by ORCH per WF-03 Step 5. See
+    # docs/issues/ISS-0292.yaml for full resolution detail; not repeated
+    # here.

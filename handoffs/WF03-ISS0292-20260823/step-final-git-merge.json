@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step-final-WF03-ISS0292-20260823",
+  "run_id": "WF03-ISS0292-20260823",
+  "workflow_id": "WF-03",
+  "step": "Final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0292-20260823/step-final-git-merge.json",
+  "created_at": "2026-08-23T11:00:00Z",
+  "started_at": "2026-08-23T11:00:00Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0292"],
+    "requirement_text": {
+      "ISS-0292": "SandboxPoolTest RT-9/RT-8 CI flake -- fully fixed, gated (design x2, security, idiom, test-design x2, full suite, all PASS), and closed (docs/issues/ISS-0292.yaml, GH#585 closed). Branch feature/WF03-ISS0292-20260823. Remaining uncommitted work: handoffs/WF03-ISS0292-20260823/*.json (steps 02 through 05), docs/issues/ISS-0292.yaml, handoffs/escalations.yaml (append), lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md (Pass 4 rework), test/reports/report-2026-08-23-WF03-ISS0292-20260823.yaml."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step05-WF03-ISS0292-20260823"],
+    "artifacts_in": [],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Commit all remaining tracked-but-uncommitted work on branch feature/WF03-ISS0292-20260823 (`git status --short` shows modified handoffs/escalations.yaml, modified lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md, and untracked docs/issues/ISS-0292.yaml, handoffs/WF03-ISS0292-20260823/*.json, test/reports/report-2026-08-23-WF03-ISS0292-20260823.yaml) with a chore(ISS-0292) commit message. Then rebase onto latest origin/main (fetch first -- other hosts may have merged work concurrently), re-run `mix test test/letflow/sandbox_pool_test.exs` after the rebase to confirm it's still green, push the branch, open a PR via `gh pr create`, wait for CI to go green (poll `gh pr checks`), and merge via `gh pr merge --squash` (or per this repo's established merge convention -- check recent merged PRs for the pattern used). This is pre-authorized humanless operation -- no human approval needed.",
+    "acceptance_criteria": [
+      "All ISS-0292 pipeline artifacts committed",
+      "Branch rebased cleanly onto latest origin/main",
+      "mix test test/letflow/sandbox_pool_test.exs re-confirmed green post-rebase",
+      "PR opened and CI reaches green",
+      "PR merged to main",
+      "Real command output quoted for each step, not asserted"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

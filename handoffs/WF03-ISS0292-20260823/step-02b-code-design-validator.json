@@ -1,0 +1,59 @@
+{
+  "handoff_id": "step02b-WF03-ISS0292-20260823",
+  "run_id": "WF03-ISS0292-20260823",
+  "workflow_id": "WF-03",
+  "step": "2b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0292-20260823/step-02b-code-design-validator.json",
+  "created_at": "2026-08-23T08:20:00Z",
+  "started_at": "2026-08-23T08:20:00Z",
+  "completed_at": "2026-08-23T09:05:00Z",
+  "status": "DONE",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0292"],
+    "requirement_text": {
+      "ISS-0292": "Letflow.SandboxPoolTest RT-9/RT-8 flaked on GitHub Actions CI with Postgres query_canceled + orphaned sandbox schema. See handoffs/WF03-ISS0292-20260823/step-02-code-designer.json for full context and handoffs/escalations.yaml for the 3 prior FAILs this run is a restart after (max_rework hit at Step 2 previously)."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step02-WF03-ISS0292-20260823"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md",
+      "handoffs/escalations.yaml",
+      "test/letflow/sandbox_pool_test.exs",
+      "test/support/tenant_schema_reaper.ex",
+      "lib/letflow/sandbox_pool.ex"
+    ],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "Validate CODE-DESIGNER's Pass 4 (Section 9 of lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md, appended after the 3 rejected passes in Sections 0-8). This design is a restart after 3 consecutive CODE-DESIGN-VALIDATOR FAILs, each of which found a real gap (retry budget vs outer rendezvous timeout vs ExUnit per-test timeout vs per-test call count -- see handoffs/escalations.yaml). Your job is to hold Pass 4 to the SAME rigor that caught those 3 gaps, not to wave it through because prior passes already failed 3 times. Specifically verify, by reading the actual cited line numbers/values yourself (not trusting the design doc's own arithmetic assertions):\n1. pool_op_rendezvous_timeout() really is 45,000ms today (release_call_timeout() default 44,000ms in lib/letflow/sandbox_pool.ex + @rendezvous_slack_ms 1,000ms in test/letflow/sandbox_pool_test.exs) and Pass 4 proposes NO change to either constant.\n2. The proposed retry_query_once/1 genuinely does not pass an explicit :timeout to Repo.query!, so both attempts really do use Postgrex's default (confirm Postgrex's actual client-side default value independently -- do not just accept '15,000ms' asserted in the design; check Postgrex's own default if you can, or state clearly if you cannot verify it and treat that as a design gap requiring an explicit stated value instead of an assumed one).\n3. The worst-case total (2x whatever that per-attempt default actually is) is real and fits inside 45,000ms with real margin -- redo this arithmetic yourself.\n4. No @moduletag/@tag timeout is added or changed anywhere in the design, and ExUnit's default (60,000ms) is untouched.\n5. Check the SAME compounding-across-multiple-calls-per-test risk that killed Pass 3 (RT-1..RT-5 call the cleanup helpers more than once per test body) -- does Pass 4's approach actually avoid that risk, or does it just have a smaller worst-case-per-call that happens not to trip it TODAY but could under worse CI throttling? The design's own OQ-4 flags this as unresolved -- assess whether that's an acceptable residual risk to ship with (a design flaw named honestly and out of scope) or a blocking gap (same class of issue that failed Pass 3, just smaller magnitude).\n6. drop_sandbox_schemas_created_since!/1's restructure: confirm the Enum.reduce-based version really does attempt every schema in the diff set regardless of any single schema's outcome (no early return/raise mid-loop), and that a genuinely-stuck schema (retry exhausted) still produces a real, visible test failure at the end (not silently swallowed) -- re-derive this from the design's described shape, do not just accept the summary's claim.\n7. Re-verify TEST CODE ONLY scope independently: confirm the design touches only test/letflow/sandbox_pool_test.exs, no lib/, no migration, no config/*.exs.\n8. Confirm the design is unambiguous enough for TEST-DESIGNER/ELIXIR-DEV to implement without further design decisions, and contains no implementation code (only signatures/shapes/prose).\n9. Confirm Sections 0-8 (the 3 rejected passes) remain readable/undeleted per the requirement that escalation history not be erased.\n\nIf you find ANY gap of the same character as Pass 1-3's gaps (a timing/retry/timeout arithmetic error, or a control-flow path that still lets one failure abort cleanup for other schemas), FAIL with the specific gap named precisely, the same way the first 3 validator passes did. If OQ-4's residual risk is judged blocking, FAIL and say so explicitly (do not treat 'the design itself admits doubt' as automatically disqualifying if you conclude the risk is genuinely acceptable and out of scope -- but state your reasoning either way).",
+    "acceptance_criteria": [
+      "Independently re-verifies (not trusts) the 45,000ms rendezvous-timeout arithmetic against the actual cited source lines",
+      "Independently verifies or explicitly flags-as-unverified the Postgrex client default timeout value the retry arithmetic depends on",
+      "Explicitly assesses OQ-4's residual multi-call-compounding risk as either acceptable-and-out-of-scope or blocking, with stated reasoning",
+      "Confirms no @moduletag/timeout change anywhere in the design",
+      "Confirms the cleanup loop restructure genuinely attempts every schema regardless of one schema's failure, and that a genuinely-stuck schema still surfaces loudly",
+      "Independently reconfirms TEST CODE ONLY scope",
+      "Confirms no implementation code appears in the design artefact",
+      "Confirms Sections 0-8 remain readable/undeleted",
+      "Verdict is PASS or FAIL with specific reasoning either way -- not a rubber stamp"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Revalidation pass, scoped to the exact gap named in the prior FAIL. Read Sections 9.2-9.5 in full: each fenced code block now contains only a single literal @spec line (retry_query_once/1 :467-469; sandbox_schema_names/0 :492-494; resilient_drop_schema/1 :514-516; drop_sandbox_schemas_created_since!/1 :548-550) -- no fn/case/if/rescue control flow, no concrete variable names, no paste-ready function body remains inside any fence in this range. The rescue/retry shape of resilient_drop_schema/1 (S9.4) and the Enum.reduce accumulate-and-continue shape of drop_sandbox_schemas_created_since!/1 (S9.5) are now described entirely in prose (bullet-point control-flow description, no Elixir syntax). The only other fences in the file's grep listing that fall inside Section 9 are :584-591 and :601-606 (S9.6), which are plain-text arithmetic/citation blocks, not code -- unchanged in kind from the prior pass and not implementation code either way. Confirmed no fenced block anywhere from :465 to :741 contains real control-flow syntax. S9.11's traceability row for 'No implementation code in the design' now reads '...no fenced Elixir syntax block with a real fn/case/if/rescue function body appears anywhere in Section 9, matching the S3.1-S3.4 style' -- this claim is now true, confirmed by direct read, not by trusting the row itself.\n\nSpot-checked for drift against the prior pass's independently-verified findings, all unchanged in substance: (9.6) arithmetic identical -- pool_op_rendezvous_timeout() = 44_000 (release_call_timeout()/provision_timeout_ms()) + 1_000 (@rendezvous_slack_ms) = 45_000ms unwidened; retry worst case 2*15_000 = 30_000ms; margin 15_000ms (33% headroom); no cited constant changed value. (9.7/OQ-4) same residual-risk framing and same two stated reasons (rare-event compounding, task's own acceptance criteria forbidding outer-timeout widening); OQ-4 itself still posed as an open question, not silently resolved. (9.8) TEST CODE ONLY scope reverification text unchanged in substance -- only test/letflow/sandbox_pool_test.exs private helpers touched, no lib/, no migrations, no config/*.exs. (9.5, now prose) still describes: every schema in schemas_to_drop visited exactly once regardless of prior outcomes, no early return/raise mid-fold, failures accumulated into a list, one final flunk/1 naming every still-failed schema if the list is non-empty -- same substantive control-flow guarantee as the previously-reviewed (now-replaced) code-shaped version. Sections 0-8 (the three rejected passes) remain present and readable above Section 9, unedited.\n\nAll nine of the original task's numbered checks that this revalidation covers are satisfied: (1)-(4), (6), (7), (9) reconfirmed present and unchanged from the already-verified prior pass; (5)/OQ-4 assessment unchanged and still reasoned rather than asserted; (8) -- the sole prior failure -- is now satisfied: no implementation code remains in Section 9, and 9.11's claim to that effect is now accurate.\n\nVerdict: PASS.",
+    "artifacts_out": ["lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md"],
+    "issues": [
+      "NON-BLOCKING (carried forward, not a gap): OQ-4's multi-call compounding risk (2+ worst-case 30_000ms retry calls per test body can reach or exceed ExUnit's untouched 60_000ms default) remains judged acceptable/out-of-scope for this pass, per the same reasoning as the prior validation pass -- flag for a future follow-up issue if CI recurrence data later shows this risk materializing.",
+      "NON-BLOCKING: OQ-2 (drop_schema!/1's possible shared exposure) remains correctly out-of-scope, unchanged from all prior passes."
+    ],
+    "next_action": "Route to ELIXIR-DEV/TEST-DESIGNER implementation"
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "revalidation_note": "CODE-DESIGNER completed rework 1/3 on step-02 (handoffs/WF03-ISS0292-20260823/step-02-code-designer.json): Sections 9.3/9.4/9.5 of lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md were rewritten from near-compilable code down to @spec + prose, per your prior FAIL's exact instruction. Re-check ONLY that specific gap this pass (confirm no fenced Elixir code block with a real function body remains in 9.2-9.5, and that 9.11's claim is now true) -- all other findings from your prior pass (arithmetic, scope, OQ-4 assessment, loop-continuation shape) were independently verified correct last time and were explicitly NOT touched by this rework, so a full re-verification from scratch is not required, but spot-check that nothing else changed unexpectedly."
+}

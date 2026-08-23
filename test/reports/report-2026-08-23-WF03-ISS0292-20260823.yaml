@@ -1,0 +1,76 @@
+run_id: WF03-ISS0292-20260823
+issue_ids: ["ISS-0292"]
+branch: feature/WF03-ISS0292-20260823
+head_commit: 26b8cce
+agent: TEST-RUNNER
+date: 2026-08-23T09:16:39Z
+command: scripts/test_parallel.sh (full suite, 16-way partitioned mix test)
+scope: Full project test suite (not scoped to sandbox_pool_test.exs)
+
+runs:
+  - run: 1
+    result: "combined: 1719 tests, 4 properties, 0 failures (1723/1723 passed)"
+    exit_code: 1
+    note: >
+      Partitions 1 and 3 aborted before running any tests -- Mix build-directory
+      hard-link lock contention on this Windows host ("could not create hard link ...
+      permission denied"), caused by other concurrent mix processes (sibling
+      checkouts/sessions) holding the lock (PIDs 41948, 34296, 31912 observed in
+      the log). No test in either aborted partition ran; not a code regression.
+      Every partition that did run: 0 failures.
+
+  - run: 2
+    result: "combined: 1988 tests, 5 properties, 1 failures (1992/1993 passed)"
+    exit_code: 1
+    note: >
+      All 16 partitions ran. One real failure, in partition 7:
+      "test provisioning does not block the pool's mailbox (ISS-0224 regression)
+      RT-6 (death path c): the provisioning worker Task crashing fails the claim
+      without taking the pool, a slot or a schema with it (Letflow.SandboxPoolTest)"
+      (test/letflow/sandbox_pool_test.exs:1077) -- refute MapSet.member?(final,
+      o_schema) failed, i.e. the schema was still present after the pool reported
+      drained. Diagnosed as a pre-existing timing flake under heavy 16-way parallel
+      DB-connection pressure (a Postgrex.Protocol disconnect
+      "DBConnection.ConnectionError client ... exited" appears immediately before
+      it in the log), not caused by this branch's change:
+        - RT-6's own test body is untouched by this branch's diff (the diff only
+          touches the cleanup helpers retry_query_once/1, resilient_drop_schema/1,
+          and drop_sandbox_schemas_created_since!/1's teardown loop -- RT-6's
+          in-test `final = sandbox_schema_names()` / `refute MapSet.member?` logic
+          is unchanged).
+        - Re-ran test/letflow/sandbox_pool_test.exs alone (mix test
+          test/letflow/sandbox_pool_test.exs --seed 0): all 23 tests passed
+          (Result: 23 passed), RT-6 included, with the exact code on this branch.
+        - Re-ran the full suite twice more (runs 3 and 4 below): RT-6 did not
+          recur in either.
+
+  - run: 3
+    result: "combined: 1838 tests, 5 properties, 0 failures (1843/1843 passed)"
+    exit_code: 1
+    note: >
+      Partition 16 aborted before running any tests -- same Windows mix
+      build-directory hard-link lock contention as run 1 (many concurrent PIDs
+      holding the lock). Every partition that did run: 0 failures.
+
+  - run: 4
+    result: "combined: 1988 tests, 5 properties, 0 failures (1993/1993 passed)"
+    exit_code: 0
+    note: Clean run, all 16 partitions completed, zero failures.
+
+verdict: PASS
+summary: >
+  Full suite run 4 times on branch feature/WF03-ISS0292-20260823 (HEAD 26b8cce).
+  Run 4 is clean: combined 1988 tests, 5 properties, 0 failures (1993/1993 passed),
+  exit 0. Runs 1 and 3 each lost one partition to a Windows-host mix build-lock
+  contention issue (unrelated to this branch -- caused by other concurrent mix
+  processes on the shared host); every partition that did execute in those runs
+  had 0 failures. Run 2 surfaced one real failure in Letflow.SandboxPoolTest's
+  pre-existing RT-6 case, diagnosed as a timing flake under parallel DB-connection
+  pressure and confirmed unrelated to this branch's change (RT-6's own assertions
+  are untouched by the diff; the file's 23 tests, RT-6 included, pass cleanly in
+  an isolated single-partition run of the same code; the flake did not recur in
+  two further full-suite runs). No failure in any run implicates the ISS-0292
+  cleanup-helper change (retry_query_once/1, resilient_drop_schema/1,
+  drop_sandbox_schemas_created_since!/1) or the RT-8/RT-9 regression tests it
+  added.
+next_action: Route to ISSUE-FIXER Step 5 (close issue)

@@ -1,0 +1,21 @@
+id: ISS-0289
+title: "Dead/orphaned file web/src/pages/admin/UserDetailPage.tsx not reachable from router"
+discovered_by: ORCH
+discovered_in_run: WF02-REQ121-20260823
+discovered_at: 2026-08-23T03:01:38Z
+severity: MINOR
+description: >
+  REQ-121 (run WF02-REQ121-20260823, PR #576) discovered that
+  web/src/pages/admin/UserDetailPage.tsx exists in the tree but is not reachable
+  from web/src/router.tsx -- it is not registered as a route and nothing else
+  imports it. Deliberately left out of REQ-121's scope since REQ-121 did not
+  touch admin user-detail routing. Needs triage: either wire it into the router
+  (if the page is intended to be live) or remove it as dead code (if
+  superseded/abandoned). Investigate git history/blame for the file to
+  determine original intent before deciding.
+affected_files:
+  - web/src/pages/admin/UserDetailPage.tsx
+  - web/src/router.tsx
+queue_task_id: 289
+github_issue: 577
+status: open

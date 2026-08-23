@@ -186,6 +186,24 @@ defmodule Letflow.Integration.KeycloakAuthPipelineTest do
     |> Repo.aggregate(:count, :id, prefix: schema_name)
   end
 
+  # AC3 fixture reset (rework 2 -- see the AC3 describe block's comment for the full
+  # root-cause explanation). Deletes ONLY the row matching this exact
+  # (external_realm, external_id) pair, scoped with `prefix: schema_name` to the
+  # bpm-default tenant's own physical schema -- the identical scope
+  # `user_count_for_subject/2` already queries with, so "what this deletes" and "what
+  # the count above/below it observes" can never disagree. Schema-per-tenant (REQ-063)
+  # means this can never touch another tenant's data even in principle: there is no
+  # `tenant_id` column to get wrong, and Postgres has no cross-schema query here at all.
+  # This row is a fixture identity this test itself owns the lifecycle of (JIT-created
+  # from a fixed seeded Keycloak credential), not real application data.
+  defp reset_subject_row!(schema_name, subject) do
+    User
+    |> where([u], u.external_realm == @realm and u.external_id == ^subject)
+    |> Repo.delete_all(prefix: schema_name)
+
+    :ok
+  end
+
   # ---------------------------------------------------------------------------------
   # AC1 -- genuine token drives the full pipeline end to end.
   # ---------------------------------------------------------------------------------
@@ -250,26 +268,33 @@ defmodule Letflow.Integration.KeycloakAuthPipelineTest do
 
       subject = jwt_subject(raw_token)
 
-      # Baseline, not a hardcoded 0 -- the bpm-default tenant/schema (design §5) is
-      # permanent and never torn down, so a prior run of this exact suite against the
-      # same persistent test database may have already provisioned this designer-user
-      # row. Asserting count_before + 1 (not 0 -> 1) is what keeps this test correct on
-      # every run, not just the database's first one, while still proving the SECOND
-      # call adds no row of its own (count stays at count_before + 1, not + 2).
-      count_before = user_count_for_subject(schema_name, subject)
+      # Rework 2 -- root cause of the previous baseline-diff fix's own failure: the
+      # bpm-default tenant/schema (design §5) is permanent and never torn down, and
+      # designer-user's JWT `sub` is a FIXED identity (the same seeded Keycloak user,
+      # every mint) -- so on any invocation after the first, this row already exists,
+      # `provision_oidc_user/4` correctly reuses it (that IS JIT provisioning working),
+      # and a bare "count_before -> count_before+1" comparison silently stops being true
+      # from the second call onward within THIS run too, because there is no third call
+      # to observe a further increment against. A count-based assertion is only
+      # meaningful when "before" is a genuine, invocation-independent zero -- so this
+      # test resets that exact row first, making the 0 -> 1 -> 1 sequence below true on
+      # every invocation, not just a database's first-ever one.
+      reset_subject_row!(schema_name, subject)
+
+      assert user_count_for_subject(schema_name, subject) == 0
 
       conn1 = call_pipeline_with_token(raw_token)
       refute conn1.halted
       user_id_1 = conn1.assigns[:auth_context][:user_id]
 
-      assert user_count_for_subject(schema_name, subject) == count_before + 1
+      assert user_count_for_subject(schema_name, subject) == 1
 
       conn2 = call_pipeline_with_token(raw_token)
       refute conn2.halted
       user_id_2 = conn2.assigns[:auth_context][:user_id]
 
       assert user_id_1 == user_id_2
-      assert user_count_for_subject(schema_name, subject) == count_before + 1
+      assert user_count_for_subject(schema_name, subject) == 1
     end
   end
 end

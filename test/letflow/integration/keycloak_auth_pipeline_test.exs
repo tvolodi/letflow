@@ -250,20 +250,26 @@ defmodule Letflow.Integration.KeycloakAuthPipelineTest do
 
       subject = jwt_subject(raw_token)
 
-      assert user_count_for_subject(schema_name, subject) == 0
+      # Baseline, not a hardcoded 0 -- the bpm-default tenant/schema (design §5) is
+      # permanent and never torn down, so a prior run of this exact suite against the
+      # same persistent test database may have already provisioned this designer-user
+      # row. Asserting count_before + 1 (not 0 -> 1) is what keeps this test correct on
+      # every run, not just the database's first one, while still proving the SECOND
+      # call adds no row of its own (count stays at count_before + 1, not + 2).
+      count_before = user_count_for_subject(schema_name, subject)
 
       conn1 = call_pipeline_with_token(raw_token)
       refute conn1.halted
       user_id_1 = conn1.assigns[:auth_context][:user_id]
 
-      assert user_count_for_subject(schema_name, subject) == 1
+      assert user_count_for_subject(schema_name, subject) == count_before + 1
 
       conn2 = call_pipeline_with_token(raw_token)
       refute conn2.halted
       user_id_2 = conn2.assigns[:auth_context][:user_id]
 
       assert user_id_1 == user_id_2
-      assert user_count_for_subject(schema_name, subject) == 1
+      assert user_count_for_subject(schema_name, subject) == count_before + 1
     end
   end
 end

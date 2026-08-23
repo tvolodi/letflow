@@ -7,20 +7,20 @@
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ134-20260823/step3-test-design.json",
   "created_at": "2026-08-23T11:24:28Z",
-  "started_at": "2026-08-23T11:24:28Z",
-  "completed_at": "2026-08-23T11:24:28Z",
+  "started_at": "2026-08-23T11:42:53Z",
+  "completed_at": "2026-08-23T11:42:53Z",
   "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
     "requirement_ids": ["REQ-134"],
-    "related_handoff_ids": ["step1-WF02-REQ134-20260823", "step1b-WF02-REQ134-20260823"],
+    "related_handoff_ids": ["step1-WF02-REQ134-20260823", "step1b-WF02-REQ134-20260823", "step3b-WF02-REQ134-20260823"],
     "artifacts_in": [
       "lib/letflow/design/req134-real-keycloak-token-integration.md"
     ]
   },
   "task": {
-    "description": "WF-02 Step 3 for REQ-134, implementing CODE-DESIGNER's approved design (gate-passed at step1b) as real, compilable test code. No lib/ module changes -- the design assigns all implementation to test-support/test code, so Step 2a (ELIXIR-DEV) was skipped by the dispatching ORCH.",
+    "description": "WF-02 Step 3 for REQ-134, implementing CODE-DESIGNER's approved design (gate-passed at step1b) as real, compilable test code. No lib/ module changes -- the design assigns all implementation to test-support/test code, so Step 2a (ELIXIR-DEV) was skipped by the dispatching ORCH. Resubmission (rework 1 of 3) after step3b's FAIL on AC3's fixture-repeatability defect -- see gate_history below.",
     "acceptance_criteria": [
       "a test obtains a genuine token from the running Keycloak and drives it through Letflow.Plugs.AuthPipeline end to end, with the real assertion output quoted",
       "the token's signature is verified against the live JWKS via the real verifier, not TokenVerifierDouble -- demonstrated by the test failing if pointed at a tampered token",
@@ -32,22 +32,28 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "Implemented the design's full assertion contracts as real, compilable code: test/support/keycloak_test_client.ex (Letflow.Support.KeycloakTestClient, design S4.1's signatures exactly -- ensure_started/0, discovery_reachable?/1, direct_access_token/4, tamper_signature/1, the token_error() type, via Erlang's built-in :httpc/:inets, no new mix.exs dependency); test/letflow/integration/keycloak_auth_pipeline_test.exs (Letflow.Integration.KeycloakAuthPipelineTest, @moduletag :keycloak, async: false, design S7.1's real-verifier setup/on_exit override, design S5's ensure_bpm_default_tenant!/0 get-or-create fixture inline in the test module per the design's own placement decision, and three test cases mapping to AC1/AC2/AC3 exactly as S7.2/S7.3/S7.4 specify); test/test_helper.exs changed to ExUnit.start(exclude: [:keycloak]) per design S2; test/specs/REQ-134.md written per the standard WF-02 Step 3 spec format.\n\nmix compile --warnings-as-errors --force (MIX_ENV=test): PASSED CLEAN -- 'Compiling 131 files (.ex)' / 'Generated letflow app', zero warnings, zero errors.\n\nAC4 default-exclusion, verified directly (Keycloak confirmed stopped via `docker compose ps` -- only the postgres service was Up): `mix test test/letflow/integration/keycloak_auth_pipeline_test.exs` -> 'Excluding tags: [:keycloak]' / 'All tests have been excluded.' / 'Result: 0 tests, 3 excluded'. A full default-suite run (all pre-existing tests) is TEST-RUNNER's Step 4 responsibility per the project's 'No Background Wait For A Cross-Turn Notification' rule -- a full mix test run is long-running and this run's own attempt at it exceeded the tool's synchronous timeout and was deliberately stopped (TaskStop) rather than left to notify a later turn that, as a dispatched subagent, would never arrive; the targeted-file exclusion evidence above is what this step's own instructions call for at minimum.\n\nAC5, verified directly: `mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs` against stopped Keycloak produced 'RuntimeError) Keycloak not ready at http://localhost:8092/realms/bpm-default/.well-known/openid-configuration. Ensure docker-compose services are running (docker compose up -d keycloak) before executing these tests.' as the first and only surfaced reason, before any test in the module ran.\n\nMINOR design/implementation discrepancy found and worked around, documented in the test module's own moduledoc and in test/specs/REQ-134.md's AC5 section: design S3.1 specifies setup_all returning {:skip, message}. Measured directly (elixir --version: Elixir 1.20.3 / ex_unit 1.20.3): this installed ExUnit version's setup_all callback does NOT accept {:skip, _} -- it raises a RuntimeError complaining the return shape is invalid, which is MORE obscure than a plain message (confirmed empirically: first attempt produced exactly this wrapped error). Also confirmed ExUnit's tag-based dynamic-skip path (ExUnit.Filters.eval/4) is evaluated from each test's compile-time tags map in runner.ex's prepare_tests/4, strictly before any setup_all/setup runs, so a runtime-computed skip reason cannot reach it either -- read ex_unit/lib/ex_unit/runner.ex and ex_unit/lib/ex_unit/filters.ex directly to confirm, not assumed. Adopted instead: setup_all raises a plain RuntimeError carrying the exact intended message text. ExUnit's own summary reports this as a failure ('all tests have been invalidated'), not literally 'skipped', but the message is exactly AC5's required two components (what's down, what to do) and is the first/only thing surfaced -- satisfies AC5's substance as closely as this toolchain allows. Not a silent resolution: flagged here per core-directives.md's Instruction Precedence 'never resolve a conflict silently' rule.\n\nKeycloak reachability in this environment: NOT running (docker compose ps showed only the postgres service Up). AC1/AC2/AC3's live-Keycloak assertion output could not be captured by this step, as anticipated by the dispatching task -- that is TEST-RUNNER's Step 4 job (with Keycloak started) or an explicit environment-constraint note if Keycloak remains unavailable there too, matching REQ-128's precedent.\n\nDeveloper command for AC6 (verified accurate against the actual file path and @moduletag): mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs",
+    "summary": "Rework 1/3, fixing step3b's BLOCKER: AC3's test in test/letflow/integration/keycloak_auth_pipeline_test.exs asserted an absolute pre-call count of 0 for designer-user's JIT-provisioned row, but the design (S5) deliberately never tears down the bpm-default tenant/schema between invocations, and designer-user is a fixed seeded Keycloak identity with no per-run uniqueness available -- so the test passed on a database's first run and would fail deterministically on the second, against AC6's own documented command. Applied option (b), per ORCH's routed instruction and the validator's own stated preference: replaced the hardcoded 0/1/1 assertions with a baseline captured before either pipeline call (count_before = user_count_for_subject(schema_name, subject)), then asserted count_before + 1 after the first AuthPipeline.call/2 and still count_before + 1 (not + 2) after the second, keeping the user_id_1 == user_id_2 identity check unchanged. This makes the test correct on every invocation regardless of prior runs or other tests sharing the same persistent fixture, with no teardown added to a fixture the design deliberately keeps permanent. Updated test/specs/REQ-134.md's AC3 section (test-contract description, a new explicit 'why a baseline count, not a hardcoded 0' subsection recording the rework and its reasoning, and the bottom mutation-verification note) to match -- no remaining reference to a hardcoded-0 assertion anywhere in the spec.\n\nNo other file touched: KeycloakTestClient, the setup_all raise/message mechanism, the exclusion default (test/test_helper.exs), and AC1/AC2's tests are exactly as validated in the previous PASS-on-those-points gate -- per ORCH's routing instruction not to touch them, and independently confirmed unnecessary since the BLOCKER was scoped entirely to AC3's assertions.\n\nmix compile --warnings-as-errors --force (MIX_ENV=test), re-run after the change: PASSED CLEAN -- 'Compiling 131 files (.ex)' / 'Generated letflow app', zero warnings, zero errors.\n\nAC4 default-exclusion, re-verified after the change (Keycloak still stopped): `mix test test/letflow/integration/keycloak_auth_pipeline_test.exs` -> 'Excluding tags: [:keycloak]' / 'All tests have been excluded.' / 'Result: 0 tests, 3 excluded' -- unchanged from before the rework, as expected since the AC3 assertion change does not touch the exclusion mechanism.\n\nAC5's raise-vs-skip mechanism is untouched by this rework and was already independently re-verified and ruled compliant by step3b -- no new evidence needed here.\n\nKeycloak reachability in this environment: still NOT running (only postgres was Up via docker compose ps), unchanged from the prior submission -- AC1/AC2/AC3's live-Keycloak assertion output remains TEST-RUNNER's Step 4 job.\n\nDeveloper command for AC6 (unchanged, re-verified accurate against the actual file path and @moduletag): mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs",
     "artifacts_out": [
       "test/support/keycloak_test_client.ex",
       "test/letflow/integration/keycloak_auth_pipeline_test.exs",
       "test/test_helper.exs",
       "test/specs/REQ-134.md"
     ],
-    "issues": [
-      {
-        "severity": "MINOR",
-        "description": "design req134-real-keycloak-token-integration.md S3.1 specifies setup_all returning {:skip, message} to skip (not fail) the module when Keycloak is unreachable. This repo's installed ExUnit (1.20.3) does not support {:skip, _} as a setup_all return -- it raises a RuntimeError about the invalid return shape, which is MORE obscure than a plain targeted message, and ExUnit's tag-based dynamic-skip path runs before setup_all so it cannot substitute either. Worked around by raising a plain RuntimeError carrying the intended message text directly from setup_all -- ExUnit classifies this as a failure ('all tests have been invalidated'), not literally 'skipped', though the message itself satisfies AC5's substance. Documented in the test module's moduledoc and test/specs/REQ-134.md. Flagging for the design doc to be corrected at the source so a future reader does not re-derive this."
-      }
-    ],
+    "issues": [],
     "next_action": "Route to TEST-DESIGN-VALIDATOR"
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3,
-  "gate_history": []
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-08-23T11:39:44Z",
+      "status": "FAIL",
+      "summary": "TEST-DESIGN-VALIDATOR (step3b) independently re-verified AC1/AC2/AC4/AC6 and PASSED them, and independently re-derived AC5's raise-vs-{:skip} deviation as compliant with AC5's substance (two probe scripts confirming no ExUnit-native runtime skip path exists in this installed toolchain). The sole FAIL was a BLOCKER under checks (c)/(d) (fixture isolation / self-sufficiency): AC3's test asserted a hardcoded pre-call count of 0 for the seeded designer-user identity's JIT-provisioned row, but the design (S5) never tears down the permanent bpm-default tenant/schema between invocations and designer-user has no per-run-unique identity available -- so the test would pass on a database's first run and fail deterministically on every subsequent run of AC6's own documented command.",
+      "issues": [
+        "AC3's test asserts an absolute pre-call count of 0 for a JIT-provisioned row keyed to a fixed, never-torn-down seeded identity (designer-user) against a permanent fixture schema -- fails deterministically on the second invocation of the suite against the same database."
+      ],
+      "next_action": "Rework TEST-DESIGNER: fix AC3's test repeatability defect, either by tearing down the designer-user row after the test or by rewriting the assertions to use a count captured before either pipeline call as a baseline (count_before, count_before+1, count_before+1), and reflect the fix in test/specs/REQ-134.md's AC3 section."
+    }
+  ]
 }

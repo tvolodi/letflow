@@ -85,6 +85,39 @@ defmodule Letflow.Definitions do
   migration is required**, and this port adds zero new `priv/repo/migrations/` files and
   zero new indexes (no `idx_def_name`, no GIN/`tsvector` index) -- the query runs against
   `process_definitions` exactly as REQ-027 shipped it.
+
+  ## `delta/2` -- `GET /definitions/delta` cursor semantics (REQ-125, MOB-3)
+
+  See `lib/letflow/design/req125-definitions-delta-sync.md` for the full design.
+  `since` is a per-tenant-schema **monotonically increasing integer**
+  (`process_definitions.sequence_number`), never a wall-clock timestamp.
+
+  Clock skew is exactly the failure mode this endpoint runs under: a mobile
+  device warming an offline cache compares its last-seen watermark against the
+  server on every subsequent sync, often after being offline for hours or
+  days, on hardware whose clock is not NTP-disciplined the way the server's
+  is. Had `since` been `updated_at` (a server-clock-stamped column compared
+  against a value the *device* last stored), every device clock's drift,
+  timezone misconfiguration, or leap-second smear would become a correctness
+  bug in what the device believes it already has. A monotonic integer has no
+  notion of "now" on either side -- it is a pure watermark, compared with `>`,
+  never interpreted as elapsed time. The counter (`definition_sequence`,
+  mirroring `Letflow.EventStore`'s `instance_sequence` at tenant-schema
+  granularity instead of per-instance granularity) is server-assigned and
+  bumped inside the same transaction as the row mutation it sequences, so "the
+  cursor advanced" and "a row actually changed" can never disagree.
+
+  A `since` that "predates retained history" is not a distinguishable error
+  state here, unlike `Letflow.Api.Pagination`'s minted cursors (which expire
+  24h *by design*): `definition_sequence`'s counter has no expiry and no
+  pruning, so `since: nil` (or `0`) is the well-defined "give me full history"
+  case (every row that exists), not a special-cased reset response. Only
+  syntactic validity is checked -- a negative integer or a non-integer string
+  is `{:error, :invalid_since}` (400); a `since` numerically larger than the
+  tenant's actual high-water mark simply returns an empty delta,
+  indistinguishable from "already caught up," which is deliberately the safe
+  behaviour (never fabricates a "full resync required" signal from a value
+  that could equally mean "already current").
   """
 
   import Ecto.Query
@@ -92,6 +125,7 @@ defmodule Letflow.Definitions do
 
   alias Ecto.Multi
   alias Letflow.Api.Pagination
+  alias Letflow.Definitions.DefinitionSequence
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.JsonSchemaShape
   alias Letflow.Definitions.PackUpdateResolution
@@ -161,6 +195,12 @@ defmodule Letflow.Definitions do
   @type common_error ::
           {:error, :invalid_schema_name}
           | {:error, {:transaction_failed, term()}}
+          # REQ-125 -- raised by assign_definition_sequence/2's locking
+          # protocol (mirrors Letflow.EventStore.assign_sequence/3's own
+          # {:sequence_conflict, term()} shape); shared across create/2,
+          # activate/2, deprecate/2, archive/2, all of which now assign a
+          # definition_sequence number inside their existing transaction.
+          | {:error, {:sequence_conflict, term()}}
 
   @type create_attrs :: %{
           required(:name) => String.t(),
@@ -273,6 +313,33 @@ defmodule Letflow.Definitions do
   @type search_paginated_opts :: [prefix: String.t()]
 
   @type search_paginated_result :: %{items: [search_result()], next_cursor: String.t() | nil}
+
+  # ---------------------------------------------------------------------------------
+  # REQ-125 types -- lib/letflow/design/req125-definitions-delta-sync.md §6.1
+  # ---------------------------------------------------------------------------------
+
+  @type delta_opts :: [prefix: String.t()]
+
+  @typedoc """
+  `next_since` is documented `pos_integer()` by the design doc's own §6.1
+  literal type. Implemented here as `non_neg_integer()` instead -- a
+  deliberate, flagged divergence, not a silent one: a tenant with zero
+  `process_definitions` rows and `since: nil` legitimately returns
+  `next_since: 0` (no `definition_sequence` row exists yet to read a
+  high-water mark from, and `0` is `since`'s own well-defined "give me full
+  history" floor per this module's moduledoc). `0` is not a `pos_integer()`,
+  so the design doc's literal type cannot hold for that reachable case.
+  Flagged for REVIEWER at Step 2d rather than silently narrowing the type to
+  paper over it.
+  """
+  @type delta_result :: %{
+          items: [ProcessDefinition.t()],
+          next_since: non_neg_integer()
+        }
+
+  @type delta_error ::
+          {:error, :invalid_since}
+          | common_error()
 
   @doc """
   Computes a solution-pack update three-way diff plan for one tenant's
@@ -468,7 +535,7 @@ defmodule Letflow.Definitions do
 
     with :ok <- reject_key(attrs, :tenant_id, "tenant_id", :tenant_id_not_accepted),
          :ok <- reject_key(attrs, :status, "status", :initial_status_not_draft),
-         {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
          {:ok, _name} <- fetch_name(attrs),
          {:ok, _version} <- fetch_version(attrs),
          {:ok, graph_map} <- fetch_graph_map(attrs),
@@ -476,7 +543,7 @@ defmodule Letflow.Definitions do
          :ok <- check_graph_result(Graph.validate_graph(graph)),
          :ok <- check_graph_result(Graph.validate_node_attributes(graph)),
          :ok <- check_graph_result(Graph.validate_edge_conditions(graph)) do
-      insert_definition(attrs, prefix)
+      insert_definition(attrs, prefix, tenant_id)
     end
   end
 
@@ -587,6 +654,61 @@ defmodule Letflow.Definitions do
       {page, next_cursor} = split_definitions_list_page(rows, page_size)
 
       {:ok, %{items: page, next_cursor: next_cursor}}
+    end
+  end
+
+  @doc """
+  Delta-sync read for `GET /definitions/delta` (REQ-125, MOB-3) -- every
+  definition in this tenant's schema whose `sequence_number` is strictly
+  greater than `since`, ascending. See this module's moduledoc for the full
+  cursor-semantics reasoning (AC2).
+
+    * `since` is `nil` or `0` -> full history (`WHERE sequence_number > 0`,
+      i.e. every row that exists) -- a device's very first sync, by
+      construction, not a special-cased "reset" response shape.
+    * `since` a negative integer, or otherwise not a non-negative integer ->
+      `{:error, :invalid_since}`.
+    * Otherwise: `WHERE sequence_number > since`, ordered `sequence_number
+      ASC`, scoped by `opts[:prefix]` exactly like every other function in
+      this module (`tenant_id` never a separate argument).
+
+  No page-size limit -- REQ-125's acceptance criteria describe a bounded
+  warm-cache/incremental-refresh workload, not an unbounded feed (design doc
+  §6.1/§9 OQ-3).
+
+  `next_since` is always the tenant's current high-water mark
+  (`definition_sequence.next_seq - 1`), or `since` itself unchanged if that is
+  already higher (never returns a value lower than what the caller already
+  holds). A zero-change delta (device already caught up) is `{:ok, %{items:
+  [], next_since: since}}`, never an error -- mirrors `list_paginated/2`'s
+  "empty page is `{:ok, ...}`, never an error" precedent.
+
+  Every definition returned carries its current `status` (AC3) -- the query is
+  **not** filtered by status, so a just-created row and a just-deprecated/
+  archived row both land in the result set, distinguished only by `status`,
+  the same field `Letflow.Routers.Definitions.definition_map/1` already
+  renders. There is no separate tombstone record type (design doc §3).
+
+  Read-only, one query (plus the `TenantProvisioning` prefix check every
+  function in this module already performs) -- no sequence assignment happens
+  on a read, only on the writes `assign_definition_sequence/2` instruments
+  (`create/2`, `activate/2`, `deprecate/2`, `archive/2`).
+  """
+  @spec delta(since :: non_neg_integer() | nil, opts :: delta_opts()) ::
+          {:ok, delta_result()} | delta_error()
+  def delta(since, opts) when is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, since_floor} <- validate_since(since) do
+      items =
+        ProcessDefinition
+        |> where([d], d.sequence_number > ^since_floor)
+        |> order_by([d], asc: d.sequence_number)
+        |> Repo.all(prefix: prefix)
+
+      {:ok,
+       %{items: items, next_since: definition_high_water_mark(tenant_id, prefix, since_floor)}}
     end
   end
 
@@ -1624,26 +1746,55 @@ defmodule Letflow.Definitions do
   # function's own call site (create/2) purely to validate `prefix` resolves to
   # a real, provisioned tenant before any row is written -- its result is no
   # longer threaded into this function at all.
-  defp insert_definition(attrs, prefix) do
-    changeset = ProcessDefinition.create_changeset(%ProcessDefinition{}, attrs)
-
+  # REQ-125 §5.3 -- create/2 now assigns a definition_sequence number inside
+  # its own transaction, stamping it via Ecto.Changeset.put_change/3 rather
+  # than adding :sequence_number to create_changeset/2's castable field list
+  # -- mirrors :status's own "never castable from caller input" protection
+  # (this module's moduledoc references ProcessDefinition's INV-DEF-8 note):
+  # a caller-supplied sequence_number in attrs must never reach the row,
+  # only the server-assigned value from the locked counter may.
+  #
+  # A duplicate (name, version) conflict still burns the assigned sequence
+  # number (the ON CONFLICT DO NOTHING path below never rolls the
+  # transaction back) -- an accepted, small counter gap, the same class
+  # activate_draft/3's 0-row deprecate update can also produce. The design's
+  # own guarantee is monotonic ordering, never gap-free numbering.
+  defp insert_definition(attrs, prefix, tenant_id) do
     try do
-      changeset
-      |> Repo.insert(
-        on_conflict: :nothing,
-        conflict_target: [:name, :version],
-        returning: true,
-        prefix: prefix
-      )
-      |> case do
-        {:ok, %ProcessDefinition{id: id}} ->
-          case Repo.get(ProcessDefinition, id, prefix: prefix) do
-            %ProcessDefinition{} = found -> {:ok, found}
-            nil -> {:error, :duplicate_name_version}
-          end
+      Repo.transaction(fn ->
+        case assign_definition_sequence(tenant_id, prefix) do
+          {:ok, seq} ->
+            changeset =
+              %ProcessDefinition{}
+              |> ProcessDefinition.create_changeset(attrs)
+              |> Ecto.Changeset.put_change(:sequence_number, seq)
 
-        {:error, %Ecto.Changeset{}} = error ->
-          error
+            changeset
+            |> Repo.insert(
+              on_conflict: :nothing,
+              conflict_target: [:name, :version],
+              returning: true,
+              prefix: prefix
+            )
+            |> case do
+              {:ok, %ProcessDefinition{id: id}} ->
+                case Repo.get(ProcessDefinition, id, prefix: prefix) do
+                  %ProcessDefinition{} = found -> found
+                  nil -> Repo.rollback(:duplicate_name_version)
+                end
+
+              {:error, %Ecto.Changeset{} = changeset} ->
+                Repo.rollback(changeset)
+            end
+
+          {:error, reason} ->
+            Repo.rollback(reason)
+        end
+      end)
+      |> case do
+        {:ok, %ProcessDefinition{} = found} -> {:ok, found}
+        {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
+        {:error, reason} -> {:error, reason}
       end
     rescue
       exception -> {:error, {:transaction_failed, exception}}
@@ -1928,6 +2079,82 @@ defmodule Letflow.Definitions do
   end
 
   # -----------------------------------------------------------------------------------
+  # REQ-125 -- delta/2 helpers (design §4/§6.1)
+  # -----------------------------------------------------------------------------------
+
+  defp validate_since(nil), do: {:ok, 0}
+  defp validate_since(since) when is_integer(since) and since >= 0, do: {:ok, since}
+  defp validate_since(_since), do: {:error, :invalid_since}
+
+  # design §6.1 -- always the tenant's current high-water mark
+  # (definition_sequence.next_seq - 1), or since_floor unchanged if that is
+  # already higher (e.g. no definition_sequence row exists yet for a
+  # brand-new tenant with zero writes -- current_high_water_mark is then 0,
+  # and since_floor wins if it is itself already > 0... though a well-formed
+  # since can never legitimately exceed a real high-water mark except via a
+  # corrupted/foreign client watermark, per this module's moduledoc, and
+  # max/2 handles that case safely too: never returns less than what the
+  # caller already holds).
+  defp definition_high_water_mark(tenant_id, prefix, since_floor) do
+    current_high_water_mark =
+      case Repo.get(DefinitionSequence, tenant_id, prefix: prefix) do
+        nil -> 0
+        %DefinitionSequence{next_seq: next_seq} -> next_seq - 1
+      end
+
+    max(current_high_water_mark, since_floor)
+  end
+
+  # -----------------------------------------------------------------------------------
+  # REQ-125 -- shared sequence-assignment protocol (design §5.3), reused by
+  # insert_definition/2 (create/2), activate_draft/3 (activate/2), and
+  # run_transition/5 (deprecate/2, archive/2). Mirrors
+  # Letflow.EventStore.assign_sequence/3's exact three-sub-step shape
+  # (insert-if-absent, row-lock read, increment-under-lock), at tenant-schema
+  # granularity instead of per-instance granularity. Always called from
+  # inside an already-open Repo.transaction/1 (never opens its own), so a
+  # rolled-back caller never burns a sequence number it didn't use -- the
+  # counter mutation rolls back with everything else in the same DB
+  # transaction.
+  # -----------------------------------------------------------------------------------
+
+  defp assign_definition_sequence(tenant_id, prefix) do
+    insert_changeset =
+      DefinitionSequence.insert_changeset(%DefinitionSequence{}, %{tenant_id: tenant_id})
+
+    case Repo.insert(insert_changeset,
+           on_conflict: :nothing,
+           conflict_target: :tenant_id,
+           prefix: prefix
+         ) do
+      {:ok, _} -> lock_and_increment_definition_sequence(tenant_id, prefix)
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  defp lock_and_increment_definition_sequence(tenant_id, prefix) do
+    locked =
+      DefinitionSequence
+      |> where([s], s.tenant_id == ^tenant_id)
+      |> lock("FOR UPDATE")
+      |> Repo.one(prefix: prefix)
+
+    case locked do
+      nil ->
+        {:error, {:sequence_conflict, :row_missing_after_insert}}
+
+      %DefinitionSequence{next_seq: assigned_sequence_number} ->
+        DefinitionSequence
+        |> where([s], s.tenant_id == ^tenant_id)
+        |> Repo.update_all([set: [next_seq: assigned_sequence_number + 1]], prefix: prefix)
+        |> case do
+          {1, _} -> {:ok, assigned_sequence_number}
+          _ -> {:error, {:sequence_conflict, :unexpected_update_count}}
+        end
+    end
+  end
+
+  # -----------------------------------------------------------------------------------
   # activate/2 helpers (design §6.2)
   # -----------------------------------------------------------------------------------
 
@@ -1949,7 +2176,7 @@ defmodule Letflow.Definitions do
 
         %ProcessDefinition{status: :draft} = definition ->
           case run_service_scope_validator(definition, tenant_id, validator) do
-            :ok -> activate_draft(definition, prefix)
+            :ok -> activate_draft(definition, prefix, tenant_id)
             {:error, reason} -> Repo.rollback(reason)
           end
       end
@@ -1972,21 +2199,55 @@ defmodule Letflow.Definitions do
     end
   end
 
-  defp activate_draft(%ProcessDefinition{id: id, name: name}, prefix) do
+  # REQ-125 §5.3 -- both writes below (the deprecate-prior-active update AND
+  # the activate-this-one update) are "the definition set changed", so both
+  # get their own assigned sequence_number, inside this same transaction. The
+  # deprecate update touches 0 or 1 rows (uq_active_definition guarantees at
+  # most one prior active per name) -- if it touches 0, the sequence number
+  # assigned for it is simply unused (a small, harmless gap in the counter,
+  # the same class of gap create/2's ON CONFLICT DO NOTHING path can produce;
+  # the design's own §2 guarantee is monotonic ordering, never gap-free
+  # numbering). Called from inside run_activate_transaction/4's
+  # Repo.transaction/1 -- Repo.rollback/1 here aborts that whole transaction,
+  # so both this row's writes AND any already-assigned sequence numbers are
+  # discarded together on a locking failure.
+  defp activate_draft(%ProcessDefinition{id: id, name: name}, prefix, tenant_id) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
-    ProcessDefinition
-    |> where([d], d.name == ^name and d.status == :active)
-    |> select([d], d)
-    |> Repo.update_all([set: [status: :deprecated, updated_at: now]], prefix: prefix)
+    case assign_definition_sequence(tenant_id, prefix) do
+      {:ok, deprecate_seq} ->
+        ProcessDefinition
+        |> where([d], d.name == ^name and d.status == :active)
+        |> select([d], d)
+        |> Repo.update_all(
+          [set: [status: :deprecated, updated_at: now, sequence_number: deprecate_seq]],
+          prefix: prefix
+        )
 
-    {1, [updated]} =
-      ProcessDefinition
-      |> where([d], d.id == ^id and d.status == :draft)
-      |> select([d], d)
-      |> Repo.update_all([set: [status: :active, updated_at: now]], prefix: prefix)
+        activate_draft_row(id, prefix, tenant_id, now)
 
-    {:activated, updated}
+      {:error, reason} ->
+        Repo.rollback(reason)
+    end
+  end
+
+  defp activate_draft_row(id, prefix, tenant_id, now) do
+    case assign_definition_sequence(tenant_id, prefix) do
+      {:ok, activate_seq} ->
+        {1, [updated]} =
+          ProcessDefinition
+          |> where([d], d.id == ^id and d.status == :draft)
+          |> select([d], d)
+          |> Repo.update_all(
+            [set: [status: :active, updated_at: now, sequence_number: activate_seq]],
+            prefix: prefix
+          )
+
+        {:activated, updated}
+
+      {:error, reason} ->
+        Repo.rollback(reason)
+    end
   end
 
   defp interpret_activate_result({:ok, {:already_active, definition}}) do
@@ -2006,6 +2267,12 @@ defmodule Letflow.Definitions do
 
   defp interpret_activate_result({:error, {:service_scope_violation, _reason}} = error), do: error
 
+  # REQ-125 -- assign_definition_sequence/2's locking-protocol failure,
+  # surfaced unchanged (common_error()). Explicit clause rather than relying
+  # on activate/2's own outer rescue to catch a FunctionClauseError here
+  # (INV-8 -- typed, not incidental).
+  defp interpret_activate_result({:error, {:sequence_conflict, _reason}} = error), do: error
+
   # -----------------------------------------------------------------------------------
   # deprecate/2 & archive/2 helpers (design §6.3) -- identical shape, different
   # from-status/to-status pair; archive/2 additionally stamps archived_at.
@@ -2014,33 +2281,51 @@ defmodule Letflow.Definitions do
   defp transition(id, opts, from_status, to_status) do
     prefix = Keyword.get(opts, :prefix)
 
-    with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
       try do
-        run_transition(id, prefix, from_status, to_status)
+        run_transition(id, prefix, tenant_id, from_status, to_status)
       rescue
         exception -> {:error, {:transaction_failed, exception}}
       end
     end
   end
 
-  defp run_transition(id, prefix, from_status, to_status) do
+  # REQ-125 §5.3 -- deprecate/2 and archive/2 both gain a sequence_number
+  # stamp inside this existing transaction. Unlike activate_draft/3's
+  # unconditional deprecate-prior-active update, this one is a genuinely
+  # conditional guarded UPDATE (`WHERE id = $1 AND status = $2`) -- if 0 rows
+  # match, fallback_lookup/2 rolls the *whole* transaction back (:not_found or
+  # :invalid_status_transition), which discards the just-assigned sequence
+  # number along with everything else. So this path never burns a number on a
+  # rejected transition.
+  defp run_transition(id, prefix, tenant_id, from_status, to_status) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
-    set = transition_set(to_status, now)
 
     Repo.transaction(fn ->
-      ProcessDefinition
-      |> where([d], d.id == ^id and d.status == ^from_status)
-      |> select([d], d)
-      |> Repo.update_all([set: set], prefix: prefix)
-      |> case do
-        {1, [updated]} -> updated
-        {0, _count_and_rows} -> fallback_lookup(id, prefix)
+      case assign_definition_sequence(tenant_id, prefix) do
+        {:ok, seq} ->
+          set = transition_set(to_status, now, seq)
+
+          ProcessDefinition
+          |> where([d], d.id == ^id and d.status == ^from_status)
+          |> select([d], d)
+          |> Repo.update_all([set: set], prefix: prefix)
+          |> case do
+            {1, [updated]} -> updated
+            {0, _count_and_rows} -> fallback_lookup(id, prefix)
+          end
+
+        {:error, reason} ->
+          Repo.rollback(reason)
       end
     end)
   end
 
-  defp transition_set(:archived, now), do: [status: :archived, updated_at: now, archived_at: now]
-  defp transition_set(status, now), do: [status: status, updated_at: now]
+  defp transition_set(:archived, now, seq),
+    do: [status: :archived, updated_at: now, archived_at: now, sequence_number: seq]
+
+  defp transition_set(status, now, seq),
+    do: [status: status, updated_at: now, sequence_number: seq]
 
   defp fallback_lookup(id, prefix) do
     case Repo.get(ProcessDefinition, id, prefix: prefix) do

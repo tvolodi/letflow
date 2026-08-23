@@ -430,7 +430,11 @@ defmodule Letflow.TenantProvisioning do
     {20_260_822_000_102, Letflow.Repo.Migrations.CreateGroupMembersTenantScoped,
      "20260822000102_create_group_members_tenant_scoped.exs"},
     {20_260_823_000_001, Letflow.Repo.Migrations.CreateApiTokensTenantScoped,
-     "20260823000001_create_api_tokens_tenant_scoped.exs"}
+     "20260823000001_create_api_tokens_tenant_scoped.exs"},
+    {20_260_823_000_003, Letflow.Repo.Migrations.AddSequenceNumberToProcessDefinitions,
+     "20260823000003_add_sequence_number_to_process_definitions.exs"},
+    {20_260_823_000_004, Letflow.Repo.Migrations.CreateDefinitionSequence,
+     "20260823000004_create_definition_sequence.exs"}
   ]
 
   @doc """

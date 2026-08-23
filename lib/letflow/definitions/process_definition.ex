@@ -98,6 +98,15 @@ defmodule Letflow.Definitions.ProcessDefinition do
     field(:created_by, Ecto.UUID)
     field(:archived_at, :utc_datetime_usec)
 
+    # REQ-125 (MOB-3 delta sync) -- server-assigned watermark for
+    # `GET /definitions/delta`'s `since`/`next_since` cursor. Never castable
+    # from caller input (mirrors :status's own INV-DEF-8 protection, above) --
+    # stamped only via Ecto.Changeset.put_change/3 in
+    # Letflow.Definitions.insert_definition/3, or via a raw Repo.update_all/3
+    # `set:` list in activate_draft/3 and run_transition/5. See
+    # lib/letflow/design/req125-definitions-delta-sync.md §5.1.
+    field(:sequence_number, :integer, default: 0)
+
     timestamps(inserted_at: :created_at, type: :utc_datetime_usec)
   end
 

@@ -52,6 +52,20 @@ defmodule Letflow.EventStore do
   not silently resolved by adding a column REQ-023's own design explicitly
   warns against completing.
 
+  ## Every platform event in a tenant shares one `instance_sequence` row (REQ-140)
+
+  `append_platform_event/2` (below) always writes under `platform_instance_id/0`,
+  never any other `instance_id`. That means every platform-scoped event appended
+  for a given tenant shares the *same* `instance_sequence` row for that sentinel
+  — and therefore the same `FOR UPDATE` lock `lock_and_increment_sequence/3`
+  takes on it (M2, reused verbatim from `append/2`). This is a real per-tenant
+  serialization point across **every** platform write in that tenant's schema,
+  not just the three promotion event types REQ-140 wires up — correct, matches
+  R-Co's own design, and fine at current traffic volumes (a handful of
+  low-frequency promotion-pipeline event types), but a capacity property worth
+  having on record here rather than rediscovered the first time platform-event
+  volume grows.
+
   ## Scope
 
   `append/2` (REQ-025) and `read/2`/`read_global/1`/`point_in_time/3`/
@@ -154,6 +168,33 @@ defmodule Letflow.EventStore do
           global_seq: pos_integer()
         }
 
+  @type append_platform_attrs :: %{
+          required(:instance_id) => Ecto.UUID.t(),
+          required(:event_type) => String.t(),
+          required(:payload) => String.t(),
+          required(:actor_id) => Ecto.UUID.t(),
+          required(:idempotency_key) => String.t(),
+          optional(:metadata) => %{optional(String.t()) => String.t()}
+        }
+
+  @type append_platform_error ::
+          {:error, :tenant_id_not_accepted}
+          | {:error, :invalid_schema_name}
+          | {:error, :not_platform_instance_id}
+          | {:error, :missing_instance_id}
+          | {:error, :missing_actor_id}
+          | {:error, :missing_payload}
+          | {:error, :invalid_payload}
+          | {:error, :missing_event_type}
+          | {:error, :missing_idempotency_key}
+          | {:error, :idempotency_key_too_long}
+          | {:error, {:invalid_metadata, metadata_violation()}}
+          | {:error, :unknown_event_type}
+          | {:error, {:payload_validation_failed, [Registry.ValidationFailure.t()]}}
+          | {:error, {:sequence_conflict, term()}}
+          | {:error, Ecto.Changeset.t()}
+          | {:error, term()}
+
   @doc """
   Appends one event to `attrs[:instance_id]`'s stream, inside the tenant
   schema named by `opts[:prefix]`. `opts`'s only required key is `:prefix` —
@@ -204,6 +245,79 @@ defmodule Letflow.EventStore do
       |> build_multi()
       |> Repo.transaction()
       |> interpret_transaction_result()
+    end
+  end
+
+  @doc """
+  Sibling of `append/2` (REQ-140), restricted to `platform_instance_id/0`.
+  Skips M1 (`active_instance_guard/3`) and M6 (`update_projection/3`) --
+  no `instance_projections` row ever exists for the platform sentinel, so
+  both steps are structurally inapplicable, not merely optional. Reuses M2
+  `assign_sequence/3`, M3 `claim_idempotency/3`, and M4 `insert_event/3`
+  verbatim -- same locking/idempotency/insert protocol `append/2` itself
+  relies on, now against the sentinel's own `instance_sequence` row (see
+  this module's moduledoc, "Every platform event in a tenant shares one
+  `instance_sequence` row").
+
+  `attrs[:instance_id]` MUST equal `platform_instance_id/0` --
+  `{:error, :not_platform_instance_id}` for any other value (a random UUID
+  or a real started instance's id alike), before any query runs.
+
+  See `lib/letflow/design/req140-platform-event-append-path.md` §3 for the
+  full design.
+  """
+  @spec append_platform_event(attrs :: append_platform_attrs(), opts :: [prefix: String.t()]) ::
+          {:ok, append_result()} | append_platform_error()
+  def append_platform_event(attrs, opts) when is_map(attrs) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with :ok <- reject_tenant_id(attrs),
+         {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, instance_id} <- fetch_platform_instance_id(attrs),
+         {:ok, actor_id} <- fetch_uuid(attrs, :actor_id, :missing_actor_id),
+         {:ok, payload} <- fetch_payload(attrs),
+         {:ok, idempotency_key} <- fetch_idempotency_key(attrs),
+         {:ok, event_type} <- fetch_event_type(attrs),
+         {:ok, metadata} <- validate_metadata(Map.get(attrs, :metadata) || %{}),
+         :ok <- Registry.validate_payload(event_type, payload, tenant_id) do
+      ctx = %{
+        schema_name: prefix,
+        tenant_id: tenant_id,
+        instance_id: instance_id,
+        event_type: event_type,
+        actor_id: actor_id,
+        idempotency_key: idempotency_key,
+        metadata: metadata,
+        payload_bytes: byte_size(payload),
+        # Safe unconditionally: Registry.validate_payload/3 (above) already
+        # proved `payload` decodes to a JSON object.
+        decoded_payload: Jason.decode!(payload),
+        event_id: Ecto.UUID.generate(),
+        created_at: DateTime.utc_now() |> DateTime.truncate(:microsecond)
+      }
+
+      ctx
+      |> build_multi_platform()
+      |> Repo.transaction()
+      |> interpret_transaction_result()
+    end
+  end
+
+  # REQ-140 §3.4 -- composes with, rather than duplicates, fetch_uuid/3: the
+  # missing/malformed-UUID handling is identical to every other fetch_uuid/3
+  # call site. Only on a structurally valid UUID does this compare it against
+  # platform_instance_id/0 -- equal -> {:ok, instance_id}, anything else
+  # (including a real started instance's id) -> {:error,
+  # :not_platform_instance_id}, before any query runs. Matches this module's
+  # "structural checks fail with zero DB writes" discipline (reject_tenant_id/1
+  # is the precedent this mirrors).
+  defp fetch_platform_instance_id(attrs) do
+    with {:ok, instance_id} <- fetch_uuid(attrs, :instance_id, :missing_instance_id) do
+      if instance_id == platform_instance_id() do
+        {:ok, instance_id}
+      else
+        {:error, :not_platform_instance_id}
+      end
     end
   end
 
@@ -342,6 +456,25 @@ defmodule Letflow.EventStore do
   end
 
   defp maybe_store_oversized_payload(multi, _ctx), do: multi
+
+  # REQ-140 §3.5 -- the platform-scoped Multi. M1 (active_instance_guard) and
+  # M6 (update_projection) are omitted -- not stubbed, not made conditional,
+  # simply never added: no instance_projections row ever exists for the
+  # platform sentinel, so both are structurally inapplicable, not a judgement
+  # call. M2/M3/M4 are the exact same call shape as build_multi/1's own steps
+  # (same private functions, reused verbatim). M5 (maybe_store_oversized_payload/2)
+  # stays in for structural symmetry with append/2 -- it is unconditional on
+  # instance_projections (a pure function of ctx's payload_bytes/decoded_payload
+  # plus the just-inserted events row), so including it costs nothing and
+  # avoids a latent gap if a platform payload ever grows past the inline
+  # threshold.
+  defp build_multi_platform(ctx) do
+    Multi.new()
+    |> Multi.run(:assign_sequence, fn repo, changes -> assign_sequence(repo, changes, ctx) end)
+    |> Multi.run(:idempotency, fn repo, changes -> claim_idempotency(repo, changes, ctx) end)
+    |> Multi.run(:insert_event, fn repo, changes -> insert_event(repo, changes, ctx) end)
+    |> maybe_store_oversized_payload(ctx)
+  end
 
   # M1 -- active-instance guard (invariant 10, ES-01). A plain, unlocked read
   # (design doc §6.2.1 -- a stronger guarantee, e.g. locking

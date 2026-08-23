@@ -619,13 +619,15 @@ defmodule Letflow.TenantProvisioning do
   # (Letflow.Engine.SubProcess's sub-process completion path), and
   # "EXECUTION_ERROR" (Letflow.Engine.ExecutionError.append_execution_error_event/2).
   #
-  # No other event type is seeded here. "DEFINITION_PROMOTED",
-  # "DEFINITION_VERSION_ROLLED_BACK", and
-  # "PROMOTION_ASSERTION_TEARDOWN_FAILED" remain deliberately unseeded: no
-  # production writer exists for any of them yet (each event_appender is
-  # caller-injected with no default, deliberately unwired) -- seeding one
-  # this call has no caller for would be speculative, not a fix for a
-  # demonstrated gap.
+  # "DEFINITION_PROMOTED", "DEFINITION_VERSION_ROLLED_BACK", and
+  # "PROMOTION_ASSERTION_TEARDOWN_FAILED" (REQ-140) now have production
+  # writers: the three Letflow.EventStore.PlatformEvents adapter functions
+  # (append_definition_promoted/2, append_definition_version_rolled_back/2,
+  # append_promotion_assertion_teardown_failed/2) built by REQ-140, each
+  # satisfying Letflow.Definitions's event_appender_fun/0 contract. Nothing
+  # yet calls those functions from a live route -- wiring opts[:event_appender]
+  # defaults into REQ-077's ported promotion routes is that requirement's
+  # job, not this one's.
   @platform_event_type_seed_attrs [
     %{
       name: "INSTANCE_STARTED",
@@ -762,6 +764,66 @@ defmodule Letflow.TenantProvisioning do
           "details" => %{"type" => "object"}
         },
         "required" => ["error_type", "affected", "reason", "variables"]
+      }
+    },
+    %{
+      name: "DEFINITION_PROMOTED",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Definitions.Promotion.promote_definition/3 (PRM-01) after a " <>
+          "promotion review is applied, via Letflow.EventStore.PlatformEvents.append_definition_promoted/2.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "review_id" => %{"type" => "string"},
+          "source_tenant_id" => %{"type" => "string"},
+          "target_tenant_id" => %{"type" => "string"},
+          "source_definition_id" => %{"type" => "string"},
+          "target_definition_id" => %{"type" => "string"},
+          "process_key" => %{"type" => "string"}
+        },
+        "required" => [
+          "review_id",
+          "source_tenant_id",
+          "target_tenant_id",
+          "source_definition_id",
+          "target_definition_id",
+          "process_key"
+        ]
+      }
+    },
+    %{
+      name: "DEFINITION_VERSION_ROLLED_BACK",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Definitions.rollback_definition_version/4 (PRM-08) after a " <>
+          "version pointer swap commits, via Letflow.EventStore.PlatformEvents.append_definition_version_rolled_back/2.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "process_key" => %{"type" => "string"},
+          "from_version" => %{"type" => "string"},
+          "to_version" => %{"type" => "string"}
+        },
+        "required" => ["process_key", "from_version", "to_version"]
+      }
+    },
+    %{
+      name: "PROMOTION_ASSERTION_TEARDOWN_FAILED",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Definitions.apply_promotion_assertion_rerun/6 (PRM-07) when " <>
+          "sandbox release fails during assertion rerun, via " <>
+          "Letflow.EventStore.PlatformEvents.append_promotion_assertion_teardown_failed/2.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "run_id" => %{"type" => "string"},
+          "sandbox_id" => %{"type" => "string"},
+          "tenant_id" => %{"type" => "string"},
+          "error" => %{"type" => "string"}
+        },
+        "required" => ["run_id", "sandbox_id", "tenant_id", "error"]
       }
     }
   ]

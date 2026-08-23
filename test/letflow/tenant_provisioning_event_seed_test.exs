@@ -61,6 +61,7 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
 
   alias Letflow.EventStore
   alias Letflow.EventStore.InstanceProjection
+  alias Letflow.EventStore.Registry.EventType
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
@@ -241,14 +242,24 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
 
   # ---------------------------------------------------------------------------------
   # Negative control: a genuinely still-unregistered type is still rejected --
-  # proves the fix seeds exactly the 6 named types, not indiscriminately
-  # everything. DEFINITION_PROMOTED is one of the 3 types the design doc §1
-  # "Out of scope" explicitly names as deliberately NOT seeded (no production
-  # writer exists for it).
+  # proves the fix seeds exactly the 9 named types, not indiscriminately
+  # everything.
+  #
+  # REQ-140 note: this used to name DEFINITION_PROMOTED as the still-unregistered
+  # example (one of the 3 types the design doc §1 "Out of scope" explicitly named
+  # as deliberately NOT seeded, "no production writer exists for it"). REQ-140
+  # gave DEFINITION_PROMOTED, DEFINITION_VERSION_ROLLED_BACK and
+  # PROMOTION_ASSERTION_TEARDOWN_FAILED real production writers
+  # (Letflow.EventStore.PlatformEvents) and added all three to
+  # @platform_event_type_seed_attrs, so DEFINITION_PROMOTED is now registered and
+  # would no longer prove this negative control. Retargeted to a fabricated type
+  # name that is not, and will never be, seeded by production code, so this
+  # control keeps testing what it always meant to: the seed list isn't
+  # indiscriminate.
   # ---------------------------------------------------------------------------------
 
   describe "still-unregistered types remain rejected (proves the seed list isn't indiscriminate)" do
-    test "EventStore.append/2 still returns {:error, :unknown_event_type} for DEFINITION_PROMOTED" do
+    test "EventStore.append/2 still returns {:error, :unknown_event_type} for a type never seeded by production code" do
       %{schema_name: schema_name} = provisioned_tenant()
 
       # No instance_projections row is seeded here -- Registry.validate_payload/3
@@ -256,7 +267,8 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
       # this assertion is unaffected by projection state (confirmed directly
       # from lib/letflow/event_store.ex's `with` chain: fetch_event_type/1 and
       # Registry.validate_payload/3 both precede the transactional phase).
-      attrs = append_attrs("DEFINITION_PROMOTED", %{"anything" => "goes"})
+      attrs =
+        append_attrs("ISS0072_NEGATIVE_CONTROL_NEVER_SEEDED", %{"anything" => "goes"})
 
       assert {:error, :unknown_event_type} = EventStore.append(attrs, prefix: schema_name)
     end
@@ -275,7 +287,7 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
   # ---------------------------------------------------------------------------------
 
   describe "OQ-1: replay_migrations/2 re-run against an already-seeded tenant stays idempotent" do
-    test "a second replay_migrations/2 call for the same tenant still returns :ok overall, and the 6 rows are not duplicated" do
+    test "a second replay_migrations/2 call for the same tenant still returns :ok overall, and the 9 rows are not duplicated" do
       %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
 
       assert {:ok, _} = TenantProvisioning.replay_migrations(tenant_id)
@@ -286,7 +298,7 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
           []
         )
 
-      assert count == 6
+      assert count == 9
 
       # And the seeded types are still all usable after the re-seed no-op.
       attrs = append_attrs("TASK_COMPLETED", minimal_payload_for("TASK_COMPLETED"))
@@ -294,6 +306,107 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
 
       assert {:ok, %{event: event}} = EventStore.append(attrs, prefix: schema_name)
       assert event.event_type == "TASK_COMPLETED"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-140 AC12: "a tenant provisioned BEFORE this change gains the three
+  # registry rows after a replay_migrations/2 call, and a second
+  # replay_migrations/2 call on the same tenant is a no-op returning success --
+  # one test covers both halves"
+  #
+  # This tree cannot literally provision a tenant under the pre-REQ-140 code (the
+  # only @platform_event_type_seed_attrs this module has IS the 9-entry, REQ-140
+  # list), so "provisioned BEFORE this change" is reproduced structurally instead:
+  # provision a tenant normally (seeding all 9 rows, since replay_migrations/2 is
+  # already generic over the list's length per REQ-140's design §5.1), then
+  # directly delete the exact 3 rows REQ-140 added -- reproducing the
+  # only-6-rows-present state a pre-REQ-140 tenant would actually be in -- and
+  # confirm a subsequent replay_migrations/2 call (the REAL, already-shipped
+  # maybe_seed_platform_event_types/2, unmodified by this file) re-adds exactly
+  # those 3 rows. A second replay_migrations/2 call after that must be a pure
+  # no-op returning :ok, per register_type/2's own
+  # {:error, :duplicate_event_type_version} -> :ok folding (unchanged by REQ-140).
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-140 AC12: a pre-existing (6-row) tenant gains the 3 new registry rows on replay, idempotently" do
+    test "replay_migrations/2 backfills the 3 REQ-140 types, and a second call is a no-op" do
+      %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
+
+      # Reproduce the pre-REQ-140 (6-row) state: delete exactly the 3 rows
+      # REQ-140 added, leaving the other 6 (ISS-0072's own set) untouched.
+      req140_types = [
+        "DEFINITION_PROMOTED",
+        "DEFINITION_VERSION_ROLLED_BACK",
+        "PROMOTION_ASSERTION_TEARDOWN_FAILED"
+      ]
+
+      {3, _} =
+        Repo.delete_all(
+          from(t in EventType, where: t.name in ^req140_types),
+          prefix: schema_name
+        )
+
+      count_before =
+        Repo.aggregate(EventType, :count, prefix: schema_name)
+
+      assert count_before == 6
+
+      # First replay_migrations/2 call after the simulated pre-existing state --
+      # backfills the 3 missing rows.
+      assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant_id)
+
+      names_after_backfill =
+        EventType
+        |> Repo.all(prefix: schema_name)
+        |> Enum.map(& &1.name)
+        |> Enum.sort()
+
+      assert names_after_backfill ==
+               Enum.sort([
+                 "INSTANCE_STARTED",
+                 "TASK_COMPLETED",
+                 "INSTANCE_CANCELLED",
+                 "INSTANCE_PINS_REBOUND",
+                 "SUB_PROCESS_COMPLETED",
+                 "EXECUTION_ERROR",
+                 "DEFINITION_PROMOTED",
+                 "DEFINITION_VERSION_ROLLED_BACK",
+                 "PROMOTION_ASSERTION_TEARDOWN_FAILED"
+               ])
+
+      # The 3 backfilled types are usable via append_platform_event/2 --
+      # confirms these aren't just registry rows but genuinely functional.
+      assert {:ok, %{event: event}} =
+               EventStore.append_platform_event(
+                 %{
+                   instance_id: EventStore.platform_instance_id(),
+                   event_type: "DEFINITION_PROMOTED",
+                   actor_id: Ecto.UUID.generate(),
+                   payload:
+                     Jason.encode!(%{
+                       "review_id" => Ecto.UUID.generate(),
+                       "source_tenant_id" => Ecto.UUID.generate(),
+                       "target_tenant_id" => Ecto.UUID.generate(),
+                       "source_definition_id" => Ecto.UUID.generate(),
+                       "target_definition_id" => Ecto.UUID.generate(),
+                       "process_key" => "req140-ac12-probe"
+                     }),
+                   idempotency_key: "req140-ac12-probe-#{System.unique_integer([:positive])}"
+                 },
+                 prefix: schema_name
+               )
+
+      assert event.event_type == "DEFINITION_PROMOTED"
+
+      # Second replay_migrations/2 call: a no-op, still returns success, and
+      # does NOT duplicate any of the 9 rows.
+      assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant_id)
+
+      count_after_second_call =
+        Repo.aggregate(EventType, :count, prefix: schema_name)
+
+      assert count_after_second_call == 9
     end
   end
 end

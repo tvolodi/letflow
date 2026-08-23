@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { usersApi, rolesApi } from '@/api/identity'
 import { queryKeys } from '@/api/queryKeys'
 import type { User } from '@/types/api'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
@@ -22,7 +22,6 @@ function displayUsername(user: User): string {
 
 export default function UsersPage() {
   const navigate = useNavigate()
-  const location = useLocation()
   const qc = useQueryClient()
   const [creating, setCreating] = useState(false)
   const [searchDraft, setSearchDraft] = useState('')
@@ -30,14 +29,6 @@ export default function UsersPage() {
   const [form, setForm] = useState({ username: '', email: '', display_name: '', password: '' })
   const [createRoleIds, setCreateRoleIds] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [submitMessage, setSubmitMessage] = useState('')
-  const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false)
-  const [detailForm, setDetailForm] = useState({ display_name: '', email: '', status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE', role_ids: [] as string[] })
-
-  const selectedUserId = useMemo(() => {
-    const match = location.pathname.match(/^\/admin\/users\/([^/?#]+)/)
-    return match?.[1] ?? null
-  }, [location.pathname])
 
   const usersQueryKey = queryKeys.admin.users({ search: searchApplied || undefined })
 
@@ -58,178 +49,15 @@ export default function UsersPage() {
       setCreating(false)
       setForm({ username: '', email: '', display_name: '', password: '' })
       setCreateRoleIds([])
-      setSubmitMessage('Saved')
       navigate(`/admin/users/${createdUser.id}`)
     },
     onError: (e) => {
       setError((e as Error).message)
-      navigate(`/admin/users/temp-${Date.now()}`)
     },
   })
-
-  const userDetail = useQuery({
-    queryKey: queryKeys.admin.userDetail(selectedUserId ?? ''),
-    queryFn: () => usersApi.get(selectedUserId ?? ''),
-    enabled: Boolean(selectedUserId),
-  })
-
-  const saveUser = useMutation({
-    mutationFn: () => usersApi.update(selectedUserId ?? '', {
-      display_name: detailForm.display_name,
-      is_active: detailForm.status === 'ACTIVE',
-      role_ids: detailForm.role_ids,
-    }),
-    onSuccess: () => {
-      setSubmitMessage('Saved')
-      qc.invalidateQueries({ queryKey: queryKeys.admin.users() })
-      if (selectedUserId) {
-        qc.invalidateQueries({ queryKey: queryKeys.admin.userDetail(selectedUserId) })
-      }
-    },
-    onError: (e) => setError((e as Error).message),
-  })
-
-  useEffect(() => {
-    const user = userDetail.data
-    if (!user) return
-    const roleNameToId = new Map((roles?.items ?? []).map((r) => [r.name, r.id]))
-    const mappedRoleIds = (user.roles ?? []).map((name) => roleNameToId.get(name)).filter((v): v is string => Boolean(v))
-    setDetailForm({
-      display_name: user.display_name,
-      email: user.email,
-      status: user.is_active ? 'ACTIVE' : 'INACTIVE',
-      role_ids: mappedRoleIds,
-    })
-  }, [userDetail.data, roles?.items])
 
   function toggleRole(roleId: string, selectedIds: string[], setter: (next: string[]) => void): void {
     setter(selectedIds.includes(roleId) ? selectedIds.filter((id) => id !== roleId) : [...selectedIds, roleId])
-  }
-
-  if (selectedUserId) {
-    return (
-      <div style={{ padding: '1.5rem' }}>
-        <button
-          onClick={() => navigate('/admin/users')}
-          style={{ marginBottom: '1rem', padding: '.35rem .8rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}
-        >
-          Back to users
-        </button>
-        {error && <p style={{ color: '#dc2626', marginBottom: '.75rem', fontSize: '.875rem' }}>{error}</p>}
-        <div data-testid="admin-user-detail-form" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '1.25rem' }}>
-          <h2 style={{ margin: '0 0 1rem' }}>User detail</h2>
-          <div style={{ marginBottom: '.75rem' }}>
-            <label style={{ display: 'block', marginBottom: '.25rem', fontSize: '.875rem', fontWeight: 500 }}>Display name</label>
-            <input
-              data-testid="admin-user-display-name"
-              aria-label="Display name"
-              value={detailForm.display_name}
-              onChange={(e) => setDetailForm((prev) => ({ ...prev, display_name: e.target.value }))}
-              style={{ width: '100%', padding: '.45rem .7rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '.9rem', boxSizing: 'border-box' }}
-            />
-          </div>
-          <div style={{ marginBottom: '.75rem' }}>
-            <label style={{ display: 'block', marginBottom: '.25rem', fontSize: '.875rem', fontWeight: 500 }}>Email</label>
-            <input
-              data-testid="admin-user-email"
-              aria-label="Email"
-              value={detailForm.email}
-              onChange={(e) => setDetailForm((prev) => ({ ...prev, email: e.target.value }))}
-              style={{ width: '100%', padding: '.45rem .7rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '.9rem', boxSizing: 'border-box' }}
-            />
-          </div>
-          <div style={{ marginBottom: '.75rem' }}>
-            <label style={{ display: 'block', marginBottom: '.25rem', fontSize: '.875rem', fontWeight: 500 }}>Status</label>
-            <select
-              data-testid="admin-user-status"
-              value={detailForm.status}
-              onChange={(e) => setDetailForm((prev) => ({ ...prev, status: e.target.value as 'ACTIVE' | 'INACTIVE' }))}
-              style={{ width: '100%', padding: '.45rem .7rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '.9rem', boxSizing: 'border-box' }}
-            >
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="INACTIVE">INACTIVE</option>
-            </select>
-          </div>
-
-          <h3 style={{ margin: '1rem 0 .5rem' }}>Role assignments</h3>
-          <div style={{ display: 'grid', gap: '.35rem', marginBottom: '.75rem' }}>
-            {(roles?.items ?? []).map((role) => (
-              <label key={role.id} style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
-                <input
-                  type="checkbox"
-                  checked={detailForm.role_ids.includes(role.id)}
-                  onChange={() => toggleRole(role.id, detailForm.role_ids, (next) => setDetailForm((prev) => ({ ...prev, role_ids: next })))}
-                />
-                <span>{role.name}</span>
-              </label>
-            ))}
-          </div>
-
-          <h3 style={{ margin: '1rem 0 .5rem' }}>Group memberships</h3>
-          <p style={{ marginTop: 0, color: '#64748b', fontSize: '.875rem' }}>Group membership editing is available in a dedicated follow-up iteration.</p>
-
-          <div style={{ display: 'flex', gap: '.5rem', marginTop: '1rem' }}>
-            <button
-              data-testid="admin-user-save"
-              onClick={() => {
-                setSubmitMessage('Saved')
-                saveUser.mutate()
-              }}
-              style={{ padding: '.4rem .9rem', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.85rem' }}
-            >
-              Save
-            </button>
-            <button
-              data-testid="admin-user-deactivate"
-              onClick={() => setShowDeactivateConfirm(true)}
-              style={{ padding: '.4rem .9rem', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.85rem' }}
-            >
-              Deactivate
-            </button>
-          </div>
-
-          {submitMessage && (
-            <p data-testid="admin-user-submit-message" style={{ margin: '.75rem 0 0', color: '#166534', fontSize: '.875rem' }}>
-              {submitMessage}
-            </p>
-          )}
-        </div>
-
-        {showDeactivateConfirm && (
-          <div
-            role="dialog"
-            aria-label="Deactivate user"
-            style={{ marginTop: '1rem', padding: '1rem', border: '1px solid #f59e0b', borderRadius: '6px', background: '#fffbeb' }}
-          >
-            <p style={{ marginTop: 0 }}>Active tasks assigned to this user remain assigned.</p>
-            <p>Users cannot complete them while INACTIVE.</p>
-            <div style={{ display: 'flex', gap: '.5rem' }}>
-              <button
-                onClick={() => {
-                  setDetailForm((prev) => ({ ...prev, status: 'INACTIVE' }))
-                  setSubmitMessage('User deactivated')
-                  setShowDeactivateConfirm(false)
-                  usersApi.update(selectedUserId, { is_active: false }).then(() => {
-                    qc.invalidateQueries({ queryKey: queryKeys.admin.users() })
-                  }).catch(() => {
-                    setError('Failed to deactivate user')
-                  })
-                }}
-                style={{ padding: '.4rem .9rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.85rem' }}
-              >
-                Deactivate
-              </button>
-              <button
-                onClick={() => setShowDeactivateConfirm(false)}
-                style={{ padding: '.4rem .9rem', background: '#6b7280', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.85rem' }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    )
   }
 
   return (

@@ -923,79 +923,236 @@ defmodule Letflow.Definitions.StoreTest do
   # REVIEWER-accepted, non-blocking finding -- activate/2's TOCTOU between two
   # DIFFERENT DRAFT rows sharing the same `name`, activated concurrently.
   #
-  # REWORK NOTE (this run): an earlier version of this test relied on plain
-  # `Task.async` with no synchronization and asserted the race "did trigger" as
-  # verified fact. TEST-DESIGN-VALIDATOR re-ran it 10 times independently and got
-  # zero occurrences of the race path -- every run took the safe sequential branch
-  # instead, because un-synchronized BEAM/Postgres scheduling essentially never
-  # produces the precise interleaving §6.2 describes (one task's whole activate/2
-  # call, lock-to-commit, is fast enough to usually finish before the other task
-  # even starts). That was a real No Speculation violation: the spec stated a fact
-  # that wasn't reproducible. Fixed here by DETERMINISTICALLY forcing the
-  # interleaving instead of hoping for it -- see below.
+  # REWORK NOTE (WF02-REQ125-20260823, TEST-DESIGNER): this test previously forced
+  # the race described above and asserted that exactly one of the two concurrent
+  # `activate/2` calls lost with `{:error, {:transaction_failed, _}}` (a real
+  # Postgres `unique_violation` on `uq_active_definition`). REQ-125 (design doc
+  # §5.3) added a per-tenant-schema `definition_sequence` lock that every
+  # `activate/2` call now takes (`SELECT ... FOR UPDATE` on
+  # `definition_sequence WHERE tenant_id = $1`, inside the SAME transaction as the
+  # row-mutation work, taken as `activate_draft/2`'s very first step -- see
+  # `assign_definition_sequence/2` in lib/letflow/definitions.ex). Two concurrent
+  # `activate/2` calls for the SAME tenant now serialize on that lock: the second
+  # transaction's own attempt to acquire it blocks at the Postgres level until the
+  # first transaction commits (or rolls back) and releases the row, by which point
+  # the first transaction's writes are already visible -- so the second call's own
+  # deprecate-step (`UPDATE ... WHERE name = ^name AND status = 'active'`) now
+  # always finds and correctly deprecates whatever the first call just activated,
+  # instead of racing it. Confirmed directly: running the ORIGINAL version of this
+  # test (git commit b4831ef, immediately before ELIXIR-DEV's REQ-125
+  # implementation landed the lock) against the CURRENT implementation hangs --
+  # `assert_receive {:toctou_paused, ^task1_pid}` never fires, because the
+  # `"process_definitions"`-sourced query sequence the old rendezvous counted on
+  # changed shape once `assign_definition_sequence/2`'s own queries (sourced
+  # `"definition_sequence"`, a different table) were interleaved in. That is
+  # itself evidence the transaction shape actually changed, not just that the
+  # unique-index race got harder to hit. REVIEWER (Step 2d) directed this test be
+  # UPDATED to assert the NEW guarantee, not deleted -- see this run's handoff.
+  #
+  # This is deliberately still a forced, deterministic test, not a
+  # hope-it-races one, for the same reason the original had to be: unsynchronized
+  # BEAM/Postgres scheduling doesn't reliably produce a *particular* interleaving
+  # on its own (confirmed the hard way once already, see the git history of this
+  # block). Serialization has to be forced into view the same way the race
+  # previously did -- see below for how.
   # ---------------------------------------------------------------------------------
 
-  describe "Regression -- activate/2 cross-row TOCTOU (design doc §6.2)" do
+  # ---------------------------------------------------------------------------------
+  # REQ-125 (MOB-3) -- delta/2's own coverage. See
+  # lib/letflow/design/req125-definitions-delta-sync.md and
+  # test/specs/REQ-125.md for the full rationale. AC2 (cursor-choice reasoning +
+  # clock-skew treatment in the moduledoc) is a doc-content check only, covered
+  # directly in Letflow.DefinitionsTest (definitions_test.exs), not here -- no
+  # DB needed for it. AC5 (tenant isolation) is covered at the HTTP layer in
+  # test/letflow/routers/definitions_test.exs, matching REQ-081's own AC5
+  # placement precedent.
+  # ---------------------------------------------------------------------------------
+
+  describe "delta/2 (AC1) -- only definitions changed after the cursor" do
+    test "with three definitions where exactly one changed, delta returns only that one" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition_1 = create!(schema_name)
+      definition_2 = create!(schema_name)
+      definition_3 = create!(schema_name)
+
+      # Baseline: since: nil returns full history (all three) -- also exercises
+      # AC4's "nil means full history" case incidentally, asserted properly in
+      # its own describe block below.
+      assert {:ok, %{items: baseline_items, next_since: baseline_since}} =
+               Definitions.delta(nil, prefix: schema_name)
+
+      baseline_ids = Enum.map(baseline_items, & &1.id)
+
+      assert Enum.sort(baseline_ids) ==
+               Enum.sort([definition_1.id, definition_2.id, definition_3.id])
+
+      # Mutate EXACTLY ONE of the three -- deprecate/2 needs an ACTIVE row, so
+      # activate definition_2 first (itself a "changed" write, but BEFORE the
+      # cursor below, so it must NOT show up either).
+      assert {:ok, %{definition: activated_2}} =
+               Definitions.activate(definition_2.id, prefix: schema_name)
+
+      assert {:ok, %{next_since: since_after_activate}} =
+               Definitions.delta(baseline_since, prefix: schema_name)
+
+      # Now deprecate definition_2 -- this is the ONE change after
+      # since_after_activate.
+      assert {:ok, deprecated_2} = Definitions.deprecate(activated_2.id, prefix: schema_name)
+
+      assert {:ok, %{items: items, next_since: next_since}} =
+               Definitions.delta(since_after_activate, prefix: schema_name)
+
+      assert Enum.map(items, & &1.id) == [deprecated_2.id]
+      assert next_since > since_after_activate
+
+      # definition_1 and definition_3, untouched since the baseline, are absent.
+      refute Enum.any?(items, &(&1.id in [definition_1.id, definition_3.id]))
+    end
+
+    test "a zero-change delta (caller already caught up) is {:ok, %{items: [], next_since: since}}, never an error" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      _definition = create!(schema_name)
+
+      assert {:ok, %{next_since: current_since}} = Definitions.delta(nil, prefix: schema_name)
+
+      assert {:ok, %{items: [], next_since: ^current_since}} =
+               Definitions.delta(current_since, prefix: schema_name)
+    end
+  end
+
+  describe "delta/2 (AC3) -- deletion/deprecation is representable via status, no separate tombstone" do
+    test "a deprecated definition appears in the delta with status :deprecated, not omitted" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active!(schema_name)
+
+      assert {:ok, %{next_since: since_before}} = Definitions.delta(nil, prefix: schema_name)
+
+      assert {:ok, deprecated} = Definitions.deprecate(definition.id, prefix: schema_name)
+
+      assert {:ok, %{items: [item]}} = Definitions.delta(since_before, prefix: schema_name)
+      assert item.id == deprecated.id
+      assert item.status == :deprecated
+    end
+
+    test "an archived definition appears in the delta with status :archived, not omitted" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = deprecated!(schema_name)
+
+      assert {:ok, %{next_since: since_before}} = Definitions.delta(nil, prefix: schema_name)
+
+      assert {:ok, archived} = Definitions.archive(definition.id, prefix: schema_name)
+
+      assert {:ok, %{items: [item]}} = Definitions.delta(since_before, prefix: schema_name)
+      assert item.id == archived.id
+      assert item.status == :archived
+    end
+  end
+
+  describe "delta/2 (AC4) -- since: nil/0 means full history; a malformed since is a typed error" do
+    test "since: nil returns every existing row -- a device's first sync, by construction" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      ids = for _ <- 1..3, do: create!(schema_name).id
+
+      assert {:ok, %{items: items}} = Definitions.delta(nil, prefix: schema_name)
+      assert Enum.sort(Enum.map(items, & &1.id)) == Enum.sort(ids)
+    end
+
+    test "since: 0 returns the exact same full history as since: nil" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      ids = for _ <- 1..3, do: create!(schema_name).id
+
+      assert {:ok, %{items: items_nil, next_since: next_since_nil}} =
+               Definitions.delta(nil, prefix: schema_name)
+
+      assert {:ok, %{items: items_zero, next_since: next_since_zero}} =
+               Definitions.delta(0, prefix: schema_name)
+
+      assert Enum.sort(Enum.map(items_nil, & &1.id)) == Enum.sort(ids)
+      assert Enum.map(items_nil, & &1.id) == Enum.map(items_zero, & &1.id)
+      assert next_since_nil == next_since_zero
+    end
+
+    test "a negative since returns {:error, :invalid_since}, never a silent full/empty dump" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      _definition = create!(schema_name)
+
+      assert {:error, :invalid_since} = Definitions.delta(-1, prefix: schema_name)
+    end
+
+    test "a non-integer since returns {:error, :invalid_since}" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      _definition = create!(schema_name)
+
+      assert {:error, :invalid_since} = Definitions.delta("not-an-integer", prefix: schema_name)
+      assert {:error, :invalid_since} = Definitions.delta(1.5, prefix: schema_name)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+
+  describe "Regression -- activate/2 cross-row TOCTOU is now serialized by the definition_sequence lock (design doc §5.3)" do
     # -------------------------------------------------------------------------------
     # How the forcing works, read this before the test below.
     #
     # activate/2 (lib/letflow/definitions.ex, run_activate_transaction/4 +
-    # activate_draft/2) does, per row, inside one DB transaction:
-    #   (1) SELECT ... FOR UPDATE       -- locks only THIS row (different ids never
-    #                                      block each other -- design doc §6.2)
-    #   (2) UPDATE ... WHERE name = ^name AND status = 'active'   -- deprecate-step
-    #   (3) UPDATE ... WHERE id = ^id AND status = 'draft'        -- self-activate
-    #   (4) COMMIT
+    # activate_draft/2 + activate_draft_row/4), per row, inside one DB transaction:
+    #   (1) SELECT process_definitions ... FOR UPDATE  -- locks only THIS row
+    #   (2) assign_definition_sequence/2 (deprecate-step's number) --
+    #         (2a) INSERT definition_sequence ... ON CONFLICT DO NOTHING
+    #         (2b) SELECT definition_sequence ... FOR UPDATE  -- tenant-wide lock
+    #         (2c) UPDATE definition_sequence SET next_seq = next_seq + 1
+    #   (3) UPDATE process_definitions ... WHERE name = ^name AND status = 'active'
+    #         (deprecate-step)
+    #   (4) assign_definition_sequence/2 again (activate-step's number, same 2a-2c
+    #       shape)
+    #   (5) UPDATE process_definitions ... WHERE id = ^id AND status = 'draft'
+    #         (self-activate)
+    #   (6) COMMIT (releases the definition_sequence row lock taken at (2b))
     #
-    # The race design doc §6.2 documents requires BOTH tasks' step (2) to run (and
-    # find nothing, since both rows start DRAFT) BEFORE EITHER task's step (3)
-    # commits -- only then does step (3) become a genuine fight over the same
-    # `uq_active_definition` partial-unique-index key, which Postgres resolves by
-    # raising a unique_violation on whichever transaction's step (3) loses. If
-    # instead one task fully finishes (steps 1-4) before the other even reaches
-    # step (2), the second task's own step (2) sees the first's committed ACTIVE
-    # row and correctly deprecates it -- the safe branch, no race, exactly what
-    # every unsynchronized run above observed.
-    #
-    # activate/2's only public extension point, `service_scope_validator`, fires
-    # too early to use as a rendezvous here (before step 2, not between steps 2 and
-    # 3 -- see the moduledoc). Rather than add a test-only hook to production code
-    # (disproportionate surgery on a security-relevant transaction, for a need this
-    # test alone has), this uses Ecto's own built-in, already-there query telemetry
-    # (`[:letflow, :repo, :query]`, emitted automatically for every query by
-    # `Ecto.Repo`/`ecto_sql` -- `deps/ecto_sql/lib/ecto/adapters/sql.ex`'s `log/5`,
-    # confirmed by direct reading, not guessed) as the rendezvous instead: a
-    # telemetry handler fires SYNCHRONOUSLY in the same process that issued the
-    # query, immediately after that query completes and before the calling code
-    # (activate_draft/2) moves on to the next one. That is exactly the window
-    # between step (2) and step (3). Attaching a handler that blocks (via a plain
-    # `receive`) the first time it observes each task's SECOND
-    # `source: "process_definitions"` query event (event #1 is step (1)'s SELECT
-    # FOR UPDATE, event #2 is step (2)'s deprecate UPDATE) pins each task's process
-    # at precisely that window. Once BOTH tasks have signalled they are paused
-    # there, we know both step (2)s have already run and found nothing -- so
-    # releasing both guarantees the fight over the unique index at step (3) is
-    # real, not a maybe. No production code (lib/letflow/definitions.ex) is
-    # touched by any of this -- telemetry is a standard, already-present Ecto
-    # extension point, not a new test hook threaded into the transaction.
+    # Step (2b) takes a `FOR UPDATE` lock on the ONE definition_sequence row for
+    # this tenant -- shared by BOTH concurrent activate/2 calls here, since both
+    # target the same tenant schema. So task 2's own step (2b) cannot complete
+    # until task 1's transaction reaches (6) and releases the row. This test:
+    #   1. Lets task 1 run up to (2b) (pausing it there via telemetry, same
+    #      rendezvous technique the original test used -- Ecto's own
+    #      `[:letflow, :repo, :query]` telemetry, no test hook added to
+    #      lib/letflow/definitions.ex).
+    #   2. Releases task 2 and confirms, by NEGATIVE assertion (refute_receive),
+    #      that task 2's own step (2b) has NOT completed after a real wait --
+    #      i.e. task 2 is genuinely blocked at the Postgres level, not merely
+    #      slow to start.
+    #   3. Releases task 1 to run to completion (commit, releasing the lock).
+    #   4. Confirms task 2's step (2b) now completes and task 2 itself finishes.
+    #   5. Asserts BOTH calls succeeded (no unique_violation -- serialization
+    #      means the race window this describe block used to force can no longer
+    #      be forced at all) and checks the post-hoc invariants REVIEWER asked
+    #      for: get_active_by_name/2 returns exactly one row, sequence_numbers
+    #      are strictly ordered, and no name is ever double-active.
     # -------------------------------------------------------------------------------
 
     @toctou_query_event [:letflow, :repo, :query]
 
-    defp attach_toctou_pause(handler_id, task_pids, test_pid) do
+    # Pauses `paused_pid` (via a blocking `receive`) the first time IT observes
+    # its own 2nd "definition_sequence"-sourced query complete -- that is step
+    # (2b) above, i.e. immediately after this task has acquired the tenant-wide
+    # definition_sequence row lock and before it does anything else. For every
+    # OTHER pid in `tracked_pids`, no pause -- instead it reports every
+    # "definition_sequence"-sourced query count it observes for ITSELF via
+    # `{:toctou_seq_query, pid, count}`, so the test can assert (by absence, then
+    # presence, of a `count == 2` report) exactly when that other task's own
+    # step (2b) actually completes.
+    defp attach_toctou_serialize(handler_id, paused_pid, tracked_pids, test_pid) do
       :telemetry.attach(
         handler_id,
         @toctou_query_event,
         fn _event, _measurements, metadata, _config ->
-          if metadata[:source] == "process_definitions" and MapSet.member?(task_pids, self()) do
-            count = Process.get(:req030_toctou_pd_query_count, 0) + 1
-            Process.put(:req030_toctou_pd_query_count, count)
+          if metadata[:source] == "definition_sequence" and MapSet.member?(tracked_pids, self()) do
+            count = Process.get(:req125_toctou_seq_count, 0) + 1
+            Process.put(:req125_toctou_seq_count, count)
+            send(test_pid, {:toctou_seq_query, self(), count})
 
-            # 2nd process_definitions-sourced query on this task's own connection
-            # == the deprecate-step UPDATE (step 2 above) has just completed and
-            # the self-activate UPDATE (step 3) has not yet been sent -- pause
-            # exactly there, once, and tell the test process we're parked.
-            if count == 2 do
+            if self() == paused_pid and count == 2 do
               send(test_pid, {:toctou_paused, self()})
 
               receive do
@@ -1016,8 +1173,8 @@ defmodule Letflow.Definitions.StoreTest do
     # Note: kept short deliberately -- ExUnit derives a compiled function name
     # (atom) from "test " <> describe-name <> " " <> test-name, and Erlang atoms
     # are capped at 255 bytes. The full rationale lives in the comments above
-    # and in test/specs/REQ-030.md, not in this string.
-    test "concurrent activation of two DRAFT rows sharing a name deterministically forces the race, never a double-ACTIVE state" do
+    # and in test/specs/REQ-125.md, not in this string.
+    test "concurrent activation of two DRAFT rows sharing a name completes serially, never a double-ACTIVE state" do
       %{schema_name: schema_name} = provisioned_tenant()
       name = unique_name("toctou")
 
@@ -1051,54 +1208,88 @@ defmodule Letflow.Definitions.StoreTest do
       task1_pid = assert_toctou_task_started(:task1)
       task2_pid = assert_toctou_task_started(:task2)
 
-      handler_id = "req030-toctou-#{System.unique_integer([:positive, :monotonic])}"
+      handler_id = "req125-toctou-#{System.unique_integer([:positive, :monotonic])}"
       on_exit(fn -> :telemetry.detach(handler_id) end)
-      assert :ok = attach_toctou_pause(handler_id, MapSet.new([task1_pid, task2_pid]), test_pid)
 
+      assert :ok =
+               attach_toctou_serialize(
+                 handler_id,
+                 task1_pid,
+                 MapSet.new([task1_pid, task2_pid]),
+                 test_pid
+               )
+
+      # Let task 1 reach and hold the tenant-wide definition_sequence lock
+      # (step 2b) -- confirmed by receiving its pause signal, not assumed.
       send(task1_pid, :toctou_run)
+      assert_receive {:toctou_paused, ^task1_pid}, 5_000
+
+      # Now release task 2. Its own step (2b) -- the SELECT ... FOR UPDATE on
+      # the SAME definition_sequence row task 1 is holding -- must block at the
+      # Postgres level until task 1 commits. Prove that genuinely, by absence:
+      # no {:toctou_seq_query, ^task2_pid, 2} report arrives within a real wait
+      # window, i.e. task 2 has NOT completed step (2b) while task 1 sits on it.
       send(task2_pid, :toctou_run)
 
-      # Both tasks are now guaranteed to reach, and block at, the window between
-      # their own deprecate-step and self-activate-step -- confirmed by receiving
-      # both pause signals below, not assumed.
-      assert_receive {:toctou_paused, ^task1_pid}, 5_000
-      assert_receive {:toctou_paused, ^task2_pid}, 5_000
+      refute_receive {:toctou_seq_query, ^task2_pid, 2},
+                     1_500,
+                     "task 2 completed its definition_sequence row lock (step 2b) while task 1 " <>
+                       "still holds it -- the two calls raced instead of serializing on the " <>
+                       "tenant-wide lock, contradicting design doc §5.3's guarantee"
 
-      # Release both. Both now attempt to write the same uq_active_definition
-      # partial-unique-index key (name, active) with neither having deprecated the
-      # other (impossible -- both deprecate-steps already ran and found nothing,
-      # confirmed above) -- Postgres's unique index deterministically makes exactly
-      # one of the two writes win and raises unique_violation on the other,
-      # exercising the real {:error, {:transaction_failed, _}} fallback path design
-      # doc §6.2 documents, not merely citing it as a theoretical possibility.
+      # Release task 1 to run to completion -- this commits its transaction and
+      # releases the definition_sequence row lock task 2 has been blocked on.
       send(task1_pid, :toctou_go)
-      send(task2_pid, :toctou_go)
+
+      # Task 2's step (2b) can now complete -- confirmed directly, not merely by
+      # task 2 eventually finishing (which could also happen if it had raced and
+      # lost/won some other way).
+      assert_receive {:toctou_seq_query, ^task2_pid, 2},
+                     10_000,
+                     "task 2 never completed its definition_sequence row lock (step 2b) even " <>
+                       "after task 1 committed and released it -- serialization is broken in " <>
+                       "the other direction (task 2 permanently stuck)"
 
       [result1, result2] = Task.await_many([task1, task2], 15_000)
       results = [result1, result2]
 
-      successes = Enum.filter(results, &match?({:ok, %{already_active: false}}, &1))
-      race_errors = Enum.filter(results, &match?({:error, {:transaction_failed, _reason}}, &1))
+      # Serialization means there is no unique_violation window left to hit --
+      # BOTH calls succeed as real activations, never a
+      # {:error, {:transaction_failed, _}} race loser (the outcome the pre-fix
+      # version of this test asserted exactly one of the two would produce).
+      assert [{:ok, %{already_active: false}}, {:ok, %{already_active: false}}] =
+               Enum.sort_by(results, fn {:ok, %{definition: d}} -> d.sequence_number end),
+             "expected both concurrent activate/2 calls to succeed once serialized by the " <>
+               "definition_sequence lock, got: #{inspect(results)}"
 
-      assert results -- (successes ++ race_errors) == [],
-             "unexpected activate/2 outcome under the forced race -- expected only a real " <>
-               "success or {:error, {:transaction_failed, _}}, got: #{inspect(results)}"
-
-      assert length(successes) == 1,
-             "expected exactly one real activation to win the deterministically-forced race, " <>
-               "got: #{inspect(results)}"
-
-      assert length(race_errors) == 1,
-             "expected exactly one {:error, {:transaction_failed, _}} from the deterministically-" <>
-               "forced race -- the synchronization guarantees both self-activate UPDATEs fight " <>
-               "over the same uq_active_definition key with neither having deprecated the other " <>
-               "first, so a real Postgres unique_violation on the loser is guaranteed, not merely " <>
-               "possible, got: #{inspect(results)}"
-
-      # The core safety invariant, regardless of which task happened to win the
-      # forced race: exactly one row is ever ACTIVE for this name -- never a
-      # corrupted double-ACTIVE state.
+      # Post-hoc invariants REVIEWER asked for (Step 2d), independent of which
+      # task happened to run first:
+      #   * exactly one row is ever ACTIVE for this name -- never a corrupted
+      #     double-ACTIVE state (same invariant the pre-fix test already checked).
       assert count_active_by_name(schema_name, name) == 1
+
+      #   * get_active_by_name/2 returns exactly one row.
+      assert {:ok, %ProcessDefinition{} = active} =
+               Definitions.get_active_by_name(name, prefix: schema_name)
+
+      #   * sequence_numbers are strictly ordered: whichever definition ended up
+      #     ACTIVE was activated (and, if it had been the loser of the old race,
+      #     would have raced) strictly AFTER the other was deprecated -- re-read
+      #     both rows from Postgres, don't trust the in-memory `activate/2`
+      #     replies alone.
+      final_1 = reread!(schema_name, definition_1.id)
+      final_2 = reread!(schema_name, definition_2.id)
+
+      {active_final, deprecated_final} =
+        if final_1.status == :active, do: {final_1, final_2}, else: {final_2, final_1}
+
+      assert active_final.id == active.id
+      assert deprecated_final.status == :deprecated
+
+      assert deprecated_final.sequence_number < active_final.sequence_number,
+             "expected the deprecated row's sequence_number to strictly precede the surviving " <>
+               "ACTIVE row's -- deprecated: #{deprecated_final.sequence_number}, active: " <>
+               "#{active_final.sequence_number}"
     end
   end
 end

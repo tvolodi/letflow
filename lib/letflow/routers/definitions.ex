@@ -16,6 +16,7 @@ defmodule Letflow.Routers.Definitions do
   | export                 | `GET /definitions/:id/export`     | `Letflow.Definitions.ExportImport.export/2`             | `DefinitionsRead` | 200 / 404 |
   | get_by_id              | `GET /definitions/:id`            | `Letflow.Definitions.get_by_id/2`                       | `DefinitionsRead` | 200 / 404 |
   | list                   | `GET /definitions`                | `Letflow.Definitions.list_paginated/2`                  | `DefinitionsRead` | 200 |
+  | delta                  | `GET /definitions/delta`          | `Letflow.Definitions.delta/2`                           | `DefinitionsRead` | 200 / 400 |
   | create                 | `POST /definitions`               | `Letflow.Definitions.create_with_variable_schemas/3`    | `DefinitionsWrite` | 201 / 422 / 409 |
   | put                    | `PUT /definitions/:id`            | `Letflow.Definitions.update/3`                          | `DefinitionsWrite` | 200 / 404 / 409 / 422 |
   | patch                  | `PATCH /definitions/:id`          | `Letflow.Definitions.update/3`                          | `DefinitionsWrite` | 200 / 404 / 409 / 422 |
@@ -48,12 +49,28 @@ defmodule Letflow.Routers.Definitions do
 
   ### Route ordering
 
-  `/active/:name`, `/search`, and `/:id/export` are declared **above**
-  `/:id`, which is declared above `/`, matching R-Co's own registration
-  order (`main.zig`) and the same hazard class `Letflow.Routers.Instances`'s
-  `/:id/history`-before-`/:id` note documents: `Plug.Router` is first-match-
-  wins, so a bare `GET "/:id"` declared above any of the three would swallow
-  it with `id` bound to the literal suffix.
+  `/active/:name`, `/search`, `/:id/export`, and (REQ-125) `/delta` are
+  declared **above** `/:id`, which is declared above `/`, matching R-Co's own
+  registration order (`main.zig`) and the same hazard class
+  `Letflow.Routers.Instances`'s `/:id/history`-before-`/:id` note documents:
+  `Plug.Router` is first-match-wins, so a bare `GET "/:id"` declared above any
+  of these would swallow it with `id` bound to the literal suffix (`"delta"`
+  for `/delta`).
+
+  ## REQ-125 — `GET /definitions/delta` (design: `lib/letflow/design/req125-definitions-delta-sync.md`)
+
+  Delegates to `Letflow.Definitions.delta/2` — see that function's `@doc` and
+  this module's own moduledoc addendum for the cursor-semantics reasoning
+  (AC2). `since` is read from `conn.query_params["since"]`: absent -> `nil`
+  (full history); a decimal-digit string -> the parsed integer;
+  present-but-non-numeric -> `{:error, :invalid_since}`, the same 400
+  `delta/2`'s own syntactic-validity check (a negative integer) produces.
+  Parsing uses `Integer.parse/1` requiring full-string consumption — the same
+  idiom `Letflow.Api.Pagination.parse_page_size_param/1` already uses. `items`
+  is rendered through the **existing** `definition_map/1` allowlist — no new
+  response shape to audit for INV-2, `status` included (AC3: a deprecated or
+  archived definition is representable in the delta response by its `status`
+  field, no separate tombstone type).
 
   ### `handle_search`'s three-way HTTP contract (AC2/AC3)
 
@@ -249,6 +266,14 @@ defmodule Letflow.Routers.Definitions do
     handle_search(conn)
   end
 
+  # REQ-125 -- MUST precede `get "/:id"` below, same ordering hazard as
+  # `/active/:name`/`/search`/`/:id/export` (see this module's moduledoc
+  # "Route ordering"): a literal path segment declared below `/:id` would be
+  # swallowed with `id => "delta"`.
+  get "/delta" do
+    handle_delta(conn)
+  end
+
   get "/:id/export" do
     handle_export(conn, conn.params["id"])
   end
@@ -398,6 +423,46 @@ defmodule Letflow.Routers.Definitions do
     do: Response.send_problem(conn, Error.cursor_expired())
 
   defp render_list_result(conn, {:error, _common_error}), do: Response.internal_error(conn)
+
+  # ── GET /definitions/delta (REQ-125, MOB-3 delta sync) ─────────────────
+
+  defp handle_delta(conn) do
+    with_authorized_scope(conn, "GET", "/definitions/delta", fn conn, opts, _actor_id ->
+      conn = fetch_query_params(conn)
+
+      case parse_since_param(Map.get(conn.query_params, "since")) do
+        {:ok, since} -> render_delta_result(conn, Definitions.delta(since, opts))
+        {:error, :invalid_since} -> Response.bad_request(conn, "invalid since")
+      end
+    end)
+  end
+
+  # Absent `since` -> nil (full history, per Definitions.delta/2). A present
+  # value must parse as a decimal integer with no remainder -- the same
+  # full-string-consumption idiom Pagination.parse_page_size_param/1 already
+  # uses -- otherwise {:error, :invalid_since}, the same 400 Definitions.delta/2
+  # itself returns for a syntactically-invalid (e.g. negative) since. No
+  # separate int-parsing validation layer beyond this.
+  defp parse_since_param(nil), do: {:ok, nil}
+
+  defp parse_since_param(raw) when is_binary(raw) do
+    case Integer.parse(raw) do
+      {int, ""} -> {:ok, int}
+      _not_a_clean_integer -> {:error, :invalid_since}
+    end
+  end
+
+  defp render_delta_result(conn, {:ok, %{items: items, next_since: next_since}}) do
+    Response.ok(conn, %{
+      "items" => Enum.map(items, &definition_map/1),
+      "next_since" => next_since
+    })
+  end
+
+  defp render_delta_result(conn, {:error, :invalid_since}),
+    do: Response.bad_request(conn, "invalid since")
+
+  defp render_delta_result(conn, {:error, _common_error}), do: Response.internal_error(conn)
 
   # ── GET /definitions/active/:name (design §4.3) ────────────────────────
 

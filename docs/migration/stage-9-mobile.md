@@ -40,7 +40,7 @@ touch-points are absent:
 | Needed by | Touch-point | State |
 |---|---|---|
 | `MOB-2` | **Unauthenticated** `tenant-config` returning `{ realm_url, locales, default_locale, branding, environment_kind }` | `Letflow.Routers.TenantConfig` is a stub — routes land in `REQ-078` (`pending`) — **and** `Letflow.Plugs.ApiPipeline` mounts it behind `Letflow.Plugs.AuthPipeline`, so implementing the route is not sufficient. The bootstrap sequence has no token at that point. |
-| `MOB-3` | `GET /definitions/delta?since=…` | Absent. Genuinely new backend work; R-Co flagged it "may be new" too. |
+| `MOB-3` | `GET /definitions/delta?since=…` | Implemented (`REQ-125`, 2026-08-23) — `Letflow.Routers.Definitions` delta route, monotonic per-tenant cursor, tenant-isolated. |
 | `MOB-3` | `{ form_id, form_version }` on task payloads | Absent — neither identifier appears anywhere in `lib/`. `Letflow.Engine.PinResolver` pins *definition* versions; a pinned **form** version on a task payload is a separate contract. |
 
 The first is the gate for the entire tier — without it the app cannot reach a

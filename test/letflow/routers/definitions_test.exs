@@ -327,6 +327,144 @@ defmodule Letflow.Routers.DefinitionsTest do
   end
 
   # ══════════════════════════════════════════════════════════════════════
+  # REQ-125 (MOB-3) -- GET /definitions/delta
+  # design: lib/letflow/design/req125-definitions-delta-sync.md
+  # AC1/AC3/AC4's context-layer behaviour is covered directly against
+  # Letflow.Definitions.delta/2 in test/letflow/definitions/store_test.exs (no
+  # HTTP layer needed there). This block covers what's specific to the HTTP
+  # surface: AC4's malformed-since -> 400 mapping, and AC5's tenant isolation
+  # (the "a delta request from tenant A never returns a definition belonging
+  # to tenant B" test obligation the design doc's §8 names explicitly),
+  # matching REQ-081's own AC5 cross-tenant placement precedent above.
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-125 AC1 -- GET /definitions/delta returns the delta envelope" do
+    test "GET /delta with no since returns full history and a next_since watermark" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req125-ac1a")
+      definition = create_definition!(tenant.schema_name)
+
+      conn =
+        build_conn("GET", "/delta", tenant, %{roles: ["PROCESS_OPERATOR"]}) |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert Map.has_key?(body, "items")
+      assert Map.has_key?(body, "next_since")
+      assert is_integer(body["next_since"])
+      assert Enum.any?(body["items"], &(&1["id"] == definition.id))
+    end
+  end
+
+  describe "REQ-125 AC4 -- malformed since is a typed 400, not a crash or silent full dump" do
+    test "GET /delta?since=not-a-number returns 400" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req125-ac4a")
+
+      conn =
+        build_conn("GET", "/delta?since=not-a-number", tenant, %{roles: ["PROCESS_OPERATOR"]})
+        |> dispatch()
+
+      assert conn.status == 400
+    end
+
+    test "GET /delta?since=-1 returns 400" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req125-ac4b")
+
+      conn =
+        build_conn("GET", "/delta?since=-1", tenant, %{roles: ["PROCESS_OPERATOR"]})
+        |> dispatch()
+
+      assert conn.status == 400
+    end
+
+    test "GET /delta?since=12abc (trailing garbage after digits) returns 400, not a truncated parse" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req125-ac4c")
+
+      conn =
+        build_conn("GET", "/delta?since=12abc", tenant, %{roles: ["PROCESS_OPERATOR"]})
+        |> dispatch()
+
+      assert conn.status == 400
+    end
+
+    test "GET /delta?since=0 is treated as full history, not an error" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req125-ac4d")
+      _definition = create_definition!(tenant.schema_name)
+
+      conn =
+        build_conn("GET", "/delta?since=0", tenant, %{roles: ["PROCESS_OPERATOR"]}) |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert length(body["items"]) == 1
+    end
+  end
+
+  describe "REQ-125 AC5 -- a delta request from tenant A never returns tenant B's definitions" do
+    test "tenant A's delta never contains a definition created/mutated only in tenant B's schema" do
+      tenant_a = TenantFixture.provisioned_tenant!(slug_prefix: "req125-ac5a1")
+      tenant_b = TenantFixture.provisioned_tenant!(slug_prefix: "req125-ac5a2")
+
+      _definition_a = create_definition!(tenant_a.schema_name)
+      definition_b = create_definition!(tenant_b.schema_name)
+
+      assert {:ok, %{definition: activated_b}} =
+               Definitions.activate(definition_b.id, prefix: tenant_b.schema_name)
+
+      assert {:ok, _deprecated_b} =
+               Definitions.deprecate(activated_b.id, prefix: tenant_b.schema_name)
+
+      conn =
+        build_conn("GET", "/delta", tenant_a, %{roles: ["PROCESS_OPERATOR"]}) |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      ids = Enum.map(body["items"], & &1["id"])
+
+      refute definition_b.id in ids,
+             "tenant A's delta response leaked a definition belonging to tenant B"
+    end
+
+    test "tenant B's own since cursor, replayed against tenant A, is scoped to tenant A's own counter -- never used to probe tenant B's change volume" do
+      tenant_a = TenantFixture.provisioned_tenant!(slug_prefix: "req125-ac5b1")
+      tenant_b = TenantFixture.provisioned_tenant!(slug_prefix: "req125-ac5b2")
+
+      _definition_a1 = create_definition!(tenant_a.schema_name)
+
+      # Tenant B has a much larger change volume/cursor than tenant A.
+      for _ <- 1..5, do: create_definition!(tenant_b.schema_name)
+
+      conn_b =
+        build_conn("GET", "/delta", tenant_b, %{roles: ["PROCESS_OPERATOR"]}) |> dispatch()
+
+      assert conn_b.status == 200
+      tenant_b_next_since = Jason.decode!(conn_b.resp_body)["next_since"]
+
+      # Replay tenant B's own high-water cursor against tenant A -- tenant A's
+      # counter is unrelated (independent per-tenant-schema counter, design §5.2/
+      # §8), so this must never error and must never leak tenant B's data; it is
+      # compared only against tenant A's own, much smaller counter.
+      conn_cross =
+        build_conn("GET", "/delta?since=#{tenant_b_next_since}", tenant_a, %{
+          roles: ["PROCESS_OPERATOR"]
+        })
+        |> dispatch()
+
+      assert conn_cross.status == 200
+      body = Jason.decode!(conn_cross.resp_body)
+      assert body["items"] == []
+    end
+  end
+
+  describe "REQ-125 AC6 -- 403 without DefinitionsRead" do
+    test "AGENT_RUNNER (no DefinitionsRead) gets 403 on /delta" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req125-ac6a")
+
+      conn = build_conn("GET", "/delta", tenant, %{roles: ["AGENT_RUNNER"]}) |> dispatch()
+      assert conn.status == 403
+    end
+  end
+
+  # ══════════════════════════════════════════════════════════════════════
   # AC5 -- cross-tenant/nonexistent equivalence (INV-1, INV-5)
   # ══════════════════════════════════════════════════════════════════════
 

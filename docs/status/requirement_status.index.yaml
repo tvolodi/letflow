@@ -231,6 +231,13 @@ volumes:
       with this run's own done-event (0 rewritten/reordered/deleted --
       `git diff --numstat` on this file across the whole run showed
       insertions-only). Successor: docs/status/requirement_status.v4.yaml.
+      WF02-REQ125-20260823's own Step Final rebase (2026-08-23) found this
+      volume already closed by WF02-REQ082-20260823 (landed on main first),
+      so its own REQ-125 started-event -- originally appended here before
+      that run knew of REQ-082's roll -- was composed into volume 4 instead,
+      per the established "one run's started/done land one in each volume
+      across a roll boundary" pattern (ISS-0263's own note above). This
+      volume's frozen content is therefore unchanged by that composition.
     note: >
       Incremented to 42 by WF03-ISS0287-20260823 (ORCH)'s own done-event
       append -- 42 on-disk `- req:` entries in requirement_status.v3.yaml,
@@ -502,12 +509,19 @@ volumes:
       forward either side's independently-computed 40/42, per this note's
       own recount-every-time rule. Rolled immediately after this recount
       (this file crossed its own roll_rule ceiling) -- see volume 4 below.
+      WF02-REQ125-20260823's own Step Final rebase found this volume already
+      closed at 43 by WF02-REQ082-20260823 above; its own REQ-125
+      started-event (independently appended here against a stale
+      pre-REQ-082 base, also computing 43) was composed into volume 4
+      instead rather than counted against this volume, since a closed
+      volume never regains an entry once rolled -- see volume 4's note
+      below.
 
   - volume: 4
     path: docs/status/requirement_status.v4.yaml
     status: current
     opened: 2026-08-23
-    entries: 5
+    entries: 7
     note: >
       Opened by WF02-REQ082-20260823's own Step Final roll, successor to
       volume 3. Created with volume 3's header text verbatim (volume number,
@@ -520,6 +534,21 @@ volumes:
       Incremented to 5 by ORCH's own ISS-0288 done-event append (docs-only
       citation-path fix, no rebase conflict on this file) -- 5 on-disk
       `- req:` entries in requirement_status.v4.yaml.
+      Incremented to 6 by WF02-REQ125-20260823 (ELIXIR-DEV)'s Step Final
+      rebase, which found this volume already opened and populated by
+      WF02-REQ082-20260823/WF02-REQ135-20260823/ISS-0288 (landed on main
+      first). REQ-125's own started-event -- originally appended to volume 3
+      before that volume's roll -- was composed here instead, appended after
+      the existing 5 entries (its own `at:` timestamp, 2026-08-22T23:25:09Z,
+      sorts before all five existing entries here, but it is appended rather
+      than reordered since this composition is across a volume boundary, not
+      a same-file chronological merge -- volume 3 is frozen and cannot regain
+      an entry once closed). Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v4.yaml` = 6.
+      Incremented to 7 by WF02-REQ125-20260823 (DOC-UPDATER)'s own REQ-125
+      done-event append (Step 6), composed in this same Step Final rebase --
+      7 on-disk `- req:` entries in requirement_status.v4.yaml.
+
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

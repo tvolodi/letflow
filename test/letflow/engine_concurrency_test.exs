@@ -185,7 +185,7 @@ defmodule Letflow.EngineConcurrencyTest do
     {result.instance_id, task}
   end
 
-  defp complete_attrs(overrides \\ %{}) do
+  defp complete_attrs(overrides) do
     Map.merge(
       %{
         output_variables: %{},

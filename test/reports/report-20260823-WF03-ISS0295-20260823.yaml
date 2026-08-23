@@ -1,0 +1,92 @@
+report_id: report-20260823-WF03-ISS0295-20260823
+agent: TEST-RUNNER
+issue: ISS-0295
+workflow_step: WF-04 Step 1 (final test-run gate before RELEASE-VALIDATOR) -- verify
+  the web/ frontend-only fix that consolidated stale Keycloak port/client_id
+  hardcoding across 33 web/tests/e2e/ files into exported constants in helpers.ts,
+  plus the new regression test guarding against future drift.
+branch: feature/WF03-ISS0295-20260823
+date: 2026-08-23
+
+diff_scope: >
+  web/tests/e2e/helpers.ts (new exported KEYCLOAK_PORT / KEYCLOAK_CLIENT_ID-style
+  constants), 33 web/tests/e2e/*.spec.ts files repointed to those constants, and the
+  new regression test web/tests/unit/iss-0295-e2e-idp-config.test.ts. No lib/letflow/
+  application code, no migrations -- frontend/web-only change. TEST-DESIGNER and
+  TEST-DESIGN-VALIDATOR both independently proved the new regression test
+  fail-then-pass prior to this run. CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, and
+  REVIEWER have already PASSed this branch.
+
+step_1_type_check:
+  command: "npm run type-check (tsc -b tsconfig.json)"
+  cwd: web/
+  exit_code: 0
+  output: "(no output -- clean tsc build)"
+  verdict: PASS
+
+step_2_lint:
+  command: "npm run lint (eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0)"
+  cwd: web/
+  exit_code: 0
+  output: "(no output -- zero warnings/errors)"
+  verdict: PASS
+
+step_3_unit_tests:
+  command: "npm run test (vitest run --passWithNoTests --exclude \"tests/e2e/**\" --exclude \"tests/guards/**\")"
+  cwd: web/
+  exit_code: 0
+  output: >
+    Test Files  32 passed (32)
+    Tests  184 passed (184)
+    Duration  7.71s
+    Includes tests/unit/iss-0295-e2e-idp-config.test.ts (4 tests) passing alongside
+    every other unit test file, no regressions elsewhere.
+  verdict: PASS
+
+step_4_guards:
+  command: "npm run guards (vitest run tests/guards/meta-control.spec.ts tests/guards/source-scan.spec.ts tests/guards/bundle-scan.spec.ts tests/guards/role-set.spec.ts --reporter=verbose)"
+  cwd: web/
+  exit_code: 0
+  output: >
+    Runs a real production build (tsc -b && vite build) as part of bundle-scan.spec.ts:
+    392 modules transformed, dist/assets/index-td801Qy7.js 1,662.24 kB (gzip 442.46 kB)
+    -- pre-existing chunk-size warning, not a failure, unrelated to this diff.
+    Test Files  4 passed (4)
+    Tests  48 passed (48)
+    Duration  15.65s
+  verdict: PASS
+
+step_5_e2e_discovery:
+  command: "npm run test:e2e:list (playwright test --config=playwright.config.ts --list)"
+  cwd: web/
+  exit_code: 0
+  output: >
+    Total: 228 tests in 37 files. All specs parsed with no collection errors,
+    confirming the helpers.ts consolidation did not break import/export wiring
+    across the 33 rewritten e2e spec files. No live Keycloak/backend was started or
+    needed for discovery-only listing.
+  verdict: PASS
+
+failures: []
+
+failure_attribution:
+  method: >
+    Per core-directives.md "Failure Attribution Is Structural, Never By
+    Count-Matching." No failures occurred in any of the five steps, so no attribution
+    work was required.
+
+verdict: PASS
+
+summary_line: >
+  web/ type-check: clean (exit 0). web/ lint: clean, zero warnings (exit 0). Unit
+  suite (vitest): 184/184 tests passed across 32 files, including the new
+  tests/unit/iss-0295-e2e-idp-config.test.ts (4/4), no regressions elsewhere. Guards
+  (production build + bundle/source/meta-control/role-set scans): 48/48 passed,
+  build succeeded (392 modules, no bundle-scan violations). Playwright e2e discovery:
+  228 tests across 37 files all parsed cleanly, no live Keycloak required. All five
+  gates PASS.
+
+artifacts_out:
+  - test/reports/report-20260823-WF03-ISS0295-20260823.yaml
+
+next_action: PASS -> Route to RELEASE-VALIDATOR

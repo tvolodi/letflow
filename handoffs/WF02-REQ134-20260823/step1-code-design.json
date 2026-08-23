@@ -1,0 +1,68 @@
+{
+  "handoff_id": "step1-WF02-REQ134-20260823",
+  "run_id": "WF02-REQ134-20260823",
+  "workflow_id": "WF-02",
+  "step": "1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ134-20260823/step1-code-design.json",
+  "created_at": "2026-08-23T10:52:01Z",
+  "started_at": "2026-08-23T10:52:01Z",
+  "completed_at": "2026-08-23T10:52:01Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-134"],
+    "requirement_text": {
+      "REQ-134": "config/test.exs sets token_verifier: Letflow.Oidc.TokenVerifierDouble, so the entire suite passes with no identity provider running. That was correct while none existed. Its consequence is that no test in this repository has ever exercised a real token, which is why a placeholder issuer and an unmountable authorization matrix both survived to 2026-08-22 without a single failure. Add an integration path that obtains a real token from the running Keycloak (direct-access grant against the seeded users) and drives it through AuthPipeline for real: signature verification against the live JWKS, issuer/realm resolution, claim mapping, JIT provisioning, and the authorization plug. Keep TokenVerifierDouble as the default for the unit suite. Do NOT make the whole suite depend on a running Keycloak -- that would trade a blind spot for a flaky, infrastructure-coupled suite, and this project already runs partitioned parallel test processes (scripts/test_parallel.sh) that a shared external service would serialize. The real-token path should be a tagged/excluded-by-default set that a human or CI can run deliberately, with a clear skip message naming what has to be running -- follow the pattern web/tests/e2e/onboarding/ already uses (\"Ensure docker-compose services are running\"). State in the result how a developer runs it, and confirm that mix test with Keycloak stopped still passes."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/oidc/token_verifier.ex",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "test/support/token_verifier_double.ex",
+      "test/support/configurable_token_verifier_double.ex",
+      "test/support/tenant_fixture.ex",
+      "config/test.exs",
+      "config/dev.exs",
+      "docker-compose.yml",
+      "priv/keycloak/realms/bpm-default.json",
+      "config/keycloak_port.exs",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex",
+      "lib/letflow/identity/tenant.ex",
+      "scripts/test_parallel.sh",
+      "test/test_helper.exs",
+      "web/tests/e2e/onboarding/onb-ui-01.e2e.spec.ts",
+      "web/tests/e2e/pipeline.ts"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/req134-real-keycloak-token-integration.md"
+    ]
+  },
+  "task": {
+    "description": "Design (no implementation code) an integration test path that obtains a genuine token from the running Keycloak via direct-access grant against the seeded bpm-default realm users, and drives it through Letflow.Plugs.AuthPipeline for real -- real JWKS/signature verification via Letflow.Oidc.TokenVerifier.Oidcc, real issuer/realm resolution, real claim mapping, and real JIT provisioning. Must stay excluded from the default mix test / scripts/test_parallel.sh run (tagged, opt-in only), must not touch config/test.exs's TokenVerifierDouble default, and must specify an exact skip message and an exact developer-facing include command.",
+    "acceptance_criteria": [
+      "a test obtains a genuine token from the running Keycloak and drives it through Letflow.Plugs.AuthPipeline end to end, with the real assertion output quoted",
+      "the token's signature is verified against the live JWKS via the real verifier, not TokenVerifierDouble -- demonstrated by the test failing if pointed at a tampered token",
+      "JIT provisioning creates a real user row on first authentication and reuses it on the second, asserted across two calls",
+      "the default mix test run still passes with Keycloak stopped, quoted as evidence",
+      "the real-token tests skip with a message naming exactly what must be running, rather than failing obscurely",
+      "the result states the exact command a developer runs to execute them"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req134-real-keycloak-token-integration.md. Design: test/test_helper.exs gains `exclude: [:keycloak]` on ExUnit.start/1 (applies to plain `mix test`, any path-scoped mix test, and every scripts/test_parallel.sh partition alike, since all load the same test_helper.exs) -- this is what keeps the new suite out of the default run without touching config/test.exs's TokenVerifierDouble default. New tagged module test/letflow/integration/keycloak_auth_pipeline_test.exs (@moduletag :keycloak, async: false -- it temporarily overrides Application.get_env(:letflow, :oidc)'s :token_verifier to the real Letflow.Oidc.TokenVerifier.Oidcc for its own setup/on_exit-bounded duration, restoring the double afterward). setup_all probes Keycloak's realm discovery endpoint via a new test-support module test/support/keycloak_test_client.ex (Erlang :httpc/:inets, no new mix.exs dependency) with a short timeout and returns {:skip, <message>} on failure; exact skip text specified: 'Keycloak not ready at <discovery-url>. Ensure docker-compose services are running (docker compose up -d keycloak) before executing these tests.' KeycloakTestClient also specifies direct_access_token/4 (resource-owner-password grant against Keycloak's token endpoint, client_id letflow-web per priv/keycloak/realms/bpm-default.json) and tamper_signature/1 (mutates a real JWT's signature segment byte-for-bit) with full @specs and error shapes. Design specifies ensure_bpm_default_tenant!/0 (get-or-create, not a plain insert, since slug/idp_realm_id are uniquely constrained and this fixture is deliberately NOT torn down between runs) that provisions the pinned bpm-default tenant row (Letflow.Identity.Tenant's @default_tenant_slug pinning requires idp_realm_id == 'bpm-default' exactly) and its schema via the same TenantProvisioning steps test/support/tenant_fixture.ex already establishes. AC1: builds a conn via Plug.Test, calls AuthPipeline.call/2 with a genuine admin-user token, asserts refute conn.halted and conn.assigns.auth_context shape (tenant_id/user_id/roles, PLATFORM_ADMIN present). AC2: same pipeline call with KeycloakTestClient.tamper_signature/1 applied to a genuine token, with the real Oidcc verifier still active -- asserts conn.halted and conn.status == 401, explicitly reasoning that TokenVerifierDouble could not even express this case (it only recognizes one fixed sentinel string). AC3: designer-user token, Repo.aggregate count query against Letflow.Identity.User (external_realm/external_id, scoped via prefix: schema_name) before/after-first/after-second AuthPipeline calls -- 0 -> 1 -> 1, plus user_id equality across both calls as the row-identity proof. AC4: exact commands named -- `mix test` and `scripts/test_parallel.sh`, both unaffected by Keycloak's state because of the test_helper.exs exclusion; TEST-RUNNER's future evidence is that command's real output with the keycloak docker-compose service stopped. AC5: setup_all's ExUnit {:skip, message} mechanism (not a raised exception, which would report as a failure rather than a skip) with the exact message text quoted above. AC6: exact command `mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs`, stated verbatim in the design's own S2 section for downstream steps to reuse without reinventing it. No implementation code included -- signatures, @specs, error-shape atoms, and exact string/command literals only. Every acceptance criterion is cross-referenced to a concrete design section in the doc's closing table (S10); no open questions were left unresolved (S9).",
+    "artifacts_out": [
+      "lib/letflow/design/req134-real-keycloak-token-integration.md"
+    ],
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

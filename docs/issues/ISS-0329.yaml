@@ -1,0 +1,51 @@
+id: ISS-0329
+title: >
+  Flaky cross-partition test: auth_pipeline_configurable_verifier_test.exs:140
+  hardcodes idp_realm_id against a unique index
+discovered_by: ORCH
+discovered_in_run: WF01-S5-EXPANSION-20260823
+discovered_at: 2026-08-23T16:35:00Z
+severity: MINOR
+description: >
+  test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs:140 sets
+  `realm = "jit-disabled-test-realm"`, a hardcoded literal, and inserts a
+  tenant carrying it via insert_tenant_for_realm!/1. `tenants.idp_realm_id`
+  has a unique partial index (tenants_idp_realm_id_partial_index), so when a
+  concurrently-running partition -- or a leftover row from an earlier aborted
+  run -- already holds that realm id, the insert fails with
+  Ecto.InvalidChangesetError: "idp_realm_id has already been taken".
+
+  Observed 2026-08-23 during S5 expansion, on a full
+  `sh scripts/test_parallel.sh` with TEST_PARALLEL_N=4: partition 4 exited 2
+  with this as its single failure (combined 1985/1986 passed). The same file
+  passes in isolation (`mix test <file>` -> 3 passed), which is the signature
+  of a cross-partition isolation defect rather than a logic bug.
+
+  Not caused by the branch that found it: the S5 expansion branch is
+  docs-and-one-test-comment only and does not touch this file, `lib/`, or
+  `mix.exs`. GitHub Actions CI runs `mix test` single-process rather than
+  partitioned, which is why CI did not surface it.
+
+  The fix already exists in the same file. The other two tests use a
+  `unique_realm/1` helper (lines 154 and 167); line 140 is the lone holdout.
+  This is the same class as WF03-ISS0059-20260819 (commit 8870068,
+  "collision-proof tenant slug suffix across 30 test files"), which
+  collision-proofed tenant slugs but left this realm id behind.
+
+  SECOND, SEPARATE FINDING in the same observation -- scripts/test_parallel.sh
+  reported the failure correctly in both its per-partition summary
+  ("partition 4: ... 1 failures, exit 2") and its combined line
+  ("1981 tests, 5 properties, 1 failures (1985/1986 passed)"), but the script
+  itself still exited 0. README.md describes this script as aggregating
+  partition results and "exits non-zero if any partition failed", so a caller
+  trusting the exit code alone would treat a red run as green. This is
+  potentially more serious than the flake itself, because it silently
+  weakens the full-suite mechanism TEST-RUNNER and RELEASE-VALIDATOR both
+  invoke (REQ-114). Needs confirming as either intended-with-a-reason or a
+  real defect in the aggregation step.
+affected_files:
+  - test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs
+  - scripts/test_parallel.sh
+queue_task_id: 329
+github_issue: 630
+status: open

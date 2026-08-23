@@ -62,46 +62,6 @@ defmodule Letflow.EngineConcurrencyTest do
 
   @instance_count 100
 
-  # ISS-0260 -- AC1's "no global lock" wall-clock proxy multiplier, split by load
-  # regime (design doc lib/letflow/design/iss0260-ac1-timing-flake.md §3.1-§3.3).
-  # `@ac1_timing_multiplier_default` applies to a plain `mix test` run;
-  # `@ac1_timing_multiplier_parallel` (60x) applies only when
-  # `TEST_PARALLEL_GROUP` is set (a real `scripts/test_parallel.sh` N-way
-  # partition), where real cross-partition Postgres/scheduler contention pushes the
-  # ratio higher than in an uncontended run. `TEST_AC1_TIMING_MULTIPLIER`, when set,
-  # overrides both unconditionally, mirroring decision 0009's env-knob pattern and
-  # `test_parallel.sh`'s own `TEST_MAX_CONNECTIONS` validation style (lines 124-127
-  # there): it must be a positive integer or the test fails loudly, naming the bad
-  # value, rather than silently falling back to a default.
-  #
-  # REQ-136 (2026-08-23): widened 30 -> 50 after a real GitHub Actions CI run (a
-  # plain `mix test` regime, TEST_PARALLEL_GROUP unset) measured ratio 42.41x
-  # (baseline_micros=5295, concurrent_micros=224549) -- CI's shared/contended
-  # runner pushes this uncontended-regime ratio meaningfully higher than the dev
-  # hosts 30x was derived against. 50x gives ~18% real headroom over the one
-  # observed CI ratio; re-derive from a proper multi-run CI window if it proves
-  # marginal in practice, per this file's own "no re-derivation without real
-  # measurement" convention.
-  @ac1_timing_multiplier_default 50
-  @ac1_timing_multiplier_parallel 60
-
-  defp ac1_timing_multiplier do
-    case System.get_env("TEST_AC1_TIMING_MULTIPLIER") do
-      nil ->
-        case System.get_env("TEST_PARALLEL_GROUP") do
-          nil -> @ac1_timing_multiplier_default
-          _group -> @ac1_timing_multiplier_parallel
-        end
-
-      value ->
-        if Regex.match?(~r/^[1-9][0-9]*$/, value) do
-          String.to_integer(value)
-        else
-          flunk("TEST_AC1_TIMING_MULTIPLIER='#{value}' is not a positive integer")
-        end
-    end
-  end
-
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers -- copied (same signatures/bodies) from
   # engine_complete_task_test.exs per design §3.2, this file provisions its own
@@ -261,13 +221,7 @@ defmodule Letflow.EngineConcurrencyTest do
   end
 
   # Completes every {instance_id, task_id} pair in `instances` via genuinely
-  # concurrent Task.async calls, all launched before any is awaited. Split out
-  # from `provision_and_complete_all!/2` (below) specifically so AC1's timing
-  # measurement can wrap ONLY this concurrent span -- not the sequential
-  # `start_n_instances!/3` setup that precedes it -- keeping the "no global lock"
-  # wall-clock proxy an apples-to-apples comparison against `baseline_micros`
-  # (which also times a single bare `complete_task/3` call with zero
-  # instance-creation cost).
+  # concurrent Task.async calls, all launched before any is awaited.
   defp complete_all_concurrently!(schema_name, instances) do
     tasks =
       Enum.map(instances, fn %{instance_id: instance_id, task_id: task_id} ->
@@ -282,6 +236,55 @@ defmodule Letflow.EngineConcurrencyTest do
       end)
 
     Task.await_many(tasks, 30_000)
+  end
+
+  # ISS-0291 -- same as complete_all_concurrently!/2 but each task also records its
+  # own [start, end] wall-clock window (monotonic_time, native units), returned
+  # alongside the completion result. Used only by AC1, which needs per-task
+  # overlap evidence rather than a batch-total timing ratio -- see
+  # max_overlap_depth/1 below for why this replaced the old baseline-ratio
+  # assertion (it flaked 3 times: ISS-0260, then twice more on GitHub Actions CI
+  # even after two threshold widenings, per ISS-0291's diagnosis).
+  defp complete_all_concurrently_with_windows!(schema_name, instances) do
+    tasks =
+      Enum.map(instances, fn %{instance_id: instance_id, task_id: task_id} ->
+        Task.async(fn ->
+          start_at = System.monotonic_time()
+
+          result =
+            Engine.complete_task(
+              task_id,
+              complete_attrs(%{output_variables: %{"instance_seed" => instance_id}}),
+              prefix: schema_name
+            )
+
+          end_at = System.monotonic_time()
+          {instance_id, result, start_at, end_at}
+        end)
+      end)
+
+    Task.await_many(tasks, 30_000)
+  end
+
+  # ISS-0291 -- classic interval-sweep max-overlap-depth: given a list of
+  # {start, end} windows (any monotonic unit), returns the maximum number of
+  # windows simultaneously "in flight" at any point in time. A start event
+  # increments depth, an end event decrements it; events at the same instant
+  # sort starts before ends so two back-to-back-but-non-overlapping windows
+  # never register a false depth-2 moment. depth > 1 is direct, timing-value-
+  # independent evidence that at least two completions genuinely overlapped in
+  # wall-clock time -- true regardless of how fast or slow (or how noisy) the
+  # host executing the test is, unlike a ratio against a single baseline
+  # measurement.
+  defp max_overlap_depth(windows) do
+    windows
+    |> Enum.flat_map(fn {start_at, end_at} -> [{start_at, :start}, {end_at, :end}] end)
+    |> Enum.sort_by(fn {at, kind} -> {at, if(kind == :end, do: 0, else: 1)} end)
+    |> Enum.reduce({0, 0}, fn
+      {_at, :start}, {depth, max_depth} -> {depth + 1, max(depth + 1, max_depth)}
+      {_at, :end}, {depth, max_depth} -> {depth - 1, max_depth}
+    end)
+    |> elem(1)
   end
 
   # Shared by Case AC1 and Case AC4 -- provisions a tenant, starts @instance_count
@@ -307,29 +310,13 @@ defmodule Letflow.EngineConcurrencyTest do
       %{schema_name: schema_name} = provisioned_tenant()
       definition = active_definition!(schema_name, graph_human_task_end())
 
-      # Independent baseline: one instance completed alone, measured immediately
-      # before the concurrent batch, used as the "no global lock" wall-clock proxy
-      # (design §3.4 Case AC1 -- deliberately loose, catches only gross regressions
-      # like an accidentally-reintroduced global mutex/singleton serializer).
-      [baseline] = start_n_instances!(schema_name, definition, 1)
-
-      {baseline_micros, baseline_result} =
-        :timer.tc(fn ->
-          Engine.complete_task(baseline.task_id, complete_attrs(), prefix: schema_name)
-        end)
-
-      assert {:ok, %{instance_status: :completed}} = baseline_result
-
-      # Setup (sequential -- start_n_instances!/3's own docstring) happens OUTSIDE
-      # the timed span: only the concurrent Task.async/Task.await_many completion
-      # phase is measured, so concurrent_micros stays comparable to baseline_micros
-      # (which also excludes any instance-creation cost).
+      # Setup (sequential -- start_n_instances!/3's own docstring) happens before
+      # the timed span.
       instances = start_n_instances!(schema_name, definition, @instance_count)
 
-      {concurrent_micros, results} =
-        :timer.tc(fn -> complete_all_concurrently!(schema_name, instances) end)
+      windowed_results = complete_all_concurrently_with_windows!(schema_name, instances)
 
-      for {_instance_id, result} <- results do
+      for {_instance_id, result, _start_at, _end_at} <- windowed_results do
         assert {:ok, %{instance_status: :completed}} = result
       end
 
@@ -339,116 +326,28 @@ defmodule Letflow.EngineConcurrencyTest do
         assert projection.variables["instance_seed"] == instance_id
       end
 
-      # Loose proxy, not a tight bound (design §3.4/§6 OQ2): genuine per-row locking
-      # lets @instance_count completions overlap, so total time stays within a small
-      # multiple of one call's own time; a global mutex/table-lock design would push
-      # this toward ~@instance_count x instead. The multiplier is load-regime-aware
-      # (ISS-0260, lib/letflow/design/iss0260-ac1-timing-flake.md §3) -- 50x under
-      # plain `mix test`, 60x under a real `scripts/test_parallel.sh` N-way
-      # partition (`TEST_PARALLEL_GROUP` set), or an explicit
-      # `TEST_AC1_TIMING_MULTIPLIER` override.
-      multiplier = ac1_timing_multiplier()
-      ratio = concurrent_micros / baseline_micros
+      # ISS-0291 -- direct overlap evidence, not a wall-clock ratio against a
+      # single baseline measurement (design §3.4/§6 OQ2's original approach,
+      # which flaked three times: ISS-0260, then twice more on GitHub Actions CI
+      # even after two threshold widenings -- shared-runner CPU contention has
+      # an effectively unbounded noise tail, so no fixed multiplier is safe).
+      # `max_overlap_depth/1` sweeps every completion's own [start, end] window
+      # and finds how many were simultaneously in flight at any instant. Depth 1
+      # would mean every completion ran strictly after the previous one finished
+      # -- exactly what a global mutex/table-lock serializer would produce,
+      # regardless of host speed. Depth > 1 is the same property the old ratio
+      # was a noisy proxy for, verified directly and with zero sensitivity to
+      # how fast or how contended the machine running this test is.
+      windows =
+        Enum.map(windowed_results, fn {_id, _result, start_at, end_at} -> {start_at, end_at} end)
 
-      assert concurrent_micros < baseline_micros * multiplier,
-             "AC1 timing ratio #{Float.round(ratio, 2)}x exceeded multiplier #{multiplier}x " <>
-               "(TEST_PARALLEL_GROUP #{if System.get_env("TEST_PARALLEL_GROUP"), do: "set", else: "unset"}) " <>
-               "-- baseline_micros=#{baseline_micros}, concurrent_micros=#{concurrent_micros}"
-    end
-  end
+      depth = max_overlap_depth(windows)
 
-  # ---------------------------------------------------------------------------------
-  # ISS-0260 regression -- unit coverage of `ac1_timing_multiplier/0` itself
-  # (lib/letflow/design/iss0260-ac1-timing-flake.md §3.1-§3.3). These are pure-
-  # function unit tests per test_developer_guide.md §1 "Pure functions first" -- no
-  # Postgres, no real concurrency, deterministic. They exist to catch a REGRESSION
-  # of this helper's own logic (wrong default, dropped load-awareness, broken
-  # override validation/precedence), which the AC1 timing test itself cannot catch
-  # because a flaky wall-clock proxy is exactly what this fix was written to stop
-  # depending on for correctness signal.
-  #
-  # async: false at the file level (Letflow.DataCase, async: false above) already
-  # rules out cross-test env-var races within this file; each test restores the
-  # PRE-EXISTING value (if any) of the vars it touches via on_exit, rather than
-  # unconditionally deleting them, so state set by the surrounding OS process (e.g.
-  # scripts/test_parallel.sh setting TEST_PARALLEL_GROUP for a whole partition's
-  # lifetime) survives these tests instead of being wiped out from under a later
-  # test in the same partition/BEAM VM.
-  # ---------------------------------------------------------------------------------
-
-  describe "ISS-0260 -- ac1_timing_multiplier/0" do
-    setup do
-      original_parallel_group = System.get_env("TEST_PARALLEL_GROUP")
-      original_ac1_multiplier = System.get_env("TEST_AC1_TIMING_MULTIPLIER")
-
-      on_exit(fn ->
-        if original_parallel_group do
-          System.put_env("TEST_PARALLEL_GROUP", original_parallel_group)
-        else
-          System.delete_env("TEST_PARALLEL_GROUP")
-        end
-
-        if original_ac1_multiplier do
-          System.put_env("TEST_AC1_TIMING_MULTIPLIER", original_ac1_multiplier)
-        else
-          System.delete_env("TEST_AC1_TIMING_MULTIPLIER")
-        end
-      end)
-
-      :ok
-    end
-
-    test "defaults to 50 when neither env var is set" do
-      System.delete_env("TEST_PARALLEL_GROUP")
-      System.delete_env("TEST_AC1_TIMING_MULTIPLIER")
-
-      assert ac1_timing_multiplier() == 50
-    end
-
-    test "returns 60 when TEST_PARALLEL_GROUP is set (real test_parallel.sh partition)" do
-      System.delete_env("TEST_AC1_TIMING_MULTIPLIER")
-      System.put_env("TEST_PARALLEL_GROUP", "tp12345")
-
-      assert ac1_timing_multiplier() == 60
-    end
-
-    test "TEST_AC1_TIMING_MULTIPLIER overrides the default (TEST_PARALLEL_GROUP unset)" do
-      System.delete_env("TEST_PARALLEL_GROUP")
-      System.put_env("TEST_AC1_TIMING_MULTIPLIER", "45")
-
-      assert ac1_timing_multiplier() == 45
-    end
-
-    test "TEST_AC1_TIMING_MULTIPLIER takes precedence over TEST_PARALLEL_GROUP, not the other way round" do
-      System.put_env("TEST_PARALLEL_GROUP", "tp12345")
-      System.put_env("TEST_AC1_TIMING_MULTIPLIER", "45")
-
-      assert ac1_timing_multiplier() == 45
-    end
-
-    test "rejects a non-numeric override value with flunk, naming the bad value" do
-      System.delete_env("TEST_PARALLEL_GROUP")
-      System.put_env("TEST_AC1_TIMING_MULTIPLIER", "abc")
-
-      assert_raise ExUnit.AssertionError, ~r/TEST_AC1_TIMING_MULTIPLIER='abc'/, fn ->
-        ac1_timing_multiplier()
-      end
-    end
-
-    test "rejects a negative override value with flunk" do
-      System.put_env("TEST_AC1_TIMING_MULTIPLIER", "-1")
-
-      assert_raise ExUnit.AssertionError, ~r/TEST_AC1_TIMING_MULTIPLIER='-1'/, fn ->
-        ac1_timing_multiplier()
-      end
-    end
-
-    test "rejects a zero override value with flunk (must be positive)" do
-      System.put_env("TEST_AC1_TIMING_MULTIPLIER", "0")
-
-      assert_raise ExUnit.AssertionError, ~r/TEST_AC1_TIMING_MULTIPLIER='0'/, fn ->
-        ac1_timing_multiplier()
-      end
+      assert depth > 1,
+             "AC1 expected genuine concurrent overlap (max_overlap_depth > 1) across " <>
+               "#{@instance_count} completions, got max depth #{depth} -- every completion " <>
+               "ran strictly sequentially, consistent with an accidentally-reintroduced " <>
+               "global lock/serializer"
     end
   end
 

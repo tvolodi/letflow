@@ -1,0 +1,53 @@
+id: ISS-0329
+title: >
+  Flaky cross-partition test: auth_pipeline_configurable_verifier_test.exs:140
+  hardcodes idp_realm_id against a unique index
+discovered_by: ORCH
+discovered_in_run: WF01-S5-EXPANSION-20260823
+discovered_at: 2026-08-23T16:35:00Z
+severity: MINOR
+description: >
+  test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs:140 sets
+  `realm = "jit-disabled-test-realm"`, a hardcoded literal, and inserts a
+  tenant carrying it via insert_tenant_for_realm!/1. `tenants.idp_realm_id`
+  has a unique partial index (tenants_idp_realm_id_partial_index), so when a
+  concurrently-running partition -- or a leftover row from an earlier aborted
+  run -- already holds that realm id, the insert fails with
+  Ecto.InvalidChangesetError: "idp_realm_id has already been taken".
+
+  Observed 2026-08-23 during S5 expansion, on a full
+  `sh scripts/test_parallel.sh` with TEST_PARALLEL_N=4: partition 4 exited 2
+  with this as its single failure (combined 1985/1986 passed). The same file
+  passes in isolation (`mix test <file>` -> 3 passed), which is the signature
+  of a cross-partition isolation defect rather than a logic bug.
+
+  Not caused by the branch that found it: the S5 expansion branch is
+  docs-and-one-test-comment only and does not touch this file, `lib/`, or
+  `mix.exs`. GitHub Actions CI runs `mix test` single-process rather than
+  partitioned, which is why CI did not surface it.
+
+  The fix already exists in the same file. The other two tests use a
+  `unique_realm/1` helper (lines 154 and 167); line 140 is the lone holdout.
+  This is the same class as WF03-ISS0059-20260819 (commit 8870068,
+  "collision-proof tenant slug suffix across 30 test files"), which
+  collision-proofed tenant slugs but left this realm id behind.
+
+  RETRACTED SUB-FINDING (corrected 2026-08-23, same session, before this
+  issue was worked). An earlier revision of this record claimed a second
+  defect: that scripts/test_parallel.sh reported "1 failures" yet exited 0,
+  silently turning a red run green for TEST-RUNNER/RELEASE-VALIDATOR
+  (REQ-114). That claim is WRONG and is withdrawn. Reading the script
+  directly (lines 283-304): `if [ "$f" -gt 0 ]; then partition_failed=1; fi`
+  sets any_failed, and line 324 is `exit "$any_failed"` -- so a parsed
+  failure count above zero does exit non-zero, exactly as README.md
+  describes. The "exited with code 0" I observed came from the agent
+  harness's own background-task wrapper line, not from the script. No
+  defect exists here; scripts/test_parallel.sh needs no change. Recorded
+  rather than deleted so nobody re-derives the same false conclusion from
+  the same misread.
+
+affected_files:
+  - test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs
+queue_task_id: 329
+github_issue: 630
+status: open

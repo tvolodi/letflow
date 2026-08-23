@@ -858,11 +858,31 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # time this assertion fails, treat it the same way: re-derive the true
       # values with audit/1 against the live corpus, don't guess, and extend
       # this comment rather than replacing it.
+      #
+      # UPDATE (S5 expansion, 2026-08-23): OQ-5's *other* predicted event
+      # happened -- "it will change legitimately when S5/S6/S7 are expanded."
+      # S5 was expanded into REQ-148..REQ-175 (28 requirements, all `pending`)
+      # against docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md.
+      # Because every one of them is `pending`, and `pending` does not confer
+      # activity (F-PENDING-NOT-ACTIVE above), S5 is now a *present but
+      # inactive* stage -- the first stage in this corpus to occupy that state.
+      # Note the distinction from F-EMPTY-STAGE-INACTIVE: a stage with no
+      # requirements is absent from result.stages entirely, whereas S5 is
+      # present and :inactive. `active` is therefore unchanged; only `inactive`
+      # moves, from [] to ["S5"].
+      #
+      # Re-derived, not guessed: `mix run -e` calling
+      # Mix.Tasks.Letflow.CheckDeferralStaleness.audit/1 against the live
+      # docs/requirements.yaml returned active == ["S0","S1","S2","S3","S4",
+      # "S8","S9"], inactive == ["S5"], violations == 0. Test-data-only
+      # update; the detector in lib/mix/tasks/letflow.check_deferral_staleness.ex
+      # is unchanged and was doing exactly its job. S5 joins `active` the
+      # moment any of REQ-148..175 goes in_progress/done/blocked.
       active = for s <- result.stages, s.activity == :active, do: s.stage
       inactive = for s <- result.stages, s.activity == :inactive, do: s.stage
 
       assert active == ["S0", "S1", "S2", "S3", "S4", "S8", "S9"]
-      assert inactive == []
+      assert inactive == ["S5"]
     end
 
     test "T-LIVE-DEFERRED-COUNT-IS-ZERO -- documents today's vacuous green", %{result: result} do

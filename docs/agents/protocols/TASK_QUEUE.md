@@ -202,6 +202,26 @@ curl -X POST https://queue-test.ai-dala.com/tasks \
   }'
 ```
 
+**`depends_on` takes integer queue task ids, not `REQ-` strings** (established
+empirically 2026-08-23, during S5's REQ-148..REQ-175 registration). Every example in
+this file happens to show `depends_on: []`, which left the element type unstated. Posting
+`"depends_on": ["REQ-058"]` is rejected with `422` / `{"error":"depends_on: is
+invalid"}`; `"depends_on": [103]` succeeds. So a batch registration has to resolve each
+`docs/requirements.yaml` `depends_on` entry to the queue id of the already-registered
+task — its `impl_order`/`id` — which in practice means **registering in dependency
+order** and keeping a `REQ-xxx → task id` map as you go. A requirement whose dependency
+is not yet registered cannot be registered either; that is a real ordering constraint,
+not an incidental one. The failure is loud (422, nothing created), so a wrong format
+cannot silently produce a task with a missing dependency edge.
+
+**Cloudflare fronts this service, and it filters by user-agent.** A `POST` from Python's
+default `urllib` user-agent returns `403` with Cloudflare `error code: 1010` — *not* a
+`letflow-queue` auth failure, and not something a valid `$QUEUE_AUTH_TOKEN` fixes. The
+same request via `curl` (or any client sending a normal UA) succeeds. If you get a `403`
+whose body is Cloudflare HTML or a bare `error code: NNNN` rather than the service's own
+`{"error": ...}` JSON, suspect the client, not the token. `GET /health` succeeding while
+a `POST` 403s is the giveaway.
+
 **Optional request field `github_issue_number`** (added 2026-08-21, `letflow-queue` PR #4,
 deployed and verified live): when supplied, the service **adopts** that existing GitHub
 issue instead of creating a second one. A number already linked to another task is

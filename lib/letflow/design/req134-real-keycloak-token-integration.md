@@ -312,82 +312,72 @@ into it as part of this requirement.
 
 ## 7. Assertions, mapped to acceptance criteria
 
+Every subsection below describes the test module's structure as a contract — setup/
+teardown behavior, what is called, what shape is asserted — in the same
+signature/type-shape register §4.1 uses for `KeycloakTestClient`. None of this is
+runnable ExUnit source; TEST-DESIGNER writes the actual `setup`/`test` blocks at Step 3
+against this contract.
+
 ### 7.1 Real-verifier override (shared setup, needed by AC1-3)
 
-```
-setup do
-  original = Application.fetch_env!(:letflow, :oidc)
-  real_oidc_config = Keyword.put(original, :token_verifier, Letflow.Oidc.TokenVerifier.Oidcc)
-  Application.put_env(:letflow, :oidc, real_oidc_config)
-  on_exit(fn -> Application.put_env(:letflow, :oidc, original) end)
-  :ok
-end
-```
+A module-level `setup` callback establishes and tears down the real-verifier override
+for every test in the module:
 
-`Letflow.Application`'s already-running `Oidcc.ProviderConfiguration.Worker` (started
-under `provider_name: Letflow.Oidc.DefaultProvider`, per `lib/letflow/application.ex`,
-against the real local issuer `config/test.exs` already configures — see that file's own
-comment, quoted in the background above) is reused as-is; this design does not start a
-second worker. `AuthPipeline.verify_token/1` re-reads `Application.fetch_env!(:letflow,
-:oidc)` on every call (confirmed in `lib/letflow/plugs/auth_pipeline.ex` — no caching), so
-this `put_env` override takes effect on the very next `AuthPipeline.call/2` with no
+- **On entry:** read the current `:letflow, :oidc` config (`Application.fetch_env!/2`),
+  derive a copy with `:token_verifier` replaced by `Letflow.Oidc.TokenVerifier.Oidcc`
+  (`Keyword.put/3`), and install it (`Application.put_env/3`). Return `:ok` (this
+  `setup` produces no test context, it only has the side effect).
+- **On exit:** an `on_exit/1` callback restores the config keyword list captured before
+  the override, so no other test file (including `test/letflow/plugs/auth_pipeline_test.exs`,
+  which runs under `async: true` against the double) ever observes the real-verifier
+  config.
+
+No new provider worker is started: `Letflow.Application`'s already-running
+`Oidcc.ProviderConfiguration.Worker` (registered as `Letflow.Oidc.DefaultProvider`,
+started against the real local issuer `config/test.exs` already configures) is reused
+as-is. `AuthPipeline.verify_token/1` re-reads `Application.fetch_env!(:letflow, :oidc)`
+on every call (confirmed in `lib/letflow/plugs/auth_pipeline.ex` — no caching), so the
+`put_env` override takes effect on the very next `AuthPipeline.call/2` with no
 additional wiring.
 
 ### 7.2 AC1 — genuine token drives the full pipeline (real assertion output required)
 
-```
-test "a genuine Keycloak token authenticates through AuthPipeline end to end" do
-  %{tenant_id: tenant_id} = ensure_bpm_default_tenant!()
-  {:ok, raw_token} =
-    KeycloakTestClient.direct_access_token(token_url(), "admin-user", "admin-pass",
-      client_id: "letflow-web"
-    )
+Test contract: **"a genuine Keycloak token authenticates through AuthPipeline end to
+end."**
 
-  conn =
-    Plug.Test.conn(:get, "/", %{})
-    |> Plug.Conn.put_req_header("authorization", "Bearer " <> raw_token)
-    |> Letflow.Plugs.AuthPipeline.call([])
-
-  refute conn.halted
-  assert %{auth_context: %{tenant_id: ^tenant_id, user_id: user_id, roles: roles}} =
-           conn.assigns
-  assert is_binary(user_id)
-  assert "PLATFORM_ADMIN" in roles
-end
-```
+1. Provision the fixture tenant via `ensure_bpm_default_tenant!/0` (§5), binding
+   `tenant_id`.
+2. Obtain a genuine token via `KeycloakTestClient.direct_access_token/4` against the
+   `admin-user`/`admin-pass` seeded credential, `client_id: "letflow-web"`.
+3. Build a `Plug.Test.conn/3` request carrying `authorization: "Bearer " <> raw_token`,
+   and pass it through `Letflow.Plugs.AuthPipeline.call/2`.
+4. Assert the resulting conn is **not** halted, and that `conn.assigns.auth_context`
+   matches the shape `%{tenant_id: <the tenant_id from step 1>, user_id: <a binary
+   string>, roles: <a list containing "PLATFORM_ADMIN">}`.
 
 `Letflow.Plugs.AuthPipeline` only halts+responds on a rejected request (`reject/4`,
 `lib/letflow/plugs/auth_pipeline.ex:322-329`) — a successful call returns the conn
 un-halted with `:auth_context` assigned (`attach_auth_context/4`), never a 2xx status of
 its own (this plug does not itself write a success response; downstream plugs do). So
-"drives it through `AuthPipeline` end to end" is demonstrated by: `conn.halted == false`
-and `conn.assigns.auth_context` populated with the expected shape — that is the concrete,
-runnable assertion AC1 requires, and TEST-RUNNER quotes the real `mix test --include
-keycloak ...` output showing this test passing (AC1's "real assertion output quoted").
+"drives it through `AuthPipeline` end to end" is demonstrated by exactly the two
+assertions in step 4 above — that is the concrete, checkable claim AC1 requires, and
+TEST-RUNNER quotes the real `mix test --include keycloak ...` output showing this test
+passing as AC1's "real assertion output quoted."
 
 ### 7.3 AC2 — tampered token is rejected by the REAL verifier (not the double)
 
-```
-test "a token with a tampered signature is rejected by the real verifier" do
-  {:ok, raw_token} =
-    KeycloakTestClient.direct_access_token(token_url(), "admin-user", "admin-pass",
-      client_id: "letflow-web"
-    )
-  tampered = KeycloakTestClient.tamper_signature(raw_token)
+Test contract: **"a token with a tampered signature is rejected by the real
+verifier."**
 
-  conn =
-    Plug.Test.conn(:get, "/", %{})
-    |> Plug.Conn.put_req_header("authorization", "Bearer " <> tampered)
-    |> Letflow.Plugs.AuthPipeline.call([])
+1. Obtain a genuine token the same way as §7.2 step 2.
+2. Derive a tampered token via `KeycloakTestClient.tamper_signature/1`.
+3. Build and drive a conn through `AuthPipeline.call/2` exactly as §7.2 step 3, but with
+   the tampered token in the `authorization` header.
+4. Assert the conn **is** halted, `conn.status == 401`, and the decoded JSON response
+   body (`Jason.decode!/1` of `conn.resp_body`) matches `%{"error" => "unauthorized"}`.
 
-  assert conn.halted
-  assert conn.status == 401
-  assert %{"error" => "unauthorized"} = Jason.decode!(conn.resp_body)
-end
-```
-
-This is the demonstration AC2 asks for: the SAME pipeline call as §7.2, with the SAME
-`:token_verifier` override in effect (`Letflow.Oidc.TokenVerifier.Oidcc`, never
+This is the demonstration AC2 asks for: the SAME pipeline call as §7.2, under the SAME
+`:token_verifier` override from §7.1 (`Letflow.Oidc.TokenVerifier.Oidcc`, never
 `TokenVerifierDouble` — `TokenVerifierDouble` has no concept of "tampered" at all, it
 only recognizes one fixed sentinel string, so this test could not even be expressed
 against the double), fails specifically because `Oidcc.Token.validate_jwt/3`'s real
@@ -396,75 +386,53 @@ signature-verification path is real and load-bearing, not a pass-through.
 
 ### 7.4 AC3 — JIT provisioning creates then reuses a real user row, across two calls
 
-```
-test "JIT provisioning creates a user row on first auth and reuses it on the second" do
-  %{tenant_id: tenant_id, schema_name: schema_name} = ensure_bpm_default_tenant!()
-  {:ok, raw_token} =
-    KeycloakTestClient.direct_access_token(token_url(), "designer-user", "designer-pass",
-      client_id: "letflow-web"
-    )
+Test contract: **"JIT provisioning creates a user row on first auth and reuses it on
+the second."**
 
-  count_before =
-    Letflow.Repo.aggregate(
-      Ecto.Query.from(u in Letflow.Identity.User,
-        where: u.external_realm == "bpm-default" and u.external_id == ^jwt_subject(raw_token)
-      ),
-      :count,
-      prefix: schema_name
-    )
-  assert count_before == 0
+1. Provision the fixture tenant via `ensure_bpm_default_tenant!/0` (§5), binding
+   `tenant_id` and `schema_name`.
+2. Obtain a genuine token for the `designer-user`/`designer-pass` seeded credential
+   (deliberately not `admin-user`, already consumed by §7.2/§7.3 — see below for why
+   that separation matters).
+3. Derive the token's `sub` claim (a private helper, described below as
+   `jwt_subject/1`), and query `Letflow.Repo.aggregate/3` for the count of
+   `Letflow.Identity.User` rows matching `external_realm == "bpm-default" and
+   external_id == <that sub>`, scoped with `prefix: schema_name`. Assert the count is
+   `0` before either pipeline call.
+4. Drive one `AuthPipeline.call/2` request with the token (same conn-building contract
+   as §7.2 step 3). Assert the conn is not halted, and capture
+   `conn.assigns.auth_context.user_id` as `user_id_1`.
+5. Re-run the same count query from step 3. Assert the count is now `1`.
+6. Drive a second `AuthPipeline.call/2` request with the SAME token. Assert the conn is
+   not halted, and capture `conn.assigns.auth_context.user_id` as `user_id_2`.
+7. Assert `user_id_1 == user_id_2`.
+8. Re-run the same count query from step 3 one more time. Assert the count is still
+   `1`.
 
-  conn1 = authenticate(raw_token)
-  refute conn1.halted
-  user_id_1 = conn1.assigns.auth_context.user_id
+`jwt_subject/1` (private test-module helper, not part of `KeycloakTestClient`): decodes
+the JWT's middle (payload) base64url segment via `Base.url_decode64!(segment, padding:
+false)` and `Jason.decode!/1`, reading the `"sub"` key — the same claim
+`Identity.provision_oidc_user/4` upserts on (`(tenant_id, external_realm,
+external_id)`, `external_id` populated from `identity_context`'s `subject`, which is
+the token's `"sub"` claim per `AuthPipeline.map_claims/2`).
 
-  count_after_first =
-    Letflow.Repo.aggregate(
-      Ecto.Query.from(u in Letflow.Identity.User,
-        where: u.external_realm == "bpm-default" and u.external_id == ^jwt_subject(raw_token)
-      ),
-      :count,
-      prefix: schema_name
-    )
-  assert count_after_first == 1
+Using `designer-user` here keeps this test's user row independent of the other two
+tests' JIT-provisioned rows, avoiding any cross-test ordering dependency within the
+module (all three tests still ultimately provision under the SAME `bpm-default`
+tenant/schema, which is why `ensure_bpm_default_tenant!/0`'s get-or-create shape from §5
+matters — a second test in this module must reuse the same tenant row, not fail on a
+duplicate insert).
 
-  conn2 = authenticate(raw_token)
-  refute conn2.halted
-  user_id_2 = conn2.assigns.auth_context.user_id
+A shared private helper (referred to above as "the conn-building contract") factors out
+the repeated `Plug.Test.conn/3` + `authorization` header + `AuthPipeline.call/2`
+sequence common to §7.2/§7.3/§7.4, so TEST-DESIGNER writes it once rather than
+duplicating it three times.
 
-  assert user_id_1 == user_id_2
-
-  count_after_second =
-    Letflow.Repo.aggregate(
-      Ecto.Query.from(u in Letflow.Identity.User,
-        where: u.external_realm == "bpm-default" and u.external_id == ^jwt_subject(raw_token)
-      ),
-      :count,
-      prefix: schema_name
-    )
-  assert count_after_second == 1
-end
-```
-
-`jwt_subject/1` (private helper in the test module): decodes the JWT's middle
-(payload) base64url segment via `Base.url_decode64!(segment, padding: false)` and
-`Jason.decode!/1`, reading `"sub"` — the same claim `Identity.provision_oidc_user/4`
-upserts on (`(tenant_id, external_realm, external_id)`, `external_id` populated from
-`identity_context`'s `subject`, which is the token's `"sub"` claim per
-`AuthPipeline.map_claims/2`). Using `"designer-user"` here (not `"admin-user"`, already
-consumed by §7.2/§7.3) keeps this test's user row independent of the other two tests'
-JIT-provisioned rows, avoiding any cross-test ordering dependency within the module (both
-still ultimately provision under the SAME `bpm-default` tenant/schema, which is why
-`ensure_bpm_default_tenant!/0`'s get-or-create shape from §5 matters — a second test in
-this module must reuse the same tenant row, not fail on a duplicate insert).
-
-`authenticate/1` (shared private helper): the same three-line `Plug.Test.conn/3 |>
-put_req_header |> AuthPipeline.call/2` sequence as §7.2/§7.3, extracted once.
-
-The count-based before/1st/2nd assertions are the concrete "asserted across two calls"
-AC3 requires: 0 → 1 → still 1, with `user_id_1 == user_id_2` as the direct row-identity
-proof (not merely a matching count, which alone wouldn't rule out a delete+reinsert
-pair).
+The count-based before/1st/2nd assertions in steps 3/5/8 are the concrete "asserted
+across two calls" AC3 requires: 0 → 1 → still 1, with `user_id_1 == user_id_2` (step 7)
+as the direct row-identity proof — a matching count alone would not rule out a
+delete-then-reinsert pair, which is why the identity check is a separate, required
+assertion rather than being inferred from the count staying at 1.
 
 ## 8. Cross-check against `scripts/test_parallel.sh`'s partitioning contract
 

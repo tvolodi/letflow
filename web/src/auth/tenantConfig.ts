@@ -2,8 +2,8 @@ import { client } from '@/api/client'
 
 /** Tenant OIDC configuration — fetched from backend by hostname, cached in memory */
 
-const DEFAULT_AUTHORITY = (import.meta.env.VITE_OIDC_AUTHORITY as string) ?? 'http://localhost:8081/realms/bpm-default'
-const DEFAULT_CLIENT_ID = (import.meta.env.VITE_OIDC_CLIENT_ID as string) ?? 'bpm-platform-api'
+const DEFAULT_AUTHORITY = (import.meta.env.VITE_OIDC_AUTHORITY as string) ?? 'http://localhost:8082/realms/bpm-default'
+const DEFAULT_CLIENT_ID = (import.meta.env.VITE_OIDC_CLIENT_ID as string) ?? 'letflow-web'
 
 const REALM_STORAGE_KEY = 'bpm_realm_slug'
 

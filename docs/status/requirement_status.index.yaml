@@ -521,7 +521,7 @@ volumes:
     path: docs/status/requirement_status.v4.yaml
     status: current
     opened: 2026-08-23
-    entries: 26
+    entries: 27
     note: >
       Opened by WF02-REQ082-20260823's own Step Final roll, successor to
       volume 3. Created with volume 3's header text verbatim (volume number,
@@ -603,6 +603,8 @@ volumes:
       Incremented to 26 by ORCH's own ISS-0295 done-event append (WF-03
       full pipeline, merged via PR #592, no rebase conflict on this file)
       -- 26 on-disk `- req:` entries in requirement_status.v4.yaml.
+      Incremented to 27 by FRONTEND-DEV's own REQ-133 blocked-event append
+      -- 27 on-disk `- req:` entries in requirement_status.v4.yaml.
 
 
 known_anomalies:

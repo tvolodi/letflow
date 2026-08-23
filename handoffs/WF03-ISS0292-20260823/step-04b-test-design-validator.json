@@ -1,0 +1,51 @@
+{
+  "handoff_id": "step04b-WF03-ISS0292-20260823",
+  "run_id": "WF03-ISS0292-20260823",
+  "workflow_id": "WF-03",
+  "step": "4b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0292-20260823/step-04b-test-design-validator.json",
+  "created_at": "2026-08-23T08:45:00Z",
+  "started_at": "2026-08-23T08:45:00Z",
+  "completed_at": "2026-08-23T08:59:13Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0292"],
+    "requirement_text": {
+      "ISS-0292": "SandboxPoolTest RT-9/RT-8 CI flake fix, 4 new deterministic regression tests added by TEST-DESIGNER at commit 26b8cce on branch feature/WF03-ISS0292-20260823, on top of the fix at commit 23273a4c0791b645d4aafb0b0a26ea898aaab479. See handoffs/WF03-ISS0292-20260823/step-04-test-designer.json for TEST-DESIGNER's full claimed evidence, including a fail-then-pass proof via a throwaway git worktree against the pre-fix parent commit."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step03-WF03-ISS0292-20260823", "step04-WF03-ISS0292-20260823"],
+    "artifacts_in": [
+      "test/letflow/sandbox_pool_test.exs",
+      "lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md"
+    ],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "Independently validate TEST-DESIGNER's 4 new test cases at commit 26b8cce (`git show 26b8cce`). Do not accept the claimed fail-then-pass worktree result as given -- per docs/agents/workflows/WF-03_issue_resolving.md's mutant/fail-first discipline, APPLY at least one of it yourself: reproduce the critical RT-8 case (schema-list traversal continuing past a deterministic middle-schema failure) against the PRE-FIX parent commit (1e765e4, or `git log --oneline` to confirm the exact parent of 23273a4c0791b645d4aafb0b0a26ea898aaab479) in your own throwaway git worktree, confirm it fails there, then confirm it passes on the fix branch -- and quote both real results. Also independently re-run the full test/letflow/sandbox_pool_test.exs suite on the fix branch and quote the real pass/fail count. Check: (1) each of the 4 new tests is deterministic (no reliance on CI-timing/query_canceled specifically) as claimed; (2) test 3's Postgres-syntax-error trigger (a schema name with an embedded unescaped double-quote) is genuinely deterministic, not incidentally flaky; (3) test 4's traversal-order determinism claim (Erlang term-order over the diff MapSet) is not itself a hidden flakiness risk -- assess this critically, it is exactly the kind of subtle-ordering assumption that could reintroduce flakiness under different schema-name hashes; (4) remove your own throwaway worktree when done and verify it's gone.",
+    "acceptance_criteria": [
+      "Independently reproduces (not just re-reads) the fail-then-pass worktree comparison for the critical RT-8 test case and quotes both real results",
+      "Independently re-runs the full test/letflow/sandbox_pool_test.exs suite on the fix branch and quotes real pass/fail counts",
+      "Assesses whether each new test is genuinely deterministic, flagging any residual flakiness risk explicitly (especially test 4's traversal-order assumption)",
+      "Confirms own throwaway worktree removed",
+      "PASS or FAIL with reasoning"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently reproduced TEST-DESIGNER's fail-then-pass claim rather than trusting it. (1) Confirmed pre-fix parent via `git log --oneline 23273a4c^..23273a4c`: 1e765e4. (2) Created my own throwaway worktree `git worktree add ../letflow-tdv-iss0292-check 1e765e4`, shared deps/build via MIX_DEPS_PATH/MIX_BUILD_PATH (mix.lock identical between 1e765e4 and 26b8cce, confirmed via `git diff 1e765e4 26b8cce -- mix.lock` = empty) to avoid re-fetching. Appended my OWN copy of the RT-8 critical test body (case 4) plus its 3 scaffolding helpers (escape_double_quotes/1, create_schema!/1, drop_schema_escaped!/1) to that commit's own test file, pointed at ITS bare pre-fix drop_sandbox_schemas_created_since!/1 (no rescue). First run (assert_raise Postgrex.Error) failed on the wrong assertion (pre-fix the exception surfaces as query_without_holding's own flunk/ExUnit.AssertionError, not a raw Postgrex.Error) -- corrected to assert_raise ExUnit.AssertionError and re-ran: `mix test test/letflow/sandbox_pool_test.exs --only describe:\"PRE-FIX PROBE\"` produced real output: '1) test PRE-FIX PROBE a deterministically-failing middle schema does not prevent a later schema from being dropped ... Expected false or nil, got true / code: refute schema_exists?(third_schema) / arguments: # 1 \"sandbox_iss0292c4_3_1\" ... Result: 0/1 passed, 19 excluded / Failed: 1 test' -- an exact independent match to TEST-DESIGNER's claimed pre-fix failure (only first_schema's DROP query appears in the logged queries before the abort; third_schema's DROP is never attempted inside the loop, only later during on_exit teardown). (3) Ran the REAL case-4 test (unmodified) on the fix branch: `mix test test/letflow/sandbox_pool_test.exs --only describe:\"drop_sandbox_schemas_created_since!/1 attempts every schema in a diff set regardless of one schema's failure (ISS-0292 / RT-8 critical regression)\"` -> 'Result: 1 passed, 22 excluded'. (4) Ran the full suite on the fix branch three times with a fixed seed (--seed 0) and once without: all four runs produced 'Result: 23 passed' (0 failures), matching TEST-DESIGNER's claimed count (19 pre-existing + 4 new). (5) Ran just the 4 new ISS-0292 tests 5 times in a row: 'Result: 4 passed, 19 excluded' every time (20/20), no flakiness observed. (6) `mix compile --warnings-as-errors` on the fix branch: exit 0, no output, clean. (7) Worktree removed: `git worktree remove ../letflow-tdv-iss0292-check --force`, then `rm -rf ./_build_tdv_probe` (the copied build cache used for the probe, kept outside the worktree so it wasn't committed); verified via `git worktree list` (shows only the main checkout) and `ls ../` (no stray letflow-tdv-iss0292-check directory). `git status --porcelain` on lib/ and test/ in the main repo shows no stray changes from this validation (the one modified file, lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md, and the untracked handoffs/*.json files, both predate this step and were not touched by me).\n\nDeterminism assessment per test: (1) retry-then-succeed and (2) retry-exhausted both use an Agent-backed call counter as the sole branch condition -- no timing/CI dependency, fully deterministic, reconfirmed via 5x repeat runs. (3) resilient_drop_schema/1's syntax-error trigger: a schema name with a literal embedded double-quote is created correctly (CREATE SCHEMA doubles the quote via escape_double_quotes/1) but the code-under-test's own DROP SQL interpolation (line ~583, `~s(DROP SCHEMA IF EXISTS \"#{schema_name}\" CASCADE)`) does NOT double it -- this asymmetry is a genuine, 100%-reproducible SQL syntax error (Postgres 42601) on every single attempt, independent of load, timing, or connection state; verified directly in my own runs (ERROR 42601 appeared identically across all reruns). Not incidentally flaky. (4) Test 4's Erlang-term-order reliance: assessed as LOW residual risk, not none, but well-mitigated -- (a) the test does not blindly assume the order, it MEASURES the actual diff_order via a live query and asserts it equals the expected [first, middle, third] BEFORE relying on it in the critical assertions, so if the ordering assumption ever broke (OTP map-representation change, unexpected leaked schemas altering the diff set), this assertion would go red first and loudly, not silently pass vacuously; (b) the underlying mechanism is not actually hash-based 'schema-name hashing' as the task brief worried -- for Erlang/OTP maps with <= 32 keys (the 'flat map' representation), key order is a deterministic, non-randomized lexicographic (byte-wise) term-order comparison, not a hash bucket order, so it does not vary across CI runs, OTP restarts, or hash-seed randomization; (c) the ordering guarantee is governed by the SIZE OF THE DIFF SET (3 elements) not the size of the full baseline/current schema sets, so even a busy CI host with many pre-existing sandbox_% schemas keeps this diff comfortably inside the flat-map/sorted regime. Residual risk that remains and should be named: if Elixir/OTP ever changes the small-map representation's ordering guarantee (or the diff set legitimately grows past ~32 concurrently-created schemas in some future test), the live diff_order assertion is the one that will fail, and it will do so as a clear, self-explanatory red rather than a silent RT-8 regression -- this is a sound fail-safe design, not a blind assumption.",
+    "artifacts_out": [],
+    "issues": [
+      "Minor, non-blocking: TEST-DESIGNER's own probe methodology note in step-04's handoff implies assert_raise Postgrex.Error was used; independent reproduction found the pre-fix exception actually surfaces as ExUnit.AssertionError (via query_without_holding/1's own flunk on the spawned process's death), not a raw Postgrex.Error. Does not change the substantive result (the critical schema-existence assertions are identical and independently confirmed to fail pre-fix / pass post-fix) but is worth TEST-DESIGNER double-checking their own worktree transcript for accuracy.",
+      "Test 4's reliance on Erlang small-map term-order for MapSet traversal is a genuine implementation-detail dependency, not a documented Elixir/OTP contract. It is well-mitigated by the test's own live diff_order measurement/assertion (fails loudly rather than silently if the assumption ever breaks), so this is not a blocking flakiness risk today, but flag for awareness: an ordering-dependent test is inherently more fragile to language/runtime upgrades than an order-independent one."
+    ],
+    "next_action": "Route to TEST-RUNNER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

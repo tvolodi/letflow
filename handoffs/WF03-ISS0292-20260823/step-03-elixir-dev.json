@@ -1,0 +1,54 @@
+{
+  "handoff_id": "step03-WF03-ISS0292-20260823",
+  "run_id": "WF03-ISS0292-20260823",
+  "workflow_id": "WF-03",
+  "step": "3",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0292-20260823/step-03-elixir-dev.json",
+  "created_at": "2026-08-23T08:55:00Z",
+  "started_at": "2026-08-23T08:55:00Z",
+  "completed_at": "2026-08-23T13:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0292"],
+    "requirement_text": {
+      "ISS-0292": "Letflow.SandboxPoolTest RT-9/RT-8 flaked on GitHub Actions CI with Postgres query_canceled + orphaned sandbox schema. Fix design (PASS, both design and validation independently re-verified) at lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md Section 9 ('Pass 4 -- post-escalation restart')."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step02-WF03-ISS0292-20260823", "step02b-WF03-ISS0292-20260823"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md",
+      "test/letflow/sandbox_pool_test.exs",
+      "test/support/tenant_schema_reaper.ex",
+      "lib/letflow/sandbox_pool.ex"
+    ],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "Implement Section 9 of lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md exactly (both CODE-DESIGNER and CODE-DESIGN-VALIDATOR independently re-verified its arithmetic, scope, and control-flow correctness -- do not second-guess the design's timing budget or introduce any new timeout/retry constant beyond what it specifies). Changes are confined to test/letflow/sandbox_pool_test.exs private helpers:\n1. Add retry_query_once/1 (S9.2): rescues Postgrex.Error and DBConnection.ConnectionError around a query function, retries the identical call exactly once with NO explicit :timeout override (so both attempts use Postgrex's own client-side default, 15_000ms -- do not add a :timeout option anywhere in this new code), re-raises if the retry also fails.\n2. sandbox_schema_names/0 (S9.3): wrap its existing Repo.query! call in retry_query_once/1. Still crashes/flunks loudly (via query_without_holding/1's existing unchanged :DOWN path) if both attempts fail -- do not change query_without_holding/1 itself, do not change its signature, do not change pool_op_rendezvous_timeout() or any other existing timeout constant.\n3. Add resilient_drop_schema/1 (S9.4): wraps retry_query_once/1's DROP call in its OWN outer rescue so it NEVER raises -- converts an exhausted retry into {:error, exception} instead (mirroring test/support/tenant_schema_reaper.ex's reclaim_row/1 shape: rescue, Logger.warning with the schema name and formatted exception, return a value rather than raising). Returns :ok on success.\n4. Restructure drop_sandbox_schemas_created_since!/1 (S9.5) from its current bare `for` loop to an Enum.reduce/3 (or equivalent) that calls resilient_drop_schema/1 for every schema in the diff set REGARDLESS of any other schema's outcome -- accumulate failures, and after attempting every schema, if the failure list is non-empty, raise ONE combined flunk/1 naming every still-undropped schema (do not let this go silent -- a genuinely-stuck schema must still surface loudly).\n5. Add `require Logger` to the test module if not already present (resilient_drop_schema/1 needs Logger.warning).\n\nDo not touch: query_without_holding/1's signature or timeout, pool_op_rendezvous_timeout(), release_call_timeout()/provision_timeout_ms() in lib/letflow/sandbox_pool.ex, any @moduletag/@tag, any lib/ file, any migration, any config/*.exs. This is TEST CODE ONLY.\n\nAfter implementing: run `mix compile --warnings-as-errors` and `mix test test/letflow/sandbox_pool_test.exs` (the full file, not just the RT-8/RT-9 cases) and quote the actual real result in your handoff -- do not report success without having run it. Commit your change on this branch (feature/WF03-ISS0292-20260823) with a real commit message referencing ISS-0292.",
+    "acceptance_criteria": [
+      "retry_query_once/1 added, no :timeout option anywhere in the new code",
+      "sandbox_schema_names/0 uses retry_query_once/1",
+      "resilient_drop_schema/1 added, never raises, mirrors tenant_schema_reaper.ex's reclaim_row/1 rescue-log-return shape",
+      "drop_sandbox_schemas_created_since!/1 attempts every schema in the diff set regardless of one schema's failure, and raises one combined failure at the end if any remain undropped",
+      "query_without_holding/1, pool_op_rendezvous_timeout(), release_call_timeout(), provision_timeout_ms() all unchanged",
+      "no @moduletag/@tag timeout added anywhere",
+      "mix compile --warnings-as-errors run and quoted",
+      "mix test test/letflow/sandbox_pool_test.exs run in full and quoted (actual pass/fail counts, not a summary claim)",
+      "change committed on feature/WF03-ISS0292-20260823 with an ISS-0292-referencing message"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented design doc Section 9 (Pass 4) exactly, confined to test/letflow/sandbox_pool_test.exs private helpers. Added `require Logger` to the module. Added `retry_query_once/1` (S9.2): calls fun.(), rescues Postgrex.Error/DBConnection.ConnectionError, logs a warning, retries the identical call once with no :timeout option added anywhere, re-raises un-rescued if the retry also fails. sandbox_schema_names/0 (S9.3) now wraps its Repo.query! SELECT call in retry_query_once/1, still inside the unchanged 1-arg query_without_holding(fn -> ... end) wrapper -- query_without_holding/1's signature, timeout, and :DOWN->flunk path are untouched. Added resilient_drop_schema/1 (S9.4): calls retry_query_once/1 around the DROP SCHEMA CASCADE query inside its own outer rescue, returns :ok on success or {:error, exception} on an exhausted retry (never raises), logging a warning naming the schema and exception -- mirrors test/support/tenant_schema_reaper.ex's reclaim_row/1 rescue-log-return shape. Restructured drop_sandbox_schemas_created_since!/1 (S9.5) from the old bare `for` loop (which discarded results and aborted on first crash -- the RT-8 defect) to an Enum.reduce/3 fold that calls query_without_holding(fn -> resilient_drop_schema(schema_name) end) for every schema in MapSet.difference(sandbox_schema_names(), baseline) regardless of any other schema's outcome, accumulating {schema_name, reason} failures; after the full pass, if failures is non-empty, raises one combined flunk/1 naming every still-undropped schema and its error, otherwise returns :ok. pool_op_rendezvous_timeout(), release_call_timeout(), provision_timeout_ms(), and query_without_holding/1's signature/timeout are all unchanged; no @moduletag/@tag timeout added; no new :timeout option or timeout constant introduced anywhere. `mix compile --warnings-as-errors` exit 0, no warnings. `mix test test/letflow/sandbox_pool_test.exs` (full file): 'Finished in 23.3 seconds (0.00s async, 23.3s sync) / Result: 19 passed', exit 0 -- 19 passed, 0 failed. Committed on feature/WF03-ISS0292-20260823.",
+    "artifacts_out": ["test/letflow/sandbox_pool_test.exs"],
+    "issues": [],
+    "next_action": "Route to SECURITY-REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,52 @@
+{
+  "handoff_id": "step04-WF03-ISS0292-20260823",
+  "run_id": "WF03-ISS0292-20260823",
+  "workflow_id": "WF-03",
+  "step": "4",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0292-20260823/step-04-test-designer.json",
+  "created_at": "2026-08-23T08:40:00Z",
+  "started_at": "2026-08-23T08:40:00Z",
+  "completed_at": "2026-08-23T08:52:22Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0292"],
+    "requirement_text": {
+      "ISS-0292": "SandboxPoolTest RT-9/RT-8 CI flake fix. Both SECURITY-REVIEWER and REVIEWER PASSed commit 23273a4c0791b645d4aafb0b0a26ea898aaab479 on branch feature/WF03-ISS0292-20260823, which added retry_query_once/1 and resilient_drop_schema/1 to test/letflow/sandbox_pool_test.exs and restructured drop_sandbox_schemas_created_since!/1 to attempt every schema in a diff set regardless of any one schema's failure. Now need a regression test that actually exercises the two NEW behaviors this fix adds, not just relies on the existing suite passing (which only exercises the all-success path)."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step03-WF03-ISS0292-20260823"],
+    "artifacts_in": [
+      "test/letflow/sandbox_pool_test.exs",
+      "lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md"
+    ],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 4 note on the fail-then-pass rule: the buggy pre-fix behavior (query_without_holding's bare crash-on-error, and the for-loop's abort-on-first-failure) is CI-timing-dependent (a real Postgres query_canceled under a throttled runner) and not reliably reproducible on demand -- so a literal 'checkout pre-fix commit, show it fails' run is not practical for the ORIGINAL trigger. Instead, per WF-03's own guidance for this class of case, prove the fix's actual NEW logic is exercised and discriminating via DETERMINISTIC test cases that don't depend on CI timing:\n\n1. A test that exercises retry_query_once/1's retry-then-succeed path deterministically: use a stateful counter (e.g. an Agent or :counters/:ets ref started in the test) so the wrapped function raises a real Postgrex.Error (or DBConnection.ConnectionError) on its FIRST call and returns a real value on its SECOND call -- assert retry_query_once/1 returns the second call's value and that the counter shows exactly 2 calls (proves it retries exactly once, not zero, not unbounded).\n2. A test that exercises retry_query_once/1's exhausted-retry path: counter that always raises -- assert the exception propagates (is NOT swallowed) after exactly 2 attempts.\n3. A test that exercises resilient_drop_schema/1 never raising: force a real deterministic Postgres error on a DROP (e.g. a schema_name value that causes a genuine SQL error un-related to timing, such as a name that fails identifier validation, or drop against a schema_name that is a Postgres reserved/invalid identifier -- find a reliable deterministic trigger, do not rely on query_canceled) -- assert resilient_drop_schema/1 returns {:error, _} rather than raising.\n4. THE CRITICAL ONE for RT-8: a test that drop_sandbox_schemas_created_since!/1's restructured loop attempts EVERY schema in a diff set even when an earlier one fails -- set up a scenario with at least 3 real schemas in the diff set where the MIDDLE one is rigged to fail deterministically (not via timing) while the first and third are real, valid, droppable schemas; assert that after the call (which should ultimately flunk/raise citing the failed one), the first and third schemas were ACTUALLY DROPPED (query information_schema.schemata directly to confirm) despite the middle one failing -- this is the fail-if-pre-fix / pass-post-fix proof: describe in your test-design summary what the OLD bare-for-loop code would have done differently (aborted immediately on the middle failure, leaving the third schema NOT dropped) versus what the new Enum.reduce code does (attempts the third schema regardless) -- since a live comparison against the actual pre-fix commit is impractical (needs a manufactured, non-timing-dependent failure trigger that must exist BEFORE the fix too), instead: temporarily check out the pre-fix parent commit into a throwaway git worktree, run YOUR test (case 4) against ONLY the pre-fix version of drop_sandbox_schemas_created_since!/1 (isolate exactly per WF-03's 'apply mutants in a throwaway git worktree' guidance), confirm it fails (the third schema is left undropped), then confirm it passes against the fix branch. Remove the worktree when done, per WF-03's mutant-probe discipline -- verify and state in your summary that no stray worktree or file mutation remains.\n\nWrite these as new test cases inside test/letflow/sandbox_pool_test.exs (private defp helpers are accessible from tests in the same module). Do not modify retry_query_once/1, resilient_drop_schema/1, or drop_sandbox_schemas_created_since!/1 themselves -- test-only additions.",
+    "acceptance_criteria": [
+      "Deterministic (non-CI-timing-dependent) test proves retry_query_once/1 retries exactly once and returns the successful retry's value",
+      "Deterministic test proves retry_query_once/1 propagates (does not swallow) an exception that persists across both attempts",
+      "Deterministic test proves resilient_drop_schema/1 never raises, converting failure to {:error, _}",
+      "The critical test proves drop_sandbox_schemas_created_since!/1 attempts every schema in a diff set regardless of one schema's failure, verified by directly querying information_schema.schemata for the schemas that should/shouldn't have been dropped",
+      "The critical test is shown to FAIL against the pre-fix parent commit (via a throwaway git worktree, per WF-03's mutant-probe discipline) and PASS against the fix branch -- both real outcomes quoted",
+      "The throwaway worktree is removed and its absence verified before this step completes",
+      "All new and pre-existing tests in test/letflow/sandbox_pool_test.exs pass on the fix branch -- real mix test output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added 4 new deterministic test cases to test/letflow/sandbox_pool_test.exs (commit 26b8cce), none dependent on CI timing. (1) 'retry_query_once/1 ... retries exactly once after a Postgrex.Error and returns the retry's value' -- a stateful Agent counter makes fun.() raise a real %Postgrex.Error{postgres: %{code: \"57014\", ...}} on call 1 and return :second_call_succeeded on call 2; asserts retry_query_once(fun) == :second_call_succeeded and the counter == 2 (exactly one retry). (2) 'propagates (does not swallow) an exception that persists across both attempts' -- fun.() always raises; assert_raise Postgrex.Error confirms it is not swallowed, and the counter == 2 confirms exactly two attempts (not unbounded). (3) 'resilient_drop_schema/1 never raises ... converts a genuine, deterministic Postgres syntax error to {:error, _}' -- creates a real schema whose name contains a literal embedded double-quote (a valid Postgres identifier once CREATE SCHEMA doubles the quote); resilient_drop_schema/1's own unescaped DROP SQL interpolation breaks on that same name, producing a genuine, 100%-reproducible Postgres syntax error (ERROR 42601) on every attempt -- verified by direct docker-exec psql probe before writing the test. Asserts {:error, %Postgrex.Error{}} is returned (not raised) and the schema still exists. (4) THE CRITICAL RT-8 CASE, 'drop_sandbox_schemas_created_since!/1 attempts every schema in a diff set regardless of one schema's failure' -- creates 3 real schemas named so their shared prefix plus one ordering digit (_1_/_2\"/_3_) deterministically fixes MapSet/Enum.reduce traversal order (confirmed empirically with `elixir` scripts against MapSet.difference/2 + Enum.to_list/1, including with a large decoy baseline, before relying on it -- Erlang's small-map representation keeps flat maps sorted by term/byte order, not insertion or hash order); the middle schema carries the same embedded-quote DROP-breaking trigger as case 3. The test re-confirms the actual traversal order via a live query before asserting on it (not merely assumed), calls drop_sandbox_schemas_created_since!(baseline) (expecting it to still raise, generically -- INV-T2), then asserts via direct information_schema.schemata queries that the first AND third schemas were genuinely dropped despite the middle one's failure, and that the middle schema still exists. FAIL-THEN-PASS EVIDENCE (real, quoted): a throwaway git worktree was added at the pre-fix parent commit 1e765e4 (`git worktree add ../letflow-wf03-iss0292-prefix-check 1e765e4`); the 3 scaffolding helpers (escape_double_quotes/1, create_schema!/1, drop_schema_escaped!/1) plus ONLY case 4's test body (cases 1-3 reference retry_query_once/1 and resilient_drop_schema/1, which do not exist pre-fix, so were correctly excluded from the probe to avoid a compile error) were added there, pointed at that commit's own pre-fix drop_sandbox_schemas_created_since!/1 (bare `for` loop, no rescue). Running `mix test test/letflow/sandbox_pool_test.exs:1388` there produced: '1) test PRE-FIX PROBE ... a deterministically-failing middle schema does not prevent a later schema from being dropped ... Expected false or nil, got true / code: refute schema_exists?(third_schema) / arguments: # 1 \"sandbox_iss0292c4_3_1\" ... Result: 0/1 passed, 19 excluded / Failed: 1 test' -- exactly the RT-8 defect: the bare for-loop aborted on the middle schema's raise and never attempted third_schema. The identical case (now on the fix branch) passes: full-suite run on commit 26b8cce produced 'Finished in 20.6 seconds ... Result: 23 passed' (0 failures; 19 pre-existing + 4 new). The worktree was then removed (`git worktree remove ../letflow-wf03-iss0292-prefix-check --force`) and its absence verified via `git worktree list` (shows only the main checkout) and a directory listing of the parent folder (no stray directory remains). `mix compile --warnings-as-errors` on the fix branch: clean, exit 0, no warnings.",
+    "artifacts_out": [
+      "test/letflow/sandbox_pool_test.exs (commit 26b8cce)"
+    ],
+    "issues": [],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,51 @@
+{
+  "handoff_id": "step03c-WF03-ISS0292-20260823",
+  "run_id": "WF03-ISS0292-20260823",
+  "workflow_id": "WF-03",
+  "step": "3c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0292-20260823/step-03c-reviewer.json",
+  "created_at": "2026-08-23T08:20:00Z",
+  "started_at": "2026-08-23T08:20:00Z",
+  "completed_at": "2026-08-23T08:32:33Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0292"],
+    "requirement_text": {
+      "ISS-0292": "Fix for SandboxPoolTest RT-9/RT-8 CI flake -- three prior fix attempts on this same issue hit max_rework (see handoffs/escalations.yaml) by stacking timeout/retry budgets one layer further out each time. This 4th attempt (design PASS, twice-validated) takes a structurally different approach: a single in-process retry with no new timeout constant, plus a cleanup loop that no longer aborts on first failure. Full design at lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md Section 9. Implementation on commit 23273a4c0791b645d4aafb0b0a26ea898aaab479, branch feature/WF03-ISS0292-20260823. mix compile --warnings-as-errors and mix test test/letflow/sandbox_pool_test.exs both reported clean (19 passed, 0 failed) by ELIXIR-DEV."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step02-WF03-ISS0292-20260823", "step02b-WF03-ISS0292-20260823", "step03-WF03-ISS0292-20260823"],
+    "artifacts_in": [
+      "test/letflow/sandbox_pool_test.exs",
+      "lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md",
+      "test/support/tenant_schema_reaper.ex",
+      "handoffs/escalations.yaml"
+    ],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "Review commit 23273a4c0791b645d4aafb0b0a26ea898aaab479 on branch feature/WF03-ISS0292-20260823 (`git show 23273a4c0791b645d4aafb0b0a26ea898aaab479`) against docs/agents/instructions/core-directives.md and docs/anti-patterns.md. Check: (1) the implementation actually matches the approved design (Section 9 of lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md) -- no scope creep, no deviation from the specified retry-once/no-new-timeout/accumulate-and-continue shape; (2) idiomatic Elixir -- the retry_query_once/1 and resilient_drop_schema/1 helpers, and the Enum.reduce restructure of drop_sandbox_schemas_created_since!/1, read cleanly and match this file's existing style; (3) confirm independently (re-read the diff yourself, don't just trust ELIXIR-DEV's report) that query_without_holding/1, pool_op_rendezvous_timeout(), release_call_timeout(), provision_timeout_ms() are genuinely unchanged, and no @moduletag/@tag timeout was added; (4) confirm the mix compile/mix test results ELIXIR-DEV reported by re-running them yourself; (5) check against docs/anti-patterns.md for any documented mistake this change risks repeating -- especially anything already logged there about this file or about timeout/retry patterns in test cleanup code.",
+    "acceptance_criteria": [
+      "Confirms implementation matches the approved design with no scope creep",
+      "Confirms idiomatic Elixir style consistent with the rest of the file",
+      "Independently re-confirms query_without_holding/1, pool_op_rendezvous_timeout(), release_call_timeout(), provision_timeout_ms() are unchanged and no timeout tag was added",
+      "Independently re-runs mix compile --warnings-as-errors and mix test test/letflow/sandbox_pool_test.exs and quotes real output",
+      "Checks docs/anti-patterns.md for relevant precedent",
+      "PASS or FAIL with reasoning"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed commit 23273a4c0791b645d4aafb0b0a26ea898aaab479 on feature/WF03-ISS0292-20260823 against design doc lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md Section 9 (Pass 4, post-escalation restart) and docs/anti-patterns.md. (1) Design match: retry_query_once/1 (test/letflow/sandbox_pool_test.exs) matches §9.2 exactly -- rescues only Postgrex.Error/DBConnection.ConnectionError, retries the identical call once with no :timeout option added, re-raises un-rescued on a second failure. sandbox_schema_names/0 matches §9.3 -- one-line body change wrapping the existing Repo.query! in retry_query_once/1, still called via the unmodified 1-arg query_without_holding(fn -> ... end). resilient_drop_schema/1 matches §9.4 -- retry_query_once/1 wrapped in its own outer rescue, never raises, returns :ok | {:error, exception}. drop_sandbox_schemas_created_since!/1 matches §9.5 -- restructured from the old first-failure-aborts `for` loop to an Enum.reduce/3 fold that attempts every schema in the diff set regardless of another's outcome, accumulating {schema_name, reason} failures and raising one combined flunk/1 at the end naming every still-undropped schema; :ok on an empty failure list. No scope creep: no new file touched, no lib/ or migration or config change, no query_without_holding/2 arity added (confirmed by re-reading test/letflow/sandbox_pool_test.exs:513-531 -- query_without_holding/1 is byte-for-byte the version from before this commit), no cleanup_query_timeout_ms/cleanup_query_rendezvous_timeout/@rendezvous_slack_ms-derived constant added (grepped the diff -- none appear), no @moduletag/@tag timeout anywhere in the file (grepped test/letflow/sandbox_pool_test.exs, zero hits) and no change to pool_op_rendezvous_timeout()/release_call_timeout()/provision_timeout_ms() (all read directly at :90-92, sandbox_pool.ex -- unmodified). This is the one structural property (§9.1/§9.6) that distinguishes this attempt from passes 1-3, which each stacked a new timeout layer one level further out; this attempt instead fits the retry inside the existing, unwidened 45_000ms pool_op_rendezvous_timeout() bound (worst case 30_000ms for two unconfigured-default Postgrex attempts, 15_000ms margin) and touches nothing outside sandbox_pool_test.exs's function bodies. (2) Idiomatic Elixir: rescue clauses pattern-matched on exception type (retry_query_once/1) vs. a bare catch-all rescue (resilient_drop_schema/1) is a deliberate, precedented split, not sloppiness -- resilient_drop_schema/1's bare `rescue exception ->` genuinely mirrors test/support/tenant_schema_reaper.ex's reclaim_row/1 (:228-240), an existing rescue-log-return-false shape already used elsewhere in this codebase for the identical accumulate-and-continue purpose (verified by direct read, not assumed). The Enum.reduce/3 fold with an accumulator list and one final Enum.map_join for the combined flunk message is idiomatic and matches TenantSchemaReaper.sweep_orphans/2's own accumulate-and-continue style, which the design doc explicitly cites as the model. Comment style (block comments above each private helper explaining intent/invariants) matches the rest of the file. (3) Independently reread the diff: query_without_holding/1, pool_op_rendezvous_timeout(), release_call_timeout(), provision_timeout_ms() are all confirmed genuinely unchanged -- none of the four appear in the diff hunks at all except as unmodified call sites, and no @moduletag/@tag timeout was added anywhere in the file. (4) Independently re-ran (not trusting ELIXIR-DEV's report): `mix compile --warnings-as-errors` -> clean, zero output, exit 0. `mix test test/letflow/sandbox_pool_test.exs` -> 'Finished in 23.4 seconds (0.00s async, 23.4s sync) / Result: 19 passed', 0 failed -- matches ELIXIR-DEV's reported 19/0. (5) docs/anti-patterns.md checked (grepped for timeout/retry/anti-pattern mentions) -- no entry references this file or a timeout/retry-in-test-cleanup pattern; nothing on record this change risks repeating. No type-safety gap worth filing: this is test-cleanup helper logic over raw SQL results, not new domain transition logic. Verdict: PASS -- 4th attempt genuinely breaks the 3-attempt stacking pattern by fitting inside an existing, unwidened budget rather than adding a new outer layer, matches its design exactly, is idiomatic, and re-verified tests are green.",
+    "artifacts_out": ["handoffs/WF03-ISS0292-20260823/step-03c-reviewer.json"],
+    "issues": [],
+    "next_action": "Route to TEST-DESIGNER (alongside SECURITY-REVIEWER's parallel gate)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

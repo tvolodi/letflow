@@ -1,0 +1,69 @@
+id: ISS-0292
+title: >
+  SandboxPoolTest RT-9/RT-8 CI flake -- cleanup helpers crash uncaught on a
+  real Postgres error and abort partway through orphan-schema cleanup
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0292-20260823
+discovered_at: "2026-08-23T08:00:00Z"
+severity: MAJOR
+description: >
+  test/letflow/sandbox_pool_test.exs's cleanup helpers
+  (query_without_holding/1, sandbox_schema_names/0,
+  drop_sandbox_schemas_created_since!/1) had no rescue around Repo.query!
+  inside a bare spawn_monitor, so a real Postgres :query_canceled error
+  (e.g. on a CPU-throttled GitHub Actions runner) crashed the cleanup
+  helper uncaught. Separately, drop_sandbox_schemas_created_since!/1's
+  DROP-schema cleanup loop was a bare `for` that aborted on the first
+  per-schema failure, leaving every schema after the failing one in the
+  diff set un-dropped and orphaned for later tests (the RT-8/RT-9
+  signature). ISSUE-FIXER's Step 1 diagnosis confirmed this as a real,
+  generalizable defect independent of recurrence frequency -- a scan of
+  the last 5 CI runs on main found zero recent recurrence of this exact
+  signature, but the code defect stood on its own regardless.
+affected_files:
+  - test/letflow/sandbox_pool_test.exs
+queue_task_id: 292
+github_issue: 585
+status: resolved
+resolved_in_run: WF03-ISS0292-20260823
+resolved_at: "2026-08-23T09:18:03Z"
+resolution_note: >
+  Root cause genuinely removed, not worked around. Fix commit
+  23273a4c0791b645d4aafb0b0a26ea898aaab479 (design doc Section 9, Pass 4,
+  post-escalation restart -- three earlier design iterations were each
+  FAILed by CODE-DESIGN-VALIDATOR for stacking timeout/retry arithmetic
+  that each closed one gap while opening a new one one layer further out;
+  see handoffs/escalations.yaml's WF03-ISS0292-20260823 entry for that
+  full history):
+    - retry_query_once/1: rescues Postgrex.Error/DBConnection.ConnectionError,
+      retries once with no :timeout override, re-raises if the retry also
+      fails.
+    - sandbox_schema_names/0 wraps its SELECT in retry_query_once/1.
+    - resilient_drop_schema/1: never raises -- converts an exhausted retry
+      into {:error, exception}, mirroring
+      TenantSchemaReaper.reclaim_row/1's shape.
+    - drop_sandbox_schemas_created_since!/1 restructured from a bare `for`
+      loop (aborted on first crash -- the RT-8 defect) into an
+      Enum.reduce/3 fold that attempts every schema regardless of another
+      schema's outcome, raising one combined flunk/1 naming every
+      still-undropped schema if any remain.
+    - query_without_holding/1, pool_op_rendezvous_timeout(),
+      release_call_timeout(), and provision_timeout_ms() are all
+      unchanged -- the retry fits entirely inside the existing unwidened
+      45_000ms outer bound (worst case 30_000ms for two Postgrex
+      attempts), so no new timeout-budget gap was introduced this time.
+  Regression-test commit 26b8cce (test/letflow/sandbox_pool_test.exs):
+  four new deterministic cases, none dependent on CI timing --
+  retry_query_once/1's retry-then-succeed and exhausted-retry-propagates
+  paths (driven by a stateful Agent counter), resilient_drop_schema/1
+  converting a genuine deterministic Postgres syntax error to {:error, _}
+  instead of raising, and the critical RT-8 case proving
+  drop_sandbox_schemas_created_since!/1's Enum.reduce attempts every
+  schema in a diff set regardless of one schema's failure (a deterministic
+  middle-schema failure trigger via a schema name with an embedded,
+  unescaped double-quote that breaks the DROP SQL text).
+  Full WF-03 gate chain, all PASS: CODE-DESIGNER (design doc, 4th
+  iteration), CODE-DESIGN-VALIDATOR, ELIXIR-DEV implementation,
+  SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER regression tests (with
+  independently-reproduced fail-then-pass proof), TEST-DESIGN-VALIDATOR,
+  TEST-RUNNER full suite (1993/1993 passing in the clean run).

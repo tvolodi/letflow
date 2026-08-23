@@ -51,6 +51,8 @@ defmodule Letflow.SandboxPoolTest do
 
   use Letflow.DataCase, async: false
 
+  require Logger
+
   alias Letflow.SandboxPool
   alias Letflow.SandboxPool.SandboxClaim
 
@@ -530,6 +532,28 @@ defmodule Letflow.SandboxPoolTest do
     end
   end
 
+  # Retries `fun` exactly once if the first call raises Postgrex.Error or
+  # DBConnection.ConnectionError (design doc §9.2) -- both attempts run under
+  # Postgrex's own unconfigured client-side default timeout (no :timeout option added
+  # or overridden anywhere in this function). Logs a warning on the first failure, same
+  # message shape as Letflow.TenantSchemaReaper.reclaim_row/1
+  # (test/support/tenant_schema_reaper.ex:233-241). If the retry also raises, that
+  # exception propagates un-rescued -- this function never swallows a doubly-failed
+  # call itself. Used only from inside `fun` arguments passed to
+  # `query_without_holding/1`; never called standalone, never wraps
+  # `query_without_holding/1` itself.
+  defp retry_query_once(fun) when is_function(fun, 0) do
+    fun.()
+  rescue
+    exception in [Postgrex.Error, DBConnection.ConnectionError] ->
+      Logger.warning(
+        "retry_query_once/1: first attempt failed, retrying once: " <>
+          Exception.format(:error, exception, __STACKTRACE__)
+      )
+
+      fun.()
+  end
+
   # Snapshot of every sandbox_% schema currently in information_schema.schemata. A set
   # difference before/after is the no-schema-leak proof in the cases where the leaked
   # name is one the test never gets told (a schema minted for a caller that died before
@@ -537,23 +561,70 @@ defmodule Letflow.SandboxPoolTest do
   defp sandbox_schema_names do
     query_without_holding(fn ->
       %{rows: rows} =
-        Repo.query!(
-          "SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'sandbox\\_%'"
-        )
+        retry_query_once(fn ->
+          Repo.query!(
+            "SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'sandbox\\_%'"
+          )
+        end)
 
       MapSet.new(rows, fn [schema_name] -> schema_name end)
     end)
+  end
+
+  # Drops one schema, retrying once (via retry_query_once/1) before giving up -- but
+  # unlike retry_query_once/1 itself, NEVER raises to its caller. On an exhausted
+  # retry, logs a warning naming the schema and the exception (same shape as
+  # Letflow.TenantSchemaReaper.reclaim_row/1,
+  # test/support/tenant_schema_reaper.ex:228-242) and returns {:error, exception}
+  # instead of propagating. This lets drop_sandbox_schemas_created_since!/1's loop keep
+  # going after one schema's exhausted retries (design doc §9.4).
+  defp resilient_drop_schema(schema_name) do
+    retry_query_once(fn ->
+      Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+    end)
+
+    :ok
+  rescue
+    exception ->
+      Logger.warning(
+        "resilient_drop_schema/1: failed to drop schema #{schema_name}: " <>
+          Exception.format(:error, exception, __STACKTRACE__)
+      )
+
+      {:error, exception}
   end
 
   # Defensive teardown -- exactly the belt-and-suspenders role this file's existing
   # `on_exit(fn -> drop_schema!(schema) end)` calls play, but for cases whose leaked
   # schema names are not known up front. A no-op on every normal path, where the pool
   # has already dropped everything it created.
+  #
+  # Attempts every schema in the diff set exactly once, regardless of any other
+  # schema's outcome (design doc §9.5) -- an accumulating fold, matching
+  # Letflow.TenantSchemaReaper.sweep_orphans/2's own accumulate-and-continue shape
+  # (test/support/tenant_schema_reaper.ex:146-163), rather than the old bare `for` loop
+  # that aborted the whole pass on the first crash (the RT-8 defect). If any schema is
+  # still undropped after the full pass, raises one combined flunk/1 naming every one
+  # of them -- a genuinely-stuck schema must still surface loudly, not be silently
+  # swallowed.
   defp drop_sandbox_schemas_created_since!(baseline) do
-    for schema_name <- MapSet.difference(sandbox_schema_names(), baseline) do
-      query_without_holding(fn ->
-        Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+    failures =
+      Enum.reduce(MapSet.difference(sandbox_schema_names(), baseline), [], fn schema_name, acc ->
+        case query_without_holding(fn -> resilient_drop_schema(schema_name) end) do
+          :ok -> acc
+          {:error, reason} -> [{schema_name, reason} | acc]
+        end
       end)
+
+    if failures != [] do
+      details =
+        failures
+        |> Enum.reverse()
+        |> Enum.map_join("; ", fn {schema_name, reason} ->
+          "#{schema_name}: #{Exception.format(:error, reason)}"
+        end)
+
+      flunk("drop_sandbox_schemas_created_since!/1: failed to drop schema(s): #{details}")
     end
 
     :ok
@@ -1359,6 +1430,214 @@ defmodule Letflow.SandboxPoolTest do
       # A SUBSEQUENT claim/release ROUND-TRIP STILL WORKS.
       assert {:ok, %SandboxClaim{sandbox_id: new_id}} = SandboxPool.claim(1_000, pool)
       assert :ok = SandboxPool.release(new_id, pool)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0292 regression: cleanup-helper resilience (retry_query_once/1,
+  # resilient_drop_schema/1, and drop_sandbox_schemas_created_since!/1's
+  # attempt-every-schema restructure). See
+  # lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md §9 (the
+  # implemented "Pass 4" design) and test/specs/ISS-0292.md for the full per-case
+  # rationale.
+  #
+  # The original CI-observed trigger (a real Postgres query_canceled under a
+  # throttled runner) is not reproducible on demand, so every case below exercises
+  # the fix's actual new logic through a DETERMINISTIC trigger instead -- a stateful
+  # counter for retry_query_once/1, and a real-but-genuinely-broken DROP SQL text for
+  # resilient_drop_schema/1 -- rather than depending on CI timing. None of these
+  # cases are vacuous: each fails against the pre-fix code (see the RT-8 case's own
+  # note, and this run's git-worktree comparison recorded in the WF-03 handoff) or,
+  # for the two retry_query_once/1 cases, would fail immediately against ANY version
+  # of this file that lacks retry_query_once/1 altogether.
+  # ---------------------------------------------------------------------------------
+
+  describe "retry_query_once/1 (ISS-0292 regression -- deterministic, non-CI-timing-dependent)" do
+    test "retries exactly once after a Postgrex.Error and returns the retry's value" do
+      {:ok, counter} = Agent.start_link(fn -> 0 end)
+      on_exit(fn -> if Process.alive?(counter), do: Agent.stop(counter) end)
+
+      fun = fn ->
+        call_number = Agent.get_and_update(counter, fn n -> {n + 1, n + 1} end)
+
+        case call_number do
+          1 ->
+            raise Postgrex.Error,
+              postgres: %{
+                code: "57014",
+                severity: "ERROR",
+                message: "canceling statement due to statement timeout"
+              }
+
+          2 ->
+            :second_call_succeeded
+        end
+      end
+
+      assert retry_query_once(fun) == :second_call_succeeded
+
+      # Proves EXACTLY two attempts -- not zero (the fun really did raise once and
+      # get called again), not unbounded (a third call would push this to 3).
+      assert Agent.get(counter, & &1) == 2
+    end
+
+    test "propagates (does not swallow) an exception that persists across both attempts" do
+      {:ok, counter} = Agent.start_link(fn -> 0 end)
+      on_exit(fn -> if Process.alive?(counter), do: Agent.stop(counter) end)
+
+      fun = fn ->
+        Agent.update(counter, &(&1 + 1))
+
+        raise Postgrex.Error,
+          postgres: %{
+            code: "57014",
+            severity: "ERROR",
+            message: "canceling statement due to statement timeout"
+          }
+      end
+
+      assert_raise Postgrex.Error, fn -> retry_query_once(fun) end
+
+      # The exception propagated only after both attempts ran -- not swallowed
+      # after the first, not silently retried a third time.
+      assert Agent.get(counter, & &1) == 2
+    end
+  end
+
+  # Doubles an embedded literal double-quote so `name` can be used as a valid
+  # quoted Postgres identifier in a CREATE/DROP SQL text -- ordinary SQL
+  # identifier-quoting rules. This is deliberately NOT what
+  # resilient_drop_schema/1's own `DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE`
+  # interpolation does (it does not double an embedded quote) -- that asymmetry is
+  # exactly what makes a schema name containing a literal quote character a
+  # deterministic, non-timing-dependent DROP failure trigger for the tests below:
+  # the schema is a perfectly real, valid Postgres object once correctly created,
+  # but the code under test's own DROP statement breaks the moment that identifier
+  # is substituted in unescaped, on every attempt, with no dependency on load or
+  # timing.
+  defp escape_double_quotes(name), do: String.replace(name, "\"", "\"\"")
+
+  defp create_schema!(schema_name) do
+    Repo.query!(~s(CREATE SCHEMA "#{escape_double_quotes(schema_name)}"))
+  end
+
+  defp drop_schema_escaped!(schema_name) do
+    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{escape_double_quotes(schema_name)}" CASCADE))
+  end
+
+  describe "resilient_drop_schema/1 never raises (ISS-0292 regression -- deterministic, non-timing trigger)" do
+    test "converts a genuine, deterministic Postgres syntax error to {:error, _} instead of raising" do
+      schema_name =
+        "sandbox_iss0292case3_" <>
+          Integer.to_string(System.unique_integer([:positive, :monotonic])) <> "\"tail"
+
+      create_schema!(schema_name)
+      on_exit(fn -> drop_schema_escaped!(schema_name) end)
+
+      # Sanity: this is a real, existing Postgres schema, not a name that merely
+      # looks plausible.
+      assert schema_exists?(schema_name)
+
+      assert {:error, %Postgrex.Error{}} = resilient_drop_schema(schema_name)
+
+      # resilient_drop_schema/1 converted the failure into a return value -- it
+      # neither raised (the pre-fix behavior for a doubly-failed query) nor
+      # actually dropped the schema.
+      assert schema_exists?(schema_name)
+    end
+  end
+
+  describe "drop_sandbox_schemas_created_since!/1 attempts every schema in a diff set regardless of one schema's failure (ISS-0292 / RT-8 critical regression)" do
+    test "a deterministically-failing middle schema does not prevent a later schema from being dropped" do
+      baseline = sandbox_schema_names()
+
+      # Byte-wise term order is what a small Elixir MapSet actually iterates in
+      # (Erlang's flat/small-map representation is kept sorted by term order,
+      # confirmed empirically against this exact code path -- MapSet.difference/2
+      # followed by Enum.reduce/3/Enum.to_list/1 -- during this test's own design),
+      # so these three names' shared prefix plus a single ordering digit
+      # ("_1_" < "_2\"" < "_3_") deterministically fixes the traversal order
+      # drop_sandbox_schemas_created_since!/1's Enum.reduce will see: first, then
+      # middle, then third. This is a guaranteed consequence of how the three
+      # literal strings compare byte-for-byte at the first position where they
+      # differ -- not a hope about hashing or insertion order -- and is reconfirmed
+      # directly below (not merely asserted in this comment) before it is relied on.
+      suffix = Integer.to_string(System.unique_integer([:positive, :monotonic]))
+      first_schema = "sandbox_iss0292c4_1_#{suffix}"
+
+      # An embedded literal double-quote is a real, valid Postgres identifier once
+      # CREATE SCHEMA doubles it (create_schema!/1 does exactly that) -- but
+      # resilient_drop_schema/1's own DROP SQL interpolation does NOT double it, so
+      # this one schema's own DROP deterministically fails with a genuine Postgres
+      # syntax error on every attempt, unrelated to timing/query_canceled. Same
+      # technique as the resilient_drop_schema/1 case above.
+      middle_schema = "sandbox_iss0292c4_2\"#{suffix}"
+      third_schema = "sandbox_iss0292c4_3_#{suffix}"
+
+      create_schema!(first_schema)
+      create_schema!(middle_schema)
+      create_schema!(third_schema)
+
+      on_exit(fn ->
+        drop_schema_escaped!(first_schema)
+        drop_schema_escaped!(middle_schema)
+        drop_schema_escaped!(third_schema)
+      end)
+
+      assert schema_exists?(first_schema)
+      assert schema_exists?(middle_schema)
+      assert schema_exists?(third_schema)
+
+      # Confirms the traversal order this whole test's argument depends on, against
+      # the real diff set, rather than merely asserting it in a comment: the diff
+      # set really does put the deterministically-failing schema strictly between
+      # the two that must survive it. If this ever stopped holding (e.g. a future
+      # Elixir/OTP map-representation change), THIS assertion is what would go red
+      # first, not a silently-vacuous pass below.
+      diff_order =
+        sandbox_schema_names()
+        |> MapSet.difference(baseline)
+        |> Enum.to_list()
+
+      assert diff_order == [first_schema, middle_schema, third_schema]
+
+      # The call itself still raises -- INV-T2, the "never silently swallowed" half
+      # of this fix: a genuinely-stuck/failing schema is still a real, loud test
+      # failure. Deliberately generic here (no message-content assertion tied to
+      # this call): this is the one assertion in this test that also holds
+      # pre-fix -- the pre-fix bare `for` loop raises too, just via
+      # query_without_holding/1's own "helper process died" flunk instead of the
+      # fix's combined per-schema report -- so it carries no fail-first weight of
+      # its own. It exists only to confirm INV-T2 on the fix branch; the
+      # fail-first proof is entirely in the schema-existence assertions below.
+      error =
+        assert_raise ExUnit.AssertionError, fn ->
+          drop_sandbox_schemas_created_since!(baseline)
+        end
+
+      # Fix-branch-only refinement of INV-T2 -- the combined report names the
+      # schema that actually failed, not just "something failed somewhere".
+      assert error.message =~ middle_schema
+
+      # THE CRITICAL RT-8 ASSERTION -- verified against real Postgres via
+      # information_schema.schemata, not inferred from a return value: despite the
+      # middle schema's DROP failing, BOTH the first schema (ordered before it) and
+      # the third schema (ordered strictly AFTER it, per the traversal order just
+      # confirmed above) were genuinely dropped.
+      #
+      # This is precisely what the pre-fix bare `for` loop got wrong: it aborted
+      # the instant it hit the middle schema's raise, so third_schema -- next in
+      # this exact same traversal order -- was never even attempted and would
+      # still exist here. Verified directly: this test file's own
+      # drop_sandbox_schemas_created_since!/1 (and every helper it calls) was
+      # checked out into a throwaway git worktree at this fix's pre-fix parent
+      # commit and this same test case run there first, where it failed on
+      # exactly this assertion (third_schema left undropped) before being
+      # reconfirmed green on the fix branch -- see this run's WF-03 Step 4 handoff
+      # for the quoted before/after output.
+      refute schema_exists?(first_schema)
+      refute schema_exists?(third_schema)
+      assert schema_exists?(middle_schema)
     end
   end
 end

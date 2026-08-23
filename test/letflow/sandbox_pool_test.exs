@@ -51,6 +51,8 @@ defmodule Letflow.SandboxPoolTest do
 
   use Letflow.DataCase, async: false
 
+  require Logger
+
   alias Letflow.SandboxPool
   alias Letflow.SandboxPool.SandboxClaim
 
@@ -530,6 +532,28 @@ defmodule Letflow.SandboxPoolTest do
     end
   end
 
+  # Retries `fun` exactly once if the first call raises Postgrex.Error or
+  # DBConnection.ConnectionError (design doc §9.2) -- both attempts run under
+  # Postgrex's own unconfigured client-side default timeout (no :timeout option added
+  # or overridden anywhere in this function). Logs a warning on the first failure, same
+  # message shape as Letflow.TenantSchemaReaper.reclaim_row/1
+  # (test/support/tenant_schema_reaper.ex:233-241). If the retry also raises, that
+  # exception propagates un-rescued -- this function never swallows a doubly-failed
+  # call itself. Used only from inside `fun` arguments passed to
+  # `query_without_holding/1`; never called standalone, never wraps
+  # `query_without_holding/1` itself.
+  defp retry_query_once(fun) when is_function(fun, 0) do
+    fun.()
+  rescue
+    exception in [Postgrex.Error, DBConnection.ConnectionError] ->
+      Logger.warning(
+        "retry_query_once/1: first attempt failed, retrying once: " <>
+          Exception.format(:error, exception, __STACKTRACE__)
+      )
+
+      fun.()
+  end
+
   # Snapshot of every sandbox_% schema currently in information_schema.schemata. A set
   # difference before/after is the no-schema-leak proof in the cases where the leaked
   # name is one the test never gets told (a schema minted for a caller that died before
@@ -537,23 +561,71 @@ defmodule Letflow.SandboxPoolTest do
   defp sandbox_schema_names do
     query_without_holding(fn ->
       %{rows: rows} =
-        Repo.query!(
-          "SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'sandbox\\_%'"
-        )
+        retry_query_once(fn ->
+          Repo.query!(
+            "SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'sandbox\\_%'"
+          )
+        end)
 
       MapSet.new(rows, fn [schema_name] -> schema_name end)
     end)
+  end
+
+  # Drops one schema, retrying once (via retry_query_once/1) before giving up -- but
+  # unlike retry_query_once/1 itself, NEVER raises to its caller. On an exhausted
+  # retry, logs a warning naming the schema and the exception (same shape as
+  # Letflow.TenantSchemaReaper.reclaim_row/1,
+  # test/support/tenant_schema_reaper.ex:228-242) and returns {:error, exception}
+  # instead of propagating. This lets drop_sandbox_schemas_created_since!/1's loop keep
+  # going after one schema's exhausted retries (design doc §9.4).
+  defp resilient_drop_schema(schema_name) do
+    retry_query_once(fn ->
+      Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+    end)
+
+    :ok
+  rescue
+    exception ->
+      Logger.warning(
+        "resilient_drop_schema/1: failed to drop schema #{schema_name}: " <>
+          Exception.format(:error, exception, __STACKTRACE__)
+      )
+
+      {:error, exception}
   end
 
   # Defensive teardown -- exactly the belt-and-suspenders role this file's existing
   # `on_exit(fn -> drop_schema!(schema) end)` calls play, but for cases whose leaked
   # schema names are not known up front. A no-op on every normal path, where the pool
   # has already dropped everything it created.
+  #
+  # Attempts every schema in the diff set exactly once, regardless of any other
+  # schema's outcome (design doc §9.5) -- an accumulating fold, matching
+  # Letflow.TenantSchemaReaper.sweep_orphans/2's own accumulate-and-continue shape
+  # (test/support/tenant_schema_reaper.ex:146-163), rather than the old bare `for` loop
+  # that aborted the whole pass on the first crash (the RT-8 defect). If any schema is
+  # still undropped after the full pass, raises one combined flunk/1 naming every one
+  # of them -- a genuinely-stuck schema must still surface loudly, not be silently
+  # swallowed.
   defp drop_sandbox_schemas_created_since!(baseline) do
-    for schema_name <- MapSet.difference(sandbox_schema_names(), baseline) do
-      query_without_holding(fn ->
-        Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+    failures =
+      Enum.reduce(MapSet.difference(sandbox_schema_names(), baseline), [], fn schema_name,
+                                                                                acc ->
+        case query_without_holding(fn -> resilient_drop_schema(schema_name) end) do
+          :ok -> acc
+          {:error, reason} -> [{schema_name, reason} | acc]
+        end
       end)
+
+    if failures != [] do
+      details =
+        failures
+        |> Enum.reverse()
+        |> Enum.map_join("; ", fn {schema_name, reason} ->
+          "#{schema_name}: #{Exception.format(:error, reason)}"
+        end)
+
+      flunk("drop_sandbox_schemas_created_since!/1: failed to drop schema(s): #{details}")
     end
 
     :ok

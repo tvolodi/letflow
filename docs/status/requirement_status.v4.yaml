@@ -697,3 +697,34 @@ history:
       or the standing-failures attribution rule, per this requirement's own
       AC5. 24 on-disk `- req:` entries in requirement_status.v4.yaml before
       this append; 25 after.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-23T10:37:20Z"
+    note: >
+      ISS-0295 (queue task 295, GH#591) resolved: web/tests/e2e/*.ts hardcoded
+      a stale Keycloak port (8081) and client_id (bpm-platform-api) across 33
+      files, with no shared constant/override mechanism -- run WF03-ISS0295-20260823
+      routed the full WF-03 pipeline (ISSUE-FIXER diagnosis, CODE-DESIGNER +
+      CODE-DESIGN-VALIDATOR, FRONTEND-DEV implementation, SECURITY-REVIEWER
+      [out of scope, test-only/non-secret config], REVIEWER, TEST-DESIGNER +
+      TEST-DESIGN-VALIDATOR [independently reproduced fail-then-pass twice],
+      TEST-RUNNER [type-check/lint/184 unit tests/48 guards/228 e2e-discovery
+      all green]) -- all PASS, no rework needed. Consolidated into two
+      exported constants in web/tests/e2e/helpers.ts: BPM_IDP_BASE_URL
+      (default rebased 8081->8082) and BPM_IDP_CLIENT_ID (new, default
+      letflow-web, previously had NO override mechanism at all). Merged to
+      main via PR #592, commit 91749ee. Diagnosis-time discrepancy recorded
+      in docs/issues/ISS-0295.yaml: the issue's own filing text claimed
+      REQ-133 had already corrected the SPA's own OIDC defaults
+      (web/src/auth/OidcManager.ts, tenantConfig.ts) -- that is FALSE, REQ-133
+      remains `pending` on main with no merged work, both before and after
+      this fix. This issue's fix is scoped ONLY to the e2e test suite; it
+      does not substitute for REQ-133's separate, still-open SPA-side work.
+      Post-merge sanity check (ORCH, independent of the merge agent's own
+      report): `git log origin/main` and `gh pr view 592` both confirm MERGED
+      at commit 91749ee7706c0c509fab6896483cf4e886aef03b; `grep -rn
+      "8081\|bpm-platform-api" web/tests/e2e/` on main returns zero matches.
+      Queue task 295 released with status done, GH#591 closed with resolution
+      comment citing docs/issues/ISS-0295.yaml. 25 on-disk `- req:` entries in
+      requirement_status.v4.yaml before this append; 26 after.

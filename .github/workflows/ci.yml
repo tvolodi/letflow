@@ -103,3 +103,47 @@ jobs:
 
       - name: Run backend gate
         run: mix letflow.check
+
+  frontend:
+    # REQ-138: frontend gate job, appended alongside `backend` per that
+    # job's own design-note item 3 -- a pure sibling addition under the
+    # same `on:` triggers, touching none of `backend`'s keys.
+    #
+    # Node version: pinned to 22 (LTS) via actions/setup-node's
+    # `node-version` input, matching web/package.json's
+    # `@types/node: ^22.0.0` -- there is no committed .nvmrc/.node-version
+    # file in web/ to read from instead, and 22 is the version the type
+    # definitions already target.
+    #
+    # `npm ci` (not `npm install`) for a reproducible install from
+    # web/package-lock.json, matching the lockfile-driven cache key below.
+    #
+    # `npm run check` is REQ-115's existing script (type-check + lint +
+    # test + guards) -- this job invokes it unchanged, same "wire the
+    # existing gate into CI, don't invent a new one" boundary REQ-136's
+    # backend job holds for `mix letflow.check`. `check`'s own composition
+    # already excludes tests/e2e/** and tests/guards' Playwright-driven
+    # specs (see web/package.json's `test` script), so no browser/server
+    # setup is needed here.
+    name: Frontend gate (npm run check)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run frontend gate
+        run: npm run check

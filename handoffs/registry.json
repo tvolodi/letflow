@@ -2126,6 +2126,23 @@
       "queue_task_id": 255,
       "queue_agent_id": "tvolodi-orch",
       "note": "WF-02 for REQ-134 (GH#493, queue task 255, stage S4 -- exercise a real Keycloak-issued token through Letflow.Plugs.AuthPipeline end to end: real JWKS signature verification, JIT provisioning, authorization plug, as a tagged/excluded-by-default integration path per docs/requirements.yaml's own description, keeping TokenVerifierDouble as the unit-suite default). depends_on REQ-128 (Keycloak dev stack, done) and REQ-131 (mandatory router-wide authorization, done). No duplicate found: no existing test file exercises a real Keycloak token, no matching resolved issue in docs/issues/*.yaml."
+    },
+    {
+      "run_id": "WF02-REQ134-20260823-resume",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-134"],
+      "stage": "S4",
+      "status": "COMPLETED",
+      "owned_modules": ["test/letflow/", "test/support/", "config/test.exs", "scripts/", "docs/guides/"],
+      "lock_acquired_at": "2026-08-23T16:29:31Z",
+      "lock_released_at": "2026-08-23T16:29:31Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #595 merged (613a2f6). Queue task 255 released with status done, GH#493 best-effort closed.",
+      "backfilled": false,
+      "queue_task_id": 255,
+      "queue_agent_id": "tvolodi-orch",
+      "recovered": true,
+      "recovery_note": "handoffs/WF02-REQ134-20260823/step4-test-run.json -- (a-1) redispatch was not needed (the prior session's substantive work, including 2 legitimate TEST-DESIGNER rework cycles resolved against a real Keycloak instance, was already complete and committed through Step 6 on branch feature/WF02-REQ134-20260823/PR #595); this session's own recovery work was purely (a-2) ORCH reconstruction of the interrupted Step Final: the prior session died mid-Step-Final, leaving PR #595 with mergeable: CONFLICTING and CI backend gate FAILURE. Diagnosed the CI failure from the actual job log (mix letflow.lint_handoffs H3: step4-test-run.json used legacy top-level keys attempt/attempt_history instead of the documented gate_history shape) -- a mechanical schema fix already sitting uncommitted in the working tree from the dead session, verified correct against HANDOFF_PROTOCOL.md and committed. Rebased onto origin/main (19 commits), resolving 2 append-only conflicts in docs/status/requirement_status.v4.yaml and requirement_status.index.yaml by composing both sides (REQ-134's own started/done events and a concurrently-merged REQ-133 blocked-event from PR #593) in chronological at: order and recounting from the composed file each time (26->27->28->29 entries), never discarding either side. First full `mix letflow.check` run surfaced 3 failures in Letflow.TenantSchemaReaperTest (a file this branch never touches); traced via `docker compose logs postgres` to a real local Postgres container crash/recovery mid-run, not an application or branch defect -- confirmed by restarting the container and getting 6/6 clean on that file alone, then a full clean `mix letflow.check` rerun (lint_handoffs OK, 1986/1986 tests passed, exit 0). Pushed, CI went green (4/4 checks SUCCESS, independently re-confirmed via `gh pr view` before merging rather than trusting the coordinator's own status report alone), merged via `gh pr merge 595 --merge` (613a2f6). No rework_count increment: no FAIL verdict was issued against this work by any validator this session or the prior one -- the prior session died before reaching a verdict, and this session's own fixes were mechanical (schema/rebase/infra), not a producer's mistake reworked under ORCHESTRATOR.md §5."
     }
   ]
 }

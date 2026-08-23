@@ -78,17 +78,11 @@ the `assignee_id`-reading clauses — this is what makes AC4 structural rather t
 itself either (it delegates entirely to `handleList`'s single call), so `/tasks/inbox`'s
 authorization decision is `:AllowWithRowFilter`/`:Allow` exactly like `/tasks`'s would be for
 the same caller, but the *scoping* decision here is re-derived independently via
-`build_inbox_assignee_scope/3` (`lib/letflow/routers/tasks.ex:234-242`):
-
-```
-roles = Authorization.roles_from_strings(conn.assigns.auth_context.roles)
-
-if Authorization.is_task_worker_only?(roles) do
-  {:principal, Tasks.resolve_principal_scope(user_id, opts)}
-else
-  :unfiltered
-end
-```
+`build_inbox_assignee_scope/3` (`lib/letflow/routers/tasks.ex:234-242`): it converts
+`conn.assigns.auth_context.roles` to role atoms, and branches on
+`Authorization.is_task_worker_only?/1` — the worker-only branch returns
+`{:principal, Tasks.resolve_principal_scope(user_id, opts)}`, the else branch returns
+`:unfiltered`; no other clause or condition is present.
 
 This reaches the *same* `{:principal, principal_scope()}` shape via a direct
 `is_task_worker_only?/1` role check rather than by reading `task_scope` off the decision —
@@ -101,27 +95,14 @@ parsing exists in `handle_inbox/3`), so there is no widening surface to close he
 ## 4. The Ecto query shape — groups-inclusive `WHERE`, in `Letflow.Tasks`
 
 `Letflow.Tasks.list_tasks/2` (`lib/letflow/tasks.ex:202-223`) builds the query by piping
-through `filter_by_assignee_scope/2` (`lib/letflow/tasks.ex:613-634`):
-
-```
-defp filter_by_assignee_scope(query, :unfiltered), do: query
-
-defp filter_by_assignee_scope(query, {:explicit_user, user_id}) do
-  from(t in query, where: t.assignee_type == "USER" and t.assignee_ref == ^user_id)
-end
-
-defp filter_by_assignee_scope(
-       query,
-       {:principal, %{user_id: user_id, group_ids: group_ids, role_names: role_names}}
-     ) do
-  from(t in query,
-    where:
-      (t.assignee_type == "USER" and t.assignee_ref == ^user_id) or
-        (t.assignee_type == "GROUP" and t.assignee_ref in ^group_ids) or
-        (t.assignee_type == "ROLE" and t.assignee_ref in ^role_names)
-  )
-end
-```
+through `filter_by_assignee_scope/2` (`lib/letflow/tasks.ex:613-634`), a 3-clause private
+function matched on its second argument: the `:unfiltered` clause returns `query`
+unchanged (identity, no `where`); the `{:explicit_user, user_id}` clause adds
+`where: t.assignee_type == "USER" and t.assignee_ref == ^user_id`; the `{:principal,
+%{user_id:, group_ids:, role_names:}}` clause adds a 3-way `or`-composed `where` — user
+match on `assignee_type == "USER"`/`assignee_ref == ^user_id`, group match on
+`assignee_type == "GROUP"`/`assignee_ref in ^group_ids`, role match on `assignee_type ==
+"ROLE"`/`assignee_ref in ^role_names`.
 
 This is the groups-inclusive `WHERE` the requirement calls for: a task-worker's row set is the
 union of (a) directly assigned to them, (b) assigned to a group they belong to, and (c)
@@ -150,12 +131,11 @@ Both reads take `user_id` from the single argument the router passed in (itself 
 ## 5. `assignee_id` query param — validated for shape, then routed or discarded
 
 `handle_list/3` (`lib/letflow/routers/tasks.ex:145-166`) parses `assignee_id` once,
-generically, with no awareness yet of whether it will be used:
-
-```
-assignee_id = non_empty(Map.get(query, "assignee_id"))
-assignee_scope = build_list_assignee_scope(decision, assignee_id, opts)
-```
+generically, with no awareness yet of whether it will be used: it binds
+`assignee_id` to `non_empty(Map.get(query, "assignee_id"))`, then passes that value
+straight into `build_list_assignee_scope(decision, assignee_id, opts)` (§2) as the
+scope-selection call's second argument — no intermediate branching on `assignee_id`
+happens in `handle_list/3` itself.
 
 `non_empty/1` only normalizes `""`/`nil` — it performs no authorization-relevant check. The
 authorization-relevant decision is made entirely inside `build_list_assignee_scope/3` (§2):

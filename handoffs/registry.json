@@ -2066,10 +2066,14 @@
     {
       "run_id": "WF02-REQ116-20260822",
       "workflow_id": "ADHOC-20260822-001",
-      "requirement_ids": ["REQ-116"],
+      "requirement_ids": [
+        "REQ-116"
+      ],
       "stage": "S8",
       "status": "COMPLETED",
-      "owned_modules": ["docs/frontend/contract-gaps.md"],
+      "owned_modules": [
+        "docs/frontend/contract-gaps.md"
+      ],
       "lock_acquired_at": "2026-08-22T14:06:24Z",
       "lock_released_at": "2026-08-22T14:36:19Z",
       "released_lock": true,
@@ -2085,7 +2089,12 @@
       "requirement_ids": [],
       "stage": "S0",
       "status": "COMPLETED",
-      "owned_modules": ["priv/repo/seeds.exs", "lib/letflow/identity.ex", "lib/letflow/tenant_provisioning.ex", "mix.exs"],
+      "owned_modules": [
+        "priv/repo/seeds.exs",
+        "lib/letflow/identity.ex",
+        "lib/letflow/tenant_provisioning.ex",
+        "mix.exs"
+      ],
       "lock_acquired_at": "2026-08-22T14:42:38Z",
       "lock_released_at": "2026-08-22T15:38:03Z",
       "released_lock": true,
@@ -2101,7 +2110,11 @@
       "requirement_ids": [],
       "stage": "S0",
       "status": "COMPLETED",
-      "owned_modules": ["docs/agents/protocols/ISSUE_QUEUE.md", "docs/agents/workflows/WF-03_issue_resolving.md", "lib/mix/tasks/letflow.audit_issue_closures.ex"],
+      "owned_modules": [
+        "docs/agents/protocols/ISSUE_QUEUE.md",
+        "docs/agents/workflows/WF-03_issue_resolving.md",
+        "lib/mix/tasks/letflow.audit_issue_closures.ex"
+      ],
       "lock_acquired_at": "2026-08-22T16:35:52Z",
       "lock_released_at": "2026-08-22T18:11:36Z",
       "released_lock": true,
@@ -2114,14 +2127,22 @@
     {
       "run_id": "WF02-REQ134-20260823",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-134"],
+      "requirement_ids": [
+        "REQ-134"
+      ],
       "stage": "S4",
-      "status": "ACTIVE",
-      "owned_modules": ["test/letflow/", "test/support/", "config/test.exs", "scripts/", "docs/guides/"],
+      "status": "COMPLETED",
+      "owned_modules": [
+        "test/letflow/",
+        "test/support/",
+        "config/test.exs",
+        "scripts/",
+        "docs/guides/"
+      ],
       "lock_acquired_at": "2026-08-23T10:43:56Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 COMPLETED PASS -- branch feature/WF02-REQ134-20260823 pushed.",
+      "lock_released_at": "2026-08-23T16:29:31Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS (via resume run WF02-REQ134-20260823-resume) -- PR #595 merged (613a2f6). Stale ACTIVE status corrected by ORCH at 2026-08-23T23:41:20Z after confirming run is complete and merged per orchestrator.log RUN_DONE and -resume registry entry.",
       "backfilled": false,
       "queue_task_id": 255,
       "queue_agent_id": "tvolodi-orch",
@@ -2130,10 +2151,18 @@
     {
       "run_id": "WF02-REQ134-20260823-resume",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-134"],
+      "requirement_ids": [
+        "REQ-134"
+      ],
       "stage": "S4",
       "status": "COMPLETED",
-      "owned_modules": ["test/letflow/", "test/support/", "config/test.exs", "scripts/", "docs/guides/"],
+      "owned_modules": [
+        "test/letflow/",
+        "test/support/",
+        "config/test.exs",
+        "scripts/",
+        "docs/guides/"
+      ],
       "lock_acquired_at": "2026-08-23T16:29:31Z",
       "lock_released_at": "2026-08-23T16:29:31Z",
       "released_lock": true,
@@ -2143,6 +2172,24 @@
       "queue_agent_id": "tvolodi-orch",
       "recovered": true,
       "recovery_note": "handoffs/WF02-REQ134-20260823/step4-test-run.json -- (a-1) redispatch was not needed (the prior session's substantive work, including 2 legitimate TEST-DESIGNER rework cycles resolved against a real Keycloak instance, was already complete and committed through Step 6 on branch feature/WF02-REQ134-20260823/PR #595); this session's own recovery work was purely (a-2) ORCH reconstruction of the interrupted Step Final: the prior session died mid-Step-Final, leaving PR #595 with mergeable: CONFLICTING and CI backend gate FAILURE. Diagnosed the CI failure from the actual job log (mix letflow.lint_handoffs H3: step4-test-run.json used legacy top-level keys attempt/attempt_history instead of the documented gate_history shape) -- a mechanical schema fix already sitting uncommitted in the working tree from the dead session, verified correct against HANDOFF_PROTOCOL.md and committed. Rebased onto origin/main (19 commits), resolving 2 append-only conflicts in docs/status/requirement_status.v4.yaml and requirement_status.index.yaml by composing both sides (REQ-134's own started/done events and a concurrently-merged REQ-133 blocked-event from PR #593) in chronological at: order and recounting from the composed file each time (26->27->28->29 entries), never discarding either side. First full `mix letflow.check` run surfaced 3 failures in Letflow.TenantSchemaReaperTest (a file this branch never touches); traced via `docker compose logs postgres` to a real local Postgres container crash/recovery mid-run, not an application or branch defect -- confirmed by restarting the container and getting 6/6 clean on that file alone, then a full clean `mix letflow.check` rerun (lint_handoffs OK, 1986/1986 tests passed, exit 0). Pushed, CI went green (4/4 checks SUCCESS, independently re-confirmed via `gh pr view` before merging rather than trusting the coordinator's own status report alone), merged via `gh pr merge 595 --merge` (613a2f6). No rework_count increment: no FAIL verdict was issued against this work by any validator this session or the prior one -- the prior session died before reaching a verdict, and this session's own fixes were mechanical (schema/rebase/infra), not a producer's mistake reworked under ORCHESTRATOR.md §5."
+    },
+    {
+      "run_id": "WF03-ISS0329-20260823",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": "S4",
+      "status": "ACTIVE",
+      "owned_modules": [
+        "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"
+      ],
+      "lock_acquired_at": "2026-08-23T23:41:20Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 PENDING -- dispatched to ELIXIR-DEV at 2026-08-23T23:41:20Z",
+      "backfilled": false,
+      "queue_task_id": 329,
+      "queue_agent_id": "orch-main",
+      "note": "WF-03 for ISS-0329 (GH#630, queue task 329, stage S4 -- flaky cross-partition test isolation defect: auth_pipeline_configurable_verifier_test.exs:140 hardcodes idp_realm_id 'jit-disabled-test-realm', causing unique constraint violation when run concurrently in TEST_PARALLEL_N=4). Queue claimed by orch-main at 2026-08-23T23:40:14Z, WF-03 started 2026-08-23T23:41:20Z."
     }
   ]
 }

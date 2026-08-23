@@ -45,7 +45,6 @@ description: >
   defect exists here; scripts/test_parallel.sh needs no change. Recorded
   rather than deleted so nobody re-derives the same false conclusion from
   the same misread.
-
 affected_files:
   - test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs
 queue_task_id: 329

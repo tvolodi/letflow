@@ -1,0 +1,57 @@
+{
+  "handoff_id": "step2c-WF02-REQ134-20260823",
+  "run_id": "WF02-REQ134-20260823",
+  "workflow_id": "WF-02",
+  "step": "2c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ134-20260823/step2c-security-gate.json",
+  "created_at": "2026-08-23T11:31:52Z",
+  "started_at": "2026-08-23T11:31:52Z",
+  "completed_at": "2026-08-23T11:31:52Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-134"],
+    "related_handoff_ids": [
+      "step1-WF02-REQ134-20260823",
+      "step1b-WF02-REQ134-20260823",
+      "step3-WF02-REQ134-20260823"
+    ],
+    "artifacts_in": [
+      "test/support/keycloak_test_client.ex",
+      "test/letflow/integration/keycloak_auth_pipeline_test.exs",
+      "test/test_helper.exs",
+      "test/specs/REQ-134.md",
+      "lib/letflow/design/req134-real-keycloak-token-integration.md"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 2c hard gate for REQ-134: read git diff main...HEAD, run the scope test, and if in scope check every applicable INV-1..INV-8 invariant for real against the diff.",
+    "acceptance_criteria": [
+      "Scope test explicitly run, not skipped",
+      "Every applicable invariant (INV-1, INV-4, INV-7, INV-8) checked against the actual diff with evidence",
+      "Hardcoded Keycloak credentials verified against the existing REQ-128 dev-only realm seed, not treated as a fresh leak without checking",
+      "token_verifier override's async:false and on_exit restoration verified directly in the test file",
+      "JIT-provisioned rows' tenant scoping verified against 0003-ecto-schema-strategy.md's prefix mechanism"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Diff (main...HEAD, commit 0c5e5e1) touches only test-only files (test/support/keycloak_test_client.ex, test/letflow/integration/keycloak_auth_pipeline_test.exs, test/test_helper.exs, test/specs/REQ-134.md) plus bookkeeping (docs/requirements.yaml status flip, docs/status/*, handoffs/*, lib/letflow/design/req134-*.md). No lib/letflow/ production module or priv/repo/migrations/*.exs changed.\n\nSCOPE TEST: IN SCOPE, not skipped. The new integration test exercises real reads/writes against tenant-scoped data (Letflow.Identity.Tenant, Letflow.Identity.User via Letflow.Repo, real JIT provisioning through Letflow.Plugs.AuthPipeline) -- per security-invariants.md's INV-1 applicability note this is checkable even though it is test-only code, so INV-1 was run for real rather than defaulted to NOT-APPLICABLE.\n\nINV-1 (tenant data isolation) -- APPLIES, PASS. Verified against 0003-ecto-schema-strategy.md's schema-per-tenant design: (a) lib/letflow/identity/tenant.ex's `schema \"tenants\"` (no :prefix) confirms Tenant is the public tenant-registry table by design, correctly queried in the test via plain Repo.get_by(Tenant, slug: @realm) with no prefix; lib/letflow/identity/user.ex's `schema \"users\"` is a per-tenant schema, and the test's user_count_for_subject/2 (keycloak_auth_pipeline_test.exs:183-187) queries it via Repo.aggregate(User, ..., prefix: schema_name) -- correctly :prefix-scoped, not the default/public schema. (b) No migration added by this diff -- N/A. (c) No new table's tenant_id is caller-supplied here: the JIT-provisioned User rows are created by the existing, already-reviewed production AuthPipeline JIT-provisioning path, not by this test file inserting rows directly with an attacker/test-supplied tenant_id; the test only asserts the resulting row count/identity via the prefix-scoped query above. The tenant fixture itself (ensure_bpm_default_tenant!/0, lines 127-154) uses Letflow.TenantProvisioning.provision_tenant_schema/1 and replay_migrations/1 -- the same production provisioning mechanism used elsewhere, not a hand-rolled schema-creation shortcut, and mirrors the established test/support/ fixture pattern (TenantFixture) named in the module's own moduledoc.\n\nINV-4 (secrets by reference only) -- APPLIES, PASS. grep -rniE for hardcoded password/secret/token patterns against the two new test files found the seeded credentials 'admin-user'/'admin-pass' and 'designer-user'/'designer-pass' (keycloak_auth_pipeline_test.exs:197,221,246-248). Cross-checked against priv/keycloak/realms/bpm-default.json:63-84 -- these are the exact same literal values already committed to the repo by REQ-128's dev-only Keycloak realm import (public, non-production seed data), not a new or real secret. The realm's client (priv/keycloak/realms/bpm-default.json:21-25, clientId 'letflow-web') is publicClient: true -- direct-access-grant flow needs no client_secret, and none is present in either new file. No System.get_env-resolved value is logged, traced, or serialized; KeycloakTestClient.direct_access_token/4 returns the raw JWT to the caller only, never through a log call.\n\nINV-7 (no SQL string interpolation) -- APPLIES (Ecto in use), PASS. grep -rn \"Repo.query\" on both new test files: zero hits. All DB access in the new files goes through Ecto.Query/Repo.get_by/Repo.aggregate with a bound/typed prefix option, not raw SQL.\n\nINV-8 (no unhandled crashes on realistic failure paths) -- checked against its literal grep scope (lib/letflow/), which this diff does not touch, so strictly NOT-APPLICABLE by that scope. Checked anyway for the record since the task called it out: the `{:ok, _} = ` patterns in the new files (keycloak_test_client.ex:38 Application.ensure_all_started(:inets); keycloak_auth_pipeline_test.exs:151,157,158 TenantProvisioning calls) are all test-process-local -- a crash there fails only this excluded, async:false, single-module test run, never a shared production process serving other tenants' in-flight work, so even read as a stricter analogy to INV-8 it does not violate the invariant's substance (a doomed test process failing loud is the correct behavior here, not a shared-process crash).\n\nINV-2, INV-3, INV-5 -- NOT-APPLICABLE per security-invariants.md's Applicability note (S4's multi-tenant API surface and S5's sandboxing have not started; this diff adds no API route and no scripting/plugin surface).\n\nINV-6 (new data-access paths prove their scoping) -- this handoff is that proof; satisfied by the INV-1 analysis above being explicit about (a)/(b)/(c).\n\nAdditional checks from the task: async:false confirmed at keycloak_auth_pipeline_test.exs:56 (`use ExUnit.Case, async: false`), with the moduledoc (lines 44-53) explaining why -- the module-scoped Application.put_env(:letflow, :oidc, ...) override of :token_verifier would race any concurrently-running async:true AuthPipeline test otherwise. The override is installed in `setup` (lines 108-121) and restored via on_exit/1 back to the original fetched config, registered per-test so it unwinds even on a failing test within the module; it cannot leak outside this module's own process because Application.put_env/3 here only ever runs inside this module's own setup/on_exit lifecycle and async:false prevents any other test module from observing the intermediate value concurrently.\n\nNo cross-tenant collision risk: the fixture is get-or-create keyed on slug: 'bpm-default' (a fixed, intentional dev/test realm slug matching REQ-128's seeded realm), reusing the same tenant row/schema across runs rather than creating throwaway tenants that could accumulate -- consistent with the existing TenantSchemaReaper.sweep_orphans() convention already wired into test_helper.exs.\n\nNon-blocking observation (not a FAIL, recorded per core-directives.md's 'never resolve a conflict silently'): this Step 2c review is running after Step 3 (TEST-DESIGNER) already completed and produced the actual test code, rather than before it as WF-02's diagram orders (2c precedes 3). Given REQ-134's design assigned all implementation to test/support code (no lib/ changes, Step 2a/2b were skipped by the dispatching ORCH), there was no pre-Step-3 artifact for this gate to review under the normal ordering. The gate itself is unaffected -- the same diff is being checked regardless of when in the sequence it runs -- but flagging the ordering deviation for ORCH's awareness in case it should route SECURITY-REVIEWER before TEST-DESIGNER for future test-only requirements.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ134-20260823/step2c-security-gate.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Step 2c (SECURITY-REVIEWER) ran after Step 3 (TEST-DESIGNER) had already produced test/support/keycloak_test_client.ex and test/letflow/integration/keycloak_auth_pipeline_test.exs, rather than before it as WF-02's Overview diagram orders (2c -> 2d -> 3). Root cause: REQ-134's design assigned all implementation to test code with no lib/ changes, so Step 2a/2b were skipped and there was nothing for this gate to review pre-Step-3. Did not block this PASS since the same diff was reviewed regardless of order, but flagging so ORCH can decide whether test-only requirements should route SECURITY-REVIEWER immediately after Step 1b instead."
+      }
+    ],
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": []
+}

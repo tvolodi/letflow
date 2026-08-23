@@ -1508,3 +1508,38 @@ proof of a clean removal on Windows when a junction was involved, because a giti
 directory's corruption is invisible to `git status`; verify the linked-into directory
 still has real contents (e.g. re-run the actual test suite) before declaring cleanup
 verified.
+
+---
+
+## Probing a write endpoint with a real POST creates real state
+
+**2026-08-23, ORCH, S5 requirement registration (REQ-148..REQ-175).**
+
+`register_task` returned `403` with Cloudflare `error code: 1010` for all 28
+requirements. Diagnosing it, I fired the *same POST* through `curl` to isolate whether
+the problem was the token or the client — and it worked, which answered the question and
+**created a real queue task** (`298`, "PROBE") plus its mirrored GitHub issue (#598).
+Determining the `depends_on` element type the same way created a second one (`299`,
+GH#599).
+
+This is the same failure class `TASK_QUEUE.md` already records for using
+`get_next_task` as a reachability probe ("a `get_next_task` call made 'just to check the
+service is up' with a disposable `agent_id` still produces a real lock on a real task"),
+but arrived at from the other direction: not a probe *disguised* as work, but a
+diagnostic that *is* work because the endpoint's whole purpose is to mutate state. The
+existing entry names one endpoint; the general rule is the one that matters.
+
+**Both probes were retired immediately** — `release_lock` with `force: true, status:
+"done"` and the GitHub issues closed with an explanatory comment — so nothing was left
+claimable. But `status: "cancelled"` is **not** a legal value (`{"error":"status must be
+one of: open, done, blocked"}`), so a junk task cannot be marked as junk; `done` is the
+closest available, which means the queue's history now contains two tasks that look
+completed and never existed as work. That is a permanent, if small, blemish on a shared
+audit trail.
+
+**Takeaway:** before sending a diagnostic request to a service, ask whether the endpoint
+is read-only. If it is not, diagnose with a read-only endpoint instead (`GET /health`
+distinguished Cloudflare-vs-service here, and would have on its own: it returned `200`
+while the `POST` 403'd — that asymmetry *is* the diagnosis, and no write was needed to
+learn it). Where a write genuinely must be tested, retire the artifact in the same turn
+and say so plainly rather than leaving it for a later reader to wonder about.

@@ -160,3 +160,111 @@ escalations:
     # (iii) recognised as a test-expectation error, not an implementation
     # bug -- see lib/letflow/design/req062-sub-process-runtime.md §10) and
     # is being merged to main in this same run.
+
+  - run_id: WF03-ISS0292-20260823
+    requirement_ids: []
+    issue_ids: [ISS-0292]
+    escalated_at: "2026-08-23T08:05:46Z"
+    escalated_by: ORCH
+    step: "Step 2 (CODE-DESIGNER fix design / CODE-DESIGN-VALIDATOR gate)"
+    rework_count: 3
+    status: FAIL
+    queue_task_id: 292
+    queue_agent_id: tvolodi-orch
+    github_issue_number: 585
+    branch: feature/WF03-ISS0292-20260823
+    diagnosis: >
+      ISS-0292: test/letflow/sandbox_pool_test.exs's cleanup helpers
+      (query_without_holding/1, sandbox_schema_names/0,
+      drop_sandbox_schemas_created_since!/1) crash on a real Postgres
+      :query_canceled error and can leave orphaned sandbox schemas for
+      later tests when a cleanup loop iteration errors partway through
+      (RT-9/RT-8 flake on a CPU-throttled GitHub Actions runner). ISSUE-
+      FIXER's Step 1 diagnosis confirmed a real, generalizable defect
+      (no rescue around Repo.query! inside a bare spawn_monitor; a
+      partial-loop-abort in the DROP-schema cleanup loop) independent of
+      recurrence -- a scan of the last 5 CI runs on main found zero
+      recurrence of this exact signature, but the code defect stands on
+      its own.
+
+      CODE-DESIGNER produced three design iterations at
+      lib/letflow/design/iss0292-sandbox-pool-test-cleanup-resilience.md,
+      each FAILed by CODE-DESIGN-VALIDATOR:
+        pass 1: OQ-1 -- the proposed retry-once shape for the two
+          cleanup call sites could total 88_000ms worst case, exceeding
+          the existing outer pool_op_rendezvous_timeout() (45_000ms) in
+          query_without_holding/1, so the outer guard could fire and
+          flunk mid-loop before the inner retry logic finished --
+          reproducing the exact RT-8 orphan-leak defect the fix exists
+          to close.
+        pass 2: fixed OQ-1 by widening the outer bound to 89_000ms at
+          just those two call sites (query_without_holding/2 with a
+          defaulted 2nd arg) -- but that introduced a NEW gap: this test
+          file has no @tag/@moduletag timeout anywhere, so it runs under
+          ExUnit's default 60_000ms per-test timeout, meaning ExUnit's
+          own supervisor could kill the test at 60s before the new
+          89_000ms inner bound ever got a chance to legitimately finish
+          or fail -- a different mechanism producing the same orphan-leak
+          class of failure.
+        pass 3: added @moduletag timeout: 120_000 (120_000 - 89_000 =
+          31_000ms margin above one worst-case cleanup call) -- but
+          CODE-DESIGN-VALIDATOR found several tests (RT-1 through RT-5)
+          call the cleanup helpers or their internals (sandbox_schema_names
+          baseline+final, plus on_exit's drop_sandbox_schemas_created_since!,
+          which itself calls sandbox_schema_names again plus one
+          query_without_holding per orphaned schema) MORE THAN ONCE per
+          test body. Two genuinely-stuck calls alone total 178_000ms,
+          exceeding the chosen 120_000ms module timeout. The margin was
+          derived against a single-call worst case, not the actual
+          multi-call-per-test pattern this file uses throughout.
+
+      Pattern across all three FAILs: each fix for the previously-found
+      gap was scoped exactly to close that one gap, and each time
+      introduced a new timing-budget gap one layer further out (retry
+      budget -> outer rendezvous timeout -> ExUnit per-test timeout ->
+      per-test call-count). This suggests the underlying design
+      approach -- stacking more timeout/retry tuning onto the existing
+      spawn_monitor + receive/after shape -- may not be the right
+      strategy at all, rather than needing a 4th round of arithmetic.
+    next_step: >
+      Per ORCHESTRATOR.md §5's change-approach rule: do not attempt a
+      4th arithmetic patch (e.g. widening the moduletag further) -- that
+      pattern has now failed three times in a row for the same
+      underlying reason (each fix's budget was derived against too
+      narrow a worst case). A resuming session should consider a
+      genuinely different approach, for example:
+        (a) decouple cleanup from ExUnit's per-test timeout entirely --
+            e.g. run drop_sandbox_schemas_created_since!/1's per-schema
+            drops in a supervised Task.await_many with its own generous
+            timeout that isn't bounded by the test process's own
+            deadline, so a slow/cancelled DROP can't starve the test's
+            other assertions of their time budget; or
+        (b) make cleanup genuinely fire-and-forget/idempotent instead of
+            synchronous-with-retry -- e.g. a periodic sweep (there is
+            already a test/support/tenant_schema_reaper.ex pattern in
+            this codebase for reclaim/sweep) that catches any schema a
+            test's own on_exit failed to drop, removing the need for
+            the on_exit path itself to be leak-proof under pathological
+            timing; or
+        (c) reduce the worst case instead of widening the budget around
+            it -- e.g. do NOT retry a cancelled cleanup query at all
+            (a single attempt with a timeout comfortably inside the
+            existing 45_000ms rendezvous window), and instead rely on
+            approach (b)'s sweep to catch the rare case where a single
+            attempt still fails, rather than chasing a retry-inflated
+            worst case through three nested timeout layers.
+      The existing design doc (three iterations, all findings above) is
+      preserved on branch feature/WF03-ISS0292-20260823 (commit d42db91)
+      for reference -- read it before starting, since it correctly
+      diagnoses the root cause (Step 1's diagnosis was never in
+      question) and its rejected iterations document exactly which
+      approaches don't close the gap, which narrows the search for a
+      4th attempt.
+      docs/issues/ISS-0292.yaml has NOT yet been created (Step 1
+      diagnosis only, never reached Step 5) -- a resuming session should
+      create it with status matching whatever this escalation resolves
+      to, not skip straight to closing GH#585.
+      letflow-queue task 292 lock: released with no status (left open)
+      by ORCH at escalation time so it is not falsely stale-claimed as
+      done; a resuming session should re-claim it (or ORCH should
+      re-dispatch it) rather than treating it as abandoned.

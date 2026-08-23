@@ -523,3 +523,21 @@ history:
       itself and a local test rerun (47/47 passed) of the three fixed
       files. 15 on-disk `- req:` entries in requirement_status.v4.yaml
       before this pair; 17 after.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-23T07:00:00Z"
+    note: >
+      ISS-0290 (queue task 290, GH#581) resolved directly (docs-only, no
+      code): handoffs/WF03-ISS0289-20260823/step-final-git-merge.json had
+      created_at/started_at (03:45:00Z) copy-paste-typo'd to AFTER
+      completed_at (03:44:30Z), tripping lint_handoffs H2. Surfaced by
+      REQ-136's first post-CI full-suite run, unrelated to REQ-136's own
+      diff. Corrected created_at/started_at to 03:41:30Z, consistent with
+      the merge evidence already embedded in the same file (mergedAt
+      2026-08-23T03:42:17Z, recovery completing by 03:44:30Z). Checked all
+      9 other handoffs in the WF03-ISS0289-20260823 run for similar
+      timestamp-ordering defects: none found. mix letflow.lint_handoffs
+      reconfirmed clean (0 new violations, 25 pre-existing grandfathered).
+      17 on-disk `- req:` entries in requirement_status.v4.yaml before this
+      append; 18 after.

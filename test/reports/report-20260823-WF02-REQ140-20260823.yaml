@@ -1,0 +1,117 @@
+run_id: WF02-REQ140-20260823
+agent: TEST-RUNNER
+step: WF-02 Step 4 (Test Run)
+date: 2026-08-23
+branch: feature/WF02-REQ140-20260823
+requirement: REQ-140 (platform-event append path -- see lib/letflow/design/req140-platform-event-append-path.md)
+
+environment_setup: >
+  No .env existed in this worktree; docker-compose.yml's default host port
+  5462 collided with the primary checkout's already-running letflow-postgres-1
+  container ("port is already allocated" -- hard fail, not the silent-empty-
+  mapping failure mode documented in docs/anti-patterns.md). No standing
+  instruction told this worktree it shares another checkout's Postgres, so
+  per that same anti-patterns.md entry this checkout is entitled to its own
+  container: created an untracked .env with LETFLOW_DB_PORT=5492 and
+  LETFLOW_KEYCLOAK_PORT=8094 (both otherwise-unused ports, verified against
+  `docker ps`), then `docker compose up -d` succeeded cleanly. deps/ and
+  _build/ were already Windows junctions to the main repo's caches (created
+  earlier in this pipeline); left as-is.
+
+commands_run:
+  - cmd: mix test test/letflow/event_store/platform_events_test.exs
+    result: "Result: 9 passed, 0 failures (20.2s)"
+  - cmd: mix test test/letflow/tenant_provisioning_event_seed_test.exs
+    result: >
+      First invocation: 8/9 passed, 1 failure -- ExUnit.TimeoutError at 60000ms
+      inside `%{schema_name: schema_name} = provisioned_tenant()`, immediately
+      after the fresh containers/first-compile warm-up (cold DB connection
+      pool + cold BEAM compile, consistent with documented first-run latency
+      in this sandbox). Re-ran the same file twice more, both clean:
+      "Result: 9 passed" in 48.7s and again "Result: 9 passed" in 11.9s.
+      Treated as environment warm-up flake, not a real failure -- reproducibly
+      absent once the environment is warm.
+  - cmd: mix test test/letflow/event_store_test.exs test/letflow/event_store/
+    result: "Result: 175 passed, 0 failures (149.5s) -- AC9 regression guard clean"
+  - cmd: mix compile --warnings-as-errors
+    result: "Clean compile, exit 0, zero warnings (mix compile --force --warnings-as-errors: 'Compiling 121 files (.ex)' / 'Generated letflow app', no warning output)"
+
+full_suite:
+  command: scripts/test_parallel.sh
+  partitions: 16
+  partitions_source: nproc
+  raw_summary_line: "combined: 1991 tests, 5 properties, 3 failures (1993/1996 passed)"
+
+branch_diff_scope: >
+  git diff main HEAD (working tree): lib/letflow/event_store.ex (modified),
+  lib/letflow/tenant_provisioning.ex (modified),
+  test/letflow/tenant_provisioning_event_seed_test.exs (modified, by
+  TEST-DESIGNER); untracked new files:
+  lib/letflow/design/req140-platform-event-append-path.md,
+  lib/letflow/event_store/platform_events.ex,
+  test/letflow/event_store/platform_events_test.exs. No other files touched.
+
+failures_unattributed_to_this_run:
+  criterion: >
+    core-directives.md attribution form (a): none of the 3 failing modules'
+    files appear in this run's diff, and this run touches zero code these
+    modules exercise (event store append path / tenant provisioning seeding
+    vs. engine concurrency / GH issue-closure auditing -- disjoint subsystems).
+    Confirmed each failing file's last change predates this branch:
+    `git log -1 --format=%H -- test/letflow/engine_concurrency_test.exs
+    lib/mix/tasks/letflow.audit_issue_closures.ex
+    test/mix/tasks/letflow.audit_issue_closures_test.exs` ->
+    4360c2704ca2a15135ba9cda694256ff4c7a20da (not this branch's commits).
+  items:
+    - suite: Letflow.EngineConcurrencyTest
+      test: "AC1 -- 100 concurrent task completions across 100 distinct instances every completion succeeds, no cross-instance corruption, no global serialization"
+      file: test/letflow/engine_concurrency_test.exs:309
+      partition: 8
+      error: >
+        DBConnection.ConnectionError: could not checkout the connection owned
+        by a Task.Supervised process -- "connection not available and request
+        was dropped from queue after 2157ms". Pool exhaustion under N=16
+        concurrently-launched partitions (TEST_POOL_SIZE=5 this run), the
+        documented ISS-0219/ISS-0222 class of transient contention, not a
+        code defect in this run's own diff.
+    - suite: Letflow.EngineConcurrencyTest
+      test: "AC4 -- reconstruction matches projection for all instances after the concurrent run each instance's reconstructed status/variables/token positions match its own projection"
+      file: test/letflow/engine_concurrency_test.exs:409
+      partition: 8
+      error: >
+        Same class: DBConnection.ConnectionError, connection dropped from
+        queue after 3438ms, same pool-contention mechanism as the AC1 failure
+        above (same partition, same test module).
+    - suite: Mix.Tasks.Letflow.AuditIssueClosuresTest
+      test: "grandfathered?/1 membership -- integration via run/1 with a faked gh T-GRANDFATHERED-VS-NEW -- real GH#68 (grandfathered) is reported separately from real GH#15 (new)"
+      file: test/mix/tasks/letflow.audit_issue_closures_test.exs:330
+      partition: 13
+      error: >
+        ExUnit.TimeoutError at 60000ms inside System.do_cmd via
+        Mix.Tasks.Letflow.AuditIssueClosures.fetch_issue/1 -- an external `gh`
+        CLI/network call that did not return within the test timeout.
+        Unrelated to this run's diff; external-tool/network latency in the
+        sandbox, not application code.
+  blocks_pass: false
+
+verdict: PASS
+verdict_reasoning: >
+  All targeted REQ-140 test files pass cleanly and repeatably (new
+  platform_events_test.exs: 9/9; modified
+  tenant_provisioning_event_seed_test.exs: 9/9 once past first-run warm-up;
+  AC9 regression guard test/letflow/event_store_test.exs +
+  test/letflow/event_store/: 175/175). mix compile --warnings-as-errors is
+  clean. The full-suite run (scripts/test_parallel.sh) shows 3 failures, all
+  structurally unattributed to this run's diff (disjoint files/subsystems,
+  last touched by a pre-existing commit) -- 2 are Postgres connection-pool
+  contention in Letflow.EngineConcurrencyTest, 1 is an external `gh` CLI
+  timeout in Mix.Tasks.Letflow.AuditIssueClosuresTest. None block this run's
+  PASS per WF-02 Step 4's pre-existing/unrelated carve-out; forwarding for
+  ISSUE_QUEUE filing rather than blocking.
+artifacts_out:
+  - test/reports/report-20260823-WF02-REQ140-20260823.yaml
+next_action: >
+  Route to RELEASE-VALIDATOR. Separately forward the 3 unattributed failures
+  (Letflow.EngineConcurrencyTest x2, Mix.Tasks.Letflow.AuditIssueClosuresTest
+  x1) to ORCH for ISSUE_QUEUE filing -- TEST-RUNNER does not allocate issue
+  ids itself.

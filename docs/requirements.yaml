@@ -6815,7 +6815,7 @@ requirements:
   - id: REQ-140
     title: Platform event append path (EventStore.append_platform_event/2) and the three promotion event appenders
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 259  # letflow-queue task id
     description: >

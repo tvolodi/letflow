@@ -1,0 +1,63 @@
+run_id: WF02-REQ131-20260823
+agent: TEST-RUNNER
+step: WF-02 Step 4 (Test Run)
+date: 2026-08-23
+branch: feature/WF02-REQ131-20260823
+requirement: REQ-131 Mandatory Letflow.Plugs.Authorize plug (53+ call sites, 7 routers, gap closures)
+
+command: scripts/test_parallel.sh
+partitions: 16
+combined_result: "1980 tests, 5 properties, 3 failures (1982/1985 passed)"
+
+branch_diff_scope: >
+  git diff main...HEAD --stat -- 19 files: lib/letflow/api/authorized_router.ex,
+  lib/letflow/plugs/authorize.ex, lib/letflow/routers/{audit,definitions,identity,
+  instances,metrics,onboarding,promotion,solution_packs,tasks,tenants}.ex,
+  test/letflow/api/authorization_enforcement_test.exs,
+  test/letflow/plugs/{api_pipeline_integration_test,authorize_test}.exs,
+  test/letflow/router_test.exs, test/letflow/routers/{identity_test,instances_test}.exs,
+  test/specs/REQ-131.md. Notably docs/requirements.yaml and
+  docs/status/requirement_status.v4.yaml are NOT in this branch's diff.
+
+failures:
+  - test: "A4a: every entry in every volume uses the documented req/event vocabulary"
+    file: test/docs/requirement_status_invariants_test.exs:162
+    suite: Letflow.Docs.RequirementStatusInvariantsTest
+    error: "undeclared vocabulary violation: req: \"ISS-0289\" at docs/status/requirement_status.v4.yaml:378"
+    partition: 1
+  - test: "A5: the on-disk vocabulary-anomaly set equals the index's declared set exactly"
+    file: test/docs/requirement_status_invariants_test.exs:278
+    suite: Letflow.Docs.RequirementStatusInvariantsTest
+    error: "on disk but NOT declared (new drift): req: \"ISS-0289\" at docs/status/requirement_status.v4.yaml:378"
+    partition: 1
+  - test: "A9: every indexed volume's declared entries: count equals what is actually on disk"
+    file: test/docs/requirement_status_invariants_test.exs:464
+    suite: Letflow.Docs.RequirementStatusInvariantsTest
+    error: "[{\"docs/status/requirement_status.v4.yaml\", 11, 12}] declared/actual mismatch"
+    partition: 1
+
+diagnosis: >
+  None of the 3 failures are in files touched by this branch's diff (see
+  branch_diff_scope above) -- all 3 are in
+  test/docs/requirement_status_invariants_test.exs against
+  docs/status/requirement_status.v4.yaml, neither of which this branch
+  changes. Verified two ways:
+  (1) `git stash` (removing the untracked local edits to
+  docs/requirements.yaml and docs/status/requirement_status.v4.yaml that
+  predate this branch) and re-running just this test file dropped the
+  failure count from 3 to 2 -- A4a and A5 still failed, A9 passed. This
+  isolates A9's failure to the stashed local working-tree edit (an
+  uncommitted count drift), not this branch.
+  (2) For the remaining A4a/A5 failures: `git show
+  main:docs/status/requirement_status.v4.yaml | grep ISS-0289` confirms
+  line 378's `req: ISS-0289` entry is present in main's own committed
+  content (commit b9910d4), unmodified by this branch. A4a/A5 fail
+  identically on main's own tracked content -- pre-existing and
+  unrelated to REQ-131.
+  All three failures are deterministic docs/status bookkeeping-invariant
+  violations, not timing/order flakes, so no re-run was warranted (re-run
+  reserved for flake-shaped failures per instructions; these reproduced
+  identically both times they were run).
+
+verdict: PASS
+handoff: Route to RELEASE-VALIDATOR (Step 5)

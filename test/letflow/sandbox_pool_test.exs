@@ -1362,3 +1362,4 @@ defmodule Letflow.SandboxPoolTest do
     end
   end
 end
+                    # REQ-136 AC4: deliberate mix-format violation, reverted before merge

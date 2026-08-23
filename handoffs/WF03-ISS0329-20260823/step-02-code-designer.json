@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0329-20260823/step-02-code-designer.json",
   "created_at": "2026-08-23T23:54:48Z",
   "started_at": "2026-08-23T23:54:48Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-23T18:57:14Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -44,9 +44,9 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Design artefact written to lib/letflow/design/iss0329-jit-disabled-realm-unique.md. Covers all 8 acceptance criteria: names exactly one test file; explains why unique_realm alone is insufficient (JitProvisioningConfig.default/1 enabled:true fallback); specifies Application.put_env pattern with on_exit cleanup; states config mutation must precede insert_tenant_for_realm!; explicitly scopes out config/test.exs, lib/, scripts/test_parallel.sh; notes auth_pipeline_test.exs:131 bpm-default is ISS-0108 out of scope; notes test_parallel.sh concern is retracted; contains no compilable Elixir code.",
+    "artifacts_out": ["lib/letflow/design/iss0329-jit-disabled-realm-unique.md"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0329-20260823",
@@ -56,7 +56,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (step-03)"
   },
   "rework_count": 0,
   "max_rework": 3

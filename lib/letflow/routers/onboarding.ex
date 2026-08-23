@@ -104,9 +104,8 @@ defmodule Letflow.Routers.Onboarding do
   `%Letflow.Identity.OnboardingRecord{}`.
   """
 
-  use Plug.Router
+  use Letflow.Api.AuthorizedRouter
 
-  alias Letflow.Api.Authorization
   alias Letflow.Api.Response
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
@@ -114,50 +113,20 @@ defmodule Letflow.Routers.Onboarding do
   alias Letflow.Identity.OnboardingRecord
   alias Letflow.TenantOnboarding
 
-  plug(:match)
-  plug(:dispatch)
-
-  post "/" do
-    with_authorization(conn, "POST", "/onboarding", fn conn ->
-      handle_create(conn)
-    end)
+  authz_post "/", :TenantsManage do
+    handle_create(conn)
   end
 
-  get "/:id" do
-    with_authorization(conn, "GET", "/onboarding/:id", fn conn ->
-      handle_get(conn, conn.params["id"])
-    end)
+  authz_get "/:id", :TenantsManage do
+    handle_get(conn, conn.params["id"])
   end
 
-  get "/" do
-    with_authorization(conn, "GET", "/onboarding", fn conn ->
-      handle_get_by_hostname(conn)
-    end)
+  authz_get "/", :TenantsManage do
+    handle_get_by_hostname(conn)
   end
 
   match _ do
     Response.not_found(conn)
-  end
-
-  # ── Shared authorization preamble ────────────────────────────────────────
-  #
-  # No "Step 1 -- scoped prefix" here (matches Letflow.Routers.Tenants, not
-  # Letflow.Routers.Identity) -- these handlers decide which tenants exist, so
-  # there is no tenant to :prefix-scope by. No Repo call of any kind happens
-  # before this returns :Allow/:AllowWithRowFilter.
-  defp with_authorization(conn, method, path_template, fun) do
-    ctx = %Authorization.AccessContext{
-      user_id: conn.assigns.auth_context.user_id,
-      roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles)
-    }
-
-    decision =
-      Authorization.evaluate_access(ctx, Authorization.endpoint_policy_key(method, path_template))
-
-    case decision.kind do
-      :Deny403 -> Response.forbidden(conn, "insufficient permissions")
-      _allow_or_allow_with_row_filter -> fun.(conn)
-    end
   end
 
   # ── POST / (design §8.2/§8.3, AC8) ───────────────────────────────────────

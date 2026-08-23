@@ -102,12 +102,30 @@ defmodule Letflow.RouterTest do
   end
 
   describe "REQ-070 AC2: sub-router isolation" do
+    # As of REQ-131, Letflow.Routers.Identity's own pipeline (use
+    # Letflow.Api.AuthorizedRouter) runs Letflow.Plugs.Authorize
+    # unconditionally between :match and :dispatch, for every request
+    # including one matching the `match _` catch-all -- and that plug's
+    # FIRST step is Letflow.Api.Context.scoped_repo_opts/1, which requires
+    # conn.assigns[:auth_context] to already be populated (normally
+    # Letflow.Plugs.AuthPipeline's job, upstream of this router in the real
+    # /api/v1 pipeline). This test deliberately dispatches straight to
+    # Letflow.Routers.Identity.call/2 with no auth_context at all, to prove
+    # sub-router isolation (this module compiles and runs its own full
+    # match/Authorize/dispatch pipeline independently of Letflow.Router) --
+    # so the correct, expected result is 500 (Letflow.Api.Response.internal_error/1,
+    # `{:error, :missing_auth_context}`), not a database-touching 404. This
+    # module is deliberately DB-free (see its own moduledoc); populating a
+    # real auth_context/tenant_id here would require a genuine tenant lookup
+    # and break that constraint -- see test/letflow/routers/identity_test.exs
+    # for the DB-backed tests that dispatch to this same router WITH a real
+    # auth_context and exercise its actual routes/authorization end to end.
     test "Letflow.Routers.Identity compiles and handles requests independently of the top-level router" do
       conn =
         conn(:get, "/some-path")
         |> Letflow.Routers.Identity.call(@identity_opts)
 
-      assert conn.status == 404
+      assert conn.status == 500
       assert get_resp_header(conn, "content-type") |> hd() =~ "application/problem+json"
     end
   end

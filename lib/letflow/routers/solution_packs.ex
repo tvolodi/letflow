@@ -132,22 +132,29 @@ defmodule Letflow.Routers.SolutionPacks do
   table in `docs/migration/stage-4-api-surface.md`.
   """
 
-  use Plug.Router
+  use Letflow.Api.AuthorizedRouter
 
-  alias Letflow.Api.Context
   alias Letflow.Api.Response
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
   alias Letflow.Definitions.SolutionPack
 
-  plug(:match)
-  plug(:dispatch)
-
-  post "/export" do
+  # REQ-131: endpoint_policy_key/2 has no clause for either route (see
+  # "Authorization gap" below) -- :DefinitionsRead/:DefinitionsCreate are
+  # route-declared policy keys (both real endpoint_policy_key() values,
+  # each already backed by a required_permission/1 clause -- :DefinitionsRead
+  # and :DefinitionsWrite respectively), reusing the closest-matching
+  # existing policy keys (export reads existing definitions, same
+  # permission class as GET /definitions*; install creates new definitions
+  # and their variable_schemas rows, same permission class as
+  # POST /definitions), not derived from Authorization.endpoint_policy_key/2.
+  # Both named on the enforcement test's explicit allowlist (design §4) --
+  # flagged for REVIEWER as a judgment call, not silently decided.
+  authz_post "/export", :DefinitionsRead do
     handle_export(conn)
   end
 
-  post "/install" do
+  authz_post "/install", :DefinitionsCreate do
     handle_install(conn)
   end
 
@@ -195,24 +202,20 @@ defmodule Letflow.Routers.SolutionPacks do
   # array.
   defp export_with_ids(conn, definition_ids, version) do
     if Enum.all?(definition_ids, &is_binary/1) do
-      with {:ok, opts} <- Context.scoped_repo_opts(conn) do
-        case SolutionPack.export(definition_ids, version, opts) do
-          {:ok, document} ->
-            Response.ok(conn, pack_document_map(document))
+      case SolutionPack.export(definition_ids, version, conn.assigns.scoped_opts) do
+        {:ok, document} ->
+          Response.ok(conn, pack_document_map(document))
 
-          {:error, {:definition_not_found, _id}} ->
-            # INV-5: the detail must NOT echo the id -- doing so would confirm
-            # to a prober that some id exists in some other tenant's schema.
-            Response.unprocessable(conn, "definition not found")
+        {:error, {:definition_not_found, _id}} ->
+          # INV-5: the detail must NOT echo the id -- doing so would confirm
+          # to a prober that some id exists in some other tenant's schema.
+          Response.unprocessable(conn, "definition not found")
 
-          {:error, :empty_definition_ids} ->
-            Response.unprocessable(conn, "definition_ids must not be empty")
+        {:error, :empty_definition_ids} ->
+          Response.unprocessable(conn, "definition_ids must not be empty")
 
-          {:error, _common_error} ->
-            Response.internal_error(conn)
-        end
-      else
-        {:error, _missing_auth_context_or_invalid_tenant_id} -> Response.internal_error(conn)
+        {:error, _common_error} ->
+          Response.internal_error(conn)
       end
     else
       Response.unprocessable(conn, "definition_id must be a string")
@@ -238,15 +241,14 @@ defmodule Letflow.Routers.SolutionPacks do
   end
 
   defp install_document(conn, document) do
-    case {Context.scoped_repo_opts(conn), actor_id(conn)} do
-      {{:ok, opts}, actor_id} when is_binary(actor_id) ->
-        render_install(conn, SolutionPack.install(document, actor_id, opts))
+    case actor_id(conn) do
+      actor_id when is_binary(actor_id) ->
+        render_install(conn, SolutionPack.install(document, actor_id, conn.assigns.scoped_opts))
 
-      # Either the auth context is missing/invalid, or it carries no user id.
-      # Neither is a caller error -- both mean this route was reached without
-      # `Letflow.Plugs.AuthPipeline` having done its job. Never falls through
-      # to an unscoped write.
-      _missing_scope_or_actor ->
+      # No user id on the auth context -- not a caller error, it means this
+      # route was reached without `Letflow.Plugs.AuthPipeline` having done
+      # its job. Never falls through to an unscoped write.
+      nil ->
         Response.internal_error(conn)
     end
   end

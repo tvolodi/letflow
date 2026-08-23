@@ -59,12 +59,13 @@ defmodule Letflow.Routers.Metrics do
   (INV-1). Per-tenant scoping is the only option compatible with that
   short-circuit.
 
-  Consequence: **this route does not call `evaluate_access/2` at all.** A call
-  whose result is a compile-time constant `:Allow` is not a gate; it is
-  decoration that would read as a gate to the next maintainer. Tenant scoping
-  is the real protection here, and it is structural. The absent permission
-  gate is recorded with the other four REQ-078 endpoints that ship
-  authenticated-but-ungated; **REQ-131 is the closer** for all of them.
+  Consequence: as of REQ-131, `Letflow.Plugs.Authorize` DOES call
+  `evaluate_access/2` for this route too — it is now the single mandatory
+  mechanism for the whole router tree, so this route is covered by it like
+  every other (`authz_get "/", :MetricsRead do ... end` below), rather than
+  opting out. Its result is still a compile-time constant `:Allow`; that
+  call is not the gate that actually protects this endpoint. Tenant scoping
+  is the real protection here, and it remains structural.
 
   `"scope" => "tenant"` is a constant in the response body, present
   specifically so a reader of a captured response can see at a glance that it
@@ -100,17 +101,20 @@ defmodule Letflow.Routers.Metrics do
   modules whose `opts` argument *is* the prefix.
   """
 
-  use Plug.Router
+  use Letflow.Api.AuthorizedRouter
 
-  alias Letflow.Api.Context
   alias Letflow.Api.Response
   alias Letflow.Definitions
   alias Letflow.Engine
 
-  plug(:match)
-  plug(:dispatch)
-
-  get "/" do
+  # REQ-131: :MetricsRead is a REAL, present endpoint_policy_key/2 clause
+  # (`Authorization.endpoint_policy_key("GET", "/metrics")`) -- not an
+  # allowlist entry, per design §4 ("excluded from 'missing', not from
+  # 'present'"). `evaluate_access/2` still short-circuits it to
+  # unconditional `:Allow` (lib/letflow/api/authorization.ex) before this
+  # module's own handler runs -- the real protection here remains the
+  # per-tenant scoping documented below, not this gate.
+  authz_get "/", :MetricsRead do
     handle_metrics(conn)
   end
 
@@ -121,13 +125,14 @@ defmodule Letflow.Routers.Metrics do
   # ── GET /metrics (design §11) ─────────────────────────────────────────────
 
   defp handle_metrics(conn) do
-    with {:ok, opts} <- Context.scoped_repo_opts(conn),
-         {:ok, instances} <- Engine.count_instances_by_status(opts),
+    opts = conn.assigns.scoped_opts
+
+    with {:ok, instances} <- Engine.count_instances_by_status(opts),
          {:ok, tasks} <- Engine.count_tasks_by_status(opts),
          {:ok, definitions} <- Definitions.count_definitions_by_status(opts) do
       Response.ok(conn, metrics_map(instances, tasks, definitions))
     else
-      # Positive rule, deliberately: ANY non-{:ok, _} from ANY of the four
+      # Positive rule, deliberately: ANY non-{:ok, _} from ANY of the three
       # calls is a 500. There is no fall-through-to-200 branch and no
       # partially-populated body -- see this module's moduledoc.
       _any_failure -> Response.internal_error(conn)

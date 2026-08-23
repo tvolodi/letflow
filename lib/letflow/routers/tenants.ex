@@ -116,9 +116,8 @@ defmodule Letflow.Routers.Tenants do
     procedure and the obligation REQ-076 inherits.
   """
 
-  use Plug.Router
+  use Letflow.Api.AuthorizedRouter
 
-  alias Letflow.Api.Authorization
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
   alias Letflow.Api.Validation
@@ -129,68 +128,32 @@ defmodule Letflow.Routers.Tenants do
 
   @tenants_cursor_prefix "T:"
 
-  plug(:match)
-  plug(:dispatch)
-
-  post "/" do
-    with_authorization(conn, "POST", "/tenants", fn conn ->
-      handle_create(conn)
-    end)
+  authz_post "/", :TenantsManage do
+    handle_create(conn)
   end
 
-  get "/" do
-    with_authorization(conn, "GET", "/tenants", fn conn ->
-      handle_list(conn)
-    end)
+  authz_get "/", :TenantsManage do
+    handle_list(conn)
   end
 
-  get "/:slug" do
-    with_authorization(conn, "GET", "/tenants/:slug", fn conn ->
-      handle_get(conn, conn.params["slug"])
-    end)
+  authz_get "/:slug", :TenantsManage do
+    handle_get(conn, conn.params["slug"])
   end
 
-  patch "/:slug" do
-    with_authorization(conn, "PATCH", "/tenants/:slug", fn conn ->
-      handle_patch(conn, conn.params["slug"])
-    end)
+  authz_patch "/:slug", :TenantsManage do
+    handle_patch(conn, conn.params["slug"])
   end
 
-  post "/:slug/deactivate" do
-    with_authorization(conn, "POST", "/tenants/:slug/deactivate", fn conn ->
-      handle_deactivate(conn, conn.params["slug"])
-    end)
+  authz_post "/:slug/deactivate", :TenantsManage do
+    handle_deactivate(conn, conn.params["slug"])
   end
 
-  post "/:slug/reactivate" do
-    with_authorization(conn, "POST", "/tenants/:slug/reactivate", fn conn ->
-      handle_reactivate(conn, conn.params["slug"])
-    end)
+  authz_post "/:slug/reactivate", :TenantsManage do
+    handle_reactivate(conn, conn.params["slug"])
   end
 
   match _ do
     Response.not_found(conn)
-  end
-
-  # ── Shared authorization preamble (design §6.1) ─────────────────────────
-  #
-  # No "Step 1 -- scoped prefix" here (unlike Letflow.Routers.Identity) --
-  # that is the load-bearing structural difference this whole router exists
-  # to get right. No Repo call of any kind happens before this returns
-  # :Allow/:AllowWithRowFilter.
-  defp with_authorization(conn, method, path_template, fun) do
-    ctx = %Authorization.AccessContext{
-      user_id: conn.assigns.auth_context.user_id,
-      roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles)
-    }
-
-    decision =
-      Authorization.evaluate_access(ctx, Authorization.endpoint_policy_key(method, path_template))
-
-    case decision.kind do
-      :Deny403 -> Response.forbidden(conn, "insufficient permissions")
-      _allow_or_allow_with_row_filter -> fun.(conn)
-    end
   end
 
   # ── POST /tenants (design §7.1, AC4, AC7) ───────────────────────────────

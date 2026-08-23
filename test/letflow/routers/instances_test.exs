@@ -450,7 +450,16 @@ defmodule Letflow.Routers.InstancesTest do
       assert conn.status == 404
     end
 
-    test "reconstruct requires no permission (authenticated only)" do
+    # REQ-131 closed this route's previously-wholly-open authorization gap
+    # (see this file's own moduledoc/lib/letflow/routers/instances.ex's
+    # "Authorization gap" comment on the route declaration) -- it now
+    # requires :InstancesCancel, the same permission POST /:id/cancel
+    # already requires, reusing an existing endpoint_policy_key() atom
+    # directly (not via Authorization.endpoint_policy_key/2, which has no
+    # clause for this path -- see test/letflow/api/authorization_enforcement_test.exs's
+    # allowlist). This supersedes this test's own former, now-stale name
+    # and 200 assertion for a no-roles caller.
+    test "reconstruct requires :InstancesCancel -- a caller with no roles is denied 403" do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req079-recon-c")
       {instance_id, _def} = start_instance!(tenant.schema_name)
 
@@ -458,7 +467,18 @@ defmodule Letflow.Routers.InstancesTest do
         build_conn("POST", "/#{instance_id}/reconstruct", tenant, %{roles: []})
         |> dispatch()
 
-      assert conn.status == 200
+      assert conn.status == 403
+    end
+
+    test "reconstruct requires :InstancesCancel -- TASK_WORKER (holds neither InstancesCancel-granting role) is denied 403" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req079-recon-d")
+      {instance_id, _def} = start_instance!(tenant.schema_name)
+
+      conn =
+        build_conn("POST", "/#{instance_id}/reconstruct", tenant, %{roles: ["TASK_WORKER"]})
+        |> dispatch()
+
+      assert conn.status == 403
     end
   end
 

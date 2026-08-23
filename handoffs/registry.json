@@ -2178,14 +2178,14 @@
       "workflow_id": "WF-03",
       "requirement_ids": [],
       "stage": "S4",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "owned_modules": [
         "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"
       ],
       "lock_acquired_at": "2026-08-23T23:41:20Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 PENDING -- dispatched to ELIXIR-DEV at 2026-08-23T23:41:20Z",
+      "lock_released_at": "2026-08-24T01:28:19Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #631 merged (83d63be). Queue task 329 released with status done, GH#630 closed.",
       "backfilled": false,
       "queue_task_id": 329,
       "queue_agent_id": "orch-main",

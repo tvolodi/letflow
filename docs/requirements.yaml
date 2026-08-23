@@ -6680,7 +6680,7 @@ requirements:
   - id: REQ-137
     title: Design per-tenant realm provisioning and its partial-failure path, and size the port
     owner: CODE-DESIGNER
-    status: in_progress
+    status: done
     stage: S4
     impl_order: 249  # letflow-queue task id; depends_on translated to queue task id [244]
     description: >

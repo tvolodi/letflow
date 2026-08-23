@@ -1,0 +1,98 @@
+run_id: WF02-REQ134-20260823
+agent: TEST-RUNNER
+step: WF-02 Step 4 (Test Run) -- ATTEMPT 2, AUTHORITATIVE, SUPERSEDES report-20260823-WF02-REQ134-20260823.yaml
+date: 2026-08-23
+branch: feature/WF02-REQ134-20260823
+commit: 84f42a9
+requirement: REQ-134 Real Keycloak token integration test for the AuthPipeline
+
+supersedes: >
+  test/reports/report-20260823-WF02-REQ134-20260823.yaml (attempt 1, verdict FAIL --
+  AC2's tampered-signature test asserted strict map equality against
+  AuthPipeline.reject/4's real response shape, which always includes a "detail"
+  key alongside "error"). TEST-DESIGNER fixed the assertion to a partial pattern
+  match at commit 84f42a9; TEST-DESIGN-VALIDATOR independently re-verified the fix
+  and PASSED it (handoffs/WF02-REQ134-20260823/step3b-test-design-gate.json),
+  personally re-running `mix test --include keycloak
+  test/letflow/integration/keycloak_auth_pipeline_test.exs` twice against live
+  Keycloak with 3/3 passing both times. This report is TEST-RUNNER's own
+  independent re-confirmation, per this run's dispatch instructions. Attempt 1's
+  file is kept, not deleted, as history.
+
+branch_diff_scope: >
+  Working tree already at commit 84f42a9 on feature/WF02-REQ134-20260823 (no new
+  commits pulled beyond what was already checked out; `git pull` reported "Already
+  up to date"). No manual diff re-derivation performed this run -- attempt 1's
+  branch_diff_scope already covers the file set, and the only change since is the
+  AC2 assertion fix + step3b re-gate, both already described above.
+
+default_suite:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  rationale_for_n4: >
+    Per this run's own dispatch instructions and attempt 1's finding, N derived
+    from nproc (16) hits the documented ISS-0219/ISS-0222 host connection-spike
+    pattern on this host; N=4 was the clean value in attempt 1 and used directly
+    here rather than re-discovering it.
+  raw_summary_line: "combined: 1981 tests, 5 properties, 0 failures (1986/1986 passed)"
+  per_partition: "partition 1: 472 tests/4 properties/0 failures/exit 0; partition 2: 451 tests/0 properties/0 failures/exit 0; partition 3: 521 tests/1 property/0 failures/exit 0; partition 4: 537 tests/0 properties/0 failures/exit 0"
+  all_partitions_reported_result_line: true
+  keycloak_exclusion_ac4: >
+    Partition 3's log shows "Result: 522 passed (1 property, 521 tests), 3
+    excluded" for Letflow.Integration.KeycloakAuthPipelineTest -- confirms the
+    3 keycloak-tagged tests are still correctly excluded (not run) in the default
+    pass.
+
+live_keycloak_run:
+  docker_state_found: >
+    docker compose ps: letflow-keycloak-1 already up and healthy (15 min uptime at
+    time of check), port 0.0.0.0:8093->8080/tcp -- same port attempt 1 settled on.
+    letflow-postgres-1 also already up and healthy, port 5462. No container
+    start/recreate needed this run.
+  command_run: "mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs"
+  real_output_quoted: |
+    Running ExUnit with seed: 210584, max_cases: 32
+    Including tags: [:keycloak]
+    ...
+    Finished in 2.5 seconds (0.00s async, 2.5s sync)
+
+    Result: 3 passed
+  ac_by_ac_result:
+    AC1_full_pipeline_real_token: "PASS -- real evidence obtained this run (part of 3/3 passed)."
+    AC2_tampered_signature_rejected: "PASS -- real evidence obtained this run; the fixed partial-match assertion (`assert %{\"error\" => \"unauthorized\"} = Jason.decode!(conn.resp_body)`) now correctly tolerates the real reject/4 response shape's extra \"detail\" key while still verifying the real verifier rejects the tampered token with 401."
+    AC3_jit_provisioning_two_calls: "PASS -- real evidence obtained this run (part of 3/3 passed)."
+  ac4_note: >
+    Not independently re-run without --include this attempt (attempt 1 already
+    established `mix test test/letflow/integration/keycloak_auth_pipeline_test.exs`
+    with no --include yields "All tests have been excluded." regardless of
+    Keycloak's runtime state, and that behavior is config-driven via
+    test/test_helper.exs, unaffected by the AC2 assertion-only fix). The full
+    default_suite run above (scripts/test_parallel.sh) independently reconfirms
+    the same exclusion via partition 3's "3 excluded" line.
+
+unblock_everything_check:
+  pre_existing_failures_found: "none"
+  note: >
+    Zero failures anywhere this run: default suite at TEST_PARALLEL_N=4 is
+    1986/1986, and the live-Keycloak suite is 3/3. No new or pre-existing failures
+    to attribute, structurally or otherwise.
+
+environment:
+  toolchain: native (local mix/elixir on PATH)
+  postgres: "letflow-postgres-1, port 5462, already running, healthy"
+  keycloak: "letflow-keycloak-1, port 8093, already running, healthy, realm bpm-default imported"
+
+verdict: PASS
+summary: >
+  Combined default suite: 1986/1986 passed, 0 failures, across 4 partitions at
+  TEST_PARALLEL_N=4 (1981 tests + 5 properties). Keycloak-tagged suite correctly
+  excluded by default (3 excluded, confirmed in partition 3's log). Live-Keycloak
+  re-run (`mix test --include keycloak
+  test/letflow/integration/keycloak_auth_pipeline_test.exs`): 3 passed, 0 failed --
+  AC1, AC2 (now fixed), and AC3 all hold with real evidence against a live
+  Keycloak instance (port 8093, realm bpm-default). This independently confirms
+  TEST-DESIGN-VALIDATOR's own prior 3/3 x2 result from a second, separate
+  execution.
+artifacts_out:
+  - test/reports/report-20260823-WF02-REQ134-20260823-attempt2.yaml
+  - handoffs/WF02-REQ134-20260823/step4-test-run.json
+next_action: "Route to RELEASE-VALIDATOR"

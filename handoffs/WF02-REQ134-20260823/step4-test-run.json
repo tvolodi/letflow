@@ -4,13 +4,14 @@
   "workflow_id": "WF-02",
   "step": "4",
   "from_agent": "TEST-RUNNER",
-  "to_agent": "TEST-DESIGNER",
+  "to_agent": "RELEASE-VALIDATOR",
   "file": "handoffs/WF02-REQ134-20260823/step4-test-run.json",
   "created_at": "2026-08-23T12:35:35Z",
-  "started_at": "2026-08-23T12:15:00Z",
-  "completed_at": "2026-08-23T12:35:35Z",
+  "started_at": "2026-08-23T17:50:00Z",
+  "completed_at": "2026-08-23T17:55:00Z",
   "status": "COMPLETED",
   "priority": "NORMAL",
+  "attempt": 2,
   "context": {
     "stage": "S4",
     "requirement_ids": ["REQ-134"],
@@ -28,7 +29,7 @@
     ]
   },
   "task": {
-    "description": "WF-02 Step 4 (TEST-RUNNER) for REQ-134: run scripts/test_parallel.sh for the full default suite (AC4), and separately attempt to bring up a live Keycloak and run `mix test --include keycloak` for the real-token evidence AC1/AC2/AC3 explicitly require, quoting real output rather than relying on code review.",
+    "description": "WF-02 Step 4 (TEST-RUNNER) re-confirmation for REQ-134 at commit 84f42a9, after TEST-DESIGNER fixed attempt 1's AC2 assertion bug and TEST-DESIGN-VALIDATOR independently re-gated it PASS. Run scripts/test_parallel.sh (full default suite) and mix test --include keycloak against live Keycloak, quoting real output.",
     "acceptance_criteria": [
       "a test obtains a genuine token from the running Keycloak and drives it through Letflow.Plugs.AuthPipeline end to end, with the real assertion output quoted",
       "the token's signature is verified against the live JWKS via the real verifier, not TokenVerifierDouble -- demonstrated by the test failing if pointed at a tampered token",
@@ -39,21 +40,34 @@
     ]
   },
   "result": {
-    "status": "FAIL",
-    "summary": "Default full suite (scripts/test_parallel.sh): N=16 (nproc) hit the documented ISS-0219/ISS-0222 host connection-spike pattern (6/16 partitions crashed with no Result: line; the 13 failures in the partitions that did report were all DBConnection.ConnectionError or contention-cascaded, none touching REQ-134's own diff files). Re-ran at TEST_PARALLEL_N=4 per the script's own inline guidance -- clean: 'combined: 1981 tests, 5 properties, 0 failures (1986/1986 passed)', all 4 partitions produced a Result: line. One partition's log confirms AC4 in the default run: 'Excluding tags: [:keycloak]' / 'Result: 522 passed (1 property, 521 tests), 3 excluded'.\n\nLive Keycloak: not initially reachable (a stale letflow-keycloak-1 container predated the workspace's .env port setting and had no host port bound). Recreating it with --force-recreate hit a real port collision: 0.0.0.0:8092 was already bound by an unrelated, healthy, 21-hour-old sibling docker-compose project (agent-adaebfe03c52023c5-keycloak-1) -- almost certainly a concurrent sibling agent session/worktree. Per this session's own operating rule for concurrent sibling sessions (check state, decide at own discretion, do not disturb an active sibling's container, report the decision afterward): did not touch that container. Instead changed this workspace's own untracked .env (LETFLOW_KEYCLOAK_PORT 8092 -> 8093, verified free), recreated only letflow-keycloak-1 on 8093. config/keycloak_port.exs reads the same .env for both dev/test config and this compose file, so no code changed. Keycloak came up healthy with realm bpm-default imported, verified directly via curl against the OIDC discovery endpoint.\n\nRan `mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs` for real: Result: 2/3 passed, Failed: 1 test. AC1 and AC3 passed with real live-Keycloak evidence. AC2 ('a token with a tampered signature is rejected with 401 unauthorized', line 236-249) failed: `assert Jason.decode!(conn.resp_body) == %{\"error\" => \"unauthorized\"}` failed because the real response body is `%{\"detail\" => \"invalid or expired bearer token\", \"error\" => \"unauthorized\"}` -- conn.halted and conn.status == 401 both held; only the exact-equality body assertion failed. Root cause traced into lib/letflow/plugs/auth_pipeline.ex's reject/4 (line 322-323, unchanged, pre-existing): it always encodes both `error` and `detail` keys on every rejection path, and the sibling test test/letflow/plugs/auth_pipeline_test.exs:196 already correctly handles this with a partial pattern match. The new AC2 test's assertion is a test-code bug (too strict), not an application regression -- this defect was invisible until today because Keycloak was never reachable in this environment before this run (step3/step3b both validated AC1-3 by code review only, never by execution).\n\nRe-confirmed AC4 with Keycloak now running: `mix test test/letflow/integration/keycloak_auth_pipeline_test.exs` (no --include) -> 'All tests have been excluded.' / 'Result: 0 tests, 3 excluded' -- confirms exclusion is a test_helper.exs config default independent of Keycloak's runtime state.\n\nUnblock-Everything: no pre-existing/unrelated failures found blocking this run. The N=16 crashes are the already-documented ISS-0219/ISS-0222 host-resource pattern, fully absent at the documented N=4 workaround, so not filed as new. The one real failure (AC2) is inside REQ-134's own new file, so it is this run's own responsibility, not something to attribute away.",
+    "status": "PASS",
+    "summary": "ATTEMPT 2 (supersedes attempt 1's FAIL below). Branch feature/WF02-REQ134-20260823 checked out at commit 84f42a9 (git pull: already up to date). docker compose ps confirmed letflow-postgres-1 (port 5462) and letflow-keycloak-1 (port 8093, realm bpm-default) both already up and healthy -- no container action needed.\n\nDefault suite: `TEST_PARALLEL_N=4 scripts/test_parallel.sh` -> 'combined: 1981 tests, 5 properties, 0 failures (1986/1986 passed)', all 4 partitions reported a clean Result: line (partition 1: 472 tests/4 properties/0 failures; partition 2: 451 tests/0 properties/0 failures; partition 3: 521 tests/1 property/0 failures; partition 4: 537 tests/0 properties/0 failures). Partition 3's log confirms AC4's exclusion behavior: 'Result: 522 passed (1 property, 521 tests), 3 excluded' -- the 3 keycloak-tagged tests are still correctly excluded from the default run.\n\nLive Keycloak: ran `mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs` personally this run -> 'Result: 3 passed', 0 failures. AC1 (real token through AuthPipeline end to end), AC2 (tampered-signature token rejected 401, now using the fixed partial-match assertion `assert %{\"error\" => \"unauthorized\"} = Jason.decode!(conn.resp_body)` which tolerates reject/4's real 'detail' key), and AC3 (JIT provisioning: real user row created on first call, reused on second) all PASS with real, freshly-obtained evidence -- independently confirming TEST-DESIGN-VALIDATOR's own prior 3/3 x2 result from a separate execution.\n\nUnblock-Everything: zero failures anywhere this run (default suite 1986/1986, live-keycloak suite 3/3) -- nothing to attribute or forward.",
     "artifacts_out": [
-      "test/reports/report-20260823-WF02-REQ134-20260823.yaml",
+      "test/reports/report-20260823-WF02-REQ134-20260823-attempt2.yaml",
       "handoffs/WF02-REQ134-20260823/step4-test-run.json"
     ],
-    "issues": [
-      {
-        "severity": "BLOCKER",
-        "description": "test/letflow/integration/keycloak_auth_pipeline_test.exs:250 (AC2's tampered-signature test) asserts full map equality `Jason.decode!(conn.resp_body) == %{\"error\" => \"unauthorized\"}` against a response body that (correctly, per lib/letflow/plugs/auth_pipeline.ex's pre-existing reject/4) also always includes a \"detail\" key. Fails deterministically on any real 401 response. Fix: change to a partial pattern match, matching the established convention in test/letflow/plugs/auth_pipeline_test.exs:196 (`assert %{\"error\" => \"unauthorized\"} = Jason.decode!(conn.resp_body)`), and update test/specs/REQ-134.md's AC2 section if it documents the exact-equality shape.",
-        "affected_requirement": "REQ-134"
-      }
-    ],
-    "next_action": "Rework TEST-DESIGNER -- fix AC2's overly-strict body-equality assertion per the BLOCKER above, then re-run through TEST-DESIGN-VALIDATOR (step3b) and TEST-RUNNER (step4). AC1, AC3, AC4, AC5, AC6, and the full default suite (1986/1986 at TEST_PARALLEL_N=4) all PASS and do not need rework."
+    "issues": [],
+    "next_action": "Route to RELEASE-VALIDATOR"
   },
-  "rework_count": 0,
+  "attempt_history": [
+    {
+      "attempt": 1,
+      "completed_at": "2026-08-23T12:35:35Z",
+      "status": "FAIL",
+      "summary": "Default suite (TEST_PARALLEL_N=4): 1986/1986 passed, 0 failures, AC4 exclusion confirmed -- clean. Live Keycloak: after resolving a stale-container/sibling-session port conflict (moved this workspace's own .env LETFLOW_KEYCLOAK_PORT 8092 -> 8093 without touching the sibling's container), ran `mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs` for real: 2/3 passed, 1 failed. AC1 and AC3 passed with real evidence. AC2 failed: test/letflow/integration/keycloak_auth_pipeline_test.exs:250 asserted strict map equality `Jason.decode!(conn.resp_body) == %{\"error\" => \"unauthorized\"}` against AuthPipeline.reject/4's real, unchanged response shape, which always also includes a \"detail\" key -- conn.halted and conn.status == 401 both held; only the exact-equality body assertion failed. Classified as a test-code bug (too strict), not an application regression, since the sibling test/letflow/plugs/auth_pipeline_test.exs:196 already correctly uses a partial pattern match for the same shape.",
+      "artifacts_out": [
+        "test/reports/report-20260823-WF02-REQ134-20260823.yaml"
+      ],
+      "issues": [
+        {
+          "severity": "BLOCKER",
+          "description": "test/letflow/integration/keycloak_auth_pipeline_test.exs:250 asserted full map equality against AuthPipeline.reject/4's response, which always includes a 'detail' key. Fix: partial pattern match, matching test/letflow/plugs/auth_pipeline_test.exs:196's convention.",
+          "affected_requirement": "REQ-134"
+        }
+      ],
+      "next_action": "Rework TEST-DESIGNER -- fix AC2's overly-strict body-equality assertion, then re-run through TEST-DESIGN-VALIDATOR (step3b) and TEST-RUNNER (step4)."
+    }
+  ],
+  "rework_count": 1,
   "max_rework": 3
 }

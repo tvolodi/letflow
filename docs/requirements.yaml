@@ -6727,7 +6727,7 @@ requirements:
   - id: REQ-138
     title: Add the frontend gate job to GitHub Actions CI
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 250  # letflow-queue task id; depends_on translated to queue task ids [241, 245]
     description: >

@@ -591,3 +591,42 @@ history:
       append; 20 after (renumbered during Step Final rebase onto
       REQ-136/ISS-0290; original note said 15/16 against this branch's
       stale base).
+  - req: REQ-138
+    event: started
+    agent: ORCH
+    at: "2026-08-23T07:03:30Z"
+    note: >
+      WF02-REQ138-20260823 begun -- add frontend gate job (npm ci && npm
+      run check) to .github/workflows/ci.yml, alongside REQ-136's backend
+      job.
+  - req: REQ-138
+    event: done
+    agent: ORCH
+    at: "2026-08-23T07:40:00Z"
+    note: >
+      REQ-138 shipped: jobs.frontend added to .github/workflows/ci.yml
+      (backend job untouched, pure sibling addition per AC2). Also fixed a
+      genuine pre-existing bug found via the first real CI run: unquoted
+      glob patterns in web/package.json's test/test:watch/test:coverage
+      exclude flags (--exclude tests/e2e/**) worked by accident on Windows
+      (npm's cmd.exe shell doesn't glob-expand) but broke on Linux CI
+      (bash expands the glob before vitest sees it, so vitest loaded
+      Playwright e2e specs directly and crashed on test.describe()) --
+      same class of Windows-vs-Linux bug as REQ-136's own gh-fixture fix.
+      Quoted the patterns; check script itself left untouched (AC5).
+      Two unrelated CI-runner-noise flakes hit this branch's runs
+      (Letflow.EngineConcurrencyTest AC1 at 80.15x, filed as ISS-0291 since
+      REQ-136 already widened its multiplier once; Letflow.SandboxPoolTest
+      RT-8/RT-9 with a real Postgres query_canceled, filed as ISS-0292) --
+      both confirmed unrelated via git diff --stat (REQ-138's own diff
+      touches only .github/workflows/ci.yml and web/package.json, zero
+      Elixir), neither blocked this merge, both re-ran green on retry.
+      AC4 demonstrated for real: a deliberate TS2322 type error in
+      web/src/utils/canvas/interfaceValidation.ts turned the frontend job
+      red (CI run 32625889148, quoted log line: "error TS2322: Type
+      'string' is not assignable to type 'number'"), reverted cleanly, and
+      the revert-confirmation run (32626122080) went green. Composed here
+      after REQ-132's done-event (both this run's events at 07:03:30Z/
+      07:40:00Z sort chronologically after REQ-132's done at 06:50:05Z, so
+      no reordering needed). 20 on-disk `- req:` entries in
+      requirement_status.v4.yaml before this pair; 22 after.

@@ -1,0 +1,53 @@
+{
+  "handoff_id": "step3b-WF02-REQ134-20260823",
+  "run_id": "WF02-REQ134-20260823",
+  "workflow_id": "WF-02",
+  "step": "3b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ134-20260823/step3b-test-design-gate.json",
+  "created_at": "2026-08-23T11:39:44Z",
+  "started_at": "2026-08-23T11:39:44Z",
+  "completed_at": "2026-08-23T11:39:44Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-134"],
+    "related_handoff_ids": ["step3-WF02-REQ134-20260823"],
+    "artifacts_in": [
+      "test/specs/REQ-134.md",
+      "test/letflow/integration/keycloak_auth_pipeline_test.exs",
+      "test/support/keycloak_test_client.ex",
+      "test/test_helper.exs",
+      "lib/letflow/design/req134-real-keycloak-token-integration.md"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 3b hard gate on TEST-DESIGNER's Step 3 output for REQ-134: read the test spec and test source independently, verify every acceptance criterion has real coverage per the 5-check list (runnable-not-skipped, no TODO, per-test unique fixtures/no pollution, self-sufficiency, no hardcoded secrets), and rule explicitly on the AC5 skip-vs-raise deviation from ExUnit-version constraints against AC5's literal text.",
+    "acceptance_criteria": [
+      "a test obtains a genuine token from the running Keycloak and drives it through Letflow.Plugs.AuthPipeline end to end, with the real assertion output quoted",
+      "the token's signature is verified against the live JWKS via the real verifier, not TokenVerifierDouble -- demonstrated by the test failing if pointed at a tampered token",
+      "JIT provisioning creates a real user row on first authentication and reuses it on the second, asserted across two calls",
+      "the default mix test run still passes with Keycloak stopped, quoted as evidence",
+      "the real-token tests skip with a message naming exactly what must be running, rather than failing obscurely",
+      "the result states the exact command a developer runs to execute them"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Read test/specs/REQ-134.md, test/letflow/integration/keycloak_auth_pipeline_test.exs, test/support/keycloak_test_client.ex, test/test_helper.exs and the approved design directly (not TEST-DESIGNER's summary). AC1/AC2/AC6 pass every check: real coverage, no TODOs, no @tag :skip, no hardcoded secrets beyond the already-vetted local seeded Keycloak test credentials (admin-user/admin-pass, designer-user/designer-pass, matching priv/keycloak/realms/bpm-default.json, this exact design already cleared SECURITY-REVIEWER at step2c). AC4 verified myself (not TEST-DESIGNER's report): ran `mix test test/letflow/integration/keycloak_auth_pipeline_test.exs` with Keycloak confirmed stopped (docker compose ps: only postgres Up) -> 'Excluding tags: [:keycloak]' / 'Result: 0 tests, 3 excluded'. AC5 verified myself with two independent probes against this repo's installed Elixir 1.20.3/ex_unit 1.20.3: (1) ran the actual test file with --include keycloak against stopped Keycloak -> setup_all raises RuntimeError with the exact intended message ('Keycloak not ready at http://localhost:8092/.../openid-configuration. Ensure docker-compose services are running (docker compose up -d keycloak)...'), reported as item '0)' -- the first and only failure surfaced, matching the spec's claim. (2) Wrote a throwaway probe module (setup_all returning {:skip, msg}) confirming it raises a strictly more obscure 'expected...got {:skip,...} instead' error, and a second probe confirming a test body returning {:skip, _} is silently ignored (reported '1 passed') in this ExUnit version -- so no runtime skip path exists at all in this toolchain, corroborating TEST-DESIGNER's own source-reading claim rather than copying it. RULING ON AC5: I independently considered a third alternative neither TEST-DESIGNER nor REVIEWER discussed -- a compile-time reachability check (module-body code setting @moduletag skip: <msg> before compilation, since ExUnit tags are evaluated from compile-time metadata) -- and reject it as inferior: Mix only recompiles a test file when its own source changes, not when Keycloak's live state changes, so a compile-time-baked skip decision would go STALE (a developer starting Keycloak after a stale compiled skip, or stopping it after a stale compiled non-skip, gets an incorrect verdict until they force a recompile) -- worse than the raise's live, every-invocation reachability check. Given no genuine ExUnit-native runtime skip mechanism exists in this installed version (confirmed by both probes above), the raise carrying the exact two-component message (what's down, what to do) as the first and only surfaced item is the best available implementation and satisfies AC5's substance even though ExUnit's own summary label reads 'failure'/'invalid' rather than literally 'skipped'. I RULE THIS SATISFIES AC5 -- PASS on this specific point, independently re-derived, not copied from REVIEWER's step2d judgement.\n\nHOWEVER: found a genuine, independently-derived defect under check (c) (fixtures must not use shared hardcoded IDs / must not cross-pollute) and check (d) (self-sufficiency) that TEST-DESIGNER's own report does not surface. AC3's test ('first call provisions a user row, second call reuses it') asserts `user_count_for_subject(schema_name, subject) == 0` BEFORE either AuthPipeline call, using the fixed seeded credential designer-user's token-derived `sub` as the query key. Read test/letflow/integration/keycloak_auth_pipeline_test.exs and lib/letflow/design/req134-real-keycloak-token-integration.md section 5 directly: the design explicitly documents that the bpm-default tenant row and schema are NEVER torn down between invocations of this suite (deliberate, so repeated runs don't redo provisioning), and neither the design nor the test file provides any on_exit/teardown for the JIT-provisioned Letflow.Identity.User row created for designer-user. designer-user is a fixed, non-unique-per-run seeded Keycloak identity (there is no way to mint a fresh one -- it comes from priv/keycloak/realms/bpm-default.json), so its associated User row persists in the same never-reset letflow_test database across every future invocation. Consequence, verified by reading the code (no live Keycloak needed to see this -- it is a direct logical consequence of the persisted schema plus the absent teardown plus the hardcoded designer-user identity): the FIRST time a developer runs `mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs` (AC6's own documented command), AC3 passes. On the SECOND invocation against the same database -- which AC6's stated command invites, since nothing in the spec, moduledoc, or design tells a developer this suite is single-use -- the pre-call assertion `user_count_for_subject(schema_name, subject) == 0` fails outright, because designer-user's row from the first run is still there. This is exactly the class of defect check (c) exists to catch: a fixture keyed to a shared, hardcoded, non-reset identity, causing pollution across runs of the same test. It is not hypothetical -- it is a certain, deterministic failure on the second real invocation, and AC6 explicitly documents and endorses that invocation as the normal way to run this suite.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "AC3's test (test/letflow/integration/keycloak_auth_pipeline_test.exs, 'first call provisions a user row, second call reuses it') asserts an absolute pre-call count of 0 for designer-user's JIT-provisioned row, but neither the test nor the design (section 5) tears down that row, and the design explicitly keeps the bpm-default tenant/schema permanent across invocations. designer-user is a fixed seeded Keycloak identity with no per-run uniqueness available. Result: the test passes on a database's first-ever run of this suite and fails deterministically on every subsequent run against the same (never-reset) letflow_test database -- exactly the scenario AC6's own documented developer command invites. Rework required: TEST-DESIGNER must make this test repeatable across invocations, either by (a) adding an on_exit/teardown in the AC3 test (or its setup) that deletes the User row matching (tenant_id, external_realm: \"bpm-default\", external_id: <designer-user's sub>) after the test runs, restoring count-to-0 for the next invocation, or (b) rewriting the assertions to use a count captured BEFORE either pipeline call as a baseline and asserting count_before, count_before+1, count_before+1 (with the same user_id_1 == user_id_2 identity check retained) instead of hardcoded absolute 0/1/1. Either fix must be reflected in test/specs/REQ-134.md's AC3 section too.",
+        "affected_requirement": "REQ-134"
+      }
+    ],
+    "next_action": "Rework TEST-DESIGNER -- fix AC3's test repeatability defect (BLOCKER above), rework iteration 1 of 3. Note separately for ORCH: AC5's deviation from the design's literal {:skip, message} mechanism is independently re-derived and RULED COMPLIANT by this gate (see summary) -- no rework needed on that point; only the AC3 fixture-teardown defect blocks this PASS."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": []
+}

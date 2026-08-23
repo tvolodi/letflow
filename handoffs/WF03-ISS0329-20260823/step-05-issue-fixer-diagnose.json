@@ -1,0 +1,61 @@
+{
+  "handoff_id": "step05-WF03-ISS0329-20260823",
+  "run_id": "WF03-ISS0329-20260823",
+  "workflow_id": "WF-03",
+  "step": "0.5",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0329-20260823/step-05-issue-fixer-diagnose.json",
+  "created_at": "2026-08-23T23:48:01Z",
+  "started_at": "2026-08-23T23:48:01Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0329"],
+    "requirement_text": {
+      "ISS-0329": "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs:140 sets realm = \"jit-disabled-test-realm\", a hardcoded literal, and inserts a tenant carrying it via insert_tenant_for_realm!/1. tenants.idp_realm_id has a unique partial index (tenants_idp_realm_id_partial_index), so when a concurrently-running partition -- or a leftover row from an earlier aborted run -- already holds that realm id, the insert fails with Ecto.InvalidChangesetError: 'idp_realm_id has already been taken'. The fix already exists in the same file. The other two tests use a unique_realm/1 helper (lines 154 and 167); line 140 is the lone holdout. Same class as WF03-ISS0059-20260819 (commit 8870068, 'collision-proof tenant slug suffix across 30 test files'), which fixed slugs but left this realm id behind. The test_parallel.sh exit-code sub-finding has been RETRACTED as a misread (see docs/issues/ISS-0329.yaml)."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0329.yaml",
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs",
+      "lib/letflow/oidc/jit_provisioning_config.ex",
+      "config/test.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Execute WF-03 Steps 0.5 and 1 for ISS-0329.\n\nSTEP 0.5 — Registry lookup:\n1. Search docs/issues/*.yaml for resolved entries with symptoms matching a hardcoded realm id or idp_realm_id collision in test files.\n2. Note whether WF03-ISS0059-20260819 (slug collision fix, commit 8870068) constitutes a prior similar fix whose fix pattern should be reused.\n3. Document in result.\n\nSTEP 1 — Diagnose root cause:\n1. Read test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs in full, especially lines 130-180.\n2. Read lib/letflow/oidc/jit_provisioning_config.ex (especially for_realm/1 and default/1).\n3. Read config/test.exs lines around 113-140 (oidc_jit_provisioning config).\n4. Identify exactly WHY line 140's hardcoded realm causes a cross-partition collision AND why a naive swap to unique_realm/1 is NOT sufficient (the unique realm won't be in config/test.exs's oidc_jit_provisioning map, so JitProvisioningConfig.for_realm/1 falls back to default/1 which returns enabled: true -- the 403 assertion would then fail).\n5. Specify the complete fix needed: (a) use unique_realm/1 for the realm, AND (b) dynamically add the unique realm to the :oidc_jit_provisioning Application config with enabled: false, cleaning up via on_exit. Show the exact application config mutation pattern (similar to what setup/0 already does for :oidc's token_verifier).\n6. Verify: grep test/ for any other hardcoded idp_realm_id values that are inserted into tenants (besides 'jit-disabled-test-realm' and 'bpm-default').\n7. Confirm the test_parallel.sh exit-code sub-finding is retracted (see docs/issues/ISS-0329.yaml) -- no code change needed for test_parallel.sh.\n\nDo NOT implement the fix. Complete handoff with next_action: 'Route to CODE-DESIGNER for fix design'.",
+    "acceptance_criteria": [
+      "Step 0.5: Prior related issue(s) identified (WF03-ISS0059-20260819 minimum), checked for recurrence",
+      "Step 1: Root cause stated: hardcoded realm collides on unique index when same partition (or leftover row) already holds it",
+      "Step 1: Why naive unique_realm/1 swap is insufficient explained (JitProvisioningConfig.default/1 returns enabled: true for unknown realms)",
+      "Step 1: Complete fix pattern described: unique_realm/1 + Application.put_env for :oidc_jit_provisioning + on_exit cleanup",
+      "Step 1: Grep check for other hardcoded idp_realm_id values in test/ reported",
+      "Step 1: test_parallel.sh exit-code retraction confirmed, no code change needed"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0329-20260823",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0329-20260823",
+      "push_status": "skipped (diagnosis step, no code changes)",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER for fix design"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

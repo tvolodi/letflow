@@ -298,3 +298,31 @@ history:
       TEST-DESIGN-VALIDATOR, TEST-RUNNER (retry after rework),
       RELEASE-VALIDATOR -- all PASS. 6 on-disk `- req:` entries in
       requirement_status.v4.yaml before this append; 7 after.
+  - req: REQ-117
+    event: blocked
+    agent: ORCH
+    at: "2026-08-23T02:37:01Z"
+    note: >
+      Claimed via get_next_task (queue task id 246, depends_on: [242/REQ-116,
+      done] -- queue considered it eligible). Not dispatched to any workflow:
+      REQ-117's own text requires reading back "the authority and client-id
+      REQ-133 set" and verifying it against decision-0002, but REQ-133
+      (S4, impl_order 254) is itself still status: pending in
+      requirements.yaml, and its own dependency REQ-131 (impl_order 248) is
+      also pending (blocked further behind impl_order 243). Confirmed live:
+      web/src/auth/OidcManager.ts and web/src/auth/tenantConfig.ts both still
+      default to http://localhost:8081/realms/bpm-default (R-Co's port),
+      while docker-compose.yml/config/dev.exs put Letflow's own Keycloak on
+      port ${LETFLOW_KEYCLOAK_PORT:-8082} -- REQ-133 has not yet applied its
+      fix, so REQ-117's AC1 (real login producing an accepted token) cannot
+      succeed against current defaults, and AC2 has nothing "REQ-133 set" to
+      read back yet. (ISS-0275, the Keycloak audience-mapper 401, is
+      separately already resolved -- not the blocker here.) This is an
+      undeclared dependency: REQ-117's queue depends_on lists only 242, not
+      REQ-133's queue task, so get_next_task will keep surfacing 246 as
+      eligible until REQ-133 (and transitively REQ-131) land. Released task
+      246 with status: "blocked" (not left open) specifically to prevent
+      get_next_task re-claiming the same not-yet-workable task on the next
+      /loop iteration; it stays ineligible until re-locked deliberately once
+      REQ-133 is done. No files changed. 7 on-disk `- req:` entries in
+      requirement_status.v4.yaml before this append; 8 after.

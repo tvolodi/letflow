@@ -52,7 +52,6 @@ defmodule Letflow.EventStore.PlatformEventsTest do
   alias Letflow.Definitions.Promotion
   alias Letflow.Definitions.PromotionArtifact
   alias Letflow.Definitions.PromotionArtifact.Assertion
-  alias Letflow.Definitions.PromotionAssertionRun
   alias Letflow.Definitions.PromotionDigest
   alias Letflow.Definitions.PromotionReview
   alias Letflow.Definitions.PromotionReviewStore
@@ -60,7 +59,6 @@ defmodule Letflow.EventStore.PlatformEventsTest do
   alias Letflow.EventStore
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
-  alias Letflow.EventStore.InstanceSequence
   alias Letflow.EventStore.PlatformEvents
   alias Letflow.EventStore.Registry
   alias Letflow.SandboxPool
@@ -126,7 +124,7 @@ defmodule Letflow.EventStore.PlatformEventsTest do
     )
   end
 
-  defp seed_projection!(schema_name, instance_id, status \\ :active) do
+  defp seed_projection!(schema_name, instance_id, status) do
     %InstanceProjection{}
     |> InstanceProjection.insert_changeset(%{
       instance_id: instance_id,
@@ -355,7 +353,7 @@ defmodule Letflow.EventStore.PlatformEventsTest do
     %FixtureRow{table_name: "process_definitions", row_json: row_json}
   end
 
-  defp artifact(overrides \\ %{}) do
+  defp artifact(overrides) do
     base = %{
       id: "req140-artifact-#{System.unique_integer([:positive, :monotonic])}",
       assertions: [assertion()],

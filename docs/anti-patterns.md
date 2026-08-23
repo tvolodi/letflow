@@ -1456,3 +1456,38 @@ handoff in the same run may then copy forward from the first handoff's own text
 verbatim (that part is fine — the defect here was the first transcription, not the
 propagation), but if a run spans multiple sessions or resumes after a gap, re-read the
 source YAML fresh rather than trusting a carried-forward handoff text.
+
+## Directory-junction sharing `node_modules` into a throwaway `git worktree` on Windows (TEST-DESIGNER)
+
+WF03-ISS0289-20260823: to verify a frontend regression test failed against a pre-fix
+commit without re-running `npm install` in a throwaway worktree (`git worktree add
+../letflow-wt-<x> <pre-fix-sha>`), a Windows directory junction was created
+(`New-Item -ItemType Junction`) pointing the worktree's `web/node_modules` at the main
+repo's real `web/node_modules`, on the reasoning that `package.json` was identical
+between the two commits so the same installed packages should work in both. The test
+ran fine once. Then `git worktree remove --force` on the throwaway worktree recursed
+*through* the junction as if it were an ordinary subdirectory and deleted the actual
+file contents of the main repo's `web/node_modules` — not just the junction pointer.
+The next `npx vitest` invocation in the main repo failed to resolve `vite`/`vitest` at
+all, and `ls node_modules` showed 0 entries.
+
+**Root cause:** a directory junction on Windows is not always treated as an opaque
+boundary by recursive-delete tooling — some implementations (apparently including
+whatever `git worktree remove` uses internally here) follow the junction and delete
+what it points to, rather than just unlinking the junction point itself. This is the
+inverse of the usual Unix symlink behavior (`rm -rf somedir` where `somedir` is a
+symlink normally removes only the link), so intuition carried over from Linux/macOS
+tooling is actively misleading on Windows.
+
+**Fix going forward:** never junction or symlink a directory into a `git worktree`
+that will later be `git worktree remove`d (or otherwise recursively deleted) by this
+session or a later one — the risk is destroying the shared target, not just the link.
+If dependency sharing into a throwaway worktree is needed and a plain `npm install` is
+too slow/unavailable, copy the directory instead (e.g. `robocopy /MIR` or a plain
+recursive copy) so a later delete only ever touches the worktree's own copy. If a
+junction is used anyway, remove it explicitly first (`Remove-Item` on the junction
+path alone, which Windows does treat as unlinking) before running `git worktree
+remove` on the parent directory. This incident was caught immediately (test tooling
+failed on the very next invocation) and fixed via `npm install` — the project's own
+dependency tree, pre-authorized to reinstall autonomously — but a slower-to-notice
+version of this mistake could have left the main repo silently broken for longer.

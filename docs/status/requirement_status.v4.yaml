@@ -457,3 +457,8 @@ history:
       authorization" section updated to reflect Letflow.Api.Authorization is
       no longer unreachable. 12 on-disk `- req:` entries in
       requirement_status.v4.yaml before this append; 13 after.
+  - req: REQ-137
+    event: started
+    agent: ORCH
+    at: "2026-08-23T05:14:28Z"
+    note: "WF02-REQ137-20260823 Step 00 (git setup) PASS; design-only requirement, no implementation code -- realm provisioning design + sized implementation plan, constrains REQ-076's boundary"

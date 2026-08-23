@@ -1,0 +1,62 @@
+id: ISS-0291
+title: >
+  Letflow.EngineConcurrencyTest AC1 timing assertion recurred as flaky on CI
+  even after REQ-136 widened its multiplier 30x->50x -- needs a real fix,
+  not another threshold bump
+discovered_by: ORCH (fork, WF02-REQ138-20260823's own closeout)
+discovered_in_run: session queue-loop, REQ-138's CI run 32624895432
+discovered_at: 2026-08-23T07:21:00Z
+severity: MINOR
+description: >
+  REQ-136 widened test/letflow/engine_concurrency_test.exs AC1's timing-ratio
+  multiplier from 30x to 50x after it flaked on GitHub Actions CI's first
+  real run (measured 42.41x). REQ-138's own CI run (branch touching only
+  .github/workflows/ci.yml and web/package.json, zero Elixir code) flaked
+  the SAME test again, this time at 80.15x. Genuine shared-runner noise, not
+  a regression -- confirmed via git diff --stat. A third occurrence
+  (ISS-0260, the original flake that established the 30x default) means
+  this has now flaked at least 3 times; another threshold widening was
+  judged very likely to just push the flake rate down rather than fix it,
+  since GitHub Actions runner CPU contention has an effectively unbounded
+  noise tail.
+affected_files:
+  - test/letflow/engine_concurrency_test.exs
+github_issue: 584
+status: resolved
+resolved_in_run: WF03-ISS0291-20260823
+resolved_at: 2026-08-23T09:05:00Z
+resolution_note: >
+  Replaced the wall-clock-ratio-against-a-single-baseline approach with a
+  direct interval-overlap measurement, preserving AC1's actual intent
+  (proving genuine concurrent overlap, not serialization) while eliminating
+  all timing-threshold sensitivity. Each of the 100 concurrent completions
+  now records its own [start, end] window via System.monotonic_time/0, and
+  a new max_overlap_depth/1 helper (a standard interval-sweep) asserts at
+  least two windows genuinely overlapped in wall-clock time
+  (max_overlap_depth > 1). This is provably immune to host speed/noise: a
+  global mutex/serializer can never produce overlapping windows regardless
+  of how fast or slow the host is; genuine per-row locking (no global lock)
+  can always produce overlap regardless of host speed. Removed the now-dead
+  ac1_timing_multiplier/0 function, its @ac1_timing_multiplier_default/
+  @ac1_timing_multiplier_parallel module attributes, the
+  TEST_AC1_TIMING_MULTIPLIER/TEST_PARALLEL_GROUP env-var machinery, and
+  their dedicated 7-test regression suite (describe "ISS-0260 --
+  ac1_timing_multiplier/0"), since nothing else referenced that function
+  once AC1 stopped calling it.
+
+  Self-review caught and fixed one real bug in the fix's first draft: the
+  interval-sweep's tiebreak order was backwards (sorted same-instant starts
+  before ends), which would have produced a false-positive overlap at an
+  exact timestamp tie rather than avoiding one as the accompanying comment
+  claimed -- fixed by flipping the tiebreak so ends process before starts
+  at equal timestamps.
+
+  Deleting the baseline measurement also removed the only zero-arg call
+  site of complete_attrs/1, leaving its `\\ %{}` default unused (same
+  warning class as ISS-0069/ISS-0284) -- flagged by ORCH from the real CI
+  run's compile-warning failure and fixed by dropping the unused default.
+
+  Verified: mix format clean, 3 consecutive local test runs green, full
+  mix letflow.check clean (1982 tests), real GitHub Actions CI green on
+  both backend and frontend gates. Landed via PR #588 (commits 7a53911,
+  4360c27), merge e49948a.

@@ -630,3 +630,32 @@ history:
       07:40:00Z sort chronologically after REQ-132's done at 06:50:05Z, so
       no reordering needed). 20 on-disk `- req:` entries in
       requirement_status.v4.yaml before this pair; 22 after.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-23T09:05:00Z"
+    note: >
+      ISS-0291 (queue task 291, GH#584) resolved: Letflow.EngineConcurrencyTest
+      AC1's "no global serialization" check had flaked 3 times (ISS-0260
+      locally, then twice on GitHub Actions CI even after two threshold
+      widenings 30x->50x) because it compared batch time to a single baseline
+      via a ratio -- inherently sensitive to unbounded shared-runner CPU
+      noise. Replaced with a direct interval-overlap measurement: each of
+      the 100 concurrent completions records its own [start, end] window via
+      System.monotonic_time/0, and a new max_overlap_depth/1 interval-sweep
+      asserts genuine overlap occurred (depth > 1) -- immune to host
+      speed/noise, since a global serializer can never produce overlapping
+      windows regardless of speed, and genuine per-row locking always can.
+      Removed the now-dead ac1_timing_multiplier/0 machinery and its 7-test
+      regression suite. Caught and fixed one real bug in the fix itself
+      (interval-sweep tiebreak was backwards, would have produced a false
+      positive at an exact-tie boundary) via self-review after an
+      accidental subagent dispatch mid-review (fork rule violation, self-
+      corrected). Also caught and fixed a second self-introduced regression:
+      deleting the baseline measurement left complete_attrs/1's default
+      argument unused (same warning class as ISS-0069/ISS-0284), flagged by
+      ORCH and fixed before merge. Verified: mix format clean, 3/3 local
+      runs green, full mix letflow.check clean (1982 tests), real CI green
+      on both backend and frontend gates (PR #588, merge e49948a). 22
+      on-disk `- req:` entries in requirement_status.v4.yaml before this
+      append; 23 after.

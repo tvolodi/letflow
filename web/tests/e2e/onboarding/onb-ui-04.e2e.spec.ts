@@ -17,13 +17,13 @@ import {
   loginWithToken,
   navigateSpa,
 } from '../pipeline'
+import { BPM_IDP_BASE_URL } from '../helpers'
 
 // Saga completion may take up to 90 s
 test.setTimeout(120_000)
 
 const API_BASE_URL       = process.env.BPM_TEST_URL     ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_BASE_URL  = process.env.BPM_IDP_BASE_URL ?? 'http://localhost:8081'
-const KEYCLOAK_DISCOVERY = `${KEYCLOAK_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
+const KEYCLOAK_DISCOVERY = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 async function assertServicesReady(request: Parameters<typeof getKeycloakToken>[0]) {
   const backend = await request.fetch(`${API_BASE_URL}/health/ready`).catch(() => null)

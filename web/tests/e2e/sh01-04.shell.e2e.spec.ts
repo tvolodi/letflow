@@ -21,7 +21,7 @@
  */
 
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test'
-import { getKeycloakToken, loginWithToken } from './helpers'
+import { getKeycloakToken, loginWithToken, BPM_IDP_CLIENT_ID } from './helpers'
 
 const SCREENSHOTS_DIR = 'tests/screenshots'
 
@@ -73,7 +73,7 @@ test.describe('SH-01 — OIDC authentication redirect', () => {
     // Verify that a redirect to Keycloak was attempted
     expect(capturedUrl).toContain('realms')
     expect(capturedUrl).toContain('openid-connect/auth')
-    expect(capturedUrl).toContain('client_id=bpm-platform-api')
+    expect(capturedUrl).toContain(`client_id=${BPM_IDP_CLIENT_ID}`)
     expect(capturedUrl).toContain('response_type=code')
     expect(capturedUrl).toContain('redirect_uri=')
     expect(capturedUrl).toContain('%2Fauth%2Fcallback')

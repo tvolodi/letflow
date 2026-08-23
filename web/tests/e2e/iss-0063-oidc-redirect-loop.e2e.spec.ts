@@ -2,7 +2,8 @@
  * E2E regression suite — ISS-0063: OIDC login redirect loop
  *
  * Covers the three real-environment failure surfaces end-to-end:
- *   1. tenant-config must return the browser-visible localhost authority on :8081
+ *   1. tenant-config must return the browser-visible localhost authority matching
+ *      the IdP's actual configured port (see BPM_IDP_BASE_URL in ./helpers)
  *   2. the authorization redirect must target the preserved authority and the
  *      browser must return through the real Keycloak callback path
  *   3. a callback-page reload must not lose the OIDC state needed to finish login
@@ -13,12 +14,12 @@
  */
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
 
 const API_BASE_URL = (process.env.BPM_TEST_URL ?? '').replace(/\/$/, '')
-const KEYCLOAK_BASE_URL = (process.env.BPM_IDP_BASE_URL ?? '').replace(/\/$/, '')
 const REQUIRED_DB_URL = process.env.BPM_TEST_DB_URL ?? ''
 const SCREENSHOTS_DIR = 'tests/screenshots'
-const KEYCLOAK_DISCOVERY_URL = `${KEYCLOAK_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
+const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 function requireEnv(name: string, value: string): string {
   if (!value) {
@@ -35,7 +36,7 @@ async function screenshot(page: Page, name: string): Promise<void> {
 async function ensurePrerequisites(request: APIRequestContext): Promise<void> {
   requireEnv('BPM_TEST_DB_URL', REQUIRED_DB_URL)
   const apiBaseUrl = requireEnv('BPM_TEST_URL', API_BASE_URL)
-  const keycloakBaseUrl = requireEnv('BPM_IDP_BASE_URL', KEYCLOAK_BASE_URL)
+  const keycloakBaseUrl = requireEnv('BPM_IDP_BASE_URL', BPM_IDP_BASE_URL)
 
   const backendHealth = await request.get(`${apiBaseUrl}/health/ready`)
   if (!backendHealth.ok()) {
@@ -53,9 +54,9 @@ async function assertTenantConfig(request: APIRequestContext): Promise<void> {
   expect(response.status()).toBe(200)
 
   const body = await response.json() as { oidc_authority: string; client_id: string }
-  expect(body.oidc_authority).toContain('http://localhost:8081/realms/')
+  expect(body.oidc_authority).toContain(`${BPM_IDP_BASE_URL}/realms/`)
   expect(body.oidc_authority).not.toContain('127.0.0.1')
-  expect(body.client_id).toBe('bpm-platform-api')
+  expect(body.client_id).toBe(BPM_IDP_CLIENT_ID)
 }
 
 async function waitForKeycloakAuthRequest(page: Page): Promise<string> {
@@ -95,7 +96,7 @@ test.describe('ISS-0063 — OIDC login redirect loop regression', () => {
     await ensurePrerequisites(request)
   })
 
-  test('TC-ISS-0063-01: tenant-config returns the browser-visible localhost authority with port 8081', async ({ request, page }) => {
+  test('TC-ISS-0063-01: tenant-config returns the browser-visible localhost authority with the configured IdP port', async ({ request, page }) => {
     await ensurePrerequisites(request)
 
     await page.goto('/')
@@ -114,7 +115,7 @@ test.describe('ISS-0063 — OIDC login redirect loop regression', () => {
 
     await page.goto('/')
     const authUrl = await authRequestPromise
-    expect(authUrl).toContain('localhost:8081')
+    expect(authUrl).toContain(new URL(BPM_IDP_BASE_URL).host)
     expect(authUrl).toContain('/realms/bpm-default/protocol/openid-connect/auth')
     await screenshot(page, 'auth-request-captured')
 

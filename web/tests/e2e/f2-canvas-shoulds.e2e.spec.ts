@@ -18,7 +18,7 @@
  * Infrastructure:
  *   - Frontend: http://127.0.0.1:4173 (Vite dev server)
  *   - Backend API: available at same origin via Vite proxy (/api → localhost:8080)
- *   - Keycloak: http://localhost:8081/realms/bpm-default
+ *   - Keycloak: http://localhost:8082/realms/bpm-default
  *   - Test user: admin-user / admin-pass (PLATFORM_ADMIN role)
  */
 

@@ -9,20 +9,20 @@
 
 import type { Page, APIRequestContext } from '@playwright/test'
 
-function normalizeIdpBaseUrl(raw: string | undefined): string {
-  const fallback = 'http://localhost:8081'
+export function normalizeIdpBaseUrl(raw: string | undefined): string {
+  const fallback = 'http://localhost:8082'
   const value = (raw ?? fallback).trim()
   if (value.length == 0) return fallback
   // Keep issuer/authority host consistent with backend expectations.
   return value.replace('://127.0.0.1', '://localhost').replace(/\/$/, '')
 }
 
-// Use localhost (not 127.0.0.1) so that issued JWT tokens have iss=http://localhost:8081/...
+// Use localhost (not 127.0.0.1) so that issued JWT tokens have iss=http://localhost:8082/...
 // which matches the backend's configured BPM_IDP_BASE_URL.
-const KEYCLOAK_BASE_URL =
+export const BPM_IDP_BASE_URL =
   normalizeIdpBaseUrl(process.env.BPM_IDP_BASE_URL)
-const KEYCLOAK_TOKEN_URL = `${KEYCLOAK_BASE_URL}/realms/bpm-default/protocol/openid-connect/token`
-const KEYCLOAK_CLIENT_ID = 'bpm-platform-api'
+const KEYCLOAK_TOKEN_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/protocol/openid-connect/token`
+export const BPM_IDP_CLIENT_ID = process.env.BPM_IDP_CLIENT_ID ?? 'letflow-web'
 
 /** Obtain a JWT access token from Keycloak via password grant. */
 export async function getKeycloakToken(
@@ -33,7 +33,7 @@ export async function getKeycloakToken(
   const response = await request.post(KEYCLOAK_TOKEN_URL, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     form: {
-      client_id: KEYCLOAK_CLIENT_ID,
+      client_id: BPM_IDP_CLIENT_ID,
       username,
       password,
       grant_type: 'password',

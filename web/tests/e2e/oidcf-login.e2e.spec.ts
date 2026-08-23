@@ -18,7 +18,7 @@
  *
  * Infrastructure:
  *   - Frontend: http://127.0.0.1:4173 (Vite dev server, started by playwright.config.ts)
- *   - Keycloak: http://localhost:8081/realms/bpm-default
+ *   - Keycloak: http://localhost:8082/realms/bpm-default
  *   - Test user: admin-user / admin-pass (role: PLATFORM_ADMIN)
  *
  * Note: The /login page has been removed. Authentication is handled via Keycloak
@@ -27,9 +27,9 @@
  */
 
 import { test, expect } from '@playwright/test'
+import { BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
 
-const KEYCLOAK_BASE_URL = process.env.BPM_IDP_BASE_URL ?? 'http://127.0.0.1:8081'
-const KEYCLOAK_REALM_URL = `${KEYCLOAK_BASE_URL}/realms/bpm-default`
+const KEYCLOAK_REALM_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default`
 const KEYCLOAK_AUTH_PATTERN = '**/realms/bpm-default/protocol/openid-connect/auth**'
 
 async function assertKeycloakReady(request: import('@playwright/test').APIRequestContext): Promise<void> {
@@ -50,7 +50,7 @@ async function installKeycloakPortRewrite(page: import('@playwright/test').Page)
   // Rewrite those requests to the actual exposed Keycloak port for real end-to-end flow.
   await page.route('http://127.0.0.1/realms/**', async (route) => {
     const originalUrl = route.request().url()
-    const rewrittenUrl = originalUrl.replace('http://127.0.0.1/', `${KEYCLOAK_BASE_URL}/`)
+    const rewrittenUrl = originalUrl.replace('http://127.0.0.1/', `${BPM_IDP_BASE_URL}/`)
     await route.continue({ url: rewrittenUrl })
   })
 }
@@ -149,7 +149,7 @@ test.describe('OIDC-F-01 — Redirect URL structure', () => {
     if (capturedRequest) {
       const url = capturedRequest.url()
       expect(url).toContain('realms/bpm-default/protocol/openid-connect/auth')
-      expect(url).toContain('client_id=bpm-platform-api')
+      expect(url).toContain(`client_id=${BPM_IDP_CLIENT_ID}`)
       expect(url).toContain('response_type=code')
       expect(url).toContain('redirect_uri=')
       expect(url).toContain('%2Fauth%2Fcallback')   // URL-encoded /auth/callback

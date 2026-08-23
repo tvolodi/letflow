@@ -16,7 +16,7 @@
  * Infrastructure:
  *   - Frontend:  http://127.0.0.1:4173 (Vite preview, started by playwright.config.ts)
  *   - Backend:   BPM_TEST_URL (default: http://127.0.0.1:8080)
- *   - Keycloak:  BPM_IDP_BASE_URL (default: http://localhost:8081)
+ *   - Keycloak:  BPM_IDP_BASE_URL (default: http://localhost:8082)
  *   - Test user: admin-user / admin-pass (PLATFORM_ADMIN, BPM_E2E_ADMIN_USERNAME/PASSWORD env vars)
  *   - Test DB:   BPM_TEST_DB_URL (required for test-tenant seeding)
  *
@@ -30,16 +30,13 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import * as fs from 'fs'
 import * as path from 'path'
 import { randomUUID } from 'crypto'
-import { getKeycloakToken, loginWithToken } from './helpers'
+import { getKeycloakToken, loginWithToken, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const SCREENSHOTS_DIR = 'tests/screenshots'
 const API_BASE_URL = (process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080').replace(/\/$/, '')
-const KEYCLOAK_BASE_URL = (process.env.BPM_IDP_BASE_URL ?? 'http://localhost:8081')
-  .replace('://127.0.0.1', '://localhost')
-  .replace(/\/$/, '')
-const KEYCLOAK_DISCOVERY_URL = `${KEYCLOAK_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
+const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 // ── Screenshot helper ─────────────────────────────────────────────────────────
 
@@ -491,7 +488,7 @@ async function onboardTestTenantFixture(
   const testDisplayName = `ENV-04C Test ${uid}`
   const testAdminUsername = `env04c-admin-${uid}`
   const testAdminPassword = `TestPass1!${uid}`
-  const keycloakMasterUrl = `${KEYCLOAK_BASE_URL}/realms/master/protocol/openid-connect/token`
+  const keycloakMasterUrl = `${BPM_IDP_BASE_URL}/realms/master/protocol/openid-connect/token`
 
   // ── Step 1: Onboard the production tenant ────────────────────────────────────
 
@@ -610,7 +607,7 @@ async function onboardTestTenantFixture(
 
   // reset-password for the test admin user
   const resetResp = await request.put(
-    `${KEYCLOAK_BASE_URL}/admin/realms/${testSlug}/users/${testAdminUserId}/reset-password`,
+    `${BPM_IDP_BASE_URL}/admin/realms/${testSlug}/users/${testAdminUserId}/reset-password`,
     {
       headers: { Authorization: `Bearer ${masterToken}`, 'Content-Type': 'application/json' },
       data: { type: 'password', value: testAdminPassword, temporary: false },
@@ -625,11 +622,11 @@ async function onboardTestTenantFixture(
   // ── Step 6: Obtain test-tenant Keycloak token ──────────────────────────────────
 
   const testTokenResp = await request.post(
-    `${KEYCLOAK_BASE_URL}/realms/${testSlug}/protocol/openid-connect/token`,
+    `${BPM_IDP_BASE_URL}/realms/${testSlug}/protocol/openid-connect/token`,
     {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       form: {
-        client_id: 'bpm-platform-api',
+        client_id: BPM_IDP_CLIENT_ID,
         username: testAdminUsername,
         password: testAdminPassword,
         grant_type: 'password',
@@ -663,7 +660,7 @@ async function cleanupOnboardedTestTenantFixture(
   if (!fixture) return
   try {
     const masterTokenResp = await request.post(
-      `${KEYCLOAK_BASE_URL}/realms/master/protocol/openid-connect/token`,
+      `${BPM_IDP_BASE_URL}/realms/master/protocol/openid-connect/token`,
       {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         form: { client_id: 'admin-cli', username: 'admin', password: 'admin', grant_type: 'password' },
@@ -672,7 +669,7 @@ async function cleanupOnboardedTestTenantFixture(
     if (masterTokenResp.ok()) {
       const masterToken = ((await masterTokenResp.json()) as { access_token: string }).access_token
       // Delete the test tenant's Keycloak realm (best-effort; production realm has no delete in BPM API)
-      await request.delete(`${KEYCLOAK_BASE_URL}/admin/realms/${fixture.keycloakRealmId}`, {
+      await request.delete(`${BPM_IDP_BASE_URL}/admin/realms/${fixture.keycloakRealmId}`, {
         headers: { Authorization: `Bearer ${masterToken}` },
       })
     }

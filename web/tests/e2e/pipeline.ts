@@ -22,17 +22,13 @@ import * as fs from 'fs'
 import * as path from 'path'
 import type { Page, APIRequestContext } from '@playwright/test'
 import { test, expect } from '@playwright/test'
+import { BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
 
 const STATE_DIR = path.resolve('tests/e2e/.pipeline-state')
-// Use localhost (not 127.0.0.1) so that issued JWT tokens have iss=http://localhost:8081/...
-// which matches the backend's configured BPM_IDP_BASE_URL. Tokens issued via 127.0.0.1
-// would have a mismatched issuer and be rejected by the backend with 401.
-const KEYCLOAK_BASE_URL = (process.env.BPM_IDP_BASE_URL ?? 'http://localhost:8081').replace(/\/$/, '')
-const KEYCLOAK_CLIENT_ID = 'bpm-platform-api'
 
 /** Build a Keycloak token endpoint URL for the given realm. */
 export function keycloakTokenUrl(realm = 'bpm-default'): string {
-  return `${KEYCLOAK_BASE_URL}/realms/${realm}/protocol/openid-connect/token`
+  return `${BPM_IDP_BASE_URL}/realms/${realm}/protocol/openid-connect/token`
 }
 
 // ─── Tenant context resolution ─────────────────────────────────────────────────
@@ -62,7 +58,7 @@ export async function getKeycloakToken(
   const tokenUrl = keycloakTokenUrl(realm)
   const response = await request.post(tokenUrl, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    form: { client_id: KEYCLOAK_CLIENT_ID, username, password, grant_type: 'password' },
+    form: { client_id: BPM_IDP_CLIENT_ID, username, password, grant_type: 'password' },
   })
   if (!response.ok()) {
     const body = await response.text()

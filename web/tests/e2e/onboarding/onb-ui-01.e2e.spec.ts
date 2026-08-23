@@ -16,10 +16,10 @@ import {
   loginWithToken,
   navigateSpa,
 } from '../pipeline'
+import { BPM_IDP_BASE_URL } from '../helpers'
 
 const API_BASE_URL       = process.env.BPM_TEST_URL     ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_BASE_URL  = process.env.BPM_IDP_BASE_URL ?? 'http://localhost:8081'
-const KEYCLOAK_DISCOVERY = `${KEYCLOAK_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
+const KEYCLOAK_DISCOVERY = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 // ── Pre-flight ────────────────────────────────────────────────────────────────
 

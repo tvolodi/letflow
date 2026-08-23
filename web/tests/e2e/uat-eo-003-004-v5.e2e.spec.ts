@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
+import { BPM_IDP_BASE_URL } from './helpers';
 
 const SCREENSHOT_DIR = path.resolve(process.cwd(), '..', 'scratch');
-const IDP_URL = process.env.BPM_IDP_BASE_URL || 'http://localhost:8081';
+const IDP_URL = BPM_IDP_BASE_URL;
 const ALICE_USER = 'alice.bauer';
 const ALICE_PASS = process.env.ALICE_PASSWORD || 'Alice-Pass-001';
 

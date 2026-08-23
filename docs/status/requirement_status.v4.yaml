@@ -166,3 +166,30 @@
 # 40 entries. It never moves, edits or deletes an existing entry.
 
 history:
+  - req: REQ-130
+    event: started
+    agent: CODE-DESIGNER
+    at: "2026-08-22T23:56:03Z"
+    note: >
+      Design doc lib/letflow/design/req130-authorization-generalization.md
+      picked a mandatory authorization plug to replace the incumbent
+      literal-string-per-call-site convention router-wide, corrected REQ-130's
+      own stale premise (nine sub-routers already have real routes, not empty
+      stubs), and scoped REQ-131's migration to all 53 already-shipped call
+      sites across seven routers. Passed CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER and REVIEWER, each PASS-WITH-FIXES with fixes applied.
+  - req: REQ-130
+    event: done
+    agent: RELEASE-VALIDATOR
+    at: "2026-08-22T23:56:03Z"
+    note: >
+      Independently re-verified all 8 acceptance criteria against the design
+      doc and actual lib/letflow/routers/*.ex and
+      lib/letflow/api/authorization.ex source (call-site counts, :Unknown
+      branch citation, INV-5 ordering, AllowWithRowFilter surfacing, zero
+      implementation code) -- all genuinely met. Also found REQ-131's own
+      requirements.yaml entry's description had been corrected per REVIEWER's
+      finding but its acceptance_criteria (stale "11 call sites"/"nine empty
+      stubs" wording) had not; fixed those 4 ACs in the same commit for
+      internal consistency with the corrected description and REQ-130's
+      design doc numbers.

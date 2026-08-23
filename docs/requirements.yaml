@@ -6293,7 +6293,7 @@ requirements:
   - id: REQ-130
     title: Design how per-route authorization generalizes to the nine unwired sub-routers
     owner: CODE-DESIGNER
-    status: pending
+    status: done
     stage: S4
     impl_order: 243  # letflow-queue task id; depends_on translated to queue task ids [137, 140, 141]
     description: >
@@ -6374,33 +6374,42 @@ requirements:
     description: >
       Build REQ-130's chosen mechanism and make it the single, mandatory
       authorization path for the whole router tree.
-      READ THIS BEFORE SCOPING THE WORK: the nine sub-routers are EMPTY.
-      Verified 2026-08-22 by direct count over lib/letflow/routers/ --
-      audit.ex, definitions.ex, instances.ex, metrics.ex, onboarding.ex,
-      promotion.ex, tasks.ex, tenant_config.ex and validation.ex are each
-      a 12-line stub with ZERO routes: a @moduledoc, plug(:match),
-      plug(:dispatch), and a single `match _` returning
-      Letflow.Api.Response.not_found/1. Every request to them 404s today.
-      Their routes arrive with REQ-077..REQ-085, all pending. Only
-      identity.ex has routes -- 11 of them, across 639 lines, already
-      authorized through with_authorized_scope/4 (identity.ex:187-213) by
-      REQ-073 and REQ-074.
-      So this requirement CANNOT prove authorization per sub-router:
-      there is nothing there to authorize. Doing so would require waiting
-      on eight route requirements and is far past one agent turn. What it
-      delivers instead is the MECHANISM: implement REQ-130's pick, prove
-      it end-to-end on the routes that exist (identity's 11), and make it
-      available and MANDATORY for the nine -- so that when each route
-      requirement lands, its routes cannot be added unauthorized.
-      Per-sub-router proof is deferred to those route requirements as
-      they land; it is deliberately NOT an acceptance criterion here.
+      READ THIS BEFORE SCOPING THE WORK: this description's original
+      2026-08-22 premise (that the nine sub-routers were empty stubs and
+      only identity.ex had routes) is STALE, corrected 2026-08-23 per
+      REQ-130's own design doc (lib/letflow/design/req130-authorization-generalization.md
+      section 1). REQ-073/074/076/079-082 shipped in the interim and
+      independently wired most sub-routers onto the incumbent
+      literal-string-per-call-site convention (identity.ex 16 call sites,
+      audit.ex 1, definitions.ex 13, instances.ex 7 gated + 2 ungated,
+      onboarding.ex 3, tenants.ex 6, tasks.ex 7). Only promotion.ex remains
+      a genuine unshipped stub (REQ-077 still pending). tenant_config.ex
+      and mobile_tenant_config.ex are deliberately unauthenticated by
+      design (public login-bootstrap endpoints mounted outside
+      Letflow.Plugs.ApiPipeline) and are OUT OF SCOPE for this requirement
+      entirely -- they will never call Letflow.Api.Authorization.
+      REQ-130's design picked REPLACE, not ratify: a mandatory plug
+      supersedes the incumbent per-call-site convention. This requirement
+      therefore migrates ALL SEVEN already-wired routers' call sites onto
+      the plug (identity 16, audit 1, definitions 13, instances 7,
+      onboarding 3, tenants 6, tasks 7 -- 53 call sites total, not just
+      identity's), deleting each router's local per-call-site helper
+      (with_authorized_scope/4 and with_authorization/4 alike) once
+      migrated, and closes the two already-shipped silent gaps named in
+      REQ-130's design (instances.ex's rebind-pins/reconstruct routes and
+      solution_packs.ex's two routes currently call no authorization
+      function at all -- give each a real policy key as part of this
+      migration, per REQ-130's design section 2 for the policy question).
+      promotion.ex's future routes (REQ-077, still pending) must be built
+      directly against the plug once it exists, never a new local helper.
       "Mandatory" must be a real enforcement artefact, not a convention
-      in prose -- a test that fails when a route reachable through
-      lib/letflow/routers/ has no policy key, or an equivalent
-      compile-time or CI check. Whichever REQ-130 named, build that.
-      If REQ-130's design replaced the literal-string-per-call-site
-      convention with a plug, this requirement also migrates identity.ex's
-      11 existing call sites onto it, per that design -- the router tree
+      in prose -- REQ-130's design section 4 names the mechanism: an
+      ExUnit test that walks every route macro call across
+      lib/letflow/routers/ and asserts a matching non-:Unknown
+      endpoint_policy_key/2 clause exists, with an explicit named
+      allowlist for any deliberately-unguarded route (today, metrics.ex
+      only, which has a real :MetricsRead clause that short-circuits to
+      Allow -- not an allowlist entry). Build that test. The router tree
       must end with exactly one authorization mechanism, not two.
       Deny403 responses go through REQ-066's Letflow.Api.Error /
       Letflow.Api.Response contract -- one error shape across the whole
@@ -6416,22 +6425,22 @@ requirements:
       out).
       Do not modify Letflow.Api.Authorization. It is a done, ported,
       tested module and this requirement consumes it. In particular its
-      :Unknown branch (lib/letflow/api/authorization.ex:257-262) allows
+      :Unknown branch (lib/letflow/api/authorization.ex:343-348) allows
       PLATFORM_ADMIN and denies every other role -- a deliberate port of
       R-Co's evaluateAccess. Match that behaviour; do not "fix" it into
       an unconditional deny while wiring the caller. If the matrix turns
       out to be wrong, that is a separate finding routed through ORCH.
     acceptance_criteria:
       - "a request with a valid token but insufficient role receives 403 as an RFC 9457 problem document via Letflow.Api.Response, asserted on both body shape and Content-Type, exercised against a real identity.ex route"
-      - "REQ-130's mechanism guards all 11 existing identity.ex routes: for each, a sufficient role passes through and an insufficient role is denied -- proven against those real routes, not a test-only endpoint, and the test names the route it exercised"
-      - "the mechanism is wired into the nine currently-empty sub-routers (audit, definitions, instances, metrics, onboarding, promotion, tasks, tenant_config, validation) such that a route added to any of them is authorized WITHOUT that route's author adding the mechanism themselves; the result quotes, for one of the nine, the diff that makes this true and states which of REQ-077..REQ-085 will be the first to exercise it"
+      - "REQ-130's mechanism guards all 16 existing identity.ex call sites (corrected from this requirement's original 2026-08-22 count of 11, per REQ-130's design doc lib/letflow/design/req130-authorization-generalization.md sections 1 and 2.4): for each, a sufficient role passes through and an insufficient role is denied -- proven against those real routes, not a test-only endpoint, and the test names the route it exercised"
+      - "the mechanism is wired into every router mounted under Letflow.Plugs.ApiPipeline -- the seven already-wired routers (identity, audit, definitions, instances, onboarding, tenants, tasks; 53 call sites total per REQ-130's design doc section 2.4) migrated onto it, plus promotion.ex (the one genuine remaining stub, REQ-077 still pending) and metrics.ex (deliberately ungated, per REQ-130's design doc section 1) covered by the same mechanism -- such that a route added to any of them is authorized WITHOUT that route's author adding the mechanism themselves; the result quotes the diff that makes this true for promotion.ex and states which of REQ-077..REQ-085 will be the first to exercise a still-unwired router's stub"
       - "an enforcement artefact exists that FAILS when a route reachable through lib/letflow/routers/ carries no policy key -- demonstrated by temporarily adding one unguarded route to a stub sub-router, quoting the actual failure output, and reverting it before the requirement completes"
       - "an unmatched (method, path) denies for every role EXCEPT PLATFORM_ADMIN, matching evaluate_access/2's ported :Unknown branch, with a test asserting both halves -- the non-admin denial and the admin allow"
       - "a token carrying an unrecognized role string is treated as holding no role, not as holding an unknown-but-accepted one"
       - "git diff shows lib/letflow/api/authorization.ex unchanged"
       - "the mechanism's position in the pipeline matches REQ-130's design, and a test demonstrates it runs after AuthPipeline has populated auth_context"
-      - "exactly one authorization mechanism remains in lib/letflow/routers/: either with_authorized_scope/4 extended to all ten sub-routers, or the plug REQ-130 chose with identity.ex's 11 call sites migrated onto it -- confirmed by grep over lib/letflow/routers/ quoted in the result"
-      - "no acceptance criterion here is satisfied by asserting behaviour against a route in one of the nine stubs, because none exists yet -- per-sub-router proof belongs to REQ-077..REQ-085 as each lands"
+      - "exactly one authorization mechanism remains in lib/letflow/routers/: the plug REQ-130 chose, with all 53 already-shipped call sites across all seven wired routers (identity 16, audit 1, definitions 13, instances 7, onboarding 3, tenants 6, tasks 7) migrated onto it and each router's local with_authorized_scope/4 / with_authorization/4 helper deleted -- confirmed by grep over lib/letflow/routers/ quoted in the result"
+      - "no acceptance criterion here is satisfied by asserting behaviour against a route in promotion.ex, because none exists yet -- per-route proof for promotion.ex belongs to REQ-077 as it lands; the seven already-wired routers' real routes ARE in scope for proof here, per the AC above naming them"
     depends_on: [REQ-130]
 
   - id: REQ-132

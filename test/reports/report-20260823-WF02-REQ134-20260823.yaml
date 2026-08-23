@@ -1,0 +1,198 @@
+run_id: WF02-REQ134-20260823
+agent: TEST-RUNNER
+step: WF-02 Step 4 (Test Run)
+date: 2026-08-23
+branch: feature/WF02-REQ134-20260823
+commit: 6dde119
+requirement: REQ-134 Real Keycloak token integration test for the AuthPipeline
+
+branch_diff_scope: >
+  git diff --name-only main...HEAD: docs/requirements.yaml,
+  docs/status/requirement_status.index.yaml, docs/status/requirement_status.v4.yaml,
+  handoffs/WF02-REQ134-20260823/step1-code-design.json,
+  handoffs/WF02-REQ134-20260823/step1b-design-gate.json,
+  handoffs/WF02-REQ134-20260823/step2c-security-gate.json,
+  handoffs/WF02-REQ134-20260823/step2d-idiom-review.json,
+  handoffs/WF02-REQ134-20260823/step3-test-design.json,
+  handoffs/WF02-REQ134-20260823/step3b-test-design-gate.json, handoffs/registry.json,
+  lib/letflow/design/req134-real-keycloak-token-integration.md,
+  test/letflow/integration/keycloak_auth_pipeline_test.exs, test/specs/REQ-134.md,
+  test/support/keycloak_test_client.ex, test/test_helper.exs. Zero lib/ application
+  code changed (test/test-support only) except the design doc itself.
+
+default_suite:
+  command: scripts/test_parallel.sh
+  attempt_1_n16:
+    partitions: 16
+    partitions_source: nproc
+    result: >
+      combined: 1202 tests, 2 properties, 13 failures (1191/1204 passed); 6 of 16
+      partitions (3, 5, 8, 11, 14, 15) crashed with no Result: line at all
+      (DBConnection.ConnectionError during ecto.migrate's connection checkout, the
+      documented ISS-0219/ISS-0222 launch-time connection-spike pattern for this
+      host at N=16). Of the 4 partitions that did report failures (1, 4, 6, 13),
+      every individual failure traced was itself either a direct
+      DBConnection.ConnectionError, or a concurrency/resource-contention cascade in
+      a test already tagged as a liveness/replay-under-load test (e.g.
+      TenantSchemaReaperTest's own concurrent-invocation guard test,
+      ServiceTaskRoutingTest's replay_migrations call) -- none touched any file in
+      this run's own diff. Not used as the authoritative result; discarded per the
+      script's own documented guidance (below).
+    disposition: >
+      Per scripts/test_parallel.sh's own inline comment (ISS-0219): "If N derived
+      from nproc/getconf crashes every partition before any Result: line, set
+      TEST_PARALLEL_N explicitly to a smaller value for this host (4 has been
+      verified clean on the host this note was written from) rather than assuming
+      a code regression." Re-ran at TEST_PARALLEL_N=4.
+  attempt_2_n4_authoritative:
+    partitions: 4
+    partitions_source: "env override (TEST_PARALLEL_N=4, per ISS-0219 guidance in scripts/test_parallel.sh)"
+    raw_summary_line: "combined: 1981 tests, 5 properties, 0 failures (1986/1986 passed)"
+    per_partition: "partition 1: 472 tests/4 properties/0 failures/exit 0; partition 2: 451 tests/0 properties/0 failures/exit 0; partition 3: 521 tests/1 property/0 failures/exit 0; partition 4: 537 tests/0 properties/0 failures/exit 0"
+    all_partitions_reported_result_line: true
+  keycloak_exclusion_ac4: >
+    One partition's log (2) shows "Excluding tags: [:keycloak]" / "Result: 522
+    passed (1 property, 521 tests), 3 excluded" for
+    Letflow.Integration.KeycloakAuthPipelineTest -- confirms AC4 (the default run
+    still passes, with the 3 new keycloak-tagged tests correctly excluded, not
+    silently passing or silently missing).
+
+live_keycloak_run:
+  docker_state_found: >
+    Postgres (letflow-postgres-1, port 5462) was already up and healthy. Keycloak
+    was not initially running for this workspace. `docker compose up -d keycloak`
+    appeared to succeed but only restarted a stale container
+    (letflow-keycloak-1, created ~3h earlier, before the untracked .env's
+    LETFLOW_KEYCLOAK_PORT existed) with NO host port binding at all (docker compose
+    ps showed bare "8080/tcp", docker port returned nothing) -- so the pipeline's
+    configured issuer URL (http://localhost:8092/.../bpm-default) was unreachable
+    (404 "Realm does not exist" from whatever else was listening, or connection
+    reset).
+  sibling_session_conflict: >
+    Attempting `docker compose up -d --force-recreate keycloak` to pick up the
+    current compose file's port mapping failed: "Bind for 0.0.0.0:8092 failed: port
+    is already allocated" -- `docker ps` showed a DIFFERENT, unrelated, healthy
+    docker-compose project already bound to 8092 for 21 hours
+    (agent-adaebfe03c52023c5-keycloak-1), evidently a sibling agent
+    session/worktree with its own .env coincidentally deriving the same port. Per
+    this session's own concurrent-sibling-session operating rule (check state,
+    decide at own discretion, do not disturb an active sibling, report
+    afterward): did NOT kill or reuse that container. Instead changed this
+    workspace's own untracked .env (LETFLOW_KEYCLOAK_PORT 8092 -> 8093, a free
+    port verified via netstat), removed and recreated only this workspace's own
+    letflow-keycloak-1 container. config/keycloak_port.exs reads the same .env for
+    both config/dev.exs and config/test.exs, so Ecto/Oidcc and the container agree
+    without any code change.
+  keycloak_became_reachable: >
+    letflow-keycloak-1 recreated on 8093, realm 'bpm-default' imported
+    (docker compose logs: "Realm 'bpm-default' imported" / "Import finished
+    successfully"), health check reported healthy within ~15s. Verified directly
+    with curl http://127.0.0.1:8093/realms/bpm-default/.well-known/openid-configuration
+    -> real OIDC discovery document returned (issuer, authorization_endpoint,
+    token_endpoint, etc. all present). Note: curl against "localhost" (not
+    127.0.0.1) reset the connection in this shell, an IPv6-resolution quirk of this
+    host/shell, not a Keycloak problem -- the Elixir test run below (which also
+    uses "localhost" in its configured issuer URL) succeeded, so this was specific
+    to the curl invocation's IPv6 preference, not a real reachability gap.
+  command_run: "MIX_ENV=test mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs"
+  real_output_quoted: |
+      Running ExUnit with seed: 6052, max_cases: 32
+      Including tags: [:keycloak]
+      ...
+
+        1) test acceptance criterion 2 — tampered signature is rejected by the real verifier a token with a tampered signature is rejected with 401 unauthorized (Letflow.Integration.KeycloakAuthPipelineTest)
+           test/letflow/integration/keycloak_auth_pipeline_test.exs:236
+           Assertion with == failed
+           code:  assert Jason.decode!(conn.resp_body) == %{"error" => "unauthorized"}
+           left:  %{
+                    "detail" => "invalid or expired bearer token",
+                    "error" => "unauthorized"
+                  }
+           right: %{"error" => "unauthorized"}
+           stacktrace:
+             test/letflow/integration/keycloak_auth_pipeline_test.exs:250: (test)
+
+      Finished in 5.4 seconds (0.00s async, 5.4s sync)
+
+      Result: 2/3 passed
+      Failed: 1 test
+  ac_by_ac_result:
+    AC1_full_pipeline_real_token: "PASS -- real evidence obtained this run (test not individually re-quoted above; part of the 2/3 that passed)."
+    AC2_tampered_signature_rejected: >
+      FAIL -- real evidence obtained this run, and it demonstrates a genuine test
+      defect, not an app regression. The real verifier DID correctly reject the
+      tampered token (conn.halted, conn.status == 401 both held -- only the exact
+      body-equality assertion failed). See root_cause below.
+    AC3_jit_provisioning_two_calls: "PASS -- real evidence obtained this run (0 -> 1 -> 1 sequence held, same user_id both calls)."
+  ac4_reconfirmed_with_keycloak_up: >
+    Re-ran `mix test test/letflow/integration/keycloak_auth_pipeline_test.exs`
+    (no --include) with Keycloak now running and reachable -> "All tests have been
+    excluded." / "Result: 0 tests, 3 excluded". Confirms AC4's important
+    distinction holds: exclusion is a test_helper.exs `ExUnit.start(exclude:
+    [:keycloak])` config default, independent of Keycloak's actual runtime state --
+    --include is required even with Keycloak up.
+
+root_cause_ac2_failure:
+  file: test/letflow/integration/keycloak_auth_pipeline_test.exs
+  line: 250
+  classification: test-code bug, not an application regression
+  detail: >
+    lib/letflow/plugs/auth_pipeline.ex's private reject/4 (line 322-323, unchanged
+    by REQ-134) always encodes `%{error: error, detail: detail}` -- both keys,
+    every rejection path. This is pre-existing, already-established behavior: the
+    sibling non-integration test test/letflow/plugs/auth_pipeline_test.exs:196 (and
+    others in that file) correctly assert this with a partial pattern match
+    (`assert %{"error" => "unauthorized"} = Jason.decode!(conn.resp_body)`), which
+    tolerates the extra "detail" key. The new AC2 test instead asserts full map
+    equality (`== %{"error" => "unauthorized"}`), which can never pass against
+    reject/4's real, unchanged output shape. This was undetected until today
+    because Keycloak was never reachable in this environment before this run (see
+    step3/step3b handoffs: AC1-3 were validated by code review only, never
+    executed) -- the design and every prior gate correctly deferred live-token
+    verification, but nothing had actually run this assertion against a live
+    401 response until now.
+  fix_direction: >
+    Change line 250 to a partial pattern match, matching the established sibling
+    test's convention -- `assert %{"error" => "unauthorized"} = Jason.decode!(conn.resp_body)`
+    -- or assert on the "error" key alone. Not applied by TEST-RUNNER: this is
+    TEST-DESIGNER's owned file/step, and per this project's every-producing-step-
+    has-a-validating-step rule, the fix needs to go back through TEST-DESIGN-VALIDATOR
+    (step3b) before Step 4 re-runs, not be silently patched here to turn a real red
+    result green.
+
+unblock_everything_check:
+  pre_existing_failures_found: "none blocking"
+  note: >
+    The only failures observed anywhere in either default-suite attempt (N=16 or
+    N=4) or the live-keycloak run were (a) the N=16 connection-pool/lock-contention
+    class already covered by the documented ISS-0219/ISS-0222 host-resource
+    constraint (fully absent at the documented N=4 workaround, so not filed as a
+    new issue), and (b) the AC2 test-code defect above, which IS in this run's own
+    diff (test/letflow/integration/keycloak_auth_pipeline_test.exs, a new file
+    added by REQ-134) -- so it is correctly this run's own responsibility to
+    rework, not a pre-existing/unrelated failure to attribute away or forward to
+    ISSUE_QUEUE.
+
+environment:
+  toolchain: native (local mix/elixir on PATH)
+  postgres: "letflow-postgres-1, port 5462, already running, healthy"
+  keycloak: "letflow-keycloak-1, recreated on port 8093 (workspace .env changed from 8092 -> 8093 to avoid a live sibling session's container already bound to 8092), realm bpm-default imported, healthy"
+
+verdict: FAIL
+blocking_reason: >
+  AC2's live-Keycloak evidence run failed on a real, reproducible assertion
+  mismatch in the new test file itself (test/letflow/integration/keycloak_auth_pipeline_test.exs:250).
+  The underlying app behavior (401 + {"error":"unauthorized","detail":...}) is
+  correct and pre-existing/unchanged; the test's exact-equality assertion is wrong
+  given that established shape. Per Step 4 procedure, this must be fixed
+  (test-code fix) and re-validated by TEST-DESIGN-VALIDATOR before Step 4 can PASS.
+  The default full suite itself (AC4, and everything else in the suite) is clean
+  at N=4 (1986/1986 passed, 3 keycloak tests correctly excluded).
+artifacts_out:
+  - test/reports/report-20260823-WF02-REQ134-20260823.yaml
+next_action: >
+  Rework: route to TEST-DESIGNER to fix AC2's assertion (line 250) to a partial
+  match consistent with test/letflow/plugs/auth_pipeline_test.exs's established
+  convention, update test/specs/REQ-134.md's AC2 section if it describes the exact-
+  equality shape, then back through TEST-DESIGN-VALIDATOR (step3b) and TEST-RUNNER
+  (step4) again. AC1, AC3, AC4, and the full default suite do not need rework.

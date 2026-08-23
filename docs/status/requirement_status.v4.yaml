@@ -728,6 +728,48 @@ history:
       Queue task 295 released with status done, GH#591 closed with resolution
       comment citing docs/issues/ISS-0295.yaml. 25 on-disk `- req:` entries in
       requirement_status.v4.yaml before this append; 26 after.
+  - req: REQ-134
+    event: started
+    agent: ORCH
+    at: "2026-08-23T10:43:56Z"
+    note: >
+      WF02-REQ134-20260823 Step 00 -- exercise a real Keycloak-issued token
+      through Letflow.Plugs.AuthPipeline in a tagged, excluded-by-default
+      integration path. depends_on REQ-128/REQ-131 both done. Branch
+      feature/WF02-REQ134-20260823 pushed.
+  - req: REQ-134
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-23T13:24:48Z"
+    note: >
+      Real-Keycloak token integration path shipped:
+      test/letflow/integration/keycloak_auth_pipeline_test.exs drives a
+      genuine token through Letflow.Plugs.AuthPipeline end to end, tagged
+      :keycloak and excluded by default via test/test_helper.exs. This run
+      went through 3 rework cycles before RELEASE-VALIDATOR: AC3's
+      fixture-reset logic twice (count-before/after JIT-provisioning
+      assertions) and one AC2 assertion-mismatch fix (tampered-signature
+      401 body shape). RELEASE-VALIDATOR independently ran the live-Keycloak
+      suite for the 3rd time overall (after TEST-DESIGN-VALIDATOR and
+      TEST-RUNNER) -- 3/3 passed, reproduced independently each time -- and
+      additionally re-derived AC4 under the condition it is actually about:
+      earlier gates had only inferred "passes with Keycloak down" from the
+      exclusion mechanism being config-static, so RELEASE-VALIDATOR ran
+      `docker compose stop keycloak`, confirmed it stopped, then ran plain
+      `mix test` end to end (1986 passed, 3 excluded, 0 failures), restarting
+      Keycloak afterward -- genuine "Keycloak actually stopped" evidence no
+      earlier gate had gathered. All 6 acceptance criteria independently
+      confirmed. Also fixed a MINOR issue RELEASE-VALIDATOR carried forward
+      from REVIEWER: lib/letflow/design/req134-real-keycloak-token-integration.md
+      S3.1 described the design-phase {:skip, message} setup_all mechanism;
+      corrected to describe the raise-based mechanism actually shipped
+      (ExUnit 1.20.3 does not support dynamic runtime skip from setup_all).
+      README.md's "Running it" section given a one-line pointer to the new
+      excluded-by-default suite and its exact run command. No
+      docs/migration/stage-N-*.md or docs/migration/decisions/ file named
+      in REQ-134's acceptance criteria; confirmed none needed updating. 27
+      on-disk `- req:` entries in requirement_status.v4.yaml before this
+      append; 28 after.
   - req: REQ-133
     event: blocked
     agent: FRONTEND-DEV
@@ -749,5 +791,5 @@ history:
       attempt: Vite dev server IPv6-only binding, and React 18 StrictMode
       double-firing signinRedirect() in dev mode (use a production preview
       build instead). Follow-up filed: ISS-0296 (queue task 296, GH#594).
-      26 on-disk `- req:` entries in requirement_status.v4.yaml before this
-      append; 27 after.
+      28 on-disk `- req:` entries in requirement_status.v4.yaml before this
+      append; 29 after.

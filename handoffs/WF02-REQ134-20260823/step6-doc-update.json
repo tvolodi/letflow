@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step6-WF02-REQ134-20260823",
+  "run_id": "WF02-REQ134-20260823",
+  "workflow_id": "WF-02",
+  "step": "6",
+  "from_agent": "DOC-UPDATER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ134-20260823/step6-doc-update.json",
+  "created_at": "2026-08-23T13:24:48Z",
+  "started_at": "2026-08-23T13:24:48Z",
+  "completed_at": "2026-08-23T13:24:48Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-134"],
+    "related_handoff_ids": [
+      "step5-WF02-REQ134-20260823"
+    ],
+    "artifacts_in": [
+      "handoffs/WF02-REQ134-20260823/step5-release-validation.json"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 6 for REQ-134: flip requirements.yaml status to done, append a done event to the current requirement-status volume, fix the MINOR design-doc staleness RELEASE-VALIDATOR flagged, check stage-doc/decision-record staleness, check README.md's test-running section for a needed pointer."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "docs/requirements.yaml: REQ-134's `status:` flipped from `in_progress` to `done`. Appended one `done` event to docs/status/requirement_status.v4.yaml (confirmed current per docs/status/requirement_status.index.yaml, still current -- no roll happened from a concurrent run since Step 00), following that volume's own HOW-TO-APPEND procedure: read the full volume first, took the timestamp from the clock (2026-08-23T13:24:48Z, via `date -u`), appended (verified via `git diff --numstat` on the working-tree file: 33 insertions, 0 deletions -- pure append), and updated the volume's `entries:` count in the index in the same change (27 -> 28), with a matching narrative line added to the index's running note. Volume 4 after this append is 772 lines / 46,456 bytes, well under the roll_rule ceiling (1200 lines / 120,000 bytes) -- no roll needed.\n\nFixed the MINOR issue RELEASE-VALIDATOR carried forward from REVIEWER: lib/letflow/design/req134-real-keycloak-token-integration.md S3.1 previously described only the design-phase `{:skip, message}` setup_all mechanism. Rewrote S3.1's prose (only that subsection touched, rest of the doc untouched) to state as-shipped behavior: ExUnit 1.20.3 does not support a dynamic runtime `{:skip, message}` return from setup_all (confirmed by TEST-DESIGN-VALIDATOR via direct probing), so the shipped module raises a RuntimeError with the same message text instead; noted REVIEWER's and RELEASE-VALIDATOR's compliant-in-spirit rulings on the deviation.\n\nChecked whether REQ-134's acceptance criteria named a docs/migration/stage-N-*.md or docs/migration/decisions/*.md file needing update: they do not (all 6 ACs are about the test suite itself -- read directly from docs/requirements.yaml's REQ-134 entry, not assumed). No stage-doc or decision-record edit made; confirmed correct rather than assumed.\n\nChecked README.md's \"Running it\" section (the section documenting `mix test`/`scripts/test_parallel.sh`/`mix letflow.check`): it is exactly the kind of section this change affects, since REQ-134 adds a new deliberately-excluded test suite a developer needs to know how to run. Added a one-line pointer immediately after the `mix test` code block naming the new suite (test/letflow/integration/keycloak_auth_pipeline_test.exs, @moduletag :keycloak), what it needs (docker compose up -d keycloak), and the exact command to run it deliberately (mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs) -- matching AC6's exact command text.\n\nFull `git diff --stat`: README.md (+10), docs/requirements.yaml (+1/-1), docs/status/requirement_status.index.yaml (+4/-1, the -1 is the mutable `entries:` field, not a history rewrite), docs/status/requirement_status.v4.yaml (+33/-0), lib/letflow/design/req134-real-keycloak-token-integration.md (+26/-10, S3.1 only). Committed and pushed to feature/WF02-REQ134-20260823.\n\nNote on Step 00: this run's Step 00 (git setup) was performed by ORCH directly (see requirement_status.v4.yaml's REQ-134 started-event, agent: ORCH), not by ELIXIR-DEV -- there was no lib/ implementation step in this requirement (test-suite-only change, TEST-DESIGNER/TEST-DESIGN-VALIDATOR/TEST-RUNNER/RELEASE-VALIDATOR carried the pipeline). next_action below names the git-merge agent generically since ORCH assigns whoever executes Step Final, not necessarily ELIXIR-DEV.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v4.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "lib/letflow/design/req134-real-keycloak-token-integration.md",
+      "README.md",
+      "handoffs/WF02-REQ134-20260823/step6-doc-update.json"
+    ],
+    "issues": [],
+    "next_action": "Route to whichever agent ORCH assigns Step Final (git-merge) for this run -- no ELIXIR-DEV implementation step occurred in this run, so do not assume it is literally ELIXIR-DEV; ORCH's Step 00 entry in requirement_status.v4.yaml is the only prior non-ORCH-pipeline-role touchpoint on git for this run."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": []
+}

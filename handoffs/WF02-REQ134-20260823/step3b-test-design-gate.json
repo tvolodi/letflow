@@ -1,0 +1,84 @@
+{
+  "handoff_id": "step3b-WF02-REQ134-20260823",
+  "run_id": "WF02-REQ134-20260823",
+  "workflow_id": "WF-02",
+  "step": "3b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ134-20260823/step3b-test-design-gate.json",
+  "created_at": "2026-08-23T11:48:36Z",
+  "started_at": "2026-08-23T11:48:36Z",
+  "completed_at": "2026-08-23T17:52:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-134"],
+    "related_handoff_ids": ["step3-WF02-REQ134-20260823", "step4-test-run.json"],
+    "artifacts_in": [
+      "test/specs/REQ-134.md",
+      "test/letflow/integration/keycloak_auth_pipeline_test.exs",
+      "test/support/keycloak_test_client.ex",
+      "test/test_helper.exs",
+      "lib/letflow/design/req134-real-keycloak-token-integration.md"
+    ]
+  },
+  "task": {
+    "description": "RE-VALIDATION triggered by a Step 4 (TEST-RUNNER) FAIL against a REAL Keycloak run (not a prior Step 3b FAIL): AC2's tampered-token test asserted exact map equality (`Jason.decode!(conn.resp_body) == %{\"error\" => \"unauthorized\"}`) on the rejection response body, but lib/letflow/plugs/auth_pipeline.ex's reject/4 always includes a \"detail\" key alongside \"error\" -- a genuine test-assertion bug, not an application regression, but one that made the real-Keycloak run fail: `left: %{\"detail\" => ..., \"error\" => \"unauthorized\"}, right: %{\"error\" => \"unauthorized\"}`. TEST-DESIGNER's claimed fix (commits 65f5ced, 4b7a5c5): change AC2's assertion to a partial pattern match, `assert %{\"error\" => \"unauthorized\"} = Jason.decode!(conn.resp_body)`, mirroring test/letflow/plugs/auth_pipeline_test.exs:196's own established pattern. Independently verify: (a) the new assertion is a genuine Elixir pattern match, not something that silently degenerates back to equality; (b) it is equally rigorous to the mirrored line -- still proves rejection actually happened, not merely that some response came back; (c) re-run the real suite against live Keycloak myself and quote real output; (d) test/specs/REQ-134.md's AC2 section matches the fix; (e) full re-check of the other Step 3b criteria against the new commits (no new secrets/TODOs, all 6 ACs still covered).",
+    "acceptance_criteria": [
+      "a test obtains a genuine token from the running Keycloak and drives it through Letflow.Plugs.AuthPipeline end to end, with the real assertion output quoted",
+      "the token's signature is verified against the live JWKS via the real verifier, not TokenVerifierDouble -- demonstrated by the test failing if pointed at a tampered token",
+      "JIT provisioning creates a real user row on first authentication and reuses it on the second, asserted across two calls",
+      "the default mix test run still passes with Keycloak stopped, quoted as evidence",
+      "the real-token tests skip with a message naming exactly what must be running, rather than failing obscurely",
+      "the result states the exact command a developer runs to execute them"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Checked out feature/WF02-REQ134-20260823, git pull confirmed already up to date at commits 65f5ced + 4b7a5c5. Read test/letflow/integration/keycloak_auth_pipeline_test.exs and test/specs/REQ-134.md fresh from disk (not trusting the resubmission narrative).\n\n(1) AC2 assertion syntax, verified by direct reading (test file line 254): `assert %{\"error\" => \"unauthorized\"} = Jason.decode!(conn.resp_body)`. This is a genuine Elixir pattern match, not equality: the right-hand side of `=` is evaluated once, then matched against the map pattern on the left. Elixir map-pattern semantics are explicit here -- a map pattern is a subset match, not a shape match: `%{\"error\" => \"unauthorized\"} = %{\"error\" => \"unauthorized\", \"detail\" => \"...\"}` succeeds because every key named in the pattern (\"error\") is present in the right-hand map with the exact matching value, and any additional keys the map carries (\"detail\") are simply ignored by the pattern -- this is standard, well-defined Elixir/Erlang map-matching behavior, not an edge case. `assert <pattern> = <expr>` is ExUnit's documented idiom for this exact kind of match assertion (it raises ExUnit.AssertionError with a match-failure message if the pattern does not match, exactly as `assert x == y` does for equality) -- confirmed this is the identical form already used and passing at test/letflow/plugs/auth_pipeline_test.exs:196, so the syntax is proven, not merely plausible.\n\n(2) Equivalence to the mirrored line at test/letflow/plugs/auth_pipeline_test.exs:196 (in the describe block 'missing/malformed token rejected before any DB/JIT work', lines 189-197): identical pattern, identical right-hand-side shape (`Jason.decode!(conn.resp_body)`). Neither assertion is weakened relative to what it needs to prove: in both files, the map-pattern assertion is paired with `assert conn.halted` and `assert conn.status == 401` on the surrounding lines (keycloak_auth_pipeline_test.exs:248-249; auth_pipeline_test.exs:194-195) -- so 'was this request actually rejected' is established by the halted/status checks, and the body-pattern match's job is narrowly to confirm the JSON error code, which it still does precisely (`\"error\" => \"unauthorized\"` must be present with that exact value; a bug that changed the error code, or omitted the key, or returned non-JSON, would still fail this line). Cross-checked reject/4's actual call sites in lib/letflow/plugs/auth_pipeline.ex (lines 151-178): every 401 rejection path calls `reject(conn, 401, \"unauthorized\", <detail>)`, and reject/4 (line 322) is the sole producer of both keys -- confirmed by reading the function -- so \"detail\" is unconditionally present on every real 401 response this test could observe, meaning the previous exact-equality assertion was structurally incapable of ever passing against the real verifier, and this fix is the correct one (not a rigor-losing workaround).\n\n(3) Re-ran the real suite myself against the live Keycloak in this environment. `docker compose ps` shows `letflow-keycloak-1` Up (healthy) on host port 8093 (confirmed via .env's LETFLOW_KEYCLOAK_PORT=8093, matching config/keycloak_port.exs's precedence). Ran `mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs` TWICE consecutively myself (not reusing TEST-DESIGNER's reported numbers): run 1 -> 'Finished in 0.9 seconds ... Result: 3 passed'; run 2 -> 'Finished in 0.8 seconds ... Result: 3 passed'. Both runs green, confirming both the AC2 fix and AC3's reset-then-baseline mechanism (from the prior gate iteration) are genuinely repeatable across invocations against this persistent database, not merely claimed.\n\n(4) test/specs/REQ-134.md's AC2 section (lines 69-95) accurately describes the current fix: states the assertion is now a partial pattern (not exact key-set equality), names the mirrored line in auth_pipeline_test.exs, explains why reject/4 always carries \"detail\", and records the correction as a Step 4/TEST-RUNNER-triggered fix with the date and the fact that it was a test-assertion bug, not an application regression. Matches the code exactly, no stale narrative.\n\n(5) Re-checked remaining Step 3b criteria against the new diff (git diff ef15ecc..4b7a5c5, the full range covering both the already-PASSED AC3 rework and this round's AC2 fix): no new hardcoded secrets (grepped 'password|secret' across the touched files -- only the same two already-vetted seeded dev credentials, admin-user/admin-pass and designer-user/designer-pass, both pre-existing and unrelated to this diff); no 'TODO: implement test' anywhere; no `@tag :skip` anywhere (grep hits are all prose describing the documented setup_all raise-vs-skip deviation, not an actual skip tag). All 6 ACs still map to runnable tests/mechanisms: AC1 (lines 211-229), AC2 (235-256, this round's fix), AC3 (262-303, reset-then-baseline from the prior PASS, re-confirmed still correct and unchanged in this diff beyond the AC2-adjacent lines), AC4 (test/test_helper.exs exclude mechanism, unchanged), AC5 (setup_all raise, unchanged), AC6 (moduledoc command, unchanged). Fixtures remain isolated (admin-user for AC1/AC2, designer-user for AC3, no collision) and self-sufficient (no test depends on another having run first). No files touched outside the diff scope; no leftover probe files -- this was a read-and-independently-rerun verification, not a mutant-application case (the code under test already existed before this fix; the defect was a test-assertion bug against real, pre-existing application behavior, not a missing module).",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to TEST-RUNNER (4) for re-confirmation"
+  },
+  "rework_count": 3,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-08-23T11:39:44Z",
+      "status": "FAIL",
+      "summary": "AC1/AC2/AC6 pass; AC4 and AC5 independently re-verified and AC5's raise-vs-skip deviation ruled compliant. BLOCKER found under checks (c)/(d): AC3's test asserted a hardcoded pre-call count of 0 for designer-user's JIT-provisioned row, but the bpm-default tenant/schema (and any row provisioned in it) is never torn down between invocations (design section 5), and designer-user is a fixed seeded Keycloak identity with no per-run uniqueness available -- so the test passes on a database's first-ever run and fails deterministically on every subsequent run of AC6's own documented command.",
+      "issues": [
+        "BLOCKER: AC3's hardcoded pre-call count of 0 is not repeatable across invocations of the same persistent test database; rework required via either (a) an on_exit/teardown deleting the JIT-provisioned row after the test, or (b) a count captured before either pipeline call as a baseline, asserted as count_before/count_before+1/count_before+1."
+      ],
+      "next_action": "Rework TEST-DESIGNER -- fix AC3's test repeatability defect, rework iteration 1 of 3."
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-08-23T11:48:36Z",
+      "status": "FAIL",
+      "summary": "AC1/AC2/AC4/AC5/AC6 re-confirmed passing (AC4 re-run: 'Excluding tags: [:keycloak]' / 'Result: 0 tests, 3 excluded' with Keycloak stopped). AC3's rework-1 fix (count_before baseline captured immediately before the first call, without resetting the row) does NOT eliminate the cross-invocation defect -- it moves it. Traced through lib/letflow/identity.ex's provision_oidc_user/4 -> upsert_by_external_identity/4 (genuine find-or-create keyed on tenant_id/external_realm/external_id): on a database's first-ever run count_before=0 and the sequence 0->1->1 holds, but on the second invocation of AC6's own documented command against the same never-torn-down bpm-default schema, designer-user's row from run 1 already exists, so count_before is captured as 1, call 1 correctly reuses the existing row (no insert), and `assert user_count_for_subject(...) == count_before + 1` fails deterministically because the post-call-1 count (1) equals count_before (1), not count_before+1 (2). Same failure class as iteration 0, just relocated to a later invocation and a different line.",
+      "issues": [
+        "BLOCKER: test/letflow/integration/keycloak_auth_pipeline_test.exs AC3 test (line 241-273 in that revision): count_before captured without first resetting live database state is not repeatable across invocations of AC6's documented command, because provision_oidc_user/4's find-or-create correctly reuses a row surviving from any prior invocation. Rework required: reset this subject's row to a true zero (e.g. Repo.delete_all scoped to external_realm/external_id in the tenant's schema) immediately after deriving `subject`, before computing any baseline. Reflect the corrected mechanism in test/specs/REQ-134.md's AC3 section."
+      ],
+      "next_action": "Rework TEST-DESIGNER -- fix AC3's still-unresolved cross-invocation repeatability defect (BLOCKER above), rework iteration 2 of 3. AC1/AC2/AC4/AC5/AC6 and checks (a)/(b)/(e) all PASS and do not need to be revisited; only the AC3 baseline-reset mechanism needs rework."
+    },
+    {
+      "iteration": 2,
+      "gated_at": "2026-08-23T16:58:00Z",
+      "status": "PASS",
+      "summary": "AC3's rework-2 reset_subject_row!/2 fix independently verified statement-by-statement: reset runs strictly before the first count read, delete/count queries share an identical scope (same where clause, same prefix: schema_name), delete_all is synchronous with no race, the 0->1->1 sequence is structurally guaranteed on any invocation (delete_all no-op is safe), the fixture row is exclusively test data. test/specs/REQ-134.md AC3 section matches. All other Step 3b criteria re-checked and passing (all 6 ACs covered, no TODOs, no skip tags, fixtures isolated and self-sufficient, no hardcoded secrets beyond the two already-vetted seeded dev credentials). AC4 re-verified independently with Keycloak stopped ('Result: 0 tests, 3 excluded'). Passed to TEST-RUNNER (Step 4) -- which subsequently found a genuine bug this gate iteration did NOT catch: AC2's assertion used exact map equality against the real Keycloak-verified response body, which legitimately carries an extra 'detail' key reject/4 always includes; this only surfaces against the REAL verifier (TokenVerifierDouble-based tests never exercise this path), so it was invisible to a design/spec read alone. See handoffs/WF02-REQ134-20260823/step4-test-run.json for the Step 4 FAIL this gap led to, and iteration 3 below for the resulting re-validation.",
+      "issues": [],
+      "next_action": "Route to TEST-RUNNER (4) -- SUBSEQUENTLY FAILED on AC2's real-Keycloak assertion bug; see iteration 3."
+    },
+    {
+      "iteration": 3,
+      "gated_at": "2026-08-23T17:52:00Z",
+      "status": "PASS",
+      "summary": "RE-VALIDATION triggered by the Step 4 FAIL noted in iteration 2 (AC2 exact-map-equality bug against the real, Keycloak-verified response body, which legitimately carries a 'detail' key). TEST-DESIGNER's fix (commits 65f5ced, 4b7a5c5) changes AC2's assertion to a partial pattern match, `assert %{\"error\" => \"unauthorized\"} = Jason.decode!(conn.resp_body)`, mirroring test/letflow/plugs/auth_pipeline_test.exs:196. Independently verified: the syntax is a genuine Elixir map-subset pattern match (not a silent equality degeneration), reasoned explicitly through Elixir's map-pattern semantics and cross-checked against the identical already-passing mirrored line; the pattern is equally rigorous (paired with conn.halted/conn.status checks, so rejection-actually-happened is still proven, only the exact key-set requirement was dropped, which reject/4's own unconditional 'detail' key makes correct rather than a rigor loss). Personally re-ran `mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs` against the live letflow-keycloak-1 container (port 8093, confirmed healthy via docker compose ps) TWICE consecutively: both runs 'Result: 3 passed', confirming both this fix and AC3's previously-validated reset mechanism are genuinely repeatable. test/specs/REQ-134.md's AC2 section matches the fix and records the correction accurately. Full re-check of remaining Step 3b criteria against the new diff: no new hardcoded secrets/TODOs/skip tags, all 6 ACs still covered, fixtures still isolated and self-sufficient.",
+      "issues": [],
+      "next_action": "Route to TEST-RUNNER (4) for re-confirmation"
+    }
+  ]
+}

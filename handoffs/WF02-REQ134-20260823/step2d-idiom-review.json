@@ -1,0 +1,52 @@
+{
+  "handoff_id": "step2d-WF02-REQ134-20260823",
+  "run_id": "WF02-REQ134-20260823",
+  "workflow_id": "WF-02",
+  "step": "2d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ134-20260823/step2d-idiom-review.json",
+  "created_at": "2026-08-23T11:34:28Z",
+  "started_at": "2026-08-23T11:34:28Z",
+  "completed_at": "2026-08-23T11:34:28Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-134"],
+    "related_handoff_ids": ["step1-WF02-REQ134-20260823", "step1b-WF02-REQ134-20260823", "step3-WF02-REQ134-20260823"],
+    "artifacts_in": [
+      "test/support/keycloak_test_client.ex",
+      "test/letflow/integration/keycloak_auth_pipeline_test.exs",
+      "test/test_helper.exs",
+      "test/specs/REQ-134.md",
+      "lib/letflow/design/req134-real-keycloak-token-integration.md"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 2d idiom/scope gate for REQ-134, per .claude/agents/reviewer.md's four questions and docs/anti-patterns.md, plus an explicit judgement call on TEST-DESIGNER's skip-vs-raise deviation from the approved design.",
+    "acceptance_criteria": [
+      "idiomatic vs. crutch assessed against the actual diff (git diff main...HEAD)",
+      "supervision integrity assessed -- does anything collapse per-instance isolation or introduce an unsupervised process",
+      "type-safety gaps assessed (non-blocking) and filed under docs/issues/ if found",
+      "scope creep assessed against REQ-134's stated scope and the approved design",
+      "explicit judgement rendered on the setup_all {:skip, message} vs raise RuntimeError deviation, deciding whether TEST-DESIGN-VALIDATOR should treat it as compliant-in-spirit or as needing rework",
+      "async: false + Application.put_env/on_exit token_verifier override pattern assessed for soundness"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD (0c5e5e1 vs main): test/support/keycloak_test_client.ex, test/letflow/integration/keycloak_auth_pipeline_test.exs, test/test_helper.exs's exclude list, test/specs/REQ-134.md. No lib/ files touched -- confirmed by grep across lib/ (only the design doc under lib/letflow/design/ references KeycloakTestClient; no lib/ module imports/aliases it). Correct call per the approved design: nothing here is reusable production logic, so lib/ was rightly untouched and ELIXIR-DEV was correctly skipped for this requirement.\n\n1. Idiomatic vs. crutch: PASS. No gen_statem/GenServer question applies -- this diff adds zero processes. KeycloakTestClient is a plain module of pure/IO functions (discovery_reachable?/1 never raises by design, matching the moduledoc's own stated invariant), matching the established test/support/ shape of Letflow.TenantSchemaReaper/Letflow.TenantFixture. Using :httpc/:inets instead of adding a new mix.exs HTTP dependency for one excluded-by-default file is the right call, not a crutch.\n\n2. Supervision: PASS, not applicable. Verified via grep that KeycloakTestClient is never referenced from lib/, never added to lib/letflow/application.ex's supervision tree, and test/support is only compiled under elixirc_paths(:test) per mix.exs:21. No spawn, no singleton process, no shared state collapsing Letflow.InstanceSupervisor's per-instance isolation -- this diff cannot affect it since it touches zero supervised code paths.\n\n3. Type-safety gaps: none found worth filing. token_error() is a real tagged-union @type (test/support/keycloak_test_client.ex), not a bare map/string being passed around. No new lib/ transition logic exists in this diff for a runtime error class to hide behind. No docs/issues/ entry filed -- there is nothing here that a struct/Ecto.Enum change would make unrepresentable, since this is a test-only HTTP client with three outcome variants already fully enumerated in the @type.\n\n4. Scope creep: PASS, none found. The diff is scoped tightly to REQ-134's six acceptance criteria: three test cases (AC1/AC2/AC3), the exclude-by-default mechanism (AC4), the reachability-probe message (AC5), and the documented developer command (AC6). tamper_signature/1 exists solely to serve AC2 and is documented as 'the ONLY place this design introduces per-byte mutation logic.' No new abstractions (behaviours, macros, generic plumbing) appear ahead of what this one integration test needs -- KeycloakTestClient is a flat set of 4 functions, not a framework.\n\nJUDGEMENT on the setup_all {:skip, message} vs. raise RuntimeError deviation: COMPLIANT-IN-SPIRIT, non-blocking, proceed. This is not scope creep or a shortcut -- TEST-DESIGNER measured the constraint empirically against the actual installed toolchain (elixir --version: 1.20.3/ex_unit 1.20.3) rather than assuming, and the evidence is real command output quoted in test/specs/REQ-134.md, not speculation: `{:skip, message}` from setup_all genuinely raises an ExUnit-internal RuntimeError about an invalid return shape in this version, and the tag-based dynamic-skip path (ExUnit.Filters.eval/4) is evaluated from each test's compile-time tags map in runner.ex's prepare_tests/4, strictly before setup_all/setup run -- confirmed against ex_unit's own source per the moduledoc, not merely asserted. AC5's substantive text is 'skip with a message naming exactly what must be running, rather than failing obscurely.' The raise satisfies the substance: the message is exact (discovery URL + docker compose up -d keycloak), and it is the first and only thing surfaced -- not buried under an unrelated obscure error, which is precisely what AC5 is guarding against. The literal ExUnit-summary label (\"3 invalid\"/failure vs. \"3 skipped\") differs from AC5's word choice, but AC5 is evaluated on the developer-facing outcome (a clear, targeted message vs. an obscure one), not on which internal ExUnit counter increments.\n\nConsidered and rejected as the fix: dynamically excluding :keycloak from test_helper.exs via ExUnit.configure/1 based on a live reachability probe run at boot. This would produce a literal 'N excluded' outcome, but at real cost: it requires the probe to run on every `mix test` invocation (or argv-sniffing for --include keycloak, itself fragile) to decide whether to re-exclude, adding a live network dependency and latency to a path that AC4 explicitly requires to stay Keycloak-independent by default. That trade -- more moving parts, a new coupling between test_helper.exs (which every test file loads) and Keycloak's runtime state, to fix a cosmetic label -- is worse than the documented raise. Rework here would be solving a wording mismatch by introducing a real new failure mode into the default suite's boot path.\n\nRecommend (non-blocking): the design doc lib/letflow/design/req134-real-keycloak-token-integration.md S3.1 should be corrected at the source to describe the raise mechanism instead of {:skip, message}, so a future reader doesn't re-derive this. This is documentation hygiene, not a rework trigger -- can be picked up by DOC-UPDATER or folded into REQ-134's close-out, not a reason to send this back to TEST-DESIGNER.\n\nRuntime token_verifier override (async: false, Application.put_env + on_exit restore): SOUND, not a crutch. Verified against lib/letflow/plugs/auth_pipeline.ex:242 (`Keyword.fetch!(oidc_config, :token_verifier)` read from `Application.get_env(:letflow, :oidc)`) -- AuthPipeline has no injection seam for the verifier other than this process-global Application env key, so mutating it for the module's duration is the only available mechanism without touching lib/ to add one (which would itself be scope creep for a single excluded-by-default test file). async: false is required, not stylistic, given this global mutation would otherwise race test/letflow/plugs/auth_pipeline_test.exs's async: true suite against TokenVerifierDouble -- the moduledoc states this correctly. on_exit registered per-test (not once in setup_all) is the safer choice, since it unwinds even if an individual test fails/raises mid-run, leaving no other test file able to observe the real-verifier config. No concerns here.\n\nTenant-fixture provisioning: no concerns. ensure_bpm_default_tenant!/0 is a get-or-create against a real Postgres schema (Repo.get_by then insert+provision on miss), reuses Letflow.TenantFixture.assert_schema_complete!/1 rather than reimplementing that check, and has no teardown by design (a persistent bpm-default tenant matching priv/keycloak/realms/bpm-default.json's seeded realm) -- appropriate for an integration fixture that's expected to already exist across runs, not a per-test throwaway.\n\nNo docs/anti-patterns.md entries were triggered by this diff.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "lib/letflow/design/req134-real-keycloak-token-integration.md S3.1 still describes the setup_all returning {:skip, message} mechanism, which this repo's installed ExUnit (1.20.3) does not support. TEST-DESIGNER correctly deviated and documented it, but the design doc itself is now stale at the source. Recommend DOC-UPDATER or REQ-134 close-out correct S3.1 to describe the raise-with-exact-message mechanism instead, so a future reader of the design doc doesn't re-derive the same investigation."
+      }
+    ],
+    "next_action": "Proceed to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": []
+}

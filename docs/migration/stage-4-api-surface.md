@@ -194,6 +194,16 @@ route-by-route port this stage was originally scoped as:
   tested, fully-ported authorization matrix that **nothing calls** — grep for
   the module across `lib/` returns only its own definition. Every route this
   stage adds is currently authenticated but not authorized.
+  **Update (2026-08-23, REQ-131 done):** no longer accurate. `Letflow.Api.Authorization`
+  is now reachable router-wide via `Letflow.Plugs.Authorize` +
+  `Letflow.Api.AuthorizedRouter`, a mandatory plug that superseded the
+  per-router `with_authorized_scope/4`/`with_authorization/4` convention
+  (both helpers deleted). All 53 already-shipped call sites across
+  identity/audit/definitions/instances/onboarding/tenants/tasks migrated
+  onto it, and three previously-silent authorization gaps (instances
+  rebind-pins/reconstruct, solution-packs export/install, definitions
+  `/validate`) were closed by giving each a real policy key. See
+  `requirement_status.v4.yaml`'s REQ-131 `done` entry for gate results.
 
 `REQ-128`..`REQ-135` cover this: Keycloak in the dev stack with a five-role realm
 (`REQ-128`), a drift check across the three places roles are named (`REQ-129`),

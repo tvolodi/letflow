@@ -102,9 +102,21 @@ defmodule Letflow.Plugs.ApiPipelineIntegrationTest do
         |> put_req_header("authorization", "Bearer valid-test-token")
         |> Letflow.Router.call(Letflow.Router.init([]))
 
-      # The stub sub-router's own not_found — NOT 401/403/500/503 — proving the
-      # request passed both AuthPipeline and TenantStatus and reached :dispatch.
-      assert conn.status == 404
+      # As of REQ-131, Letflow.Plugs.Authorize is mandatory on every sub-router
+      # under Letflow.Plugs.ApiPipeline, including Letflow.Routers.Identity's
+      # own `match _` catch-all -- an unmatched (method, path) is evaluated as
+      # :Unknown (Letflow.Api.Authorization.evaluate_access/2's ported
+      # fail-closed-EXCEPT-PLATFORM_ADMIN branch), and this fixture's only
+      # token double mints role "VIEWER" -- not a recognised
+      # Letflow.Api.Authorization.role(), so roles_from_strings/1 drops it and
+      # the caller holds no role at all. The 403 (not 401/500/503) is what
+      # proves the request passed both AuthPipeline and TenantStatus and
+      # reached Letflow.Routers.Identity's own :match/Authorize/:dispatch
+      # chain -- a stronger signal than the pre-REQ-131 404 this test used to
+      # assert, since it additionally proves the mandatory plug ran. See
+      # test/letflow/api/authorization_enforcement_test.exs (AC5) for the
+      # PLATFORM_ADMIN-allowed half of the same :Unknown branch.
+      assert conn.status == 403
       assert conn.assigns.auth_context.tenant_id == tenant.id
       assert conn.assigns.auth_context.roles == ["VIEWER"]
       assert is_binary(conn.assigns.auth_context.user_id)
@@ -160,9 +172,14 @@ defmodule Letflow.Plugs.ApiPipelineIntegrationTest do
           :telemetry.detach(handler_id)
         end
 
-      # Stub's own not_found, not 503 — TenantStatus's method short-circuit (GET is
-      # not in @write_methods) passed the request straight through.
-      assert conn.status == 404
+      # 403, not 503 — TenantStatus's method short-circuit (GET is not in
+      # @write_methods) passed the request straight through to
+      # Letflow.Plugs.Authorize, which denies this "VIEWER"-role (unrecognised,
+      # so no-role) caller on the unmatched (method, path) via
+      # evaluate_access/2's :Unknown branch. See the REQ-071 AC2 test above for
+      # the full REQ-131 explanation of why 403 (not the pre-REQ-131 404) is
+      # now the correct proof this request reached :dispatch.
+      assert conn.status == 403
       refute "30" in get_resp_header(conn, "retry-after")
 
       # AuthPipeline's own JIT-provisioning lookups DO issue real Repo queries for

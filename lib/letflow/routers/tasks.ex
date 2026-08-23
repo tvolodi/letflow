@@ -20,16 +20,15 @@ defmodule Letflow.Routers.Tasks do
   delegated to `Letflow.Tasks`/`Letflow.Engine`. All unmatched requests
   return the RFC 9457 404 problem document.
 
-  ## Authorization — direct `Authorization.evaluate_access/2` call, temporary pending REQ-131
+  ## Authorization (REQ-131)
 
-  REQ-131 (making `Letflow.Api.Authorization` a mandatory router-wide plug) is
-  still `status: pending` (`docs/requirements.yaml`) as of this requirement.
-  `with_authorized_scope/4` below calls `Authorization.evaluate_access/2`
-  directly from this route module — the same established pattern
-  `Letflow.Routers.Identity` and `Letflow.Routers.Tenants` already use for
-  their own write routes, not a new mechanism. This is temporary: once
-  REQ-131 lands, this direct call is expected to be replaced by the
-  mandatory plug.
+  Every route below is declared via `authz_get`/`authz_post`
+  (`Letflow.Api.AuthorizedRouter`) with its own policy key —
+  `Letflow.Plugs.Authorize` evaluates it before this module's handler ever
+  runs. The route-local `with_authorized_scope/4` copy that used to live
+  here (the same established pattern `Letflow.Routers.Identity` and
+  `Letflow.Routers.Tenants` also used to have) is deleted, not adapted, per
+  REQ-130's design §2.4.
 
   ## Concurrency (`claim`/`assign`/`reassign`, AC4)
 
@@ -98,10 +97,9 @@ defmodule Letflow.Routers.Tasks do
   machinery.
   """
 
-  use Plug.Router
+  use Letflow.Api.AuthorizedRouter
 
   alias Letflow.Api.Authorization
-  alias Letflow.Api.Context
   alias Letflow.Api.Error
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
@@ -110,90 +108,36 @@ defmodule Letflow.Routers.Tasks do
   alias Letflow.Engine
   alias Letflow.Tasks
 
-  plug(:match)
-  plug(:dispatch)
-
-  get "/inbox" do
-    with_authorized_scope(conn, "GET", "/tasks/inbox", fn conn, opts, decision ->
-      handle_inbox(conn, opts, decision)
-    end)
+  authz_get "/inbox", :TasksList do
+    handle_inbox(conn, conn.assigns.scoped_opts, conn.assigns.access_decision)
   end
 
-  get "/" do
-    with_authorized_scope(conn, "GET", "/tasks", fn conn, opts, decision ->
-      handle_list(conn, opts, decision)
-    end)
+  authz_get "/", :TasksList do
+    handle_list(conn, conn.assigns.scoped_opts, conn.assigns.access_decision)
   end
 
-  get "/:id" do
-    with_authorized_scope(conn, "GET", "/tasks/:id", fn conn, opts, _decision ->
-      handle_get_by_id(conn, conn.params["id"], opts)
-    end)
+  authz_get "/:id", :TasksGetById do
+    handle_get_by_id(conn, conn.params["id"], conn.assigns.scoped_opts)
   end
 
-  post "/:id/complete" do
-    with_authorized_scope(conn, "POST", "/tasks/:id/complete", fn conn, opts, _decision ->
-      handle_complete(conn, conn.params["id"], opts)
-    end)
+  authz_post "/:id/complete", :TasksComplete do
+    handle_complete(conn, conn.params["id"], conn.assigns.scoped_opts)
   end
 
-  post "/:id/claim" do
-    with_authorized_scope(conn, "POST", "/tasks/:id/claim", fn conn, opts, _decision ->
-      handle_claim(conn, conn.params["id"], opts)
-    end)
+  authz_post "/:id/claim", :TasksComplete do
+    handle_claim(conn, conn.params["id"], conn.assigns.scoped_opts)
   end
 
-  post "/:id/assign" do
-    with_authorized_scope(conn, "POST", "/tasks/:id/assign", fn conn, opts, _decision ->
-      handle_assign(conn, conn.params["id"], opts)
-    end)
+  authz_post "/:id/assign", :TasksAssign do
+    handle_assign(conn, conn.params["id"], conn.assigns.scoped_opts)
   end
 
-  post "/:id/reassign" do
-    with_authorized_scope(conn, "POST", "/tasks/:id/reassign", fn conn, opts, _decision ->
-      handle_reassign(conn, conn.params["id"], opts)
-    end)
+  authz_post "/:id/reassign", :TasksReassign do
+    handle_reassign(conn, conn.params["id"], conn.assigns.scoped_opts)
   end
 
   match _ do
     Response.not_found(conn)
-  end
-
-  # ── Shared step-1/step-2 preamble (design §5.1) ─────────────────────────
-  #
-  # Step 1 -- scoped prefix. Step 2 -- authorization. No Repo call of any
-  # kind happens before both steps have run and step 2 has returned :Allow
-  # or :AllowWithRowFilter. `method`/`path_template` are literal string
-  # constants at every call site above, never derived from conn.request_path,
-  # matching Letflow.Api.Authorization's own already-shipped endpoint_policy_key/2
-  # clauses for these three routes (full-path literals, "/tasks"-prefixed,
-  # not this sub-router's own forward-relative match patterns).
-  defp with_authorized_scope(conn, method, path_template, fun) do
-    case Context.scoped_repo_opts(conn) do
-      {:error, _missing_auth_context_or_invalid_tenant_id} ->
-        Response.internal_error(conn)
-
-      {:ok, prefix: _schema} = ok ->
-        ctx = %Authorization.AccessContext{
-          user_id: conn.assigns.auth_context.user_id,
-          roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles)
-        }
-
-        decision =
-          Authorization.evaluate_access(
-            ctx,
-            Authorization.endpoint_policy_key(method, path_template)
-          )
-
-        case decision.kind do
-          :Deny403 ->
-            Response.forbidden(conn, "insufficient permissions")
-
-          _allow_or_allow_with_row_filter ->
-            {:ok, opts} = ok
-            fun.(conn, opts, decision)
-        end
-    end
   end
 
   # ── GET /tasks (design §5.2) ────────────────────────────────────────────

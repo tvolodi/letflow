@@ -137,9 +137,8 @@ defmodule Letflow.Routers.Instances do
   prefix.
   """
 
-  use Plug.Router
+  use Letflow.Api.AuthorizedRouter
 
-  alias Letflow.Api.Authorization
   alias Letflow.Api.Context
   alias Letflow.Api.Error
   alias Letflow.Api.Pagination
@@ -159,23 +158,30 @@ defmodule Letflow.Routers.Instances do
   # parsePinKind accepts (pin_rebind.zig:165-170).
   @pin_kinds ["catalog_entry", "variable_schema", "module"]
 
-  plug(:match)
-  plug(:dispatch)
-
   # MUST precede any future `post "/:id"` -- see this module's moduledoc.
-  post "/:id/rebind-pins" do
+  #
+  # REQ-131: no endpoint_policy_key/2 clause exists for this route (see
+  # "Authorization gap" below) -- :InstancesCancel is a route-declared
+  # policy key, reusing the same permission POST /:id/cancel already
+  # requires (both mutate an in-flight instance's execution state), NOT
+  # derived from Authorization.endpoint_policy_key/2. Named on the
+  # enforcement test's explicit allowlist (design §4) -- flagged for
+  # REVIEWER as a judgment call, not silently decided.
+  authz_post "/:id/rebind-pins", :InstancesCancel do
     handle_rebind_pins(conn, conn.params["id"])
   end
 
-  post "/:id/cancel" do
+  authz_post "/:id/cancel", :InstancesCancel do
     handle_cancel(conn, conn.params["id"])
   end
 
-  post "/:id/reconstruct" do
+  # REQ-131: same judgment call as /:id/rebind-pins above -- see that
+  # route's comment and the enforcement test's allowlist.
+  authz_post "/:id/reconstruct", :InstancesCancel do
     handle_reconstruct(conn, conn.params["id"])
   end
 
-  post "/" do
+  authz_post "/", :InstancesStart do
     handle_create(conn)
   end
 
@@ -183,23 +189,23 @@ defmodule Letflow.Routers.Instances do
   # class Letflow.Routers.Tasks's `/inbox`-before-`/:id` note documents;
   # `Plug.Router` first-match-wins would otherwise have `/:id` swallow each
   # of these with `id` bound to the literal suffix.
-  get "/:id/history" do
+  authz_get "/:id/history", :InstancesRead do
     handle_history(conn, conn.params["id"])
   end
 
-  get "/:id/timeline" do
+  authz_get "/:id/timeline", :InstancesRead do
     handle_timeline(conn, conn.params["id"])
   end
 
-  get "/:id/pins" do
+  authz_get "/:id/pins", :InstancesRead do
     handle_get_pins(conn, conn.params["id"])
   end
 
-  get "/:id" do
+  authz_get "/:id", :InstancesRead do
     handle_get_by_id(conn, conn.params["id"])
   end
 
-  get "/" do
+  authz_get "/", :InstancesRead do
     handle_list(conn)
   end
 
@@ -311,19 +317,20 @@ defmodule Letflow.Routers.Instances do
   ]
 
   defp handle_create(conn) do
-    with_authorized_scope(conn, "POST", "/instances", fn conn, opts, actor_id ->
-      with {:ok, body} <- object_body(conn),
-           {:ok, attrs} <- validate_schema(@create_schema, body) do
-        create_attrs = create_attrs(attrs, actor_id, idempotency_key(conn))
-        render_create(conn, Engine.create(create_attrs, opts))
-      else
-        {:error, :malformed_json} ->
-          Response.bad_request(conn, "request body must be a JSON object")
+    opts = conn.assigns.scoped_opts
+    actor_id = conn.assigns.auth_context.user_id
 
-        {:errors, field_errors} ->
-          Response.send_problem(conn, Validation.problem(field_errors))
-      end
-    end)
+    with {:ok, body} <- object_body(conn),
+         {:ok, attrs} <- validate_schema(@create_schema, body) do
+      create_attrs = create_attrs(attrs, actor_id, idempotency_key(conn))
+      render_create(conn, Engine.create(create_attrs, opts))
+    else
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
+
+      {:errors, field_errors} ->
+        Response.send_problem(conn, Validation.problem(field_errors))
+    end
   end
 
   # Only includes keys the request actually sent (never a nil-valued key),
@@ -399,16 +406,17 @@ defmodule Letflow.Routers.Instances do
   # ── POST /instances/:id/cancel (design §"Routes"/cancel) ──────────────────
 
   defp handle_cancel(conn, raw_id) do
-    with_authorized_scope(conn, "POST", "/instances/:id/cancel", fn conn, opts, actor_id ->
-      case cast_instance_id(raw_id) do
-        {:ok, instance_id} ->
-          cancel_attrs = %{actor_id: actor_id, idempotency_key: idempotency_key(conn)}
-          render_cancel(conn, Engine.cancel_instance(instance_id, cancel_attrs, opts))
+    opts = conn.assigns.scoped_opts
+    actor_id = conn.assigns.auth_context.user_id
 
-        {:error, :invalid_instance_id} ->
-          Response.unprocessable(conn, "instance_id is not a valid UUID")
-      end
-    end)
+    case cast_instance_id(raw_id) do
+      {:ok, instance_id} ->
+        cancel_attrs = %{actor_id: actor_id, idempotency_key: idempotency_key(conn)}
+        render_cancel(conn, Engine.cancel_instance(instance_id, cancel_attrs, opts))
+
+      {:error, :invalid_instance_id} ->
+        Response.unprocessable(conn, "instance_id is not a valid UUID")
+    end
   end
 
   defp render_cancel(conn, {:ok, result}) do
@@ -492,15 +500,15 @@ defmodule Letflow.Routers.Instances do
   # ── GET /instances/:id (design §"Router"/get_by_id) ────────────────────
 
   defp handle_get_by_id(conn, raw_id) do
-    with_authorized_scope(conn, "GET", "/instances/:id", fn conn, opts, _actor_id ->
-      case cast_instance_id(raw_id) do
-        {:ok, id} ->
-          render_get_by_id(conn, Instances.get_by_id(id, opts))
+    opts = conn.assigns.scoped_opts
 
-        {:error, :invalid_instance_id} ->
-          Response.unprocessable(conn, "instance_id is not a valid UUID")
-      end
-    end)
+    case cast_instance_id(raw_id) do
+      {:ok, id} ->
+        render_get_by_id(conn, Instances.get_by_id(id, opts))
+
+      {:error, :invalid_instance_id} ->
+        Response.unprocessable(conn, "instance_id is not a valid UUID")
+    end
   end
 
   defp render_get_by_id(conn, {:ok, projection}), do: Response.ok(conn, instance_map(projection))
@@ -529,39 +537,38 @@ defmodule Letflow.Routers.Instances do
   # ── GET /instances (design §"Router"/list) ──────────────────────────────
 
   defp handle_list(conn) do
-    with_authorized_scope(conn, "GET", "/instances", fn conn, opts, _actor_id ->
-      conn = fetch_query_params(conn)
-      query = conn.query_params
+    opts = conn.assigns.scoped_opts
+    conn = fetch_query_params(conn)
+    query = conn.query_params
 
-      with {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
-           {:ok, page_size} <- Pagination.validate_page_size(raw_page_size),
-           {:ok, started_after} <- parse_optional_timestamp(Map.get(query, "started_after")),
-           {:ok, started_before} <- parse_optional_timestamp(Map.get(query, "started_before")) do
-        params = %{
-          status: Map.get(query, "status"),
-          definition_id: Map.get(query, "definition_id"),
-          correlation_key: Map.get(query, "correlation_key"),
-          started_after: started_after,
-          started_before: started_before,
-          cursor: Map.get(query, "cursor"),
-          page_size: page_size
-        }
+    with {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+         {:ok, page_size} <- Pagination.validate_page_size(raw_page_size),
+         {:ok, started_after} <- parse_optional_timestamp(Map.get(query, "started_after")),
+         {:ok, started_before} <- parse_optional_timestamp(Map.get(query, "started_before")) do
+      params = %{
+        status: Map.get(query, "status"),
+        definition_id: Map.get(query, "definition_id"),
+        correlation_key: Map.get(query, "correlation_key"),
+        started_after: started_after,
+        started_before: started_before,
+        cursor: Map.get(query, "cursor"),
+        page_size: page_size
+      }
 
-        Instances.list(params, opts) |> render_page_result(conn, &list_item_map/1)
-      else
-        {:error, :invalid_page_size} ->
-          Response.bad_request(conn, "invalid page_size")
+      Instances.list(params, opts) |> render_page_result(conn, &list_item_map/1)
+    else
+      {:error, :invalid_page_size} ->
+        Response.bad_request(conn, "invalid page_size")
 
-        {:error, :page_size_too_large} ->
-          Response.bad_request(conn, "page_size out of range")
+      {:error, :page_size_too_large} ->
+        Response.bad_request(conn, "page_size out of range")
 
-        {:error, :invalid_timestamp} ->
-          Response.unprocessable(
-            conn,
-            "started_after/started_before must be valid ISO 8601 timestamps"
-          )
-      end
-    end)
+      {:error, :invalid_timestamp} ->
+        Response.unprocessable(
+          conn,
+          "started_after/started_before must be valid ISO 8601 timestamps"
+        )
+    end
   end
 
   defp list_item_map(projection) do
@@ -577,38 +584,37 @@ defmodule Letflow.Routers.Instances do
   # ── GET /instances/:id/history (design §"Router"/history) ──────────────
 
   defp handle_history(conn, raw_id) do
-    with_authorized_scope(conn, "GET", "/instances/:id/history", fn conn, opts, _actor_id ->
-      conn = fetch_query_params(conn)
-      query = conn.query_params
+    opts = conn.assigns.scoped_opts
+    conn = fetch_query_params(conn)
+    query = conn.query_params
 
-      with {:ok, id} <- cast_instance_id(raw_id),
-           {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
-           {:ok, page_size} <- Pagination.validate_page_size(raw_page_size),
-           {:ok, from} <- parse_optional_timestamp(Map.get(query, "from")),
-           {:ok, to} <- parse_optional_timestamp(Map.get(query, "to")) do
-        params = %{
-          event_type: Map.get(query, "event_type"),
-          from: from,
-          to: to,
-          cursor: Map.get(query, "cursor"),
-          page_size: page_size
-        }
+    with {:ok, id} <- cast_instance_id(raw_id),
+         {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+         {:ok, page_size} <- Pagination.validate_page_size(raw_page_size),
+         {:ok, from} <- parse_optional_timestamp(Map.get(query, "from")),
+         {:ok, to} <- parse_optional_timestamp(Map.get(query, "to")) do
+      params = %{
+        event_type: Map.get(query, "event_type"),
+        from: from,
+        to: to,
+        cursor: Map.get(query, "cursor"),
+        page_size: page_size
+      }
 
-        Instances.history(id, params, opts) |> render_page_result(conn, &history_item_map/1)
-      else
-        {:error, :invalid_instance_id} ->
-          Response.unprocessable(conn, "instance_id is not a valid UUID")
+      Instances.history(id, params, opts) |> render_page_result(conn, &history_item_map/1)
+    else
+      {:error, :invalid_instance_id} ->
+        Response.unprocessable(conn, "instance_id is not a valid UUID")
 
-        {:error, :invalid_page_size} ->
-          Response.bad_request(conn, "invalid page_size")
+      {:error, :invalid_page_size} ->
+        Response.bad_request(conn, "invalid page_size")
 
-        {:error, :page_size_too_large} ->
-          Response.bad_request(conn, "page_size out of range")
+      {:error, :page_size_too_large} ->
+        Response.bad_request(conn, "page_size out of range")
 
-        {:error, :invalid_timestamp} ->
-          Response.unprocessable(conn, "from/to must be valid ISO 8601 timestamps")
-      end
-    end)
+      {:error, :invalid_timestamp} ->
+        Response.unprocessable(conn, "from/to must be valid ISO 8601 timestamps")
+    end
   end
 
   defp history_item_map(event) do
@@ -624,26 +630,25 @@ defmodule Letflow.Routers.Instances do
   # ── GET /instances/:id/timeline (design §"Router"/timeline) ────────────
 
   defp handle_timeline(conn, raw_id) do
-    with_authorized_scope(conn, "GET", "/instances/:id/timeline", fn conn, opts, _actor_id ->
-      conn = fetch_query_params(conn)
-      query = conn.query_params
+    opts = conn.assigns.scoped_opts
+    conn = fetch_query_params(conn)
+    query = conn.query_params
 
-      with {:ok, id} <- cast_instance_id(raw_id),
-           {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
-           {:ok, page_size} <- Pagination.validate_page_size(raw_page_size) do
-        params = %{cursor: Map.get(query, "cursor"), page_size: page_size}
-        Instances.timeline(id, params, opts) |> render_page_result(conn, &timeline_item_map/1)
-      else
-        {:error, :invalid_instance_id} ->
-          Response.unprocessable(conn, "instance_id is not a valid UUID")
+    with {:ok, id} <- cast_instance_id(raw_id),
+         {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+         {:ok, page_size} <- Pagination.validate_page_size(raw_page_size) do
+      params = %{cursor: Map.get(query, "cursor"), page_size: page_size}
+      Instances.timeline(id, params, opts) |> render_page_result(conn, &timeline_item_map/1)
+    else
+      {:error, :invalid_instance_id} ->
+        Response.unprocessable(conn, "instance_id is not a valid UUID")
 
-        {:error, :invalid_page_size} ->
-          Response.bad_request(conn, "invalid page_size")
+      {:error, :invalid_page_size} ->
+        Response.bad_request(conn, "invalid page_size")
 
-        {:error, :page_size_too_large} ->
-          Response.bad_request(conn, "page_size out of range")
-      end
-    end)
+      {:error, :page_size_too_large} ->
+        Response.bad_request(conn, "page_size out of range")
+    end
   end
 
   defp timeline_item_map(item) do
@@ -698,15 +703,15 @@ defmodule Letflow.Routers.Instances do
   # ── GET /instances/:id/pins (design §"Router"/get_pins) ─────────────────
 
   defp handle_get_pins(conn, raw_id) do
-    with_authorized_scope(conn, "GET", "/instances/:id/pins", fn conn, opts, _actor_id ->
-      case cast_instance_id(raw_id) do
-        {:ok, id} ->
-          render_get_pins(conn, id, PinResolver.reconstruct_effective_pins(id, opts))
+    opts = conn.assigns.scoped_opts
 
-        {:error, :invalid_instance_id} ->
-          Response.unprocessable(conn, "instance_id is not a valid UUID")
-      end
-    end)
+    case cast_instance_id(raw_id) do
+      {:ok, id} ->
+        render_get_pins(conn, id, PinResolver.reconstruct_effective_pins(id, opts))
+
+      {:error, :invalid_instance_id} ->
+        Response.unprocessable(conn, "instance_id is not a valid UUID")
+    end
   end
 
   defp render_get_pins(conn, id, {:ok, pins}) do
@@ -734,41 +739,6 @@ defmodule Letflow.Routers.Instances do
   defp status_string(:completed), do: "COMPLETED"
   defp status_string(:cancelled), do: "CANCELLED"
   defp status_string(:error), do: "ERROR"
-
-  # ── Authorization (temporary direct call, pending REQ-131) ────────────────
-  #
-  # Matches Letflow.Routers.Tasks's with_authorized_scope/4 shape. No Repo
-  # call of any kind happens before both steps (scope, then permission) have
-  # run and the permission check has returned :Allow/:AllowWithRowFilter.
-  defp with_authorized_scope(conn, method, path_template, fun) do
-    case scoped_repo_opts(conn) do
-      {:ok, opts} ->
-        case actor_id(conn) do
-          {:ok, actor_id} ->
-            ctx = %Authorization.AccessContext{
-              user_id: actor_id,
-              roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles)
-            }
-
-            decision =
-              Authorization.evaluate_access(
-                ctx,
-                Authorization.endpoint_policy_key(method, path_template)
-              )
-
-            case decision.kind do
-              :Deny403 -> Response.forbidden(conn, "insufficient permissions")
-              _allow_or_allow_with_row_filter -> fun.(conn, opts, actor_id)
-            end
-
-          {:error, :missing_scope_or_actor} ->
-            Response.internal_error(conn)
-        end
-
-      {:error, :missing_scope_or_actor} ->
-        Response.internal_error(conn)
-    end
-  end
 
   defp validate_schema(schema, body) do
     case Validation.validate(schema, body) do

@@ -6368,7 +6368,7 @@ requirements:
   - id: REQ-131
     title: Implement REQ-130's authorization mechanism and make it mandatory router-wide
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 248  # letflow-queue task id; depends_on translated to queue task id [243]
     description: >

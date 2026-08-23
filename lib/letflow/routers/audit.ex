@@ -78,21 +78,15 @@ defmodule Letflow.Routers.Audit do
   `true` and the very next page returns zero new rows. That ordinary
   cursor-pagination boundary case is inherited here unchanged.
 
-  ## Temporary route-local authorization
+  ## Authorization (REQ-131)
 
-  This module calls `Letflow.Api.Authorization.evaluate_access/2` **from
-  inside its own handler**, through a private `with_authorization/4` that is a
-  **third copy** of the helper already in
-  `lib/letflow/routers/tenants.ex:181` and
-  `lib/letflow/routers/identity.ex:187`.
-
-  **This is temporary.** REQ-131 builds the authorization plug that supersedes
-  all three copies at once; when it lands, this helper is **deleted, not
-  adapted**. Do not extract it into a shared module in the meantime — a shared
-  always-called gate *is* REQ-131's plug under another name, and building it
-  here would pre-empt REQ-130's design. Three copies of a thirteen-line helper
-  are a small, visible, greppable debt with a named owner; one copy in a
-  shared module is an invisible architectural commitment.
+  `GET /audit` is declared via `authz_get "/", :AuditRead do ... end`
+  (`Letflow.Api.AuthorizedRouter`) — `Letflow.Plugs.Authorize` evaluates
+  `:AuditRead` before this module's handler ever runs. The route-local
+  `with_authorization/4` copy that used to live here (a third copy of the
+  helper also in `lib/letflow/routers/tenants.ex` and
+  `lib/letflow/routers/identity.ex` before this requirement) is deleted, not
+  adapted, per REQ-130's design §2.4.
 
   `Letflow.Api.Authorization.endpoint_policy_key("GET", "/audit")` already
   returns `:AuditRead`. Per `role_allows?/2`, `PLATFORM_ADMIN` and
@@ -124,10 +118,8 @@ defmodule Letflow.Routers.Audit do
   merely filtered but physically unreachable.
   """
 
-  use Plug.Router
+  use Letflow.Api.AuthorizedRouter
 
-  alias Letflow.Api.Authorization
-  alias Letflow.Api.Context
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
   alias Letflow.EventStore
@@ -137,44 +129,12 @@ defmodule Letflow.Routers.Audit do
   # minted by another endpoint fail here.
   @audit_cursor_prefix "A:"
 
-  plug(:match)
-  plug(:dispatch)
-
-  get "/" do
-    with_authorization(conn, "GET", "/audit", fn conn ->
-      handle_list(conn)
-    end)
+  authz_get "/", :AuditRead do
+    handle_list(conn)
   end
 
   match _ do
     Response.not_found(conn)
-  end
-
-  # ── Temporary route-local authorization preamble (design §4.2) ────────────
-  #
-  # THIRD copy of lib/letflow/routers/tenants.ex:181 and
-  # lib/letflow/routers/identity.ex:187. Deleted -- not adapted -- when
-  # REQ-131's authorization plug lands. Do NOT extract it into a shared
-  # module: see this module's moduledoc.
-  @spec with_authorization(
-          Plug.Conn.t(),
-          method :: String.t(),
-          path_template :: String.t(),
-          (Plug.Conn.t() -> Plug.Conn.t())
-        ) :: Plug.Conn.t()
-  defp with_authorization(conn, method, path_template, fun) do
-    ctx = %Authorization.AccessContext{
-      user_id: conn.assigns.auth_context.user_id,
-      roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles)
-    }
-
-    decision =
-      Authorization.evaluate_access(ctx, Authorization.endpoint_policy_key(method, path_template))
-
-    case decision.kind do
-      :Deny403 -> Response.forbidden(conn, "insufficient permissions")
-      _allow_or_allow_with_row_filter -> fun.(conn)
-    end
   end
 
   # ── GET /audit (design §6) ────────────────────────────────────────────────
@@ -190,7 +150,7 @@ defmodule Letflow.Routers.Audit do
          {:ok, from} <- parse_timestamp_param(Map.get(query, "from")),
          {:ok, to} <- parse_timestamp_param(Map.get(query, "to")),
          :ok <- check_time_range(from, to),
-         {:ok, scope} <- scoped_repo_opts(conn) do
+         {:ok, scope} <- {:ok, conn.assigns.scoped_opts} do
       if unsupported_resource_type?(Map.get(query, "resource_type")) do
         # A truthful empty page, with no query issued -- see the filter table.
         Response.ok(conn, page_body([], nil))
@@ -222,9 +182,6 @@ defmodule Letflow.Routers.Audit do
 
       {:error, :invalid_filter} ->
         Response.unprocessable(conn, "invalid filter")
-
-      {:error, :missing_scope} ->
-        Response.internal_error(conn)
     end
   end
 
@@ -304,15 +261,6 @@ defmodule Letflow.Routers.Audit do
     case DateTime.compare(from, to) do
       :gt -> {:error, :invalid_time_range}
       _lt_or_eq -> :ok
-    end
-  end
-
-  # Never falls through to an unscoped query -- an unresolvable auth context
-  # is a 500, not a widened read.
-  defp scoped_repo_opts(conn) do
-    case Context.scoped_repo_opts(conn) do
-      {:ok, opts} -> {:ok, opts}
-      {:error, _missing_auth_context_or_invalid_tenant_id} -> {:error, :missing_scope}
     end
   end
 

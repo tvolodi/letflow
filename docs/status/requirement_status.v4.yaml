@@ -407,3 +407,53 @@ history:
       confirmed present/correct) before writing this entry. 10 on-disk
       `- req:` entries in requirement_status.v4.yaml before this append; 11
       after.
+  - req: REQ-131
+    event: started
+    agent: ORCH
+    at: "2026-08-23T03:47:13Z"
+    note: >
+      Claimed via letflow-queue get_next_task (queue task id 248, GH#486).
+      Queue API returned this requirement's STALE 2026-08-22 description
+      text (nine empty sub-routers, identity.ex 11 call sites); using
+      docs/requirements.yaml's corrected 2026-08-23 text instead (7 already-
+      wired routers, 53 call sites, promotion.ex the one genuine remaining
+      stub, metrics.ex deliberately ungated) as source of truth for the
+      handoff, per ORCH's sole role reading that file to scope work. No
+      duplicate found under docs/issues/ for GH#486. depends_on REQ-130,
+      status done (design doc lib/letflow/design/req130-authorization-
+      generalization.md, already passed CODE-DESIGN-VALIDATOR/
+      SECURITY-REVIEWER/REVIEWER under REQ-130's own run). WF-02 Step 00
+      complete: branch feature/WF02-REQ131-20260823 created off up-to-date
+      main and pushed. Given REQ-130's design doc already IS the design
+      artefact for this exact implementation (and already gate-passed),
+      Step 1/1b (CODE-DESIGNER/CODE-DESIGN-VALIDATOR) are not re-run as a
+      separate round for REQ-131 -- proceeding directly to Step 2a
+      (ELIXIR-DEV) referencing that design doc. 11 on-disk `- req:` entries
+      in requirement_status.v4.yaml before this append; 12 after.
+  - req: REQ-131
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-23T05:07:19Z"
+    note: >
+      REQ-130's authorization mechanism (Letflow.Plugs.Authorize +
+      Letflow.Api.AuthorizedRouter) implemented and made the single mandatory
+      authorization path router-wide. Migrated all 53 already-shipped call
+      sites across seven routers (identity 16, audit 1, definitions 13,
+      instances 7, onboarding 3, tenants 6, tasks 7) onto the plug, deleting
+      the old per-router with_authorized_scope/4 and with_authorization/4
+      helpers entirely. Closed 3 previously-silent authorization gaps by
+      reusing existing policy-key atoms: instances.ex's rebind-pins/
+      reconstruct routes, solution_packs.ex's export/install routes, and
+      definitions.ex's /validate route. lib/letflow/api/authorization.ex
+      confirmed unchanged by every gate. Test coverage added:
+      test/letflow/api/authorization_enforcement_test.exs,
+      test/letflow/plugs/authorize_test.exs, extended
+      test/letflow/routers/identity_test.exs, test/specs/REQ-131.md. Gates
+      passed: SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER
+      (full suite 1982/1985, 3 unrelated pre-existing bookkeeping-invariant
+      failures), RELEASE-VALIDATOR -- all PASS, RELEASE-VALIDATOR
+      independently confirmed all 10 acceptance criteria genuinely met.
+      docs/migration/stage-4-api-surface.md's "Identity infrastructure and
+      authorization" section updated to reflect Letflow.Api.Authorization is
+      no longer unreachable. 12 on-disk `- req:` entries in
+      requirement_status.v4.yaml before this append; 13 after.

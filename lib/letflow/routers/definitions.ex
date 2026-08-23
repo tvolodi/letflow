@@ -190,12 +190,10 @@ defmodule Letflow.Routers.Definitions do
   *is* the prefix.
   """
 
-  use Plug.Router
+  use Letflow.Api.AuthorizedRouter
 
   require Logger
 
-  alias Letflow.Api.Authorization
-  alias Letflow.Api.Context
   alias Letflow.Api.Error
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
@@ -208,9 +206,6 @@ defmodule Letflow.Routers.Definitions do
   alias Letflow.Definitions.ProcessDefinition
   alias Letflow.Definitions.ServiceScopeValidator
 
-  plug(:match)
-  plug(:dispatch)
-
   # REQ-082 -- must precede `post "/:id/activate"` etc below: "/import" is a
   # literal one-segment suffix distinct from any `/:id/...` two-segment
   # pattern, so it cannot actually collide with them regardless of
@@ -218,11 +213,11 @@ defmodule Letflow.Routers.Definitions do
   # bare `post "/:id"` is ever added to this file (there is none today; see
   # this module's moduledoc "Route ordering"), it is visibly obvious this
   # route must stay above it.
-  post "/import" do
+  authz_post "/import", :DefinitionsImport do
     handle_import(conn)
   end
 
-  post "/" do
+  authz_post "/", :DefinitionsCreate do
     handle_create(conn)
   end
 
@@ -232,37 +227,37 @@ defmodule Letflow.Routers.Definitions do
   # moduledoc makes for GET vs POST) -- the three `/:id/<verb>` routes below
   # only need to stay ABOVE a hypothetical bare `post "/:id"`, which this
   # file does not have.
-  post "/:id/activate" do
+  authz_post "/:id/activate", :DefinitionsActivate do
     handle_activate(conn, conn.params["id"])
   end
 
-  post "/:id/deprecate" do
+  authz_post "/:id/deprecate", :DefinitionsDeprecate do
     handle_deprecate(conn, conn.params["id"])
   end
 
-  post "/:id/archive" do
+  authz_post "/:id/archive", :DefinitionsArchive do
     handle_archive(conn, conn.params["id"])
   end
 
-  put "/:id" do
+  authz_put "/:id", :DefinitionsUpdate do
     handle_put(conn, conn.params["id"])
   end
 
-  patch "/:id" do
+  authz_patch "/:id", :DefinitionsPatch do
     handle_patch(conn, conn.params["id"])
   end
 
-  delete "/:id" do
+  authz_delete "/:id", :DefinitionsDelete do
     handle_delete(conn, conn.params["id"])
   end
 
   # REQ-081 read routes. MUST precede `get "/:id"` below -- see this
   # module's moduledoc "Route ordering".
-  get "/active/:name" do
+  authz_get "/active/:name", :DefinitionsRead do
     handle_get_active_by_name(conn, conn.params["name"])
   end
 
-  get "/search" do
+  authz_get "/search", :DefinitionsRead do
     handle_search(conn)
   end
 
@@ -270,23 +265,30 @@ defmodule Letflow.Routers.Definitions do
   # `/active/:name`/`/search`/`/:id/export` (see this module's moduledoc
   # "Route ordering"): a literal path segment declared below `/:id` would be
   # swallowed with `id => "delta"`.
-  get "/delta" do
+  authz_get "/delta", :DefinitionsRead do
     handle_delta(conn)
   end
 
-  get "/:id/export" do
+  authz_get "/:id/export", :DefinitionsRead do
     handle_export(conn, conn.params["id"])
   end
 
-  get "/:id" do
+  authz_get "/:id", :DefinitionsRead do
     handle_get_by_id(conn, conn.params["id"])
   end
 
-  get "/" do
+  authz_get "/", :DefinitionsRead do
     handle_list(conn)
   end
 
-  post "/:id/validate" do
+  # REQ-131: endpoint_policy_key/2 has no ("POST", "/definitions/:id/validate")
+  # clause (see "Authorization gap" above) -- :DefinitionsRead is a
+  # route-declared policy key (read access is sufficient to run a
+  # read-only, non-mutating validation pass over an already-stored graph),
+  # not derived from Authorization.endpoint_policy_key/2. Named on the
+  # enforcement test's explicit allowlist (design §4) -- flagged for
+  # REVIEWER as a judgment call, not silently decided.
+  authz_post "/:id/validate", :DefinitionsRead do
     handle_validate(conn, conn.params["id"])
   end
 
@@ -301,12 +303,15 @@ defmodule Letflow.Routers.Definitions do
   # (validation.zig:75-80).
 
   defp handle_validate(conn, raw_id) do
-    with {:ok, id} <- cast_id(raw_id),
-         {:ok, opts} <- scoped_repo_opts(conn) do
-      render_validation(conn, Definitions.validate_definition_graph(id, opts))
-    else
-      {:error, :invalid_id_format} -> Response.unprocessable(conn, "invalid id format")
-      {:error, :missing_scope} -> Response.internal_error(conn)
+    case cast_id(raw_id) do
+      {:ok, id} ->
+        render_validation(
+          conn,
+          Definitions.validate_definition_graph(id, conn.assigns.scoped_opts)
+        )
+
+      {:error, :invalid_id_format} ->
+        Response.unprocessable(conn, "invalid id format")
     end
   end
 
@@ -351,9 +356,7 @@ defmodule Letflow.Routers.Definitions do
   # inherit get_by_id/2's not-found collapse (OQ-2)".
 
   defp handle_get_by_id(conn, raw_id) do
-    with_authorized_scope(conn, "GET", "/definitions/:id", fn conn, opts, _actor_id ->
-      render_get_by_id(conn, Definitions.get_by_id(raw_id, opts))
-    end)
+    render_get_by_id(conn, Definitions.get_by_id(raw_id, conn.assigns.scoped_opts))
   end
 
   defp render_get_by_id(conn, {:ok, definition}),
@@ -365,26 +368,25 @@ defmodule Letflow.Routers.Definitions do
   # ── GET /definitions (design §4.3) ─────────────────────────────────────
 
   defp handle_list(conn) do
-    with_authorized_scope(conn, "GET", "/definitions", fn conn, opts, _actor_id ->
-      conn = fetch_query_params(conn)
-      query = conn.query_params
+    opts = conn.assigns.scoped_opts
+    conn = fetch_query_params(conn)
+    query = conn.query_params
 
-      with {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
-           {:ok, page_size} <- Pagination.validate_page_size(raw_page_size) do
-        filters = %{
-          name: Map.get(query, "name"),
-          status: parse_status(Map.get(query, "status")),
-          stage: Map.get(query, "stage"),
-          cursor: Map.get(query, "cursor"),
-          page_size: page_size
-        }
+    with {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+         {:ok, page_size} <- Pagination.validate_page_size(raw_page_size) do
+      filters = %{
+        name: Map.get(query, "name"),
+        status: parse_status(Map.get(query, "status")),
+        stage: Map.get(query, "stage"),
+        cursor: Map.get(query, "cursor"),
+        page_size: page_size
+      }
 
-        render_list_result(conn, Definitions.list_paginated(filters, opts))
-      else
-        {:error, :invalid_page_size} -> Response.bad_request(conn, "invalid page_size")
-        {:error, :page_size_too_large} -> Response.bad_request(conn, "page_size out of range")
-      end
-    end)
+      render_list_result(conn, Definitions.list_paginated(filters, opts))
+    else
+      {:error, :invalid_page_size} -> Response.bad_request(conn, "invalid page_size")
+      {:error, :page_size_too_large} -> Response.bad_request(conn, "page_size out of range")
+    end
   end
 
   # `status` is compared against ProcessDefinition.status/0's lowercase atoms
@@ -427,14 +429,13 @@ defmodule Letflow.Routers.Definitions do
   # ── GET /definitions/delta (REQ-125, MOB-3 delta sync) ─────────────────
 
   defp handle_delta(conn) do
-    with_authorized_scope(conn, "GET", "/definitions/delta", fn conn, opts, _actor_id ->
-      conn = fetch_query_params(conn)
+    opts = conn.assigns.scoped_opts
+    conn = fetch_query_params(conn)
 
-      case parse_since_param(Map.get(conn.query_params, "since")) do
-        {:ok, since} -> render_delta_result(conn, Definitions.delta(since, opts))
-        {:error, :invalid_since} -> Response.bad_request(conn, "invalid since")
-      end
-    end)
+    case parse_since_param(Map.get(conn.query_params, "since")) do
+      {:ok, since} -> render_delta_result(conn, Definitions.delta(since, opts))
+      {:error, :invalid_since} -> Response.bad_request(conn, "invalid since")
+    end
   end
 
   # Absent `since` -> nil (full history, per Definitions.delta/2). A present
@@ -467,29 +468,26 @@ defmodule Letflow.Routers.Definitions do
   # ── GET /definitions/active/:name (design §4.3) ────────────────────────
 
   defp handle_get_active_by_name(conn, name) do
-    with_authorized_scope(conn, "GET", "/definitions/active/:name", fn conn, opts, _actor_id ->
-      render_get_by_id(conn, Definitions.get_active_by_name(name, opts))
-    end)
+    render_get_by_id(conn, Definitions.get_active_by_name(name, conn.assigns.scoped_opts))
   end
 
   # ── GET /definitions/search (design §4.4 -- the requirement's stated trap) ──
 
   defp handle_search(conn) do
-    with_authorized_scope(conn, "GET", "/definitions/search", fn conn, opts, _actor_id ->
-      conn = fetch_query_params(conn)
-      query = conn.query_params
+    opts = conn.assigns.scoped_opts
+    conn = fetch_query_params(conn)
+    query = conn.query_params
 
-      with {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
-           {:ok, page_size} <- Pagination.validate_page_size(raw_page_size) do
-        q = Map.get(query, "q") || ""
-        params = %{cursor: Map.get(query, "cursor"), page_size: page_size}
+    with {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+         {:ok, page_size} <- Pagination.validate_page_size(raw_page_size) do
+      q = Map.get(query, "q") || ""
+      params = %{cursor: Map.get(query, "cursor"), page_size: page_size}
 
-        render_search_result(conn, Definitions.search_paginated(q, params, opts))
-      else
-        {:error, :invalid_page_size} -> Response.bad_request(conn, "invalid page_size")
-        {:error, :page_size_too_large} -> Response.bad_request(conn, "page_size out of range")
-      end
-    end)
+      render_search_result(conn, Definitions.search_paginated(q, params, opts))
+    else
+      {:error, :invalid_page_size} -> Response.bad_request(conn, "invalid page_size")
+      {:error, :page_size_too_large} -> Response.bad_request(conn, "page_size out of range")
+    end
   end
 
   # Five clauses, one per outcome -- query_empty/query_too_long are
@@ -536,9 +534,7 @@ defmodule Letflow.Routers.Definitions do
   # Definitions.get_by_id/2.
 
   defp handle_export(conn, raw_id) do
-    with_authorized_scope(conn, "GET", "/definitions/:id/export", fn conn, opts, _actor_id ->
-      render_export(conn, ExportImport.export(raw_id, opts))
-    end)
+    render_export(conn, ExportImport.export(raw_id, conn.assigns.scoped_opts))
   end
 
   defp render_export(conn, {:ok, document}), do: Response.ok(conn, export_document_map(document))
@@ -557,35 +553,36 @@ defmodule Letflow.Routers.Definitions do
   ]
 
   defp handle_create(conn) do
-    with_authorized_scope(conn, "POST", "/definitions", fn conn, opts, actor_id ->
-      with {:ok, body} <- object_body(conn),
-           {:ok, attrs} <- validate_schema(@create_schema, body),
-           {:ok, entries} <- normalise_variable_schema_entries(Map.get(attrs, "variable_schemas")) do
-        create_attrs = %{
-          name: Map.fetch!(attrs, "name"),
-          version: Map.fetch!(attrs, "version"),
-          description: Map.get(attrs, "description"),
-          graph: Map.fetch!(attrs, "graph"),
-          stage: Map.get(attrs, "stage"),
-          created_by: actor_id
-        }
+    opts = conn.assigns.scoped_opts
+    actor_id = conn.assigns.auth_context.user_id
 
-        render_write(
-          conn,
-          Definitions.create_with_variable_schemas(create_attrs, entries || [], opts),
-          :created
-        )
-      else
-        {:error, :malformed_json} ->
-          Response.bad_request(conn, "request body must be a JSON object")
+    with {:ok, body} <- object_body(conn),
+         {:ok, attrs} <- validate_schema(@create_schema, body),
+         {:ok, entries} <- normalise_variable_schema_entries(Map.get(attrs, "variable_schemas")) do
+      create_attrs = %{
+        name: Map.fetch!(attrs, "name"),
+        version: Map.fetch!(attrs, "version"),
+        description: Map.get(attrs, "description"),
+        graph: Map.fetch!(attrs, "graph"),
+        stage: Map.get(attrs, "stage"),
+        created_by: actor_id
+      }
 
-        {:errors, field_errors} ->
-          Response.send_problem(conn, Validation.problem(field_errors))
+      render_write(
+        conn,
+        Definitions.create_with_variable_schemas(create_attrs, entries || [], opts),
+        :created
+      )
+    else
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
 
-        {:error, :invalid_variable_schemas} ->
-          Response.unprocessable(conn, "variable_schemas entries are malformed")
-      end
-    end)
+      {:errors, field_errors} ->
+        Response.send_problem(conn, Validation.problem(field_errors))
+
+      {:error, :invalid_variable_schemas} ->
+        Response.unprocessable(conn, "variable_schemas entries are malformed")
+    end
   end
 
   # ── PUT /definitions/:id (REQ-082, design §"write routes"/put) ─────────
@@ -608,37 +605,37 @@ defmodule Letflow.Routers.Definitions do
   ]
 
   defp handle_put(conn, raw_id) do
-    with_authorized_scope(conn, "PUT", "/definitions/:id", fn conn, opts, _actor_id ->
-      with {:ok, body} <- object_body(conn),
-           {:ok, attrs} <- validate_schema(@put_schema, body),
-           {:ok, description} <- optional_string(Map.get(body, "description")),
-           {:ok, stage} <- optional_string(Map.get(body, "stage")),
-           {:ok, entries} <- normalise_variable_schema_entries(Map.get(body, "variable_schemas")) do
-        update_attrs =
-          %{
-            name: Map.fetch!(attrs, "name"),
-            version: Map.fetch!(attrs, "version"),
-            description: description,
-            graph: Map.fetch!(attrs, "graph"),
-            stage: stage
-          }
-          |> maybe_put_variable_schemas(entries)
+    opts = conn.assigns.scoped_opts
 
-        render_write(conn, Definitions.update(raw_id, update_attrs, opts), :ok)
-      else
-        {:error, :malformed_json} ->
-          Response.bad_request(conn, "request body must be a JSON object")
+    with {:ok, body} <- object_body(conn),
+         {:ok, attrs} <- validate_schema(@put_schema, body),
+         {:ok, description} <- optional_string(Map.get(body, "description")),
+         {:ok, stage} <- optional_string(Map.get(body, "stage")),
+         {:ok, entries} <- normalise_variable_schema_entries(Map.get(body, "variable_schemas")) do
+      update_attrs =
+        %{
+          name: Map.fetch!(attrs, "name"),
+          version: Map.fetch!(attrs, "version"),
+          description: description,
+          graph: Map.fetch!(attrs, "graph"),
+          stage: stage
+        }
+        |> maybe_put_variable_schemas(entries)
 
-        {:errors, field_errors} ->
-          Response.send_problem(conn, Validation.problem(field_errors))
+      render_write(conn, Definitions.update(raw_id, update_attrs, opts), :ok)
+    else
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
 
-        {:error, :invalid_optional_string} ->
-          Response.unprocessable(conn, "request body failed validation")
+      {:errors, field_errors} ->
+        Response.send_problem(conn, Validation.problem(field_errors))
 
-        {:error, :invalid_variable_schemas} ->
-          Response.unprocessable(conn, "variable_schemas entries are malformed")
-      end
-    end)
+      {:error, :invalid_optional_string} ->
+        Response.unprocessable(conn, "request body failed validation")
+
+      {:error, :invalid_variable_schemas} ->
+        Response.unprocessable(conn, "variable_schemas entries are malformed")
+    end
   end
 
   # ── PATCH /definitions/:id (REQ-082, design §"write routes"/patch) ─────
@@ -655,23 +652,23 @@ defmodule Letflow.Routers.Definitions do
   ]
 
   defp handle_patch(conn, raw_id) do
-    with_authorized_scope(conn, "PATCH", "/definitions/:id", fn conn, opts, _actor_id ->
-      with {:ok, body} <- object_body(conn),
-           {:ok, attrs} <- validate_schema(@patch_schema, body),
-           {:ok, entries} <- normalise_variable_schema_entries(Map.get(body, "variable_schemas")) do
-        update_attrs = patch_attrs(body, attrs) |> maybe_put_variable_schemas(entries)
-        render_write(conn, Definitions.update(raw_id, update_attrs, opts), :ok)
-      else
-        {:error, :malformed_json} ->
-          Response.bad_request(conn, "request body must be a JSON object")
+    opts = conn.assigns.scoped_opts
 
-        {:errors, field_errors} ->
-          Response.send_problem(conn, Validation.problem(field_errors))
+    with {:ok, body} <- object_body(conn),
+         {:ok, attrs} <- validate_schema(@patch_schema, body),
+         {:ok, entries} <- normalise_variable_schema_entries(Map.get(body, "variable_schemas")) do
+      update_attrs = patch_attrs(body, attrs) |> maybe_put_variable_schemas(entries)
+      render_write(conn, Definitions.update(raw_id, update_attrs, opts), :ok)
+    else
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
 
-        {:error, :invalid_variable_schemas} ->
-          Response.unprocessable(conn, "variable_schemas entries are malformed")
-      end
-    end)
+      {:errors, field_errors} ->
+        Response.send_problem(conn, Validation.problem(field_errors))
+
+      {:error, :invalid_variable_schemas} ->
+        Response.unprocessable(conn, "variable_schemas entries are malformed")
+    end
   end
 
   # `attrs` (from @patch_schema) carries name/version/graph only when both
@@ -831,41 +828,41 @@ defmodule Letflow.Routers.Definitions do
   # `current.status` then dispatches) -- not a Letflow-introduced race.
 
   defp handle_delete(conn, raw_id) do
-    with_authorized_scope(conn, "DELETE", "/definitions/:id", fn conn, opts, _actor_id ->
-      case Definitions.get_by_id(raw_id, opts) do
-        {:ok, %ProcessDefinition{status: :draft}} ->
-          render_delete(conn, Definitions.hard_delete(raw_id, opts))
+    opts = conn.assigns.scoped_opts
 
-        {:ok, %ProcessDefinition{status: :active}} ->
-          case Definitions.deprecate(raw_id, opts) do
-            {:ok, _deprecated} ->
-              render_transition(
-                conn,
-                Definitions.archive(raw_id, opts),
-                "definition status changed concurrently; retry"
-              )
+    case Definitions.get_by_id(raw_id, opts) do
+      {:ok, %ProcessDefinition{status: :draft}} ->
+        render_delete(conn, Definitions.hard_delete(raw_id, opts))
 
-            {:error, _reason} = error ->
-              render_delete(conn, error)
-          end
+      {:ok, %ProcessDefinition{status: :active}} ->
+        case Definitions.deprecate(raw_id, opts) do
+          {:ok, _deprecated} ->
+            render_transition(
+              conn,
+              Definitions.archive(raw_id, opts),
+              "definition status changed concurrently; retry"
+            )
 
-        {:ok, %ProcessDefinition{status: :deprecated}} ->
-          render_transition(
-            conn,
-            Definitions.archive(raw_id, opts),
-            "definition status changed concurrently; retry"
-          )
+          {:error, _reason} = error ->
+            render_delete(conn, error)
+        end
 
-        {:ok, %ProcessDefinition{status: :archived}} ->
-          Response.conflict(conn, "definition is already archived")
+      {:ok, %ProcessDefinition{status: :deprecated}} ->
+        render_transition(
+          conn,
+          Definitions.archive(raw_id, opts),
+          "definition status changed concurrently; retry"
+        )
 
-        {:error, :not_found} ->
-          Response.not_found(conn)
+      {:ok, %ProcessDefinition{status: :archived}} ->
+        Response.conflict(conn, "definition is already archived")
 
-        {:error, _common_error} ->
-          Response.internal_error(conn)
-      end
-    end)
+      {:error, :not_found} ->
+        Response.not_found(conn)
+
+      {:error, _common_error} ->
+        Response.internal_error(conn)
+    end
   end
 
   defp render_delete(conn, {:ok, :deleted}), do: Response.no_content(conn)
@@ -893,17 +890,13 @@ defmodule Letflow.Routers.Definitions do
   # `Application.put_env(:letflow, :definitions_service_scope_validator, fun)`
   # before making the HTTP request and resetting it after -- this is the ONLY
   # seam through which the real router's handler can be driven end-to-end with
-  # an injected validator, since `with_authorized_scope/4`'s `opts` carries no
+  # an injected validator, since `conn.assigns.scoped_opts` carries no
   # per-request override slot.
 
   defp handle_activate(conn, raw_id) do
-    with_authorized_scope(conn, "POST", "/definitions/:id/activate", fn conn, opts, _actor_id ->
-      validator =
-        Application.get_env(:letflow, :definitions_service_scope_validator, nil)
-
-      activate_opts = Keyword.put(opts, :service_scope_validator, validator)
-      render_activate(conn, Definitions.activate(raw_id, activate_opts))
-    end)
+    validator = Application.get_env(:letflow, :definitions_service_scope_validator, nil)
+    activate_opts = Keyword.put(conn.assigns.scoped_opts, :service_scope_validator, validator)
+    render_activate(conn, Definitions.activate(raw_id, activate_opts))
   end
 
   defp render_activate(conn, {:ok, %{definition: definition}}),
@@ -940,25 +933,21 @@ defmodule Letflow.Routers.Definitions do
   # ── POST /definitions/:id/deprecate (REQ-082) ───────────────────────────
 
   defp handle_deprecate(conn, raw_id) do
-    with_authorized_scope(conn, "POST", "/definitions/:id/deprecate", fn conn, opts, _actor_id ->
-      render_transition(
-        conn,
-        Definitions.deprecate(raw_id, opts),
-        "only an ACTIVE definition can be deprecated"
-      )
-    end)
+    render_transition(
+      conn,
+      Definitions.deprecate(raw_id, conn.assigns.scoped_opts),
+      "only an ACTIVE definition can be deprecated"
+    )
   end
 
   # ── POST /definitions/:id/archive (REQ-082) ─────────────────────────────
 
   defp handle_archive(conn, raw_id) do
-    with_authorized_scope(conn, "POST", "/definitions/:id/archive", fn conn, opts, _actor_id ->
-      render_transition(
-        conn,
-        Definitions.archive(raw_id, opts),
-        "only a DEPRECATED definition can be archived"
-      )
-    end)
+    render_transition(
+      conn,
+      Definitions.archive(raw_id, conn.assigns.scoped_opts),
+      "only a DEPRECATED definition can be archived"
+    )
   end
 
   defp render_transition(conn, {:ok, %ProcessDefinition{} = definition}, _conflict_detail),
@@ -983,39 +972,40 @@ defmodule Letflow.Routers.Definitions do
   # REQ-082's own `variable_schemas` addition.
 
   defp handle_import(conn) do
-    with_authorized_scope(conn, "POST", "/definitions/import", fn conn, opts, actor_id ->
-      with {:ok, body} <- object_body(conn),
-           {:ok, schema_version} <- required_string(body, "bpm_export_schema_version"),
-           {:ok, name} <- required_string(body, "name"),
-           {:ok, version} <- required_string(body, "version"),
-           {:ok, graph} <- required_object(body, "graph"),
-           {:ok, entries} <- normalise_variable_schema_entries(Map.get(body, "variable_schemas")) do
-        document = %ExportDocument{
-          bpm_export_schema_version: schema_version,
-          id: Map.get(body, "id"),
-          name: name,
-          version: version,
-          description: Map.get(body, "description"),
-          graph: graph,
-          exported_at: Map.get(body, "exported_at")
-        }
+    opts = conn.assigns.scoped_opts
+    actor_id = conn.assigns.auth_context.user_id
 
-        render_write(
-          conn,
-          ExportImport.import_with_variable_schemas(document, entries || [], actor_id, opts),
-          :created
-        )
-      else
-        {:error, :malformed_json} ->
-          Response.bad_request(conn, "request body must be a JSON object")
+    with {:ok, body} <- object_body(conn),
+         {:ok, schema_version} <- required_string(body, "bpm_export_schema_version"),
+         {:ok, name} <- required_string(body, "name"),
+         {:ok, version} <- required_string(body, "version"),
+         {:ok, graph} <- required_object(body, "graph"),
+         {:ok, entries} <- normalise_variable_schema_entries(Map.get(body, "variable_schemas")) do
+      document = %ExportDocument{
+        bpm_export_schema_version: schema_version,
+        id: Map.get(body, "id"),
+        name: name,
+        version: version,
+        description: Map.get(body, "description"),
+        graph: graph,
+        exported_at: Map.get(body, "exported_at")
+      }
 
-        {:error, {:missing_field, field}} ->
-          Response.unprocessable(conn, "#{field} is required")
+      render_write(
+        conn,
+        ExportImport.import_with_variable_schemas(document, entries || [], actor_id, opts),
+        :created
+      )
+    else
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
 
-        {:error, :invalid_variable_schemas} ->
-          Response.unprocessable(conn, "variable_schemas entries are malformed")
-      end
-    end)
+      {:error, {:missing_field, field}} ->
+        Response.unprocessable(conn, "#{field} is required")
+
+      {:error, :invalid_variable_schemas} ->
+        Response.unprocessable(conn, "variable_schemas entries are malformed")
+    end
   end
 
   defp required_string(body, key) do
@@ -1087,52 +1077,6 @@ defmodule Letflow.Routers.Definitions do
   defp status_string(:deprecated), do: "DEPRECATED"
   defp status_string(:archived), do: "ARCHIVED"
 
-  # ── Authorization (temporary direct call, pending REQ-131) ────────────────
-  #
-  # Copied structurally from Letflow.Routers.Instances's own
-  # with_authorized_scope/4 -- see this module's moduledoc "REQ-081 -- read
-  # routes". No Repo call of any kind happens before both steps (scope, then
-  # permission) have run and the permission check has returned
-  # :Allow/:AllowWithRowFilter. Unlike Instances's version this one has no
-  # actor_id to thread through (none of the five REQ-081 handlers need one),
-  # so `fun` is arity 2 (`conn`, `opts`), not arity 3.
-  defp with_authorized_scope(conn, method, path_template, fun) do
-    case scoped_repo_opts(conn) do
-      {:ok, opts} ->
-        case actor_id(conn) do
-          {:ok, actor_id} ->
-            ctx = %Authorization.AccessContext{
-              user_id: actor_id,
-              roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles)
-            }
-
-            decision =
-              Authorization.evaluate_access(
-                ctx,
-                Authorization.endpoint_policy_key(method, path_template)
-              )
-
-            case decision.kind do
-              :Deny403 -> Response.forbidden(conn, "insufficient permissions")
-              _allow_or_allow_with_row_filter -> fun.(conn, opts, actor_id)
-            end
-
-          {:error, :missing_scope} ->
-            Response.internal_error(conn)
-        end
-
-      {:error, :missing_scope} ->
-        Response.internal_error(conn)
-    end
-  end
-
-  defp actor_id(conn) do
-    case conn.assigns[:auth_context] do
-      %{user_id: user_id} when is_binary(user_id) -> {:ok, user_id}
-      _other -> {:error, :missing_scope}
-    end
-  end
-
   # ── Helpers ───────────────────────────────────────────────────────────────
 
   # Checked in the route before any call, matching validation.zig:83-85.
@@ -1140,13 +1084,6 @@ defmodule Letflow.Routers.Definitions do
     case Ecto.UUID.cast(raw_id) do
       {:ok, id} -> {:ok, id}
       :error -> {:error, :invalid_id_format}
-    end
-  end
-
-  defp scoped_repo_opts(conn) do
-    case Context.scoped_repo_opts(conn) do
-      {:ok, opts} -> {:ok, opts}
-      {:error, _missing_auth_context_or_invalid_tenant_id} -> {:error, :missing_scope}
     end
   end
 

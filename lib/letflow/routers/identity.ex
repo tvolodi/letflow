@@ -104,13 +104,14 @@ defmodule Letflow.Routers.Identity do
 
   ## Ordering guarantee (AC4/design §3)
 
-  Every handler resolves `Letflow.Api.Context.scoped_repo_opts/1` first, then
-  calls `Letflow.Api.Authorization.evaluate_access/2` against the endpoint's
-  policy key (`:UsersManage` for `/users*`, `:GroupsManage` for `/groups*`,
-  the latter already wired ahead of REQ-074 by the existing wildcard clause
-  in `Letflow.Api.Authorization`) — **before any `Repo` call of any kind**,
-  including every pre-fetch read. A `Deny403` decision returns immediately;
-  no read or write happens on that path.
+  As of REQ-131, this is enforced by `Letflow.Plugs.Authorize`
+  (`use Letflow.Api.AuthorizedRouter`), not by a route-local helper: every
+  route resolves `Letflow.Api.Context.scoped_repo_opts/1` first, then calls
+  `Letflow.Api.Authorization.evaluate_access/2` against the route's own
+  declared policy key (`:UsersManage` for `/users*`, `:GroupsManage` for
+  `/groups*`) — **before any `Repo` call of any kind**, including every
+  pre-fetch read. A `Deny403` decision returns immediately; no read or write
+  happens on that path, and no handler in this module runs.
 
   ## Response allowlist (AC5, INV-2)
 
@@ -121,10 +122,8 @@ defmodule Letflow.Routers.Identity do
   (REQ-074) is the same hand-built-map discipline for `%Letflow.Identity.Group{}`.
   """
 
-  use Plug.Router
+  use Letflow.Api.AuthorizedRouter
 
-  alias Letflow.Api.Authorization
-  alias Letflow.Api.Context
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
   alias Letflow.Api.Validation
@@ -134,142 +133,77 @@ defmodule Letflow.Routers.Identity do
 
   @users_cursor_prefix "U:"
 
-  plug(:match)
-  plug(:dispatch)
-
-  post "/users" do
-    with_authorized_scope(conn, "POST", "/users", fn conn, opts ->
-      handle_create(conn, opts)
-    end)
+  authz_post "/users", :UsersManage do
+    handle_create(conn, conn.assigns.scoped_opts)
   end
 
-  get "/users" do
-    with_authorized_scope(conn, "GET", "/users", fn conn, opts ->
-      handle_list(conn, opts)
-    end)
+  authz_get "/users", :UsersManage do
+    handle_list(conn, conn.assigns.scoped_opts)
   end
 
-  get "/users/:id" do
-    with_authorized_scope(conn, "GET", "/users/:id", fn conn, opts ->
-      handle_get(conn, conn.params["id"], opts)
-    end)
+  authz_get "/users/:id", :UsersManage do
+    handle_get(conn, conn.params["id"], conn.assigns.scoped_opts)
   end
 
-  patch "/users/:id" do
-    with_authorized_scope(conn, "PATCH", "/users/:id", fn conn, opts ->
-      handle_patch(conn, conn.params["id"], opts)
-    end)
+  authz_patch "/users/:id", :UsersManage do
+    handle_patch(conn, conn.params["id"], conn.assigns.scoped_opts)
   end
 
-  post "/users/:id/status" do
-    with_authorized_scope(conn, "POST", "/users/:id/status", fn conn, opts ->
-      handle_status_update(conn, conn.params["id"], opts)
-    end)
+  authz_post "/users/:id/status", :UsersManage do
+    handle_status_update(conn, conn.params["id"], conn.assigns.scoped_opts)
   end
 
-  post "/groups" do
-    with_authorized_scope(conn, "POST", "/groups", fn conn, opts ->
-      handle_create_group(conn, opts)
-    end)
+  authz_post "/groups", :GroupsManage do
+    handle_create_group(conn, conn.assigns.scoped_opts)
   end
 
-  get "/groups" do
-    with_authorized_scope(conn, "GET", "/groups", fn conn, opts ->
-      handle_list_groups(conn, opts)
-    end)
+  authz_get "/groups", :GroupsManage do
+    handle_list_groups(conn, conn.assigns.scoped_opts)
   end
 
-  delete "/groups/:id" do
-    with_authorized_scope(conn, "DELETE", "/groups/:id", fn conn, opts ->
-      handle_delete_group(conn, conn.params["id"], opts)
-    end)
+  authz_delete "/groups/:id", :GroupsManage do
+    handle_delete_group(conn, conn.params["id"], conn.assigns.scoped_opts)
   end
 
-  post "/groups/:id/members" do
-    with_authorized_scope(conn, "POST", "/groups/:id/members", fn conn, opts ->
-      handle_add_member(conn, conn.params["id"], opts)
-    end)
+  authz_post "/groups/:id/members", :GroupsManage do
+    handle_add_member(conn, conn.params["id"], conn.assigns.scoped_opts)
   end
 
-  get "/groups/:id/members" do
-    with_authorized_scope(conn, "GET", "/groups/:id/members", fn conn, opts ->
-      handle_list_group_members(conn, conn.params["id"], opts)
-    end)
+  authz_get "/groups/:id/members", :GroupsManage do
+    handle_list_group_members(conn, conn.params["id"], conn.assigns.scoped_opts)
   end
 
-  delete "/groups/:id/members/:user_id" do
-    with_authorized_scope(conn, "DELETE", "/groups/:id/members/:user_id", fn conn, opts ->
-      handle_remove_member(conn, conn.params["id"], conn.params["user_id"], opts)
-    end)
+  authz_delete "/groups/:id/members/:user_id", :GroupsManage do
+    handle_remove_member(
+      conn,
+      conn.params["id"],
+      conn.params["user_id"],
+      conn.assigns.scoped_opts
+    )
   end
 
-  post "/tokens" do
-    with_authorized_scope(conn, "POST", "/tokens", fn conn, opts ->
-      handle_create_token(conn, opts)
-    end)
+  authz_post "/tokens", :TokensManage do
+    handle_create_token(conn, conn.assigns.scoped_opts)
   end
 
-  get "/tokens" do
-    with_authorized_scope(conn, "GET", "/tokens", fn conn, opts ->
-      handle_list_tokens(conn, opts)
-    end)
+  authz_get "/tokens", :TokensManage do
+    handle_list_tokens(conn, conn.assigns.scoped_opts)
   end
 
-  delete "/tokens/:id" do
-    with_authorized_scope(conn, "DELETE", "/tokens/:id", fn conn, opts ->
-      handle_revoke_token(conn, conn.params["id"], opts)
-    end)
+  authz_delete "/tokens/:id", :TokensManage do
+    handle_revoke_token(conn, conn.params["id"], conn.assigns.scoped_opts)
   end
 
-  get "/roles" do
-    with_authorized_scope(conn, "GET", "/roles", fn conn, _opts ->
-      handle_list_roles(conn)
-    end)
+  authz_get "/roles", :RolesManage do
+    handle_list_roles(conn)
   end
 
-  post "/roles" do
-    with_authorized_scope(conn, "POST", "/roles", fn conn, _opts ->
-      handle_upsert_role(conn)
-    end)
+  authz_post "/roles", :RolesManage do
+    handle_upsert_role(conn)
   end
 
   match _ do
     Response.not_found(conn)
-  end
-
-  # ── Shared step-1/step-2 preamble (design §1) ───────────────────────────
-  #
-  # Step 1 -- scoped prefix. Step 2 -- authorization. No Repo call of any
-  # kind happens before both steps have run and step 2 has returned :Allow.
-  # `method`/`path_template` are literal string constants at every call
-  # site above, never derived from conn.request_path, so a handler's own
-  # policy key can never accidentally vary with the literal path matched.
-  defp with_authorized_scope(conn, method, path_template, fun) do
-    case Context.scoped_repo_opts(conn) do
-      {:error, _missing_auth_context_or_invalid_tenant_id} ->
-        Response.internal_error(conn)
-
-      {:ok, prefix: _schema} = ok ->
-        ctx = %Authorization.AccessContext{
-          user_id: conn.assigns.auth_context.user_id,
-          roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles)
-        }
-
-        decision =
-          Authorization.evaluate_access(
-            ctx,
-            Authorization.endpoint_policy_key(method, path_template)
-          )
-
-        case decision.kind do
-          :Deny403 ->
-            Response.forbidden(conn, "insufficient permissions")
-
-          _allow_or_allow_with_row_filter ->
-            {:ok, opts} = ok
-            fun.(conn, opts)
-        end
-    end
   end
 
   # ── POST /users (design §2.1) ───────────────────────────────────────────

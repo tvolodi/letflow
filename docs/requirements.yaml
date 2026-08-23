@@ -7241,3 +7241,1681 @@ requirements:
       - "test/letflow/definitions/pack_update_migration_test.exs and the full mix test suite pass with real output quoted"
       - "lib/letflow/design/req041-pack-update-diff-schema.md §9 OQ-6 is updated to state the rename is done, citing this requirement and R-Co/src/definition/pack_update.zig:25-29"
     depends_on: []
+
+  - id: REQ-148
+    title: Adopt tv-labs/lua in mix.exs and empirically verify decision 0014's documentation-only claims (OQ-2 spike, LUA-01 restated)
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S5
+    description: >
+      FIRST requirement of S5's Lua half; every other Lua requirement
+      depends_on it directly or transitively. Executes
+      docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md's
+      Decision (1) -- adopt tv-labs/lua, a pure-Elixir Lua 5.3 VM (no NIF, no
+      C, no Port, no reimplementation) -- and its OQ-2 spike. Decision 0014 is
+      a SETTLED PREMISE: build-vs-bind is not reopened here, and no other Lua
+      library may be substituted except by the narrow OQ-2 escape hatch below.
+      RESTATEMENT OF LUA-01, AND WHY. R-Co's LUA-01 (LuaJIT Integration, MUST)
+      reads "The platform MUST embed LuaJIT and expose it through Zig
+      C-interop. Linking MUST be static." Under decision 0014's chosen runtime
+      NONE of those three clauses can be satisfied: tv-labs/lua is not LuaJIT
+      (it is a Lua 5.3 implementation), there is no Zig anywhere in Letflow,
+      and there is no linking step at all -- it is a BEAM-only Hex dependency.
+      This requirement therefore implements LUA-01's INTENT, not its literal
+      text: the platform embeds a Lua runtime in-process with no external Lua
+      runtime dependency at deploy time. Decision 0014 records that the intent
+      is satisfied MORE completely this way than by static linking, because a
+      BEAM-only dependency means no shared library, no C toolchain, and no ABI
+      surface whatsoever. This restatement is stated explicitly so no future
+      reader mistakes a satisfied intent for a satisfied literal text -- the
+      exact failure mode R-Co/src/lua/luajit_bindings.zig's own header records
+      (LUA-01..16 "sat marked RELEASED" for three months while nothing
+      executed).
+      Decision 0014's "Evidence -- Elixir ecosystem" section states plainly
+      that NO dependency was fetched, compiled, or executed in producing the
+      record, and that "S5's first requirement must verify these behaviours by
+      actually running them." That verification is this requirement's core
+      deliverable, not a side task. It also notes this environment DOES have
+      network access (hex.pm and repo.hex.pm were both reached over HTTPS
+      while gating the record), so "I could not check" is not an available
+      answer here -- if mix deps.get fails, quote the actual failure.
+      Scope:
+      1. Add {:lua, "~> 1.0"} (tv-labs/lua, Apache-2.0, v1.0.2 as documented
+      2026-08-23) to mix.exs deps. Run mix deps.get and mix compile and quote
+      the real output. Decision 0014 explicitly did NOT assert that
+      mix deps.get completes -- assert it only after running it.
+      2. Write lib/letflow/design/req148-lua-runtime-spike.md recording, for
+      each of OQ-2's four questions, what was OBSERVED by running code (with
+      the actual script and actual output quoted), not what was read from
+      documentation:
+      (a) Can a script pcall its own :max_instructions budget exhaustion and
+      continue? (bears on LUA-08 / LUA-10 -- REQ-154, REQ-155.)
+      (b) Can a script pcall an error raised by a host function, i.e. is the
+      same interception hazard present for platform.fail? (bears on LUA-15 --
+      REQ-161.)
+      (c) Is a CONSUMED-instruction count retrievable after execution or on
+      the raised error? Decision 0014 found NO documentation of one, and notes
+      absence of documentation is not proof of absence. (bears on LUA-16 --
+      REQ-162.) Record the answer as yes-with-mechanism or no-with-evidence;
+      do not leave it open.
+      (d) Confirm Lua.new/1's documented default sandbox actually denies the
+      27 paths the docs list, by evaluating a representative sample from
+      inside a script -- at minimum os.execute, os.exit, load, loadfile,
+      require, dofile, and one io.* function.
+      3. Record, in the same artefact, the OBSERVED Lua version/dialect
+      (evaluate _VERSION from inside a script) and confirm 5.3 semantics on
+      the one dialect difference decision 0014 (b) gives real weight: that 3/2
+      evaluates to 1.5 and 3//2 to 1. This is the input REQ-150 (OQ-6, number
+      marshalling) consumes.
+      4. OQ-2 escape hatch, deliberately narrow: if and only if a spike
+      observation contradicts the documented behaviour tv-labs/lua was
+      selected on, this requirement MAY reverse the selection to luerl
+      (v1.5.1, also pure BEAM) WITHOUT reopening decision 0014's build-vs-bind
+      conclusion, since both are pure-BEAM binds. A reversal must be recorded
+      as an addendum to decision 0014 with REVIEWER sign-off, must re-run all
+      four spike questions against luerl, and must state which observation
+      forced it. A reversal for preference rather than evidence is out of
+      scope.
+      NOT IN THIS REQUIREMENT: no sandbox hardening beyond observing the
+      defaults (REQ-151), no host API (REQ-157, REQ-159, REQ-160), no
+      Executor implementation (REQ-153), no limits wiring (REQ-154..156).
+      GATES: decision 0014 "Ownership of execution" assigns REVIEWER sign-off
+      on this requirement specifically, as the first that adds tv-labs/lua to
+      mix.exs (Letflow's first scripting dependency). SECURITY-REVIEWER is a
+      hard gate on the whole Lua half -- scripts execute tenant-supplied
+      input, a tenant-data path by definition -- and applies here.
+    acceptance_criteria:
+      - "mix.exs deps includes tv-labs/lua ({:lua, \"~> 1.0\"} or the exact resolved requirement), and `mix deps.get` followed by `mix compile` both complete, with the real command output quoted -- not asserted from documentation"
+      - "lib/letflow/design/req148-lua-runtime-spike.md exists and answers OQ-2 (a), (b), (c), and (d) each with the actual Lua/Elixir snippet run and its actual output quoted; no answer is sourced from published documentation alone"
+      - "OQ-2 (c) resolves to an explicit yes-with-mechanism or no-with-evidence about a retrievable consumed-instruction count; the artefact does not leave it open, and does not claim a count is available without showing one being read"
+      - "the artefact records the observed _VERSION string from inside a script, and shows 3/2 == 1.5 and 3//2 == 1 evaluated by the runtime, as the input REQ-150 consumes"
+      - "the artefact records a run in which a script evaluates each of os.execute, os.exit, load, loadfile, require, dofile, and one io.* function under Lua.new/1's DEFAULT options, and shows each is nil or raises -- confirming the documented default deny-set empirically"
+      - "the artefact states in its own text that this requirement restates LUA-01 rather than satisfying it literally, naming all three unsatisfiable clauses (not LuaJIT, no Zig C-interop, no static linking) and the intent that is satisfied instead"
+      - "if the OQ-2 escape hatch is exercised, an addendum to docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md exists naming the specific contradicting observation, and REVIEWER has signed off on it; if it is not exercised, the artefact says so explicitly"
+      - "no file under lib/letflow/engine/ is modified by this requirement (confirmed by `git diff --stat` scoped to its commits) -- the seams are consumed by REQ-153 onward, not changed here"
+    depends_on: [REQ-058]
+
+  - id: REQ-149
+    title: Settle OQ-1 -- how a Lua script execution gets a configurable memory limit (blocks LUA-09)
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S5
+    description: >
+      Decision-and-design requirement that unblocks REQ-156 (LUA-09). It
+      exists as its own requirement rather than as prose inside REQ-156
+      because docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md's
+      OQ-1 explicitly BLOCKS LUA-09's expansion, and a blocked requirement
+      whose blocker is only described in its own description keeps the queue's
+      dependency graph dishonest -- the blocker gets no owner, no gate, and no
+      completion signal.
+      OQ-1 verbatim: "No memory-limit option is documented for tv-labs/lua."
+      Decision 0014 calls this "the weakest point of the Lua decision" and
+      says S5 "must not mark LUA-09 met without resolving it," and must not
+      treat instruction limiting as a proxy for memory limiting. R-Co had a
+      real one (R-Co/src/lua/memory_limiter.zig, via LuaJIT's custom allocator
+      hook); a pure-BEAM VM allocates ordinary BEAM terms and has no such
+      hook.
+      LUA-09's literal text is "Each script execution MUST have a configurable
+      memory limit. Allocations exceeding the limit MUST fail gracefully and
+      terminate the script," with acceptance "Script attempting to allocate
+      1 GB with 16 MB limit fails cleanly." Note the two-clause structure:
+      fail GRACEFULLY and TERMINATE. The BEAM's nearest primitive,
+      :max_heap_size on the executing process, kills the process -- which
+      plausibly satisfies "terminate" but not "fail gracefully" as an
+      in-script observable allocation failure.
+      Scope: write lib/letflow/design/req149-lua-memory-limit.md that
+      1. Empirically establishes, by running it, whether the adopted runtime
+      (per REQ-148) exposes any memory-limit or allocation-accounting option
+      at all -- search the installed dependency's own source under deps/ and
+      quote what was found, rather than reasoning from its published docs.
+      2. Evaluates at minimum these candidates, each with a run demonstrating
+      what it actually does: a bounded :max_heap_size on the script's
+      executing process (spawn_opt/2 or Process.flag(:max_heap_size, ...));
+      periodic host-side sampling of Process.info(pid, :memory) from the
+      supervising process; and declining the graceful-failure clause outright.
+      3. Reaches an explicit RECOMMENDED MECHANISM, and states plainly which
+      of LUA-09's two clauses it satisfies and which it does not. If the
+      graceful-allocation-failure clause is not achievable, this artefact must
+      say so, and REQ-156 must then restate LUA-09 accordingly -- this
+      requirement's job is to produce a decided answer, including a decided
+      "this clause is not achievable and here is the evidence," not to leave
+      it open.
+      4. Explicitly rejects approximating memory via :max_instructions, per
+      decision 0014's own instruction ("allocation is not proportional to
+      instruction count"), and records that rejection so REQ-156 cannot
+      quietly reintroduce it.
+      Whether this produces a new record in docs/migration/decisions/ or an
+      addendum to 0014 is this requirement's own call; if the outcome
+      contradicts anything 0014 states, it is an addendum with REVIEWER
+      sign-off, never a silent divergence.
+      NOT IN THIS REQUIREMENT: no implementation of the chosen mechanism --
+      that is REQ-156.
+    acceptance_criteria:
+      - "lib/letflow/design/req149-lua-memory-limit.md exists and names exactly one RECOMMENDED MECHANISM for bounding a script execution's memory, with the candidates it rejected and why"
+      - "the artefact quotes a real search of the installed dependency's own source under deps/ (e.g. `grep -rn \"max_heap\" deps/lua/lib/`) showing whether any memory-limit option exists, rather than citing published documentation"
+      - "for at least the :max_heap_size candidate, the artefact quotes a real run showing what happens to a process that exceeds it (killed with which exit reason, observable by the supervising process how)"
+      - "the artefact states explicitly, in one sentence, which of LUA-09's two clauses ('fail gracefully' / 'terminate the script') the recommended mechanism satisfies and which it does not"
+      - "the artefact explicitly rejects using :max_instructions as a memory proxy, citing decision 0014's OQ-1"
+      - "if the outcome contradicts anything stated in docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md, an addendum to that record exists with REVIEWER sign-off; if it does not, the artefact says so explicitly"
+      - "no file under lib/letflow/engine/ and no mix.exs change is made by this requirement, confirmed by `git diff --stat` scoped to its commits"
+    depends_on: [REQ-148]
+
+  - id: REQ-150
+    title: Settle OQ-6 -- Lua 5.3 integer/float marshalling across VariableMerge and JSONB variable storage (blocks LUA-11)
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S5
+    description: >
+      Decision-and-design requirement that unblocks REQ-159/REQ-160 (LUA-11's
+      read and write paths). Filed as its own requirement because decision
+      0014's OQ-6 says the question "must be settled once, centrally, before
+      LUA-11 is expanded -- not rediscovered per host function," and a
+      cross-cutting marshalling rule discovered independently inside two
+      sibling host-function requirements is exactly how two host functions end
+      up with two different rules.
+      OQ-6 is the one Lua 5.1 -> 5.3 dialect difference decision 0014 (b)
+      gives real semantic weight: 5.3 distinguishes an integer subtype from a
+      float subtype (3/2 is 1.5; integer division needs //), where LuaJIT's
+      5.1 had a single number type. Letflow stores instance variables as JSONB
+      and merges them through Letflow.Engine.VariableMerge. So a value written
+      by a script, persisted, and read back by a later script must round-trip
+      with a defined subtype -- otherwise a script that writes 1 and reads
+      back 1.0 is a live correctness bug that would surface as a
+      hard-to-diagnose comparison failure inside tenant workflows.
+      Scope: write lib/letflow/design/req150-lua-number-marshalling.md that
+      1. Establishes empirically, by running code against the adopted runtime,
+      how integers and floats cross the Elixir/Lua boundary in BOTH directions
+      -- what Elixir term a Lua integer becomes, what a Lua float becomes,
+      what a Lua script sees when handed an Elixir integer and an Elixir
+      float, and whether the subtype survives a Jason.encode!/Jason.decode!
+      round trip as JSONB storage would impose.
+      2. States one NORMATIVE RULE, in a numbered section REQ-159 and REQ-160
+      cite by section number, covering: which Elixir type each Lua subtype
+      maps to; what happens to a Lua float with no fractional part (does 2.0
+      persist as 2.0 or collapse to 2); what happens to an integer exceeding
+      IEEE-754 exact range; and what a script observes for a JSON null.
+      3. Names the exact module and function that will own the conversion, so
+      it is written once rather than per host function.
+      4. Records the interaction OQ-6 itself flags: WASM-12 (REQ-171/REQ-172)
+      requires the WASM host API to be semantically identical to Lua's, and
+      the WASM ABI has its own numeric representation -- so this rule is the
+      one WASM must conform to, and the artefact must say so.
+      NOT IN THIS REQUIREMENT: no host function is implemented; no change to
+      lib/letflow/engine/variable_merge.ex ships here.
+    acceptance_criteria:
+      - "lib/letflow/design/req150-lua-number-marshalling.md exists with a numbered normative section stating one rule per direction (Lua to Elixir, Elixir to Lua) that REQ-159 and REQ-160 can cite by section number"
+      - "the artefact quotes real runs showing what an Elixir integer, an Elixir float, a Lua integer, and a Lua float each become on crossing the boundary in the adopted runtime -- observed, not inferred from the Lua 5.3 manual"
+      - "the artefact states explicitly what happens to a float with no fractional part (e.g. 2.0) after a Jason.encode!/Jason.decode! round trip, with the real output quoted, since that is JSONB variable storage's actual behaviour"
+      - "the artefact states the behaviour for an integer outside IEEE-754 exact range and for a JSON null, each with a defined outcome rather than 'undefined'"
+      - "the artefact names the exact module and function that will own the conversion, so REQ-159 and REQ-160 share one implementation"
+      - "the artefact states that WASM-12's parity requirement (REQ-171, REQ-172) binds the WASM half to this same rule, citing decision 0014's OQ-6"
+      - "no file under lib/letflow/engine/ is modified by this requirement, confirmed by `git diff --stat` scoped to its commits"
+    depends_on: [REQ-148]
+
+  - id: REQ-151
+    title: Enumerate and test the Lua 5.3 sandbox deny-set, guarding the :sandboxed-replaces-defaults trap (LUA-03 and LUA-04 restated)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      Builds Letflow's Lua sandbox construction -- the single function every
+      script execution obtains its Lua state from -- and the test suite
+      proving what that state cannot reach. Ports the PROPERTY of
+      R-Co/src/lua/stdlib.zig (143 lines) without porting its mechanism.
+      RESTATEMENT OF LUA-03, AND WHY. R-Co's LUA-03 (Stdlib Restriction, MUST)
+      names a LuaJIT/5.1 module set: "MUST NOT load io, os, package, debug",
+      "MUST load only math, string, table", and "MUST remove string.dump,
+      os.execute (if reachable), loadstring, load, loadfile, dofile." Three
+      distinct reasons that text cannot be adopted verbatim under decision
+      0014's runtime, each of which this requirement must therefore restate:
+      (a) loadstring is a Lua 5.1 name that does not exist in Lua 5.3;
+      (b) R-Co additionally never opens jit, ffi, and bit -- and all three are
+      LuaJIT-SPECIFIC and DO NOT EXIST IN LUA 5.3 AT ALL, so three of R-Co's
+      most security-critical exclusions are VACUOUS here, including the ffi
+      one that R-Co/src/lua/stdlib.zig:57 calls "a COMPLETE sandbox escape
+      (arbitrary memory ...)". Vacuous is not the same as satisfied and must
+      not be reported as satisfied;
+      (c) R-Co's SBX-1 invariant (R-Co/src/lua/stdlib.zig:26-31, "prune
+      strictly AFTER open") does not transfer as a mechanism, because
+      Lua.new/1 sandboxes by construction rather than by post-hoc pruning --
+      there is no open-then-prune ordering to get wrong. The PROPERTY SBX-1
+      protects (no window in which a dangerous global is reachable) still must
+      be asserted by test.
+      RESTATEMENT OF LUA-04, AND WHY. LUA-04 (Bytecode Loading Disabled, MUST)
+      reads "The sandbox MUST refuse to load Lua bytecode; only source text
+      MAY be loaded," acceptance "Attempt to load bytecode is rejected with
+      error." The adopted runtime parses Lua SOURCE TEXT and has no bytecode
+      loader to disable; there is no LuaJIT bytecode format in play. LUA-04 is
+      therefore satisfied STRUCTURALLY -- only source text is accepted because
+      nothing else can be -- and this requirement must restate it as such
+      rather than claim an implemented refusal, BECAUSE THERE IS NO REJECTION
+      PATH TO TEST. Writing a test that asserts "bytecode is rejected" would
+      be testing a mechanism that does not exist. What IS testable, and what
+      this requirement tests instead, is the absence of every loader: load,
+      loadfile, dofile, and (5.3) string.dump.
+      THE :sandboxed TRAP -- read before writing any option list. Per
+      Lua.new/1's documentation, the :sandboxed option REPLACES the default
+      27-path deny list rather than adding to it; :exclude is the subtractive
+      option that removes paths from the sandbox. So a naive hardening such as
+      sandboxed: [[:os, :time]] would SILENTLY UN-DENY all 27 defaults --
+      including os.execute and load. This exact trap was caught by REVIEWER
+      during decision 0014's second gating round and is recorded in
+      docs/migration/stage-5-scripting-plugins.md's sign-off section as "a
+      hardening change that would have opened a sandbox escape." Any custom
+      list this requirement passes MUST restate the full deny-set, and the
+      tests MUST assert the DEFAULT denials still hold afterward, not merely
+      that the newly added ones do.
+      Scope:
+      1. A single sandbox-construction function (e.g.
+      Letflow.Engine.Lua.Sandbox.new/0,1) that every script execution uses --
+      no caller anywhere constructs a Lua state by calling the library
+      directly. This is the mechanism that makes SBX-1's property hold: there
+      is one door, so there is no window.
+      2. Enumerate the denied surface against LUA 5.3's ACTUAL stdlib, not
+      5.1's. The full deny-set must be written out explicitly in source with a
+      per-entry reason comment, in the spirit of R-Co's PRUNED_GLOBALS array
+      (R-Co/src/lua/stdlib.zig:64+), so a future reader can see what was
+      considered rather than inferring it from a library default.
+      3. Decide coroutine EXPLICITLY. R-Co never opened it; decision 0014 says
+      it must be "an explicit decision rather than an inherited one." Record
+      the decision and its reason in the moduledoc either way.
+      4. Record, in the moduledoc, that jit/ffi/bit do not exist in Lua 5.3 --
+      so a later reader does not add tests for them, find them absent, and
+      conclude the sandbox is doing work it is not.
+      NOT IN THIS REQUIREMENT: the os-surface time denials (os.time, os.date,
+      os.clock, os.difftime) are REQ-152's -- they are LUA-14's subject and
+      are split out so the five-function gap decision 0014 identifies gets its
+      own gate. No resource limits, no host API, no executor.
+      GATE: SECURITY-REVIEWER is a hard gate on this requirement. It is the
+      sandbox boundary itself.
+    acceptance_criteria:
+      - "a single sandbox-construction function exists (e.g. Letflow.Engine.Lua.Sandbox.new/0,1) and a repo search for the library's own state-construction call across lib/ (restricted to '*.ex' so design docs and this file's own prose are out of scope) shows that function as the only call site, with the real output quoted"
+      - "a test evaluates each of io.open, io.write, os.execute, os.exit, os.getenv, os.remove, os.rename, os.tmpname, load, loadfile, dofile, require, package, debug, and string.dump from INSIDE a script obtained from that function, and asserts each is nil or raises -- with the real `mix test` output quoted"
+      - "if any custom :sandboxed list is passed, a test asserts the DEFAULT denials still hold after it (at minimum os.execute and load are still denied from inside a script), explicitly guarding the :sandboxed-replaces-defaults trap; if no custom list is passed here, the moduledoc says so and names REQ-152 as the requirement that adds one"
+      - "the moduledoc states that this requirement restates LUA-03 rather than satisfying its literal text, and names all three reasons: loadstring is a 5.1 name absent from 5.3; jit/ffi/bit do not exist in Lua 5.3 so R-Co's exclusions of them are vacuous here rather than satisfied; and SBX-1's open-then-prune ordering does not transfer as a mechanism, only as a property"
+      - "the moduledoc states that this requirement restates LUA-04 rather than satisfying it literally: the runtime has no bytecode loader to disable, so only-source-text holds structurally and there is no rejection path to test -- what is tested instead is the absence of load/loadfile/dofile/string.dump"
+      - "the deny-set is written out explicitly in source with a per-entry reason, and coroutine's availability is an explicitly recorded decision with a stated reason, not an inherited default"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-148]
+
+  - id: REQ-152
+    title: Deny all four ambient Lua time sources and implement platform.now (LUA-14 restated, deliberately beyond its literal wording)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      RESTATEMENT OF LUA-14, AND WHY -- this is the requirement decision 0014's
+      REVIEWER round 1 caught being wrongly listed as satisfiable, and it is
+      the clearest instance in S5 of a library default silently not meeting a
+      requirement's acceptance criterion.
+      LUA-14 (Time Source, MUST) reads: "platform.now() MUST return the
+      platform's authoritative time as ISO 8601 UTC. Lua's os.time MUST NOT be
+      available." Its acceptance criterion is "os.time is nil; platform.now()
+      returns valid timestamp."
+      The platform.now() half is straightforward. THE SECOND HALF IS NOT
+      SATISFIED BY THE CHOSEN RUNTIME'S DEFAULTS. Lua 5.3's os library
+      contains eleven functions (verified against the Lua 5.3 reference manual
+      during decision 0014's second gating round): os.clock, os.date,
+      os.difftime, os.execute, os.exit, os.getenv, os.remove, os.rename,
+      os.setlocale, os.time, os.tmpname. Lua.new/1's documented default
+      sandbox denies SIX of them -- execute, exit, getenv, remove, rename,
+      tmpname. It does NOT deny os.clock, os.date, os.difftime, os.setlocale,
+      or os.time. R-Co, by contrast, never opened the os table at all, so all
+      eleven were unreachable there. os.time -- the sole subject of LUA-14's
+      acceptance criterion -- is therefore REACHABLE unless denied explicitly.
+      This requirement closes that five-function gap.
+      GOING BEYOND LUA-14's LITERAL WORDING, SAID PLAINLY. LUA-14's literal
+      text names only os.time. Its INTENT is that scripts read time only from
+      the platform's authoritative source, never from an ambient one -- and
+      os.date, os.clock, and os.difftime are also reachable by default and are
+      also ambient time sources. This requirement denies all four. That is
+      MORE than LUA-14 asks for, and it is recorded here as a deliberate
+      extension rather than pretending the extra three were always in scope.
+      os.setlocale is the fifth reachable function; it is not a time source,
+      so it falls to REQ-151's general enumeration rather than to this
+      requirement's restatement -- but REQ-151 and this requirement together
+      must leave zero of the eleven reachable, and the acceptance criteria
+      below check that jointly.
+      THE :sandboxed TRAP APPLIES DIRECTLY HERE. This is the requirement most
+      likely to reach for sandboxed: [[:os, :time]], which would un-deny all
+      27 defaults including os.execute and load. See REQ-151's description for
+      the full statement of the trap. Whichever option is used, a test must
+      assert the default denials still hold afterward.
+      Scope:
+      1. Extend REQ-151's sandbox construction so os.time, os.date, os.clock,
+      and os.difftime are all unreachable from a script, without un-denying
+      any default.
+      2. Implement platform.now() returning Letflow's authoritative time as an
+      ISO 8601 UTC string. Per R-Co/src/lua/host_api/mod.zig's capability
+      matrix, now is UNGATED BY DESIGN -- "a pure time read with no state
+      reach" -- and that matrix states this is "a POSITIVE design statement,
+      not an omission ... A test that expects a gate on either is reading the
+      matrix wrong." Record that in the moduledoc so REQ-157's capability work
+      does not later add a gate to it by symmetry.
+      3. The time source must be injectable so tests can assert an exact
+      value rather than a plausible-looking one; do not read the system clock
+      directly at the call site.
+      NOT IN THIS REQUIREMENT: no other platform.* function (REQ-157,
+      REQ-159, REQ-160).
+      GATE: SECURITY-REVIEWER is a hard gate -- this modifies the sandbox
+      boundary.
+    acceptance_criteria:
+      - "a test evaluates os.time, os.date, os.clock, and os.difftime from INSIDE a script and asserts each is nil or raises, with the real mix test output quoted -- this is LUA-14's own acceptance criterion for os.time, extended to the other three"
+      - "a test asserts the default denials still hold after this requirement's sandbox change -- at minimum os.execute and load are still nil-or-raise from inside a script -- explicitly guarding the :sandboxed-replaces-defaults trap"
+      - "a test evaluates os.execute, os.exit, os.getenv, os.remove, os.rename, os.setlocale, and os.tmpname from inside a script and asserts each is nil or raises, so that combined with the four above all ELEVEN Lua 5.3 os functions are proven unreachable"
+      - "platform.now() called from inside a script returns a string that Elixir's DateTime.from_iso8601/1 parses successfully into a UTC DateTime, asserted by test"
+      - "the time source is injectable and a test asserts platform.now() returns one exact, pre-set timestamp rather than merely a well-formed one"
+      - "the moduledoc states that this requirement restates LUA-14, that os.time is NOT in Lua.new/1's default deny-set (6 of the 11 os functions are denied by default; os.clock/os.date/os.difftime/os.setlocale/os.time are not), and that denying os.date/os.clock/os.difftime goes BEYOND LUA-14's literal wording as a deliberate extension of its intent"
+      - "the moduledoc records that platform.now is ungated by design per R-Co/src/lua/host_api/mod.zig's capability matrix, so a future requirement adding a capability gate to it is wrong"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-151]
+
+  - id: REQ-153
+    title: Per-invocation Lua state isolation and a concrete LuaScriptAudit.Executor implementation (LUA-02, resolving script_ref)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      Cashes in the deliberately-opaque seam REQ-058 left for exactly this
+      decision. lib/letflow/engine/lua_script_audit.ex's moduledoc states that
+      "S5's own build-vs-bind decision record ... is a prerequisite for whoever
+      supplies a real Executor implementation; this module does not pre-empt
+      that choice." Decision 0014 (d) verified by reading both modules in full
+      that the Executor behaviour needs NO change: @type script_ref :: term()
+      accommodates whatever concrete shape S5 picks, and every failure mode --
+      sandbox violation, instruction-budget exhaustion, wall-clock kill,
+      platform.fail -- folds into the existing {:error, term()} arm. Decision
+      0014 calls the opaque term() "the right call and ... now cashed in, not
+      amended." This requirement must NOT change the behaviour.
+      LUA-02 (State Isolation, MUST) is satisfiable substantially as worded:
+      "Each script execution MUST occur in a fresh lua_State or a fully reset
+      state. State MUST NOT leak between script invocations," acceptance
+      "Setting a global in one execution does not affect another." Under the
+      chosen runtime this maps to constructing a new state per invocation via
+      REQ-151's sandbox function -- and decision 0014 (e) notes the property is
+      stronger here than in R-Co: a fresh state is a fresh IMMUTABLE BEAM term,
+      so cross-invocation global leakage is not merely prevented but
+      unrepresentable. Test it anyway; "unrepresentable" is a claim about the
+      design, and the test is what proves the design was actually followed.
+      Scope:
+      1. Fix script_ref's CONCRETE SHAPE and document it. Decision 0014 says
+      "S5 fixes its concrete shape" and that the behaviour's term()
+      accommodates it. State the chosen shape in the moduledoc with its
+      reason; do not leave it inferable only from a function head.
+      2. A module implementing @behaviour Letflow.Engine.LuaScriptAudit.Executor
+      -- execute_with_manifest(script_ref, registered_hash) -- backed by the
+      adopted runtime, obtaining its state from REQ-151's sandbox function.
+      3. Fresh state per invocation, no reuse, no reset-and-reuse path.
+      4. Preserve LuaScriptAudit's own ordering guarantees, which are that
+      module's and must not be re-implemented or bypassed here: instance_id is
+      validated BEFORE the executor is invoked (INV-LSA-1), and the
+      manifest-hash mismatch check (INV-LSA-2) is performed by LuaScriptAudit
+      itself "regardless of what this callback does with registered_hash," so
+      a non-conforming executor cannot bypass it. Confirm both still hold with
+      a real executor in place rather than with a test double.
+      NOT IN THIS REQUIREMENT: no resource limits (REQ-154..156), no host API
+      beyond the platform.now REQ-152 already registered, no capability
+      enforcement (REQ-157), no manifest validation logic (REQ-158).
+      GATE: SECURITY-REVIEWER is a hard gate -- this is the first requirement
+      that executes tenant-supplied script text end to end.
+    acceptance_criteria:
+      - "a module implementing @behaviour Letflow.Engine.LuaScriptAudit.Executor exists, shown by a repo search over lib/ restricted to '*.ex', with the real output quoted"
+      - "lib/letflow/engine/lua_script_audit.ex is unmodified by this requirement -- confirmed by `git diff --stat` scoped to its commits showing that path absent -- since decision 0014 (d) established the Executor behaviour survives as written"
+      - "a test sets a global in one script execution and asserts it is absent in the next execution through the same executor, which is LUA-02's own acceptance criterion"
+      - "a test asserts each execution obtains a distinct state, e.g. by mutating a table in execution 1 and observing the pristine value in execution 2, and no reset-and-reuse code path exists in lib/"
+      - "a test drives Letflow.Engine.LuaScriptAudit.execute_script_for_audit/6 with this REAL executor (not a test double) and asserts INV-LSA-1 still holds: an invalid instance_id short-circuits with {:error, :invalid_instance_id}, zero executor calls, zero audit rows"
+      - "a test drives the same path with a real executor whose reported manifest_hash differs from registered_hash and asserts INV-LSA-2 still holds: a {:manifest_hash_mismatch, registered_hash, actual_hash} error is returned and no audit row is written"
+      - "the moduledoc states the concrete shape chosen for script_ref and why, per decision 0014's 'S5 fixes its concrete shape'"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-152, REQ-150]
+
+  - id: REQ-154
+    title: In-band instruction budget for Lua script execution -- layer 1 of the two-layer pair (LUA-08 restated)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      RESTATEMENT OF LUA-08 AS ONE HALF OF A TWO-LAYER PAIR, AND WHY.
+      Decision 0014 lists LUA-08 and LUA-10 together on its watchlist of
+      requirements not satisfiable as literally worded, with this reasoning:
+      they are "satisfiable, but NOT BY ONE MECHANISM, and the requirements
+      are not interchangeable." :max_instructions is in-band and, per the
+      library's documentation, raises a CATCHABLE error recoverable via pcall
+      -- meaning a hostile script can pcall its own budget exhaustion and
+      continue running. LUA-08's literal text ("Exceeding the limit MUST
+      terminate the script with a structured timeout error", acceptance
+      "Infinite loop terminates within configured limit") therefore is NOT met
+      by :max_instructions alone: a script that traps the error is not
+      terminated. This requirement builds layer 1 and states plainly that it
+      is INSUFFICIENT ON ITS OWN; REQ-155 builds the mandatory layer 2, and
+      LUA-08 must not be reported met until both have landed.
+      For contrast, note what this replaces rather than ports. R-Co had to
+      hand-build R-Co/src/lua/instruction_limiter.zig (126 lines) with two
+      invariants: INV-2, the limiter pointer lives in LUA_REGISTRYINDEX
+      because a __limiter__ global was writable by any script
+      (_G.__limiter__ = nil "defeats LUA-08 entirely"); and INV-4, ONE
+      combined LUA_MASKCOUNT hook carrying both the instruction count and the
+      elapsed-time check, because that hook is "the only mechanism in this
+      codebase that can interrupt a tight while true do end loop." NEITHER
+      INVARIANT PORTS. There is no registry and no hook here -- the budget is
+      a library option, and the tight-loop interruption problem INV-4 existed
+      to solve is REQ-155's, solved by preemptive BEAM scheduling instead.
+      Say this in the moduledoc so a future reader does not go looking for a
+      hook that was correctly never written.
+      Scope:
+      1. Wire a CONFIGURABLE :max_instructions budget into REQ-153's executor
+      path (configurable per LUA-08's "configurable maximum instruction
+      count" -- a hardcoded constant does not satisfy it).
+      2. Convert budget exhaustion into a structured error distinguishable
+      from every other failure arm, so REQ-162's SCRIPT_ERROR event and
+      REQ-155's kill can be told apart by the caller.
+      3. Test the hazard directly, using REQ-148's spike answer (a) as the
+      established fact: assert what a script that pcalls its own budget
+      exhaustion actually does. If it continues, that observation is exactly
+      why REQ-155 exists and the test must record it as expected behaviour of
+      layer 1, not as a bug in this requirement.
+      NOT IN THIS REQUIREMENT: the out-of-band host kill (REQ-155), memory
+      limiting (REQ-156).
+      GATE: SECURITY-REVIEWER is a hard gate -- this is a resource-exhaustion
+      boundary on a tenant-supplied input path.
+    acceptance_criteria:
+      - "the instruction budget is configurable (not a hardcoded literal) and a test drives two different configured budgets and asserts the smaller one halts a loop sooner, with real mix test output quoted"
+      - "a test runs an unbounded `while true do end` loop under a configured budget and asserts the execution terminates rather than hanging, which is LUA-08's own acceptance criterion"
+      - "budget exhaustion surfaces as a structured error value distinguishable by pattern match from other failure arms, asserted by a test that matches on it specifically rather than on a catch-all {:error, _}"
+      - "a test asserts what a script that pcalls its own budget exhaustion does, matching REQ-148's spike answer (a); if such a script continues executing, the test asserts that continuation as the documented limitation of layer 1"
+      - "the moduledoc states that this requirement RESTATES LUA-08 as layer 1 of a two-layer pair, that :max_instructions is in-band and pcall-catchable so LUA-08's literal text is NOT met by this requirement alone, and that REQ-155 supplies the mandatory host-enforced layer 2"
+      - "the moduledoc states that R-Co's INV-2 (registry-stored limiter) and INV-4 (one combined LUA_MASKCOUNT hook) do not port, and why -- so no future reader looks for a hook that was correctly never written"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-153]
+
+  - id: REQ-155
+    title: Out-of-band host-enforced wall-clock kill for Lua script execution -- layer 2 of the two-layer pair (LUA-10 restated)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      RESTATEMENT OF LUA-10 AS THE MANDATORY SECOND LAYER, AND WHY.
+      LUA-10 (Wall Clock Timeout, MUST) reads "Each script execution MUST have
+      a configurable wall clock timeout enforced BY THE HOST (not relying on
+      Lua to cooperate)," acceptance "Script that blocks on a host function
+      MUST still be terminable." Decision 0014 pairs it with LUA-08 on its
+      watchlist because the two are NOT interchangeable and NOT satisfiable by
+      one mechanism: REQ-154's :max_instructions is in-band and catchable, so
+      it is by construction a cooperative limit, and LUA-10's parenthetical
+      forbids exactly that. This requirement supplies the non-cooperative
+      layer, and together with REQ-154 it is what makes LUA-08 and LUA-10 both
+      genuinely met.
+      Decision 0014 (a) records why this is cheap here and was expensive in
+      R-Co: R-Co needed INV-4's combined LUA_MASKCOUNT hook because that was
+      "the only mechanism in the codebase that can interrupt a tight
+      while true do end loop." The BEAM equivalent is not a hook at all -- a
+      preemptively-scheduled process is interruptible by construction, so
+      Process.exit(pid, :kill) from a supervising process terminates a tight
+      loop with no cooperation from the script and no in-VM instrumentation.
+      Scope:
+      1. Run each script execution in its own process, supervised, and enforce
+      a CONFIGURABLE wall-clock timeout from OUTSIDE that process. The
+      established pattern in this repo is the one
+      lib/letflow/engine/plugin_interface.ex already implements for plugins --
+      Task.Supervisor.async_nolink/2 under the already-supervised
+      Letflow.Engine.PluginTaskSupervisor (registered at
+      lib/letflow/application.ex:45), then Task.yield/2, then
+      Task.shutdown(task, :brutal_kill) on timeout. Reuse that shape rather
+      than inventing a second one; if a separate supervisor is warranted for
+      scripts, say why in the moduledoc rather than adding one silently.
+      2. The timeout must fire even when the script has trapped its own
+      instruction-budget error, which is the whole reason this layer exists.
+      3. Timeout termination must surface as a structured error
+      distinguishable from REQ-154's in-band budget error.
+      4. Carry forward, honestly, the same disclosed limitation
+      lib/letflow/engine/plugin_interface.ex's moduledoc already states: this
+      covers a hang, a raise, and an exit, but NOT a hard kill of the BEAM
+      node itself or System.halt/0. Do not claim more.
+      NOT IN THIS REQUIREMENT: memory limiting (REQ-156).
+      GATE: SECURITY-REVIEWER is a hard gate.
+    acceptance_criteria:
+      - "the wall-clock timeout is configurable (not a hardcoded literal) and a test drives two different configured timeouts and asserts the shorter one terminates sooner, with real mix test output quoted"
+      - "a test runs a script that pcalls its own instruction-budget exhaustion and then continues looping, and asserts the outer host timeout STILL terminates it -- this is the specific test decision 0014 requires for the two-layer pair, and it must fail if layer 2 is removed"
+      - "a test asserts the script's execution process is dead after a timeout (e.g. via Process.alive?/1 on the pid, or by asserting the supervisor reports no child), proving the kill is real rather than only the caller giving up waiting"
+      - "timeout termination surfaces as a structured error distinguishable by pattern match from REQ-154's in-band budget error, asserted by a test matching each arm specifically"
+      - "the script execution runs under a supervised task and the moduledoc names the supervisor used; if it is not Letflow.Engine.PluginTaskSupervisor, the moduledoc states why a separate one was added"
+      - "the moduledoc states that this requirement RESTATES LUA-10 as layer 2 of the LUA-08/LUA-10 pair, that LUA-10's 'enforced by the host (not relying on Lua to cooperate)' clause is what forbids satisfying it with :max_instructions, and that neither LUA-08 nor LUA-10 is met without both layers"
+      - "the moduledoc carries forward PluginInterface's disclosed limitation verbatim in substance: a hard kill of the BEAM node or System.halt/0 is NOT covered by this mechanism"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-154]
+
+  - id: REQ-156
+    title: Configurable memory limit for Lua script execution, per REQ-149's decided mechanism (LUA-09 restated)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      Implements the mechanism REQ-149 decided. This requirement CANNOT START
+      until REQ-149 is done, because decision 0014's OQ-1 explicitly blocks
+      LUA-09's expansion and calls it "the weakest point of the Lua decision";
+      that block is encoded as depends_on rather than left as prose.
+      RESTATEMENT OF LUA-09, AND WHY. LUA-09 (Memory Limit, MUST) reads "Each
+      script execution MUST have a configurable memory limit. Allocations
+      exceeding the limit MUST fail gracefully and terminate the script,"
+      acceptance "Script attempting to allocate 1 GB with 16 MB limit fails
+      cleanly." The chosen runtime documents :max_instructions and
+      :max_call_depth and NO memory-limit option. R-Co had a real one via
+      LuaJIT's custom allocator hook (R-Co/src/lua/memory_limiter.zig); a
+      pure-BEAM VM allocates ordinary BEAM terms and offers no equivalent
+      allocation-refusal point. The BEAM's nearest primitive, a per-process
+      :max_heap_size, KILLS the process rather than failing an allocation
+      gracefully -- so LUA-09's two clauses come apart: "terminate the script"
+      is achievable, "fail gracefully" as an in-script observable allocation
+      failure may not be.
+      THE RESTATEMENT THIS REQUIREMENT MUST WRITE. Whatever REQ-149 concluded,
+      this requirement's moduledoc must state which of LUA-09's two clauses
+      the shipped mechanism satisfies and which it does not. If the graceful
+      clause is not achievable, the moduledoc says so in those words. What it
+      must NOT do is report LUA-09 met while quietly satisfying only one
+      clause -- decision 0014 states S5 "must not mark LUA-09 met without
+      resolving it."
+      FORBIDDEN SHORTCUT, NAMED EXPLICITLY: :max_instructions must not be used
+      as a proxy for a memory limit. Decision 0014's OQ-1 rejects it as
+      "unsound -- allocation is not proportional to instruction count," and
+      REQ-149 records that rejection. A requirement that satisfies its memory
+      criteria by tightening the instruction budget has not met LUA-09.
+      Scope:
+      1. Implement REQ-149's recommended mechanism, configurable per
+      execution, wired into REQ-155's supervised execution process.
+      2. Limit breach must surface as a structured error distinguishable from
+      REQ-154's budget error and REQ-155's timeout error.
+      3. Test at the scale LUA-09's own acceptance criterion names -- a script
+      attempting a large allocation under a small configured limit -- rather
+      than at a scale chosen to make the test convenient.
+      GATE: SECURITY-REVIEWER is a hard gate.
+    acceptance_criteria:
+      - "the memory limit is configurable per execution (not a hardcoded literal) and a test drives two different configured limits and asserts the smaller one halts an allocating script sooner, with real mix test output quoted"
+      - "a test runs a script that attempts a large allocation under a small configured limit and asserts the execution terminates with a structured error rather than hanging, exhausting the node, or returning success -- LUA-09's own acceptance criterion, at the scale it names"
+      - "the memory-limit breach surfaces as a structured error distinguishable by pattern match from REQ-154's instruction-budget error and REQ-155's wall-clock timeout error, asserted by a test matching each of the three arms specifically"
+      - "the implemented mechanism is the one REQ-149's artefact recommends; if it diverges, the moduledoc names the divergence and why, and REQ-149's artefact is updated"
+      - "the moduledoc states that this requirement RESTATES LUA-09 and which of its two clauses ('fail gracefully' / 'terminate the script') the shipped mechanism satisfies and which it does not, in those words -- not a general claim that LUA-09 is met"
+      - "no code path uses :max_instructions as a memory proxy; the moduledoc states that shortcut was rejected per decision 0014's OQ-1"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-149, REQ-155]
+
+  - id: REQ-157
+    title: Capability model and capability check at every gated host-function call site (LUA-05, LUA-06)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      Builds the capability substrate every host function in REQ-159 and
+      REQ-160 checks against, and the closed-set registration that makes
+      LUA-05's "and no others" clause enforceable. Ports
+      R-Co/src/lua/capabilities.zig (a string-grant set with has/add) and the
+      normative capability matrix in R-Co/src/lua/host_api/mod.zig's
+      registerAll doc comment. Both LUA-05 and LUA-06 are on decision 0014's
+      "satisfiable substantially as worded" list -- but that record also
+      cautions that list is "a starting position to verify, not a clearance,"
+      so each still needs its own acceptance test.
+      LUA-05 (Host API Registration, MUST): "The platform MUST register
+      exactly the platform.* functions defined in Architecture 5.2 and no
+      others. Each function MUST check the caller's capability grant before
+      executing." Acceptance: "Calling platform.call_service('X') without
+      service:call:X grant returns structured error."
+      LUA-06 (Capability Check at Call Site, MUST): "Every host function MUST
+      check the script's declared capabilities before executing. Missing
+      capability MUST raise a Lua error with structured details (function,
+      capability required, capabilities granted)." Acceptance: "Capability
+      denial test for every host function."
+      THE CLOSED SET, from R-Co/src/lua/host_api/mod.zig's registerAll -- eight
+      functions, with the capability each requires:
+      call_service -> service:call:<svc_id>; read_variable -> variable:read;
+      write_variable -> variable:write; log -> audit:log;
+      emit_event -> event:emit; get_instance_state -> instance:read;
+      now -> NONE, ungated by design; fail -> NONE, ungated by design.
+      That doc comment states the ungating of now and fail is "a POSITIVE
+      design statement, not an omission" -- now is a pure time read with no
+      state reach (LUA-14), and a script may always terminate itself (LUA-15)
+      -- and that "a test that expects a gate on either is reading the matrix
+      wrong." Carry that matrix into the moduledoc verbatim in substance,
+      including the ungated rationale, so LUA-06's "every host function" is
+      not read as contradicting it.
+      Scope:
+      1. A capability-set representation and a check function with structured
+      denial details naming, at minimum, the function, the capability
+      required, and the capabilities granted (LUA-06's three named fields).
+      2. A single registration point that installs the platform table, so the
+      closed set is enforceable by inspecting one place rather than by
+      grepping for scattered registrations. R-Co's own doc comment states
+      "Adding a ninth function without adding a row there is a defect" --
+      encode that as a test, not only as prose.
+      3. Denial must be observable from inside the script per LUA-06 ("MUST
+      raise a Lua error"), and simultaneously reportable to the host, so
+      REQ-162's capability-state-at-failure field has a source.
+      4. call_service's grant is PARAMETERISED by service id
+      (service:call:<svc_id>), not a blanket service:call -- a grant for one
+      service must not authorise another. Test that specifically.
+      NOT IN THIS REQUIREMENT: the host functions' own bodies (REQ-159,
+      REQ-160) beyond whatever stub is needed to test the gate;
+      platform.now's implementation already shipped in REQ-152.
+      GATE: SECURITY-REVIEWER is a hard gate. This is the authorization
+      boundary for tenant-supplied scripts.
+    acceptance_criteria:
+      - "a test asserts the platform table exposes EXACTLY the eight functions of R-Co's matrix (call_service, read_variable, write_variable, log, emit_event, get_instance_state, now, fail) and no others -- enumerated from inside a script, so adding a ninth without updating the matrix fails the suite"
+      - "for EACH of the six gated functions there is a capability-denial test asserting a Lua error is raised when the grant is absent, which is LUA-06's own acceptance criterion ('capability denial test for every host function')"
+      - "a denial's structured details include the function name, the capability required, and the capabilities granted -- all three asserted by test, per LUA-06's explicit list"
+      - "a test asserts platform.call_service('X') without a service:call:X grant produces a structured error, which is LUA-05's own acceptance criterion"
+      - "a test asserts a service:call:alpha grant does NOT authorise platform.call_service('beta'), proving the grant is parameterised by service id rather than blanket"
+      - "a test asserts platform.now and platform.fail are callable with an EMPTY capability set, confirming they are ungated by design rather than accidentally reachable"
+      - "the moduledoc reproduces R-Co/src/lua/host_api/mod.zig's capability matrix including the stated rationale for now and fail being ungated"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-153]
+
+  - id: REQ-158
+    title: Capability manifest validation on script load, wired to the existing LuaScriptAudit hash path (LUA-07)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      Completes LUA-07, whose audit-persistence half already shipped as
+      REQ-058 (lib/letflow/engine/lua_script_audit.ex, S3). That module's own
+      moduledoc records that it ports "only the audit-persistence path,
+      against an injected Executor behaviour ... not a real Lua interpreter."
+      This requirement supplies the missing half: the manifest itself, its
+      validation against the script artifact at load time, and the hash that
+      LuaScriptAudit already persists.
+      LUA-07 (Capability Manifest Validation, MUST): "On script load, the
+      platform MUST validate the script's manifest against the script
+      artifact. Manifest hash MUST be recorded with each execution."
+      Acceptance: "Modified manifest without re-registration is rejected."
+      LUA-07 is on decision 0014's "satisfiable substantially as worded" list;
+      no restatement is required, but per that record's caution the list is a
+      starting position to verify, so this requirement still carries its own
+      tests.
+      Scope:
+      1. A manifest representation -- at minimum, the declared capability set
+      REQ-157 checks against, and whatever identity fields the hash covers.
+      Port R-Co/src/lua/manifest.zig's shape; state in the moduledoc any field
+      deliberately dropped and why.
+      2. Validation at LOAD time (not at call time): a manifest that does not
+      match its script artifact is rejected before any script text executes.
+      This ordering is the requirement's substance -- validating after
+      execution would satisfy the words and none of the point.
+      3. The manifest hash computed here is the value LuaScriptAudit's
+      registered_hash is compared against. Do NOT re-implement or bypass
+      LuaScriptAudit's INV-LSA-2 mismatch check; feed it.
+      4. The hash function and exactly what bytes it covers must be stated in
+      the moduledoc, since "modified manifest is rejected" is only meaningful
+      relative to a defined covered set.
+      GATE: SECURITY-REVIEWER is a hard gate -- the manifest is what bounds a
+      script's authority.
+    acceptance_criteria:
+      - "a test loads a script whose manifest has been modified after registration and asserts it is REJECTED, which is LUA-07's own acceptance criterion"
+      - "a test asserts rejection happens before any script text executes -- e.g. a script whose body would set an observable side effect produces none when its manifest is invalid"
+      - "a test asserts the manifest hash produced here is what flows into Letflow.Engine.LuaScriptAudit's audit row for a successful execution, so 'recorded with each execution' is proven end to end rather than in isolation"
+      - "a test asserts a mismatch between the computed hash and the caller-supplied registered_hash still yields LuaScriptAudit's own {:manifest_hash_mismatch, ...} error and writes no audit row, confirming INV-LSA-2 is fed rather than bypassed"
+      - "the moduledoc states the hash algorithm and exactly which bytes/fields it covers"
+      - "the moduledoc names any field of R-Co/src/lua/manifest.zig deliberately not ported, and why"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-157]
+
+  - id: REQ-159
+    title: Lua host API 1/2 -- read path -- platform.read_variable, get_instance_state, log (LUA-11 read half, LUA-13)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      First of two sibling requirements splitting R-Co's eight-function
+      platform.* surface along the read/write seam, so each fits one agent
+      turn. This one covers the functions that only READ or EMIT and stage
+      nothing: platform.read_variable (LUA-11's read half),
+      platform.get_instance_state, and platform.log (LUA-13).
+      platform.now already shipped in REQ-152 and is not re-implemented here.
+      LUA-11 read half: "platform.read_variable(name) MUST return the current
+      value or nil." LUA-13 (Logging, MUST): "platform.log(level, message,
+      context) MUST emit a structured log entry tagged with the script's
+      identity, instance ID, and trace ID," acceptance "Log entry appears with
+      correct correlation IDs." Both are on decision 0014's "satisfiable
+      substantially as worded" list, so no restatement is required -- but per
+      that record's caution ("a starting position to verify, not a
+      clearance"), each carries its own acceptance test here.
+      NUMBER MARSHALLING IS NOT THIS REQUIREMENT'S TO DECIDE. REQ-150 settles
+      OQ-6 centrally and names the module and function that own the
+      conversion. This requirement CITES REQ-150's normative section by number
+      and uses that conversion; it must not introduce a second rule. Decision
+      0014's OQ-6 requires the rule be settled "once, centrally ... not
+      rediscovered per host function," which is why REQ-150 is a depends_on.
+      CAPABILITY GATES, from R-Co/src/lua/host_api/mod.zig's matrix:
+      read_variable requires variable:read; get_instance_state requires
+      instance:read; log requires audit:log. Each is checked via REQ-157's
+      check function at its own call site -- LUA-06's "at call site" is
+      structural, not decorative.
+      TENANT BOUNDARY, per decision 0014 (e): neither runtime is given
+      database access. Host functions receive already-resolved values; the
+      tenant prefix is supplied by the calling engine code and is NEVER
+      derived inside a script or read from a script-supplied argument. A
+      read_variable implementation that reaches Letflow.Repo directly with a
+      prefix taken from script input is a tenant-isolation defect, not an
+      optimization.
+      NOT IN THIS REQUIREMENT: platform.write_variable, call_service, and
+      emit_event are REQ-160's; platform.fail is REQ-161's.
+      GATE: SECURITY-REVIEWER is a hard gate.
+    acceptance_criteria:
+      - "a test asserts platform.read_variable returns the current value for a set variable and nil for an unset one, which is LUA-11's read-half text"
+      - "a test asserts platform.log emits a structured entry carrying the script's identity, the instance ID, and the trace ID -- all three asserted individually, which is LUA-13's own acceptance criterion"
+      - "a test asserts platform.get_instance_state returns instance state for a valid instance and a structured error (not a raise into the caller) for an invalid one"
+      - "each of the three functions has a capability-denial test: read_variable without variable:read, get_instance_state without instance:read, log without audit:log -- each asserting a Lua error is raised"
+      - "the number conversion used is the module and function REQ-150's artefact names; the moduledoc cites REQ-150's normative section by number and no second conversion rule is introduced in this requirement"
+      - "a test round-trips at least one integer and one float through read_variable and asserts the subtype matches REQ-150's normative rule, so the central rule is proven applied rather than merely referenced"
+      - "no host function in this requirement calls Letflow.Repo with a prefix derived from script-supplied input; the moduledoc states the tenant prefix is supplied by the calling engine code, per decision 0014 (e)"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-158, REQ-150]
+
+  - id: REQ-160
+    title: Lua host API 2/2 -- write path -- platform.write_variable staged-and-atomic, call_service, emit_event (LUA-11 write half, LUA-12)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      Second of two sibling requirements splitting the platform.* surface;
+      REQ-159 covers the read path. This one covers the functions with
+      OUTBOUND EFFECT, which is why it is separated: their correctness
+      condition is transactional, not per-call.
+      LUA-11 write half (MUST): "platform.write_variable(name, value) MUST
+      stage a write; writes are applied atomically on script success and
+      DISCARDED ON SCRIPT FAILURE." Acceptance: "Failed script does not leave
+      partial variable writes in instance state." This is the substance of the
+      requirement -- a write_variable that applies immediately satisfies the
+      function signature and violates the requirement. Staging must survive
+      every failure arm S5 has built: sandbox violation, REQ-154's instruction
+      budget, REQ-155's wall-clock kill, REQ-156's memory limit, and REQ-161's
+      platform.fail. The kill arm is the sharp one -- a brutal kill of the
+      execution process must not leave a half-applied write, which means the
+      staging buffer cannot live only inside the killed process's own state
+      unless the apply step happens strictly after the process exits normally.
+      LUA-12 (Service Call, MUST): "platform.call_service(service_id, payload)
+      MUST invoke a registered service synchronously. Response MUST be
+      returned as Lua table. Service call failures MUST RETURN A STRUCTURED
+      ERROR, NOT RAISE." Acceptance: "Calling a registered service round-trips
+      through host." Note the asymmetry with LUA-06: a MISSING CAPABILITY
+      raises (LUA-06), a SERVICE FAILURE returns a structured error (LUA-12).
+      Both behaviours must be tested, and they must differ.
+      Both LUA-11 and LUA-12 are on decision 0014's "satisfiable substantially
+      as worded" list; no restatement is required, and per that record's
+      caution each still carries its own tests.
+      CAPABILITY GATES, per R-Co/src/lua/host_api/mod.zig's matrix:
+      write_variable requires variable:write; call_service requires
+      service:call:<svc_id> (parameterised per service, per REQ-157);
+      emit_event requires event:emit.
+      NUMBER MARSHALLING: same constraint as REQ-159 -- use REQ-150's central
+      conversion, cite its normative section, introduce no second rule.
+      TENANT BOUNDARY: same as REQ-159 -- the tenant prefix comes from the
+      calling engine code, never from script input.
+      NOT IN THIS REQUIREMENT: platform.fail (REQ-161).
+      GATE: SECURITY-REVIEWER is a hard gate.
+    acceptance_criteria:
+      - "a test asserts a script that writes a variable and then FAILS leaves the instance's variable state unchanged -- LUA-11's own acceptance criterion -- and it is asserted separately for each failure arm: a raised script error, REQ-154's instruction budget, REQ-155's wall-clock kill, and REQ-156's memory limit"
+      - "a test asserts a script that writes several variables and succeeds applies ALL of them, and a test asserts no intermediate state in which only some are applied is observable, proving atomicity rather than merely eventual application"
+      - "a test asserts platform.call_service round-trips through the host to a registered service and returns the response as a Lua table readable from inside the script, which is LUA-12's own acceptance criterion"
+      - "a test asserts a service call FAILURE returns a structured error value to the script rather than raising, and a separate test asserts a MISSING service:call:<id> capability DOES raise -- the two behaviours asserted distinctly, per LUA-12 vs LUA-06"
+      - "a test asserts platform.emit_event without an event:emit grant raises, and with the grant emits an event observable by the host"
+      - "the number conversion used is the module and function REQ-150's artefact names; the moduledoc cites REQ-150's normative section by number and introduces no second conversion rule"
+      - "no host function in this requirement calls Letflow.Repo with a prefix derived from script-supplied input; the moduledoc states the tenant prefix is supplied by the calling engine code, per decision 0014 (e)"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-159, REQ-156, REQ-155]
+
+  - id: REQ-161
+    title: platform.fail terminates by a mechanism the script cannot intercept (LUA-15 restated)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      RESTATEMENT OF LUA-15, AND WHY. LUA-15 (Structured Failure, MUST) reads
+      "platform.fail(reason, details) MUST TERMINATE THE SCRIPT and propagate
+      a structured failure to the engine. The engine MUST record a
+      SCRIPT_FAILED event and transition the instance per the node's error
+      policy." Acceptance: "Test confirms structured failure produces expected
+      event and routing."
+      Decision 0014 moved LUA-15 onto its restatement watchlist during
+      REVIEWER's second gating round, for this reason: if platform.fail is
+      implemented as an ordinary raised Lua error -- the obvious
+      implementation -- then a hostile or merely careless script can wrap its
+      own failure in pcall and CONTINUE EXECUTING. The script would not
+      terminate, and the engine would receive no failure, defeating the
+      requirement's central verb. This is the identical in-band/out-of-band
+      hazard as REQ-154's :max_instructions, and decision 0014 states "the
+      answer must be the same in shape: termination CANNOT DEPEND ON THE
+      SCRIPT DECLINING TO CATCH THE ERROR."
+      The restatement, verbatim in substance from decision 0014: platform.fail
+      must terminate the invocation by a mechanism the script cannot
+      intercept -- recording the failure host-side AT CALL TIME so that a
+      swallowed error is still reported, terminating the enclosing process, or
+      both -- and a test must assert that a script which pcalls its own
+      platform.fail STILL yields a SCRIPT_FAILED outcome and does not run to
+      completion.
+      REQ-148's spike answer (b) is the established fact this requirement
+      builds on: it determined empirically whether a host-raised error is
+      pcall-catchable in the adopted runtime. If it is not catchable, that
+      observation must be cited and the test written anyway -- an untested
+      "cannot happen" is how the LUA-14 near-miss got onto decision 0014's
+      satisfiable list in the first place.
+      CAPABILITY: per R-Co/src/lua/host_api/mod.zig's matrix, fail is UNGATED
+      BY DESIGN -- "a script may always terminate itself (LUA-15)" -- and that
+      matrix states a test expecting a gate on it "is reading the matrix
+      wrong." Do not add one.
+      Scope:
+      1. platform.fail(reason, details) with the uninterceptable termination
+      mechanism above.
+      2. A SCRIPT_FAILED outcome propagated to the engine, distinguishable
+      from REQ-162's SCRIPT_ERROR (an uncaught runtime error) -- a deliberate
+      failure and a crash are different events and must not collapse into one.
+      3. The engine-side half LUA-15 names -- recording the SCRIPT_FAILED
+      event and transitioning per the node's error policy -- is wired only as
+      far as the seam Letflow already has. lib/letflow/engine/plugin_interface.ex's
+      moduledoc records that node-dispatch integration belongs to whichever
+      future requirement builds runtime dispatch, and REQ-058's moduledoc says
+      nothing yet calls its audit path. If the error-policy transition has no
+      existing call site to attach to, state that in the moduledoc and scope
+      this requirement to producing the structured outcome -- do NOT invent a
+      dispatch path here, and do not claim the routing half is met when it is
+      not.
+      GATE: SECURITY-REVIEWER is a hard gate.
+    acceptance_criteria:
+      - "a test asserts that a script which wraps its own platform.fail call in pcall and then continues STILL yields a SCRIPT_FAILED outcome and does NOT run to completion -- the specific test decision 0014's LUA-15 restatement requires; it must fail if the uninterceptable mechanism is removed"
+      - "a test asserts the structured failure carries the reason and details the script passed, readable by the host"
+      - "a test asserts SCRIPT_FAILED (deliberate platform.fail) is distinguishable by pattern match from REQ-162's SCRIPT_ERROR (uncaught runtime error), so the two are not collapsed"
+      - "a test asserts platform.fail is callable with an EMPTY capability set, confirming it is ungated by design per R-Co's matrix"
+      - "the moduledoc states that this requirement restates LUA-15, that an ordinary raised Lua error would let a script pcall its own failure and continue, and what mechanism is used instead"
+      - "the moduledoc states explicitly whether LUA-15's engine-side half (SCRIPT_FAILED event recording plus error-policy transition) is wired to a real call site or has none yet; if none, it says so rather than implying the routing half is met"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-160]
+
+  - id: REQ-162
+    title: Uncaught Lua errors captured as structured SCRIPT_ERROR events, with the instruction-count field resolved empirically (LUA-16 restated)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      RESTATEMENT OF LUA-16, AND WHY. LUA-16 (Runtime Error Capture, MUST)
+      reads "Uncaught Lua errors MUST be captured by the host and converted to
+      structured SCRIPT_ERROR events with stack trace, INSTRUCTION COUNT
+      CONSUMED, and capability state at failure." Acceptance: "Division by
+      zero in script yields rich error report."
+      Two of the three fields are host-side concerns Letflow controls: the
+      stack trace and the capability state at failure (REQ-157 owns the
+      capability set and is a depends_on for exactly this reason). THE
+      INSTRUCTION COUNT CONSUMED IS NOT. Decision 0014 found NO documentation
+      that the adopted runtime exposes a consumed-instruction count, either as
+      a return value or on the error raised when :max_instructions is
+      exceeded -- the option is documented only as raising "instruction budget
+      exceeded". That record notes absence of documentation is not proof of
+      absence, and that no code was run to check.
+      REQ-148's spike answer (c) is that check, and it is a hard prerequisite
+      for this requirement (REQ-148 is a transitive ancestor via REQ-161 and
+      REQ-157; its artefact must be read before this requirement starts). This requirement's restatement obligation, taken
+      verbatim in substance from decision 0014, has two branches:
+      (a) If a consumed-instruction count IS retrievable, emit it, and the
+      moduledoc records the mechanism found and cites REQ-148's artefact.
+      (b) If it is NOT retrievable, LUA-16 MUST BE RESTATED to drop that field
+      (or to report the CONFIGURED BUDGET rather than the consumed count), and
+      the restatement must SAY SO -- and specifically must NOT silently emit
+      an event with the field omitted or ZERO-FILLED while claiming the
+      requirement met. A zero-filled instruction_count is the precise failure
+      decision 0014 forbids, because it reads to every downstream consumer as
+      a real measurement of zero.
+      Whichever branch holds, the moduledoc states it explicitly and names the
+      evidence.
+      NOTE ON THE ACCEPTANCE CRITERION ITSELF. LUA-16's own acceptance
+      criterion is "division by zero in script yields rich error report" --
+      which is a Lua 5.1 assumption. In Lua 5.3, 1/0 evaluates to inf rather
+      than raising, while 1//0 and 1%0 on INTEGERS do raise -- 1//0 with
+      "attempt to divide by zero" and 1%0 with "attempt to perform 'n%%0'"
+      (verified against Lua 5.3's lvm.c luaV_div/luaV_mod and the 5.3.4 test
+      suite errors.lua:135-136; note both raise ONLY when both operands are
+      integers -- 1//0.0 yields inf without raising). So the literal
+      acceptance criterion does not fire
+      under the chosen runtime the way it fired under LuaJIT. This requirement
+      must verify which division forms actually raise in the adopted runtime
+      (REQ-148 established the dialect is 5.3) and test with one that does,
+      recording the substitution rather than reporting the original criterion
+      as passing.
+      Scope:
+      1. Capture uncaught script errors host-side and convert them to a
+      structured SCRIPT_ERROR value carrying stack trace, capability state at
+      failure, and whatever the instruction-count branch above resolved to.
+      2. SCRIPT_ERROR must be distinguishable from REQ-161's SCRIPT_FAILED
+      (deliberate), REQ-154's budget error, REQ-155's timeout, and REQ-156's
+      memory limit -- five arms, each pattern-matchable.
+      3. Capability state at failure comes from REQ-157's capability set, not
+      from a re-derived copy.
+      GATE: SECURITY-REVIEWER is a hard gate -- error reports are a data-
+      disclosure surface, and a stack trace must not leak host internals or
+      other tenants' data to a script author's error view.
+    acceptance_criteria:
+      - "a test asserts an uncaught runtime error inside a script produces a structured SCRIPT_ERROR value carrying a stack trace and the capability state at failure, both asserted individually"
+      - "the moduledoc states which branch of LUA-16's restatement holds -- consumed-instruction count retrievable (naming the mechanism, citing REQ-148's artefact) or not retrievable (naming what is reported instead) -- and the corresponding assertion is made by test"
+      - "if the count is not retrievable, a test asserts the emitted event does NOT carry a zero or omitted-but-still-named instruction_count field passed off as a measurement; the field is either absent by design or explicitly labelled as the configured budget, and the moduledoc says which"
+      - "the test standing in for LUA-16's 'division by zero' acceptance criterion uses a division form that actually raises in Lua 5.3 (e.g. integer 1//0 or 1%0, since 1/0 yields inf), and the moduledoc records that substitution and why the literal 5.1-era criterion does not apply"
+      - "a test asserts SCRIPT_ERROR is distinguishable by pattern match from SCRIPT_FAILED (REQ-161), the instruction-budget error (REQ-154), the wall-clock timeout (REQ-155), and the memory-limit error (REQ-156) -- all five arms matched distinctly in one test"
+      - "the capability state in the event is read from REQ-157's capability set rather than re-derived, shown by a test where a script granted exactly one capability produces an event listing exactly that one"
+      - "a test asserts the stack trace does not include host filesystem paths or Elixir module internals beyond what a script author needs, so the error report is not a host-internals disclosure surface"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-161, REQ-157]
+
+  - id: REQ-163
+    title: Settle OQ-4 -- WASM core modules or the component model (blocks the WASM half's ABI and WASM-07)
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S5
+    description: >
+      First of the two decision requirements that unblock S5's WASM half.
+      Decision 0014's "Ownership of execution" states "OQ-3 and OQ-4 block the
+      WASM half's expansion and should be resolved first," so both are filed
+      as their own requirements with their own gates rather than left as prose
+      inside a blocked implementation requirement.
+      OQ-4 verbatim: "Core modules or the component model? Wasmex.EngineConfig
+      exposes :wasm_component_model. WASM-02's ABI (init, execute, deinit,
+      get_capabilities) is core-module shaped; WASM-07's wasi:filesystem/types
+      is component-model shaped. R-Co's own spec is internally inconsistent
+      here, and its stub code settles nothing. S5 must pick one explicitly."
+      R-Co settles nothing because R-Co/src/wasm/ is stubs end to end --
+      wasmtime_bindings.zig's header reads "Actual C FFI integration deferred
+      to Stage 10", Engine/Store/Instance/Module/Func/Trap/Memory are all
+      empty extern structs, and `grep -rn "Stage 10" R-Co/src/wasm/` returns
+      12 hits across eight files. There is no working Wasmtime integration to
+      be faithful to. This is a specification port, not a code port.
+      Scope: write a decision artefact (a new record under
+      docs/migration/decisions/ if it settles policy beyond S5, otherwise
+      lib/letflow/design/req163-wasm-abi-choice.md -- state which and why)
+      that
+      1. Picks ONE: core modules, or the component model. Not both, not
+      "either is acceptable."
+      2. Grounds the choice in what wasmex actually supports at the version
+      Letflow would adopt -- verified by reading the installed dependency or
+      its published API surface and quoting what was found, not by inference
+      from the option's name.
+      3. States the consequence for WASM-02's four-export ABI (init, execute,
+      deinit, get_capabilities). If the component model is chosen, that
+      core-module-shaped ABI must be restated into its component-model
+      equivalent, and the artefact must supply that restatement so REQ-166 can
+      implement against a defined contract rather than improvising one.
+      4. States the consequence for WASM-07's concrete import name. WASM-07's
+      "Module attempting to import wasi:filesystem/types is rejected" is a
+      WASI Preview 2 component-model interface name; under core modules the
+      equivalent denial has a different concrete shape. Name the exact ABI
+      surface REQ-167 must assert the denial against.
+      5. States the consequence for WASM-12's parity requirement, since the
+      chosen ABI determines how Lua's host API values are represented at the
+      WASM boundary -- and REQ-150's number rule binds here per its own OQ-6
+      interaction note.
+      NOT IN THIS REQUIREMENT: no mix.exs change, no implementation. That is
+      REQ-165 onward.
+    acceptance_criteria:
+      - "the artefact names exactly one choice -- core modules or the component model -- as a Decision heading, with no 'either' fallback"
+      - "the artefact quotes real evidence of what the wasmex version Letflow would adopt supports for the chosen mode (read from the installed dependency under deps/ or its published API surface, with the source and date named), rather than inferring support from the :wasm_component_model option's existence"
+      - "the artefact restates WASM-02's four-export ABI (init, execute, deinit, get_capabilities) into the chosen mode's concrete contract, in enough detail that REQ-166 implements against it without improvising"
+      - "the artefact names the exact import surface REQ-167 must assert a filesystem denial against under the chosen mode, replacing WASM-07's component-model-specific 'wasi:filesystem/types' where that is not the chosen mode"
+      - "the artefact states how the chosen ABI represents the values REQ-150's number-marshalling rule governs, so WASM-12's parity requirement has a defined mapping"
+      - "the artefact cites R-Co/src/wasm/wasmtime_bindings.zig's 'deferred to Stage 10' header and states that R-Co's stub code settles nothing here, so the choice is Letflow's own and not a port"
+      - "no mix.exs change and no file under lib/letflow/engine/ is modified, confirmed by `git diff --stat` scoped to its commits"
+    depends_on: [REQ-162]
+
+  - id: REQ-164
+    title: Settle OQ-3 -- whether Letflow hosts WASM guest compilation at all (blocks WASM-03/04/05)
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S5
+    description: >
+      Second of the two decision requirements unblocking S5's WASM half, and
+      the one that determines whether REQ-175 exists as scoped work at all.
+      OQ-3 verbatim: "Does Letflow host guest compilation at all
+      (WASM-03/04/05)? Accepting pre-compiled .wasm artifacts and never
+      running a compiler would eliminate three requirements' worth of scope
+      plus a build-farm security surface. R-Co never built this, so nothing is
+      lost by declining. Needs S6's operational input (artifact storage,
+      retention, job execution)."
+      The evidence supporting "nothing is lost by declining" was verified
+      directly during decision 0014: R-Co/src/wasm/ is stubs end to end, and
+      `find R-Co -name '*.wasm' -not -path '*/.git/*'` returns ZERO files.
+      There is no working pipeline to port and no artifact corpus to remain
+      compatible with.
+      Scope: write a decision artefact (a new record under
+      docs/migration/decisions/ if it settles policy beyond S5, otherwise
+      lib/letflow/design/req164-wasm-compilation-hosting.md -- state which and
+      why) that
+      1. Decides YES or NO: does Letflow host guest compilation.
+      2. If NO -- Letflow accepts only pre-compiled .wasm artifacts -- the
+      artefact must say so as a decision, must record that WASM-03, WASM-04,
+      and WASM-05 are consequently DECLINED RATHER THAN DEFERRED (with the
+      reason), and REQ-175 is then cancelled rather than left pending. A
+      declined requirement that stays pending forever is indistinguishable
+      from a forgotten one.
+      3. If YES, the artefact must supply the restatement REQ-175 needs. All
+      three of WASM-03/04/05 specify a pipeline compiling ZIG SOURCE to .wasm,
+      and decision 0014 records that Letflow has no Zig toolchain and no
+      reason to acquire one. The restatement, verbatim in substance from that
+      record: the pipeline must be LANGUAGE-AGNOSTIC, accepting a .wasm
+      artifact and keying its cache on ARTIFACT HASH plus toolchain identity
+      (WASM-04's literal text keys on SOURCE hash plus toolchain version,
+      which presumes hosted compilation of source).
+      4. Either way, name what S6 operational input the decision needed
+      (artifact storage, retention, job execution) and state whether it was
+      available at decision time or assumed -- decision 0014 flags this as
+      needing S6's input, and an S6-dependent decision made without S6 must
+      say so rather than present itself as fully grounded.
+      NOT IN THIS REQUIREMENT: no pipeline implementation.
+    acceptance_criteria:
+      - "the artefact records an explicit YES or NO under a Decision heading on whether Letflow hosts WASM guest compilation"
+      - "if NO, the artefact states that WASM-03, WASM-04, and WASM-05 are DECLINED (not deferred) with the reason, and REQ-175's status is changed to cancelled with a status-history event recording why -- not left pending"
+      - "if YES, the artefact supplies the language-agnostic restatement REQ-175 implements against: accepting a .wasm artifact rather than Zig source, and keying the cache on artifact hash plus toolchain identity rather than WASM-04's literal source hash"
+      - "the artefact states that R-Co never built this pipeline, citing that R-Co/src/wasm/ is stubs and that a search for '*.wasm' across R-Co returns zero files, so declining loses nothing that exists"
+      - "the artefact names which S6 operational inputs (artifact storage, retention, job execution) the decision required, and states for each whether it was available or assumed"
+      - "no mix.exs change and no file under lib/letflow/engine/ is modified, confirmed by `git diff --stat` scoped to its commits"
+    depends_on: [REQ-162]
+
+  - id: REQ-165
+    title: Adopt wasmex in mix.exs behind a mandatory process boundary, with a pinned Rust toolchain in CI (WASM-01 restated, OQ-7)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      FIRST requirement of S5's WASM half; every other WASM requirement
+      depends_on it. Executes decision 0014's Decision (2) -- adopt wasmex
+      (Wasmtime via a Rust NIF) -- and its non-negotiable constraint: EVERY
+      GUEST INVOCATION MUST CROSS A PROCESS BOUNDARY, dispatched through a
+      supervised task exactly as lib/letflow/engine/plugin_interface.ex's
+      invoke/2,3 already does, NEVER called inline from an engine or request
+      process.
+      SEQUENCING IS SETTLED, NOT A PREFERENCE. Decision 0014's Decision (4):
+      "Lua lands first; WASM lands second and depends on it. WASM-12 defines
+      the WASM host API by parity with Lua's, so the Lua host API is the
+      definition WASM conforms to." That is why this requirement depends_on
+      the Lua half's terminal requirement plus both WASM decision
+      requirements, and not merely on REQ-148.
+      RESTATEMENT OF WASM-01, AND WHY. WASM-01 (Wasmtime Integration, MUST)
+      reads "The platform MUST embed Wasmtime VIA ITS C API, LINKED STATICALLY
+      INTO THE PLATFORM BINARY." wasmex embeds Wasmtime through a RUST NIF,
+      not the C API, and there is no "platform binary" at all -- the BEAM
+      loads a shared library at runtime. The MECHANISM CLAUSE is therefore not
+      satisfiable. Note the split precisely, because it is unusual on this
+      watchlist: WASM-01's own ACCEPTANCE CRITERION ("No external Wasm runtime
+      dependency at deploy time") IS satisfiable as literally worded and must
+      be tested as written; only the mechanism clause is restated. The intent
+      implemented here is: the platform embeds Wasmtime in-process with no
+      external Wasm runtime dependency at deploy time.
+      THE RESIDUAL RISK MUST BE STATED, NOT HIDDEN. Decision 0014 (a) records
+      it plainly: a NIF crash takes down the ENTIRE BEAM node, and no
+      supervisor recovers it. The process boundary bounds hangs and guest
+      traps; it does NOT bound native crashes. lib/letflow/engine/plugin_interface.ex's
+      moduledoc already discloses that it does not cover "a hard kill of the
+      BEAM node itself, or System.halt/0" -- and decision 0014 (d) states a
+      Wasmtime-layer NIF crash falls into precisely that disclosed-and-
+      uncovered class. S5 must not claim otherwise.
+      PluginInterface's CONTRACT DOES NOT CHANGE. Decision 0014: WASM plugins
+      arrive as a SEPARATE handler family -- a wasmex-backed module that
+      itself implements the existing @behaviour -- not as a change to
+      PluginInterface's contract. Its moduledoc's scope boundary ("only
+      in-process Elixir modules ... no WASM sandboxing") remains literally
+      true and needs no rewrite: the handler module IS in-process Elixir; the
+      guest it delegates to is not a dynamically-loaded Elixir plugin. Do not
+      edit that moduledoc's scope paragraph to "fix" it.
+      Scope:
+      1. Add wasmex (v0.15.1 or later as resolved) to mix.exs. Run
+      mix deps.get and mix compile and quote the real output -- this is
+      Letflow's first dependency that compiles native code, so a successful
+      fetch is not evidence of a successful build.
+      2. OQ-7: pin the Rust toolchain and add it to CI. Letflow's CI has no
+      Rust toolchain today and .tool-versions pins only Elixir and Erlang.
+      Decision 0014 (f) cites docs/migration/decisions/0005-pin-formatting-toolchain.md's
+      pinning discipline as the precedent. Pin it the way that record pins its
+      own toolchain rather than inventing a second mechanism.
+      3. A minimal wasmex-backed handler module implementing
+      @behaviour Letflow.Engine.PluginInterface, whose handle_node/1 invokes a
+      trivial guest -- enough to prove the process boundary and the toolchain,
+      not the full ABI (REQ-166's).
+      4. Prove the process boundary by test, not by assertion in prose.
+      GATES: decision 0014 assigns REVIEWER sign-off on this requirement
+      specifically, as the first that adds wasmex -- Letflow's FIRST
+      NATIVE-CODE BUILD DEPENDENCY. SECURITY-REVIEWER is a hard gate on the
+      whole WASM half; plugins execute tenant-supplied input.
+    acceptance_criteria:
+      - "mix.exs deps includes wasmex, and `mix deps.get` followed by `mix compile` both complete WITH THE NATIVE BUILD SUCCEEDING, with the real output quoted -- a successful fetch alone does not satisfy this"
+      - "the Rust toolchain version is pinned by the same mechanism docs/migration/decisions/0005-pin-formatting-toolchain.md establishes for this repo, and CI installs that pinned version -- shown by the CI config diff and a real CI run"
+      - "a module implementing @behaviour Letflow.Engine.PluginInterface exists whose handle_node/1 invokes a wasm guest, and a test asserts it returns {:complete, map} for a trivial guest"
+      - "a test asserts the guest invocation runs in a DIFFERENT process from the caller (e.g. by comparing self() captured inside the handler against the test process pid), proving decision 0014's mandatory process boundary structurally rather than by prose"
+      - "a test asserts a guest that hangs is terminated by the supervised-task timeout and surfaces as {:error, reason} to the caller, never as an exception or exit propagating into the calling process"
+      - "lib/letflow/engine/plugin_interface.ex is unmodified by this requirement -- confirmed by `git diff --stat` scoped to its commits showing that path absent -- since decision 0014 established WASM plugins are a separate handler family, not a contract change"
+      - "the new module's moduledoc states that this requirement restates WASM-01's mechanism clause (Rust NIF, not the C API; a runtime-loaded shared library, not a statically linked platform binary) while WASM-01's acceptance criterion is met as literally worded, and a test or deployment check asserts no external Wasm runtime dependency is required at deploy time"
+      - "the moduledoc states the residual risk decision 0014 (a) records: a Wasmtime or NIF-layer crash takes down the BEAM node, no supervisor recovers it, and the process boundary bounds hangs and traps but NOT native crashes -- the same disclosed-and-uncovered class PluginInterface's own moduledoc names"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-162, REQ-163, REQ-164]
+
+  - id: REQ-166
+    title: WASM module ABI validation and rejection of non-conforming modules at registration (WASM-02)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      Implements the module contract against whichever ABI REQ-163 chose, and
+      the registration-time rejection that makes it enforceable.
+      WASM-02 (Module ABI, MUST): "Every module loaded by the platform MUST
+      export the functions defined in Architecture 5.3 (init, execute, deinit,
+      get_capabilities). Modules missing required exports MUST be rejected AT
+      REGISTRATION." Acceptance: "Registration of a module without execute
+      export fails with structured error."
+      WASM-02 is on decision 0014's "satisfiable substantially as worded"
+      list, so no restatement of WASM-02 itself is required -- BUT the four
+      export names are core-module shaped, and if REQ-163 chose the component
+      model, REQ-163's artefact supplies the restated contract and THIS
+      requirement implements that restated contract, citing it. Do not
+      re-derive the mapping here and do not implement the core-module names
+      against a component-model runtime.
+      The ordering is the substance: rejection AT REGISTRATION, not at first
+      invocation. A module missing execute that registers successfully and
+      fails later has satisfied the words and none of the point -- and worse,
+      it fails at the moment a tenant's workflow runs rather than at the
+      moment an operator registers it.
+      Scope:
+      1. Validate a module's exports against the contract at registration.
+      2. Reject a non-conforming module with a STRUCTURED error naming which
+      export is missing -- "invalid module" is not actionable to whoever
+      registered it.
+      3. Registration is a distinct step from invocation, with its own entry
+      point, so the ordering above is structural.
+      NOT IN THIS REQUIREMENT: capability sandboxing (REQ-167), resource
+      limits (REQ-169, REQ-170), host API (REQ-171, REQ-172), versioning
+      (REQ-173).
+      GATE: SECURITY-REVIEWER is a hard gate.
+    acceptance_criteria:
+      - "a test registers a module missing the execute export and asserts registration fails with a structured error naming the missing export, which is WASM-02's own acceptance criterion"
+      - "a test asserts a module missing EACH of the other required exports is likewise rejected -- one test case per required export, so a validator checking only execute fails the suite"
+      - "a test asserts rejection happens at REGISTRATION and not at invocation: a non-conforming module is never invocable, and no guest code from it executes"
+      - "a test asserts a conforming module registers successfully and is then invocable"
+      - "the moduledoc names the export contract implemented and cites REQ-163's artefact as its source; if REQ-163 chose the component model, the moduledoc states that WASM-02's literal four core-module export names were restated by REQ-163 and names the restated contract used instead"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-165]
+
+  - id: REQ-167
+    title: WASM import whitelist derived from the manifest, and filesystem access denied by default (WASM-06, WASM-07 restated)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      The WASM half's authorization boundary -- the counterpart to REQ-157 on
+      the Lua side, and the requirement that makes a guest's declared
+      capability set actually bound what it can reach.
+      WASM-06 (Import Whitelist, MUST): "The Wasmtime instance MUST provide
+      only the host functions corresponding to capabilities declared in the
+      module manifest. Imports outside the whitelist MUST cause INSTANTIATION
+      TO FAIL." Acceptance: "Module declaring var:read only cannot import
+      platform_call_service." WASM-06 is on decision 0014's satisfiable list;
+      no restatement needed, but it carries its own tests per that record's
+      caution. Note the enforcement point: instantiation fails, rather than
+      the import being present-but-erroring. A guest that instantiates with an
+      unauthorised import in its table has already lost the property.
+      RESTATEMENT OF WASM-07, AND WHY. WASM-07 (No Filesystem Access, MUST)
+      reads "Wasm modules MUST NOT be granted WASI filesystem capabilities by
+      default. Any future grant MUST be explicit in the capability manifest,"
+      acceptance "Module attempting to import wasi:filesystem/types is
+      rejected." The INTENT is satisfiable -- grant no WASI filesystem
+      capability -- but the concrete import name in the acceptance criterion,
+      wasi:filesystem/types, is a WASI PREVIEW 2 COMPONENT-MODEL INTERFACE
+      NAME. Under core modules the equivalent surface has a different concrete
+      shape entirely. Decision 0014's restatement: deny by default and assert
+      the denial AGAINST WHICHEVER ABI IS CHOSEN. REQ-163's artefact names the
+      exact import surface to assert against; this requirement implements and
+      tests against that named surface and states in its moduledoc that it is
+      doing so IN PLACE OF WASM-07's literal wasi:filesystem/types name --
+      because a test that asserts a component-model interface name is rejected
+      by a core-module runtime proves nothing: the name would be rejected as
+      unrecognised regardless of any filesystem policy, which is a false pass.
+      Scope:
+      1. Build the instance's import table FROM the module manifest's declared
+      capabilities -- a whitelist, not a denylist, so an unnamed host function
+      is absent rather than needing to be remembered.
+      2. Instantiation fails when the module imports anything outside that
+      whitelist.
+      3. No filesystem capability is granted by default under the chosen ABI,
+      asserted against REQ-163's named surface.
+      4. The "any future grant MUST be explicit in the capability manifest"
+      clause: if no filesystem grant is implementable today, state that in the
+      moduledoc rather than building a grant path nothing uses.
+      GATE: SECURITY-REVIEWER is a hard gate. This is the sandbox boundary for
+      guest code.
+    acceptance_criteria:
+      - "a test asserts a module declaring only var:read and importing the service-call host function FAILS TO INSTANTIATE, which is WASM-06's own acceptance criterion"
+      - "a test asserts the import table is built from the manifest as a whitelist: a host function not named by the manifest is absent from the instance's imports, asserted by inspecting the instance rather than by invoking and catching an error"
+      - "a test asserts a module attempting filesystem access under the ABI REQ-163 chose is rejected, using the concrete import surface REQ-163's artefact names"
+      - "if the chosen ABI is core modules, the moduledoc states that WASM-07's literal 'wasi:filesystem/types' name is NOT the surface tested, names what is tested instead, and explains that asserting the component-model name under a core-module runtime would be a false pass (rejected as unrecognised regardless of filesystem policy)"
+      - "the moduledoc states that this requirement restates WASM-07: the intent (no filesystem capability by default) is implemented, while the acceptance criterion's concrete interface name is ABI-dependent and was replaced per REQ-163"
+      - "the moduledoc states whether an explicit filesystem grant path exists today; if none does, it says so rather than implying the 'future grant' clause is implemented"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-166]
+
+  - id: REQ-168
+    title: WASM linear memory isolation and host-side validation of every guest pointer/length pair (WASM-08)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      WASM-08 (Memory Isolation, MUST): "Modules MUST execute in isolated
+      linear memory. The host MUST VALIDATE ALL POINTER/LENGTH PAIRS received
+      from the module before dereferencing." Acceptance: "Malformed pointer
+      from module yields structured trap, not host crash."
+      WASM-08 is on decision 0014's satisfiable list -- and it is the entry on
+      that list with the highest cost if it turns out to be wrong, which is
+      why it gets its own requirement rather than riding along inside the host
+      API ones. The acceptance criterion's failure mode is "host crash," and
+      under decision 0014's chosen runtime a host crash means the BEAM NODE,
+      not a request. Every host function REQ-171 and REQ-172 build receives
+      pointer/length pairs from guest memory; if validation is written per
+      host function, one unvalidated read is a node-level fault. It is written
+      once here, before those requirements, so they consume it.
+      Scope:
+      1. A single validation function every host function uses to resolve a
+      guest pointer/length pair into host-side data -- bounds-checked against
+      the instance's actual linear memory size, rejecting out-of-range offsets,
+      lengths that overflow past the memory end, and integer-overflow cases
+      where offset+length wraps.
+      2. A malformed pair yields a structured trap surfaced to the caller as
+      an error outcome, never an exception or exit propagating out and never a
+      native fault.
+      3. Per-instance memory isolation asserted directly: one module instance
+      cannot observe another's memory.
+      4. The moduledoc must state the boundary honestly, consistent with
+      REQ-165: this validation prevents the host from dereferencing a bad
+      pointer, and does NOT bound a fault occurring inside Wasmtime's own
+      native code, which remains the disclosed uncovered class.
+      GATE: SECURITY-REVIEWER is a hard gate.
+    acceptance_criteria:
+      - "a single validation function exists that every host-side read of guest memory goes through, and a repo search over lib/ restricted to '*.ex' shows no other guest-memory read path, with the real output quoted"
+      - "a test asserts a malformed pointer from a guest yields a structured error outcome to the caller and the BEAM node stays up (the test process and the supervisor both survive), which is WASM-08's own acceptance criterion"
+      - "tests cover at minimum: an offset beyond the memory size, a length running past the memory end, and an offset+length pair that overflows -- each asserted to be rejected before any dereference"
+      - "a test asserts two instances of the same module do not share linear memory: a write in one is not observable in the other"
+      - "the moduledoc states that this validation bounds host-side dereferences only and does NOT bound a fault inside Wasmtime's own native code, which remains the residual class REQ-165's moduledoc discloses"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-166]
+
+  - id: REQ-169
+    title: WASM fuel budget and linear-memory cap per invocation (WASM-09, WASM-10)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      The two in-guest resource limits, paired in one requirement because both
+      are direct configuration of the same wasmex objects and neither is large
+      alone. The out-of-band wall-clock layer is REQ-170's, deliberately
+      separate for the same reason the Lua half separates REQ-154 from
+      REQ-155: an in-guest limit and a host-enforced kill are different
+      guarantees.
+      WASM-09 (Fuel-Based Execution Limit, MUST): "The host MUST enable
+      Wasmtime's fuel mechanism (or equivalent) and set a PER-INVOCATION fuel
+      budget. Exhaustion MUST terminate execution with a structured error."
+      Acceptance: "Infinite loop terminates within budget." Decision 0014
+      records Wasmex.EngineConfig's :consume_fuel (default FALSE) as a direct
+      analogue -- note the default: fuel metering is OFF unless enabled, so a
+      configuration that forgets it produces an unlimited guest with no error
+      anywhere.
+      WASM-10 (Memory Cap, MUST): "Linear memory growth MUST be capped per
+      module instance. Attempt to grow beyond cap MUST TRAP." Acceptance:
+      "Module attempting to allocate beyond cap traps cleanly." Decision 0014
+      records Wasmex.StoreLimits' memory_size ("maximum number of bytes a
+      linear memory can grow to") and table_elements as direct analogues.
+      Both are on decision 0014's satisfiable list; no restatement required,
+      and per that record's caution each carries its own test. But note the
+      caution has teeth here: decision 0014's evidence for both is published
+      documentation that was READ, not run. If :consume_fuel or StoreLimits
+      does not behave as documented, that is a finding to record, not to work
+      around silently.
+      Scope:
+      1. Enable fuel metering explicitly and set a CONFIGURABLE per-invocation
+      budget (per-invocation, not per-store -- a budget that is not reset
+      between invocations lets invocation N starve invocation N+1).
+      2. Cap linear memory per instance via StoreLimits, configurable.
+      3. Both breaches surface as structured errors distinguishable from each
+      other and from REQ-170's timeout.
+      GATE: SECURITY-REVIEWER is a hard gate.
+    acceptance_criteria:
+      - "a test asserts an infinite-loop guest terminates within its configured fuel budget rather than hanging, which is WASM-09's own acceptance criterion"
+      - "a test asserts fuel is reset per invocation: two consecutive invocations of the same module each get the full budget, so the second is not starved by the first"
+      - "a test asserts a guest attempting to grow linear memory beyond the configured cap traps cleanly and the caller receives a structured error, which is WASM-10's own acceptance criterion"
+      - "both the fuel budget and the memory cap are configurable (not hardcoded literals), and a test drives two different values for each and asserts the tighter one binds sooner"
+      - "a test asserts fuel metering is actually enabled -- e.g. that a guest exceeding the budget errors rather than completing -- so a configuration that silently leaves :consume_fuel at its false default fails the suite"
+      - "fuel exhaustion and memory-cap trap surface as errors distinguishable by pattern match from each other and from REQ-170's wall-clock timeout"
+      - "if either mechanism does not behave as decision 0014's documentation-sourced evidence describes, the divergence is recorded in the moduledoc and reported, not worked around silently"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-168]
+
+  - id: REQ-170
+    title: WASM per-invocation wall-clock timeout enforced across the process boundary (WASM-11)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      The out-of-band layer for the WASM half, and the requirement that cashes
+      in decision 0014's mandatory process boundary as an actual guarantee
+      rather than a structural claim.
+      WASM-11 (Wall Clock Timeout, MUST): "A per-invocation wall clock timeout
+      MUST be enforced. Exceeding the timeout MUST INTERRUPT EXECUTION."
+      Acceptance: "Host-blocking call respects timeout." On decision 0014's
+      satisfiable list -- (ii) of its containment argument cites wasmex's
+      documented behaviour that "if a call times out, Wasmex interrupts its
+      WebAssembly execution and keeps the Store available for subsequent
+      calls," and calls that "the interruption primitive WASM-11 needs." That
+      is documentation that was read, not run: this requirement verifies it.
+      TWO LAYERS, AND THE STORE-SURVIVAL CLAIM IS TESTABLE. wasmex's own
+      timeout is one mechanism; the supervised-task boundary REQ-165 built is
+      the second, and it is the one that holds when the first does not. Assert
+      both: that a timed-out call is interrupted and the Store remains usable
+      for a subsequent call (the documented behaviour), and that the outer
+      supervised task terminates the invocation regardless (the guarantee that
+      does not depend on the NIF cooperating).
+      OQ-5 IS ADJACENT AND MUST NOT BE SILENTLY ABSORBED. Decision 0014's OQ-5
+      asks whether a fuel-bounded guest can still block a BEAM scheduler long
+      enough to degrade the node, notes no dirty-NIF or scheduler-yielding
+      guarantee was found documented and none was measured, and says the Port
+      fallback returns if it does. That needs a LOAD spike and likely S6
+      thresholds, so it is NOT this requirement's deliverable. But if this
+      requirement's own testing produces evidence bearing on it -- e.g. a
+      timed-out guest that visibly stalls the scheduler -- that must be filed
+      as an issue against OQ-5, not absorbed as a tuning detail.
+      Scope:
+      1. A configurable per-invocation wall-clock timeout.
+      2. Verify wasmex's documented interrupt-and-keep-Store behaviour by
+      running it.
+      3. Assert the supervised-task boundary terminates the invocation
+      independently of that.
+      4. Timeout surfaces as a structured error distinguishable from REQ-169's
+      fuel and memory errors.
+      GATE: SECURITY-REVIEWER is a hard gate.
+    acceptance_criteria:
+      - "a test asserts a guest blocked in a host call is terminated by the configured timeout and the caller receives a structured error, which is WASM-11's own acceptance criterion"
+      - "a test verifies wasmex's documented behaviour by running it: after a timed-out call, a subsequent call on the same Store succeeds -- with the real result quoted; if it does not hold, the divergence from decision 0014's documentation-sourced evidence is recorded and reported"
+      - "a test asserts the outer supervised task terminates the invocation independently of the runtime's own timeout, e.g. by asserting the task process is dead and the caller received {:error, reason} -- proving the guarantee does not rest solely on the NIF cooperating"
+      - "the timeout is configurable (not a hardcoded literal) and a test drives two values and asserts the shorter binds sooner"
+      - "the timeout error is distinguishable by pattern match from REQ-169's fuel-exhaustion and memory-cap errors"
+      - "the moduledoc states that OQ-5 (scheduler safety under real load) is NOT settled by this requirement and names what would settle it (a load spike plus S6 thresholds); any scheduler-stall evidence observed while building this requirement is filed as an issue against OQ-5 rather than absorbed"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-169]
+
+  - id: REQ-171
+    title: WASM host API 1/2 -- read path -- read_variable, log, now, uuid at parity with Lua (WASM-12 read half)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      First of two sibling requirements splitting WASM-12's host API along the
+      same read/write seam REQ-159 and REQ-160 use on the Lua side, so each
+      fits one agent turn and so the parity comparison is between matching
+      halves.
+      WASM-12 (Parity with Lua Host API, MUST): "The SEMANTIC BEHAVIOUR of
+      platform.read_variable, platform.write_variable, platform.call_service,
+      platform.log, platform.now, platform.uuid, platform.fail MUST BE
+      IDENTICAL whether called from Lua or Wasm. DIFFERENCES MUST BE LIMITED
+      TO ABI (string encoding, return shape)." Acceptance: "Same test scenario
+      passes against Lua implementation and Wasm implementation of an
+      equivalent script."
+      THE DIRECTION OF CONFORMANCE IS SETTLED. Decision 0014 (4): "WASM-12
+      defines the WASM host API BY PARITY WITH LUA'S, so THE LUA HOST API IS
+      THE DEFINITION WASM CONFORMS TO." This requirement changes nothing in
+      REQ-159's Lua implementation to make parity easier; if a genuine
+      semantic conflict surfaces, it is raised as a finding, not resolved by
+      moving the Lua side.
+      This requirement covers the read/emit half: read_variable, log, now, and
+      uuid. Note that uuid appears in WASM-12's list and in
+      R-Co/src/wasm/host_api/uuid.zig but NOT in R-Co/src/lua/host_api/mod.zig's
+      eight-function Lua matrix -- so there is no Lua counterpart to be at
+      parity WITH. State that asymmetry in the moduledoc and decide
+      explicitly: either implement uuid on the WASM side as a documented
+      addition with no Lua twin, or raise it as a gap in the Lua host API. Do
+      not quietly implement it and describe it as parity.
+      NUMBER MARSHALLING: REQ-150's normative rule binds here. Its own OQ-6
+      interaction note states WASM-12's parity requirement means the WASM ABI
+      must conform to that rule despite having its own numeric
+      representation. Cite REQ-150's section; introduce no second rule.
+      CAPABILITY GATES come from REQ-167's manifest-derived whitelist, not
+      from a second WASM-side capability model.
+      TENANT BOUNDARY: identical to REQ-159 -- host functions receive
+      already-resolved values, and the tenant prefix is supplied by the
+      calling engine code, never derived from guest input.
+      NOT IN THIS REQUIREMENT: write_variable, call_service, and fail are
+      REQ-172's, along with the shared parity suite.
+      GATE: SECURITY-REVIEWER is a hard gate.
+    acceptance_criteria:
+      - "for each of read_variable, log, and now, a test asserts the WASM-side semantic behaviour matches the Lua-side behaviour REQ-159 and REQ-152 established -- same inputs, same observable outcome, differing only in ABI representation"
+      - "a test asserts read_variable returns the current value for a set variable and a defined not-present representation for an unset one, matching the Lua side's nil semantics under the chosen ABI's return shape"
+      - "a test asserts log emits a structured entry carrying script/module identity, instance ID, and trace ID -- the same three fields LUA-13 requires, asserted individually"
+      - "a test asserts now returns a value parseable as the same ISO 8601 UTC instant the Lua side returns for the same injected clock, so parity is proven against a fixed time rather than two plausible-looking timestamps"
+      - "the moduledoc states that uuid has NO counterpart in R-Co's eight-function Lua host API matrix, and records the explicit decision taken (implemented as a documented WASM-side addition, or raised as a Lua-side gap) rather than presenting it as parity"
+      - "the number conversion is REQ-150's named module and function; the moduledoc cites REQ-150's normative section by number and introduces no second rule, and a test round-trips an integer and a float asserting the subtype matches that rule"
+      - "capability gating for these functions comes from REQ-167's manifest-derived whitelist; no second capability model is introduced, shown by the moduledoc naming REQ-167 as the source"
+      - "no host function calls Letflow.Repo with a prefix derived from guest-supplied input; the moduledoc states the tenant prefix is supplied by the calling engine code, per decision 0014 (e)"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-170, REQ-160, REQ-150]
+
+  - id: REQ-172
+    title: WASM host API 2/2 -- write path and the shared Lua/Wasm parity test suite (WASM-12 write half and its acceptance criterion)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      Second of two sibling requirements implementing WASM-12, and the one
+      that satisfies WASM-12's own acceptance criterion: "Same test scenario
+      passes against Lua implementation and Wasm implementation of an
+      equivalent script." That criterion is not met by two independent test
+      suites that happen to make similar assertions -- it names ONE scenario
+      run against BOTH. Building that shared suite is this requirement's
+      distinguishing deliverable, which is why it sits on the write half
+      rather than the read half: the write path is where the semantics most
+      likely to diverge live.
+      Covers platform.write_variable, platform.call_service, and
+      platform.fail on the WASM side, each at parity with the Lua behaviour
+      REQ-160 and REQ-161 established.
+      THE THREE PARITY CONSTRAINTS THAT ARE EASY TO LOSE:
+      1. write_variable STAGES. Per LUA-11, writes apply atomically on success
+      and are DISCARDED ON FAILURE. The WASM side must discard on every
+      failure arm the WASM half has: REQ-169's fuel exhaustion, REQ-169's
+      memory cap, REQ-170's wall-clock timeout, a guest trap, and fail. A
+      guest killed by the supervised task must leave no half-applied write --
+      the same sharp case REQ-160 names on the Lua side.
+      2. call_service RETURNS a structured error on service failure rather
+      than trapping, mirroring LUA-12's "MUST return a structured error, not
+      raise", while a MISSING CAPABILITY still fails per REQ-167. Two
+      different behaviours; both tested; they must differ.
+      3. fail must terminate by a mechanism THE GUEST CANNOT INTERCEPT -- the
+      WASM analogue of REQ-161's restated LUA-15. A guest that catches its own
+      trap and continues is the same defeat of the central verb, and the
+      parity suite must include the interception case, not merely the
+      happy-path failure.
+      Decision 0014's Decision (4) again: the Lua host API is the definition;
+      WASM conforms to it. A parity conflict is a finding to raise, never
+      grounds to alter REQ-159/REQ-160/REQ-161's Lua behaviour.
+      Scope:
+      1. The three write-path host functions at parity.
+      2. A SHARED parity test suite: one scenario definition, executed against
+      both the Lua executor and the WASM handler, asserting identical
+      observable outcomes with differences confined to ABI. Structure it so
+      adding a host function later forces a parity case rather than allowing
+      one to be skipped.
+      3. Any semantic difference that is NOT purely ABI (string encoding,
+      return shape) is a defect to fix or a documented, justified exception --
+      enumerate any exceptions explicitly in the moduledoc; WASM-12's own text
+      limits differences to ABI, so an undocumented one means the requirement
+      is not met.
+      GATE: SECURITY-REVIEWER is a hard gate.
+    acceptance_criteria:
+      - "ONE shared scenario definition is executed against BOTH the Lua executor and the WASM handler, asserting identical observable outcomes -- WASM-12's own acceptance criterion -- rather than two separately written suites; the shared harness is a single named module or fixture, quoted in the moduledoc"
+      - "a test asserts a guest that writes variables and then FAILS leaves instance variable state unchanged, asserted separately for each failure arm: a guest trap, fuel exhaustion (REQ-169), memory cap (REQ-169), wall-clock timeout (REQ-170), and fail"
+      - "a test asserts a guest that writes several variables and succeeds applies all of them with no observable partial state"
+      - "a test asserts call_service returns a structured error to the guest on service failure rather than trapping, and a separate test asserts a missing service capability fails per REQ-167 -- the two behaviours asserted distinctly"
+      - "a test asserts a guest that attempts to catch or ignore its own fail STILL yields a failed outcome and does not run to completion -- the WASM analogue of REQ-161's uninterceptable-termination test"
+      - "any semantic difference between the Lua and WASM host APIs that is not purely ABI (string encoding, return shape) is enumerated explicitly in the moduledoc with its justification; the moduledoc states that WASM-12 limits differences to ABI, so an unlisted one means the requirement is unmet"
+      - "the moduledoc states that the Lua host API is the definition WASM conforms to per decision 0014 Decision (4), and that no Lua-side behaviour was changed to ease parity; confirmed by `git diff --stat` scoped to this requirement's commits showing no Lua host-API implementation file modified"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-171, REQ-161]
+
+  - id: REQ-173
+    title: WASM module hot reload -- in-flight invocations of the prior version complete, new invocations use the new version (WASM-14)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      WASM-14 (Hot Reload, MUST): "When a new version of a module is
+      activated, IN-FLIGHT INVOCATIONS OF THE PRIOR VERSION MUST COMPLETE
+      NORMALLY. New invocations MUST use the new version." Acceptance:
+      "Activation during execution does not interrupt running invocations."
+      On decision 0014's satisfiable list; no restatement required, and per
+      that record's caution it carries its own tests.
+      This is a concurrency requirement, and its acceptance criterion is only
+      meaningful if the test actually overlaps an activation with a running
+      invocation. A test that activates a new version between two sequential
+      invocations asserts nothing about WASM-14 -- it would pass against an
+      implementation that interrupts every in-flight call. The test must hold
+      an invocation open (e.g. a guest blocked in a controllable host call),
+      activate during it, and then assert BOTH halves: the held invocation
+      completes against the OLD version's behaviour, and a subsequent
+      invocation observes the NEW version's.
+      Two versions must therefore be observably different -- a guest whose
+      output differs by version -- or the test cannot distinguish the two
+      halves.
+      Scope:
+      1. Versioned module registration and an activation operation.
+      2. An in-flight invocation resolves its module version at invocation
+      start and holds it, so activation cannot swap it mid-call.
+      3. New invocations after activation use the new version.
+      4. The prior version's resources are released only after its last
+      in-flight invocation completes -- a version dropped while still executing
+      is the failure mode this requirement exists to prevent, and it must be
+      asserted rather than assumed from the design.
+      NOT IN THIS REQUIREMENT: instance pooling is REQ-174's, and it interacts
+      with this requirement (a pooled instance of a superseded version must
+      not be handed to a new invocation) -- REQ-174 depends_on this one and
+      owns that interaction.
+      GATE: SECURITY-REVIEWER is a hard gate -- version confusion is an
+      authorization hazard when the manifest's capability set changes between
+      versions.
+    acceptance_criteria:
+      - "a test holds an invocation open (a guest blocked in a controllable host call), activates a new module version DURING it, and asserts the held invocation completes normally against the OLD version's observable behaviour -- WASM-14's own acceptance criterion, with the overlap real rather than sequential"
+      - "the same test asserts an invocation started AFTER the activation observes the NEW version's behaviour, so both halves of WASM-14 are proven in one overlapping scenario"
+      - "the two module versions used are observably different in output, so the test can distinguish which version served an invocation rather than merely completing"
+      - "a test asserts the prior version's resources are released only after its last in-flight invocation completes, not at activation time"
+      - "a test asserts that when the new version's manifest declares a DIFFERENT capability set, an in-flight invocation of the prior version keeps the prior version's capability set, and the new invocation gets the new one -- so activation cannot silently widen or narrow a running invocation's authority"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-172]
+
+  - id: REQ-174
+    title: WASM instance pooling with per-invocation memory reset as a correctness requirement (WASM-13 restated, SHOULD)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      RESTATEMENT OF WASM-13, AND WHY -- this restatement ADDS a constraint
+      rather than relaxing one, which is unusual on decision 0014's watchlist
+      and is the reason it is listed there.
+      WASM-13 (Instance Pooling, SHOULD): "The host SHOULD pool Wasm instances
+      per module to amortise instantiation cost, WHILE ENSURING PER-INVOCATION
+      ISOLATION (memory reset between invocations)." Acceptance: "Repeated
+      invocation of same module shows reduced p50 latency vs cold
+      instantiation."
+      Decision 0014 retains it as SHOULD but adds a constraint absent from the
+      original: IF POOLING IS ADOPTED, PER-INVOCATION MEMORY RESET IS A
+      CORRECTNESS REQUIREMENT (ISOLATION), NOT A PERFORMANCE DETAIL. The
+      reasoning is in (e): wasmex pooling deliberately REUSES a Store, and
+      Letflow is schema-per-tenant (decision 0006). A pooled instance carrying
+      residue from a previous invocation is a cross-invocation -- and
+      potentially cross-tenant -- data leak, not a stale cache. The Lua half
+      has no equivalent exposure because a fresh Lua state is a fresh
+      immutable BEAM term, so cross-invocation leakage is unrepresentable
+      there; here it is representable and must be prevented by construction.
+      BECAUSE IT IS A SHOULD, DECLINING IS A LEGITIMATE OUTCOME. If pooling is
+      not adopted, this requirement is satisfied by recording that decision
+      with its reason and asserting the property that makes declining safe
+      (each invocation gets a fresh instance). What is NOT acceptable is
+      adopting pooling and treating memory reset as a later optimization --
+      the isolation constraint and the pooling are one deliverable.
+      NOTE ON THE PERFORMANCE ACCEPTANCE CRITERION. WASM-13's own criterion is
+      a p50 latency comparison. A latency assertion in an ordinary test suite
+      is a flakiness source on shared CI. If pooling is adopted, measure it as
+      a recorded benchmark with the real numbers quoted, and keep the
+      CORRECTNESS assertions (memory reset, no cross-invocation residue) as
+      ordinary deterministic tests. Do not gate CI on a latency threshold.
+      Scope: adopt pooling with per-invocation reset, or decline it with a
+      recorded reason -- and in either case assert per-invocation isolation.
+      Also handle the REQ-173 interaction: a pooled instance of a superseded
+      module version must never be handed to a new invocation.
+      GATE: SECURITY-REVIEWER is a hard gate -- this is an isolation boundary.
+    acceptance_criteria:
+      - "the moduledoc records an explicit decision: pooling adopted, or pooling declined with its reason -- WASM-13 is a SHOULD and declining is legitimate, but silence is not"
+      - "a test asserts per-invocation isolation regardless of which way the decision went: data written to guest memory in invocation N is NOT observable in invocation N+1 of the same module"
+      - "if pooling is adopted, a test asserts memory reset happens between invocations by construction -- e.g. an invocation that fails or traps mid-write still leaves no residue for the next invocation -- and the moduledoc states this is a correctness requirement per decision 0014's restatement, not a performance detail"
+      - "if pooling is adopted, a test asserts a pooled instance of a module version superseded by REQ-173's activation is never handed to a new invocation"
+      - "if pooling is adopted, WASM-13's p50 latency comparison is recorded as a benchmark with real measured numbers quoted in the moduledoc or a design artefact; no CI test asserts a latency threshold"
+      - "the moduledoc states that this requirement restates WASM-13 by ADDING the per-invocation memory-reset correctness constraint, which is absent from WASM-13's original text, and cites decision 0014 (e) and the wasmex Store-reuse behaviour that motivates it"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-173]
+
+  - id: REQ-175
+    title: Language-agnostic WASM artifact intake pipeline with hash-keyed caching (WASM-03/04/05 restated, conditional on REQ-164)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S5
+    description: >
+      CONDITIONAL REQUIREMENT. This requirement exists only if REQ-164 decided
+      YES on OQ-3 (Letflow hosts guest compilation). If REQ-164 decided NO,
+      REQ-164's own acceptance criteria require this requirement to be
+      CANCELLED with a status-history event recording why -- not left pending.
+      Whoever picks this up must read REQ-164's artefact FIRST and confirm the
+      decision was YES before writing any code.
+      RESTATEMENT OF WASM-03, WASM-04, AND WASM-05, AND WHY. All three specify
+      a pipeline compiling ZIG SOURCE to .wasm:
+      WASM-03 (Source Compilation Job, MUST) -- "a compilation job that takes
+      Zig source for a Wasm module and produces a validated .wasm artifact.
+      The job MUST run out-of-band, not on the execution path." Acceptance:
+      "Compilation request returns a job ID; completion notification carries
+      artifact hash."
+      WASM-04 (Compile Caching, MUST) -- "Compiled .wasm artifacts MUST be
+      cached in the repository keyed by SOURCE HASH plus toolchain version.
+      Equal sources MUST NOT be recompiled." Acceptance: "Submitting identical
+      source twice produces one compilation."
+      WASM-05 (Build Reproducibility, SHOULD) -- "same source + same toolchain
+      version yields byte-identical .wasm." Acceptance: "Two compilations of
+      same input produce identical bytes."
+      Letflow has NO ZIG TOOLCHAIN AND NO REASON TO ACQUIRE ONE. Decision
+      0014's restatement, which this requirement implements: the pipeline must
+      be LANGUAGE-AGNOSTIC, accepting a .wasm ARTIFACT and keying its cache on
+      ARTIFACT HASH plus toolchain identity. Note what that changes about
+      WASM-04's acceptance criterion specifically: "submitting identical
+      source twice produces one compilation" presumes hosted compilation of
+      source; under the restatement the testable property is that submitting
+      an identical artifact twice produces one cache entry and no duplicate
+      intake work. And WASM-05's "same source yields byte-identical .wasm"
+      becomes vacuous when Letflow does not compile -- an accepted artifact is
+      already bytes. State that plainly rather than reporting WASM-05 as met:
+      if Letflow does not compile, WASM-05 has no subject here, and the
+      honest report is that it does not apply, not that it passes.
+      Decision 0014 also records that R-Co NEVER BUILT THIS -- R-Co/src/wasm/
+      is stubs and zero .wasm artifacts exist anywhere in R-Co -- so there is
+      no working pipeline to port and no reference behaviour to be faithful
+      to. This is specification work, and REQ-164's artefact is its source.
+      Scope (assuming REQ-164 decided YES):
+      1. An out-of-band intake job -- not on the execution path -- returning a
+      job id, with completion carrying the artifact hash (WASM-03's acceptance
+      criterion survives the restatement intact and must be tested as worded).
+      2. Validation of the submitted artifact before it becomes registrable,
+      feeding REQ-166's ABI check rather than duplicating it.
+      3. A cache keyed on artifact hash plus toolchain identity per REQ-164's
+      artefact.
+      4. Storage and retention per whatever REQ-164 recorded about S6's
+      operational input; if REQ-164 recorded those inputs as ASSUMED rather
+      than available, this requirement must flag the assumption rather than
+      build on it silently.
+      GATE: SECURITY-REVIEWER is a hard gate -- artifact intake is an
+      untrusted-input boundary and, per decision 0014's OQ-3, a build-farm
+      security surface.
+    acceptance_criteria:
+      - "REQ-164's artefact is read first and its YES decision is quoted in this requirement's PR; if REQ-164 decided NO, no code is written and this requirement is cancelled per REQ-164's own acceptance criteria"
+      - "a test asserts an intake request returns a job id and that completion carries the artifact hash, which is WASM-03's own acceptance criterion, unchanged by the restatement"
+      - "a test asserts intake runs out-of-band: submitting an artifact does not block or run on a guest-execution path"
+      - "a test asserts submitting an IDENTICAL ARTIFACT twice produces one cache entry and no duplicate intake work -- the restated form of WASM-04's 'identical source twice produces one compilation'"
+      - "a test asserts a malformed or non-conforming artifact is rejected at intake with a structured error, and that rejection feeds REQ-166's ABI validation rather than duplicating it"
+      - "the moduledoc states that this requirement restates WASM-03/04/05: the pipeline is language-agnostic and accepts a .wasm artifact rather than Zig source (Letflow has no Zig toolchain), and the cache keys on artifact hash plus toolchain identity rather than WASM-04's literal source hash"
+      - "the moduledoc states explicitly that WASM-05 (byte-identical output for the same source) HAS NO SUBJECT under this restatement because Letflow does not compile, and reports it as not-applicable rather than as met"
+      - "if REQ-164 recorded any S6 operational input (artifact storage, retention, job execution) as ASSUMED rather than available, this requirement flags that assumption explicitly rather than building on it silently"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-164, REQ-166]

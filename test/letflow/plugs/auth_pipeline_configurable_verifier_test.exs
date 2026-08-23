@@ -137,7 +137,23 @@ defmodule Letflow.Plugs.AuthPipelineConfigurableVerifierTest do
 
   describe "JIT-disabled realm (403, distinct from every 401 case)" do
     test "a token for a realm with JIT provisioning disabled is rejected 403 end-to-end, no user row created" do
-      realm = "jit-disabled-test-realm"
+      realm = unique_realm("jit-disabled")
+      original_jit_config = Application.fetch_env!(:letflow, :oidc_jit_provisioning)
+
+      Application.put_env(
+        :letflow,
+        :oidc_jit_provisioning,
+        Map.put(original_jit_config, realm, %{
+          enabled: false,
+          default_status: :active,
+          default_roles: []
+        })
+      )
+
+      on_exit(fn ->
+        Application.put_env(:letflow, :oidc_jit_provisioning, original_jit_config)
+      end)
+
       tenant = insert_tenant_for_realm!(realm)
 
       conn = call_pipeline(:post, [{"authorization", "Bearer realm-token:#{realm}"}])

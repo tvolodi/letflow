@@ -1,0 +1,77 @@
+run_id: WF03-ISS0329-20260823
+step: "WF-03 Step 4c (Test Runner)"
+branch: feature/WF03-ISS0329-20260823
+test_command: "TEST_PARALLEL_N=4 bash scripts/test_parallel.sh"
+timestamp_utc: "2026-08-23T19:40:07Z"
+
+combined_result: "1991 tests, 5 properties, 1 failures (1995/1996 passed)"
+exit_code: 1
+failures: 1
+verdict: FAIL
+
+partitions:
+  - partition: 1
+    tests: 532
+    properties: 0
+    failures: 0
+    exit: 0
+  - partition: 2
+    tests: 442
+    properties: 4
+    failures: 0
+    exit: 0
+  - partition: 3
+    tests: 540
+    properties: 1
+    failures: 1
+    exit: 2
+  - partition: 4
+    tests: 477
+    properties: 0
+    failures: 0
+    exit: 0
+
+iss0329_specific:
+  file: "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"
+  failures: 0
+  result: "PASS — 0 failures in the ISS-0329 fix file across all partitions"
+
+failure_detail:
+  test: "T-H6-ZERO-NEW -- every non-JSON file in the real handoffs/ tree is grandfathered-or-absent, never new"
+  file: "test/mix/tasks/letflow.lint_handoffs_test.exs:333"
+  error: "FunctionClauseError: no function clause matching in String.length/1"
+  root_cause: |
+    handoffs/WF03-ISS0329-20260823/step-02b-code-design-validator.json has
+    result.summary as a nested map (object with 'verdict' and 'criteria' keys)
+    instead of the expected string format used by all other handoff files.
+    lib/mix/tasks/letflow.lint_handoffs.ex:586 calls String.length(summary)
+    on the advisory value, which crashes when summary is a map.
+  attribution: |
+    The bug in lint_handoffs.ex:586 is pre-existing (String.length/1 guards
+    only against string inputs). The trigger is new on this branch: the
+    CODE-DESIGN-VALIDATOR agent wrote step-02b with a structured map for
+    result.summary, violating the handoff schema convention (all other
+    step-02b files on main use a plain string summary). This failure is
+    NOT in any file touched by the ISS-0329 fix. The auth pipeline tests
+    and :oidc_jit_provisioning change have 0 failures.
+  touched_by_this_branch: false
+  related_to_iss0329_fix: false
+
+fix_needed:
+  location: "lib/mix/tasks/letflow.lint_handoffs.ex:586"
+  description: |
+    check_advisory/2 computes summary_len: String.length(summary) without
+    guarding that summary is a binary. Fix: guard with is_binary(summary)
+    or convert to string via inspect/1 for non-string summaries.
+    Alternative: normalize step-02b-code-design-validator.json's
+    result.summary to a plain string (schema enforcement fix).
+  route_to: ELIXIR-DEV
+
+notes: |
+  auth_pipeline_configurable_verifier_test.exs (the ISS-0329 fix file)
+  has zero failures across all 4 partitions. The 1 failure is in the
+  lint_handoffs corpus test triggered by a non-standard handoff artifact
+  (map-valued result.summary in step-02b). The lint_handoffs.ex bug
+  pre-existed but was previously untriggered because all prior step-02b
+  files used string summaries. This is a real failure that must be fixed
+  before merge — route to ELIXIR-DEV for lint_handoffs.ex:586 guard fix.

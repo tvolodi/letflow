@@ -6760,7 +6760,7 @@ requirements:
   - id: REQ-139
     title: Correct GIT_MERGE.md's stale no-CI and REQ-013-pending premises
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S4
     impl_order: 251  # letflow-queue task id; depends_on translated to queue task id [245]
     description: >

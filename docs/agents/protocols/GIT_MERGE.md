@@ -16,16 +16,13 @@ gates are green.
 ## Precondition
 
 CI must exist and be green for this protocol's step 7-8 (PR checks) to mean anything.
-**As of REQ-136 (landed), Letflow has a `.github/workflows/ci.yml` backend job** that
-runs `mix letflow.check` against a `postgres:16` service on every `push` and
-`pull_request`. Insert "wait for the GitHub Actions `backend` job to report success on
-the PR" between steps 7 and 8, mirroring R-Co's pattern — use `gh pr checks <PR>` or
-`gh run view <run-id> --json jobs` to confirm the conclusion before proceeding to
-step 8's merge.
-
-REQ-138 (frontend gate, pending as of this writing) will add a sibling `frontend` job
-to the same workflow file; once it lands, step 7-8's wait must cover both jobs' PR
-checks, not just `backend`'s.
+**As of REQ-136 and REQ-138 (both landed), Letflow has a `.github/workflows/ci.yml`**
+with a `backend` job (runs `mix letflow.check` against a `postgres:16` service) and a
+`frontend` job (runs `npm ci && npm run check` in `web/`), both triggered on every
+`push` and `pull_request`. Insert "wait for the GitHub Actions `backend` and
+`frontend` jobs to report success on the PR" between steps 7 and 8, mirroring R-Co's
+pattern — use `gh pr checks <PR>` or `gh run view <run-id> --json jobs` to confirm
+both jobs' conclusions before proceeding to step 8's merge.
 
 **What "reported green" means here.** This suite carries a standing set of pre-existing
 failures (13-15 at the time of writing) and has for days, so "green" read as "zero
@@ -266,7 +263,8 @@ handoffs/<run-id>/" \
    silent success. Note it explicitly for the next session to pick up.
 
 8. Merge PR immediately (all gates already passed; see Precondition above for what
-   "all gates" means before REQ-013 lands):
+   "all gates" means now that REQ-013's local gate and REQ-136/REQ-138's CI have
+   landed):
    gh pr merge --squash --delete-branch
 
    ⚠️ The rebase in step 5 and the squash in step 8 both invalidate every commit sha

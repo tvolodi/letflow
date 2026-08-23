@@ -679,3 +679,21 @@ history:
       pipeline role" stated apart from "exactly once, not double-dispatch."
       23 on-disk `- req:` entries in requirement_status.v4.yaml before this
       append; 24 after.
+  - req: REQ-139
+    event: done
+    agent: ORCH
+    at: "2026-08-23T09:45:00Z"
+    note: >
+      Handled directly (docs-only, single file, well within ORCH's own
+      sizing rule -- docs/agents/protocols/GIT_MERGE.md). Corrected the
+      Precondition section's stale "REQ-138 (frontend gate, pending as of
+      this writing)" premise (REQ-138 has since landed) to name both
+      REQ-136 and REQ-138 as landed and describe both the backend and
+      frontend CI jobs. Corrected the sole remaining "REQ-013" mention
+      (line 268, "before REQ-013 lands") to reflect REQ-013's local gate
+      and REQ-136/REQ-138's CI all being landed. Verified via grep: no
+      "still `pending`" phrase applied to REQ-013 remains anywhere in the
+      file. Did not touch the "What 'reported green' means here" paragraph
+      or the standing-failures attribution rule, per this requirement's own
+      AC5. 24 on-disk `- req:` entries in requirement_status.v4.yaml before
+      this append; 25 after.

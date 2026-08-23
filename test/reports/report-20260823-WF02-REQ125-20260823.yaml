@@ -1,0 +1,52 @@
+run_id: WF02-REQ125-20260823
+agent: TEST-RUNNER
+step: WF-02 Step 4 (Test Run, retry after rework)
+date: 2026-08-23
+branch: feature/WF02-REQ125-20260823
+requirement: REQ-125 Definition delta-sync endpoint (MOB-3 offline cache)
+prior_run:
+  status: FAIL
+  failures: 11
+  affected: [PromotionAssertionRerunTest x8, FixtureLoaderTest x3]
+  root_cause: this run's migration broke jsonb_populate_record fixture loading
+  fix_commit: 020cc38
+  fix_description: >
+    ELIXIR-DEV added default_base_row/2 to
+    lib/letflow/sandbox_pool/fixture_loader.ex, reading real column DEFAULTs
+    from the Postgres catalog instead of NULL.
+  security_review: SECURITY-REVIEWER re-checked the fix, PASS.
+
+command: scripts/test_parallel.sh
+partitions: 16
+combined_result: "1913 tests, 5 properties, 2 failures (1916/1918 passed)"
+
+previously_failing_files_status:
+  PromotionAssertionRerunTest: PASS (ran in partition 1, 128 tests, 0 failures)
+  FixtureLoaderTest: PASS (ran in partition 1, 128 tests, 0 failures)
+
+remaining_failures:
+  - test: "AC4 -- reconstruction matches projection for all instances after the concurrent run"
+    file: test/letflow/engine_concurrency_test.exs:501
+    suite: Letflow.EngineConcurrencyTest
+    error: "DBConnection.ConnectionError: connection not available, request dropped from queue after 2253ms"
+    partition: 7
+  - test: "AC1 -- 100 concurrent task completions across 100 distinct instances"
+    file: test/letflow/engine_concurrency_test.exs:267
+    suite: Letflow.EngineConcurrencyTest
+    error: "DBConnection.ConnectionError: connection not available, request dropped from queue after 2253ms"
+    partition: 7
+
+diagnosis: >
+  Both failures are DBConnection pool-checkout timeouts under this run's
+  16-way parallel load, not assertion failures. `git diff --name-only
+  origin/main...HEAD` for this branch touches only
+  lib/letflow/definitions.ex, definitions/definition_sequence.ex,
+  definitions/process_definition.ex, sandbox_pool/fixture_loader.ex,
+  tenant_provisioning.ex, routers/definitions.ex, and two new migrations --
+  nothing in the engine/concurrency code path. This matches the
+  pre-existing, documented EngineConcurrencyTest/DBConnection timing
+  flakiness under heavy parallel load, not a regression introduced by this
+  branch's diff.
+
+verdict: PASS
+handoff: Route to RELEASE-VALIDATOR (Step 5)

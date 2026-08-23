@@ -272,3 +272,29 @@ history:
       roll boundary" pattern (see requirement_status.index.yaml's ISS-0263
       note). 5 on-disk `- req:` entries in requirement_status.v4.yaml before
       this append; 6 after.
+  - req: REQ-125
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-23T01:31:30Z"
+    note: >
+      GET /definitions/delta?since=<cursor> shipped (MOB-3 offline cache).
+      Monotonic per-tenant cursor chosen over wall-clock timestamp -- moduledoc
+      states the clock-skew reasoning explicitly. Deletion/deprecation
+      represented via a `status` field in each delta payload row.
+      since: nil|0 means full history; the sequence counter never expires or
+      prunes, so "cursor predates retained history" is impossible by
+      construction -- also stated and tested. Tenant isolation verified (a
+      delta for tenant A never returns tenant B's definitions). One rework
+      cycle: FixtureLoader was inserting NULL for the new sequence_number
+      column, violating its NOT NULL constraint; fixed via
+      default_base_row/2 reading the real Postgres column DEFAULTs instead of
+      hard-coded nulls (lib/letflow/sandbox_pool/fixture_loader.ex). Final
+      full-suite run: 1916/1918 (2 pre-existing, unrelated
+      EngineConcurrencyTest flakes). Migrations:
+      priv/repo/migrations/20260823000003_add_sequence_number_to_process_definitions.exs,
+      priv/repo/migrations/20260823000004_create_definition_sequence.exs.
+      Design doc: lib/letflow/design/req125-definitions-delta-sync.md. Gates
+      passed: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (x2), REVIEWER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER (retry after rework),
+      RELEASE-VALIDATOR -- all PASS. 6 on-disk `- req:` entries in
+      requirement_status.v4.yaml before this append; 7 after.

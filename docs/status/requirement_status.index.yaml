@@ -521,7 +521,7 @@ volumes:
     path: docs/status/requirement_status.v4.yaml
     status: current
     opened: 2026-08-23
-    entries: 6
+    entries: 7
     note: >
       Opened by WF02-REQ082-20260823's own Step Final roll, successor to
       volume 3. Created with volume 3's header text verbatim (volume number,
@@ -545,6 +545,9 @@ volumes:
       a same-file chronological merge -- volume 3 is frozen and cannot regain
       an entry once closed). Recounted directly from `grep -c "^  - req:"
       docs/status/requirement_status.v4.yaml` = 6.
+      Incremented to 7 by WF02-REQ125-20260823 (DOC-UPDATER)'s own REQ-125
+      done-event append (Step 6), composed in this same Step Final rebase --
+      7 on-disk `- req:` entries in requirement_status.v4.yaml.
 
 
 known_anomalies:

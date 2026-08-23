@@ -6044,7 +6044,7 @@ requirements:
   - id: REQ-125
     title: Definition delta-sync endpoint (MOB-3 offline cache)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S9
     impl_order: 237  # letflow-queue task id; depends_on translated to queue task id [148]
     description: >

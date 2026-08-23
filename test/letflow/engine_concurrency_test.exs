@@ -64,8 +64,8 @@ defmodule Letflow.EngineConcurrencyTest do
 
   # ISS-0260 -- AC1's "no global lock" wall-clock proxy multiplier, split by load
   # regime (design doc lib/letflow/design/iss0260-ac1-timing-flake.md §3.1-§3.3).
-  # `@ac1_timing_multiplier_default` (30x, unchanged) applies to a plain `mix test`
-  # run; `@ac1_timing_multiplier_parallel` (60x) applies only when
+  # `@ac1_timing_multiplier_default` applies to a plain `mix test` run;
+  # `@ac1_timing_multiplier_parallel` (60x) applies only when
   # `TEST_PARALLEL_GROUP` is set (a real `scripts/test_parallel.sh` N-way
   # partition), where real cross-partition Postgres/scheduler contention pushes the
   # ratio higher than in an uncontended run. `TEST_AC1_TIMING_MULTIPLIER`, when set,
@@ -73,7 +73,16 @@ defmodule Letflow.EngineConcurrencyTest do
   # `test_parallel.sh`'s own `TEST_MAX_CONNECTIONS` validation style (lines 124-127
   # there): it must be a positive integer or the test fails loudly, naming the bad
   # value, rather than silently falling back to a default.
-  @ac1_timing_multiplier_default 30
+  #
+  # REQ-136 (2026-08-23): widened 30 -> 50 after a real GitHub Actions CI run (a
+  # plain `mix test` regime, TEST_PARALLEL_GROUP unset) measured ratio 42.41x
+  # (baseline_micros=5295, concurrent_micros=224549) -- CI's shared/contended
+  # runner pushes this uncontended-regime ratio meaningfully higher than the dev
+  # hosts 30x was derived against. 50x gives ~18% real headroom over the one
+  # observed CI ratio; re-derive from a proper multi-run CI window if it proves
+  # marginal in practice, per this file's own "no re-derivation without real
+  # measurement" convention.
+  @ac1_timing_multiplier_default 50
   @ac1_timing_multiplier_parallel 60
 
   defp ac1_timing_multiplier do
@@ -334,7 +343,7 @@ defmodule Letflow.EngineConcurrencyTest do
       # lets @instance_count completions overlap, so total time stays within a small
       # multiple of one call's own time; a global mutex/table-lock design would push
       # this toward ~@instance_count x instead. The multiplier is load-regime-aware
-      # (ISS-0260, lib/letflow/design/iss0260-ac1-timing-flake.md §3) -- 30x under
+      # (ISS-0260, lib/letflow/design/iss0260-ac1-timing-flake.md §3) -- 50x under
       # plain `mix test`, 60x under a real `scripts/test_parallel.sh` N-way
       # partition (`TEST_PARALLEL_GROUP` set), or an explicit
       # `TEST_AC1_TIMING_MULTIPLIER` override.
@@ -389,11 +398,11 @@ defmodule Letflow.EngineConcurrencyTest do
       :ok
     end
 
-    test "defaults to 30 when neither env var is set" do
+    test "defaults to 50 when neither env var is set" do
       System.delete_env("TEST_PARALLEL_GROUP")
       System.delete_env("TEST_AC1_TIMING_MULTIPLIER")
 
-      assert ac1_timing_multiplier() == 30
+      assert ac1_timing_multiplier() == 50
     end
 
     test "returns 60 when TEST_PARALLEL_GROUP is set (real test_parallel.sh partition)" do

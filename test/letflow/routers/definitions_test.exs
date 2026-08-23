@@ -410,7 +410,8 @@ defmodule Letflow.Routers.DefinitionsTest do
       assert {:ok, %{definition: activated_b}} =
                Definitions.activate(definition_b.id, prefix: tenant_b.schema_name)
 
-      assert {:ok, _deprecated_b} = Definitions.deprecate(activated_b.id, prefix: tenant_b.schema_name)
+      assert {:ok, _deprecated_b} =
+               Definitions.deprecate(activated_b.id, prefix: tenant_b.schema_name)
 
       conn =
         build_conn("GET", "/delta", tenant_a, %{roles: ["PROCESS_OPERATOR"]}) |> dispatch()

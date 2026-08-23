@@ -983,7 +983,9 @@ defmodule Letflow.Definitions.StoreTest do
                Definitions.delta(nil, prefix: schema_name)
 
       baseline_ids = Enum.map(baseline_items, & &1.id)
-      assert Enum.sort(baseline_ids) == Enum.sort([definition_1.id, definition_2.id, definition_3.id])
+
+      assert Enum.sort(baseline_ids) ==
+               Enum.sort([definition_1.id, definition_2.id, definition_3.id])
 
       # Mutate EXACTLY ONE of the three -- deprecate/2 needs an ACTIVE row, so
       # activate definition_2 first (itself a "changed" write, but BEFORE the
@@ -1013,6 +1015,7 @@ defmodule Letflow.Definitions.StoreTest do
       _definition = create!(schema_name)
 
       assert {:ok, %{next_since: current_since}} = Definitions.delta(nil, prefix: schema_name)
+
       assert {:ok, %{items: [], next_since: ^current_since}} =
                Definitions.delta(current_since, prefix: schema_name)
     end
@@ -1228,10 +1231,11 @@ defmodule Letflow.Definitions.StoreTest do
       # window, i.e. task 2 has NOT completed step (2b) while task 1 sits on it.
       send(task2_pid, :toctou_run)
 
-      refute_receive {:toctou_seq_query, ^task2_pid, 2}, 1_500,
-                      "task 2 completed its definition_sequence row lock (step 2b) while task 1 " <>
-                        "still holds it -- the two calls raced instead of serializing on the " <>
-                        "tenant-wide lock, contradicting design doc §5.3's guarantee"
+      refute_receive {:toctou_seq_query, ^task2_pid, 2},
+                     1_500,
+                     "task 2 completed its definition_sequence row lock (step 2b) while task 1 " <>
+                       "still holds it -- the two calls raced instead of serializing on the " <>
+                       "tenant-wide lock, contradicting design doc §5.3's guarantee"
 
       # Release task 1 to run to completion -- this commits its transaction and
       # releases the definition_sequence row lock task 2 has been blocked on.
@@ -1240,10 +1244,11 @@ defmodule Letflow.Definitions.StoreTest do
       # Task 2's step (2b) can now complete -- confirmed directly, not merely by
       # task 2 eventually finishing (which could also happen if it had raced and
       # lost/won some other way).
-      assert_receive {:toctou_seq_query, ^task2_pid, 2}, 10_000,
-                      "task 2 never completed its definition_sequence row lock (step 2b) even " <>
-                        "after task 1 committed and released it -- serialization is broken in " <>
-                        "the other direction (task 2 permanently stuck)"
+      assert_receive {:toctou_seq_query, ^task2_pid, 2},
+                     10_000,
+                     "task 2 never completed its definition_sequence row lock (step 2b) even " <>
+                       "after task 1 committed and released it -- serialization is broken in " <>
+                       "the other direction (task 2 permanently stuck)"
 
       [result1, result2] = Task.await_many([task1, task2], 15_000)
       results = [result1, result2]

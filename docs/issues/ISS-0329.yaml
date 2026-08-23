@@ -32,20 +32,22 @@ description: >
   "collision-proof tenant slug suffix across 30 test files"), which
   collision-proofed tenant slugs but left this realm id behind.
 
-  SECOND, SEPARATE FINDING in the same observation -- scripts/test_parallel.sh
-  reported the failure correctly in both its per-partition summary
-  ("partition 4: ... 1 failures, exit 2") and its combined line
-  ("1981 tests, 5 properties, 1 failures (1985/1986 passed)"), but the script
-  itself still exited 0. README.md describes this script as aggregating
-  partition results and "exits non-zero if any partition failed", so a caller
-  trusting the exit code alone would treat a red run as green. This is
-  potentially more serious than the flake itself, because it silently
-  weakens the full-suite mechanism TEST-RUNNER and RELEASE-VALIDATOR both
-  invoke (REQ-114). Needs confirming as either intended-with-a-reason or a
-  real defect in the aggregation step.
+  RETRACTED SUB-FINDING (corrected 2026-08-23, same session, before this
+  issue was worked). An earlier revision of this record claimed a second
+  defect: that scripts/test_parallel.sh reported "1 failures" yet exited 0,
+  silently turning a red run green for TEST-RUNNER/RELEASE-VALIDATOR
+  (REQ-114). That claim is WRONG and is withdrawn. Reading the script
+  directly (lines 283-304): `if [ "$f" -gt 0 ]; then partition_failed=1; fi`
+  sets any_failed, and line 324 is `exit "$any_failed"` -- so a parsed
+  failure count above zero does exit non-zero, exactly as README.md
+  describes. The "exited with code 0" I observed came from the agent
+  harness's own background-task wrapper line, not from the script. No
+  defect exists here; scripts/test_parallel.sh needs no change. Recorded
+  rather than deleted so nobody re-derives the same false conclusion from
+  the same misread.
+
 affected_files:
   - test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs
-  - scripts/test_parallel.sh
 queue_task_id: 329
 github_issue: 630
 status: open

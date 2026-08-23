@@ -20,8 +20,8 @@
  *
  * Pre-fix / post-fix proof (see test/specs/ISS-0295.md for the full record):
  *   - Against main (275e9f1, pre-fix): helpers.ts exports neither constant at all
- *     (TC-1 fails to even import them) and 12 spec files hardcode 'bpm-platform-api'
- *     literally (TC-2 fails with 12 offenders).
+ *     (TC-1 fails to even import them) and TC-2 fails with 49 hardcoded IdP literal(s)
+ *     ('bpm-platform-api' / bare 8081) across the e2e spec files.
  *   - Against feature/WF03-ISS0295-20260823 (f7aec1d, post-fix): both pass.
  */
 

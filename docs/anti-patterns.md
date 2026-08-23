@@ -1491,3 +1491,20 @@ remove` on the parent directory. This incident was caught immediately (test tool
 failed on the very next invocation) and fixed via `npm install` — the project's own
 dependency tree, pre-authorized to reinstall autonomously — but a slower-to-notice
 version of this mistake could have left the main repo silently broken for longer.
+
+**Recurrence (WF03-ISS0295-20260823, TEST-DESIGNER then TEST-DESIGN-VALIDATOR):** the
+exact same junction-then-`git worktree remove --force` sequence was used again for the
+ISS-0295 regression test's fail-then-pass proof, despite this entry already existing at
+the time. TEST-DESIGNER's own verification apparently did not corrupt `node_modules`
+(or didn't notice if it did — their spec only checked `git worktree list`/`git status
+--porcelain`, neither of which would catch a wiped, gitignored `node_modules`), but
+TEST-DESIGN-VALIDATOR reproducing the identical steps independently *did* trigger it:
+`web/node_modules` went to 0 entries after `git worktree remove --force`, caught only
+because the next `npx vitest` invocation failed to resolve `vite`. Fixed the same way
+(`npm install`). Takeaway: an anti-pattern being on record is not enough — grep this
+file for the technique you're about to use before using it, not just before writing new
+code. Checking `git status --porcelain` after a worktree removal is **not** sufficient
+proof of a clean removal on Windows when a junction was involved, because a gitignored
+directory's corruption is invisible to `git status`; verify the linked-into directory
+still has real contents (e.g. re-run the actual test suite) before declaring cleanup
+verified.

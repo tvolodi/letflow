@@ -728,3 +728,26 @@ history:
       Queue task 295 released with status done, GH#591 closed with resolution
       comment citing docs/issues/ISS-0295.yaml. 25 on-disk `- req:` entries in
       requirement_status.v4.yaml before this append; 26 after.
+  - req: REQ-133
+    event: blocked
+    agent: FRONTEND-DEV
+    at: "2026-08-23T13:50:00Z"
+    note: >
+      Config fix (web/src/auth/OidcManager.ts, tenantConfig.ts,
+      web/.env.example, lib/letflow/routers/tenant_config.ex -- the latter
+      not in REQ-133's own named scope but discovered to carry the identical
+      stale R-Co defaults, completely overriding the SPA-side fix without
+      it) landed via PR #593, REVIEWER PASS, curl-verified. AC7
+      (type-check/lint/test) and AC8 (route inventory: REQ-073..085 all
+      done except REQ-077 blocked) completed for real. AC1-6 (live browser
+      login proof) could not be completed despite multiple hours of
+      genuine attempts -- reproducible Playwright/Chromium automation
+      flakiness in this environment, confirmed NOT an app defect via curl
+      (backend and Keycloak both respond correctly for the fixed values)
+      and one real browser network log showing the correct URL requested.
+      Two real environment issues found and documented for the next
+      attempt: Vite dev server IPv6-only binding, and React 18 StrictMode
+      double-firing signinRedirect() in dev mode (use a production preview
+      build instead). Follow-up filed: ISS-0296 (queue task 296, GH#594).
+      26 on-disk `- req:` entries in requirement_status.v4.yaml before this
+      append; 27 after.

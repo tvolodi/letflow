@@ -118,7 +118,14 @@ defmodule Letflow.SandboxPool.FixtureLoader do
         Repo.query!(~s(TRUNCATE "#{sandbox_schema}"."#{table_name}" CASCADE))
       end)
 
+      # Computed once per distinct table, not once per row (jsonb_populate_record/2's
+      # base composite is the same for every row of a given table) -- see
+      # default_base_row/2's own moduledoc-comment for why this exists at all.
+      base_rows = Map.new(table_names, &{&1, default_base_row(sandbox_schema, &1)})
+
       Enum.each(fixtures, fn %FixtureRow{table_name: table_name, row_json: row_json} ->
+        base_row = Map.fetch!(base_rows, table_name)
+
         # A plain double-quoted string, not ~s(...): this toolchain's sigil
         # parser does not treat raw parens inside a ~s(...) sigil's own
         # content as nestable (verified directly -- `~s(a(b)c)` alone fails
@@ -128,7 +135,8 @@ defmodule Letflow.SandboxPool.FixtureLoader do
         # (not concatenated) here, identically safe to the TRUNCATE statement
         # above: both already passed validate_schema_name/1 and
         # validate_table_names/1 by this point (INV-7). row_json is always
-        # bound as a parameter, never interpolated (INV-FL-3).
+        # bound as a parameter, never interpolated (INV-FL-3). base_row is
+        # never user input either -- see default_base_row/2.
         #
         # `($1::text)::jsonb`, not the design doc's literal `$1::jsonb`
         # (verified empirically, not a stylistic choice): when a bound
@@ -145,7 +153,7 @@ defmodule Letflow.SandboxPool.FixtureLoader do
         # still bound as a parameter either way -- never interpolated.
         sql =
           "INSERT INTO \"#{sandbox_schema}\".\"#{table_name}\" SELECT * FROM " <>
-            "jsonb_populate_record(NULL::\"#{sandbox_schema}\".\"#{table_name}\", ($1::text)::jsonb)"
+            "jsonb_populate_record(#{base_row}, ($1::text)::jsonb)"
 
         Repo.query!(sql, [row_json])
       end)
@@ -154,5 +162,53 @@ defmodule Letflow.SandboxPool.FixtureLoader do
     :ok
   rescue
     _exception -> {:error, :insert_failed}
+  end
+
+  # jsonb_populate_record/2's base-composite argument. Was `NULL::"schema"."table"`
+  # until WF02-REQ125-20260823's rework: jsonb_populate_record fills every JSON key
+  # *absent* from row_json with whatever the base composite holds at that column --
+  # NULL, if the base is NULL::type. It does NOT know about the target TABLE's
+  # column-level DEFAULTs (populate_record operates purely on the composite TYPE),
+  # so a fixture's JSON omitting a NOT NULL column with a table-level default (e.g.
+  # `sequence_number bigint NOT NULL DEFAULT 0`, added by
+  # 20260823000003_add_sequence_number_to_process_definitions.exs) inserted a real
+  # NULL and violated the constraint, breaking every existing fixture builder that
+  # (reasonably) never anticipated needing to know about a column added after it was
+  # written. Fixed generically, once, at this level -- rather than patching each
+  # fixture JSON builder to name `sequence_number` explicitly -- so the NEXT NOT NULL
+  # column added anywhere on the allowlist with a table-level default does not
+  # re-break every fixture builder the same way again.
+  #
+  # Builds `ROW(<default-or-NULL per column, in attnum order>)::"schema"."table"` by
+  # reading each column's own DEFAULT expression straight out of Postgres's catalogs
+  # (pg_attrdef via pg_get_expr) -- the same canonical rendering `pg_dump` itself
+  # uses, already fully typed/cast, and already validated by Postgres at
+  # CREATE/ALTER TABLE time. Interpolated into the SQL text below at the same trust
+  # level as table_name/sandbox_schema elsewhere in this module: not user input, and
+  # sandbox_schema/table_name were already validated (INV-FL-1/INV-FL-2) before this
+  # is ever called. A column with no table-level default renders as 'NULL', identical
+  # to this function's pre-fix behavior for that column.
+  defp default_base_row(sandbox_schema, table_name) do
+    # `($1::text)::regclass`, not a bare `$1::regclass` -- the same reason
+    # apply_fixtures/3's own `($1::text)::jsonb` isn't just `$1::jsonb` (see that
+    # comment): a parameter whose only annotation is `::regclass` makes Postgrex
+    # infer the wire type is regclass's own OID representation and bind an integer,
+    # raising "you tried to use a binary for an oid type" for the text this module
+    # actually has (verified empirically). Casting from `::text` first keeps the
+    # parameter bound as plain text; the `::regclass` cast then happens server-side.
+    %Postgrex.Result{rows: [[defaults_csv]]} =
+      Repo.query!(
+        """
+        SELECT string_agg(COALESCE(pg_get_expr(d.adbin, d.adrelid), 'NULL'), ',' ORDER BY a.attnum)
+        FROM pg_attribute a
+        LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+        WHERE a.attrelid = ($1::text)::regclass
+          AND a.attnum > 0
+          AND NOT a.attisdropped
+        """,
+        ["\"#{sandbox_schema}\".\"#{table_name}\""]
+      )
+
+    "ROW(#{defaults_csv})::\"#{sandbox_schema}\".\"#{table_name}\""
   end
 end

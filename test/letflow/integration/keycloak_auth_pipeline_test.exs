@@ -247,7 +247,11 @@ defmodule Letflow.Integration.KeycloakAuthPipelineTest do
 
       assert conn.halted
       assert conn.status == 401
-      assert Jason.decode!(conn.resp_body) == %{"error" => "unauthorized"}
+      # Partial match on "error" only, mirroring test/letflow/plugs/auth_pipeline_test.exs:196
+      # -- AuthPipeline.reject/4 (lib/letflow/plugs/auth_pipeline.ex, pre-existing and
+      # unrelated to this suite) always includes a "detail" key alongside "error"; AC2
+      # cares that the response is the standard unauthorized shape, not the exact key set.
+      assert %{"error" => "unauthorized"} = Jason.decode!(conn.resp_body)
     end
   end
 

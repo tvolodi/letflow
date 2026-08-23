@@ -7247,6 +7247,7 @@ requirements:
     owner: CODE-DESIGNER
     status: pending
     stage: S5
+    impl_order: 300  # letflow-queue task id
     description: >
       FIRST requirement of S5's Lua half; every other Lua requirement
       depends_on it directly or transitively. Executes
@@ -7340,6 +7341,7 @@ requirements:
     owner: CODE-DESIGNER
     status: pending
     stage: S5
+    impl_order: 301  # letflow-queue task id
     description: >
       Decision-and-design requirement that unblocks REQ-156 (LUA-09). It
       exists as its own requirement rather than as prose inside REQ-156
@@ -7405,6 +7407,7 @@ requirements:
     owner: CODE-DESIGNER
     status: pending
     stage: S5
+    impl_order: 302  # letflow-queue task id
     description: >
       Decision-and-design requirement that unblocks REQ-159/REQ-160 (LUA-11's
       read and write paths). Filed as its own requirement because decision
@@ -7457,6 +7460,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 303  # letflow-queue task id
     description: >
       Builds Letflow's Lua sandbox construction -- the single function every
       script execution obtains its Lua state from -- and the test suite
@@ -7543,6 +7547,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 304  # letflow-queue task id
     description: >
       RESTATEMENT OF LUA-14, AND WHY -- this is the requirement decision 0014's
       REVIEWER round 1 caught being wrongly listed as satisfiable, and it is
@@ -7615,6 +7620,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 305  # letflow-queue task id
     description: >
       Cashes in the deliberately-opaque seam REQ-058 left for exactly this
       decision. lib/letflow/engine/lua_script_audit.ex's moduledoc states that
@@ -7674,6 +7680,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 306  # letflow-queue task id
     description: >
       RESTATEMENT OF LUA-08 AS ONE HALF OF A TWO-LAYER PAIR, AND WHY.
       Decision 0014 lists LUA-08 and LUA-10 together on its watchlist of
@@ -7733,6 +7740,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 307  # letflow-queue task id
     description: >
       RESTATEMENT OF LUA-10 AS THE MANDATORY SECOND LAYER, AND WHY.
       LUA-10 (Wall Clock Timeout, MUST) reads "Each script execution MUST have
@@ -7789,6 +7797,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 308  # letflow-queue task id
     description: >
       Implements the mechanism REQ-149 decided. This requirement CANNOT START
       until REQ-149 is done, because decision 0014's OQ-1 explicitly blocks
@@ -7843,6 +7852,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 309  # letflow-queue task id
     description: >
       Builds the capability substrate every host function in REQ-159 and
       REQ-160 checks against, and the closed-set registration that makes
@@ -7912,6 +7922,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 310  # letflow-queue task id
     description: >
       Completes LUA-07, whose audit-persistence half already shipped as
       REQ-058 (lib/letflow/engine/lua_script_audit.ex, S3). That module's own
@@ -7960,6 +7971,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 311  # letflow-queue task id
     description: >
       First of two sibling requirements splitting R-Co's eight-function
       platform.* surface along the read/write seam, so each fits one agent
@@ -8012,6 +8024,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 312  # letflow-queue task id
     description: >
       Second of two sibling requirements splitting the platform.* surface;
       REQ-159 covers the read path. This one covers the functions with
@@ -8065,6 +8078,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 313  # letflow-queue task id
     description: >
       RESTATEMENT OF LUA-15, AND WHY. LUA-15 (Structured Failure, MUST) reads
       "platform.fail(reason, details) MUST TERMINATE THE SCRIPT and propagate
@@ -8131,6 +8145,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 314  # letflow-queue task id
     description: >
       RESTATEMENT OF LUA-16, AND WHY. LUA-16 (Runtime Error Capture, MUST)
       reads "Uncaught Lua errors MUST be captured by the host and converted to
@@ -8203,6 +8218,7 @@ requirements:
     owner: CODE-DESIGNER
     status: pending
     stage: S5
+    impl_order: 315  # letflow-queue task id
     description: >
       First of the two decision requirements that unblock S5's WASM half.
       Decision 0014's "Ownership of execution" states "OQ-3 and OQ-4 block the
@@ -8261,6 +8277,7 @@ requirements:
     owner: CODE-DESIGNER
     status: pending
     stage: S5
+    impl_order: 316  # letflow-queue task id
     description: >
       Second of the two decision requirements unblocking S5's WASM half, and
       the one that determines whether REQ-175 exists as scoped work at all.
@@ -8314,6 +8331,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 317  # letflow-queue task id
     description: >
       FIRST requirement of S5's WASM half; every other WASM requirement
       depends_on it. Executes decision 0014's Decision (2) -- adopt wasmex
@@ -8391,6 +8409,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 318  # letflow-queue task id
     description: >
       Implements the module contract against whichever ABI REQ-163 chose, and
       the registration-time rejection that makes it enforceable.
@@ -8436,6 +8455,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 319  # letflow-queue task id
     description: >
       The WASM half's authorization boundary -- the counterpart to REQ-157 on
       the Lua side, and the requirement that makes a guest's declared
@@ -8493,6 +8513,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 320  # letflow-queue task id
     description: >
       WASM-08 (Memory Isolation, MUST): "Modules MUST execute in isolated
       linear memory. The host MUST VALIDATE ALL POINTER/LENGTH PAIRS received
@@ -8537,6 +8558,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 321  # letflow-queue task id
     description: >
       The two in-guest resource limits, paired in one requirement because both
       are direct configuration of the same wasmex objects and neither is large
@@ -8587,6 +8609,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 322  # letflow-queue task id
     description: >
       The out-of-band layer for the WASM half, and the requirement that cashes
       in decision 0014's mandatory process boundary as an actual guarantee
@@ -8639,6 +8662,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 323  # letflow-queue task id
     description: >
       First of two sibling requirements splitting WASM-12's host API along the
       same read/write seam REQ-159 and REQ-160 use on the Lua side, so each
@@ -8694,6 +8718,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 324  # letflow-queue task id
     description: >
       Second of two sibling requirements implementing WASM-12, and the one
       that satisfies WASM-12's own acceptance criterion: "Same test scenario
@@ -8755,6 +8780,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 325  # letflow-queue task id
     description: >
       WASM-14 (Hot Reload, MUST): "When a new version of a module is
       activated, IN-FLIGHT INVOCATIONS OF THE PRIOR VERSION MUST COMPLETE
@@ -8804,6 +8830,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 326  # letflow-queue task id
     description: >
       RESTATEMENT OF WASM-13, AND WHY -- this restatement ADDS a constraint
       rather than relaxing one, which is unusual on decision 0014's watchlist
@@ -8855,6 +8882,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
+    impl_order: 327  # letflow-queue task id
     description: >
       CONDITIONAL REQUIREMENT. This requirement exists only if REQ-164 decided
       YES on OQ-3 (Letflow hosts guest compilation). If REQ-164 decided NO,

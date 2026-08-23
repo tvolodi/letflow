@@ -375,3 +375,35 @@ history:
       3b/4 skipped), RELEASE-VALIDATOR -- all PASS, no rework needed. 9
       on-disk `- req:` entries in requirement_status.v4.yaml before this
       append; 10 after.
+  - req: ISS-0289
+    event: done
+    agent: ORCH
+    at: "2026-08-23T03:43:00Z"
+    note: >
+      WF03-ISS0289-20260823 complete, merged to main via PR #578 (commit
+      6e5e3ee). ISS-0289 was REQ-121's own follow-up finding: registered via
+      register_task (queue task 289, GH#577) at the start of this run.
+      ISSUE-FIXER diagnosed root cause as a router wiring gap, not dead code:
+      UsersPage.tsx carried a redundant inline detail/edit branch with NO
+      PLATFORM_ADMIN role gate at admin/users/:id, while the fully-built
+      UserDetailPage.tsx (real role gate, DeactivateUserDialog, group-
+      membership editing) sat unwired. CODE-DESIGNER/CODE-DESIGN-VALIDATOR
+      chose Option 1 (adopt UserDetailPage.tsx as sole detail/edit view,
+      route param renamed :id -> :userId, UsersPage.tsx's inline branch
+      removed). FRONTEND-DEV implemented; SECURITY-REVIEWER confirmed this is
+      a net ADD of access control (the old inline branch had zero role check
+      -- any authenticated user could previously edit/deactivate any user).
+      REVIEWER passed on idiom/scope. TEST-DESIGNER wrote a route-level
+      fail-then-pass regression test (web/src/__tests__/router.iss-0289.test.tsx)
+      targeting the routing/wiring boundary, independently reproduced by
+      TEST-DESIGN-VALIDATOR via a safe robocopy-based worktree (TEST-DESIGNER's
+      own run hit and self-corrected a git-worktree-junction node_modules
+      deletion, logged to docs/anti-patterns.md). TEST-RUNNER confirmed full
+      suite green (180 unit tests, 48 guard tests, real vite build). Issue
+      closed resolved (docs/issues/ISS-0289.yaml), GitHub issue #577 closed
+      with evidence comment. Queue task 289 released done. All changes
+      independently verified on main by ORCH post-merge (router.tsx,
+      UsersPage.tsx, UserDetailPage.tsx, test file, issue record all
+      confirmed present/correct) before writing this entry. 10 on-disk
+      `- req:` entries in requirement_status.v4.yaml before this append; 11
+      after.

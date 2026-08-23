@@ -1,0 +1,64 @@
+{
+  "handoff_id": "step02b-WF03-ISS0289-20260823",
+  "run_id": "WF03-ISS0289-20260823",
+  "workflow_id": "WF-03",
+  "step": "2b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0289-20260823/step-02b-code-design-validator.json",
+  "created_at": "2026-08-23T03:10:21Z",
+  "started_at": "2026-08-23T03:10:21Z",
+  "completed_at": "2026-08-23T03:10:21Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0289": "Dead/orphaned file web/src/pages/admin/UserDetailPage.tsx not reachable from router. REQ-121 discovered that web/src/pages/admin/UserDetailPage.tsx exists but is not registered as a route and nothing else imports it. Needs triage: wire it in (if intended live) or remove it as dead code (if abandoned)."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0289-20260823/step-02-code-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0289-user-detail-page-routing.md",
+      "handoffs/WF03-ISS0289-20260823/step-02-code-designer.json",
+      "docs/issues/ISS-0289.yaml",
+      "web/src/router.tsx",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/UserDetailPage.tsx",
+      "web/src/hooks/useAdminUsers.ts",
+      "web/src/components/admin/users/DeactivateUserDialog.tsx",
+      "web/tests/e2e/f5-admin-users.e2e.spec.ts",
+      "web/tests/e2e/pipelines/admin-user-lifecycle.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/sim-company-onboarding.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/sim-admin-processes.pipeline.e2e.spec.ts",
+      "web/src/types/api.ts",
+      "web/src/api/identity.ts"
+    ],
+    "owned_modules": ["web/src/router.tsx", "web/src/pages/admin/UsersPage.tsx", "web/src/pages/admin/UserDetailPage.tsx"]
+  },
+  "task": {
+    "description": "Independently re-verify lib/letflow/design/iss0289-user-detail-page-routing.md against its own producing handoff's 6 acceptance criteria (handoffs/WF03-ISS0289-20260823/step-02-code-designer.json). Do not accept CODE-DESIGNER's claims (grep sweep, e2e-spec behavior) as given -- re-run the greps and read the actual source/spec files directly. Check: (1) no implementation code in the design doc; (2) every ISS-0289 acceptance surface (live-wire-in vs dead-remove decision, exact route/param, exact file-by-file plan, behavior preservation) is covered; (3) the design is unambiguous enough for FRONTEND-DEV to implement without further judgment calls; (4) the 'both e2e specs drive the UI by testid/URL only, never import either component, never assert admin-user-username' claim actually holds when the spec files are read in full; (5) no helper/export from UsersPage.tsx's inline branch would be orphaned/needed elsewhere after deletion.",
+    "acceptance_criteria": [
+      "Design artefact under lib/letflow/design/ exists with a clear Option 1 vs Option 2 recommendation and rationale",
+      "Independent grep verification of zero other references to useAdminUsers/UserDetailPage/DeactivateUserDialog/admin-user-* testids is documented, not just inherited from ISSUE-FIXER",
+      "Exact file-by-file change list given (router.tsx, UsersPage.tsx, UserDetailPage.tsx, useAdminUsers.ts, DeactivateUserDialog.tsx, test files)",
+      "Route param naming mismatch (:id vs userId) resolved with stated rationale for which side changes",
+      "Preservation of list, create-user navigation, and deactivate behavior is explicitly addressed",
+      "No implementation code in the design artefact"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified lib/letflow/design/iss0289-user-detail-page-routing.md against all 6 of its own acceptance criteria by reading the design doc in full and re-deriving every claim from source rather than trusting CODE-DESIGNER's summary. AC1 (Option 1 vs 2 recommendation): present in section 1 with concrete rationale (QueryStateBoundary/classifyError pattern parity with AuditLogPage/HealthDashboardPage/MetricsPage, real DeactivateUserDialog component, full group-membership editing UsersPage.tsx's inline branch explicitly punts on, and the temp-${Date.now()} URL hack Option 1 removes) -- confirmed by reading both UsersPage.tsx and UserDetailPage.tsx in full; the 'Group membership editing is available in a dedicated follow-up iteration' placeholder text and the temp-id navigate hack in createUser's onError (line 66 of UsersPage.tsx) are both real and exactly as described. AC2 (independent grep verification): re-ran `grep -rn 'useAdminUsers|UserDetailPage|DeactivateUserDialog' web/src` myself -- hits only in the three self-referencing files (UserDetailPage.tsx, useAdminUsers.ts, DeactivateUserDialog.tsx), zero other references, matching the design doc's claim exactly. Re-ran the testid grep across web -- hits only in UsersPage.tsx, UserDetailPage.tsx, and four e2e spec files: f5-admin-users.e2e.spec.ts, admin-user-lifecycle.pipeline.e2e.spec.ts, sim-company-onboarding.pipeline.e2e.spec.ts, sim-admin-processes.pipeline.e2e.spec.ts (the design doc's own section 2 grep transcript lists all four; section 4.5 discusses only the first two by name but the 'no changes required, testid/URL-driven only' conclusion is verified to hold for all four -- read all four directly, confirmed no import of either page component and no reference to the route param name in any of them, only page.getByTestId(...) and navigateSpa(page, `/admin/users/${id}`) string interpolation). AC3 (file-by-file change list): router.tsx (add import, change line 59's route path+element), UsersPage.tsx (named states/hooks/JSX block to remove, createUser.onError hack removal, what stays), UserDetailPage.tsx (no change), useAdminUsers.ts/DeactivateUserDialog.tsx (no change) -- all concrete and exact, cross-checked line-by-line against the actual current UsersPage.tsx and router.tsx content; router.tsx line 59 is confirmed to currently read `{ path: 'admin/users/:id', element: <UsersPage /> }` exactly as the design assumes. AC4 (route param rationale): section 3 correctly identifies UserDetailPage.tsx's `useParams()` destructure as `{ userId: routeUserId = '' }` (verified at UserDetailPage.tsx line 20, threaded through 5 call sites as claimed: useAdminUser, useUpdateAdminUser, useDeactivateAdminUser, pageUserId memo, DeactivateUserDialog displayName fallback) and correctly concludes renaming router.tsx's path segment is less invasive; verified no other router.tsx entry collides on a bare :id param name change (definitions/:id and instances/:id are separate, unaffected route entries, confirmed by reading router.tsx in full). AC5 (behavior preservation -- list/create-nav/deactivate): section 5 explicit and each claim independently verified: createUser.onSuccess's existing `navigate(`/admin/users/${createdUser.id}`)` is unaffected and becomes the sole detail entry point; DeactivateUserDialog's rendered paragraph text ('Active tasks assigned to this user remain assigned...cannot complete them while INACTIVE') was read directly and does contain, as exact substrings, both strings asserted by f5-admin-users.e2e.spec.ts (lines 231-232) and admin-user-lifecycle.pipeline.e2e.spec.ts (lines 147-148) via page.getByText(...) -- so the 'no test asserts on exact copy' framing is not just true but understated: the substrings that ARE asserted do match verbatim in the new dialog. Its aria-label ('Deactivate user') and button text ('Deactivate') also match the `page.getByLabel('Deactivate user').getByRole('button', { name: 'Deactivate' })` locator used in both specs -- confirmed by reading DeactivateUserDialog.tsx directly. AC6 (no implementation code): confirmed by reading the full design doc -- every reference to code is either a route-path string, an import line, a named list of state/hooks/JSX blocks to remove, or prose; no .tsx function bodies, JSX trees, or executable logic appear anywhere in the document. Additional independent checks beyond the doc's own 6 criteria, per this validator's task: (a) e2e-claim re-verification -- both named e2e specs plus the two additional pipeline specs that also touch the shared testids were read in full; none imports UserDetailPage or UsersPage, none references admin-user-username (grep confirms the sole hit for that testid is UserDetailPage.tsx's own JSX), all navigate via navigateSpa(page, '/admin/users/${id}') URL strings only -- design's core claim holds for all four files, not just the two it names; (b) orphaned-export check -- UsersPage.tsx's module-level `roleList`/`displayUsername`/`toggleRole` are none of them `export`ed, so nothing outside the file can depend on them; toggleRole is correctly identified in the design as still needed by the create-user role checkboxes and kept; (c) type/API surface check -- web/src/types/api.ts already declares `username?`, `status?: 'ACTIVE'|'INACTIVE'`, `role_ids?: string[]`, `group_ids?: string[]` on User, and web/src/api/identity.ts's usersApi.update already accepts a body with `status`/`role_ids`/`group_ids`/`is_active` -- the design's 'no API-client change needed' claim holds. All 6 acceptance criteria PASS with no gaps found.",
+    "issues": [
+      "Non-blocking, for FRONTEND-DEV/TEST-DESIGNER awareness only, not a rework trigger: design doc section 4.5 names only f5-admin-users.e2e.spec.ts and admin-user-lifecycle.pipeline.e2e.spec.ts as the e2e specs touching the shared testids, but two more pipeline specs (sim-company-onboarding.pipeline.e2e.spec.ts, sim-admin-processes.pipeline.e2e.spec.ts) also assert admin-user-detail-form/save/submit-message/status/deactivate via the same testid-driven pattern -- the design's 'no changes required' conclusion is independently verified to hold for these two as well (same URL/testid-only driving, no import, no admin-user-username reference), so this is an incomplete enumeration in the doc's prose, not an incorrect one. TEST-DESIGNER/TEST-RUNNER should still run all four specs post-implementation, not just the two named.",
+      "Non-blocking, carried from the design doc's own section 6: two open questions (row-click-to-navigate affordance for the list, and UserDetailPage.tsx's PLATFORM_ADMIN gate being stricter than the removed inline branch's no-gate) are explicitly flagged rather than silently resolved, which is the correct handling -- surfaced here so FRONTEND-DEV/REVIEWER do not miss them in the design doc itself."
+    ],
+    "next_action": "Route to FRONTEND-DEV"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

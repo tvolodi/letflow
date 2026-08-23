@@ -326,3 +326,52 @@ history:
       /loop iteration; it stays ineligible until re-locked deliberately once
       REQ-133 is done. No files changed. 7 on-disk `- req:` entries in
       requirement_status.v4.yaml before this append; 8 after.
+  - req: REQ-121
+    event: started
+    agent: ORCH
+    at: "2026-08-23T02:41:00Z"
+    note: >
+      Claimed via get_next_task (queue task id 247, github_issue_number 485,
+      depends_on: [241/REQ-115, done]). No duplicate found under docs/issues/
+      for GH#485 -- genuine new work. WF-02 Step 00 (git setup) complete via
+      FRONTEND-DEV: branch feature/WF02-REQ121-20260823 created and pushed.
+      Fails ORCH's direct-action sizing check (docs/agents/ORCHESTRATOR.md
+      Section 10, check 1: touches more than one file) so routed through the
+      full workflow rather than acted on directly. Pre-Step-1 investigation:
+      web/src/pages/admin/users/UsersPage.tsx confirmed genuinely unreferenced
+      (grep over web/ for the path and for relative-import forms found
+      nothing); its only component import, CreateUserDialog, is also
+      unreferenced anywhere else. DeactivateUserDialog is NOT dead -- it is
+      imported by web/src/pages/admin/UserDetailPage.tsx, but that importer
+      is itself an orphan: grep found no reference to UserDetailPage anywhere
+      in web/src, including router.tsx (both /admin/users and
+      /admin/users/:id route to the live UsersPage.tsx, not UserDetailPage).
+      This is a third dead file outside REQ-121's stated scope (only the two
+      UsersPage.tsx files and web/src/components/admin/users/ were named) --
+      flagged for CODE-DESIGNER/FRONTEND-DEV to resolve on evidence, not
+      silently folded into this deletion. 8 on-disk `- req:` entries in
+      requirement_status.v4.yaml before this append; 9 after.
+  - req: REQ-121
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-23T02:56:04Z"
+    note: >
+      WF02-REQ121-20260823 complete. Deleted
+      web/src/pages/admin/users/UsersPage.tsx (confirmed unreferenced anywhere
+      in web/) and web/src/components/admin/users/CreateUserDialog.tsx (its
+      only importer was the deleted page). Kept
+      web/src/components/admin/users/DeactivateUserDialog.tsx -- imported by
+      web/src/pages/admin/UserDetailPage.tsx, which is itself unreferenced by
+      router.tsx (a third orphan file, out of REQ-121's named scope, flagged
+      as a follow-up finding rather than deleted here). All 5 acceptance
+      criteria independently verified at RELEASE-VALIDATOR (Step 5): zero
+      code references confirmed via grep (only a stale README.md prose
+      mention remained), frontend gates all passed (type-check, lint,
+      178/178 tests, 48/48 guards), DeactivateUserDialog/UserDetailPage/live
+      UsersPage.tsx/router.tsx confirmed untouched. Design doc:
+      lib/letflow/design/req121-remove-dead-userspage.md. Gates passed:
+      CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (out of scope, no tenant-data
+      path), REVIEWER, TEST-DESIGNER (out of scope, no executable surface --
+      3b/4 skipped), RELEASE-VALIDATOR -- all PASS, no rework needed. 9
+      on-disk `- req:` entries in requirement_status.v4.yaml before this
+      append; 10 after.

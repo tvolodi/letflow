@@ -5885,7 +5885,7 @@ requirements:
   - id: REQ-121
     title: Remove the dead duplicate admin UsersPage
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 247  # letflow-queue task id; depends_on translated to queue task id [241]
     description: >

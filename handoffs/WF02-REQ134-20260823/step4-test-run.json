@@ -11,7 +11,6 @@
   "completed_at": "2026-08-23T17:55:00Z",
   "status": "COMPLETED",
   "priority": "NORMAL",
-  "attempt": 2,
   "context": {
     "stage": "S4",
     "requirement_ids": ["REQ-134"],
@@ -49,21 +48,14 @@
     "issues": [],
     "next_action": "Route to RELEASE-VALIDATOR"
   },
-  "attempt_history": [
+  "gate_history": [
     {
-      "attempt": 1,
-      "completed_at": "2026-08-23T12:35:35Z",
+      "iteration": 0,
+      "gated_at": "2026-08-23T12:35:35Z",
       "status": "FAIL",
       "summary": "Default suite (TEST_PARALLEL_N=4): 1986/1986 passed, 0 failures, AC4 exclusion confirmed -- clean. Live Keycloak: after resolving a stale-container/sibling-session port conflict (moved this workspace's own .env LETFLOW_KEYCLOAK_PORT 8092 -> 8093 without touching the sibling's container), ran `mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs` for real: 2/3 passed, 1 failed. AC1 and AC3 passed with real evidence. AC2 failed: test/letflow/integration/keycloak_auth_pipeline_test.exs:250 asserted strict map equality `Jason.decode!(conn.resp_body) == %{\"error\" => \"unauthorized\"}` against AuthPipeline.reject/4's real, unchanged response shape, which always also includes a \"detail\" key -- conn.halted and conn.status == 401 both held; only the exact-equality body assertion failed. Classified as a test-code bug (too strict), not an application regression, since the sibling test/letflow/plugs/auth_pipeline_test.exs:196 already correctly uses a partial pattern match for the same shape.",
-      "artifacts_out": [
-        "test/reports/report-20260823-WF02-REQ134-20260823.yaml"
-      ],
       "issues": [
-        {
-          "severity": "BLOCKER",
-          "description": "test/letflow/integration/keycloak_auth_pipeline_test.exs:250 asserted full map equality against AuthPipeline.reject/4's response, which always includes a 'detail' key. Fix: partial pattern match, matching test/letflow/plugs/auth_pipeline_test.exs:196's convention.",
-          "affected_requirement": "REQ-134"
-        }
+        "BLOCKER: test/letflow/integration/keycloak_auth_pipeline_test.exs:250 asserted full map equality against AuthPipeline.reject/4's response, which always includes a 'detail' key. Fix: partial pattern match, matching test/letflow/plugs/auth_pipeline_test.exs:196's convention."
       ],
       "next_action": "Rework TEST-DESIGNER -- fix AC2's overly-strict body-equality assertion, then re-run through TEST-DESIGN-VALIDATOR (step3b) and TEST-RUNNER (step4)."
     }

@@ -1,0 +1,56 @@
+{
+  "handoff_id": "step03-WF03-ISS0289-20260823",
+  "run_id": "WF03-ISS0289-20260823",
+  "workflow_id": "WF-03",
+  "step": "3",
+  "from_agent": "ORCH",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF03-ISS0289-20260823/step-03-frontend-dev.json",
+  "created_at": "2026-08-23T03:14:00Z",
+  "started_at": "2026-08-23T03:14:00Z",
+  "completed_at": "2026-08-23T08:25:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0289": "Dead/orphaned file web/src/pages/admin/UserDetailPage.tsx not reachable from router. REQ-121 discovered that web/src/pages/admin/UserDetailPage.tsx exists but is not registered as a route and nothing else imports it. Needs triage: wire it in (if intended live) or remove it as dead code (if abandoned)."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0289-20260823/step-02-code-designer.json",
+      "handoffs/WF03-ISS0289-20260823/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0289-user-detail-page-routing.md",
+      "web/src/router.tsx",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/UserDetailPage.tsx",
+      "web/src/hooks/useAdminUsers.ts",
+      "web/src/components/admin/users/DeactivateUserDialog.tsx"
+    ],
+    "owned_modules": ["web/src/router.tsx", "web/src/pages/admin/UsersPage.tsx", "web/src/pages/admin/UserDetailPage.tsx"]
+  },
+  "task": {
+    "description": "Implement the validated design at lib/letflow/design/iss0289-user-detail-page-routing.md (Option 1: adopt UserDetailPage.tsx as the single detail/edit view, delete UsersPage.tsx's inline duplicate). Per the design's file-by-file plan (section 4): (1) router.tsx -- rename route param admin/users/:id to admin/users/:userId, change its element from UsersPage to UserDetailPage; (2) UsersPage.tsx -- remove the inline detail/edit branch entirely (path-parsed selectedUserId, inline userDetail query, saveUser mutation, sync useEffect, the whole `if (selectedUserId)` JSX block, and the temp-id navigate hack in createUser.onError), keep the list+create page, verify roleList/displayUsername/toggleRole have no external dependents before deleting the branch; (3) UserDetailPage.tsx -- no changes, its useParams destructure already reads userId; (4) confirm useAdminUsers.ts and DeactivateUserDialog.tsx need no edits. Run type-check, lint, test, and guards from web/ and quote real output.",
+    "acceptance_criteria": [
+      "router.tsx: admin/users/:userId routes to UserDetailPage; admin/users (list, no id) still routes to UsersPage, unchanged",
+      "UsersPage.tsx: inline detail/edit branch fully removed, file is list+create only, still navigates to /admin/users/${id} on create-success and (implicitly) on any future row-select",
+      "UserDetailPage.tsx and useAdminUsers.ts and DeactivateUserDialog.tsx unchanged, per design section 4.2/4.4",
+      "npm run type-check, npm run lint, npm test, npm run guards all pass with real quoted output",
+      "No file outside owned_modules touched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented Option 1 exactly per lib/letflow/design/iss0289-user-detail-page-routing.md, no deviation from the file-by-file plan except one implementation-level correction noted below. (1) web/src/router.tsx: added `import UserDetailPage from '@/pages/admin/UserDetailPage'` alongside the existing UsersPage import, changed the route entry from `{ path: 'admin/users/:id', element: <UsersPage /> }` to `{ path: 'admin/users/:userId', element: <UserDetailPage /> }`. The `admin/users` (list, no id) entry is untouched. (2) web/src/pages/admin/UsersPage.tsx: removed showDeactivateConfirm/detailForm state, the selectedUserId useMemo (location.pathname regex parse), the userDetail useQuery, the saveUser useMutation, the sync useEffect, and the entire `if (selectedUserId) { ... }` early-return JSX block (back button, admin-user-detail-form div and all its fields, group-membership placeholder, Save/Deactivate buttons, inline deactivate-confirm dialog). Removed the `useLocation` import/call (nothing else in the file reads location.pathname after the branch's removal). createUser's onError no longer calls `navigate('/admin/users/temp-${Date.now()}')` -- kept only `setError((e as Error).message)`, which still renders inside the create panel's existing `{error && <p>...}` block. Kept unchanged: creating/searchDraft/searchApplied/form/createRoleIds/error state, the list query, the roles query, createUser.onSuccess's `navigate('/admin/users/${createdUser.id}')` (now correctly lands on UserDetailPage), toggleRole (still used by create-user role checkboxes), roleList/displayUsername (still used by the list table), and the full list-page JSX. (3) web/src/pages/admin/UserDetailPage.tsx: no changes, confirmed by re-reading it -- its `const { userId: routeUserId = '' } = useParams()` destructure already matches the router's renamed :userId param. (4) Confirmed web/src/hooks/useAdminUsers.ts and web/src/components/admin/users/DeactivateUserDialog.tsx need no changes by reading both in full -- neither references router param names or the deleted UsersPage.tsx branch. Verified roleList/displayUsername/toggleRole have no external dependents via `grep -rn 'roleList|displayUsername|toggleRole' web/src` -- all hits are within UsersPage.tsx itself, at the surviving list/create call sites (roleList/displayUsername in the table rows, toggleRole in both the (removed) detail branch and the surviving create-role checkboxes) -- matches the design's claim, confirmed independently rather than trusted.\n\nOne implementation-level correction beyond the design's explicit plan: after deleting the inline detail branch, the `submitMessage` state (declared, set to 'Saved'/'User deactivated' by createUser.onSuccess and the deactivate handler) had no remaining renderer -- it was only ever displayed inside the deleted detail branch's `<p data-testid=\"admin-user-submit-message\">`, never in the list/create JSX. tsc flagged it as TS6133 (declared but never read) once the detail branch was gone. Removed the dead `submitMessage` state and its `setSubmitMessage('Saved')` call in createUser.onSuccess; `setError`/error display (the only user-visible feedback the list/create page ever had for this state) is unaffected. This is a correction the design's section 4.3 (which said to keep submitMessage state 'unchanged') did not anticipate becoming dead code as a side effect of the branch deletion -- flagged here rather than silently diverging; does not affect any test, since no e2e/unit test asserts on submitMessage inside UsersPage.tsx's list/create view (the shared admin-user-submit-message testid that tests do assert on lives in UserDetailPage.tsx, which still renders it, untouched).\n\nVerification, run for real from web/:\n\n`npm run type-check` -> `tsc -b tsconfig.json` -- clean exit, no output.\n\n`npm run lint` -> `eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0` -- clean exit, no output.\n\n`npm test` -> `vitest run --passWithNoTests --exclude tests/e2e/** --exclude tests/guards/**` -- Test Files 30 passed (30), Tests 178 passed (178), Duration 5.93s. No pre-existing test broke.\n\n`npm run guards` -> `vitest run tests/guards/meta-control.spec.ts tests/guards/source-scan.spec.ts tests/guards/bundle-scan.spec.ts tests/guards/role-set.spec.ts --reporter=verbose` -- Test Files 4 passed (4), Tests 48 passed (48), Duration 12.84s; includes a real `vite build` (392 modules transformed, built in 6.42s) as part of bundle-scan, confirming the app builds cleanly with the new routing.\n\nPer WF-03 instructions, did not write a regression test for this change -- that is TEST-DESIGNER's job in the next step. Did not invoke SECURITY-REVIEWER or REVIEWER myself.",
+    "issues": [
+      "Non-blocking: removed UsersPage.tsx's now-dead submitMessage state (see summary) -- a small implementation-level deviation from design section 4.3's 'keep submitMessage state unchanged' instruction, necessitated by tsc's unused-variable error once the only renderer (the deleted detail branch) was gone. No behavior or test-surface change results.",
+      "Carried forward from step-02b's PASS review, unresolved and out of scope for this step: (a) whether a UsersPage.tsx list-row click should also navigate to /admin/users/${id} is an open product question, not implemented here per the design's explicit scoping; (b) UserDetailPage.tsx's PLATFORM_ADMIN gate (absent in the deleted inline branch) is intentional hardening per the design, not a regression, but noted here again for REVIEWER's awareness."
+    ],
+    "next_action": "Route to SECURITY-REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

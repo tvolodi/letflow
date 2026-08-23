@@ -1,0 +1,60 @@
+{
+  "handoff_id": "step04-WF03-ISS0289-20260823",
+  "run_id": "WF03-ISS0289-20260823",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0289-20260823/step-04-test-designer.json",
+  "created_at": "2026-08-23T08:20:00Z",
+  "started_at": "2026-08-23T08:20:00Z",
+  "completed_at": "2026-08-23T08:32:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0289": "Dead/orphaned file web/src/pages/admin/UserDetailPage.tsx not reachable from router. Fixed by wiring it into router.tsx and retiring UsersPage.tsx's inline duplicate detail/edit branch."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0289-20260823/step-02-code-designer.json",
+      "handoffs/WF03-ISS0289-20260823/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0289-20260823/step-03-frontend-dev.json",
+      "handoffs/WF03-ISS0289-20260823/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0289-20260823/step-03c-reviewer.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0289.yaml",
+      "lib/letflow/design/iss0289-user-detail-page-routing.md",
+      "web/src/router.tsx",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/UserDetailPage.tsx"
+    ],
+    "owned_modules": ["web/src/__tests__/router.iss-0289.test.tsx", "test/specs/ISS-0289.md"]
+  },
+  "task": {
+    "description": "Write a regression test proving ISS-0289's fix: before commit da37fb3, navigating to /admin/users/:id rendered UsersPage.tsx (no PLATFORM_ADMIN role gate, partial inline edit form, no group-membership editing); after the fix, /admin/users/:userId renders the dedicated UserDetailPage.tsx. Since UserDetailPage.tsx itself is unchanged by the fix (only router.tsx's path->element mapping and UsersPage.tsx's inline branch changed), the test must target the routing/wiring boundary, not either component in isolation, and must be shown to fail against pre-fix code (da37fb3~1) and pass against post-fix code (this branch HEAD).",
+    "acceptance_criteria": [
+      "A route-level test proves the URL that resolves to UserDetailPage resolves to UsersPage pre-fix and to UserDetailPage post-fix (not asserted against either component's source directly, since UserDetailPage.tsx is byte-identical across both commits)",
+      "A route-level test proves the PLATFORM_ADMIN authorization regression concretely: a non-admin session navigating to the admin user detail URL sees the permission-denied gate post-fix, and did NOT pre-fix (UsersPage's inline branch had no gate at all)",
+      "Both tests actually run and fail against da37fb3~1 and actually run and pass against branch HEAD -- real command output quoted, not asserted",
+      "No pre-existing test broken; full unit suite, guards, type-check and lint all still pass on the branch after adding the new test file"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote web/src/__tests__/router.iss-0289.test.tsx (2 tests, vitest + @testing-library/react, jsdom) and test/specs/ISS-0289.md.\n\nTC-ISS0289-01 inspects router.routes (the real config from web/src/router.tsx, imported directly -- not reconstructed) and asserts the bare list path 'admin/users' still maps to UsersPage while the parameterized detail child route maps to UserDetailPage, not UsersPage.\n\nTC-ISS0289-02 resolves the real match for URL '/admin/users/user-42' via react-router's own matchRoutes(router.routes, url) -- deliberately not hardcoding either the pre-fix ':id' or post-fix ':userId' param name -- renders exactly that matched route element inside a MemoryRouter with a mocked non-PLATFORM_ADMIN session (useAuth mocked, react-query hooks mocked generically per the existing TenantsPage.test.tsx convention), and asserts the 'You do not have permission to manage users.' gate text renders while admin-user-detail-form does not.\n\nBoth targeted the routing/wiring boundary specifically because UserDetailPage.tsx itself is unchanged by the fix (design section 4.2) -- a test that only imported and rendered UserDetailPage.tsx directly would pass identically on both the pre-fix and post-fix commit and would prove nothing about this bug.\n\nFAIL-THEN-PASS PROOF (both phases actually executed):\nPost-fix (branch HEAD, 8a0f8d6 at the time): `npx vitest run src/__tests__/router.iss-0289.test.tsx` -> 'Test Files 1 passed (1), Tests 2 passed (2)'.\nPre-fix: created a throwaway `git worktree add ../letflow-wt-iss0289-prefix da37fb3~1` (3e37947, CODE-DESIGN-VALIDATOR's PASS commit immediately before FRONTEND-DEV's da37fb3 -- confirmed via `git log --oneline` that these are the two commits bracketing the fix), copied the new test file in unmodified (package.json diff confirmed identical between the two commits so node_modules could be shared via a Windows directory junction rather than a fresh npm install), and ran the same command: 'Test Files 1 failed (1), Tests 2 failed (2)'. TC-ISS0289-01 failed with 'expected [Function UsersPage] to be [Function UserDetailPage]'. TC-ISS0289-02 failed with 'Unable to find an element with the text: You do not have permission to manage users.' and the captured DOM showed the pre-fix inline admin-user-detail-form (Display name/Email/Status fields, Save/Deactivate buttons) rendered unconditionally for the non-admin session -- confirming the exact authorization gap SECURITY-REVIEWER flagged as previously absent.\n\nIncident during verification, self-corrected: `git worktree remove --force` on the throwaway worktree recursed through the Windows directory junction used for node_modules sharing and deleted the actual contents of the main repo's web/node_modules (junctions are not always respected as opaque boundaries by recursive-delete tooling on Windows). Detected immediately (next `npx vitest` invocation failed to resolve vite/vitest, `ls node_modules` showed 0 entries), fixed by running `npm install` in web/ (a project's own dependency reinstall -- pre-authorized, not a system-wide install) -- restored cleanly, 502 packages. Full suite re-run afterward to confirm no lasting damage (below). Noting this in docs/anti-patterns.md is recommended: never junction/symlink a directory another process might `git worktree remove` recursively into; use `robocopy /MIR` or a plain copy for throwaway worktree dependency sharing instead.\n\nGuard fix: the non-admin fixture's tenant_slug initially used 'acme', which the tenant-slug-in-source source-scan guard forbids outside its directory allowlist (web/src/__tests__/ is not on it). Changed to a non-matching placeholder ('demo-co') rather than expanding the guard's allowlist. Re-verified: `npx vitest run tests/guards/meta-control.spec.ts tests/guards/source-scan.spec.ts tests/guards/bundle-scan.spec.ts tests/guards/role-set.spec.ts` -> 'Test Files 4 passed (4), Tests 48 passed (48)', including a real vite build (392 modules) inside bundle-scan.\n\nFull unit suite on the branch after the new file: `npx vitest run --passWithNoTests --exclude \"tests/e2e/**\" --exclude \"tests/guards/**\"` -> 'Test Files 31 passed (31), Tests 180 passed (180)' (was 30 files/178 tests per FRONTEND-DEV's step-03 handoff -- +1 file/+2 tests, zero regressions). `npx tsc -b tsconfig.json` clean (no output). `npx eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0` clean (no output).\n\nExisting e2e specs (f5-admin-users.e2e.spec.ts, admin-user-lifecycle.pipeline.e2e.spec.ts) confirmed by design/CODE-DESIGN-VALIDATOR to need no changes and were not re-run here (require a live backend + browser, out of scope for this unit-level test) -- left to TEST-RUNNER/RELEASE-VALIDATOR's normal e2e pass.\n\nDid not touch application code (router.tsx, UsersPage.tsx, UserDetailPage.tsx untouched by this step) -- the fix implementation itself showed no bugs during this verification.",
+    "artifacts_out": [
+      "web/src/__tests__/router.iss-0289.test.tsx",
+      "test/specs/ISS-0289.md"
+    ],
+    "issues": [
+      "Non-blocking, self-corrected: a git worktree junction-sharing technique used during verification briefly deleted (and was restored via npm install) the main repo's web/node_modules -- see summary. Recommend adding a docs/anti-patterns.md entry (not added here, out of this step's owned_modules) so future agents avoid directory-junction sharing across a git worktree that may later be `git worktree remove`d.",
+      "Existing e2e specs (f5-admin-users.e2e.spec.ts, admin-user-lifecycle.pipeline.e2e.spec.ts) were not re-run in this step -- confirmed unaffected by design/CODE-DESIGN-VALIDATOR review (testid/URL driven, not import-driven), but TEST-RUNNER/RELEASE-VALIDATOR should still run them per the normal WF-03 gate sequence."
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

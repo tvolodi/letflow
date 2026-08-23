@@ -1,0 +1,52 @@
+{
+  "handoff_id": "step02-WF03-ISS0289-20260823",
+  "run_id": "WF03-ISS0289-20260823",
+  "workflow_id": "WF-03",
+  "step": "2",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0289-20260823/step-02-code-designer.json",
+  "created_at": "2026-08-23T03:07:19Z",
+  "started_at": "2026-08-23T03:07:19Z",
+  "completed_at": "2026-08-23T03:07:19Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0289": "Dead/orphaned file web/src/pages/admin/UserDetailPage.tsx not reachable from router. REQ-121 (run WF02-REQ121-20260823, PR #576) discovered that web/src/pages/admin/UserDetailPage.tsx exists in the tree but is not reachable from web/src/router.tsx -- it is not registered as a route and nothing else imports it. Deliberately left out of REQ-121's scope since REQ-121 did not touch admin user-detail routing. Needs triage: either wire it into the router (if the page is intended to be live) or remove it as dead code (if superseded/abandoned). Investigate git history/blame for the file to determine original intent before deciding."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0289.yaml",
+      "web/src/router.tsx",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/UserDetailPage.tsx",
+      "web/src/hooks/useAdminUsers.ts",
+      "web/src/components/admin/users/DeactivateUserDialog.tsx"
+    ],
+    "owned_modules": ["web/src/router.tsx", "web/src/pages/admin/UsersPage.tsx", "web/src/pages/admin/UserDetailPage.tsx"]
+  },
+  "task": {
+    "description": "Design the fix for ISS-0289 per ISSUE-FIXER's diagnosis: router.tsx routes admin/users/:id to UsersPage (list component), which contains its own redundant inline detail/edit implementation duplicating the same data-testids as the separate, more complete, unreferenced UserDetailPage.tsx (dead code, also has a :id vs userId param-name bug). Decide between Option 1 (wire up UserDetailPage.tsx, remove UsersPage's inline branch) and Option 2 (keep the inline branch, delete UserDetailPage.tsx + useAdminUsers.ts + DeactivateUserDialog.tsx). Independently grep web/src for useAdminUsers, UserDetailPage, DeactivateUserDialog, and each admin-user-* testid before finalizing -- do not just trust the diagnosis. Write a design doc covering the chosen option, exact file-by-file change list, the route param naming decision and why, and how existing behavior (list, create-user navigation, deactivate) is preserved. No implementation code.",
+    "acceptance_criteria": [
+      "Design artefact under lib/letflow/design/ exists with a clear Option 1 vs Option 2 recommendation and rationale",
+      "Independent grep verification of zero other references to useAdminUsers/UserDetailPage/DeactivateUserDialog/admin-user-* testids is documented, not just inherited from ISSUE-FIXER",
+      "Exact file-by-file change list given (router.tsx, UsersPage.tsx, UserDetailPage.tsx, useAdminUsers.ts, DeactivateUserDialog.tsx, test files)",
+      "Route param naming mismatch (:id vs userId) resolved with stated rationale for which side changes",
+      "Preservation of list, create-user navigation, and deactivate behavior is explicitly addressed",
+      "No implementation code in the design artefact"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Recommend and design Option 1: adopt web/src/pages/admin/UserDetailPage.tsx as the single detail/edit view; remove UsersPage.tsx's redundant inline detail/edit branch. Independently re-verified ISSUE-FIXER's 'zero other references' claim via my own grep sweep of web/src (and web more broadly for the testids): useAdminUsers/UserDetailPage/DeactivateUserDialog are referenced only by each other; the admin-user-* testids appear only in UsersPage.tsx's inline branch, UserDetailPage.tsx, and two e2e specs (f5-admin-users.e2e.spec.ts, admin-user-lifecycle.pipeline.e2e.spec.ts) that drive the UI purely by testid/URL, never by importing either component -- confirmed by reading both spec files directly, not just the grep hit list. Route param decision: rename router.tsx's admin/users/:id to admin/users/:userId (leave UserDetailPage.tsx's existing `userId` destructure untouched) because UserDetailPage.tsx already threads a `routeUserId` variable through 5 call sites, so renaming the router side changes zero lines inside the component versus renaming 5+ call sites the other way; confirmed no other route in router.tsx collides on param name (React Router scopes params per-route). Design doc lib/letflow/design/iss0289-user-detail-page-routing.md covers: the decision and rationale (section 1), the independent grep verification with exact commands/results (section 2), the route param decision (section 3), a file-by-file change list for router.tsx / UserDetailPage.tsx (no changes needed) / UsersPage.tsx (removes selectedUserId parsing, userDetail query, saveUser mutation, the sync useEffect, the entire inline detail/edit JSX branch, and the temp-${Date.now()} navigate hack in createUser's onError) / useAdminUsers.ts and DeactivateUserDialog.tsx (no changes, become live) / test files (no changes required) (section 4), how list/create-navigation/deactivate behavior is preserved including the minor confirmation-dialog copy difference which no test asserts on (section 5), and two explicitly flagged open questions for FRONTEND-DEV/REVIEWER rather than silently resolved: whether list rows should gain a click-to-navigate affordance (not in ISS-0289's affected_files, treated as out of scope), and that UserDetailPage.tsx's PLATFORM_ADMIN gate (absent from the removed inline branch) is treated as intentional hardening consistent with AuditLogPage/HealthDashboardPage/MetricsPage's existing pattern, not a regression (section 6). No implementation code included -- only prop/param/route-string level descriptions and named additions/removals.",
+    "artifacts_out": ["lib/letflow/design/iss0289-user-detail-page-routing.md"],
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

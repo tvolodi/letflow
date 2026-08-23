@@ -1,0 +1,58 @@
+{
+  "handoff_id": "6b2f0c5a-6e1e-4c1e-9f6a-6a2e2c8f0b91",
+  "run_id": "WF03-ISS0289-20260823",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0289-20260823/step-04c-test-runner.json",
+  "created_at": "2026-08-23T03:30:00Z",
+  "started_at": "2026-08-23T03:30:15Z",
+  "completed_at": "2026-08-23T03:37:34Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "web/src/router.tsx",
+      "web/src/pages/admin/users/UserDetailPage.tsx",
+      "web/src/pages/admin/users/UsersPage.tsx",
+      "web/src/__tests__/router.iss-0289.test.tsx"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the frontend verification suite for web/ on branch feature/WF03-ISS0289-20260823 (Letflow's React/TS SPA, not the Elixir backend) and report real quoted output: npm run type-check, npm run lint, npx vitest run --passWithNoTests --exclude tests/e2e/** --exclude tests/guards/** (full unit suite including the new src/__tests__/router.iss-0289.test.tsx), npm run guards (includes a real vite build), and the new regression test re-run in isolation.",
+    "acceptance_criteria": [
+      "npm run type-check clean",
+      "npm run lint clean (max-warnings 0)",
+      "full unit suite green, including src/__tests__/router.iss-0289.test.tsx",
+      "npm run guards green (source-scan, bundle-scan, meta-control, role-set, real vite build)",
+      "src/__tests__/router.iss-0289.test.tsx passes in isolation",
+      "PASS only if all five commands are green; any failure reported precisely, not silently patched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Checked out feature/WF03-ISS0289-20260823 (HEAD d1a65bff56270c18e8410e6c38109f14fdc1cbd9, already up to date with origin, on top of TEST-DESIGN-VALIDATOR PASS commit d1a65bf). Ran all 5 commands fresh from web/. (1) `npm run type-check` (tsc -b tsconfig.json): exit 0, no output, no type errors. (2) `npm run lint` (eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0): exit 0, no output, zero warnings/errors. (3) `npx vitest run --passWithNoTests --exclude tests/e2e/** --exclude tests/guards/**`: 31 test files, 180 tests, all passed, 0 failed, including src/__tests__/router.iss-0289.test.tsx (2 tests). Duration 6.80s. (4) `npm run guards` (vitest run tests/guards/meta-control.spec.ts tests/guards/source-scan.spec.ts tests/guards/bundle-scan.spec.ts tests/guards/role-set.spec.ts, includes `tsc -b && vite build`): 4 test files, 48 tests, all passed, 0 failed; vite build succeeded (392 modules transformed, dist/ emitted, only the pre-existing >500kB chunk-size advisory warning, not an error); bundle-scan and role-set guards both green against the built output. (5) `npx vitest run src/__tests__/router.iss-0289.test.tsx` in isolation: 1 test file, 2 tests, both passed in 26ms, confirming the new regression test is self-sufficient and not dependent on suite ordering. No failures anywhere in this run. This is the last gate before issue closure and merge for ISS-0289.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0289-20260823/step-04c-test-runner.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0289-20260823",
+      "commit_sha_list": ["d1a65bff56270c18e8410e6c38109f14fdc1cbd9"],
+      "remote_branch": "origin/feature/WF03-ISS0289-20260823",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to RELEASE-VALIDATOR to independently re-verify acceptance criteria before ISS-0289 closure and merge; all five frontend verification commands are green on this branch."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

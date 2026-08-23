@@ -1,0 +1,56 @@
+{
+  "handoff_id": "step04b-WF03-ISS0289-20260823",
+  "run_id": "WF03-ISS0289-20260823",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0289-20260823/step-04b-test-design-validator.json",
+  "created_at": "2026-08-23T08:30:00Z",
+  "started_at": "2026-08-23T08:30:00Z",
+  "completed_at": "2026-08-23T08:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0289-20260823/step-04-test-designer.json"],
+    "artifacts_in": [
+      "web/src/__tests__/router.iss-0289.test.tsx",
+      "test/specs/ISS-0289.md",
+      "docs/issues/ISS-0289.yaml",
+      "handoffs/WF03-ISS0289-20260823/step-04-test-designer.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's regression test at web/src/__tests__/router.iss-0289.test.tsx (2 tests, TC-ISS0289-01/02). Independently reproduce both the post-fix pass and the pre-fix fail (using a throwaway git worktree at 3e37947 == da37fb3~1, this time copying node_modules via robocopy rather than a directory junction, per the incident TEST-DESIGNER reported), verify main checkout's web/node_modules shows no residue, confirm full suite still green, and check test isolation/self-sufficiency and acceptance-criteria coverage.",
+    "acceptance_criteria": [
+      "Post-fix (branch HEAD) test run independently reproduced, real output quoted, both tests pass",
+      "Pre-fix (3e37947 / da37fb3~1) test run independently reproduced in a throwaway worktree using a non-junction node_modules sharing technique, real output quoted, both tests genuinely fail",
+      "Worktree removed cleanly after; main checkout web/node_modules verified intact (no repeat of TEST-DESIGNER's junction-deletion incident)",
+      "Full frontend suite verified green on main checkout after validator's own worktree work",
+      "Both ISS-0289 acceptance criteria (route resolves to UserDetailPage post-fix / to UsersPage pre-fix; PLATFORM_ADMIN gate present post-fix, absent pre-fix) confirmed covered by the test file, read directly",
+      "No .skip/.todo/weakened assertions; fixtures self-contained (mocked useAuth/react-query, no shared external state)",
+      "PASS or FAIL with itemized issues if FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Checked out feature/WF03-ISS0289-20260823 (HEAD 7917970, TEST-DESIGNER's test commit on top of REVIEWER PASS 8a0f8d6). Confirmed da37fb3~1 and 3e37947 are the same commit via `git log --oneline -1` on both refs (identical SHA/message: 'chore(ISS-0289): CODE-DESIGN-VALIDATOR PASS on UserDetailPage routing design').\n\nPOST-FIX REPRODUCTION (own run, not copied from the handoff): `cd web && npx vitest run src/__tests__/router.iss-0289.test.tsx` -> 'src/__tests__/router.iss-0289.test.tsx (2 tests) 25ms' / 'Test Files 1 passed (1)' / 'Tests 2 passed (2)'. Matches TEST-DESIGNER's claim.\n\nPRE-FIX REPRODUCTION (own run, independent technique): confirmed web/package.json and package-lock.json are byte-identical between 3e37947 and HEAD via `git diff 3e37947 HEAD -- web/package.json web/package-lock.json` (empty output), so a node_modules copy (not a fresh install) was valid. Created a throwaway worktree `git worktree add ../letflow-wt-tdv-iss0289 3e37947`, copied only the new test file in (plain file copy, not the whole tree), and populated node_modules via `robocopy web/node_modules <worktree>/web/node_modules /E /MT:8` -- a real recursive file copy, explicitly NOT a directory junction/symlink, per the incident TEST-DESIGNER reported. Verified the copy landed (308 top-level entries in both main and worktree node_modules, matching). Ran `npx vitest run src/__tests__/router.iss-0289.test.tsx` in the worktree -> 'Test Files 1 failed (1)' / 'Tests 2 failed (2)'. TC-ISS0289-01 failed with 'expected [Function UsersPage] to be [Function UserDetailPage] // Object.is equality' -- exact match to TEST-DESIGNER's quoted output. TC-ISS0289-02 failed with 'Unable to find an element with the text: You do not have permission to manage users.', and the captured DOM dump shows the pre-fix inline admin-user-detail-form (Display name/Email/Status fields, Role assignments, Group memberships stub text, Save/Deactivate buttons, all with the exact testids TEST-DESIGNER described) rendered unconditionally for the non-admin session, with no PLATFORM_ADMIN check anywhere -- confirms the exact authorization gap.\n\nCLEANUP: `git worktree remove ../letflow-wt-tdv-iss0289 --force` -> worktree removed. `git worktree list` afterward shows only the main checkout. Main checkout's web/node_modules verified intact: `.bin/vitest*` present, 308 top-level entries (same count as before the worktree work) -- no repeat of the junction-deletion incident, since a plain robocopy /E copy has no cross-boundary link for `worktree remove` to recurse through destructively.\n\nFULL SUITE (own run, on the main checkout, after validator's own worktree work, to catch any leaked residue): `npx vitest run --passWithNoTests --exclude \"tests/e2e/**\" --exclude \"tests/guards/**\"` -> 'Test Files 31 passed (31)' / 'Tests 180 passed (180)', including src/__tests__/router.iss-0289.test.tsx (2 tests, 41ms). Matches TEST-DESIGNER's claimed count exactly.\n\nFinal residue check: `git status --porcelain` on the main checkout (repo root) is empty -- no stray files, no modified node_modules tracked state, nothing left over from validator's own worktree/robocopy work.\n\nACCEPTANCE CRITERIA COVERAGE (read web/src/__tests__/router.iss-0289.test.tsx and test/specs/ISS-0289.md directly): TC-ISS0289-01 inspects the real `router.routes` (imported directly from @/router, not reconstructed) and asserts the bare 'admin/users' list path still maps to UsersPage while the parameterized detail child path maps to UserDetailPage and explicitly not UsersPage -- covers 'route resolves to UserDetailPage, not UsersPage, post-fix' and, by construction (it fails pre-fix because no such route exists), the pre-fix side too. TC-ISS0289-02 resolves the real match for '/admin/users/user-42' via react-router's own matchRoutes(router.routes, url) (deliberately param-name-agnostic), renders exactly that matched element with a mocked non-PLATFORM_ADMIN session, and asserts the permission-denied gate text renders while admin-user-detail-form does not -- covers the PLATFORM_ADMIN authorization-regression criterion concretely, both post-fix (gate present, verified above) and pre-fix (gate absent, editable form rendered instead, verified above in the worktree run).\n\nISOLATION / SELF-SUFFICIENCY: both tests mock @tanstack/react-query (useQuery/useMutation/useQueryClient) and @/auth/AuthContext's useAuth generically per the existing TenantsPage.test.tsx convention -- no real network/DB/global state. NON_ADMIN_SESSION is a local const fixture, not imported from any shared/global fixture module. TC-ISS0289-02 sets its own mock via mockUseAuth.mockReturnValue in its own test body (not in a shared beforeEach depended on by TC-ISS0289-01), and afterEach calls cleanup()+vi.clearAllMocks() so no state leaks between tests or requires ordering -- confirmed by running the file in isolation (`vitest run <file>`) above, which only ever runs both tests together in one process regardless, but each test's own render/mock setup is independent and neither reads output produced by the other.\n\nNO SHORTCUTS: grepped the test file for `.skip`, `.todo`, `TODO` -- zero matches. No hardcoded secrets/connection strings (only a mock bearer token string 'tok' and a placeholder tenant_slug 'demo-co', neither a real credential). Assertions are exact-match (Object.is on element.type, exact permission-denied text, exact testid absence) -- not weakened to substring/contains or loosened to 'toBeTruthy'.\n\nNo issues found. This is a genuine two-commit-bracket regression test (not the 'code under test did not exist' pre-fix case -- UserDetailPage.tsx existed unchanged at 3e37947; the fix was purely a routing/wiring change), so the WF-03 mutant-application rule for the 'pre-fix = UndefinedFunctionError for every test' case does not apply here; the required confirmation is exactly what was done: independently verify the spec's claimed pre-fix fail against the actual pre-fix commit, which was done with genuine assertion-level failures (not import/compile errors), directly discriminating the fix.",
+    "artifacts_out": ["handoffs/WF03-ISS0289-20260823/step-04b-test-design-validator.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0289-20260823",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0289-20260823",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,55 @@
+{
+  "handoff_id": "step03b-WF03-ISS0289-20260823",
+  "run_id": "WF03-ISS0289-20260823",
+  "workflow_id": "WF-03",
+  "step": "3b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0289-20260823/step-03b-security-reviewer.json",
+  "created_at": "2026-08-23T09:00:00Z",
+  "started_at": "2026-08-23T09:00:00Z",
+  "completed_at": "2026-08-23T09:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0289": "Wire up dead/orphaned web/src/pages/admin/UserDetailPage.tsx as the live route for admin/users/:id (renamed :userId), retiring UsersPage.tsx's inline duplicate detail/edit view."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0289-20260823/step-02-code-designer.json",
+      "handoffs/WF03-ISS0289-20260823/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0289-20260823/step-03-frontend-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0289-user-detail-page-routing.md",
+      "web/src/router.tsx",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/UserDetailPage.tsx",
+      "web/src/hooks/useAdminUsers.ts",
+      "web/src/components/admin/users/DeactivateUserDialog.tsx"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Security gate (WF-02 Step 2c equivalent) on FRONTEND-DEV's implementation for ISS-0289: web/src/router.tsx route-param rename + element swap (UsersPage -> UserDetailPage for admin/users/:userId), and web/src/pages/admin/UsersPage.tsx's removal of its inline detail/edit branch now that UserDetailPage.tsx is wired live. This is an admin-user-management path (role/group assignment, deactivation) -- mandatory gate, not optional. Specifically verify: (1) UserDetailPage.tsx's PLATFORM_ADMIN gate is present/correct and not weakened, and determine whether the deleted inline UsersPage.tsx branch was previously protected by an equivalent check anywhere (page-level, route-level) -- i.e. did this change net-add access control or merely relocate it; (2) no tenant-scoping/data-access regression in useUpdateAdminUser/useDeactivateAdminUser; (3) the :id -> :userId route-param rename introduces no new injection surface; (4) any other INV-1..INV-8 concern.",
+    "acceptance_criteria": [
+      "PLATFORM_ADMIN gate finding stated with evidence (git history of the deleted branch, not assumption)",
+      "INV-1..INV-8 addressed individually (PASS/N/A per invariant)",
+      "Clear PASS/FAIL verdict"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: this IS a tenant-data path (admin user role/group assignment, deactivation) so the gate is mandatory and was run in full, not skipped.\n\nPoint 1 -- PLATFORM_ADMIN gate (the substantive finding). UserDetailPage.tsx line 23: `const isPlatformAdmin = session?.roles?.includes('PLATFORM_ADMIN') === true`, gating the entire edit/deactivate form behind an early return (lines 54-61: unauthorized users see only 'You do not have permission to manage users.', none of the form, role checkboxes, group checkboxes, or Save/Deactivate buttons render). This gate is present, unweakened by the diff (UserDetailPage.tsx is untouched -- 0 lines changed, confirmed via the diff and by re-reading the file), and matches the established pattern used by AuditLogPage.tsx/HealthDashboardPage.tsx/MetricsPage.tsx.\n\nWas the deleted inline branch in UsersPage.tsx previously protected by an equivalent check elsewhere? No. Verified two ways: (a) `git show b993120:web/src/pages/admin/UsersPage.tsx | grep -n 'PLATFORM_ADMIN|isPlatformAdmin|session?.roles|useAuth'` -- zero hits; the pre-change file (main's tip before this branch) never imports useAuth or checks any role, anywhere in the file, including inside the now-deleted `if (selectedUserId) { ... }` detail/edit block. (b) Route-level: web/src/auth/ProtectedRoute.tsx (read in full) only checks `isAuthenticated` -- it redirects unauthenticated sessions to Keycloak OIDC login but performs no role/claim check, so it could never have been the equivalent gate. No other wrapper sits between ProtectedRoute and UsersPage's render in router.tsx. Conclusion: the old inline detail/edit view was reachable and fully functional (view PII, edit display_name/email/status/roles, deactivate) for ANY authenticated user, regardless of role, as long as they were logged in and navigated to /admin/users/<id>. This change is a net ADD of access control that did not previously exist, not a relocation of a pre-existing check and not a weakening. Flagged in the design (section 6, item 2) and the frontend-dev handoff's issues[] as 'intentional hardening' -- independently confirmed here against the actual prior source, not taken on trust.\n\nPoint 2 -- tenant-scoping / data-access regression. useAdminUsers.ts (unchanged, 0 diff) -- useUpdateAdminUser(userId) and useDeactivateAdminUser(userId) both call usersApi.update(userId, body) unchanged, same queryKeys.admin.userDetail(userId)/users() invalidation as before. UserDetailPage.tsx (unchanged, 0 diff) passes routeUserId (now correctly populated instead of always '') into the same hooks the same way. No new fetch call, no new endpoint, no change to request shape. This is purely a routing/component-selection change -- the API surface hit is identical to what UserDetailPage.tsx already called when (previously) unreachable. No unscoped or cross-tenant path introduced; DeactivateUserDialog.tsx (unchanged, 0 diff) only collects an optional reason string passed to onConfirm, no new data path.\n\nPoint 3 -- :id -> :userId param rename. React Router path-param renaming only (web/src/router.tsx line 60); the extracted value flows into the same usersApi.get/update(userId, ...) calls that already existed with the same untyped string type as before under the old ':id' name. No new parsing, no eval/interpolation into SQL, shell, or HTML introduced by the rename itself -- confirmed by reading UserDetailPage.tsx and useAdminUsers.ts in full, no template/dangerouslySetInnerHTML/raw-SQL usage anywhere in this path. Not an injection surface change.\n\nInvariant-by-invariant (INV-1..INV-8, per security-invariants.md):\n- INV-1 (tenant data isolation): N/A for THIS diff specifically -- no Ecto schema, migration, or backend query touched; this is a web/ frontend routing change only, no lib/letflow/ or priv/repo/migrations/*.exs files in the diff (confirmed via `git diff main...HEAD --stat`: only web/src/router.tsx, web/src/pages/admin/UsersPage.tsx, and docs/handoff artifacts changed). Backend tenant-scoping for usersApi.get/update was already established prior to this issue and is unaffected.\n- INV-2 (server-side field authorisation): N/A directly -- no API response type changed. Noted for awareness: UserDetailPage.tsx is a client-side gate only (as this file's own preamble says, 'no client is ever the authorisation boundary'); this diff does not change what the server emits, so it neither creates nor closes a server-side field-authorisation gap. Pre-existing backend authorization for usersApi endpoints is out of this diff's scope.\n- INV-3 (sandboxing): N/A -- S5 not started, no scripting/plugin surface here.\n- INV-4 (secrets by reference only): APPLIES (live) -- verified PASS. `grep -rniE \"(password|secret|client_secret|token)\\s*(=|:)\\s*\\\"[^\\\"]{8,}\\\"\" web/src/router.tsx web/src/pages/admin/UsersPage.tsx web/src/pages/admin/UserDetailPage.tsx web/src/hooks/useAdminUsers.ts web/src/components/admin/users/DeactivateUserDialog.tsx` -- no hits. No secret material is read, logged, or serialised anywhere in the diff or the files it touches.\n- INV-5 (not-found/forbidden indistinguishability): N/A -- no backend lookup-by-ID endpoint changed (S4 not started); this is client routing to an already-existing endpoint call.\n- INV-6 (new data-access paths prove scoping): this handoff is that proof -- no new data-access path was introduced (point 2 above); the only new thing reachable is a client route pointing at pre-existing hooks/endpoints.\n- INV-7 (no SQL string interpolation): N/A -- no SQL in this diff (frontend TypeScript only).\n- INV-8 (no unhandled crashes on realistic failure paths): N/A strictly (no lib/letflow/ Elixir code in this diff), but checked the frontend-analog anyway for realistic-failure handling: UserDetailPage.tsx's mutations (updateUser.mutate, deactivateUser.mutate) both supply onError handlers that setSubmitMessage instead of letting a rejected promise go unhandled; UsersPage.tsx's createUser.onError likewise sets error state. No unguarded `.then()` without a paired `.catch`/onError in the touched files. Frontend-dev's own verification (npm run type-check / lint / test / guards, all passing, quoted in step-03-frontend-dev.json) provides additional confidence this compiles and exercises cleanly.\n\nNo BLOCKER found on any applicable invariant.",
+    "issues": [
+      "Non-blocking, carried forward for REVIEWER awareness (already flagged by the design and by FRONTEND-DEV): whether a UsersPage.tsx list-row click should also navigate to /admin/users/${id} is an open product question, out of this issue's scope, not a security concern.",
+      "Non-blocking observation (not a defect in this diff): UserDetailPage.tsx's PLATFORM_ADMIN check is client-side only, consistent with this file's own INV-2 caveat that a client is never the authorisation boundary. This diff does not change server-side enforcement for usersApi.get/update either way -- if server-side role enforcement for those endpoints does not already exist, that is a pre-existing gap this issue did not create and did not close, and is out of ISS-0289's scope (no acceptance criterion mentions it). Recording this for whichever future requirement audits backend authorization on admin identity endpoints."
+    ],
+    "next_action": "Route to REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

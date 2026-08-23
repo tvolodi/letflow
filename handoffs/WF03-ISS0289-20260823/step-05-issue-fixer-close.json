@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b4f1a7e2-9c3d-4e2a-8f0b-2a6d5c1e7f90",
+  "run_id": "WF03-ISS0289-20260823",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0289-20260823/step-05-issue-fixer-close.json",
+  "created_at": "2026-08-23T03:35:00Z",
+  "started_at": "2026-08-23T03:39:00Z",
+  "completed_at": "2026-08-23T03:39:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/agents/workflows/WF-03_issue_resolving.md": "docs/issues/ISS-NNNN.yaml: status: <resolved | instrumented | no_defect>, plus THAT status's own key pair and its own required evidence. resolved uses resolved_in_run:/resolved_at:. If github_issue is set and gh is reachable: gh issue close <n> --comment \"Fixed in <run-id>. See docs/issues/ISS-NNNN.yaml and the regression test at <test file path>.\" Never claim a fix or cite a regression test on a non-resolved close."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0289.yaml"
+    ],
+    "owned_modules": ["docs/issues/ISS-0289.yaml"]
+  },
+  "task": {
+    "description": "Close ISS-0289 per WF-03 Step 5. Full passing chain confirmed on feature/WF03-ISS0289-20260823 (HEAD 07b017b at start): design (validated), FRONTEND-DEV implementation, SECURITY-REVIEWER PASS, REVIEWER PASS, TEST-DESIGNER's fail-then-pass regression test, TEST-DESIGN-VALIDATOR PASS (independently reproduced), TEST-RUNNER PASS (full suite green: 180 unit tests, 48 guard tests, real build). Root cause -- dead/unwired UserDetailPage.tsx -- is directly removed: the page is now the live, role-gated admin user detail/edit view registered in web/src/router.tsx, and UsersPage.tsx's redundant unguarded inline duplicate was removed. Update docs/issues/ISS-0289.yaml: status: resolved, resolved_in_run: WF03-ISS0289-20260823, resolved_at: <real UTC clock read>. github_issue is 577 -- if gh is reachable, close it with a comment per the 'resolved' template citing this run-id, docs/issues/ISS-0289.yaml, and the regression test path web/src/__tests__/router.iss-0289.test.tsx.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0289.yaml status flipped to resolved with resolved_in_run/resolved_at keys (real UTC timestamp)",
+      "If gh reachable: GH#577 closed with the resolved-status comment template, citing the run-id, the yaml file, and the regression test path",
+      "If gh unreachable: state that explicitly, do not claim closure",
+      "next_action: Route to Step Final (git merge)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Closed ISS-0289 per WF-03 Step 5. Checked out feature/WF03-ISS0289-20260823 (git fetch/checkout/pull), confirmed HEAD 07b017b carrying the full passing chain (design validated, FRONTEND-DEV implementation, SECURITY-REVIEWER PASS, REVIEWER PASS, TEST-DESIGNER fail-then-pass regression test, TEST-DESIGN-VALIDATOR PASS independently reproduced, TEST-RUNNER PASS full suite green: 180 unit tests, 48 guard tests, real build). Root cause -- dead/orphaned web/src/pages/admin/UserDetailPage.tsx not reachable from web/src/router.tsx -- is genuinely removed, not just documented: the page is now wired into router.tsx as the live, role-gated admin user detail/edit view, and UsersPage.tsx's redundant unguarded inline duplicate view was deleted. Proven by a fail-then-pass regression test at web/src/__tests__/router.iss-0289.test.tsx. Updated docs/issues/ISS-0289.yaml: status: resolved, resolved_in_run: WF03-ISS0289-20260823, resolved_at: 2026-08-23T03:39:09Z (real UTC clock read). `gh auth status` confirmed gh authenticated and reachable (account tvolodi, repo scope). Ran `gh issue close 577 --comment \"Fixed in WF03-ISS0289-20260823. See docs/issues/ISS-0289.yaml and the regression test at web/src/__tests__/router.iss-0289.test.tsx.\"` -- output confirmed: 'Closed issue tvolodi/letflow#577 (ISS-0289: Dead/orphaned file web/src/pages/admin/UserDetailPage.tsx not reachable from router)'. Committed and pushed docs/issues/ISS-0289.yaml update as commit 9f86345 to feature/WF03-ISS0289-20260823.",
+    "artifacts_out": [
+      "docs/issues/ISS-0289.yaml"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0289-20260823",
+      "commit_sha_list": ["9f86345"],
+      "remote_branch": "origin/feature/WF03-ISS0289-20260823",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step Final (git merge)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

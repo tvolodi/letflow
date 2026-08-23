@@ -134,9 +134,18 @@ defmodule Letflow.Routers.TenantConfig do
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
 
-  # All four ported verbatim from tenant_config.zig:59 / :60 / :62.
-  @default_idp_base_url "http://localhost:8081"
-  @default_client_id "bpm-platform-api"
+  # Ported from tenant_config.zig:59/:60/:62, then corrected under REQ-133:
+  # the literal ported defaults named R-Co's nginx gateway port (8081) and
+  # client id (bpm-platform-api) verbatim, both stale against Letflow's own
+  # Keycloak -- REQ-128's docker-compose.yml/config/keycloak_port.exs default
+  # to port 8082, and REQ-128's config/dev.exs :oidc client_id is
+  # "letflow-web" (priv/keycloak/realms/bpm-default.json's only client).
+  # This endpoint is what the SPA actually calls at runtime (its own
+  # web/src/auth/{OidcManager,tenantConfig}.ts defaults are a same-value
+  # fallback for when this call fails, not the effective source of truth),
+  # so a stale default here silently overrides a correct SPA-side default.
+  @default_idp_base_url "http://localhost:8082"
+  @default_client_id "letflow-web"
   @default_realm "bpm-default"
 
   plug(:match)

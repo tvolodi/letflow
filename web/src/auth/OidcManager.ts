@@ -28,8 +28,8 @@ function buildOidcSettings(authority: string, clientId: string): UserManagerSett
 }
 
 const _defaultSettings: UserManagerSettings = buildOidcSettings(
-  (import.meta.env.VITE_OIDC_AUTHORITY as string) ?? 'http://localhost:8081/realms/bpm-default',
-  (import.meta.env.VITE_OIDC_CLIENT_ID as string) ?? 'bpm-platform-api',
+  (import.meta.env.VITE_OIDC_AUTHORITY as string) ?? 'http://localhost:8082/realms/bpm-default',
+  (import.meta.env.VITE_OIDC_CLIENT_ID as string) ?? 'letflow-web',
 )
 
 /** Backward-compat sync export using default (env-var) config. */

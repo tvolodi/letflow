@@ -291,3 +291,6 @@ export function parseSubProcessInterface(value: unknown): SubProcessInterface | 
     : []
   return { inputs, outputs }
 }
+
+// REQ-138 AC4: deliberate type error to prove CI catches it (will revert)
+const __req138_ac4_deliberate_type_error: number = "not a number"

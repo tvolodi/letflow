@@ -1,0 +1,67 @@
+{
+  "handoff_id": "stepfinal-WF03-ISS0289-20260823",
+  "run_id": "WF03-ISS0289-20260823",
+  "workflow_id": "WF-03",
+  "step": "Final",
+  "from_agent": "ORCH",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF03-ISS0289-20260823/step-final-git-merge.json",
+  "created_at": "2026-08-23T03:45:00Z",
+  "started_at": "2026-08-23T03:45:00Z",
+  "completed_at": "2026-08-23T03:44:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0289": "Dead/orphaned file web/src/pages/admin/UserDetailPage.tsx not reachable from router.tsx. See handoffs/WF03-ISS0289-20260823/step-02-code-designer.json context.requirement_text for full original text."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0289-20260823/step-04c-test-runner.json",
+      "handoffs/WF03-ISS0289-20260823/step-05-issue-fixer-close.json"
+    ],
+    "artifacts_in": [],
+    "owned_modules": ["web/src/router.tsx", "web/src/pages/admin/UsersPage.tsx", "web/src/pages/admin/users/UserDetailPage.tsx"]
+  },
+  "task": {
+    "description": "Run fn:git-merge per docs/agents/protocols/GIT_MERGE.md for run_id WF03-ISS0289-20260823, branch feature/WF03-ISS0289-20260823. All upstream gates already PASS: design (validated by CODE-DESIGN-VALIDATOR), FRONTEND-DEV implementation, SECURITY-REVIEWER PASS, REVIEWER PASS, TEST-DESIGNER's fail-then-pass regression test, TEST-DESIGN-VALIDATOR PASS (independently reproduced), TEST-RUNNER PASS (full suite green at commit d1a65bf), ISSUE-FIXER's Step 5 close (docs/issues/ISS-0289.yaml status: resolved, GH#577 closed). Branch HEAD 9f86345 at start. Open PR, merge, clean up locally.",
+    "acceptance_criteria": [
+      "git branch --show-current == feature/WF03-ISS0289-20260823 before starting",
+      "merge-base check against origin/main -- no divergence requiring rebase, or rebase resolved cleanly if present",
+      "PR opened and merged",
+      "Local cleanup: git checkout main, pull --ff-only, delete feature branch (local and remote), verify clean working tree",
+      "web/src/router.tsx and web/src/pages/admin/UsersPage.tsx on main reflect the fix"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Confirmed starting branch feature/WF03-ISS0289-20260823, HEAD 9f86345, clean working tree. git fetch origin showed origin/main HEAD at 84742b6, which was exactly the merge-base of this feature branch with origin/main -- no divergence, no rebase needed (nothing new landed on main since this branch was cut). Diffed d1a65bf..9f86345 for web/ changes: none (only docs/issues/ISS-0289.yaml and the step-05 handoff changed after TEST-RUNNER's green run), so the already-green TEST-RUNNER verification at d1a65bf still covers HEAD's web/ code exactly. Re-ran npm run type-check from web/ as a final spot-check: exit 0, no errors. No CI configured yet (per GIT_MERGE.md precondition, REQ-013 still pending) so proceeded to merge on local-gates-green per protocol. git push origin feature/WF03-ISS0289-20260823: already up to date (no rebase, nothing to push). Opened PR #578 'fix: wire UserDetailPage into router as live admin view [WF03-ISS0289-20260823]' base main <- head feature/WF03-ISS0289-20260823 with full validation section. gh pr merge 578 --squash --delete-branch: GitHub-side merge succeeded (verified via gh pr view 578 --json state,mergedAt,mergeCommit -> {\"state\":\"MERGED\",\"mergedAt\":\"2026-08-23T03:42:17Z\",\"mergeCommit\":{\"oid\":\"6e5e3eec5b4e39c698e0a6e8aff69bfc091b912f\"}}), but the command's local side effect errored: 'error: cannot lock ref refs/remotes/origin/main: is at 84742b6 but expected 6e5e3ee' -- a local remote-tracking-ref race, not a merge failure (single worktree, per GIT_MERGE.md's worktree-variant note this same failure mode is documented for the worktree case; here it surfaced in a single-worktree checkout instead, same root cause: gh updated the local ref concurrently with its own fetch). Recovered with git fetch origin main + git checkout main + git pull --ff-only origin main -- all clean, no conflicts. Verified: git branch --show-current -> main; git log --oneline -1 -> '6e5e3ee fix: wire UserDetailPage into router as live admin view [WF03-ISS0289-20260823] (#578)'; git status -> clean, up to date with origin/main. git fetch origin --prune confirmed both feature/WF03-ISS0289-20260823 (this run) and a stray feature/WF02-REQ121-20260823 remote-tracking ref were deleted server-side; local feature branch was already gone (gh's delete-branch step completed despite the ref-lock error on the merge step). Confirmed the fix is live on main: web/src/router.tsx imports UserDetailPage from '@/pages/admin/UserDetailPage' and registers route { path: 'admin/users/:userId', element: <UserDetailPage /> } (line 60); web/src/pages/admin/UsersPage.tsx no longer contains any 'UserDetailPage' string (grep -c returned 0) and is now 189 lines (down from its prior inline-duplicate-bearing form).",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "gh pr merge --squash --delete-branch's local ref-update step raced with its own preceding fetch and errored 'cannot lock ref refs/remotes/origin/main', even though this was a single-worktree checkout (the documented workaround in GIT_MERGE.md's Worktree Variant section is for multi-worktree setups specifically). The GitHub-side merge and branch deletion both completed successfully regardless -- verified via gh pr view before taking any recovery action, per the same 'verify before treating as FAIL' guidance the worktree-variant section states. No data loss, no incorrect state; recovered with a plain fetch+checkout+pull. Noting for awareness in case this failure mode recurs outside the worktree case this protocol currently documents it for."
+      }
+    ],
+    "git_evidence": {
+      "pre_merge_branch": "feature/WF03-ISS0289-20260823",
+      "pre_merge_head": "9f86345",
+      "merge_base_with_main": "84742b6 (== origin/main HEAD at fetch time -- no rebase needed)",
+      "web_diff_since_last_green_test_run": "none (d1a65bf..9f86345 touched only docs/issues/ISS-0289.yaml and handoff files)",
+      "type_check_spot_check": "npm run type-check: exit 0, clean",
+      "push_result": "already up to date, no rebase replay",
+      "pr_number": 578,
+      "pr_url": "https://github.com/tvolodi/letflow/pull/578",
+      "merge_result": "gh pr merge --squash --delete-branch: GitHub-side MERGED (verified via gh pr view), local ref-lock error on the same command recovered via fetch+checkout+pull",
+      "merge_commit_sha": "6e5e3eec5b4e39c698e0a6e8aff69bfc091b912f",
+      "final_main_commit": "6e5e3ee",
+      "final_branch": "main",
+      "final_status": "clean working tree, up to date with origin/main",
+      "branch_cleanup": "local feature branch already absent post-merge; remote feature/WF03-ISS0289-20260823 confirmed deleted via git fetch --prune"
+    },
+    "next_action": "ORCH marks run COMPLETED and releases owned_modules lock"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

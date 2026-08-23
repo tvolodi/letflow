@@ -346,6 +346,153 @@ defmodule Letflow.Routers.IdentityTest do
     end
   end
 
+  # ── REQ-131 AC2 gap-fill: insufficient-role denial on every remaining ────
+  # identity.ex call site not already covered above. Written by TEST-DESIGNER
+  # during REQ-131's coverage-verification pass: pre-existing REQ-073/074/076
+  # test blocks above/below only ever exercised the SUFFICIENT-role half for
+  # GET /users, GET /users/:id, all six group routes, GET /tokens,
+  # DELETE /tokens/:id, and GET /roles -- 11 of the 16 identity.ex call sites
+  # REQ-131's AC2 requires both halves for. This block is the missing
+  # insufficient-role half for those 11, each naming its route.
+
+  describe "REQ-131 AC2: insufficient-role denial on the remaining identity.ex routes" do
+    setup do
+      %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req131-ac2")}
+    end
+
+    test "GET /users -> 403 for TASK_WORKER (lacks :UsersManage)", %{tenant: tenant} do
+      conn = build_conn(:get, "/users", tenant, roles: ["TASK_WORKER"]) |> dispatch()
+      assert conn.status == 403
+    end
+
+    test "GET /users/:id -> 403 for TASK_WORKER (lacks :UsersManage)", %{tenant: tenant} do
+      user = insert_user!(tenant, username: "req131-get-user-denied")
+
+      conn =
+        build_conn(:get, "/users/#{user.id}", tenant, roles: ["TASK_WORKER"]) |> dispatch()
+
+      assert conn.status == 403
+    end
+
+    test "POST /groups -> 403 for TASK_WORKER (lacks :GroupsManage), no row inserted", %{
+      tenant: tenant
+    } do
+      count_before = Repo.aggregate(Group, :count, prefix: tenant.schema_name)
+
+      conn =
+        build_conn(:post, "/groups", tenant,
+          roles: ["TASK_WORKER"],
+          body: %{"name" => "req131-denied-group"}
+        )
+        |> dispatch()
+
+      assert conn.status == 403
+      assert Repo.aggregate(Group, :count, prefix: tenant.schema_name) == count_before
+    end
+
+    test "GET /groups -> 403 for TASK_WORKER (lacks :GroupsManage)", %{tenant: tenant} do
+      conn = build_conn(:get, "/groups", tenant, roles: ["TASK_WORKER"]) |> dispatch()
+      assert conn.status == 403
+    end
+
+    test "DELETE /groups/:id -> 403 for TASK_WORKER (lacks :GroupsManage), group not deleted", %{
+      tenant: tenant
+    } do
+      group = insert_group!(tenant, name: "req131-delete-denied-group")
+
+      conn =
+        build_conn(:delete, "/groups/#{group.id}", tenant, roles: ["TASK_WORKER"]) |> dispatch()
+
+      assert conn.status == 403
+      assert Repo.get!(Group, group.id, prefix: tenant.schema_name)
+    end
+
+    test "POST /groups/:id/members -> 403 for TASK_WORKER (lacks :GroupsManage), no membership inserted",
+         %{tenant: tenant} do
+      group = insert_group!(tenant, name: "req131-members-denied-group")
+      user = insert_user!(tenant, username: "req131-member-denied")
+
+      conn =
+        build_conn(:post, "/groups/#{group.id}/members", tenant,
+          roles: ["TASK_WORKER"],
+          body: %{"user_id" => user.id}
+        )
+        |> dispatch()
+
+      assert conn.status == 403
+
+      refute Repo.get_by(GroupMember, [group_id: group.id, user_id: user.id],
+               prefix: tenant.schema_name
+             )
+    end
+
+    test "GET /groups/:id/members -> 403 for TASK_WORKER (lacks :GroupsManage)", %{
+      tenant: tenant
+    } do
+      group = insert_group!(tenant, name: "req131-members-list-denied-group")
+
+      conn =
+        build_conn(:get, "/groups/#{group.id}/members", tenant, roles: ["TASK_WORKER"])
+        |> dispatch()
+
+      assert conn.status == 403
+    end
+
+    test "DELETE /groups/:id/members/:user_id -> 403 for TASK_WORKER (lacks :GroupsManage), membership not removed",
+         %{tenant: tenant} do
+      group = insert_group!(tenant, name: "req131-member-remove-denied-group")
+      user = insert_user!(tenant, username: "req131-member-remove-denied")
+      insert_group_member!(tenant, group.id, user.id)
+
+      conn =
+        build_conn(:delete, "/groups/#{group.id}/members/#{user.id}", tenant,
+          roles: ["TASK_WORKER"]
+        )
+        |> dispatch()
+
+      assert conn.status == 403
+
+      assert Repo.get_by(GroupMember, [group_id: group.id, user_id: user.id],
+               prefix: tenant.schema_name
+             )
+    end
+
+    test "GET /tokens -> 403 for TASK_WORKER (lacks :TokensManage)", %{tenant: tenant} do
+      conn = build_conn(:get, "/tokens", tenant, roles: ["TASK_WORKER"]) |> dispatch()
+      assert conn.status == 403
+    end
+
+    test "DELETE /tokens/:id -> 403 for TASK_WORKER (lacks :TokensManage), token not revoked", %{
+      tenant: tenant
+    } do
+      user = insert_user!(tenant, username: "req131-token-owner-denied")
+
+      created =
+        build_conn(:post, "/tokens", tenant,
+          roles: ["PLATFORM_ADMIN"],
+          body: %{"user_id" => user.id, "roles" => ["TASK_WORKER"]}
+        )
+        |> dispatch()
+
+      assert created.status == 201
+      token_id = Jason.decode!(created.resp_body)["id"]
+
+      conn =
+        build_conn(:delete, "/tokens/#{token_id}", tenant, roles: ["TASK_WORKER"]) |> dispatch()
+
+      assert conn.status == 403
+
+      assert is_nil(
+               Repo.get!(Letflow.Identity.ApiToken, token_id, prefix: tenant.schema_name).revoked_at
+             )
+    end
+
+    test "GET /roles -> 403 for TASK_WORKER (lacks :RolesManage)", %{tenant: tenant} do
+      conn = build_conn(:get, "/roles", tenant, roles: ["TASK_WORKER"]) |> dispatch()
+      assert conn.status == 403
+    end
+  end
+
   # ── AC3/INV-1: tenant-isolation on list (design §6) ─────────────────────
 
   describe "AC3/INV-1: listing is tenant-isolated" do

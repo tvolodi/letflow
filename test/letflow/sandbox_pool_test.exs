@@ -609,8 +609,7 @@ defmodule Letflow.SandboxPoolTest do
   # swallowed.
   defp drop_sandbox_schemas_created_since!(baseline) do
     failures =
-      Enum.reduce(MapSet.difference(sandbox_schema_names(), baseline), [], fn schema_name,
-                                                                                acc ->
+      Enum.reduce(MapSet.difference(sandbox_schema_names(), baseline), [], fn schema_name, acc ->
         case query_without_holding(fn -> resilient_drop_schema(schema_name) end) do
           :ok -> acc
           {:error, reason} -> [{schema_name, reason} | acc]

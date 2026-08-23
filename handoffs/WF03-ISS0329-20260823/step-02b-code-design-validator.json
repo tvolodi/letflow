@@ -14,12 +14,16 @@
   "context": {
     "stage": "S4",
     "requirement_ids": [],
-    "issue_ids": ["ISS-0329"],
+    "issue_ids": [
+      "ISS-0329"
+    ],
     "requirement_text": {
       "ISS-0329": "auth_pipeline_configurable_verifier_test.exs:140 hardcodes idp_realm_id causing cross-partition unique constraint collision. Fix: use unique_realm/1 + dynamic Application.put_env for :oidc_jit_provisioning with on_exit cleanup. Test-code only change."
     },
     "source_text": {},
-    "related_handoff_ids": ["step2-WF03-ISS0329-20260823"],
+    "related_handoff_ids": [
+      "step2-WF03-ISS0329-20260823"
+    ],
     "artifacts_in": [
       "lib/letflow/design/iss0329-jit-disabled-realm-unique.md",
       "handoffs/WF03-ISS0329-20260823/step-02-code-designer.json",
@@ -40,20 +44,7 @@
   },
   "result": {
     "status": "PASS",
-    "summary": {
-      "verdict": "PASS — all 8 acceptance criteria satisfied; design is unambiguous enough for ELIXIR-DEV to implement from.",
-      "criteria": {
-        "1_single_file": "PASS — Section 4 (Scope Boundary) names exactly one file as CHANGE: test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs. No other file is listed as CHANGE.",
-        "2_naive_swap_insufficient": "PASS — Section 2 explains the exact failure chain: for_realm/1 reads the config map, Map.fetch/2 misses on the generated realm, falls through to default/1, which returns enabled: true, causing JIT to succeed and the pipeline to return HTTP 200, failing the assert conn.status == 403.",
-        "3_put_env_on_exit_pattern": "PASS — Section 3.3 Steps 2–4 (prose only) specify: read Application.get_env into original_jit_config; register on_exit to restore via Application.put_env; then call Application.put_env with a map containing the unique realm keyed to %{enabled: false, default_status: :active, default_roles: []}. The config map shape is stated explicitly in Step 4 and repeated in Section 7.",
-        "4_config_before_insert": "PASS — Section 3.4 states the ordering invariant explicitly in a diagram: put_env(add realm) → insert_tenant_for_realm! → call_pipeline. Section 3.3 Step 5 also calls this out in prose as a required ordering.",
-        "5_explicit_scope_exclusions": "PASS — Section 4 Out of Scope table lists config/test.exs, lib/letflow/oidc/jit_provisioning_config.ex, any other file under lib/, and scripts/test_parallel.sh — all three required exclusions are present.",
-        "6_iss0108_bpm_default": "PASS — Section 5 explicitly notes auth_pipeline_test.exs:131 uses hardcoded 'bpm-default', states it is already tracked as ISS-0108, and declares it out of scope for this fix.",
-        "7_test_parallel_retracted": "PASS — Section 6 explicitly states the exit-code concern 'has been retracted as a misread of the script' and confirms no change to scripts/test_parallel.sh is needed.",
-        "8_no_compilable_code": "PASS — All function references in Section 3.2 are @spec signatures only (no def/do/end bodies). Section 3.3 uses numbered prose steps. Section 3.4's ordering invariant is ASCII pseudocode, not valid Elixir. No compilable code blocks are present anywhere in the document.",
-        "clarity_check": "PASS — The config entry shape (%{enabled: false, default_status: :active, default_roles: []}) is stated in both Section 3.3 Step 4 and Section 7. Affected line (140) is identified. The three new statements are described in order. on_exit placement (before the put_env mutation) is explicit. ELIXIR-DEV has a complete, unambiguous specification."
-      }
-    },
+    "summary": "PASS -- all 8 acceptance criteria independently verified against the design artefact. (1) Names exactly one file: test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs. (2) Explains why unique_realm/1 alone is insufficient: for_realm/1 falls back to default/1 which returns enabled: true for unknown realms. (3) Specifies Application.put_env pattern with on_exit cleanup, config entry shape %{enabled: false, default_status: :active, default_roles: []} explicit. (4) Config mutation precedes insert_tenant_for_realm! -- ordering stated explicitly in §3.3 and §3.4 diagram. (5) config/test.exs, lib/, scripts/test_parallel.sh all explicitly scoped out. (6) auth_pipeline_test.exs:131 (bpm-default) noted as ISS-0108, out of scope. (7) test_parallel.sh exit-code concern confirmed retracted, no change needed. (8) No compilable Elixir code -- only @spec signatures and prose throughout. Design is unambiguous enough for ELIXIR-DEV to implement.",
     "artifacts_out": [
       "handoffs/WF03-ISS0329-20260823/step-02b-code-design-validator.json"
     ],

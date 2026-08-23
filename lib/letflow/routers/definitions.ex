@@ -427,7 +427,7 @@ defmodule Letflow.Routers.Definitions do
   # ── GET /definitions/delta (REQ-125, MOB-3 delta sync) ─────────────────
 
   defp handle_delta(conn) do
-    with_authorized_scope(conn, "GET", "/definitions/delta", fn conn, opts ->
+    with_authorized_scope(conn, "GET", "/definitions/delta", fn conn, opts, _actor_id ->
       conn = fetch_query_params(conn)
 
       case parse_since_param(Map.get(conn.query_params, "since")) do

@@ -793,3 +793,39 @@ history:
       build instead). Follow-up filed: ISS-0296 (queue task 296, GH#594).
       28 on-disk `- req:` entries in requirement_status.v4.yaml before this
       append; 29 after.
+  - req: REQ-140
+    event: started
+    agent: ORCH
+    at: "2026-08-23T14:00:00Z"
+    note: >
+      WF02-REQ140-20260823. Full pipeline: CODE-DESIGNER wrote
+      lib/letflow/design/req140-platform-event-append-path.md, resolving
+      the requirement's own open question (module placement) with
+      reasoning. CODE-DESIGN-VALIDATOR PASS. ELIXIR-DEV implemented
+      EventStore.append_platform_event/2 (append/2 left byte-unchanged) and
+      Letflow.EventStore.PlatformEvents (three deterministic adapters).
+  - req: REQ-140
+    event: done
+    agent: ORCH
+    at: "2026-08-23T15:35:00Z"
+    note: >
+      SECURITY-REVIEWER PASS (INV-1 tenant isolation confirmed -- platform
+      sentinel check happens before the M1 guard-skip, all writes remain
+      prefix-scoped). REVIEWER PASS (idiom, scope, decision-record
+      consistency clean). TEST-DESIGNER wrote
+      test/letflow/event_store/platform_events_test.exs (new) and extended
+      test/letflow/tenant_provisioning_event_seed_test.exs. TEST-RUNNER:
+      platform_events_test.exs 9/9, tenant_provisioning_event_seed_test.exs
+      9/9, full event_store regression guard 175/175, all passed. A
+      broader 16-way-parallel full-suite run surfaced 3 pre-existing,
+      unrelated flakes (confirmed via git diff not touching this branch)
+      -- registered separately as ISS-0297, not blocking. RELEASE-VALIDATOR
+      independently re-derived and PASSed all 13 acceptance criteria
+      against real re-run tests (184/184 combined). Unblocks REQ-077
+      (promotion routes) -- REQ-077 remains status: blocked pending its own
+      follow-up run to wire these appenders in, not implemented here (out
+      of REQ-140's scope). This run's own base predated REQ-134's landing on
+      main, so its own pre-rebase recount (27) was stale; recounted directly
+      from `grep -c "^  - req:"` on the composed post-rebase file = 31,
+      per this note's own recount-every-time rule, rather than carrying
+      forward either side's independently-computed number.

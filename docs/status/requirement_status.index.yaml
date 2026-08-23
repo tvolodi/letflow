@@ -521,7 +521,7 @@ volumes:
     path: docs/status/requirement_status.v4.yaml
     status: current
     opened: 2026-08-23
-    entries: 29
+    entries: 31
     note: >
       Opened by WF02-REQ082-20260823's own Step Final roll, successor to
       volume 3. Created with volume 3's header text verbatim (volume number,
@@ -618,6 +618,15 @@ volumes:
       from `grep -c "^  - req:" docs/status/requirement_status.v4.yaml` = 29,
       rather than carrying forward either side's independently-computed
       27/28, per this note's own recount-every-time rule.
+      Incremented to 31 by ORCH's own REQ-140 started+done event pair (2
+      appends), whose own Step Final rebase found main already advanced by
+      the REQ-134+REQ-133 composition above (this run's base predated it,
+      so its own pre-rebase count of 27 was stale). REQ-140 started
+      (14:00:00Z) and done (15:35:00Z) both sort after REQ-133's blocked
+      event (13:50:00Z), so both append cleanly with no reordering.
+      Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v4.yaml` on the composed post-rebase
+      file = 31, per this note's own recount-every-time rule.
 
 
 known_anomalies:

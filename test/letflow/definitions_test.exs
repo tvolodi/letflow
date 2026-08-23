@@ -327,4 +327,59 @@ defmodule Letflow.DefinitionsTest do
              "moduledoc does not frame the residual gap as a disclosed, deferred limitation"
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-125 acceptance criterion 2 (MOB-3 delta sync): "the choice between timestamp
+  # and monotonic cursor is stated in the moduledoc with its reasoning, and clock
+  # skew is addressed explicitly." Per this run's own task instructions this is a
+  # doc check, not a behavioural test -- delta/2's actual query behaviour (AC1,
+  # AC3, AC4) is covered in test/letflow/definitions/store_test.exs, which needs a
+  # real tenant schema; this is the pure doc-content half, same convention as
+  # every other moduledoc-content block in this file.
+  # ---------------------------------------------------------------------------------
+
+  describe "moduledoc -- AC2: delta/2's cursor-choice reasoning and clock-skew treatment are stated explicitly (REQ-125)" do
+    test "states since is a monotonically increasing integer, never a wall-clock timestamp" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~ "monotonically increasing integer",
+             "moduledoc does not state since is a monotonically increasing integer"
+
+      assert doc =~ "never a wall-clock timestamp",
+             "moduledoc does not state since is never a wall-clock timestamp"
+    end
+
+    test "addresses clock skew explicitly as the failure mode this endpoint runs under" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~ "Clock skew is exactly the failure mode this endpoint runs under",
+             "moduledoc does not address clock skew explicitly"
+
+      assert doc =~ "device clock's drift, timezone misconfiguration, or leap-second smear",
+             "moduledoc does not name the concrete clock-skew failure modes"
+
+      assert doc =~ "has no notion of \"now\" on either side",
+             "moduledoc does not state the monotonic counter's independence from wall-clock time"
+    end
+
+    test "states the counter is server-assigned inside the same transaction as the row mutation it sequences" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~ "server-assigned and bumped inside the same transaction",
+             "moduledoc does not state the counter is server-assigned and bumped in the same transaction"
+    end
+
+    test "states a since that predates retained history is not a distinguishable error state, and why" do
+      doc = normalized_moduledoc(Definitions)
+
+      assert doc =~ "predates retained history",
+             "moduledoc does not address the since-predates-history case"
+
+      assert doc =~ "has no expiry and no pruning",
+             "moduledoc does not state the counter has no expiry and no pruning"
+
+      assert doc =~ "give me full history",
+             "moduledoc does not state since: nil/0 means full history"
+    end
+  end
 end

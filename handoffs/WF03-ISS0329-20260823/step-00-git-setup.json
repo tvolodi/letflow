@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0329-20260823/step-00-git-setup.json",
   "created_at": "2026-08-23T23:41:20Z",
   "started_at": "2026-08-23T23:41:20Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-23T23:47:38Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -38,19 +38,19 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Checked out main, confirmed up-to-date with origin/main (already at 4d3490ab). Created branch feature/WF03-ISS0329-20260823 and pushed to origin with upstream tracking set. git branch --show-current confirmed correct branch. push exited 0 with '* [new branch]' in output.",
+    "artifacts_out": ["branch: feature/WF03-ISS0329-20260823"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": null,
+      "branch_name": "feature/WF03-ISS0329-20260823",
+      "commit_sha_list": ["4d3490ab43c431bf5323bfc04c906a2c9d6234aa"],
+      "remote_branch": "origin/feature/WF03-ISS0329-20260823",
+      "push_status": "success — * [new branch] feature/WF03-ISS0329-20260823 -> feature/WF03-ISS0329-20260823",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "ORCH routes to ISSUE-FIXER for Step 0.5 and Step 1 (diagnose)"
+    "next_action": "ORCH routes to ISSUE-FIXER for Step 0.5 and Step 1"
   },
   "rework_count": 0,
   "max_rework": 3

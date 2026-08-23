@@ -1,0 +1,76 @@
+{
+  "handoff_id": "step4c-WF03-ISS0329-20260823",
+  "run_id": "WF03-ISS0329-20260823",
+  "workflow_id": "WF-03",
+  "step": "4c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0329-20260823/step-04c-test-runner.json",
+  "created_at": "2026-08-24T00:20:23Z",
+  "started_at": "2026-08-24T00:20:23Z",
+  "completed_at": "2026-08-24T00:50:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0329"],
+    "requirement_text": {
+      "ISS-0329": "auth_pipeline_configurable_verifier_test.exs:140 hardcoded idp_realm_id fixed. Full parallel test suite required to confirm no regressions."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step4-WF03-ISS0329-20260823"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0329-20260823/step-04-test-designer.json",
+      "handoffs/WF03-ISS0329-20260823/step-04b-test-design-validator.json"
+    ],
+    "owned_modules": [
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Run the full test suite for the ISS-0329 fix branch.\n\nRun: `TEST_PARALLEL_N=4 sh scripts/test_parallel.sh`\n\nThis is specifically required by ISS-0329's acceptance criteria ('A full sh scripts/test_parallel.sh (TEST_PARALLEL_N=4) run passes with 0 failures across all partitions').\n\nIf Postgres is not running, start it: `docker compose up -d postgres` and wait for it to be ready.\n\nCheck docs/anti-patterns.md for the local toolchain path if `mix` is not on PATH.\n\nReport:\n1. The combined test count (e.g. 1986/1986)\n2. The number of failures across all partitions\n3. Any failures that ARE related to this branch's changes vs. pre-existing failures\n4. The exit code of scripts/test_parallel.sh\n\nA PASS is: 0 failures OR all failures are pre-existing/unrelated to this branch's changes and are documented as such.",
+    "acceptance_criteria": [
+      "TEST_PARALLEL_N=4 scripts/test_parallel.sh run completed",
+      "0 failures specifically related to auth_pipeline_configurable_verifier_test.exs or the :oidc_jit_provisioning config change",
+      "Any pre-existing failures identified and attributed to unrelated causes",
+      "scripts/test_parallel.sh exit code reported"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "RERUN PASS. combined: 1991 tests, 5 properties, 0 failures (1996/1996 passed). Exit code: 0. Partition breakdown: P1 532t/0p/0f exit0, P2 442t+4p/0f exit0, P3 540t+1p/0f exit0, P4 477t+0p/0f exit0 (3 excluded). ISS-0329 fix file auth_pipeline_configurable_verifier_test.exs: 0 failures. Prior T-H6-ZERO-NEW failure cleared after normalizing step-02b result.summary to a plain string (commit f46313a). Suite fully green.",
+    "artifacts_out": ["test/reports/report-20260824-WF03-ISS0329.yaml"],
+    "issues": [],
+    "gate_history": [
+      {
+        "attempt": 1,
+        "timestamp_utc": "2026-08-23T19:40:07Z",
+        "verdict": "FAIL",
+        "combined": "1991 tests, 5 properties, 1 failures (1995/1996 passed)",
+        "exit_code": 1,
+        "failure": "T-H6-ZERO-NEW in letflow.lint_handoffs_test.exs:333 -- FunctionClauseError in String.length/1; root cause: step-02b-code-design-validator.json result.summary was a map, not a string"
+      },
+      {
+        "attempt": 2,
+        "timestamp_utc": "2026-08-24T00:50:00Z",
+        "verdict": "PASS",
+        "combined": "combined: 1991 tests, 5 properties, 0 failures (1996/1996 passed)",
+        "exit_code": 0,
+        "trigger_commit": "f46313a",
+        "note": "step-02b result.summary normalized to string; T-H6-ZERO-NEW cleared; suite fully green"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0329-20260823",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0329-20260823",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "PASS: Route to RELEASE-VALIDATOR. Suite fully green — 1991 tests, 5 properties, 0 failures (1996/1996 passed). ISS-0329 fix (auth_pipeline_configurable_verifier_test.exs) confirmed 0 failures. Prior T-H6-ZERO-NEW failure cleared."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

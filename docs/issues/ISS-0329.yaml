@@ -49,4 +49,15 @@ affected_files:
   - test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs
 queue_task_id: 329
 github_issue: 630
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0329-20260823
+resolved_at: 2026-08-23T19:55:46Z
+resolution_note: >
+  Root cause removed. The JIT-disabled realm test (line 140) now uses
+  `unique_realm("jit-disabled")` and dynamically adds the unique realm to the
+  `:oidc_jit_provisioning` Application config with
+  `%{enabled: false, default_status: :active, default_roles: []}` before
+  `insert_tenant_for_realm!/1`, restoring the original config in `on_exit`.
+  The hardcoded 'jit-disabled-test-realm' literal that collided on
+  tenants.idp_realm_id's unique partial index under parallel execution is
+  gone. Fix commit 4146622 on branch feature/WF03-ISS0329-20260823.

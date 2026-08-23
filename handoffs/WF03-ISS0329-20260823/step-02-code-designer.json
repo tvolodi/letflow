@@ -1,0 +1,63 @@
+{
+  "handoff_id": "step2-WF03-ISS0329-20260823",
+  "run_id": "WF03-ISS0329-20260823",
+  "workflow_id": "WF-03",
+  "step": "2",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0329-20260823/step-02-code-designer.json",
+  "created_at": "2026-08-23T23:54:48Z",
+  "started_at": "2026-08-23T23:54:48Z",
+  "completed_at": "2026-08-23T23:57:14Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0329"],
+    "requirement_text": {
+      "ISS-0329": "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs:140 sets realm = \"jit-disabled-test-realm\", a hardcoded literal, causing a unique constraint violation on tenants.idp_realm_id when run concurrently in test_parallel.sh with TEST_PARALLEL_N=4. The fix requires: (1) use unique_realm/1 for the realm in the JIT-disabled test body, AND (2) dynamically add the unique realm to :oidc_jit_provisioning Application config with enabled: false and clean up via on_exit. The test_parallel.sh exit-code sub-finding is RETRACTED as a misread -- no change needed for that script."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step05-WF03-ISS0329-20260823"],
+    "artifacts_in": [
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs",
+      "lib/letflow/oidc/jit_provisioning_config.ex",
+      "config/test.exs",
+      "handoffs/WF03-ISS0329-20260823/step-05-issue-fixer-diagnose.json"
+    ],
+    "owned_modules": [
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Produce a fix design for ISS-0329. This is a TEST-only change to one file: test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs. The fix is to the 'JIT-disabled realm (403)' test at line 140.\n\nKEY CONTEXT (from ISSUE-FIXER Step 1 diagnosis):\n- Line 140: `realm = \"jit-disabled-test-realm\"` (hardcoded, causes cross-partition unique constraint collision)\n- A naive `realm = unique_realm(\"jit-disabled\")` is NOT sufficient because `JitProvisioningConfig.for_realm/1` falls back to `default/1` (enabled: true) for unknown realms, causing the pipeline to return 200 instead of 403\n- The complete fix must also dynamically update `Application.get_env(:letflow, :oidc_jit_provisioning)` within the test body\n- `auth_pipeline_test.exs:131` also hardcodes `\"bpm-default\"` as idp_realm_id but is already tracked under ISS-0108 -- document this finding but it is OUT OF SCOPE for this fix\n- `test_parallel.sh` exit-code concern is RETRACTED (no code change needed)\n\nDESIGN ARTEFACT: Write to `lib/letflow/design/iss0329-jit-disabled-realm-unique.md`.\n\nThe design must include:\n1. Exact file to change: `test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs`\n2. Exact lines to change (describe, do NOT write compilable Elixir code bodies)\n3. Why unique_realm/1 alone is insufficient -- reference JitProvisioningConfig.default/1's enabled: true fallback\n4. The Application.put_env pattern: add the unique realm to the :oidc_jit_provisioning config map with `%{enabled: false, default_status: :active, default_roles: []}`, and restore in on_exit\n5. Ordering: the config mutation must happen BEFORE insert_tenant_for_realm!(realm) -- insert_tenant_for_realm! calls TenantProvisioning.provision_tenant_schema/1 which also sets Sandbox to :auto, so order within the test body matters\n6. Scope: ONLY this one test file, ONLY this one test body. No changes to config/test.exs. No changes to lib/. No changes to scripts/.\n7. Note about auth_pipeline_test.exs:131 (bpm-default) -- already tracked as ISS-0108, out of scope here\n8. Note about test_parallel.sh exit-code (RETRACTED, no change needed)\n\nDO NOT include compilable Elixir function bodies or code blocks. Use @spec and prose only.",
+    "acceptance_criteria": [
+      "Design names exactly one file to change: test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs",
+      "Design explains why unique_realm/1 alone is insufficient (JitProvisioningConfig.default/1 enabled: true fallback)",
+      "Design specifies Application.put_env pattern for :oidc_jit_provisioning with on_exit cleanup",
+      "Design states the config mutation must precede insert_tenant_for_realm!",
+      "Design explicitly scopes out: config/test.exs, lib/, scripts/test_parallel.sh",
+      "Design notes auth_pipeline_test.exs:131 (bpm-default) is tracked as ISS-0108 and out of scope",
+      "Design notes test_parallel.sh exit-code concern is retracted",
+      "No compilable Elixir code in the design artefact (only @spec + prose)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design artefact written to lib/letflow/design/iss0329-jit-disabled-realm-unique.md. Covers all 8 acceptance criteria: names exactly one test file; explains why unique_realm alone is insufficient (JitProvisioningConfig.default/1 enabled:true fallback); specifies Application.put_env pattern with on_exit cleanup; states config mutation must precede insert_tenant_for_realm!; explicitly scopes out config/test.exs, lib/, scripts/test_parallel.sh; notes auth_pipeline_test.exs:131 bpm-default is ISS-0108 out of scope; notes test_parallel.sh concern is retracted; contains no compilable Elixir code.",
+    "artifacts_out": ["lib/letflow/design/iss0329-jit-disabled-realm-unique.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0329-20260823",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0329-20260823",
+      "push_status": "skipped (design step)",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (step-03)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

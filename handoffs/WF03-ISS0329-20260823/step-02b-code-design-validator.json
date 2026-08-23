@@ -1,0 +1,64 @@
+{
+  "handoff_id": "step2b-WF03-ISS0329-20260823",
+  "run_id": "WF03-ISS0329-20260823",
+  "workflow_id": "WF-03",
+  "step": "2b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0329-20260823/step-02b-code-design-validator.json",
+  "created_at": "2026-08-23T23:57:44Z",
+  "started_at": "2026-08-23T23:57:44Z",
+  "completed_at": "2026-08-23T23:59:18Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0329"
+    ],
+    "requirement_text": {
+      "ISS-0329": "auth_pipeline_configurable_verifier_test.exs:140 hardcodes idp_realm_id causing cross-partition unique constraint collision. Fix: use unique_realm/1 + dynamic Application.put_env for :oidc_jit_provisioning with on_exit cleanup. Test-code only change."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "step2-WF03-ISS0329-20260823"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0329-jit-disabled-realm-unique.md",
+      "handoffs/WF03-ISS0329-20260823/step-02-code-designer.json",
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs",
+      "lib/letflow/oidc/jit_provisioning_config.ex"
+    ],
+    "owned_modules": [
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"
+    ]
+  },
+  "task": {
+    "description": "HARD GATE. Independently validate lib/letflow/design/iss0329-jit-disabled-realm-unique.md against ISS-0329's 8 acceptance criteria and WF-03 Step 2 requirements. Read the design artefact directly -- do NOT rely solely on CODE-DESIGNER's result.summary.\n\nCheck each acceptance criterion explicitly:\n1. Names exactly one file to change: test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs\n2. Explains why unique_realm/1 alone is insufficient (JitProvisioningConfig.default/1 enabled: true fallback)\n3. Specifies Application.put_env pattern for :oidc_jit_provisioning with on_exit cleanup\n4. States the config mutation must precede insert_tenant_for_realm!\n5. Explicitly scopes out: config/test.exs, lib/, scripts/test_parallel.sh\n6. Notes auth_pipeline_test.exs:131 (bpm-default) is tracked as ISS-0108, out of scope\n7. Notes test_parallel.sh exit-code concern is retracted\n8. No compilable Elixir code in the design artefact (only @spec + prose)\n\nAlso verify: the design is unambiguous enough for ELIXIR-DEV to implement from. The fix pattern must be complete: what lines change, what the config mutation looks like (shape of the map entry), where on_exit goes, ordering relative to insert_tenant_for_realm!.",
+    "acceptance_criteria": [
+      "All 8 criteria verified against the actual design artefact",
+      "Design is unambiguous enough to implement from (no gaps in the fix pattern)",
+      "No implementation code present in the design"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS -- all 8 acceptance criteria independently verified against the design artefact. (1) Names exactly one file: test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs. (2) Explains why unique_realm/1 alone is insufficient: for_realm/1 falls back to default/1 which returns enabled: true for unknown realms. (3) Specifies Application.put_env pattern with on_exit cleanup, config entry shape %{enabled: false, default_status: :active, default_roles: []} explicit. (4) Config mutation precedes insert_tenant_for_realm! -- ordering stated explicitly in §3.3 and §3.4 diagram. (5) config/test.exs, lib/, scripts/test_parallel.sh all explicitly scoped out. (6) auth_pipeline_test.exs:131 (bpm-default) noted as ISS-0108, out of scope. (7) test_parallel.sh exit-code concern confirmed retracted, no change needed. (8) No compilable Elixir code -- only @spec signatures and prose throughout. Design is unambiguous enough for ELIXIR-DEV to implement.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0329-20260823/step-02b-code-design-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0329-20260823",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0329-20260823",
+      "push_status": "skipped (gate step)",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV for implementation"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

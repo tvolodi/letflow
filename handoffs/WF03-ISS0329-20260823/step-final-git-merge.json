@@ -1,0 +1,62 @@
+{
+  "handoff_id": "stepfinal-WF03-ISS0329-20260823",
+  "run_id": "WF03-ISS0329-20260823",
+  "workflow_id": "WF-03",
+  "step": "Final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0329-20260823/step-final-git-merge.json",
+  "created_at": "2026-08-24T00:56:41Z",
+  "started_at": "2026-08-24T00:56:41Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0329"],
+    "requirement_text": {
+      "ISS-0329": "All WF-03 gates passed. Fix: unique_realm + dynamic :oidc_jit_provisioning for jit-disabled test. Suite: 1996/1996, 0 failures. Ready to merge."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step5-WF03-ISS0329-20260823"],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "handoffs/WF03-ISS0329-20260823/step-04c-test-runner.json",
+      "handoffs/WF03-ISS0329-20260823/step-05-issue-fixer-close.json"
+    ],
+    "owned_modules": [
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Execute GIT_MERGE.md procedure for WF03-ISS0329-20260823. Read docs/agents/protocols/GIT_MERGE.md first.\n\nBranch: feature/WF03-ISS0329-20260823\n\nSummary of what's on the branch:\n- fix(ISS-0329): use unique_realm for jit-disabled test, dynamic :oidc_jit_provisioning config (commit 4146622)\n- test/specs/ISS-0329.md (regression test spec)\n- All WF-03 handoff files\n- docs/issues/ISS-0329.yaml updated to resolved\n\nAll gates passed:\n- CODE-DESIGN-VALIDATOR: PASS\n- SECURITY-REVIEWER: PASS\n- REVIEWER: PASS\n- TEST-DESIGN-VALIDATOR: PASS\n- TEST-RUNNER (final): 1996/1996, 0 failures, exit 0\n- ISS-0329 closed on GH#630 with evidence comment\n\nProceed with the full GIT_MERGE.md procedure:\n1. Rebase onto origin/main\n2. Run mix compile --warnings-as-errors (exit 0 required)\n3. Run mix format --check-formatted (exit 0 required)\n4. Run mix test (or mix letflow.check) to verify no regressions\n5. Open a PR\n6. Wait for CI\n7. Merge\n8. Fast-forward local main, delete feature branch (local + remote)\n9. Release queue task 329",
+    "acceptance_criteria": [
+      "Branch feature/WF03-ISS0329-20260823 rebased onto main cleanly",
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted exits 0",
+      "mix test (or mix letflow.check) exits 0",
+      "PR opened and CI passes",
+      "PR merged to main",
+      "Feature branch deleted (local and remote)",
+      "Queue task 329 released with status done"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0329-20260823",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0329-20260823",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH records RUN_DONE after Step Final PASS"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,59 @@
+{
+  "handoff_id": "step3-WF03-ISS0329-20260823",
+  "run_id": "WF03-ISS0329-20260823",
+  "workflow_id": "WF-03",
+  "step": "3",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0329-20260823/step-03-elixir-dev.json",
+  "created_at": "2026-08-24T00:00:04Z",
+  "started_at": "2026-08-24T00:00:04Z",
+  "completed_at": "2026-08-24T00:03:15Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0329"],
+    "requirement_text": {
+      "ISS-0329": "auth_pipeline_configurable_verifier_test.exs:140 hardcodes idp_realm_id causing cross-partition unique constraint collision. Fix: use unique_realm/1 + dynamic Application.put_env for :oidc_jit_provisioning with on_exit cleanup."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step2b-WF03-ISS0329-20260823"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0329-jit-disabled-realm-unique.md",
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Implement the fix for ISS-0329 per the design in lib/letflow/design/iss0329-jit-disabled-realm-unique.md.\n\nThe ONLY file to change is: test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs\n\nSpecifically, in the 'JIT-disabled realm (403, distinct from every 401 case)' describe block's test body (currently line 140):\n\nReplace:\n  realm = \"jit-disabled-test-realm\"\n  tenant = insert_tenant_for_realm!(realm)\n\nWith:\n  realm = unique_realm(\"jit-disabled\")\n  original_jit_config = Application.fetch_env!(:letflow, :oidc_jit_provisioning)\n  Application.put_env(:letflow, :oidc_jit_provisioning, Map.put(original_jit_config, realm, %{enabled: false, default_status: :active, default_roles: []}))\n  on_exit(fn -> Application.put_env(:letflow, :oidc_jit_provisioning, original_jit_config) end)\n  tenant = insert_tenant_for_realm!(realm)\n\nThe `unique_realm/1` helper already exists in the same file (lines 145-147).\nThe `Application.put_env` pattern mirrors the existing module-level setup/0 which already does this for config :letflow, :oidc.\n\nDo NOT change any other file. Do NOT modify config/test.exs, lib/, scripts/, or any other test files.\n\nAfter making the change:\n1. Run `mix compile --warnings-as-errors` to confirm the file compiles cleanly\n2. Run `mix test test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs` to confirm all 3 tests in the file pass (isolated, single-partition)\n3. Run `mix format --check-formatted` on the changed file\n\nIf any step fails, fix and re-run before completing the handoff.",
+    "acceptance_criteria": [
+      "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs:140 (now) uses unique_realm(\"jit-disabled\") instead of hardcoded \"jit-disabled-test-realm\"",
+      "Application.put_env(:letflow, :oidc_jit_provisioning, ...) with the unique realm added and on_exit cleanup precedes insert_tenant_for_realm!",
+      "mix compile --warnings-as-errors exits 0",
+      "mix test test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs -- 3 tests, 0 failures",
+      "mix format --check-formatted exits 0 for the changed file",
+      "No other files modified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Replaced hardcoded 'jit-disabled-test-realm' with unique_realm(\"jit-disabled\") and added dynamic Application.put_env for :oidc_jit_provisioning with on_exit cleanup. Format fix applied (multi-line Map.put and on_exit expansion). mix compile --warnings-as-errors: 0 warnings. mix test auth_pipeline_configurable_verifier_test.exs: 3 tests, 0 failures (both before and after format fix). mix format --check-formatted: exit 0. Only test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs modified. Commit: 4146622.",
+    "artifacts_out": ["test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0329-20260823",
+      "commit_sha_list": ["4146622"],
+      "remote_branch": "origin/feature/WF03-ISS0329-20260823",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

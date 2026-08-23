@@ -1,0 +1,44 @@
+id: ISS-0293
+title: >
+  test/docs/requirement_status_invariants_test.exs A4a/A5 fail against
+  docs/status/requirement_status.v4.yaml:378 (ISS-0289 vocabulary-drift line)
+discovered_by: ORCH
+discovered_in_run: "WF-02 REQ-131 full-suite run; independently reproduced again in WF-02 REQ-132 full-suite run (PR #583)"
+discovered_at: 2026-08-23T07:39:25Z
+severity: MINOR
+description: >
+  Two independent runs (WF-02 for REQ-131, then WF-02 for REQ-132/PR #583) each
+  ran the full suite and independently reproduced the same pre-existing,
+  unrelated failures in test/docs/requirement_status_invariants_test.exs
+  (assertions A4a and A5), both citing a vocabulary-drift issue at
+  docs/status/requirement_status.v4.yaml:378 traced back to the ISS-0289
+  resolution entry appended to that file. Neither run treated it as blocking
+  (both confirmed pre-existing against a clean tree before the run's own
+  diff), but the failure was never filed as a tracked issue despite being
+  reproduced twice. Needs triage: read the actual A4a/A5 assertion text in
+  test/docs/requirement_status_invariants_test.exs, identify what
+  vocabulary/schema rule the line at requirement_status.v4.yaml:378 violates
+  (likely an event-type or req-id vocabulary drift introduced by the
+  ISS-0289 WF03-ISS0289-20260823 status-history append), and either fix the
+  offending status-file line to match the invariant schema or, if the
+  invariant itself is stale, adjust it -- with REVIEWER sign-off on any
+  decision-record-adjacent change per core-directives.md.
+affected_files:
+  - test/docs/requirement_status_invariants_test.exs
+  - docs/status/requirement_status.v4.yaml
+queue_task_id: 293
+github_issue: 586
+status: resolved
+resolved_in_run: "session queue-loop, ORCH direct (docs-only verification, no new fix needed)"
+resolved_at: 2026-08-23T07:41:00Z
+resolution_note: >
+  Already fixed before this issue was ever filed. Commit 8b23526
+  (chore(REQ-136): append status-history events, fix pre-existing req:
+  vocabulary drift), part of REQ-136's own rebase-onto-main step, corrected
+  docs/status/requirement_status.v4.yaml:378's `req: ISS-0289` to
+  `req: SCOPE-CHANGE` -- the exact vocabulary-drift line REQ-131 and
+  REQ-132's full-suite runs had both flagged. Verified live: `mix test
+  test/docs/requirement_status_invariants_test.exs` and `mix test
+  test/docs/` both pass 20/20, including A4a and A5, against the current
+  tree. No further action needed; filed and closed as a duplicate-of-already-fixed
+  record so the two prior reproductions have a tracked home.

@@ -258,7 +258,17 @@ defmodule Mix.Tasks.Letflow.AuditIssueClosuresTest do
 
       File.mkdir_p!(fixture_dir)
 
-      gh_script = Path.join(fixture_dir, "gh.bat")
+      # REQ-136 (2026-08-23): this fixture was Windows-only -- a `gh.bat` batch
+      # script (`%3`, `@echo off`, `exit /b 0`) plus a `;`-joined PATH, which is
+      # the Windows path-list separator. On a real GitHub Actions Linux runner
+      # both assumptions are wrong: `;` inside PATH is not a separator (it
+      # malforms the whole variable into one nonexistent directory entry), and
+      # even if it were, `gh.bat` is not an executable format `System.cmd/3`
+      # will invoke on Linux -- so `fetch_issue/1` silently fails to find any
+      # `gh` at all, producing a fetch error per issue rather than the intended
+      # fixture response. Write the OS-appropriate script and join PATH with the
+      # OS-appropriate separator instead of hardcoding either.
+      windows? = match?({:win32, _}, :os.type())
 
       # For real tracked issue #68 (already a real @grandfathered entry,
       # docs/issues/ISS-0012.yaml) and #15 (a real tracked, un-grandfathered
@@ -266,21 +276,48 @@ defmodule Mix.Tasks.Letflow.AuditIssueClosuresTest do
       # evidence -- a genuine ZERO_EVIDENCE violation. Every other real
       # tracked number gets an OPEN response so it is never a violation and
       # never pollutes this assertion.
-      File.write!(gh_script, """
-      @echo off
-      if "%3"=="68" (
-        echo {"number":68,"state":"CLOSED","comments":[],"closedByPullRequestsReferences":[]}
-        exit /b 0
-      )
-      if "%3"=="15" (
-        echo {"number":15,"state":"CLOSED","comments":[],"closedByPullRequestsReferences":[]}
-        exit /b 0
-      )
-      echo {"number":%3,"state":"OPEN","comments":[],"closedByPullRequestsReferences":[]}
-      exit /b 0
-      """)
+      if windows? do
+        gh_script = Path.join(fixture_dir, "gh.bat")
 
-      System.put_env("PATH", fixture_dir <> ";" <> (original_path || ""))
+        File.write!(gh_script, """
+        @echo off
+        if "%3"=="68" (
+          echo {"number":68,"state":"CLOSED","comments":[],"closedByPullRequestsReferences":[]}
+          exit /b 0
+        )
+        if "%3"=="15" (
+          echo {"number":15,"state":"CLOSED","comments":[],"closedByPullRequestsReferences":[]}
+          exit /b 0
+        )
+        echo {"number":%3,"state":"OPEN","comments":[],"closedByPullRequestsReferences":[]}
+        exit /b 0
+        """)
+      else
+        gh_script = Path.join(fixture_dir, "gh")
+
+        File.write!(gh_script, """
+        #!/bin/sh
+        case "$3" in
+          68)
+            echo '{"number":68,"state":"CLOSED","comments":[],"closedByPullRequestsReferences":[]}'
+            exit 0
+            ;;
+          15)
+            echo '{"number":15,"state":"CLOSED","comments":[],"closedByPullRequestsReferences":[]}'
+            exit 0
+            ;;
+          *)
+            echo "{\\"number\\":$3,\\"state\\":\\"OPEN\\",\\"comments\\":[],\\"closedByPullRequestsReferences\\":[]}"
+            exit 0
+            ;;
+        esac
+        """)
+
+        File.chmod!(gh_script, 0o755)
+      end
+
+      path_separator = if windows?, do: ";", else: ":"
+      System.put_env("PATH", fixture_dir <> path_separator <> (original_path || ""))
 
       on_exit(fn ->
         if original_path, do: System.put_env("PATH", original_path)

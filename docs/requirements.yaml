@@ -6627,7 +6627,7 @@ requirements:
   - id: REQ-136
     title: Introduce GitHub Actions CI running the backend gate
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 245  # letflow-queue task id
     description: >

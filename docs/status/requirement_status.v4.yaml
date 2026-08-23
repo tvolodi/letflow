@@ -375,7 +375,7 @@ history:
       3b/4 skipped), RELEASE-VALIDATOR -- all PASS, no rework needed. 9
       on-disk `- req:` entries in requirement_status.v4.yaml before this
       append; 10 after.
-  - req: ISS-0289
+  - req: SCOPE-CHANGE
     event: done
     agent: ORCH
     at: "2026-08-23T03:43:00Z"
@@ -488,3 +488,38 @@ history:
       RELEASE-VALIDATOR independently re-verified all 6 acceptance criteria
       PASS. 13 on-disk `- req:` entries in requirement_status.v4.yaml before
       this append; 14 after.
+  - req: REQ-136
+    event: started
+    agent: ORCH
+    at: "2026-08-23T02:45:00Z"
+    note: >
+      REQ-136 (GitHub Actions CI running the backend gate) started.
+  - req: REQ-136
+    event: done
+    agent: ORCH
+    at: "2026-08-23T06:10:00Z"
+    note: >
+      REQ-136 shipped: .github/workflows/ci.yml added with jobs.backend
+      running mix letflow.check against a postgres:16 service matching
+      docker-compose.yml, triggered on push and pull_request. Job keyed
+      as a named sibling-ready jobs.backend so REQ-138's future frontend
+      job can append without restructuring. docs/agents/protocols/
+      GIT_MERGE.md's stale "no CI exists" precondition corrected
+      (REVIEWER flag). First real CI run (32613777269) surfaced 3
+      pre-existing environment-sensitive test defects unrelated to this
+      requirement's own diff -- fixed directly per coordinator decision
+      (widened SandboxPoolTest's vacuity floor 200ms->100ms and
+      EngineConcurrencyTest's timing multiplier 30x->50x with measured
+      real-CI rationale in each; fixed AuditIssueClosuresTest's fake-gh
+      fixture, which was Windows-only (gh.bat, ;-joined PATH) and
+      silently failed to isolate on Linux CI producing 177 fetch errors
+      -- now branches on :os.type() for both the script and PATH
+      separator). Real CI run 32619149244 confirmed green after the
+      fixes. AC4 demonstrated for real: a deliberate mix-format
+      violation pushed and shown red on CI (run 32621650147, actual
+      log line quoted), then reverted and confirmed green again (run
+      32621691722). RELEASE-VALIDATOR independently re-verified all 6
+      acceptance criteria PASS, including re-running gh run list/view
+      itself and a local test rerun (47/47 passed) of the three fixed
+      files. 15 on-disk `- req:` entries in requirement_status.v4.yaml
+      before this pair; 17 after.

@@ -16,16 +16,16 @@ gates are green.
 ## Precondition
 
 CI must exist and be green for this protocol's step 7-8 (PR checks) to mean anything.
-**As of this writing, Letflow has no `.github/workflows/` CI configured yet** — that is
-S0's REQ-013 (`mix letflow.check` / equivalent gate), still `pending`. Until REQ-013
-lands and a CI workflow exists:
-- Steps 1-6 and 9-11 below still apply (rebase, commit, push, local cleanup).
-- Steps 7-8 (PR + merge) still apply, but `gh pr merge` will have no CI check to wait
-  on — proceed with the merge once ELIXIR-DEV/FRONTEND-DEV's own local
-  `mix format --check-formatted && mix compile --warnings-as-errors && mix test` (or
-  whatever REQ-013 settles on) has been run and reported green in this run's own
-  handoffs. Once REQ-013 lands, insert "wait for GitHub Actions check to report success
-  on the PR" between steps 7 and 8, mirroring R-Co's pattern.
+**As of REQ-136 (landed), Letflow has a `.github/workflows/ci.yml` backend job** that
+runs `mix letflow.check` against a `postgres:16` service on every `push` and
+`pull_request`. Insert "wait for the GitHub Actions `backend` job to report success on
+the PR" between steps 7 and 8, mirroring R-Co's pattern — use `gh pr checks <PR>` or
+`gh run view <run-id> --json jobs` to confirm the conclusion before proceeding to
+step 8's merge.
+
+REQ-138 (frontend gate, pending as of this writing) will add a sibling `frontend` job
+to the same workflow file; once it lands, step 7-8's wait must cover both jobs' PR
+checks, not just `backend`'s.
 
 **What "reported green" means here.** This suite carries a standing set of pre-existing
 failures (13-15 at the time of writing) and has for days, so "green" read as "zero

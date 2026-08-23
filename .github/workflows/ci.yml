@@ -1,0 +1,105 @@
+# REQ-136: GitHub Actions CI running the backend gate.
+#
+# Design note (kept inline -- this is infra config, not an Elixir module or
+# a data model, so a separate lib/letflow/design/ doc would just restate
+# this file; see CODE-DESIGNER's handoff for the full reasoning).
+#
+# 1. Postgres image match (acceptance criterion 3).
+#    docker-compose.yml:3            image: postgres:16
+#    this file, `services.postgres.image` below:   postgres:16
+#    Kept byte-for-byte identical on purpose: the backend gate's `mix test`
+#    step runs real Ecto migrations, and a version drift between dev/CI
+#    Postgres is exactly the kind of thing this CI is meant to catch, not
+#    introduce.
+#
+# 2. Why `mix letflow.check` and nothing else.
+#    `mix letflow.check` is the existing alias (mix.exs) that already runs
+#    the full local gate: toolchain-pin check, requirements-registration
+#    check, deferral-staleness check, handoff lint, `format --check-formatted`,
+#    `compile --warnings-as-errors`, and the test suite (which itself runs
+#    `ecto.create --quiet` + `ecto.migrate --quiet` before `test`, via this
+#    project's own `test` alias). REQ-136 is scoped to wiring this existing
+#    command into CI-as-a-service, not to changing what the gate checks --
+#    if the gate is ever found to be missing a step, that is a change to
+#    REQ-013's alias and is filed as its own requirement/finding, not folded
+#    in here. Hence exactly one `run: mix letflow.check` step below, and
+#    nothing hand-rolled alongside it.
+#
+# 3. Job-key structure for REQ-138 (future frontend job).
+#    This job is declared as `jobs.backend`, not as an implicit single
+#    top-level job or under a generic/unnamed key. REQ-138 (frontend gate,
+#    `npm run check`, blocked on REQ-115) is scoped to add `jobs.frontend`
+#    as a sibling of `jobs.backend` under the same `on: [push, pull_request]`
+#    triggers -- a pure append, touching none of this job's keys (`steps`,
+#    `services`, `runs-on`, etc.). Nothing about this file needs to be
+#    restructured for that to happen.
+#
+# Toolchain versions: read from .tool-versions (elixir 1.20.3-otp-29,
+# erlang 29.0.5) via setup-beam's version-file input rather than hardcoded
+# here, so CI and local `mix letflow.check_toolchain` can never silently
+# drift apart -- the same file backs both.
+#
+# actions/checkout uses fetch-depth: 0 (full history) because
+# `mix letflow.lint_handoffs` (one of `letflow.check`'s own steps) shells
+# out to `git merge-base --is-ancestor` and `git show` against repo history;
+# a shallow clone would make those git calls fail.
+#
+# Postgres service port is published as 5462:5432 to match
+# config/db_port.exs's un-overridden default (5462) -- config/test.exs
+# resolves `LETFLOW_DB_PORT` from the environment first, then an untracked
+# `.env`, then that same 5462 default; CI sets neither, so the service's
+# published port must be the one the default actually falls through to.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend gate (mix letflow.check)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: letflow
+          POSTGRES_PASSWORD: letflow
+          POSTGRES_DB: letflow_dev
+        ports:
+          - 5462:5432
+        options: >-
+          --health-cmd "pg_isready -U letflow"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Elixir/OTP (from .tool-versions)
+        uses: erlef/setup-beam@v1
+        with:
+          version-file: .tool-versions
+          version-type: strict
+
+      - name: Cache deps and _build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Run backend gate
+        run: mix letflow.check

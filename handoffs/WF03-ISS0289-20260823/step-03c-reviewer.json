@@ -1,0 +1,63 @@
+{
+  "handoff_id": "step03c-WF03-ISS0289-20260823",
+  "run_id": "WF03-ISS0289-20260823",
+  "workflow_id": "WF-03",
+  "step": "3c",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0289-20260823/step-03c-reviewer.json",
+  "created_at": "2026-08-23T10:00:00Z",
+  "started_at": "2026-08-23T10:00:00Z",
+  "completed_at": "2026-08-23T10:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0289-20260823/step-02-code-designer.json",
+      "handoffs/WF03-ISS0289-20260823/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0289-20260823/step-03-frontend-dev.json",
+      "handoffs/WF03-ISS0289-20260823/step-03b-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0289-user-detail-page-routing.md",
+      "web/src/router.tsx",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/UserDetailPage.tsx"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 idiom/scope hard gate (Step 2d equivalent) on FRONTEND-DEV's ISS-0289 implementation (commit da37fb3) -- wiring UserDetailPage.tsx into the router as admin/users/:userId and retiring UsersPage.tsx's inline detail/edit branch, after SECURITY-REVIEWER's step-03b PASS (commit 37d522c).",
+    "acceptance_criteria": [
+      "Implementation matches the validated design (lib/letflow/design/iss0289-user-detail-page-routing.md) with no undisclosed deviation beyond the flagged submitMessage removal",
+      "submitMessage-removal deviation assessed as reasonable or flagged as a problem",
+      "React/TypeScript idiom quality of the diff checked: clean file state, idiomatic React Router v6 usage, no code smell",
+      "No contradiction with docs/migration/decisions/, particularly 0011-frontend-ownership.md",
+      "owned_modules discipline confirmed: only router.tsx and UsersPage.tsx actually changed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Reviewed commit da37fb3 on feature/WF03-ISS0289-20260823 against the validated design, the full current state of web/src/router.tsx and web/src/pages/admin/UsersPage.tsx, and docs/migration/decisions/0011-frontend-ownership.md.\n\n1. Design conformance. `git show da37fb3 -- web/src/router.tsx web/src/pages/admin/UsersPage.tsx` matches the design's section 4 file-by-file plan line for line: router.tsx adds the UserDetailPage import and changes only the `admin/users/:id` entry (now `admin/users/:userId` -> `<UserDetailPage />`); `admin/users` (list) and every other route entry are untouched. UsersPage.tsx: showDeactivateConfirm/detailForm state, the selectedUserId useMemo (location.pathname regex), the userDetail query, the saveUser mutation, the sync useEffect, and the entire `if (selectedUserId) {...}` inline detail/edit JSX block are removed in full, matching the design's explicit removal list. The `useLocation` import/call is dropped, matching the design's 'remove if nothing else uses it' instruction (confirmed nothing else in the file reads location.pathname). createUser.onError drops the `navigate('/admin/users/temp-${Date.now()}')` hack, keeping `setError(...)`, exactly as designed. `git diff 195e957..HEAD --stat` (branch base) confirms only web/src/router.tsx and web/src/pages/admin/UsersPage.tsx changed among code files -- web/src/pages/admin/UserDetailPage.tsx, useAdminUsers.ts, and DeactivateUserDialog.tsx are untouched, matching the design's 'no changes' calls for section 4.2/4.4. No unauthorized scope creep found.\n\n2. submitMessage-removal deviation. Reasonable and correctly scoped, not a problem. The design's section 4.3 said to keep `submitMessage` state 'unchanged,' but that instruction implicitly assumed the state would still have a renderer -- it did not anticipate that its only JSX consumer (`<p data-testid=\"admin-user-submit-message\">`) lived entirely inside the block section 4.3 itself ordered deleted. Once that block was gone, `submitMessage` became genuinely dead: declared, written by `setSubmitMessage('Saved')`/`setSubmitMessage('User deactivated')`, never read. This is not a design contradiction, it is a design gap the implementer correctly noticed and resolved the only reasonable way -- removing dead state that tsc's TS6133 flagged as a hard compile error, not a stylistic call. Checked for consequence: no e2e/unit test asserts on `submitMessage` inside UsersPage.tsx (the shared `admin-user-submit-message` testid the specs actually touch lives in UserDetailPage.tsx, untouched, still rendering it). The only user-visible feedback channel UsersPage.tsx ever needed for its surviving list/create scope -- `error` -- is unaffected. FRONTEND-DEV disclosed this explicitly in the handoff's issues[] rather than silently diverging, which is the correct behavior under this project's deviation-disclosure norm. No rework needed.\n\n3. Idiom / cleanliness. Read web/src/pages/admin/UsersPage.tsx in full post-change (189 lines): no leftover unused imports (`useState` still used 6x, `useQuery`/`useMutation`/`useQueryClient` all still used -- `qc` survives via createUser.onSuccess's invalidateQueries, the only remaining mutation), no dead branches, no orphaned helper (`toggleRole`, `roleList`, `displayUsername` all still called from the surviving create-form/list-table JSX). The file reads as a clean, single-purpose list+create page -- no residue of the deleted detail/edit branch. Routing: the router.tsx change (add one import, rename one route's path param and swap its element) is idiomatic React Router v6 data-router usage, consistent with every other entry in the same `children` array (e.g. `definitions/:id`, `instances/:id`, `admin/tenants/:slug/edit` all follow the same flat path+element shape); no wrapper, loader, or abstraction introduced beyond what the route table already uses elsewhere. No code smell found.\n\n4. Decision-record consistency. docs/migration/decisions/0011-frontend-ownership.md establishes that web/ is a first-class, Letflow-owned subsystem gated the same way as lib/letflow/ -- this change is exactly that: a Letflow-gated frontend fix routed through the full WF-03 pipeline (CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> FRONTEND-DEV -> SECURITY-REVIEWER -> REVIEWER), consistent with the decision record's intent. No other decision record (framework choice, routing convention) is implicated by a route-table entry change; nothing in this diff reopens or contradicts a settled decision.\n\n5. owned_modules discipline. step-03-frontend-dev.json's owned_modules lists router.tsx, UsersPage.tsx, UserDetailPage.tsx. Confirmed via `git show da37fb3 --stat` and `git diff 195e957..HEAD --stat` that only router.tsx and UsersPage.tsx were actually touched by code changes -- UserDetailPage.tsx, though listed as owned (in scope to touch if needed), was correctly left untouched per the design's 'no changes' call. No file outside owned_modules was modified; the only other files in the branch diff are this run's own handoff JSONs and the design doc, which are expected WF-03 artifacts, not code changes.\n\nPer point 3 of the REVIEWER charter (type-safety gaps): none found -- this is a routing/JSX-removal change with no new transition logic, no new state shape, nothing that would benefit from a struct/Ecto.Enum change. No docs/issues/ entry filed.\n\nNo rework required.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0289-20260823/step-03c-reviewer.json"
+    ],
+    "issues": [
+      "Non-blocking, carried forward again for TEST-DESIGNER/product awareness (already flagged by the design, FRONTEND-DEV, and SECURITY-REVIEWER, not a review defect): whether a UsersPage.tsx list-row click should also navigate to /admin/users/${id} is an open product question, out of ISS-0289's scope.",
+      "Non-blocking, carried forward: UserDetailPage.tsx's PLATFORM_ADMIN gate is client-side only; SECURITY-REVIEWER already confirmed this is a net access-control ADD (the deleted inline branch had no equivalent gate) and flagged server-side enforcement for usersApi.get/update as a separate, pre-existing out-of-scope gap for a future requirement to audit."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0289-20260823",
+      "commit_sha_list": ["da37fb3"],
+      "remote_branch": "origin/feature/WF03-ISS0289-20260823",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

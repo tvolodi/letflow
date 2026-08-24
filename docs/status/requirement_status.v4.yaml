@@ -829,3 +829,17 @@ history:
       from `grep -c "^  - req:"` on the composed post-rebase file = 31,
       per this note's own recount-every-time rule, rather than carrying
       forward either side's independently-computed number.
+  - req: REQ-122
+    event: done
+    at: "2026-08-24T02:35:00Z"
+    note: >
+      Inventory of all 37 e2e spec files produced at
+      docs/testing/REQ-122-e2e-inventory.md. RUNNABLE-NOW set: 1 spec
+      (sh05-06.shell.e2e.spec.ts — 3/3 PASSED, no Keycloak, no backend
+      required). BLOCKED-ON-INFRA: 36 specs — 35 require Keycloak
+      bpm-default realm + seeded users; 1 (oidcf2-subdomain) requires
+      Letflow backend at :4000 for TC01/TC02 (TC03/TC04 pass). No spec
+      file under web/tests/e2e/ was modified (git diff confirmed clean).
+      Infrastructure needed to repeat: Playwright + Chromium + Vite dev
+      server only (for sh05-06); Letflow + Keycloak + Postgres + seeded
+      users for all others.

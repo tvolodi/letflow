@@ -5917,7 +5917,7 @@ requirements:
   - id: REQ-122
     title: Establish which Playwright e2e specs can run against Letflow, and what each needs
     owner: TEST-DESIGNER
-    status: pending
+    status: done
     stage: S8
     impl_order: 252  # letflow-queue task id; depends_on translated to queue task id [246]
     description: >

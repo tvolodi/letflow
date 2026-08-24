@@ -831,6 +831,7 @@ history:
       forward either side's independently-computed number.
   - req: REQ-122
     event: done
+    agent: ORCH
     at: "2026-08-24T02:35:00Z"
     note: >
       Inventory of all 37 e2e spec files produced at

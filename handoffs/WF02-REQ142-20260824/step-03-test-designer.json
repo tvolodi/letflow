@@ -3,7 +3,6 @@
   "run_id": "WF02-REQ142-20260824",
   "workflow_id": "WF-02",
   "step": "03",
-  "step_name": "Test Design",
   "from_agent": "ORCH",
   "to_agent": "TEST-DESIGNER",
   "file": "handoffs/WF02-REQ142-20260824/step-03-test-designer.json",

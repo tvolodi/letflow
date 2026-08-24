@@ -2343,16 +2343,16 @@
                                              "REQ-145"
                                          ],
                      "stage":  "S8",
-                     "status":  "ACTIVE",
+                     "status":  "COMPLETED",
                      "owned_modules":  [
                                            "web/src/components/layout/",
                                            "web/src/components/definitions/",
                                            "web/src/components/admin/"
                                        ],
                      "lock_acquired_at":  "2026-08-24T07:33:40Z",
-                     "lock_released_at":  null,
-                     "released_lock":  false,
-                     "last_known_step":  "Step 00 COMPLETED PASS -- branch created. Dispatching CODE-DESIGNER.",
+                     "lock_released_at":  "2026-08-24T08:00:39Z",
+                     "released_lock":  true,
+                     "last_known_step":  "Step Final COMPLETED PASS (pending PR/merge -- all gates green, 184/184, 48/48)",
                      "backfilled":  false,
                      "queue_task_id":  271,
                      "queue_agent_id":  "orch-main",

@@ -989,3 +989,17 @@ history:
       palette additions likely needed). depends_on REQ-141 (done). Branch
       feature/WF02-REQ145-20260824 created. Queue task 271 (GH#533).
       42 on-disk entries before this append; 43 after.
+  - req: REQ-145
+    event: done
+    agent: FRONTEND-DEV
+    at: "2026-08-24T08:00:39Z"
+    note: >
+      Migrated 45 hex literals across 7 files in layout/+definitions/+admin/
+      to CSS custom properties. Design-step addendum: 6 prerequisite changes
+      (5 new tokens + --surface-sidebar corrected from var(--color-neutral-900)
+      to #1e293b). CODE-DESIGN-VALIDATOR took 3 rework cycles (count stale in
+      summary, OQ-3 stale in §7, §1.2 stale count). SECURITY-REVIEWER (out of
+      scope), REVIEWER (PASS), TEST-DESIGNER (no new tests), RELEASE-VALIDATOR
+      (all 4 ACs verified: grep 0, 7 target files, no test files modified,
+      184/184 tests, 48/48 guards). 43 on-disk entries before this append;
+      44 after.

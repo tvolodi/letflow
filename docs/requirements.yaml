@@ -7081,7 +7081,7 @@ requirements:
   - id: REQ-145
     title: Migrate web/src/components/layout/, definitions/, and admin/ off inline hex literals to tokens.css custom properties
     owner: FRONTEND-DEV
-    status: in_progress
+    status: done
     stage: S8
     impl_order: 271  # letflow-queue task id
     description: >

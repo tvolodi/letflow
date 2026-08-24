@@ -857,3 +857,13 @@ history:
       which passed with 32 test files / 184 tests green and 48 guard tests green;
       a production `vite build` also succeeded. 32 on-disk `- req:` entries
       in requirement_status.v4.yaml before this append; 33 after.
+  - req: REQ-142
+    event: started
+    agent: ORCH
+    at: "2026-08-24T03:19:00Z"
+    note: >
+      WF02-REQ142-20260824 Step 00. Canvas hex-literal to tokens.css migration
+      (15 files, ~118 occurrences per 2026-08-22 count). depends_on REQ-141
+      (done). Branch feature/WF02-REQ142-20260824 created and pushed. Queue task
+      268 claimed (GH#530). 33 on-disk `- req:` entries in
+      requirement_status.v4.yaml before this append; 34 after.

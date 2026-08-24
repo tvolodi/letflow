@@ -2313,6 +2313,28 @@
                      "queue_task_id":  269,
                      "queue_agent_id":  "orch-main",
                      "note":  "WF-02 for REQ-143 (GH#531, queue task 269, stage S8 -- migrate web/src/components/promotions/ and web/src/components/instances/ 12 files / 193 occurrences to tokens.css custom properties). depends_on REQ-141 (done). Queue claimed by orch-main at 2026-08-24T05:08:38Z."
+                 },
+                 {
+                     "run_id":  "WF02-REQ144-20260824",
+                     "workflow_id":  "WF-02",
+                     "requirement_ids":  [
+                                             "REQ-144"
+                                         ],
+                     "stage":  "S8",
+                     "status":  "ACTIVE",
+                     "owned_modules":  [
+                                           "web/src/components/ui/",
+                                           "web/src/components/forms/",
+                                           "web/src/components/webhooks/"
+                                       ],
+                     "lock_acquired_at":  "2026-08-24T06:03:23Z",
+                     "lock_released_at":  null,
+                     "released_lock":  false,
+                     "last_known_step":  "Step 00 COMPLETED PASS -- branch created. Dispatching CODE-DESIGNER.",
+                     "backfilled":  false,
+                     "queue_task_id":  270,
+                     "queue_agent_id":  "orch-main",
+                     "note":  "WF-02 for REQ-144 (GH#532, queue task 270, stage S8 -- migrate ui/+forms/+webhooks/ 12 files). Queue claimed 2026-08-24T06:02:40Z."
                  }
              ]
 }

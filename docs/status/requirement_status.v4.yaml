@@ -930,3 +930,14 @@ history:
       npm run type-check/lint/test(184/184)/guards(48/48) all pass).
       37 on-disk `- req:` entries in requirement_status.v4.yaml before this
       append; 38 after.
+  - req: REQ-144
+    event: started
+    agent: ORCH
+    at: "2026-08-24T06:03:23Z"
+    note: >
+      WF02-REQ144-20260824 Step 00. ui/+forms/+webhooks/ hex-literal migration
+      (12 files, 133 occurrences per 2026-08-22 count; re-verified: 118 hits,
+      33 distinct values -- many Tailwind status/alert colors not in palette,
+      design-step addendum expected). depends_on REQ-141 (done). Branch
+      feature/WF02-REQ144-20260824 created. Queue task 270 (GH#532).
+      38 on-disk entries before this append; 39 after.

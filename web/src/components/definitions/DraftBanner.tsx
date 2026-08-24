@@ -24,8 +24,8 @@ export function DraftBanner(props: DraftBannerProps): React.ReactElement {
       aria-label="Unsaved local draft"
       style={{
         padding: '.85rem 1.1rem',
-        background: '#eff6ff',
-        border: '1px solid #bfdbfe',
+        background: 'var(--color-info-tint)',
+        border: '1px solid var(--color-info-light)',
         borderRadius: '6px',
         marginBottom: '1rem',
         display: 'flex',
@@ -36,10 +36,10 @@ export function DraftBanner(props: DraftBannerProps): React.ReactElement {
       }}
     >
       <div>
-        <p style={{ margin: 0, fontWeight: 500, color: '#1e3a8a', fontSize: '.9rem' }}>
+        <p style={{ margin: 0, fontWeight: 500, color: 'var(--color-info-text)', fontSize: '.9rem' }}>
           You have an unsaved local draft
         </p>
-        <p style={{ margin: '.15rem 0 0', fontSize: '.8rem', color: '#3b82f6' }}>
+        <p style={{ margin: '.15rem 0 0', fontSize: '.8rem', color: 'var(--interactive-primary)' }}>
           {dirtyCount === 0
             ? '1 field changed'
             : `${dirtyCount} fields changed`}
@@ -53,10 +53,10 @@ export function DraftBanner(props: DraftBannerProps): React.ReactElement {
           onClick={onApply}
           style={{
             padding: '.35rem .85rem',
-            border: '1px solid #2563eb',
+            border: '1px solid var(--interactive-primary)',
             borderRadius: '4px',
-            background: '#fff',
-            color: '#2563eb',
+            background: 'var(--surface-card)',
+            color: 'var(--interactive-primary)',
             cursor: 'pointer',
             fontSize: '.85rem',
           }}
@@ -69,10 +69,10 @@ export function DraftBanner(props: DraftBannerProps): React.ReactElement {
           onClick={onDiscard}
           style={{
             padding: '.35rem .85rem',
-            border: '1px solid #dc2626',
+            border: '1px solid var(--interactive-danger)',
             borderRadius: '4px',
-            background: '#fff',
-            color: '#dc2626',
+            background: 'var(--surface-card)',
+            color: 'var(--interactive-danger)',
             cursor: 'pointer',
             fontSize: '.85rem',
           }}

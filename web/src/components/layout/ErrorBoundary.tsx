@@ -54,7 +54,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           alignItems: 'center',
           justifyContent: 'center',
           minHeight: '100vh',
-          background: '#f8fafc',
+          background: 'var(--surface-page)',
           padding: '2rem',
         }}
       >
@@ -62,8 +62,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           style={{
             maxWidth: '480px',
             width: '100%',
-            background: '#fff',
-            border: '1.5px solid #fca5a5',
+            background: 'var(--surface-card)',
+            border: '1.5px solid var(--color-error-border-strong)',
             borderRadius: '8px',
             padding: '2rem',
             boxShadow: '0 2px 8px rgba(0,0,0,.08)',
@@ -76,7 +76,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               height="24"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#dc2626"
+              stroke="var(--interactive-danger)"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -85,12 +85,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               <line x1="12" y1="8" x2="12" y2="12" />
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-            <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#111827' }}>
+            <h2 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>
               Something went wrong
             </h2>
           </div>
 
-          <p style={{ margin: '0 0 1rem', color: '#374151', fontSize: '.9rem', lineHeight: 1.6 }}>
+          <p style={{ margin: '0 0 1rem', color: 'var(--color-neutral-700)', fontSize: '.9rem', lineHeight: 1.6 }}>
             An unexpected error occurred in this view.
             <br />
             Your session and other tabs are not affected.
@@ -99,12 +99,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           {import.meta.env.DEV && error && (
             <details
               data-testid="error-boundary-details"
-              style={{ marginBottom: '1rem', fontSize: '.8rem', color: '#6b7280' }}
+              style={{ marginBottom: '1rem', fontSize: '.8rem', color: 'var(--text-secondary)' }}
             >
               <summary style={{ cursor: 'pointer', marginBottom: '.5rem' }}>Error details</summary>
               <pre
                 style={{
-                  background: '#f3f4f6',
+                  background: 'var(--color-neutral-100)',
                   borderRadius: '4px',
                   padding: '.75rem',
                   overflow: 'auto',
@@ -124,8 +124,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               data-testid="error-boundary-reset"
               onClick={this.handleReset}
               style={{
-                background: '#2563eb',
-                color: '#fff',
+                background: 'var(--interactive-primary)',
+                color: 'var(--text-inverse)',
                 border: 'none',
                 borderRadius: '6px',
                 padding: '.5rem 1.25rem',
@@ -141,9 +141,9 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                background: '#f3f4f6',
-                color: '#374151',
-                border: '1px solid #d1d5db',
+                background: 'var(--color-neutral-100)',
+                color: 'var(--color-neutral-700)',
+                border: '1px solid var(--color-neutral-300)',
                 borderRadius: '6px',
                 padding: '.5rem 1.25rem',
                 fontSize: '.9rem',

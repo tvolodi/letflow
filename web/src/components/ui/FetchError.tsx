@@ -15,9 +15,9 @@ export function FetchError({ onRetry }: FetchErrorProps): React.ReactElement {
         onClick={onRetry}
         style={{
           padding: '.4rem .9rem',
-          border: '1px solid #cbd5e1',
+          border: '1px solid var(--color-neutral-400)',
           borderRadius: '4px',
-          background: '#fff',
+          background: 'var(--surface-card)',
           cursor: 'pointer',
         }}
       >

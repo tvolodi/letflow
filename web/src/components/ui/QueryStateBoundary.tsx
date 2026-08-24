@@ -84,7 +84,7 @@ export function QueryStateBoundary({
           <button
             type="button"
             onClick={onRetry ?? noop}
-            style={{ padding: '.4rem .9rem', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer' }}
+            style={{ padding: '.4rem .9rem', border: '1px solid var(--color-neutral-400)', borderRadius: '4px', cursor: 'pointer' }}
           >
             Refresh
           </button>

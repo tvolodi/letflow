@@ -91,7 +91,7 @@ export function WebhookSubscriptionDetailPanel({
         style={{
           width: 'min(560px, 100vw)',
           height: '100%',
-          background: '#ffffff',
+          background: 'var(--surface-card)',
           boxShadow: '-12px 0 32px rgba(15, 23, 42, 0.18)',
           padding: '1.25rem',
           overflowY: 'auto',
@@ -100,7 +100,7 @@ export function WebhookSubscriptionDetailPanel({
         <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', marginBottom: '1rem' }}>
           <div>
             <h3 id="webhook-detail-title" style={{ margin: 0 }}>Subscription details</h3>
-            <p style={{ margin: '.3rem 0 0', color: '#64748b', fontSize: '.85rem' }}>
+            <p style={{ margin: '.3rem 0 0', color: 'var(--text-secondary)', fontSize: '.85rem' }}>
               Recent delivery attempts for the selected subscription.
             </p>
           </div>
@@ -109,8 +109,8 @@ export function WebhookSubscriptionDetailPanel({
             onClick={onClose}
             style={{
               marginLeft: 'auto',
-              border: '1px solid #cbd5e1',
-              background: '#fff',
+              border: '1px solid var(--color-neutral-400)',
+              background: 'var(--surface-card)',
               borderRadius: '6px',
               padding: '.45rem .8rem',
               cursor: 'pointer',
@@ -123,26 +123,26 @@ export function WebhookSubscriptionDetailPanel({
         <section
           data-testid="webhook-subscription-summary"
           style={{
-            border: '1px solid #e2e8f0',
+            border: '1px solid var(--border-default)',
             borderRadius: '10px',
             padding: '1rem',
             marginBottom: '1rem',
-            background: '#f8fafc',
+            background: 'var(--surface-page)',
           }}
         >
           <dl style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 160px) 1fr', rowGap: '.65rem', columnGap: '.75rem', margin: 0 }}>
-            <dt style={{ color: '#475569', fontWeight: 600 }}>Target URL</dt>
+            <dt style={{ color: 'var(--color-neutral-700)', fontWeight: 600 }}>Target URL</dt>
             <dd style={{ margin: 0, fontFamily: 'monospace', wordBreak: 'break-word' }}>{resolveTargetUrl(subscription)}</dd>
 
-            <dt style={{ color: '#475569', fontWeight: 600 }}>Status</dt>
-            <dd style={{ margin: 0, color: resolveStatus(subscription) === 'PAUSED' ? '#c2410c' : '#166534', fontWeight: 700 }}>
+            <dt style={{ color: 'var(--color-neutral-700)', fontWeight: 600 }}>Status</dt>
+            <dd style={{ margin: 0, color: resolveStatus(subscription) === 'PAUSED' ? 'var(--color-warning-text)' : 'var(--color-success-dark)', fontWeight: 700 }}>
               {resolveStatus(subscription)}
             </dd>
 
-            <dt style={{ color: '#475569', fontWeight: 600 }}>Event types</dt>
+            <dt style={{ color: 'var(--color-neutral-700)', fontWeight: 600 }}>Event types</dt>
             <dd style={{ margin: 0 }}>{eventTypes}</dd>
 
-            <dt style={{ color: '#475569', fontWeight: 600 }}>Created</dt>
+            <dt style={{ color: 'var(--color-neutral-700)', fontWeight: 600 }}>Created</dt>
             <dd style={{ margin: 0 }}>{formatTimestamp(subscription.created_at)}</dd>
           </dl>
         </section>
@@ -151,15 +151,15 @@ export function WebhookSubscriptionDetailPanel({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '.75rem' }}>
             <div>
               <h4 style={{ margin: 0 }}>Recent delivery attempts</h4>
-              <p style={{ margin: '.25rem 0 0', color: '#64748b', fontSize: '.82rem' }}>
+              <p style={{ margin: '.25rem 0 0', color: 'var(--text-secondary)', fontSize: '.82rem' }}>
                 Status, response code, and timestamp for the latest webhook deliveries.
               </p>
             </div>
             <button
               onClick={() => void deliveriesQuery.refetch()}
               style={{
-                border: '1px solid #cbd5e1',
-                background: '#fff',
+                border: '1px solid var(--color-neutral-400)',
+                background: 'var(--surface-card)',
                 borderRadius: '6px',
                 padding: '.4rem .7rem',
                 cursor: 'pointer',
@@ -171,7 +171,7 @@ export function WebhookSubscriptionDetailPanel({
           </div>
 
           {deliveriesQuery.isLoading ? (
-            <div data-testid="webhook-delivery-loading" style={{ padding: '1rem', border: '1px dashed #cbd5e1', borderRadius: '8px', color: '#475569' }}>
+            <div data-testid="webhook-delivery-loading" style={{ padding: '1rem', border: '1px dashed var(--color-neutral-400)', borderRadius: '8px', color: 'var(--color-neutral-700)' }}>
               Loading delivery attempts…
             </div>
           ) : null}
@@ -179,7 +179,7 @@ export function WebhookSubscriptionDetailPanel({
           {deliveriesQuery.isError ? (
             <div
               data-testid="webhook-delivery-error"
-              style={{ border: '1px solid #fecaca', background: '#fef2f2', borderRadius: '8px', padding: '1rem', color: '#991b1b' }}
+              style={{ border: '1px solid var(--color-error-border)', background: 'var(--color-error-tint)', borderRadius: '8px', padding: '1rem', color: 'var(--color-error-dark)' }}
             >
               <strong>Unable to load delivery attempts.</strong>
               <div style={{ marginTop: '.35rem', fontSize: '.85rem' }}>
@@ -191,7 +191,7 @@ export function WebhookSubscriptionDetailPanel({
           {!deliveriesQuery.isLoading && !deliveriesQuery.isError && deliveriesQuery.data && deliveriesQuery.data.items.length === 0 ? (
             <div
               data-testid="webhook-delivery-empty"
-              style={{ border: '1px dashed #cbd5e1', background: '#f8fafc', borderRadius: '8px', padding: '1rem', color: '#475569' }}
+              style={{ border: '1px dashed var(--color-neutral-400)', background: 'var(--surface-page)', borderRadius: '8px', padding: '1rem', color: 'var(--color-neutral-700)' }}
             >
               No delivery attempts recorded yet.
             </div>

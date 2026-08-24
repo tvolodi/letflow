@@ -34,14 +34,14 @@ export function renderFormField(
   const commonStyles: CSSProperties = {
     width: '100%',
     padding: '.5rem .75rem',
-    border: '1px solid #cbd5e1',
+    border: '1px solid var(--color-neutral-400)',
     borderRadius: '4px',
     fontSize: '.9rem',
     fontFamily: 'inherit',
     boxSizing: 'border-box',
   }
 
-  const errorStyles: CSSProperties = errorMessage ? { borderColor: '#ef4444' } : {}
+  const errorStyles: CSSProperties = errorMessage ? { borderColor: 'var(--border-error)' } : {}
 
   const ariaRequired = isRequired
   const ariaInvalid = Boolean(errorMessage)
@@ -68,19 +68,19 @@ export function renderFormField(
             marginBottom: '.5rem',
             fontWeight: 500,
             fontSize: '.9rem',
-            color: '#1e293b',
+            color: 'var(--text-primary)',
           }}
         >
           {title}
           {isRequired && (
-            <span style={{ color: '#ef4444', marginLeft: '.25rem' }}>*</span>
+            <span style={{ color: 'var(--color-error)', marginLeft: '.25rem' }}>*</span>
           )}
         </label>
 
         {description && (
           <p
             id={hintId(fieldName)}
-            style={{ margin: '0.25rem 0 0.5rem 0', fontSize: '.85rem', color: '#64748b' }}
+            style={{ margin: '0.25rem 0 0.5rem 0', fontSize: '.85rem', color: 'var(--text-secondary)' }}
           >
             {description}
           </p>
@@ -92,7 +92,7 @@ export function renderFormField(
           <p
             id={ariaErrorMessage}
             role="alert"
-            style={{ marginTop: '.25rem', fontSize: '.85rem', color: '#ef4444' }}
+            style={{ marginTop: '.25rem', fontSize: '.85rem', color: 'var(--color-error)' }}
           >
             {errorMessage}
           </p>
@@ -111,17 +111,17 @@ export function renderFormField(
           marginBottom: '.5rem',
           fontWeight: 500,
           fontSize: '.9rem',
-          color: '#1e293b',
+          color: 'var(--text-primary)',
         }}
       >
         {title}
-        {isRequired && <span style={{ color: '#ef4444', marginLeft: '.25rem' }}>*</span>}
+        {isRequired && <span style={{ color: 'var(--color-error)', marginLeft: '.25rem' }}>*</span>}
       </label>
 
       {description && (
         <p
           id={hintId(fieldName)}
-          style={{ margin: '0.25rem 0 0.5rem 0', fontSize: '.85rem', color: '#64748b' }}
+          style={{ margin: '0.25rem 0 0.5rem 0', fontSize: '.85rem', color: 'var(--text-secondary)' }}
         >
           {description}
         </p>
@@ -253,7 +253,7 @@ export function renderFormField(
         <p
           id={ariaErrorMessage}
           role="alert"
-          style={{ marginTop: '.25rem', fontSize: '.85rem', color: '#ef4444' }}
+          style={{ marginTop: '.25rem', fontSize: '.85rem', color: 'var(--color-error)' }}
         >
           {errorMessage}
         </p>

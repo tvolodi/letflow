@@ -20,8 +20,8 @@ export interface ConfirmDialogProps {
 }
 
 const VARIANT_STYLES: Record<NonNullable<ConfirmDialogProps['confirmVariant']>, { bg: string; hover: string }> = {
-  primary: { bg: '#2563eb', hover: '#1d4ed8' },
-  danger: { bg: '#dc2626', hover: '#b91c1c' },
+  primary: { bg: 'var(--interactive-primary)', hover: 'var(--interactive-primary-hover)' },
+  danger: { bg: 'var(--interactive-danger)', hover: 'var(--interactive-danger-hover)' },
 }
 
 export function ConfirmDialog(props: ConfirmDialogProps): React.ReactElement | null {
@@ -82,7 +82,7 @@ export function ConfirmDialog(props: ConfirmDialogProps): React.ReactElement | n
     >
       <div
         style={{
-          background: '#fff',
+          background: 'var(--surface-card)',
           borderRadius: '8px',
           padding: '1.5rem',
           maxWidth: '480px',
@@ -96,7 +96,7 @@ export function ConfirmDialog(props: ConfirmDialogProps): React.ReactElement | n
             margin: '0 0 1rem',
             fontSize: '1.05rem',
             fontWeight: 600,
-            color: '#111827',
+            color: 'var(--text-primary)',
           }}
         >
           {title}
@@ -105,7 +105,7 @@ export function ConfirmDialog(props: ConfirmDialogProps): React.ReactElement | n
           style={{
             margin: '0 0 1.5rem',
             fontSize: '.9rem',
-            color: '#374151',
+            color: 'var(--color-neutral-700)',
             lineHeight: 1.55,
           }}
         >
@@ -119,12 +119,12 @@ export function ConfirmDialog(props: ConfirmDialogProps): React.ReactElement | n
             disabled={isLoading}
             style={{
               padding: '6px 16px',
-              border: '1px solid #d1d5db',
+              border: '1px solid var(--color-neutral-300)',
               borderRadius: '4px',
-              background: '#fff',
+              background: 'var(--surface-card)',
               cursor: isLoading ? 'not-allowed' : 'pointer',
               fontSize: '.875rem',
-              color: '#374151',
+              color: 'var(--color-neutral-700)',
               opacity: isLoading ? 0.6 : 1,
             }}
           >
@@ -141,7 +141,7 @@ export function ConfirmDialog(props: ConfirmDialogProps): React.ReactElement | n
               border: 'none',
               borderRadius: '4px',
               background: variant.bg,
-              color: '#fff',
+              color: 'var(--text-inverse)',
               cursor: isLoading ? 'not-allowed' : 'pointer',
               fontSize: '.875rem',
               fontWeight: 500,

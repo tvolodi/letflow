@@ -83,10 +83,10 @@ export function RateLimitBackpressure(props: RateLimitBackpressureProps): React.
       aria-atomic="true"
       style={{
         padding: '1.5rem',
-        border: '1px solid #fde68a',
-        background: '#fffbeb',
+        border: '1px solid var(--color-warning-border)',
+        background: 'var(--color-warning-tint)',
         borderRadius: '6px',
-        color: '#92400e',
+        color: 'var(--color-warning-text)',
       }}
     >
       <p style={{ marginBottom: '.75rem', fontWeight: 500 }}>
@@ -113,10 +113,10 @@ export function RateLimitBackpressure(props: RateLimitBackpressureProps): React.
         style={{
           marginTop: '.75rem',
           padding: '.4rem .9rem',
-          border: '1px solid #d97706',
+          border: '1px solid var(--color-warning-dark)',
           borderRadius: '4px',
-          background: '#fff',
-          color: '#92400e',
+          background: 'var(--surface-card)',
+          color: 'var(--color-warning-text)',
           cursor: 'pointer',
           fontSize: '.85rem',
         }}

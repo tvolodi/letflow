@@ -1,0 +1,29 @@
+{
+  "handoff_id": "WF02-REQ142-20260824-step-01-design",
+  "run_id": "WF02-REQ142-20260824",
+  "step": "01",
+  "step_name": "Code Design",
+  "agent": "CODE-DESIGNER",
+  "status": "COMPLETED",
+  "created_at": "2026-08-24T03:22:00Z",
+  "started_at": "2026-08-24T03:22:00Z",
+  "completed_at": "2026-08-24T03:27:00Z",
+  "task": {
+    "description": "REQ-142: Produce design artefact mapping all 118 hex literals in web/src/components/canvas/ to tokens.css custom properties.",
+    "acceptance_criteria": [
+      "Every acceptance criterion maps to a concrete design element",
+      "All distinct hex values are mapped to existing tokens",
+      "No implementation code present"
+    ]
+  },
+  "context": {
+    "branch_name": "feature/WF02-REQ142-20260824",
+    "requirement_text": "See step-00-git-setup.json context.requirement_text"
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design doc lib/letflow/design/req142-canvas-token-migration.md written. 22 distinct hex values across 118 occurrences in 15 files all mapped to existing tokens. Background color=#ccc case resolved as var(--color-neutral-400) (NOT a justified exception -- @xyflow/react passes color via CSS custom property, var() syntax valid). 6 var(--token, #fallback) cases need fallback stripped. No new tokens required.",
+    "artifacts_out": ["lib/letflow/design/req142-canvas-token-migration.md"]
+  },
+  "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+}

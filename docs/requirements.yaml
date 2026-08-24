@@ -7245,7 +7245,7 @@ requirements:
   - id: REQ-148
     title: Adopt tv-labs/lua in mix.exs and empirically verify decision 0014's documentation-only claims (OQ-2 spike, LUA-01 restated)
     owner: CODE-DESIGNER
-    status: in_progress
+    status: done
     stage: S5
     impl_order: 300  # letflow-queue task id
     description: >

@@ -2410,15 +2410,15 @@
                                              "REQ-148"
                                          ],
                      "stage":  "S5",
-                     "status":  "ACTIVE",
+                     "status":  "COMPLETED",
                      "owned_modules":  [
                                            "mix.exs",
                                            "lib/letflow/design/req148-lua-runtime-spike.md"
                                        ],
                      "lock_acquired_at":  "2026-08-24T10:34:44Z",
-                     "lock_released_at":  null,
-                     "released_lock":  false,
-                     "last_known_step":  "Step 00 COMPLETED PASS -- branch created. Dispatching CODE-DESIGNER for Step 1+2a.",
+                     "lock_released_at":  "2026-08-24T10:49:31Z",
+                     "released_lock":  true,
+                     "last_known_step":  "Step Final COMPLETED PASS (pending PR/merge)",
                      "backfilled":  false,
                      "queue_task_id":  300,
                      "queue_agent_id":  "orch-main",

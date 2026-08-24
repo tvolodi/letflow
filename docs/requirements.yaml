@@ -7016,7 +7016,7 @@ requirements:
   - id: REQ-143
     title: Migrate web/src/components/promotions/ and instances/ off inline hex literals to tokens.css custom properties
     owner: FRONTEND-DEV
-    status: pending
+    status: in_progress
     stage: S8
     impl_order: 269  # letflow-queue task id
     description: >

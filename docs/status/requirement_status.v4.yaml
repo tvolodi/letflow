@@ -900,3 +900,15 @@ history:
       invariants tests now pass. Queue task 330 released done, GH#633 closed.
       35 on-disk `- req:` entries in requirement_status.v4.yaml before this
       append; 36 after.
+  - req: REQ-143
+    event: started
+    agent: ORCH
+    at: "2026-08-24T05:09:08Z"
+    note: >
+      WF02-REQ143-20260824 Step 00. promotions/ and instances/ hex-literal to
+      tokens.css migration (12 files, 193 occurrences per 2026-08-22 count;
+      re-verified at start: 162 hits, 57 distinct hex values -- many Tailwind/
+      Mantine colors not in current palette, design-step addendum likely needed).
+      depends_on REQ-141 (done). Branch feature/WF02-REQ143-20260824 created
+      and pushed. Queue task 269 claimed (GH#531). 36 on-disk `- req:` entries
+      in requirement_status.v4.yaml before this append; 37 after.

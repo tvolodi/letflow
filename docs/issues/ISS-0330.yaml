@@ -1,0 +1,32 @@
+id: ISS-0330
+queue_task_id: 330
+github_issue_number: 633
+title: "requirement_status_invariants_test.exs A4b/A9 failures: REQ-122 done event missing agent: field introduced by direct main push (70632a3)"
+status: open
+severity: blocker
+introduced_by: "70632a3 (REQ-122 done event written without required agent: field by sibling session that pushed directly to main bypassing CI)"
+discovered_by: WF02-REQ142-20260824
+discovered_at: "2026-08-24T04:09:36Z"
+description: >
+  Two tests in test/docs/requirement_status_invariants_test.exs have been failing
+  on every main-branch CI run since commit 70632a3 (2026-08-24T02:47:53Z):
+
+  A4b: The on-disk shape-violation set includes the REQ-122 done entry in
+  requirement_status.v4.yaml which is missing the required `agent:` field (the
+  five-field shape is req/event/agent/at/note). The entry was written by a sibling
+  session (REQ-122) that pushed directly to main without going through a PR, so CI
+  never checked it. Because volume 4 is still open (not a closed, pinned volume),
+  this violation cannot be added to known_shape_anomalies: (the test requires every
+  known_shape_anomaly record to cite a closed, pinned volume). The append-only rule
+  forbids correcting the original entry.
+
+  A9: Volume 4's declared entries: count in requirement_status.index.yaml drifted
+  from the actual on-disk count. The 70632a3 commit set entries: 32 (for the REQ-122
+  done event); subsequent appends (REQ-141, REQ-142 started, REQ-142 done) brought
+  the actual count to 35 while the index was updated correctly by each session.
+  However, there is likely a count mismatch state in the CI snapshot that doesn't
+  reflect our current local state. Needs investigation.
+acceptance_criteria:
+  - "Fix the REQ-122 entry's missing agent: field per the volume 4 schema (five-field shape requirement) without violating the append-only rule"
+  - "Update volume 4's declared entries: count to match the actual on-disk count"
+  - "Both A4b and A9 tests pass on main after the fix"

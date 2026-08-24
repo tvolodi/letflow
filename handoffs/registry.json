@@ -2196,7 +2196,7 @@
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-142"],
       "stage": "S8",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "owned_modules": [
         "web/src/components/canvas/"
       ],
@@ -2207,7 +2207,11 @@
       "backfilled": false,
       "queue_task_id": 268,
       "queue_agent_id": "orch-main",
-      "note": "WF-02 for REQ-142 (GH#530, queue task 268, stage S8 -- migrate web/src/components/canvas/ 15 files / ~118 hex-literal occurrences to tokens.css custom properties). depends_on REQ-141 (done, 2d15e86). Queue claimed by orch-main at 2026-08-24T03:16:27Z, WF-02 started 2026-08-24T03:19:00Z."
+      "note": "WF-02 for REQ-142 (GH#530, queue task 268, stage S8 -- migrate web/src/components/canvas/ 15 files / ~118 hex-literal occurrences to tokens.css custom properties). depends_on REQ-141 (done, 2d15e86). Queue claimed by orch-main at 2026-08-24T03:16:27Z, WF-02 started 2026-08-24T03:19:00Z.",
+      "status": "COMPLETED",
+      "lock_released_at": "2026-08-24T04:10:05Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #632 squash-merged (fe0f0f8). Queue task 268 released with status done, GH#530 best-effort closed via release. Pre-existing A4b/A9 invariant test failures (from REQ-122 sibling commit 70632a3) attributed and filed as ISS-0330 (GH#633, queue task 330). Zero failures attributable to this branch."
     }
   ]
 }

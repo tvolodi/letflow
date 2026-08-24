@@ -27,9 +27,17 @@
   --color-warning: #fcc419;
   --color-warning-dark: #e67700;
 
+  /* Warning-state additions (REQ-144 addendum) */
+  --color-warning-tint:   #fffbeb;
+  --color-warning-border: #fde68a;
+  --color-warning-text:   #92400e;
+
   --color-error-light: #ffe3e3;
   --color-error: #fa5252;
   --color-error-dark: #c92a2a;
+
+  /* Error-state border addition (REQ-144 addendum) */
+  --color-error-border: #fecaca;
 
   /* Tints and failure state */
   --color-success-tint: #f8fff8;

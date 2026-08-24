@@ -66,9 +66,9 @@ export function DynamicFormRenderer(props: DynamicFormRendererProps) {
 
   if (parseError) {
     return (
-      <div style={{ background: '#fee2e2', border: '1px solid #fecaca', borderRadius: '6px', padding: '1rem', marginBottom: '1.5rem' }}>
-        <p style={{ color: '#991b1b', fontWeight: 600, margin: '0 0 0.5rem 0' }}>Unable to render form schema</p>
-        <p style={{ color: '#7f1d1d', fontSize: '.9rem', margin: 0 }}>
+      <div style={{ background: 'var(--color-error-light)', border: '1px solid var(--color-error-border)', borderRadius: '6px', padding: '1rem', marginBottom: '1.5rem' }}>
+        <p style={{ color: 'var(--color-error-dark)', fontWeight: 600, margin: '0 0 0.5rem 0' }}>Unable to render form schema</p>
+        <p style={{ color: 'var(--color-error-dark)', fontSize: '.9rem', margin: 0 }}>
           {parseError}
         </p>
       </div>
@@ -92,7 +92,7 @@ export function DynamicFormRenderer(props: DynamicFormRendererProps) {
   const commonInputStyles = {
     width: '100%',
     padding: '.5rem .75rem',
-    border: '1px solid #cbd5e1',
+    border: '1px solid var(--color-neutral-400)',
     borderRadius: '4px',
     fontSize: '.9rem',
     fontFamily: 'inherit',
@@ -107,8 +107,8 @@ export function DynamicFormRenderer(props: DynamicFormRendererProps) {
       style={{ overflow: 'hidden' }}
     >
       {submitError && (
-        <div style={{ background: '#fee2e2', border: '1px solid #fecaca', borderRadius: '6px', padding: '1rem', marginBottom: '1rem' }}>
-          <p style={{ color: '#991b1b', margin: 0, fontSize: '.9rem' }}>
+        <div style={{ background: 'var(--color-error-light)', border: '1px solid var(--color-error-border)', borderRadius: '6px', padding: '1rem', marginBottom: '1rem' }}>
+          <p style={{ color: 'var(--color-error-dark)', margin: 0, fontSize: '.9rem' }}>
             {submitError.message}
           </p>
         </div>
@@ -131,15 +131,15 @@ export function DynamicFormRenderer(props: DynamicFormRendererProps) {
                 marginBottom: '.5rem',
                 fontWeight: 500,
                 fontSize: '.9rem',
-                color: '#1e293b',
+                color: 'var(--text-primary)',
               }}
             >
               {title}
-              {isRequired && <span style={{ color: '#ef4444', marginLeft: '.25rem' }}>*</span>}
+              {isRequired && <span style={{ color: 'var(--color-error)', marginLeft: '.25rem' }}>*</span>}
             </label>
 
             {description && (
-              <p style={{ margin: '0.25rem 0 0.5rem 0', fontSize: '.85rem', color: '#64748b' }}>
+              <p style={{ margin: '0.25rem 0 0.5rem 0', fontSize: '.85rem', color: 'var(--text-secondary)' }}>
                 {description}
               </p>
             )}
@@ -152,7 +152,7 @@ export function DynamicFormRenderer(props: DynamicFormRendererProps) {
                 placeholder={fieldDef.placeholder || `Enter ${title.toLowerCase()}`}
                 style={{
                   ...commonInputStyles,
-                  borderColor: fieldError ? '#ef4444' : '#cbd5e1',
+                  borderColor: fieldError ? 'var(--border-error)' : 'var(--color-neutral-400)',
                 } as React.CSSProperties}
               />
             )}
@@ -165,7 +165,7 @@ export function DynamicFormRenderer(props: DynamicFormRendererProps) {
                 rows={4}
                 style={{
                   ...commonInputStyles,
-                  borderColor: fieldError ? '#ef4444' : '#cbd5e1',
+                  borderColor: fieldError ? 'var(--border-error)' : 'var(--color-neutral-400)',
                   resize: 'vertical',
                 } as React.CSSProperties}
               />
@@ -177,7 +177,7 @@ export function DynamicFormRenderer(props: DynamicFormRendererProps) {
                 id={fieldName}
                 style={{
                   ...commonInputStyles,
-                  borderColor: fieldError ? '#ef4444' : '#cbd5e1',
+                  borderColor: fieldError ? 'var(--border-error)' : 'var(--color-neutral-400)',
                 } as React.CSSProperties}
               >
                 <option value="">Select {title.toLowerCase()}</option>
@@ -197,7 +197,7 @@ export function DynamicFormRenderer(props: DynamicFormRendererProps) {
                 placeholder={fieldDef.placeholder || `Enter ${title.toLowerCase()}`}
                 style={{
                   ...commonInputStyles,
-                  borderColor: fieldError ? '#ef4444' : '#cbd5e1',
+                  borderColor: fieldError ? 'var(--border-error)' : 'var(--color-neutral-400)',
                 } as React.CSSProperties}
               />
             )}
@@ -227,7 +227,7 @@ export function DynamicFormRenderer(props: DynamicFormRendererProps) {
                 type="date"
                 style={{
                   ...commonInputStyles,
-                  borderColor: fieldError ? '#ef4444' : '#cbd5e1',
+                  borderColor: fieldError ? 'var(--border-error)' : 'var(--color-neutral-400)',
                 } as React.CSSProperties}
               />
             )}
@@ -237,7 +237,7 @@ export function DynamicFormRenderer(props: DynamicFormRendererProps) {
                 style={{
                   marginTop: '.25rem',
                   fontSize: '.85rem',
-                  color: '#ef4444',
+                  color: 'var(--color-error)',
                 }}
               >
                 {typeof fieldError.message === 'string' ? fieldError.message : 'Invalid field'}
@@ -254,8 +254,8 @@ export function DynamicFormRenderer(props: DynamicFormRendererProps) {
         style={{
           width: '100%',
           padding: '.75rem 1rem',
-          background: '#2563eb',
-          color: '#fff',
+          background: 'var(--interactive-primary)',
+          color: 'var(--text-inverse)',
           border: 'none',
           borderRadius: '4px',
           cursor: formBusy ? 'not-allowed' : 'pointer',

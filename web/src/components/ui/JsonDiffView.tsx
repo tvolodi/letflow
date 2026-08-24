@@ -19,17 +19,17 @@ export function JsonDiffView(props: {
   const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)])).sort()
 
   if (keys.length === 0) {
-    return <div style={{ color: '#64748b', fontSize: '.85rem' }}>No structured field changes for this entry.</div>
+    return <div style={{ color: 'var(--text-secondary)', fontSize: '.85rem' }}>No structured field changes for this entry.</div>
   }
 
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.82rem' }}>
         <thead>
-          <tr style={{ textAlign: 'left', background: '#f8fafc' }}>
-            <th style={{ padding: '.4rem .5rem', borderBottom: '1px solid #e2e8f0' }}>Field</th>
-            <th style={{ padding: '.4rem .5rem', borderBottom: '1px solid #e2e8f0' }}>Before</th>
-            <th style={{ padding: '.4rem .5rem', borderBottom: '1px solid #e2e8f0' }}>After</th>
+          <tr style={{ textAlign: 'left', background: 'var(--surface-page)' }}>
+            <th style={{ padding: '.4rem .5rem', borderBottom: '1px solid var(--border-default)' }}>Field</th>
+            <th style={{ padding: '.4rem .5rem', borderBottom: '1px solid var(--border-default)' }}>Before</th>
+            <th style={{ padding: '.4rem .5rem', borderBottom: '1px solid var(--border-default)' }}>After</th>
           </tr>
         </thead>
         <tbody>
@@ -39,10 +39,10 @@ export function JsonDiffView(props: {
             const changed = JSON.stringify(beforeValue) !== JSON.stringify(afterValue)
 
             return (
-              <tr key={key} style={{ background: changed ? '#fff7ed' : 'transparent' }}>
-                <td style={{ padding: '.35rem .5rem', borderBottom: '1px solid #f1f5f9', fontFamily: 'monospace' }}>{key}</td>
-                <td style={{ padding: '.35rem .5rem', borderBottom: '1px solid #f1f5f9', fontFamily: 'monospace' }}>{formatValue(beforeValue)}</td>
-                <td style={{ padding: '.35rem .5rem', borderBottom: '1px solid #f1f5f9', fontFamily: 'monospace' }}>{formatValue(afterValue)}</td>
+              <tr key={key} style={{ background: changed ? 'var(--color-warning-light)' : 'transparent' }}>
+                <td style={{ padding: '.35rem .5rem', borderBottom: '1px solid var(--color-neutral-100)', fontFamily: 'monospace' }}>{key}</td>
+                <td style={{ padding: '.35rem .5rem', borderBottom: '1px solid var(--color-neutral-100)', fontFamily: 'monospace' }}>{formatValue(beforeValue)}</td>
+                <td style={{ padding: '.35rem .5rem', borderBottom: '1px solid var(--color-neutral-100)', fontFamily: 'monospace' }}>{formatValue(afterValue)}</td>
               </tr>
             )
           })}

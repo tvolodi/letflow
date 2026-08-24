@@ -114,7 +114,7 @@ export function ConflictResolver(props: ConflictResolverProps): React.ReactEleme
     >
       <div
         style={{
-          background: '#fff',
+          background: 'var(--surface-card)',
           borderRadius: '8px',
           padding: '1.5rem',
           maxWidth: '560px',
@@ -134,11 +134,11 @@ export function ConflictResolver(props: ConflictResolverProps): React.ReactEleme
             data-testid="conflict-version-mismatch"
             style={{
               padding: '.75rem 1rem',
-              background: '#fef3c7',
-              border: '1px solid #fde68a',
+              background: 'var(--color-warning-light)',
+              border: '1px solid var(--color-warning-border)',
               borderRadius: '4px',
               marginBottom: '1rem',
-              color: '#92400e',
+              color: 'var(--color-warning-text)',
               fontSize: '.85rem',
             }}
           >
@@ -146,7 +146,7 @@ export function ConflictResolver(props: ConflictResolverProps): React.ReactEleme
           </div>
         )}
 
-        <p style={{ margin: '0 0 1.25rem', color: '#374151', fontSize: '.9rem' }}>
+        <p style={{ margin: '0 0 1.25rem', color: 'var(--color-neutral-700)', fontSize: '.9rem' }}>
           Choose how to resolve the conflict:
         </p>
 
@@ -157,10 +157,10 @@ export function ConflictResolver(props: ConflictResolverProps): React.ReactEleme
             onClick={() => onRefetch()}
             style={{
               padding: '.6rem 1rem',
-              border: '1px solid #2563eb',
+              border: '1px solid var(--interactive-primary)',
               borderRadius: '4px',
-              background: '#fff',
-              color: '#2563eb',
+              background: 'var(--surface-card)',
+              color: 'var(--interactive-primary)',
               cursor: 'pointer',
               fontSize: '.9rem',
             }}
@@ -178,10 +178,10 @@ export function ConflictResolver(props: ConflictResolverProps): React.ReactEleme
               aria-describedby={conflictVersion == null ? mergeDisabledReasonId : undefined}
               style={{
                 padding: '.6rem 1rem',
-                border: '1px solid #6b7280',
-                borderRadius: '4px',
-                background: '#fff',
-                color: '#374151',
+              border: '1px solid var(--text-secondary)',
+              borderRadius: '4px',
+              background: 'var(--surface-card)',
+              color: 'var(--color-neutral-700)',
                 cursor: conflictVersion == null ? 'not-allowed' : 'pointer',
                 fontSize: '.9rem',
                 opacity: conflictVersion == null ? 0.6 : 1,
@@ -195,7 +195,7 @@ export function ConflictResolver(props: ConflictResolverProps): React.ReactEleme
                 style={{
                   margin: '.25rem 0 0',
                   fontSize: '.8rem',
-                  color: '#6b7280',
+                  color: 'var(--text-secondary)',
                 }}
               >
                 The server did not include a version stamp (X-Resource-Version
@@ -210,10 +210,10 @@ export function ConflictResolver(props: ConflictResolverProps): React.ReactEleme
             onClick={() => setShowDiscard(true)}
             style={{
               padding: '.6rem 1rem',
-              border: '1px solid #dc2626',
+              border: '1px solid var(--interactive-danger)',
               borderRadius: '4px',
-              background: '#fff',
-              color: '#dc2626',
+              background: 'var(--surface-card)',
+              color: 'var(--interactive-danger)',
               cursor: 'pointer',
               fontSize: '.9rem',
             }}
@@ -248,7 +248,7 @@ export function ConflictResolver(props: ConflictResolverProps): React.ReactEleme
           >
             <div
               style={{
-                background: '#fff',
+                background: 'var(--surface-card)',
                 borderRadius: '8px',
                 padding: '1.5rem',
                 maxWidth: '720px',
@@ -264,7 +264,7 @@ export function ConflictResolver(props: ConflictResolverProps): React.ReactEleme
               >
                 Merge manually
               </h3>
-              <p style={{ margin: '0 0 1rem', fontSize: '.85rem', color: '#6b7280' }}>
+              <p style={{ margin: '0 0 1rem', fontSize: '.85rem', color: 'var(--text-secondary)' }}>
                 Pick which side wins for each field. Saved version will be{' '}
                 <code>{conflictVersion ?? '—'}</code>.
               </p>
@@ -273,9 +273,9 @@ export function ConflictResolver(props: ConflictResolverProps): React.ReactEleme
               </div>
               <table style={{ width: '100%', fontSize: '.85rem', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
-                    <th style={{ padding: '.4rem .5rem', borderBottom: '1px solid #e2e8f0' }}>Field</th>
-                    <th style={{ padding: '.4rem .5rem', borderBottom: '1px solid #e2e8f0' }}>Source</th>
+                  <tr style={{ background: 'var(--surface-page)', textAlign: 'left' }}>
+                    <th style={{ padding: '.4rem .5rem', borderBottom: '1px solid var(--border-default)' }}>Field</th>
+                    <th style={{ padding: '.4rem .5rem', borderBottom: '1px solid var(--border-default)' }}>Source</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -305,9 +305,9 @@ export function ConflictResolver(props: ConflictResolverProps): React.ReactEleme
                   onClick={() => setShowMerge(false)}
                   style={{
                     padding: '6px 16px',
-                    border: '1px solid #d1d5db',
+                    border: '1px solid var(--color-neutral-300)',
                     borderRadius: '4px',
-                    background: '#fff',
+                    background: 'var(--surface-card)',
                     cursor: 'pointer',
                     fontSize: '.875rem',
                   }}
@@ -322,8 +322,8 @@ export function ConflictResolver(props: ConflictResolverProps): React.ReactEleme
                     padding: '6px 16px',
                     border: 'none',
                     borderRadius: '4px',
-                    background: '#2563eb',
-                    color: '#fff',
+                    background: 'var(--interactive-primary)',
+                    color: 'var(--text-inverse)',
                     cursor: 'pointer',
                     fontSize: '.875rem',
                   }}

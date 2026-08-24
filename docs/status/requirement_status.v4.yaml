@@ -930,3 +930,28 @@ history:
       npm run type-check/lint/test(184/184)/guards(48/48) all pass).
       37 on-disk `- req:` entries in requirement_status.v4.yaml before this
       append; 38 after.
+  - req: REQ-144
+    event: started
+    agent: ORCH
+    at: "2026-08-24T06:03:23Z"
+    note: >
+      WF02-REQ144-20260824 Step 00. ui/+forms/+webhooks/ hex-literal migration
+      (12 files, 133 occurrences per 2026-08-22 count; re-verified: 118 hits,
+      33 distinct values -- many Tailwind status/alert colors not in palette,
+      design-step addendum expected). depends_on REQ-141 (done). Branch
+      feature/WF02-REQ144-20260824 created. Queue task 270 (GH#532).
+      38 on-disk entries before this append; 39 after.
+  - req: REQ-144
+    event: done
+    agent: FRONTEND-DEV
+    at: "2026-08-24T06:37:27Z"
+    note: >
+      Migrated 118 hex literals across 12 files in ui/+forms/+webhooks/ to
+      CSS custom properties. Design-step addendum: 4 new tokens added to
+      tokens.css/design-system.md (--color-warning-tint/border/text +
+      --color-error-border). AC-3 rework: ConflictResolver.12.test.tsx:120
+      asserted literal #dc2626 which jsdom cannot resolve from a CSS var --
+      updated regex to also accept var(--interactive-danger), authorized as
+      fixing an over-specified test assertion. All 4 ACs verified: grep 0,
+      12 target files + test fix, 184/184 tests, 48/48 guards. CI 4/4 green.
+      39 on-disk entries before this append; 40 after.

@@ -52,11 +52,11 @@ export function StaleVersionError(props: StaleVersionErrorProps): React.ReactEle
         role="alert"
         style={{
           padding: '1.25rem',
-          border: '1px solid #fde68a',
-          background: '#fffbeb',
+          border: '1px solid var(--color-warning-border)',
+          background: 'var(--color-warning-tint)',
           borderRadius: '6px',
           marginBottom: '1rem',
-          color: '#92400e',
+          color: 'var(--color-warning-text)',
         }}
       >
         <p style={{ margin: 0, fontWeight: 500 }}>

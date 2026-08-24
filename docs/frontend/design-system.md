@@ -64,9 +64,17 @@ All colors are defined as CSS custom properties in `web/src/styles/tokens.css`. 
   --color-warning:       #fcc419;
   --color-warning-dark:  #e67700;
 
+  /* Warning-state additions (REQ-144 addendum) */
+  --color-warning-tint:   #fffbeb;   /* amber-50; barely-amber white — warning banner bg */
+  --color-warning-border: #fde68a;   /* amber-200; border accent for warning boxes */
+  --color-warning-text:   #92400e;   /* amber-800; WCAG AA text on warning backgrounds */
+
   --color-error-light:   #ffe3e3;
   --color-error:         #fa5252;
   --color-error-dark:    #c92a2a;
+
+  /* Error-state border addition (REQ-144 addendum) */
+  --color-error-border: #fecaca;     /* red-200; border accent for error alert blocks */
 
   /* Tints and failure state (REQ-143 addendum) */
   --color-success-tint:  #f8fff8;   /* barely-green white; lighter than --color-success-light */

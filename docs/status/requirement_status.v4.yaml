@@ -989,6 +989,21 @@ history:
       palette additions likely needed). depends_on REQ-141 (done). Branch
       feature/WF02-REQ145-20260824 created. Queue task 271 (GH#533).
       42 on-disk entries before this append; 43 after.
+  - req: REQ-147
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-08-24T10:22:38Z"
+    note: >
+      Renamed pack_update_resolutions.resolution Ecto.Enum:
+      :keep_theirs->:keep_local, :custom->:merged. Migration
+      20260824143417_rename_resolution_enum_values.exs (defensive; zero rows
+      existed). @type and doc prose updated. Test string literals updated.
+      req041 design doc OQ-6 marked resolved with REQ-147 + R-Co
+      pack_update.zig:25-29 citations. CODE-DESIGNER skipped (mechanical
+      rename). SECURITY-REVIEWER PASS, REVIEWER PASS, TEST-DESIGNER (scope:
+      no new tests needed), RELEASE-VALIDATOR PASS (5/5 ACs; 5 pre-existing
+      concurrency flakes in full suite unrelated to this branch). 47 on-disk
+      entries before this append; 48 after.
   - req: REQ-146
     event: done
     agent: FRONTEND-DEV

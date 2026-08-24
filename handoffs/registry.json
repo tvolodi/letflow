@@ -2387,7 +2387,7 @@
                                              "REQ-147"
                                          ],
                      "stage":  "S2",
-                     "status":  "ACTIVE",
+                     "status":  "COMPLETED",
                      "owned_modules":  [
                                            "lib/letflow/definitions/pack_update_resolution.ex",
                                            "priv/repo/migrations/",
@@ -2395,9 +2395,9 @@
                                            "lib/letflow/design/req041-pack-update-diff-schema.md"
                                        ],
                      "lock_acquired_at":  "2026-08-24T09:31:33Z",
-                     "lock_released_at":  null,
-                     "released_lock":  false,
-                     "last_known_step":  "Step 00 COMPLETED PASS -- branch created. CODE-DESIGNER skipped (mechanical rename). Dispatching ELIXIR-DEV.",
+                     "lock_released_at":  "2026-08-24T10:22:38Z",
+                     "released_lock":  true,
+                     "last_known_step":  "Step Final COMPLETED PASS (pending PR/merge)",
                      "backfilled":  false,
                      "queue_task_id":  282,
                      "queue_agent_id":  "orch-main",

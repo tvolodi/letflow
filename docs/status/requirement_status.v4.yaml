@@ -885,3 +885,18 @@ history:
       substitution, busywork gate avoided), RELEASE-VALIDATOR (independently
       verified all 4 ACs). Final: npm run type-check, lint, test (184/184),
       guards (48/48) all pass.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-24T04:54:12Z"
+    note: >
+      ISS-0330 resolved (WF03-ISS0330-20260824, PR #634, 5b57ed9). Two
+      pre-existing invariant test failures fixed: A4b (REQ-122 done entry in
+      requirement_status.v4.yaml was missing required `agent:` field, added
+      `agent: ORCH` matching the direct-push attribution pattern) and A9
+      (requirement_status.yaml/volume 1 index declared entries: 182 but had
+      185 on disk, corrected in the index). Both failures traced to sibling
+      session commit 70632a3 (direct main push bypassing CI). All 20
+      invariants tests now pass. Queue task 330 released done, GH#633 closed.
+      35 on-disk `- req:` entries in requirement_status.v4.yaml before this
+      append; 36 after.

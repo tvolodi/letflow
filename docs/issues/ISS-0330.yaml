@@ -2,7 +2,9 @@ id: ISS-0330
 queue_task_id: 330
 github_issue_number: 633
 title: "requirement_status_invariants_test.exs A4b/A9 failures: REQ-122 done event missing agent: field introduced by direct main push (70632a3)"
-status: open
+status: resolved
+resolved_at: "2026-08-24T04:54:12Z"
+resolved_by: WF03-ISS0330-20260824
 severity: blocker
 introduced_by: "70632a3 (REQ-122 done event written without required agent: field by sibling session that pushed directly to main bypassing CI)"
 discovered_by: WF02-REQ142-20260824

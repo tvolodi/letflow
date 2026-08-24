@@ -989,6 +989,20 @@ history:
       palette additions likely needed). depends_on REQ-141 (done). Branch
       feature/WF02-REQ145-20260824 created. Queue task 271 (GH#533).
       42 on-disk entries before this append; 43 after.
+  - req: REQ-146
+    event: done
+    agent: FRONTEND-DEV
+    at: "2026-08-24T09:19:04Z"
+    note: >
+      Tightened literal-colour guard (dropped semicolon-lookahead, catches JS/TSX
+      inline style literals). Deleted design-tokens/letflow.tokens.json. Resolved
+      web/README.md drift entries. Offender fixture updated to JS inline-style case
+      (fail-first/pass-after verified). Exposed and fixed 22 additional rgba/hex
+      violations in components/ and utils/ (shadow tokens, overlay tokens added to
+      tokens.css). allowedPaths: web/src/pages/ (pending migration), vendor+index
+      bundles (tokens.css compilation). vite.config.ts manualChunks vendor split.
+      All gates: 184/184 tests, 48/48 guards (source+bundle). CI 4/4 green.
+      45 on-disk entries before this append; 46 after.
   - req: REQ-145
     event: done
     agent: FRONTEND-DEV
@@ -1003,3 +1017,14 @@ history:
       (all 4 ACs verified: grep 0, 7 target files, no test files modified,
       184/184 tests, 48/48 guards). 43 on-disk entries before this append;
       44 after.
+  - req: REQ-146
+    event: started
+    agent: ORCH
+    at: "2026-08-24T08:14:12Z"
+    note: >
+      WF02-REQ146-20260824 Step 00. Final REQ-141 split requirement: delete
+      design-tokens/letflow.tokens.json, tighten literal-colour guard to catch
+      JS/TSX inline style literals, update web/README.md drift entries.
+      Pre-check: zero hex hits across web/src/components/ (AC-5 verified).
+      Branch feature/WF02-REQ146-20260824 created. Queue task 272 (GH#534).
+      44 on-disk entries before this append; 45 after.

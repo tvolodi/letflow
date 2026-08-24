@@ -142,7 +142,7 @@ function TokenMarkerOverlay(props: TokenMarkerOverlayProps): JSX.Element {
         top: '20px',
         opacity: isHovered ? 1 : 0.8,
         cursor: 'pointer',
-        filter: isHovered ? 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))' : 'none',
+        filter: isHovered ? 'var(--drop-shadow-overlay)' : 'none',
         transition: 'opacity 0.2s, filter 0.2s',
       }}
       onMouseEnter={onHover}
@@ -254,7 +254,7 @@ function buildGraphFromDefinition(
           style: {
             ...(node.style ?? {}),
             border: isActive ? '2px solid var(--interactive-primary)' : '1px solid var(--color-neutral-400)',
-            boxShadow: isActive ? '0 0 0 4px rgba(37, 99, 235, 0.18)' : undefined,
+            boxShadow: isActive ? 'var(--shadow-focus-blue)' : undefined,
           },
         }
       }),

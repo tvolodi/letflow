@@ -15,7 +15,7 @@ export default function TimerNode({ selected }: NodeProps<Node<CanvasNodeData>>)
         alignItems: 'center',
         justifyContent: 'center',
         position: 'relative',
-        boxShadow: selected ? '0 0 0 3px rgba(34,139,230,0.2)' : undefined,
+        boxShadow: selected ? 'var(--shadow-focus-brand)' : undefined,
         cursor: 'pointer',
       }}
     >

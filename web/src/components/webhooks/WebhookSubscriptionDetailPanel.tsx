@@ -79,7 +79,7 @@ export function WebhookSubscriptionDetailPanel({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(15, 23, 42, 0.35)',
+        background: 'var(--surface-overlay-slate)',
         display: 'flex',
         justifyContent: 'flex-end',
         zIndex: 1000,
@@ -92,7 +92,7 @@ export function WebhookSubscriptionDetailPanel({
           width: 'min(560px, 100vw)',
           height: '100%',
           background: 'var(--surface-card)',
-          boxShadow: '-12px 0 32px rgba(15, 23, 42, 0.18)',
+          boxShadow: 'var(--shadow-panel)',
           padding: '1.25rem',
           overflowY: 'auto',
         }}

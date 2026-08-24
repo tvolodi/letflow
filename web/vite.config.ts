@@ -9,6 +9,17 @@ export default defineConfig({
       '@': resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split third-party dependencies into vendor-* chunks so the literal-colour
+        // bundle guard can exempt them without blanketing the application code.
+        manualChunks(id) {
+          if (id.includes('node_modules')) return 'vendor'
+        },
+      },
+    },
+  },
   server: {
     port: Number(process.env.VITE_PORT) || 5173,
     proxy: {

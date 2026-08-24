@@ -18,7 +18,7 @@ export default function ServiceTaskNode({ data, selected }: NodeProps<Node<Canva
         flexDirection: 'column',
         gap: 2,
         position: 'relative',
-        boxShadow: selected ? '0 0 0 3px rgba(34,139,230,0.2)' : undefined,
+        boxShadow: selected ? 'var(--shadow-focus-brand)' : undefined,
         cursor: 'pointer',
       }}
     >

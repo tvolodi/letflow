@@ -4,11 +4,11 @@
  * Get SVG fill colour for a token status
  */
 export function getTokenMarkerColour(status: 'active' | 'completed' | 'pending' | 'error'): string {
-  const colours = {
-    active: '#3b82f6',    // blue
-    completed: '#10b981', // green
-    pending: '#f59e0b',   // amber
-    error: '#ef4444',     // red
+  const colours: Record<'active' | 'completed' | 'pending' | 'error', string> = {
+    active:    'var(--interactive-primary)',
+    completed: 'var(--color-success)',
+    pending:   'var(--color-warning)',
+    error:     'var(--color-error)',
   }
   return colours[status]
 }

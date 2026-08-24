@@ -17,7 +17,7 @@ export function ConfirmPromoteModal(props: ConfirmPromoteModalProps): React.Reac
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.4)',
+        background: 'var(--surface-overlay)',
         zIndex: 500,
         display: 'flex',
         alignItems: 'center',
@@ -31,7 +31,7 @@ export function ConfirmPromoteModal(props: ConfirmPromoteModalProps): React.Reac
           padding: '1.5rem',
           maxWidth: '480px',
           width: '90vw',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+          boxShadow: 'var(--shadow-modal-lg)',
         }}
       >
         <h3

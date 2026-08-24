@@ -26,7 +26,7 @@ export default function ParallelGatewayNode({ selected }: NodeProps<Node<CanvasN
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: selected ? '0 0 0 3px rgba(34,139,230,0.2)' : undefined,
+          boxShadow: selected ? 'var(--shadow-focus-brand)' : undefined,
         }}
       >
         {/* Plus sign */}

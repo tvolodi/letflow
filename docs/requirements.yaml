@@ -7114,7 +7114,7 @@ requirements:
   - id: REQ-146
     title: Delete design-tokens/letflow.tokens.json and tighten the literal-colour guard pattern to catch inline JS/TSX style literals
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 272  # letflow-queue task id
     description: >

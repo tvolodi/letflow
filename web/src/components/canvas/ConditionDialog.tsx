@@ -63,7 +63,7 @@ export default function ConditionDialog({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.5)',
+        background: 'var(--surface-overlay)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -79,7 +79,7 @@ export default function ConditionDialog({
           padding: 24,
           minWidth: 480,
           maxWidth: 560,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+          boxShadow: 'var(--shadow-lg)',
         }}
         onClick={(e) => e.stopPropagation()}
       >

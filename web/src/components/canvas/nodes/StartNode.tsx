@@ -14,7 +14,7 @@ export default function StartNode({ selected }: NodeProps<Node<CanvasNodeData>>)
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        boxShadow: selected ? '0 0 0 3px rgba(34,139,230,0.2)' : undefined,
+        boxShadow: selected ? 'var(--shadow-focus-brand)' : undefined,
         cursor: 'default',
       }}
     >

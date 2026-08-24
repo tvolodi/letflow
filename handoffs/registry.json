@@ -2379,6 +2379,29 @@
                      "queue_task_id":  272,
                      "queue_agent_id":  "orch-main",
                      "note":  "WF-02 for REQ-146 (GH#534, queue task 272, stage S8 -- final REQ-141 split: guard tighten + delete tokens.json + README). Queue claimed 2026-08-24T08:12:54Z."
+                 },
+                 {
+                     "run_id":  "WF02-REQ147-20260824",
+                     "workflow_id":  "WF-02",
+                     "requirement_ids":  [
+                                             "REQ-147"
+                                         ],
+                     "stage":  "S2",
+                     "status":  "ACTIVE",
+                     "owned_modules":  [
+                                           "lib/letflow/definitions/pack_update_resolution.ex",
+                                           "priv/repo/migrations/",
+                                           "test/letflow/definitions/pack_update_migration_test.exs",
+                                           "lib/letflow/design/req041-pack-update-diff-schema.md"
+                                       ],
+                     "lock_acquired_at":  "2026-08-24T09:31:33Z",
+                     "lock_released_at":  null,
+                     "released_lock":  false,
+                     "last_known_step":  "Step 00 COMPLETED PASS -- branch created. CODE-DESIGNER skipped (mechanical rename). Dispatching ELIXIR-DEV.",
+                     "backfilled":  false,
+                     "queue_task_id":  282,
+                     "queue_agent_id":  "orch-main",
+                     "note":  "WF-02 for REQ-147 (GH#556, queue task 282, stage S2 -- rename pack_update_resolutions.resolution enum values). Queue claimed 2026-08-24T09:30:58Z."
                  }
              ]
 }

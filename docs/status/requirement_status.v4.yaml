@@ -1003,6 +1003,17 @@ history:
       bundles (tokens.css compilation). vite.config.ts manualChunks vendor split.
       All gates: 184/184 tests, 48/48 guards (source+bundle). CI 4/4 green.
       45 on-disk entries before this append; 46 after.
+  - req: REQ-147
+    event: started
+    agent: ORCH
+    at: "2026-08-24T09:31:33Z"
+    note: >
+      WF02-REQ147-20260824 Step 00. Mechanical S2 enum rename:
+      :keep_theirs->:keep_local, :custom->:merged in
+      pack_update_resolution.ex + defensive migration + test update +
+      design doc correction. CODE-DESIGNER skipped (rename confirmed
+      mechanical per requirement description). Branch created. Queue task
+      282 (GH#556). 46 on-disk entries before this append; 47 after.
   - req: REQ-145
     event: done
     agent: FRONTEND-DEV

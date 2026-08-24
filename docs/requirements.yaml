@@ -7164,7 +7164,7 @@ requirements:
   - id: REQ-147
     title: Rename pack_update_resolutions.resolution enum values to match R-Co's ResolutionKind (keep_local/take_incoming/merged)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S2
     impl_order: 282  # letflow-queue task id, GH#556
     description: >

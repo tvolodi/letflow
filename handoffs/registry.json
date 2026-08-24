@@ -2397,7 +2397,7 @@
                      "lock_acquired_at":  "2026-08-24T09:31:33Z",
                      "lock_released_at":  "2026-08-24T10:22:38Z",
                      "released_lock":  true,
-                     "last_known_step":  "Step Final COMPLETED PASS (pending PR/merge)",
+                     "last_known_step":  "Step Final COMPLETED PASS -- PR #640 squash-merged (ddc3db1). Queue task 282 released done, GH#556 closed.",
                      "backfilled":  false,
                      "queue_task_id":  282,
                      "queue_agent_id":  "orch-main",

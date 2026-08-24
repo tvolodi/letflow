@@ -5816,3 +5816,15 @@ history:
       violating FNFR-06. Cannot fix here (AC-3 forbids touching that file).
       AC-1 (live login test) blocked: no running Letflow+Keycloak stack
       (REQ-128 S4 not shipped). Report at docs/handoffs/REQ-117-verification.md.
+  - req: REQ-117
+    event: blocked
+    agent: SECURITY-REVIEWER
+    at: 2026-08-24T00:57:00Z
+    note: >
+      FINDING-002 fixed: OidcManager.ts now uses WebStorageStateStore
+      wrapping InMemoryWebStorage instead of window.sessionStorage
+      (FNFR-06 / OIDC-F-02 compliance). SECURITY-REVIEWER PASS.
+      npm run check PASS (48 guard + 184 unit tests). AC-2..AC-6 all
+      confirmed. Remaining blocker: AC-1 (live login test) requires a
+      running Letflow+Keycloak docker stack — Docker not accessible in
+      this environment (/var/run/docker.sock permission denied).

@@ -5720,7 +5720,7 @@ requirements:
   - id: REQ-117
     title: Wire web/ to Letflow's API -- base URL, auth token, and the login path
     owner: FRONTEND-DEV
-    status: blocked  # blocked: AC-1 requires running Letflow+Keycloak instance (REQ-128 S4 not shipped); FINDING-002 (FNFR-06 sessionStorage violation in OidcManager.ts) needs separate requirement before this can close
+    status: blocked  # blocked: AC-1 requires a running Letflow+Keycloak stack (Docker not accessible in this environment); all other ACs pass; FINDING-002 (FNFR-06) fixed in this session
     stage: S8
     impl_order: 246  # letflow-queue task id; depends_on translated to queue task id [242]
     description: >

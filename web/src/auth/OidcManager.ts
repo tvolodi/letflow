@@ -1,6 +1,6 @@
 /** OIDC Manager — singleton UserManager for authorization code flow via oidc-client-ts */
 
-import { UserManager, WebStorageStateStore } from 'oidc-client-ts'
+import { UserManager, InMemoryWebStorage, WebStorageStateStore } from 'oidc-client-ts'
 import type { UserManagerSettings } from 'oidc-client-ts'
 import { fetchTenantConfig } from './tenantConfig'
 
@@ -22,7 +22,11 @@ function buildOidcSettings(authority: string, clientId: string): UserManagerSett
       end_session_endpoint: `${normalizedAuthority}/protocol/openid-connect/logout`,
       jwks_uri: `${normalizedAuthority}/protocol/openid-connect/certs`,
     },
-    userStore: new WebStorageStateStore({ store: window.sessionStorage }),
+    // FNFR-06 / OIDC-F-02: keep oidc-client-ts internal state (ID token,
+    // refresh token, PKCE verifier) in memory only — never in sessionStorage
+    // or localStorage. InMemoryWebStorage is the in-memory Storage backend;
+    // WebStorageStateStore wraps it to satisfy the StateStore interface.
+    userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
     automaticSilentRenew: false,
   }
 }

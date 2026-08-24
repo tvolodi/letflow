@@ -978,3 +978,14 @@ history:
       registered as queue task 331 (GH#637). docs/requirements.yaml updated:
       impl_order 144->331, status blocked->pending. GH#284 commented and
       closed; track at GH#637. 41 on-disk entries before this append; 42 after.
+  - req: REQ-145
+    event: started
+    agent: ORCH
+    at: "2026-08-24T07:33:40Z"
+    note: >
+      WF02-REQ145-20260824 Step 00. layout/+definitions/+admin/ hex-literal
+      migration (8 files, 52 occurrences per 2026-08-22 count; re-verified:
+      45 hits, 28 distinct values -- Tailwind sky/blue and yellow/amber
+      palette additions likely needed). depends_on REQ-141 (done). Branch
+      feature/WF02-REQ145-20260824 created. Queue task 271 (GH#533).
+      42 on-disk entries before this append; 43 after.

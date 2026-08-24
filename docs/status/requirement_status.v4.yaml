@@ -1003,3 +1003,14 @@ history:
       (all 4 ACs verified: grep 0, 7 target files, no test files modified,
       184/184 tests, 48/48 guards). 43 on-disk entries before this append;
       44 after.
+  - req: REQ-146
+    event: started
+    agent: ORCH
+    at: "2026-08-24T08:14:12Z"
+    note: >
+      WF02-REQ146-20260824 Step 00. Final REQ-141 split requirement: delete
+      design-tokens/letflow.tokens.json, tighten literal-colour guard to catch
+      JS/TSX inline style literals, update web/README.md drift entries.
+      Pre-check: zero hex hits across web/src/components/ (AC-5 verified).
+      Branch feature/WF02-REQ146-20260824 created. Queue task 272 (GH#534).
+      44 on-disk entries before this append; 45 after.

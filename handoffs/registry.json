@@ -2357,6 +2357,28 @@
                      "queue_task_id":  271,
                      "queue_agent_id":  "orch-main",
                      "note":  "WF-02 for REQ-145 (GH#533, queue task 271, stage S8 -- migrate layout/+definitions/+admin/ 8 files). Queue claimed 2026-08-24T07:32:44Z."
+                 },
+                 {
+                     "run_id":  "WF02-REQ146-20260824",
+                     "workflow_id":  "WF-02",
+                     "requirement_ids":  [
+                                             "REQ-146"
+                                         ],
+                     "stage":  "S8",
+                     "status":  "ACTIVE",
+                     "owned_modules":  [
+                                           "web/tests/guards/",
+                                           "design-tokens/",
+                                           "web/README.md"
+                                       ],
+                     "lock_acquired_at":  "2026-08-24T08:14:12Z",
+                     "lock_released_at":  null,
+                     "released_lock":  false,
+                     "last_known_step":  "Step 00 COMPLETED PASS -- branch created. Dispatching CODE-DESIGNER.",
+                     "backfilled":  false,
+                     "queue_task_id":  272,
+                     "queue_agent_id":  "orch-main",
+                     "note":  "WF-02 for REQ-146 (GH#534, queue task 272, stage S8 -- final REQ-141 split: guard tighten + delete tokens.json + README). Queue claimed 2026-08-24T08:12:54Z."
                  }
              ]
 }

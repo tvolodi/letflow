@@ -44,12 +44,11 @@ export const PATTERNS: GuardPattern[] = [
     rationale: 'CMP-UI-02',
   },
   {
-    // Catches unquoted CSS colour literals: hex or rgba()/hsl() followed by `;` on same line.
-    // JS inline-style strings end with `'` not `;` so they don't match.
-    // Vite bundles CSS to separate .css files; raw hex in JS only appears in app code.
-    // `[^)]+` (one-or-more) prevents matching zero-arg `rgb()` method calls from color libs.
+    // Catches raw colour literals anywhere in TS/TSX source and the built bundle.
+    // web/src/styles/tokens.css is allowedPaths-exempt. Negative lookbehind on rgba?/hsla?
+    // prevents matching zero-arg calls from colour-manipulation libraries.
     name: 'literal-colour',
-    regex: /#[0-9a-fA-F]{3,8}\b(?=[^'";\n]*;)|(?<![.a-zA-Z0-9_$])rgba?\([^)]+\)(?=[^'";\n]*;)|(?<![.a-zA-Z0-9_$])hsla?\([^)]+\)(?=[^'";\n]*;)/,
+    regex: /#[0-9a-fA-F]{3,8}\b|(?<![.a-zA-Z0-9_$])rgba?\([^)]+\)|(?<![.a-zA-Z0-9_$])hsla?\([^)]+\)/,
     appliesTo: 'both',
     allowedPaths: ['web/src/styles/tokens.css'],
     rationale: 'CMP-UI-06',

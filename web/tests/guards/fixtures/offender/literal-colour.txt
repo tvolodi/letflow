@@ -1,4 +1,1 @@
-.button {
-  color: #ff0000;
-  background: #e2e8f0;
-}
+const style = { color: '#fa5252' };

@@ -74,7 +74,7 @@ export default function ConditionDialog({
     >
       <div
         style={{
-          background: 'var(--color-neutral-0, #fff)',
+          background: 'var(--color-neutral-0)',
           borderRadius: 8,
           padding: 24,
           minWidth: 480,
@@ -88,7 +88,7 @@ export default function ConditionDialog({
             margin: '0 0 4px',
             fontSize: 'var(--text-lg, 1.125rem)',
             fontWeight: 600,
-            color: 'var(--text-primary, #212529)',
+            color: 'var(--text-primary)',
           }}
         >
           Edge Condition
@@ -97,7 +97,7 @@ export default function ConditionDialog({
           style={{
             margin: '0 0 16px',
             fontSize: 'var(--text-sm, 0.875rem)',
-            color: 'var(--text-secondary, #6c757d)',
+            color: 'var(--text-secondary)',
           }}
         >
           {sourceName} → {targetName}
@@ -111,7 +111,7 @@ export default function ConditionDialog({
               fontSize: 'var(--text-sm, 0.875rem)',
               fontWeight: 500,
               marginBottom: 6,
-              color: isDefault ? 'var(--text-disabled, #ced4da)' : 'var(--text-primary, #212529)',
+              color: isDefault ? 'var(--text-disabled)' : 'var(--text-primary)',
             }}
           >
             CEL Expression
@@ -161,12 +161,12 @@ export default function ConditionDialog({
             onClick={onCancel}
             style={{
               padding: '6px 16px',
-              border: '1px solid var(--border-default, #e9ecef)',
+              border: '1px solid var(--border-default)',
               borderRadius: 4,
-              background: '#fff',
+              background: 'var(--surface-card)',
               cursor: 'pointer',
               fontSize: 'var(--text-sm, 0.875rem)',
-              color: 'var(--text-primary, #212529)',
+              color: 'var(--text-primary)',
             }}
           >
             Cancel
@@ -180,9 +180,9 @@ export default function ConditionDialog({
               border: 'none',
               borderRadius: 4,
               background: isValid
-                ? 'var(--interactive-primary, #228be6)'
-                : 'var(--color-neutral-300, #dee2e6)',
-              color: isValid ? '#fff' : 'var(--text-disabled, #ced4da)',
+                ? 'var(--interactive-primary)'
+                : 'var(--color-neutral-300)',
+              color: isValid ? 'var(--text-inverse)' : 'var(--text-disabled)',
               cursor: isValid ? 'pointer' : 'not-allowed',
               fontSize: 'var(--text-sm, 0.875rem)',
               fontWeight: 500,

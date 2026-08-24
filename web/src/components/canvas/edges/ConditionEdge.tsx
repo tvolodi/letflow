@@ -31,7 +31,7 @@ export default function ConditionEdge({
   const condition = data?.condition
 
   const strokeDasharray = isDefault ? '5,5' : undefined
-  const stroke = selected ? 'var(--color-brand-500, #339af0)' : 'var(--color-neutral-500, #adb5bd)'
+  const stroke = selected ? 'var(--color-brand-500)' : 'var(--color-neutral-500)'
 
   const labelText = isDefault
     ? 'D'
@@ -42,8 +42,8 @@ export default function ConditionEdge({
       : null
 
   const labelBg = isDefault
-    ? 'var(--color-info-light, #dbe4ff)'
-    : 'var(--color-warning-light, #fff3bf)'
+    ? 'var(--color-info-light)'
+    : 'var(--color-warning-light)'
 
   return (
     <>
@@ -67,14 +67,14 @@ export default function ConditionEdge({
               borderRadius: 4,
               fontSize: 'var(--text-xs, 0.7rem)',
               fontWeight: isDefault ? 700 : 400,
-              color: 'var(--text-primary, #212529)',
+              color: 'var(--text-primary)',
               fontFamily: isDefault ? undefined : 'var(--font-mono, monospace)',
               pointerEvents: 'none',
               whiteSpace: 'nowrap',
               maxWidth: 160,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              border: `1px solid ${isDefault ? 'var(--color-info, #4c6ef5)' : 'var(--color-warning, #fcc419)'}`,
+              border: `1px solid ${isDefault ? 'var(--color-info)' : 'var(--color-warning)'}`,
               lineHeight: 1.4,
             }}
           >

@@ -9,8 +9,8 @@ export default function HumanTaskNode({ data, selected }: NodeProps<Node<CanvasN
         width: 180,
         minHeight: 72,
         borderRadius: 8,
-        border: '1.5px solid var(--color-brand-500, #339af0)',
-        background: 'var(--color-neutral-0, #fff)',
+        border: '1.5px solid var(--color-brand-500)',
+        background: 'var(--color-neutral-0)',
         padding: '8px 12px',
         display: 'flex',
         flexDirection: 'column',
@@ -29,12 +29,12 @@ export default function HumanTaskNode({ data, selected }: NodeProps<Node<CanvasN
             width: 16,
             height: 16,
             borderRadius: '50%',
-            background: 'var(--color-error, #fa5252)',
+            background: 'var(--color-error)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: 10,
-            color: '#fff',
+            color: 'var(--text-inverse)',
             fontWeight: 'bold',
           }}
           title={data.validationError}
@@ -44,7 +44,7 @@ export default function HumanTaskNode({ data, selected }: NodeProps<Node<CanvasN
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         {/* User icon */}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--color-brand-500, #339af0)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--color-brand-500)">
           <circle cx="12" cy="8" r="4" />
           <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
         </svg>
@@ -52,7 +52,7 @@ export default function HumanTaskNode({ data, selected }: NodeProps<Node<CanvasN
           style={{
             fontWeight: 600,
             fontSize: 'var(--text-sm, 0.875rem)',
-            color: 'var(--text-primary, #212529)',
+            color: 'var(--text-primary)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -65,7 +65,7 @@ export default function HumanTaskNode({ data, selected }: NodeProps<Node<CanvasN
       <span
         style={{
           fontSize: 'var(--text-xs, 0.75rem)',
-          color: 'var(--text-secondary, #6c757d)',
+          color: 'var(--text-secondary)',
           marginLeft: 24,
         }}
       >

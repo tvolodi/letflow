@@ -22,8 +22,8 @@ export default function ValidationSummaryBar({ errors }: ValidationSummaryBarPro
   return (
     <div
       style={{
-        borderTop: '1px solid var(--border-default, #e9ecef)',
-        background: errorCount > 0 ? 'var(--color-error-light, #ffe3e3)' : 'var(--color-warning-light, #fff3bf)',
+        borderTop: '1px solid var(--border-default)',
+        background: errorCount > 0 ? 'var(--color-error-light)' : 'var(--color-warning-light)',
       }}
     >
       {/* Collapsed bar */}
@@ -36,16 +36,16 @@ export default function ValidationSummaryBar({ errors }: ValidationSummaryBarPro
           padding: '6px 16px',
           cursor: 'pointer',
           fontSize: 'var(--text-sm, 0.875rem)',
-          color: 'var(--text-primary, #212529)',
+          color: 'var(--text-primary)',
           userSelect: 'none',
         }}
       >
         <span>
-          {errorCount > 0 && <span style={{ fontWeight: 600, color: 'var(--color-error, #fa5252)' }}>{errorCount} error{errorCount !== 1 ? 's' : ''}</span>}
+          {errorCount > 0 && <span style={{ fontWeight: 600, color: 'var(--color-error)' }}>{errorCount} error{errorCount !== 1 ? 's' : ''}</span>}
           {errorCount > 0 && warningCount > 0 && <span> · </span>}
-          {warningCount > 0 && <span style={{ color: 'var(--color-warning-dark, #e67700)' }}>{warningCount} warning{warningCount !== 1 ? 's' : ''}</span>}
+          {warningCount > 0 && <span style={{ color: 'var(--color-warning-dark)' }}>{warningCount} warning{warningCount !== 1 ? 's' : ''}</span>}
         </span>
-        <span style={{ color: 'var(--text-secondary, #6c757d)' }}>
+        <span style={{ color: 'var(--text-secondary)' }}>
           {expanded ? '▲' : '▼'}
         </span>
       </div>
@@ -62,12 +62,12 @@ export default function ValidationSummaryBar({ errors }: ValidationSummaryBarPro
                 gap: 6,
                 padding: '3px 0',
                 fontSize: 'var(--text-xs, 0.75rem)',
-                color: 'var(--text-primary, #212529)',
+                color: 'var(--text-primary)',
               }}
             >
               <span
                 style={{
-                  color: err.severity === 'error' ? 'var(--color-error, #fa5252)' : 'var(--color-warning-dark, #e67700)',
+                  color: err.severity === 'error' ? 'var(--color-error)' : 'var(--color-warning-dark)',
                   fontWeight: 'bold',
                   flexShrink: 0,
                 }}

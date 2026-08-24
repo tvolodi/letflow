@@ -22,8 +22,8 @@ export default function ExclusiveGatewayNode({ selected }: NodeProps<Node<Canvas
           width: 40,
           height: 40,
           transform: 'rotate(45deg)',
-          border: '2px solid var(--color-warning-dark, #e67700)',
-          background: 'var(--color-neutral-0, #fff)',
+          border: '2px solid var(--color-warning-dark)',
+          background: 'var(--color-neutral-0)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -36,7 +36,7 @@ export default function ExclusiveGatewayNode({ selected }: NodeProps<Node<Canvas
           style={{
             transform: 'rotate(-45deg)',
             fontWeight: 'bold',
-            color: 'var(--color-warning-dark, #e67700)',
+            color: 'var(--color-warning-dark)',
             fontSize: 18,
             lineHeight: 1,
           }}
@@ -49,7 +49,7 @@ export default function ExclusiveGatewayNode({ selected }: NodeProps<Node<Canvas
       <span
         style={{
           fontSize: 'var(--text-xs, 0.65rem)',
-          color: 'var(--color-warning-dark, #e67700)',
+          color: 'var(--color-warning-dark)',
           marginTop: 2,
           textAlign: 'center',
           lineHeight: 1.1,

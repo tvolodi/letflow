@@ -519,18 +519,18 @@ export default function ProcessCanvas({
         <Background color="var(--color-neutral-400)" gap={20} />
         <MiniMap
           nodeColor={minimapNodeColor}
-          maskColor="rgba(0,0,0,0.1)"
+          maskColor="var(--minimap-mask-color)"
           style={{
             position: 'absolute',
             bottom: 12,
             right: 12,
             borderRadius: 8,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            boxShadow: 'var(--shadow-modal)',
           }}
         />
         <Controls
           position="bottom-left"
-          style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+          style={{ borderRadius: 8, boxShadow: 'var(--shadow-modal)' }}
         />
       </ReactFlow>
 

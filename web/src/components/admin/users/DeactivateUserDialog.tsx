@@ -45,7 +45,7 @@ export function DeactivateUserDialog({ open, displayName, isSubmitting, onCancel
 const overlayStyle: CSSProperties = {
   position: 'fixed',
   inset: 0,
-  backgroundColor: 'rgba(15, 23, 42, 0.45)',
+  backgroundColor: 'var(--surface-overlay-slate)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',

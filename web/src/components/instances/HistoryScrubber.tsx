@@ -202,7 +202,7 @@ export function HistoryScrubber(props: HistoryScrubberProps): JSX.Element {
             border: '2px solid var(--surface-card)',
             borderRadius: '50%',
             cursor: isDragging ? 'grabbing' : 'grab',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            boxShadow: 'var(--shadow-sm)',
             transition: isDragging ? 'none' : 'left 0.1s',
           }}
         />

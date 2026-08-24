@@ -66,7 +66,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             border: '1.5px solid var(--color-error-border-strong)',
             borderRadius: '8px',
             padding: '2rem',
-            boxShadow: '0 2px 8px rgba(0,0,0,.08)',
+            boxShadow: 'var(--shadow-card)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', marginBottom: '1rem' }}>

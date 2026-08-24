@@ -80,6 +80,22 @@
   --interactive-danger: var(--color-error);
   --interactive-danger-hover: var(--color-error-dark);
 
+  /* Overlay surfaces (REQ-146 addendum) */
+  --surface-overlay-slate: rgba(15, 23, 42, 0.45);  /* slate-900 at 45% opacity; modal and side-panel backdrops */
+  --minimap-mask-color:    rgba(0, 0, 0, 0.1);       /* MiniMap mask; cannot use --surface-overlay (different opacity) */
+
+  /* Elevation shadows (REQ-146 addendum) */
+  --shadow-card:        0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-sm:          0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-modal:       0 2px 8px rgba(0, 0, 0, 0.15);
+  --shadow-modal-lg:    0 8px 32px rgba(0, 0, 0, 0.18);
+  --shadow-lg:          0 8px 32px rgba(0, 0, 0, 0.15);
+  --shadow-dialog:      0 8px 24px rgba(0, 0, 0, 0.16);
+  --shadow-panel:      -12px 0 32px rgba(15, 23, 42, 0.18);
+  --shadow-focus-brand: 0 0 0 3px rgba(34, 139, 230, 0.2);
+  --shadow-focus-blue:  0 0 0 4px rgba(37, 99, 235, 0.18);
+  --drop-shadow-overlay: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
+
   /* Avatar accent palette — reserved for actor avatar backgrounds only */
   --color-avatar-blue:   #2563eb;
   --color-avatar-teal:   #0d9488;

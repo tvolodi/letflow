@@ -74,7 +74,7 @@ export function CancelInstanceDialog({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.45)',
+        background: 'var(--surface-overlay)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -94,7 +94,7 @@ export function CancelInstanceDialog({
           maxWidth: '92vw',
           background: 'var(--surface-card)',
           borderRadius: '8px',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.16)',
+          boxShadow: 'var(--shadow-dialog)',
           padding: '1rem 1.2rem',
         }}
       >

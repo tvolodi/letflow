@@ -21,8 +21,8 @@ export default function ParallelGatewayNode({ selected }: NodeProps<Node<CanvasN
           width: 40,
           height: 40,
           transform: 'rotate(45deg)',
-          border: '2px solid var(--color-success-dark, #2f9e44)',
-          background: 'var(--color-neutral-0, #fff)',
+          border: '2px solid var(--color-success-dark)',
+          background: 'var(--color-neutral-0)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -34,7 +34,7 @@ export default function ParallelGatewayNode({ selected }: NodeProps<Node<CanvasN
           style={{
             transform: 'rotate(-45deg)',
             fontWeight: 'bold',
-            color: 'var(--color-success-dark, #2f9e44)',
+            color: 'var(--color-success-dark)',
             fontSize: 20,
             lineHeight: 1,
           }}

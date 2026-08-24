@@ -2190,6 +2190,24 @@
       "queue_task_id": 329,
       "queue_agent_id": "orch-main",
       "note": "WF-03 for ISS-0329 (GH#630, queue task 329, stage S4 -- flaky cross-partition test isolation defect: auth_pipeline_configurable_verifier_test.exs:140 hardcodes idp_realm_id 'jit-disabled-test-realm', causing unique constraint violation when run concurrently in TEST_PARALLEL_N=4). Queue claimed by orch-main at 2026-08-23T23:40:14Z, WF-03 started 2026-08-23T23:41:20Z."
+    },
+    {
+      "run_id": "WF02-REQ142-20260824",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-142"],
+      "stage": "S8",
+      "status": "ACTIVE",
+      "owned_modules": [
+        "web/src/components/canvas/"
+      ],
+      "lock_acquired_at": "2026-08-24T03:19:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 COMPLETED PASS -- branch feature/WF02-REQ142-20260824 created and pushed. Dispatching CODE-DESIGNER (Step 1).",
+      "backfilled": false,
+      "queue_task_id": 268,
+      "queue_agent_id": "orch-main",
+      "note": "WF-02 for REQ-142 (GH#530, queue task 268, stage S8 -- migrate web/src/components/canvas/ 15 files / ~118 hex-literal occurrences to tokens.css custom properties). depends_on REQ-141 (done, 2d15e86). Queue claimed by orch-main at 2026-08-24T03:16:27Z, WF-02 started 2026-08-24T03:19:00Z."
     }
   ]
 }

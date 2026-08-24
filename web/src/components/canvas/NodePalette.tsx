@@ -44,8 +44,8 @@ export default function NodePalette({ isReadOnly, onAddNode }: NodePaletteProps)
       style={{
         width: 200,
         minWidth: 200,
-        background: 'var(--surface-card, #fff)',
-        borderRight: '1px solid var(--border-default, #e9ecef)',
+        background: 'var(--surface-card)',
+        borderRight: '1px solid var(--border-default)',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -55,10 +55,10 @@ export default function NodePalette({ isReadOnly, onAddNode }: NodePaletteProps)
       <div
         style={{
           padding: '12px 16px',
-          borderBottom: '1px solid var(--border-default, #e9ecef)',
+          borderBottom: '1px solid var(--border-default)',
           fontSize: 'var(--text-sm, 0.875rem)',
           fontWeight: 600,
-          color: 'var(--text-primary, #212529)',
+          color: 'var(--text-primary)',
         }}
       >
         Node Palette
@@ -74,7 +74,7 @@ export default function NodePalette({ isReadOnly, onAddNode }: NodePaletteProps)
                   padding: '4px 16px',
                   fontSize: 'var(--text-xs, 0.75rem)',
                   fontWeight: 500,
-                  color: 'var(--text-secondary, #6c757d)',
+                  color: 'var(--text-secondary)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                 }}
@@ -92,7 +92,7 @@ export default function NodePalette({ isReadOnly, onAddNode }: NodePaletteProps)
                     padding: '8px 16px',
                     cursor: isReadOnly ? 'default' : 'grab',
                     fontSize: 'var(--text-sm, 0.875rem)',
-                    color: 'var(--text-primary, #212529)',
+                    color: 'var(--text-primary)',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
@@ -100,7 +100,7 @@ export default function NodePalette({ isReadOnly, onAddNode }: NodePaletteProps)
                     transition: 'background 0.1s',
                   }}
                   onMouseEnter={(e) => {
-                    if (!isReadOnly) e.currentTarget.style.background = 'var(--color-neutral-100, #f1f3f5)'
+                    if (!isReadOnly) e.currentTarget.style.background = 'var(--color-neutral-100)'
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = 'transparent'
@@ -125,48 +125,48 @@ function NodeTypeIcon({ type }: { type: NodeType }) {
   switch (type) {
     case 'START':
       return (
-        <svg {...iconProps} viewBox="0 0 24 24" fill="var(--color-brand-600, #228be6)">
+        <svg {...iconProps} viewBox="0 0 24 24" fill="var(--color-brand-600)">
           <polygon points="8,5 19,12 8,19" />
         </svg>
       )
     case 'END':
       return (
-        <svg {...iconProps} viewBox="0 0 24 24" fill="var(--color-error-dark, #c92a2a)">
+        <svg {...iconProps} viewBox="0 0 24 24" fill="var(--color-error-dark)">
           <rect x="6" y="6" width="12" height="12" rx="1" />
         </svg>
       )
     case 'HUMAN_TASK':
       return (
-        <svg {...iconProps} viewBox="0 0 24 24" fill="var(--color-brand-500, #339af0)">
+        <svg {...iconProps} viewBox="0 0 24 24" fill="var(--color-brand-500)">
           <circle cx="12" cy="8" r="4" />
           <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
         </svg>
       )
     case 'SERVICE_TASK':
       return (
-        <svg {...iconProps} viewBox="0 0 24 24" fill="none" stroke="var(--color-info, #4c6ef5)" strokeWidth="2">
+        <svg {...iconProps} viewBox="0 0 24 24" fill="none" stroke="var(--color-info)" strokeWidth="2">
           <circle cx="12" cy="12" r="3" />
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
       )
     case 'EXCLUSIVE_GATEWAY':
       return (
-        <span style={{ color: 'var(--color-warning-dark, #e67700)', fontWeight: 'bold', fontSize: 14 }}>✕</span>
+        <span style={{ color: 'var(--color-warning-dark)', fontWeight: 'bold', fontSize: 14 }}>✕</span>
       )
     case 'PARALLEL_GATEWAY':
       return (
-        <span style={{ color: 'var(--color-success-dark, #2f9e44)', fontWeight: 'bold', fontSize: 16 }}>+</span>
+        <span style={{ color: 'var(--color-success-dark)', fontWeight: 'bold', fontSize: 16 }}>+</span>
       )
     case 'TIMER':
       return (
-        <svg {...iconProps} viewBox="0 0 24 24" fill="none" stroke="var(--color-warning, #fcc419)" strokeWidth="2">
+        <svg {...iconProps} viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2">
           <circle cx="12" cy="12" r="10" />
           <polyline points="12,6 12,12 16,14" />
         </svg>
       )
     case 'SUB_PROCESS':
       return (
-        <svg {...iconProps} viewBox="0 0 24 24" fill="none" stroke="var(--color-brand-400, #4dabf7)" strokeWidth="2">
+        <svg {...iconProps} viewBox="0 0 24 24" fill="none" stroke="var(--color-brand-400)" strokeWidth="2">
           <polygon points="12,2 22,7 12,12 2,7 12,2" />
           <polyline points="2,17 12,22 22,17" />
           <polyline points="2,12 12,17 22,12" />

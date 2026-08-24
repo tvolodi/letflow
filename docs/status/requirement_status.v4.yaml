@@ -857,3 +857,30 @@ history:
       which passed with 32 test files / 184 tests green and 48 guard tests green;
       a production `vite build` also succeeded. 32 on-disk `- req:` entries
       in requirement_status.v4.yaml before this append; 33 after.
+  - req: REQ-142
+    event: started
+    agent: ORCH
+    at: "2026-08-24T03:19:00Z"
+    note: >
+      WF02-REQ142-20260824 Step 00. Canvas hex-literal to tokens.css migration
+      (15 files, ~118 occurrences per 2026-08-22 count). depends_on REQ-141
+      (done). Branch feature/WF02-REQ142-20260824 created and pushed. Queue task
+      268 claimed (GH#530). 33 on-disk `- req:` entries in
+      requirement_status.v4.yaml before this append; 34 after.
+  - req: REQ-142
+    event: done
+    agent: FRONTEND-DEV
+    at: "2026-08-24T03:45:02Z"
+    note: >
+      Migrated all 118 inline hex literals across 15 files in
+      web/src/components/canvas/ to CSS custom properties from tokens.css.
+      No fallback hex values remain (grep confirms 0 hits). ProcessCanvas.tsx's
+      <Background color> prop (previously "#ccc") replaced with
+      var(--color-neutral-400) — @xyflow/react passes the color value through
+      a CSS custom property internally, so var() syntax is valid. No test
+      files modified. No files outside canvas/ touched. All gates passed:
+      CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (out of scope — no tenant-data
+      path), REVIEWER, TEST-DESIGNER (no new tests needed -- pure style
+      substitution, busywork gate avoided), RELEASE-VALIDATOR (independently
+      verified all 4 ACs). Final: npm run type-check, lint, test (184/184),
+      guards (48/48) all pass.

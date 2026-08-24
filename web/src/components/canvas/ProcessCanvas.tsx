@@ -56,15 +56,15 @@ function minimapNodeColor(node: Node<CanvasNodeData>) {
   const nodeType = node.data?.nodeType
   switch (nodeType) {
     case 'START':
-      return 'var(--color-brand-400, #4dabf7)'
+      return 'var(--color-brand-400)'
     case 'END':
-      return 'var(--color-error, #fa5252)'
+      return 'var(--color-error)'
     case 'EXCLUSIVE_GATEWAY':
-      return 'var(--color-warning-dark, #e67700)'
+      return 'var(--color-warning-dark)'
     case 'PARALLEL_GATEWAY':
-      return 'var(--color-success-dark, #2f9e44)'
+      return 'var(--color-success-dark)'
     default:
-      return 'var(--color-brand-500, #339af0)'
+      return 'var(--color-brand-500)'
   }
 }
 
@@ -514,9 +514,9 @@ export default function ProcessCanvas({
         fitView
         fitViewOptions={{ maxZoom: 1.5 }}
         deleteKeyCode={['Backspace', 'Delete']}
-        style={{ background: 'var(--surface-page, #f8f9fa)' }}
+        style={{ background: 'var(--surface-page)' }}
       >
-        <Background color="#ccc" gap={20} />
+        <Background color="var(--color-neutral-400)" gap={20} />
         <MiniMap
           nodeColor={minimapNodeColor}
           maskColor="rgba(0,0,0,0.1)"

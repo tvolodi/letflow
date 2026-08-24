@@ -48,8 +48,8 @@ export default function PropertyPanel({
   const panelStyle: React.CSSProperties = {
     width: 400,
     minWidth: 400,
-    background: 'var(--surface-card, #fff)',
-    borderLeft: '1px solid var(--border-default, #e9ecef)',
+    background: 'var(--surface-card)',
+    borderLeft: '1px solid var(--border-default)',
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
@@ -65,10 +65,10 @@ export default function PropertyPanel({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '12px 16px',
-          borderBottom: '1px solid var(--border-default, #e9ecef)',
+          borderBottom: '1px solid var(--border-default)',
         }}
       >
-        <span style={{ fontSize: 'var(--text-sm, 0.875rem)', fontWeight: 600, color: 'var(--text-primary, #212529)' }}>
+        <span style={{ fontSize: 'var(--text-sm, 0.875rem)', fontWeight: 600, color: 'var(--text-primary)' }}>
           Properties
         </span>
         <button
@@ -80,7 +80,7 @@ export default function PropertyPanel({
             padding: 4,
             fontSize: 18,
             lineHeight: 1,
-            color: 'var(--text-secondary, #6c757d)',
+            color: 'var(--text-secondary)',
           }}
           aria-label="Close panel"
         >
@@ -318,10 +318,10 @@ function NodePropertyContent({
                 fontSize: 'var(--text-xs, 0.75rem)',
                 color:
                   interfaceStatus.kind === 'error'
-                    ? 'var(--color-error-dark, #c92a2a)'
+                    ? 'var(--color-error-dark)'
                     : interfaceStatus.kind === 'ok'
-                      ? 'var(--color-success-dark, #2f9e44)'
-                      : 'var(--text-secondary, #6c757d)',
+                      ? 'var(--color-success-dark)'
+                      : 'var(--text-secondary)',
               }}
             >
               <span aria-hidden="true">
@@ -344,7 +344,7 @@ function NodePropertyContent({
         <span
           style={{
             fontSize: 'var(--text-xs, 0.75rem)',
-            color: 'var(--text-secondary, #6c757d)',
+            color: 'var(--text-secondary)',
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
           }}
@@ -369,7 +369,7 @@ function NodePropertyContent({
 
       {renderTypeSpecificFields()}
 
-      <p style={{ fontSize: 'var(--text-sm, 0.875rem)', color: 'var(--text-secondary, #6c757d)' }}>
+      <p style={{ fontSize: 'var(--text-sm, 0.875rem)', color: 'var(--text-secondary)' }}>
         Select a node on the canvas to edit its properties. Changes are saved locally until you click Save.
       </p>
     </div>
@@ -401,12 +401,12 @@ function EdgePropertyContent({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Field label="Connection">
-        <div style={{ fontSize: 'var(--text-sm, 0.875rem)', color: 'var(--text-primary, #212529)' }}>
+        <div style={{ fontSize: 'var(--text-sm, 0.875rem)', color: 'var(--text-primary)' }}>
           {sourceName} → {targetName}
         </div>
       </Field>
 
-      <p style={{ fontSize: 'var(--text-sm, 0.875rem)', color: 'var(--text-secondary, #6c757d)' }}>
+      <p style={{ fontSize: 'var(--text-sm, 0.875rem)', color: 'var(--text-secondary)' }}>
         Select an edge on the canvas and use the Delete/Backspace key to remove it.
       </p>
 
@@ -421,8 +421,8 @@ function EdgePropertyContent({
               padding: '6px 16px',
               border: 'none',
               borderRadius: 4,
-              background: 'var(--interactive-danger, #fa5252)',
-              color: '#fff',
+              background: 'var(--interactive-danger)',
+              color: 'var(--text-inverse)',
               cursor: 'pointer',
               fontSize: 'var(--text-sm, 0.875rem)',
               fontWeight: 500,
@@ -447,7 +447,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
           fontSize: 'var(--text-sm, 0.875rem)',
           fontWeight: 500,
           marginBottom: 4,
-          color: 'var(--text-primary, #212529)',
+          color: 'var(--text-primary)',
         }}
       >
         {label}
@@ -461,12 +461,12 @@ function inputStyle(isReadOnly: boolean): React.CSSProperties {
   return {
     width: '100%',
     padding: '6px 8px',
-    border: '1px solid var(--border-default, #e9ecef)',
+    border: '1px solid var(--border-default)',
     borderRadius: 4,
     fontSize: 'var(--text-sm, 0.875rem)',
     boxSizing: 'border-box',
-    background: isReadOnly ? 'var(--color-neutral-50, #f8f9fa)' : '#fff',
+    background: isReadOnly ? 'var(--color-neutral-50)' : 'var(--surface-card)',
     cursor: isReadOnly ? 'not-allowed' : undefined,
-    color: isReadOnly ? 'var(--text-secondary, #6c757d)' : undefined,
+    color: isReadOnly ? 'var(--text-secondary)' : undefined,
   }
 }

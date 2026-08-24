@@ -11,8 +11,8 @@ export default function SubProcessNode({ data, selected }: NodeProps<Node<Canvas
         width: 200,
         minHeight: 80,
         borderRadius: 8,
-        border: '2px dashed var(--color-brand-400, #4dabf7)',
-        background: 'var(--color-neutral-0, #fff)',
+        border: '2px dashed var(--color-brand-400)',
+        background: 'var(--color-neutral-0)',
         padding: '8px 12px',
         display: 'flex',
         flexDirection: 'column',
@@ -31,12 +31,12 @@ export default function SubProcessNode({ data, selected }: NodeProps<Node<Canvas
             width: 16,
             height: 16,
             borderRadius: '50%',
-            background: 'var(--color-error, #fa5252)',
+            background: 'var(--color-error)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: 10,
-            color: '#fff',
+            color: 'var(--text-inverse)',
             fontWeight: 'bold',
           }}
           title={data.validationError}
@@ -46,7 +46,7 @@ export default function SubProcessNode({ data, selected }: NodeProps<Node<Canvas
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         {/* Stacked-layers icon */}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-brand-400, #4dabf7)" strokeWidth="2">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-brand-400)" strokeWidth="2">
           <polygon points="12,2 22,7 12,12 2,7 12,2" />
           <polyline points="2,17 12,22 22,17" />
           <polyline points="2,12 12,17 22,12" />
@@ -55,7 +55,7 @@ export default function SubProcessNode({ data, selected }: NodeProps<Node<Canvas
           style={{
             fontWeight: 600,
             fontSize: 'var(--text-sm, 0.875rem)',
-            color: 'var(--text-primary, #212529)',
+            color: 'var(--text-primary)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -68,7 +68,7 @@ export default function SubProcessNode({ data, selected }: NodeProps<Node<Canvas
       <span
         style={{
           fontSize: 'var(--text-xs, 0.75rem)',
-          color: 'var(--text-secondary, #6c757d)',
+          color: 'var(--text-secondary)',
           marginLeft: 24,
         }}
       >

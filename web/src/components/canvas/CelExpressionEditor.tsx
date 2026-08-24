@@ -68,28 +68,28 @@ export default function CelExpressionEditor({
         }}
         style={{
           minHeight,
-          border: `1px solid ${serverError ? 'var(--border-error, #fa5252)' : 'var(--border-default, #e9ecef)'}`,
+          border: `1px solid ${serverError ? 'var(--border-error)' : 'var(--border-default)'}`,
           borderRadius: 4,
           fontSize: 'var(--text-sm, 0.875rem)',
           fontFamily: 'var(--font-mono, monospace)',
           opacity: disabled ? 0.6 : 1,
         }}
         theme={EditorView.theme({
-          '&': { backgroundColor: disabled ? 'var(--color-neutral-50, #f8f9fa)' : '#fff' },
+          '&': { backgroundColor: disabled ? 'var(--color-neutral-50)' : 'var(--surface-card)' },
           '.cm-content': {
             caretColor: disabled ? 'transparent' : 'auto',
           },
           '.cm-placeholder': {
-            color: 'var(--text-disabled, #ced4da)',
+            color: 'var(--text-disabled)',
             fontFamily: 'var(--font-mono, monospace)',
             fontSize: 'var(--text-sm, 0.875rem)',
           },
           '.cm-gutters': {
-            backgroundColor: 'var(--color-neutral-50, #f8f9fa)',
-            borderRight: '1px solid var(--border-default, #e9ecef)',
+            backgroundColor: 'var(--color-neutral-50)',
+            borderRight: '1px solid var(--border-default)',
           },
           '.cm-activeLineGutter': {
-            backgroundColor: 'var(--color-neutral-100, #f1f3f5)',
+            backgroundColor: 'var(--color-neutral-100)',
           },
         })}
       />
@@ -106,8 +106,8 @@ export default function CelExpressionEditor({
             marginTop: 4,
             padding: '4px 8px',
             fontSize: 'var(--text-xs, 0.75rem)',
-            color: 'var(--color-error-dark, #c92a2a)',
-            background: 'var(--color-error-light, #ffe3e3)',
+            color: 'var(--color-error-dark)',
+            background: 'var(--color-error-light)',
             borderRadius: 4,
           }}
         >

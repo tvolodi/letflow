@@ -2330,7 +2330,7 @@
                      "lock_acquired_at":  "2026-08-24T06:03:23Z",
                      "lock_released_at":  "2026-08-24T06:37:27Z",
                      "released_lock":  true,
-                     "last_known_step":  "Step Final COMPLETED PASS (pending PR/merge -- all gates green, 184/184, 48/48)",
+                     "last_known_step":  "Step Final COMPLETED PASS -- PR #636 squash-merged (85fc290). Queue task 270 released done, GH#532 closed.",
                      "backfilled":  false,
                      "queue_task_id":  270,
                      "queue_agent_id":  "orch-main",

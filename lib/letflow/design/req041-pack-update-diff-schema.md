@@ -263,8 +263,8 @@ inventing a persistence/reuse policy REQ-041 never asked for (§9 OQ-5).
 | `target_version` | `:string` | `varchar(255)` | `NOT NULL` | "Vn" — the incoming version this resolution applies to (matches `compute_pack_update_plan/5`'s `incoming_version` argument, §5.3). |
 | `artefact_type` | `:string` | `varchar(255)` | `NOT NULL` | Same shape as §3.2's `artefact_type`. |
 | `artefact_id` | `:string` | `varchar(255)` | `NOT NULL` | Same shape as §3.2's `artefact_id`. |
-| `resolution` | `Ecto.Enum` | `varchar(255)` | `NOT NULL` | Bare atom-list `Ecto.Enum` over `[:keep_theirs, :take_incoming, :custom]` — the three ways a human/system can resolve a conflicting artefact. No R-Co source names this set (§0); this is this design's own reasonable enumeration of "keep the tenant's local change," "accept the pack's offered change," or "neither, here is a merged value" — flagged as a design choice, not a cited fact (§9 OQ-6). |
-| `resolved_content` | `:text` | `text` | **nullable** | Only meaningful when `resolution == :custom` (the merged/overridden content, same canonical-JSON-text contract as `base_content`, §3.2). `NULL` for `:keep_theirs`/`:take_incoming`, where the resolved content is unambiguously `theirs`/`incoming` respectively and does not need to be duplicated into this table. Not CHECK-constrained to enforce that nullability-vs-`resolution` correlation — same "structural checks are an application/changeset concern" precedent `req027`/`req035` already establish (§3 there). |
+| `resolution` | `Ecto.Enum` | `varchar(255)` | `NOT NULL` | Bare atom-list `Ecto.Enum` over `[:keep_local, :take_incoming, :merged]` — the three ways a human/system can resolve a conflicting artefact. Matches R-Co's `ResolutionKind` enum (`pack_update.zig:25-29`); renamed from the original `[:keep_theirs, :take_incoming, :custom]` by REQ-147 (see §9 OQ-6). |
+| `resolved_content` | `:text` | `text` | **nullable** | Only meaningful when `resolution == :merged` (the merged/overridden content, same canonical-JSON-text contract as `base_content`, §3.2). `NULL` for `:keep_local`/`:take_incoming`, where the resolved content is unambiguously `local`/`incoming` respectively and does not need to be duplicated into this table. Not CHECK-constrained to enforce that nullability-vs-`resolution` correlation — same "structural checks are an application/changeset concern" precedent `req027`/`req035` already establish (§3 there). |
 | `resolved_by` | `:binary_id` | `uuid` | `NOT NULL` | Actor who made the resolution decision. No FK — same cross-schema-adjacent reasoning `req035` gives `requested_by`/`approved_by` (§3.1 there): `users` and this table are technically both GLOBAL here (unlike `req035`'s case), but this design still omits the FK, deliberately, because REQ-041 names no requirement that this column be validated against a real `users.id` and inventing one is unasserted scope — flagged as a design choice in §9 OQ-7, not silently matched to `req035`'s different-reasoned precedent. |
 | `resolved_at` | `:utc_datetime_usec` | `timestamp` (precision 6) | `NOT NULL` | When the resolution was recorded. |
 | `inserted_at` / `updated_at` | via `timestamps/1` | `timestamp` (precision 6) | `NOT NULL` | Same convention as §3.1/§3.2. |
@@ -725,25 +725,17 @@ forward to a later, different incoming version's preflight. Flagged as a design
 decision a future requirement could revisit if it turns out resolutions should persist
 across update attempts.
 
-**OQ-6 (MINOR): `resolution`'s three-value enum (`:keep_theirs`/`:take_incoming`/
-`:custom`) is this design's own enumeration**, not sourced from R-Co (§0 — no access to
-prm-batch1's actual schema). A future requirement building the real
-resolution-recording write path should confirm this enum matches whatever UI/API
-REQ-041's downstream consumer actually needs, and extend it (a 4th migration, per this
-project's additive-migration convention) if not.
+**OQ-6 (MINOR): `resolution`'s three-value enum was originally this design's own enumeration**, not sourced from R-Co (§0 — no access to
+prm-batch1's actual schema at design time).
 
-**Checked against R-Co 2026-08-22 (GH#324, WF03-ISS0278-20260822) — STILL OPEN, now with a
-concrete divergence, not merely unverified.** `R-Co/src/definition/pack_update.zig` is
-reachable now and defines `pub const ResolutionKind = enum { keep_local, take_incoming,
-merged };` (lines 25-29; the moduledoc at line 5 states the same three names). Two of the
-three atom names differ from this design's choice (`keep_theirs` vs. R-Co's `keep_local`;
-`custom` vs. R-Co's `merged`) while representing the same three concepts. The schema is
-already implemented (`lib/letflow/definitions/pack_update_resolution.ex`,
-`priv/repo/migrations/20260817083803_create_pack_update_resolutions.exs`) and tested, so
-renaming to match R-Co is a real code change (migration + schema + call sites), not a doc
-edit — flagged for REVIEWER to decide whether to rename for R-Co parity or keep the current
-naming with this citation recorded as the documented reason it diverges. Not resolved by
-this run; GH#324 reopened rather than closed on the strength of this finding.
+**RESOLVED by REQ-147 (2026-08-24).** `R-Co/src/definition/pack_update.zig:25-29` defines
+`pub const ResolutionKind = enum { keep_local, take_incoming, merged };`. Two of the three
+original atom names diverged (`keep_theirs` vs. R-Co's `keep_local`; `custom` vs. R-Co's
+`merged`). REQ-147 renamed both: the Ecto.Enum values in
+`lib/letflow/definitions/pack_update_resolution.ex` are now exactly `[:keep_local,
+:take_incoming, :merged]`, and migration
+`priv/repo/migrations/20260824143417_rename_resolution_enum_values.exs` handles any
+in-flight rows (none existed — the write path was never built per REQ-041 scope note).
 
 **OQ-7 (MINOR): `pack_update_resolutions.resolved_by` has no FK to `users.id`**, even
 though both tables are GLOBAL here (unlike `req035`'s cross-schema reason for omitting

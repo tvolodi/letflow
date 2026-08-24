@@ -157,7 +157,7 @@ defmodule Letflow.Definitions.PackUpdateMigrationTest do
         target_version: target_version,
         artefact_type: artefact_type,
         artefact_id: artefact_id,
-        resolution: "keep_theirs",
+        resolution: "keep_local",
         resolved_by: Ecto.UUID.generate(),
         resolved_at: @fixed_timestamp
       })
@@ -174,7 +174,7 @@ defmodule Letflow.Definitions.PackUpdateMigrationTest do
       target_version: target_version,
       artefact_type: artefact_type,
       artefact_id: artefact_id,
-      resolution: "keep_theirs",
+      resolution: "keep_local",
       resolved_by: Ecto.UUID.generate(),
       resolved_at: @fixed_timestamp
     })

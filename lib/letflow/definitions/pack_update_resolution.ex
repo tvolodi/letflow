@@ -59,7 +59,7 @@ defmodule Letflow.Definitions.PackUpdateResolution do
     field(:target_version, :string)
     field(:artefact_type, :string)
     field(:artefact_id, :string)
-    field(:resolution, Ecto.Enum, values: [:keep_theirs, :take_incoming, :custom])
+    field(:resolution, Ecto.Enum, values: [:keep_local, :take_incoming, :merged])
     field(:resolved_content, :string)
     field(:resolved_by, Ecto.UUID)
     field(:resolved_at, :utc_datetime_usec)
@@ -68,14 +68,14 @@ defmodule Letflow.Definitions.PackUpdateResolution do
   end
 
   @type t :: %__MODULE__{}
-  @type resolution :: :keep_theirs | :take_incoming | :custom
+  @type resolution :: :keep_local | :take_incoming | :merged
 
   @doc """
   Structural changeset for inserting a new pack-update conflict resolution.
   Does no I/O. Not called anywhere within REQ-041's own scope — see moduledoc.
 
-  `resolved_content` is only meaningful when `resolution == :custom` (nullable
-  for `:keep_theirs`/`:take_incoming`, design §3.3) — this changeset does not
+  `resolved_content` is only meaningful when `resolution == :merged` (nullable
+  for `:keep_local`/`:take_incoming`, design §3.3) — this changeset does not
   add a conditional-required check for that correlation, matching
   `req027`/`req035`'s "structural checks are an application/changeset concern,
   not asserted here without a stated requirement" precedent.

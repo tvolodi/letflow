@@ -6941,7 +6941,7 @@ requirements:
   - id: REQ-141
     title: Build web/src/styles/tokens.css and wire it into the application entry point
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 267  # letflow-queue task id
     description: >

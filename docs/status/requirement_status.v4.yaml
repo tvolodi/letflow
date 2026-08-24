@@ -843,3 +843,17 @@ history:
       Infrastructure needed to repeat: Playwright + Chromium + Vite dev
       server only (for sh05-06); Letflow + Keycloak + Postgres + seeded
       users for all others.
+  - req: REQ-141
+    event: done
+    agent: FRONTEND-DEV
+    at: "2026-08-24T03:10:00Z"
+    note: >
+      Built web/src/styles/tokens.css from the design-system.md palette and
+      imported it once from web/src/main.tsx so the app loads the token source
+      before routing. No web/src/components/ files were modified, the legacy
+      design-tokens/letflow.tokens.json file stayed untouched, and the guard
+      patterns were left alone per this requirement's narrow scope. Verified in
+      web with `npm run type-check && npm run lint && npm test && npm run guards`,
+      which passed with 32 test files / 184 tests green and 48 guard tests green;
+      a production `vite build` also succeeded. 32 on-disk `- req:` entries
+      in requirement_status.v4.yaml before this append; 33 after.

@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from 'react-router-dom'
+import './styles/tokens.css'
 import { router } from './router'
 import { fetchTenantConfig } from './auth/tenantConfig'
 

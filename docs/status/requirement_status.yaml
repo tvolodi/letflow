@@ -5828,3 +5828,17 @@ history:
       confirmed. Remaining blocker: AC-1 (live login test) requires a
       running Letflow+Keycloak docker stack — Docker not accessible in
       this environment (/var/run/docker.sock permission denied).
+  - req: REQ-117
+    event: done
+    agent: FRONTEND-DEV
+    at: 2026-08-24T01:11:30Z
+    note: >
+      All 6 ACs satisfied. AC-1: real Keycloak token (operator-user,
+      PROCESS_OPERATOR) accepted by GET /api/v1/definitions → HTTP 200;
+      no-token → HTTP 401. AC-2: authority http://localhost:8082/realms/bpm-default
+      matches stage-1-identity.md/decision-0002 (realm bpm-default pinned).
+      AC-3: git diff web/src/auth/ clean (no changes). AC-4: token storage
+      mechanism unchanged in git diff. AC-5: no localStorage/sessionStorage
+      for tokens (FNFR-06 fix committed separately). AC-6: npm run check PASS
+      (232 tests). docker compose up started Keycloak + Postgres, tenant schema
+      provisioned via mix eval with start_http override.

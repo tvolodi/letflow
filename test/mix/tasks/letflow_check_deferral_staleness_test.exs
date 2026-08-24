@@ -878,11 +878,17 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # update; the detector in lib/mix/tasks/letflow.check_deferral_staleness.ex
       # is unchanged and was doing exactly its job. S5 joins `active` the
       # moment any of REQ-148..175 goes in_progress/done/blocked.
+      # UPDATE (REQ-148 done, 2026-08-24): S5 is now active -- REQ-148 (stage S5,
+      # status done) went in on WF02-REQ148-20260824. Per the detector rule,
+      # a stage is active once any requirement assigned to it has status
+      # done/in_progress/blocked. S5 moves from inactive to active.
+      # Re-derived: active == ["S0","S1","S2","S3","S4","S5","S8","S9"],
+      # inactive == []. Test-data-only update; detector logic unchanged.
       active = for s <- result.stages, s.activity == :active, do: s.stage
       inactive = for s <- result.stages, s.activity == :inactive, do: s.stage
 
-      assert active == ["S0", "S1", "S2", "S3", "S4", "S8", "S9"]
-      assert inactive == ["S5"]
+      assert active == ["S0", "S1", "S2", "S3", "S4", "S5", "S8", "S9"]
+      assert inactive == []
     end
 
     test "T-LIVE-DEFERRED-COUNT-IS-ZERO -- documents today's vacuous green", %{result: result} do

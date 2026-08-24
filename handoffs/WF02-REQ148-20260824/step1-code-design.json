@@ -1,0 +1,56 @@
+{
+  "handoff_id": "step1-WF02-REQ148-20260824",
+  "run_id": "WF02-REQ148-20260824",
+  "workflow_id": "WF-02",
+  "step": "1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ148-20260824/step1-code-design.json",
+  "created_at": "2026-08-24T00:00:00Z",
+  "started_at": "2026-08-24T00:00:00Z",
+  "completed_at": "2026-08-24T15:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-148"],
+    "requirement_text": {
+      "REQ-148": "FIRST requirement of S5's Lua half; executes decision 0014's Decision (1) and OQ-2 spike. Scope: (1) add {:lua, \"~> 1.0\"} to mix.exs, run mix deps.get and mix compile and quote real output; (2) write lib/letflow/design/req148-lua-runtime-spike.md recording empirical answers to OQ-2(a)-(d), _VERSION, and dialect checks. LUA-01 restatement must be explicit."
+    },
+    "owned_modules": [
+      "lib/letflow/design/req148-lua-runtime-spike.md"
+    ],
+    "artifacts_in": [
+      "mix.exs",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ]
+  },
+  "task": {
+    "description": "Step 1+2a combined (CODE-DESIGNER is REQ-148 owner and the deliverable is both a mix.exs change and a design artefact). Add {:lua, \"~> 1.0\"} to mix.exs. Run mix deps.get and mix compile. Write lib/letflow/design/req148-lua-runtime-spike.md with empirical verification of all OQ-2 items and LUA-01 restatement.",
+    "acceptance_criteria": [
+      "{:lua, \"~> 1.0\"} present in mix.exs deps list",
+      "mix deps.get output quoted showing lua 1.0.2 fetched",
+      "mix compile output quoted showing zero errors",
+      "lib/letflow/design/req148-lua-runtime-spike.md exists with all 8 sections complete",
+      "LUA-01 restatement: all three unsatisfiable clauses named explicitly",
+      "OQ-2(a): actual pcall output quoted for max_instructions exhaustion",
+      "OQ-2(b): actual pcall output quoted for host function error",
+      "OQ-2(c): consumed instruction count question resolved with evidence (yes/no)",
+      "OQ-2(d): each of os.execute, os.exit, load, loadfile, require, dofile, io.open tested with actual output",
+      "_VERSION quoted as actual output",
+      "3/2 and 3//2 results quoted as actual output",
+      "OQ-2 escape hatch disposition stated"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All work complete. mix.exs: added {:lua, \"~> 1.0\"} (tv-labs/lua 1.0.2, Apache-2.0). mix deps.get: lua 1.0.2 fetched (actual output quoted in spike doc). mix compile: 63 lua + 121 letflow files, 0 warnings, 0 errors (actual output quoted). Spike doc written at lib/letflow/design/req148-lua-runtime-spike.md with 8 sections. All OQ-2 items answered from actual code runs (MIX_ENV=test mix run --no-start). Commit 55f058c pushed to feature/WF02-REQ148-20260824. OQ-2(a): pcall catches max_instructions budget -- [false, \"instruction budget exceeded\"]. OQ-2(b): pcall catches host function raise -- [false, \"host function exploded\"]. OQ-2(c): consumed count IS accessible via lua_after.state.instruction_count (Lua.VM.State internal field, value 99 for 100-iter loop; not a formal public API). OQ-2(d): all 7 sandbox functions confirmed as raising NativeFunc stubs -- exact error: \"Lua runtime error: <fn> is sandboxed\". _VERSION = \"Lua 5.3\". 3/2 = 1.5, 3//2 = 1. OQ-2 escape hatch NOT exercised. LUA-01 restatement: all 3 unsatisfiable clauses named (not LuaJIT, no Zig, no linking). os.* 5-function gap (clock/date/difftime/setlocale/time not in default deny-set) documented for LUA-03 restatement.",
+    "artifacts_out": [
+      "lib/letflow/design/req148-lua-runtime-spike.md",
+      "mix.exs",
+      "mix.lock"
+    ],
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (step 1b)"
+  }
+}

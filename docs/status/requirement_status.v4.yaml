@@ -1054,3 +1054,29 @@ history:
       Pre-check: zero hex hits across web/src/components/ (AC-5 verified).
       Branch feature/WF02-REQ146-20260824 created. Queue task 272 (GH#534).
       44 on-disk entries before this append; 45 after.
+  - req: REQ-148
+    event: started
+    agent: ORCH
+    at: "2026-08-24T10:34:44Z"
+    note: >
+      WF02-REQ148-20260824 Step 00. S5 Lua adoption spike: add {:lua, "~> 1.0"}
+      to mix.exs, run deps.get/compile, write empirical OQ-2 spike design doc.
+      Branch feature/WF02-REQ148-20260824 created. Queue task 300 (GH#600).
+      SECURITY-REVIEWER and REVIEWER both hard gates per decision 0014.
+      48 on-disk entries before this append; 49 after.
+  - req: REQ-148
+    event: done
+    agent: CODE-DESIGNER
+    at: "2026-08-24T10:49:31Z"
+    note: >
+      {:lua, "~> 1.0"} added to mix.exs (lua 1.0.2 fetched, 63+121 files
+      compiled, 0 warnings). req148-lua-runtime-spike.md written: OQ-2
+      (a)-(d) all answered empirically -- budget exhaustion catchable, host
+      errors catchable, instruction_count accessible as internal struct
+      field (yes-with-mechanism), sandbox deny-set confirmed for 7 functions.
+      _VERSION=Lua 5.3, 3/2=1.5, 3//2=1. LUA-01 restatement complete.
+      Escape hatch NOT exercised. SECURITY-REVIEWER PASS (forward condition:
+      INV-3 re-evaluated when execution path wired). REVIEWER PASS (instruction
+      count field: yes-with-mechanism, not contradiction). TEST-DESIGNER (no
+      executable surface). RELEASE-VALIDATOR PASS (8/8 ACs). 49 on-disk
+      entries before this append; 50 after.

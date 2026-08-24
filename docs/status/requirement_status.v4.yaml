@@ -900,3 +900,33 @@ history:
       invariants tests now pass. Queue task 330 released done, GH#633 closed.
       35 on-disk `- req:` entries in requirement_status.v4.yaml before this
       append; 36 after.
+  - req: REQ-143
+    event: started
+    agent: ORCH
+    at: "2026-08-24T05:09:08Z"
+    note: >
+      WF02-REQ143-20260824 Step 00. promotions/ and instances/ hex-literal to
+      tokens.css migration (12 files, 193 occurrences per 2026-08-22 count;
+      re-verified at start: 162 hits, 57 distinct hex values -- many Tailwind/
+      Mantine colors not in current palette, design-step addendum likely needed).
+      depends_on REQ-141 (done). Branch feature/WF02-REQ143-20260824 created
+      and pushed. Queue task 269 claimed (GH#531). 36 on-disk `- req:` entries
+      in requirement_status.v4.yaml before this append; 37 after.
+  - req: REQ-143
+    event: done
+    agent: FRONTEND-DEV
+    at: "2026-08-24T05:44:22Z"
+    note: >
+      Migrated 162 hex literals across 12 files in web/src/components/promotions/
+      and instances/ to CSS custom properties. Design-step addendum: 13 new
+      tokens added to tokens.css and design-system.md (--color-success-tint,
+      --color-error-tint, --color-failure, and 10 --color-avatar-* tokens for
+      ActorAvatar.tsx's avatar palette). All 55 distinct hex values mapped;
+      zero grep hits remain. All gates passed: CODE-DESIGN-VALIDATOR (PASS,
+      confirmed --color-failure token is semantically distinct from
+      --color-error-dark), SECURITY-REVIEWER (out of scope), REVIEWER (1 rework:
+      prerequisite commit was not yet pushed; corrected), RELEASE-VALIDATOR
+      (independently verified all 4 ACs -- grep 0, no test files modified,
+      npm run type-check/lint/test(184/184)/guards(48/48) all pass).
+      37 on-disk `- req:` entries in requirement_status.v4.yaml before this
+      append; 38 after.

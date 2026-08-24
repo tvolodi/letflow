@@ -5,14 +5,14 @@ interface EventJsonExpandableProps {
 export function EventJsonExpandable({ payload }: EventJsonExpandableProps) {
   return (
     <details>
-      <summary style={{ cursor: 'pointer', color: '#334155', fontSize: '.8rem' }}>
+      <summary style={{ cursor: 'pointer', color: 'var(--color-neutral-700)', fontSize: '.8rem' }}>
         Payload
       </summary>
       <pre
         style={{
           marginTop: '.4rem',
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
+          background: 'var(--surface-page)',
+          border: '1px solid var(--border-default)',
           borderRadius: '4px',
           padding: '.65rem',
           fontSize: '.75rem',

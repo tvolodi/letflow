@@ -92,7 +92,7 @@ export function CancelInstanceDialog({
         style={{
           width: '560px',
           maxWidth: '92vw',
-          background: '#fff',
+          background: 'var(--surface-card)',
           borderRadius: '8px',
           boxShadow: '0 8px 24px rgba(0,0,0,0.16)',
           padding: '1rem 1.2rem',
@@ -102,16 +102,16 @@ export function CancelInstanceDialog({
           Cancel instance?
         </h3>
 
-        <p id="cancel-instance-description" style={{ marginTop: 0, color: '#475569', fontSize: '.9rem' }}>
+        <p id="cancel-instance-description" style={{ marginTop: 0, color: 'var(--color-neutral-700)', fontSize: '.9rem' }}>
           This will cancel instance {instanceName}. Running tasks and timers will be terminated.
           This action cannot be undone.
         </p>
 
-        <div style={{ color: '#64748b', fontSize: '.8rem', marginBottom: '.5rem' }}>
+        <div style={{ color: 'var(--text-secondary)', fontSize: '.8rem', marginBottom: '.5rem' }}>
           Instance ID: <code>{instanceId}</code>
         </div>
 
-        <label htmlFor="cancel-reason" style={{ display: 'block', fontSize: '.85rem', color: '#334155', marginBottom: '.25rem' }}>
+        <label htmlFor="cancel-reason" style={{ display: 'block', fontSize: '.85rem', color: 'var(--color-neutral-700)', marginBottom: '.25rem' }}>
           Reason (optional)
         </label>
         <textarea
@@ -124,7 +124,7 @@ export function CancelInstanceDialog({
             width: '100%',
             marginBottom: '.8rem',
             padding: '.5rem .6rem',
-            border: '1px solid #cbd5e1',
+            border: '1px solid var(--color-neutral-400)',
             borderRadius: '4px',
             fontFamily: 'inherit',
           }}
@@ -137,9 +137,9 @@ export function CancelInstanceDialog({
             disabled={isPending}
             style={{
               padding: '.4rem .8rem',
-              border: '1px solid #cbd5e1',
+              border: '1px solid var(--color-neutral-400)',
               borderRadius: '4px',
-              background: '#fff',
+              background: 'var(--surface-card)',
               cursor: 'pointer',
             }}
           >
@@ -152,8 +152,8 @@ export function CancelInstanceDialog({
               padding: '.4rem .8rem',
               border: 'none',
               borderRadius: '4px',
-              background: '#dc2626',
-              color: '#fff',
+              background: 'var(--interactive-danger)',
+              color: 'var(--text-inverse)',
               cursor: isPending ? 'not-allowed' : 'pointer',
             }}
           >

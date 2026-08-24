@@ -4,16 +4,16 @@ interface ActorAvatarProps {
 }
 
 const AVATAR_PALETTE = [
-  '#2563eb',
-  '#0d9488',
-  '#7c3aed',
-  '#ea580c',
-  '#0891b2',
-  '#16a34a',
-  '#9333ea',
-  '#0284c7',
-  '#c2410c',
-  '#4f46e5',
+  'var(--color-avatar-blue)',
+  'var(--color-avatar-teal)',
+  'var(--color-avatar-violet)',
+  'var(--color-avatar-orange)',
+  'var(--color-avatar-cyan)',
+  'var(--color-avatar-green)',
+  'var(--color-avatar-purple)',
+  'var(--color-avatar-sky)',
+  'var(--color-avatar-rust)',
+  'var(--color-avatar-indigo)',
 ]
 
 function hashText(value: string): number {
@@ -43,7 +43,7 @@ export function ActorAvatar({ displayName, size = 36 }: ActorAvatarProps) {
   const normalized = (displayName ?? '').trim()
   const isSystem = normalized.length === 0
   const paletteIndex = isSystem ? 0 : hashText(normalized) % AVATAR_PALETTE.length
-  const backgroundColor = isSystem ? '#64748b' : AVATAR_PALETTE[paletteIndex]
+  const backgroundColor = isSystem ? 'var(--text-secondary)' : AVATAR_PALETTE[paletteIndex]
   const initials = isSystem ? 'SY' : buildInitials(normalized)
 
   return (
@@ -55,7 +55,7 @@ export function ActorAvatar({ displayName, size = 36 }: ActorAvatarProps) {
         height: `${size}px`,
         borderRadius: '9999px',
         background: backgroundColor,
-        color: '#ffffff',
+        color: 'var(--text-inverse)',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',

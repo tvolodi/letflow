@@ -36,9 +36,9 @@ function formatJsonCanonical(plan: PromotionPlan): string {
 }
 
 const CHANGE_KIND_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  added: { bg: '#d3f9d8', text: '#2f9e44', label: 'Added' },
-  modified: { bg: '#fff3bf', text: '#e67700', label: 'Modified' },
-  removed: { bg: '#ffe3e3', text: '#c92a2a', label: 'Removed' },
+  added: { bg: 'var(--color-success-light)', text: 'var(--color-success-dark)', label: 'Added' },
+  modified: { bg: 'var(--color-warning-light)', text: 'var(--color-warning-dark)', label: 'Modified' },
+  removed: { bg: 'var(--color-error-light)', text: 'var(--color-error-dark)', label: 'Removed' },
 }
 
 export function PlanDigestView(props: PlanDigestViewProps): React.ReactElement {
@@ -57,13 +57,13 @@ export function PlanDigestView(props: PlanDigestViewProps): React.ReactElement {
         style={{
           padding: '.75rem 1rem',
           borderRadius: '8px',
-          border: `1px solid ${digestVerified ? '#40c057' : '#fa5252'}`,
-          background: digestVerified ? '#f8fff8' : '#fff5f5',
+          border: `1px solid ${digestVerified ? 'var(--color-success)' : 'var(--color-error)'}`,
+          background: digestVerified ? 'var(--color-success-tint)' : 'var(--color-error-tint)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: '.7rem', fontWeight: 600, color: '#6c757d', marginBottom: '.2rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+            <div style={{ fontSize: '.7rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '.2rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
               Plan Digest (SHA-256)
             </div>
             <code
@@ -71,8 +71,8 @@ export function PlanDigestView(props: PlanDigestViewProps): React.ReactElement {
               style={{
                 fontFamily: 'monospace',
                 fontSize: '.8rem',
-                color: '#343a40',
-                background: '#f1f3f5',
+                color: 'var(--color-neutral-800)',
+                background: 'var(--color-neutral-100)',
                 padding: '.15rem .4rem',
                 borderRadius: '4px',
                 wordBreak: 'break-all',
@@ -91,21 +91,21 @@ export function PlanDigestView(props: PlanDigestViewProps): React.ReactElement {
               gap: '.35rem',
               padding: '.3rem .65rem',
               borderRadius: '20px',
-              background: digestVerified ? '#d3f9d8' : '#ffe3e3',
-              border: `1px solid ${digestVerified ? '#40c057' : '#fa5252'}`,
+              background: digestVerified ? 'var(--color-success-light)' : 'var(--color-error-light)',
+              border: `1px solid ${digestVerified ? 'var(--color-success)' : 'var(--color-error)'}`,
             }}
           >
             {digestVerified ? (
-              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2f9e44" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--color-success-dark)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             ) : (
-              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c92a2a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--color-error-dark)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             )}
-            <span style={{ fontSize: '.75rem', fontWeight: 600, color: digestVerified ? '#2f9e44' : '#c92a2a' }}>
+            <span style={{ fontSize: '.75rem', fontWeight: 600, color: digestVerified ? 'var(--color-success-dark)' : 'var(--color-error-dark)' }}>
               {digestVerified ? 'Digest Verified' : 'Digest Mismatch'}
             </span>
           </div>
@@ -114,7 +114,7 @@ export function PlanDigestView(props: PlanDigestViewProps): React.ReactElement {
 
       {/* Canonical JSON viewer */}
       <div>
-        <div style={{ fontSize: '.75rem', fontWeight: 600, color: '#495057', marginBottom: '.4rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+        <div style={{ fontSize: '.75rem', fontWeight: 600, color: 'var(--color-neutral-700)', marginBottom: '.4rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
           Canonical Plan JSON
         </div>
         <pre
@@ -122,12 +122,12 @@ export function PlanDigestView(props: PlanDigestViewProps): React.ReactElement {
           style={{
             margin: 0,
             padding: '.75rem 1rem',
-            background: '#f8f9fa',
-            border: '1px solid #e9ecef',
+            background: 'var(--surface-page)',
+            border: '1px solid var(--border-default)',
             borderRadius: '6px',
             fontFamily: 'monospace',
             fontSize: '.78rem',
-            color: '#343a40',
+            color: 'var(--color-neutral-800)',
             overflowX: 'auto',
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
@@ -142,12 +142,12 @@ export function PlanDigestView(props: PlanDigestViewProps): React.ReactElement {
       {/* Plan entries summary */}
       {plan.entries.length > 0 && (
         <div>
-          <div style={{ fontSize: '.75rem', fontWeight: 600, color: '#495057', marginBottom: '.4rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+          <div style={{ fontSize: '.75rem', fontWeight: 600, color: 'var(--color-neutral-700)', marginBottom: '.4rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
             Plan Entries ({plan.entries.length})
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '.35rem' }}>
             {plan.entries.map((entry: PlanEntry, index: number) => {
-              const ck = CHANGE_KIND_COLORS[entry.change_kind] ?? { bg: '#f1f3f5', text: '#495057', label: entry.change_kind }
+              const ck = CHANGE_KIND_COLORS[entry.change_kind] ?? { bg: 'var(--color-neutral-100)', text: 'var(--color-neutral-700)', label: entry.change_kind }
               return (
                 <div
                   key={`${entry.id}-${index}`}
@@ -158,8 +158,8 @@ export function PlanDigestView(props: PlanDigestViewProps): React.ReactElement {
                     gap: '.5rem',
                     padding: '.4rem .6rem',
                     borderRadius: '5px',
-                    background: '#fff',
-                    border: '1px solid #e9ecef',
+                    background: 'var(--surface-card)',
+                    border: '1px solid var(--border-default)',
                   }}
                 >
                   <span
@@ -175,11 +175,11 @@ export function PlanDigestView(props: PlanDigestViewProps): React.ReactElement {
                   >
                     {ck.label}
                   </span>
-                  <code style={{ fontFamily: 'monospace', fontSize: '.78rem', color: '#343a40', flexShrink: 0 }}>
+                  <code style={{ fontFamily: 'monospace', fontSize: '.78rem', color: 'var(--color-neutral-800)', flexShrink: 0 }}>
                     {entry.type}:{entry.id}
                   </code>
                   {entry.change_kind === 'modified' && (
-                    <span style={{ fontSize: '.75rem', color: '#6c757d', marginLeft: 'auto' }}>
+                    <span style={{ fontSize: '.75rem', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
                       {entry.before && entry.after ? 'updated' : ''}
                     </span>
                   )}

@@ -68,6 +68,11 @@ All colors are defined as CSS custom properties in `web/src/styles/tokens.css`. 
   --color-error:         #fa5252;
   --color-error-dark:    #c92a2a;
 
+  /* Tints and failure state (REQ-143 addendum) */
+  --color-success-tint:  #f8fff8;   /* barely-green white; lighter than --color-success-light */
+  --color-error-tint:    #fff5f5;   /* barely-red white; lighter than --color-error-light */
+  --color-failure:       #a61e4d;   /* deep pink-crimson; "failed" system-error state — distinct from rejected (--color-error-dark) */
+
   --color-info-light:    #dbe4ff;
   --color-info:          #4c6ef5;
   --color-info-dark:     #3b5bdb;
@@ -96,6 +101,26 @@ All colors are defined as CSS custom properties in `web/src/styles/tokens.css`. 
   --interactive-primary-hover:  var(--color-brand-700);
   --interactive-danger:         var(--color-error);
   --interactive-danger-hover:   var(--color-error-dark);
+}
+```
+
+### 2.3 Avatar accent palette (REQ-143 addendum)
+
+Reserved for actor avatar backgrounds in `ActorAvatar.tsx`. **Not for use in semantic UI elements.**
+
+```css
+:root {
+  /* Avatar accent palette — actor visual differentiation only */
+  --color-avatar-blue:   #2563eb;
+  --color-avatar-teal:   #0d9488;
+  --color-avatar-violet: #7c3aed;
+  --color-avatar-orange: #ea580c;
+  --color-avatar-cyan:   #0891b2;
+  --color-avatar-green:  #16a34a;
+  --color-avatar-purple: #9333ea;
+  --color-avatar-sky:    #0284c7;
+  --color-avatar-rust:   #c2410c;
+  --color-avatar-indigo: #4f46e5;
 }
 ```
 

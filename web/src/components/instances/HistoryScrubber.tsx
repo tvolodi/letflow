@@ -106,7 +106,7 @@ export function HistoryScrubber(props: HistoryScrubberProps): JSX.Element {
           marginBottom: '.5rem',
         }}
       >
-        <label style={{ fontSize: '.85rem', fontWeight: 500, color: '#475569' }}>
+        <label style={{ fontSize: '.85rem', fontWeight: 500, color: 'var(--color-neutral-700)' }}>
           Event {currentPosition} of {totalEvents}
         </label>
 
@@ -115,8 +115,8 @@ export function HistoryScrubber(props: HistoryScrubberProps): JSX.Element {
             <span
               style={{
                 display: 'inline-block',
-                background: '#10b981',
-                color: '#fff',
+                background: 'var(--color-success)',
+                color: 'var(--text-inverse)',
                 padding: '.25rem .5rem',
                 borderRadius: '3px',
                 fontSize: '.75rem',
@@ -132,8 +132,8 @@ export function HistoryScrubber(props: HistoryScrubberProps): JSX.Element {
               onClick={() => onResumeLive()}
               style={{
                 padding: '.25rem .5rem',
-                background: '#3b82f6',
-                color: '#fff',
+                background: 'var(--interactive-primary)',
+                color: 'var(--text-inverse)',
                 border: 'none',
                 borderRadius: '3px',
                 fontSize: '.75rem',
@@ -146,7 +146,7 @@ export function HistoryScrubber(props: HistoryScrubberProps): JSX.Element {
           )}
 
           {isLoading && (
-            <span style={{ fontSize: '.75rem', color: '#64748b' }}>Loading…</span>
+            <span style={{ fontSize: '.75rem', color: 'var(--text-secondary)' }}>Loading…</span>
           )}
         </div>
       </div>
@@ -170,11 +170,11 @@ export function HistoryScrubber(props: HistoryScrubberProps): JSX.Element {
           position: 'relative',
           width: '100%',
           height: '6px',
-          background: '#e2e8f0',
+          background: 'var(--border-default)',
           borderRadius: '3px',
           cursor: isDragging ? 'grabbing' : 'pointer',
           outline: 'none',
-          border: isDragging ? '2px solid #3b82f6' : 'none',
+          border: isDragging ? '2px solid var(--interactive-primary)' : 'none',
         }}
       >
         {/* Progress fill */}
@@ -185,9 +185,7 @@ export function HistoryScrubber(props: HistoryScrubberProps): JSX.Element {
             top: 0,
             height: '100%',
             width: `${percentage}%`,
-            background: '#3b82f6',
-            borderRadius: '3px',
-            transition: isDragging ? 'none' : 'width 0.1s',
+            background: 'var(--interactive-primary)',
           }}
         />
 
@@ -200,8 +198,8 @@ export function HistoryScrubber(props: HistoryScrubberProps): JSX.Element {
             top: '-5px',
             width: '16px',
             height: '16px',
-            background: '#3b82f6',
-            border: '2px solid #fff',
+            background: 'var(--interactive-primary)',
+            border: '2px solid var(--surface-card)',
             borderRadius: '50%',
             cursor: isDragging ? 'grabbing' : 'grab',
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
@@ -217,8 +215,8 @@ export function HistoryScrubber(props: HistoryScrubberProps): JSX.Element {
               left: `calc(${((hoveredPosition - 1) / Math.max(1, totalEvents - 1)) * 100}%)`,
               top: '-30px',
               transform: 'translateX(-50%)',
-              background: '#1f2937',
-              color: '#f3f4f6',
+              background: 'var(--surface-sidebar)',
+              color: 'var(--color-neutral-300)',
               padding: '.25rem .5rem',
               borderRadius: '3px',
               fontSize: '.7rem',

@@ -15,8 +15,8 @@ export interface ConflictRejectionAlertProps {
 }
 
 const STATUSBadgeColors: Record<string, { bg: string; text: string }> = {
-  source: { bg: '#dbe4ff', text: '#3b5bdb' },
-  target: { bg: '#ffe3e3', text: '#c92a2a' },
+  source: { bg: 'var(--color-info-light)', text: 'var(--color-info-dark)' },
+  target: { bg: 'var(--color-error-light)', text: 'var(--color-error-dark)' },
 }
 
 export function ConflictRejectionAlert(props: ConflictRejectionAlertProps): React.ReactElement {
@@ -27,10 +27,10 @@ export function ConflictRejectionAlert(props: ConflictRejectionAlertProps): Reac
       data-testid="conflict-rejection-alert"
       className={className}
       style={{
-        border: '1px solid #fa5252',
+        border: '1px solid var(--color-error)',
         borderRadius: '8px',
         padding: '1rem',
-        background: '#fff5f5',
+        background: 'var(--color-error-tint)',
       }}
     >
       {/* Header */}
@@ -41,7 +41,7 @@ export function ConflictRejectionAlert(props: ConflictRejectionAlertProps): Reac
           height="18"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#c92a2a"
+          stroke="var(--color-error-dark)"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -50,14 +50,14 @@ export function ConflictRejectionAlert(props: ConflictRejectionAlertProps): Reac
           <line x1="12" y1="9" x2="12" y2="13" />
           <line x1="12" y1="17" x2="12.01" y2="17" />
         </svg>
-        <span style={{ fontWeight: 600, color: '#c92a2a', fontSize: '.95rem' }}>
+        <span style={{ fontWeight: 600, color: 'var(--color-error-dark)', fontSize: '.95rem' }}>
           Promotion Conflict Detected
         </span>
       </div>
 
       {/* Conflict detail */}
       <div style={{ marginBottom: '.75rem' }}>
-        <p style={{ margin: '0 0 .5rem', fontSize: '.875rem', color: '#495057' }}>
+          <p style={{ margin: '0 0 .5rem', fontSize: '.875rem', color: 'var(--color-neutral-700)' }}>
           The target tenant has <strong>advanced past</strong> the version your source was branched from.
           Conflicting definition:
         </p>
@@ -65,16 +65,16 @@ export function ConflictRejectionAlert(props: ConflictRejectionAlertProps): Reac
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.82rem' }}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left', padding: '.35rem .5rem', borderBottom: '1px solid #fcc419', color: '#495057' }}>Process Key</th>
-              <th style={{ textAlign: 'left', padding: '.35rem .5rem', borderBottom: '1px solid #fcc419', color: '#495057' }}>Target Version</th>
-              <th style={{ textAlign: 'left', padding: '.35rem .5rem', borderBottom: '1px solid #fcc419', color: '#495057' }}>Target Def ID</th>
+              <th style={{ textAlign: 'left', padding: '.35rem .5rem', borderBottom: '1px solid var(--color-warning)', color: 'var(--color-neutral-700)' }}>Process Key</th>
+              <th style={{ textAlign: 'left', padding: '.35rem .5rem', borderBottom: '1px solid var(--color-warning)', color: 'var(--color-neutral-700)' }}>Target Version</th>
+              <th style={{ textAlign: 'left', padding: '.35rem .5rem', borderBottom: '1px solid var(--color-warning)', color: 'var(--color-neutral-700)' }}>Target Def ID</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td style={{ padding: '.35rem .5rem', borderBottom: '1px solid #f1f5f9', fontFamily: 'monospace' }}>{conflict.process_key}</td>
-              <td style={{ padding: '.35rem .5rem', borderBottom: '1px solid #f1f5f9', fontFamily: 'monospace', fontWeight: 600 }}>{conflict.target_version}</td>
-              <td style={{ padding: '.35rem .5rem', borderBottom: '1px solid #f1f5f9', fontFamily: 'monospace', fontSize: '.75rem' }}>{conflict.target_definition_id}</td>
+              <td style={{ padding: '.35rem .5rem', borderBottom: '1px solid var(--color-neutral-100)', fontFamily: 'monospace' }}>{conflict.process_key}</td>
+              <td style={{ padding: '.35rem .5rem', borderBottom: '1px solid var(--color-neutral-100)', fontFamily: 'monospace', fontWeight: 600 }}>{conflict.target_version}</td>
+              <td style={{ padding: '.35rem .5rem', borderBottom: '1px solid var(--color-neutral-100)', fontFamily: 'monospace', fontSize: '.75rem' }}>{conflict.target_definition_id}</td>
             </tr>
           </tbody>
         </table>
@@ -92,7 +92,7 @@ export function ConflictRejectionAlert(props: ConflictRejectionAlertProps): Reac
           <div style={{ fontSize: '.7rem', fontWeight: 600, color: STATUSBadgeColors.source.text, marginBottom: '.25rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
             Source Change
           </div>
-          <div style={{ fontSize: '.82rem', color: '#343a40' }}>
+          <div style={{ fontSize: '.82rem', color: 'var(--color-neutral-800)' }}>
             {conflict.source_change}
           </div>
         </div>
@@ -107,14 +107,14 @@ export function ConflictRejectionAlert(props: ConflictRejectionAlertProps): Reac
           <div style={{ fontSize: '.7rem', fontWeight: 600, color: STATUSBadgeColors.target.text, marginBottom: '.25rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
             Target Change
           </div>
-          <div style={{ fontSize: '.82rem', color: '#343a40' }}>
+          <div style={{ fontSize: '.82rem', color: 'var(--color-neutral-800)' }}>
             {conflict.target_change}
           </div>
         </div>
       </div>
 
       {/* Action hint */}
-      <p style={{ margin: '.75rem 0 0', fontSize: '.8rem', color: '#6c757d' }}>
+      <p style={{ margin: '.75rem 0 0', fontSize: '.8rem', color: 'var(--text-secondary)' }}>
         Resolve the conflict by promoting from the target tenant's current version, then retry.
       </p>
     </div>

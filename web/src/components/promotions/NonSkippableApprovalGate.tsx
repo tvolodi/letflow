@@ -41,9 +41,9 @@ function InlineError(props: { message: string; testId?: string }) {
         gap: '.4rem',
         padding: '.5rem .75rem',
         borderRadius: '6px',
-        background: '#fff5f5',
-        border: '1px solid #fa5252',
-        color: '#c92a2a',
+        background: 'var(--color-error-tint)',
+        border: '1px solid var(--color-error)',
+        color: 'var(--color-error-dark)',
         fontSize: '.82rem',
         marginTop: '.5rem',
       }}
@@ -114,24 +114,24 @@ function AssertionItem(props: { artifact_id: string; assertion_type: string; pas
         gap: '.5rem',
         padding: '.4rem .6rem',
         borderRadius: '5px',
-        background: props.passed ? '#f8fff8' : '#fff5f5',
-        border: `1px solid ${props.passed ? '#40c057' : '#fa5252'}`,
+        background: props.passed ? 'var(--color-success-tint)' : 'var(--color-error-tint)',
+        border: `1px solid ${props.passed ? 'var(--color-success)' : 'var(--color-error)'}`,
       }}
     >
       {props.passed ? (
-        <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2f9e44" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--color-success-dark)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="20 6 9 17 4 12" />
         </svg>
       ) : (
-        <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c92a2a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--color-error-dark)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
         </svg>
       )}
-      <code style={{ fontFamily: 'monospace', fontSize: '.75rem', color: '#343a40' }}>
+      <code style={{ fontFamily: 'monospace', fontSize: '.75rem', color: 'var(--color-neutral-800)' }}>
         {props.assertion_type}
       </code>
-      <span style={{ fontSize: '.72rem', color: '#6c757d', marginLeft: 'auto' }}>
+      <span style={{ fontSize: '.72rem', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
         {props.artifact_id}
       </span>
     </div>
@@ -245,11 +245,11 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
         style={{
           padding: '1rem',
           borderRadius: '8px',
-          border: '1px solid #e9ecef',
-          background: '#fff',
+          border: '1px solid var(--border-default)',
+          background: 'var(--surface-card)',
         }}
       >
-        <div style={{ fontSize: '.7rem', fontWeight: 600, color: '#6c757d', marginBottom: '.5rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+        <div style={{ fontSize: '.7rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '.5rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
           Artifact Assertions
         </div>
         {assertions && assertions.length > 0 ? (
@@ -259,7 +259,7 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
             ))}
           </div>
         ) : (
-          <p style={{ margin: 0, fontSize: '.82rem', color: '#6c757d' }}>No assertions available.</p>
+          <p style={{ margin: 0, fontSize: '.82rem', color: 'var(--text-secondary)' }}>No assertions available.</p>
         )}
       </div>
 
@@ -287,10 +287,10 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
           onClick={handleReject}
           style={{
             padding: '.5rem 1.25rem',
-            border: '1px solid #fa5252',
+            border: '1px solid var(--color-error)',
             borderRadius: '6px',
-            background: '#fff',
-            color: '#c92a2a',
+            background: 'var(--surface-card)',
+            color: 'var(--color-error-dark)',
             cursor: !canReject || rejecting ? 'not-allowed' : 'pointer',
             fontSize: '.875rem',
             fontWeight: 500,
@@ -310,8 +310,8 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
             padding: '.5rem 1.25rem',
             border: 'none',
             borderRadius: '6px',
-            background: isSelfApproval ? '#ced4da' : '#2563eb',
-            color: '#fff',
+            background: isSelfApproval ? 'var(--color-neutral-400)' : 'var(--interactive-primary)',
+            color: 'var(--text-inverse)',
             cursor: !canApprove || approving ? 'not-allowed' : 'pointer',
             fontSize: '.875rem',
             fontWeight: 500,
@@ -332,8 +332,8 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
             padding: '.5rem 1.25rem',
             border: 'none',
             borderRadius: '6px',
-            background: canApply ? '#40c057' : '#adb5bd',
-            color: '#fff',
+            background: canApply ? 'var(--color-success)' : 'var(--color-neutral-500)',
+            color: 'var(--text-inverse)',
             cursor: !canApply || applying ? 'not-allowed' : 'pointer',
             fontSize: '.875rem',
             fontWeight: 500,
@@ -346,11 +346,11 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
 
         {/* Non-skippable gate notice */}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
-          <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6c757d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
-          <span style={{ fontSize: '.72rem', color: '#6c757d' }}>
+          <span style={{ fontSize: '.72rem', color: 'var(--text-secondary)' }}>
             Non-skippable gate
           </span>
         </div>

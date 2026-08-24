@@ -54,12 +54,12 @@ export function ProcessGraphWithTokens(props: ProcessGraphWithTokensProps): JSX.
             zIndex: 10,
           }}
         >
-          <p style={{ color: '#64748b' }}>Loading tokens…</p>
+          <p style={{ color: 'var(--text-secondary)' }}>Loading tokens…</p>
         </div>
       )}
 
       {!instanceGraph || typeof instanceGraph !== 'object' ? (
-        <div style={{ padding: '1rem', color: '#64748b', fontSize: '.85rem' }}>
+        <div style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '.85rem' }}>
           No graph snapshot is available for this instance.
         </div>
       ) : (
@@ -73,7 +73,7 @@ export function ProcessGraphWithTokens(props: ProcessGraphWithTokensProps): JSX.
             fitView
             proOptions={{ hideAttribution: true }}
           >
-            <Background color="#e2e8f0" gap={20} />
+            <Background color="var(--border-default)" gap={20} />
             <MiniMap />
             <Controls />
           </ReactFlow>
@@ -96,8 +96,8 @@ export function ProcessGraphWithTokens(props: ProcessGraphWithTokensProps): JSX.
             <div
               style={{
                 position: 'absolute',
-                background: '#1f2937',
-                color: '#f3f4f6',
+                background: 'var(--surface-sidebar)',
+                color: 'var(--color-neutral-300)',
                 padding: '.5rem .75rem',
                 borderRadius: '4px',
                 fontSize: '.75rem',
@@ -107,7 +107,7 @@ export function ProcessGraphWithTokens(props: ProcessGraphWithTokensProps): JSX.
               }}
             >
               <div style={{ fontWeight: 600 }}>{hoveredTokenNode}</div>
-              <div style={{ marginTop: '.25rem', color: '#d1d5db' }}>{tokens.find((t) => t.node_id === hoveredTokenNode)?.count ?? 0} token(s)</div>
+              <div style={{ marginTop: '.25rem', color: 'var(--color-neutral-300)' }}>{tokens.find((t) => t.node_id === hoveredTokenNode)?.count ?? 0} token(s)</div>
             </div>
           )}
         </>
@@ -203,7 +203,7 @@ function TokenMarkerOverlay(props: TokenMarkerOverlayProps): JSX.Element {
           cx={size - 6}
           cy={6}
           r="5"
-          fill="#1f2937"
+          fill="var(--surface-sidebar)"
           stroke={colour}
           strokeWidth="1"
           style={{ pointerEvents: 'none' }}
@@ -253,7 +253,7 @@ function buildGraphFromDefinition(
           ...node,
           style: {
             ...(node.style ?? {}),
-            border: isActive ? '2px solid #2563eb' : '1px solid #cbd5e1',
+            border: isActive ? '2px solid var(--interactive-primary)' : '1px solid var(--color-neutral-400)',
             boxShadow: isActive ? '0 0 0 4px rgba(37, 99, 235, 0.18)' : undefined,
           },
         }

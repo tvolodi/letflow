@@ -5802,3 +5802,17 @@ history:
 #   `known_anomalies:` and the Step 4 invariant test asserts they are still
 #   present and still wrong — a silent normalization fails the suite.
 # ─────────────────────────────────────────────────────────────────────────────
+  - req: REQ-117
+    event: blocked
+    agent: FRONTEND-DEV
+    at: 2026-08-24T00:43:00Z
+    note: >
+      Verification attempted. AC-2 through AC-6 satisfied: npm run check
+      passes (184+48 tests), git diff web/src/auth/ clean, no localStorage
+      usage, authority/realm confirmed against decision-0002. Two findings:
+      FINDING-001 (client-id rename letflow-web vs bpm-platform-api — medium,
+      needs ADR check); FINDING-002 HIGH — OidcManager.ts uses
+      WebStorageStateStore(sessionStorage) instead of InMemoryWebStorage,
+      violating FNFR-06. Cannot fix here (AC-3 forbids touching that file).
+      AC-1 (live login test) blocked: no running Letflow+Keycloak stack
+      (REQ-128 S4 not shipped). Report at docs/handoffs/REQ-117-verification.md.

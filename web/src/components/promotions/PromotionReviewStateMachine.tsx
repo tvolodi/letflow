@@ -48,12 +48,12 @@ const EDGES: StateEdge[] = [
 ]
 
 const STATUS_META: Record<ReviewStatus, { bg: string; text: string; border: string }> = {
-  pending_review: { bg: '#fff3bf', text: '#e67700', border: '#fcc419' },
-  approved:       { bg: '#d3f9d8', text: '#2f9e44', border: '#40c057' },
-  rejected:       { bg: '#ffe3e3', text: '#c92a2a', border: '#fa5252' },
-  applied:        { bg: '#dbe4ff', text: '#3b5bdb', border: '#4c6ef5' },
-  failed:         { bg: '#fff0f0', text: '#a61e4d', border: '#e03131' },
-  superseded:     { bg: '#f1f3f5', text: '#495057', border: '#ced4da' },
+  pending_review: { bg: 'var(--color-warning-light)', text: 'var(--color-warning-dark)', border: 'var(--color-warning)' },
+  approved:       { bg: 'var(--color-success-light)', text: 'var(--color-success-dark)', border: 'var(--color-success)' },
+  rejected:       { bg: 'var(--color-error-light)', text: 'var(--color-error-dark)', border: 'var(--color-error)' },
+  applied:        { bg: 'var(--color-info-light)', text: 'var(--color-info-dark)', border: 'var(--color-info)' },
+  failed:         { bg: 'var(--color-error-tint)', text: 'var(--color-failure)', border: 'var(--color-error-dark)' },
+  superseded:     { bg: 'var(--color-neutral-100)', text: 'var(--color-neutral-700)', border: 'var(--color-neutral-400)' },
 }
 
 function formatDate(iso: string | null): string {
@@ -82,14 +82,14 @@ export function PromotionReviewStateMachine(props: PromotionReviewStateMachinePr
       <div
         style={{
           padding: '1rem',
-          border: '1px solid #e9ecef',
+          border: '1px solid var(--border-default)',
           borderRadius: '8px',
-          background: '#f8f9fa',
+          background: 'var(--surface-page)',
         }}
       >
         {/* Current state highlight */}
         <div style={{ marginBottom: '.75rem' }}>
-          <div style={{ fontSize: '.7rem', fontWeight: 600, color: '#6c757d', marginBottom: '.3rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+          <div style={{ fontSize: '.7rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '.3rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
             Current Status
           </div>
           <div
@@ -125,8 +125,8 @@ export function PromotionReviewStateMachine(props: PromotionReviewStateMachinePr
                     viewBox="0 0 20 16"
                     style={{ flexShrink: 0 }}
                   >
-                    <line x1="0" y1="8" x2="14" y2="8" stroke="#adb5bd" strokeWidth="1.5" />
-                    <polygon points="14,4 20,8 14,12" fill="#adb5bd" />
+                    <line x1="0" y1="8" x2="14" y2="8" stroke="var(--color-neutral-500)" strokeWidth="1.5" />
+                    <polygon points="14,4 20,8 14,12" fill="var(--color-neutral-500)" />
                   </svg>
                 )}
                 <div
@@ -134,8 +134,8 @@ export function PromotionReviewStateMachine(props: PromotionReviewStateMachinePr
                   style={{
                     padding: '.3rem .6rem',
                     borderRadius: '6px',
-                    background: isCurrent ? stateMeta.bg : '#fff',
-                    border: `1.5px solid ${isCurrent ? stateMeta.border : '#dee2e6'}`,
+                    background: isCurrent ? stateMeta.bg : 'var(--surface-card)',
+                    border: `1.5px solid ${isCurrent ? stateMeta.border : 'var(--color-neutral-300)'}`,
                     opacity: isCurrent ? 1 : 0.6,
                   }}
                 >
@@ -143,7 +143,7 @@ export function PromotionReviewStateMachine(props: PromotionReviewStateMachinePr
                     style={{
                       fontSize: '.75rem',
                       fontWeight: isCurrent ? 700 : 500,
-                      color: isCurrent ? stateMeta.text : '#868e96',
+                      color: isCurrent ? stateMeta.text : 'var(--text-secondary)',
                     }}
                   >
                     {state.label}
@@ -156,8 +156,8 @@ export function PromotionReviewStateMachine(props: PromotionReviewStateMachinePr
 
         {/* Outgoing edges from current state */}
         {outgoingEdges.length > 0 && (
-          <div style={{ marginTop: '.75rem', paddingTop: '.75rem', borderTop: '1px solid #dee2e6' }}>
-            <div style={{ fontSize: '.7rem', fontWeight: 600, color: '#6c757d', marginBottom: '.3rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+          <div style={{ marginTop: '.75rem', paddingTop: '.75rem', borderTop: '1px solid var(--color-neutral-300)' }}>
+            <div style={{ fontSize: '.7rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '.3rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
               Possible Transitions
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.4rem' }}>
@@ -169,8 +169,8 @@ export function PromotionReviewStateMachine(props: PromotionReviewStateMachinePr
                     fontSize: '.72rem',
                     padding: '.15rem .5rem',
                     borderRadius: '4px',
-                    background: '#e9ecef',
-                    color: '#495057',
+                    background: 'var(--border-default)',
+                    color: 'var(--color-neutral-700)',
                     fontFamily: 'monospace',
                   }}
                 >
@@ -245,7 +245,7 @@ export function PromotionReviewStateMachine(props: PromotionReviewStateMachinePr
       {/* Serialised plan preview */}
       {review.serialised_plan && (
         <div>
-          <div style={{ fontSize: '.75rem', fontWeight: 600, color: '#495057', marginBottom: '.4rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+          <div style={{ fontSize: '.75rem', fontWeight: 600, color: 'var(--color-neutral-700)', marginBottom: '.4rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
             Serialised Plan
           </div>
           <pre
@@ -253,12 +253,12 @@ export function PromotionReviewStateMachine(props: PromotionReviewStateMachinePr
             style={{
               margin: 0,
               padding: '.75rem 1rem',
-              background: '#f8f9fa',
-              border: '1px solid #e9ecef',
+              background: 'var(--surface-page)',
+              border: '1px solid var(--border-default)',
               borderRadius: '6px',
               fontFamily: 'monospace',
               fontSize: '.75rem',
-              color: '#343a40',
+              color: 'var(--color-neutral-800)',
               overflowX: 'auto',
               maxHeight: '200px',
               overflowY: 'auto',
@@ -278,14 +278,14 @@ function MetadataItem(props: { label: string; value: string; testId: string; mon
   const { label, value, testId, mono } = props
   return (
     <div>
-      <div style={{ fontSize: '.7rem', fontWeight: 600, color: '#6c757d', marginBottom: '.2rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+      <div style={{ fontSize: '.7rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '.2rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
         {label}
       </div>
       <div
         data-testid={testId}
         style={{
           fontSize: '.82rem',
-          color: '#212529',
+          color: 'var(--text-primary)',
           fontFamily: mono ? 'monospace' : 'inherit',
           wordBreak: 'break-all',
         }}

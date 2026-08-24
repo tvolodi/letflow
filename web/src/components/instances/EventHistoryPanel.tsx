@@ -83,14 +83,14 @@ export function EventHistoryPanel({ instanceId }: EventHistoryPanelProps) {
           marginBottom: '.85rem',
         }}
       >
-        <label style={{ display: 'grid', gap: '.2rem', fontSize: '.82rem', color: '#334155' }}>
+        <label style={{ display: 'grid', gap: '.2rem', fontSize: '.82rem', color: 'var(--color-neutral-700)' }}>
           Event type
           <select
             value={draftEventType}
             onChange={(e) => setDraftEventType(e.target.value)}
             style={{
               minWidth: '180px',
-              border: '1px solid #cbd5e1',
+              border: '1px solid var(--color-neutral-400)',
               borderRadius: '4px',
               padding: '.35rem .45rem',
             }}
@@ -104,28 +104,28 @@ export function EventHistoryPanel({ instanceId }: EventHistoryPanelProps) {
           </select>
         </label>
 
-        <label style={{ display: 'grid', gap: '.2rem', fontSize: '.82rem', color: '#334155' }}>
+        <label style={{ display: 'grid', gap: '.2rem', fontSize: '.82rem', color: 'var(--color-neutral-700)' }}>
           From
           <input
             type="datetime-local"
             value={draftFrom}
             onChange={(e) => setDraftFrom(e.target.value)}
             style={{
-              border: '1px solid #cbd5e1',
+              border: '1px solid var(--color-neutral-400)',
               borderRadius: '4px',
               padding: '.32rem .45rem',
             }}
           />
         </label>
 
-        <label style={{ display: 'grid', gap: '.2rem', fontSize: '.82rem', color: '#334155' }}>
+        <label style={{ display: 'grid', gap: '.2rem', fontSize: '.82rem', color: 'var(--color-neutral-700)' }}>
           To
           <input
             type="datetime-local"
             value={draftTo}
             onChange={(e) => setDraftTo(e.target.value)}
             style={{
-              border: '1px solid #cbd5e1',
+              border: '1px solid var(--color-neutral-400)',
               borderRadius: '4px',
               padding: '.32rem .45rem',
             }}
@@ -138,8 +138,8 @@ export function EventHistoryPanel({ instanceId }: EventHistoryPanelProps) {
             padding: '.35rem .8rem',
             border: 'none',
             borderRadius: '4px',
-            background: '#2563eb',
-            color: '#ffffff',
+            background: 'var(--interactive-primary)',
+            color: 'var(--text-inverse)',
             cursor: 'pointer',
           }}
         >
@@ -150,9 +150,9 @@ export function EventHistoryPanel({ instanceId }: EventHistoryPanelProps) {
           onClick={onClear}
           style={{
             padding: '.35rem .8rem',
-            border: '1px solid #cbd5e1',
+            border: '1px solid var(--color-neutral-400)',
             borderRadius: '4px',
-            background: '#ffffff',
+            background: 'var(--surface-card)',
             cursor: 'pointer',
           }}
         >
@@ -162,7 +162,7 @@ export function EventHistoryPanel({ instanceId }: EventHistoryPanelProps) {
 
       {eventsQuery.isLoading && <p>Loading event history...</p>}
       {eventsQuery.error && (
-        <p role="alert" style={{ color: '#dc2626' }}>
+        <p role="alert" style={{ color: 'var(--color-error-dark)' }}>
           Failed to load events.
         </p>
       )}
@@ -171,12 +171,12 @@ export function EventHistoryPanel({ instanceId }: EventHistoryPanelProps) {
         <>
           {events.length > 0 ? (
             <>
-              <div style={{ color: '#64748b', fontSize: '.8rem', marginBottom: '.45rem' }}>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '.8rem', marginBottom: '.45rem' }}>
                 Showing {events.length} events
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.85rem' }}>
                 <thead>
-                  <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
+                  <tr style={{ background: 'var(--color-neutral-100)', textAlign: 'left' }}>
                     <th style={{ padding: '.5rem .75rem' }}>#</th>
                     <th style={{ padding: '.5rem .75rem' }}>Type</th>
                     <th style={{ padding: '.5rem .75rem' }}>Actor</th>
@@ -186,19 +186,19 @@ export function EventHistoryPanel({ instanceId }: EventHistoryPanelProps) {
                 </thead>
                 <tbody>
                   {events.map((event) => (
-                    <tr key={event.event_id} style={{ borderBottom: '1px solid #e2e8f0', verticalAlign: 'top' }}>
-                      <td style={{ padding: '.5rem .75rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                    <tr key={event.event_id} style={{ borderBottom: '1px solid var(--border-default)', verticalAlign: 'top' }}>
+                      <td style={{ padding: '.5rem .75rem', color: 'var(--color-neutral-500)', fontFamily: 'monospace' }}>
                         {event.sequence_number}
                       </td>
                       <td style={{ padding: '.5rem .75rem', fontFamily: 'monospace', fontSize: '.8rem' }}>
                         {event.event_type}
                       </td>
-                      <td style={{ padding: '.5rem .75rem', color: '#64748b', fontFamily: 'monospace', fontSize: '.8rem' }}>
+                      <td style={{ padding: '.5rem .75rem', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: '.8rem' }}>
                         {typeof event.actor_id === 'string' && event.actor_id
                           ? event.actor_id.slice(0, 8)
                           : 'system'}
                       </td>
-                      <td style={{ padding: '.5rem .75rem', color: '#64748b' }}>
+                      <td style={{ padding: '.5rem .75rem', color: 'var(--text-secondary)' }}>
                         {new Date(event.created_at).toLocaleString()}
                       </td>
                       <td style={{ padding: '.5rem .75rem', minWidth: '180px' }}>
@@ -210,13 +210,13 @@ export function EventHistoryPanel({ instanceId }: EventHistoryPanelProps) {
               </table>
             </>
           ) : (
-            <p style={{ color: '#64748b', margin: 0 }}>No events match the current filters.</p>
+            <p style={{ color: 'var(--text-secondary)', margin: 0 }}>No events match the current filters.</p>
           )}
         </>
       )}
 
       {(appliedFilters.from || appliedFilters.to) && (
-        <div style={{ marginTop: '.6rem', color: '#64748b', fontSize: '.78rem' }}>
+        <div style={{ marginTop: '.6rem', color: 'var(--text-secondary)', fontSize: '.78rem' }}>
           Range: {toDatetimeLocal(appliedFilters.from)} - {toDatetimeLocal(appliedFilters.to)}
         </div>
       )}

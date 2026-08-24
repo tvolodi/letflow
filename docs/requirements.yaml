@@ -4343,9 +4343,9 @@ requirements:
   - id: REQ-077
     title: Promotion pipeline routes (promotion_review.zig, promotions.zig, promotion_read.zig, promotion_assertion.zig, promotion.zig, definition_rollback.zig)
     owner: ELIXIR-DEV
-    status: blocked
+    status: pending
     stage: S4
-    impl_order: 144  # letflow-queue task id
+    impl_order: 331  # letflow-queue task id (re-registered 2026-08-24; original task 144 expired)
     description: >
       Port the six promotion-pipeline route modules as one requirement --
       they total 1,844 lines but 1,140 of that is promotion_review.zig's five

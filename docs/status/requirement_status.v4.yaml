@@ -955,3 +955,26 @@ history:
       fixing an over-specified test assertion. All 4 ACs verified: grep 0,
       12 target files + test fix, 184/184 tests, 48/48 guards. CI 4/4 green.
       39 on-disk entries before this append; 40 after.
+  - req: REQ-077
+    event: revised
+    agent: ORCH
+    at: "2026-08-24T07:04:06Z"
+    note: >
+      Status flipped blocked -> pending. REQ-077's original blocker was the
+      absence of a production platform-event appender (REVIEWER ruling at
+      WF02-REQ077-20260822). REQ-140 (platform event append path) is now
+      done (merged 2026-08-23, PR #597). Both depends_on satisfied:
+      REQ-072 (done) and REQ-140 (done). Queue task id=144 returns 404 on
+      the live service (likely never registered or expired), so
+      re-registration is needed before the next run claims it. GH#284
+      (the issue mirror) remains open correctly -- REQ-077 is pending, not
+      done. 40 on-disk entries before this append; 41 after.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-24T07:05:49Z"
+    note: >
+      REQ-077 queue reconciliation. Old queue task 144 expired (404). Re-
+      registered as queue task 331 (GH#637). docs/requirements.yaml updated:
+      impl_order 144->331, status blocked->pending. GH#284 commented and
+      closed; track at GH#637. 41 on-disk entries before this append; 42 after.

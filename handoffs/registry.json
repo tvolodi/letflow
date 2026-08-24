@@ -2335,6 +2335,28 @@
                      "queue_task_id":  270,
                      "queue_agent_id":  "orch-main",
                      "note":  "WF-02 for REQ-144 (GH#532, queue task 270, stage S8 -- migrate ui/+forms/+webhooks/ 12 files). Queue claimed 2026-08-24T06:02:40Z."
+                 },
+                 {
+                     "run_id":  "WF02-REQ145-20260824",
+                     "workflow_id":  "WF-02",
+                     "requirement_ids":  [
+                                             "REQ-145"
+                                         ],
+                     "stage":  "S8",
+                     "status":  "COMPLETED",
+                     "owned_modules":  [
+                                           "web/src/components/layout/",
+                                           "web/src/components/definitions/",
+                                           "web/src/components/admin/"
+                                       ],
+                     "lock_acquired_at":  "2026-08-24T07:33:40Z",
+                     "lock_released_at":  "2026-08-24T08:00:39Z",
+                     "released_lock":  true,
+                     "last_known_step":  "Step Final COMPLETED PASS (pending PR/merge -- all gates green, 184/184, 48/48)",
+                     "backfilled":  false,
+                     "queue_task_id":  271,
+                     "queue_agent_id":  "orch-main",
+                     "note":  "WF-02 for REQ-145 (GH#533, queue task 271, stage S8 -- migrate layout/+definitions/+admin/ 8 files). Queue claimed 2026-08-24T07:32:44Z."
                  }
              ]
 }

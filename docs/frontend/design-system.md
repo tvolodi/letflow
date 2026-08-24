@@ -69,12 +69,18 @@ All colors are defined as CSS custom properties in `web/src/styles/tokens.css`. 
   --color-warning-border: #fde68a;   /* amber-200; border accent for warning boxes */
   --color-warning-text:   #92400e;   /* amber-800; WCAG AA text on warning backgrounds */
 
+  /* Warning-banner addition (REQ-145 addendum) */
+  --color-warning-banner: #fef08a;   /* yellow-200; sticky env/test warning banners */
+
   --color-error-light:   #ffe3e3;
   --color-error:         #fa5252;
   --color-error-dark:    #c92a2a;
 
   /* Error-state border addition (REQ-144 addendum) */
   --color-error-border: #fecaca;     /* red-200; border accent for error alert blocks */
+
+  /* Error-border-strong addition (REQ-145 addendum) */
+  --color-error-border-strong: #fca5a5;  /* red-300; full-page error boundary card border */
 
   /* Tints and failure state (REQ-143 addendum) */
   --color-success-tint:  #f8fff8;   /* barely-green white; lighter than --color-success-light */
@@ -84,6 +90,10 @@ All colors are defined as CSS custom properties in `web/src/styles/tokens.css`. 
   --color-info-light:    #dbe4ff;
   --color-info:          #4c6ef5;
   --color-info-dark:     #3b5bdb;
+
+  /* Info-state additions (REQ-145 addendum) */
+  --color-info-tint: #eff6ff;   /* blue-50; near-white info banner background */
+  --color-info-text: #1e3a8a;   /* blue-800; authoritative heading text on info backgrounds */
 }
 ```
 
@@ -93,8 +103,11 @@ All colors are defined as CSS custom properties in `web/src/styles/tokens.css`. 
 :root {
   --surface-page:       var(--color-neutral-50);
   --surface-card:       var(--color-neutral-0);
-  --surface-sidebar:    var(--color-neutral-900);
+  --surface-sidebar:    #1e293b;              /* slate-800; AppShell sidebar (REQ-145 correction) */
   --surface-overlay:    rgba(0, 0, 0, 0.5);
+
+  /* Sidebar accent (REQ-145 addendum) */
+  --color-sidebar-active: #334155;            /* slate-700; active-nav highlight and dividers on sidebar */
 
   --text-primary:       var(--color-neutral-900);
   --text-secondary:     var(--color-neutral-600);

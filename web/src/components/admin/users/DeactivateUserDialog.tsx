@@ -53,7 +53,7 @@ const overlayStyle: CSSProperties = {
 }
 
 const dialogStyle: CSSProperties = {
-  backgroundColor: '#fff',
+  backgroundColor: 'var(--surface-card)',
   width: 'min(560px, calc(100vw - 2rem))',
   borderRadius: 8,
   padding: 20,

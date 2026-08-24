@@ -55,15 +55,15 @@ export function AppShell() {
       <aside
         style={{
           width: '220px',
-          background: '#1e293b',
-          color: '#cbd5e1',
+          background: 'var(--surface-sidebar)',
+          color: 'var(--color-neutral-400)',
           display: 'flex',
           flexDirection: 'column',
           padding: '1.5rem 0',
           flexShrink: 0,
         }}
       >
-        <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem', fontWeight: 700, fontSize: '1.1rem', color: '#f1f5f9' }}>
+        <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem', fontWeight: 700, fontSize: '1.1rem', color: 'var(--color-neutral-100)' }}>
           Letflow
         </div>
 
@@ -77,11 +77,11 @@ export function AppShell() {
               style={({ isActive }) => ({
                 display: 'block',
                 padding: '.5rem 1.25rem',
-                color: isActive ? '#f1f5f9' : '#94a3b8',
-                background: isActive ? '#334155' : 'transparent',
+                color: isActive ? 'var(--color-neutral-100)' : 'var(--color-neutral-500)',
+                background: isActive ? 'var(--color-sidebar-active)' : 'transparent',
                 textDecoration: 'none',
                 fontSize: '.9rem',
-                borderLeft: isActive ? '3px solid #3b82f6' : '3px solid transparent',
+                borderLeft: isActive ? '3px solid var(--interactive-primary)' : '3px solid transparent',
               })}
             >
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.5rem' }}>
@@ -96,8 +96,8 @@ export function AppShell() {
                       lineHeight: '1.15rem',
                       textAlign: 'center',
                       fontWeight: 700,
-                      color: '#0f172a',
-                      background: dlqSeverity === 'critical' ? '#ef4444' : '#f59e0b',
+                      color: 'var(--text-primary)',
+                      background: dlqSeverity === 'critical' ? 'var(--color-error)' : 'var(--color-warning)',
                     }}
                     aria-label={`DLQ pending count ${pendingDlqCount}`}
                   >
@@ -109,23 +109,23 @@ export function AppShell() {
           ))}
         </nav>
 
-        <div style={{ padding: '.75rem 1.25rem', borderTop: '1px solid #334155', fontSize: '.8rem', color: '#64748b' }}>
+        <div style={{ padding: '.75rem 1.25rem', borderTop: '1px solid var(--color-sidebar-active)', fontSize: '.8rem', color: 'var(--text-secondary)' }}>
           <div
             data-testid="user-display-name"
-            style={{ marginBottom: '.25rem', color: '#94a3b8' }}
+            style={{ marginBottom: '.25rem', color: 'var(--color-neutral-500)' }}
           >
             {session?.display_name}
           </div>
           <div
             data-testid="user-roles"
-            style={{ marginBottom: '.5rem', color: '#64748b', fontSize: '.75rem' }}
+            style={{ marginBottom: '.5rem', color: 'var(--text-secondary)', fontSize: '.75rem' }}
           >
             {session?.roles.join(', ')}
           </div>
           <button
             data-testid="logout-button"
             onClick={logout}
-            style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 0, fontSize: '.8rem' }}
+            style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 0, fontSize: '.8rem' }}
           >
             Sign out
           </button>
@@ -133,7 +133,7 @@ export function AppShell() {
       </aside>
 
       {/* Main content */}
-      <main style={{ flex: 1, overflow: 'auto', background: '#f8fafc' }}>
+      <main style={{ flex: 1, overflow: 'auto', background: 'var(--surface-page)' }}>
         <TestEnvironmentBanner />
         <ApiConnectivityBanner />
         <Outlet />

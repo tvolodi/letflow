@@ -8,7 +8,7 @@ export function TenantHeader(): JSX.Element {
       style={{
         padding: '0 1.25rem',
         marginBottom: '.75rem',
-        borderBottom: '1px solid #334155',
+        borderBottom: '1px solid var(--color-sidebar-active)',
         paddingBottom: '.75rem',
       }}
     >
@@ -17,7 +17,7 @@ export function TenantHeader(): JSX.Element {
         style={{
           fontSize: '.78rem',
           fontWeight: 600,
-          color: isUnknown ? '#64748b' : '#38bdf8',
+          color: isUnknown ? 'var(--text-secondary)' : 'var(--color-brand-400)',
           textTransform: 'uppercase',
           letterSpacing: '.05em',
           overflow: 'hidden',

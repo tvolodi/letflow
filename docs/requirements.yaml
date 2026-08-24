@@ -6986,7 +6986,7 @@ requirements:
   - id: REQ-142
     title: Migrate web/src/components/canvas/ off inline hex literals to tokens.css custom properties
     owner: FRONTEND-DEV
-    status: in_progress
+    status: done
     stage: S8
     impl_order: 268  # letflow-queue task id
     description: >

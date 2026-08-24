@@ -117,6 +117,8 @@ describe('RND-UI-06 §12.2 — error-mode regressions', () => {
     // applies background #dc2626 (→ rgb(220, 38, 38) in jsdom) to the confirm
     // button. We assert the rendered style contains that colour.
     const style = confirmBtn.getAttribute('style') ?? ''
-    expect(style).toMatch(/background:\s*(?:#dc2626|rgb\(220,\s*38,\s*38\))/i)
+    // After token migration, ConfirmDialog uses var(--interactive-danger) instead of
+    // the literal hex; jsdom does not resolve CSS vars so we accept either form.
+    expect(style).toMatch(/background:\s*(?:#dc2626|rgb\(220,\s*38,\s*38\)|var\(--interactive-danger\))/i)
   })
 })

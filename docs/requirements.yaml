@@ -7048,7 +7048,7 @@ requirements:
   - id: REQ-144
     title: Migrate web/src/components/ui/, forms/, and webhooks/ off inline hex literals to tokens.css custom properties
     owner: FRONTEND-DEV
-    status: in_progress
+    status: done
     stage: S8
     impl_order: 270  # letflow-queue task id
     description: >

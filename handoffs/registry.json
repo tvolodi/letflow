@@ -2321,16 +2321,16 @@
                                              "REQ-144"
                                          ],
                      "stage":  "S8",
-                     "status":  "ACTIVE",
+                     "status":  "COMPLETED",
                      "owned_modules":  [
                                            "web/src/components/ui/",
                                            "web/src/components/forms/",
                                            "web/src/components/webhooks/"
                                        ],
                      "lock_acquired_at":  "2026-08-24T06:03:23Z",
-                     "lock_released_at":  null,
-                     "released_lock":  false,
-                     "last_known_step":  "Step 00 COMPLETED PASS -- branch created. Dispatching CODE-DESIGNER.",
+                     "lock_released_at":  "2026-08-24T06:37:27Z",
+                     "released_lock":  true,
+                     "last_known_step":  "Step Final COMPLETED PASS (pending PR/merge -- all gates green, 184/184, 48/48)",
                      "backfilled":  false,
                      "queue_task_id":  270,
                      "queue_agent_id":  "orch-main",

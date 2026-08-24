@@ -2402,6 +2402,27 @@
                      "queue_task_id":  282,
                      "queue_agent_id":  "orch-main",
                      "note":  "WF-02 for REQ-147 (GH#556, queue task 282, stage S2 -- rename pack_update_resolutions.resolution enum values). Queue claimed 2026-08-24T09:30:58Z."
+                 },
+                 {
+                     "run_id":  "WF02-REQ148-20260824",
+                     "workflow_id":  "WF-02",
+                     "requirement_ids":  [
+                                             "REQ-148"
+                                         ],
+                     "stage":  "S5",
+                     "status":  "ACTIVE",
+                     "owned_modules":  [
+                                           "mix.exs",
+                                           "lib/letflow/design/req148-lua-runtime-spike.md"
+                                       ],
+                     "lock_acquired_at":  "2026-08-24T10:34:44Z",
+                     "lock_released_at":  null,
+                     "released_lock":  false,
+                     "last_known_step":  "Step 00 COMPLETED PASS -- branch created. Dispatching CODE-DESIGNER for Step 1+2a.",
+                     "backfilled":  false,
+                     "queue_task_id":  300,
+                     "queue_agent_id":  "orch-main",
+                     "note":  "WF-02 for REQ-148 (GH#600, queue task 300, stage S5 -- first S5 Lua requirement: add {:lua, \"~\u003e 1.0\"} + empirical OQ-2 spike doc). Queue claimed 2026-08-24T10:33:32Z."
                  }
              ]
 }

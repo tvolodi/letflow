@@ -45,6 +45,19 @@ defmodule Letflow.EventStore.PlatformEvents do
   (`append_promotion_event/9`). Idempotency key:
   `"definition_promoted:" <> review_id` — `review_id` is the stable
   identifier of this specific promotion decision (design doc §4.2/§4.3).
+
+  `review_id` is `nil` on the R10 "promote with no review"
+  path (`Promotion.promote_active_definition/5`, ENV-03) — that is this
+  path's normal, defining case, not an edge case, so it cannot raise.
+  When `review_id` is `nil` the key is instead built from
+  `"no_review:" <> source_tenant_id <> ":" <> target_tenant_id <> ":" <>
+  target_definition_id`. `target_definition_id` is the id of the row the
+  promotion transaction just created for *this* promotion action (fresh
+  per call, decided before this adapter ever runs), so the triple still
+  uniquely identifies "this specific promotion action": a retried
+  event-append call for the same committed transaction reuses the same
+  `target_definition_id` and lands on the same key (idempotent), while a
+  genuinely new promotion mints a new row and a new key.
   """
   @spec append_definition_promoted(event_attrs :: map(), prefix :: String.t()) ::
           {:ok, %{event_id: Ecto.UUID.t()}} | {:error, term()}
@@ -52,7 +65,10 @@ defmodule Letflow.EventStore.PlatformEvents do
     %{
       event_type: event_type,
       actor_id: actor_id,
-      review_id: review_id
+      review_id: review_id,
+      source_tenant_id: source_tenant_id,
+      target_tenant_id: target_tenant_id,
+      target_definition_id: target_definition_id
     } = event_attrs
 
     payload =
@@ -60,12 +76,22 @@ defmodule Letflow.EventStore.PlatformEvents do
       |> Map.drop([:event_type, :actor_id])
       |> Jason.encode!()
 
+    promotion_key =
+      case review_id do
+        nil ->
+          "no_review:" <>
+            source_tenant_id <> ":" <> target_tenant_id <> ":" <> target_definition_id
+
+        id ->
+          id
+      end
+
     platform_attrs = %{
       instance_id: EventStore.platform_instance_id(),
       event_type: event_type,
       actor_id: actor_id,
       payload: payload,
-      idempotency_key: "definition_promoted:" <> review_id
+      idempotency_key: "definition_promoted:" <> promotion_key
     }
 
     platform_attrs

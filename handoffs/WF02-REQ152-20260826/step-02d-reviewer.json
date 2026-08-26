@@ -1,0 +1,78 @@
+{
+  "handoff_id": "step02d-WF02-REQ152-20260826",
+  "run_id": "WF02-REQ152-20260826",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ152-20260826/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-26T20:39:20Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-152"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-152": "Deny all four ambient Lua time sources (os.time, os.date, os.clock, os.difftime) and implement platform.now() (LUA-14 restated). See docs/requirements.yaml REQ-152 for full text."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ152-20260826/step-01-code-designer.json",
+      "handoffs/WF02-REQ152-20260826/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ152-20260826/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ152-20260826/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/lua/sandbox.ex",
+      "lib/letflow/engine/lua/platform.ex",
+      "config/config.exs",
+      "lib/letflow/design/req152-lua-time-denial.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/sandbox.ex",
+      "lib/letflow/engine/lua/platform.ex"
+    ],
+    "branch_name": "feature/WF02-REQ152-20260826"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-152's implementation: idiom/scope/decision-record consistency.",
+    "acceptance_criteria": [
+      "Check against the 4 REVIEWER questions (idiomatic vs crutch, supervision, type-safety gaps, scope creep)",
+      "Check against docs/anti-patterns.md",
+      "Check internal consistency with docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md",
+      "Confirm the TimeSource behaviour/Application.get_env resolution pattern is idiomatic (not a crutch) and that platform.ex's design doesn't introduce scope creep beyond REQ-152's stated boundary (NOT other platform.* functions)",
+      "PASS or FAIL with specifics; route to TEST-DESIGNER on PASS, back to ELIXIR-DEV on FAIL"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "diff_reviewed": "git diff main...HEAD -- lib/letflow/engine/lua/sandbox.ex lib/letflow/engine/lua/platform.ex (full diff read; also read the full new platform.ex file and sandbox.ex's changed region)",
+    "checks": {
+      "idiomatic_vs_crutch": {
+        "verdict": "IDIOMATIC",
+        "notes": "TimeSource is a real @behaviour with a single @callback now/0 :: DateTime.t(), a default SystemClock implementation (@behaviour + @impl), and resolution via Application.get_env/3 read fresh on every call (never cached in a module attribute or process dictionary). This is the standard Elixir seam for making an ambient side effect (the system clock) swappable in tests without a mocking library or a GenServer -- not a crutch standing in for a missing gen_statem/process boundary, since platform.now/0 has no state to isolate: it is a pure function (resolve config -> call callback -> format string) with a documented never-fails contract. No case-on-state hand-rolled state machine is present anywhere in this diff. This is also flagged by the design doc itself as the first behaviour-based clock seam in the codebase (no prior pattern existed to match), which is worth watching as a precedent other modules with ambient DateTime.utc_now/0 calls may want to converge on later, but is not itself a red flag."
+      },
+      "supervision": {
+        "verdict": "NO CHANGE, CONFIRMED",
+        "notes": "No GenServer, gen_statem, Task, spawn, or supervisor entry appears anywhere in this diff. platform.ex is entirely stateless functions (now/0, install/1) plus a behaviour and a default-impl module. Sandbox.new/1's construction pipeline gains one pipe step (Letflow.Engine.Lua.Platform.install/1) but this operates on the already-constructed Lua.t() value in the same process/call -- it does not introduce a process, and Letflow.InstanceSupervisor's per-instance isolation is untouched by this change (no instance-supervision code is in scope or modified)."
+      },
+      "type_safety_gaps": {
+        "verdict": "MINOR, NON-BLOCKING",
+        "notes": "now/0 returns a bare String.t() (iso8601_utc type alias is just String.t(), not a distinct nominal type) -- a caller could in principle pass any string where an ISO-8601 timestamp is expected and nothing would catch it structurally. This mirrors the existing Sandbox.deny_set() pattern (also bare String.t()/tuple types) and is consistent with the codebase's current style for this kind of value, so not a new class of gap introduced by this diff. Also: Application.get_env(:letflow, :lua_platform_time_source, ...) resolves to an atom (module name) with no static guarantee the configured module actually implements the TimeSource behaviour -- a misconfiguration would only surface at runtime as an UndefinedFunctionError inside now/0. This is the ordinary tradeoff of Elixir's behaviour+config-driven pluggability (the same shape Mox and most pluggable-adapter code in the wider ecosystem accepts) and does not rise to a class Ecto.Enum/a struct could make unrepresentable without changing the whole mechanism (e.g. to a compile-time-checked macro), so not filed under docs/issues/ -- noted here as a non-blocking observation per the REVIEWER brief, not something requiring a filed issue."
+      },
+      "scope_creep": {
+        "verdict": "NONE FOUND",
+        "notes": "platform.ex implements exactly platform.now/0, its install/1 wiring, and the TimeSource/SystemClock support types the design doc specified -- no other platform.* function (platform.fail, capability-gated variable access, etc.) appears anywhere in the diff, matching REQ-152's explicit 'NOT IN THIS REQUIREMENT: no other platform.* function' boundary and the design doc's own stated scope (Section 1). install/1's moduledoc explicitly states future platform.* functions should follow the same install/1-into-Sandbox.new/1-pipeline pattern rather than inventing new wiring points, which is documentation of an extension point already implicit in the existing Sandbox.new/1 composition, not new abstraction machinery built ahead of need -- no macro, no generic plugin-loading framework, no behaviour registry was added."
+      }
+    },
+    "anti_patterns_md_check": "Reviewed docs/anti-patterns.md in full. No entry applies to this diff -- the closest-adjacent entries (fragment/1 SQL duplication, ISS-number/migration-version collisions, timestamp-batching hazards) are all about different mechanics. Nothing in this diff repeats a documented mistake.",
+    "decision_0014_consistency": "Internally consistent with docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md's LUA-14 restatement: platform.now() is implemented (returns ISO 8601 UTC per DateTime.to_iso8601/1 after DateTime.shift_zone!/2 to Etc/UTC), and os.time plus the three additional ambient time functions (os.date/os.clock/os.difftime) are explicitly denied with moduledoc language stating this goes beyond LUA-14's literal wording as a deliberate extension, exactly as decision 0014 calls for ('Expansion should deny all four, and should say plainly that doing so goes beyond LUA-14's literal wording'). The os.setlocale gap-closure (5th entry) is also consistent with decision 0014's own finding that the os surface is wider than the default deny-set (5 functions left reachable, not 4) -- REQ-152 closes all 5, matching decision 0014's LUA-03 restatement rather than contradicting it. platform.now is documented as ungated by design per decision 0014's capability-matrix framing, binding on REQ-157's future work not to add a gate 'by symmetry'.",
+    "sandbox_deny_set_mechanism_check": "Verified the :sandboxed-replaces-defaults trap decision 0014 warns about was genuinely avoided: the 5 new entries are appended directly to the existing @sandbox_deny_set module attribute (sandbox.ex), not a second/partial list; Sandbox.new/1 still derives sandboxed_paths from that single attribute and passes it to the sole Lua.new/1 call site (INV-SBX-1 unaffected), now 33 entries instead of 28.",
+    "issues_filed": [],
+    "summary": "PASS. TimeSource behaviour + Application.get_env resolution is idiomatic Elixir DI for an ambient side effect, not a crutch -- no process/state involved so gen_statem is not applicable here. No supervision or process-isolation change of any kind; Letflow.InstanceSupervisor is untouched. No scope creep: platform.ex implements exactly platform.now/0 and its supporting types, nothing else under platform.*, matching REQ-152's explicit boundary. One non-blocking type-safety observation (bare String.t()/atom-resolved-behaviour typing, consistent with existing codebase style) noted but not filed as an issue. Fully consistent with decision 0014's LUA-14 restatement and its os-surface gap-closure finding, and with the :sandboxed-replaces-defaults trap avoidance the decision record specifically warns about."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "next_action": "Route to TEST-DESIGNER (3)"
+}

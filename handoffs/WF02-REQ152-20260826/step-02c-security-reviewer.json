@@ -1,0 +1,97 @@
+{
+  "handoff_id": "step02c-WF02-REQ152-20260826",
+  "run_id": "WF02-REQ152-20260826",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ152-20260826/step-02c-security-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-152"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-152": "Deny all four ambient Lua time sources (os.time, os.date, os.clock, os.difftime) and implement platform.now() (LUA-14 restated). GATE: SECURITY-REVIEWER is a hard gate -- this modifies the sandbox boundary. See docs/requirements.yaml REQ-152 for full text."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ152-20260826/step-01-code-designer.json",
+      "handoffs/WF02-REQ152-20260826/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ152-20260826/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/lua/sandbox.ex",
+      "lib/letflow/engine/lua/platform.ex",
+      "config/config.exs",
+      "lib/letflow/design/req152-lua-time-denial.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/sandbox.ex",
+      "lib/letflow/engine/lua/platform.ex"
+    ],
+    "branch_name": "feature/WF02-REQ152-20260826"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER hard gate (WF-02 Step 2c) on REQ-152 -- this run touches the Lua sandbox boundary (lib/letflow/engine/lua/sandbox.ex, new lib/letflow/engine/lua/platform.ex) which is explicitly in-scope per docs/agents/instructions/security-invariants.md's applicability notes.",
+    "acceptance_criteria": [
+      "Read the branch diff: git diff main...HEAD",
+      "For each of INV-1..INV-8, determine APPLIES or NOT-APPLICABLE against this diff and run the 'How to verify' check for each APPLIES invariant",
+      "Confirm the sandbox deny-set change only ADDS denials (5 new entries: os.time/date/clock/difftime/setlocale) and does not weaken/remove any existing denial or use a replacing (rather than additive) list construction -- verify the :sandboxed trap was genuinely avoided",
+      "Confirm platform.now/0 exposes no capability beyond a pure time read (no file/network/process access reachable through the TimeSource behaviour or its config-driven resolution)",
+      "Confirm no tenant/user input flows into the TimeSource module resolution (Application.get_env) in a way that would let a script or tenant override which time-source module loads",
+      "PASS or FAIL with specifics per invariant; route to REVIEWER (2d) on PASS, back to ELIXIR-DEV on FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "scope_test": "Modifies lib/letflow/engine/lua/sandbox.ex (sandbox deny-set), adds lib/letflow/engine/lua/platform.ex (new host function reachable from tenant-authored Lua), and config/config.exs (time-source resolution). This is the untrusted-runtime-sandbox boundary -- in scope.",
+    "diff_reviewed": "git diff main...HEAD on feature/WF02-REQ152-20260826 vs main (verified current branch via git branch --show-current)",
+    "invariants": {
+      "INV-1": {
+        "verdict": "NOT-APPLICABLE",
+        "reason": "No Ecto schema, migration, or tenant-scoped table touched. Diff is confined to the Lua sandbox module, a new Lua-host-function module, and config/config.exs. No priv/repo/migrations/*.exs changed (confirmed via git diff --stat)."
+      },
+      "INV-2": {
+        "verdict": "NOT-APPLICABLE",
+        "reason": "No API response type or field-serialisation code touched; S4 not started."
+      },
+      "INV-3": {
+        "verdict": "APPLIES",
+        "verify": "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md is status 'decided' (2026-08-23), so INV-3's precondition is met and this is checkable now, not deferred. Verified: (1) the 5 new deny-set entries ({[:os,:time]}, {[:os,:date]}, {[:os,:clock]}, {[:os,:difftime]}, {[:os,:setlocale]}) are appended as literal tuples inside the single @sandbox_deny_set module attribute (sandbox.ex lines ~132-230+); (2) Sandbox.new/1 maps @sandbox_deny_set (one list, now 33 entries, confirmed by `grep -c '^    {\\[' sandbox.ex` = 33) into sandboxed_paths and passes that single list to Lua.new(sandboxed: sandboxed_paths) -- no second/partial list is constructed anywhere, so the ':sandboxed-replaces-defaults trap' the moduledoc warns about is genuinely avoided: this is additive, not replacing. (3) platform.now is the only new host capability introduced; Platform.install/1 wires only `platform.now` at Lua path [:platform, :now] via Lua.set!/3 and never touches the deny-set (confirmed by reading install/1's body -- single Lua.set! call, no interaction with @sandbox_deny_set or sandboxed_paths). (4) Platform.now/0's call chain is: Application.get_env(:letflow, :lua_platform_time_source, SystemClock) -> source.now() -> DateTime.shift_zone!/2 -> DateTime.to_iso8601/1. The TimeSource behaviour has exactly one callback, now/0 -> DateTime.t(), with no arguments through which a script could pass a path, URL, command, or other capability-relevant input -- there is no parameter surface for a script to influence. SystemClock.now/0 calls only DateTime.utc_now/0 (no file, network, process, or port access). No other TimeSource implementation exists in lib/ (grep confirms zero other @behaviour TimeSource modules under lib/). (5) Resolution of which module loads is config/application-env only: config/config.exs statically sets Letflow.Engine.Lua.Platform.SystemClock at compile/boot time; grep across lib/, config/, test/ for 'lua_platform_time_source' shows writers are only config/config.exs (static) and test setup/on_exit via Application.put_env (test-only, not reachable from any tenant-facing request path or from Lua script text itself -- no Lua-exposed function reads or writes this key). No tenant/user input reaches Application.get_env's key or default resolution. Conclusion: platform.now is a pure, ungated time read matching decision 0014's capability-matrix classification ('positive design statement, not an omission'); no capability beyond a time read is reachable through this path. PASS."
+      },
+      "INV-4": {
+        "verdict": "APPLIES",
+        "verify": "grep -rn 'System.get_env' config/ lib/letflow/engine/lua/ -- no hits in the changed files themselves (config.exs's new line is a static module reference, not a secret). grep -rniE secret/password/token pattern across lib/letflow/engine/lua/ and config/config.exs -- zero hits. No secret material is introduced, logged, or serialised by this diff. PASS."
+      },
+      "INV-5": {
+        "verdict": "NOT-APPLICABLE",
+        "reason": "No lookup-by-ID endpoint touched; S4 not started."
+      },
+      "INV-6": {
+        "verdict": "APPLIES",
+        "verify": "This handoff itself is the proof artifact: it explicitly states which of INV-1..INV-8 apply and how each is satisfied, per the meta-invariant's requirement. PASS."
+      },
+      "INV-7": {
+        "verdict": "APPLIES",
+        "verify": "grep -rn 'Repo.query' lib/letflow/engine/lua/ priv/repo/migrations/ -- zero hits. No SQL touched by this diff. PASS."
+      },
+      "INV-8": {
+        "verdict": "APPLIES",
+        "verify": "grep -rn '^\\s*{:ok, .*} = ' lib/letflow/engine/lua/ -- zero hits. Platform.now/0's moduledoc explicitly documents it 'Never fails: no I/O, no user input' -- consistent with the actual call chain (Application.get_env with a default, a behaviour callback that reads the system clock, and pure DateTime formatting functions), none of which can raise on realistic input. PASS."
+      }
+    },
+    "specific_confirmations": {
+      "a_additive_deny_set": "CONFIRMED. Single @sandbox_deny_set attribute, 33 entries total (28 restated defaults + :debug from REQ-151, + 5 new REQ-152 entries), mapped once into sandboxed_paths and passed as the sole argument to Lua.new(sandboxed: sandboxed_paths). No replacing/partial list found.",
+      "b_platform_now_capability_bound": "CONFIRMED. TimeSource behaviour has a single zero-arg callback returning DateTime.t(); SystemClock's only production call site of DateTime.utc_now/0; no file/network/process/port access reachable through now/0's call chain.",
+      "c_no_tenant_influence_on_time_source_resolution": "CONFIRMED. lua_platform_time_source is set only in config/config.exs (static, boot-time) and via Application.put_env in test setup/on_exit (test-only); no Lua-exposed function or tenant-facing code path reads or writes this key."
+    },
+    "issues": [],
+    "overall": "PASS -- no BLOCKER findings. All applicable invariants (INV-3, INV-4, INV-6, INV-7, INV-8) verified satisfied. INV-1, INV-2, INV-5 correctly NOT-APPLICABLE (no tenant table/migration, no API response shaping, no lookup-by-ID endpoint in this diff)."
+  },
+  "completed_at": "2026-08-26T20:38:14Z",
+  "next_action": "Route to REVIEWER (2d)",
+  "rework_count": 0,
+  "max_rework": 3
+}

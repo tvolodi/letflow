@@ -20,4 +20,6 @@ acceptance_criteria:
   - "root cause identified (likely mix.lock / lua NIF build environment mismatch from REQ-148)"
 queue_task_id: 333
 github_issue: 645
-status: open
+status: resolved
+resolved_at: "2026-08-26T04:14:46Z"
+resolved_by: "PR #644 (fix: remove lua dep from mix.exs), merged to main independently of this run; WF02-REQ077-20260826 Step Final rebase onto origin/main picked it up and confirmed 2028/2028 passing"

@@ -1,1 +1,70 @@
-﻿{  "handoff_id": "step01-WF03-ISS0296-20260826",  "run_id": "WF03-ISS0296-20260826",  "workflow_id": "WF-03",  "step": "01",  "from_agent": "ORCH",  "to_agent": "FRONTEND-DEV",  "file": "handoffs/WF03-ISS0296-20260826/step-01-frontend-dev-login-proof.json",  "created_at": "2026-08-26T18:35:00Z",  "started_at": null,  "completed_at": null,  "status": "PENDING",  "priority": "NORMAL",  "context": {    "stage": "S4",    "requirement_ids": ["REQ-133"],    "issue_ids": ["ISS-0296"],    "requirement_text": {      "REQ-133": "End-to-end login -- SPA through Keycloak to an authorized API call. Config fix already merged (PR #593): OidcManager.ts, tenantConfig.ts, .env.example, tenant_config.ex all corrected to use Letflow's real Keycloak (port 8093, client_id letflow-web). Remaining: AC1-6 live browser proof. See docs/requirements.yaml REQ-133 for full description.",      "ISS-0296": "REQ-133 AC1-6: complete the live-browser login proof once a session with reliable Chromium/Playwright automation is available. Config fix already landed and curl-verified. Queue task 296, GH#594."    },    "source_text": {},    "related_handoff_ids": [      "step00-WF03-ISS0296-20260826"    ],    "artifacts_in": [      "docs/issues/ISS-0296.yaml",      "docs/requirements.yaml",      "web/tests/e2e/oidcf-login.e2e.spec.ts",      "web/playwright.config.ts",      "web/.env.example"    ],    "owned_modules": [      "docs/requirements.yaml",      "web/src/"    ],    "branch_name": "feature/WF03-ISS0296-20260826",    "git_evidence_step00": {      "branch": "feature/WF03-ISS0296-20260826",      "commit": "d74da86"    },    "environment_context": {      "keycloak_status": "healthy, running at http://localhost:8093/realms/bpm-default (docker container letflow-keycloak-1)",      "chromium": "installed at C:\\Users\\tvolo\\AppData\\Local\\ms-playwright\\chromium-1223\\chrome-win64\\chrome.exe",      "playwright_version": "1.60.0",      "known_workarounds": [        "Use 'localhost' not '127.0.0.1' in E2E_BASE_URL (Vite binds to IPv6 localhost only)",        "Use 'npm run build && npm run preview' (port 4173) NOT 'npm run dev' to avoid React 18 StrictMode PKCE-state race",        "BPM_IDP_BASE_URL must be set to http://localhost:8093 (not 8082) for e2e tests"      ],      "seeded_users": {        "admin": "username: admin-user, password: admin-pass, role: PLATFORM_ADMIN",        "worker": "check priv/keycloak/realms/bpm-default.json for TASK_WORKER seeded user"      }    }  },  "task": {    "description": "Complete REQ-133 AC1-6: run the live browser login proof against Letflow + Keycloak.\n\n## Environment setup\n1. Ensure you are on branch feature/WF03-ISS0296-20260826\n2. Start the Letflow server: mix phx.server (or Start-Process mix.bat with args 'phx.server', in background)\n   - The Letflow server must be running at http://localhost:4000\n   - Use the Elixir toolchain at 'C:\\Program Files\\Elixir\\bin\\mix.bat'\n3. Build and serve the SPA: cd web && npm run build && npm run preview\n   - This serves at http://localhost:4173 (matching playwright.config.ts default)\n   - Do NOT use npm run dev (PKCE race issue with React 18 StrictMode)\n4. Create web/.env.local with:\n   BPM_IDP_BASE_URL=http://localhost:8093\n   E2E_BASE_URL=http://localhost:4173\n   E2E_ADMIN_USERNAME=admin-user\n   E2E_ADMIN_PASSWORD=admin-pass\n   (Note: use 'localhost' not '127.0.0.1' in E2E_BASE_URL)\n\n## Acceptance criteria to verify (AC1-6 of REQ-133)\n1. A real browser login as the seeded PLATFORM_ADMIN completes the full OIDC redirect/callback flow and lands on an authenticated view\n2. A real browser login as the seeded TASK_WORKER shows a demonstrably narrower nav than the admin, with both navs listed\n3. At least one authenticated API call returns real data from Letflow, with the request and response quoted\n4. An authenticated call to a route the caller's role does not permit returns REQ-131's 403 problem document, observed from the browser\n5. No token is written to localStorage or sessionStorage, confirmed by inspecting browser storage after login\n6. (Once AC1-5 pass) flip REQ-133's status from blocked to done in docs/requirements.yaml and append a status-history event to the current volume of docs/status/requirement_status.v4.yaml\n\n## Playwright tests to run\nRun: cd web && npx playwright test tests/e2e/oidcf-login.e2e.spec.ts --headed\n(Or write focused Playwright tests if existing ones don't cover AC1-6 adequately)\n\n## If browser login still fails (flakiness)\n- Document EXACTLY what fails: screenshot, error message, network trace\n- Record the specific failure mode (timeout, wrong redirect, etc.)\n- If the failure is the same as the previous session's undetermined flakiness, try at least 3 runs\n- If consistently failing: release the queue task WITHOUT marking it done (leave open), and record the failure evidence in the handoff result\n\n## Files to modify on success\n- docs/requirements.yaml: change REQ-133 status from 'blocked' to 'done'\n- docs/status/requirement_status.v4.yaml: append completion event (req: REQ-133, event: done, agent: FRONTEND-DEV, ...)\n\n## Completion\nUpdate this handoff result with:\n- result.status: PASS or FAIL\n- result.summary: what was tested, what passed, what failed, with real browser output/screenshots referenced\n- result.next_action: 'Merge: requirements.yaml and status updated, REQ-133 done' OR 'Release without done: browser login still failing'\n\nCommit changes: git add docs/requirements.yaml docs/status/requirement_status.v4.yaml (if updated) handoffs/WF03-ISS0296-20260826/step-01-frontend-dev-login-proof.json\ngit commit -m \"handoff(WF03-ISS0296 step-01): PASS/FAIL -- [brief result]\"\ngit push origin feature/WF03-ISS0296-20260826",    "acceptance_criteria": [      "All 6 REQ-133 ACs verified or clearly documented as failing",      "If passing: docs/requirements.yaml REQ-133 status flipped to done",      "If passing: status event appended to current volume",      "Result documents actual browser session (screenshots, API responses) -- not a claim",      "If failing: exact failure mode documented with evidence"    ]  },  "result": null,  "rework_count": 0,  "max_rework": 3}
+{
+  "handoff_id": "step01-WF03-ISS0296-20260826",
+  "run_id": "WF03-ISS0296-20260826",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF03-ISS0296-20260826/step-01-frontend-dev-login-proof.json",
+  "created_at": "2026-08-26T18:35:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-133"],
+    "issue_ids": ["ISS-0296"],
+    "requirement_text": {
+      "REQ-133": "End-to-end login -- SPA through Keycloak to an authorized API call. Config fix already merged (PR #593): OidcManager.ts, tenantConfig.ts, .env.example, tenant_config.ex all corrected to use Letflow's real Keycloak (port 8093, client_id letflow-web). Remaining: AC1-6 live browser proof. See docs/requirements.yaml REQ-133 for full description.",
+      "ISS-0296": "REQ-133 AC1-6: complete the live-browser login proof once a session with reliable Chromium/Playwright automation is available. Config fix already landed and curl-verified. Queue task 296, GH#594."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "step00-WF03-ISS0296-20260826"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0296.yaml",
+      "docs/requirements.yaml",
+      "web/tests/e2e/oidcf-login.e2e.spec.ts",
+      "web/playwright.config.ts",
+      "web/.env.example"
+    ],
+    "owned_modules": [
+      "docs/requirements.yaml",
+      "web/src/"
+    ],
+    "branch_name": "feature/WF03-ISS0296-20260826",
+    "git_evidence_step00": {
+      "branch": "feature/WF03-ISS0296-20260826",
+      "commit": "d74da86"
+    },
+    "environment_context": {
+      "keycloak_status": "healthy, running at http://localhost:8093/realms/bpm-default (docker container letflow-keycloak-1)",
+      "chromium": "installed at C:\\Users\\tvolo\\AppData\\Local\\ms-playwright\\chromium-1223\\chrome-win64\\chrome.exe",
+      "playwright_version": "1.60.0",
+      "known_workarounds": [
+        "Use 'localhost' not '127.0.0.1' in E2E_BASE_URL (Vite binds to IPv6 localhost only)",
+        "Use 'npm run build && npm run preview' (port 4173) NOT 'npm run dev' to avoid React 18 StrictMode PKCE-state race",
+        "BPM_IDP_BASE_URL must be set to http://localhost:8093 (not 8082) for e2e tests"
+      ],
+      "seeded_users": {
+        "admin": "username: admin-user, password: admin-pass, role: PLATFORM_ADMIN",
+        "worker": "check priv/keycloak/realms/bpm-default.json for TASK_WORKER seeded user"
+      }
+    }
+  },
+  "task": {
+    "description": "Complete REQ-133 AC1-6: run the live browser login proof against Letflow + Keycloak.\n\n## Environment setup\n1. Ensure you are on branch feature/WF03-ISS0296-20260826\n2. Start the Letflow server: mix phx.server (or Start-Process mix.bat with args 'phx.server', in background)\n   - The Letflow server must be running at http://localhost:4000\n   - Use the Elixir toolchain at 'C:\\Program Files\\Elixir\\bin\\mix.bat'\n3. Build and serve the SPA: cd web && npm run build && npm run preview\n   - This serves at http://localhost:4173 (matching playwright.config.ts default)\n   - Do NOT use npm run dev (PKCE race issue with React 18 StrictMode)\n4. Create web/.env.local with:\n   BPM_IDP_BASE_URL=http://localhost:8093\n   E2E_BASE_URL=http://localhost:4173\n   E2E_ADMIN_USERNAME=admin-user\n   E2E_ADMIN_PASSWORD=admin-pass\n   (Note: use 'localhost' not '127.0.0.1' in E2E_BASE_URL)\n\n## Acceptance criteria to verify (AC1-6 of REQ-133)\n1. A real browser login as the seeded PLATFORM_ADMIN completes the full OIDC redirect/callback flow and lands on an authenticated view\n2. A real browser login as the seeded TASK_WORKER shows a demonstrably narrower nav than the admin, with both navs listed\n3. At least one authenticated API call returns real data from Letflow, with the request and response quoted\n4. An authenticated call to a route the caller's role does not permit returns REQ-131's 403 problem document, observed from the browser\n5. No token is written to localStorage or sessionStorage, confirmed by inspecting browser storage after login\n6. (Once AC1-5 pass) flip REQ-133's status from blocked to done in docs/requirements.yaml and append a status-history event to the current volume of docs/status/requirement_status.v4.yaml\n\n## Playwright tests to run\nRun: cd web && npx playwright test tests/e2e/oidcf-login.e2e.spec.ts --headed\n(Or write focused Playwright tests if existing ones don't cover AC1-6 adequately)\n\n## If browser login still fails (flakiness)\n- Document EXACTLY what fails: screenshot, error message, network trace\n- Record the specific failure mode (timeout, wrong redirect, etc.)\n- If the failure is the same as the previous session's undetermined flakiness, try at least 3 runs\n- If consistently failing: release the queue task WITHOUT marking it done (leave open), and record the failure evidence in the handoff result\n\n## Files to modify on success\n- docs/requirements.yaml: change REQ-133 status from 'blocked' to 'done'\n- docs/status/requirement_status.v4.yaml: append completion event (req: REQ-133, event: done, agent: FRONTEND-DEV, ...)\n\n## Completion\nUpdate this handoff result with:\n- result.status: PASS or FAIL\n- result.summary: what was tested, what passed, what failed, with real browser output/screenshots referenced\n- result.next_action: 'Merge: requirements.yaml and status updated, REQ-133 done' OR 'Release without done: browser login still failing'\n\nCommit changes: git add docs/requirements.yaml docs/status/requirement_status.v4.yaml (if updated) handoffs/WF03-ISS0296-20260826/step-01-frontend-dev-login-proof.json\ngit commit -m \"handoff(WF03-ISS0296 step-01): PASS/FAIL -- [brief result]\"\ngit push origin feature/WF03-ISS0296-20260826",
+    "acceptance_criteria": [
+      "All 6 REQ-133 ACs verified or clearly documented as failing",
+      "If passing: docs/requirements.yaml REQ-133 status flipped to done",
+      "If passing: status event appended to current volume",
+      "Result documents actual browser session (screenshots, API responses) -- not a claim",
+      "If failing: exact failure mode documented with evidence"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

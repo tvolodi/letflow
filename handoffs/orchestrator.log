@@ -1345,3 +1345,4 @@
 2026-08-26T13:41:00Z | ISSUE_FILED | WF-02 | WF02-REQ151-20260826 | TEST-RUNNER (via ORCH) -> - | ISS-0339 (queue 339, GH#653) requirement_status.v4.yaml A4a/A5 vocabulary drift; ISS-0340 (queue 340, GH#654) flaky context_test.exs scoped_repo_opts test. Both forwarded per ISSUE_QUEUE.md, not fixed in this run.
 2026-08-26T13:45:00Z | DISPATCH | WF-02 | WF02-REQ151-20260826 | ORCH -> RELEASE-VALIDATOR | step-05-release-validator.json PENDING committed at dispatch time
 2026-08-26T14:10:00Z | STEP_COMPLETE | WF-02 | WF02-REQ151-20260826 | RELEASE-VALIDATOR -> ORCH | step-05-release-validator.json PASS. Independent full-suite re-run 2060/2062, all 7 ACs checked against real code/test. ISS-0339 already filed for the vocabulary drift it flagged.
+2026-08-26T14:11:00Z | DISPATCH | WF-02 | WF02-REQ151-20260826 | ORCH -> DOC-UPDATER | step-06-doc-updater.json PENDING committed at dispatch time

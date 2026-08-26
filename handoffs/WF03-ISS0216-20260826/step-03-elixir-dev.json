@@ -1,0 +1,36 @@
+{
+  "handoff_id": "step03-WF03-ISS0216-20260826",
+  "run_id": "WF03-ISS0216-20260826",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0216-20260826/step-03-elixir-dev.json",
+  "created_at": "2026-08-26T14:01:00Z",
+  "started_at": "2026-08-26T14:01:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0216"],
+    "related_handoff_ids": ["handoffs/WF03-ISS0216-20260826/step-02b-code-design-validator-rework1.json"],
+    "artifacts_in": ["lib/letflow/design/iss0216-pagination-prefix-guard.md"],
+    "owned_modules": ["lib/letflow/api/pagination.ex"],
+    "branch_name": "feature/WF03-ISS0216-20260826"
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/iss0216-pagination-prefix-guard.md (approved design, passed CODE-DESIGN-VALIDATOR after 1 rework) per WF-03 Step 3 (same procedure as WF-02 Step 2a). Claim this handoff by setting status to IN_PROGRESS only.\n\n1. Verify branch: git branch --show-current must equal feature/WF03-ISS0216-20260826.\n2. Add the new leading check_prefix/2 clause per the design's §2.1: matches prefix == \"\", raises ArgumentError with a message naming the misused function, the precondition, why it matters, and pointing at the new INV-9 invariant.\n3. Add the new INV-9 moduledoc invariant and the @doc note on decode_cursor/4 per the design.\n4. mix compile --warnings-as-errors -- fix and retry if FAIL.\n5. mix format --check-formatted.\n6. Confirm no existing call site's behavior changes: run the existing test/letflow/api/pagination_test.exs suite, quote real output.\n7. Complete the handoff with artifacts_out: [\"lib/letflow/api/pagination.ex\"], next_action: \"Route to SECURITY-REVIEWER\".\n8. Commit on feature/WF03-ISS0216-20260826 and push.",
+    "acceptance_criteria": [
+      "check_prefix/2 raises ArgumentError when prefix == \"\", matching the design's §2.1 clause exactly",
+      "existing check_prefix/2 clause and decode_cursor/4's @spec are otherwise unchanged",
+      "mix compile --warnings-as-errors exits 0, real output quoted",
+      "mix format --check-formatted exits 0",
+      "existing test/letflow/api/pagination_test.exs suite still passes unchanged (proves no existing call site's behavior changed), real output quoted"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

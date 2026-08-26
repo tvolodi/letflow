@@ -2588,6 +2588,28 @@
             "queue_task_id": 347,
             "queue_agent_id": "orch-main",
             "note": "WF-03 for ISS-0347 (queue task 347, GH#668) DONE. Fixed BadMapError crash (lint_file/2 parse-error branch advisory shape normalized) + corrected already-merged H1/H3 handoff schema violations directly on main (commit 0ab7f79). Regression test proven fail-then-pass. ISS-0347 resolved, GH#668 closed. Separate unrelated flake found during release validation (Letflow.TenantProvisioning.BackfillTest DB-pollution under full serial test runs) filed as ISS-0348/GH#669 -- did not block this merge, did not manifest in CI (partitioned mechanism unaffected)."
+        },
+        {
+            "run_id": "WF03-ISS0348-20260826",
+            "workflow_id": "WF-03",
+            "requirement_ids": [],
+            "issue_ids": [
+                "ISS-0348"
+            ],
+            "stage": "S0",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "test/letflow/tenant_provisioning/backfill_test.exs",
+                "lib/letflow/tenant_provisioning.ex"
+            ],
+            "lock_acquired_at": "2026-08-26T22:33:39Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PENDING (ELIXIR-DEV dispatched)",
+            "backfilled": false,
+            "queue_task_id": 348,
+            "queue_agent_id": "orch-main",
+            "note": "WF-03 for ISS-0348 (queue task 348, GH#669). Letflow.TenantProvisioning.BackfillTest: 4 count-mismatch failures under full serial mix letflow.check, suspected DB-state pollution from other tests' committed tenant rows under async:false/Sandbox :auto. Does not manifest under scripts/test_parallel.sh's partitioned execution. Discovered by RELEASE-VALIDATOR during WF03-ISS0347-20260826."
         }
     ]
 }

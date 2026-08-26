@@ -1,0 +1,34 @@
+id: ISS-0339
+title: >
+  requirement_status.v4.yaml:1122 SCOPE-CHANGE entry fails A4a/A5 vocabulary
+  invariants (undeclared in known_anomalies)
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ151-20260826
+discovered_at: 2026-08-26T13:11:00Z
+severity: MINOR
+status: open
+resolved_in_run: null
+resolved_at: null
+queue_task_id: 339
+github_issue_number: 653
+description: >
+  test/docs/requirement_status_invariants_test.exs A4a ("every entry in
+  every volume uses the documented req/event vocabulary") and A5 ("the
+  on-disk vocabulary-anomaly set equals the index's own declared set
+  exactly") both fail intermittently on main. A `- req: SCOPE-CHANGE /
+  event: done` entry at docs/status/requirement_status.v4.yaml:1122
+  (timestamp 2026-08-26T06:05:09Z, note referencing WF03-ISS0332-20260826)
+  appears to duplicate/orphan the already-correctly-logged `req: ISS-0332
+  / event: done` entry at the same timestamp, and is not declared in
+  requirement_status.index.yaml's known_anomalies. Structurally confirmed
+  pre-existing (not caused by REQ-151's branch) by reproduction at
+  merge-base 8c331b6621becb11814a0cc234411527e2e21db5.
+acceptance_criteria:
+  - >
+    test/docs/requirement_status_invariants_test.exs A4a and A5 both pass
+    against current main
+  - >
+    the SCOPE-CHANGE entry at requirement_status.v4.yaml:1122 is either
+    properly declared as a known_anomaly with a stated reason, or the
+    vocabulary gap it exposes is otherwise closed without violating the
+    append-only rule

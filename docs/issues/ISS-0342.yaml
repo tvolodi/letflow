@@ -1,0 +1,30 @@
+id: ISS-0342
+title: >
+  lint_handoffs failures in pre-existing WF02-REQ149/WF03-ISS0332 handoff
+  files fail backend CI (mix letflow.check)
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ151-20260826
+discovered_at: 2026-08-26T11:20:00Z
+severity: MINOR
+status: open
+resolved_in_run: null
+resolved_at: null
+queue_task_id: 342
+github_issue_number: 657
+description: >
+  PR #656 (WF02-REQ151-20260826) backend CI job (mix letflow.check ->
+  lint_handoffs) failed on both CI runs, structurally attributed as
+  pre-existing/unrelated (route 1: the offending files are not in this
+  branch's diff, already present on origin/main at bf4f520 before this run
+  rebased). Offending files: handoffs/WF02-REQ149-20260826/step-01-code-designer.json,
+  handoffs/WF03-ISS0332-20260826/step-02b-code-design-validator.json,
+  handoffs/WF03-ISS0332-20260826/step-04-test-designer.json. These belong
+  to a different, concurrently-running host's WF02-REQ149-20260826 run and
+  an already-completed WF03-ISS0332-20260826 run.
+acceptance_criteria:
+  - >
+    mix letflow.check (lint_handoffs) passes against current main with no
+    failures in the named files
+  - >
+    backend CI job green on a subsequent PR with no other pre-existing
+    failures

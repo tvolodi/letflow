@@ -2394,7 +2394,7 @@
             ],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/engine/lua/sandbox.ex",
                 "test/letflow/engine/lua/sandbox_test.exs",
@@ -2403,9 +2403,9 @@
                 "test/letflow/engine/lua_script_audit_test.exs"
             ],
             "lock_acquired_at": "2026-08-26T09:20:00Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step Final PENDING (ELIXIR-DEV dispatched)",
+            "lock_released_at": "2026-08-26T14:23:06Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #656 squash-merged (fbb94ce), queue task 337 released done",
             "backfilled": false,
             "queue_task_id": 337,
             "queue_agent_id": "orch-loop-1787735920",

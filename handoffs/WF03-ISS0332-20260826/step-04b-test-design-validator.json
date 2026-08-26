@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0332-20260826/step-04b-test-design-validator.json",
   "created_at": "2026-08-26T05:36:30Z",
   "started_at": "2026-08-26T05:36:30Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-26T05:42:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -35,7 +35,24 @@
       "FAIL with specific missing coverage if any criterion fails"
     ]
   },
-  "result": null,
+  "result": {
+    "verdict": "PASS",
+    "criteria": {
+      "AC1": "PASS — test 'backfill updates pre-existing tenant to schema_version 2' provisions tenant, downgrades to v1, calls Backfill.run(v2_attrs()), asserts {:ok, %{updated: 1, skipped: 0}} and schema_version 2 post-backfill.",
+      "AC2": "PASS — test 'R10 event-append succeeds after backfill' asserts {:error, {:payload_validation_failed, _}} BEFORE backfill and :ok AFTER backfill. Both assertions present.",
+      "AC3": "PASS — test 'idempotent: already-v2 tenant is skipped, not errored' asserts {:ok, %{updated: 0, skipped: 1}} on already-v2 tenant.",
+      "no_skip_or_defer": "PASS — no @tag :skip, no TODO placeholders found in test file.",
+      "mutation_testing": "PASS — step-04 handoff records 2 mutants. Independent verification of Mutant 1 (duplicate_event_type_version case changed to halt with error): ran mix test, got 3/4 passed 1 failed. Failing test: 'idempotent: already-v2 tenant is skipped, not errored'. Matches TEST-DESIGNER claim exactly. Reverted. git status --porcelain lib/ test/ empty. Re-run: 4/4 passed."
+    },
+    "mutant_1_independent_run": {
+      "applied": "Changed {:cont, {:ok, %{counts | skipped: counts.skipped + 1}}} in :duplicate_event_type_version case to {:halt, {:error, {:backfill_failed, tenant_id, :forced_mutant_1}}}",
+      "result": "3 passed, 1 failed",
+      "failing_test": "regression: ISS-0332 -- idempotent: already-v2 tenant is skipped, not errored",
+      "matches_claim": true,
+      "reverted": true,
+      "post_revert_run": "4 passed, 0 failed"
+    }
+  },
   "rework_count": 0,
   "max_rework": 3
 }

@@ -1,0 +1,35 @@
+{
+  "handoff_id": "stepfinal-WF02-REQ151-20260826",
+  "run_id": "WF02-REQ151-20260826",
+  "workflow_id": "WF-02",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ151-20260826/step-final-git-merge.json",
+  "created_at": "2026-08-26T14:41:00Z",
+  "started_at": "2026-08-26T14:41:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-151"],
+    "issue_ids": [],
+    "related_handoff_ids": ["handoffs/WF02-REQ151-20260826/step-06-doc-updater.json"],
+    "branch_name": "feature/WF02-REQ151-20260826",
+    "note": "KNOWN LIKELY CONFLICT on docs/requirements.yaml: this run's feature branch flipped REQ-151 status pending -> done (Step 06, DOC-UPDATER), but main separately had an ORCH commit flipping it pending -> in_progress (Step 00/started-event bookkeeping, committed straight to main per this project's convention) that the feature branch never picked up before diverging. On rebase this is very likely a same-line conflict. RESOLUTION: take status: done (the branch's own Step 06 result is the authoritative final state -- RELEASE-VALIDATOR already confirmed it). Also check docs/status/requirement_status.v4.yaml (or whichever volume is current) for a similar shape: main has a 'started' event for REQ-151 from ORCH's own commit, and the branch has a 'done' event from DOC-UPDATER -- BOTH are real, chronologically ordered events and must both survive the rebase (append-only rule); do not let one silently displace the other. Also expect main to have advanced with unrelated commits from a concurrently-running WF02-REQ149-20260826 run on a different host -- those are none of this run's concern, just rebase past them normally."
+  },
+  "task": {
+    "description": "Perform docs/agents/protocols/GIT_MERGE.md's standard procedure for run WF02-REQ151-20260826. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "git branch --show-current equals feature/WF02-REQ151-20260826 before starting",
+      "rebase onto origin/main completes (resolve the docs/requirements.yaml and requirement_status volume conflicts per context.note if they occur; escalate per GIT_MERGE.md's >5-file rule only if conflicts are broader than expected)",
+      "mix format --check-formatted, mix compile --warnings-as-errors, and mix test all verified post-rebase, with any failure attributed structurally (not by count-matching) before calling it clean",
+      "PR created and merged via gh pr merge --squash --delete-branch, with the mix test line in the PR body carrying real counts and attribution route, not a bare PASS",
+      "local cleanup: back on main, fast-forwarded, feature branch deleted, clean working tree"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

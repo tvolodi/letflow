@@ -50,10 +50,10 @@
       "verdict": "out of scope -- no executable surface (docs-only: lib/letflow/design/req150-lua-number-marshalling.md is a design markdown document, not application logic; the handoffs/*.json files are pipeline bookkeeping artifacts, not code). No lib/letflow/engine/ file or any other .ex/.exs application code was touched on this branch, matching REQ-150's stated scope ('Design-only requirement... No lib/letflow/engine/ change')."
     },
     "reasoning": "REQ-150 (OQ-6 settlement) produces only a design document that will inform later requirements LUA-11/REQ-159/REQ-160, which will carry the actual lib/letflow/engine/ implementation and executable surface to test. Writing an ExUnit test that greps/parses the markdown file would assert on the design doc's own text rather than on any real behavior -- this is the explicit anti-pattern called out in WF-02 Step 3 ('manufactured busywork, not real coverage'). No test/specs/REQ-150.md or test code was written.",
-    "verdict": "PASS -- correctly routed out of TEST-DESIGN-VALIDATOR/TEST-RUNNER"
+    "verdict": "PASS -- correctly routed out of TEST-DESIGN-VALIDATOR/TEST-RUNNER",
+    "next_action": "Route directly to RELEASE-VALIDATOR (Step 5) -- Steps 3b/4 skipped, no executable surface produced by this requirement"
   },
   "completed_at": "2026-08-26T19:42:49Z",
-  "next_action": "Route directly to RELEASE-VALIDATOR (Step 5) -- Steps 3b/4 skipped, no executable surface produced by this requirement",
   "rework_count": 0,
   "max_rework": 3
 }

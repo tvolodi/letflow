@@ -2397,16 +2397,19 @@
             "status": "IN_PROGRESS",
             "owned_modules": [
                 "lib/letflow/engine/lua/sandbox.ex",
-                "test/letflow/engine/lua/sandbox_test.exs"
+                "test/letflow/engine/lua/sandbox_test.exs",
+                "mix.exs",
+                "mix.lock",
+                "test/letflow/engine/lua_script_audit_test.exs"
             ],
             "lock_acquired_at": "2026-08-26T09:20:00Z",
             "lock_released_at": null,
             "released_lock": false,
-            "last_known_step": "Step 01 PENDING (CODE-DESIGNER dispatched)",
+            "last_known_step": "Step 01 COMPLETED PASS (b8cc7da) -- owned_modules expanded per user decision to retire REQ-058 AC5 guardrail",
             "backfilled": false,
             "queue_task_id": 337,
             "queue_agent_id": "orch-loop-1787735920",
-            "note": "WF-02 for REQ-151 (queue task 337, GH#650, stage S5 -- Lua sandbox deny-set construction and test suite). Queue claimed 2026-08-26T09:18:41Z via get_next_task."
+            "note": "WF-02 for REQ-151 (queue task 337, GH#650, stage S5 -- Lua sandbox deny-set construction and test suite). Queue claimed 2026-08-26T09:18:41Z via get_next_task. Step 01 (CODE-DESIGNER) flagged OQ-1: mix.exs currently carries no {:lua,...} dep (reverted twice by human commits 30db07b/984bbc9 citing REQ-058's AC5 guardrail test, which asserts no Lua dep 'while S5 is deferred'). User consulted 2026-08-26; decision: retire the AC5 guardrail now that S5 is actively underway, re-add {:lua, \"~> 1.0\"} to mix.exs, with REVIEWER sign-off at Step 2d since this touches a locked REQ-058 acceptance criterion outside REQ-151's original owned_modules. owned_modules expanded to include mix.exs, mix.lock, test/letflow/engine/lua_script_audit_test.exs."
         }
     ]
 }

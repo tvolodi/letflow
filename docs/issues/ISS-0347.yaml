@@ -7,7 +7,7 @@ discovered_by: ELIXIR-DEV
 discovered_in_run: WF02-REQ152-20260826
 discovered_at: "2026-08-26T21:30:00Z"
 severity: MINOR
-status: open
+status: in_progress
 queue_task_id: 347
 github_issue_number: 668
 description: >

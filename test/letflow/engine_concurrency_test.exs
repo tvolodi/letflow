@@ -49,6 +49,9 @@ defmodule Letflow.EngineConcurrencyTest do
 
   use Letflow.DataCase, async: false
 
+  # ISS-0297: pool_size >= @instance_count (100) is required; impossible at N >= 2 on standard 100-max_connections Postgres.
+  @moduletag :high_pool_demand
+
   import Ecto.Query
 
   alias Letflow.Definitions

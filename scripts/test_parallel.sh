@@ -166,6 +166,13 @@ else
   echo "test_parallel: TEST_POOL_SIZE=$TEST_POOL_SIZE (caller override, not computed)"
 fi
 
+# ISS-0297: exclude tests that need pool_size >= 100 (impossible at N >= 2)
+if [ "$TEST_POOL_SIZE" -lt 100 ]; then
+  high_pool_demand_exclude="--exclude high_pool_demand"
+else
+  high_pool_demand_exclude=""
+fi
+
 # --- Step 2: launch N background partitions -------------------------------
 
 tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/letflow_test_parallel.XXXXXX")
@@ -190,7 +197,7 @@ declare -a failures
 
 i=1
 while [ "$i" -le "$N" ]; do
-  MIX_TEST_PARTITION="$i" mix test --partitions "$N" --no-color "$@" \
+  MIX_TEST_PARTITION="$i" mix test --partitions "$N" --no-color $high_pool_demand_exclude "$@" \
     > "$tmp_dir/partition-$i.log" 2>&1 &
   pids[$i]=$!
   i=$((i + 1))

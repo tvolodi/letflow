@@ -1,0 +1,28 @@
+id: ISS-0345
+title: >
+  handoffs/WF03-ISS0296-20260826/step-01-frontend-dev-login-proof.json has a
+  leading BOM, fails lint_handoffs JSON parse
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0343-20260826
+discovered_at: 2026-08-26T16:49:00Z
+severity: MINOR
+status: open
+resolved_in_run: null
+resolved_at: null
+queue_task_id: 345
+github_issue_number: 664
+description: >
+  mix letflow.lint_handoffs currently fails to parse
+  handoffs/WF03-ISS0296-20260826/step-01-frontend-dev-login-proof.json due
+  to a leading UTF-8 BOM (same class of defect as ISS-0338's step-02b file,
+  fixed earlier this session). This file belongs to an apparently
+  still-in-progress WF03-ISS0296-20260826 run (a different host, per
+  handoffs/registry.json) -- do not edit it while that run may still be
+  active; check the run's status in registry.json first. If the run has
+  completed, strip the BOM (first 3 bytes) the same way ISS-0338's fix did.
+acceptance_criteria:
+  - >
+    the BOM is stripped once WF03-ISS0296-20260826 is confirmed no longer
+    active
+  - >
+    mix letflow.lint_handoffs parses the file without error

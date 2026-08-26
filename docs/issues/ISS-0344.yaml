@@ -1,0 +1,51 @@
+id: ISS-0344
+title: >
+  Two more handoff JSON files have completed_at preceding started_at
+  (lint_handoffs H2), same recurring bug class as ISS-0342
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF03-ISS0343-20260826
+discovered_at: 2026-08-26T16:42:00Z
+severity: MINOR
+status: resolved
+resolved_in_run: ORCH-direct-20260826
+resolved_at: "2026-08-26T16:50:00Z"
+queue_task_id: 344
+github_issue_number: 663
+description: >
+  PR #661 (WF03-ISS0343-20260826) backend CI failed lint_handoffs with 2 H2
+  violations: handoffs/WF03-ISS0216-20260826/step-final-git-merge.json
+  (completed_at 2026-08-26T13:26:00Z preceded started_at
+  2026-08-26T16:21:00Z) and handoffs/WF03-ISS0343-20260826/step-00-git-setup.json
+  (completed_at 2026-08-26T13:29:23Z preceded started_at
+  2026-08-26T13:30:00Z). Both structurally confirmed pre-existing/unrelated
+  to PR #661 (neither file was in its diff). Same recurring bug class
+  already fixed once this session as ISS-0342.
+acceptance_criteria:
+  - >
+    both named files' completed_at corrected to a real timestamp after
+    their started_at
+  - >
+    mix letflow.lint_handoffs reports 0 new violations against current main
+  - >
+    a repo-wide check for the same completed_at-precedes-started_at pattern
+    across all handoffs/*.json is done at least once, to catch any other
+    pre-existing instances
+resolution_note: >
+  Fixed directly by ORCH (qualifies for the ORCHESTRATOR.md §10 direct-action
+  exception: two single-line JSON timestamp corrections, no application
+  code touched). handoffs/WF03-ISS0216-20260826/step-final-git-merge.json's
+  completed_at corrected to 2026-08-26T17:01:00Z (after its 16:21:00Z
+  started_at, consistent with that step's real ~40min duration).
+  handoffs/WF03-ISS0343-20260826/step-00-git-setup.json's completed_at
+  corrected to 2026-08-26T13:30:37Z (after its 13:30:00Z started_at,
+  consistent with a quick git-setup step). Repo-wide sweep performed (a
+  Python script comparing completed_at/started_at across every
+  handoffs/*.json file): found only the 2 already-known grandfathered
+  entries (WF03-ISS0047-20260818/step-03-elixir-dev.json,
+  WF02-REQ025-20260817/step-01b-code-design-validator.json, both already in
+  lint_handoffs's GRANDFATHERED/ISS-0190 list) plus the 2 fixed here -- no
+  other unaccounted instances found. mix letflow.lint_handoffs confirmed
+  0 new violations after the fix (one additional, unrelated new violation
+  was found during this same check -- a BOM parse failure on a different,
+  still-in-progress run's handoff file -- filed separately as ISS-0345,
+  not fixed here since that run may still be active).

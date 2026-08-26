@@ -2462,15 +2462,15 @@
                 "ISS-0343"
             ],
             "stage": "S4",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "test/letflow/tenant_provisioning/backfill_test.exs",
                 "test/support/tenant_fixture.ex"
             ],
             "lock_acquired_at": "2026-08-26T13:27:58Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step Final PENDING (ELIXIR-DEV dispatched)",
+            "lock_released_at": "2026-08-26T16:50:53Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #661 squash-merged (67523cb), queue task 343 released done",
             "backfilled": false,
             "queue_task_id": 343,
             "queue_agent_id": "orch-loop-1787735920",
@@ -2479,8 +2479,12 @@
         {
             "run_id": "WF03-ISS0296-20260826",
             "workflow_id": "WF-03",
-            "requirement_ids": ["REQ-133"],
-            "issue_ids": ["ISS-0296"],
+            "requirement_ids": [
+                "REQ-133"
+            ],
+            "issue_ids": [
+                "ISS-0296"
+            ],
             "stage": "S4",
             "status": "IN_PROGRESS",
             "owned_modules": [

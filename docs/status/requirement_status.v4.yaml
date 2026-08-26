@@ -1124,8 +1124,26 @@ history:
     agent: ORCH
     at: "2026-08-26T06:05:09Z"
     note: >
-      WF03-ISS0332-20260826 complete (ISS-0332: DEFINITION_PROMOTED schema_version 2
-      backfill for pre-existing tenants).
+      WF03-ISS0332-20260826 complete. DEFINITION_PROMOTED schema_version 2
+      backfill routine for pre-existing tenants. New module
+      Letflow.TenantProvisioning.Backfill (lib/letflow/tenant_provisioning/
+      backfill.ex) and Mix task mix letflow.backfill_event_type_versions
+      (lib/mix/tasks/letflow.backfill_event_type_versions.ex). Pre-existing
+      tenants with DEFINITION_PROMOTED at schema_version 1 (post-REQ-077
+      state) can now be upgraded to v2 to unblock R10
+      (Promotion.promote_active_definition/5, ENV-03 review-less promote
+      path). All pipeline gates PASS: SECURITY-REVIEWER, REVIEWER,
+      TEST-DESIGN-VALIDATOR (with mutation testing), TEST-RUNNER (2032
+      tests, 0 failures). Issue file docs/issues/ISS-0332.yaml set to
+      resolved. GH#642 closed. Queue task 332 released as done. 52
+      on-disk entries before this append; 53 after. (Vocab-corrected from
+      `req: ISS-0332` to `req: SCOPE-CHANGE` by a later direct-to-main
+      commit, fc4d240 -- that commit's diff also trimmed this note's body;
+      restored here during WF02-REQ151-20260826's Step Final rebase since
+      shortening a past entry's content is exactly what this file's
+      append-only rule forbids, same principle as the volume-1 anomalies
+      this index already documents as left-as-written rather than
+      "cleaned up".)
 
   - req: REQ-151
     event: started
@@ -1147,3 +1165,72 @@ history:
       clause not achievable with pure-BEAM Lua VM. No decision 0014 addendum
       needed. Deliverable: lib/letflow/design/req149-lua-memory-limit.md.
       Queue task 335. 54 on-disk entries before this append; 55 after.
+
+  - req: REQ-151
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-26T10:44:18Z"
+    note: >
+      WF02-REQ151-20260826 complete. Letflow.Engine.Lua.Sandbox implemented
+      as the single sandbox-construction function every script execution
+      obtains its Lua state from, with an explicit 28-entry deny-set
+      (io.*/os.*/package/load/loadfile/require/dofile/loadstring/debug, each
+      with a per-entry reason comment) enumerated against Lua 5.3's real
+      stdlib rather than 5.1's. {:lua, "~> 1.0"} re-added to mix.exs/mix.lock
+      to support this. Moduledoc restates LUA-03 (loadstring absent from
+      5.3; jit/ffi/bit vacuous rather than satisfied; SBX-1's open-then-prune
+      ordering does not transfer as a mechanism) and LUA-04 (no bytecode
+      loader exists, so only-source-text holds structurally with no
+      rejection path to test) rather than claiming their literal text is
+      satisfied, and records the coroutine decision explicitly with its
+      reason. REQ-058's AC5 guardrail (which had required a placeholder
+      restatement of LUA-03/LUA-04 pending this requirement) retired with
+      REVIEWER sign-off confirming consistency with decision 0014. 30 new
+      tests added (sandbox_test.exs, lua_script_audit_test.exs). Full suite:
+      2060/2062 (2 pre-existing unrelated failures, filed as ISS-0339 and
+      ISS-0340, both independently re-confirmed pre-existing/off-branch by
+      RELEASE-VALIDATOR via a fresh worktree at merge-base). RELEASE-VALIDATOR
+      independently re-verified all 7 acceptance criteria PASS. No
+      docs/migration/stage-N-*.md or docs/migration/decisions/ file named in
+      REQ-151's acceptance criteria; none required updating -- confirmed per
+      the Step 05 handoff's own note. 53 on-disk `- req:` entries in
+      requirement_status.v4.yaml before this append (as independently
+      computed against this run's own pre-rebase base); 56 after once
+      composed into the true chain during WF02-REQ151-20260826's Step Final
+      rebase, which interleaves this entry after REQ-149's done-event (55
+      on-disk before this specific append in the real combined history; 56
+      after) -- same "independently appended against a stale base, recounted
+      at merge time" shape as WF02-REQ125-20260823's note above for volume 3.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 4 — CLOSED 2026-08-26. DO NOT APPEND TO THIS FILE.
+#
+# This volume holds the complete requirement run history from 2026-08-23 through
+# 2026-08-26 (56 entries, lines 1-1203). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed under WF02-REQ151-20260826's Step
+# Final rebase because composing that run's own REQ-151 entries with main's
+# concurrently-landed ISS-0332/REQ-151-started/REQ-149-done chain brought this
+# file to 1203 lines -- over its declared roll_rule ceiling (max_lines: 1200) --
+# confirmed failing test/docs/requirement_status_invariants_test.exs's assertion
+# A3 ("the current volume is within the roll-rule ceilings"). Reads of this
+# volume are TARGETED reads only -- a line range or a pattern match, never a
+# whole-file read. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v5.yaml
+#
+# Why this file was closed: WF02-REQ151-20260826's Step Final rebase composed
+# main's ISS-0332/REQ-151-started/REQ-149-done chain (landed independently)
+# with this run's own REQ-151-done append, bringing the on-disk count to 56
+# across 1203 lines -- over the roll ceiling. No entry above this footer was
+# moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none declared beyond what volumes 1-3 already
+# declare against themselves.
+# ─────────────────────────────────────────────────────────────────────────────

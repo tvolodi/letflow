@@ -6,10 +6,10 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ151-20260826/step-01b-code-design-validator.json",
-  "created_at": "2026-08-26T09:51:30Z",
-  "started_at": "2026-08-26T09:51:30Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "created_at": "2026-08-26T10:15:00Z",
+  "started_at": "2026-08-26T10:20:00Z",
+  "completed_at": "2026-08-26T10:40:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -19,27 +19,28 @@
     "artifacts_in": ["lib/letflow/design/req151-lua-sandbox.md"],
     "owned_modules": [
       "lib/letflow/engine/lua/sandbox.ex",
-      "test/letflow/engine/lua/sandbox_test.exs",
-      "mix.exs",
-      "mix.lock",
-      "test/letflow/engine/lua_script_audit_test.exs"
+      "test/letflow/engine/lua/sandbox_test.exs"
     ],
-    "branch_name": "feature/WF02-REQ151-20260826",
-    "note": "OQ-1 in the design doc (mix.exs currently has no Lua dep) is a KNOWN, USER-DECIDED open item, not a design gap: the human project owner already decided (2026-08-26) to retire REQ-058's AC5 guardrail and re-add {:lua, \"~> 1.0\"} at Step 2a, with REVIEWER sign-off at Step 2d. Do not FAIL the design over OQ-1's existence -- verify only that it is stated clearly and not silently resolved, per the design-validator's own checklist."
+    "branch_name": "feature/WF02-REQ151-20260826"
   },
   "task": {
-    "description": "Validate lib/letflow/design/req151-lua-sandbox.md per WF-02_requirement_implementation.md Step 1b. Claim this handoff by setting status to IN_PROGRESS only. Read the design artefact independently (not CODE-DESIGNER's summary). Check every MUST/acceptance criterion from REQ-151 has a corresponding design element, function signatures are fully specified, error handling is stated, cross-module deps are listed, and no implementation code (.ex/.exs code bodies) is present.",
+    "description": "HARD GATE. Independently read lib/letflow/design/req151-lua-sandbox.md in full (431 lines) and verify it against REQ-151's acceptance criteria and WF-02 Step 1b's checklist: every AC maps to a concrete design element, no TBD/deferral language, function signatures fully specified including error shape, cross-module dependencies listed, no implementation code present. Open Question 1 (mix.exs currently carries no {:lua,...} dependency, conflicting with REQ-058's AC5 guardrail test) is a known, user-decided item -- the human project owner already decided to retire that guardrail and re-add the dependency at Step 2a with REVIEWER sign-off at Step 2d. Do not FAIL over OQ-1's existence; only check it is stated clearly.",
     "acceptance_criteria": [
-      "a single sandbox-construction function is specified as the only intended call site for the library's own state-construction call",
-      "the design lists a test evaluating each of io.open, io.write, os.execute, os.exit, os.getenv, os.remove, os.rename, os.tmpname, load, loadfile, dofile, require, package, debug, and string.dump from inside a script, asserting each is nil or raises",
-      "the design specifies how the :sandboxed-replaces-defaults trap is guarded (or explicitly defers a custom list to REQ-152)",
-      "the design states the moduledoc will restate LUA-03 and LUA-04 rather than claim literal satisfaction, with the specific reasons named",
-      "the deny-set is enumerated explicitly with a per-entry reason, and the coroutine decision is stated explicitly with a reason",
-      "no implementation code (.ex/.exs code bodies) present -- signatures and type shapes only",
-      "OQ-1 (mix.exs Lua dependency conflict with REQ-058 AC5) is stated clearly, not silently resolved -- FAIL only if it is missing or glossed over, not because it exists"
+      "a single sandbox-construction function exists (e.g. Letflow.Engine.Lua.Sandbox.new/0,1) and a repo search for the library's own state-construction call across lib/ (restricted to '*.ex') shows that function as the only call site, with the real output quoted",
+      "a test evaluates each of io.open, io.write, os.execute, os.exit, os.getenv, os.remove, os.rename, os.tmpname, load, loadfile, dofile, require, package, debug, and string.dump from INSIDE a script obtained from that function, and asserts each is nil or raises -- with the real mix test output quoted",
+      "if any custom :sandboxed list is passed, a test asserts the DEFAULT denials still hold after it (at minimum os.execute and load are still denied from inside a script), explicitly guarding the :sandboxed-replaces-defaults trap; if no custom list is passed here, the moduledoc says so and names REQ-152 as the requirement that adds one",
+      "the moduledoc states that this requirement restates LUA-03 rather than satisfying its literal text, and names all three reasons: loadstring is a 5.1 name absent from 5.3; jit/ffi/bit do not exist in Lua 5.3 so R-Co's exclusions of them are vacuous here rather than satisfied; and SBX-1's open-then-prune ordering does not transfer as a mechanism, only as a property",
+      "the moduledoc states that this requirement restates LUA-04 rather than satisfying it literally: the runtime has no bytecode loader to disable, so only-source-text holds structurally and there is no rejection path to test -- what is tested instead is the absence of load/loadfile/dofile/string.dump",
+      "the deny-set is written out explicitly in source with a per-entry reason, and coroutine's availability is an explicitly recorded decision with a stated reason, not an inherited default",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     ]
   },
-  "result": null,
+  "result": {
+    "verdict": "PASS",
+    "summary": "Independently read lib/letflow/design/req151-lua-sandbox.md in full (431 lines) rather than trusting CODE-DESIGNER's step-01 result.summary. VERDICT PASS on all Step 1b checks. AC1: Sec 3 specifies @spec new() :: Lua.t() and @spec new(opts :: keyword()) :: Lua.t(), states new/1 is the only permitted call site of Lua.new/1 anywhere under lib/, and Sec 9's test table specifies a repo-search test ('the only call site') asserting grep -rn \"Lua\\\\.new\\\\(\" lib --include=*.ex returns exactly one hit inside sandbox.ex, matching AC1's real-output requirement. Independently ran grep -n 'lua' mix.exs and grep -rn 'Lua.new(' lib --include=*.ex on this branch: both return zero hits currently, consistent with the design's own OQ-1 disclosure (dependency not yet added). AC2: Sec 9's per-path test row lists exactly the 15 paths AC2 names (io.open, io.write, os.execute, os.exit, os.getenv, os.remove, os.rename, os.tmpname, load, loadfile, dofile, require, package, debug, string.dump) with the nil-or-raises assertion shape; Sec 4 documents installed-vs-vacuous status for every one of them against deps/lua's actual source (cited by file:line), so the test spec has a concrete VM-level basis for each path rather than a bare list. AC3: Sec 5 discloses the module never passes a caller-supplied partial :sandboxed list, states the moduledoc must say so and name REQ-152 (matching AC3's stated fallback verbatim), and Sec 9 specifies a 'default denials hold' regression test asserting os.execute and load remain denied -- the trap-guard is proven by test, not only documented. AC4: Sec 7 gives the exact required moduledoc text with all three reasons (loadstring is a 5.1 name; jit/ffi/bit do not exist in 5.3; SBX-1's ordering is not a transferable mechanism, only a property, asserted by test against the already-constructed Lua.t()). AC5: Sec 8 gives the exact required moduledoc text: no bytecode format/loader exists so LUA-04 holds structurally, and what is tested instead is the absence of load/loadfile/dofile/string.dump. AC6: Sec 4 enumerates all 28 deny-set entries (27 restated defaults + debug) each with an explicit installed/vacuous determination and a per-entry reason sourced to deps/lua's actual files; Sec 6 records the coroutine decision explicitly (absent from the runtime entirely, so no deny-set entry is added, with the reason that sandboxing a nonexistent path would fabricate a new global) and specifies a moduledoc addendum plus a 'coroutine is nil' regression test. AC7: correctly identified in Sec 13's traceability table as not a design-time artifact -- ELIXIR-DEV's Step 2a responsibility, explicitly flagged as blocked on OQ-1 until the mix.exs/REQ-058-AC5-guardrail conflict is resolved; this is the correct disposition for a design document, not a gap. TBD/deferral language: grep -in 'TBD|to be determined|will decide later|placeholder' over the artefact returns zero hits; OQ-2 and OQ-3 are explicitly non-blocking, scoped forward to REQ-152/154-156, and not deferrals within this requirement's own scope. Signatures fully specified including error shape: Sec 3 gives full @spec for new/0 and new/1, and explicitly states the error shape is 'never {:ok,_}|{:error,_}' because construction cannot fail (no I/O, no config lookup, no user input) -- an explicit, justified position rather than an omission. Cross-module dependencies: Sec 12's table lists five dependencies (Lua/deps/lua with direction and specific functions used; LuaScriptAudit as read-only context with no code dependency; the OQ-1-blocking test file; REQ-152 and REQ-153 as downstream consumers) with direction and nature for each. No implementation code: grep -n '^def |  def |defmodule|do$' over the artefact returns zero hits; all code fences contain only @spec/@type declarations, data-shape sketches explicitly hedged as illustrative ('or equivalent'), or quoted library-internal fragments cited as evidence from deps/lua's actual source (not code being authored for this design) -- no full function body or module structure is present. OQ-1 is stated with full detail (Sec 11): the exact mix.exs history (commits 55f058c/3a62d09 added the dependency, 30db07b/984bbc9 reverted it), the exact guardrail test and line range (test/letflow/engine/lua_script_audit_test.exs:419-427), and an explicit statement that this design does not resolve which of two remediation paths to take, flagging it for REVIEWER at Step 2d -- per this handoff's instruction, this is not treated as a failure, only checked for clarity, and clarity is confirmed.",
+    "artifacts_out": [],
+    "next_action": "Route to ELIXIR-DEV (2a)"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

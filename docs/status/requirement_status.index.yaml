@@ -519,16 +519,50 @@ volumes:
 
   - volume: 4
     path: docs/status/requirement_status.v4.yaml
-    status: current
+    status: closed
     opened: 2026-08-23
-    entries: 55
+    closed: 2026-08-26
+    entries: 56
+    lines: 1203
+    bytes_working_tree: 68911
+    # SHA-256 of lines 1..1203 with CRLF normalised to LF, i.e. the frozen prefix.
+    # The hashed stream terminates EVERY line with a single \n, including the
+    # last, so it ends in \n. Exact definition and reference implementations:
+    # lib/letflow/design/iss-0119-status-file-readability.md §8.
+    # Asserted unchanged by test/docs/requirement_status_invariants_test.exs.
+    frozen_prefix_lines: 1203
+    frozen_prefix_sha256: "41596491a7bd8020820f0bd32fd6cae6220a32958d7d27e8afb81d7313ab6fde"
+    closure_note: >
+      Closed under WF02-REQ151-20260826's Step Final rebase at 1203 lines /
+      68911 bytes / 56 entries -- over its own declared roll_rule ceiling
+      (max_lines: 1200), confirmed failing
+      test/docs/requirement_status_invariants_test.exs's assertion A3.
+      Composing main's concurrently-landed ISS-0332-done/REQ-151-started/
+      REQ-149-done chain with this run's own REQ-151-done append is what
+      brought the count to 56 -- 0 entries rewritten/reordered/deleted
+      (`git diff --numstat` on this file across the whole run showed
+      insertions-only, aside from restoring the ISS-0332 note body a
+      same-line direct-to-main edit, fc4d240, had trimmed -- see the volume's
+      own history for that entry). Successor:
+      docs/status/requirement_status.v5.yaml.
     note: >
+      Incremented to 56 during WF02-REQ151-20260826's own Step Final rebase:
+      composed main's REQ-151-started/REQ-149-done chain (which had reached
+      55) with this branch's own REQ-151-done append (independently computed
+      against a stale pre-REQ-149 base of 53->54) by interleaving the latter
+      after REQ-149's done-event in true chronological order -- 56 on-disk
+      `- req:` entries in requirement_status.v4.yaml after composition, which
+      also crossed this volume's roll ceiling and triggered its closure
+      above. Also restored the SCOPE-CHANGE/ISS-0332 done-event's full note
+      body, trimmed by a same-line direct-to-main edit (fc4d240) during its
+      own vocab fix; restoring it does not change the entry count.
       Incremented to 55 by WF02-REQ149-20260826 (DOC-UPDATER) REQ-149 done-event
       append (Step 6) -- 55 on-disk `- req:` entries in
       requirement_status.v4.yaml, no rebase conflict on this file.
       Incremented to 54 by WF02-REQ149-20260826 (TEST-RUNNER) A9 fix: vocab-fix commit added one entry.
       Incremented to 53 by WF03-ISS0332-20260826 (ORCH) ISS-0332 done-event append.
-      append (DOC-UPDATER, Step 6) -- 52 on-disk `- req:` entries in
+      Incremented to 52 by WF02-REQ077-20260826 (DOC-UPDATER)'s own done-event
+      append (Step 6) -- 52 on-disk `- req:` entries in
       requirement_status.v4.yaml, no rebase conflict on this file.
       Opened by WF02-REQ082-20260823's own Step Final roll, successor to
       volume 3. Created with volume 3's header text verbatim (volume number,
@@ -647,6 +681,21 @@ volumes:
       = 51 on-disk entries, folding in every append landed on main between
       REQ-143's started-event and this one without its own index-note
       increment.
+
+  - volume: 5
+    path: docs/status/requirement_status.v5.yaml
+    status: current
+    opened: 2026-08-26
+    entries: 0
+    note: >
+      Opened by WF02-REQ151-20260826's own Step Final roll, successor to
+      volume 4. Created with volume 4's header text verbatim (volume number,
+      opening date and predecessor path updated) and an empty `history:`
+      list, per this index's `roll_rule.on_exceed` procedure -- volume 4's
+      full 56 entries were kept in volume 4 rather than split across the
+      roll, matching every prior roll's own pattern (volume 4's own footer:
+      "no entry above this footer was moved, edited or deleted"). `entries:`
+      will be incremented per HOW-TO-APPEND step 6 as real appends land.
 
 
 known_anomalies:

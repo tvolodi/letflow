@@ -1,37 +1,49 @@
 {
-  "handoff_id": "step02b-rework1-WF03-ISS0343-20260826",
+  "handoff_id": "step02b-WF03-ISS0343-20260826-rework1",
   "run_id": "WF03-ISS0343-20260826",
   "workflow_id": "WF-03",
-  "step": "02b-rework1",
-  "from_agent": "ORCH",
+  "step": "02b",
+  "from_agent": "CODE-DESIGNER",
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF03-ISS0343-20260826/step-02b-code-design-validator-rework1.json",
-  "created_at": "2026-08-26T15:50:00Z",
-  "started_at": "2026-08-26T15:50:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "created_at": "2026-08-26T16:05:00Z",
+  "started_at": "2026-08-26T16:05:00Z",
+  "completed_at": "2026-08-26T16:20:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
     "requirement_ids": [],
     "issue_ids": ["ISS-0343"],
     "related_handoff_ids": [
+      "handoffs/WF03-ISS0343-20260826/step-00-git-setup.json",
+      "handoffs/WF03-ISS0343-20260826/step-01-issue-fixer.json",
       "handoffs/WF03-ISS0343-20260826/step-02-code-designer.json",
       "handoffs/WF03-ISS0343-20260826/step-02b-code-design-validator.json"
     ],
-    "artifacts_in": ["lib/letflow/design/iss0343-backfill-missing-schema-tolerance.md"],
-    "branch_name": "feature/WF03-ISS0343-20260826",
-    "note": "RE-VALIDATION after rework 1/3. Prior FAIL was solely on criterion 5 (§2.3 had a copy-pasteable Elixir case clause). CODE-DESIGNER rewrote §2.3 to prose only. The other 4 checks already passed and were not the subject of rework -- confirm they still hold."
+    "artifacts_in": [
+      "lib/letflow/design/iss0343-backfill-missing-schema-tolerance.md",
+      "lib/letflow/event_store/registry.ex",
+      "lib/letflow/tenant_provisioning/backfill.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0343-20260826"
   },
   "task": {
-    "description": "Re-validate lib/letflow/design/iss0343-backfill-missing-schema-tolerance.md's §2.3 specifically, and re-confirm the other 4 checks still pass.",
+    "description": "Re-validate lib/letflow/design/iss0343-backfill-missing-schema-tolerance.md after rework 1/3. Prior FAIL (step-02b) was solely on criterion 5 (implementation code present in section 2.3). Confirm that specific violation is fixed, and sanity-check the other four previously-passing criteria still hold against the reworked doc.",
     "acceptance_criteria": [
-      "§2.3 contains no case/do/end, Logger.warning(...), or map-update Elixir syntax -- prose/structural description only",
-      "§2.3 still fully specifies: match pattern, what the log message must convey, and the skipped-counter outcome",
-      "the other 4 previously-passing checks still pass unchanged"
+      "design doc maps step-01's diagnosed race to a concrete typed error shape (distinct from :tenant_not_provisioned) added to Registry's affected function specs",
+      "design doc identifies the exact call sites (current_max query, insert, get_type query) that must detect the missing-schema condition and how (Postgrex.Error postgres.code match, not a blanket rescue)",
+      "design doc specifies Backfill.run/1's new case clause treats the condition as skipped (not halted), with no change to its public @spec/arity",
+      "design doc explicitly states why scoping Backfill.run/1 to a single tenant_id, and why locking only the test fixture's DROP SCHEMA, are not chosen as the fix (or are noted as insufficient alone)",
+      "no implementation code (.ex code blocks) present -- signatures/specs/shapes in prose or @spec-style typespec blocks only"
     ]
   },
-  "result": null,
+  "result": {
+    "verdict": "PASS",
+    "summary": "Rework 1/3 fixes the sole prior FAIL. Section 2.3 (lines 128-163 of the reworked doc) no longer contains the literal `case` clause / `Logger.warning/1` call / map-update expression that caused the original FAIL -- it is now entirely prose describing the new clause's match pattern, logging content requirements (three things the message must convey), counting behavior (increment :skipped, leave other fields unchanged), and control-flow shape (continue, not halt), with no executable Elixir anywhere in the section. Section 2.1's @spec blocks and section 2.2's rescue_missing_schema/1 @spec block remain typespec-only (no function bodies), consistent with the rest of the document. Read the entire design doc fresh (all sections, not just 2.3) and found no other code blocks anywhere in the file -- the fix was scoped correctly and did not introduce a new violation elsewhere.\n\nSanity re-check of the four previously-passing criteria against the current doc text and the actual source (read lib/letflow/event_store/registry.ex and lib/letflow/tenant_provisioning/backfill.ex directly, not from memory of the prior validation): (1) :tenant_schema_missing is still correctly distinguished from :tenant_not_provisioned in section 2.1's prose and added to register_type/2 and get_type/2's @spec blocks; (2) section 2.2 still names the exact three call sites -- insert_with_monotonicity_check/2's current_max Repo.one/2 query (registry.ex L233) and its Repo.insert/2 (L247), plus get_type/2's Repo.one/2 (L175) -- confirmed these are the only three prefix:-scoped queries in the module, with detection narrowed to %Postgrex.Error{postgres: %{code: :undefined_table}}, explicit re-raise-on-anything-else language, not a blanket rescue; (3) section 2.3 still states Backfill.run/1's own @spec needs no change, confirmed backfill.ex's actual @spec (L16-18) and its existing :tenant_not_provisioned clause (L36-41) match the doc's description of the mirrored shape; (4) section 4 (renumbered from the original's section, now titled 'Alternative considered and rejected') still substantively rejects both single-tenant scoping (in section 0) and fixture-lock-only (section 4 in full) with reasoning specific to why neither closes the underlying race, not a rubber-stamp dismissal. All four hold.\n\nAll five acceptance criteria pass. No gaps, no TBD/deferral language, no ambiguity that would leave ELIXIR-DEV guessing.",
+    "artifacts_out": [],
+    "next_action": "Route to ELIXIR-DEV"
+  },
   "rework_count": 1,
   "max_rework": 3
 }

@@ -1,0 +1,36 @@
+{
+  "handoff_id": "step04-WF03-ISS0343-20260826",
+  "run_id": "WF03-ISS0343-20260826",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0343-20260826/step-04-test-designer.json",
+  "created_at": "2026-08-26T15:46:00Z",
+  "started_at": "2026-08-26T15:46:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0343"],
+    "related_handoff_ids": ["handoffs/WF03-ISS0343-20260826/step-03-elixir-dev.json"],
+    "artifacts_in": ["lib/letflow/event_store/registry.ex", "lib/letflow/tenant_provisioning/backfill.ex"],
+    "owned_modules": ["test/letflow/event_store/registry_test.exs", "test/letflow/tenant_provisioning/backfill_test.exs"],
+    "branch_name": "feature/WF03-ISS0343-20260826",
+    "note": "This fix touches EXISTING modules (Registry, Backfill), not new ones -- the standard fail-then-pass rule applies directly (not the 'code under test did not exist' exemption). Reproduce the exact scenario: provision a real tenant via TenantFixture, then genuinely DROP its schema (DROP SCHEMA ... CASCADE, same mechanism the real race uses) BEFORE calling register_type/2 (or Backfill.run/1 against a Registration row pointing at that now-gone schema), and assert the new typed error / skip behavior rather than a crash."
+  },
+  "task": {
+    "description": "Add regression tests per WF-03 Step 4. Claim this handoff by setting status to IN_PROGRESS only.\n\n1. In test/letflow/event_store/registry_test.exs: provision a real tenant, then execute a raw DROP SCHEMA <name> CASCADE against it directly (simulating the concurrent-teardown race), then call register_type/2 (and/or get_type/2) against that tenant_id and assert {:error, :tenant_schema_missing} is returned -- not a crash.\n2. In test/letflow/tenant_provisioning/backfill_test.exs: set up a scenario with at least 2 Registration rows, drop one tenant's schema before calling Backfill.run/1, and assert run/1 completes (does not crash), the dropped tenant is counted in :skipped, and the other tenant is still processed/counted in :updated.\n3. Fail-then-pass proof (mandatory): check out the pre-fix commit in a throwaway git worktree (parent of 4d20542 on this branch), run ONLY these new tests against it, confirm they fail (real crash/exception, quote it), then confirm they pass on this branch. Remove the worktree when done.\n4. Complete the handoff with artifacts_out: [\"test/letflow/event_store/registry_test.exs\", \"test/letflow/tenant_provisioning/backfill_test.exs\"], next_action: \"Route to TEST-DESIGN-VALIDATOR\".\n5. Commit on feature/WF03-ISS0343-20260826 and push.",
+    "acceptance_criteria": [
+      "a test genuinely drops a tenant's schema (real DROP SCHEMA CASCADE, not a mock) then asserts register_type/2 or get_type/2 returns {:error, :tenant_schema_missing} rather than raising",
+      "a Backfill.run/1 test with one dropped-schema tenant among multiple registrations asserts the run completes without crashing, the dropped tenant counted as skipped, others still processed",
+      "fail-then-pass proof shown with real quoted output via worktree at the pre-fix commit",
+      "no test depends on wall-clock time or unseeded randomness"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

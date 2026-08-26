@@ -2373,11 +2373,14 @@
             ],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/design/req149-lua-memory-limit.md"
             ],
             "lock_acquired_at": "2026-08-26T08:35:14Z",
+            "lock_released_at": "2026-08-26T10:17:38Z",
+            "released_lock": true,
+            "last_known_step": "Step Final PASS (PR #652 merged)",
             "lock_released_at": null,
             "released_lock": false,
             "last_known_step": "Step 00 PENDING",

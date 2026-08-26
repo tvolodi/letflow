@@ -1,0 +1,41 @@
+{
+  "handoff_id": "step02c-WF02-REQ151-20260826",
+  "run_id": "WF02-REQ151-20260826",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ151-20260826/step-02c-security-reviewer.json",
+  "created_at": "2026-08-26T11:21:00Z",
+  "started_at": "2026-08-26T11:21:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-151"],
+    "issue_ids": [],
+    "related_handoff_ids": ["handoffs/WF02-REQ151-20260826/step-02a-elixir-dev.json"],
+    "artifacts_in": [
+      "lib/letflow/engine/lua/sandbox.ex",
+      "mix.exs",
+      "mix.lock",
+      "test/letflow/engine/lua_script_audit_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ151-20260826",
+    "note": "REQ-151's own text states: 'GATE: SECURITY-REVIEWER is a hard gate on this requirement. It is the sandbox boundary itself.' This gate is mandatory regardless of the usual tenant-data-path scope test -- the sandbox module IS the security boundary that will constrain tenant-supplied Lua scripts once wired up by later requirements (REQ-153+)."
+  },
+  "task": {
+    "description": "Review the diff on feature/WF02-REQ151-20260826 (git diff main...HEAD) per WF-02 Step 2c. Claim this handoff by setting status to IN_PROGRESS only. Since this is a declared hard gate regardless of the normal scope test, proceed directly to the invariant checklist rather than exiting early on an out-of-scope finding. Focus specifically on: does lib/letflow/engine/lua/sandbox.ex's deny-set actually deny every path lib/letflow/design/req151-lua-sandbox.md's design says it should (read the design doc and the code side by side); is Lua.new/1 called with the sandboxed option in a way that could silently under-deny (the design doc's central risk -- :sandboxed REPLACES rather than merges); does the coroutine decision leave any reachable escape; is the re-added {:lua, \"~> 1.0\"} mix.exs dependency itself a supply-chain concern (pinned version, checksum in mix.lock).",
+    "acceptance_criteria": [
+      "for each of INV-1..INV-8 (docs/agents/instructions/security-invariants.md), state APPLIES or NOT-APPLICABLE against this diff, with reasoning",
+      "for each APPLIES invariant, run its 'how to verify' check and quote the real result",
+      "independently confirm the deny-set in sandbox.ex matches every entry the design doc lists (28 entries) -- flag any mismatch, addition, or omission",
+      "confirm the :sandboxed-replaces-defaults trap cannot be triggered by any code path added in this diff",
+      "state a verdict on mix.lock's lua entry (pinned version, real checksum, no unexpected transitive deps)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

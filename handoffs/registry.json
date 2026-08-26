@@ -2533,18 +2533,18 @@
             ],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/design/req150-lua-number-marshalling.md"
             ],
             "lock_acquired_at": "2026-08-26T18:21:06Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 02d PENDING (REVIEWER dispatched)",
+            "lock_released_at": "2026-08-26T20:08:24Z",
+            "released_lock": true,
+            "last_known_step": "Step Final PASS -- PR #666 squash-merged (773f170)",
             "backfilled": false,
             "queue_task_id": 336,
             "queue_agent_id": "orch-loop-1787735920",
-            "note": "WF-02 for REQ-150 (queue task 336, GH#649). Fresh restart of a run a prior session had started and abandoned (stale branch feature/WF02-REQ150-20260826 deleted, no registry entry existed for it). Design-only requirement: no mix.exs/lib/letflow/engine/ change. Queue claimed 2026-08-26T18:21:06Z via get_next_task."
+            "note": "WF-02 for REQ-150 (queue task 336, GH#649) DONE. Design doc lib/letflow/design/req150-lua-number-marshalling.md merged via PR #666 (feature/WF02-REQ150-20260826 deleted). All gates PASS: CODE-DESIGNER, CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER (scope-test: no executable surface), RELEASE-VALIDATOR, DOC-UPDATER. requirements.yaml REQ-150 status: done. Queue task 336 released status: done."
         }
     ]
 }

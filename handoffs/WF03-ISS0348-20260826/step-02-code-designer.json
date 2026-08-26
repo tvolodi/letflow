@@ -40,8 +40,9 @@
       "No implementation code -- signatures/assertion-shape descriptions only"
     ]
   },
-  "artifacts_out": ["lib/letflow/design/iss0348-backfill-test-isolation.md"],
   "result": {
+    "status": "PASS",
+    "artifacts_out": ["lib/letflow/design/iss0348-backfill-test-isolation.md"],
     "summary": "Design produced at lib/letflow/design/iss0348-backfill-test-isolation.md. Core approach: replace each of the 4 failing tests' exact-match assertions on Backfill.run/1's global {updated, skipped} tally with bound assertions (updated >= N / skipped >= M, derived from that test's own known tenant contribution) instead of exact literals, relying on the proven monotonicity property that leaked rows can only add to the aggregate counters, never invert a specific tenant's outcome. Each test's existing per-tenant Registry.get_type/2 pre/post checks (already scoped to that test's own tenant_id) remain the authoritative regression proof and are unchanged; test 2 (ISS-0343 vanished-schema) gets one added standalone, side-effect-free Registry.register_type/2 call scoped to vanished_tenant_id to strengthen (not weaken) its 'was skipped, not just present' claim. Backfill.run/1 (lib/letflow/tenant_provisioning/backfill.ex) is untouched. test/support/tenant_fixture.ex, test/support/data_case.ex, and all Sandbox.mode calls are untouched -- explicitly confirmed not to re-propose ISS-0113's reverted global-restore fix shape.",
     "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },

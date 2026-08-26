@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0332-20260826/step-04-test-designer.json",
   "created_at": "2026-08-26T05:26:44Z",
   "started_at": "2026-08-26T05:26:44Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-26T05:40:00Z",
+  "status": "PASS",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -49,7 +49,36 @@
       "Tests use Letflow.DataCase for isolation"
     ]
   },
-  "result": null,
+  "result": {
+    "verdict": "PASS",
+    "test_file": "test/letflow/tenant_provisioning/backfill_test.exs",
+    "feature_branch_head_sha": "6646e2b",
+    "baseline_run": "4 passed, 0 failed (all 4 tests pass against shipped fix)",
+    "mutation_results": {
+      "mutant_1": {
+        "description": "In the :duplicate_event_type_version case, changed {:cont, {:ok, %{counts | skipped: counts.skipped + 1}}} to {:halt, {:error, {:backfill_failed, registration.tenant_id, :forced_mutant_1}}}",
+        "result": "3 passed, 1 failed",
+        "failing_tests": [
+          "regression: ISS-0332 -- idempotent: already-v2 tenant is skipped, not errored"
+        ],
+        "explanation": "The AC3 test asserts {:ok, %{updated: 0, skipped: 1}} but gets {:error, {:backfill_failed, tenant_id, :forced_mutant_1}} because the mutant halts on :duplicate_event_type_version instead of continuing. AC1/AC2 are unaffected (their tenant has v1, so register_type returns {:ok, _}, not :duplicate_event_type_version). The higher-version test is also unaffected (its branch is :schema_version_not_monotonic, not :duplicate_event_type_version).",
+        "reverted": true
+      },
+      "mutant_2": {
+        "description": "Passed nil instead of registration.tenant_id in the Registry.register_type/2 call",
+        "result": "0 passed, 4 failed",
+        "failing_tests": [
+          "regression: ISS-0332 -- backfill updates pre-existing tenant to schema_version 2",
+          "regression: ISS-0332 -- R10 event-append succeeds after backfill (validate_payload accepts null review_id)",
+          "regression: ISS-0332 -- idempotent: already-v2 tenant is skipped, not errored",
+          "regression: ISS-0332 -- higher existing schema_version is skipped (schema_version_not_monotonic)"
+        ],
+        "explanation": "Passing nil to register_type/2 causes Repo.get_by(Registration, tenant_id: nil) to raise an Ecto query builder error (nil is not a valid binary_id value). This error propagates through the {:error, other} catch arm as {:error, {:backfill_failed, tenant_id, <query_error>}}, causing every test's {:ok, ...} assertion to fail.",
+        "reverted": true
+      }
+    },
+    "notes": "Both backfill.ex mutants reverted before final commit. Test file committed at 6646e2b on feature/WF03-ISS0332-20260826."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

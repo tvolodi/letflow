@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ151-20260826/step-final-git-merge.json",
   "created_at": "2026-08-26T14:41:00Z",
   "started_at": "2026-08-26T14:41:00Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-26T11:22:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -29,7 +29,29 @@
       "local cleanup: back on main, fast-forwarded, feature branch deleted, clean working tree"
     ]
   },
-  "result": null,
+  "result": {
+    "verdict": "PASS",
+    "summary": "Rebased feature/WF02-REQ151-20260826 onto origin/main. All 11 conflicts were add/add on this run's own handoff JSON files (main held stale PENDING re-dispatch stubs from a queue re-registration; this branch's own commits held the real COMPLETED records for the same steps -- resolved by keeping this branch's own COMPLETED version throughout, per --theirs' rebase-inverted meaning) plus the anticipated docs/requirements.yaml conflict (resolved to status: done, exactly as context.note predicted) and a 3-file requirement_status volume conflict composing main's ISS-0332-done/REQ-151-started/REQ-149-done chain with this branch's own REQ-151-done append in true chronological order -- both events survived, append-only preserved. That composition brought requirement_status.v4.yaml to 56 entries/1203 lines, over its roll_rule ceiling and failing invariants test A3; rolled volume 4 to a new empty volume 5 per the index's own roll_rule.on_exceed procedure (v4 closed with all 56 entries preserved byte-for-byte, matching every prior roll's pattern of never splitting entries across a roll). Also restored the SCOPE-CHANGE/ISS-0332 done-event note body a same-line direct-to-main edit (fc4d240) had trimmed during its own vocab fix -- append-only forbids shortening a past entry. Post-rebase: mix format --check-formatted PASS (one unrelated pre-existing violation in lib/letflow/tenant_provisioning/backfill.ex, from ISS-0332, fixed since the gate is unconditional regardless of origin), mix compile --warnings-as-errors PASS, mix test 2062 passed/0 failed/3 excluded (full suite), test/docs/requirement_status_invariants_test.exs 20/20 passed after the volume-4 roll. PR #656 created and merged via gh pr merge --squash --delete-branch. CI's Backend gate (mix letflow.check) failed on both PR check runs -- structurally attributed as pre-existing (route 1): the failing files (handoffs/WF02-REQ149-20260826/step-01-code-designer.json status-enum violation, a lint_handoffs BadMapError crash on handoffs/WF03-ISS0332-20260826/step-02b-code-design-validator.json, and a status-enum violation on WF03-ISS0332-20260826/step-04-test-designer.json) do not appear in `git diff --name-only main...HEAD` for this branch and were already present in origin/main (bf4f520) before this branch's rebase -- confirmed via `git show bf4f520:<path>`. Reported to ORCH below for filing per ISSUE_QUEUE.md rather than filed directly (this agent has no register_task/queue tool access). CI's Frontend gate passed both runs. Local cleanup completed: on main, fast-forwarded, feature branch deleted, working tree clean.",
+    "git_evidence": {
+      "pr_number": 656,
+      "pr_url": "https://github.com/tvolodi/letflow/pull/656",
+      "merge_commit_sha": "fbb94ce0378f7a88c731d1ece63e23d36cd9a3ff",
+      "ci_backend_gate": "fail (both check runs) -- attributed pre-existing, route 1, not caused by this branch",
+      "ci_frontend_gate": "pass (both check runs)",
+      "mix_test": "2062 passed, 0 failed, 3 excluded",
+      "requirement_status_invariants_test": "20/20 passed post-roll",
+      "final_branch": "main",
+      "final_head_matches_merge_commit": true,
+      "working_tree_clean": true
+    },
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "CI's Backend gate (mix letflow.check) fails on main as of merge commit fbb94ce, via mix letflow.lint_handoffs: (1) handoffs/WF02-REQ149-20260826/step-01-code-designer.json has top-level status \"PASS\" which is not a legal handoff status value; (2) handoffs/WF03-ISS0332-20260826/step-02b-code-design-validator.json crashes lint_handoffs' print_advisory/1 with a BadMapError (expected a map, got []); (3) handoffs/WF03-ISS0332-20260826/step-04-test-designer.json has the same top-level status \"PASS\" violation. All three files are unrelated to REQ-151, untouched by this branch's own diff, and were already present on origin/main (bf4f520) before this branch's Step Final rebase began -- structurally pre-existing (route 1). Needs filing via register_task/ISSUE_QUEUE.md and a fix run (likely DOC-UPDATER for the two status-enum violations, ELIXIR-DEV for the lint_handoffs crash hardening so a malformed criteria_checked list does not crash the advisory printer)."
+      }
+    ],
+    "next_action": "ORCH marks WF02-REQ151-20260826 COMPLETED, releases owned_modules lock, and files the Backend-gate lint_handoffs failure above via register_task per ISSUE_QUEUE.md (it blocks CI green on main going forward but did not block this merge per GIT_MERGE.md's pre-existing-failure precondition, since it structurally predates this branch)."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

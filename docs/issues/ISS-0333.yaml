@@ -1,0 +1,23 @@
+id: ISS-0333
+title: "Letflow.Engine.LuaScriptAuditTest fails on main -- pre-existing, unrelated to REQ-077"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ077-20260826
+discovered_at: "2026-08-26T03:56:28Z"
+severity: MINOR
+description: >
+  TEST-RUNNER discovered this during WF02-REQ077-20260826 Step 4's full-suite
+  run: Letflow.Engine.LuaScriptAuditTest fails because of the {:lua, "~> 1.0"}
+  dependency declared in mix.exs. Confirmed via git diff main --stat that
+  mix.exs is not touched by the REQ-077 branch -- the dependency was added by
+  an already-merged commit 3a62d09 (REQ-148, the S5 Lua adoption spike). Not
+  blocking REQ-077; filed as a forwarded incidental finding per
+  ISSUE_QUEUE.md rather than expanding that run's scope.
+affected_files:
+  - mix.exs
+  - test/letflow/engine/lua_script_audit_test.exs
+acceptance_criteria:
+  - "Letflow.Engine.LuaScriptAuditTest passes on main"
+  - "root cause identified (likely mix.lock / lua NIF build environment mismatch from REQ-148)"
+queue_task_id: 333
+github_issue: 645
+status: open

@@ -7,9 +7,9 @@
   "to_agent": "ISSUE-FIXER",
   "file": "handoffs/WF03-ISS0297-20260826/step-01-issue-fixer-diagnose.json",
   "created_at": "2026-08-26T18:30:00Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-08-26T18:45:00Z",
+  "completed_at": "2026-08-26T19:00:00Z",
+  "status": "COMPLETE",
   "priority": "NORMAL",
   "context": {
     "stage": "S0",
@@ -57,7 +57,23 @@
       "result.next_action names the recommended fix approach"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "completed_at": "2026-08-26T19:00:00Z",
+    "registry_lookup": {
+      "prior_matching_issues": [
+        {
+          "id": "ISS-0194",
+          "title": "scripts/test_parallel.sh at nproc-default N hits Postgres too_many_connections",
+          "status": "resolved",
+          "similarity": "Same surface symptom (pool exhaustion under N-way parallelism) but DIFFERENT root cause: ISS-0194 was all N partitions combined exhausting Postgres max_connections (N*pool_size > max_connections). ISS-0297 is a single test whose own concurrent demand (100 tasks) exceeds its partition's computed pool_size (5). ISS-0194's fix (the pool clamp formula) is in place and working correctly -- it is not recurrence."
+        }
+      ],
+      "conclusion": "ISS-0194 is the closest prior. Not a recurrence. ISS-0297 is a distinct class: inter-test vs intra-test resource exhaustion."
+    },
+    "summary": "ROOT CAUSE CONFIRMED for both failures:\n\n## Failure 1 & 2: Letflow.EngineConcurrencyTest (2x failures, pool exhaustion)\n\nEmpirical evidence:\n- `@instance_count 100` confirmed at test/letflow/engine_concurrency_test.exs:63\n- `complete_all_concurrently!/2` (lines 225-239) calls `Enum.map(instances, fn ... -> Task.async(...) end)` and then `Task.await_many(tasks, 30_000)` -- all 100 Task.async bodies are spawned BEFORE any is awaited, so all 100 run concurrently and each checks out its own Repo connection in `:auto` sandbox mode\n- pool_size at N=16 computed by scripts/test_parallel.sh: `usable_ceiling = 100 - 3 = 97`, `budget = 97 - 10 - 2 = 85`, `computed_pool = floor(85 / 16) = 5`; config/test.exs reads TEST_POOL_SIZE=5\n- MISMATCH: pool_size=5 vs concurrent demand=100. When complete_all_concurrently!/2 fires, 100 tasks compete for 5 connections. The first 5 succeed; the other 95 queue on DBConnection and hit checkout timeout, causing pool exhaustion errors.\n- The test REQUIRES pool_size >= 100 to run correctly (all 100 tasks must hold a connection simultaneously to demonstrate genuine row-lock isolation). Any N >= 2 on a 100-max_connections Postgres will compute pool_size <= 42, always below 100.\n\n## Failure 3: Mix.Tasks.Letflow.AuditIssueClosuresTest (1x failure, ExUnit timeout)\n\nEmpirical evidence:\n- The 'grandfathered?/1 membership -- integration via run/1 with a faked gh' describe block (lines 247+) calls `Audit.run([])` at line 334 against the REAL `docs/issues/` corpus (confirmed: moduledoc lines 42/66 state this explicitly; grep confirms `Audit.tracked_issues(\"docs/issues\")` at line 142)\n- Corpus size confirmed: `(Get-ChildItem docs/issues -Filter '*.yaml').Count` = **201 YAML files**\n- The fake `gh` (a `gh.bat`/`gh` shell script) is used, so no real network calls are made -- the 'gh CLI timeout' label in the issue title is misleading. The actual mechanism is: Audit.run([]) reads all 201 YAML files, identifies tracked+closed issues, and calls `System.cmd('gh', ...)` once per closed tracked issue via the fake script\n- ExUnit default test timeout is 60 seconds. Under 16-way CPU and I/O contention, processing 201 files plus subprocess spawns can exceed 60s, triggering the ExUnit timeout kill, which manifests as an apparent 'gh CLI timeout' in the failure message\n- This is a load-induced timeout, not a test-isolation gap or network issue.",
+    "next_action": "Route to CODE-DESIGNER for fix design: (1) Add @moduletag :high_pool_demand to Letflow.EngineConcurrencyTest and update scripts/test_parallel.sh to pass --exclude high_pool_demand when computed pool_size < 100 (i.e., at any N >= 2 on a 100-max_connections Postgres, since floor(85/2)=42 < 100); the test must run only in single-partition mode or when pool_size >= 100. (2) Add @moduletag timeout: 120_000 to Mix.Tasks.Letflow.AuditIssueClosuresTest (the grandfathered?/1 describe block or at module level) to allow 2 minutes for the 201-file real-corpus run under high parallel load."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

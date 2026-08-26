@@ -1,0 +1,34 @@
+id: ISS-0346
+title: >
+  A9 invariant: docs/status/requirement_status.index.yaml declares volume 5
+  at 0 entries but 2 are on disk
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0297-20260826
+discovered_at: 2026-08-26T19:00:00Z
+severity: MINOR
+status: resolved
+resolved_at: 2026-08-26T19:05:00Z
+resolving_run: orch-loop-iss0346
+queue_task_id: 346
+github_issue_number: 665
+github_issue: https://github.com/tvolodi/letflow/issues/665
+description: >
+  Found incidentally while verifying ISS-0297's fix (GH#596) via
+  TEST_PARALLEL_N=16 scripts/test_parallel.sh -- unrelated to that issue's
+  own two known flakes, filed separately per WF-03's incidental-finding
+  rule. test/docs/requirement_status_invariants_test.exs's A9 assertion
+  failed: docs/status/requirement_status.index.yaml's volume-5 entry
+  declared `entries: 0`, but docs/status/requirement_status.v5.yaml already
+  had 2 real entries on disk (REQ-133-done and REQ-150-started, both
+  appended without the index's declared count being bumped in the same
+  commit -- the same class of drift ISS-0199 finding 2 caught on volume 2).
+acceptance_criteria:
+  - "index.yaml's volume 5 entries: count matches the real count in v5.yaml"
+  - "test/docs/requirement_status_invariants_test.exs's A9 assertion passes"
+resolution: >
+  Recounted docs/status/requirement_status.v5.yaml's history: (grep '^  -
+  req:' -> 2 entries: REQ-133 done, REQ-150 started). Updated
+  docs/status/requirement_status.index.yaml's volume-5 entries: field from
+  0 to 2, with a note explaining the correction. Verified: `mix test
+  test/docs/requirement_status_invariants_test.exs` -- 20/20 passed (was
+  19/20 with the A9 failure before the fix).

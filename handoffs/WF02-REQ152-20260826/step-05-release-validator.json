@@ -10,7 +10,9 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
-    "requirement_ids": ["REQ-152"],
+    "requirement_ids": [
+      "REQ-152"
+    ],
     "issue_ids": [],
     "requirement_text": {
       "REQ-152": "Deny all four ambient Lua time sources and implement platform.now() (LUA-14 restated). See docs/requirements.yaml REQ-152 for full 8-item acceptance_criteria."
@@ -93,10 +95,10 @@
       "requirements_yaml": "REQ-152 status is still 'in_progress' (docs/requirements.yaml line ~7545-7547) -- correctly not yet flipped to done, awaiting this gate's PASS routing to DOC-UPDATER.",
       "status_history": "docs/status/requirement_status.v5.yaml line 220 has only a 'started' event for REQ-152 (2026-08-26T20:19:00Z, ORCH, WF02-REQ152-20260826 Step 00) -- no 'done' event yet. No staleness/mismatch found: history and requirements.yaml agree the requirement is still open pending this validation."
     },
-    "branch_verified": "feature/WF02-REQ152-20260826 (confirmed via git branch --show-current)"
+    "branch_verified": "feature/WF02-REQ152-20260826 (confirmed via git branch --show-current)",
+    "next_action": "Route to DOC-UPDATER"
   },
   "rework_count": 0,
   "max_rework": 3,
-  "completed_at": "2026-08-26T21:40:00Z",
-  "next_action": "Route to DOC-UPDATER"
+  "completed_at": "2026-08-26T21:40:00Z"
 }

@@ -10,7 +10,9 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
-    "requirement_ids": ["REQ-152"],
+    "requirement_ids": [
+      "REQ-152"
+    ],
     "issue_ids": [],
     "requirement_text": {
       "REQ-152": "Deny all four ambient Lua time sources (os.time, os.date, os.clock, os.difftime) and implement platform.now() (LUA-14 restated). GATE: SECURITY-REVIEWER is a hard gate -- this modifies the sandbox boundary. See docs/requirements.yaml REQ-152 for full text."
@@ -88,10 +90,10 @@
       "c_no_tenant_influence_on_time_source_resolution": "CONFIRMED. lua_platform_time_source is set only in config/config.exs (static, boot-time) and via Application.put_env in test setup/on_exit (test-only); no Lua-exposed function or tenant-facing code path reads or writes this key."
     },
     "issues": [],
-    "overall": "PASS -- no BLOCKER findings. All applicable invariants (INV-3, INV-4, INV-6, INV-7, INV-8) verified satisfied. INV-1, INV-2, INV-5 correctly NOT-APPLICABLE (no tenant table/migration, no API response shaping, no lookup-by-ID endpoint in this diff)."
+    "overall": "PASS -- no BLOCKER findings. All applicable invariants (INV-3, INV-4, INV-6, INV-7, INV-8) verified satisfied. INV-1, INV-2, INV-5 correctly NOT-APPLICABLE (no tenant table/migration, no API response shaping, no lookup-by-ID endpoint in this diff).",
+    "next_action": "Route to REVIEWER (2d)"
   },
   "completed_at": "2026-08-26T20:38:14Z",
-  "next_action": "Route to REVIEWER (2d)",
   "rework_count": 0,
   "max_rework": 3
 }

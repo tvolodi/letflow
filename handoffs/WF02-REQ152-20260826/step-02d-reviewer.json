@@ -11,7 +11,9 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
-    "requirement_ids": ["REQ-152"],
+    "requirement_ids": [
+      "REQ-152"
+    ],
     "issue_ids": [],
     "requirement_text": {
       "REQ-152": "Deny all four ambient Lua time sources (os.time, os.date, os.clock, os.difftime) and implement platform.now() (LUA-14 restated). See docs/requirements.yaml REQ-152 for full text."
@@ -70,9 +72,9 @@
     "decision_0014_consistency": "Internally consistent with docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md's LUA-14 restatement: platform.now() is implemented (returns ISO 8601 UTC per DateTime.to_iso8601/1 after DateTime.shift_zone!/2 to Etc/UTC), and os.time plus the three additional ambient time functions (os.date/os.clock/os.difftime) are explicitly denied with moduledoc language stating this goes beyond LUA-14's literal wording as a deliberate extension, exactly as decision 0014 calls for ('Expansion should deny all four, and should say plainly that doing so goes beyond LUA-14's literal wording'). The os.setlocale gap-closure (5th entry) is also consistent with decision 0014's own finding that the os surface is wider than the default deny-set (5 functions left reachable, not 4) -- REQ-152 closes all 5, matching decision 0014's LUA-03 restatement rather than contradicting it. platform.now is documented as ungated by design per decision 0014's capability-matrix framing, binding on REQ-157's future work not to add a gate 'by symmetry'.",
     "sandbox_deny_set_mechanism_check": "Verified the :sandboxed-replaces-defaults trap decision 0014 warns about was genuinely avoided: the 5 new entries are appended directly to the existing @sandbox_deny_set module attribute (sandbox.ex), not a second/partial list; Sandbox.new/1 still derives sandboxed_paths from that single attribute and passes it to the sole Lua.new/1 call site (INV-SBX-1 unaffected), now 33 entries instead of 28.",
     "issues_filed": [],
-    "summary": "PASS. TimeSource behaviour + Application.get_env resolution is idiomatic Elixir DI for an ambient side effect, not a crutch -- no process/state involved so gen_statem is not applicable here. No supervision or process-isolation change of any kind; Letflow.InstanceSupervisor is untouched. No scope creep: platform.ex implements exactly platform.now/0 and its supporting types, nothing else under platform.*, matching REQ-152's explicit boundary. One non-blocking type-safety observation (bare String.t()/atom-resolved-behaviour typing, consistent with existing codebase style) noted but not filed as an issue. Fully consistent with decision 0014's LUA-14 restatement and its os-surface gap-closure finding, and with the :sandboxed-replaces-defaults trap avoidance the decision record specifically warns about."
+    "summary": "PASS. TimeSource behaviour + Application.get_env resolution is idiomatic Elixir DI for an ambient side effect, not a crutch -- no process/state involved so gen_statem is not applicable here. No supervision or process-isolation change of any kind; Letflow.InstanceSupervisor is untouched. No scope creep: platform.ex implements exactly platform.now/0 and its supporting types, nothing else under platform.*, matching REQ-152's explicit boundary. One non-blocking type-safety observation (bare String.t()/atom-resolved-behaviour typing, consistent with existing codebase style) noted but not filed as an issue. Fully consistent with decision 0014's LUA-14 restatement and its os-surface gap-closure finding, and with the :sandboxed-replaces-defaults trap avoidance the decision record specifically warns about.",
+    "next_action": "Route to TEST-DESIGNER (3)"
   },
   "rework_count": 0,
-  "max_rework": 3,
-  "next_action": "Route to TEST-DESIGNER (3)"
+  "max_rework": 3
 }

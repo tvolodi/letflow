@@ -9,12 +9,14 @@
   "created_at": "2026-08-26T18:30:00Z",
   "started_at": "2026-08-26T18:45:00Z",
   "completed_at": "2026-08-26T19:00:00Z",
-  "status": "COMPLETE",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S0",
     "requirement_ids": [],
-    "issue_ids": ["ISS-0297"],
+    "issue_ids": [
+      "ISS-0297"
+    ],
     "requirement_text": {
       "ISS-0297": "3 test failures under 16-way scripts/test_parallel.sh parallelism: 2x Letflow.EngineConcurrencyTest (Postgres connection-pool exhaustion) and 1x Mix.Tasks.Letflow.AuditIssueClosuresTest (described as 'gh CLI timeout'). Not caused by any specific branch. Pool sizing: with N=16 partitions, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2 -> budget=85, pool_size=85/16=5 per partition. Affected files: test/letflow/engine_concurrency_test.exs, test/mix/tasks/letflow.audit_issue_closures_test.exs, scripts/test_parallel.sh."
     },

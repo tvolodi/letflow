@@ -9,12 +9,14 @@
   "created_at": "2026-08-26T18:20:00Z",
   "started_at": "2026-08-26T18:20:00Z",
   "completed_at": "2026-08-26T18:21:00Z",
-  "status": "DONE",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S0",
     "requirement_ids": [],
-    "issue_ids": ["ISS-0297"],
+    "issue_ids": [
+      "ISS-0297"
+    ],
     "requirement_text": {
       "ISS-0297": "3 test failures under 16-way scripts/test_parallel.sh parallelism: 2x Letflow.EngineConcurrencyTest (Postgres connection-pool exhaustion) and 1x Mix.Tasks.Letflow.AuditIssueClosuresTest (gh CLI timeout). Discovered by TEST-RUNNER during REQ-140's broader sanity check. None of the affected files are touched by that branch -- pre-existing. Needs diagnosis of root cause for each and a fix or documented mitigation. Queue task 297 (GH#596). See docs/issues/ISS-0297.yaml."
     },

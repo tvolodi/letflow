@@ -10,7 +10,9 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
-    "requirement_ids": ["REQ-152"],
+    "requirement_ids": [
+      "REQ-152"
+    ],
     "issue_ids": [],
     "requirement_text": {
       "REQ-152": "Deny all four ambient Lua time sources (os.time, os.date, os.clock, os.difftime) and implement platform.now() (LUA-14 restated, deliberately beyond its literal wording). See docs/requirements.yaml REQ-152 for full text and acceptance_criteria."
@@ -33,7 +35,7 @@
     "description": "ELIXIR-DEV (WF-02 Step 2a) for REQ-152. Implement per lib/letflow/design/req152-lua-time-denial.md: extend the sandbox deny-set (5 new entries: os.time, os.date, os.clock, os.difftime, os.setlocale) and implement platform.now/0 with an injectable TimeSource behaviour.",
     "acceptance_criteria": [
       "git branch --show-current == feature/WF02-REQ152-20260826 before touching any file",
-      "Implement per the design doc's §6-8: sandbox.ex deny-set extension, platform.ex with platform.now/0, TimeSource behaviour + SystemClock default impl, Lua.set!/3 wiring in Sandbox.new/1",
+      "Implement per the design doc's \u00a76-8: sandbox.ex deny-set extension, platform.ex with platform.now/0, TimeSource behaviour + SystemClock default impl, Lua.set!/3 wiring in Sandbox.new/1",
       "mix compile --warnings-as-errors exits 0",
       "mix format --check-formatted passes",
       "Write ExUnit tests are NOT this step's job (TEST-DESIGNER does that in Step 3) -- but do a self-check that the 8 acceptance criteria in docs/requirements.yaml's REQ-152 entry are all achievable given the implementation",
@@ -52,10 +54,9 @@
     "mix_format_check_formatted": "PASS (no output, exit 0)",
     "mix_test_lua_dir": "30/30 passed (test/letflow/engine/lua/)",
     "mix_test_full_suite": "2068 passed (5 properties, 2063 tests), 3 excluded, 0 failures -- 'Finished in 659.8 seconds'",
-    "self_review_note": "One iteration required: platform.ex's initial moduledoc prose literally contained the substring \"Lua.new(\", which test/letflow/engine/lua/sandbox_test.exs's grep-based single-call-site guard (AC1's original REQ-151 regression test) matched as a second call site. Reworded the moduledoc to describe the composition point without repeating that literal substring; re-verified grep -rn \"Lua.new(\" lib --include=*.ex returns exactly one hit (sandbox.ex only)."
+    "self_review_note": "One iteration required: platform.ex's initial moduledoc prose literally contained the substring \"Lua.new(\", which test/letflow/engine/lua/sandbox_test.exs's grep-based single-call-site guard (AC1's original REQ-151 regression test) matched as a second call site. Reworded the moduledoc to describe the composition point without repeating that literal substring; re-verified grep -rn \"Lua.new(\" lib --include=*.ex returns exactly one hit (sandbox.ex only).",
+    "next_action": "Route to SECURITY-REVIEWER (2c)"
   },
-  "status": "COMPLETED",
-  "next_action": "Route to SECURITY-REVIEWER (2c)",
   "completed_at": "2026-08-26T20:40:00Z",
   "rework_count": 0,
   "max_rework": 3

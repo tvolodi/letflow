@@ -23,8 +23,11 @@ defmodule Letflow.TenantProvisioning.BackfillTest do
 
   alias Letflow.EventStore.Registry
   alias Letflow.EventStore.Registry.EventType
+  alias Letflow.Identity.Tenant
   alias Letflow.TenantFixture
+  alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Backfill
+  alias Letflow.TenantProvisioning.Registration
 
   # ---------------------------------------------------------------------------
   # Fixtures
@@ -209,5 +212,73 @@ defmodule Letflow.TenantProvisioning.BackfillTest do
     # v3 is untouched.
     assert {:ok, %EventType{schema_version: 3}} =
              Registry.get_type("DEFINITION_PROMOTED", tenant_id)
+  end
+
+  # ---------------------------------------------------------------------------
+  # ISS-0343 regression: a tenant whose Registration row survives its own
+  # schema being dropped mid-sweep is skipped, not a crash of the whole run.
+  # ---------------------------------------------------------------------------
+
+  # Provisions a real tenant, then drops its physical schema WITHOUT deleting the
+  # Registration row -- the exact "Registration exists, schema does not" window
+  # ISS-0343's concurrent teardown/offboarding race produces. Mirrors
+  # test/letflow/event_store/registry_tenant_schema_missing_test.exs's own
+  # tenant_with_vanished_schema/1 helper (this file needs its own copy since it lives
+  # in a different test module).
+  defp tenant_with_vanished_schema!(prefix) do
+    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
+    tenant =
+      %Tenant{}
+      |> Tenant.create_changeset(
+        %{
+          slug: Letflow.TenantSlugFixture.unique_slug(prefix),
+          display_name: "ISS-0343 Backfill Test Tenant"
+        },
+        :disabled
+      )
+      |> Repo.insert!()
+
+    on_exit(fn ->
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+    end)
+
+    assert {:ok, %Registration{schema_name: schema_name}} =
+             TenantProvisioning.provision_tenant_schema(tenant.id)
+
+    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+
+    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+
+    tenant.id
+  end
+
+  test "regression: ISS-0343 -- a tenant whose schema vanished mid-sweep is skipped, not a crash of the whole run" do
+    # A normal, healthy tenant that the sweep must still update.
+    %{tenant_id: healthy_tenant_id, schema_name: healthy_schema_name} =
+      TenantFixture.provisioned_tenant!(slug_prefix: "iss0343-backfill-healthy")
+
+    downgrade_to_v1!(healthy_schema_name)
+
+    # A tenant whose Registration row exists but whose physical schema has already
+    # been dropped -- the exact race Backfill.run/1's Registration -> Registry.register_type/2
+    # window can hit (design doc section 1). Pre-fix, Registry.register_type/2 let the
+    # resulting Postgrex.Error (undefined_table) propagate uncaught, which unwound
+    # straight out of Enum.reduce_while/3 and crashed the ENTIRE run -- including the
+    # still-healthy tenant above, which would never get updated.
+    vanished_tenant_id = tenant_with_vanished_schema!("iss0343-backfill-vanished")
+
+    assert {:ok, %{updated: 1, skipped: 1}} = Backfill.run(v2_attrs())
+
+    # The healthy tenant was updated despite the other tenant's schema having vanished --
+    # proof the vanished tenant did not halt/crash the sweep for everyone else.
+    assert {:ok, %EventType{schema_version: 2}} =
+             Registry.get_type("DEFINITION_PROMOTED", healthy_tenant_id)
+
+    # The vanished tenant's Registration row is still queryable (it was never deleted --
+    # only its physical schema is gone), confirming this test exercised the intended
+    # "Registration present, schema absent" window rather than :tenant_not_provisioned.
+    assert %Registration{} = Repo.get_by(Registration, tenant_id: vanished_tenant_id)
   end
 end

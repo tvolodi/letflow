@@ -2567,6 +2567,27 @@
             "queue_task_id": 304,
             "queue_agent_id": "orch-main",
             "note": "WF-02 for REQ-152 (queue task 304, GH#604) DONE. Deny all four ambient Lua time sources (os.time/os.date/os.clock/os.difftime) + os.setlocale gap closure, implement platform.now(). SECURITY-REVIEWER hard gate PASS. All gates passed: CODE-DESIGNER, CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR, TEST-RUNNER (2092/2092), RELEASE-VALIDATOR (independently re-verified), DOC-UPDATER. requirements.yaml REQ-152 status: done. Queue task 304 released status: done. Forwarded ISS-0347/GH#668 (pre-existing backend CI lint_handoffs schema-drift + BadMapError crash, structurally attributed, not fixed here). Claimed via get_next_task after ORCH force-released expired queue tasks 301/302/303 (REQ-149/150/151, done in reality but left as dangling depends_on edges after a prior queue reset re-registered them as 335/336/337) which had been silently blocking this and other downstream tasks."
+        },
+        {
+            "run_id": "WF03-ISS0347-20260826",
+            "workflow_id": "WF-03",
+            "requirement_ids": [],
+            "issue_ids": [
+                "ISS-0347"
+            ],
+            "stage": "S0",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/mix/tasks/letflow.lint_handoffs.ex"
+            ],
+            "lock_acquired_at": "2026-08-26T21:30:08Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PENDING (ELIXIR-DEV dispatched)",
+            "backfilled": false,
+            "queue_task_id": 347,
+            "queue_agent_id": "orch-main",
+            "note": "WF-03 for ISS-0347 (queue task 347, GH#668). Backend CI lint_handoffs gate: (1) handoff schema check rejects next_action/PASS fields actually used throughout the pipeline (recurring class, see ISS-0342/ISS-0345), (2) BadMapError crash in Mix.Tasks.Letflow.LintHandoffs.print_advisory/1. Pre-existing on main, discovered by ELIXIR-DEV during WF02-REQ152-20260826's Step Final CI run."
         }
     ]
 }

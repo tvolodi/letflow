@@ -1,0 +1,69 @@
+{
+  "handoff_id": "step03d-WF03-ISS0347-20260826",
+  "run_id": "WF03-ISS0347-20260826",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0347-20260826/step-03d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0347"],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0347": "Fix normalizes lint_file/2's parse-error advisory shape in lib/mix/tasks/letflow.lint_handoffs.ex."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0347-20260826/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0347-20260826/step-03c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "owned_modules": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0347-20260826"
+  },
+  "task": {
+    "description": "REVIEWER hard gate on ISS-0347's fix: idiom/scope/decision-record consistency.",
+    "acceptance_criteria": [
+      "Check against the 4 REVIEWER questions (idiomatic vs crutch, supervision N/A, type-safety gaps, scope creep)",
+      "Check against docs/anti-patterns.md",
+      "Confirm the fix is the minimal correct change (single literal shape normalization), no scope creep beyond ISS-0347",
+      "PASS or FAIL with specifics; route to TEST-DESIGNER on PASS, back to ELIXIR-DEV on FAIL"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "diff_reviewed": "lib/mix/tasks/letflow.lint_handoffs.ex line ~398: advisory: [] -> advisory: %{path: path, warnings: [], size_info: %{desc_len: 0, summary_len: 0}} in the parse-error branch of lint_file/2",
+    "findings": [
+      {
+        "question": "idiomatic vs crutch",
+        "note": "Not a crutch. The old `advisory: []` in the parse-error branch was simply the wrong shape for a value that print_advisory/1 (line 695-722) accesses as r.advisory.warnings / r.advisory.size_info. This branch's new literal now matches the shape used in the two other branches (non-JSON branch, line ~360, and the success path via check_advisory/2 at 376-382). This is a genuine bug fix, not a paper-over."
+      },
+      {
+        "question": "supervision",
+        "note": "N/A - no process code touched."
+      },
+      {
+        "question": "type-safety gap",
+        "non_blocking": true,
+        "note": "The %{path:, warnings:, size_info: %{desc_len:, summary_len:}} shape is now written as an identical inline map literal in two branches (non-JSON at ~360, parse-error at ~398) plus produced by check_advisory/2 in the third. Three independent hand-written copies of the same shape is exactly the kind of drift that caused ISS-0347 in the first place. Worth a follow-up: extract a private helper (e.g. defp empty_advisory(path)) or a @type/struct for the advisory shape so the three sites can't diverge again. Not filing a new docs/issues/ entry for this since it's small and directly adjacent to the just-fixed bug; flagging here is sufficient for TEST-DESIGNER/ELIXIR-DEV awareness, but if this pattern reappears elsewhere it should get a type-safety issue filed."
+      },
+      {
+        "question": "scope creep",
+        "note": "None. Diff is a single line, confined to the exact function and branch named in ISS-0347. No unrelated refactors, no new abstractions."
+      }
+    ],
+    "anti_patterns_check": "No existing docs/anti-patterns.md entry matches this specific inline-map-shape-drift issue; not adding a new entry since REVIEWER doesn't author anti-patterns entries speculatively and the fix itself doesn't demonstrate a *newly discovered* mistake pattern beyond what's already implicit in the diff.",
+    "decision_record_consistency": "N/A - no framework/library choice involved.",
+    "next_action": "Route to TEST-DESIGNER"
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "completed_at": "2026-08-26T21:45:18Z"
+}

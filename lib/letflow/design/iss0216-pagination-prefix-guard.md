@@ -105,24 +105,41 @@ who reads the existing call sites would ever need to actually handle.
 prefix case is intercepted *before* `check_prefix/2`'s existing logic runs,
 not folded into its existing `if`/`else`.
 
-New guard clause, ordered before the existing body, checked first thing on
-entry to the function (so it runs before the size/`starts_with?` computation,
-not after — the existing conjunct is never evaluated when `prefix == ""`):
+A new function-head clause is added immediately above the existing
+`check_prefix/2` clause (Elixir multiple-clause dispatch on function head,
+not an `if` inserted into the existing single clause) — this keeps the
+precondition check textually separate from, and evaluated strictly before,
+the existing size/`starts_with?` logic, and keeps the existing clause's diff
+to zero lines changed (only the new clause is added above it).
 
-```
-defp check_prefix(_decoded, ""), do:
-  raise ArgumentError, "Letflow.Api.Pagination.decode_cursor/4 called with an empty prefix — prefix must be a non-empty, hardcoded per-endpoint literal (see moduledoc INV-1/INV-5); an empty prefix defeats cross-endpoint cursor isolation (ISS-0216)"
+The new clause's head matches `check_prefix/2` when its second argument (the
+`prefix`) is the empty string, disregarding the first argument (`decoded`)
+entirely — i.e. it is decided purely by whether `prefix` is empty, before any
+of the existing size/`starts_with?` computation runs on `decoded`. Because
+Elixir clause dispatch tries clauses top-to-bottom, ordering this clause first
+guarantees it intercepts the empty-`prefix` case before the existing clause's
+body ever executes.
 
-defp check_prefix(decoded, prefix) do
-  # existing body, unchanged
-end
-```
+The new clause's body does exactly one thing: it raises `ArgumentError`. It
+does not return `:ok` or `{:error, ...}` — execution does not fall through to
+a return value at all, matching the `@spec` staying unchanged (a `raise` is
+outside a function's `@spec` return type). The exception message must convey,
+at minimum:
 
-Two function-head clauses (Elixir multiple-clause dispatch), not an `if`
-inserted into the existing single clause — this keeps the precondition check
-textually separate from, and evaluated strictly before, the existing
-size/`starts_with?` logic, and keeps the existing clause's diff to zero lines
-changed (only the new clause is added above it).
+- which function was misused — `Letflow.Api.Pagination.decode_cursor/4` (the
+  public entry point a caller actually invokes; `check_prefix/2` itself is
+  private and not part of anyone's mental model of "what did I call"),
+- what the precondition is — `prefix` must be a non-empty, hardcoded,
+  per-endpoint literal, not derived from request/query/path input,
+- why it matters — an empty `prefix` defeats the cross-endpoint cursor
+  isolation this check exists to provide (ISS-0216),
+- a pointer back to the moduledoc invariant that documents this contract
+  (INV-9, added in §3), so a future reader hitting the crash can find the
+  authoritative explanation rather than just the one-line message.
+
+The existing clause (the current size/`starts_with?` logic) is otherwise
+untouched — no line of its existing body changes; it simply becomes the
+second of two clauses instead of the only one.
 
 ### 2.2 `decode_cursor/4` — no signature or `@spec` change
 

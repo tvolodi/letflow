@@ -521,8 +521,9 @@ volumes:
     path: docs/status/requirement_status.v4.yaml
     status: current
     opened: 2026-08-23
-    entries: 53
+    entries: 54
     note: >
+      Incremented to 54 by WF02-REQ149-20260826 (TEST-RUNNER) A9 fix: vocab-fix commit added one entry.
       Incremented to 53 by WF03-ISS0332-20260826 (ORCH) ISS-0332 done-event append.
       append (DOC-UPDATER, Step 6) -- 52 on-disk `- req:` entries in
       requirement_status.v4.yaml, no rebase conflict on this file.

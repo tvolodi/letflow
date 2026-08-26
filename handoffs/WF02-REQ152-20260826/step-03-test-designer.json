@@ -1,0 +1,57 @@
+{
+  "handoff_id": "step03-WF02-REQ152-20260826",
+  "run_id": "WF02-REQ152-20260826",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ152-20260826/step-03-test-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-152"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-152": "Deny all four ambient Lua time sources (os.time, os.date, os.clock, os.difftime) and implement platform.now() (LUA-14 restated). See docs/requirements.yaml REQ-152 for full text and its 8-item acceptance_criteria list -- read that file directly for the complete test-level criteria."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ152-20260826/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ152-20260826/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ152-20260826/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/lua/sandbox.ex",
+      "lib/letflow/engine/lua/platform.ex",
+      "lib/letflow/design/req152-lua-time-denial.md"
+    ],
+    "owned_modules": [
+      "test/letflow/engine/lua/sandbox_test.exs",
+      "test/letflow/engine/lua/platform_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ152-20260826"
+  },
+  "task": {
+    "description": "TEST-DESIGNER (WF-02 Step 3) for REQ-152. Real application-executable surface exists (sandbox.ex, platform.ex) -- full procedure applies, scope test is a formality here.",
+    "acceptance_criteria": [
+      "Write test/specs/REQ-152.md and test code covering every one of REQ-152's acceptance_criteria in docs/requirements.yaml: os.time/date/clock/difftime nil-or-raise from inside a script; default denials still hold (os.execute, load nil-or-raise); remaining 7 os functions nil-or-raise (all 11 total proven unreachable); platform.now() parseable by DateTime.from_iso8601/1; injectable exact-timestamp test via TimeSource swap; moduledoc content assertions if applicable; mix test/compile pass",
+      "Every acceptance criterion has >=1 test case that would fail if violated",
+      "No test depends on wall-clock time or unseeded randomness -- use the injectable TimeSource for the exact-timestamp test",
+      "Follow existing test conventions in test/letflow/engine/lua/sandbox_test.exs"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "artifacts_out": [
+      "test/specs/REQ-152.md",
+      "test/letflow/engine/lua/sandbox_test.exs",
+      "test/letflow/engine/lua/platform_test.exs"
+    ],
+    "summary": "Wrote test/specs/REQ-152.md (criterion-by-criterion rationale for all 8 acceptance criteria) and test code covering every criterion. Extended test/letflow/engine/lua/sandbox_test.exs with: 4 tests for os.time/date/clock/difftime raising from inside a script (AC1); 2 trap-guard regression tests re-asserting os.execute/load still denied via Sandbox.new/0 and Sandbox.new/1 with arbitrary opts against the 33-entry list (AC2); 7 tests for the remaining os functions (os.exit, os.getenv, os.remove, os.rename, os.setlocale, os.tmpname, os.execute) completing all 11 os functions (AC3); 4 moduledoc content assertions on Sandbox for the 6-of-11 finding, BEYOND-LUA-14 framing, 28->33 count, and os.setlocale gap-closure disclosure (AC6). Created new test/letflow/engine/lua/platform_test.exs with: 2 tests for platform.now() parseable by DateTime.from_iso8601/1 (script-visible and direct Elixir call) (AC4); 3 tests for exact pre-set timestamp injection via a local FixedTimeSource behaviour swapped in via Application.put_env/on_exit, including a live-resolution proof (AC5); 5 moduledoc content assertions on Platform for the ungated-by-design statement, REQ-157 symmetry warning, and injection-mechanism/composition-point disclosure (AC7). AC8 (mix test/compile output) is TEST-RUNNER's Step 4 responsibility per project convention (same disposition as REQ-151's spec). No test depends on wall-clock time or unseeded randomness -- all exact-value assertions use a hardcoded DateTime literal via the injectable TimeSource; parseability-only assertions never assert a specific value. Did not run mix test/compile myself, per instructions.",
+    "next_action": "Route to TEST-DESIGN-VALIDATOR",
+    "completed_at": "2026-08-26T20:42:07Z"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

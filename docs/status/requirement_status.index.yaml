@@ -521,8 +521,11 @@ volumes:
     path: docs/status/requirement_status.v4.yaml
     status: current
     opened: 2026-08-23
-    entries: 51
+    entries: 52
     note: >
+      Incremented to 52 by WF02-REQ077-20260826's own REQ-077 done-event
+      append (DOC-UPDATER, Step 6) -- 52 on-disk `- req:` entries in
+      requirement_status.v4.yaml, no rebase conflict on this file.
       Opened by WF02-REQ082-20260823's own Step Final roll, successor to
       volume 3. Created with volume 3's header text verbatim (volume number,
       opening date and predecessor path updated) and an empty `history:`

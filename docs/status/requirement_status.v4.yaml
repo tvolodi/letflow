@@ -1095,3 +1095,26 @@ history:
       skipped, starting at Step 2a. Branch feature/WF02-REQ077-20260826
       created and pushed. Queue task 331 (GH#637), locked by orch-ai-dala.
       50 on-disk entries before this append; 51 after.
+  - req: REQ-077
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-26T04:11:08Z"
+    note: >
+      WF02-REQ077-20260826 complete. Six R-Co promotion-pipeline route modules
+      (promotion_review.zig, promotions.zig, promotion_read.zig,
+      promotion_assertion.zig, promotion.zig, definition_rollback.zig) ported as
+      ten routes across three routers: lib/letflow/routers/promotions.ex,
+      definitions.ex, and tenants.ex. Design artefact
+      lib/letflow/design/req077-promotion-pipeline-routes.md already validated
+      2026-08-22 (CODE-DESIGN-VALIDATOR PASS); Step 1/1b skipped, implementation
+      started directly at Step 2a. Two rework iterations during this run:
+      SECURITY-REVIEWER caught an INV-8 nil-crash, and TEST-RUNNER caught an
+      iso8601/DateTime crash -- both fixed and re-verified. Full suite:
+      2027/2028 (one pre-existing, unrelated failure tracked as ISS-0333).
+      RELEASE-VALIDATOR independently re-verified all six acceptance criteria
+      PASS. Also corrected this design doc's stale "IS BLOCKED" banner (lines
+      ~10-31), which had gone stale once REQ-140 (platform-event-appender)
+      shipped 2026-08-23 -- flagged by both ELIXIR-DEV and
+      TEST-DESIGN-VALIDATOR during this run but left unfixed until now. 51
+      on-disk `- req:` entries in requirement_status.v4.yaml before this
+      append; 52 after.

@@ -1,0 +1,63 @@
+{
+  "handoff_id": "step01-WF03-ISS0297-20260826",
+  "run_id": "WF03-ISS0297-20260826",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0297-20260826/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-08-26T18:30:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0297"],
+    "requirement_text": {
+      "ISS-0297": "3 test failures under 16-way scripts/test_parallel.sh parallelism: 2x Letflow.EngineConcurrencyTest (Postgres connection-pool exhaustion) and 1x Mix.Tasks.Letflow.AuditIssueClosuresTest (described as 'gh CLI timeout'). Not caused by any specific branch. Pool sizing: with N=16 partitions, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2 -> budget=85, pool_size=85/16=5 per partition. Affected files: test/letflow/engine_concurrency_test.exs, test/mix/tasks/letflow.audit_issue_closures_test.exs, scripts/test_parallel.sh."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "step00-WF03-ISS0297-20260826"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0297.yaml",
+      "test/letflow/engine_concurrency_test.exs",
+      "test/mix/tasks/letflow.audit_issue_closures_test.exs",
+      "lib/mix/tasks/letflow.audit_issue_closures.ex",
+      "scripts/test_parallel.sh",
+      "config/test.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/engine_concurrency_test.exs",
+      "test/mix/tasks/letflow.audit_issue_closures_test.exs",
+      "scripts/test_parallel.sh",
+      "config/test.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0297-20260826",
+    "pre_loaded_diagnosis": {
+      "engine_concurrency_root_cause": "EngineConcurrencyTest has @instance_count 100 and launches 100 concurrent Task.async processes each needing a DB connection via Letflow.DataCase (async: false, each task checks out its own connection). With pool_size=5 at N=16, the test exhausts the 5-connection pool immediately when it calls complete_all_concurrently!/2 with 100 instances. This is a pool-size-vs-test-demand mismatch: the test MUST run with pool_size >= 100 to avoid exhaustion.",
+      "audit_closures_root_cause": "AuditIssueClosuresTest calls Audit.run([]) which (1) reads ALL docs/issues/*.yaml files (hundreds, growing), (2) makes a System.cmd('gh', ...) subprocess call for each tracked+closed issue. Under 16-way parallel load the test competes for I/O and CPU for these hundreds of file reads and subprocess spawns, and may exceed ExUnit's default 60-second timeout. The test uses a fake gh.bat so no real network calls are made -- the timeout is load-induced slowness, not network delay.",
+      "fix_options": {
+        "engine_concurrency": "Option A (PREFERRED): Add @moduletag :high_pool_demand to engine_concurrency_test.exs and update scripts/test_parallel.sh to pass --exclude high_pool_demand when computed pool_size < @instance_count (i.e., < 100, which happens at any N >= 2 on a 100-max_connections Postgres). The test must run only when pool_size >= 100 or when the caller explicitly includes it. Option B: Reduce @instance_count to something that fits in pool_size=5, but this defeats the test's purpose (AC2 explicitly requires 100 instances to demonstrate real concurrency).",
+        "audit_closures": "Option A (PREFERRED): Add @moduletag timeout: 120_000 (2 minutes) to AuditIssueClosuresTest to prevent the timeout under load -- the test is legitimately slow when the docs/issues/ corpus is large but should not be skipped. Option B: Tag it :high_load_sensitive and exclude from 16-way runs, but this leaves the test running only in single-partition mode which defeats parallelism coverage. Option C: Speed up the test by reducing the corpus read (but the moduledoc explicitly tests the real corpus)."
+      }
+    }
+  },
+  "task": {
+    "description": "Perform WF-03 Steps 0.5 (registry lookup) and 1 (confirm/complete diagnosis) for ISS-0297.\n\n## Step 0.5 - Registry lookup\nCheck docs/issues/*.yaml for any previously resolved issue matching these symptoms (pool exhaustion under parallelism, test timeout under parallel load). If found, cite it.\n\n## Step 1 - Confirm and complete diagnosis\nThe ORCH pre-loading gives you root cause hypotheses. Your job is to VERIFY them empirically, not just trust them:\n\n1. Read test/letflow/engine_concurrency_test.exs to confirm @instance_count is 100 and complete_all_concurrently!/2 spawns that many Task.async bodies simultaneously.\n2. Read config/test.exs to confirm pool_size formula: TEST_POOL_SIZE / schedulers_online()*2 when unset.\n3. Compute: with N=16 partitions and max_connections=100, what pool_size does test_parallel.sh compute? (Should be 85/16=5).\n4. Confirm: does pool_size=5 explain pool exhaustion when 100 concurrent tasks each check out a connection? Yes -- 100 > 5.\n5. Read test/mix/tasks/letflow.audit_issue_closures_test.exs to confirm it calls Audit.run([]) against the real docs/issues/ corpus under a fake gh PATH manipulation.\n6. Count the docs/issues/*.yaml files: `(Get-ChildItem docs/issues -Filter '*.yaml').Count`. With hundreds of files and System.cmd spawned per closed issue, confirm this could approach the 60s ExUnit timeout under 16-way load.\n\n## Acceptance criteria\n- Root cause for EngineConcurrencyTest confirmed: @instance_count=100 > pool_size=5\n- Root cause for AuditIssueClosuresTest confirmed: slow test (real corpus + subprocess per issue) vs ExUnit 60s timeout\n- Registry lookup completed\n- result.next_action states the recommended fix: apply @moduletag :high_pool_demand + script fix for EngineConcurrencyTest, and @moduletag timeout: 120_000 for AuditIssueClosuresTest\n- Do NOT implement the fix -- that is step 2 (CODE-DESIGNER) and step 3 (ELIXIR-DEV)",
+    "acceptance_criteria": [
+      "registry lookup completed -- either a prior matching issue found and cited, or confirmed none exists",
+      "@instance_count value in engine_concurrency_test.exs quoted",
+      "computed pool_size for N=16 quoted (from the formula in test_parallel.sh/config/test.exs)",
+      "count of docs/issues/*.yaml files quoted",
+      "result.summary states root cause (not just symptom) for each failure",
+      "result.next_action names the recommended fix approach"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

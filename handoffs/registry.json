@@ -2470,7 +2470,7 @@
             "lock_acquired_at": "2026-08-26T13:27:58Z",
             "lock_released_at": null,
             "released_lock": false,
-            "last_known_step": "Step 02b PENDING (CODE-DESIGN-VALIDATOR dispatched)",
+            "last_known_step": "Step 02b COMPLETED FAIL (32e6fac); Step 02 REWORK 1/3 (CODE-DESIGNER)",
             "backfilled": false,
             "queue_task_id": 343,
             "queue_agent_id": "orch-loop-1787735920",

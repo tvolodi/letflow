@@ -1391,3 +1391,5 @@
 2026-08-26T18:55:00Z | DISPATCH | WF-03 | WF03-ISS0343-20260826 | ORCH -> CODE-DESIGNER | step-02-code-designer.json PENDING committed at dispatch time
 2026-08-26T19:20:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0343-20260826 | CODE-DESIGNER -> ORCH | step-02-code-designer.json PASS. New {:error, :tenant_schema_missing} on register_type/2 and get_type/2, rescue_missing_schema/1 helper rescuing Postgrex undefined_table, Backfill.run/1 skips instead of crashing.
 2026-08-26T19:21:00Z | DISPATCH | WF-03 | WF03-ISS0343-20260826 | ORCH -> CODE-DESIGN-VALIDATOR | step-02b-code-design-validator.json PENDING committed at dispatch time
+2026-08-26T19:45:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0343-20260826 | CODE-DESIGN-VALIDATOR -> ORCH | step-02b-code-design-validator.json FAIL. Design §2.3 contains a real Elixir case clause with Logger.warning call and map update, not prose. 4/5 checks otherwise pass.
+2026-08-26T19:45:30Z | REWORK | WF-03 | WF03-ISS0343-20260826 | ORCH -> CODE-DESIGNER | rework 1/3: strip implementation code from lib/letflow/design/iss0343-backfill-missing-schema-tolerance.md §2.3, restate as prose only

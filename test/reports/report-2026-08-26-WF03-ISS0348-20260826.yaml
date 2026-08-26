@@ -1,0 +1,108 @@
+report_id: WF03-ISS0348-20260826-test-runner
+run_id: WF03-ISS0348-20260826
+workflow_id: WF-03
+step: "04"
+agent: TEST-RUNNER
+branch: feature/WF03-ISS0348-20260826
+head_commit: ccb27fe
+date: "2026-08-26"
+
+environment:
+  db_up: true
+  note: >
+    `docker compose up -d` could not be re-run: `docker` CLI (both as this
+    user and via passwordless `sudo`) got "permission denied" /
+    "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is
+    the docker daemon running?" -- same signature as prior TEST-RUNNER runs
+    on this host (see report-2026-08-26-WF03-ISS0347-20260826.yaml).
+    Confirmed via `systemctl status docker` that the systemd-managed
+    docker.service is failed/restart-looping on a stale /var/run/docker.pid
+    referencing a still-live rogue dockerd (PID 3925615, started Aug 24,
+    genuinely listening on /var/run/docker.sock per `ss -xlp`/`lsof`), and
+    that neither this user nor root (via sudo) can actually reach that
+    daemon over the socket -- environment/mount-namespace isolation, not
+    something to fix by killing a live daemon process (out of scope for a
+    test run, and per this agent's instruction not to run `docker compose
+    up` against a checkout that may share another checkout's container).
+    Confirmed via `ss -tlnp` that a Postgres instance is already live and
+    reachable on 0.0.0.0:5463 / 127.0.0.1:5462, matching this workspace's
+    untracked .env LETFLOW_DB_PORT=5463, so the test DB was reachable
+    without re-running compose. `mix deps.get` succeeded (network
+    reachable this run).
+
+commands:
+  - scripts/test_parallel.sh
+  - "MIX_ENV=test mix test --no-color (full serial run -- the mechanism mix letflow.check uses, and the one that originally reproduced ISS-0348)"
+  - "MIX_ENV=test mix test test/letflow/tenant_provisioning/backfill_test.exs --trace --no-color (isolated re-check of the changed file)"
+
+parallel_run:
+  command: scripts/test_parallel.sh
+  parallelism:
+    n: 8
+    source: nproc
+    test_pool_size: 10
+  combined_result:
+    tests: 2089
+    properties: 5
+    total: 2094
+    failures: 0
+    passed: 2094
+    verdict: PASS
+  raw_output: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.6wY53I
+    test_parallel: TEST_PARALLEL_GROUP=tp1375608 (shared by all 8 partitions)
+    partition 1: 307 tests, 2 properties, 0 failures, exit 0
+    partition 2: 271 tests, 0 properties, 0 failures, exit 0
+    partition 3: 243 tests, 2 properties, 0 failures, exit 0
+    partition 4: 104 tests, 0 properties, 0 failures, exit 0
+    partition 5: 249 tests, 1 property, 0 failures, exit 0
+    partition 6: 348 tests, 0 properties, 0 failures, exit 0
+    partition 7: 288 tests, 0 properties, 0 failures, exit 0
+    partition 8: 279 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 2089 tests, 5 properties, 0 failures (2094/2094 passed)
+
+serial_run:
+  command: "MIX_ENV=test mix test --no-color"
+  purpose: >
+    This is the exact mechanism -- a single non-partitioned `mix test`
+    process -- that mix letflow.check uses and that originally reproduced
+    ISS-0348's flake (shared-connection-pool cross-test interference not
+    present under scripts/test_parallel.sh's per-partition isolation).
+  duration_seconds: 660.3
+  result_line: "Result: 2097 passed (5 properties, 2092 tests), 3 excluded"
+  failures: 0
+  verdict: PASS
+  backfill_test_result: >
+    No per-test trace output was captured in the full serial run (plain
+    `mix test`, not `--trace`), and the summary line reports 0 failures
+    suite-wide, so backfill_test.exs's 5 tests are included in the clean
+    2097-passed total with no failure entries anywhere in the log
+    (confirmed via `grep -n "^Result:\|^Failed:\|Finished in"` -- no
+    `Failed:` line exists in the output at all). To get an explicit,
+    named confirmation for backfill_test.exs specifically, it was also
+    re-run in isolation with --trace immediately after the full serial
+    run finished, against the same live DB state:
+      test regression: ISS-0332 -- idempotent: already-v2 tenant is
+      skipped, not errored (609.1ms) [L#169]
+      Finished in 4.6 seconds (0.00s async, 4.6s sync)
+      Result: 5 passed
+    5 passed, 0 failures -- clean, no flake observed.
+
+scope_check: >
+  This branch's diff (git diff --name-only main...HEAD) touches only
+  docs/issues/ISS-0348.yaml, lib/letflow/design/iss0348-backfill-test-isolation.md,
+  test/letflow/tenant_provisioning/backfill_test.exs, and this run's own
+  handoffs/WF03-ISS0348-20260826/ files. Zero failures were observed in
+  either the partitioned run or the full serial run, so no structural
+  attribution is needed -- there is nothing outside this scope, or
+  anywhere else, to attribute.
+
+failures: []
+failure_attribution: "N/A -- zero failures in both the partitioned run and the full serial run; nothing to attribute."
+
+verdict: PASS
+next_action: "Route to RELEASE-VALIDATOR"

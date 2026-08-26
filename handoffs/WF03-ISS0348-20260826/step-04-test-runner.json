@@ -1,0 +1,61 @@
+{
+  "handoff_id": "step04-WF03-ISS0348-20260826",
+  "run_id": "WF03-ISS0348-20260826",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0348-20260826/step-04-test-runner.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0348"],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0348": "ORCH routed directly from ELIXIR-DEV (step 3) to TEST-RUNNER, skipping TEST-DESIGNER/TEST-DESIGN-VALIDATOR: this fix's entire deliverable IS a test-assertion change to backfill_test.exs itself (per lib/letflow/design/iss0348-backfill-test-isolation.md), already independently checked for rigor by CODE-DESIGN-VALIDATOR (step-02b: confirmed the loosened tally assertions plus unchanged per-tenant Registry.get_type/2 checks still catch a real regression). A TEST-DESIGNER pass designing a test for a test-file change would be circular, mirroring the WF-02 Step 3 scope-test precedent (REQ-150) for artifacts with no additional executable surface to design tests against."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0348-20260826/step-03-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "test/letflow/tenant_provisioning/backfill_test.exs"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0348-20260826"
+  },
+  "task": {
+    "description": "TEST-RUNNER (WF-03 Step 4, routed directly per ORCH's scope note above) for ISS-0348. Run scripts/test_parallel.sh AND a full serial mix test (the mechanism that originally reproduced the flake) to build confidence the fix holds under both.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run, combined parsed Result:/Failed: counts",
+      "Additionally run full serial `mix test` at least once (the mechanism mix letflow.check uses, and the one that originally reproduced ISS-0348) and quote real output for backfill_test.exs specifically",
+      "Any failure attributed structurally per core-directives.md",
+      "Write test/reports/report-<date>-<run-id>.yaml",
+      "PASS -> route to RELEASE-VALIDATOR; FAIL -> rework"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "parallel_run": {
+      "command": "scripts/test_parallel.sh",
+      "tests": 2089,
+      "properties": 5,
+      "total": 2094,
+      "failures": 0,
+      "passed": 2094
+    },
+    "serial_run": {
+      "command": "MIX_ENV=test mix test --no-color",
+      "duration_seconds": 660.3,
+      "result_line": "Result: 2097 passed (5 properties, 2092 tests), 3 excluded",
+      "failures": 0,
+      "backfill_test_isolated_rerun": "5 passed, 0 failures (mix test test/letflow/tenant_provisioning/backfill_test.exs --trace)"
+    },
+    "report": "test/reports/report-2026-08-26-WF03-ISS0348-20260826.yaml",
+    "next_action": "Route to RELEASE-VALIDATOR"
+  },
+  "completed_at": "2026-08-26T23:35:00Z",
+  "rework_count": 0,
+  "max_rework": 3
+}

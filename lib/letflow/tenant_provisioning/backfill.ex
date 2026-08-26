@@ -20,7 +20,7 @@ defmodule Letflow.TenantProvisioning.Backfill do
     registrations = Repo.all(Registration)
 
     Enum.reduce_while(registrations, {:ok, %{updated: 0, skipped: 0}}, fn registration,
-                                                                           {:ok, counts} ->
+                                                                          {:ok, counts} ->
       tenant_id = registration.tenant_id
 
       case Registry.register_type(event_type_attrs, tenant_id) do

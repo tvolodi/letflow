@@ -2440,19 +2440,19 @@
                 "ISS-0340"
             ],
             "stage": "S4",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "test/letflow/api/context_test.exs",
                 "lib/letflow/api/context.ex"
             ],
             "lock_acquired_at": "2026-08-26T17:09:00Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 PENDING (ELIXIR-DEV dispatched)",
+            "lock_released_at": "2026-08-26T20:13:00Z",
+            "released_lock": true,
+            "last_known_step": "Step Final PASS -- PR #658 merged (7515197), ISS-0340 marked resolved (0e47d0c)",
             "backfilled": false,
             "queue_task_id": 340,
             "queue_agent_id": "orch-main",
-            "note": "WF-03 for ISS-0340 (queue task 340, GH#654). Flaky test context_test.exs scoped_repo_opts/1. Claimed via get_next_task 2026-08-26 as part of ORCH sync pass (was not blocked by Lua chain)."
+            "note": "WF-03 for ISS-0340 (queue task 340, GH#654) DONE. Fix landed 5b9b2b5 (test moved out of provisioning describe block), merged via PR #658. Registry entry was stale (still IN_PROGRESS/Step 00 PENDING though the run had already merged) and queue task 340 was still locked -- both found and closed during ORCH's post-REQ150 stale-lock sweep."
         },
         {
             "run_id": "WF03-ISS0343-20260826",

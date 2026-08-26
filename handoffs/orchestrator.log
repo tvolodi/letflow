@@ -1429,3 +1429,4 @@
 2026-08-26T19:56:00Z | STEP_COMPLETE | WF-02 | WF02-REQ150-20260826 | SECURITY-REVIEWER -> ORCH | step-02c-security-reviewer.json PASS. OUT_OF_SCOPE, all invariants N/A.
 2026-08-26T19:57:00Z | DISPATCH | WF-02 | WF02-REQ150-20260826 | ORCH -> REVIEWER | step-02d-reviewer.json PENDING committed at dispatch time
 2026-08-26T20:08:24Z ORCH: WF02-REQ150-20260826 DONE -- REQ-150 done, PR #666 merged (773f170), queue task 336 released status:done
+2026-08-26T20:13:00Z ORCH: stale-lock sweep -- WF03-ISS0340-20260826 registry entry was IN_PROGRESS despite PR #658 already merged; queue task 340 released status:done, registry closed

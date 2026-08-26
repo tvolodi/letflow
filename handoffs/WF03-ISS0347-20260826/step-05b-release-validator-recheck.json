@@ -1,0 +1,76 @@
+{
+  "handoff_id": "step05b-WF03-ISS0347-20260826",
+  "run_id": "WF03-ISS0347-20260826",
+  "workflow_id": "WF-03",
+  "step": "05b",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-ISS0347-20260826/step-05b-release-validator-recheck.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0347"],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0347": "Re-check after ORCH fixed the single blocking issue from step-05's FAIL: this run's own step-04c-test-runner.json had top-level status 'PASS' (invalid enum), corrected to 'COMPLETED' with result.verdict already correctly holding PASS."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0347-20260826/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0347-20260826/step-04c-test-runner.json"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0347-20260826"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR re-check (WF-03 Step 5, rework cycle) for ISS-0347. Confirm the single blocking issue from your prior FAIL is resolved; do not re-run the full suite again unless you have reason to distrust the prior run.",
+    "acceptance_criteria": [
+      "Confirm handoffs/WF03-ISS0347-20260826/step-04c-test-runner.json now has valid top-level status COMPLETED",
+      "Run mix letflow.check yourself and quote real output confirming exit 0 (ORCH already ran it and confirmed exit 0 with 'mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings' -- re-verify independently)",
+      "If clean: PASS, route to ISSUE-FIXER for close (also handle AC2's wording note from your prior review -- flag for DOC-UPDATER-equivalent/ISSUE-FIXER to reword when writing the resolved record)"
+    ]
+  },
+  "result": {
+    "verdict": "PASS (for ISS-0347's own blocker) -- with a new, structurally unrelated blocker discovered and filed",
+    "step04c_status_check": {
+      "field": "handoffs/WF03-ISS0347-20260826/step-04c-test-runner.json top-level status",
+      "value": "COMPLETED",
+      "result_verdict": "PASS",
+      "confirmed": true
+    },
+    "independent_check_run": {
+      "command": "mix letflow.check",
+      "exit": 1,
+      "duration": "Finished in 651.9 seconds (9.3s async, 642.6s sync)",
+      "summary": "Result: 2093/2097 passed (5/5 properties, 2088/2092 tests), 3 excluded. Failed: 4 tests.",
+      "outcome": "mix letflow.check.test: FAILED -- underlying `mix test` run exited 2 (real test failure/error).",
+      "note": "This does NOT match ORCH's claimed 'confirmed exit 0' -- either that check was run at a different point, or the failure is order/pollution-dependent (which the evidence below supports). Reporting the actual result of my own run, not the prior claim."
+    },
+    "acceptance_criteria_check": [
+      {
+        "criterion": "handoffs/WF03-ISS0347-20260826/step-04c-test-runner.json has valid top-level status COMPLETED",
+        "verdict": "PASS",
+        "evidence": "Read the file directly: top-level 'status': 'COMPLETED', result.verdict: 'PASS'. This resolves the exact H1 blocker from step-05's FAIL."
+      },
+      {
+        "criterion": "mix letflow.check exits 0",
+        "verdict": "FAIL, but structurally unrelated to ISS-0347",
+        "evidence": "My independent full run of `mix letflow.check` (652s, non-parallel `mix test`) exited 1 with 4 real test failures, all in Letflow.TenantProvisioning.BackfillTest (test/letflow/tenant_provisioning/backfill_test.exs): 'test regression: ISS-0332 -- backfill updates pre-existing tenant to schema_version 2' (expected {updated:1,skipped:0}, got {updated:1,skipped:1}), 'ISS-0343 -- a tenant whose schema vanished mid-sweep is skipped, not a crash', 'ISS-0332 -- higher existing schema_version is skipped (schema_version_not_monotonic)', 'ISS-0332 -- idempotent: already-v2 tenant is skipped, not errored'. All 4 are count-mismatch assertions on Backfill.run/1's {updated, skipped} tallies -- the signature of cross-test DB-state pollution (BackfillTest uses `async: false` with Sandbox :auto / real schema creation per its own moduledoc, so it sees any tenant rows other tests left committed), not a logic defect newly introduced. lint_handoffs's own scripts/test_parallel.sh run (my prior step-05 run and TEST-RUNNER's step-04c run) was fully green at 2089/2094, 0 failures -- the partitioned mechanism does not exhibit this; only the full serial `mix test` invoked by mix letflow.check does, which itself is evidence of an ordering/pollution mechanism rather than a real regression."
+      },
+      {
+        "criterion": "Structural attribution per core-directives.md (Failure Attribution Is Structural)",
+        "verdict": "Route 1 satisfied -- pre-existing/unrelated to this branch",
+        "evidence": "`git diff --name-only main...HEAD` (17 files) contains no file under test/letflow/tenant_provisioning/ or lib/letflow/tenant_provisioning/ -- this branch touches only lib/mix/tasks/letflow.lint_handoffs.ex, test/mix/tasks/letflow.lint_handoffs_test.exs, docs/issues/ISS-0347.yaml, handoffs/*, and one design doc. `git merge-base main HEAD` == main's own tip commit 0ab7f79 ('fix(ISS-0347): correct H1/H3 handoff schema violations'), i.e. main already contains this branch's fix and this branch adds only handoff/doc bookkeeping on top -- there is no code delta this branch could have contributed to BackfillTest's failure. Structurally, this branch cannot have caused it (Route 1)."
+      }
+    ],
+    "overall_verdict": "PASS for ISS-0347's scope",
+    "reason": "The single blocker from my prior step-05 FAIL (step-04c's invalid top-level status 'PASS') is confirmed fixed -- now 'COMPLETED' with result.verdict 'PASS' intact. ISS-0347's 3 original acceptance criteria (from docs/issues/ISS-0347.yaml) are satisfied: AC1 (lint_handoffs completes without raising) and AC2 (next_action handling, by alternate resolution, wording flagged for reword) were already confirmed PASS in step-05 and are unchanged. AC3 (backend CI green / mix letflow.check as proxy) is satisfied for THIS issue's own defect class -- no [H1]/[H3] handoff-schema violations remain, confirmed by my run reaching the full 642s test phase rather than failing fast on lint. However, mix letflow.check does not currently exit 0: 4 unrelated BackfillTest failures block it, structurally cleared as pre-existing/out-of-scope per Route 1 (module absent from this branch's diff; merge-base with main is this branch's own fix commit). This is a genuine, currently-open defect that will block backend CI on ANY subsequent PR (including this one's own merge) until fixed -- it must be filed as a new issue and is NOT to be silently waved through as 'clean'.",
+    "next_action": "Route to ISSUE-FIXER for ISS-0347 close (this issue's own acceptance criteria are met; also apply the AC2 wording correction noted in step-05 when writing the resolved record). SEPARATELY, file a new issue for the 4 BackfillTest count-mismatch failures under Letflow.TenantProvisioning.BackfillTest (test/letflow/tenant_provisioning/backfill_test.exs) surfaced by a full serial `mix letflow.check` run -- suspected test-isolation/DB-pollution mechanism (BackfillTest is async:false with Sandbox :auto per its own moduledoc, so Backfill.run/1's tenant scan can pick up rows committed by other tests in full-suite ordering that scripts/test_parallel.sh's partitioned execution does not exhibit) -- this will block backend CI on this and any other subsequent PR until resolved, so it should not wait."
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "completed_at": "2026-08-26T22:26:00Z"
+}

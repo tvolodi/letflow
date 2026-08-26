@@ -1,0 +1,45 @@
+{
+  "handoff_id": "step02b-code-design-validator-WF03-ISS0332-20260826",
+  "run_id": "WF03-ISS0332-20260826",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0332-20260826/step-02b-code-design-validator.json",
+  "created_at": "2026-08-26T04:57:54Z",
+  "started_at": "2026-08-26T04:57:54Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0332"],
+    "requirement_text": {
+      "ISS-0332": "REQ-077 bumped the DEFINITION_PROMOTED platform-event-type seed from schema_version 1 (review_id required non-null) to schema_version 2 (review_id nullable) in lib/letflow/tenant_provisioning.ex. This seed only applies to newly provisioned tenants. Pre-existing tenants' event_type_registry still has v1. R10 against such a tenant commits the promotion transaction, then fails the event-append step on schema validation -- Severity-1 broken-audit shape. Needs a backfill routine."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "step02-code-designer-WF03-ISS0332-20260826"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0332-definition-promoted-backfill.md",
+      "docs/issues/ISS-0332.yaml",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/event_store/registry.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0332-20260826"
+  },
+  "task": {
+    "description": "Validate CODE-DESIGNER's design artefact at lib/letflow/design/iss0332-definition-promoted-backfill.md (on branch feature/WF03-ISS0332-20260826). Check out that branch before reading the file.\n\nValidation criteria:\n1. Every ISS-0332 acceptance criterion is explicitly mapped to a design element (AC1: backfill updates pre-existing tenants; AC2: R10 succeeds end-to-end; AC3: idempotent on already-v2 tenants).\n2. Scope decision (backfill only vs structural fix) is stated with rationale.\n3. Backfill module/function name and @spec are stated -- no implementation code present.\n4. All register_type/2 return value cases are addressed (ok, duplicate_event_type_version, schema_version_not_monotonic, tenant_not_provisioned, other).\n5. The design is unambiguous enough for ELIXIR-DEV to implement without making new design decisions.\n6. No implementation code in the design doc (function bodies, actual Elixir code, etc.).\n\nIf PASS: complete handoff with status PASS and next_action 'ORCH routes to ELIXIR-DEV for implementation'.\nIf FAIL: list specific issues; ORCH will rework with CODE-DESIGNER.",
+    "acceptance_criteria": [
+      "All six validation criteria checked against the actual design doc",
+      "PASS verdict only if all six criteria are met",
+      "FAIL verdict with specific issues if any criterion fails"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

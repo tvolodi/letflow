@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0332-20260826/step-02-code-designer.json",
   "created_at": "2026-08-26T04:52:46Z",
   "started_at": "2026-08-26T04:52:46Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-26T04:57:54Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -49,7 +49,13 @@
       "No implementation code in the design doc"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Design doc written at lib/letflow/design/iss0332-definition-promoted-backfill.md on feature branch. Scope: backfill only (structural commit-before-event gap out of scope, filed as follow-on note in design §2). New module Letflow.TenantProvisioning.Backfill with run/1 @spec. Mix task mix letflow.backfill_event_type_versions wraps it. All register_type/2 return values handled: {:ok,_}->updated, :duplicate_event_type_version->skipped, :schema_version_not_monotonic->skipped, :tenant_not_provisioned->warn+skip, {:error,other}->halt. All three ISS-0332 ACs mapped to design elements in §5.",
+    "artifacts_out": ["lib/letflow/design/iss0332-definition-promoted-backfill.md"],
+    "issues": [],
+    "next_action": "ORCH routes to CODE-DESIGN-VALIDATOR"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

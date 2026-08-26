@@ -198,6 +198,50 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
       assert violation.rule == "PARSE"
     end
 
+    test "F-PARSE-ADVISORY-SHAPE (ISS-0347 regression) -- parse-error advisory is the same map shape every other branch uses, so print_advisory/1's dot-access never raises BadMapError",
+         %{dir: dir} do
+      path = Path.join(dir, "step-01-agent.json")
+      File.write!(path, "{not valid json")
+
+      result = LintHandoffs.lint_file(path, @empty_schema)
+
+      assert result.parse_error != nil
+      assert [violation] = result.hard_new
+      assert violation.rule == "PARSE"
+
+      # This reproduces exactly the access pattern print_advisory/1 performs
+      # on every result (`r.advisory.warnings`, then
+      # `size_info.desc_len`/`summary_len` when building the H-SIZE-3 report).
+      # Pre-fix, lint_file/2's {:error, reason} branch set `advisory: []` --
+      # a bare list -- so this same dot-access raised `%BadMapError{term: []}`
+      # and crashed the whole `mix letflow.lint_handoffs` run on the first
+      # handoff-shaped file with invalid JSON. Post-fix it is the same
+      # %{path:, warnings:, size_info:} map every other branch produces.
+      # Fail-then-pass evidence: test/specs/ISS-0347.md.
+      assert result.advisory.warnings == []
+      assert result.advisory.size_info.desc_len == 0
+      assert result.advisory.size_info.summary_len == 0
+    end
+
+    test "F-BOM-PARSE-ADVISORY-SHAPE (ISS-0347 regression) -- a leading UTF-8 BOM also hits the parse-error branch without crashing",
+         %{dir: dir} do
+      path = Path.join(dir, "step-01-agent.json")
+      # ﻿ (UTF-8 BOM) prepended to otherwise-valid JSON -- Jason.decode/1
+      # rejects the BOM byte sequence, landing lint_file/2 in the same
+      # {:error, reason} branch as plain invalid JSON.
+      File.write!(path, "﻿" <> ~s({"status": "COMPLETED"}))
+
+      result = LintHandoffs.lint_file(path, @empty_schema)
+
+      assert result.parse_error != nil
+      assert [violation] = result.hard_new
+      assert violation.rule == "PARSE"
+
+      assert result.advisory.warnings == []
+      assert result.advisory.size_info.desc_len == 0
+      assert result.advisory.size_info.summary_len == 0
+    end
+
     test "F-JSON-REAL-GRANDFATHERED-UNCHANGED -- a real pre-existing grandfathered .json entry still classifies as grandfathered, not new" do
       # handoffs/WF02-REQ023-20260816/step-06-doc-updater.json is one of the 6
       # pre-ISS-0190 H3 entries already in @grandfathered, untouched by this

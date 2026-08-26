@@ -1,0 +1,38 @@
+{
+  "handoff_id": "step01-WF03-ISS0343-20260826",
+  "run_id": "WF03-ISS0343-20260826",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0343-20260826/step-01-issue-fixer.json",
+  "created_at": "2026-08-26T13:40:00Z",
+  "started_at": "2026-08-26T13:40:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0343"],
+    "related_handoff_ids": ["handoffs/WF03-ISS0343-20260826/step-00-git-setup.json"],
+    "artifacts_in": [
+      "docs/issues/ISS-0343.yaml",
+      "test/letflow/tenant_provisioning/backfill_test.exs",
+      "test/support/tenant_fixture.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0343-20260826"
+  },
+  "task": {
+    "description": "Combined Step 0.5 (registry lookup) + Step 1 (diagnose) per WF-03_issue_resolving.md. Claim this handoff by setting status to IN_PROGRESS only.\n\nStep 0.5: search docs/issues/*.yaml for a resolved entry with matching symptoms -- ISS-0329 (parallel test schema/connection isolation, resolved 2026-08-24) is the closest prior candidate; read its resolution and state whether this is the same root cause recurring (if so, bump severity to at least MAJOR) or a distinct mechanism.\n\nStep 1: Reproduce directly under scripts/test_parallel.sh repeatedly (standalone `mix test test/letflow/tenant_provisioning/backfill_test.exs` already confirmed clean by ORCH -- 4/4 passed -- so do NOT rely on a standalone run; you must reproduce under actual parallel partitioning). Read test/support/tenant_fixture.ex's provisioned_tenant!/1 (Sandbox.mode(Letflow.Repo, :auto) called globally) and trace how this interacts with other concurrently-running async tests/partitions when test_parallel.sh spawns N separate `mix test --partitions N` OS processes. Determine: is this a cross-PROCESS issue (each partition is a separate BEAM VM against the same physical Postgres, so Sandbox :auto in one partition process cannot leak into another process's connections) or a cross-test-WITHIN-partition issue (an async test in the SAME partition process racing against this async:false test's global Sandbox mode flip)? Quote real reproduction output -- run scripts/test_parallel.sh at least 3 times if the first doesn't reproduce it, since ISS-0329/ISS-0340's own history shows this class of failure is itself flaky (different counts/sets across identical runs). Do NOT implement a fix -- produce the diagnosis for CODE-DESIGNER.",
+    "acceptance_criteria": [
+      "docs/issues/*.yaml searched, ISS-0329 specifically read and compared, finding (recurrence or distinct) stated explicitly",
+      "the failure reproduced under real scripts/test_parallel.sh parallel execution with real quoted output, not just asserted from the original PR's report",
+      "root cause traced to a specific mechanism (cross-process vs. cross-test-within-partition, or another mechanism if evidence points elsewhere) -- not asserted, demonstrated",
+      "no fix implemented; next_action names CODE-DESIGNER (or, if this turns out to be a test-infra-only issue needing no application-code design, states that explicitly and names the direct next step)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

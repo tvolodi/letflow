@@ -9,6 +9,26 @@ defmodule Letflow.Engine.Lua.Sandbox do
   codebase that will run tenant-supplied script text MUST have been produced here, and by
   nothing else. This is enforced structurally (single call site), not by a runtime check.
 
+  ## REQ-152 (LUA-14 restated) — additions to this module
+
+  This file also implements the deny-set half of REQ-152 (LUA-14 restated; the
+  `platform.now()` half lives in `Letflow.Engine.Lua.Platform`). Of Lua 5.3's 11 `os`
+  functions, `Lua.new/1`'s own documented default sandbox denies only 6 — `os.execute`,
+  `os.exit`, `os.getenv`, `os.remove`, `os.rename`, `os.tmpname`. It does NOT deny
+  `os.clock`, `os.date`, `os.difftime`, `os.setlocale`, or `os.time` — 5 of the 11 are
+  left reachable by the library's own defaults. REQ-152 closes all 5: `os.time` is
+  LUA-14's own literal, sole-named acceptance criterion; denying `os.date`, `os.clock`,
+  and `os.difftime` goes BEYOND LUA-14's literal wording, as a deliberate extension of
+  its intent (time is read only from `platform.now()`'s single authoritative source,
+  never an ambient one). `os.setlocale` is not a time source, but was left reachable by
+  this module's original (REQ-151) deny-set despite REQ-151's own description text
+  claiming it fell to "REQ-151's general enumeration" — that claim did not match the
+  actual implemented list, so REQ-152 closes this gap here rather than silently leaving
+  it, or reopening REQ-151. The deny-set below grew from 28 to 33 entries as a result,
+  appended to the same list passed to `Lua.new/1`'s `sandboxed:` option — never a second
+  or partial list (see "The `:sandboxed`-replaces-defaults trap" below, which this
+  extension is equally subject to).
+
   Construction never fails: there is no `{:ok, _} | {:error, _}` return shape for `new/0`
   or `new/1` (INV-SBX-4) — there is no external I/O, no config lookup, and no user input
   at construction time.
@@ -178,10 +198,43 @@ defmodule Letflow.Engine.Lua.Sandbox do
        "bypass and arbitrary upvalue mutation are capabilities strictly beyond " <>
        "math/string/table's intended surface (LUA-03's MUST-load set) and are exactly " <>
        "the class of introspection primitive R-Co's stdlib.zig excluded by naming " <>
-       "`debug` outright."}
+       "`debug` outright."},
+    # REQ-152 (LUA-14 restated) additions — appended to this same list, never a second
+    # or partial list (the `:sandboxed`-replaces-defaults trap, see moduledoc). Of Lua
+    # 5.3's 11 `os` functions, REQ-151 above denied 6 (execute, exit, getenv, remove,
+    # rename, tmpname); os.clock, os.date, os.difftime, os.setlocale, and os.time were
+    # left reachable. This requirement closes all 5, growing this deny-set 28 -> 33.
+    {[:os, :time],
+     "Installed (`time`/`time_ms`/`time_us` in os.ex; `time` is the LUA-14-named one). " <>
+       "Real denial — LUA-14's own literal, sole-named acceptance criterion: os.time " <>
+       "MUST NOT be available. The platform's authoritative time is reachable only " <>
+       "through platform.now() (Letflow.Engine.Lua.Platform)."},
+    {[:os, :date],
+     "Installed (os_date/2). Real denial — an ambient time source reachable by " <>
+       "default. Not named by LUA-14's literal text; denied here as a DELIBERATE " <>
+       "EXTENSION beyond that literal wording, to serve LUA-14's intent (time read " <>
+       "only from the platform's single authoritative source, never an ambient one)."},
+    {[:os, :clock],
+     "Installed (os_clock/2). Real denial — same beyond-LUA-14-literal-wording " <>
+       "extension as os.date: a CPU-time-derived but still ambient, ungoverned time " <>
+       "signal a script could otherwise read instead of platform.now()."},
+    {[:os, :difftime],
+     "Installed (os_difftime/2). Real denial — same beyond-LUA-14-literal-wording " <>
+       "extension; computes over two ambient time values, so denying it removes " <>
+       "computation over any ambient timestamp a script might otherwise have obtained."},
+    {[:os, :setlocale],
+     "Installed (os_setlocale/2). Real denial. Not a time source, so not part of the " <>
+       "LUA-14 restatement above — this closes a gap REQ-151's own description text " <>
+       "claimed (incorrectly) was already covered by its general enumeration; reading " <>
+       "REQ-151's implemented deny-set directly showed no `[:os, :setlocale]` entry. " <>
+       "Locale-dependent formatting/parsing is a nondeterminism and host-environment- " <>
+       "disclosure surface. Closed here (REQ-152) rather than reopening REQ-151."}
   ]
 
-  @doc "The full 28-entry deny-set: `{path, reason}` pairs, restated defaults plus `:debug`."
+  @doc """
+  The full 33-entry deny-set: `{path, reason}` pairs — the 27 restated `Lua.new/1`
+  defaults, plus `:debug` (REQ-151), plus the 5 `os` time/locale entries (REQ-152).
+  """
   @spec deny_set() :: deny_set()
   def deny_set, do: @sandbox_deny_set
 
@@ -195,14 +248,21 @@ defmodule Letflow.Engine.Lua.Sandbox do
 
   @doc """
   Builds a sandboxed `Lua.t()`. `opts` currently defines no meaningful keys for this
-  requirement — the parameter exists so later requirements (REQ-152, REQ-154..156) can
-  extend behavior (e.g. `:max_instructions`) without ever constructing a `Lua.t()` via
+  requirement — the parameter exists so later requirements (REQ-154..156) can extend
+  behavior (e.g. `:max_instructions`) without ever constructing a `Lua.t()` via
   `Lua.new/1` directly. This is the ONLY permitted call site of `Lua.new/1` under `lib/`
   (INV-SBX-1). Construction never fails (INV-SBX-4).
+
+  REQ-152: after `Lua.new/1` constructs the sandboxed VM, `Letflow.Engine.Lua.Platform.
+  install/1` is called unconditionally to make `platform.now()` reachable. This is
+  additive only — it never touches the deny-set above — and is the ONLY place
+  `platform.now` is wired in, so every `Lua.t()` this module produces has it (INV-PLAT-1).
   """
   @spec new(opts :: keyword()) :: Lua.t()
   def new(_opts) do
     sandboxed_paths = Enum.map(@sandbox_deny_set, fn {path, _reason} -> path end)
+
     Lua.new(sandboxed: sandboxed_paths)
+    |> Letflow.Engine.Lua.Platform.install()
   end
 end

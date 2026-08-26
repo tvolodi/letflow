@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step00-WF03-ISS0296-20260826",
+  "run_id": "WF03-ISS0296-20260826",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0296-20260826/step-00-git-setup.json",
+  "created_at": "2026-08-26T18:25:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-133"],
+    "issue_ids": ["ISS-0296"],
+    "requirement_text": {
+      "ISS-0296": "REQ-133 AC1-6: complete the live-browser login proof. Config fix already landed (PR #593). Keycloak is running on port 8093 (healthy, verified). Chromium is installed at C:\\Users\\tvolo\\AppData\\Local\\ms-playwright\\chromium-1223. See docs/issues/ISS-0296.yaml. Queue task 296, GH#594."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_SETUP.md",
+      "docs/issues/ISS-0296.yaml"
+    ],
+    "owned_modules": [
+      "docs/requirements.yaml",
+      "web/src/"
+    ],
+    "branch_name": "feature/WF03-ISS0296-20260826"
+  },
+  "task": {
+    "description": "Perform GIT_SETUP.md's standard procedure for WF-03 run WF03-ISS0296-20260826. Create branch feature/WF03-ISS0296-20260826 from an up-to-date main and push it immediately.",
+    "acceptance_criteria": [
+      "git pull --ff-only origin main exits 0",
+      "git branch --show-current outputs feature/WF03-ISS0296-20260826",
+      "git push -u origin feature/WF03-ISS0296-20260826 exits 0"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

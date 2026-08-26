@@ -417,13 +417,27 @@ defmodule Letflow.Engine.LuaScriptAuditTest do
   # ---------------------------------------------------------------------------------
 
   describe "mix.exs and moduledoc guardrails" do
-    test "mix.exs declares no Lua/NIF-shaped dependency" do
+    # REQ-151 (2026-08-26, USER-DECIDED via ORCH): this guardrail originally asserted
+    # mix.exs declared NO Lua/NIF-shaped dependency, "while the runtime is S5-deferred"
+    # (see git history on this describe block, commits 55f058c/3a62d09 add {:lua, "~>
+    # 1.0"}; 30db07b/984bbc9 revert it to keep this assertion green). S5 is no longer
+    # deferred as of REQ-148 (empirical spike, lib/letflow/design/req148-lua-runtime-spike.md)
+    # and REQ-151 (lib/letflow/engine/lua/sandbox.ex, the real sandbox-construction
+    # entry point that requires {:lua, "~> 1.0"} to compile). The assertion this test
+    # protects -- "no Lua dependency sneaks in before the build-vs-bind decision is
+    # made" -- no longer applies: decision 0014 already settled build-vs-bind, and this
+    # dependency is now load-bearing production code, not an accidental leak. Rewritten
+    # to assert the now-active state instead of deleting the guard outright, so a
+    # future accidental removal of the dependency (which would break sandbox.ex's
+    # compile) is still caught here.
+    test "mix.exs declares the adopted Lua dependency (tv-labs/lua, ~> 1.0, per decision 0014)" do
       dep_names =
         Mix.Project.config()[:deps]
         |> Enum.map(fn dep -> dep |> elem(0) |> Atom.to_string() |> String.downcase() end)
 
-      refute Enum.any?(dep_names, &(&1 =~ "lua")),
-             "found a Lua-shaped dependency in mix.exs: #{inspect(dep_names)}"
+      assert Enum.any?(dep_names, &(&1 == "lua")),
+             "expected mix.exs to declare the {:lua, \"~> 1.0\"} dependency adopted by " <>
+               "REQ-148/decision 0014, found: #{inspect(dep_names)}"
     end
 
     test "the moduledoc states the Lua runtime is S5 scope, pending the build-vs-bind decision record" do

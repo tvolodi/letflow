@@ -1,0 +1,54 @@
+{
+  "handoff_id": "step01-WF03-ISS0340-20260826",
+  "run_id": "WF03-ISS0340-20260826",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0340-20260826/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-08-26T17:20:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0340"],
+    "requirement_text": {
+      "ISS-0340": "test/letflow/api/context_test.exs test 'scoped_repo_opts/1 is 1-arity' fails intermittently under scripts/test_parallel.sh. Observed: failed 1 of 9 standalone reruns on feature/WF02-REQ151-20260826, 0 of 5 reruns at merge-base 8c331b6621becb11814a0cc234411527e2e21db5, and did not recur in a second full-suite run on the same branch. No code touched by that branch is related to lib/letflow/api/context.ex. Root cause/reproducing mechanism not yet found. Queue task 340 (github issue #654). See docs/issues/ISS-0340.yaml for full description."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "step00-WF03-ISS0340-20260826"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0340.yaml",
+      "test/letflow/api/context_test.exs",
+      "lib/letflow/api/context.ex"
+    ],
+    "owned_modules": [
+      "test/letflow/api/context_test.exs",
+      "lib/letflow/api/context.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0340-20260826",
+    "git_evidence_step00": {
+      "branch": "feature/WF03-ISS0340-20260826",
+      "commit": "94254cd7805b07db0c26532c2396013fa76783c5"
+    }
+  },
+  "task": {
+    "description": "Perform WF-03 Steps 0.5 (registry lookup) and 1 (diagnosis) for ISS-0340.\n\nStep 0.5 — Registry lookup:\n1. Search docs/issues/*.yaml for entries with status: resolved whose description mentions similar symptoms (flaky tests, context_test, scoped_repo_opts, shared state, parallelism).\n2. If a clear match exists, cite it and check whether the same root cause has recurred.\n3. Record whether a prior match was found.\n\nStep 1 — Diagnose:\n1. Read test/letflow/api/context_test.exs and find the 'scoped_repo_opts/1 is 1-arity' test.\n2. Read lib/letflow/api/context.ex to understand what scoped_repo_opts/1 does.\n3. Run the test in isolation multiple times (at minimum 20 runs) to attempt reproduction:\n   mix test test/letflow/api/context_test.exs --seed 0  (several times with different seeds)\n4. Look for shared state, missing async: false, Sandbox mode issues, or ordering dependencies.\n5. Check if the test is marked async: true and whether it shares state with other tests.\n6. If you cannot reproduce with standalone runs, try running it alongside likely-interfering tests:\n   mix test test/letflow/api/context_test.exs test/letflow/api/ (broader set)\n7. Identify the root cause: which function, which invariant breaks, why tests don't catch it reliably.\n8. Do NOT implement the fix. Report the diagnosis only.\n\nIMPORTANT: The Elixir toolchain is at '/c/Program Files/Elixir/bin/mix' if bare 'mix' is not on PATH.\nIMPORTANT: Work on branch feature/WF03-ISS0340-20260826.",
+    "acceptance_criteria": [
+      "registry lookup completed -- either a prior matching issue found and cited, or confirmed none exists",
+      "test/letflow/api/context_test.exs 'scoped_repo_opts/1 is 1-arity' test read and its implementation understood",
+      "at least 10 standalone reruns of the test attempted with real output quoted",
+      "root cause identified (or 'cannot reproduce with standalone runs, requires parallel load' stated explicitly with evidence)",
+      "result.summary states: root cause (not just symptom), affected files, what a fix needs to change",
+      "next_action set to 'Route to CODE-DESIGNER for fix design' or 'ORCH: cannot reproduce, file as low-priority' if reproduction fails"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

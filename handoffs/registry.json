@@ -2499,6 +2499,29 @@
             "queue_task_id": 296,
             "queue_agent_id": "orch-main",
             "note": "WF-03 for ISS-0296 (queue task 296, GH#594). REQ-133 AC1-6: PLATFORM_ADMIN login, TASK_WORKER narrower nav, authenticated API call, 403 enforcement, no token in storage. All 5 ACs pass. PR #662 merged 2026-08-26. GH#594 closed."
+        },
+        {
+            "run_id": "WF03-ISS0297-20260826",
+            "workflow_id": "WF-03",
+            "requirement_ids": [],
+            "issue_ids": ["ISS-0297"],
+            "stage": "S0",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "test/letflow/engine_concurrency_test.exs",
+                "lib/mix/tasks/letflow.audit_issue_closures.ex",
+                "test/mix/tasks/letflow.audit_issue_closures_test.exs",
+                "scripts/test_parallel.sh",
+                "config/test.exs"
+            ],
+            "lock_acquired_at": "2026-08-26T18:20:00Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PENDING (ELIXIR-DEV dispatched)",
+            "backfilled": false,
+            "queue_task_id": 297,
+            "queue_agent_id": "orch-main",
+            "note": "WF-03 for ISS-0297 (queue task 297, GH#596). 16-way parallelism failures: EngineConcurrencyTest pool exhaustion x2, AuditIssueClosuresTest gh CLI timeout x1. Queue claimed 2026-08-26T18:15:33Z via get_next_task."
         }
     ]
 }

@@ -1,0 +1,35 @@
+{
+  "handoff_id": "stepfinal-WF03-ISS0343-20260826",
+  "run_id": "WF03-ISS0343-20260826",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0343-20260826/step-final-git-merge.json",
+  "created_at": "2026-08-26T16:41:00Z",
+  "started_at": "2026-08-26T16:41:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0343"],
+    "related_handoff_ids": ["handoffs/WF03-ISS0343-20260826/step-06-issue-fixer-close.json"],
+    "branch_name": "feature/WF03-ISS0343-20260826",
+    "note": "This run's own handoffs/WF03-ISS0343-20260826/*.json bookkeeping files were committed to main at dispatch time by ORCH (as usual), so expect the same class of add/add conflicts seen on prior runs this session (WF03-ISS0216's Step Final) -- resolve by keeping the branch's COMPLETED versions over main's stale PENDING dispatch stubs. No conflict expected on the actual code (lib/letflow/event_store/registry.ex, lib/letflow/tenant_provisioning/backfill.ex, the two test files, docs/issues/ISS-0343.yaml)."
+  },
+  "task": {
+    "description": "Perform docs/agents/protocols/GIT_MERGE.md's standard procedure for run WF03-ISS0343-20260826. Use prefix \"fix:\" for the PR title (WF-03 branch).",
+    "acceptance_criteria": [
+      "git branch --show-current equals feature/WF03-ISS0343-20260826 before starting",
+      "rebase onto origin/main completes (resolve handoff-bookkeeping add/add conflicts per context.note; escalate only if broader than expected)",
+      "mix format --check-formatted, mix compile --warnings-as-errors, and mix test all verified post-rebase with real quoted output and structural attribution for any failure",
+      "PR created (title prefix fix:) and merged via gh pr merge --squash --delete-branch, mix test line in PR body carrying real counts/attribution",
+      "local cleanup: back on main, fast-forwarded, feature branch deleted, clean working tree"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

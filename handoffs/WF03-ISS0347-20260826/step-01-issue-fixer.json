@@ -1,0 +1,55 @@
+{
+  "handoff_id": "step01-WF03-ISS0347-20260826",
+  "run_id": "WF03-ISS0347-20260826",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0347-20260826/step-01-issue-fixer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "started_at": "2026-08-26T21:20:00Z",
+  "completed_at": "2026-08-26T21:33:27Z",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0347"],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0347": "Backend CI lint_handoffs (mix letflow.check) fails on main. Two causes: (1) handoff schema check rejects top-level next_action key and PASS status value actually used throughout the pipeline (recurring class, see ISS-0342/ISS-0345). (2) mix letflow.lint_handoffs raises BadMapError in Mix.Tasks.Letflow.LintHandoffs.print_advisory/1 (lib/mix/tasks/letflow.lint_handoffs.ex:697) while iterating advisory entries. Full description in docs/issues/ISS-0347.yaml."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0347-20260826/step-00-git-setup.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0347.yaml",
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "owned_modules": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0347-20260826"
+  },
+  "task": {
+    "description": "ISSUE-FIXER: Step 0.5 (registry lookup) + Step 1 (diagnose) for ISS-0347. Do NOT implement a fix -- produce a diagnosis for CODE-DESIGNER.",
+    "acceptance_criteria": [
+      "Step 0.5: check docs/issues/ for resolved entries with matching symptoms (ISS-0342, ISS-0345 are cited as the same recurring class -- read them and confirm/refute the match; if recurring, flag severity as at least MAJOR)",
+      "Step 1: reproduce directly -- run `mix letflow.lint_handoffs` (or `mix letflow.check`) locally and quote the actual BadMapError output/stacktrace",
+      "Trace root cause in lib/mix/tasks/letflow.lint_handoffs.ex:697's print_advisory/1 -- what map shape does it assume, what shape does it actually receive from which handoff file(s)",
+      "Trace root cause of the next_action/PASS schema rejection -- which schema/validation function rejects them, why the check is out of sync with actual pipeline convention",
+      "Do NOT implement the fix -- write result.summary with root cause (not just symptom), affected files, what a fix needs to change; next_action: Route to CODE-DESIGNER for fix design"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "STEP 0.5 (registry lookup): Read ISS-0342 and ISS-0345 in full. Both are real prior occurrences of the same defect class (top-level `next_action` / top-level status \"PASS\" / leading UTF-8 BOM), and both were closed by hand-patching the specific offending files rather than by fixing whatever keeps producing them -- ISS-0342's own resolution_note describes single-line JSON edits (PASS->COMPLETED, BOM strip) with no change to authoring behavior or tooling. Verified via `find handoffs -name '*.json' | xargs jq -e 'has(\"next_action\")'` that 0 files currently have next_action at top level -- so the prior fixes did land -- yet this run's own dispatch handoff (handoffs/WF03-ISS0347-20260826/step-00-git-setup.json) and WF02-REQ152-20260826's step-01b/02a/02c/02d/03b/05 handoffs all have next_action back at the top level, authored by ORCH after ISS-0342/ISS-0345 were closed. This is a genuine recurrence: the root cause (ORCH's own handoff-authoring habit of placing next_action as a sibling of rework_count/max_rework instead of nesting it under result, per HANDOFF_PROTOCOL.md's documented schema at lines 320-336) was never actually removed -- only its symptoms were repeatedly patched file-by-file. Severity flagged up from MINOR to MAJOR accordingly (recurring, unfixed root cause, now blocking backend CI on main for the third time).\n\nSTEP 1 (diagnose), cause 1 -- next_action/PASS schema rejection: NOT a linter bug. HANDOFF_PROTOCOL.md (docs/agents/shared/HANDOFF_PROTOCOL.md:320-336) defines `next_action` as a member of the `result` object (`result.next_action`), and `result.status` uses its own enum `PASS|FAIL|PARTIAL|BLOCKED|SKIPPED` (line 321) -- distinct from the top-level `status` enum `PENDING|IN_PROGRESS|COMPLETED|FAILED|ESCALATED|CANCELLED` (@legal_statuses, lib/mix/tasks/letflow.lint_handoffs.ex:102). check_h3_keys/2 (lint_handoffs.ex:464-479) correctly rejects any top-level key outside @schema_top_keys (lint_handoffs.ex:104-108, which does not include next_action -- by design, per the moduledoc comment at lines 136-137 recording that ISS-0190 already did '6 H3 next_action relocations'), and check_h1_status/2 (lint_handoffs.ex:411-424) correctly rejects top-level status \"PASS\" (a result.status value, not a top-level status value) against @legal_statuses. The linter's schema is correct and matches the documented protocol; the defect is that ORCH keeps authoring handoffs with next_action/status misplaced at the top level (confirmed instance: handoffs/WF02-REQ152-20260826/step-01b-code-design-validator.json has `\"next_action\": \"Route to ELIXIR-DEV (2a)\"` as a direct sibling of `rework_count`/`max_rework`, outside `result`, and step-04-test-runner.json has top-level `\"status\": \"PASS\"`). A fix needs to stop this at the source, not patch more files: either (a) ORCH's own handoff-template/generation logic needs correcting so next_action is always written into result.next_action and result.status/top-level status are never conflated, and/or (b) since this keeps recurring across independently-authored runs/hosts despite HANDOFF_PROTOCOL.md already stating the correct shape, CODE-DESIGNER should consider whether lint_handoffs itself should be extended with a pre-commit/dispatch-time check (not just CI-time) so the defect is caught before it lands rather than after. Affected files needing correction for this run alone: handoffs/WF03-ISS0347-20260826/step-00-git-setup.json and handoffs/WF02-REQ152-20260826/step-01b-code-design-validator.json, step-02a-elixir-dev.json, step-02c-security-reviewer.json, step-02d-reviewer.json, step-03b-test-design-validator.json (all H3 next_action), step-04-test-runner.json (H1 status PASS), step-05-release-validator.json (H3 next_action).\n\nSTEP 1, cause 2 -- BadMapError crash: reproduced directly via `mix letflow.lint_handoffs`, actual stacktrace: `** (BadMapError) expected a map, got: []` at `lib/mix/tasks/letflow.lint_handoffs.ex:697: anonymous fn/1 in Mix.Tasks.Letflow.LintHandoffs.print_advisory/1`, via Enum.flat_map_list recursion in lib/enum.ex. Root cause: lint_file/2's three result-construction branches produce inconsistent shapes for the `advisory` field. The :non_json (H6) branch (line 360) and the successful :json/Jason.decode branch (line 376, via check_advisory/2) both set `advisory` to a map `%{path:, warnings:, size_info:}`. But the :json branch's `{:error, reason}` clause (parse failure -- File.read or Jason.decode fails) sets `advisory: []` (line 398) -- a bare empty list, not the map shape every other branch produces. print_advisory/1 (lines 695-724) unconditionally does `r.advisory.warnings` (line 697) and `r.advisory.size_info` (line 708) via Elixir's map dot-access on every result in the list, with no shape check -- when it reaches a result whose advisory is `[]`, dot-access raises BadMapError. The concrete trigger file is handoffs/WF03-ISS0297-20260826/step-02-elixir-dev.json: confirmed via `head -c 10 | xxd` to start with a UTF-8 BOM (`ef bb bf`) before `{`, which fails Jason.decode with %Jason.DecodeError{position: 0, ...}, routing lint_file/2 into the {:error, reason} branch that sets advisory: []. The two .md-extension handoff-shaped file sets under handoffs/WF03-ISS0258-20260822/ and handoffs/WF03-ISS0260-20260822/ (confirmed to exist via ls) are a red herring for this specific crash: they hit the :non_json/H6 branch (line 342-362), which sets a proper map-shaped advisory and is correctly grandfathered by h6_floor_commit -- they do not crash print_advisory. A fix needs to make lint_file/2's {:error, reason} branch (line 386-400) set `advisory: %{path: path, warnings: [], size_info: %{desc_len: 0, summary_len: 0}}` (matching the shape used at line 360 and produced by check_advisory/2), eliminating the shape drift at its source, rather than adding a defensive shape check inside print_advisory/1 that would just paper over a future recurrence of the same drift. Separately, the underlying BOM in handoffs/WF03-ISS0297-20260826/step-02-elixir-dev.json should also be stripped (same fix class as ISS-0338/ISS-0345) so that file parses cleanly once print_advisory no longer crashes on it.",
+    "artifacts_out": [],
+    "issues": [
+      {"severity": "MAJOR", "description": "Recurring defect class (top-level next_action / top-level PASS status) already 'resolved' twice (ISS-0342, ISS-0345) by patching individual files without removing the root cause -- ORCH's own handoff-authoring keeps reintroducing it (this run's own step-00-git-setup.json and WF02-REQ152-20260826's handoffs). Severity raised from MINOR to MAJOR.", "affected_requirement": null},
+      {"severity": "MAJOR", "description": "advisory field shape drift in lib/mix/tasks/letflow.lint_handoffs.ex: lint_file/2's parse-error branch (line 398) sets advisory: [] instead of the map shape every other branch produces, crashing print_advisory/1 (line 697) on any file with a JSON decode error (e.g. a leading BOM).", "affected_requirement": null}
+    ],
+    "next_action": "Route to CODE-DESIGNER for fix design"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

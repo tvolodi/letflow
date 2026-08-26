@@ -1,0 +1,57 @@
+{
+  "handoff_id": "step04b-WF03-ISS0347-20260826",
+  "run_id": "WF03-ISS0347-20260826",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0347-20260826/step-04b-test-design-validator.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-26T21:50:00Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0347"],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0347": "Regression test for the BadMapError fix. See test/specs/ISS-0347.md."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0347-20260826/step-04-test-designer.json"
+    ],
+    "artifacts_in": [
+      "test/specs/ISS-0347.md",
+      "test/mix/tasks/letflow.lint_handoffs_test.exs"
+    ],
+    "owned_modules": [
+      "test/mix/tasks/letflow.lint_handoffs_test.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0347-20260826"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate on ISS-0347's regression test.",
+    "acceptance_criteria": [
+      "Test targets the actual defect (BadMapError from advisory shape mismatch), not a vacuous check",
+      "Fail-then-pass evidence in test/specs/ISS-0347.md is genuine -- independently re-verify by running the current test suite (post-fix, should be green); trust but verify the reported pre-fix RED output rather than re-running the worktree dance yourself unless something looks off",
+      "Test fixtures use per-test unique temp paths, no cross-test pollution, self-sufficient",
+      "No hardcoded secrets",
+      "PASS or FAIL; route to TEST-RUNNER on PASS, back to TEST-DESIGNER on FAIL"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "checks": {
+      "targets_actual_defect": "PASS -- F-PARSE-ADVISORY-SHAPE and F-BOM-PARSE-ADVISORY-SHAPE call LintHandoffs.lint_file/2 directly (not run/1) and reproduce print_advisory/1's exact private dot-access pattern (result.advisory.warnings, result.advisory.size_info.desc_len, .summary_len) inline in the test, since print_advisory/1 is a defp and not externally callable. This is a direct assertion on the regressed field shape, not a vacuous check. Two independent real-world triggers are covered: syntactically invalid JSON and a Jason-rejected leading UTF-8 BOM, both landing in lint_file/2's {:error, reason} branch.",
+      "fail_then_pass_evidence": "PASS -- independently re-ran `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` on feature branch feature/WF03-ISS0347-20260826 (post-fix, fix commit 07a766e present). Result: 22 passed, 0 failures -- exact match to the spec's claimed post-fix output. The spec's quoted RED output (BadMapError: expected a map, got: [] at the pre-fix worktree c30f672) is specific, cites real line numbers/stacktrace, and is plausible given the described one-line fix (advisory: [] -> advisory: %{...}); trusted per the acceptance criteria without re-running the worktree dance myself, nothing looked off.",
+      "fixtures_isolated": "PASS -- both new tests reuse the enclosing describe block's setup, which builds dir = Path.join(System.tmp_dir!(), \"letflow-lint-handoffs-#{System.unique_integer([:positive])}\"), mkdir_p!s it, and File.rm_rf!s it in on_exit. Per-test unique path, no shared/hardcoded path, no cross-test pollution.",
+      "self_sufficient": "PASS -- each test writes its own fixture file inside its own dir and asserts purely from LintHandoffs.lint_file/2's return value; no ordering dependency on other tests.",
+      "no_skip_no_todo": "PASS -- grep for 'skip'/'TODO' in test/mix/tasks/letflow.lint_handoffs_test.exs returns nothing.",
+      "no_hardcoded_secrets": "PASS -- fixtures are literal JSON/invalid-JSON/BOM strings; no credentials or connection strings anywhere in the test file or spec."
+    },
+    "own_test_run": "mix test test/mix/tasks/letflow.lint_handoffs_test.exs on feature/WF03-ISS0347-20260826: 'Excluding tags: [:keycloak]' ... '......................' 'Finished in 5.6 seconds (5.6s async, 0.00s sync)' 'Result: 22 passed'. No failures.",
+    "next_action": "Route to TEST-RUNNER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,50 @@
+{
+  "handoff_id": "step03-WF03-ISS0347-20260826",
+  "run_id": "WF03-ISS0347-20260826",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0347-20260826/step-03-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0347"],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0347": "See lib/letflow/design/iss0347-lint-handoffs-advisory-shape.md for the fix spec."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0347-20260826/step-02-code-designer.json",
+      "handoffs/WF03-ISS0347-20260826/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0347-lint-handoffs-advisory-shape.md"
+    ],
+    "owned_modules": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0347-20260826"
+  },
+  "task": {
+    "description": "ELIXIR-DEV (WF-03 Step 3) for ISS-0347. Implement per lib/letflow/design/iss0347-lint-handoffs-advisory-shape.md: normalize lint_file/2's parse-error branch's advisory field to the same %{path:, warnings:, size_info:} shape used elsewhere.",
+    "acceptance_criteria": [
+      "git branch --show-current == feature/WF03-ISS0347-20260826 before touching any file",
+      "Implement exactly per the design doc",
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted passes",
+      "mix letflow.lint_handoffs runs to completion (no crash) -- quote real output",
+      "Self-review: no unresolved {:ok, _} = match on external I/O path, no signature-compatibility break for any caller of lint_file/2"
+    ]
+  },
+  "result": {
+    "artifacts_out": ["lib/mix/tasks/letflow.lint_handoffs.ex"],
+    "summary": "Normalized lint_file/2's {:error, reason} branch (line 398) so advisory: [] became advisory: %{path: path, warnings: [], size_info: %{desc_len: 0, summary_len: 0}} -- the exact literal already used by the :non_json branch, per the design doc. mix compile --warnings-as-errors and mix format --check-formatted both pass. mix letflow.lint_handoffs runs to completion end-to-end (prints H-SIZE-3/H5 sections, no BadMapError/crash); it exits 1 only due to one pre-existing, unrelated lint violation (Mix's normal task-failure exit, not a crash).",
+    "next_action": "Route to TEST-DESIGNER (regression test)",
+    "completed_at": "2026-08-26T21:42:25Z"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

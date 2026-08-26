@@ -1,0 +1,52 @@
+id: ISS-0348
+title: >
+  Letflow.TenantProvisioning.BackfillTest: 4 count-mismatch failures under
+  full serial mix letflow.check (test-isolation/DB-pollution suspected)
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF03-ISS0347-20260826
+discovered_at: "2026-08-26T22:26:00Z"
+severity: MAJOR
+status: open
+queue_task_id: 348
+github_issue_number: 669
+description: >
+  mix letflow.check (full serial `mix test`, 652s) exits 1 with 4 failures,
+  all in test/letflow/tenant_provisioning/backfill_test.exs, all
+  {updated, skipped} count-mismatch assertions on Backfill.run/1's tally:
+  (1) ISS-0332 regression -- backfill updates pre-existing tenant to
+      schema_version 2, expected {updated:1,skipped:0} got
+      {updated:1,skipped:1}
+  (2) ISS-0343 -- a tenant whose schema vanished mid-sweep is skipped, not
+      a crash
+  (3) ISS-0332 -- higher existing schema_version is skipped
+      (schema_version_not_monotonic)
+  (4) ISS-0332 -- idempotent: already-v2 tenant is skipped, not errored
+  Suspected mechanism: BackfillTest uses `async: false` with Sandbox
+  `:auto` / real schema creation per its own moduledoc, so
+  Backfill.run/1's tenant scan can pick up tenant rows left committed by
+  other tests under full-suite serial ordering. scripts/test_parallel.sh
+  (partitioned `mix test --partitions N`, used by TEST-RUNNER/
+  RELEASE-VALIDATOR in normal WF-02/WF-03 gates) does NOT exhibit this --
+  2089-2094/2094 clean in multiple runs the same day -- only the full
+  serial `mix test` invoked by `mix letflow.check` does.
+  This currently blocks backend CI (`mix letflow.check` exit 1) on main
+  and will block it on every subsequent PR until fixed.
+  Structurally confirmed unrelated to WF03-ISS0347-20260826's own diff:
+  `git diff --name-only main...HEAD` touches none of tenant_provisioning;
+  merge-base with main is that branch's own fix commit (0ab7f79).
+affected_files:
+  - test/letflow/tenant_provisioning/backfill_test.exs
+  - lib/letflow/tenant_provisioning.ex
+acceptance_criteria:
+  - >
+    Root cause identified: what test(s) commit tenant/tenant_schema rows
+    that BackfillTest sees under full serial ordering but not under
+    partitioned parallel execution
+  - >
+    Fix isolates BackfillTest from cross-test DB state (proper
+    cleanup/scoping, or a fix to whichever test leaks rows) without
+    weakening BackfillTest itself
+  - >
+    mix letflow.check exits 0 after the fix, run and quoted for real
+  - >
+    scripts/test_parallel.sh also still green after the fix

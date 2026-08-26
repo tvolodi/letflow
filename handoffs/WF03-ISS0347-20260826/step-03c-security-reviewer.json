@@ -1,0 +1,58 @@
+{
+  "handoff_id": "step03c-WF03-ISS0347-20260826",
+  "run_id": "WF03-ISS0347-20260826",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0347-20260826/step-03c-security-reviewer.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-26T21:44:18Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0347"],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0347": "Fix normalizes lint_file/2's parse-error advisory shape in lib/mix/tasks/letflow.lint_handoffs.ex, a dev/CI tooling mix task -- not a tenant-data path."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0347-20260826/step-03-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "owned_modules": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0347-20260826"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER scope test on ISS-0347's fix.",
+    "acceptance_criteria": [
+      "git diff main...HEAD to see the actual change",
+      "Scope test: does this diff touch a tenant-data path per security-invariants.md's applicability notes? (expect NO -- dev/CI tooling mix task, no DB/tenant data/API response)",
+      "PASS with 'out of scope' summary if scope test is NO; route to REVIEWER (3d) either way"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "scope_test": "out of scope -- no tenant-data path touched",
+    "diff_reviewed": "git diff main...HEAD -- lib/mix/tasks/letflow.lint_handoffs.ex",
+    "diff_summary": "Single-line change in lint_file/2's parse-error branch: advisory: [] -> advisory: %{path: path, warnings: [], size_info: %{desc_len: 0, summary_len: 0}}. Normalizes the shape of an internal map used only for the linter's own advisory-printing output.",
+    "invariant_assessment": {
+      "INV-1_tenant_data_isolation": "NOT-APPLICABLE -- no Ecto schema, migration, or business table touched; change is confined to a Mix task's in-memory advisory map.",
+      "INV-2": "NOT-APPLICABLE -- S4/S5 mechanism not yet reached, and diff doesn't approach it regardless.",
+      "INV-3": "NOT-APPLICABLE -- S4/S5 mechanism not yet reached, and diff doesn't approach it regardless.",
+      "INV-4_secret_handling": "NOT-APPLICABLE -- no secret/config/env/token resolution added or modified; grep for hardcoded-secret patterns in the diff finds none.",
+      "INV-5": "NOT-APPLICABLE -- S4/S5 mechanism not yet reached, and diff doesn't approach it regardless.",
+      "INV-7": "NOT-APPLICABLE -- no Repo.query/raw-SQL or analytics-query pattern touched.",
+      "INV-8": "NOT-APPLICABLE -- no lookup-by-ID or cross-tenant exposure surface touched; this is dev/CI tooling output shaping only, not API response shaping for a tenant-scoped entity."
+    },
+    "summary": "out of scope -- no tenant-data path touched. Change is confined to lib/mix/tasks/letflow.lint_handoffs.ex, a dev/CI tooling mix task normalizing an internal advisory map used only for the linter's own console output. No DB, no Ecto schema/migration, no secret resolution, no API route, no tenant-scoped response shaping. All INV-1..INV-8 assessed NOT-APPLICABLE per the scope test.",
+    "next_action": "Route to REVIEWER (3d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

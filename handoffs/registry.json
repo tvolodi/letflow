@@ -2423,6 +2423,27 @@
                      "queue_task_id":  300,
                      "queue_agent_id":  "orch-main",
                      "note":  "WF-02 for REQ-148 (GH#600, queue task 300, stage S5 -- first S5 Lua requirement: add {:lua, \"~\u003e 1.0\"} + empirical OQ-2 spike doc). Queue claimed 2026-08-24T10:33:32Z."
+                 },
+                 {
+                     "run_id":  "WF03-ISS0332-20260826",
+                     "workflow_id":  "WF-03",
+                     "requirement_ids":  [],
+                     "issue_ids":  ["ISS-0332"],
+                     "stage":  "S4",
+                     "status":  "IN_PROGRESS",
+                     "owned_modules":  [
+                                           "lib/letflow/tenant_provisioning.ex",
+                                           "lib/letflow/event_store/registry.ex",
+                                           "lib/mix/tasks/"
+                                       ],
+                     "lock_acquired_at":  "2026-08-26T04:44:18Z",
+                     "lock_released_at":  null,
+                     "released_lock":  false,
+                     "last_known_step":  "Step 00 PENDING",
+                     "backfilled":  false,
+                     "queue_task_id":  332,
+                     "queue_agent_id":  "orch-main",
+                     "note":  "WF-03 for ISS-0332 (GH#642, queue task 332, stage S4 -- DEFINITION_PROMOTED schema_version 2 backfill for pre-existing tenants). Queue claimed 2026-08-26T04:41:20Z."
                  }
              ]
 }

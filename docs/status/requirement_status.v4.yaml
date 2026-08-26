@@ -1080,3 +1080,18 @@ history:
       count field: yes-with-mechanism, not contradiction). TEST-DESIGNER (no
       executable surface). RELEASE-VALIDATOR PASS (8/8 ACs). 49 on-disk
       entries before this append; 50 after.
+  - req: REQ-077
+    event: started
+    agent: ORCH
+    at: "2026-08-26T02:55:42Z"
+    note: >
+      WF02-REQ077-20260826 Step 00. Six promotion-pipeline route modules
+      (promotion_review.zig, promotions.zig, promotion_read.zig,
+      promotion_assertion.zig, promotion.zig, definition_rollback.zig).
+      depends_on REQ-072 (done) and REQ-140 (done, unblocked platform event
+      appender) both satisfied. Design artefact
+      lib/letflow/design/req077-promotion-pipeline-routes.md already written
+      and CODE-DESIGN-VALIDATOR PASS (WF02-REQ077-20260822) -- Step 1/1b
+      skipped, starting at Step 2a. Branch feature/WF02-REQ077-20260826
+      created and pushed. Queue task 331 (GH#637), locked by orch-ai-dala.
+      50 on-disk entries before this append; 51 after.

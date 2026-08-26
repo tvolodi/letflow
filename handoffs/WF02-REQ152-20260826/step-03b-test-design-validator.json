@@ -1,0 +1,70 @@
+{
+  "handoff_id": "step03b-WF02-REQ152-20260826",
+  "run_id": "WF02-REQ152-20260826",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ152-20260826/step-03b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-152"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-152": "Deny all four ambient Lua time sources and implement platform.now() (LUA-14 restated). See docs/requirements.yaml REQ-152 for full 8-item acceptance_criteria."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ152-20260826/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "test/specs/REQ-152.md",
+      "test/letflow/engine/lua/sandbox_test.exs",
+      "test/letflow/engine/lua/platform_test.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/engine/lua/sandbox_test.exs",
+      "test/letflow/engine/lua/platform_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ152-20260826"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate (WF-02 Step 3b) on REQ-152's test spec and test code.",
+    "acceptance_criteria": [
+      "For each of REQ-152's 8 acceptance criteria: at least one runnable test targets it, no TODO/skip left",
+      "Test fixtures use per-test unique data, no cross-test pollution",
+      "Tests are self-sufficient -- don't depend on other tests running first",
+      "No hardcoded secrets/connection strings",
+      "Confirm the exact-timestamp test genuinely does not depend on wall-clock time (uses injected TimeSource, not Application.put_env leaking across tests without cleanup)",
+      "PASS or FAIL; route to TEST-RUNNER (4) on PASS, back to TEST-DESIGNER on FAIL"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "acceptance_criteria_coverage": [
+      {"ac": "AC1 (os.time/os.date/os.clock/os.difftime raise from inside a script)", "test": "sandbox_test.exs 'REQ-152: os time functions raise when called (AC1)' -- 4 tests, one per function"},
+      {"ac": "AC2 (default denials still hold -- :sandboxed-replaces-defaults trap)", "test": "sandbox_test.exs 'REQ-152: default denials still hold ... (AC2)' -- os.execute/load via Sandbox.new/0 and Sandbox.new/1 with arbitrary opts"},
+      {"ac": "AC3 (remaining 7 os functions, all 11 proven unreachable)", "test": "sandbox_test.exs 'REQ-152: remaining os functions raise ... (AC3)' -- exit/getenv/remove/rename/setlocale/tmpname/execute; combined with AC1's 4 => all 11 os functions covered in this file alone"},
+      {"ac": "AC4 (platform.now() from script parses via DateTime.from_iso8601/1, UTC)", "test": "platform_test.exs 'platform.now() returns ... (AC4)' -- one test via script eval, one via direct Platform.now/0 call"},
+      {"ac": "AC5 (time source injectable, exact pre-set timestamp)", "test": "platform_test.exs 'the time source is injectable ... (AC5)' -- FixedTimeSource behaviour double, Application.put_env in setup/on_exit, asserts exact ISO8601 string both via Platform.now/0 and platform.now() script call, plus a live-swap-back test proving fresh per-call resolution"},
+      {"ac": "AC6 (sandbox.ex moduledoc: 6-of-11, beyond-LUA-14, 28->33, os.setlocale gap)", "test": "sandbox_test.exs 'REQ-152 moduledoc content (AC6)' -- 4 tests reading Code.fetch_docs/1 output, each checking specific substrings"},
+      {"ac": "AC7 (platform.ex moduledoc: ungated-by-design, REQ-157/symmetry binding statement, injection mechanism, install/1 composition point)", "test": "platform_test.exs 'moduledoc content (AC7)' -- 5 tests reading Code.fetch_docs/1 output"},
+      {"ac": "AC8 (mix test / mix compile --warnings-as-errors)", "test": "explicitly deferred to TEST-RUNNER Step 4 per test/specs/REQ-152.md section 8, matching REQ-151's own spec convention; not a gap"}
+    ],
+    "checks": {
+      "skip_tags_or_todos": "none found (grep for '@tag :skip' and 'TODO' across both test files and the spec returned no matches)",
+      "hardcoded_secrets": "none found (grep for password/secret/api_key/token=/connection strings returned no matches)",
+      "fixture_isolation": "no shared hardcoded state between tests; each test constructs its own Sandbox.new()/Sandbox.new(opts) VM instance",
+      "self_sufficiency_and_ordering": "verified empirically -- ran combined suite (sandbox_test.exs + platform_test.exs) with three different --seed values (0, 12345, 999) and both file orders; all 57 tests pass identically each time, no ordering dependency",
+      "exact_timestamp_test_isolation": "platform_test.exs's AC5 describe block sets Application.put_env(:letflow, :lua_platform_time_source, FixedTimeSource) in a `setup` block, captures the PRIOR value via Application.get_env/2 before overwriting, and restores it (or Application.delete_env/2 if none) in `on_exit`. The describe block runs `async: false` at the module level (whole file is async: false) specifically because it mutates process-independent application env that Platform.now/0 reads fresh on every call. config/config.exs:10 sets the production default (Letflow.Engine.Lua.Platform.SystemClock) confirming what on_exit restores to in a normal run. The two non-injecting AC4 tests assert only shape/parseability, never a specific value, so they cannot be affected by wall-clock timing. Confirmed genuinely non-wall-clock: the fixed value asserted (~U[2026-01-01 00:00:00.000000Z]) is a hardcoded literal, not derived from the test-run clock."
+    },
+    "test_run_evidence": "mix test test/letflow/engine/lua/platform_test.exs test/letflow/engine/lua/sandbox_test.exs --seed 0: 'Running ExUnit with seed: 0, max_cases: 16 / Excluding tags: [:keycloak] / Finished in 0.2 seconds (0.2s async, 0.01s sync) / Result: 57 passed'. Re-run with --seed 12345 (same order) and --seed 999 (reversed file order): both '57 passed', 0 failures, 0 skipped, identical each time.",
+    "reasoning": "All 8 REQ-152 acceptance criteria have runnable, passing test coverage. AC8 is legitimately deferred to TEST-RUNNER per an established spec convention carried over from REQ-151, not a gap. No skip tags, no TODOs, no hardcoded secrets. Tests are self-sufficient and order-independent (empirically verified across 3 seeds / 2 file orders, 57/57 passing each time). The AC5 exact-timestamp test uses a real injected TimeSource behaviour double via Application.put_env, captures and restores the prior value in on_exit, and asserts a hardcoded DateTime literal rather than anything wall-clock-derived -- genuinely deterministic."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "completed_at": "2026-08-26T20:43:40Z",
+  "next_action": "Route to TEST-RUNNER (4)"
+}

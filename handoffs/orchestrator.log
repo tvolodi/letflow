@@ -1409,3 +1409,4 @@
 2026-08-26T22:36:00Z | DISPATCH | WF-03 | WF03-ISS0343-20260826 | ORCH -> TEST-RUNNER | step-04c-test-runner.json PENDING committed at dispatch time
 2026-08-26T23:00:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0343-20260826 | TEST-RUNNER -> ORCH | step-04c-test-runner.json PASS. Full suite 2068/2068, 0 failures. BackfillTest explicitly clean this run, no regression.
 2026-08-26T23:01:00Z | DISPATCH | WF-03 | WF03-ISS0343-20260826 | ORCH -> RELEASE-VALIDATOR | step-05-release-validator.json PENDING committed at dispatch time
+2026-08-26T23:30:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0343-20260826 | RELEASE-VALIDATOR -> ORCH | step-05-release-validator.json PASS. Independent full-suite re-run 2068/2068, both ISS-0343 acceptance criteria checked against real code/test.

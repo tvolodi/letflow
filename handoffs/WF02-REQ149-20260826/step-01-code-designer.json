@@ -1,0 +1,51 @@
+{
+  "handoff_id": "step01-WF02-REQ149-20260826",
+  "run_id": "WF02-REQ149-20260826",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ149-20260826/step-01-code-designer.json",
+  "created_at": "2026-08-26T08:43:11Z",
+  "started_at": "2026-08-26T08:43:11Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-149"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-149": "Decision-and-design requirement that unblocks REQ-156 (LUA-09). Produce lib/letflow/design/req149-lua-memory-limit.md that: (1) empirically establishes whether tv-labs/lua exposes any memory-limit or allocation-accounting option at all -- search deps/lua/ source and quote findings; (2) evaluates at minimum: bounded :max_heap_size on the script's executing process, periodic host-side sampling of Process.info(pid, :memory), and declining the graceful-failure clause; (3) reaches an explicit RECOMMENDED MECHANISM stating which of LUA-09's two clauses (fail gracefully / terminate the script) it satisfies and which it does not; (4) explicitly rejects approximating memory via :max_instructions, citing decision 0014's OQ-1. If the outcome contradicts anything 0014 states, write an addendum to docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md with REVIEWER sign-off. NOT IN THIS REQUIREMENT: no implementation of the chosen mechanism (that is REQ-156)."
+    },
+    "source_text": {
+      "spike_data": "REQ-148 (lib/letflow/design/req148-lua-runtime-spike.md) already answered OQ-2(a)-(d): pcall catches :max_instructions budget exhaustion, pcall catches host errors, instruction_count accessible as internal struct field, sandbox deny-set confirmed. _VERSION=Lua 5.3, 3/2=1.5, 3//2=1. tv-labs/lua is {:lua, ~> 1.0} v1.0.2."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req148-lua-runtime-spike.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md",
+      "docs/requirements.yaml (REQ-149)",
+      "deps/lua/"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/req149-lua-memory-limit.md"
+    ],
+    "branch_name": "feature/WF02-REQ149-20260826"
+  },
+  "task": {
+    "description": "Write lib/letflow/design/req149-lua-memory-limit.md on branch feature/WF02-REQ149-20260826. This is a design-only requirement -- the deliverable IS this document, no Elixir code.\n\nThe document must:\n1. Search deps/lua/ source for any memory-limit or allocation-accounting option -- grep for 'memory', 'heap', 'limit', 'alloc' in deps/lua/lib/ and quote what was found. Do not cite docs; quote actual source.\n2. Evaluate these three candidates with a real run for each:\n   a. :max_heap_size on the Lua script's OS process (spawn_opt/2 or Process.flag/2). Run a test showing what happens when it's exceeded -- what exit reason the supervising process observes.\n   b. Periodic host-side sampling of Process.info(pid, :memory) from the supervising process. Show what resolution and latency this gives.\n   c. Declining the graceful-failure clause outright (implementing only 'terminate the script' via :max_instructions or process kill, with no graceful pcall-catchable allocation failure).\n3. Choose exactly ONE RECOMMENDED MECHANISM. State plainly which of LUA-09's two clauses it satisfies and which it does not.\n4. Explicitly reject :max_instructions as a memory proxy, citing decision 0014's OQ-1 instruction.\n5. If the outcome contradicts anything in docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md, write an addendum to that file. Otherwise state that no addendum is needed.\n\nReq148's spike doc is already done and has run observations. Build on it, don't repeat it.\n\nAfter writing the design doc:\n1. Checkout feature/WF02-REQ149-20260826\n2. Write lib/letflow/design/req149-lua-memory-limit.md\n3. git add lib/letflow/design/req149-lua-memory-limit.md\n4. git commit -m 'design(REQ-149): Lua memory limit mechanism design [WF02-REQ149-20260826]'\n5. git push origin feature/WF02-REQ149-20260826\n6. Update handoff on main:\n   git checkout main && git pull --ff-only && git add handoffs/WF02-REQ149-20260826/step-01-code-designer.json && git commit -m 'chore(CODE-DESIGNER): WF02-REQ149-20260826 step-01 PASS' && git push origin main",
+    "acceptance_criteria": [
+      "lib/letflow/design/req149-lua-memory-limit.md exists naming exactly one RECOMMENDED MECHANISM",
+      "artefact quotes a real search of deps/lua/ source for memory-limit options (not just docs)",
+      "for :max_heap_size candidate, artefact quotes a real run showing what happens to a process that exceeds it",
+      "artefact states explicitly which of LUA-09's two clauses the recommended mechanism satisfies and which it does not",
+      "artefact explicitly rejects :max_instructions as a memory proxy, citing decision 0014's OQ-1",
+      "if outcome contradicts 0014, an addendum is written; if not, the artefact states so explicitly",
+      "no lib/letflow/engine/ file and no mix.exs change is made by this requirement"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

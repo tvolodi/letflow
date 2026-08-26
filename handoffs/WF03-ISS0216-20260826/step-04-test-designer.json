@@ -61,9 +61,9 @@
     },
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0216-20260826",
-      "commit_sha_list": [],
+      "commit_sha_list": ["8f21c26"],
       "remote_branch": "origin/feature/WF03-ISS0216-20260826",
-      "push_status": "pending",
+      "push_status": "pushed",
       "pr_url": null,
       "pr_create_error": null
     },

@@ -2470,7 +2470,7 @@
             "lock_acquired_at": "2026-08-26T13:27:58Z",
             "lock_released_at": null,
             "released_lock": false,
-            "last_known_step": "Step 01 re-dispatched, tightly bounded (prior attempt looped >200k tokens without concluding, no commit produced)",
+            "last_known_step": "Step 01 COMPLETED PASS (e8c4814); Step 02 PENDING (CODE-DESIGNER dispatched)",
             "backfilled": false,
             "queue_task_id": 343,
             "queue_agent_id": "orch-loop-1787735920",

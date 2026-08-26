@@ -3,34 +3,61 @@
   "run_id": "WF03-ISS0216-20260826",
   "workflow_id": "WF-03",
   "step": "02",
-  "from_agent": "ORCH",
+  "from_agent": "ISSUE-FIXER",
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF03-ISS0216-20260826/step-02-code-designer.json",
-  "created_at": "2026-08-26T12:36:00Z",
-  "started_at": "2026-08-26T12:36:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "created_at": "2026-08-26T12:01:39Z",
+  "started_at": "2026-08-26T12:01:39Z",
+  "completed_at": "2026-08-26T12:10:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
     "requirement_ids": [],
     "issue_ids": ["ISS-0216"],
+    "requirement_text": {
+      "ISS-0216": "Letflow.Api.Pagination.decode_cursor/4 trusts its caller-supplied prefix with no non-empty guard, a real bypass path once REQ-072-onward endpoints call it. check_prefix/2 (lib/letflow/api/pagination.ex) uses a size guard (byte_size(decoded) >= byte_size(prefix) and String.starts_with?(decoded, prefix)) that trivially passes if prefix is an empty string, since every decoded cursor starts with the empty string -- an empty prefix defeats the cross-endpoint isolation this parameter exists to provide. Filed 2026-08-21 as unreachable-but-real-risk (REQ-072 routing layer was pending); NOW LIVE -- confirmed 2026-08-26 that real route handlers (lib/letflow/routers/audit.ex, tasks.ex, instances.ex, routers/tenants.ex, routers/identity.ex, definitions.ex) already call decode_cursor/4 with hardcoded non-empty module-attribute prefixes. The guard itself is still missing."
+    },
+    "source_text": {},
     "related_handoff_ids": ["handoffs/WF03-ISS0216-20260826/step-01-issue-fixer.json"],
-    "artifacts_in": ["lib/letflow/api/pagination.ex"],
-    "owned_modules": ["lib/letflow/api/pagination.ex"],
-    "branch_name": "feature/WF03-ISS0216-20260826",
-    "note": "ISSUE-FIXER's diagnosis (step-01): check_prefix/2 (lib/letflow/api/pagination.ex:211-218) is vacuously true for prefix == \"\", defeating cross-endpoint cursor isolation. Not currently exploitable (all 9 real call sites pass hardcoded non-empty literals) but the guard itself is structurally missing -- defense-in-depth fix needed per ISS-0216's acceptance criteria."
+    "artifacts_in": [
+      "docs/issues/ISS-0216.yaml",
+      "lib/letflow/api/pagination.ex",
+      "handoffs/WF03-ISS0216-20260826/step-01-issue-fixer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/api/pagination.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0216-20260826"
   },
   "task": {
-    "description": "Design a fix per WF-03 Step 2 (same procedure as WF-02 Step 1). Claim this handoff by setting status to IN_PROGRESS only. Write lib/letflow/design/iss0216-pagination-prefix-guard.md specifying the exact change to check_prefix/2 (or decode_cursor/4) that rejects an empty-string prefix outright, before the existing size/starts_with? check -- design only, no implementation code. State the error shape (reuse {:error, :wrong_endpoint}, or introduce a new tag -- your call, state which and why). Confirm the design doesn't change behavior for any of the 9 existing non-empty-prefix call sites (their behavior must be unchanged).",
+    "description": "Design the fix for ISS-0216: check_prefix/2 in lib/letflow/api/pagination.ex has no guard against an empty-string prefix, which trivially bypasses cross-endpoint cursor isolation (String.starts_with?(decoded, \"\") is always true). Write lib/letflow/design/iss0216-pagination-prefix-guard.md specifying: (1) exactly which clause(s) of check_prefix/2 and/or decode_cursor/4 change and how (guard placement, updated @spec if the error/return shape changes); (2) the error-shape decision -- new error atom vs. reusing :wrong_endpoint vs. raising, with rationale, since prefix is always a caller-internal hardcoded module-attribute literal (per step-01's call-site audit), never external/request-controlled input; (3) any @moduledoc/@doc wording that needs updating to state the guard is now structural, not conventional; (4) what TEST-DESIGNER needs to cover (empty-prefix case at minimum, plus any other boundary case this design surfaces). Design only -- no implementation code.",
     "acceptance_criteria": [
-      "design specifies check_prefix/2 (or decode_cursor/4) rejecting prefix == \"\" outright, stated as a concrete function-signature-level change (which clause, what it returns)",
-      "the chosen error shape is stated explicitly with reasoning ({:error, :wrong_endpoint} reuse vs. a new tag)",
-      "design states explicitly that all 9 existing call sites' behavior is unchanged (they never pass an empty prefix)",
-      "no implementation code present -- signatures/type shapes/prose only"
+      "Design names the exact function(s)/clause(s) that change in lib/letflow/api/pagination.ex",
+      "Error-shape decision (new atom vs. reuse vs. raise) is made explicitly with stated rationale, not left as an unresolved TBD",
+      "Design states whether @spec of decode_cursor/4 and/or check_prefix/2 changes",
+      "Design states what TEST-DESIGNER must cover, including the empty-prefix case reproduced in step-01",
+      "No implementation code in the design doc",
+      "Handoff status flips to COMPLETED with next_action naming CODE-DESIGN-VALIDATOR"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/iss0216-pagination-prefix-guard.md. Root defect (from step-01): check_prefix/2's guard (byte_size(decoded) >= byte_size(prefix) and String.starts_with?(decoded, prefix)) trivially passes for prefix == \"\" since every binary starts with the empty string and every size check against 0 passes -- cross-endpoint cursor isolation is defeated whenever prefix is empty. Step-01's call-site audit established prefix is always a compile-time, non-empty, module-attribute literal at all 9 real call sites (identity.ex, tenants.ex, audit.ex, tasks.ex, instances.ex x3, definitions.ex x2) -- never request/query/path-derived -- so this is a caller-contract violation, not untrusted network-facing input.\n\nDesign decision (error shape, §1): raise ArgumentError from a new check_prefix/2 function-head clause matching prefix == \"\" (added before the existing clause, evaluated first, existing clause's body untouched), rather than returning a new/reused error tuple. Rationale: (a) reusing {:error, :wrong_endpoint} would conflate 'the decoded cursor payload doesn't match' (untrusted-data concern) with 'the caller's own hardcoded prefix argument is malformed' (code-bug concern) under one atom; (b) a new {:error, :invalid_prefix} tuple would extend decode_cursor/4's public error contract for a condition that cannot occur through any code path respecting the module's own documented calling convention, and would force every real call site's case/else to grow a branch it can never actually hit; (c) INV-8 ('no unhandled crashes on realistic failure paths') is explicitly scoped in this module's own moduledoc to caller-controlled NETWORK-FACING input -- prefix is not network-facing, so raising does not violate it. This mirrors idiomatic Elixir precondition-violation patterns (Keyword.fetch!/2-style).\n\nClause changes (§2): check_prefix/2 gains one new leading function-head clause (defp check_prefix(_decoded, \"\"), do: raise ArgumentError, \"...\") ; its existing clause and @spec (:ok | {:error, :wrong_endpoint}) are unchanged. decode_cursor/4's @spec and body are unchanged -- no new error tuple in its return type, since raise isn't part of an Elixir @spec return shape and its with chain already just calls check_prefix/2 as before.\n\nDoc updates (§3): new moduledoc invariant INV-9 stating the guard is structural; decode_cursor/4's @doc gains a paragraph stating prefix must be a non-empty hardcoded literal, never caller/request-derived, and that an empty prefix raises rather than returning a tuple.\n\nTEST-DESIGNER coverage required (§4): (1) mandatory -- build a cursor under a real prefix, call decode_cursor(encoded, \"\", offset), assert_raise ArgumentError (mirrors step-01's live reproduction); (2) non-regression on all existing :ok/:wrong_endpoint/:expired/:invalid_cursor/:invalid_base64 cases; (3) optional boundary case (prefix that is itself a prefix of another endpoint's prefix, e.g. \"T:\" vs \"TL:\") for completeness; (4) test only through the public decode_cursor/4, never reach into private check_prefix/2.\n\nOpen questions flagged for CODE-DESIGN-VALIDATOR/REVIEWER (§5): raise-vs-tuple is an explicit, reasoned choice, not a TBD, but stated as overridable; whether to also guard non-binary prefix (out of scope for ISS-0216 as filed); whether INV-9 should be its own invariant or folded into INV-1/INV-5.\n\nNo implementation code written anywhere in the design file -- signatures, @spec deltas, and prose only.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0216-pagination-prefix-guard.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0216-20260826",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0216-20260826",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

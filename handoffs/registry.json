@@ -2431,6 +2431,28 @@
             "queue_task_id": 216,
             "queue_agent_id": "orch-loop-1787735920",
             "note": "WF-03 for ISS-0216 (queue task 216, GH#439). decode_cursor/4 empty-prefix guard is now live/reachable (real route handlers calling it exist). Queue claimed 2026-08-26T11:55:21Z via get_next_task."
+        },
+        {
+            "run_id": "WF03-ISS0340-20260826",
+            "workflow_id": "WF-03",
+            "requirement_ids": [],
+            "issue_ids": [
+                "ISS-0340"
+            ],
+            "stage": "S4",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "test/letflow/api/context_test.exs",
+                "lib/letflow/api/context.ex"
+            ],
+            "lock_acquired_at": "2026-08-26T17:09:00Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PENDING (ELIXIR-DEV dispatched)",
+            "backfilled": false,
+            "queue_task_id": 340,
+            "queue_agent_id": "orch-main",
+            "note": "WF-03 for ISS-0340 (queue task 340, GH#654). Flaky test context_test.exs scoped_repo_opts/1. Claimed via get_next_task 2026-08-26 as part of ORCH sync pass (was not blocked by Lua chain)."
         }
     ]
 }

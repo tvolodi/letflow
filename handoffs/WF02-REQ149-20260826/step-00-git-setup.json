@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step00-WF02-REQ149-20260826",
+  "run_id": "WF02-REQ149-20260826",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ149-20260826/step-00-git-setup.json",
+  "created_at": "2026-08-26T08:35:14Z",
+  "started_at": "2026-08-26T08:35:14Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-149"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-149": "Decision-and-design requirement that unblocks REQ-156 (LUA-09). Produce lib/letflow/design/req149-lua-memory-limit.md that: (1) empirically establishes whether the adopted runtime (tv-labs/lua, per REQ-148) exposes any memory-limit or allocation-accounting option at all -- search deps/lua/ source and quote what was found; (2) evaluates at minimum: bounded :max_heap_size on the script's executing process, periodic host-side sampling of Process.info(pid, :memory), and declining the graceful-failure clause outright; (3) reaches an explicit RECOMMENDED MECHANISM stating which of LUA-09's two clauses (fail gracefully / terminate the script) it satisfies; (4) explicitly rejects approximating memory via :max_instructions per decision 0014's own instruction. Whether this produces a new record in docs/migration/decisions/ or an addendum to 0014 is this requirement's own call; if the outcome contradicts anything 0014 states, it is an addendum with REVIEWER sign-off."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_SETUP.md",
+      "docs/requirements.yaml (REQ-149)"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/req149-lua-memory-limit.md"
+    ],
+    "branch_name": "feature/WF02-REQ149-20260826"
+  },
+  "task": {
+    "description": "Perform GIT_SETUP.md's standard procedure for WF-02 run WF02-REQ149-20260826. Create branch feature/WF02-REQ149-20260826 from an up-to-date main and push it immediately.",
+    "acceptance_criteria": [
+      "git pull --ff-only origin main exits 0",
+      "git branch --show-current outputs feature/WF02-REQ149-20260826",
+      "git push -u origin feature/WF02-REQ149-20260826 exits 0"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

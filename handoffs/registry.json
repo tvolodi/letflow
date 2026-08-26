@@ -2444,6 +2444,25 @@
                      "queue_task_id":  332,
                      "queue_agent_id":  "orch-main",
                      "note":  "WF-03 for ISS-0332 (GH#642, queue task 332, stage S4 -- DEFINITION_PROMOTED schema_version 2 backfill for pre-existing tenants). Queue claimed 2026-08-26T04:41:20Z."
+                 },
+                 {
+                     "run_id":  "WF02-REQ149-20260826",
+                     "workflow_id":  "WF-02",
+                     "requirement_ids":  ["REQ-149"],
+                     "issue_ids":  [],
+                     "stage":  "S5",
+                     "status":  "IN_PROGRESS",
+                     "owned_modules":  [
+                                           "lib/letflow/design/req149-lua-memory-limit.md"
+                                       ],
+                     "lock_acquired_at":  "2026-08-26T08:35:14Z",
+                     "lock_released_at":  null,
+                     "released_lock":  false,
+                     "last_known_step":  "Step 00 PENDING",
+                     "backfilled":  false,
+                     "queue_task_id":  335,
+                     "queue_agent_id":  "orch-main",
+                     "note":  "WF-02 for REQ-149 (queue task 335, stage S5 -- Settle OQ-1: Lua memory limit design). Queue claimed 2026-08-26T08:35:14Z. Re-registered after queue reset (original task 301 expired)."
                  }
              ]
 }

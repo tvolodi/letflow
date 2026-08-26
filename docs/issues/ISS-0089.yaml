@@ -57,6 +57,11 @@ description: >
 affected_files:
   - lib/letflow/engine/variable_schema.ex
 status: open
+# queue_task_id: UNKNOWN -- github_issue_number 306 is already registered in the
+# queue (register_task returns "github_issue_number: has already been taken") but
+# the exact task id was not found during the 2026-08-26 sync scan. Find by probing
+# queue task IDs for one with github_issue_number=306.
+github_issue_number: 306
 github_issue: https://github.com/tvolodi/letflow/issues/306
 related:
   - ISS-0088

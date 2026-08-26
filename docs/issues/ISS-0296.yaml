@@ -1,0 +1,45 @@
+id: ISS-0296
+title: >
+  REQ-133 AC1-6: complete the live-browser login proof once a session with
+  reliable Chromium/Playwright automation is available -- config fix already
+  landed and curl-verified
+discovered_by: FRONTEND-DEV
+discovered_in_run: WF02-REQ133-20260823
+discovered_at: 2026-08-23T00:00:00Z
+severity: MINOR
+status: open
+queue_task_id: 296
+github_issue_number: 594
+github_issue: https://github.com/tvolodi/letflow/issues/594
+description: >
+  REQ-133 (End-to-end login -- SPA through Keycloak to an authorized API
+  call) had its config-fix scope landed and merged (PR #593): web/src/auth/
+  OidcManager.ts, tenantConfig.ts, web/.env.example, and lib/letflow/routers/
+  tenant_config.ex all corrected from R-Co-stale defaults (port 8081,
+  client_id bpm-platform-api) to Letflow's real values (port 8082,
+  client_id letflow-web), verified consistent against docker-compose.yml/
+  config/dev.exs/priv/keycloak/realms/bpm-default.json, REVIEWER PASS.
+  AC7 (npm run type-check/lint/test) and AC8 (route inventory) completed.
+
+  What remains: AC1-6 (live browser proof -- admin login, worker login with
+  narrower nav, an authenticated API call, a 403-on-forbidden-route check,
+  and a browser-storage inspection). Extensive attempts in the REQ-133 session
+  hit genuine reproducible Playwright/Chromium flakiness in that environment
+  -- NOT an app defect.
+
+  Two real environment workarounds discovered: (1) Vite dev server binds to
+  IPv6 localhost only -- use 'localhost' not '127.0.0.1' in E2E_BASE_URL;
+  (2) React 18 StrictMode double-invokes ProtectedRoute redirect, causing
+  PKCE-state race in 'npm run dev' -- use 'npm run build && npm run preview'
+  (port 4173) for e2e login tests.
+
+  Strong prior confidence the underlying fix is correct: curl-verified GET
+  /api/tenant-config returns {client_id: letflow-web, oidc_authority:
+  http://localhost:8082/realms/bpm-default}; Keycloak /auth returns 200.
+acceptance_criteria:
+  - "a real browser login as PLATFORM_ADMIN completes the full OIDC redirect/callback flow and lands on an authenticated view"
+  - "a real browser login as TASK_WORKER shows a demonstrably narrower nav than the admin, with both navs listed"
+  - "at least one authenticated API call returns real data from Letflow, with the request and response quoted"
+  - "an authenticated call to a route the caller's role does not permit returns REQ-131's 403 problem document"
+  - "no token is written to localStorage or sessionStorage, confirmed by inspecting browser storage after login"
+  - "REQ-133's status in docs/requirements.yaml is flipped from blocked to done with status-history event appended"

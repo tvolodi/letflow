@@ -1,0 +1,34 @@
+id: ISS-0297
+title: >
+  3 test failures under 16-way scripts/test_parallel.sh parallelism
+  (Postgres pool exhaustion in EngineConcurrencyTest x2, gh CLI timeout
+  in AuditIssueClosuresTest x1) -- pre-existing, unrelated to REQ-140
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ140-20260817
+discovered_at: 2026-08-17T00:00:00Z
+severity: MINOR
+status: open
+queue_task_id: 297
+github_issue_number: 596
+github_issue: https://github.com/tvolodi/letflow/issues/596
+description: >
+  REQ-140's TEST-RUNNER ran the full suite via scripts/test_parallel.sh
+  (16 partitions) as a broader sanity check and found 3/1996 failures:
+  2x Letflow.EngineConcurrencyTest (Postgres connection-pool exhaustion
+  under 16-way parallel load -- distinct from ISS-0291's already-fixed
+  timing-ratio flake, this is a resource-contention issue, not a timing
+  one) and 1x Mix.Tasks.Letflow.AuditIssueClosuresTest (external gh CLI
+  timeout). Confirmed via git diff that none of the affected files are
+  touched by REQ-140's branch; all last changed at a prior merged commit.
+
+  Needs diagnosis: whether the EngineConcurrencyTest pool exhaustion is
+  a real connection-pool-size configuration gap under high parallelism or
+  expected/acceptable resource contention; whether the AuditIssueClosuresTest
+  gh CLI timeout is a real test-isolation gap (real network calls under
+  contention) or an environment-specific flake. Fix or document a mitigation
+  (lower default parallelism, exclude tests from 16-way, real pool-size fix).
+acceptance_criteria:
+  - "reproducing mechanism for EngineConcurrencyTest pool exhaustion is diagnosed (config gap vs. accepted contention)"
+  - "reproducing mechanism for AuditIssueClosuresTest gh CLI timeout is diagnosed (test-isolation gap vs. env flake)"
+  - "fix or documented mitigation exists so 16-way parallel runs are reliable or their limits are stated"
+  - "scripts/test_parallel.sh at 16-way parallelism passes clean after fix, or flakiness at very high parallelism is documented as a known limit with rationale"

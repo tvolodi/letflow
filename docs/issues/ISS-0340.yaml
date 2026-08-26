@@ -11,6 +11,7 @@ resolved_in_run: null
 resolved_at: null
 queue_task_id: 340
 github_issue_number: 654
+github_issue: https://github.com/tvolodi/letflow/issues/654
 description: >
   test/letflow/api/context_test.exs's "scoped_repo_opts/1 is 1-arity" test
   fails intermittently under scripts/test_parallel.sh -- failed 1 of 9

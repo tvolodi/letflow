@@ -11,6 +11,7 @@ resolved_in_run: null
 resolved_at: null
 queue_task_id: 339
 github_issue_number: 653
+github_issue: https://github.com/tvolodi/letflow/issues/653
 description: >
   test/docs/requirement_status_invariants_test.exs A4a ("every entry in
   every volume uses the documented req/event vocabulary") and A5 ("the

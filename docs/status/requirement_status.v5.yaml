@@ -230,3 +230,22 @@ history:
       335/336/337 without repointing downstream edges) which had silently
       blocked this task. SECURITY-REVIEWER hard gate applies -- modifies the
       Lua sandbox boundary.
+
+  - req: REQ-152
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-26T21:03:23Z"
+    note: >
+      WF02-REQ152-20260826 complete. Deny all four ambient Lua time sources
+      (os.time, os.date, os.clock, os.difftime) from inside a script and
+      implement platform.now() returning Letflow's authoritative time as an
+      injectable ISO 8601 UTC string, per LUA-14 restated. Combined with
+      REQ-151's general enumeration, all eleven Lua 5.3 os functions are
+      proven unreachable by test. Default denials (os.execute, load) confirmed
+      still held after the sandbox change, guarding the :sandboxed-replaces-
+      defaults trap. platform.now documented as ungated by design per
+      R-Co/src/lua/host_api/mod.zig's capability matrix. Passed design,
+      security-reviewer (hard gate, sandbox boundary), reviewer, test-designer,
+      test-design-validator, test-runner (2092/2092 passing), and
+      release-validator (independent re-verification). Status flipped
+      in_progress -> done in docs/requirements.yaml.

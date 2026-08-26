@@ -157,7 +157,9 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
   end
 
   defp approve(caller_tenant, review_id, plan_digest, fields \\ []) do
-    conn_fields = Keyword.take(fields, [:roles, :user_id]) ++ [body: %{"plan_digest" => plan_digest}]
+    conn_fields =
+      Keyword.take(fields, [:roles, :user_id]) ++ [body: %{"plan_digest" => plan_digest}]
+
     build_conn(:post, "/#{review_id}/approve", caller_tenant, conn_fields) |> promotions()
   end
 
@@ -167,7 +169,9 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
   end
 
   defp apply_promotion(caller_tenant, review_id, plan_digest, fields \\ []) do
-    conn_fields = Keyword.take(fields, [:roles, :user_id]) ++ [body: %{"plan_digest" => plan_digest}]
+    conn_fields =
+      Keyword.take(fields, [:roles, :user_id]) ++ [body: %{"plan_digest" => plan_digest}]
+
     build_conn(:post, "/#{review_id}/apply", caller_tenant, conn_fields) |> promotions()
   end
 
@@ -402,7 +406,8 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
   # exactly two top-level fields, "plan_digest" and "artifact" (an :object), so
   # the artifact's own fields must be NESTED under "artifact", never flattened
   # to the top level.
-  defp run_assertions_request_body(digest), do: %{"plan_digest" => digest, "artifact" => artifact_json()}
+  defp run_assertions_request_body(digest),
+    do: %{"plan_digest" => digest, "artifact" => artifact_json()}
 
   describe "AC1: R8 POST /promotions/:review_id/run-assertions (design §7.5)" do
     test "200, exactly 6 keys, idempotent_hit is never one of them" do
@@ -478,7 +483,9 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
       assert {:ok, %{definition: _v2}} = Definitions.activate(v2.id, prefix: tenant.schema_name)
 
       resp =
-        build_conn(:post, "/#{process_key}/rollback", tenant, body: %{"target_version" => "1.0.0"})
+        build_conn(:post, "/#{process_key}/rollback", tenant,
+          body: %{"target_version" => "1.0.0"}
+        )
         |> definitions()
 
       assert resp.status == 200
@@ -685,16 +692,24 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
 
       assert cross.status == 404
       assert absent.status == 404
-      assert strip_trace(Jason.decode!(cross.resp_body)) == strip_trace(Jason.decode!(absent.resp_body))
+
+      assert strip_trace(Jason.decode!(cross.resp_body)) ==
+               strip_trace(Jason.decode!(absent.resp_body))
     end
 
-    test "R5 POST /:id/approve", %{target_b: target_b, foreign_review_id: foreign_id, digest: digest} do
+    test "R5 POST /:id/approve", %{
+      target_b: target_b,
+      foreign_review_id: foreign_id,
+      digest: digest
+    } do
       cross = approve(target_b, foreign_id, digest)
       absent = approve(target_b, Ecto.UUID.generate(), digest)
 
       assert cross.status == 404
       assert absent.status == 404
-      assert strip_trace(Jason.decode!(cross.resp_body)) == strip_trace(Jason.decode!(absent.resp_body))
+
+      assert strip_trace(Jason.decode!(cross.resp_body)) ==
+               strip_trace(Jason.decode!(absent.resp_body))
     end
 
     test "R6 POST /:id/reject", %{target_b: target_b, foreign_review_id: foreign_id} do
@@ -703,21 +718,32 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
 
       assert cross.status == 404
       assert absent.status == 404
-      assert strip_trace(Jason.decode!(cross.resp_body)) == strip_trace(Jason.decode!(absent.resp_body))
+
+      assert strip_trace(Jason.decode!(cross.resp_body)) ==
+               strip_trace(Jason.decode!(absent.resp_body))
     end
 
-    test "R7 POST /:id/apply", %{target_b: target_b, foreign_review_id: foreign_id, digest: digest} do
+    test "R7 POST /:id/apply", %{
+      target_b: target_b,
+      foreign_review_id: foreign_id,
+      digest: digest
+    } do
       cross = apply_promotion(target_b, foreign_id, digest)
       absent = apply_promotion(target_b, Ecto.UUID.generate(), digest)
 
       assert cross.status == 404
       assert absent.status == 404
-      assert strip_trace(Jason.decode!(cross.resp_body)) == strip_trace(Jason.decode!(absent.resp_body))
+
+      assert strip_trace(Jason.decode!(cross.resp_body)) ==
+               strip_trace(Jason.decode!(absent.resp_body))
     end
 
     # Not AC5-required (only cross-tenant/nonexistent are), but design §5.2/§3.2 name
     # a malformed id as a fifth case belonging to the same byte-identical set.
-    test "a malformed (non-UUID) id is the SAME response too", %{target_b: target_b, digest: digest} do
+    test "a malformed (non-UUID) id is the SAME response too", %{
+      target_b: target_b,
+      digest: digest
+    } do
       malformed = approve(target_b, "not-a-uuid-at-all", digest)
       absent = approve(target_b, Ecto.UUID.generate(), digest)
 
@@ -783,7 +809,9 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
 
     test ":pending_review row -- approve=200, reject=200, apply=409", %{tenant: tenant} do
       {review_approve, digest_approve} = seed_review!(tenant.schema_name)
-      assert approve(tenant, review_approve.id, digest_approve, user_id: Ecto.UUID.generate()).status == 200
+
+      assert approve(tenant, review_approve.id, digest_approve, user_id: Ecto.UUID.generate()).status ==
+               200
 
       {review_reject, _digest_reject} = seed_review!(tenant.schema_name)
       assert reject(tenant, review_reject.id).status == 200
@@ -792,7 +820,9 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
       assert apply_promotion(tenant, review_apply.id, digest_apply).status == 409
     end
 
-    test ":approved row -- approve=409, reject=409 (apply=200 covered elsewhere)", %{tenant: tenant} do
+    test ":approved row -- approve=409, reject=409 (apply=200 covered elsewhere)", %{
+      tenant: tenant
+    } do
       requester = Ecto.UUID.generate()
       {review, digest} = seed_review!(tenant.schema_name, requester)
 
@@ -811,7 +841,10 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
     test ":rejected row -- approve=409, reject=409, apply=409", %{tenant: tenant} do
       {review, digest} = seed_review!(tenant.schema_name)
 
-      assert {:ok, _} = PromotionReviewStore.reject_review(review.id, Ecto.UUID.generate(), prefix: tenant.schema_name)
+      assert {:ok, _} =
+               PromotionReviewStore.reject_review(review.id, Ecto.UUID.generate(),
+                 prefix: tenant.schema_name
+               )
 
       assert approve(tenant, review.id, digest, user_id: Ecto.UUID.generate()).status == 409
       assert reject(tenant, review.id).status == 409
@@ -821,8 +854,13 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
     test ":applied row -- approve=409, reject=409, apply=409", %{tenant: tenant} do
       {review, digest} = seed_review!(tenant.schema_name)
 
-      assert {:ok, _} = PromotionReviewStore.approve_review(review.id, Ecto.UUID.generate(), digest, prefix: tenant.schema_name)
-      assert {:ok, _} = PromotionReviewStore.mark_review_applied(review.id, prefix: tenant.schema_name)
+      assert {:ok, _} =
+               PromotionReviewStore.approve_review(review.id, Ecto.UUID.generate(), digest,
+                 prefix: tenant.schema_name
+               )
+
+      assert {:ok, _} =
+               PromotionReviewStore.mark_review_applied(review.id, prefix: tenant.schema_name)
 
       assert approve(tenant, review.id, digest, user_id: Ecto.UUID.generate()).status == 409
       assert reject(tenant, review.id).status == 409
@@ -832,8 +870,13 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
     test ":failed row -- approve=409, reject=409, apply=409", %{tenant: tenant} do
       {review, digest} = seed_review!(tenant.schema_name)
 
-      assert {:ok, _} = PromotionReviewStore.approve_review(review.id, Ecto.UUID.generate(), digest, prefix: tenant.schema_name)
-      assert {:ok, _} = PromotionReviewStore.mark_review_failed(review.id, prefix: tenant.schema_name)
+      assert {:ok, _} =
+               PromotionReviewStore.approve_review(review.id, Ecto.UUID.generate(), digest,
+                 prefix: tenant.schema_name
+               )
+
+      assert {:ok, _} =
+               PromotionReviewStore.mark_review_failed(review.id, prefix: tenant.schema_name)
 
       assert approve(tenant, review.id, digest, user_id: Ecto.UUID.generate()).status == 409
       assert reject(tenant, review.id).status == 409
@@ -843,7 +886,10 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
     test ":superseded row -- approve=409, reject=409, apply=409", %{tenant: tenant} do
       {review, digest} = seed_review!(tenant.schema_name)
 
-      assert {:ok, _} = PromotionReviewStore.approve_review(review.id, Ecto.UUID.generate(), digest, prefix: tenant.schema_name)
+      assert {:ok, _} =
+               PromotionReviewStore.approve_review(review.id, Ecto.UUID.generate(), digest,
+                 prefix: tenant.schema_name
+               )
 
       assert {:ok, _} =
                PromotionReviewStore.supersede_review(review.id, Ecto.UUID.generate(),
@@ -891,8 +937,18 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
     end
 
     test "every non-PLATFORM_ADMIN role (including no roles at all) is denied on :Unknown" do
-      for roles <- [["PROCESS_DESIGNER"], ["PROCESS_OPERATOR"], ["TASK_WORKER"], ["AGENT_RUNNER"], []] do
-        ctx = %AccessContext{user_id: Ecto.UUID.generate(), roles: Authorization.roles_from_strings(roles)}
+      for roles <- [
+            ["PROCESS_DESIGNER"],
+            ["PROCESS_OPERATOR"],
+            ["TASK_WORKER"],
+            ["AGENT_RUNNER"],
+            []
+          ] do
+        ctx = %AccessContext{
+          user_id: Ecto.UUID.generate(),
+          roles: Authorization.roles_from_strings(roles)
+        }
+
         assert Authorization.evaluate_access(ctx, :Unknown).kind == :Deny403
       end
     end
@@ -940,7 +996,11 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
       tenant =
         %Letflow.Identity.Tenant{}
         |> Letflow.Identity.Tenant.create_changeset(
-          %{slug: unique_slug(), display_name: "REQ-077 Full-stack Smoke Tenant", idp_realm_id: realm},
+          %{
+            slug: unique_slug(),
+            display_name: "REQ-077 Full-stack Smoke Tenant",
+            idp_realm_id: realm
+          },
           :enabled
         )
         |> Repo.insert!()

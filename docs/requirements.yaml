@@ -7341,7 +7341,7 @@ requirements:
     owner: CODE-DESIGNER
     status: pending
     stage: S5
-    impl_order: 301  # letflow-queue task id
+    impl_order: 335  # letflow-queue task id (re-registered 2026-08-26; original task 301 expired/queue reset)
     description: >
       Decision-and-design requirement that unblocks REQ-156 (LUA-09). It
       exists as its own requirement rather than as prose inside REQ-156
@@ -7407,7 +7407,7 @@ requirements:
     owner: CODE-DESIGNER
     status: pending
     stage: S5
-    impl_order: 302  # letflow-queue task id
+    impl_order: 336  # letflow-queue task id (re-registered 2026-08-26; original task 302 expired/queue reset)
     description: >
       Decision-and-design requirement that unblocks REQ-159/REQ-160 (LUA-11's
       read and write paths). Filed as its own requirement because decision
@@ -7460,7 +7460,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S5
-    impl_order: 303  # letflow-queue task id
+    impl_order: 337  # letflow-queue task id (re-registered 2026-08-26; original task 303 expired/queue reset)
     description: >
       Builds Letflow's Lua sandbox construction -- the single function every
       script execution obtains its Lua state from -- and the test suite

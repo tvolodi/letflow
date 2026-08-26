@@ -43,4 +43,4 @@ acceptance_criteria:
   - >
     no regression to tenants already at schema_version 2 (idempotent /
     no-op on higher-version collision)
-status: open
+

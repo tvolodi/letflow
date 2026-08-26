@@ -1,0 +1,55 @@
+{
+  "handoff_id": "step02-code-designer-WF03-ISS0332-20260826",
+  "run_id": "WF03-ISS0332-20260826",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0332-20260826/step-02-code-designer.json",
+  "created_at": "2026-08-26T04:52:46Z",
+  "started_at": "2026-08-26T04:52:46Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0332"],
+    "requirement_text": {
+      "ISS-0332": "REQ-077 bumped the DEFINITION_PROMOTED platform-event-type seed from schema_version 1 (review_id required non-null) to schema_version 2 (review_id nullable) in lib/letflow/tenant_provisioning.ex, to support R10. This seed only applies to tenants provisioned from this point forward -- nothing re-runs replay_migrations/2 or re-registers the type for already-provisioned tenants. R10 against such a tenant commits the promotion transaction, then fails the event-append step on schema validation -- a committed write reported as failure (Severity 1). Needs a backfill routine iterating tenant_schemas and calling Letflow.EventStore.Registry.register_type/2 per tenant, no-op on already-higher-version collision."
+    },
+    "source_text": {
+      "diagnosis": "Root cause: maybe_seed_platform_event_types/2 is called only during replay_migrations/2 (provisioning time). When @platform_event_type_seed_attrs changes (v1->v2 for DEFINITION_PROMOTED), no mechanism updates already-provisioned tenants' event_type_registry. R10's append_promotion_event call (outside any transaction) calls validate_payload/3 which queries the highest registered schema_version -- still v1 for pre-existing tenants -- and fails on null review_id, producing HTTP 500 while the promotion DB write is already committed (Severity-1 broken-audit shape). Fix must: iterate tenant_schemas, call register_type/2 per tenant for DEFINITION_PROMOTED v2 attrs, treat {:error, :duplicate_event_type_version} as no-op (already at v2). CODE-DESIGNER should also review whether the structural commit-before-event issue warrants a structural fix (outer transaction or idempotent retry) within this ISS-0332 scope or a separate issue."
+    },
+    "related_handoff_ids": [
+      "step05-diagnose-WF03-ISS0332-20260826"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0332.yaml",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/event_store/registry.ex",
+      "lib/letflow/definitions/promotion.ex",
+      "docs/agents/instructions/core-directives.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/event_store/registry.ex",
+      "lib/mix/tasks/"
+    ],
+    "branch_name": "feature/WF03-ISS0332-20260826"
+  },
+  "task": {
+    "description": "Design the fix for ISS-0332. Produce a design artefact at lib/letflow/design/iss0332-definition-promoted-backfill.md. No implementation code.\n\nThe design must cover:\n\n1. **Scope decision**: Is the fix ONLY the backfill routine, or does it also address the structural issue that promote_active_definition/5 commits the target definition write before calling the event appender? Assess: (a) would an outer transaction around both the DB write and the event append be feasible given EventStore.append/2's structure? (b) or is an idempotent re-run/retry the right shape? Document your decision and rationale. If the structural issue is out of scope for ISS-0332 (too large, needs its own requirement), say so explicitly and file a note for a follow-on ISS.\n\n2. **Backfill mechanism**: Define the @spec, module, and function name for the backfill. Options include:\n   a. A Mix task (e.g. mix letflow.backfill_event_type_versions) that iterates Letflow.TenantProvisioning.Registration records and calls Letflow.EventStore.Registry.register_type/2 per tenant for each event type that needs a version bump.\n   b. A module function in Letflow.TenantProvisioning (or a new Letflow.TenantProvisioning.Backfill module) callable from iex/ops.\n   Both a and b can coexist -- the Mix task wrapping the module function is the idiomatic pattern. Choose and justify.\n\n3. **register_type/2 return value handling**: Document how the backfill handles each return from register_type/2:\n   - {:ok, _} -> new registration succeeded\n   - {:error, :duplicate_event_type_version} -> already at this exact version, treat as success\n   - {:error, :schema_version_not_monotonic} -> already at a HIGHER version, treat as success\n   - {:error, :tenant_not_provisioned} -> tenant_schemas row exists but no Registration? Log and skip, or halt?\n   - {:error, other} -> halt with error\n\n4. **@spec for any new public functions** -- no implementation bodies.\n\n5. **Acceptance criteria mapping**: Map each of ISS-0332's three acceptance criteria to what the design produces:\n   - AC1: backfill updates pre-existing tenants\n   - AC2: R10 against a pre-existing tenant succeeds end-to-end (does the design address this, or does it only create the backfill and assume it will be run?)\n   - AC3: idempotent on already-v2 tenants\n\nDesign doc must be unambiguous enough for ELIXIR-DEV to implement without making new design decisions.",
+    "acceptance_criteria": [
+      "lib/letflow/design/iss0332-definition-promoted-backfill.md exists and covers all five design points above",
+      "Scope decision on the structural commit-before-event issue is stated explicitly",
+      "Backfill mechanism module/function/@spec is stated -- no implementation code",
+      "All register_type/2 return value cases are handled in the design",
+      "Every ISS-0332 acceptance criterion is mapped to a concrete design element",
+      "No implementation code in the design doc"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

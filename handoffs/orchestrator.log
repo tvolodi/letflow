@@ -1357,3 +1357,4 @@
 2026-08-26T12:35:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0216-20260826 | ISSUE-FIXER -> ORCH | step-01-issue-fixer.json PASS. Reproduced empty-prefix bypass for real, root cause check_prefix/2, all 9 real call sites confirmed non-empty hardcoded prefixes (not currently exploitable, missing defense-in-depth).
 2026-08-26T12:36:00Z | DISPATCH | WF-03 | WF03-ISS0216-20260826 | ORCH -> CODE-DESIGNER | step-02-code-designer.json PENDING committed at dispatch time
 2026-08-26T12:57:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0216-20260826 | CODE-DESIGNER -> ORCH | step-02-code-designer.json PASS. Design: new leading check_prefix/2 clause raising ArgumentError on prefix=="" (caller-contract violation, not tagged-tuple error since no real caller passes untrusted prefix). New INV-9.
+2026-08-26T12:58:00Z | DISPATCH | WF-03 | WF03-ISS0216-20260826 | ORCH -> CODE-DESIGN-VALIDATOR | step-02b-code-design-validator.json PENDING committed at dispatch time

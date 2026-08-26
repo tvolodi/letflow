@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step02d-WF02-REQ149-20260826",
+  "run_id": "WF02-REQ149-20260826",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ149-20260826/step-02d-reviewer.json",
+  "created_at": "2026-08-26T08:59:51Z",
+  "started_at": "2026-08-26T08:59:51Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-149"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-149": "Design-only requirement. RECOMMENDED MECHANISM: :max_heap_size with kill: true. Satisfies 'terminate the script' clause; does NOT satisfy 'fail gracefully' clause. No decision 0014 addendum needed."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req149-lua-memory-limit.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md",
+      "docs/migration/decisions/"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF02-REQ149-20260826"
+  },
+  "task": {
+    "description": "Idiom and scope review of lib/letflow/design/req149-lua-memory-limit.md on branch feature/WF02-REQ149-20260826.\n\nCheck:\n1. Does the design contradict or silently re-decide any docs/migration/decisions/ record? Specifically check decision 0014 (scripting-plugin-runtime-strategy.md) and decision 0012 (mobile-tier-stack.md -- not relevant here but verify).\n2. Is the recommended mechanism (:max_heap_size with kill: true) consistent with decision 0014's intent? Decision 0014 selected tv-labs/lua as a pure-BEAM runtime with no C/NIF components; the recommended mechanism is a pure BEAM process flag.\n3. Is the scope correct? REQ-149 explicitly says NOT IN THIS REQUIREMENT: implementation of the chosen mechanism (that is REQ-156). Does the artefact stay within design-only scope?\n4. Is there any OTP idiom concern? The recommended mechanism involves a supervised process with :max_heap_size -- does this align with the established supervision patterns?\n5. Scope creep: does the artefact make implementation decisions that REQ-156 should own instead?",
+    "acceptance_criteria": [
+      "No decision record contradiction found (or if found, stated explicitly with recommendation)",
+      "Recommended mechanism consistent with decision 0014's intent",
+      "Artefact stays within design-only scope",
+      "No OTP idiom violation in the design",
+      "No scope creep into REQ-156's implementation territory"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

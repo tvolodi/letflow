@@ -58,13 +58,13 @@
         "id": 3,
         "description": "Quotes a real run showing exit reason when :max_heap_size exceeded",
         "outcome": "PASS",
-        "evidence": "Section 2 Candidate A shows scratch/lua_memory_spike.exs with actual output: 'EXIT REASON (max_heap_size): :killed'. Also notes {:DOWN, ref, :process, pid, :killed} signal received by supervisor."
+        "evidence": "Section 2 Candidate A shows scratch/lua_memory_spike.exs with actual output: 'EXIT REASON (max_heap_size): :killed'. Also notes {DOWN, ref, :process, pid, :killed} signal received by supervisor."
       },
       {
         "id": 4,
         "description": "States explicitly which of LUA-09's two clauses is satisfied and which is not",
         "outcome": "PASS",
-        "evidence": "Section 3 has explicit table: 'terminate the script' = YES; 'fail gracefully' = NO. Same table in Section 2 Candidate A. Prose: 'LUA-09 is only partially achievable with tv-labs/lua.'"
+        "evidence": "Section 3 has explicit table: 'terminate the script' = YES; 'fail gracefully' = NO. Same table in Section 2 Candidate A. Written in prose: 'LUA-09 is only partially achievable with tv-labs/lua.'"
       },
       {
         "id": 5,

@@ -1,0 +1,111 @@
+run_id: WF02-REQ151-20260826
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+requirement_ids: [REQ-151]
+date: "2026-08-26"
+branch: feature/WF02-REQ151-20260826
+
+environment:
+  toolchain: local (elixir/mix via asdf shims, found on PATH)
+  docker_compose_up: |
+    NOT run this invocation. `docker compose up -d` and `sudo docker ps` both
+    failed with "Cannot connect to the Docker daemon at unix:///var/run/docker.sock" --
+    the host's shared dockerd (PID 3925615, a process also serving unrelated
+    services on this host: penpot, immich) was hung/unresponsive to its own CLI,
+    and a `systemctl restart docker` attempt also failed (old PID still holding
+    /var/run/docker.pid). Did NOT force-kill the stray daemon, since it also backs
+    other running unrelated containers on this shared host (see
+    docs/anti-patterns.md's caution on shared docker state across checkouts).
+    Confirmed instead via `ss -tlnp` that the actual Postgres containers for this
+    project were already up and listening (127.0.0.1:5462 and 0.0.0.0:5463/[::]:5463,
+    docker-proxy-owned), and the untracked .env sets LETFLOW_DB_PORT=5463, which
+    config/db_port.exs resolves to for both dev and test -- so Ecto could reach the
+    already-running DB container without needing the docker CLI/daemon API.
+  deps_get: "mix deps.get -> 'Unchanged' for all deps including lua 1.0.2; 'All dependencies have been fetched'"
+  mix_compile_warnings_as_errors: "mix compile --warnings-as-errors -> exit 0, no output (clean)"
+
+test_parallel:
+  partition_count_N: 8
+  partition_count_source: nproc
+  runs:
+    - run: 1
+      combined: "2057 tests, 5 properties, 3 failures (2059/2062 passed)"
+      per_partition: "p1: 255 tests/2 failures(exit2) | p2: 227/0 | p3: 196/0 | p4: 306/0(1 property) | p5: 286/0 | p6: 232/1(exit2) | p7: 336/0(2 properties) | p8: 219/0"
+    - run: 2
+      combined: "2057 tests, 5 properties, 2 failures (2060/2062 passed)"
+      per_partition: "p1: 255 tests/2 failures(exit2) | p2: 227/0 | p3: 196/0 | p4: 306/0(1 property) | p5: 286/0 | p6: 232/0 | p7: 336/0(2 properties) | p8: 219/0"
+  final_combined_totals: "2057 tests, 5 properties, 2 failures (2060/2062 passed)"
+
+req_151_own_tests:
+  command: "MIX_ENV=test mix test test/letflow/engine/lua/sandbox_test.exs test/letflow/engine/lua_script_audit_test.exs"
+  result: "Result: 46 passed -- 0 failures"
+
+failures_observed:
+  - id: F1
+    test: "test A5: the on-disk vocabulary-anomaly set equals the index's declared set exactly, and every declared record cites a closed, pinned, warranted volume (Letflow.Docs.RequirementStatusInvariantsTest)"
+    file: "test/docs/requirement_status_invariants_test.exs:278"
+    seen_in: [run1_partition1, run2_partition1]
+    attribution: pre-existing, unrelated to REQ-151
+    structural_form: "not-in-diff + reproduced-at-merge-base"
+    evidence: >
+      `git diff --name-only main...HEAD` (this branch's full diff) does not include
+      test/docs/requirement_status_invariants_test.exs, docs/status/requirement_status.v4.yaml,
+      or any docs/status file. Checked out a worktree at the merge-base commit
+      (8c331b6621becb11814a0cc234411527e2e21db5, `git merge-base main HEAD`) and ran
+      `MIX_ENV=test mix test test/docs/requirement_status_invariants_test.exs
+      test/letflow/api/context_test.exs` there: identical failure reproduced verbatim --
+      "on disk but NOT declared (new drift): %{line: 1122, value: \"ISS-0332\",
+      path: \"docs/status/requirement_status.v4.yaml\", field: \"req\"}". This is an
+      undeclared vocabulary drift in docs/status/requirement_status.v4.yaml line 1122
+      (an ISS-0332-referencing status entry not yet added to that volume's
+      known_anomalies), predating this branch. Not fixed here per Step 4's scope --
+      forwarded to ORCH for filing/declaration per ISSUE_QUEUE.md.
+    action_taken: reported to ORCH, not fixed on this branch (out of REQ-151's scope)
+  - id: F2
+    test: "test A4a: every entry in every volume uses the documented req/event vocabulary (Letflow.Docs.RequirementStatusInvariantsTest)"
+    file: "test/docs/requirement_status_invariants_test.exs:162"
+    seen_in: [run1_partition1, run2_partition1]
+    attribution: pre-existing, unrelated to REQ-151
+    structural_form: "not-in-diff + reproduced-at-merge-base"
+    evidence: "Same root cause and same merge-base reproduction as F1 (same undeclared ISS-0332 entry at docs/status/requirement_status.v4.yaml:1122)."
+    action_taken: reported to ORCH, not fixed on this branch (out of REQ-151's scope)
+  - id: F3
+    test: "test scoped_repo_opts/1 ignores request-supplied tenant hints (INV-1, AC3) scoped_repo_opts/1 is 1-arity -- no tenant/schema/prefix parameter exists to pass (Letflow.Api.ContextTest)"
+    file: "test/letflow/api/context_test.exs:125"
+    seen_in: [run1_partition6]
+    attribution: "pre-existing flakiness, unrelated to REQ-151 -- did not reproduce in run2's full suite, nor in 8/9 standalone re-runs on this branch, nor in 5/5 standalone runs at merge-base"
+    structural_form: not-in-diff
+    evidence: >
+      `git diff --name-only main...HEAD` does not include test/letflow/api/context_test.exs
+      or lib/letflow/api/context.ex -- neither file is touched by this branch. Re-ran
+      `MIX_ENV=test mix test test/letflow/api/context_test.exs` standalone on this branch
+      9 times: failed once (10/11 passed), passed 8 times (11 passed) with default
+      (randomized) seed each time; with a fixed `--seed 0` it passed 5/5. Ran the same
+      standalone command 5 times in a worktree at the merge-base commit: passed 5/5.
+      This is order/seed-dependent flakiness in a test file this run never touched, not a
+      regression this run introduced -- no code path from mix.exs's re-added {:lua, "~> 1.0"}
+      dependency (or any other diff in this run) plausibly reaches Letflow.Api.Context's
+      function_exported?/3 introspection. Full run2 of the parallel suite (immediately
+      after observing this once in run1) did not reproduce it at all.
+    action_taken: reported to ORCH as a pre-existing intermittent/flaky test worth filing; not fixed on this branch (no reproducible mechanism tied to this run's diff to fix)
+
+verdict: PASS
+summary: >
+  Full suite run twice via scripts/test_parallel.sh (N=8, nproc-derived) after
+  `mix deps.get` (lua 1.0.2 already resolved/unchanged) and a clean
+  `mix compile --warnings-as-errors` (0 warnings). Both runs: 2057 tests / 5
+  properties, run1 3 failures (2059/2062 passed), run2 2 failures (2060/2062
+  passed). REQ-151's own test file plus the related lua_script_audit_test.exs
+  pass cleanly in isolation (46/46). All observed failures are attributed
+  structurally as pre-existing/unrelated to this run's diff -- two are a
+  reproducible-at-merge-base docs-status vocabulary-drift defect (ISS-0332 entry
+  undeclared in docs/status/requirement_status.v4.yaml), one is intermittent
+  flakiness in test/letflow/api/context_test.exs (a file this branch does not
+  touch) that failed once out of ~14 total observations across both branch and
+  merge-base and did not recur in the second full-suite run. Nothing in this
+  run's own diff (lib/letflow/engine/lua/sandbox.ex, its tests, mix.exs/mix.lock's
+  lua dependency) caused any observed failure. Docker CLI/daemon was unusable this
+  session (stray hung dockerd shared with other host services); worked around by
+  confirming the already-running Postgres containers were reachable on the
+  .env-configured port instead of restarting docker compose.

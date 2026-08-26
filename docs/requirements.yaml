@@ -7458,7 +7458,7 @@ requirements:
   - id: REQ-151
     title: Enumerate and test the Lua 5.3 sandbox deny-set, guarding the :sandboxed-replaces-defaults trap (LUA-03 and LUA-04 restated)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S5
     impl_order: 337  # letflow-queue task id (re-registered 2026-08-26; original task 303 expired/queue reset)
     description: >

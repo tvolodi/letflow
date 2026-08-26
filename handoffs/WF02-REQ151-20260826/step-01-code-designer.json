@@ -1,0 +1,50 @@
+{
+  "handoff_id": "step01-WF02-REQ151-20260826",
+  "run_id": "WF02-REQ151-20260826",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ151-20260826/step-01-code-designer.json",
+  "created_at": "2026-08-26T09:22:30Z",
+  "started_at": "2026-08-26T09:22:30Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-151"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-151": "Title: Enumerate and test the Lua 5.3 sandbox deny-set, guarding the :sandboxed-replaces-defaults trap (LUA-03 and LUA-04 restated). Builds Letflow's Lua sandbox construction -- the single function every script execution obtains its Lua state from -- and the test suite proving what that state cannot reach. Ports the PROPERTY of R-Co/src/lua/stdlib.zig (143 lines) without porting its mechanism.\n\nRESTATEMENT OF LUA-03, AND WHY. R-Co's LUA-03 (Stdlib Restriction, MUST) names a LuaJIT/5.1 module set: 'MUST NOT load io, os, package, debug', 'MUST load only math, string, table', and 'MUST remove string.dump, os.execute (if reachable), loadstring, load, loadfile, dofile.' Three distinct reasons that text cannot be adopted verbatim under decision 0014's runtime, each of which this requirement must therefore restate: (a) loadstring is a Lua 5.1 name that does not exist in Lua 5.3; (b) R-Co additionally never opens jit, ffi, and bit -- and all three are LuaJIT-SPECIFIC and DO NOT EXIST IN LUA 5.3 AT ALL, so three of R-Co's most security-critical exclusions are VACUOUS here, including the ffi one that R-Co/src/lua/stdlib.zig:57 calls 'a COMPLETE sandbox escape (arbitrary memory ...)'. Vacuous is not the same as satisfied and must not be reported as satisfied; (c) R-Co's SBX-1 invariant (R-Co/src/lua/stdlib.zig:26-31, 'prune strictly AFTER open') does not transfer as a mechanism, because Lua.new/1 sandboxes by construction rather than by post-hoc pruning -- there is no open-then-prune ordering to get wrong. The PROPERTY SBX-1 protects (no window in which a dangerous global is reachable) still must be asserted by test.\n\nRESTATEMENT OF LUA-04, AND WHY. LUA-04 (Bytecode Loading Disabled, MUST) reads 'The sandbox MUST refuse to load Lua bytecode; only source text MAY be loaded,' acceptance 'Attempt to load bytecode is rejected with error.' The adopted runtime parses Lua SOURCE TEXT and has no bytecode loader to disable; there is no LuaJIT bytecode format in play. LUA-04 is therefore satisfied STRUCTURALLY -- only source text is accepted because nothing else can be -- and this requirement must restate it as such rather than claim an implemented refusal, BECAUSE THERE IS NO REJECTION PATH TO TEST. What IS testable, and what this requirement tests instead, is the absence of every loader: load, loadfile, dofile, and (5.3) string.dump.\n\nTHE :sandboxed TRAP -- read before writing any option list. Per Lua.new/1's documentation, the :sandboxed option REPLACES the default 27-path deny list rather than adding to it; :exclude is the subtractive option that removes paths from the sandbox. So a naive hardening such as sandboxed: [[:os, :time]] would SILENTLY UN-DENY all 27 defaults -- including os.execute and load. This exact trap was caught by REVIEWER during decision 0014's second gating round and is recorded in docs/migration/stage-5-scripting-plugins.md's sign-off section as 'a hardening change that would have opened a sandbox escape.' Any custom list this requirement passes MUST restate the full deny-set, and the tests MUST assert the DEFAULT denials still hold afterward, not merely that the newly added ones do.\n\nScope:\n1. A single sandbox-construction function (e.g. Letflow.Engine.Lua.Sandbox.new/0,1) that every script execution uses -- no caller anywhere constructs a Lua state by calling the library directly. This is the mechanism that makes SBX-1's property hold: there is one door, so there is no window.\n2. Enumerate the denied surface against LUA 5.3's ACTUAL stdlib, not 5.1's. The full deny-set must be written out explicitly in source with a per-entry reason comment, in the spirit of R-Co's PRUNED_GLOBALS array (R-Co/src/lua/stdlib.zig:64+), so a future reader can see what was considered rather than inferring it from a library default.\n3. Decide coroutine EXPLICITLY. R-Co never opened it; decision 0014 says it must be 'an explicit decision rather than an inherited one.' Record the decision and its reason in the moduledoc either way.\n4. Record, in the moduledoc, that jit/ffi/bit do not exist in Lua 5.3 -- so a later reader does not add tests for them, find them absent, and conclude the sandbox is doing work it is not.\n\nNOT IN THIS REQUIREMENT: the os-surface time denials (os.time, os.date, os.clock, os.difftime) are REQ-152's -- they are LUA-14's subject and are split out so the five-function gap decision 0014 identifies gets its own gate. No resource limits, no host API, no executor.\n\nGATE: SECURITY-REVIEWER is a hard gate on this requirement. It is the sandbox boundary itself."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF02-REQ151-20260826/step-00-git-setup.json"],
+    "artifacts_in": [
+      "docs/guides/backend_developer_guide.md",
+      "docs/migration/stage-5-scripting-plugins.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md",
+      "R-Co/src/lua/stdlib.zig (reference only -- port the property, not the mechanism)"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/sandbox.ex",
+      "test/letflow/engine/lua/sandbox_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ151-20260826"
+  },
+  "task": {
+    "description": "Design lib/letflow/design/req151-lua-sandbox.md per WF-02_requirement_implementation.md Step 1. Claim this handoff by setting status to IN_PROGRESS only. Cover: the sandbox-construction function's signature (module name, arity, @spec-style types), the explicit full deny-set enumerated against Lua 5.3's actual stdlib (not 5.1) with a per-entry reason, the explicit coroutine decision and its reason, the moduledoc note about jit/ffi/bit not existing in Lua 5.3, and how the design guards the :sandboxed-replaces-defaults trap (i.e., whether/how a custom :sandboxed or :exclude list is used, and why it can't silently un-deny defaults). Design only -- no implementation code (no .ex/.exs code bodies, signatures and type shapes only).",
+    "acceptance_criteria": [
+      "a single sandbox-construction function is specified (e.g. Letflow.Engine.Lua.Sandbox.new/0,1) as the only call site for the library's own state-construction call",
+      "the design lists a test evaluating each of io.open, io.write, os.execute, os.exit, os.getenv, os.remove, os.rename, os.tmpname, load, loadfile, dofile, require, package, debug, and string.dump from inside a script, asserting each is nil or raises",
+      "if any custom :sandboxed list is used, the design specifies a test asserting the DEFAULT denials still hold after it (at minimum os.execute and load); if no custom list is used, the design states so and names REQ-152 as the requirement that adds one",
+      "the design states the moduledoc will restate LUA-03 (not satisfy it literally) naming: loadstring is a 5.1 name absent from 5.3; jit/ffi/bit do not exist in Lua 5.3 so R-Co's exclusions of them are vacuous here; SBX-1's open-then-prune ordering does not transfer as a mechanism, only as a property",
+      "the design states the moduledoc will restate LUA-04 (not satisfy it literally): no bytecode loader exists to disable, so only-source-text holds structurally; tests instead assert absence of load/loadfile/dofile/string.dump",
+      "the deny-set is enumerated explicitly with a per-entry reason, and the coroutine decision (opened or not) is stated explicitly with a reason",
+      "no implementation code present -- signatures and type shapes only"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -2402,7 +2402,7 @@
             "lock_acquired_at": "2026-08-26T09:20:00Z",
             "lock_released_at": null,
             "released_lock": false,
-            "last_known_step": "Step 00 PENDING",
+            "last_known_step": "Step 01 PENDING (CODE-DESIGNER dispatched)",
             "backfilled": false,
             "queue_task_id": 337,
             "queue_agent_id": "orch-loop-1787735920",

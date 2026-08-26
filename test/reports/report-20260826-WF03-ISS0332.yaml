@@ -1,0 +1,31 @@
+run_id: WF03-ISS0332-20260826
+step: "04c"
+agent: TEST-RUNNER
+branch: feature/WF03-ISS0332-20260826
+timestamp: "2026-08-26T05:57:10Z"
+
+verdict: PASS
+
+summary_line: "Finished in 937.8 seconds (13.4s async, 924.4s sync)"
+result_line: "Result: 2032 passed (5 properties, 2027 tests), 3 excluded"
+
+totals:
+  tests: 2027
+  properties: 5
+  passed: 2032
+  failures: 0
+  excluded: 3
+  duration_seconds: 937.8
+
+iss0332_regression_tests:
+  - "regression: ISS-0332 -- backfill updates pre-existing tenant to schema_version 2"
+  - "regression: ISS-0332 -- R10 event-append succeeds after backfill (validate_payload accepts null review_id)"
+  - "regression: ISS-0332 -- idempotent: already-v2 tenant is skipped, not errored"
+  - "regression: ISS-0332 -- higher existing schema_version is skipped (schema_version_not_monotonic)"
+
+failures: []
+
+notes:
+  - "All 4 ISS-0332 regression tests passed (observed in test file, 0 failures in full suite)"
+  - "3 excluded tests are pre-existing exclusions, not related to ISS-0332"
+  - "Keycloak OIDC connection errors (localhost:8093) are expected in test environment -- not failures"

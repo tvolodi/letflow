@@ -1,0 +1,40 @@
+{
+  "handoff_id": "step05-issue-fixer-close-WF03-ISS0332-20260826",
+  "run_id": "WF03-ISS0332-20260826",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0332-20260826/step-05-issue-fixer-close.json",
+  "created_at": "2026-08-26T05:59:10Z",
+  "started_at": "2026-08-26T05:59:10Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0332"],
+    "requirement_text": {
+      "ISS-0332": "Backfill routine for DEFINITION_PROMOTED schema_version 2 for pre-existing tenants."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step04c-test-runner-WF03-ISS0332-20260826"],
+    "artifacts_in": [
+      "docs/issues/ISS-0332.yaml"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0332-20260826"
+  },
+  "task": {
+    "description": "Close ISS-0332 -- all gates have passed (security, idiom review, test design validation, full test suite 2032 passed 0 failures).\n\n1. Update docs/issues/ISS-0332.yaml:\n   - status: open -> resolved\n   - Add field: resolved_in_run: WF03-ISS0332-20260826\n   - Add field: resolved_at: <current UTC timestamp>\n\n2. Close the GitHub issue:\n   gh issue close 642 --comment 'Fixed in WF03-ISS0332-20260826. New module Letflow.TenantProvisioning.Backfill and Mix task `mix letflow.backfill_event_type_versions` added. Full test suite: 2032 tests, 0 failures. See docs/issues/ISS-0332.yaml.'\n\n3. Commit the updated issue file to the FEATURE BRANCH:\n   git checkout feature/WF03-ISS0332-20260826\n   git pull origin feature/WF03-ISS0332-20260826\n   git add docs/issues/ISS-0332.yaml\n   git commit -m 'chore(ISS-0332): resolve issue -- backfill implemented, tests pass, GH#642 closed'\n   git push origin feature/WF03-ISS0332-20260826\n\n4. Update this handoff with PASS result and commit it to main:\n   git checkout main\n   git pull --ff-only origin main\n   git add handoffs/WF03-ISS0332-20260826/step-05-issue-fixer-close.json\n   git commit -m 'chore(ISSUE-FIXER): WF03-ISS0332-20260826 step-05 PASS -- ISS-0332 resolved, GH#642 closed'\n   git push origin main",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0332.yaml status set to resolved with resolved_in_run and resolved_at",
+      "GitHub issue #642 closed with a descriptive comment",
+      "Issue file committed to feature branch"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

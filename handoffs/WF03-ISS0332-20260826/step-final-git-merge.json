@@ -1,0 +1,43 @@
+{
+  "handoff_id": "stepFinal-git-merge-WF03-ISS0332-20260826",
+  "run_id": "WF03-ISS0332-20260826",
+  "workflow_id": "WF-03",
+  "step": "Final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0332-20260826/step-final-git-merge.json",
+  "created_at": "2026-08-26T05:59:10Z",
+  "started_at": "2026-08-26T05:59:10Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0332"],
+    "requirement_text": {
+      "ISS-0332": "Backfill routine for DEFINITION_PROMOTED schema_version 2 for pre-existing tenants. All gates passed: 2032 tests 0 failures."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step00-WF03-ISS0332-20260826"],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/event_store/registry.ex",
+      "lib/mix/tasks/"
+    ],
+    "branch_name": "feature/WF03-ISS0332-20260826"
+  },
+  "task": {
+    "description": "Merge feature/WF03-ISS0332-20260826 to main via GitHub PR. All gates have passed:\n- SECURITY-REVIEWER: PASS\n- REVIEWER: PASS\n- TEST-DESIGN-VALIDATOR: PASS (mutation testing verified)\n- TEST-RUNNER: PASS (2032 tests, 0 failures)\n- ISSUE-FIXER step-05: PASS (ISS-0332 resolved, GH#642 closed)\n\nProcedure:\n1. Wait for ISSUE-FIXER step-05 to complete first (check that step-05-issue-fixer-close.json status is COMPLETED before proceeding).\n2. git checkout feature/WF03-ISS0332-20260826 && git pull origin feature/WF03-ISS0332-20260826\n3. gh pr create --title 'fix(ISS-0332): DEFINITION_PROMOTED schema_version 2 backfill routine' --body 'Fixes ISS-0332. Adds Letflow.TenantProvisioning.Backfill.run/1 and `mix letflow.backfill_event_type_versions`. Pre-existing tenants had DEFINITION_PROMOTED at schema_version 1 after REQ-077 bumped the seed to v2 -- R10 (promote_active_definition/5) was failing event-append with Severity-1 shape (committed promotion, 500 response). Full suite: 2032 tests, 0 failures. Closes #642.' --base main\n4. Wait for CI or squash-merge if CI is not configured.\n5. gh pr merge <PR-URL> --squash --delete-branch\n6. git checkout main && git pull --ff-only origin main\n7. Verify HEAD on main matches the merged commit.\n8. Update this handoff on main with PASS result.\n   git add handoffs/WF03-ISS0332-20260826/step-final-git-merge.json\n   git commit -m 'chore(ELIXIR-DEV): WF03-ISS0332-20260826 Step Final PASS -- PR merged, ISS-0332 done'\n   git push origin main",
+    "acceptance_criteria": [
+      "PR created for feature/WF03-ISS0332-20260826",
+      "PR merged to main (squash)",
+      "main HEAD updated to include the merge commit",
+      "No test failures introduced"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

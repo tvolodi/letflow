@@ -559,11 +559,14 @@ guarantees, and none was measured. If a fuel-bounded guest still blocks a schedu
 enough to degrade the node, the Port fallback from (c) returns. Needs a load spike, and
 likely S6 operational thresholds.
 
-**OQ-6 — Number marshalling across the 5.1→5.3 integer/float split.** Per (b), the one
-dialect difference with semantic weight. How Lua integers and floats round-trip through
-`Letflow.Engine.VariableMerge` and JSONB variable storage must be settled once, centrally,
-before LUA-11 is expanded — not rediscovered per host function. Interacts with WASM-12's
-parity requirement, since the WASM ABI has its own numeric representation.
+**OQ-6 — Number marshalling across the 5.1→5.3 integer/float split. SETTLED by REQ-150,
+`lib/letflow/design/req150-lua-number-marshalling.md`.** Per (b), the one dialect
+difference with semantic weight. How Lua integers and floats round-trip through
+`Letflow.Engine.VariableMerge` and JSONB variable storage is now settled once, centrally,
+by that design's §2 normative rule (cited as "REQ-150 §2.n"), with the owning module and
+function named in §3, before LUA-11 (REQ-159/REQ-160) is expanded — not rediscovered per
+host function. §4 of that design records the interaction with WASM-12's parity
+requirement, since the WASM ABI has its own numeric representation.
 
 **OQ-7 — Rust toolchain pinning in CI.** `wasmex` requires a Rust toolchain to build,
 which Letflow's CI does not have today. Per (f) and `0005-pin-formatting-toolchain.md`'s

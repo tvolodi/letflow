@@ -6,31 +6,57 @@
   "from_agent": "ORCH",
   "to_agent": "REVIEWER",
   "file": "handoffs/WF02-REQ150-20260826/step-02d-reviewer.json",
-  "created_at": "2026-08-26T19:57:00Z",
-  "started_at": "2026-08-26T19:57:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "created_at": "2026-08-26T18:36:37Z",
+  "started_at": "2026-08-26T18:36:37Z",
+  "completed_at": "2026-08-26T19:41:30Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
     "requirement_ids": ["REQ-150"],
     "issue_ids": [],
-    "related_handoff_ids": ["handoffs/WF02-REQ150-20260826/step-02c-security-reviewer.json"],
-    "artifacts_in": ["lib/letflow/design/req150-lua-number-marshalling.md"],
-    "branch_name": "feature/WF02-REQ150-20260826",
-    "note": "Design-only requirement, same shape as REQ-149's own step-02d. Idiom review here means: is the empirical evidence sound, is the normative rule internally consistent, does it correctly avoid scope creep into implementation, and is it consistent with decision 0014."
+    "requirement_text": {
+      "REQ-150": "Settle OQ-6 -- Lua 5.3 integer/float marshalling across VariableMerge and JSONB variable storage (blocks LUA-11 / REQ-159 / REQ-160). Design-only requirement producing lib/letflow/design/req150-lua-number-marshalling.md. No lib/letflow/engine/ change."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ150-20260826/step-01-code-designer.json",
+      "handoffs/WF02-REQ150-20260826/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ150-20260826/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req150-lua-number-marshalling.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF02-REQ150-20260826"
   },
   "task": {
-    "description": "Review lib/letflow/design/req150-lua-number-marshalling.md per .claude/agents/reviewer.md's four questions, adapted for a design-only artefact: is the empirical methodology sound (real runtime evidence, not inferred), is the normative rule internally consistent and unambiguous, no scope creep (correctly stays out of lib/letflow/engine/), consistent with decision 0014's OQ-6 framing.",
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on lib/letflow/design/req150-lua-number-marshalling.md: check idiom/scope/decision-record consistency for this design-only artefact against docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md.",
     "acceptance_criteria": [
-      "empirical methodology reviewed and judged sound",
-      "normative rule reviewed for internal consistency/ambiguity",
-      "no scope creep confirmed",
-      "consistency with decision 0014 confirmed",
-      "checked against docs/anti-patterns.md"
+      "Confirm scope: no lib/letflow/engine/ file touched, matching REQ-150's own constraint",
+      "Check the design against the 4 REVIEWER questions (idiom/crutch, supervision, type-safety gaps, scope creep)",
+      "Check against docs/anti-patterns.md entries",
+      "Check internal consistency with decision 0014, in particular OQ-6 and the naming of the owning module for REQ-159/REQ-160",
+      "PASS or FAIL with specifics; route to TEST-DESIGNER on PASS, back to CODE-DESIGNER on FAIL"
     ]
   },
-  "result": null,
+  "result": {
+    "verdict": "PASS",
+    "reviewed_artifact": "lib/letflow/design/req150-lua-number-marshalling.md",
+    "scope_confirmation": "git diff main...HEAD --stat on feature/WF02-REQ150-20260826 touches only handoffs/WF02-REQ150-20260826/step-01*.json, step-02c*.json, and lib/letflow/design/req150-lua-number-marshalling.md. No lib/letflow/engine/ file is touched, matching REQ-150's own constraint and the design's own §6 claim.",
+    "four_questions": {
+      "idiomatic_vs_crutch": "N/A directly (no code exists yet), but the proposed module design is sound: to_lua/1 and from_lua/1 are stated as explicit identity functions for the numeric/nil cases rather than omitting numeric handling, which is the correct way to codify 'do not add coercion' as an assertable contract instead of an implicit gap. No case-do-the-state-machine's-job pattern or other crutch shape appears.",
+      "supervision": "N/A — the design proposes no process, GenServer, or gen_statem change of any kind. No isolation concern.",
+      "type_safety_gaps": "to_lua/1 and from_lua/1 are typed term() -> term() rather than a narrower union. This is a reasonable design-stage choice (one call site regardless of value shape, per §3) and the doc is explicit that non-numeric behavior is out of this rule's scope, not silently assumed identity-safe. Not filed as a type-safety issue: there is no implementation yet to make unrepresentable, and REQ-159/REQ-160 (which will write the actual code) are the right point to tighten the @spec if narrower typing is possible then.",
+      "scope_creep": "None found. The design creates no module, adds no dependency, and explicitly defers non-numeric marshalling to REQ-159/REQ-160 rather than pre-building generic plumbing for cases OQ-6 didn't ask it to settle. §4's WASM-12 parity binding restates what decision 0014 already commits to ('WASM-12 defines the WASM host API by parity with Lua's') rather than inventing new scope."
+    },
+    "anti_patterns_check": "No violation found. Notably the design's §1 empirical findings are real runs against the adopted tv-labs/lua runtime and a real Postgres jsonb column, not inferred from documentation or inherited from decision 0014's own doc-sourced claims — this is exactly the discipline the 'Inheriting a claim from a record instead of re-deriving it from the source' anti-pattern entry asks for, applied correctly here rather than violated.",
+    "decision_0014_consistency": "Internally consistent. OQ-6 names Letflow.Engine.VariableMerge and JSONB variable storage as the two things the rule must cover centrally 'before LUA-11 is expanded, not rediscovered per host function' -- the design's §3 module (Letflow.Engine.LuaNumberMarshalling) is scoped exactly to that, and correctly references VariableMerge.merge/3's incoming_variables map as the real integration point rather than a placeholder. The design does not claim decision 0014's doc-sourced Elixir-ecosystem facts as verified; it independently re-verifies the number-marshalling-relevant subset (Lua.eval!/2, Lua.set!/3, Jason round-trip, real jsonb column) empirically, which is stronger than what 0014 itself could assert. §4's WASM-12 binding correctly cites 0014's Decision (4) rather than re-deciding it. No contradiction with any S0 decision record was introduced.",
+    "summary": "Design-only artefact, no lib/letflow/engine/ change (confirmed via git diff --stat). All four REVIEWER questions checked; no crutch, no supervision concern (none applicable), no blocking type-safety gap, no scope creep. Internally consistent with decision 0014's OQ-6 framing and correctly cites (rather than re-derives) 0014's WASM-12 parity commitment. Findings in the design are empirically verified, not doc-inherited, which is the strongest form of evidence this project asks for. One non-blocking note: to_lua/1 and from_lua/1's term()->term() signatures are appropriately broad for a design stage; REQ-159/REQ-160 should consider a narrower @spec if the implementation allows it, but this does not block the design gate.",
+    "next_action": "Route to TEST-DESIGNER (3)"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

@@ -1,0 +1,62 @@
+{
+  "handoff_id": "step05-WF02-REQ150-20260826",
+  "run_id": "WF02-REQ150-20260826",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ150-20260826/step-05-release-validator.json",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-150"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-150": "Settle OQ-6 -- Lua 5.3 integer/float marshalling across VariableMerge and JSONB variable storage (blocks LUA-11 / REQ-159 / REQ-160). Design-only requirement producing lib/letflow/design/req150-lua-number-marshalling.md. No lib/letflow/engine/ change."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ150-20260826/step-01-code-designer.json",
+      "handoffs/WF02-REQ150-20260826/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ150-20260826/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ150-20260826/step-02d-reviewer.json",
+      "handoffs/WF02-REQ150-20260826/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req150-lua-number-marshalling.md"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF02-REQ150-20260826"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR (WF-02 Step 5) for REQ-150. Steps 3b/4 were skipped (no executable surface -- design-only requirement). Verify acceptance criteria by reading the design artefact directly, not via test result.",
+    "acceptance_criteria": [
+      "Confirm lib/letflow/design/req150-lua-number-marshalling.md exists and settles OQ-6 for Lua 5.3 integer/float marshalling across VariableMerge and JSONB storage",
+      "Confirm no lib/letflow/engine/ file was changed on this branch (git diff main...HEAD --stat)",
+      "Confirm docs/status/requirement_status.yaml and docs/requirements.yaml are not already stale relative to what shipped",
+      "PASS -> route to DOC-UPDATER; FAIL -> identify blocking issue and which agent it routes back to"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "checks": [
+      {
+        "criterion": "lib/letflow/design/req150-lua-number-marshalling.md exists and settles OQ-6 with a concrete answer",
+        "outcome": "PASS -- read in full. §1 gives real quoted runs (tv-labs/lua, Jason, and a real disposable Postgres jsonb DB letflow_test99) for: Lua int/float literal -> Elixir (§1.1), Elixir int/float -> Lua via Lua.set!/3 (§1.2), Jason encode/decode subtype survival incl. whole-number float 3.0 not collapsing (§1.3-1.5), 2^53+1 integer exact round trip (§1.6), real jsonb column round trip (§1.7), JSON null round trip (§1.8). §2 states one normative rule (§2.1-§2.6, table) both directions, whole-number-float no-collapse, out-of-range integer, and null -- all with defined outcomes, none deferred. §3 names the owning module/function (Letflow.Engine.LuaNumberMarshalling.to_lua/1, from_lua/1) for REQ-159/REQ-160 to consume. §4 binds WASM-12 to the same rule per decision 0014. §5 explicitly states no open questions remain, and scopes non-numeric value handling out rather than silently assuming it. All 7 acceptance_criteria in docs/requirements.yaml's REQ-150 entry (line 7428-7434) are satisfied point for point."
+      },
+      {
+        "criterion": "no lib/letflow/engine/ file touched on this branch",
+        "outcome": "PASS -- ran `git diff main...HEAD --stat` on feature/WF02-REQ150-20260826: only 6 files changed, all under handoffs/WF02-REQ150-20260826/ and lib/letflow/design/req150-lua-number-marshalling.md (734 insertions, 0 deletions). `git diff main...HEAD --stat -- lib/letflow/engine/` produced zero output -- confirms no engine file touched, matching the artefact's own §6 claim."
+      },
+      {
+        "criterion": "docs/requirements.yaml and docs/status/requirement_status.yaml/index not stale",
+        "outcome": "PASS -- docs/requirements.yaml REQ-150 entry (line 7405) still status: pending, correct at this pipeline stage (not yet done). docs/status/requirement_status.index.yaml current volume is v5 (docs/status/requirement_status.v5.yaml, opened 2026-08-26, 0 entries at time of check); grep for REQ-150 in that volume returns nothing -- no premature or stale status-history entry exists for REQ-150. Consistent: nothing claims REQ-150 is done anywhere in the status system, matching the pending flag."
+      }
+    ],
+    "next_action": "Route to DOC-UPDATER"
+  },
+  "status": "COMPLETED",
+  "completed_at": "2026-08-26T19:44:06Z",
+  "rework_count": 0,
+  "max_rework": 3
+}

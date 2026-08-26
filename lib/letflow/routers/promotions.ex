@@ -759,6 +759,15 @@ defmodule Letflow.Routers.Promotions do
     end
   end
 
+  # `PromotionReview` (see `Letflow.Definitions.PromotionReview`) declares
+  # `timestamps(type: :utc_datetime_usec)`, so `inserted_at`/`updated_at`
+  # are `%DateTime{}` at runtime, not `%NaiveDateTime{}` -- unlike
+  # `Letflow.Routers.Tenants`' own `iso8601/1`, which only ever sees
+  # `%NaiveDateTime{}` because its schema's timestamps aren't UTC-typed.
+  # A `%DateTime{}` is already UTC-anchored, so it goes straight to
+  # `DateTime.to_iso8601/1` with no naive->UTC conversion step.
+  defp iso8601(%DateTime{} = utc), do: DateTime.to_iso8601(utc)
+
   defp iso8601(%NaiveDateTime{} = naive) do
     naive
     |> DateTime.from_naive!("Etc/UTC")

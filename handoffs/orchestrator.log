@@ -1397,3 +1397,4 @@
 2026-08-26T19:50:30Z | DISPATCH | WF-03 | WF03-ISS0343-20260826 | ORCH -> CODE-DESIGN-VALIDATOR | step-02b-code-design-validator-rework1.json PENDING committed at dispatch time
 2026-08-26T20:10:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0343-20260826 | CODE-DESIGN-VALIDATOR -> ORCH | step-02b rework1 PASS. Design cleared -- all 5 checks pass.
 2026-08-26T20:15:00Z | DISPATCH | WF-03 | WF03-ISS0343-20260826 | ORCH -> ELIXIR-DEV | step-03-elixir-dev.json PENDING committed at dispatch time
+2026-08-26T20:55:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0343-20260826 | ELIXIR-DEV -> ORCH | step-03-elixir-dev.json PASS. :undefined_table confirmed empirically. rescue_missing_schema/1 added, 3 call sites wrapped, Backfill.run/1 skips instead of crashing. 32/32 existing tests pass.

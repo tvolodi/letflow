@@ -1,0 +1,45 @@
+{
+  "handoff_id": "step01b-WF02-REQ151-20260826",
+  "run_id": "WF02-REQ151-20260826",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ151-20260826/step-01b-code-design-validator.json",
+  "created_at": "2026-08-26T09:51:30Z",
+  "started_at": "2026-08-26T09:51:30Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-151"],
+    "issue_ids": [],
+    "related_handoff_ids": ["handoffs/WF02-REQ151-20260826/step-01-code-designer.json"],
+    "artifacts_in": ["lib/letflow/design/req151-lua-sandbox.md"],
+    "owned_modules": [
+      "lib/letflow/engine/lua/sandbox.ex",
+      "test/letflow/engine/lua/sandbox_test.exs",
+      "mix.exs",
+      "mix.lock",
+      "test/letflow/engine/lua_script_audit_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ151-20260826",
+    "note": "OQ-1 in the design doc (mix.exs currently has no Lua dep) is a KNOWN, USER-DECIDED open item, not a design gap: the human project owner already decided (2026-08-26) to retire REQ-058's AC5 guardrail and re-add {:lua, \"~> 1.0\"} at Step 2a, with REVIEWER sign-off at Step 2d. Do not FAIL the design over OQ-1's existence -- verify only that it is stated clearly and not silently resolved, per the design-validator's own checklist."
+  },
+  "task": {
+    "description": "Validate lib/letflow/design/req151-lua-sandbox.md per WF-02_requirement_implementation.md Step 1b. Claim this handoff by setting status to IN_PROGRESS only. Read the design artefact independently (not CODE-DESIGNER's summary). Check every MUST/acceptance criterion from REQ-151 has a corresponding design element, function signatures are fully specified, error handling is stated, cross-module deps are listed, and no implementation code (.ex/.exs code bodies) is present.",
+    "acceptance_criteria": [
+      "a single sandbox-construction function is specified as the only intended call site for the library's own state-construction call",
+      "the design lists a test evaluating each of io.open, io.write, os.execute, os.exit, os.getenv, os.remove, os.rename, os.tmpname, load, loadfile, dofile, require, package, debug, and string.dump from inside a script, asserting each is nil or raises",
+      "the design specifies how the :sandboxed-replaces-defaults trap is guarded (or explicitly defers a custom list to REQ-152)",
+      "the design states the moduledoc will restate LUA-03 and LUA-04 rather than claim literal satisfaction, with the specific reasons named",
+      "the deny-set is enumerated explicitly with a per-entry reason, and the coroutine decision is stated explicitly with a reason",
+      "no implementation code (.ex/.exs code bodies) present -- signatures and type shapes only",
+      "OQ-1 (mix.exs Lua dependency conflict with REQ-058 AC5) is stated clearly, not silently resolved -- FAIL only if it is missing or glossed over, not because it exists"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

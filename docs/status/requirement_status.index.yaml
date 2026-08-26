@@ -521,7 +521,7 @@ volumes:
     path: docs/status/requirement_status.v4.yaml
     status: current
     opened: 2026-08-23
-    entries: 50
+    entries: 51
     note: >
       Opened by WF02-REQ082-20260823's own Step Final roll, successor to
       volume 3. Created with volume 3's header text verbatim (volume number,
@@ -634,6 +634,12 @@ volumes:
       Incremented to 37 by ORCH's own REQ-143 started-event append (Step 00)
       -- 37 on-disk `- req:` entries in requirement_status.v4.yaml, no rebase
       conflict on this file.
+      Recounted to 51 by ORCH's own WF02-REQ077-20260826 fix, catching a
+      missed increment on its own Step 00 started-event append (TEST-RUNNER's
+      A9 failure) -- `grep -c "^  - req:" docs/status/requirement_status.v4.yaml`
+      = 51 on-disk entries, folding in every append landed on main between
+      REQ-143's started-event and this one without its own index-note
+      increment.
 
 
 known_anomalies:

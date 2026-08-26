@@ -7545,7 +7545,7 @@ requirements:
   - id: REQ-152
     title: Deny all four ambient Lua time sources and implement platform.now (LUA-14 restated, deliberately beyond its literal wording)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 304  # letflow-queue task id
     description: >

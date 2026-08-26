@@ -1,0 +1,51 @@
+id: ISS-0347
+title: >
+  lint_handoffs H1/H3 violations (this run's own handoffs) plus a
+  BadMapError crash in print_advisory fail backend CI (mix letflow.check),
+  pre-existing on main before WF02-REQ152-20260826
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ152-20260826
+discovered_at: "2026-08-26T21:30:00Z"
+severity: MINOR
+status: open
+queue_task_id: null
+github_issue_number: null
+description: >
+  PR #667 (WF02-REQ152-20260826) backend CI job (mix letflow.check ->
+  lint_handoffs) failed on both CI runs (33013560601, 33015258189).
+  Structurally attributed as pre-existing/unrelated to this branch's diff
+  (lib/letflow/engine/lua/sandbox.ex, lib/letflow/engine/lua/platform.ex,
+  plus tests): the same backend gate is already failing on origin/main at
+  56974fc (the exact commit this branch rebased onto, before any of this
+  run's own commits) and on the four main commits before it (verified via
+  `gh run list --branch main --workflow=ci.yml`, all conclusion "failure").
+  Two distinct causes present:
+  1. [H3] non-schema top-level key "next_action" in several
+     handoffs/WF02-REQ152-20260826/*.json files, and [H1] top-level
+     status "PASS" (not in the enum) in step-04-test-runner.json -- this
+     matches the established recurring "next_action"/"PASS" pattern already
+     seen and structurally cleared in ISS-0342/ISS-0345, i.e. the handoff
+     schema check is out of sync with the field conventions actually used
+     throughout the pipeline (HANDOFF_PROTOCOL.md's own next_action field).
+  2. A genuine crash: `mix letflow.lint_handoffs` raises `BadMapError` in
+     `Mix.Tasks.Letflow.LintHandoffs.print_advisory/1`
+     (lib/mix/tasks/letflow.lint_handoffs.ex:697) while iterating advisory
+     entries -- reproduced locally on this branch, and the same crash
+     pattern is implicated by the unrelated WF03-ISS0297-20260826 handoff
+     set (step-02-elixir-dev.json has a leading UTF-8 BOM causing a
+     Jason.DecodeError, same defect class as ISS-0338/ISS-0345) plus
+     several .md-extension handoff-shaped files under
+     handoffs/WF03-ISS0258-20260822/ and handoffs/WF03-ISS0260-20260822/
+     that predate the H6 floor commit and are grandfathered but appear to
+     be tripping print_advisory's map-shape assumption.
+acceptance_criteria:
+  - >
+    mix letflow.lint_handoffs completes without raising (fixes the
+    BadMapError in print_advisory/1)
+  - >
+    the handoff JSON schema recognizes "next_action" as a valid top-level
+    key (or the check is corrected to look at result.next_action instead),
+    matching actual pipeline convention
+  - >
+    backend CI job green on a subsequent PR with no other pre-existing
+    failures

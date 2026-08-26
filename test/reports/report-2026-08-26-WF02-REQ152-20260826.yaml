@@ -1,0 +1,62 @@
+run_id: WF02-REQ152-20260826
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+requirement_ids: [REQ-152]
+date: "2026-08-26"
+branch: feature/WF02-REQ152-20260826
+
+diff_scope:
+  command: "git diff --name-only main...HEAD"
+  code_files: [lib/letflow/engine/lua/sandbox.ex, lib/letflow/engine/lua/platform.ex]
+  other_files: >
+    config/config.exs, docs/requirements.yaml, docs/status/requirement_status.index.yaml,
+    docs/status/requirement_status.v5.yaml, handoffs/WF02-REQ152-20260826/*,
+    lib/letflow/design/req152-lua-time-denial.md, test/letflow/engine/lua/platform_test.exs,
+    test/letflow/engine/lua/sandbox_test.exs, test/specs/REQ-152.md -- non-application-code
+    (docs/handoffs/design/tests). No application code outside sandbox.ex/platform.ex touched.
+
+environment:
+  toolchain: local (elixir/mix via asdf shims, found on PATH; Erlang/OTP 29, Mix 1.20.3)
+  docker_compose_up: |
+    NOT run this invocation. `docker compose up -d` and `sudo docker compose up -d`
+    both failed with "Cannot connect to the Docker daemon at unix:///var/run/docker.sock".
+    `sudo systemctl start docker` also failed (docker.pid held by an already-running
+    dockerd, PID 3925615, that is itself unreachable via the socket from this session --
+    a stray/hung daemon shared with other host services, per docs/anti-patterns.md's
+    note on this being a shared host). Did not force-kill it (may back other unrelated
+    containers). Confirmed via `ss -tlnp` that this project's Postgres container was
+    already up and listening on 0.0.0.0:5463/[::]:5463 -- the untracked .env sets
+    LETFLOW_DB_PORT=5463, which config/db_port.exs resolves to for both dev and test --
+    so Ecto reached the already-running DB container without needing the docker CLI.
+
+test_parallel:
+  command: scripts/test_parallel.sh
+  partition_count_N: 8
+  partition_count_source: nproc
+  per_partition:
+    - "partition 1: 307 tests, 2 properties, 0 failures, exit 0"
+    - "partition 2: 271 tests, 0 properties, 0 failures, exit 0"
+    - "partition 3: 243 tests, 2 properties, 0 failures, exit 0"
+    - "partition 4: 102 tests, 0 properties, 0 failures, exit 0"
+    - "partition 5: 249 tests, 1 property, 0 failures, exit 0"
+    - "partition 6: 348 tests, 0 properties, 0 failures, exit 0"
+    - "partition 7: 288 tests, 0 properties, 0 failures, exit 0"
+    - "partition 8: 279 tests, 0 properties, 0 failures, exit 0"
+  combined: "2087 tests, 5 properties, 0 failures (2092/2092 passed)"
+  wall_time: "2m20.615s (real)"
+
+failures_observed: []
+
+verdict: PASS
+summary: >
+  Full suite run once via scripts/test_parallel.sh (N=8, nproc-derived). Combined
+  result: 2087 tests + 5 properties, 0 failures, 2092/2092 passed across all 8
+  partitions. No failures observed anywhere in the suite, so no structural
+  attribution was needed -- this branch's diff (lib/letflow/engine/lua/sandbox.ex,
+  lib/letflow/engine/lua/platform.ex, plus their tests/docs/handoffs) introduced
+  no regressions and no pre-existing failures surfaced. Docker CLI/daemon was
+  unusable this session (stray hung dockerd shared with other host services on
+  this box); worked around by confirming the already-running Postgres container
+  was reachable on the .env-configured port (5463) instead of restarting docker
+  compose.

@@ -210,6 +210,100 @@ defmodule Letflow.Engine.Lua.SandboxTest do
     end
   end
 
+  describe "REQ-152: os time functions raise when called (AC1)" do
+    test "os.time raises when called" do
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(Sandbox.new(), "return os.time()")
+      end
+    end
+
+    test "os.date raises when called" do
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(Sandbox.new(), "return os.date()")
+      end
+    end
+
+    test "os.clock raises when called" do
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(Sandbox.new(), "return os.clock()")
+      end
+    end
+
+    test "os.difftime raises when called" do
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(Sandbox.new(), "return os.difftime(0, 0)")
+      end
+    end
+  end
+
+  describe "REQ-152: default denials still hold after the 33-entry extension (AC2, sandboxed-replaces-defaults trap)" do
+    test "os.execute and load remain denied via Sandbox.new/0 after REQ-152's change" do
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(Sandbox.new(), "return os.execute('ls')")
+      end
+
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(Sandbox.new(), "return load('return 1')")
+      end
+    end
+
+    test "os.execute and load remain denied via Sandbox.new/1 with arbitrary opts after REQ-152's change" do
+      sandbox = Sandbox.new(max_instructions: 1_000_000, some_future_key: :ignored)
+
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(sandbox, "return os.execute('ls')")
+      end
+
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(sandbox, "return load('return 1')")
+      end
+    end
+  end
+
+  describe "REQ-152: remaining os functions raise when called, completing all 11 (AC3)" do
+    test "os.exit raises when called" do
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(Sandbox.new(), "return os.exit()")
+      end
+    end
+
+    test "os.getenv raises when called" do
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(Sandbox.new(), "return os.getenv('HOME')")
+      end
+    end
+
+    test "os.remove raises when called" do
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(Sandbox.new(), "return os.remove('/tmp/x')")
+      end
+    end
+
+    test "os.rename raises when called" do
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(Sandbox.new(), "return os.rename('/tmp/x', '/tmp/y')")
+      end
+    end
+
+    test "os.setlocale raises when called" do
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(Sandbox.new(), "return os.setlocale('C')")
+      end
+    end
+
+    test "os.tmpname raises when called" do
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(Sandbox.new(), "return os.tmpname()")
+      end
+    end
+
+    test "os.execute raises when called (already covered above, restated here to complete the 11-function enumeration)" do
+      assert_raise Lua.RuntimeException, ~r/sandboxed/, fn ->
+        Lua.eval!(Sandbox.new(), "return os.execute('ls')")
+      end
+    end
+  end
+
   describe "moduledoc content (AC4, AC5, AC6)" do
     setup do
       {:docs_v1, _anno, _lang, _fmt, moduledoc, _meta, _docs} =
@@ -252,6 +346,41 @@ defmodule Letflow.Engine.Lua.SandboxTest do
       moduledoc: text
     } do
       assert text =~ "REQ-152"
+    end
+  end
+
+  describe "REQ-152 moduledoc content (AC6)" do
+    setup do
+      {:docs_v1, _anno, _lang, _fmt, moduledoc, _meta, _docs} =
+        Code.fetch_docs(Letflow.Engine.Lua.Sandbox)
+
+      %{"en" => text} = moduledoc
+      %{moduledoc: text}
+    end
+
+    test "states the 6-of-11 / 5-undenied finding", %{moduledoc: text} do
+      assert text =~ "6"
+      assert text =~ "os.clock"
+      assert text =~ "os.date"
+      assert text =~ "os.difftime"
+      assert text =~ "os.setlocale"
+      assert text =~ "os.time"
+    end
+
+    test "states denying os.date/os.clock/os.difftime goes beyond LUA-14's literal wording", %{
+      moduledoc: text
+    } do
+      assert text =~ "BEYOND LUA-14"
+    end
+
+    test "states the deny-set count grew from 28 to 33 entries", %{moduledoc: text} do
+      assert text =~ "28"
+      assert text =~ "33"
+    end
+
+    test "states the os.setlocale gap-closure finding explicitly", %{moduledoc: text} do
+      assert text =~ "os.setlocale"
+      assert text =~ "gap"
     end
   end
 end

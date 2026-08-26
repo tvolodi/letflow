@@ -1407,3 +1407,4 @@
 2026-08-26T22:11:00Z | DISPATCH | WF-03 | WF03-ISS0343-20260826 | ORCH -> TEST-DESIGN-VALIDATOR | step-04b-test-design-validator.json PENDING committed at dispatch time
 2026-08-26T22:35:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0343-20260826 | TEST-DESIGN-VALIDATOR -> ORCH | step-04b-test-design-validator.json PASS. Independently reproduced fail-then-pass in own worktree (3/8 fail pre-fix, 36/36 post-fix).
 2026-08-26T22:36:00Z | DISPATCH | WF-03 | WF03-ISS0343-20260826 | ORCH -> TEST-RUNNER | step-04c-test-runner.json PENDING committed at dispatch time
+2026-08-26T23:00:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0343-20260826 | TEST-RUNNER -> ORCH | step-04c-test-runner.json PASS. Full suite 2068/2068, 0 failures. BackfillTest explicitly clean this run, no regression.

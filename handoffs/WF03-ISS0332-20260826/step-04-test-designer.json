@@ -9,7 +9,7 @@
   "created_at": "2026-08-26T05:26:44Z",
   "started_at": "2026-08-26T05:26:44Z",
   "completed_at": "2026-08-26T05:40:00Z",
-  "status": "PASS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",

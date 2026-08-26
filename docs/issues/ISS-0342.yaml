@@ -6,9 +6,22 @@ discovered_by: ELIXIR-DEV
 discovered_in_run: WF02-REQ151-20260826
 discovered_at: 2026-08-26T11:20:00Z
 severity: MINOR
-status: open
-resolved_in_run: null
-resolved_at: null
+status: resolved
+resolved_in_run: ORCH-direct-20260826
+resolved_at: "2026-08-26T11:56:00Z"
+resolution_note: >
+  Fixed directly by ORCH (qualified for the direct-action exception in
+  ORCHESTRATOR.md §10: each fix was a single-line JSON field correction in
+  an existing handoff record, no new function/spec, no migration, no
+  supervision-tree file, no tenant-data path, no tested behavior change).
+  handoffs/WF02-REQ149-20260826/step-01-code-designer.json and
+  handoffs/WF03-ISS0332-20260826/step-04-test-designer.json had top-level
+  status "PASS" (a result.verdict value, not a valid top-level status)
+  corrected to "COMPLETED". handoffs/WF03-ISS0332-20260826/step-02b-code-design-validator.json
+  had a leading UTF-8 BOM stripped (was causing a JSON decode failure).
+  Verified: mix letflow.lint_handoffs -> "OK -- 0 new violations across 991
+  handoff files (25 pre-existing grandfathered, traced to ISS-0190)"; full
+  mix test re-run clean, 2062 passed, 0 failed.
 queue_task_id: 342
 github_issue_number: 657
 description: >

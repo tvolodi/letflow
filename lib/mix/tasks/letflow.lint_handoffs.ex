@@ -395,7 +395,7 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
                 }
               ],
               hard_grandfathered: [],
-              advisory: [],
+              advisory: %{path: path, warnings: [], size_info: %{desc_len: 0, summary_len: 0}},
               parse_error: inspect(reason)
             }
         end

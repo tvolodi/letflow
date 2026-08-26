@@ -28,6 +28,17 @@ defmodule Letflow.Api.Pagination do
   tagged tuple, since cursor/page-size values are caller-controlled,
   network-facing input.
 
+  **INV-9 (structural, not conventional).** `decode_cursor/4` never
+  silently accepts an empty `prefix`. `check_prefix/2` raises
+  `ArgumentError` immediately if `prefix == ""`, rather than allowing
+  `String.starts_with?/2`'s documented empty-string-always-matches
+  semantics to defeat cross-endpoint cursor isolation. This is a
+  precondition on the *caller's own hardcoded literal* (see the
+  "prefix is caller-internal configuration" note below), not a
+  network-facing input validation — it exists to catch a future call
+  site's programming mistake at the first test/request that exercises
+  it, not to sanitize untrusted data.
+
   **Wall-clock time boundary.** `decode_cursor/4` is the only function in this
   module that reads wall-clock time (`System.system_time(:microsecond)`).
   This module is API-layer code; no pure S2/S3 module (e.g.
@@ -184,6 +195,14 @@ defmodule Letflow.Api.Pagination do
   sites only supply the three arguments that vary per endpoint.
 
   On success: `{:ok, %Cursor{inner: decoded}}`.
+
+  `prefix` must be a non-empty, hardcoded, per-endpoint literal — never a
+  value derived from the request, query string, path, or any other
+  caller-controlled input; see the moduledoc's INV-9. An empty `prefix`
+  raises `ArgumentError` rather than returning an error tuple, since this
+  is a caller-contract violation, not cursor-payload validation (contrast
+  with `{:error, :wrong_endpoint}`, which is about the decoded payload,
+  never about `prefix` itself).
   """
   @spec decode_cursor(String.t(), String.t(), non_neg_integer(), non_neg_integer()) ::
           {:ok, Cursor.t()}
@@ -209,6 +228,26 @@ defmodule Letflow.Api.Pagination do
   end
 
   @spec check_prefix(binary(), String.t()) :: :ok | {:error, :wrong_endpoint}
+  # INV-9: an empty prefix would make String.starts_with?/2 always match,
+  # silently defeating cross-endpoint cursor isolation (ISS-0216). This is a
+  # caller-contract violation (prefix is always a hardcoded, per-endpoint
+  # literal — never request/query/path-derived), not cursor-payload
+  # validation, so it raises instead of returning a tagged tuple.
+  defp check_prefix(_decoded, "") do
+    raise ArgumentError, """
+    Letflow.Api.Pagination.decode_cursor/4 was called with an empty prefix.
+
+    prefix must be a non-empty, hardcoded, per-endpoint literal — never a
+    value derived from the request, query string, path, or any other
+    caller-controlled input.
+
+    An empty prefix defeats decode_cursor/4's cross-endpoint cursor
+    isolation, since every decoded cursor payload trivially starts with the
+    empty string (ISS-0216). See the moduledoc's INV-9 for the full
+    invariant this precondition enforces.
+    """
+  end
+
   defp check_prefix(decoded, prefix) do
     if byte_size(decoded) >= byte_size(prefix) and String.starts_with?(decoded, prefix) do
       :ok

@@ -1,0 +1,105 @@
+run_id: WF03-ISS0216-20260826
+workflow_id: WF-03
+step: "04c"
+agent: TEST-RUNNER
+issue_ids: [ISS-0216]
+date: "2026-08-26"
+branch: feature/WF03-ISS0216-20260826
+head_commit: 214d2fdd7392ee7cf7cff7402387f9a431ac6394
+merge_base_with_main: 819fe82bfbb3f9061a4626571821dedd089c03ed
+
+environment:
+  toolchain: local (elixir/mix via asdf shims, found on PATH)
+  docker_compose_up: |
+    NOT run this invocation. `docker compose up -d` was not attempted directly
+    against a fresh daemon start because the host's shared dockerd was found in
+    the same broken state a prior TEST-RUNNER run on this host already hit (see
+    test/reports/report-2026-08-26-WF02-REQ151-20260826.yaml's identical note):
+    `docker ps`/`docker compose ps` failed with "Cannot connect to the Docker
+    daemon at unix:///var/run/docker.sock". Diagnosed before touching anything
+    further: `/var/run/docker.pid` pointed at PID 3925615, a dockerd process
+    still alive (cwd = this workspace) and still holding an open LISTEN fd on
+    a /var/run/docker.sock inode -- but `stat`/`lsof -U` showed the *path*
+    /var/run/docker.sock now resolves to a different, newer inode created by
+    systemd's docker.socket unit, which was itself in a failed
+    (start-limit-hit) state. I.e. the daemon that owns this workspace's
+    containers is alive and undisturbed, but its API socket path had been
+    reclaimed by systemd's competing socket unit, orphaning CLI access -- not
+    something safe to fix further without risking other unrelated services on
+    this shared host (penpot, immich postgres processes observed still running
+    under the same dockerd). Did not force-kill or otherwise touch dockerd
+    3925615.
+    Confirmed instead, without going through the docker CLI/API, that this
+    checkout's own Postgres container was already up: `ss -tlnp` showed
+    `docker-proxy` processes forwarding 127.0.0.1:5462->172.17.0.2:5432 and
+    0.0.0.0:5463/[::]:5463->172.27.0.2:5432; the untracked .env at the project
+    root sets LETFLOW_DB_PORT=5463, which config/db_port.exs resolves to for
+    both dev and test. A raw `/dev/tcp` probe confirmed 127.0.0.1:5463 accepts
+    connections. So `docker compose up -d` was unnecessary here (the container
+    this checkout uses was already running) and Ecto could reach it directly.
+  mix_test_alias: "mix.exs's `test` alias ran ecto.create/ecto.migrate --quiet automatically inside each of the 8 partition processes, as scripts/test_parallel.sh's own design expects -- no separate DB-setup step taken."
+
+test_parallel:
+  script: scripts/test_parallel.sh
+  partition_count_N: 8
+  partition_count_source: nproc ($TEST_PARALLEL_N was unset)
+  per_partition:
+    - "partition 1: 257 tests, 2 properties, 0 failures, exit 0"
+    - "partition 2: 227 tests, 0 properties, 0 failures, exit 0"
+    - "partition 3: 196 tests, 0 properties, 0 failures, exit 0"
+    - "partition 4: 306 tests, 1 property, 0 failures, exit 0"
+    - "partition 5: 286 tests, 0 properties, 0 failures, exit 0"
+    - "partition 6: 232 tests, 0 properties, 0 failures, exit 0"
+    - "partition 7: 336 tests, 2 properties, 0 failures, exit 0"
+    - "partition 8: 219 tests, 0 properties, 0 failures, exit 0"
+  combined: "2059 tests, 5 properties, 0 failures (2064/2064 passed)"
+  script_exit_code: 0
+  raw_tail: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.xiEYP7
+    test_parallel: TEST_PARALLEL_GROUP=tp3276096 (shared by all 8 partitions)
+    partition 1: 257 tests, 2 properties, 0 failures, exit 0
+    partition 2: 227 tests, 0 properties, 0 failures, exit 0
+    partition 3: 196 tests, 0 properties, 0 failures, exit 0
+    partition 4: 306 tests, 1 property, 0 failures, exit 0
+    partition 5: 286 tests, 0 properties, 0 failures, exit 0
+    partition 6: 232 tests, 0 properties, 0 failures, exit 0
+    partition 7: 336 tests, 2 properties, 0 failures, exit 0
+    partition 8: 219 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 2059 tests, 5 properties, 0 failures (2064/2064 passed)
+
+    [exited with code 0]
+
+known_registry_check:
+  iss_0339_docs_vocabulary_drift: "did not reproduce -- no failure in test/docs/requirement_status_invariants_test.exs (or any docs/*_test.exs) this run"
+  iss_0340_flaky_context_test: "did not reproduce -- no failure in test/letflow/api/context_test.exs this run"
+
+failures_observed: []
+
+attribution_note: >
+  Zero failures across all 8 partitions this run, so no Failure Attribution Is
+  Structural analysis was required -- every partition's parsed Result:/Failed:
+  count was 0 and every partition exited 0. Nothing to attribute, nothing to
+  file. This run's own diff (lib/letflow/api/pagination.ex's check_prefix/2
+  guard, test/letflow/api/pagination_test.exs's two new ISS-0216 regression
+  cases, test/specs/ISS-0216.md, lib/letflow/design/iss0216-pagination-prefix-
+  guard.md) is exercised cleanly within the combined 2064-test/2064-pass total.
+
+verdict: PASS
+summary: >
+  Full suite run once via scripts/test_parallel.sh (N=8, nproc-derived, no
+  $TEST_PARALLEL_N override): 2059 tests + 5 properties across 8 partitions,
+  0 failures, 2064/2064 passed, script exit code 0. Docker CLI/daemon access
+  was broken this session in the same way a prior TEST-RUNNER run on this host
+  already documented (report-2026-08-26-WF02-REQ151-20260826.yaml) -- a
+  shared, still-alive dockerd whose API socket path had been reclaimed by a
+  competing (and itself failed) systemd docker.socket unit. Did not attempt to
+  repair the daemon further given the risk to other unrelated containers on
+  this shared host; instead confirmed this checkout's own Postgres container
+  was already up and reachable on the .env-configured port (5463) and ran the
+  suite against it directly -- `docker compose up -d` was not needed. No
+  known-issue registry entries (ISS-0339 docs-vocabulary-drift, ISS-0340 flaky
+  context_test.exs) reproduced this run. No new failures to file.

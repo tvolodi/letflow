@@ -43,4 +43,6 @@ github_issue_note: >
   (#439) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately
   not called separately. The id comes from `register_task`'s `issue_ref`, not a
   directory scan.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0216-20260826
+resolved_at: "2026-08-26T13:06:00Z"

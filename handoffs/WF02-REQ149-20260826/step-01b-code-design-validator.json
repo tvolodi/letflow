@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step01b-WF02-REQ149-20260826",
+  "run_id": "WF02-REQ149-20260826",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ149-20260826/step-01b-code-design-validator.json",
+  "created_at": "2026-08-26T08:56:56Z",
+  "started_at": "2026-08-26T08:56:56Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-149"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-149": "Design requirement settling OQ-1: how a Lua script execution gets a configurable memory limit. Deliverable: lib/letflow/design/req149-lua-memory-limit.md naming one RECOMMENDED MECHANISM, stating which of LUA-09's two clauses it satisfies, rejecting :max_instructions, and disposing of the decision 0014 addendum question."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step01-WF02-REQ149-20260826"],
+    "artifacts_in": [
+      "lib/letflow/design/req149-lua-memory-limit.md",
+      "docs/requirements.yaml (REQ-149)",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF02-REQ149-20260826"
+  },
+  "task": {
+    "description": "Validate CODE-DESIGNER's artefact at lib/letflow/design/req149-lua-memory-limit.md on branch feature/WF02-REQ149-20260826. Check out the feature branch before reading.\n\nGate criteria:\n1. Every acceptance criterion from REQ-149 is covered by the artefact:\n   - Names exactly one RECOMMENDED MECHANISM (not a pros/cons list)\n   - Quotes a real search of deps/lua/ source (not just docs) for memory-limit options\n   - For :max_heap_size candidate, quotes a real run showing what happens when exceeded\n   - States explicitly which of LUA-09's two clauses are satisfied and which are not\n   - Explicitly rejects :max_instructions as a memory proxy with decision 0014 OQ-1 citation\n   - States whether a decision 0014 addendum is needed (and if so, writes it)\n   - No lib/letflow/engine/ file and no mix.exs change made\n2. No implementation code present (this is a design-only requirement)\n3. The design is unambiguous enough for REQ-156 to implement against",
+    "acceptance_criteria": [
+      "All six REQ-149 acceptance criteria are verified against the actual artefact",
+      "PASS only if all six are met",
+      "FAIL with specific missing coverage if any criterion fails"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

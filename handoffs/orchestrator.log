@@ -1404,3 +1404,4 @@
 2026-08-26T21:45:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0343-20260826 | REVIEWER -> ORCH | step-03c-reviewer.json PASS. Idiomatic, no scope creep. Diagnosability note judged acceptable (Postgres gives no finer signal; Logger.warning carries tenant_id; escalation-if-fleet-wide out of ISS-0343 scope).
 2026-08-26T21:46:00Z | DISPATCH | WF-03 | WF03-ISS0343-20260826 | ORCH -> TEST-DESIGNER | step-04-test-designer.json PENDING committed at dispatch time. Fail-then-pass proof required.
 2026-08-26T22:10:00Z | STEP_COMPLETE | WF-03 | WF03-ISS0343-20260826 | TEST-DESIGNER -> ORCH | step-04-test-designer.json PASS. Deterministic dropped-schema reproduction (not race-timing dependent). Fail-then-pass via worktree: 3/8 fail pre-fix (all uncaught Postgrex undefined_table), 36/36 post-fix.
+2026-08-26T22:11:00Z | DISPATCH | WF-03 | WF03-ISS0343-20260826 | ORCH -> TEST-DESIGN-VALIDATOR | step-04b-test-design-validator.json PENDING committed at dispatch time

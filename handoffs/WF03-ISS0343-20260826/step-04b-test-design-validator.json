@@ -1,0 +1,38 @@
+{
+  "handoff_id": "step04b-WF03-ISS0343-20260826",
+  "run_id": "WF03-ISS0343-20260826",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0343-20260826/step-04b-test-design-validator.json",
+  "created_at": "2026-08-26T16:11:00Z",
+  "started_at": "2026-08-26T16:11:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0343"],
+    "related_handoff_ids": ["handoffs/WF03-ISS0343-20260826/step-04-test-designer.json"],
+    "artifacts_in": [
+      "test/specs/ISS-0343.md",
+      "test/letflow/event_store/registry_tenant_schema_missing_test.exs",
+      "test/letflow/tenant_provisioning/backfill_test.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0343-20260826"
+  },
+  "task": {
+    "description": "Independently validate the new tests per WF-03 Step 4b. Read test/specs/ISS-0343.md and the new test cases directly. Re-run the tests yourself. Independently reproduce TEST-DESIGNER's fail-then-pass claim: create your own throwaway worktree at the pre-fix commit (parent of 4d20542), copy the tests in, run them there, confirm they fail with the reported Postgrex undefined_table error, then confirm they pass on this branch. Use a dedicated test DB/MIX_TEST_PARTITION for the worktree run to avoid colliding with your main checkout's test DB, and clean up the worktree DB and worktree itself afterward.",
+    "acceptance_criteria": [
+      "new tests read directly and confirmed to assert the documented behavior through the public functions",
+      "fail-then-pass independently reproduced in your own worktree, with your own quoted output",
+      "no TODO/skip left, no hardcoded secrets, fixtures self-sufficient",
+      "worktree and its throwaway DB cleaned up and verified after your own reproduction"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

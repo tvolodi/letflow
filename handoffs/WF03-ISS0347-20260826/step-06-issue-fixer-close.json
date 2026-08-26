@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step06-WF03-ISS0347-20260826",
+  "run_id": "WF03-ISS0347-20260826",
+  "workflow_id": "WF-03",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0347-20260826/step-06-issue-fixer-close.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0347"],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0347": "RELEASE-VALIDATOR PASSed ISS-0347's own scope (step-05b). AC2's literal wording ('schema recognizes next_action as valid top-level key') doesn't describe the actual resolution taken (moved next_action into result per the existing HANDOFF_PROTOCOL.md schema, rather than changing the schema) -- reword when closing."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0347-20260826/step-05-release-validator.json",
+      "handoffs/WF03-ISS0347-20260826/step-05b-release-validator-recheck.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0347.yaml"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0347-20260826"
+  },
+  "task": {
+    "description": "ISSUE-FIXER (WF-03 Step 5/close) for ISS-0347. Set docs/issues/ISS-0347.yaml status: resolved, resolving run-id, real UTC timestamp. Close the linked GitHub issue #668.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0347.yaml status: resolved, add resolved_in_run: WF03-ISS0347-20260826, resolved_at: <UTC timestamp>",
+      "Reword AC2's original wording to reflect what was actually done (next_action moved into result per HANDOFF_PROTOCOL.md's existing schema, not a schema change) -- append a resolution note rather than editing the original acceptance_criteria wording (append-don't-edit spirit; add a resolution: field or similar)",
+      "gh issue close 668 --comment referencing this run and docs/issues/ISS-0347.yaml, plus a note that a follow-up defect (ISS-0348/GH#669, BackfillTest DB-pollution) was separately filed and does NOT block this issue's resolution",
+      "Do not touch ISS-0348 -- that is a separate open issue for a separate run"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "docs/issues/ISS-0347.yaml set to status: resolved with resolved_in_run: WF03-ISS0347-20260826 and resolved_at: 2026-08-26T22:26:53Z. Appended a resolution: field (original description/acceptance_criteria left unedited) explaining: AC1 fixed by normalizing lint_file/2's parse-error advisory shape so print_advisory/1 no longer raises BadMapError (commit 07a766e); AC2's original wording described the wrong fix direction -- the handoff schema was already correct per HANDOFF_PROTOCOL.md, the actual defect was malformed data placing next_action at the top level instead of nested under result.next_action, so the fix moved next_action into result rather than changing the schema; AC3 -- mix letflow.check now passes for this issue's own defect class (no H1/H3 violations, no print_advisory crash), but a separate structurally-unrelated flake (ISS-0348/GH#669, BackfillTest DB-pollution under full serial test runs) still blocks the overall exit code -- tracked separately, does not block this issue's resolution. GitHub issue #668 closed with a --comment citing the run-id and docs/issues/ISS-0347.yaml per ISSUE_QUEUE.md's evidence-mandatory rule. ISS-0348/#669 untouched.",
+    "artifacts_out": ["docs/issues/ISS-0347.yaml"],
+    "next_action": "Route to ELIXIR-DEV for Step Final"
+  },
+  "completed_at": "2026-08-26T22:26:53Z",
+  "rework_count": 0,
+  "max_rework": 3
+}

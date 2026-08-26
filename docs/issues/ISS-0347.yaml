@@ -7,7 +7,9 @@ discovered_by: ELIXIR-DEV
 discovered_in_run: WF02-REQ152-20260826
 discovered_at: "2026-08-26T21:30:00Z"
 severity: MINOR
-status: in_progress
+status: resolved
+resolved_in_run: WF03-ISS0347-20260826
+resolved_at: "2026-08-26T22:26:53Z"
 queue_task_id: 347
 github_issue_number: 668
 description: >
@@ -49,3 +51,20 @@ acceptance_criteria:
   - >
     backend CI job green on a subsequent PR with no other pre-existing
     failures
+resolution: >
+  Resolved in run WF03-ISS0347-20260826. AC1: fixed by normalizing
+  lint_file/2's parse-error advisory shape so print_advisory/1 no longer
+  raises BadMapError (commit 07a766e). AC2: the original wording ("schema
+  recognizes next_action as valid top-level key") described the wrong fix
+  direction -- the handoff schema was already correct per
+  HANDOFF_PROTOCOL.md; the actual defect was malformed data placing
+  next_action at the top level of several handoffs instead of nested under
+  result.next_action. Resolved by moving next_action into result in the
+  affected handoffs, matching the existing schema, rather than changing the
+  schema itself. AC3: mix letflow.check now passes for this issue's own
+  defect class (no H1/H3 handoff-schema violations, no print_advisory
+  crash). A separate, structurally-unrelated flake (ISS-0348/GH#669,
+  BackfillTest DB-pollution under full serial test runs) currently also
+  blocks mix letflow.check's exit code on unrelated PRs; that is tracked
+  separately in ISS-0348 and does not block this issue's resolution since
+  it is not the defect ISS-0347 was filed for.

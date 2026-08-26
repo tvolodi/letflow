@@ -2405,7 +2405,7 @@
             "lock_acquired_at": "2026-08-26T09:20:00Z",
             "lock_released_at": null,
             "released_lock": false,
-            "last_known_step": "Step 02c COMPLETED PASS; Step 02d PENDING (REVIEWER dispatched)",
+            "last_known_step": "Step 02d PENDING (REVIEWER dispatched, explicit AC5 sign-off required)",
             "backfilled": false,
             "queue_task_id": 337,
             "queue_agent_id": "orch-loop-1787735920",

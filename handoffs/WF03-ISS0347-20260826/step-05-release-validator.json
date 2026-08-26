@@ -1,0 +1,77 @@
+{
+  "handoff_id": "step05-WF03-ISS0347-20260826",
+  "run_id": "WF03-ISS0347-20260826",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-ISS0347-20260826/step-05-release-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0347"],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0347": "See docs/issues/ISS-0347.yaml for full acceptance_criteria."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0347-20260826/step-04c-test-runner.json"
+    ],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "test/mix/tasks/letflow.lint_handoffs_test.exs"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0347-20260826"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR (WF-03 Step 5) for ISS-0347. Independently re-run scripts/test_parallel.sh and confirm the 3 acceptance criteria in docs/issues/ISS-0347.yaml.",
+    "acceptance_criteria": [
+      "Independently re-run scripts/test_parallel.sh -- do not trust TEST-RUNNER's report alone",
+      "Confirm all 3 acceptance_criteria in docs/issues/ISS-0347.yaml against actual code/test: mix letflow.lint_handoffs completes without raising; next_action recognized as valid (already fixed directly on main + this branch's own defensive shape fix); backend CI green on a subsequent PR with no other pre-existing failures (verify via mix letflow.check locally as a proxy)",
+      "Also run mix letflow.check (the actual backend CI command) directly and quote real output",
+      "PASS -> route to DOC-UPDATER/ISSUE-FIXER close; FAIL -> identify blocking issue"
+    ]
+  },
+  "result": {
+    "verdict": "FAIL",
+    "independent_test_run": {
+      "command": "scripts/test_parallel.sh",
+      "combined_tests": 2089,
+      "combined_properties": 5,
+      "combined_total": 2094,
+      "combined_failures": 0,
+      "exit": 0
+    },
+    "independent_check_run": {
+      "command": "mix letflow.check",
+      "exit": 1,
+      "outcome": "letflow.lint_handoffs: FAIL -- 1 new (un-grandfathered) violation(s)"
+    },
+    "acceptance_criteria_check": [
+      {
+        "criterion": "mix letflow.lint_handoffs completes without raising (fixes the BadMapError in print_advisory/1)",
+        "verdict": "PASS",
+        "evidence": "Ran mix letflow.check (which invokes lint_handoffs) directly; it printed full ADVISORY/GRANDFATHERED/NEW-VIOLATIONS output and exited via a controlled `** (Mix) letflow.lint_handoffs found 1 new violation(s)` Mix.raise, not an unhandled BadMapError. print_advisory/1 (lib/mix/tasks/letflow.lint_handoffs.ex:695) ran to completion over all results including the previously-crashing entries (WF03-ISS0297 BOM file, WF03-ISS0258/ISS0260 .md-extension handoff-shaped files) -- all now appear correctly as [H6]/grandfathered advisory lines rather than crashing the task."
+      },
+      {
+        "criterion": "the handoff JSON schema recognizes next_action as a valid top-level key (or the check is corrected to look at result.next_action instead)",
+        "verdict": "PASS (by alternate resolution)",
+        "evidence": "The actual fix taken was NOT a schema change -- it corrects malformed data by keeping next_action inside result.*, consistent with HANDOFF_PROTOCOL.md's existing convention. Confirmed no top-level next_action keys remain flagged as [H3] non-schema-key violations anywhere in the current mix letflow.check output. This resolution is sound: the criterion's literal wording (schema recognizes next_action as valid top-level key) does not literally apply since that path wasn't taken, but its intent -- next_action handling works correctly and stops tripping the linter -- is satisfied. Recommend DOC-UPDATER reword this AC's phrasing when closing ISS-0347 to reflect the actual resolution, so the written record doesn't imply a schema change that never happened."
+      },
+      {
+        "criterion": "backend CI job green on a subsequent PR with no other pre-existing failures",
+        "verdict": "FAIL",
+        "evidence": "mix letflow.check exits 1 on this exact branch right now. NEW HARD VIOLATIONS block lists exactly one un-grandfathered violation: [H1] handoffs/WF03-ISS0347-20260826/step-04c-test-runner.json: top-level status \"PASS\" is not one of [\"PENDING\", \"IN_PROGRESS\", \"COMPLETED\", \"FAILED\", \"ESCALATED\", \"CANCELLED\"]. This is this run's OWN TEST-RUNNER handoff (step-04c), not a pre-existing/unrelated failure -- it is freshly introduced by this run's pipeline execution, the same H1 defect class the code fix targets, self-inflicted after the fix landed. It must be corrected (status should be \"COMPLETED\", with the PASS/FAIL verdict already correctly recorded at result.verdict) before backend CI can be green. This is a blocking, in-scope defect discovered by this validation pass, not attributable to any other branch."
+      }
+    ],
+    "overall_verdict": "FAIL",
+    "reason": "AC1 and AC2(-by-alternate-resolution) are satisfied. AC3 is not: my own independent mix letflow.check run on this branch (feature/WF03-ISS0347-20260826) fails with exit 1 due to a genuine new [H1] violation in handoffs/WF03-ISS0347-20260826/step-04c-test-runner.json (top-level status \"PASS\" instead of a valid enum value). scripts/test_parallel.sh is fully green (2089 tests, 5 properties, 0 failures) and is not the blocker.",
+    "next_action": "Route to TEST-RUNNER (or ORCH) to correct handoffs/WF03-ISS0347-20260826/step-04c-test-runner.json's top-level \"status\" field from \"PASS\" to \"COMPLETED\" (result.verdict already correctly holds \"PASS\"), then re-run mix letflow.check and re-dispatch to RELEASE-VALIDATOR for re-verification before routing to ISSUE-FIXER for close."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "completed_at": "2026-08-26T22:20:00Z"
+}

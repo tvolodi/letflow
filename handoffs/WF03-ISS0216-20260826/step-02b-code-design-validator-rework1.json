@@ -1,0 +1,37 @@
+{
+  "handoff_id": "step02b-rework1-WF03-ISS0216-20260826",
+  "run_id": "WF03-ISS0216-20260826",
+  "workflow_id": "WF-03",
+  "step": "02b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0216-20260826/step-02b-code-design-validator-rework1.json",
+  "created_at": "2026-08-26T13:40:00Z",
+  "started_at": "2026-08-26T13:40:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0216"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0216-20260826/step-02-code-designer.json",
+      "handoffs/WF03-ISS0216-20260826/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": ["lib/letflow/design/iss0216-pagination-prefix-guard.md"],
+    "branch_name": "feature/WF03-ISS0216-20260826",
+    "note": "RE-VALIDATION after rework 1/3. Prior FAIL (step-02b-code-design-validator.json) was solely on 'no implementation code' -- §2.1 had a copy-paste-ready Elixir clause. CODE-DESIGNER rewrote §2.1 to prose/structural description only. The other 5 checks already passed and were not the subject of rework -- confirm they still hold (nothing else in the doc should have changed) and specifically re-check §2.1 is now free of literal Elixir syntax."
+  },
+  "task": {
+    "description": "Re-validate lib/letflow/design/iss0216-pagination-prefix-guard.md's §2.1 specifically (the only section reworked), and re-confirm the other 5 checks still pass unchanged. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "§2.1 contains no defp/do:/end or other copy-pasteable Elixir syntax -- prose/structural description only",
+      "§2.1 still fully specifies: match pattern, clause ordering relative to the existing clause, that it raises (not returns), and what the message must convey",
+      "the other 5 previously-passing checks (clause identification, error-shape reasoning, @spec deltas, TEST-DESIGNER scope, no TBD language) still pass and were not altered inconsistently"
+    ]
+  },
+  "result": null,
+  "rework_count": 1,
+  "max_rework": 3
+}

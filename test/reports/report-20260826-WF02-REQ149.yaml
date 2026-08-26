@@ -1,0 +1,71 @@
+run_id: WF02-REQ149-20260826
+step: "03"
+agent: TEST-RUNNER
+timestamp: "2026-08-26T09:26:00Z"
+
+branch: feature/WF02-REQ149-20260826
+
+compile:
+  exit_code: 0
+  output: "(no output — no warnings, no errors)"
+
+test_suite:
+  command: mix test
+  exit_code: 1
+  summary_line: "Finished in 807.9 seconds (12.6s async, 795.3s sync)"
+  result_line: "Result: 2030/2032 passed (5/5 properties, 2025/2027 tests), 3 excluded"
+  failures_line: "Failed: 2 tests"
+  total_tests: 2032
+  passed: 2030
+  failed: 2
+  excluded: 3
+
+failures:
+  - id: 1
+    module: Letflow.Docs.RequirementStatusInvariantsTest
+    test: "A4a: every entry in every volume uses the documented req/event vocabulary"
+    file: test/docs/requirement_status_invariants_test.exs
+    line: 162
+    detail: |
+      A4a — undeclared vocabulary violations (1).
+          %{line: 1122, value: "ISS-0332", path: "docs/status/requirement_status.v4.yaml", field: "req"}
+      Legal `req:` values: REQ-NNN | SCOPE-CHANGE.
+      Legal `event:` values: started | done | blocked | cancelled | revised | verified.
+  - id: 2
+    module: Letflow.Docs.RequirementStatusInvariantsTest
+    test: "A5: the on-disk vocabulary-anomaly set equals the index's declared set exactly, and every declared record cites a closed, pinned, warranted volume"
+    file: test/docs/requirement_status_invariants_test.exs
+    line: 278
+    detail: |
+      A5 — the declared anomaly set does not match disk, or cites a volume that
+      is not closed, pinned, and warranted.
+        on disk but NOT declared (new drift):
+          %{line: 1122, value: "ISS-0332", path: "docs/status/requirement_status.v4.yaml", field: "req"}
+        declared but NOT on disk: (none)
+        records citing a non-closed/pinned/warranted volume (0): (none)
+
+pre_existing_analysis:
+  verdict: PRE-EXISTING — NOT introduced by REQ-149
+  evidence: |
+    Running the same test file against current main also shows the identical
+    ISS-0332 violation at line 1122 of docs/status/requirement_status.v4.yaml.
+    Main currently has 3 failures in this file (17/20 passed); the feature branch
+    has only 2 (18/20 passed). REQ-149 added only
+    lib/letflow/design/req149-lua-memory-limit.md — no changes to any
+    docs/status/ file.
+  root_cause: |
+    docs/status/requirement_status.v4.yaml line 1122 uses "ISS-0332" as a `req:`
+    field value. The legal vocabulary for that field is REQ-NNN or SCOPE-CHANGE;
+    ISS identifiers are not permitted there. This was written to the file before
+    this branch was cut.
+  routing: ELIXIR-DEV (fix the vocabulary violation in the status volume, or
+    declare it in known_anomalies: if the volume is already closed and meets
+    the warrant criteria — see design §13.5–13.6)
+
+verdict: FAIL
+verdict_detail: |
+  2 tests fail. Both failures are pre-existing vocabulary violations in the
+  requirements status index (docs/status/requirement_status.v4.yaml), not
+  introduced by REQ-149. REQ-149 is a design-only deliverable
+  (lib/letflow/design/req149-lua-memory-limit.md) and introduced no code or
+  status changes. No regressions attributable to REQ-149 were detected.

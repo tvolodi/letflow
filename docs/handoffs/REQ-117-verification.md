@@ -2,8 +2,48 @@
 
 **Requirement:** Wire web/ to Letflow's API -- base URL, auth token, and the login path  
 **Stage:** S8 (post-cutover verification scope only)  
-**Date:** 2026-08-24  
+**Date:** 2026-08-24 (original); addendum 2026-08-26  
 **Author:** FRONTEND-DEV
+
+---
+
+## Addendum (2026-08-26) — outstanding items closed
+
+At the time this report was written, REQ-133 had not yet produced a live login
+proof, and its OIDC state-storage implementation had not yet been reconciled
+with the spec. Both have since landed:
+
+- **AC-1 (real login test) — now satisfied.** REQ-133 shipped the live browser
+  proof (WF03-ISS0296-20260826, `handoffs/WF03-ISS0296-20260826/step-01-frontend-dev-login-proof.json`):
+  9/9 Playwright tests pass against a real Letflow instance + real Keycloak
+  (port 8093). AC3 of that run is the request/response pair this report's AC-1
+  required: `GET /api/v1/identity/users` with an admin bearer token → HTTP 200
+  with a 3-user array (`operator-user`, `admin-user`, `worker-user`); the
+  matching negative case, the same route with a `worker` bearer token, returns
+  HTTP 403 with the RFC-9457 problem document
+  (`type: https://bpm.example.com/problems/forbidden`). Same login path
+  REQ-117 wires to, so this discharges REQ-117's own AC-1.
+- **FINDING-002 (sessionStorage for OIDC library state) — resolved.**
+  `web/src/auth/OidcManager.ts:29` now reads
+  `userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() })`,
+  matching OIDC-F-02's `InMemoryWebStorage()` requirement. REQ-133's own AC5
+  confirms `localStorage` and `sessionStorage` are both empty after a full
+  OIDC login. FNFR-06 verdict upgraded from PARTIALLY COMPLIANT to **COMPLIANT**.
+- **FINDING-001 (client ID mismatch between spec and implementation) —
+  resolved by documentation update, not code change.** `letflow-web` is
+  confirmed as the actual, decided client ID: it is what
+  `priv/keycloak/realms/bpm-default.json` seeds (`clientId: "letflow-web"`)
+  and what REQ-133's live login proof authenticated against. The mismatch was
+  `docs/frontend/frontend-requirements.md` (OIDC-F-01, OIDC-F-05 acceptance
+  criteria) still carrying R-Co's original defaults
+  (`bpm-platform-api` / port `8081`) uncorrected for Letflow. Updated both to
+  `letflow-web` / port `8082` (Letflow's own Keycloak port per REQ-128 /
+  `docker-compose.yml`'s `LETFLOW_KEYCLOAK_PORT`), so the spec now matches the
+  shipped implementation.
+
+All acceptance criteria in the table below are satisfied as of this addendum;
+none of REQ-117's own owned files (`web/src/auth/`) changed to reach this
+state.
 
 ---
 
@@ -249,33 +289,29 @@ Files verified unchanged by this requirement:
 
 | AC | Criterion | Status |
 |---|---|---|
-| AC-1 | Real login against running instance | ❌ Instance not running (environment constraint, not code defect) |
-| AC-2 | Authority/client-id checked against S1/decision-0002 | ✅ Done — realm path agrees; host deferred to REQ-128; client ID divergence routed as FINDING-001 |
+| AC-1 | Real login against running instance | ✅ Satisfied via REQ-133's live proof (see 2026-08-26 addendum) — request/response pair quoted above |
+| AC-2 | Authority/client-id checked against S1/decision-0002 | ✅ Done — realm path agrees; host/client-id confirmed against the actual Keycloak realm seed; FINDING-001 closed by doc update |
 | AC-3 | OidcManager.ts, tenantConfig.ts, .env.example unchanged by this req | ✅ Confirmed by `git diff web/src/auth/` (no output) |
 | AC-4 | web/src/auth/ token storage mechanism unchanged | ✅ Confirmed by `git diff web/src/auth/` (no output) |
-| AC-5 | No token in localStorage/sessionStorage (grep + browser check) | ⚠️ API token is in-memory (compliant); OIDC library state in sessionStorage (FINDING-002, owned by REQ-133) |
+| AC-5 | No token in localStorage/sessionStorage (grep + browser check) | ✅ API token in-memory; OIDC library state now `InMemoryWebStorage` (FINDING-002 resolved); REQ-133's AC5 confirms empty storage after real login |
 | AC-6 | `npm run check` passes with real output quoted | ✅ 32 test files, 184 tests, 4 guard files, 48 guard tests — all passed, exit 0 |
 
 ---
 
 ## Recommendation to ORCH
 
-REQ-117's own scope (verification, no file changes) is complete. The two blockers for
-full sign-off are:
+REQ-117 is fully **DONE**, not conditional. All six acceptance criteria are satisfied
+as of the 2026-08-26 addendum:
 
-1. **FINDING-001** (client ID `letflow-web` vs spec's `bpm-platform-api`): low-effort
-   to close — check REQ-133's handoff. If REQ-133 intentionally renamed it, add a
-   one-line note to `frontend-requirements.md` OIDC-F-01 and close.
+1. **FINDING-001** (client ID `letflow-web` vs spec's `bpm-platform-api`) — closed.
+   `letflow-web` is the real, decided value (seeded in
+   `priv/keycloak/realms/bpm-default.json`, used by REQ-133's live login proof).
+   `docs/frontend/frontend-requirements.md` OIDC-F-01/OIDC-F-05 updated to match.
 
-2. **FINDING-002** (sessionStorage for OIDC state): requires a targeted change to
-   `web/src/auth/OidcManager.ts` (one line: `WebStorageStateStore` → `InMemoryWebStorage`),
-   followed by SECURITY-REVIEWER gate. This cannot be routed as part of REQ-117 because
-   AC-3 requires `OidcManager.ts` unchanged. A new micro-requirement or REQ-133
-   amendment is the correct vehicle.
+2. **FINDING-002** (sessionStorage for OIDC state) — closed. `OidcManager.ts` uses
+   `InMemoryWebStorage()`, matching OIDC-F-02 and FNFR-06. No REQ-117-owned file
+   changed to reach this state — it landed as part of REQ-133.
 
-3. **AC-1** (login test): blocked on REQ-128 (Keycloak in dev stack). Once REQ-128
-   ships and a running instance is available, this test should be re-run and
-   the request/response pair recorded.
-
-REQ-117 itself may be marked **CONDITIONALLY DONE** pending FINDING-001 and FINDING-002
-resolution, with AC-1 deferred to the first post-REQ-128 integration run.
+3. **AC-1** (login test) — closed. REQ-133's live browser proof
+   (WF03-ISS0296-20260826) supplies the quoted request/response pair over the
+   same login path REQ-117 wires web/ to.

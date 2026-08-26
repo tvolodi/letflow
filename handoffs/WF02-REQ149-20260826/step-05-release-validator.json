@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ149-20260826/step-05-release-validator.json",
   "created_at": "2026-08-26T10:09:04Z",
   "started_at": "2026-08-26T10:09:04Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-26T10:30:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -38,7 +38,54 @@
       "FAIL with specific gaps if any criterion is unmet"
     ]
   },
-  "result": null,
+  "result": {
+    "verdict": "PASS",
+    "verified_at": "2026-08-26T10:30:00Z",
+    "criteria": [
+      {
+        "id": 1,
+        "description": "File exists; names exactly one RECOMMENDED MECHANISM with candidates rejected",
+        "outcome": "PASS",
+        "evidence": "Section 3 explicitly recommends 'Candidate A — :max_heap_size with kill: true'. Sections 2A/B/C evaluate all candidates with rejection reasoning. Candidate B rejected as latency-bound, not a hard enforcement boundary."
+      },
+      {
+        "id": 2,
+        "description": "Quotes real deps/ source search or documents absence + REQ-148 spike data",
+        "outcome": "PASS",
+        "evidence": "Section 1 documents deps/lua/ absence (commit 984bbc9, PR #644, AC5 guardrail). References req148-lua-runtime-spike.md Section 5 for the actual grep results when source was present. Explains why this satisfies the criterion."
+      },
+      {
+        "id": 3,
+        "description": "Quotes a real run showing exit reason when :max_heap_size exceeded",
+        "outcome": "PASS",
+        "evidence": "Section 2 Candidate A shows scratch/lua_memory_spike.exs with actual output: 'EXIT REASON (max_heap_size): :killed'. Also notes {:DOWN, ref, :process, pid, :killed} signal received by supervisor."
+      },
+      {
+        "id": 4,
+        "description": "States explicitly which of LUA-09's two clauses is satisfied and which is not",
+        "outcome": "PASS",
+        "evidence": "Section 3 has explicit table: 'terminate the script' = YES; 'fail gracefully' = NO. Same table in Section 2 Candidate A. Prose: 'LUA-09 is only partially achievable with tv-labs/lua.'"
+      },
+      {
+        "id": 5,
+        "description": "Explicitly rejects :max_instructions as memory proxy, citing decision 0014 OQ-1",
+        "outcome": "PASS",
+        "evidence": "Section 4 headed ':max_instructions Rejection as Memory Proxy'. States ':max_instructions MUST NOT be used as a proxy'. Directly quotes Decision 0014 OQ-1: 'approximate via :max_instructions (unsound — allocation is not proportional to instruction count)'."
+      },
+      {
+        "id": 6,
+        "description": "Decision 0014 addendum exists if contradicted; otherwise file says so explicitly",
+        "outcome": "PASS",
+        "evidence": "Section 5 states 'Addendum to 0014 is NOT REQUIRED. OQ-1 is resolved by this design document.' Explains outcome is consistent with 0014 which anticipated this direction."
+      },
+      {
+        "id": 7,
+        "description": "No lib/letflow/engine/ files and no mix.exs change in branch commits",
+        "outcome": "PASS",
+        "evidence": "git diff --stat feature/WF02-REQ149-20260826...origin/main shows only: docs/issues/ISS-0338.yaml, handoffs/**, test/reports/**. No lib/letflow/engine/ files. No mix.exs. All clean."
+      }
+    ]
+  },
   "rework_count": 0,
   "max_rework": 3
 }

@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step01-WF03-ISS0348-20260826",
+  "run_id": "WF03-ISS0348-20260826",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0348-20260826/step-01-issue-fixer.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0348"],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0348": "mix letflow.check (full serial mix test) exits 1 with 4 failures in test/letflow/tenant_provisioning/backfill_test.exs, all {updated, skipped} count-mismatch assertions on Backfill.run/1's tally. Does not manifest under scripts/test_parallel.sh's partitioned execution. Suspected DB-state pollution: BackfillTest is async:false/Sandbox :auto so it sees tenant rows other tests left committed. See docs/issues/ISS-0348.yaml for full description and acceptance_criteria."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0348-20260826/step-00-git-setup.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0348.yaml",
+      "test/letflow/tenant_provisioning/backfill_test.exs",
+      "lib/letflow/tenant_provisioning.ex"
+    ],
+    "owned_modules": [
+      "test/letflow/tenant_provisioning/backfill_test.exs",
+      "lib/letflow/tenant_provisioning.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0348-20260826"
+  },
+  "task": {
+    "description": "ISSUE-FIXER: Step 0.5 (registry lookup) + Step 1 (diagnose) for ISS-0348. Do NOT implement a fix.",
+    "acceptance_criteria": [
+      "Step 0.5: check docs/issues/ for resolved entries with matching DB-pollution/test-isolation symptoms in tenant_provisioning tests -- if a recurrence, flag severity accordingly",
+      "Step 1: reproduce directly -- run `mix test` in FULL SERIAL mode (not scripts/test_parallel.sh) at least twice and quote real output showing the 4 BackfillTest failures (or confirm/refute reproduction -- flakes can be nondeterministic)",
+      "Identify the specific other test(s) that commit tenant/tenant_schema rows visible to BackfillTest's scan under serial ordering -- grep for tests that insert into tenants/tenant_schemas without full cleanup, or that use Sandbox :auto without a transaction rollback",
+      "Trace Backfill.run/1's tenant-scan query to understand exactly what rows it would pick up that a properly-isolated test wouldn't leave behind",
+      "Do NOT implement the fix -- write result.summary with root cause (not symptom), affected files, what a fix needs to change; next_action: Route to CODE-DESIGNER for fix design"
+    ]
+  },
+  "result": {},
+  "rework_count": 0,
+  "max_rework": 3
+}

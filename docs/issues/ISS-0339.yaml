@@ -6,9 +6,9 @@ discovered_by: TEST-RUNNER
 discovered_in_run: WF02-REQ151-20260826
 discovered_at: 2026-08-26T13:11:00Z
 severity: MINOR
-status: open
-resolved_in_run: null
-resolved_at: null
+status: resolved
+resolved_in_run: WF02-REQ151-20260826
+resolved_at: "2026-08-26T18:20:00Z"
 queue_task_id: 339
 github_issue_number: 653
 github_issue: https://github.com/tvolodi/letflow/issues/653

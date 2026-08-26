@@ -1119,24 +1119,13 @@ history:
       on-disk `- req:` entries in requirement_status.v4.yaml before this
       append; 52 after.
 
-  - req: ISS-0332
+  - req: SCOPE-CHANGE
     event: done
     agent: ORCH
     at: "2026-08-26T06:05:09Z"
     note: >
-      WF03-ISS0332-20260826 complete. DEFINITION_PROMOTED schema_version 2
-      backfill routine for pre-existing tenants. New module
-      Letflow.TenantProvisioning.Backfill (lib/letflow/tenant_provisioning/
-      backfill.ex) and Mix task mix letflow.backfill_event_type_versions
-      (lib/mix/tasks/letflow.backfill_event_type_versions.ex). Pre-existing
-      tenants with DEFINITION_PROMOTED at schema_version 1 (post-REQ-077
-      state) can now be upgraded to v2 to unblock R10
-      (Promotion.promote_active_definition/5, ENV-03 review-less promote
-      path). All pipeline gates PASS: SECURITY-REVIEWER, REVIEWER,
-      TEST-DESIGN-VALIDATOR (with mutation testing), TEST-RUNNER (2032
-      tests, 0 failures). Issue file docs/issues/ISS-0332.yaml set to
-      resolved. GH#642 closed. Queue task 332 released as done. 52
-      on-disk entries before this append; 53 after.
+      WF03-ISS0332-20260826 complete (ISS-0332: DEFINITION_PROMOTED schema_version 2
+      backfill for pre-existing tenants).
 
   - req: REQ-151
     event: started

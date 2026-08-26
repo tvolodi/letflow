@@ -7,9 +7,9 @@
   "to_agent": "FRONTEND-DEV",
   "file": "handoffs/WF03-ISS0296-20260826/step-01-frontend-dev-login-proof.json",
   "created_at": "2026-08-26T18:35:00Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-08-26T19:30:00Z",
+  "completed_at": "2026-08-26T21:00:00Z",
+  "status": "PASS",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -64,7 +64,29 @@
       "If failing: exact failure mode documented with evidence"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "completed_at": "2026-08-26T21:00:00Z",
+    "summary": "REQ-133 AC1-6 live browser proof complete. All 9 Playwright tests pass (5 oidcf-login + 4 req133-ac2-ac5). type-check 0, lint 0, unit 184/184, guards 48/48. REQ-133 flipped to done in docs/requirements.yaml. ISS-0296 closed.",
+    "evidence": {
+      "AC1_platform_admin_login": "TC-OIDCF-03 PASS: admin-user completes full OIDC redirect/callback, AppShell renders with logout-button, user-display-name, Users nav link. Screenshot: tests/screenshots/OIDCF-TC03-workspace-authenticated.png",
+      "AC2_task_worker_narrower_nav": "REQ133-AC2 PASS: worker-user logs in, nav shows only ['My Tasks']. Admin nav has 14 items including Users/Groups/Tokens/Audit etc. Screenshot: tests/screenshots/REQ133-AC2-02-workspace-after-login.png",
+      "AC3_authenticated_api_call": "REQ133-AC3 PASS: GET /api/v1/identity/users with admin bearer token returns HTTP 200 with 3-user array: operator-user, admin-user, worker-user",
+      "AC4_403_forbidden_route": "REQ133-AC4 PASS: GET /api/v1/identity/users with worker bearer token returns HTTP 403 RFC-9457 problem document: {status:403, type:'https://bpm.example.com/problems/forbidden', title:'Forbidden', detail:'insufficient permissions'}",
+      "AC5_no_token_in_storage": "REQ133-AC5 PASS: localStorage keys=[] and sessionStorage keys=[] after full OIDC login. No JWT-shaped value in any storage key.",
+      "frontend_gates": {
+        "type_check": "0 errors",
+        "lint": "0 warnings",
+        "unit_tests": "184/184 tests pass, 32 files",
+        "guards": "48/48 tests pass, 4 files"
+      },
+      "e2e_tests": "9/9 pass in 19.1s (Chromium headless, Keycloak port 8093)",
+      "incidental_fixes": [
+        "tenant_config.ex: IDP URL now derived from Application :oidc issuer config (oidc_issuer_base/0) before hardcoded default -- fixes per-workspace keycloak port divergence",
+        "letflow_dev DB: admin-user external_id updated to match current Keycloak sub (19a99bc6-... was fc0c3b19-..., stale from prior Keycloak setup)"
+      ]
+    }
+  },
   "rework_count": 0,
   "max_rework": 3
 }

@@ -1135,3 +1135,15 @@ history:
       WF02-REQ151-20260826 started (queue task 337, GH#650, stage S5).
       Step 00 git-setup PASS (ELIXIR-DEV): branch feature/WF02-REQ151-20260826
       created and pushed. 53 on-disk entries before this append; 54 after.
+
+  - req: REQ-149
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-26T10:20:00Z"
+    note: >
+      WF02-REQ149-20260826 complete. Design-only requirement settling OQ-1
+      (Lua memory limit mechanism). RECOMMENDED MECHANISM: :max_heap_size
+      with kill: true. Satisfies LUA-09 terminate clause; graceful-failure
+      clause not achievable with pure-BEAM Lua VM. No decision 0014 addendum
+      needed. Deliverable: lib/letflow/design/req149-lua-memory-limit.md.
+      Queue task 335. 54 on-disk entries before this append; 55 after.

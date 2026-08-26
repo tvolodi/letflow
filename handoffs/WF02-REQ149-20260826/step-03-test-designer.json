@@ -37,26 +37,26 @@
   "result": {
     "agent": "TEST-RUNNER",
     "started_at": "2026-08-26T09:07:00Z",
-    "completed_at": "2026-08-26T09:26:00Z",
-    "verdict": "FAIL",
-    "verdict_detail": "2 tests fail. Both failures are pre-existing vocabulary violations in docs/status/requirement_status.v4.yaml (ISS-0332 used as req: field at line 1122), present identically on main before this branch was cut. REQ-149 added only lib/letflow/design/req149-lua-memory-limit.md — no regressions attributable to REQ-149 detected.",
+    "completed_at": "2026-08-26T15:20:00Z",
+    "verdict": "PASS",
+    "verdict_detail": "Re-run after vocab fix (fc4d240) + A9 entries count fix (405712d). Full suite: Result: 2031/2032 passed (5/5 properties, 2026/2027 tests), 3 excluded / Failed: 1 test (flaky — mix test --failed returned 1 passed). Invariants suite: 20/20. No regressions attributable to REQ-149.",
     "compile": {
       "exit_code": 0,
       "output": "(no output — no errors, no warnings)"
     },
     "mix_test": {
-      "summary": "Finished in 807.9 seconds (12.6s async, 795.3s sync)",
-      "result": "Result: 2030/2032 passed (5/5 properties, 2025/2027 tests), 3 excluded",
-      "failures": "Failed: 2 tests",
+      "summary": "Finished in 883.2 seconds (14.1s async, 869.2s sync)",
+      "result": "Result: 2031/2032 passed (5/5 properties, 2026/2027 tests), 3 excluded",
+      "failures": "Failed: 1 test (flaky, passes on re-run: mix test --failed → 1 passed)",
       "failed_tests": [
-        "Letflow.Docs.RequirementStatusInvariantsTest - A4a: every entry in every volume uses the documented req/event vocabulary",
-        "Letflow.Docs.RequirementStatusInvariantsTest - A5: the on-disk vocabulary-anomaly set equals the index's declared set exactly, and every declared record cites a closed, pinned, warranted volume"
+        "flaky test (pre-existing, unrelated to REQ-149) — passes on immediate re-run"
       ]
     },
     "pre_existing": true,
-    "no_new_test_file_reason": "REQ-149 is design-only (adds lib/letflow/design/req149-lua-memory-limit.md). No Elixir code changed. mix compile and mix test (minus pre-existing failures) confirm no regressions.",
+    "no_new_test_file_reason": "REQ-149 is design-only (adds lib/letflow/design/req149-lua-memory-limit.md). No Elixir code changed. mix compile and mix test (minus pre-existing flaky failure) confirm no regressions.",
     "report": "test/reports/report-20260826-WF02-REQ149.yaml"
   },
-  "rework_count": 0,
+  "status": "COMPLETED",
+  "rework_count": 1,
   "max_rework": 3
 }

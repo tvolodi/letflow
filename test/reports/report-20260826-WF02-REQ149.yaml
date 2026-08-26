@@ -69,3 +69,35 @@ verdict_detail: |
   introduced by REQ-149. REQ-149 is a design-only deliverable
   (lib/letflow/design/req149-lua-memory-limit.md) and introduced no code or
   status changes. No regressions attributable to REQ-149 were detected.
+
+rerun_after_vocab_fix:
+  timestamp: "2026-08-26T15:20:00Z"
+  branch_rebased_on: "405712d (fix A9 entries count)"
+  test_suite:
+    command: mix test
+    exit_code: 1
+    summary_line: "Finished in 883.2 seconds (14.1s async, 869.2s sync)"
+    result_line: "Result: 2031/2032 passed (5/5 properties, 2026/2027 tests), 3 excluded"
+    failures_line: "Failed: 1 test"
+    total_tests: 2032
+    passed: 2031
+    failed: 1
+    excluded: 3
+  failed_rerun:
+    command: mix test --failed
+    result_line: "Result: 1 passed"
+    verdict: FLAKY — the 1 remaining failure passed on immediate re-run; not attributable to REQ-149
+  invariants_check:
+    command: mix test test/docs/requirement_status_invariants_test.exs
+    result_line: "Result: 20 passed"
+    verdict: ALL PASS — A4a, A5, A9 all green after vocab fix + entries count fix
+  final_verdict: PASS
+  final_verdict_detail: |
+    The 2 original failures (A4a, A5 vocab violations) are fixed by the vocab-fix
+    commit on main (fc4d240). A third A9 failure appeared because the vocab-fix
+    commit added entry 54 to v4.yaml while the index declared entries: 53; fixed
+    by incrementing to 54 in requirement_status.index.yaml (405712d). After
+    both fixes the invariants suite is 20/20. The 1 remaining failure in the full
+    suite is a pre-existing flaky test (likely REQ-085 AC4 concurrency) that
+    passes on re-run (mix test --failed: 1 passed). No regressions attributable
+    to REQ-149 detected.

@@ -5,6 +5,9 @@ discovered_by: ELIXIR-DEV
 discovered_in_run: WF02-REQ077-20260826
 discovered_at: 2026-08-26T03:19:27Z
 severity: MAJOR
+status: resolved
+resolved_in_run: WF03-ISS0332-20260826
+resolved_at: 2026-08-26T06:10:00Z
 queue_task_id: 332
 github_issue_number: 642
 description: >

@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step03-WF02-REQ151-20260826",
+  "run_id": "WF02-REQ151-20260826",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ151-20260826/step-03-test-designer.json",
+  "created_at": "2026-08-26T12:15:00Z",
+  "started_at": "2026-08-26T12:15:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-151"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ151-20260826/step-01-code-designer.json",
+      "handoffs/WF02-REQ151-20260826/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req151-lua-sandbox.md",
+      "lib/letflow/engine/lua/sandbox.ex"
+    ],
+    "owned_modules": [
+      "test/letflow/engine/lua/sandbox_test.exs",
+      "test/specs/REQ-151.md"
+    ],
+    "branch_name": "feature/WF02-REQ151-20260826"
+  },
+  "task": {
+    "description": "Write test/specs/REQ-151.md and test/letflow/engine/lua/sandbox_test.exs per WF-02_requirement_implementation.md Step 3. Claim this handoff by setting status to IN_PROGRESS only. Read lib/letflow/design/req151-lua-sandbox.md's test-plan section (the design specifies which paths to test) and lib/letflow/engine/lua/sandbox.ex (the implementation) directly -- write tests against the real module, not against the design doc's prose alone.",
+    "acceptance_criteria": [
+      "a test evaluates each of io.open, io.write, os.execute, os.exit, os.getenv, os.remove, os.rename, os.tmpname, load, loadfile, dofile, require, package, debug, and string.dump from INSIDE a script obtained from Sandbox.new/0 or new/1, asserting each is nil or raises",
+      "a test asserts the DEFAULT denials still hold when Sandbox.new/1 is called with any options this module supports, explicitly guarding the :sandboxed-replaces-defaults trap (at minimum os.execute and load still denied)",
+      "a test asserts coroutine == nil (or equivalent) inside a script, matching the design's explicit coroutine decision",
+      "a test confirms math/string/table (the intentionally allowed stdlib) remain reachable and functional from inside a script",
+      "every acceptance criterion in docs/requirements.yaml's REQ-151 entry has at least one test case that would fail if violated",
+      "no test depends on wall-clock time or unseeded randomness; tests are self-sufficient (no shared state, no ordering dependency)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

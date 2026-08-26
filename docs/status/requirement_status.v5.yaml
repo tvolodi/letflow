@@ -166,3 +166,25 @@
 # 40 entries. It never moves, edits or deletes an existing entry.
 
 history:
+  - req: REQ-133
+    event: done
+    agent: FRONTEND-DEV
+    at: "2026-08-26T21:00:00Z"
+    note: >
+      WF03-ISS0296-20260826 complete. Live browser login proof: PLATFORM_ADMIN
+      (admin-user) and TASK_WORKER (worker-user) both complete OIDC
+      redirect/callback flow via real Keycloak port 8093, Chromium headless.
+      PLATFORM_ADMIN nav: Instances, My Tasks, Definitions, DLQ, Webhooks,
+      Users, Groups, Tokens, Audit, Health, Metrics, Register Tenant, Tenants,
+      Services. TASK_WORKER nav: My Tasks only. Authenticated API call
+      GET /api/v1/identity/users with admin bearer token returns 200 with real
+      user list (3 users). TASK_WORKER bearer token against same route returns
+      403 RFC-9457 problem document. localStorage and sessionStorage empty
+      after OIDC login (InMemoryWebStorage, FNFR-06 compliant). All 9
+      Playwright tests pass (oidcf-login: 5/5, req133-ac2-ac5: 4/4).
+      type-check 0 errors, lint 0 warnings, unit tests 184/184, guards 48/48.
+      Two incidental fixes: (1) tenant_config.ex derives IDP URL from
+      Application :oidc issuer config so per-workspace keycloak port overrides
+      propagate without BPM_IDP_BASE_URL env var; (2) stale admin-user
+      external_id in dev DB updated to match current Keycloak sub UUID.
+      ISS-0296 closed.

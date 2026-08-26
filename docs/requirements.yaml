@@ -6488,15 +6488,15 @@ requirements:
   - id: REQ-133
     title: End-to-end login -- SPA through Keycloak to an authorized API call
     owner: FRONTEND-DEV
-    status: blocked
+    status: done
     stage: S4
-    # blocked 2026-08-23: config fix (OidcManager.ts/tenantConfig.ts/.env.example
-    # + lib/letflow/routers/tenant_config.ex) landed and REVIEWER-approved via
-    # PR #593, curl-verified. AC1-6 (live browser login proof) could not be
-    # completed in this environment -- genuine Playwright/Chromium automation
-    # flakiness, not an app defect. See ISS-0296 (queue task 296, GH#594) for
-    # the remaining live-verification work and the two real environment
-    # workarounds discovered along the way.
+    # done 2026-08-26 (WF03-ISS0296-20260826): live browser proof complete.
+    # PLATFORM_ADMIN and TASK_WORKER both complete full OIDC redirect/callback
+    # flow via Playwright + real Keycloak (port 8093, Chromium headless). AC1-6
+    # all verified. ISS-0296 closed. Two additional fixes landed: (1)
+    # tenant_config.ex now derives IDP base URL from Application :oidc issuer
+    # config so per-workspace port overrides propagate correctly; (2) stale
+    # admin-user external_id in dev DB updated to match current Keycloak sub.
     impl_order: 254  # letflow-queue task id; depends_on translated to queue task ids [234, 248]
     description: >
       Make a human able to log in. This is the requirement that proves

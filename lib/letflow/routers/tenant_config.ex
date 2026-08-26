@@ -221,7 +221,17 @@ defmodule Letflow.Routers.TenantConfig do
   # regardless.
   defp idp_base_url do
     System.get_env("BPM_IDP_BASE_URL") || System.get_env("KEYCLOAK_BASE_URL") ||
+      oidc_issuer_base() ||
       @default_idp_base_url
+  end
+
+  # Derive the IDP base URL from the compiled :oidc issuer, which is already
+  # set correctly via config/keycloak_port.exs for every workspace.
+  defp oidc_issuer_base do
+    case Application.get_env(:letflow, :oidc, [])[:issuer] do
+      nil -> nil
+      issuer -> issuer |> String.split("/realms/") |> List.first()
+    end
   end
 
   defp client_id, do: System.get_env("OIDC_CLIENT_ID") || @default_client_id

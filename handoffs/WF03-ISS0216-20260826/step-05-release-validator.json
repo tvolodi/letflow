@@ -1,0 +1,37 @@
+{
+  "handoff_id": "step05-WF03-ISS0216-20260826",
+  "run_id": "WF03-ISS0216-20260826",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-ISS0216-20260826/step-05-release-validator.json",
+  "created_at": "2026-08-26T15:51:00Z",
+  "started_at": "2026-08-26T15:51:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0216"],
+    "related_handoff_ids": ["handoffs/WF03-ISS0216-20260826/step-04c-test-runner.json"],
+    "artifacts_in": [
+      "lib/letflow/api/pagination.ex",
+      "test/letflow/api/pagination_test.exs",
+      "docs/issues/ISS-0216.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0216-20260826"
+  },
+  "task": {
+    "description": "Independently re-run scripts/test_parallel.sh per WF-03 Step 5 (same as WF-02 Step 5). Confirm every one of docs/issues/ISS-0216.yaml's acceptance_criteria is satisfied by reading the actual code/test, not TEST-RUNNER's summary.",
+    "acceptance_criteria": [
+      "full suite re-run independently, real combined pass/fail totals quoted",
+      "ISS-0216.yaml's 3 acceptance criteria each checked explicitly against real code/test",
+      "docs/issues/ISS-0216.yaml checked for staleness (should still show status: open at this point -- ISSUE-FIXER flips it at Step 5 of the workflow's own numbering, called Step 6 here to avoid clashing with this step's own '5')"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

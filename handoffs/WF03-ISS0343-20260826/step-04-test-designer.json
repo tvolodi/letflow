@@ -3,34 +3,58 @@
   "run_id": "WF03-ISS0343-20260826",
   "workflow_id": "WF-03",
   "step": "04",
-  "from_agent": "ORCH",
+  "from_agent": "REVIEWER",
   "to_agent": "TEST-DESIGNER",
   "file": "handoffs/WF03-ISS0343-20260826/step-04-test-designer.json",
-  "created_at": "2026-08-26T15:46:00Z",
-  "started_at": "2026-08-26T15:46:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "created_at": "2026-08-26T16:56:00Z",
+  "started_at": "2026-08-26T16:56:00Z",
+  "completed_at": "2026-08-26T17:40:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
     "requirement_ids": [],
     "issue_ids": ["ISS-0343"],
-    "related_handoff_ids": ["handoffs/WF03-ISS0343-20260826/step-03-elixir-dev.json"],
-    "artifacts_in": ["lib/letflow/event_store/registry.ex", "lib/letflow/tenant_provisioning/backfill.ex"],
-    "owned_modules": ["test/letflow/event_store/registry_test.exs", "test/letflow/tenant_provisioning/backfill_test.exs"],
-    "branch_name": "feature/WF03-ISS0343-20260826",
-    "note": "This fix touches EXISTING modules (Registry, Backfill), not new ones -- the standard fail-then-pass rule applies directly (not the 'code under test did not exist' exemption). Reproduce the exact scenario: provision a real tenant via TenantFixture, then genuinely DROP its schema (DROP SCHEMA ... CASCADE, same mechanism the real race uses) BEFORE calling register_type/2 (or Backfill.run/1 against a Registration row pointing at that now-gone schema), and assert the new typed error / skip behavior rather than a crash."
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0343-20260826/step-00-git-setup.json",
+      "handoffs/WF03-ISS0343-20260826/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0343-20260826/step-02-code-designer.json",
+      "handoffs/WF03-ISS0343-20260826/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0343-20260826/step-02b-code-design-validator-rework1.json",
+      "handoffs/WF03-ISS0343-20260826/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0343-20260826/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0343-20260826/step-03c-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0343-backfill-missing-schema-tolerance.md",
+      "lib/letflow/event_store/registry.ex",
+      "lib/letflow/tenant_provisioning/backfill.ex",
+      "test/letflow/tenant_provisioning/backfill_test.exs",
+      "test/letflow/event_store/registry_test.exs",
+      "test/support/tenant_fixture.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0343-20260826"
   },
   "task": {
-    "description": "Add regression tests per WF-03 Step 4. Claim this handoff by setting status to IN_PROGRESS only.\n\n1. In test/letflow/event_store/registry_test.exs: provision a real tenant, then execute a raw DROP SCHEMA <name> CASCADE against it directly (simulating the concurrent-teardown race), then call register_type/2 (and/or get_type/2) against that tenant_id and assert {:error, :tenant_schema_missing} is returned -- not a crash.\n2. In test/letflow/tenant_provisioning/backfill_test.exs: set up a scenario with at least 2 Registration rows, drop one tenant's schema before calling Backfill.run/1, and assert run/1 completes (does not crash), the dropped tenant is counted in :skipped, and the other tenant is still processed/counted in :updated.\n3. Fail-then-pass proof (mandatory): check out the pre-fix commit in a throwaway git worktree (parent of 4d20542 on this branch), run ONLY these new tests against it, confirm they fail (real crash/exception, quote it), then confirm they pass on this branch. Remove the worktree when done.\n4. Complete the handoff with artifacts_out: [\"test/letflow/event_store/registry_test.exs\", \"test/letflow/tenant_provisioning/backfill_test.exs\"], next_action: \"Route to TEST-DESIGN-VALIDATOR\".\n5. Commit on feature/WF03-ISS0343-20260826 and push.",
+    "description": "Write test spec + test code proving ISS-0343's fix (Letflow.EventStore.Registry's :tenant_schema_missing tolerance and Letflow.TenantProvisioning.Backfill.run/1's new skip clause). The underlying race is a low-frequency, cross-partition timing defect (per step-01) that is not reliably reproducible on demand -- instead of chasing the race's timing, write tests that reproduce the exact end-state the race produces (a Registration row present, its physical schema already dropped) deterministically: provision a real tenant, then DROP SCHEMA ... CASCADE it directly WITHOUT deleting the Registration row, and assert Registry.get_type/2, Registry.register_type/2, and Backfill.run/1 all tolerate it (typed {:error, :tenant_schema_missing} / skipped, not an uncaught Postgrex.Error / a crashed sweep). Mandatory fail-then-pass proof: create a throwaway git worktree at the pre-fix commit (4d20542^), copy the new test files in, compile against the pre-fix lib/, run them against a dedicated throwaway test database, confirm they fail with the exact uncaught Postgrex.Error the fix addresses, then remove the worktree and confirm the tests pass at HEAD.",
     "acceptance_criteria": [
-      "a test genuinely drops a tenant's schema (real DROP SCHEMA CASCADE, not a mock) then asserts register_type/2 or get_type/2 returns {:error, :tenant_schema_missing} rather than raising",
-      "a Backfill.run/1 test with one dropped-schema tenant among multiple registrations asserts the run completes without crashing, the dropped tenant counted as skipped, others still processed",
-      "fail-then-pass proof shown with real quoted output via worktree at the pre-fix commit",
-      "no test depends on wall-clock time or unseeded randomness"
+      "test/specs/ISS-0343.md written: defect recap, fix summary, why the tests are deterministic (not race-timing-dependent), fail-then-pass proof, and a table of test cases with rationale",
+      "test code added under test/letflow/ exercising Registry.get_type/2, Registry.register_type/2, and Backfill.run/1's tolerance of a vanished tenant schema",
+      "fail-then-pass proof performed in a throwaway git worktree at the pre-fix commit, real output quoted for both the pre-fix failing run and the post-fix passing run, worktree removed afterward",
+      "no regression in pre-existing RegistryTest/BackfillTest tests",
+      "mix format clean"
     ]
   },
-  "result": null,
+  "result": {
+    "verdict": "PASS",
+    "summary": "Wrote test/specs/ISS-0343.md and two test artifacts. New file test/letflow/event_store/registry_tenant_schema_missing_test.exs: provisions a real tenant (TenantProvisioning.provision_tenant_schema/1 + replay_migrations/1), then DROP SCHEMA ... CASCADEs it directly WITHOUT deleting the Registration row (the exact 'Registration present, schema absent' window ISS-0343's race produces), and asserts get_type/2 and register_type/2 both return {:error, :tenant_schema_missing} rather than raising; a control test confirms a healthy, non-dropped tenant's get_type/2 ({:error, :unknown_event_type}) and register_type/2 ({:ok, ...}) behavior is unchanged. One new test appended to test/letflow/tenant_provisioning/backfill_test.exs ('regression: ISS-0343 -- a tenant whose schema vanished mid-sweep is skipped, not a crash of the whole run'): a healthy tenant (downgraded to v1, needs updating) and a schema-vanished tenant are both present when Backfill.run/1 is invoked once; asserts {:ok, %{updated: 1, skipped: 1}} (the vanished tenant does not halt the sweep), that the healthy tenant was actually updated to schema_version 2, and that the vanished tenant's Registration row still exists (proving this is the :tenant_schema_missing window, not :tenant_not_provisioned).\n\nFail-then-pass proof, performed exactly as directed: created a throwaway git worktree (`git worktree add <scratchpad>/iss0343-prefix 4d20542^`, landing at 54a0c14, the last commit before ELIXIR-DEV's ISS-0343 fix). Confirmed via `grep -n tenant_schema_missing` on that worktree's lib/letflow/event_store/registry.ex and lib/letflow/tenant_provisioning/backfill.ex: zero matches -- the pre-fix code genuinely has no tolerance logic. Copied both new/modified test files into the worktree unchanged, symlinked deps/ from the main checkout, ran `MIX_ENV=test mix compile` (compiled cleanly against the pre-fix lib/), created a dedicated throwaway test database (`MIX_TEST_PARTITION=98 mix ecto.create && mix ecto.migrate`) so this run could not collide with or corrupt the main checkout's own test DB.\n\nPre-fix run (worktree, commit 54a0c14): `MIX_ENV=test MIX_TEST_PARTITION=98 mix test test/letflow/event_store/registry_tenant_schema_missing_test.exs test/letflow/tenant_provisioning/backfill_test.exs` -> 'Result: 5/8 passed, Failed: 3 tests'. The 3 failures are exactly the 3 new assertions targeting the fix, each an uncaught `** (Postgrex.Error) ERROR 42P01 (undefined_table) relation \"tenant_....event_type_registry\" does not exist`: (1) register_type/2's new test, raised from insert_with_monotonicity_check/2 at pre-fix registry.ex:233 (the then-unguarded current_max query); (2) get_type/2's new test, raised from get_type/2 at pre-fix registry.ex:175; (3) the new Backfill.run/1 test, raised from insert_with_monotonicity_check/2, propagating through Enum.reduce_while/3 at pre-fix backfill.ex:26 and crashing the whole Backfill.run(v2_attrs()) call before the healthy tenant in that same test could be updated -- exactly the 'one tenant's vanished schema crashes the entire sweep' defect ISS-0343 reports. The other 5 tests (pre-existing ISS-0332 BackfillTest tests unaffected by this change, plus the new file's control test which drops no schema) passed unchanged, confirming the 3 failures are isolated to the new schema-missing assertions and not an artifact of a broken worktree/environment. Worktree database dropped (`mix ecto.drop`) and worktree removed (`git worktree remove --force`) immediately after.\n\nPost-fix run (this branch, HEAD): `MIX_ENV=test mix test test/letflow/event_store/registry_tenant_schema_missing_test.exs test/letflow/tenant_provisioning/backfill_test.exs test/letflow/event_store/registry_test.exs` -> 'Finished in 24.9 seconds (0.00s async, 24.9s sync), Result: 36 passed'. All 3 previously-failing tests now pass, and all 33 pre-existing RegistryTest/BackfillTest tests continue to pass -- no regression. `mix format --check-formatted` on both test files: exit 0.\n\nNot a 'code did not exist' case (register_type/2, get_type/2, and Backfill.run/1 all pre-existed this fix), so the WF-03 mutation-reporting fallback procedure does not apply -- the worktree-based fail-then-pass run against real pre-fix code is the primary, sufficient proof here.",
+    "artifacts_out": [
+      "test/specs/ISS-0343.md",
+      "test/letflow/event_store/registry_tenant_schema_missing_test.exs",
+      "test/letflow/tenant_provisioning/backfill_test.exs"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

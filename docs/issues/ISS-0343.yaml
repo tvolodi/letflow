@@ -6,9 +6,9 @@ discovered_by: ELIXIR-DEV
 discovered_in_run: WF03-ISS0216-20260826
 discovered_at: 2026-08-26T13:15:00Z
 severity: MINOR
-status: open
-resolved_in_run: null
-resolved_at: null
+status: resolved
+resolved_in_run: WF03-ISS0343-20260826
+resolved_at: 2026-08-26T14:31:19Z
 queue_task_id: 343
 github_issue_number: 660
 description: >

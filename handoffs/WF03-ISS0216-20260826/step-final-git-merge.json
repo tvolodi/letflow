@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0216-20260826/step-final-git-merge.json",
   "created_at": "2026-08-26T16:21:00Z",
   "started_at": "2026-08-26T16:21:00Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-26T13:26:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -33,7 +33,28 @@
       "local cleanup: back on main, fast-forwarded, feature branch deleted, clean working tree"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "GIT_MERGE.md standard procedure completed for WF03-ISS0216-20260826. Started on main by mistake, stashed the IN_PROGRESS edit, checked out feature/WF03-ISS0216-20260826, pulled (no-op, already up to date), reapplied and committed the IN_PROGRESS status update. Fetched origin/main and rebased: 15 commits replayed onto origin/main (73ff2ffd), hitting add/add conflicts on every one of this run's own handoff bookkeeping files (step-01 through step-final-git-merge.json) -- each conflict was ORCH's original PENDING dispatch placeholder (committed straight to main at dispatch time, confirmed via `git log origin/main -- <file>` showing exactly one commit per file, all 'chore(ORCH): dispatch ...') colliding with this branch's own fully-executed COMPLETED/PASS version of the same file. Resolved all of them identically: kept the branch's own completed version (rebase stage :3, 'theirs') over main's stale placeholder (stage :2, 'ours') in every case -- verified the status/result fields before each resolution to confirm the direction was consistent (PENDING/minimal vs COMPLETED/full result) rather than assuming from the first conflict. No conflict touched process_instance.ex, instance_supervisor.ex, or priv/repo/migrations/, and no conflict count exceeded 5 at any single step. lib/letflow/api/pagination.ex and test/letflow/api/pagination_test.exs (the run's actual code changes) auto-merged cleanly with zero conflicts; verified via `git diff origin/main -- lib/letflow/api/pagination.ex | grep '@spec'` that both @specs (decode_cursor/4, check_prefix/2) are unchanged from what the branch already had, confirming no semantic drop during rebase. Post-rebase: mix format --check-formatted PASS (no output), mix compile --warnings-as-errors PASS (no output), mix test: 2060/2064 passed (5/5 properties, 2055/2059 tests), 3 excluded, 4 failed -- all 4 in Letflow.TenantProvisioning.BackfillTest ('relation tenant_*.event_type_registry does not exist'). Attributed via Route 1: backfill.ex, event_store/registry.ex, and the test file itself do not appear in `git diff --name-only origin/main...HEAD` (that diff contains only pagination.ex/pagination_test.exs and this run's own design/handoff/report artifacts). Independently corroborated by checking out detached at origin/main (73ff2ffd) and running `mix test test/letflow/tenant_provisioning/backfill_test.exs` alone: 4/4 passed there, consistent with a full-suite-only shared-state interaction unrelated to this branch, not a merge-base reproduction of the same failure. Not yet covered by an existing docs/issues/ entry (checked ISS-0339/ISS-0340, both about unrelated tests) or by ISS-0332 (status: resolved, different failure mode -- schema_version mismatch, not a missing table) -- forwarding as a new finding below per ISSUE_QUEUE.md rather than filing an ISS-NNNN myself, since only ORCH/letflow-queue allocates the id. Pushed with --force-with-lease (rebase rewrote every commit, plain push correctly rejected as non-fast-forward first). Opened PR #659 (fix: ... title prefix), CI green (Backend gate + Frontend gate both PASS across both queued runs, watched via `gh pr checks 659 --watch`), merged via `gh pr merge --squash --delete-branch` -- GitHub squash commit 92da2b6a2b2de118792f5eec7738c8659a34b22a, local checkout auto-fast-forwarded to main and local feature branch auto-deleted (single-worktree checkout, not the worktree variant). Final state verified: `git branch --show-current` = main, `git log --oneline -1` shows the squash commit, `git status` clean, `git worktree list` shows exactly one entry.",
+    "artifacts_out": [
+      "branch: feature/WF03-ISS0216-20260826 (squash-merged into main as 92da2b6a2b2de118792f5eec7738c8659a34b22a, branch deleted both remotely and locally)"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "New finding, not yet filed as ISS-NNNN (forwarding to ORCH for letflow-queue registration per ISSUE_QUEUE.md): full mix test run on this branch post-rebase (and presumably reproducible on current main at 92da2b6) shows 4 failures in Letflow.TenantProvisioning.BackfillTest -- 'Postgrex.Error ERROR 42P01 (undefined_table): relation \"tenant_<uuid>.event_type_registry\" does not exist'. These 4 tests pass individually and pass at merge-base origin/main (73ff2ffd) when run standalone (`mix test test/letflow/tenant_provisioning/backfill_test.exs` -> 4 passed), so this is a full-suite-only shared-state/ordering failure, not a merge-base-reproducible defect and not caused by this branch (backfill.ex/registry.ex/the test file are untouched by this branch's diff). Distinct from ISS-0332 (already resolved, was a schema_version-mismatch failure, not a missing-table error) and from ISS-0339/ISS-0340 (unrelated test files). Affected files: test/letflow/tenant_provisioning/backfill_test.exs, lib/letflow/tenant_provisioning/backfill.ex, lib/letflow/event_store/registry.ex, lib/letflow/tenant_provisioning.ex."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0216-20260826",
+      "pr_number": 659,
+      "pr_url": "https://github.com/tvolodi/letflow/pull/659",
+      "merge_commit_sha": "92da2b6a2b2de118792f5eec7738c8659a34b22a",
+      "ci_status": "PASS (Backend gate + Frontend gate, both queued CI runs)",
+      "mix_test": "2060/2064 passed (5/5 properties, 2055/2059 tests), 3 excluded, 4 failed, 0 attributable to this branch (attribution route 1 + merge-base standalone corroboration)"
+    },
+    "next_action": "ORCH marks run WF03-ISS0216-20260826 COMPLETED, releases owned_modules lock for lib/letflow/api/pagination.ex, and registers the forwarded BackfillTest full-suite finding above as a new ISS-NNNN via letflow-queue per ISSUE_QUEUE.md."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

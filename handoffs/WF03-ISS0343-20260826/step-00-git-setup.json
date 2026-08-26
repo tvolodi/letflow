@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step00-WF03-ISS0343-20260826",
+  "run_id": "WF03-ISS0343-20260826",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0343-20260826/step-00-git-setup.json",
+  "created_at": "2026-08-26T13:30:00Z",
+  "started_at": "2026-08-26T13:30:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0343"],
+    "requirement_text": {
+      "ISS-0343": "Letflow.TenantProvisioning.BackfillTest fails intermittently under scripts/test_parallel.sh: 'relation tenant_*.event_type_registry does not exist'. Standalone (mix test test/letflow/tenant_provisioning/backfill_test.exs) it passes cleanly (4/4, confirmed by ORCH directly before dispatch) -- this is specific to parallel-partition execution. test/support/tenant_fixture.ex's provisioned_tenant!/1 calls Sandbox.mode(Letflow.Repo, :auto) globally (not per-connection), same class of risk as ISS-0329's parallel-isolation fix. Needs real diagnosis (reproduce under scripts/test_parallel.sh repeatedly, not just standalone) before any fix is designed."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0343.yaml",
+      "docs/agents/protocols/GIT_SETUP.md"
+    ],
+    "owned_modules": [
+      "test/letflow/tenant_provisioning/backfill_test.exs",
+      "test/support/tenant_fixture.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0343-20260826"
+  },
+  "task": {
+    "description": "Perform GIT_SETUP.md's standard procedure for WF-03 run WF03-ISS0343-20260826. Create branch feature/WF03-ISS0343-20260826 from an up-to-date main and push it immediately.",
+    "acceptance_criteria": [
+      "git pull --ff-only origin main exits 0",
+      "git branch --show-current outputs feature/WF03-ISS0343-20260826",
+      "git push -u origin feature/WF03-ISS0343-20260826 exits 0"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -2453,6 +2453,28 @@
             "queue_task_id": 340,
             "queue_agent_id": "orch-main",
             "note": "WF-03 for ISS-0340 (queue task 340, GH#654). Flaky test context_test.exs scoped_repo_opts/1. Claimed via get_next_task 2026-08-26 as part of ORCH sync pass (was not blocked by Lua chain)."
+        },
+        {
+            "run_id": "WF03-ISS0343-20260826",
+            "workflow_id": "WF-03",
+            "requirement_ids": [],
+            "issue_ids": [
+                "ISS-0343"
+            ],
+            "stage": "S4",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "test/letflow/tenant_provisioning/backfill_test.exs",
+                "test/support/tenant_fixture.ex"
+            ],
+            "lock_acquired_at": "2026-08-26T13:27:58Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PENDING",
+            "backfilled": false,
+            "queue_task_id": 343,
+            "queue_agent_id": "orch-loop-1787735920",
+            "note": "WF-03 for ISS-0343 (queue task 343, GH#660). BackfillTest parallel-only flake ('relation ... does not exist'), standalone run confirmed clean by ORCH before dispatch. Queue claimed 2026-08-26T13:27:58Z via get_next_task."
         }
     ]
 }

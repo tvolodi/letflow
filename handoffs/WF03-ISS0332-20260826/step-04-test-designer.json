@@ -1,0 +1,55 @@
+{
+  "handoff_id": "step04-test-designer-WF03-ISS0332-20260826",
+  "run_id": "WF03-ISS0332-20260826",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0332-20260826/step-04-test-designer.json",
+  "created_at": "2026-08-26T05:26:44Z",
+  "started_at": "2026-08-26T05:26:44Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0332"],
+    "requirement_text": {
+      "ISS-0332": "Backfill routine for DEFINITION_PROMOTED schema_version 2 for pre-existing tenants. Acceptance criteria: (AC1) backfill updates pre-existing tenants' DEFINITION_PROMOTED to schema_version 2; (AC2) R10 against a pre-existing tenant succeeds end-to-end; (AC3) idempotent/no-op on already-v2 tenants."
+    },
+    "source_text": {
+      "bug_class": "WF-03 Step 4 rule applies: the test must be shown to fail against pre-fix code and pass against post-fix code. Since the fix ADDS a new module (Letflow.TenantProvisioning.Backfill), the pre-fix failure for unit tests is UndefinedFunctionError. So the fail-first requirement is satisfied ONLY by additionally mutating the shipped logic and recording which tests fail for each mutant."
+    },
+    "related_handoff_ids": [
+      "step03-elixir-dev-WF03-ISS0332-20260826",
+      "step03b-security-reviewer-WF03-ISS0332-20260826",
+      "step03c-reviewer-WF03-ISS0332-20260826"
+    ],
+    "artifacts_in": [
+      "lib/letflow/tenant_provisioning/backfill.ex",
+      "lib/mix/tasks/letflow.backfill_event_type_versions.ex",
+      "lib/letflow/event_store/registry.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/tenant_provisioning_test.exs",
+      "test/support/",
+      "docs/issues/ISS-0332.yaml",
+      "lib/letflow/design/iss0332-definition-promoted-backfill.md"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0332-20260826"
+  },
+  "task": {
+    "description": "Write regression tests for ISS-0332 at test/letflow/tenant_provisioning/backfill_test.exs (on branch feature/WF03-ISS0332-20260826).\n\nWF-03 Step 4 rule: the test must fail against pre-fix code (or a mutant) and pass against post-fix code. Since the fix adds a new module, the fail-first requirement is satisfied by mutating the shipped logic and recording which tests fail for each mutant.\n\nTests must cover all three acceptance criteria:\n\nAC1 — Backfill updates pre-existing tenants:\n- Test setup: provision a tenant and seed ONLY DEFINITION_PROMOTED schema_version 1 (use Registry.register_type directly with schema_version: 1 attrs). Then call Backfill.run/1 with schema_version: 2 attrs. Assert: result is {:ok, %{updated: 1, skipped: 0}} and the tenant's DEFINITION_PROMOTED is now at schema_version 2.\n\nAC2 — R10 against a pre-existing tenant succeeds end-to-end:\n- This tests Letflow.EventStore.Registry.validate_payload/3 behavior. Set up a tenant with DEFINITION_PROMOTED at schema_version 1 only, then call Backfill.run/1, then call Registry.validate_payload('DEFINITION_PROMOTED', <payload with null review_id>, tenant_id). Assert: returns :ok (not payload_validation_failed).\n- Note: before the backfill, the same call with null review_id should return {:error, {:payload_validation_failed, _}}. This is the regression test that proves the fix works.\n\nAC3 — Idempotent on already-v2 tenants:\n- Provision a tenant, register DEFINITION_PROMOTED at schema_version 2. Call Backfill.run/1 with schema_version 2 attrs. Assert: result is {:ok, %{updated: 0, skipped: 1}} (no error, the version-2 tenant is skipped).\n\nAdditional test — schema_version_not_monotonic skip:\n- Provision a tenant, register DEFINITION_PROMOTED at schema_version 3 (hypothetical future version). Call Backfill.run/1 with schema_version 2 attrs. Assert: result is {:ok, %{updated: 0, skipped: 1}} (higher version is skipped, not an error).\n\nMutation testing requirement:\n- After the tests pass on post-fix code, mutate Backfill.run/1 in at least TWO ways:\n  1. Change the :duplicate_event_type_version case to return {:error, :should_halt} instead of :skipped. Record which tests fail.\n  2. Change the register_type call to pass nil instead of registration.tenant_id. Record which tests fail.\n- State these mutations and their failure results in the handoff result.summary.\n\nTest file location: test/letflow/tenant_provisioning/backfill_test.exs\nModule: Letflow.TenantProvisioning.BackfillTest\nUse: Letflow.DataCase (for database isolation per test)",
+    "acceptance_criteria": [
+      "test/letflow/tenant_provisioning/backfill_test.exs exists and covers all three ISS-0332 ACs",
+      "AC2 test explicitly asserts {:error, {:payload_validation_failed, _}} before backfill and :ok after backfill",
+      "AC3 and schema_version_not_monotonic tests cover the idempotent/skip paths",
+      "Mutation testing: at least 2 mutants applied and tested, results recorded in handoff",
+      "Tests use Letflow.DataCase for isolation"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

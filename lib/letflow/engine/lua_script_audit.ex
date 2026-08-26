@@ -16,9 +16,9 @@ defmodule Letflow.Engine.LuaScriptAudit do
   The LUA EXECUTION RUNTIME ITSELF is S5 scope (docs/migration/stage-5-scripting-plugins.md).
   This module ports only the audit-persistence path, against an injected Executor behaviour
   (see Executor below) -- not a real Lua interpreter. mix.exs gains no Lua/NIF dependency
-  here. S5's own build-vs-bind decision record (Elixir NIF/Port wrapping a real Lua runtime
-  vs. reimplementing) is a prerequisite for whoever supplies a real Executor implementation;
-  this module does not pre-empt that choice.
+  here. S5's build-vs-bind decision is settled: docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md
+  adopted tv-labs/lua (pure-BEAM Lua 5.3, no NIF). A real Executor implementation
+  can now be built; this module does not implement one.
 
   ## Ordering (design §5, INV-LSA-1)
 
@@ -89,11 +89,10 @@ defmodule Letflow.Engine.LuaScriptAudit do
     """
 
     @typedoc """
-    Deliberately opaque — S5's build-vs-bind decision
-    (docs/migration/stage-5-scripting-plugins.md) has not been made, so this behaviour
-    cannot know whether a real executor expects a script body string, a compiled
-    bytecode reference, a file path, or something else. Pinning a concrete type here
-    would silently pre-empt that decision.
+    Deliberately opaque — decision 0014 adopted tv-labs/lua (pure-BEAM Lua 5.3, no NIF),
+    but the concrete script-ref shape (body string, compiled bytecode, file path, etc.)
+    remains an implementation detail of the real Executor. Pinning a concrete type here
+    would constrain a decision that belongs to the Executor module.
     """
     @type script_ref :: term()
 

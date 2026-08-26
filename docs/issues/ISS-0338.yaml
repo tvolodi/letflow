@@ -6,8 +6,9 @@ discovered_by: REVIEWER
 discovered_in_run: WF02-REQ151-20260826
 discovered_at: 2026-08-26T12:07:50Z
 severity: MINOR
-status: open
-resolved_in_run: null
+status: resolved
+resolved_in_run: ORCH-direct-20260826
+resolved_at: "2026-08-26T10:35:00Z"
 resolved_at: null
 queue_task_id: 338
 github_issue_number: 651

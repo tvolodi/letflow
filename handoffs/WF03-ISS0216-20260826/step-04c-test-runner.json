@@ -1,0 +1,35 @@
+{
+  "handoff_id": "step04c-WF03-ISS0216-20260826",
+  "run_id": "WF03-ISS0216-20260826",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0216-20260826/step-04c-test-runner.json",
+  "created_at": "2026-08-26T15:48:00Z",
+  "started_at": "2026-08-26T15:48:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0216"],
+    "related_handoff_ids": ["handoffs/WF03-ISS0216-20260826/step-04b-test-design-validator.json"],
+    "artifacts_in": ["lib/letflow/api/pagination.ex", "test/letflow/api/pagination_test.exs"],
+    "branch_name": "feature/WF03-ISS0216-20260826",
+    "note": "ISS-0339 (requirement_status.v4.yaml A4a/A5 vocabulary drift) and ISS-0340 (flaky context_test.exs scoped_repo_opts test, another host is actively working on it per registry.json) are known pre-existing/unrelated findings from a prior run on this branch's ancestor -- if either reproduces here, attribute per the structural rule and do not treat as blocking."
+  },
+  "task": {
+    "description": "Run scripts/test_parallel.sh (full suite) per WF-03 Step 4 (same as WF-02 Step 4).",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run for real, combined pass/fail totals quoted, partition count N and source stated",
+      "test/reports/report-2026-08-26-WF03-ISS0216-20260826.yaml written with the actual output",
+      "any failure attributed per one of the three structural forms, not by count-matching",
+      "any failure with no existing issue record reported for filing, not filed directly"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

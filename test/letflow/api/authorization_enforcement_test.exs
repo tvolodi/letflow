@@ -54,7 +54,7 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     Letflow.Routers.Tenants,
     Letflow.Routers.Tasks,
     Letflow.Routers.SolutionPacks,
-    Letflow.Routers.Promotion,
+    Letflow.Routers.Promotions,
     Letflow.Routers.Metrics
   ]
 
@@ -83,7 +83,7 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     Letflow.Routers.Tenants => "/tenants",
     Letflow.Routers.Tasks => "/tasks",
     Letflow.Routers.SolutionPacks => "/solution-packs",
-    Letflow.Routers.Promotion => "/promotion",
+    Letflow.Routers.Promotions => "/promotions",
     Letflow.Routers.Metrics => "/metrics"
   }
 
@@ -129,8 +129,12 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
         # Every router in @routers must actually use Letflow.Api.AuthorizedRouter
         # (this would be an empty list, not a compile error, for a router that
         # forgot -- so assert non-emptiness for every router known to declare
-        # at least one route; Letflow.Routers.Promotion is the one exception,
-        # a genuine zero-route stub, asserted separately below).
+        # at least one route; Letflow.Routers.Promotions is the one exception,
+        # because REQ-077 deliberately declares every one of its ten routes
+        # with the plain get/post macros (all `:Unknown`-gated, see that
+        # router's own moduledoc), never authz_get/authz_post, so
+        # __authz_routes__/0 stays empty even though the router is fully
+        # live -- asserted separately below.
         for {method, local_path, declared_key} <- routes do
           full_path = full_path(prefix, local_path)
           real_key = Authorization.endpoint_policy_key(method, full_path)
@@ -162,8 +166,8 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     end
   end
 
-  test "Letflow.Routers.Promotion declares zero routes (genuine stub, REQ-077 not yet shipped)" do
-    assert Letflow.Routers.Promotion.__authz_routes__() == []
+  test "Letflow.Routers.Promotions declares zero authz_*-macro routes (all ten REQ-077 routes are :Unknown-gated via the plain get/post macros instead, see that router's own moduledoc)" do
+    assert Letflow.Routers.Promotions.__authz_routes__() == []
   end
 
   test "every allowlisted route is actually declared by its router (no stale allowlist entries)" do

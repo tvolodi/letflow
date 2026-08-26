@@ -48,6 +48,30 @@ defmodule Letflow.Routers.Tenants do
   tenant's record. This is ported as-is: there is no "manage your own
   tenant" carve-out in this implementation either.
 
+  ## REQ-077 R10 (ENV-03) -- one route contributed by another requirement
+
+  `POST /:test_tenant_id/promote/:process_key` is REQ-077's, placed here
+  only because `Letflow.Plugs.ApiPipeline` forwards `/tenants` here and
+  `Plug.Router` permits one forward per prefix
+  (`lib/letflow/design/req077-promotion-pipeline-routes.md` §2.4). This
+  requirement (REQ-075) owns every other route in this module and must not
+  treat that one route as precedent for its own design, nor remove it. Its
+  handler, validation schema (none — no request body, §8.4) and response
+  allowlist are specified in that design doc's §7.7.
+
+  REQ-075's "these six handlers operate on the global `tenants` table,
+  entirely outside REQ-072's `:prefix`-scoping" statement (below) applies to
+  those six handlers only. `POST /:test_tenant_id/promote/:process_key` is
+  **not** one of them: it is `:prefix`-scoped like every other S4 route (the
+  target tenant is the caller's own, from
+  `conn.assigns.auth_context.tenant_id`).
+
+  `POST /:test_tenant_id/promote/:process_key` is declared with a plain
+  `post` macro, not `authz_post` — it is `:Unknown`-gated
+  (PLATFORM_ADMIN-only), the same deliberate decision every other REQ-077
+  route makes; see `Letflow.Routers.Promotions`' moduledoc for the full
+  reasoning.
+
   ## Relationship to REQ-076 (AC7)
 
   `POST /tenants` (this requirement) and REQ-076's onboarding endpoint are
@@ -118,10 +142,14 @@ defmodule Letflow.Routers.Tenants do
 
   use Letflow.Api.AuthorizedRouter
 
+  alias Letflow.Api.Error
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
+  alias Letflow.Definitions.Promotion
+  alias Letflow.Definitions.PromotionPlan
+  alias Letflow.EventStore.PlatformEvents
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
@@ -150,6 +178,20 @@ defmodule Letflow.Routers.Tenants do
 
   authz_post "/:slug/reactivate", :TenantsManage do
     handle_reactivate(conn, conn.params["slug"])
+  end
+
+  # REQ-077 R10 (ENV-03) -- the ONE route this requirement contributes to
+  # this router (design §2.4): PLATFORM_ADMIN-only via the `:Unknown`
+  # catch-all, same deliberate decision every other REQ-077 route makes
+  # (see Letflow.Routers.Promotions' moduledoc). Deliberately NOT
+  # `authz_post` -- no policy key. `:test_tenant_id` is caller-supplied and
+  # IS a cross-tenant read (design §7.9); the destination
+  # (`conn.assigns.auth_context.tenant_id`, never a path/query/body value)
+  # is not. R-Co's path segment is `:definition_name`; Letflow's is
+  # `:process_key` -- same value, renamed to match this codebase's own
+  # promotion-stack vocabulary (design §2.4).
+  post "/:test_tenant_id/promote/:process_key" do
+    handle_promote(conn, conn.params["test_tenant_id"], conn.params["process_key"])
   end
 
   match _ do
@@ -314,6 +356,78 @@ defmodule Letflow.Routers.Tenants do
       {:ok, tenant} -> Response.ok(conn, tenant_map(tenant))
       {:error, :not_found} -> Response.not_found(conn)
     end
+  end
+
+  # ── POST /tenants/:test_tenant_id/promote/:process_key -- REQ-077 R10 ──
+  #
+  # No request body (R-Co's promotion.zig parses none, design §8.4) --
+  # conn.body_params ignored. `target_tenant_id` is
+  # conn.assigns.auth_context.tenant_id -- never a path/query/body value
+  # (design §7.7, INV-1): the destination of this irreversible write is
+  # structurally uninfluenceable by the request.
+
+  defp handle_promote(conn, test_tenant_id, process_key) do
+    actor_id = conn.assigns.auth_context.user_id
+    target_tenant_id = conn.assigns.auth_context.tenant_id
+
+    result =
+      Promotion.promote_active_definition(
+        actor_id,
+        test_tenant_id,
+        target_tenant_id,
+        process_key,
+        permission_checker: &PromotionPlan.default_permission_checker/2,
+        event_appender: &PlatformEvents.append_definition_promoted/2
+      )
+
+    render_promote(conn, result)
+  end
+
+  defp render_promote(conn, {:ok, result}), do: Response.created(conn, promote_map(result))
+
+  defp render_promote(conn, {:error, :forbidden}),
+    do: Response.forbidden(conn, "insufficient permissions")
+
+  defp render_promote(conn, {:error, :invalid_promotion_source}),
+    do:
+      Response.send_problem(
+        conn,
+        Error.invalid_promotion_source("source_tenant_id must name a test tenant")
+      )
+
+  defp render_promote(conn, {:error, :source_definition_missing}), do: Response.not_found(conn)
+
+  # test_tenant_id is exactly the kind of caller-supplied id INV-5 is about
+  # -- 404, not 422, so a prober cannot distinguish "does not exist" from
+  # "exists but you cannot promote from it" (design §7.7).
+  defp render_promote(conn, {:error, :invalid_tenant_id}), do: Response.not_found(conn)
+
+  defp render_promote(conn, {:error, {:conflicts, details}}),
+    do:
+      Response.send_problem(
+        conn,
+        Error.promotion_conflict("target tenant has advanced past base_version", details)
+      )
+
+  defp render_promote(conn, {:error, :duplicate_version}),
+    do: Response.conflict(conn, "the target version already exists in the target tenant")
+
+  defp render_promote(conn, {:error, _other}), do: Response.internal_error(conn)
+
+  # Exactly 4 keys (design §7.7), ported from promotion.zig:70-91.
+  # `warnings` is always `[]` -- R-Co populates it from a semantic gate
+  # (runSemanticGateOnSource) this codebase does not port (OQ-6); the key
+  # stays so the shape is R-Co-compatible and a later requirement can
+  # populate it without a breaking change.
+  @doc false
+  @spec promote_map(map()) :: map()
+  defp promote_map(result) do
+    %{
+      "definition_id" => result.definition_id,
+      "version" => result.version,
+      "status" => Atom.to_string(result.status),
+      "warnings" => []
+    }
   end
 
   # ── Response allowlist (design §8) ──────────────────────────────────────

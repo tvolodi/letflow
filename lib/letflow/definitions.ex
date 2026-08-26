@@ -1122,6 +1122,52 @@ defmodule Letflow.Definitions do
     end
   end
 
+  # ---------------------------------------------------------------------------------
+  # REQ-077 §9.2 -- NEW. Placed here, not on Letflow.Definitions.PromotionAssertionRun
+  # itself, because REQ-040 already put every promotion_assertion_runs behaviour in
+  # this module -- consistent with apply_promotion_assertion_rerun/6 immediately above.
+  # ---------------------------------------------------------------------------------
+
+  @doc """
+  Reads the most recent `promotion_assertion_runs` row for `review_id`, scoped to
+  `opts[:prefix]` (NEW, REQ-077 design §9.2 -- R3/R4's `GET /promotions/:id`).
+
+  Casts `review_id` with `Ecto.UUID.cast/1` first, same defensive-cast reasoning as
+  `Letflow.Definitions.PromotionReviewStore.get_review/2`. Orders
+  `[desc: :started_at, desc: :id]` -- `started_at` is `read_after_writes: true` (a DB
+  default), so two runs inserted in the same transaction can share a timestamp; the
+  `:id` tiebreaker makes "latest" a total, deterministic order rather than one that
+  could flap between test runs.
+
+  Returns `{:error, :not_found}` -- deliberately NOT `:review_not_found` -- because
+  this answers a different question ("is there a run for this review") than
+  `PromotionReviewStore.get_review/2` answers ("does this review exist"), and R3 maps
+  the two to different HTTP responses (404 vs. `{"assertion_run": null}`, design §7.4).
+  """
+  @spec get_latest_assertion_run(
+          review_id :: Ecto.UUID.t() | String.t(),
+          opts :: [prefix: String.t()]
+        ) :: {:ok, PromotionAssertionRun.t()} | {:error, :not_found}
+  def get_latest_assertion_run(review_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    with {:ok, uuid} <- Ecto.UUID.cast(review_id) do
+      query =
+        from(r in PromotionAssertionRun,
+          where: r.review_id == ^uuid,
+          order_by: [desc: r.started_at, desc: r.id],
+          limit: 1
+        )
+
+      case Repo.one(query, prefix: prefix) do
+        nil -> {:error, :not_found}
+        %PromotionAssertionRun{} = run -> {:ok, run}
+      end
+    else
+      :error -> {:error, :not_found}
+    end
+  end
+
   # ===================================================================================
   # REQ-078 -- definition-graph validation endpoint backing (design §7.2)
   # ===================================================================================

@@ -128,7 +128,7 @@ requests return the RFC 9457 404 problem document via
 | `Letflow.Routers.Instances` | `/instances` | `lib/letflow/routers/instances.ex` | REQ-079/080 |
 | `Letflow.Routers.Definitions` | `/definitions` | `lib/letflow/routers/definitions.ex` | REQ-081/082 |
 | `Letflow.Routers.Tasks` | `/tasks` | `lib/letflow/routers/tasks.ex` | REQ-083/085 |
-| `Letflow.Routers.Promotion` | `/promotion` | `lib/letflow/routers/promotion.ex` | REQ-077 |
+| `Letflow.Routers.Promotions` | `/promotions` | `lib/letflow/routers/promotions.ex` | REQ-077 |
 | `Letflow.Routers.Onboarding` | `/onboarding` | `lib/letflow/routers/onboarding.ex` | REQ-076 |
 | `Letflow.Routers.Audit` | `/audit` | `lib/letflow/routers/audit.ex` | REQ-078 |
 | `Letflow.Routers.TenantConfig` | `/tenant-config` | `lib/letflow/routers/tenant_config.ex` | REQ-078 |
@@ -197,7 +197,7 @@ forward "/identity",     to: Letflow.Routers.Identity
 forward "/instances",    to: Letflow.Routers.Instances
 forward "/definitions",  to: Letflow.Routers.Definitions
 forward "/tasks",        to: Letflow.Routers.Tasks
-forward "/promotion",    to: Letflow.Routers.Promotion
+forward "/promotions",   to: Letflow.Routers.Promotions
 forward "/onboarding",   to: Letflow.Routers.Onboarding
 forward "/audit",        to: Letflow.Routers.Audit
 forward "/tenant-config", to: Letflow.Routers.TenantConfig

@@ -62,7 +62,7 @@ defmodule Letflow.Api.Error do
   @not_found_detail "the requested resource was not found"
 
   @derive {Jason.Encoder, only: [:type, :title, :status, :detail, :trace_id]}
-  defstruct [:type, :title, :status, :detail, trace_id: "", errors: nil]
+  defstruct [:type, :title, :status, :detail, trace_id: "", errors: nil, extensions: nil]
 
   @typedoc """
   An RFC 9457 Problem Details object. Mirrors `errors.zig`'s `ProblemDetails`
@@ -88,7 +88,8 @@ defmodule Letflow.Api.Error do
           status: 400..599,
           detail: String.t(),
           trace_id: String.t(),
-          errors: [struct()] | nil
+          errors: [struct()] | nil,
+          extensions: map() | nil
         }
 
   @doc """
@@ -99,18 +100,46 @@ defmodule Letflow.Api.Error do
   `docs/migration/stage-4-api-surface.md`: prefer `conn.assigns`, do not port a
   thread-local global). `Letflow.Api.Response.send_problem/2` splices
   `conn.assigns[:trace_id]` in before calling this.
+
+  `extensions` (REQ-077 §9.6) — a `map()` of string-keyed RFC 9457 §3.2
+  extension members, e.g. the `conflicts` array a promotion-conflict document
+  carries — is merged into the emitted document only when it is a non-empty
+  map, following the exact precedent `errors` already sets: excluded from the
+  `@derive {Jason.Encoder, only: [...]}` list above (for the same "Jason does
+  not omit `nil` fields" reason `errors` is excluded) and merged explicitly
+  here instead, so every document with no extension members stays
+  byte-identical to before this field existed.
   """
   @spec serialise(t()) :: String.t()
-  def serialise(%__MODULE__{errors: nil} = problem) do
+  def serialise(%__MODULE__{errors: nil, extensions: extensions} = problem)
+      when extensions in [nil, %{}] do
     problem
     |> Map.take([:type, :title, :status, :detail, :trace_id])
     |> Jason.encode!()
   end
 
-  def serialise(%__MODULE__{errors: [_ | _] = errs} = problem) do
+  def serialise(%__MODULE__{errors: nil, extensions: extensions} = problem)
+      when is_map(extensions) and map_size(extensions) > 0 do
+    problem
+    |> Map.take([:type, :title, :status, :detail, :trace_id])
+    |> Map.merge(extensions)
+    |> Jason.encode!()
+  end
+
+  def serialise(%__MODULE__{errors: [_ | _] = errs, extensions: extensions} = problem)
+      when extensions in [nil, %{}] do
     problem
     |> Map.take([:type, :title, :status, :detail, :trace_id])
     |> Map.put(:errors, errs)
+    |> Jason.encode!()
+  end
+
+  def serialise(%__MODULE__{errors: [_ | _] = errs, extensions: extensions} = problem)
+      when is_map(extensions) and map_size(extensions) > 0 do
+    problem
+    |> Map.take([:type, :title, :status, :detail, :trace_id])
+    |> Map.put(:errors, errs)
+    |> Map.merge(extensions)
     |> Jason.encode!()
   end
 
@@ -278,6 +307,55 @@ defmodule Letflow.Api.Error do
       title: "Cursor Expired",
       status: 410,
       detail: "cursor has expired; please restart pagination"
+    }
+  end
+
+  @doc """
+  HTTP 422 — Empty Promotion Plan. REQ-066 §0.2 deliberately deferred this
+  constructor ("PRM-01 AC3/AC4 ... is itself a separate, not-yet-landed
+  Letflow requirement") — REQ-077 is that requirement. Matches
+  `src/api/errors.zig:254-272`'s slug/title/status exactly.
+  """
+  @spec empty_promotion_plan(String.t()) :: t()
+  def empty_promotion_plan(detail) do
+    %__MODULE__{
+      type: @problems_base <> "empty-promotion-plan",
+      title: "Empty Promotion Plan",
+      status: 422,
+      detail: detail
+    }
+  end
+
+  @doc """
+  HTTP 422 — Invalid Promotion Source. Same deferred-by-REQ-066 lineage as
+  `empty_promotion_plan/1` above.
+  """
+  @spec invalid_promotion_source(String.t()) :: t()
+  def invalid_promotion_source(detail) do
+    %__MODULE__{
+      type: @problems_base <> "invalid-promotion-source",
+      title: "Invalid Promotion Source",
+      status: 422,
+      detail: detail
+    }
+  end
+
+  @doc """
+  HTTP 409 — Promotion Conflict. A genuine addition (not REQ-066-deferred):
+  R1/R7/R10's conflict response must carry the `conflicts` array
+  (`promotion_review.zig:197-209`) as an RFC 9457 §3.2 extension member —
+  the actionable half of the response, so a client does not have to re-fetch
+  and re-diff to learn which `process_key`/version conflicted (REQ-077
+  design §9.6).
+  """
+  @spec promotion_conflict(String.t(), [map()]) :: t()
+  def promotion_conflict(detail, conflicts) when is_list(conflicts) do
+    %__MODULE__{
+      type: @problems_base <> "promotion-conflict",
+      title: "Promotion Conflict",
+      status: 409,
+      detail: detail,
+      extensions: %{"conflicts" => conflicts}
     }
   end
 end

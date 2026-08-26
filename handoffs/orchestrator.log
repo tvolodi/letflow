@@ -1431,3 +1431,4 @@
 2026-08-26T20:08:24Z ORCH: WF02-REQ150-20260826 DONE -- REQ-150 done, PR #666 merged (773f170), queue task 336 released status:done
 2026-08-26T20:13:00Z ORCH: stale-lock sweep -- WF03-ISS0340-20260826 registry entry was IN_PROGRESS despite PR #658 already merged; queue task 340 released status:done, registry closed
 2026-08-26T20:14:11Z ORCH: force-released expired queue tasks 301/302/303 (status:done, matches reality -- REQ-149/150/151 all done, prior queue reset had orphaned depends_on edges pointing at these ids). This unblocked REQ-152 (queue task 304); dispatched WF02-REQ152-20260826 step-00 to ELIXIR-DEV
+2026-08-26T21:30:00Z ORCH: WF02-REQ152-20260826 DONE -- REQ-152 done, PR #667 merged (51f2ebf), queue task 304 released status:done; ISS-0347/GH#668 registered and forwarded (pre-existing backend CI lint_handoffs issue)

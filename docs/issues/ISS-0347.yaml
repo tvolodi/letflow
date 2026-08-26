@@ -8,8 +8,8 @@ discovered_in_run: WF02-REQ152-20260826
 discovered_at: "2026-08-26T21:30:00Z"
 severity: MINOR
 status: open
-queue_task_id: null
-github_issue_number: null
+queue_task_id: 347
+github_issue_number: 668
 description: >
   PR #667 (WF02-REQ152-20260826) backend CI job (mix letflow.check ->
   lint_handoffs) failed on both CI runs (33013560601, 33015258189).

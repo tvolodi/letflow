@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0332-20260826/step-05-issue-fixer-close.json",
   "created_at": "2026-08-26T05:59:10Z",
   "started_at": "2026-08-26T05:59:10Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-26T06:10:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -34,7 +34,15 @@
       "Issue file committed to feature branch"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "ISS-0332 resolved. docs/issues/ISS-0332.yaml updated to status: resolved (resolved_in_run: WF03-ISS0332-20260826, resolved_at: 2026-08-26T06:10:00Z). Feature branch feature/WF03-ISS0332-20260826 merged to main (merge commit cb69dfb). GH#642 closed with descriptive comment. All acceptance criteria met: backfill implementation merged, 2032 tests 0 failures.",
+    "artifacts_out": [
+      "docs/issues/ISS-0332.yaml"
+    ],
+    "issues": [],
+    "next_action": "NONE -- issue resolved"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

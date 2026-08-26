@@ -7339,7 +7339,7 @@ requirements:
   - id: REQ-149
     title: Settle OQ-1 -- how a Lua script execution gets a configurable memory limit (blocks LUA-09)
     owner: CODE-DESIGNER
-    status: in_progress
+    status: done
     stage: S5
     impl_order: 335  # letflow-queue task id (re-registered 2026-08-26; original task 301 expired/queue reset)
     description: >

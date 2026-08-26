@@ -7,9 +7,9 @@
   "to_agent": "ISSUE-FIXER",
   "file": "handoffs/WF03-ISS0340-20260826/step-01-issue-fixer-diagnose.json",
   "created_at": "2026-08-26T17:20:00Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-08-26T17:30:00Z",
+  "completed_at": "2026-08-26T18:15:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -48,7 +48,27 @@
       "next_action set to 'Route to CODE-DESIGNER for fix design' or 'ORCH: cannot reproduce, file as low-priority' if reproduction fails"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "completed_at": "2026-08-26T18:15:00Z",
+    "registry_lookup": {
+      "prior_match_found": true,
+      "matching_issues": ["ISS-0113", "ISS-0222"],
+      "recurrence": false,
+      "notes": "ISS-0113 documents the mechanism: TenantFixture.provisioned_tenant! calls Sandbox.mode(:auto) and never restores :manual, leaving all subsequent tests in the same VM running with committed (non-sandboxed) DB connections. ISS-0222 documents the transient too_many_connections spike when test partitions launch concurrently. Neither ISS is the direct cause of this specific test failing, but both create the conditions under which the describe block's setup can transiently fail. No prior issue matches this exact misplacement pattern."
+    },
+    "summary": "ROOT CAUSE: The test 'scoped_repo_opts/1 is 1-arity' is incorrectly placed inside a describe block whose 'setup do' provisions two real tenant schemas via TenantFixture.provisioned_tenant!/1 × 2. ExUnit always runs 'setup do' before every test in a describe block, regardless of whether the test body uses the context. This test body is pure (only calls function_exported?/3) and has zero dependency on any provisioned tenant data — it receives no context (no %{tenant_a:, tenant_b:} pattern match) and makes no DB calls.\n\nTenantFixture.provisioned_tenant!/1 calls Sandbox.mode(:auto) (ISS-0113, deliberately not fixed), cancels the DataCase-established sandbox transaction, then performs 56 migrations (28 per tenant × 2) and multiple Repo.insert!/query!/delete_all calls via committed DB connections. Any transient DB failure during this setup — connection pool exhaustion under parallel-suite launch (ISS-0222), Postgres too_many_connections (ISS-0219), or any other transient DB error — causes the setup to raise and ExUnit to mark this test as failed, even though the test body would trivially pass.\n\nThe failure is load-dependent: 65 standalone runs in isolation produced 0 failures. The original 1/9 failure occurred on the REQ-151 branch under consecutive rapid reruns (confirmed by TEST-RUNNER handoff step-04-WF02-REQ151-20260826.json), consistent with the ISS-0222 connection-spike pattern. The first occurrence was in partition 6 of 8 under scripts/test_parallel.sh run1.\n\nAFFECTED FILES: test/letflow/api/context_test.exs (misplacement of test). lib/letflow/api/context.ex is not involved.\n\nWHAT A FIX MUST CHANGE: Move 'scoped_repo_opts/1 is 1-arity' out of the 'scoped_repo_opts/1 ignores request-supplied tenant hints (INV-1, AC3)' describe block. Place it in a new describe block with no setup, or directly in the module (no describe), with no DataCase provisioning. The test needs only ExUnit.Case or the existing Letflow.DataCase module — no provisioned tenants, no real DB, no Sandbox mode changes. This eliminates the unnecessary DB setup dependency and makes the test immune to transient provisioning failures.",
+    "reproduction": "Cannot reproduce standalone (65 runs: 0 failures). Consistent with load-dependent trigger (ISS-0222/ISS-0219 connection spike under parallel suite launch). Failure mechanism confirmed structurally: (1) test is in describe block with provisioning setup it does not use, (2) setup uses Sandbox.mode(:auto) + 56 migrations, (3) transient DB error in setup → setup raises → test marked failed.",
+    "evidence": {
+      "test_runs_standalone": "65 runs (20 + 30 + 15 with related files), 0 failures",
+      "original_failure_source": "handoffs/WF02-REQ151-20260826/step-04-test-runner.json, context_test_flake_check_branch: '9x standalone on this branch -> 1 failure, 8 passes (random seed)'",
+      "full_suite_failure": "partition 6/8 in scripts/test_parallel.sh run1, not in run2",
+      "test_body_analysis": "test 'scoped_repo_opts/1 is 1-arity' has no context match (%{tenant_a:, tenant_b:}), calls only function_exported?/3, has zero DB dependency",
+      "setup_analysis": "TenantFixture.provisioned_tenant! calls Sandbox.mode(:auto) (ISS-0113), runs 28 migrations per tenant via Ecto.Migrator.run/4 Task, does Repo.insert!/provision!/replay!/assert_schema_complete! — all with committed connections",
+      "related_issues": "ISS-0113 (Sandbox mode leak from provisioned_tenant!), ISS-0222 (launch-time connection spike), ISS-0219 (partition count vs Postgres budget)"
+    },
+    "next_action": "Route to CODE-DESIGNER for fix design"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

@@ -7,7 +7,9 @@ discovered_by: TEST-RUNNER
 discovered_in_run: WF02-REQ140-20260817
 discovered_at: 2026-08-17T00:00:00Z
 severity: MINOR
-status: open
+status: resolved
+resolved_at: 2026-08-26T18:50:00Z
+resolving_run: WF03-ISS0297-20260826
 queue_task_id: 297
 github_issue_number: 596
 github_issue: https://github.com/tvolodi/letflow/issues/596
@@ -32,3 +34,35 @@ acceptance_criteria:
   - "reproducing mechanism for AuditIssueClosuresTest gh CLI timeout is diagnosed (test-isolation gap vs. env flake)"
   - "fix or documented mitigation exists so 16-way parallel runs are reliable or their limits are stated"
   - "scripts/test_parallel.sh at 16-way parallelism passes clean after fix, or flakiness at very high parallelism is documented as a known limit with rationale"
+resolution: >
+  Root cause (ISSUE-FIXER, step-01): EngineConcurrencyTest's @instance_count
+  100 requires pool_size >= 100 to run without exhaustion, which no N >= 2
+  partitioning of a standard 100-max_connections Postgres can provide
+  (N=16 computes pool_size=5). This is an intrinsic resource-demand-vs-
+  parallelism-budget mismatch, not a configuration gap -- the test is
+  correctly demanding all 100 connections at once by design (AC2 requires
+  genuine 100-way concurrency). AuditIssueClosuresTest's failure is a
+  load-induced ExUnit 60s default timeout scanning the real 201-file
+  docs/issues/ corpus under 16-way CPU contention, not a real gh CLI call
+  (a fake gh binary is used) or a test-isolation gap.
+
+  Fix (ELIXIR-DEV, step-02, commit 8eff8e1 on feature/WF03-ISS0297-20260826):
+  tagged EngineConcurrencyTest @moduletag :high_pool_demand and updated
+  scripts/test_parallel.sh to pass --exclude high_pool_demand whenever
+  computed TEST_POOL_SIZE < 100 (i.e. at any real N >= 2); extended
+  AuditIssueClosuresTest to @moduletag timeout: 120_000.
+
+  Verification (this run, 2026-08-26): standalone
+  `mix test test/letflow/engine_concurrency_test.exs
+  test/mix/tasks/letflow.audit_issue_closures_test.exs` -- 21 passed, 0
+  failures. `TEST_PARALLEL_N=16 bash scripts/test_parallel.sh` (nproc=8,
+  TEST_PARALLEL_N env override to reach 16-way) -- combined 2060 tests, 5
+  properties, 1 failure (2064/2065 passed); the one remaining failure is
+  test/docs/requirement_status_invariants_test.exs's A9 assertion, an
+  unrelated pre-existing docs/status/ volume-index drift with no connection
+  to test parallelism, connection pooling, or gh CLI timing -- filed
+  separately as GH#665, not fixed here (WF-03's incidental-finding rule:
+  do not extend this run for an unrelated finding). Neither
+  EngineConcurrencyTest nor AuditIssueClosuresTest, nor any pool-exhaustion
+  or gh-timeout symptom, appeared in this 16-way run. ISS-0297's own two
+  failure modes are confirmed resolved.

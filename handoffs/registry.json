@@ -2508,7 +2508,7 @@
                 "ISS-0297"
             ],
             "stage": "S0",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETE",
             "owned_modules": [
                 "test/letflow/engine_concurrency_test.exs",
                 "lib/mix/tasks/letflow.audit_issue_closures.ex",
@@ -2517,13 +2517,13 @@
                 "config/test.exs"
             ],
             "lock_acquired_at": "2026-08-26T18:20:00Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 PENDING (ELIXIR-DEV dispatched)",
+            "lock_released_at": "2026-08-26T19:00:00Z",
+            "released_lock": true,
+            "last_known_step": "Step Final PASS -- merged to main, GH#596 closed",
             "backfilled": false,
             "queue_task_id": 297,
             "queue_agent_id": "orch-main",
-            "note": "WF-03 for ISS-0297 (queue task 297, GH#596). 16-way parallelism failures: EngineConcurrencyTest pool exhaustion x2, AuditIssueClosuresTest gh CLI timeout x1. Queue claimed 2026-08-26T18:15:33Z via get_next_task."
+            "note": "WF-03 for ISS-0297 (queue task 297, GH#596). 16-way parallelism failures: EngineConcurrencyTest pool exhaustion x2, AuditIssueClosuresTest gh CLI timeout x1. Root cause: EngineConcurrencyTest's 100-way concurrency demand exceeds any N>=2 partition's pool budget by design; AuditIssueClosuresTest's 201-file corpus scan exceeds ExUnit's 60s default under load. Fix: tag+exclude high_pool_demand from partitioned runs, extend audit test timeout to 120s (commit 8eff8e1). Verified: 21/21 standalone, 2064/2065 at real 16-way (the 1 remaining failure is unrelated docs/status/ volume-index drift, filed as GH#665). Queue claimed 2026-08-26T18:15:33Z via get_next_task."
         },
         {
             "run_id": "WF02-REQ150-20260826",

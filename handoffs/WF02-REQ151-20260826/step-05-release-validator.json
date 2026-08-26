@@ -1,0 +1,39 @@
+{
+  "handoff_id": "step05-WF02-REQ151-20260826",
+  "run_id": "WF02-REQ151-20260826",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ151-20260826/step-05-release-validator.json",
+  "created_at": "2026-08-26T13:45:00Z",
+  "started_at": "2026-08-26T13:45:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-151"],
+    "issue_ids": [],
+    "related_handoff_ids": ["handoffs/WF02-REQ151-20260826/step-04-test-runner.json"],
+    "artifacts_in": [
+      "lib/letflow/engine/lua/sandbox.ex",
+      "test/letflow/engine/lua/sandbox_test.exs",
+      "test/reports/report-2026-08-26-WF02-REQ151-20260826.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ151-20260826",
+    "note": "TEST-RUNNER reported 2 pre-existing/unrelated failures (ISS-0339, ISS-0340), both structurally attributed via reproduction at merge-base 8c331b6621becb11814a0cc234411527e2e21db5 -- do not accept that attribution on say-so, re-derive it yourself per core-directives.md's rule that this gate never trusts the prior report."
+  },
+  "task": {
+    "description": "Independently re-run scripts/test_parallel.sh (do not trust TEST-RUNNER's report alone) per WF-02 Step 5. Claim this handoff by setting status to IN_PROGRESS only. Confirm every one of REQ-151's acceptance_criteria in docs/requirements.yaml is satisfied by reading the actual code/test, not by TEST-RUNNER's summary. Check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness relative to what actually shipped.",
+    "acceptance_criteria": [
+      "full suite re-run independently, real combined pass/fail totals quoted",
+      "any failure re-attributed structurally (not by trusting the prior report's count) -- confirm ISS-0339/ISS-0340 attribution independently or dispute it with evidence",
+      "each of REQ-151's 7 acceptance criteria in docs/requirements.yaml checked explicitly against the real code/test and confirmed satisfied",
+      "docs/requirements.yaml and docs/status/requirement_status.yaml checked for staleness relative to what actually shipped (should still show REQ-151 as in_progress at this point -- DOC-UPDATER flips it next)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

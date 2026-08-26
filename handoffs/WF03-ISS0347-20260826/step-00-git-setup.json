@@ -36,10 +36,10 @@
     ]
   },
   "result": {
-    "outcome": "PASS",
-    "artifacts_out": ["branch: feature/WF03-ISS0347-20260826"]
+    "status": "PASS",
+    "artifacts_out": ["branch: feature/WF03-ISS0347-20260826"],
+    "next_action": "ORCH routes to next step per active workflow"
   },
-  "next_action": "ORCH routes to next step per active workflow",
   "completed_at": "2026-08-26T21:31:09Z",
   "rework_count": 0,
   "max_rework": 3

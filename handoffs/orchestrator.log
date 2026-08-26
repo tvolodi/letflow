@@ -1433,3 +1433,4 @@
 2026-08-26T20:14:11Z ORCH: force-released expired queue tasks 301/302/303 (status:done, matches reality -- REQ-149/150/151 all done, prior queue reset had orphaned depends_on edges pointing at these ids). This unblocked REQ-152 (queue task 304); dispatched WF02-REQ152-20260826 step-00 to ELIXIR-DEV
 2026-08-26T21:30:00Z ORCH: WF02-REQ152-20260826 DONE -- REQ-152 done, PR #667 merged (51f2ebf), queue task 304 released status:done; ISS-0347/GH#668 registered and forwarded (pre-existing backend CI lint_handoffs issue)
 2026-08-26T21:30:08Z ORCH: registered ISS-0347 (queue task 347, GH#668), dispatched WF03-ISS0347-20260826 step-00 to ELIXIR-DEV
+2026-08-26T22:38:00Z ORCH: WF03-ISS0347-20260826 DONE -- ISS-0347 resolved, GH#668 closed, PR #670 merged (8c941bf), queue task 347 released status:done; separate flake filed as ISS-0348/GH#669

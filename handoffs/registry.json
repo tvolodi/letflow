@@ -2576,18 +2576,18 @@
                 "ISS-0347"
             ],
             "stage": "S0",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/mix/tasks/letflow.lint_handoffs.ex"
             ],
             "lock_acquired_at": "2026-08-26T21:30:08Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 PENDING (ELIXIR-DEV dispatched)",
+            "lock_released_at": "2026-08-26T22:38:00Z",
+            "released_lock": true,
+            "last_known_step": "Step Final PASS -- PR #670 merged (8c941bf), both CI gates green",
             "backfilled": false,
             "queue_task_id": 347,
             "queue_agent_id": "orch-main",
-            "note": "WF-03 for ISS-0347 (queue task 347, GH#668). Backend CI lint_handoffs gate: (1) handoff schema check rejects next_action/PASS fields actually used throughout the pipeline (recurring class, see ISS-0342/ISS-0345), (2) BadMapError crash in Mix.Tasks.Letflow.LintHandoffs.print_advisory/1. Pre-existing on main, discovered by ELIXIR-DEV during WF02-REQ152-20260826's Step Final CI run."
+            "note": "WF-03 for ISS-0347 (queue task 347, GH#668) DONE. Fixed BadMapError crash (lint_file/2 parse-error branch advisory shape normalized) + corrected already-merged H1/H3 handoff schema violations directly on main (commit 0ab7f79). Regression test proven fail-then-pass. ISS-0347 resolved, GH#668 closed. Separate unrelated flake found during release validation (Letflow.TenantProvisioning.BackfillTest DB-pollution under full serial test runs) filed as ISS-0348/GH#669 -- did not block this merge, did not manifest in CI (partitioned mechanism unaffected)."
         }
     ]
 }

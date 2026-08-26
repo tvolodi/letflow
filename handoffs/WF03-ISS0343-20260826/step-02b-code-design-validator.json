@@ -1,0 +1,36 @@
+{
+  "handoff_id": "step02b-WF03-ISS0343-20260826",
+  "run_id": "WF03-ISS0343-20260826",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0343-20260826/step-02b-code-design-validator.json",
+  "created_at": "2026-08-26T15:21:00Z",
+  "started_at": "2026-08-26T15:21:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0343"],
+    "related_handoff_ids": ["handoffs/WF03-ISS0343-20260826/step-02-code-designer.json"],
+    "artifacts_in": ["lib/letflow/design/iss0343-backfill-missing-schema-tolerance.md"],
+    "branch_name": "feature/WF03-ISS0343-20260826"
+  },
+  "task": {
+    "description": "Validate lib/letflow/design/iss0343-backfill-missing-schema-tolerance.md per WF-03 Step 2 (same as WF-02 Step 1b). Claim this handoff by setting status to IN_PROGRESS only. Pay particular attention to: is the rescue narrow enough (only :undefined_table, re-raising everything else)? Does every other real call site of register_type/2 and get_type/2 get checked for how it handles the new {:error, :tenant_schema_missing} tuple (or explicitly not needing to)? No implementation code present.",
+    "acceptance_criteria": [
+      "the exact error shape to rescue is specified precisely (module/struct/field path), not vaguely",
+      "the rescue is scoped narrowly (re-raises anything not matching), stated explicitly",
+      "every real call site of register_type/2 and get_type/2 is enumerated and its handling of the new error tuple is addressed",
+      "Backfill.run/1's new skip-count semantics are unambiguous",
+      "no implementation code present -- signatures/type shapes/prose only",
+      "no TBD/deferral language"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

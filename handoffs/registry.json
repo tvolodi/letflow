@@ -2545,6 +2545,28 @@
             "queue_task_id": 336,
             "queue_agent_id": "orch-loop-1787735920",
             "note": "WF-02 for REQ-150 (queue task 336, GH#649) DONE. Design doc lib/letflow/design/req150-lua-number-marshalling.md merged via PR #666 (feature/WF02-REQ150-20260826 deleted). All gates PASS: CODE-DESIGNER, CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER (scope-test: no executable surface), RELEASE-VALIDATOR, DOC-UPDATER. requirements.yaml REQ-150 status: done. Queue task 336 released status: done."
+        },
+        {
+            "run_id": "WF02-REQ152-20260826",
+            "workflow_id": "WF-02",
+            "requirement_ids": [
+                "REQ-152"
+            ],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/lua/sandbox.ex",
+                "lib/letflow/engine/lua/platform.ex"
+            ],
+            "lock_acquired_at": "2026-08-26T20:14:11Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PENDING (ELIXIR-DEV dispatched)",
+            "backfilled": false,
+            "queue_task_id": 304,
+            "queue_agent_id": "orch-main",
+            "note": "WF-02 for REQ-152 (queue task 304, GH#604). Deny all four ambient Lua time sources (os.time/os.date/os.clock/os.difftime) and implement platform.now(). SECURITY-REVIEWER hard gate applies -- modifies sandbox boundary. Claimed via get_next_task after ORCH force-released expired queue tasks 301/302/303 (REQ-149/150/151, done in reality but left as dangling depends_on edges after a prior queue reset re-registered them as 335/336/337) which had been silently blocking this and other downstream tasks."
         }
     ]
 }

@@ -40,6 +40,15 @@ defmodule Letflow.TenantProvisioning.Backfill do
 
           {:cont, {:ok, %{counts | skipped: counts.skipped + 1}}}
 
+        {:error, :tenant_schema_missing} ->
+          Logger.warning(
+            "ISS-0343 backfill: tenant #{tenant_id}'s Registration row exists but its " <>
+              "physical schema no longer exists (expected under a concurrent " <>
+              "teardown/offboarding race, not a data integrity problem), skipping"
+          )
+
+          {:cont, {:ok, %{counts | skipped: counts.skipped + 1}}}
+
         {:error, other} ->
           {:halt, {:error, {:backfill_failed, tenant_id, other}}}
       end

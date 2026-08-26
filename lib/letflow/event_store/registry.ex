@@ -90,6 +90,7 @@ defmodule Letflow.EventStore.Registry do
   @spec register_type(attrs :: map(), tenant_id :: Ecto.UUID.t()) ::
           {:ok, EventType.t()}
           | {:error, :tenant_not_provisioned}
+          | {:error, :tenant_schema_missing}
           | {:error, Ecto.Changeset.t()}
           | {:error, :duplicate_event_type_version}
           | {:error, :schema_version_not_monotonic}
@@ -164,19 +165,22 @@ defmodule Letflow.EventStore.Registry do
   @spec get_type(event_type :: String.t(), tenant_id :: Ecto.UUID.t()) ::
           {:ok, EventType.t()}
           | {:error, :tenant_not_provisioned}
+          | {:error, :tenant_schema_missing}
           | {:error, :unknown_event_type}
           | {:error, term()}
   def get_type(event_type, tenant_id) do
     with {:ok, schema_name} <- resolve_schema_name(tenant_id) do
-      EventType
-      |> where([e], e.name == ^event_type)
-      |> order_by([e], desc: e.schema_version)
-      |> limit(1)
-      |> Repo.one(prefix: schema_name)
-      |> case do
-        nil -> {:error, :unknown_event_type}
-        %EventType{} = event_type -> {:ok, event_type}
-      end
+      rescue_missing_schema(fn ->
+        EventType
+        |> where([e], e.name == ^event_type)
+        |> order_by([e], desc: e.schema_version)
+        |> limit(1)
+        |> Repo.one(prefix: schema_name)
+        |> case do
+          nil -> {:error, :unknown_event_type}
+          %EventType{} = event_type -> {:ok, event_type}
+        end
+      end)
     end
   end
 
@@ -200,6 +204,32 @@ defmodule Letflow.EventStore.Registry do
       nil -> {:error, :tenant_not_provisioned}
       %Registration{schema_name: schema_name} -> {:ok, schema_name}
     end
+  end
+
+  # Narrow tolerance for a schema that vanished between resolve_schema_name/1
+  # succeeding (a Registration row exists) and this query actually running
+  # against it (ISS-0343: a concurrent teardown/offboarding race can drop the
+  # physical schema in that window). Matches only the exact Postgrex.Error
+  # shape %Postgrex.Error{postgres: %{code: :undefined_table}} -- confirmed
+  # empirically (not assumed from the SQLSTATE 42P01 mnemonic) against this
+  # project's test database that this is the atom Postgrex raises for a query
+  # against a dropped schema/table. Any other exception is re-raised
+  # unchanged -- this must stay a narrow, diagnosed-failure-mode rescue, not a
+  # blanket one (see design doc section 2.2 and docs/anti-patterns.md).
+  @spec rescue_missing_schema(fun :: (-> result)) ::
+          result | {:error, :tenant_schema_missing}
+        when result: var
+  defp rescue_missing_schema(fun) do
+    fun.()
+  rescue
+    e in Postgrex.Error ->
+      case e do
+        %Postgrex.Error{postgres: %{code: :undefined_table}} ->
+          {:error, :tenant_schema_missing}
+
+        _other ->
+          reraise e, __STACKTRACE__
+      end
   end
 
   # Ported from R-Co's isJsonObject pre-check + malformed-JSON fallback,
@@ -226,36 +256,46 @@ defmodule Letflow.EventStore.Registry do
     name = Ecto.Changeset.get_field(changeset, :name)
     version = Ecto.Changeset.get_field(changeset, :schema_version)
 
-    current_max =
-      EventType
-      |> where([e], e.name == ^name)
-      |> select([e], max(e.schema_version))
-      |> Repo.one(prefix: schema_name) || 0
+    with {:ok, current_max} <- fetch_current_max(name, schema_name) do
+      cond do
+        version < current_max ->
+          {:error, :schema_version_not_monotonic}
 
-    cond do
-      version < current_max ->
-        {:error, :schema_version_not_monotonic}
+        # Only reachable when current_max > 0 (schema_version is validated
+        # > 0, so it can never equal a current_max of 0) -- an exact
+        # (name, schema_version) collision, known before even attempting the
+        # insert.
+        version == current_max ->
+          {:error, :duplicate_event_type_version}
 
-      # Only reachable when current_max > 0 (schema_version is validated
-      # > 0, so it can never equal a current_max of 0) -- an exact
-      # (name, schema_version) collision, known before even attempting the
-      # insert.
-      version == current_max ->
-        {:error, :duplicate_event_type_version}
+        true ->
+          rescue_missing_schema(fn ->
+            case Repo.insert(changeset, prefix: schema_name) do
+              {:ok, %EventType{} = event_type} ->
+                {:ok, event_type}
 
-      true ->
-        case Repo.insert(changeset, prefix: schema_name) do
-          {:ok, %EventType{} = event_type} ->
-            {:ok, event_type}
-
-          {:error, %Ecto.Changeset{} = failed_changeset} ->
-            if unique_violation?(failed_changeset, :name) do
-              {:error, :duplicate_event_type_version}
-            else
-              {:error, failed_changeset}
+              {:error, %Ecto.Changeset{} = failed_changeset} ->
+                if unique_violation?(failed_changeset, :name) do
+                  {:error, :duplicate_event_type_version}
+                else
+                  {:error, failed_changeset}
+                end
             end
-        end
+          end)
+      end
     end
+  end
+
+  defp fetch_current_max(name, schema_name) do
+    rescue_missing_schema(fn ->
+      current_max =
+        EventType
+        |> where([e], e.name == ^name)
+        |> select([e], max(e.schema_version))
+        |> Repo.one(prefix: schema_name) || 0
+
+      {:ok, current_max}
+    end)
   end
 
   defp unique_violation?(%Ecto.Changeset{errors: errors}, field) do

@@ -216,3 +216,17 @@ history:
       record docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md's
       OQ-6 updated to point at the settled design. Status flipped pending -> done
       in docs/requirements.yaml.
+
+  - req: REQ-152
+    event: started
+    agent: ORCH
+    at: "2026-08-26T20:19:00Z"
+    note: >
+      WF02-REQ152-20260826 started (queue task 304, GH#604, stage S5). Step 00
+      git-setup PASS (ELIXIR-DEV): branch feature/WF02-REQ152-20260826 created
+      and pushed. Claimed via get_next_task after ORCH force-released expired
+      queue tasks 301/302/303 (REQ-149/150/151, all actually done, orphaned as
+      depends_on targets by a prior queue reset that re-registered them as
+      335/336/337 without repointing downstream edges) which had silently
+      blocked this task. SECURITY-REVIEWER hard gate applies -- modifies the
+      Lua sandbox boundary.

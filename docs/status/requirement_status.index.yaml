@@ -686,12 +686,15 @@ volumes:
     path: docs/status/requirement_status.v5.yaml
     status: current
     opened: 2026-08-26
-    entries: 3
+    entries: 4
     note: >
       Incremented to 3 by WF02-REQ150-20260826's own Step Final rebase, which
       appended the REQ-150-done event (DOC-UPDATER) alongside the pre-existing
       REQ-150-started event already on this volume -- `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 3 on-disk entries.
+      Incremented to 4 by ORCH's own REQ-152 started-event append (Step 00,
+      WF02-REQ152-20260826) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 4 on-disk entries.
 
       ISS-0346/GH#665: entries: corrected from 0 to 2 (A9 drift -- the
       declared count was never bumped when the REQ-133-done and REQ-150-

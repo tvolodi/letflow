@@ -1,0 +1,115 @@
+report_id: WF03-ISS0347-20260826-test-runner
+run_id: WF03-ISS0347-20260826
+workflow_id: WF-03
+step: "04c"
+agent: TEST-RUNNER
+branch: feature/WF03-ISS0347-20260826
+head_commit: c1ad888
+date: "2026-08-26"
+
+environment:
+  db_up: true
+  note: >
+    `docker compose up -d` could not be re-run: `docker` CLI (both as this
+    user and via `sudo`) got "permission denied" / "cannot connect ... is
+    the docker daemon running?" against /var/run/docker.sock. Investigation
+    showed the systemd-managed docker.service is in a failed/restart-looping
+    state (stale /var/run/docker.pid referencing a still-live rogue dockerd,
+    PID 3925615, whose cwd is this checkout). Did not attempt to kill/restart
+    that daemon or its containers -- per this agent's instruction not to run
+    `docker compose up` against a checkout that may share another checkout's
+    container, and killing a live daemon process is out of scope for a test
+    run. Confirmed via `ss -ltnp` that Postgres containers from an earlier
+    `docker compose up -d` in this same checkout are already live and
+    listening (docker-proxy on 127.0.0.1:5462 and 0.0.0.0:5463, matching this
+    workspace's untracked .env LETFLOW_DB_PORT=5463), so the test DB was
+    reachable without re-running compose.
+
+command: scripts/test_parallel.sh
+parallelism:
+  n: 8
+  source: nproc
+  test_pool_size: 10
+
+combined_result:
+  tests: 2089
+  properties: 5
+  total: 2094
+  failures: 0
+  passed: 2094
+  verdict: PASS
+
+per_partition:
+  - partition: 1
+    tests: 307
+    properties: 2
+    failures: 0
+    exit_code: 0
+  - partition: 2
+    tests: 271
+    properties: 0
+    failures: 0
+    exit_code: 0
+  - partition: 3
+    tests: 243
+    properties: 2
+    failures: 0
+    exit_code: 0
+  - partition: 4
+    tests: 104
+    properties: 0
+    failures: 0
+    exit_code: 0
+  - partition: 5
+    tests: 249
+    properties: 1
+    failures: 0
+    exit_code: 0
+  - partition: 6
+    tests: 348
+    properties: 0
+    failures: 0
+    exit_code: 0
+  - partition: 7
+    tests: 288
+    properties: 0
+    failures: 0
+    exit_code: 0
+  - partition: 8
+    tests: 279
+    properties: 0
+    failures: 0
+    exit_code: 0
+
+raw_output: |
+  test_parallel: N=8 (source: nproc)
+  test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+  test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+  test_parallel: partition logs in /tmp/letflow_test_parallel.8Y0mt9
+  test_parallel: TEST_PARALLEL_GROUP=tp1093206 (shared by all 8 partitions)
+  partition 1: 307 tests, 2 properties, 0 failures, exit 0
+  partition 2: 271 tests, 0 properties, 0 failures, exit 0
+  partition 3: 243 tests, 2 properties, 0 failures, exit 0
+  partition 4: 104 tests, 0 properties, 0 failures, exit 0
+  partition 5: 249 tests, 1 property, 0 failures, exit 0
+  partition 6: 348 tests, 0 properties, 0 failures, exit 0
+  partition 7: 288 tests, 0 properties, 0 failures, exit 0
+  partition 8: 279 tests, 0 properties, 0 failures, exit 0
+  ---
+  combined: 2089 tests, 5 properties, 0 failures (2094/2094 passed)
+
+scope_check: >
+  This branch's diff (git diff --name-only main...HEAD) touches only
+  lib/mix/tasks/letflow.lint_handoffs.ex,
+  test/mix/tasks/letflow.lint_handoffs_test.exs, test/specs/ISS-0347.md,
+  lib/letflow/design/iss0347-lint-handoffs-advisory-shape.md,
+  docs/issues/ISS-0347.yaml, and this run's own handoffs/ files. Zero
+  failures were observed across all 8 partitions, so no structural
+  attribution is needed -- there is nothing outside this scope, or
+  anywhere else, to attribute.
+
+failures: []
+failure_attribution: "N/A -- zero failures across all 8 partitions; nothing to attribute."
+
+verdict: PASS
+next_action: "Route to RELEASE-VALIDATOR"

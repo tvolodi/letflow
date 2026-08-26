@@ -1,0 +1,34 @@
+id: ISS-0332
+title: "DEFINITION_PROMOTED schema_version 2 backfill missing for pre-existing tenants"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ077-20260826
+discovered_at: "2026-08-26T03:19:27Z"
+severity: MAJOR
+description: >
+  REQ-077 bumped the DEFINITION_PROMOTED platform-event-type seed from
+  schema_version 1 (review_id required non-null) to schema_version 2
+  (review_id nullable) in lib/letflow/tenant_provisioning.ex, to support R10
+  (Promotion.promote_active_definition/5, ENV-03 review-less promote path).
+  This seed only applies to tenants provisioned from this point forward --
+  nothing re-runs replay_migrations/2 or re-registers the type for
+  already-provisioned tenants, whose event_type_registry still validates
+  against v1. R10 against such a tenant commits the promotion transaction,
+  then fails the event-append step on schema validation -- a committed write
+  reported as failure (design req077-promotion-pipeline-routes.md section
+  F-5.2 Severity 1 shape). Needs a backfill routine (e.g. a Mix task
+  iterating tenant_schemas and calling Letflow.EventStore.Registry.register_type/2
+  per tenant, no-op on an already-higher-version collision) -- should go
+  through CODE-DESIGNER before implementation. Discovered by ELIXIR-DEV
+  during WF02-REQ077-20260826 rework iteration 1, surfaced by
+  SECURITY-REVIEWER FAIL (the crash BLOCKER it was bundled with is fixed
+  separately in the same run).
+affected_files:
+  - lib/letflow/tenant_provisioning.ex
+  - lib/letflow/event_store/registry.ex
+acceptance_criteria:
+  - "a backfill mechanism updates already-provisioned tenants' event_type_registry DEFINITION_PROMOTED entries to schema_version 2 (or documents why not needed)"
+  - "R10 against a pre-existing (pre-REQ-077) tenant succeeds end-to-end"
+  - "no regression to tenants already at schema_version 2 (idempotent / no-op on higher-version collision)"
+queue_task_id: 332
+github_issue: 642
+status: open

@@ -99,8 +99,10 @@ defmodule Letflow.Definitions.Promotion do
 
   alias Letflow.Definitions.ProcessDefinition
   alias Letflow.Definitions.PromotionConflict
+  alias Letflow.Definitions.PromotionDigest
   alias Letflow.Definitions.PromotionPlan
   alias Letflow.Definitions.PromotionReview
+  alias Letflow.Definitions.PromotionReviewStore
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
 
@@ -163,21 +165,124 @@ defmodule Letflow.Definitions.Promotion do
         {:error, :invalid_promotion_source}
 
       true ->
-        do_promote_definition(
-          actor_id,
-          review,
-          source_tenant_id,
-          target_tenant_id,
-          process_key,
-          base_version,
-          event_appender
-        )
+        case do_promote_definition(
+               actor_id,
+               review.id,
+               source_tenant_id,
+               target_tenant_id,
+               process_key,
+               base_version,
+               event_appender
+             ) do
+          {:ok, result} ->
+            {:ok, Map.take(result, [:source_definition_id, :target_definition_id, :process_key])}
+
+          {:error, _} = error ->
+            error
+        end
     end
   end
 
+  @doc """
+  ENV-03/R10 entry point (NEW, REQ-077 design §9.5) — a promotion with no
+  review at all: `test_tenant_id` + `process_key` straight into the target
+  tenant, used by `Letflow.Routers.Tenants`' `POST
+  /tenants/:test_tenant_id/promote/:process_key`. `promote_definition/3`
+  takes a `%PromotionReview{}` and derives source/target/process_key/
+  base_version by decoding `review.serialised_plan`; this function has none
+  of that, so it re-implements the same permission/classifier gate and then
+  shares `do_promote_definition/7`'s core with `review_id: nil` — see that
+  function's own comment for why `nil` is safe to thread all the way through
+  to the appended event's payload.
+
+  `base_version` for the conflict re-check is read from the **target
+  tenant's own current ACTIVE row** (`nil` when it has none) — R10 parses no
+  request body, so there is nothing else it could be.
+  """
+  @spec promote_active_definition(
+          actor_id :: Ecto.UUID.t(),
+          source_tenant_id :: Ecto.UUID.t(),
+          target_tenant_id :: Ecto.UUID.t(),
+          process_key :: String.t(),
+          opts :: promote_opts()
+        ) ::
+          {:ok,
+           %{
+             definition_id: Ecto.UUID.t(),
+             version: String.t(),
+             status: ProcessDefinition.status(),
+             source_definition_id: Ecto.UUID.t()
+           }}
+          | {:error, promote_error()}
+  def promote_active_definition(actor_id, source_tenant_id, target_tenant_id, process_key, opts) do
+    permission_checker = Keyword.fetch!(opts, :permission_checker)
+
+    tenant_classifier =
+      Keyword.get(opts, :tenant_classifier, &PromotionPlan.default_tenant_classifier/1)
+
+    event_appender = Keyword.fetch!(opts, :event_appender)
+
+    cond do
+      not permission_checker.(actor_id, source_tenant_id) ->
+        {:error, :forbidden}
+
+      tenant_classifier.(source_tenant_id) == :production ->
+        {:error, :invalid_promotion_source}
+
+      true ->
+        with {:ok, target_prefix} <- TenantProvisioning.schema_name_for_tenant(target_tenant_id) do
+          base_version = current_active_version(process_key, target_prefix)
+
+          case do_promote_definition(
+                 actor_id,
+                 nil,
+                 source_tenant_id,
+                 target_tenant_id,
+                 process_key,
+                 base_version,
+                 event_appender
+               ) do
+            {:ok, %{new_row: new_row, source_definition_id: source_definition_id}} ->
+              {:ok,
+               %{
+                 definition_id: new_row.id,
+                 version: new_row.version,
+                 status: new_row.status,
+                 source_definition_id: source_definition_id
+               }}
+
+            {:error, _} = error ->
+              error
+          end
+        end
+    end
+  end
+
+  @spec current_active_version(String.t(), String.t()) :: String.t() | nil
+  defp current_active_version(process_key, target_prefix) do
+    case Repo.get_by(ProcessDefinition, [name: process_key, status: :active],
+           prefix: target_prefix
+         ) do
+      nil -> nil
+      %ProcessDefinition{version: version} -> version
+    end
+  end
+
+  # Generalised core shared by promote_definition/3 and
+  # promote_active_definition/5 (REQ-077 design §9.5) -- takes `review_id ::
+  # Ecto.UUID.t() | nil` rather than a `%PromotionReview{}`, because the only
+  # thing the original body needed from the review was `review.id`, threaded
+  # down to append_promotion_event/9's event payload. `nil` there means "no
+  # review exists for this promotion" (R10/ENV-03), and is admitted by the
+  # DEFINITION_PROMOTED event-type schema from schema_version 2 on (REQ-140's
+  # seed, widened by this requirement -- see tenant_provisioning.ex).
+  # Zero behaviour change for promote_definition/3's own callers: its public
+  # promote_result() contract (source_definition_id/target_definition_id/
+  # process_key, exactly those 3 keys) is unchanged, produced by
+  # Map.take/2 over this function's now-slightly-richer {:ok, ...} map.
   defp do_promote_definition(
          actor_id,
-         review,
+         review_id,
          source_tenant_id,
          target_tenant_id,
          process_key,
@@ -202,7 +307,7 @@ defmodule Letflow.Definitions.Promotion do
         event_appender,
         target_prefix,
         actor_id,
-        review,
+        review_id,
         source_tenant_id,
         target_tenant_id,
         source_row,
@@ -306,7 +411,7 @@ defmodule Letflow.Definitions.Promotion do
          event_appender,
          target_prefix,
          actor_id,
-         review,
+         review_id,
          source_tenant_id,
          target_tenant_id,
          source_row,
@@ -316,7 +421,7 @@ defmodule Letflow.Definitions.Promotion do
     event_attrs = %{
       event_type: "DEFINITION_PROMOTED",
       actor_id: actor_id,
-      review_id: review.id,
+      review_id: review_id,
       source_tenant_id: source_tenant_id,
       target_tenant_id: target_tenant_id,
       source_definition_id: source_row.id,
@@ -330,11 +435,97 @@ defmodule Letflow.Definitions.Promotion do
          %{
            source_definition_id: source_row.id,
            target_definition_id: new_row.id,
-           process_key: process_key
+           process_key: process_key,
+           new_row: new_row
          }}
 
       {:error, _reason} = error ->
         error
+    end
+  end
+
+  @type apply_review_error ::
+          :review_not_found
+          | :digest_mismatch
+          | :invalid_transition
+          | {:promotion_failed, promote_error()}
+
+  @doc """
+  R7's apply *orchestration* (NEW, REQ-077 design §9.3) — `PromotionReviewStore`
+  deliberately does not call `promote_definition/3` (see its own moduledoc); this
+  is that orchestrator. Four steps, each short-circuiting:
+
+    1. `PromotionReviewStore.get_review/2`. `{:error, :review_not_found}` ->
+       return unchanged. Nothing written.
+    2. `PromotionDigest.verify_digest/2` (constant-time). Mismatch ->
+       `{:error, :digest_mismatch}`. Nothing written.
+    3. `review.status == :approved`? No -> `{:error, :invalid_transition}`.
+       Nothing written, and critically no `process_definitions` row touched --
+       this is what makes AC4's "does not re-apply" true, not
+       `mark_review_applied/2`'s own status guard (which would only fire AFTER
+       the promotion already committed).
+    4. `promote_definition/3`.
+       * `{:error, reason}` -> `PromotionReviewStore.mark_review_failed/2`
+         (result ignored — a concurrent transition there must not mask the
+         real failure), then `{:error, {:promotion_failed, reason}}`.
+       * `{:ok, result}` -> `PromotionReviewStore.mark_review_applied/2`.
+         `{:error, :invalid_transition}` there is treated as success too
+         (OQ-8): the promotion already durably committed by this point, and
+         reporting failure for an operation that succeeded would be worse
+         than a stale status — the only way this fires is a concurrent
+         transition moving the row out of `:approved` after step 3.
+  """
+  @spec apply_review(
+          review_id :: Ecto.UUID.t() | String.t(),
+          actor_id :: Ecto.UUID.t(),
+          plan_digest :: String.t(),
+          opts :: [
+            prefix: String.t(),
+            permission_checker: (Ecto.UUID.t(), Ecto.UUID.t() -> boolean()),
+            tenant_classifier: (Ecto.UUID.t() -> :production | :test),
+            event_appender: (map(), String.t() -> {:ok, term()} | {:error, term()})
+          ]
+        ) ::
+          {:ok,
+           %{
+             review_id: Ecto.UUID.t(),
+             source_definition_id: Ecto.UUID.t(),
+             target_definition_id: Ecto.UUID.t(),
+             process_key: String.t()
+           }}
+          | {:error, apply_review_error()}
+  def apply_review(review_id, actor_id, plan_digest, opts) do
+    with {:ok, review} <- PromotionReviewStore.get_review(review_id, opts),
+         :ok <- verify_apply_digest(review, plan_digest),
+         :ok <- verify_approved(review) do
+      do_apply_review(review, actor_id, opts)
+    end
+  end
+
+  defp verify_apply_digest(review, plan_digest) do
+    if PromotionDigest.verify_digest(review.plan_digest, plan_digest) do
+      :ok
+    else
+      {:error, :digest_mismatch}
+    end
+  end
+
+  defp verify_approved(%PromotionReview{status: :approved}), do: :ok
+  defp verify_approved(_review), do: {:error, :invalid_transition}
+
+  defp do_apply_review(review, actor_id, opts) do
+    case promote_definition(actor_id, review, opts) do
+      {:ok, result} ->
+        # OQ-8: a concurrent {:error, :invalid_transition} here does not undo
+        # an already-durable promotion -- deliberately ignored.
+        PromotionReviewStore.mark_review_applied(review.id, opts)
+        {:ok, Map.put(result, :review_id, review.id)}
+
+      {:error, reason} ->
+        # Result ignored -- a concurrent transition here must not mask the
+        # real failure this function is about to return.
+        PromotionReviewStore.mark_review_failed(review.id, opts)
+        {:error, {:promotion_failed, reason}}
     end
   end
 end

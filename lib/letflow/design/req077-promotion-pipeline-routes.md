@@ -7,24 +7,37 @@ Ports six R-Co route modules as one requirement: `src/api/routes/promotion_revie
 No implementation code below — signatures, route tables, status matrices, response-key
 allowlists and test specs only.
 
-> ## ⚠ REQ-077 IS BLOCKED — read this before scheduling any implementation
+> ## ✅ REQ-077 IS DONE (2026-08-26) — the blocker below is historical
 >
-> **Four of the ten routes (R7 apply, R8 run-assertions, R9 rollback, R10 ENV-03 promote)
+> This design's original blocker was the absence of a production platform-event appender.
+> That requirement shipped as **REQ-140** (`Letflow.EventStore.append_platform_event/2` +
+> `Letflow.EventStore.PlatformEvents`), done 2026-08-23 (PR #597). REQ-077 itself was
+> implemented in run `WF02-REQ077-20260826`: all ten routes (R1–R10, including the four
+> previously blocked on the appender — R7 apply, R8 run-assertions, R9 rollback, R10
+> ENV-03 promote) are live across `lib/letflow/routers/promotions.ex`,
+> `definitions.ex`, and `tenants.ex`. All six acceptance criteria were independently
+> re-verified PASS by RELEASE-VALIDATOR. See
+> `docs/status/requirement_status.v4.yaml`'s REQ-077 `done` entry for the full run
+> history, including two rework cycles (SECURITY-REVIEWER INV-8 nil-crash fix,
+> TEST-RUNNER iso8601/DateTime crash fix).
+>
+> The paragraphs immediately below (originally the "IS BLOCKED" banner) are left as
+> written for historical context on why the design was split from the appender work;
+> they no longer describe REQ-077's current status.
+>
+> ~~Four of the ten routes (R7 apply, R8 run-assertions, R9 rollback, R10 ENV-03 promote)
 > cannot be built until a separate, not-yet-drafted requirement lands: the
 > platform-event-appender requirement (id TBD, proposed
-> `depends_on: [REQ-023, REQ-024]`).** All four call a context function that
-> `Keyword.fetch!`es `opts[:event_appender]`, and no production appender exists or can
-> exist today (**F-5**). REVIEWER has ruled: build it as Option (B) — a new
+> `depends_on: [REQ-023, REQ-024]`).~~ All four call a context function that
+> `Keyword.fetch!`es `opts[:event_appender]`, and no production appender existed at design
+> time (**F-5**). REVIEWER ruled: build it as Option (B) — a new
 > `Letflow.EventStore` sibling entry point — **in its own requirement**, not inside this
 > one (**§11 OQ-1**, resolved, with the full rationale and the three grounds for the split).
+> That requirement became REQ-140, and REQ-077's `depends_on` gained it alongside REQ-072.
 >
-> **REQ-077's `depends_on` gains that requirement alongside REQ-072.** No id is minted in
-> this document — REQ-ANALYST assigns ids.
->
-> **Consequence for acceptance criteria: AC1, AC2 and AC4 are unreachable, and AC5 is
-> reachable for only three of its four cases, until that requirement ships.** AC3 and AC6
-> are reachable now. The per-AC table is at the end of §11; TEST-DESIGNER should plan for
-> two passes (§12.0's sequencing note).
+> ~~Consequence for acceptance criteria: AC1, AC2 and AC4 are unreachable, and AC5 is
+> reachable for only three of its four cases, until that requirement ships.~~ All six ACs
+> are now reachable and have been independently verified PASS.
 >
 > Everything else in this design is buildable and gate-verified. §4, §5, §6, §9 and §10 are
 > unaffected.

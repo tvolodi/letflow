@@ -183,6 +183,35 @@ defmodule Letflow.Definitions.PromotionReviewStore do
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
 
+  @doc """
+  Reads one `promotion_reviews` row by id, scoped to `opts[:prefix]` (NEW,
+  REQ-077 design §9.1 — this module had no read function at all before this).
+
+  Casts `review_id` with `Ecto.UUID.cast/1` before any `Repo` access —
+  `Repo.get/3`'s `:binary_id` primary-key lookup raises `Ecto.Query.CastError`
+  for a non-UUID binary rather than returning a tagged error, so this is the
+  one place every caller (HTTP or otherwise) is protected from that crash.
+  `nil` from either the cast or the lookup collapses to the same
+  `{:error, :review_not_found}` atom every transition function in this module
+  already returns for "no such row" — one mapping rule for the router
+  (REQ-077 design §5), not two.
+
+  Returns the struct, not a map — response shaping belongs to the caller
+  (REQ-077 design §7.3's allowlist), never to this context module.
+  """
+  @spec get_review(review_id :: Ecto.UUID.t() | String.t(), opts :: [prefix: String.t()]) ::
+          {:ok, PromotionReview.t()} | {:error, :review_not_found}
+  def get_review(review_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    with {:ok, uuid} <- Ecto.UUID.cast(review_id),
+         %PromotionReview{} = row <- Repo.get(PromotionReview, uuid, prefix: prefix) do
+      {:ok, row}
+    else
+      _cast_error_or_nil -> {:error, :review_not_found}
+    end
+  end
+
   @type insert_review_error ::
           :duplicate_review
           | :digest_mismatch

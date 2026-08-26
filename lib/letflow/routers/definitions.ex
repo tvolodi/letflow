@@ -5,8 +5,21 @@ defmodule Letflow.Routers.Definitions do
 
   REQ-078 adds **exactly one** route to it — the definition-graph validation
   endpoint. REQ-081 adds the five read routes below. REQ-082 adds the eight
-  write/lifecycle routes below that. None of the four touches the `match _`
-  catch-all or modifies a route another of them added.
+  write/lifecycle routes below that. REQ-077 adds **exactly one** route —
+  `POST /:process_key/rollback` (PRM-08, ports
+  `src/api/routes/definition_rollback.zig`) — placed here only because
+  `Letflow.Plugs.ApiPipeline` forwards `/definitions` here and `Plug.Router`
+  permits one forward per prefix (`lib/letflow/design/req077-promotion-pipeline-routes.md`
+  §2.3). REQ-081/082 own every other route under `/definitions` and must
+  not treat this one route as precedent for their own design, nor remove
+  it. Its handler, validation schema and response allowlist are specified
+  in that design doc's §7.6. None of the four requirements touches the
+  `match _` catch-all or modifies a route another of them added.
+
+  `POST /:process_key/rollback` is declared with a plain `post` macro, not
+  `authz_post` — it is `:Unknown`-gated (PLATFORM_ADMIN-only), the same
+  deliberate decision every other REQ-077 route makes; see
+  `Letflow.Routers.Promotions`' moduledoc for the full reasoning.
 
   | Handler               | Method/path                       | Delegate                                              | Permission        | Response |
   |------------------------|-----------------------------------|--------------------------------------------------------|-------------------|----------|
@@ -290,6 +303,20 @@ defmodule Letflow.Routers.Definitions do
   # REVIEWER as a judgment call, not silently decided.
   authz_post "/:id/validate", :DefinitionsRead do
     handle_validate(conn, conn.params["id"])
+  end
+
+  # REQ-077 R9 -- the ONE route this requirement contributes to this router
+  # (design §2.3): PLATFORM_ADMIN-only via the `:Unknown` catch-all
+  # (Letflow.Plugs.Authorize evaluates any route declared with a plain
+  # get/post/put/patch/delete macro, rather than authz_get/authz_post/etc,
+  # as :Unknown -- see lib/letflow/api/authorized_router.ex's own
+  # moduledoc). Deliberately NOT declared with authz_post/2 -- see
+  # Letflow.Routers.Promotions' moduledoc for the full reasoning this route
+  # shares with all ten REQ-077 routes. `:process_key` is a free-form
+  # string (process_definitions.name has no numeric/UUID shape), so there
+  # is nothing to pre-cast here, unlike `/:id`'s UUID segments above.
+  post "/:process_key/rollback" do
+    handle_rollback(conn, conn.params["process_key"])
   end
 
   match _ do
@@ -1076,6 +1103,80 @@ defmodule Letflow.Routers.Definitions do
   defp status_string(:active), do: "ACTIVE"
   defp status_string(:deprecated), do: "DEPRECATED"
   defp status_string(:archived), do: "ARCHIVED"
+
+  # ── POST /definitions/:process_key/rollback -- REQ-077 R9 ──────────────
+
+  @rollback_schema [
+    %FieldConstraint{
+      name: "target_version",
+      required: true,
+      type: :string,
+      reject_empty_string: true,
+      max_length: 64
+    }
+  ]
+
+  defp handle_rollback(conn, process_key) do
+    opts = conn.assigns.scoped_opts
+    actor_id = conn.assigns.auth_context.user_id
+
+    case Validation.validate(@rollback_schema, conn.body_params) do
+      {:errors, field_errors} ->
+        Response.send_problem(conn, Validation.problem(field_errors))
+
+      {:ok, attrs} ->
+        result =
+          Definitions.rollback_definition_version(
+            process_key,
+            attrs["target_version"],
+            actor_id,
+            Keyword.merge(opts,
+              permission_checker: &Letflow.Definitions.PromotionPlan.default_permission_checker/2,
+              event_appender:
+                &Letflow.EventStore.PlatformEvents.append_definition_version_rolled_back/2
+            )
+          )
+
+        render_rollback(conn, result)
+    end
+  end
+
+  defp render_rollback(conn, {:ok, result}), do: Response.ok(conn, rollback_map(result))
+
+  defp render_rollback(conn, {:error, :forbidden}),
+    do: Response.forbidden(conn, "insufficient permissions")
+
+  # process_key with no ACTIVE definition in the caller's tenant is the same
+  # fact as one that never existed -- zero-detail 404, matching §5's
+  # cross-tenant/nonexistent byte-identity.
+  defp render_rollback(conn, {:error, :process_key_not_found}), do: Response.not_found(conn)
+
+  defp render_rollback(conn, {:error, :version_never_active}),
+    do: Response.unprocessable(conn, "target_version was never active")
+
+  defp render_rollback(conn, {:error, :already_active}),
+    do: Response.unprocessable(conn, "target_version is already the active version")
+
+  defp render_rollback(conn, {:error, :invalid_schema_name}), do: Response.internal_error(conn)
+  defp render_rollback(conn, {:error, _other}), do: Response.internal_error(conn)
+
+  # Exactly 5 keys (REQ-077 design §7.6), ported from
+  # definition_rollback.zig:96-114. `version`/`rolled_back_from_version` are
+  # STRINGS, not JSON numbers like R-Co -- process_definitions.version is
+  # free-form text here (PromotionConflict.version_greater?/2's own
+  # int-then-lexicographic fallback already documents this), so porting
+  # R-Co's integer typing would reject versions this codebase permits.
+  @doc false
+  @spec rollback_map(Definitions.rollback_result()) :: map()
+  defp rollback_map(result) do
+    %{
+      "definition_id" => result.definition_id,
+      "version" => result.version,
+      "rolled_back_from_version" => result.rolled_back_from_version,
+      "superseded_review_id" => result.superseded_review_id,
+      "event_id" => result.event_id
+    }
+  end
 
   # ── Helpers ───────────────────────────────────────────────────────────────
 

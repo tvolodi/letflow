@@ -1,0 +1,126 @@
+report_id: WF03-ISS0343-20260826-test-runner
+run_id: WF03-ISS0343-20260826
+workflow_id: WF-03
+step: "04c"
+agent: TEST-RUNNER
+branch: feature/WF03-ISS0343-20260826
+head_commit: fd95067
+date: "2026-08-26"
+
+environment:
+  db_up: true
+  note: >
+    docker daemon (systemd docker.service) was in a failed/restart-looping state
+    at session start (stale /var/run/docker.pid referencing a still-live dockerd
+    PID 3925615), so `docker compose up -d` could not be re-run cleanly. However
+    Postgres was already reachable on the checkout's configured port (5463, per
+    this workspace's untracked .env LETFLOW_DB_PORT=5463) -- containers from an
+    earlier `docker compose up -d` in this same checkout were already live and
+    listening, confirmed via a raw TCP probe of 127.0.0.1:5463 before running the
+    suite. Did not touch/restart the docker daemon or its containers further,
+    per this agent's instruction not to run `docker compose up` against a
+    checkout that may share another checkout's container.
+
+command: scripts/test_parallel.sh
+parallelism:
+  n: 8
+  source: nproc
+  test_pool_size: 10
+
+combined_result:
+  tests: 2063
+  properties: 5
+  total: 2068
+  failures: 0
+  passed: 2068
+  verdict: PASS
+
+per_partition:
+  - partition: 1
+    tests: 288
+    properties: 0
+    failures: 0
+    exit_code: 0
+  - partition: 2
+    tests: 253
+    properties: 2
+    failures: 0
+    exit_code: 0
+  - partition: 3
+    tests: 156
+    properties: 0
+    failures: 0
+    exit_code: 0
+  - partition: 4
+    tests: 191
+    properties: 1
+    failures: 0
+    exit_code: 0
+  - partition: 5
+    tests: 370
+    properties: 0
+    failures: 0
+    exit_code: 0
+  - partition: 6
+    tests: 204
+    properties: 0
+    failures: 0
+    exit_code: 0
+  - partition: 7
+    tests: 338
+    properties: 0
+    failures: 0
+    exit_code: 0
+    note: >
+      Contains Letflow.TenantProvisioning.BackfillTest and
+      Letflow.EventStore.RegistryTest, including ISS-0343's new
+      registry_tenant_schema_missing_test.exs suite and the new ISS-0343
+      case appended to backfill_test.exs. Partition log
+      (/tmp/letflow_test_parallel.o7KWB9/partition-7.log) shows "Result: 338
+      passed" with no Failed: line, and explicit teardown log lines for
+      every BackfillTest test name in this run, including:
+        - "test regression: ISS-0332 -- backfill updates pre-existing tenant to schema_version 2"
+        - "test regression: ISS-0332 -- R10 event-append succeeds after backfill (validate_payload accepts null review_id)"
+        - "test regression: ISS-0343 -- a tenant whose schema vanished mid-sweep is skipped, not a crash of the whole run"
+        - "test regression: ISS-0332 -- higher existing schema_version is skipped (schema_version_not_monotonic)"
+        - "test regression: ISS-0332 -- idempotent: already-v2 tenant is skipped, not errored"
+  - partition: 8
+    tests: 263
+    properties: 2
+    failures: 0
+    exit_code: 0
+
+raw_output: |
+  test_parallel: N=8 (source: nproc)
+  test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+  test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+  test_parallel: partition logs in /tmp/letflow_test_parallel.o7KWB9
+  test_parallel: TEST_PARALLEL_GROUP=tp3693507 (shared by all 8 partitions)
+  partition 1: 288 tests, 0 properties, 0 failures, exit 0
+  partition 2: 253 tests, 2 properties, 0 failures, exit 0
+  partition 3: 156 tests, 0 properties, 0 failures, exit 0
+  partition 4: 191 tests, 1 property, 0 failures, exit 0
+  partition 5: 370 tests, 0 properties, 0 failures, exit 0
+  partition 6: 204 tests, 0 properties, 0 failures, exit 0
+  partition 7: 338 tests, 0 properties, 0 failures, exit 0
+  partition 8: 263 tests, 2 properties, 0 failures, exit 0
+  ---
+  combined: 2063 tests, 5 properties, 0 failures (2068/2068 passed)
+
+backfill_test_status: >
+  Explicit confirmation per handoff instruction: the original/pre-existing
+  Letflow.TenantProvisioning.BackfillTest tests (the three ISS-0332 regression
+  tests -- "backfill updates pre-existing tenant to schema_version 2", "R10
+  event-append succeeds after backfill", "higher existing schema_version is
+  skipped", "idempotent: already-v2 tenant is skipped") showed NO failure in
+  this run. They ran inside partition 7 alongside the new ISS-0343 backfill
+  regression test and TEST-DESIGNER's new
+  registry_tenant_schema_missing_test.exs suite, and partition 7 reported
+  "Result: 338 passed" with zero failures. No regression introduced by the
+  ISS-0343 fix or its new tests.
+
+failures: []
+failure_attribution: "N/A -- zero failures across all 8 partitions; nothing to attribute."
+
+verdict: PASS
+next_action: "Route to RELEASE-VALIDATOR"

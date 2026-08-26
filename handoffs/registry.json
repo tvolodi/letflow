@@ -2504,7 +2504,9 @@
             "run_id": "WF03-ISS0297-20260826",
             "workflow_id": "WF-03",
             "requirement_ids": [],
-            "issue_ids": ["ISS-0297"],
+            "issue_ids": [
+                "ISS-0297"
+            ],
             "stage": "S0",
             "status": "IN_PROGRESS",
             "owned_modules": [
@@ -2522,6 +2524,27 @@
             "queue_task_id": 297,
             "queue_agent_id": "orch-main",
             "note": "WF-03 for ISS-0297 (queue task 297, GH#596). 16-way parallelism failures: EngineConcurrencyTest pool exhaustion x2, AuditIssueClosuresTest gh CLI timeout x1. Queue claimed 2026-08-26T18:15:33Z via get_next_task."
+        },
+        {
+            "run_id": "WF02-REQ150-20260826",
+            "workflow_id": "WF-02",
+            "requirement_ids": [
+                "REQ-150"
+            ],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/design/req150-lua-number-marshalling.md"
+            ],
+            "lock_acquired_at": "2026-08-26T18:21:06Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PENDING",
+            "backfilled": false,
+            "queue_task_id": 336,
+            "queue_agent_id": "orch-loop-1787735920",
+            "note": "WF-02 for REQ-150 (queue task 336, GH#649). Fresh restart of a run a prior session had started and abandoned (stale branch feature/WF02-REQ150-20260826 deleted, no registry entry existed for it). Design-only requirement: no mix.exs/lib/letflow/engine/ change. Queue claimed 2026-08-26T18:21:06Z via get_next_task."
         }
     ]
 }

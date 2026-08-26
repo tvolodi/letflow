@@ -2419,14 +2419,14 @@
                 "ISS-0216"
             ],
             "stage": null,
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/api/pagination.ex"
             ],
             "lock_acquired_at": "2026-08-26T11:55:21Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step Final PENDING (ELIXIR-DEV dispatched)",
+            "lock_released_at": "2026-08-26T13:27:33Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #659 squash-merged (92da2b6), queue task 216 released done",
             "backfilled": false,
             "queue_task_id": 216,
             "queue_agent_id": "orch-loop-1787735920",

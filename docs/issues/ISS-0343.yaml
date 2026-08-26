@@ -1,0 +1,32 @@
+id: ISS-0343
+title: >
+  Letflow.TenantProvisioning.BackfillTest fails: relation
+  tenant_*.event_type_registry does not exist
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF03-ISS0216-20260826
+discovered_at: 2026-08-26T13:15:00Z
+severity: MINOR
+status: open
+resolved_in_run: null
+resolved_at: null
+queue_task_id: 343
+github_issue_number: 660
+description: >
+  PR #659 (WF03-ISS0216-20260826) Step Final mix test run showed 4 failures
+  in Letflow.TenantProvisioning.BackfillTest, error: relation
+  "tenant_*.event_type_registry" does not exist. Structurally attributed as
+  pre-existing/unrelated to that branch (route 1: backfill.ex/registry.ex/the
+  test file do not appear in `git diff --name-only origin/main...HEAD` for
+  that PR) and corroborated by the same 4 tests passing standalone at
+  merge-base origin/main (73ff2ff). Not covered by any existing filed issue
+  (ISS-0339/ISS-0340/ISS-0332 are different symptoms). Likely a tenant-schema
+  migration/fixture ordering issue in the Backfill test suite, possibly
+  related to REQ-077/ISS-0332 backfill work (lib/letflow/tenant_provisioning/backfill.ex,
+  lib/letflow/tenant_provisioning.ex, lib/letflow/event_store/registry.ex).
+acceptance_criteria:
+  - >
+    Letflow.TenantProvisioning.BackfillTest passes reliably against current
+    main
+  - >
+    root cause identified (fixture/migration ordering vs. genuine
+    regression) and fixed accordingly

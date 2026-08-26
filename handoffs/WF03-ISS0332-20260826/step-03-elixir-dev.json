@@ -1,0 +1,52 @@
+{
+  "handoff_id": "step03-elixir-dev-WF03-ISS0332-20260826",
+  "run_id": "WF03-ISS0332-20260826",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0332-20260826/step-03-elixir-dev.json",
+  "created_at": "2026-08-26T05:02:07Z",
+  "started_at": "2026-08-26T05:02:07Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0332"],
+    "requirement_text": {
+      "ISS-0332": "REQ-077 bumped the DEFINITION_PROMOTED platform-event-type seed from schema_version 1 (review_id required non-null) to schema_version 2 (review_id nullable) in lib/letflow/tenant_provisioning.ex. Pre-existing tenants' event_type_registry still has v1. R10 against such a tenant fails the event-append step after the promotion transaction commits -- Severity-1. Fix: backfill routine iterating tenant_schemas and calling register_type/2 per tenant for DEFINITION_PROMOTED v2 attrs, no-op on higher-version collision."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "step02-code-designer-WF03-ISS0332-20260826",
+      "step02b-code-design-validator-WF03-ISS0332-20260826"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0332-definition-promoted-backfill.md",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/event_store/registry.ex",
+      "docs/issues/ISS-0332.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/event_store/registry.ex",
+      "lib/mix/tasks/"
+    ],
+    "branch_name": "feature/WF03-ISS0332-20260826"
+  },
+  "task": {
+    "description": "Implement the fix for ISS-0332 per lib/letflow/design/iss0332-definition-promoted-backfill.md (on branch feature/WF03-ISS0332-20260826).\n\nThe design specifies:\n1. New module Letflow.TenantProvisioning.Backfill at lib/letflow/tenant_provisioning/backfill.ex with:\n   @spec run(event_type_attrs :: map()) :: {:ok, %{updated: non_neg_integer(), skipped: non_neg_integer()}} | {:error, {:backfill_failed, Ecto.UUID.t(), term()}}\n   - Queries all Registration records (tenant_schemas)\n   - For each tenant, calls Letflow.EventStore.Registry.register_type/2 with the provided attrs and the tenant's tenant_id\n   - {:ok, _} -> count as updated\n   - {:error, :duplicate_event_type_version} -> count as skipped (already at exact version)\n   - {:error, :schema_version_not_monotonic} -> count as skipped (already at higher version)\n   - {:error, :tenant_not_provisioned} -> Logger.warning and count as skipped (anomaly)\n   - {:error, other} -> return {:error, {:backfill_failed, tenant_id, other}} immediately\n\n2. Mix task Mix.Tasks.Letflow.BackfillEventTypeVersions at lib/mix/tasks/letflow.backfill_event_type_versions.ex:\n   - mix letflow.backfill_event_type_versions\n   - Hardcodes the DEFINITION_PROMOTED v2 attrs (name, schema_version: 2, description, json_schema)\n   - Calls Backfill.run/1 and prints a summary\n   - Check the json_schema for DEFINITION_PROMOTED v2 from lib/letflow/tenant_provisioning.ex @platform_event_type_seed_attrs -- use the EXACT same schema (review_id type ['string','null'], all other fields unchanged from v1)\n\nIMPORTANT constraints:\n- Do NOT modify lib/letflow/tenant_provisioning.ex (the KNOWN GAP comment stays -- the gap itself is fixed by the backfill, not by removing the comment)\n- Do NOT modify lib/letflow/event_store/registry.ex\n- The Backfill module imports Letflow.Repo and Letflow.TenantProvisioning.Registration for the tenant list query\n- Use Logger for the :tenant_not_provisioned anomaly case\n- No new dependencies\n\nAfter implementation:\n1. git checkout feature/WF03-ISS0332-20260826\n2. Implement the two new files\n3. Run mix compile -- fix any compile errors before proceeding\n4. Run mix test --no-start to check for regressions (not adding new tests yet -- that's TEST-DESIGNER's job)\n5. Commit: git add lib/letflow/tenant_provisioning/backfill.ex lib/mix/tasks/letflow.backfill_event_type_versions.ex; git commit -m 'fix(ISS-0332): DEFINITION_PROMOTED schema_version 2 backfill [WF03-ISS0332-20260826]'\n6. Push: git push origin feature/WF03-ISS0332-20260826\n7. Update handoff on main: git checkout main; git pull --ff-only; git add handoffs/WF03-ISS0332-20260826/step-03-elixir-dev.json; git commit -m 'chore(ELIXIR-DEV): WF03-ISS0332-20260826 step-03 PASS'; git push origin main",
+    "acceptance_criteria": [
+      "lib/letflow/tenant_provisioning/backfill.ex exists with run/1 matching the design @spec",
+      "lib/mix/tasks/letflow.backfill_event_type_versions.ex exists",
+      "mix compile exits 0 with no new warnings",
+      "mix test exits 0 (no regression in existing tests)",
+      "No modification to lib/letflow/tenant_provisioning.ex or lib/letflow/event_store/registry.ex"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

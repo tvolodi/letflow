@@ -1,0 +1,55 @@
+{
+  "handoff_id": "step02-WF03-ISS0297-20260826",
+  "run_id": "WF03-ISS0297-20260826",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0297-20260826/step-02-elixir-dev.json",
+  "created_at": "2026-08-26T19:05:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0297"],
+    "requirement_text": {
+      "ISS-0297": "Two distinct root causes confirmed by ISSUE-FIXER (step-01 PASS):\n1. EngineConcurrencyTest (@instance_count 100) exhausts pool_size=5 at N=16. The test needs pool_size >= 100, impossible at any N >= 2 on 100-max_connections Postgres.\n2. AuditIssueClosuresTest processes 201 docs/issues/*.yaml files with System.cmd per closed issue, hits ExUnit 60s default timeout under 16-way CPU load."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "step00-WF03-ISS0297-20260826",
+      "step01-WF03-ISS0297-20260826"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0297.yaml",
+      "handoffs/WF03-ISS0297-20260826/step-01-issue-fixer-diagnose.json",
+      "test/letflow/engine_concurrency_test.exs",
+      "test/mix/tasks/letflow.audit_issue_closures_test.exs",
+      "scripts/test_parallel.sh",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md"
+    ],
+    "owned_modules": [
+      "test/letflow/engine_concurrency_test.exs",
+      "test/mix/tasks/letflow.audit_issue_closures_test.exs",
+      "scripts/test_parallel.sh"
+    ],
+    "branch_name": "feature/WF03-ISS0297-20260826"
+  },
+  "task": {
+    "description": "Implement the fix for ISS-0297 on branch feature/WF03-ISS0297-20260826.\n\n## Fix 1: EngineConcurrencyTest -- exclude from high-N parallel runs\n\nAdd `@moduletag :high_pool_demand` to the module declaration in test/letflow/engine_concurrency_test.exs. This tag signals that the test requires pool_size >= @instance_count (100 connections) and cannot run in partitioned mode on a standard 100-max_connections Postgres.\n\nUpdate scripts/test_parallel.sh to pass `--exclude high_pool_demand` to each partition's `mix test` invocation when the computed pool_size < 100. Specifically:\n- After the pool_size is computed/set (around line 164-166 in test_parallel.sh), add a check: if pool_size < 100, set EXCLUDE_HIGH_POOL_DEMAND='--exclude high_pool_demand', else EXCLUDE_HIGH_POOL_DEMAND=''\n- Then pass $EXCLUDE_HIGH_POOL_DEMAND to each partition's mix test invocation\n\nAdd a comment in test/letflow/engine_concurrency_test.exs near the `@instance_count 100` line explaining WHY the tag is there and what pool_size is required.\n\nAlso update docs/migration/decisions/0009-test-parallel-pool-sizing.md (if it exists) to document this known test class. Read it first to see if it needs updating.\n\n## Fix 2: AuditIssueClosuresTest -- extend timeout\n\nAdd `@moduletag timeout: 120_000` at the module level in test/mix/tasks/letflow.audit_issue_closures_test.exs. This gives the test 2 minutes instead of ExUnit's default 60 seconds, which is sufficient for the 201-file corpus scan even under parallel load.\n\nAdd a comment explaining the extended timeout: the test calls Audit.run([]) against the real docs/issues/ corpus (currently 201 files) and spawns System.cmd per closed issue via a fake gh binary -- under high-parallelism CPU contention this can exceed the default 60s.\n\n## Verification\nAfter implementing:\n1. Run `mix test test/letflow/engine_concurrency_test.exs` (standalone) -- must pass\n2. Run `mix test test/mix/tasks/letflow.audit_issue_closures_test.exs` (standalone) -- must pass\n3. Run `mix compile --warnings-as-errors` -- must pass\n4. Quote actual output\n\nDo NOT run the full 16-way parallel suite -- that would take too long and isn't needed to confirm the fix. The next step (TEST-RUNNER) handles broader coverage.\n\n## Scope boundary\nDo NOT:\n- Change @instance_count (it must stay 100 for the test to be meaningful)\n- Change the test assertions\n- Change config/test.exs pool_size formula\n- Change docs/migration/decisions/0009 unless a factual update is needed",
+    "acceptance_criteria": [
+      "@moduletag :high_pool_demand added to test/letflow/engine_concurrency_test.exs module declaration",
+      "scripts/test_parallel.sh passes --exclude high_pool_demand to each partition when pool_size < 100",
+      "@moduletag timeout: 120_000 added to test/mix/tasks/letflow.audit_issue_closures_test.exs",
+      "mix test test/letflow/engine_concurrency_test.exs passes standalone with real output quoted",
+      "mix test test/mix/tasks/letflow.audit_issue_closures_test.exs passes standalone with real output quoted",
+      "mix compile --warnings-as-errors passes with real output quoted"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

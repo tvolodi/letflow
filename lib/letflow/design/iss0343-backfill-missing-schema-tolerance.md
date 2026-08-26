@@ -127,18 +127,29 @@ raise `undefined_table`.
 
 ### 2.3 `Letflow.TenantProvisioning.Backfill.run/1` — new clause, no signature change
 
-One new `case` clause in the existing `Enum.reduce_while/3` (mirrors the existing
-`:tenant_not_provisioned` clause immediately above it in `backfill.ex`, same shape,
-same counter semantics):
+One new match clause added to the existing `case` inside the `Enum.reduce_while/3`
+body, matching the tuple `{:error, :tenant_schema_missing}`. It mirrors the existing
+`:tenant_not_provisioned` clause immediately above it in `backfill.ex` in shape and in
+counter semantics — same "log and move on, don't halt" outcome — but is a distinct
+clause because the two error reasons carry a different meaning worth distinguishing
+in the log:
 
-```
-{:error, :tenant_schema_missing} ->
-  Logger.warning(
-    "ISS-0332 backfill: tenant #{tenant_id}'s Registration row exists but its " <>
-      "physical schema is gone (concurrent teardown/offboarding race), skipping"
-  )
-  {:cont, {:ok, %{counts | skipped: counts.skipped + 1}}}
-```
+- **Logging**: emits one warning-level log entry (via `Logger.warning/1`, same
+  logging call the existing `:tenant_not_provisioned` clause already uses) whose
+  message must convey three things: (1) which tenant this is (the `tenant_id` value
+  the current reduce iteration is processing), (2) that this tenant's `Registration`
+  row does exist but its physical schema does not — i.e., this is *not* the same
+  situation as `:tenant_not_provisioned`, and (3) a one-clause explanation that this
+  is expected under a concurrent teardown/offboarding race rather than a data
+  integrity problem, so an operator reading the log doesn't treat it as an anomaly.
+- **Counting**: updates the same `counts` map the surrounding `reduce_while` already
+  threads through, incrementing its `:skipped` field by one — the identical field and
+  update the `:tenant_not_provisioned` clause performs — and leaves every other field
+  of `counts` unchanged.
+- **Control flow**: continues the reduction (does not halt), carrying the updated
+  `counts` map forward as the accumulator for the next tenant — the same
+  `{:cont, {:ok, updated_counts}}` shape the `:tenant_not_provisioned` clause already
+  returns.
 
 Placement: alongside the existing `:tenant_not_provisioned` clause (`backfill.ex`
 L36-41) — both are "this tenant can't be reconciled right now, move on" outcomes,

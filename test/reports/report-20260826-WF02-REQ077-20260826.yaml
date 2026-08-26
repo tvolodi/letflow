@@ -1,0 +1,136 @@
+run_id: WF02-REQ077-20260826
+agent: TEST-RUNNER
+step: WF-02 Step 4 (Test Run)
+date: 2026-08-26
+branch: feature/WF02-REQ077-20260826
+requirement: REQ-077 (promotion-pipeline routes -- see lib/letflow/design/req077-promotion-pipeline-routes.md)
+
+environment_setup: >
+  docker (docker ps) was permission-denied in this sandbox, but Postgres was
+  already reachable directly: `.env` in this worktree sets
+  LETFLOW_DB_PORT=5463, and `nc -zv localhost 5463` succeeded. `mix deps.get`
+  completed cleanly (fetched all deps; unrelated pre-existing security
+  advisories noted for bandit, no network failure). `MIX_ENV=test mix
+  ecto.create` reported "database already exists"-equivalent success ("The
+  database for Letflow.Repo has been created"), and `MIX_ENV=test mix
+  ecto.migrate` ran all migrations through 20260824143417 cleanly, exit 0.
+  DB was reachable throughout -- no BLOCKED condition.
+
+commands_run:
+  - cmd: mix test test/letflow/routers/req077_promotion_pipeline_test.exs
+    result: "Result: 31/32 passed. Failed: 1 test (36.5s)"
+  - cmd: mix test (full suite, plain, non-partitioned, for cross-check)
+    result: "Result: 2025/2028 passed (5/5 properties, 2020/2023 tests), 3 excluded. Failed: 3 tests (635.1s)"
+
+full_suite:
+  command: scripts/test_parallel.sh
+  partitions: 8
+  partitions_source: nproc
+  raw_summary_line: "combined: 2023 tests, 5 properties, 3 failures (2025/2028 passed)"
+  per_partition:
+    - "partition 1: 223 tests, 0 properties, 1 failures, exit 2"
+    - "partition 2: 259 tests, 0 properties, 0 failures, exit 0"
+    - "partition 3: 312 tests, 1 property, 1 failures, exit 2"
+    - "partition 4: 219 tests, 0 properties, 1 failures, exit 2"
+    - "partition 5: 286 tests, 0 properties, 0 failures, exit 0"
+    - "partition 6: 237 tests, 2 properties, 0 failures, exit 0"
+    - "partition 7: 276 tests, 2 properties, 0 failures, exit 0"
+    - "partition 8: 211 tests, 0 properties, 0 failures, exit 0"
+  cross_check: >
+    Identical 3 failing test names in both the plain `mix test` run and
+    scripts/test_parallel.sh's partitioned run -- same failures, not an
+    artifact of partitioning.
+
+branch_diff_scope: >
+  git diff main --stat: lib/letflow/definitions.ex, lib/letflow/definitions/
+  promotion.ex, lib/letflow/definitions/promotion_artifact.ex (new),
+  lib/letflow/definitions/promotion_review_store.ex,
+  lib/letflow/event_store/platform_events.ex, lib/letflow/plugs/
+  api_pipeline.ex, lib/letflow/routers/definitions.ex,
+  lib/letflow/routers/promotion.ex (removed, replaced),
+  lib/letflow/routers/promotions.ex (new, 767 lines),
+  lib/letflow/routers/tenants.ex, lib/letflow/tenant_provisioning.ex,
+  lib/letflow/api/error.ex, test/letflow/api/authorization_enforcement_test.exs,
+  test/letflow/routers/req077_promotion_pipeline_test.exs (new, 1015 lines),
+  test/specs/REQ-077.md (new), docs/issues/ISS-0332.yaml (new),
+  docs/requirements.yaml, docs/status/requirement_status.v4.yaml (append),
+  lib/letflow/design/req070-router-decomposition.md. mix.exs is NOT in this
+  branch's diff.
+
+failures:
+  - suite: Letflow.Routers.Req077PromotionPipelineTest
+    test: "AC1: R4 GET /promotions/:id/context (design §7.3) 200, exactly 9 keys"
+    file: test/letflow/routers/req077_promotion_pipeline_test.exs:259
+    attribution: "REQ-077's own new code -- real implementation bug, not a test bug."
+    error: >
+      ** (Plug.Conn.WrapperError) ** (FunctionClauseError) no function clause
+      matching in Letflow.Routers.Promotions.iso8601/1, raised from
+      lib/letflow/routers/promotions.ex:762 via review_context_map/1 (line
+      489) via render_context/2 (line 470). Root cause: `iso8601/1` (line
+      762) only has a clause for `%NaiveDateTime{}`, but
+      `Letflow.Definitions.PromotionReview.inserted_at`
+      (lib/letflow/definitions/promotion_review.ex:88) is declared
+      `timestamps(type: :utc_datetime_usec)`, so `review.inserted_at` is a
+      `%DateTime{}` at runtime (confirmed in the trace:
+      `iso8601(~U[2026-08-26 03:40:22.962954Z])`), not a NaiveDateTime.
+      `iso8601/1` needs a `%DateTime{}` clause (or the existing clause
+      widened) alongside the NaiveDateTime one.
+    route_to: ELIXIR-DEV
+  - suite: Letflow.Docs.RequirementStatusInvariantsTest
+    test: "A9: every indexed volume's declared entries: count equals what is actually on disk"
+    file: test/docs/requirement_status_invariants_test.exs:464
+    attribution: >
+      Caused by this branch's own docs bookkeeping, not pre-existing. `git
+      diff main -- docs/status/requirement_status.v4.yaml` shows this run's
+      Step 00 appended one `started` event for REQ-077 (50 on-disk entries
+      before this append; 51 after, per the entry's own note), but the
+      volume's declared `entries:` count in
+      docs/status/requirement_status.index.yaml:524 was left at 50, not
+      bumped to 51.
+    error: "mismatches == [{\"docs/status/requirement_status.v4.yaml\", 50, 51}]"
+    route_to: "DOC-UPDATER (bump docs/status/requirement_status.index.yaml:524 entries: 50 -> 51)"
+  - suite: Letflow.Engine.LuaScriptAuditTest
+    test: "mix.exs and moduledoc guardrails mix.exs declares no Lua/NIF-shaped dependency"
+    file: test/letflow/engine/lua_script_audit_test.exs:420
+    attribution: >
+      Pre-existing, unrelated to this branch. mix.exs is not in this
+      branch's diff (git diff main --stat has no mix.exs entry); the `{:lua,
+      "~> 1.0"}` dependency was added by a prior, already-merged commit
+      (3a62d09, "feat(REQ-148): adopt {:lua, ~> 1.0} + empirical OQ-2
+      spike"), which predates and is disjoint from this branch.
+    error: 'found a Lua-shaped dependency in mix.exs: ["ecto_sql", "postgrex", "plug", "bandit", "jason", "stream_data", "ueberauth_oidcc", "lua"]'
+    route_to: "Forward to ORCH for ISSUE_QUEUE filing (pre-existing REQ-148 regression, not this run's responsibility to fix or block on)"
+  blocks_pass: true
+  blocks_pass_reasoning: >
+    2 of the 3 failures are NOT pre-existing/unrelated: the iso8601 bug is a
+    real defect in this branch's own new router code (fails one of
+    TEST-DESIGN-VALIDATOR's approved AC1/R4 tests), and the entries: count
+    drift was introduced by this branch's own Step 00 docs append. Per
+    WF-02 Step 4's pre-existing/unrelated carve-out, only the third failure
+    (Lua guardrail, mix.exs untouched by this branch) qualifies to be
+    forwarded rather than block.
+
+verdict: FAIL
+verdict_reasoning: >
+  32 tests in the new REQ-077 suite ran; 31 passed, 1 failed. The failure is
+  a genuine implementation bug (Letflow.Routers.Promotions.iso8601/1 missing
+  a DateTime clause, hit by R4 GET /promotions/:id/context) -- not a flaky
+  test, not an environment issue, not a pre-existing/unrelated failure.
+  Additionally, the full suite (scripts/test_parallel.sh, cross-checked
+  against a plain non-partitioned mix test run, identical failing tests in
+  both) shows 3 failures total: the iso8601 bug above, a docs
+  entries:-count drift this branch's own Step 00 introduced
+  (docs/status/requirement_status.index.yaml:524 needs updating from 50 to
+  51), and one pre-existing/unrelated Lua-dependency guardrail failure
+  (mix.exs untouched by this branch, dependency added by an earlier merged
+  commit). Do not route to RELEASE-VALIDATOR as-is.
+artifacts_out:
+  - test/reports/report-20260826-WF02-REQ077-20260826.yaml
+next_action: >
+  Route back to ELIXIR-DEV to fix Letflow.Routers.Promotions.iso8601/1 (add
+  a %DateTime{} clause) and re-run TEST-RUNNER. Separately route to
+  DOC-UPDATER to bump docs/status/requirement_status.index.yaml:524's
+  entries: 50 -> 51 for volume requirement_status.v4.yaml. Forward the Lua
+  guardrail failure (Letflow.Engine.LuaScriptAuditTest) to ORCH for
+  ISSUE_QUEUE filing as a pre-existing, unrelated regression from commit
+  3a62d09 -- does not block this run.

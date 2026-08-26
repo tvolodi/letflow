@@ -1,0 +1,81 @@
+run_id: WF02-REQ077-20260826
+agent: TEST-RUNNER
+step: WF-02 Step 4 (Test Run) -- RE-RUN after fixes
+date: 2026-08-26
+branch: feature/WF02-REQ077-20260826
+requirement: REQ-077 (promotion-pipeline routes -- see lib/letflow/design/req077-promotion-pipeline-routes.md)
+prior_report: test/reports/report-20260826-WF02-REQ077-20260826.yaml (original FAIL; superseded by this re-run)
+
+context: >
+  Re-verifying after: (1) ELIXIR-DEV fixed the iso8601/1 DateTime crash in
+  lib/letflow/routers/promotions.ex, commit b6c6a74; (2) ORCH fixed the A9
+  docs entries:-count drift in docs/status/requirement_status.index.yaml,
+  commit c112e03; (3) ORCH ran mix format on the new test file, commit
+  c819f7d. Also confirmed (3) is not blocking: a pre-existing, unrelated
+  Lua-dependency guardrail failure filed as ISS-0333 (GH#645). All claims
+  below were independently re-run, not trusted from prior summaries.
+
+environment_setup: >
+  docker compose up -d failed with "permission denied while trying to
+  connect to the docker API at unix:///var/run/docker.sock" (both
+  unprivileged and sudo -n). Did not attempt to work around the docker
+  permission issue because Postgres was already reachable: this worktree's
+  untracked .env sets LETFLOW_DB_PORT=5463, and `ss -tlnp` confirmed a
+  listener on 0.0.0.0:5463 and [::]:5463 (also 127.0.0.1:5462). DB
+  reachable throughout; each mix test / partition process performed its
+  own ecto.create/ecto.migrate --quiet via the `test` alias, no separate
+  setup step needed.
+
+commands_run:
+  - cmd: mix compile --warnings-as-errors
+    result: "exit 0, no output -- clean compile, zero warnings"
+  - cmd: mix format --check-formatted
+    result: "exit 0, no output -- whole tree formatted, no unformatted files"
+  - cmd: mix test test/letflow/routers/req077_promotion_pipeline_test.exs
+    result: "Result: 32 passed. Finished in 36.3 seconds (0.00s async, 36.3s sync). 0 failures."
+
+full_suite:
+  command: scripts/test_parallel.sh
+  partitions: 8
+  partitions_source: nproc
+  raw_summary_line: "combined: 2023 tests, 5 properties, 1 failures (2027/2028 passed)"
+  per_partition:
+    - "partition 1: 223 tests, 0 properties, 0 failures, exit 0"
+    - "partition 2: 259 tests, 0 properties, 0 failures, exit 0"
+    - "partition 3: 312 tests, 1 property, 0 failures, exit 0"
+    - "partition 4: 219 tests, 0 properties, 1 failures, exit 2"
+    - "partition 5: 286 tests, 0 properties, 0 failures, exit 0"
+    - "partition 6: 237 tests, 2 properties, 0 failures, exit 0"
+    - "partition 7: 276 tests, 2 properties, 0 failures, exit 0"
+    - "partition 8: 211 tests, 0 properties, 0 failures, exit 0"
+  failure_identified:
+    suite: Letflow.Engine.LuaScriptAuditTest
+    test: "mix.exs and moduledoc guardrails mix.exs declares no Lua/NIF-shaped dependency"
+    file: test/letflow/engine/lua_script_audit_test.exs:420
+    error: 'found a Lua-shaped dependency in mix.exs: ["ecto_sql", "postgrex", "plug", "bandit", "jason", "stream_data", "ueberauth_oidcc", "lua"]'
+    log_location: /tmp/letflow_test_parallel.bCtmMF/partition-4.log:2155
+    status: "Pre-existing, already filed as ISS-0333 (GH#645). Not blocking, not new, not a regression."
+
+regression_check:
+  iso8601_datetime_crash: "GONE -- 32/32 passed on test/letflow/routers/req077_promotion_pipeline_test.exs, including AC1/R4 GET /promotions/:id/context."
+  a9_docs_entries_drift: "GONE -- no Letflow.Docs.RequirementStatusInvariantsTest failure in the full-suite run (all 8 partitions clean of it)."
+  new_failures: "NONE -- the only failure in the full suite is the single, already-tracked Lua guardrail test; failure count dropped from 3 (prior run) to 1 (this run), consistent with exactly the two fixed issues going away."
+
+verdict: PASS
+verdict_reasoning: >
+  mix compile --warnings-as-errors is clean. mix format --check-formatted
+  is clean on the whole tree. The new REQ-077 suite is 32/32 passing. The
+  full suite (scripts/test_parallel.sh, 8 partitions) is 2027/2028 passing
+  (2023 tests + 5 properties, 1 failure), and that sole failure is
+  Letflow.Engine.LuaScriptAuditTest, the pre-existing, already-filed
+  ISS-0333 (GH#645) regression from commit 3a62d09, unrelated to this
+  branch's mix.exs (still untouched by this diff). Both previously-blocking
+  failures (iso8601 DateTime crash, A9 docs entries: drift) are confirmed
+  gone. Safe to route to RELEASE-VALIDATOR.
+
+artifacts_out:
+  - test/reports/report-20260826-WF02-REQ077-20260826-rerun.yaml
+
+next_action: >
+  Route to RELEASE-VALIDATOR for independent re-verification. No further
+  TEST-RUNNER action needed on this run.

@@ -1,0 +1,39 @@
+{
+  "handoff_id": "step03b-WF02-REQ151-20260826",
+  "run_id": "WF02-REQ151-20260826",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ151-20260826/step-03b-test-design-validator.json",
+  "created_at": "2026-08-26T12:46:00Z",
+  "started_at": "2026-08-26T12:46:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-151"],
+    "issue_ids": [],
+    "related_handoff_ids": ["handoffs/WF02-REQ151-20260826/step-03-test-designer.json"],
+    "artifacts_in": [
+      "test/specs/REQ-151.md",
+      "test/letflow/engine/lua/sandbox_test.exs",
+      "lib/letflow/engine/lua/sandbox.ex"
+    ],
+    "branch_name": "feature/WF02-REQ151-20260826"
+  },
+  "task": {
+    "description": "Independently validate test/specs/REQ-151.md and test/letflow/engine/lua/sandbox_test.exs per WF-02 Step 3b. Claim this handoff by setting status to IN_PROGRESS only. Read both files directly, and re-run the tests yourself (do not trust TEST-DESIGNER's report). Apply at least one mutant to lib/letflow/engine/lua/sandbox.ex (e.g. remove one deny-set entry, or invert the coroutine decision) and confirm the corresponding test fails, then revert and confirm the suite is clean again.",
+    "acceptance_criteria": [
+      "every acceptance criterion in docs/requirements.yaml's REQ-151 entry has at least one runnable test targeting it, verified by reading the test file, not the spec's claims alone",
+      "no TODO/skip left in the spec or test file",
+      "test fixtures are self-sufficient -- no shared state, no cross-test pollution, no ordering dependency",
+      "no hardcoded secrets/connection strings in the test file",
+      "at least one mutant applied to sandbox.ex is caught by the suite (isolates at least one test failure), then reverted with a clean re-run confirmed"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

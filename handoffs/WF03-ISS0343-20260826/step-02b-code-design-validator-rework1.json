@@ -1,0 +1,37 @@
+{
+  "handoff_id": "step02b-rework1-WF03-ISS0343-20260826",
+  "run_id": "WF03-ISS0343-20260826",
+  "workflow_id": "WF-03",
+  "step": "02b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0343-20260826/step-02b-code-design-validator-rework1.json",
+  "created_at": "2026-08-26T15:50:00Z",
+  "started_at": "2026-08-26T15:50:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0343"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0343-20260826/step-02-code-designer.json",
+      "handoffs/WF03-ISS0343-20260826/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": ["lib/letflow/design/iss0343-backfill-missing-schema-tolerance.md"],
+    "branch_name": "feature/WF03-ISS0343-20260826",
+    "note": "RE-VALIDATION after rework 1/3. Prior FAIL was solely on criterion 5 (§2.3 had a copy-pasteable Elixir case clause). CODE-DESIGNER rewrote §2.3 to prose only. The other 4 checks already passed and were not the subject of rework -- confirm they still hold."
+  },
+  "task": {
+    "description": "Re-validate lib/letflow/design/iss0343-backfill-missing-schema-tolerance.md's §2.3 specifically, and re-confirm the other 4 checks still pass.",
+    "acceptance_criteria": [
+      "§2.3 contains no case/do/end, Logger.warning(...), or map-update Elixir syntax -- prose/structural description only",
+      "§2.3 still fully specifies: match pattern, what the log message must convey, and the skipped-counter outcome",
+      "the other 4 previously-passing checks still pass unchanged"
+    ]
+  },
+  "result": null,
+  "rework_count": 1,
+  "max_rework": 3
+}

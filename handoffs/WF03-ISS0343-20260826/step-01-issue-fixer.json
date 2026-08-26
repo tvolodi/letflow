@@ -6,8 +6,8 @@
   "from_agent": "ORCH",
   "to_agent": "ISSUE-FIXER",
   "file": "handoffs/WF03-ISS0343-20260826/step-01-issue-fixer.json",
-  "created_at": "2026-08-26T13:40:00Z",
-  "started_at": "2026-08-26T13:40:00Z",
+  "created_at": "2026-08-26T14:20:00Z",
+  "started_at": "2026-08-26T14:20:00Z",
   "completed_at": null,
   "status": "PENDING",
   "priority": "NORMAL",
@@ -21,15 +21,16 @@
       "test/letflow/tenant_provisioning/backfill_test.exs",
       "test/support/tenant_fixture.ex"
     ],
-    "branch_name": "feature/WF03-ISS0343-20260826"
+    "branch_name": "feature/WF03-ISS0343-20260826",
+    "note": "REVISED SCOPE, tightly bounded to avoid the prior attempt's resource cost. A prior dispatch of this same step spent >200k tokens across repeated scripts/test_parallel.sh reruns without ever committing a conclusion. Do not repeat that pattern."
   },
   "task": {
-    "description": "Combined Step 0.5 (registry lookup) + Step 1 (diagnose) per WF-03_issue_resolving.md. Claim this handoff by setting status to IN_PROGRESS only.\n\nStep 0.5: search docs/issues/*.yaml for a resolved entry with matching symptoms -- ISS-0329 (parallel test schema/connection isolation, resolved 2026-08-24) is the closest prior candidate; read its resolution and state whether this is the same root cause recurring (if so, bump severity to at least MAJOR) or a distinct mechanism.\n\nStep 1: Reproduce directly under scripts/test_parallel.sh repeatedly (standalone `mix test test/letflow/tenant_provisioning/backfill_test.exs` already confirmed clean by ORCH -- 4/4 passed -- so do NOT rely on a standalone run; you must reproduce under actual parallel partitioning). Read test/support/tenant_fixture.ex's provisioned_tenant!/1 (Sandbox.mode(Letflow.Repo, :auto) called globally) and trace how this interacts with other concurrently-running async tests/partitions when test_parallel.sh spawns N separate `mix test --partitions N` OS processes. Determine: is this a cross-PROCESS issue (each partition is a separate BEAM VM against the same physical Postgres, so Sandbox :auto in one partition process cannot leak into another process's connections) or a cross-test-WITHIN-partition issue (an async test in the SAME partition process racing against this async:false test's global Sandbox mode flip)? Quote real reproduction output -- run scripts/test_parallel.sh at least 3 times if the first doesn't reproduce it, since ISS-0329/ISS-0340's own history shows this class of failure is itself flaky (different counts/sets across identical runs). Do NOT implement a fix -- produce the diagnosis for CODE-DESIGNER.",
+    "description": "Combined Step 0.5 + Step 1, STRICTLY BOUNDED. Claim this handoff by setting status to IN_PROGRESS only.\n\n1. Read docs/issues/ISS-0329.yaml (prior resolved parallel-isolation issue) and state in one paragraph whether ISS-0343 looks like the same mechanism recurring or a distinct one, based on reading both descriptions -- no need to reproduce ISS-0329 itself.\n2. Read test/support/tenant_fixture.ex's provisioned_tenant!/1 (Sandbox.mode(Letflow.Repo, :auto) call) and test/letflow/tenant_provisioning/backfill_test.exs in full. Reason from the code alone (not experimentation) about the mechanism: scripts/test_parallel.sh runs N SEPARATE mix test --partitions N OS processes, each its own BEAM VM with its own Ecto connection pool against the same physical Postgres -- so Sandbox.mode flips in one partition process cannot directly affect another partition's connections. State whether this makes a CROSS-PROCESS explanation implausible, and if so, what a plausible WITHIN-A-SINGLE-PARTITION mechanism would be (e.g. a schema-name collision between this test's provisioned_tenant!/1 and another async test's tenant fixture running concurrently in the same partition process, before/while this test's DROP SCHEMA CASCADE runs).\n3. Run scripts/test_parallel.sh EXACTLY ONCE (do not repeat even if it doesn't reproduce -- one real attempt's output is what this step needs, not proof of reproduction). Quote the real output (pass/fail counts). If BackfillTest fails in this one run, quote the specific error and use it to refine your mechanism theory from step 2. If it does NOT fail, that's fine -- state plainly \"did not reproduce in this one real attempt, consistent with a low-frequency intermittent, prior PR run already showed it failing once (4 failures) so the failure mode is real even if not always triggered.\"\n4. Do NOT implement a fix. Complete the handoff NOW regardless of whether you reproduced it -- a code-reasoning-based mechanism theory plus one real run's output is a sufficient and complete diagnosis for this step. Set next_action to CODE-DESIGNER, naming the specific fix direction your mechanism theory points to (e.g. per-test unique schema/tenant naming already exists via TenantSlugFixture.unique_slug -- if collisions aren't about naming, is it about the DROP SCHEMA CASCADE racing a concurrent CREATE in another test).",
     "acceptance_criteria": [
-      "docs/issues/*.yaml searched, ISS-0329 specifically read and compared, finding (recurrence or distinct) stated explicitly",
-      "the failure reproduced under real scripts/test_parallel.sh parallel execution with real quoted output, not just asserted from the original PR's report",
-      "root cause traced to a specific mechanism (cross-process vs. cross-test-within-partition, or another mechanism if evidence points elsewhere) -- not asserted, demonstrated",
-      "no fix implemented; next_action names CODE-DESIGNER (or, if this turns out to be a test-infra-only issue needing no application-code design, states that explicitly and names the direct next step)"
+      "ISS-0329 comparison stated in one paragraph, recurrence vs. distinct",
+      "mechanism reasoning (cross-process vs within-partition) stated from reading the code, not from repeated experimentation",
+      "exactly one scripts/test_parallel.sh run, real output quoted, whether or not it reproduces",
+      "handoff completed (status COMPLETED, a result block) within this single dispatch -- no follow-up runs, no open-ended waiting"
     ]
   },
   "result": null,

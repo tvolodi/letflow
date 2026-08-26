@@ -188,3 +188,14 @@ history:
       propagate without BPM_IDP_BASE_URL env var; (2) stale admin-user
       external_id in dev DB updated to match current Keycloak sub UUID.
       ISS-0296 closed.
+
+  - req: REQ-150
+    event: started
+    agent: ORCH
+    at: "2026-08-26T18:32:00Z"
+    note: >
+      WF02-REQ150-20260826 started (queue task 336, GH#649, stage S5).
+      Step 00 git-setup PASS (ELIXIR-DEV): branch feature/WF02-REQ150-20260826
+      created and pushed. Fresh restart of a run a prior session had begun
+      and abandoned (stale branch never registered/merged) -- deleted and
+      restarted clean before this dispatch.

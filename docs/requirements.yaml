@@ -7405,7 +7405,7 @@ requirements:
   - id: REQ-150
     title: Settle OQ-6 -- Lua 5.3 integer/float marshalling across VariableMerge and JSONB variable storage (blocks LUA-11)
     owner: CODE-DESIGNER
-    status: pending
+    status: in_progress
     stage: S5
     impl_order: 336  # letflow-queue task id (re-registered 2026-08-26; original task 302 expired/queue reset)
     description: >

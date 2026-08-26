@@ -1,0 +1,49 @@
+{
+  "handoff_id": "step01-WF02-REQ150-20260826",
+  "run_id": "WF02-REQ150-20260826",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ150-20260826/step-01-code-designer.json",
+  "created_at": "2026-08-26T18:33:00Z",
+  "started_at": "2026-08-26T18:33:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-150"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-150": "Settle OQ-6 -- Lua 5.3 integer/float marshalling across VariableMerge and JSONB variable storage (blocks LUA-11). Decision-and-design requirement unblocking REQ-159/REQ-160. Decision 0014's OQ-6 says this must be settled once, centrally, before LUA-11 is expanded. Lua 5.3 distinguishes an integer subtype from a float subtype (3/2 is 1.5; integer division needs //) where LuaJIT 5.1 had a single number type. Letflow stores instance variables as JSONB and merges them through Letflow.Engine.VariableMerge -- a value written by a script, persisted, and read back must round-trip with a defined subtype.\n\nScope: write lib/letflow/design/req150-lua-number-marshalling.md that:\n1. Establishes EMPIRICALLY, by running code against the adopted runtime (tv-labs/lua), how integers and floats cross the Elixir/Lua boundary in BOTH directions -- what Elixir term a Lua integer becomes, what a Lua float becomes, what a Lua script sees when handed an Elixir integer and an Elixir float, and whether the subtype survives a Jason.encode!/Jason.decode! round trip (JSONB storage behavior).\n2. States one NORMATIVE RULE in a numbered section REQ-159/REQ-160 will cite by number: which Elixir type each Lua subtype maps to; what happens to a Lua float with no fractional part (does 2.0 persist as 2.0 or collapse to 2); what happens to an integer exceeding IEEE-754 exact range; what a script observes for a JSON null.\n3. Names the exact module and function that will own the conversion (written once, not per host function).\n4. Records that WASM-12 (REQ-171/REQ-172) requires the WASM host API to be semantically identical to Lua's -- this rule is what WASM must conform to, and the artefact must say so.\n\nNOT IN THIS REQUIREMENT: no host function implemented; no change to lib/letflow/engine/variable_merge.ex ships here."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF02-REQ150-20260826/step-00-git-setup.json"],
+    "artifacts_in": [
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md",
+      "docs/migration/stage-5-scripting-plugins.md",
+      "lib/letflow/design/req148-lua-runtime-spike.md (empirical spike precedent -- same style: quote real runtime output, don't infer from the manual)",
+      "lib/letflow/engine/variable_merge.ex (read-only, for context on the JSONB round-trip path)"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/req150-lua-number-marshalling.md"
+    ],
+    "branch_name": "feature/WF02-REQ150-20260826"
+  },
+  "task": {
+    "description": "Write lib/letflow/design/req150-lua-number-marshalling.md per the requirement text above and docs/requirements.yaml REQ-150's full acceptance_criteria. This requirement calls for EMPIRICAL observation (run real code against deps/lua, quote real output) same as REQ-148's spike precedent -- this is evidence-gathering + a normative design rule, not implementation code for variable_merge.ex itself (that stays out of scope). Actually run Lua code via iex/mix run against the adopted runtime to observe boundary behavior in both directions, and actually run Jason.encode!/Jason.decode! to observe the JSONB round-trip -- do not infer from the Lua 5.3 reference manual or from memory.",
+    "acceptance_criteria": [
+      "lib/letflow/design/req150-lua-number-marshalling.md exists with a numbered normative section stating one rule per direction (Lua to Elixir, Elixir to Lua) that REQ-159 and REQ-160 can cite by section number",
+      "the artefact quotes real runs showing what an Elixir integer, an Elixir float, a Lua integer, and a Lua float each become on crossing the boundary in the adopted runtime -- observed, not inferred from the Lua 5.3 manual",
+      "the artefact states explicitly what happens to a float with no fractional part (e.g. 2.0) after a Jason.encode!/Jason.decode! round trip, with the real output quoted",
+      "the artefact states the behaviour for an integer outside IEEE-754 exact range and for a JSON null, each with a defined outcome rather than 'undefined'",
+      "the artefact names the exact module and function that will own the conversion, so REQ-159 and REQ-160 share one implementation",
+      "the artefact states that WASM-12's parity requirement (REQ-171, REQ-172) binds the WASM half to this same rule, citing decision 0014's OQ-6",
+      "no file under lib/letflow/engine/ is modified by this requirement, confirmed by git diff --stat scoped to its commits"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

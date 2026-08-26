@@ -1,0 +1,25 @@
+id: ISS-0338
+title: >
+  lua_script_audit.ex moduledoc says build-vs-bind decision "has not been
+  made" -- stale since decision 0014 (2026-08-23)
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ151-20260826
+discovered_at: 2026-08-26T12:07:50Z
+severity: MINOR
+status: open
+resolved_in_run: null
+resolved_at: null
+queue_task_id: 338
+github_issue_number: 651
+description: >
+  lib/letflow/engine/lua_script_audit.ex's moduledoc/typedoc (lines ~16-21,
+  ~91-97) still states the Lua build-vs-bind decision has not been made.
+  Decision 0014 (docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md)
+  settled this 2026-08-23, and S5 Lua work (REQ-148..REQ-151+) is now
+  actively underway. Flagged as a non-blocking follow-up by REVIEWER during
+  WF02-REQ151-20260826 Step 2d (2026-08-26) -- no test or downstream
+  consumer relies on the stale wording, so it did not block that gate.
+acceptance_criteria:
+  - >
+    lua_script_audit.ex moduledoc/typedoc updated to reflect decision 0014
+    as settled, not pending

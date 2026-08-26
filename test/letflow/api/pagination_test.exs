@@ -106,6 +106,32 @@ defmodule Letflow.Api.PaginationTest do
 
       assert Pagination.decode_cursor(encoded, "PREFIX:", 0) == {:error, :wrong_endpoint}
     end
+
+    # ISS-0216: an empty prefix used to make String.starts_with?/2 match
+    # unconditionally (every binary "starts with" ""), so check_prefix/2
+    # returned :ok for ANY decoded payload regardless of which endpoint
+    # minted it -- defeating cross-endpoint cursor isolation. The fix
+    # (lib/letflow/api/pagination.ex check_prefix/2's new leading clause)
+    # raises ArgumentError instead. See test/specs/ISS-0216.md.
+    test "ISS-0216: an empty prefix raises ArgumentError instead of silently matching" do
+      raw = Pagination.build_raw_cursor("T:", System.system_time(:microsecond), "task-1")
+      encoded = Pagination.encode_cursor(raw)
+
+      assert_raise ArgumentError, ~r/empty prefix/, fn ->
+        Pagination.decode_cursor(encoded, "", 2)
+      end
+    end
+
+    test "ISS-0216: an empty prefix raises even against a payload with no colons at all" do
+      # Pins that the raise fires purely on prefix == "" -- independent of
+      # decoded's own shape -- so a future change couldn't reintroduce the
+      # bypass by special-casing "well-formed" cursors only.
+      encoded = Pagination.encode_cursor("anything")
+
+      assert_raise ArgumentError, fn ->
+        Pagination.decode_cursor(encoded, "", 0)
+      end
+    end
   end
 
   # ── AC4: expiry checking, no wall-clock waiting ────────────────────────────

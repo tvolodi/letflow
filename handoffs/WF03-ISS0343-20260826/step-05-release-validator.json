@@ -1,0 +1,37 @@
+{
+  "handoff_id": "step05-WF03-ISS0343-20260826",
+  "run_id": "WF03-ISS0343-20260826",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-ISS0343-20260826/step-05-release-validator.json",
+  "created_at": "2026-08-26T16:41:00Z",
+  "started_at": "2026-08-26T16:41:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0343"],
+    "related_handoff_ids": ["handoffs/WF03-ISS0343-20260826/step-04c-test-runner.json"],
+    "artifacts_in": [
+      "lib/letflow/event_store/registry.ex",
+      "lib/letflow/tenant_provisioning/backfill.ex",
+      "docs/issues/ISS-0343.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0343-20260826"
+  },
+  "task": {
+    "description": "Independently re-run scripts/test_parallel.sh per WF-03 Step 5. Confirm every one of docs/issues/ISS-0343.yaml's acceptance_criteria is satisfied by reading the actual code/test, not TEST-RUNNER's summary.",
+    "acceptance_criteria": [
+      "full suite re-run independently, real combined pass/fail totals quoted",
+      "ISS-0343.yaml's 2 acceptance criteria each checked explicitly against real code/test",
+      "docs/issues/ISS-0343.yaml checked for staleness (should still show status: open at this point)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

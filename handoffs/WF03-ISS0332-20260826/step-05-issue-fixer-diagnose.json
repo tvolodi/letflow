@@ -9,7 +9,7 @@
   "created_at": "2026-08-26T04:48:29Z",
   "started_at": "2026-08-26T04:48:29Z",
   "completed_at": null,
-  "status": "PENDING",
+  "status": "IN_PROGRESS",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -43,7 +43,16 @@
       "No implementation code produced"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "STEP 0.5 — REGISTRY LOOKUP: No resolved issue in docs/issues/ covers this exact class. ISS-0072 (resolved) concerns event types never seeded at all for a tenant schema; ISS-0332 concerns a type that IS seeded (DEFINITION_PROMOTED) but whose schema_version was bumped (1→2) without backfilling pre-existing tenants. First occurrence of the 'schema_version bump not backfilled' class.\n\nSTEP 1 — ROOT CAUSE:\n\n1. @platform_event_type_seed_attrs in lib/letflow/tenant_provisioning.ex now seeds DEFINITION_PROMOTED at schema_version 2 (review_id type ['string','null']). maybe_seed_platform_event_types/2 (line 848) is called only from replay_migrations/2 (line 322), and only for tenants being provisioned right now. There is no mechanism to re-run or upgrade existing tenants' event_type_registry rows when @platform_event_type_seed_attrs changes. Pre-existing tenants retain DEFINITION_PROMOTED at schema_version 1 (review_id type 'string', required non-null).\n\n2. R10 call path: lib/letflow/routers/tenants.ex handle_promote/3 (line 374) calls Promotion.promote_active_definition/5. Inside do_promote_definition/7 (lib/letflow/definitions/promotion.ex line 287), the with-chain calls write_target_definition/4 first. write_target_definition/4 runs inside its own Repo.transaction/1 (line 349), which commits independently. After that transaction commits, do_promote_definition/7 calls append_promotion_event/9 (line 306). These are sequenced — not inside a wrapping transaction — so the promotion write commits before the event-append attempt.\n\n3. append_promotion_event/9 → PlatformEvents.append_definition_promoted/2 (lib/letflow/event_store/platform_events.ex line 64) → EventStore.append_platform_event/2 (lib/letflow/event_store.ex line 271). Inside append_platform_event/2's with-chain, Registry.validate_payload('DEFINITION_PROMOTED', payload, tenant_id) is called (event_store.ex line 284).\n\n4. validate_payload/3 (lib/letflow/event_store/registry.ex line 139) calls get_type('DEFINITION_PROMOTED', tenant_id), which queries ORDER BY schema_version DESC LIMIT 1 — returning the v1 row for pre-existing tenants. JsonSchema.validate/2 then validates the R10 payload (review_id: null) against the v1 JSON Schema ('type': 'string'), which fails. Returns {:error, {:payload_validation_failed, [...]}}.\n\n5. This error propagates back through the with-chain to render_promote/2 (tenants.ex line 389), which hits the catch-all {:error, _other} clause → Response.internal_error(conn) → HTTP 500.\n\n6. SEVERITY-1 SHAPE: The promotion DB write (write_target_definition/4's Repo.transaction) already committed in step 2 — the process definition is active in the target tenant schema. The caller receives a 500. No DEFINITION_PROMOTED event is written. Committed write + failed event-append + 500 to client = the exact broken-audit shape design §F-5.2 names as Severity 1.\n\nFIX DIRECTION (for CODE-DESIGNER): A backfill mechanism — most naturally a Mix task — that iterates every provisioned tenant schema (via TenantProvisioning registrations or tenant_schemas), calls Registry.register_type/2 with the DEFINITION_PROMOTED v2 attrs per tenant, and treats {:error, :duplicate_event_type_version} as :ok (already at v2, idempotent). The monotonicity check in insert_with_monotonicity_check/2 already protects against downgrade (returns {:error, :schema_version_not_monotonic} if current_max > attempted version). Task must be safe to run at deploy time and a no-op on tenants already at v2. No application-code change is required beyond the backfill mechanism.",
+    "artifacts_out": [],
+    "issues": [
+      "ISS-0072 (resolved) covers the adjacent 'event types never seeded' class but is a different root cause — not a recurrence.",
+      "The promotion write and event-append are sequenced in two separate transactions (write_target_definition/4 commits, then append_promotion_event/9 runs). This sequencing is the structural reason the failure leaves a committed-but-unevented promotion — worth CODE-DESIGNER reviewing whether the two should be wrapped in a single outer transaction or whether idempotent retry is the preferred recovery shape."
+    ],
+    "next_action": "ORCH routes to CODE-DESIGNER for fix design"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

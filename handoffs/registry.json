@@ -2540,7 +2540,7 @@
             "lock_acquired_at": "2026-08-26T18:21:06Z",
             "lock_released_at": null,
             "released_lock": false,
-            "last_known_step": "Step 01b PENDING (CODE-DESIGN-VALIDATOR dispatched)",
+            "last_known_step": "Step 01b COMPLETED PASS; Step 02c PENDING (SECURITY-REVIEWER dispatched, out-of-scope gate)",
             "backfilled": false,
             "queue_task_id": 336,
             "queue_agent_id": "orch-loop-1787735920",

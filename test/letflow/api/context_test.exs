@@ -96,6 +96,18 @@ defmodule Letflow.Api.ContextTest do
     end
   end
 
+  # Pure introspection test: no DB, no provisioned tenants needed.
+  # Placed here rather than inside the provisioning describe block below so that
+  # the tenant-provisioning setup does not run for it -- ISS-0340.
+  describe "scoped_repo_opts/1 API shape" do
+    test "scoped_repo_opts/1 is 1-arity — no tenant/schema/prefix parameter exists to pass" do
+      assert function_exported?(Context, :scoped_repo_opts, 1)
+      refute function_exported?(Context, :scoped_repo_opts, 2)
+      refute function_exported?(Context, :scoped_repo_opts, 3)
+      refute function_exported?(Context, :scoped_repo_opts, 4)
+    end
+  end
+
   describe "scoped_repo_opts/1 ignores request-supplied tenant hints (INV-1, AC3)" do
     setup do
       tenant_a = TenantFixture.provisioned_tenant!(slug_prefix: "req072-a")
@@ -120,13 +132,6 @@ defmodule Letflow.Api.ContextTest do
       assert {:ok, prefix: schema_name} = Context.scoped_repo_opts(conn)
       assert schema_name == tenant_a.schema_name
       refute schema_name == tenant_b.schema_name
-    end
-
-    test "scoped_repo_opts/1 is 1-arity — no tenant/schema/prefix parameter exists to pass" do
-      assert function_exported?(Context, :scoped_repo_opts, 1)
-      refute function_exported?(Context, :scoped_repo_opts, 2)
-      refute function_exported?(Context, :scoped_repo_opts, 3)
-      refute function_exported?(Context, :scoped_repo_opts, 4)
     end
 
     test "returns {:error, :missing_auth_context} when conn.assigns.auth_context is absent" do

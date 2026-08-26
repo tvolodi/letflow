@@ -6,9 +6,9 @@ discovered_by: ORCH
 discovered_in_run: WF03-ISS0343-20260826
 discovered_at: 2026-08-26T16:49:00Z
 severity: MINOR
-status: open
-resolved_in_run: null
-resolved_at: null
+status: resolved
+resolved_in_run: WF03-ISS0296-20260826
+resolved_at: "2026-08-26T17:20:00Z"
 queue_task_id: 345
 github_issue_number: 664
 description: >
@@ -26,3 +26,13 @@ acceptance_criteria:
     active
   - >
     mix letflow.lint_handoffs parses the file without error
+resolution_note: >
+  WF03-ISS0296-20260826 merged (PR #662) before ORCH could act on this
+  deferral. The other host's own session already fixed the underlying BOM
+  as part of a broader handoff-status cleanup (commit 09dd279,
+  "fix(lint_handoffs): correct handoff status values -- DONE->COMPLETED,
+  PASS->COMPLETED (H1 fix)"), landed on main ahead of this session picking
+  the issue back up. Verified directly: the file no longer has a leading
+  BOM (head -c 5 | xxd shows a clean "{\n  \"" start), and
+  mix letflow.lint_handoffs reports "OK -- 0 new violations across 1023
+  handoff files" against current main. No further action needed.

@@ -1,0 +1,41 @@
+{
+  "handoff_id": "step04b-test-design-validator-WF03-ISS0332-20260826",
+  "run_id": "WF03-ISS0332-20260826",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0332-20260826/step-04b-test-design-validator.json",
+  "created_at": "2026-08-26T05:36:30Z",
+  "started_at": "2026-08-26T05:36:30Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0332"],
+    "requirement_text": {
+      "ISS-0332": "AC1: backfill updates pre-existing tenants' DEFINITION_PROMOTED to schema_version 2. AC2: R10 against pre-existing tenant succeeds end-to-end. AC3: idempotent on already-v2 tenants."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step04-test-designer-WF03-ISS0332-20260826"],
+    "artifacts_in": [
+      "test/letflow/tenant_provisioning/backfill_test.exs",
+      "docs/issues/ISS-0332.yaml"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0332-20260826"
+  },
+  "task": {
+    "description": "Validate the test file at test/letflow/tenant_provisioning/backfill_test.exs (on branch feature/WF03-ISS0332-20260826). Check out the feature branch before reading.\n\nGate criteria:\n1. Every MUST acceptance criterion from ISS-0332 has a runnable test:\n   - AC1: a test that shows backfill updates a pre-existing tenant from v1 to v2\n   - AC2: a test that shows validate_payload FAILS on null review_id before backfill, PASSES after backfill\n   - AC3: a test that shows backfill is a no-op on already-v2 tenants (no error, skipped count incremented)\n2. No skipped or deferred coverage (no @tag :skip, no TODO placeholders)\n3. Fixtures are isolated (use Letflow.DataCase per test)\n4. Mutation testing was performed: at least 2 mutants were applied, which tests failed for each is recorded in the step-04 handoff result\n5. The AC2 test explicitly asserts {:error, {:payload_validation_failed, _}} BEFORE backfill and :ok AFTER backfill -- not just the post-backfill state",
+    "acceptance_criteria": [
+      "All five gate criteria checked against the actual test file",
+      "PASS only if all five criteria met",
+      "FAIL with specific missing coverage if any criterion fails"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,49 @@
+{
+  "handoff_id": "step05-diagnose-WF03-ISS0332-20260826",
+  "run_id": "WF03-ISS0332-20260826",
+  "workflow_id": "WF-03",
+  "step": "0.5+1",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0332-20260826/step-05-issue-fixer-diagnose.json",
+  "created_at": "2026-08-26T04:48:29Z",
+  "started_at": "2026-08-26T04:48:29Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0332"],
+    "requirement_text": {
+      "ISS-0332": "REQ-077 bumped the DEFINITION_PROMOTED platform-event-type seed from schema_version 1 (review_id required non-null) to schema_version 2 (review_id nullable) in lib/letflow/tenant_provisioning.ex, to support R10 (Promotion.promote_active_definition/5, ENV-03 review-less promote path). This seed only applies to tenants provisioned from this point forward -- nothing re-runs replay_migrations/2 or re-registers the type for already-provisioned tenants, whose event_type_registry still validates against v1. R10 against such a tenant commits the promotion transaction, then fails the event-append step on schema validation -- a committed write reported as failure (Severity 1). Needs a backfill routine (e.g. a Mix task iterating tenant_schemas and calling Letflow.EventStore.Registry.register_type/2 per tenant, no-op on an already-higher-version collision) -- should go through CODE-DESIGNER before implementation. Affected files: lib/letflow/tenant_provisioning.ex, lib/letflow/event_store/registry.ex."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step00-WF03-ISS0332-20260826"],
+    "artifacts_in": [
+      "docs/issues/ISS-0332.yaml",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/event_store/registry.ex",
+      "lib/letflow/routers/tenants.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/event_store/registry.ex",
+      "lib/mix/tasks/"
+    ],
+    "branch_name": "feature/WF03-ISS0332-20260826"
+  },
+  "task": {
+    "description": "Perform WF-03 Steps 0.5 and 1 for ISS-0332.\n\nStep 0.5 — Registry Lookup: Check docs/issues/*.yaml for any resolved entries with matching symptoms (same DEFINITION_PROMOTED schema_version gap class). If a match is found, determine whether the same root cause has recurred or if this is a genuinely new manifestation. Complete the lookup and record findings.\n\nStep 1 — Diagnose: Root-cause the failure. ISS-0332's description and docs/issues/ISS-0332.yaml give good context, but verify by reading the actual code:\n- lib/letflow/tenant_provisioning.ex: Find the @platform_event_type_seed_attrs list, specifically DEFINITION_PROMOTED at schema_version 2. Note the KNOWN GAP comment in the description field -- this is the code's own self-documented admission.\n- lib/letflow/event_store/registry.ex: Read register_type/2 and the monotonicity check to understand how {:error, :duplicate_event_type_version} and {:error, :schema_version_not_monotonic} are returned.\n- lib/letflow/routers/tenants.ex: Find R10 (the ENV-03 promote_active_definition/5 route) to understand how it calls the event store and what happens when the schema validation fails.\n\nDocument the root cause, not just the symptom. The root cause is: maybe_seed_platform_event_types/2 only seeds event types during replay_migrations/2 for the current @platform_event_type_seed_attrs list -- there is no mechanism to re-seed or upgrade event type schema_versions for tenants already provisioned before @platform_event_type_seed_attrs was changed. R10 calls the event appender after committing the promotion transaction; if that tenant's event_type_registry still has DEFINITION_PROMOTED at schema_version 1 (review_id type 'string', not ['string','null']), validate_payload/3 fails on a null review_id, returning {error, {:payload_validation_failed, ...}}, leaving the promotion committed but the audit event unemitted -- a Severity-1 broken-audit shape.\n\nAfter diagnosis: state what a fix needs to do. Do NOT implement the fix.\n\nComplete both steps in a single handoff result.",
+    "acceptance_criteria": [
+      "Step 0.5: docs/issues/ checked for prior resolved entries with the same schema_version backfill class; findings stated",
+      "Step 1: root cause identified as specific function and code path, not just symptom",
+      "Step 1: affected functions named (register_type/2, maybe_seed_platform_event_types/2, validate_payload/3 path through R10)",
+      "Step 1: fix direction stated -- sufficient for CODE-DESIGNER to design from",
+      "No implementation code produced"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0343-20260826/step-05-release-validator.json",
   "created_at": "2026-08-26T16:41:00Z",
   "started_at": "2026-08-26T16:41:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-26T14:35:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -31,7 +31,11 @@
       "docs/issues/ISS-0343.yaml checked for staleness (should still show status: open at this point)"
     ]
   },
-  "result": null,
+  "result": {
+    "verdict": "PASS",
+    "summary": "Independently re-ran scripts/test_parallel.sh on feature/WF03-ISS0343-20260826 (N=8, nproc): combined 2063 tests, 5 properties, 0 failures (2068/2068 passed) -- per-partition breakdown all exit 0 (288/253/156/191/370/204/338/263 tests across the 8 partitions). Also isolate-ran the two files most relevant to ISS-0343 directly (mix test test/letflow/tenant_provisioning/backfill_test.exs test/letflow/event_store/registry_tenant_schema_missing_test.exs): 8 passed, 0 failures.\n\nISS-0343 acceptance criteria checked against real code/tests, not history narrative:\n(1) 'Letflow.TenantProvisioning.BackfillTest passes reliably against current main [branch]' -- CONFIRMED: the full BackfillTest suite (including the new ISS-0343 regression test 'a tenant whose schema vanished mid-sweep is skipped, not a crash of the whole run') passed both in the full 2068-test combined run and in isolation.\n(2) 'root cause identified (fixture/migration ordering vs. genuine regression) and fixed accordingly' -- CONFIRMED as a genuine race, not a fixture-ordering artifact: step-01-issue-fixer.json's diagnosis (TenantFixture.provisioned_tenant!/1 flips Sandbox to :auto mode process-wide and never restores :manual, so a concurrently-running async test's on_exit DROP SCHEMA CASCADE can race Backfill.run/1's system-wide Repo.all(Registration) sweep against Registry.register_type/2's query) is reflected in the shipped fix: lib/letflow/event_store/registry.ex adds resolve_schema_name/1 (Registration-row lookup, {:error, :tenant_not_provisioned} if absent) plus a narrowly-scoped rescue_missing_schema/1 that catches ONLY %Postgrex.Error{postgres: %{code: :undefined_table}} around both DB call sites (fetch_current_max/2 + the Repo.insert inside insert_with_monotonicity_check/2, and get_type/2's query), returning {:error, :tenant_schema_missing} rather than letting the exception propagate; any other exception is reraised unchanged (verified by reading the rescue clause directly, not the design doc's description of it). lib/letflow/tenant_provisioning/backfill.ex's Enum.reduce_while/3 gained a matching {:error, :tenant_schema_missing} clause that logs and counts the tenant as skipped rather than halting the whole sweep -- confirmed by reading backfill.ex directly (lines 43-50). Design doc lib/letflow/design/iss0343-backfill-missing-schema-tolerance.md explicitly rejects narrowing Backfill.run/1 to a single tenant_id (would remove real production sweep semantics to patch a test symptom) and rejects an advisory-lock-only fix on TenantFixture teardown (does not close the race at the query side, which is the only place that's correct independent of *why* the schema vanished -- test teardown today, live tenant-offboarding in production tomorrow). Confirmed via git log that this design passed CODE-DESIGN-VALIDATOR (after one rework iteration removing implementation code from the doc), the ELIXIR-DEV implementation passed SECURITY-REVIEWER and REVIEWER, and TEST-DESIGNER's new tests (test/letflow/event_store/registry_tenant_schema_missing_test.exs -- 3 tests covering get_type/2, register_type/2, and a control case for an unaffected healthy tenant; plus the backfill_test.exs regression test) passed TEST-DESIGN-VALIDATOR and TEST-RUNNER.\n(3) 'docs/issues/ISS-0343.yaml checked for staleness' -- CONFIRMED still status: open, resolved_in_run: null, resolved_at: null -- consistent with this being the pre-closure validation step (ISSUE-FIXER closes it at Step 5's next_action, not RELEASE-VALIDATOR).\n\nNote on repo state: the handoff file for this step existed only on `main` (committed there directly by ORCH's dispatch commit 209f8a5, alongside other WF03-ISS0343 bookkeeping commits that are on main but not yet on this feature branch) rather than on feature/WF03-ISS0343-20260826 itself -- copied it onto the feature branch here so this step's IN_PROGRESS/COMPLETED transitions and result are recorded on the branch this run's code changes actually live on.",
+    "next_action": "Route to ISSUE-FIXER for Step 5 (close issue): flip docs/issues/ISS-0343.yaml's status to resolved, set resolved_in_run/resolved_at, and close GitHub issue #660."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

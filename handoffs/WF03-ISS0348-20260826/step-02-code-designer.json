@@ -1,0 +1,50 @@
+{
+  "handoff_id": "step02-WF03-ISS0348-20260826",
+  "run_id": "WF03-ISS0348-20260826",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0348-20260826/step-02-code-designer.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-26T23:30:00Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0348"],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0348": "ISSUE-FIXER's diagnosis (handoffs/WF03-ISS0348-20260826/step-01-issue-fixer.json result): Backfill.run/1 does an unscoped Repo.all(Registration) whole-table scan (by design -- a backfill tool must see every provisioned tenant). Under full serial test runs, other async:false tests that flip Sandbox mode to :auto (per pre-existing OPEN issue ISS-0113 -- Sandbox.mode/2 is repo-global, not per-test, and provisioned_tenant!/1 never restores :manual) can leave real committed tenant/Registration rows visible to BackfillTest's assertions, causing its exact-count assertions to see extra rows it didn't create."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0348-20260826/step-01-issue-fixer.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0113.yaml",
+      "test/letflow/tenant_provisioning/backfill_test.exs",
+      "lib/letflow/tenant_provisioning/backfill.ex"
+    ],
+    "owned_modules": [
+      "test/letflow/tenant_provisioning/backfill_test.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0348-20260826"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-03 Step 2, fix design) for ISS-0348. Design a fix SCOPED TO test/letflow/tenant_provisioning/backfill_test.exs's own assertions. DO NOT design a fix touching the shared TenantFixture/Sandbox global mode mechanism (test/support/tenant_fixture.ex, test/support/data_case.ex) -- ISS-0113 already investigated and REVERTED exactly that class of fix after it broke 12 other tests across 3 distinct mechanisms (identity_test.exs double-checkout collision, engine/reconstruction_test.exs concurrent-connection tests, promotion_assertion_rerun_test.exs's second-provisioning-in-same-test pattern). Read ISS-0113.yaml's investigation_note in full before designing -- do not re-propose that same shape.",
+    "acceptance_criteria": [
+      "Backfill.run/1's own production code (lib/letflow/tenant_provisioning/backfill.ex) is NOT changed -- its unscoped whole-table scan is correct/intentional production behavior for a backfill tool, not the defect",
+      "Design shows how backfill_test.exs's assertions become resilient to pre-existing/leaked Registration or tenant rows from other tests -- e.g. by scoping each test's post-run assertions to only the tenant_id(s) that specific test created, rather than asserting exact global {updated, skipped} totals that assume zero background rows",
+      "Design does not touch test/support/tenant_fixture.ex, test/support/data_case.ex, or any Sandbox.mode call -- confirm this explicitly as a design constraint satisfied",
+      "Design states the specific assertion changes per failing test case (the 4 named in docs/issues/ISS-0348.yaml)",
+      "No implementation code -- signatures/assertion-shape descriptions only"
+    ]
+  },
+  "artifacts_out": ["lib/letflow/design/iss0348-backfill-test-isolation.md"],
+  "result": {
+    "summary": "Design produced at lib/letflow/design/iss0348-backfill-test-isolation.md. Core approach: replace each of the 4 failing tests' exact-match assertions on Backfill.run/1's global {updated, skipped} tally with bound assertions (updated >= N / skipped >= M, derived from that test's own known tenant contribution) instead of exact literals, relying on the proven monotonicity property that leaked rows can only add to the aggregate counters, never invert a specific tenant's outcome. Each test's existing per-tenant Registry.get_type/2 pre/post checks (already scoped to that test's own tenant_id) remain the authoritative regression proof and are unchanged; test 2 (ISS-0343 vanished-schema) gets one added standalone, side-effect-free Registry.register_type/2 call scoped to vanished_tenant_id to strengthen (not weaken) its 'was skipped, not just present' claim. Backfill.run/1 (lib/letflow/tenant_provisioning/backfill.ex) is untouched. test/support/tenant_fixture.ex, test/support/data_case.ex, and all Sandbox.mode calls are untouched -- explicitly confirmed not to re-propose ISS-0113's reverted global-restore fix shape.",
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

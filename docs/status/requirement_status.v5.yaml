@@ -199,3 +199,20 @@ history:
       created and pushed. Fresh restart of a run a prior session had begun
       and abandoned (stale branch never registered/merged) -- deleted and
       restarted clean before this dispatch.
+
+  - req: REQ-150
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-26T19:45:10Z"
+    note: >
+      WF02-REQ150-20260826 complete. Design-only requirement settling OQ-6 (Lua
+      5.3 integer/float marshalling across Letflow.Engine.VariableMerge and JSONB
+      variable storage). lib/letflow/design/req150-lua-number-marshalling.md
+      produced, with normative rule in §2 (cited as REQ-150 §2.n by LUA-11's
+      REQ-159/REQ-160), owning module/function named in §3, and WASM-12 parity
+      binding recorded in §4. Passed design, CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER scope-test, and
+      RELEASE-VALIDATOR gates. No lib/letflow/engine/ change, confirmed. Decision
+      record docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md's
+      OQ-6 updated to point at the settled design. Status flipped pending -> done
+      in docs/requirements.yaml.

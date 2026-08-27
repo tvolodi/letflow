@@ -1,0 +1,54 @@
+{
+  "handoff_id": "step02a-WF02-REQ160-20260827",
+  "run_id": "WF02-REQ160-20260827",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ160-20260827/step-02a-elixir-dev.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-160"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ160-20260827/step-01-code-designer.json",
+      "handoffs/WF02-REQ160-20260827/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ160-20260827/step-01b-code-design-validator-recheck.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req160-lua-host-api-write.md",
+      "lib/letflow/engine/lua/platform.ex",
+      "lib/letflow/engine/lua_number_marshalling.ex",
+      "lib/letflow/engine/lua/capabilities.ex",
+      "lib/letflow/engine/variable_merge.ex",
+      "lib/letflow/engine/lua_script_audit.ex",
+      "lib/letflow/event_store.ex"
+    ],
+    "branch_name": "feature/WF02-REQ160-20260827",
+    "commit": "a77f216"
+  },
+  "task": {
+    "description": "Implement REQ-160 (LUA-11 write half, LUA-12) strictly per the APPROVED design at lib/letflow/design/req160-lua-host-api-write.md (passed CODE-DESIGN-VALIDATOR recheck, commit a77f216). Read the full design doc before writing any code. Implement in lib/letflow/engine/lua/platform.ex: (1) platform.write_variable(name, value) -- a process-dictionary staged-writes buffer per design section 2.3/2.4 (last-write-wins Map.put semantics), a new private stage_write/2 helper, and a new PUBLIC function Letflow.Engine.Lua.Platform.take_staged_writes/0 that reads-and-clears the process dictionary entry (section 2.4). write_variable itself makes no Repo call, never raises, returns [] (section 3). (2) platform.call_service(service_id, payload) -- a new nested injected behaviour Letflow.Engine.Lua.Platform.ServiceCaller with @callback call/2, resolved fresh via Application.get_env(:letflow, :lua_platform_service_caller, Letflow.Engine.Lua.Platform.NoServiceCaller) on every call (mirrors the existing TimeSource pattern in this same file -- read it first), a default NoServiceCaller module always returning {:error, :service_caller_not_configured}, and the full control flow in section 4.4 (decode Lua table payload via Lua.decode!/2, apply LuaNumberMarshalling.from_lua/1 on the way in and to_lua/1 on the way out, structured [nil, error_table] on any failure, NEVER raise inside this function -- the capability raise happens earlier at the fold/Capabilities.check!/3 level, unchanged). (3) platform.emit_event(event_type, payload, idempotency_key) -- add actor_id to execution_context and empty_execution_context/0 (section 5.2/7.4), and the full control flow in section 5.3 hooking into the real Letflow.EventStore.append/2 (lib/letflow/event_store.ex:214), returning [true] on success or [nil, error_table] on any {:error, reason} -- never raise. (4) Update @capability_matrix per section 7.2 (only the `stub` tag changes for these 3 rows, `required` unchanged) and run_stub/5 per section 7.3 (three new clauses; delete the now-dead :not_yet_implemented clause entirely -- after this requirement no row is ever that tag). (5) Update the stub_spec type per section 7.1. Follow every citation in the design doc precisely -- do not invent a different mechanism than what was approved (e.g. do not encode staged writes into the Lua.t() state, the design explicitly rejected that in section 2.3). Honor INV-write-discard-on-race (section 2.2/8): you are NOT editing REQ-155 or REQ-156's kill-path files (they are not in this requirement's owned_modules) -- do not touch req155-lua-wallclock-kill.md, req156-lua-memory-limit-impl.md, or any executor.ex/sandbox.ex wiring; take_staged_writes/0 is deliberately unwired to any real caller in this requirement (OQ-1, section 2.5) -- do not attempt to wire it into executor.ex yourself, that is explicitly out of scope.",
+    "owned_modules": [
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs",
+      "lib/letflow/design/req160-lua-host-api-write.md",
+      "test/specs/REQ-160.md"
+    ],
+    "acceptance_criteria": [
+      "AC1: A script that writes a variable and then FAILS (raised script error, REQ-154 instruction budget, REQ-155 wall-clock kill, REQ-156 memory limit) leaves no observable trace via take_staged_writes/0 reachable from that failure path -- since take_staged_writes/0 is only ever called by a hypothetical future caller after a normal Lua.eval!/2 return, per this requirement's own scope this means: verify at the Platform layer that no code path in platform.ex itself calls take_staged_writes/0 except an explicit, deliberate call, and that the staged-writes buffer lives only in the process dictionary of the one process that ran the script (section 2.2/2.3).",
+      "AC2: A script that writes several variables and succeeds has ALL of them present in take_staged_writes/0's returned map, last-write-wins on duplicate keys, no partial state observable mid-execution.",
+      "AC3: platform.call_service round-trips through the injected ServiceCaller to a fake/registered service in a test double, response returned as a Lua table readable from inside the script.",
+      "AC4: A service call FAILURE returns a structured Lua error (never raises); a MISSING service:call:<id> capability DOES raise (via the existing, unedited Capabilities.check!/3 fold-level gate) -- the two must be asserted as genuinely distinct code paths in tests.",
+      "AC5: platform.emit_event without the event:emit capability raises (via the existing fold-level gate, unedited); with the grant, calls Letflow.EventStore.append/2 and the emitted event is observable (e.g. via a test double/mock at the EventStore boundary or a real append against a test tenant).",
+      "AC6: Number conversion uses LuaNumberMarshalling.from_lua/1 / to_lua/1 exclusively (REQ-150 section 2.1/2.2) -- no second ad hoc numeric conversion introduced anywhere in this requirement's new code.",
+      "AC7: No host function added by this requirement calls Letflow.Repo with a prefix derived from script-supplied input -- write_variable and call_service make zero Repo calls; emit_event's one Repo call (via EventStore.append/2) always uses execution_context.prefix, never event_type/payload/idempotency_key.",
+      "AC8: mix compile --warnings-as-errors and mix test both pass; quote real command output, not a paraphrase."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

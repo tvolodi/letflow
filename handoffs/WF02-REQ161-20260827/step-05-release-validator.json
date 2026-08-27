@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "RELEASE-VALIDATOR",
   "file": "handoffs/WF02-REQ161-20260827/step-05-release-validator.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -40,6 +40,28 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "summary": "Independently re-derived (not cited) that all 7 REQ-161 acceptance criteria are met by real, currently-passing code and tests, and that the central uninterceptable-termination claim is empirically true, not merely asserted by prior agents.",
+    "acceptance_criteria_mapping": [
+      {"ac": 1, "text": "a test asserts a pcall-wrapped platform.fail STILL yields SCRIPT_FAILED and does not run to completion", "test": "test/letflow/engine/lua/platform_test.exs:1883 'AC1: a script that wraps platform.fail in pcall and continues STILL yields SCRIPT_FAILED and does not run to completion' -- observed pass"},
+      {"ac": 2, "text": "structured failure carries reason/details readable by the host", "test": "platform_test.exs:1900 'AC2: the structured failure carries the reason/details the script passed, readable by the host' and :1914 'AC2: a missing reason/details pair defaults...' -- observed pass"},
+      {"ac": 3, "text": "SCRIPT_FAILED distinguishable from SCRIPT_ERROR by pattern match", "test": "platform_test.exs:1921 'AC3: {:script_failed, _} is pattern-match-distinguishable from a real, unrelated crash' -- observed pass"},
+      {"ac": 4, "text": "platform.fail callable with an EMPTY capability set", "test": "platform_test.exs:1942 'AC4: platform.fail is callable with an EMPTY capability grant set and still terminates the process' -- observed pass"},
+      {"ac": 5, "text": "moduledoc states LUA-15 restatement, pcall hazard, and the actual mechanism", "test": "platform_test.exs:1961 'restates LUA-15 and explains the pcall-continuation hazard, naming exit/1 as the mechanism' -- observed pass"},
+      {"ac": 6, "text": "moduledoc states explicitly whether LUA-15's engine-side half has a real call site", "test": "platform_test.exs:1971 'states plainly that LUA-15's engine-side half has no real call site today' -- observed pass"},
+      {"ac": 7, "text": "mix test and mix compile --warnings-as-errors both pass with real output quoted", "test": "see checks_performed below -- both re-run independently, real output quoted"}
+    ],
+    "checks_performed": [
+      "Read docs/requirements.yaml REQ-161 entry verbatim (lines 8076-8141, 7 acceptance_criteria) directly from source, not from a prior agent's paraphrase.",
+      "Read lib/letflow/design/req161-lua-platform-fail.md in full (566 lines) -- design traces deps/lua/lib/lua.ex's do_call_function/3 and deps/lua/lib/lua/vm/stdlib.ex's lua_pcall/2/lua_xpcall/2 as rescue-only, no catch clause, so exit/1 is not intercepted.",
+      "Read lib/letflow/engine/lua/platform.ex's do_fail/2 (lines 548-562) directly: constructs %{reason:, details:} and calls exit({:script_failed, script_failure}) -- never raise/1,2, never returns.",
+      "Ran `export PATH=\"$HOME/.asdf/shims:$PATH\"; mix compile --warnings-as-errors --force` myself: 'Compiling 129 files (.ex)' / 'Generated letflow app' -- zero warnings, zero errors.",
+      "Ran `mix test test/letflow/engine/lua/platform_test.exs` myself (fresh invocation, this session, not TEST-RUNNER's prior run): 'Finished in 8.3 seconds (0.00s async, 8.3s sync)' / 'Result: 100 passed' -- 0 failures. Re-ran with --seed 0 for a second independent confirmation: identical 'Result: 100 passed'.",
+      "Independently verified the central uninterceptable-termination claim EMPIRICALLY, not merely by code reading: ran an ad hoc script via `MIX_ENV=test MIX_TEST_PARTITION=1 mix run -e '...'` that installed Platform.install/3 with an empty capability set, wrapped platform.fail(\"boom\", {x=1}) in a Lua pcall, and observed the raw Task.yield/2 result directly. Actual output: the task process crashed with `** (stop) {:script_failed, %{reason: \"boom\", details: %{\"x\" => 1}}}`, the crash trace shows the exit propagating straight out through `Lua.VM.Stdlib.lua_pcall/2`'s own stack frame (pcall's body was on the stack when the process died -- it never got a chance to return {false, err} to the script), and `Task.yield/2` returned the exact unmodified term `{:exit, {:script_failed, %{reason: \"boom\", details: %{\"x\" => 1}}}}`. This is direct, first-hand confirmation that pcall did not and could not intercept the exit -- not a citation of the design doc's or TEST-RUNNER's prior claim.",
+      "Ran `git diff main...feature/WF02-REQ161-20260827 --stat`: 16 files changed -- lib/letflow/engine/lua/platform.ex, test/letflow/engine/lua/platform_test.exs, lib/letflow/design/req161-lua-platform-fail.md, test/specs/REQ-161.md, one run-history report, and this run's own 11 handoffs/ files. No file outside platform.ex's owned_modules (e.g. no executor.ex, no plugin_interface.ex, no lua_script_audit.ex edits) -- confirms the design's own stated scope boundary (S1.3/S4) was honored in the actual diff, not just claimed.",
+      "Ran `mix letflow.lint_handoffs` myself: 'OK -- 0 new violations across 1180 handoff files (25 pre-existing grandfathered, traced to ISS-0190)' -- all findings shown are pre-existing and unrelated to this run.",
+      "Confirmed lib/letflow/design/req161-lua-platform-fail.md's section 4 and platform.ex's own moduledoc REQ-161 section both honestly disclose the executor.ex stringification gap and the absent engine-side call site, rather than overclaiming routing is wired -- matches AC5/AC6's specific wording requirement, checked against the real moduledoc text via Code.fetch_docs, not assumed."
+    ],
+    "verdict": "PASS -- all 7 real acceptance criteria in docs/requirements.yaml's REQ-161 entry are independently re-derived as met against the current code and a fresh test run performed in this session (100/100 passed twice, mix compile --warnings-as-errors clean). The central claim (exit/1 uninterceptable by pcall) was confirmed not just by reading do_fail/2 and the design's deps/lua trace, but by directly running the failure scenario via mix run and observing the raw crash/exit term myself -- pcall's own stack frame was mid-execution when the process died, and Task.yield/2 delivered the unmodified {:script_failed, _} tuple. No owned_modules boundary violation across the whole run's diff. REQ-161 is genuinely done, not merely reported done."
   }
 }

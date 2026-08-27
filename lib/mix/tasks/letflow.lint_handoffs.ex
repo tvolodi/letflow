@@ -542,10 +542,13 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
     desc = get_in(data, ["task", "description"]) || ""
     acs = get_in(data, ["task", "acceptance_criteria"]) || []
     artifacts_in = get_in(data, ["context", "artifacts_in"]) || []
-    result_map = case Map.get(data, "result") do
-      r when is_map(r) -> r
-      _ -> %{}
-    end
+
+    result_map =
+      case Map.get(data, "result") do
+        r when is_map(r) -> r
+        _ -> %{}
+      end
+
     artifacts_out = Map.get(result_map, "artifacts_out") || []
     summary = Map.get(result_map, "summary") || ""
     created_at = Map.get(data, "created_at")

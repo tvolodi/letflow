@@ -1,26 +1,28 @@
 {
-  "agent": "ELIXIR-DEV",
   "run_id": "WF02-REQ153-20260827",
   "step": "02a",
-  "status": "PASS",
-  "branch": "feature/WF02-REQ153-20260827",
-  "commit": "328ab8c",
-  "timestamp": "2026-08-27T09:00:00Z",
-  "files_created": [
-    "lib/letflow/engine/lua/executor.ex",
-    "test/letflow/engine/lua/executor_test.exs"
-  ],
-  "compile_result": "mix compile --warnings-as-errors: 0 warnings, 0 errors",
-  "test_output": "Running ExUnit with seed: 601659, max_cases: 32\nExcluding tags: [:keycloak]\n\n...........\nFinished in 0.1 seconds (0.1s async, 0.00s sync)\n\nResult: 11 passed",
-  "acceptance_criteria": {
-    "AC1_module_exists_implements_behaviour": "PASS",
-    "AC2_lua_script_audit_ex_unchanged": "PASS -- grep confirms no Letflow.Engine.Lua.Executor reference in lua_script_audit.ex",
-    "AC3_global_isolation": "PASS -- Sandbox.new() produces fresh VM; SENTINEL global absent after exec 1",
-    "AC4_distinct_state": "PASS -- table T from exec 1 absent in fresh Sandbox.new() VM",
-    "AC5_INV_LSA_1_real_executor": "PASS -- nil and malformed instance_id return {:error, :invalid_instance_id}",
-    "AC6_INV_LSA_2_real_executor": "PASS -- wrong registered_hash returns {:error, {:manifest_hash_mismatch, wrong, real}}",
-    "AC7_moduledoc_documents_script_ref_shape": "PASS -- @moduledoc states script_ref is a binary (Lua source text)",
-    "AC8_mix_test_passing": "PASS -- 11 tests, 0 failures"
-  },
-  "notes": "executor.ex uses Sandbox.new() exclusively (no direct Lua.new() calls). SHA-256 computed via :crypto.hash(:sha256, script_source) |> Base.encode16(case: :lower). No state reuse between calls. lua_script_audit.ex untouched."
+  "status": "COMPLETED",
+  "result": {
+    "agent": "ELIXIR-DEV",
+    "branch": "feature/WF02-REQ153-20260827",
+    "commit": "328ab8c",
+    "timestamp": "2026-08-27T09:00:00Z",
+    "files_created": [
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs"
+    ],
+    "compile_result": "mix compile --warnings-as-errors: 0 warnings, 0 errors",
+    "test_output": "Running ExUnit with seed: 601659, max_cases: 32\nExcluding tags: [:keycloak]\n\n...........\nFinished in 0.1 seconds (0.1s async, 0.00s sync)\n\nResult: 11 passed",
+    "acceptance_criteria": {
+      "AC1_module_exists_implements_behaviour": "PASS",
+      "AC2_lua_script_audit_ex_unchanged": "PASS -- grep confirms no Letflow.Engine.Lua.Executor reference in lua_script_audit.ex",
+      "AC3_global_isolation": "PASS -- Sandbox.new() produces fresh VM; SENTINEL global absent after exec 1",
+      "AC4_distinct_state": "PASS -- table T from exec 1 absent in fresh Sandbox.new() VM",
+      "AC5_INV_LSA_1_real_executor": "PASS -- nil and malformed instance_id return {:error, :invalid_instance_id}",
+      "AC6_INV_LSA_2_real_executor": "PASS -- wrong registered_hash returns {:error, {:manifest_hash_mismatch, wrong, real}}",
+      "AC7_moduledoc_documents_script_ref_shape": "PASS -- @moduledoc states script_ref is a binary (Lua source text)",
+      "AC8_mix_test_passing": "PASS -- 11 tests, 0 failures"
+    },
+    "notes": "executor.ex uses Sandbox.new() exclusively (no direct Lua.new() calls). SHA-256 computed via :crypto.hash(:sha256, script_source) |> Base.encode16(case: :lower). No state reuse between calls. lua_script_audit.ex untouched."
+  }
 }

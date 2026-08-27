@@ -1,80 +1,77 @@
 {
-  "agent": "TEST-DESIGN-VALIDATOR",
-  "workflow": "WF02",
-  "requirement": "REQ-153",
   "run_id": "WF02-REQ153-20260827",
   "step": "3b",
-  "verdict": "PASS",
-  "timestamp_utc": "2026-08-27T09:19:30Z",
-
-  "baseline_suite": {
-    "command": "mix test test/letflow/engine/lua/executor_test.exs",
-    "result": "11/11 passed",
-    "exit_code": 0
-  },
-
-  "mutant_experiment": {
-    "purpose": "Independently verify that AC3 and AC4 tests are non-vacuous after TEST-DESIGNER's fix.",
-    "rationale": "Lua.eval!/3 is purely functional — it returns {results, %{lua | state: new_state}}. The executor discards the return value, so the original 'lua' struct is never updated. A naive 'cached lua struct' mutant would NOT leak state (because Lua.eval! does not mutate in place). A discriminating mutant must capture the returned modified state and persist it across calls.",
-    "mutant_applied_to": "lib/letflow/engine/lua/executor.ex",
-    "mutant_description": "Process-dictionary state capture: 'lua = Process.get(:__mutant_lua_state__, Sandbox.new())' on entry; '{_results, modified_lua} = Lua.eval!(lua, script_source)' capturing the new state; 'Process.put(:__mutant_lua_state__, modified_lua)' before returning. This causes every invocation to start from the Lua state left by the previous call.",
-    "mutant_result": "9/11 passed — exactly AC3 and AC4 failed:",
-    "ac3_failure": "test global isolation (AC3) a global written in execution 1 is absent in execution 2 — MatchError: {:error, \"Lua runtime error: global_leaked: MY_GLOBAL = 42 (at <eval>:1)\"}",
-    "ac4_failure": "test distinct state (AC4) a table mutated in execution 1 is pristine in execution 2 — MatchError: {:error, \"Lua runtime error: table_T_leaked: T.x = 99 (at <eval>:1)\"}",
-    "revert_command": "git checkout -- lib/letflow/engine/lua/executor.ex",
-    "post_revert_status": "git status --porcelain lib/ test/ → empty (only untracked test/reports/ file, pre-existing)",
-    "post_revert_suite": "11/11 passed"
-  },
-
-  "per_criterion_assessment": {
-    "AC1": {
-      "verdict": "PASS",
-      "assessment": "Two tests: module_info(:attributes) checks that Letflow.Engine.LuaScriptAudit.Executor is in the :behaviour list; function_exported?/3 confirms execute_with_manifest/2 is actually exported. Both are structurally non-vacuous — a module without the @behaviour declaration or the callback would fail."
+  "status": "COMPLETED",
+  "result": {
+    "agent": "TEST-DESIGN-VALIDATOR",
+    "workflow": "WF02",
+    "requirement": "REQ-153",
+    "verdict": "PASS",
+    "timestamp_utc": "2026-08-27T09:19:30Z",
+    "baseline_suite": {
+      "command": "mix test test/letflow/engine/lua/executor_test.exs",
+      "result": "11/11 passed",
+      "exit_code": 0
     },
-    "AC2": {
-      "verdict": "PASS",
-      "assessment": "Reads lib/letflow/engine/lua_script_audit.ex as a binary string and refutes the literal string 'Letflow.Engine.Lua.Executor'. This is the correct source-text assertion; it fails immediately if the seam module is modified to hard-wire the concrete module. The file currently does not contain that string."
+    "mutant_experiment": {
+      "purpose": "Independently verify that AC3 and AC4 tests are non-vacuous after TEST-DESIGNER's fix.",
+      "rationale": "Lua.eval!/3 is purely functional — it returns {results, %{lua | state: new_state}}. The executor discards the return value, so the original 'lua' struct is never updated. A naive 'cached lua struct' mutant would NOT leak state (because Lua.eval! does not mutate in place). A discriminating mutant must capture the returned modified state and persist it across calls.",
+      "mutant_applied_to": "lib/letflow/engine/lua/executor.ex",
+      "mutant_description": "Process-dictionary state capture: 'lua = Process.get(:__mutant_lua_state__, Sandbox.new())' on entry; '{_results, modified_lua} = Lua.eval!(lua, script_source)' capturing the new state; 'Process.put(:__mutant_lua_state__, modified_lua)' before returning. This causes every invocation to start from the Lua state left by the previous call.",
+      "mutant_result": "9/11 passed — exactly AC3 and AC4 failed:",
+      "ac3_failure": "test global isolation (AC3) a global written in execution 1 is absent in execution 2 — MatchError: {:error, \"Lua runtime error: global_leaked: MY_GLOBAL = 42 (at <eval>:1)\"}",
+      "ac4_failure": "test distinct state (AC4) a table mutated in execution 1 is pristine in execution 2 — MatchError: {:error, \"Lua runtime error: table_T_leaked: T.x = 99 (at <eval>:1)\"}",
+      "revert_command": "git checkout -- lib/letflow/engine/lua/executor.ex",
+      "post_revert_status": "git status --porcelain lib/ test/ → empty (only untracked test/reports/ file, pre-existing)",
+      "post_revert_suite": "11/11 passed"
     },
-    "AC3": {
-      "verdict": "PASS",
-      "assessment": "The fix is genuine. Execution 1 sets MY_GLOBAL = 42 through execute_with_manifest/2. Execution 2 runs 'if MY_GLOBAL ~= nil then error(\"global_leaked: ...\") end'. If state leaks, Lua's error() propagates as Lua.RuntimeException → {:error, _}, which fails the assert {:ok, _}. The mutant experiment confirmed: with state-sharing, AC3 fails with the exact message 'global_leaked: MY_GLOBAL = 42'.",
-      "original_flaw": "The original test asserted {:ok, _} on 'return MY_GLOBAL' — vacuous because execute_with_manifest/2 discards the Lua return value; both nil and 42 yield {:ok, _}.",
-      "fix_mechanism": "Using Lua error() to signal leakage converts the absence-check into a distinguishable error return, which the assert {:ok, _} can then discriminate."
+    "per_criterion_assessment": {
+      "AC1": {
+        "verdict": "PASS",
+        "assessment": "Two tests: module_info(:attributes) checks that Letflow.Engine.LuaScriptAudit.Executor is in the :behaviour list; function_exported?/3 confirms execute_with_manifest/2 is actually exported. Both are structurally non-vacuous — a module without the @behaviour declaration or the callback would fail."
+      },
+      "AC2": {
+        "verdict": "PASS",
+        "assessment": "Reads lib/letflow/engine/lua_script_audit.ex as a binary string and refutes the literal string 'Letflow.Engine.Lua.Executor'. This is the correct source-text assertion; it fails immediately if the seam module is modified to hard-wire the concrete module. The file currently does not contain that string."
+      },
+      "AC3": {
+        "verdict": "PASS",
+        "assessment": "The fix is genuine. Execution 1 sets MY_GLOBAL = 42 through execute_with_manifest/2. Execution 2 runs 'if MY_GLOBAL ~= nil then error(\"global_leaked: ...\") end'. If state leaks, Lua's error() propagates as Lua.RuntimeException → {:error, _}, which fails the assert {:ok, _}. The mutant experiment confirmed: with state-sharing, AC3 fails with the exact message 'global_leaked: MY_GLOBAL = 42'.",
+        "original_flaw": "The original test asserted {:ok, _} on 'return MY_GLOBAL' — vacuous because execute_with_manifest/2 discards the Lua return value; both nil and 42 yield {:ok, _}.",
+        "fix_mechanism": "Using Lua error() to signal leakage converts the absence-check into a distinguishable error return, which the assert {:ok, _} can then discriminate."
+      },
+      "AC4": {
+        "verdict": "PASS",
+        "assessment": "The fix is genuine. Same mechanism as AC3 but for a table T. Execution 1 sets T = {}; T.x = 99. Execution 2 errors if T ~= nil. The mutant experiment confirmed: with state-sharing, AC4 fails with 'table_T_leaked: T.x = 99'. A reset-and-reuse path that captures the modified Lua state would be caught.",
+        "note_on_non_capturing_reuse": "A mutant that reuses a Lua struct but does NOT capture Lua.eval!'s returned modified state would NOT be caught by AC3/AC4, because Lua.eval! is purely functional and the original struct would never have MY_GLOBAL/T. However, that mutant is also not a realistic or meaningful bug — a 'shared but never-updated' Lua state is functionally equivalent to calling Sandbox.new() each time (the globals are absent regardless). The tests correctly discriminate the only form of isolation failure that can actually cause state leakage."
+      },
+      "AC5": {
+        "verdict": "PASS",
+        "assessment": "Calls LuaScriptAudit.execute_script_for_audit/6 with the REAL Executor module (not a double) and nil/non-UUID instance_id. Asserts the exact atom {:error, :invalid_instance_id}. The test cannot directly assert zero executor calls (executor is a real module, no mock). However, the return value {:error, :invalid_instance_id} can only come from validate_instance_id/1 in the with-chain, which short-circuits before executor_result/3 is ever reached — this structurally proves the executor was not called. Code verified: defp validate_instance_id(nil), do: {:error, :invalid_instance_id} fires first; Ecto.UUID.cast('not-a-uuid') → :error → {:error, :invalid_instance_id} fires for the malformed case. Both tests pass against the real implementation.",
+        "two_cases": "nil instance_id AND malformed (non-UUID string) are both tested — good coverage of the guard."
+      },
+      "AC6": {
+        "verdict": "PASS",
+        "assessment": "Calls execute_script_for_audit/6 with the REAL Executor and a valid UUID instance_id. Computes the real SHA-256 of 'return 2 + 2' via :crypto.hash(:sha256, script) |> Base.encode16(case: :lower) and stores it as real_hash. Passes wrong_hash = '0000...0000' as registered_hash. Asserts {:error, {:manifest_hash_mismatch, ^wrong_hash, ^real_hash}} with pin operators on both values. This is genuinely non-vacuous: the real executor computes the real hash, and the mismatch check in lua_script_audit.ex compares registered_hash against it. The pinned assertion verifies both the specific wrong_hash echoed back AND the correct actual hash computed from the script."
+      },
+      "AC7": {
+        "verdict": "PASS",
+        "assessment": "Uses Code.fetch_docs/1 to read the compiled @moduledoc and asserts it contains the word 'binary'. The executor's @moduledoc states: 'script_ref concrete shape: a binary containing the Lua source text to execute.' The assertion is non-vacuous — a module with an absent or incorrect moduledoc would fail."
+      },
+      "AC8": {
+        "verdict": "PASS",
+        "assessment": "mix test test/letflow/engine/lua/executor_test.exs: 11/11 passed. Verified on feature/WF02-REQ153-20260827."
+      }
     },
-    "AC4": {
-      "verdict": "PASS",
-      "assessment": "The fix is genuine. Same mechanism as AC3 but for a table T. Execution 1 sets T = {}; T.x = 99. Execution 2 errors if T ~= nil. The mutant experiment confirmed: with state-sharing, AC4 fails with 'table_T_leaked: T.x = 99'. A reset-and-reuse path that captures the modified Lua state would be caught.",
-      "note_on_non_capturing_reuse": "A mutant that reuses a Lua struct but does NOT capture Lua.eval!'s returned modified state would NOT be caught by AC3/AC4, because Lua.eval! is purely functional and the original struct would never have MY_GLOBAL/T. However, that mutant is also not a realistic or meaningful bug — a 'shared but never-updated' Lua state is functionally equivalent to calling Sandbox.new() each time (the globals are absent regardless). The tests correctly discriminate the only form of isolation failure that can actually cause state leakage."
+    "checks_against_anti_patterns": {
+      "vacuous_ok_assertions": "None present. AC3/AC4 use error() to convert absence to a detectable signal. AC5/AC6 assert specific error shapes, not generic {:ok, _} or {:error, _}.",
+      "skipped_tests": "No @tag :skip found in the test file.",
+      "todo_tests": "No 'TODO: implement test' comments found.",
+      "hardcoded_secrets": "None. Hashes use :crypto.hash/2 computed at test runtime. UUIDs use Ecto.UUID.generate().",
+      "shared_fixture_state": "Tests use async: true and create no shared DB state. No fixtures. AC3/AC4 rely on process-local state (each test runs in its own process).",
+      "ordering_dependency": "None. Each test creates all state it needs within the test body."
     },
-    "AC5": {
-      "verdict": "PASS",
-      "assessment": "Calls LuaScriptAudit.execute_script_for_audit/6 with the REAL Executor module (not a double) and nil/non-UUID instance_id. Asserts the exact atom {:error, :invalid_instance_id}. The test cannot directly assert zero executor calls (executor is a real module, no mock). However, the return value {:error, :invalid_instance_id} can only come from validate_instance_id/1 in the with-chain, which short-circuits before executor_result/3 is ever reached — this structurally proves the executor was not called. Code verified: defp validate_instance_id(nil), do: {:error, :invalid_instance_id} fires first; Ecto.UUID.cast('not-a-uuid') → :error → {:error, :invalid_instance_id} fires for the malformed case. Both tests pass against the real implementation.",
-      "two_cases": "nil instance_id AND malformed (non-UUID string) are both tested — good coverage of the guard."
-    },
-    "AC6": {
-      "verdict": "PASS",
-      "assessment": "Calls execute_script_for_audit/6 with the REAL Executor and a valid UUID instance_id. Computes the real SHA-256 of 'return 2 + 2' via :crypto.hash(:sha256, script) |> Base.encode16(case: :lower) and stores it as real_hash. Passes wrong_hash = '0000...0000' as registered_hash. Asserts {:error, {:manifest_hash_mismatch, ^wrong_hash, ^real_hash}} with pin operators on both values. This is genuinely non-vacuous: the real executor computes the real hash, and the mismatch check in lua_script_audit.ex compares registered_hash against it. The pinned assertion verifies both the specific wrong_hash echoed back AND the correct actual hash computed from the script."
-    },
-    "AC7": {
-      "verdict": "PASS",
-      "assessment": "Uses Code.fetch_docs/1 to read the compiled @moduledoc and asserts it contains the word 'binary'. The executor's @moduledoc states: 'script_ref concrete shape: a binary containing the Lua source text to execute.' The assertion is non-vacuous — a module with an absent or incorrect moduledoc would fail."
-    },
-    "AC8": {
-      "verdict": "PASS",
-      "assessment": "mix test test/letflow/engine/lua/executor_test.exs: 11/11 passed. Verified on feature/WF02-REQ153-20260827."
-    }
-  },
-
-  "checks_against_anti_patterns": {
-    "vacuous_ok_assertions": "None present. AC3/AC4 use error() to convert absence to a detectable signal. AC5/AC6 assert specific error shapes, not generic {:ok, _} or {:error, _}.",
-    "skipped_tests": "No @tag :skip found in the test file.",
-    "todo_tests": "No 'TODO: implement test' comments found.",
-    "hardcoded_secrets": "None. Hashes use :crypto.hash/2 computed at test runtime. UUIDs use Ecto.UUID.generate().",
-    "shared_fixture_state": "Tests use async: true and create no shared DB state. No fixtures. AC3/AC4 rely on process-local state (each test runs in its own process).",
-    "ordering_dependency": "None. Each test creates all state it needs within the test body."
-  },
-
-  "key_technical_finding": "Lua.eval!/3 is purely functional — returns {results, %{lua | state: new_state}}; does NOT mutate the input lua struct in place. The executor's current implementation discards the return value (correct: fresh state per call via Sandbox.new()). A discriminating mutant must capture and persist the RETURNED modified state. The process-dictionary mutant applied here is a realistic representation of such a bug, and the tests correctly caught it.",
-
-  "next_step": "REVIEWER (step 4)"
+    "key_technical_finding": "Lua.eval!/3 is purely functional — returns {results, %{lua | state: new_state}}; does NOT mutate the input lua struct in place. The executor's current implementation discards the return value (correct: fresh state per call via Sandbox.new()). A discriminating mutant must capture and persist the RETURNED modified state. The process-dictionary mutant applied here is a realistic representation of such a bug, and the tests correctly caught it.",
+    "next_step": "REVIEWER (step 4)"
+  }
 }

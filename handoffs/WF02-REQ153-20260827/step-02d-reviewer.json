@@ -1,65 +1,68 @@
 {
-  "agent": "REVIEWER",
   "step": "02d",
-  "requirement": "REQ-153",
-  "branch": "feature/WF02-REQ153-20260827",
-  "timestamp": "2026-08-27T00:00:00Z",
-  "verdict": "PASS",
-  "findings": {
-    "otp_idiom": {
-      "status": "PASS",
-      "notes": [
-        "Module is pure — no GenServer, no Agent, no Process.put/get, no module-level state.",
-        "try/rescue wrapping Lua.RuntimeException and Lua.CompilerException is correct and idiomatic for C-binding exceptions from a NIF-backed library.",
-        "Function guard 'when is_binary(script_source)' adds a light compile-time narrowing — appropriate.",
-        "Return shapes are {:ok, %{manifest_hash: ...}} | {:error, term()} consistently with the behaviour contract."
-      ]
+  "status": "COMPLETED",
+  "result": {
+    "agent": "REVIEWER",
+    "requirement": "REQ-153",
+    "branch": "feature/WF02-REQ153-20260827",
+    "timestamp": "2026-08-27T00:00:00Z",
+    "verdict": "PASS",
+    "findings": {
+      "otp_idiom": {
+        "status": "PASS",
+        "notes": [
+          "Module is pure — no GenServer, no Agent, no Process.put/get, no module-level state.",
+          "try/rescue wrapping Lua.RuntimeException and Lua.CompilerException is correct and idiomatic for C-binding exceptions from a NIF-backed library.",
+          "Function guard 'when is_binary(script_source)' adds a light compile-time narrowing — appropriate.",
+          "Return shapes are {:ok, %{manifest_hash: ...}} | {:error, term()} consistently with the behaviour contract."
+        ]
+      },
+      "supervision_integrity": {
+        "status": "PASS",
+        "notes": [
+          "Executor starts no processes. Lua.t() is a plain value allocated and discarded within a single function call.",
+          "No supervision tree changes. No unsupervised spawn."
+        ]
+      },
+      "scope_creep": {
+        "status": "PASS",
+        "notes": [
+          "Diff is exactly the expected surface: lib/letflow/engine/lua/executor.ex, test/letflow/engine/lua/executor_test.exs, lib/letflow/design/req153-lua-executor.md, and handoff files.",
+          "lua_script_audit.ex is NOT in the diff — isolation invariant preserved.",
+          "No resource limits, no capability enforcement, no manifest validation added — all correctly deferred to REQ-154–REQ-158 per design doc §8."
+        ]
+      },
+      "decision_record_consistency": {
+        "status": "PASS_WITH_FINDING",
+        "notes": [
+          "Sandbox.new/0 is used as the sole construction path — matches REQ-151/152 design and INV-SBX-1.",
+          "Moduledoc states the concrete script_ref shape: 'a binary containing the Lua source text to execute'. AC7 covered.",
+          "FINDING (non-blocking): @moduledoc does not cite docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md. The module references REQ-153 and LUA-02 correctly, but the decision record that chose Lua as the scripting runtime is not cross-referenced. This is a documentation gap, not a correctness defect — the implementation is fully consistent with that decision."
+        ]
+      },
+      "type_safety": {
+        "status": "NO_ISSUE",
+        "notes": [
+          "script_ref is typed as binary() and guarded at the function head. No representable-as-invalid-state gap observed at this scope."
+        ]
+      },
+      "test_review": {
+        "status": "PASS",
+        "notes": [
+          "8 acceptance criteria covered. async: true is safe — no DB access; INV-LSA-1/LSA-2 paths short-circuit before any Repo insert.",
+          "AC3/AC4 verify isolation at the Sandbox.new() level directly — reasonable given that execute_with_manifest/2 delegates construction to Sandbox.new/0; property is proven at the right layer.",
+          "Syntax error test (bonus) uses '===' which is not valid Lua syntax and will reliably trigger CompilerException — correct choice."
+        ]
+      }
     },
-    "supervision_integrity": {
-      "status": "PASS",
-      "notes": [
-        "Executor starts no processes. Lua.t() is a plain value allocated and discarded within a single function call.",
-        "No supervision tree changes. No unsupervised spawn."
-      ]
-    },
-    "scope_creep": {
-      "status": "PASS",
-      "notes": [
-        "Diff is exactly the expected surface: lib/letflow/engine/lua/executor.ex, test/letflow/engine/lua/executor_test.exs, lib/letflow/design/req153-lua-executor.md, and handoff files.",
-        "lua_script_audit.ex is NOT in the diff — isolation invariant preserved.",
-        "No resource limits, no capability enforcement, no manifest validation added — all correctly deferred to REQ-154–REQ-158 per design doc §8."
-      ]
-    },
-    "decision_record_consistency": {
-      "status": "PASS_WITH_FINDING",
-      "notes": [
-        "Sandbox.new/0 is used as the sole construction path — matches REQ-151/152 design and INV-SBX-1.",
-        "Moduledoc states the concrete script_ref shape: 'a binary containing the Lua source text to execute'. AC7 covered.",
-        "FINDING (non-blocking): @moduledoc does not cite docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md. The module references REQ-153 and LUA-02 correctly, but the decision record that chose Lua as the scripting runtime is not cross-referenced. This is a documentation gap, not a correctness defect — the implementation is fully consistent with that decision."
-      ]
-    },
-    "type_safety": {
-      "status": "NO_ISSUE",
-      "notes": [
-        "script_ref is typed as binary() and guarded at the function head. No representable-as-invalid-state gap observed at this scope."
-      ]
-    },
-    "test_review": {
-      "status": "PASS",
-      "notes": [
-        "8 acceptance criteria covered. async: true is safe — no DB access; INV-LSA-1/LSA-2 paths short-circuit before any Repo insert.",
-        "AC3/AC4 verify isolation at the Sandbox.new() level directly — reasonable given that execute_with_manifest/2 delegates construction to Sandbox.new/0; property is proven at the right layer.",
-        "Syntax error test (bonus) uses '===' which is not valid Lua syntax and will reliably trigger CompilerException — correct choice."
-      ]
-    }
-  },
-  "non_blocking_findings": [
-    {
-      "id": "NB-01",
-      "category": "documentation",
-      "description": "@moduledoc does not reference docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md. Should be added in a follow-up or as part of a doc pass over the S5 Lua modules."
-    }
-  ],
-  "gate": "PASS",
-  "next_step": "TEST-DESIGNER may proceed"
+    "non_blocking_findings": [
+      {
+        "id": "NB-01",
+        "category": "documentation",
+        "description": "@moduledoc does not reference docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md. Should be added in a follow-up or as part of a doc pass over the S5 Lua modules."
+      }
+    ],
+    "gate": "PASS",
+    "next_step": "TEST-DESIGNER may proceed"
+  }
 }

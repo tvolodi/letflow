@@ -1,0 +1,39 @@
+{
+  "handoff_id": "step05b-WF03-ISS0348-20260826",
+  "run_id": "WF03-ISS0348-20260826",
+  "workflow_id": "WF-03",
+  "step": "05b",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-ISS0348-20260826/step-05b-release-validator-recheck.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0348"],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0348": "Re-check after ORCH fixed the single blocking issue from step-05's FAIL: handoffs/WF03-ISS0348-20260826/step-02-code-designer.json had top-level artifacts_out (invalid schema field), moved into result.artifacts_out."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0348-20260826/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0348-20260826/step-02-code-designer.json"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0348-20260826"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR re-check (WF-03 Step 5, rework cycle) for ISS-0348. Confirm the blocking issue is resolved.",
+    "acceptance_criteria": [
+      "Confirm handoffs/WF03-ISS0348-20260826/step-02-code-designer.json no longer has top-level artifacts_out",
+      "ORCH already ran mix letflow.check independently and confirmed exit 0 with 'mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings' -- re-verify independently yourself (you may run it fresh, or if you have already-fresh confidence from your own prior run plus this metadata-only diff, state your reasoning either way)",
+      "If clean: PASS, route to ISSUE-FIXER for close"
+    ]
+  },
+  "result": {},
+  "rework_count": 1,
+  "max_rework": 3
+}

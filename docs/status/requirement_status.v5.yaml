@@ -437,3 +437,17 @@ history:
       rework was needed at all (unlike sibling REQ-155, which needed 2
       implementation rework rounds). Status flipped pending -> done in
       docs/requirements.yaml.
+
+  - req: REQ-158
+    event: started
+    agent: ORCH
+    at: "2026-08-27T15:15:00Z"
+    note: >
+      WF02-REQ158-20260827 started (queue task 310, GH#610, stage S5).
+      Claimed via get_next_task after REQ-156's completion. Capability
+      manifest validation on script load, wired to the existing
+      LuaScriptAudit hash path (LUA-07), depends on REQ-157 (done).
+      Step 00 git-setup PASS (ORCH, direct): branch
+      feature/WF02-REQ158-20260827 created from main (76b089d) and
+      pushed. Dispatching Step 1 to CODE-DESIGNER next. 16 on-disk
+      entries before this append; 17 after.

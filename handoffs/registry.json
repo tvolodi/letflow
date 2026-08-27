@@ -2721,6 +2721,28 @@
             "queue_task_id": 308,
             "queue_agent_id": "orch-ai-dala",
             "note": "WF-02 for REQ-156 (queue task 308, GH#608, stage S5). Configurable memory limit for Lua script execution (LUA-09 restated), per REQ-149's decided mechanism (lib/letflow/design/req149-lua-memory-limit.md), depends on REQ-149 and REQ-155 (both done). SECURITY-REVIEWER hard gate. Queue claimed via get_next_task 2026-08-27T13:57:57Z. Design needed 1 rework (literal-code fix; substance approved first pass, including a source-verified finding that Task.Supervisor.async_nolink/2 cannot carry max_heap_size). Security/idiom PASS first pass. TEST-DESIGNER found and closed 1 mutation-detectable coverage gap (caller-issued-kill-on-timeout branch), independently re-verified by TEST-DESIGN-VALIDATOR reproducing the mutation from scratch. No implementation rework needed. 2+ cumulative clean full-suite runs at every gate."
+        },
+        {
+            "run_id": "WF02-REQ158-20260827",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-158"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/lua/manifest.ex",
+                "test/letflow/engine/lua/manifest_test.exs",
+                "lib/letflow/design/req158-lua-manifest-validation.md",
+                "test/specs/REQ-158.md"
+            ],
+            "lock_acquired_at": "2026-08-27T15:15:00Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ158-20260827 created; Step 1 dispatched to CODE-DESIGNER",
+            "backfilled": false,
+            "queue_task_id": 310,
+            "queue_agent_id": "orch-ai-dala",
+            "note": "WF-02 for REQ-158 (queue task 310, GH#610, stage S5). Capability manifest validation on script load, wired to the existing LuaScriptAudit hash path (LUA-07), depends on REQ-157 (done). Feeds LuaScriptAudit's INV-LSA-2 mismatch check rather than bypassing it. SECURITY-REVIEWER hard gate -- the manifest is what bounds a script's authority. Queue claimed via get_next_task 2026-08-27T15:14:42Z."
         }
     ]
 }

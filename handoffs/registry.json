@@ -2684,7 +2684,7 @@
             "requirement_ids": ["REQ-155"],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/engine/lua/executor.ex",
                 "test/letflow/engine/lua/executor_test.exs",
@@ -2692,13 +2692,13 @@
                 "test/specs/REQ-155.md"
             ],
             "lock_acquired_at": "2026-08-27T11:07:00Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ155-20260827 created; Step 1 dispatched to CODE-DESIGNER",
+            "lock_released_at": "2026-08-27T13:56:59Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #677 squash-merged (d932dba); queue task 307 released done cleanly",
             "backfilled": false,
             "queue_task_id": 307,
             "queue_agent_id": "orch-ai-dala",
-            "note": "WF-02 for REQ-155 (queue task 307, GH#607, stage S5). Out-of-band host-enforced wall-clock kill for Lua script execution -- layer 2 of the two-layer pair (LUA-10 restated), depends on REQ-154 (done). Extends lib/letflow/engine/lua/executor.ex with a Task.Supervisor.async_nolink/2-based supervised, non-cooperative timeout, reusing the pattern already established in lib/letflow/engine/plugin_interface.ex. SECURITY-REVIEWER hard gate. Queue claimed via get_next_task 2026-08-27T11:06:25Z."
+            "note": "WF-02 for REQ-155 (queue task 307, GH#607, stage S5). Out-of-band host-enforced wall-clock kill for Lua script execution -- layer 2 of the two-layer pair (LUA-10 restated), depends on REQ-154 (done). Extends lib/letflow/engine/lua/executor.ex with a Task.Supervisor.async_nolink/2-based supervised, non-cooperative timeout, reusing the pattern already established in lib/letflow/engine/plugin_interface.ex. SECURITY-REVIEWER hard gate. Queue claimed via get_next_task 2026-08-27T11:06:25Z. Design/security/idiom/test-design all PASS first pass. Needed 2 rework iterations at Step 5 (RELEASE-VALIDATOR), each catching a real bug: (1) test-env lua_wallclock_timeout_ms too tight (200ms) under parallel load, fixed to 5000ms after an intermediate 1500ms also proved insufficient; (2) two flaky tests in executor_test.exs root-cause-fixed (AC-5 fixed-sleep -> poll/retry loop; long-standing function_exported?/3 module-load race -> Code.ensure_loaded/1). ISS-0340 found recurring during Step 4 and reopened. 10+ cumulative clean scripts/test_parallel.sh runs before final PASS."
         }
     ]
 }

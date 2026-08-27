@@ -178,4 +178,52 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       assert {:error, _reason} = Executor.execute_with_manifest("this is not lua ===", "h")
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-154 -- instruction budget (LUA-08 layer 1)
+  # ---------------------------------------------------------------------------------
+
+  describe "instruction budget (REQ-154)" do
+    # AC-1: configurable budget -- two different budgets produce different outcomes
+    # for a loop that exceeds 500 instructions but not 5000.
+    test "AC-1: smaller budget halts sooner than larger budget on the same loop" do
+      # This loop runs many more than 500 instructions but fewer than 50000.
+      loop_script = "for i = 1, 5000 do end"
+
+      assert {:error, {:budget_exceeded, 500}} =
+               Executor.execute_with_manifest(loop_script, "h", max_instructions: 500)
+
+      assert {:ok, %{manifest_hash: _}} =
+               Executor.execute_with_manifest(loop_script, "h", max_instructions: 50000)
+    end
+
+    # AC-2: while true terminates under a budget rather than hanging.
+    test "AC-2: while true do end terminates with budget_exceeded rather than hanging" do
+      assert {:error, {:budget_exceeded, 1000}} =
+               Executor.execute_with_manifest("while true do end", "h", max_instructions: 1000)
+    end
+
+    # AC-3: budget exhaustion is distinguishable by pattern match from other error arms.
+    test "AC-3: budget_exceeded is a structured error, not a bare string or atom" do
+      result =
+        Executor.execute_with_manifest("while true do end", "h", max_instructions: 500)
+
+      # Must NOT match {:error, msg} (string) or {:error, :invalid_script_ref}
+      assert {:error, {:budget_exceeded, _limit}} = result
+    end
+
+    # AC-4: REQ-148 spike OQ-2(a) -- pcall catches budget exhaustion inside the script.
+    # The inner loop stops, pcall returns {false, "instruction budget exceeded"}, and
+    # Lua.eval!/2 returns normally. This is expected layer-1 behavior: the script
+    # receives control back after pcall. Layer 2 (REQ-155) provides the non-catchable kill.
+    test "AC-4: pcall-caught budget exhaustion returns {:ok, _} -- layer-1 pcall-catchable" do
+      script = """
+      local ok, err = pcall(function() while true do end end)
+      return ok, tostring(err)
+      """
+
+      assert {:ok, %{manifest_hash: _}} =
+               Executor.execute_with_manifest(script, "h", max_instructions: 1000)
+    end
+  end
 end

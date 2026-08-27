@@ -550,7 +550,13 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
       end
 
     artifacts_out = Map.get(result_map, "artifacts_out") || []
-    summary = Map.get(result_map, "summary") || ""
+
+    summary =
+      case Map.get(result_map, "summary") do
+        s when is_binary(s) -> s
+        _ -> ""
+      end
+
     created_at = Map.get(data, "created_at")
 
     names = artifacts_in |> Enum.map(&Path.basename/1) |> MapSet.new()

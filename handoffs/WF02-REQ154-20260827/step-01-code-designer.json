@@ -1,0 +1,58 @@
+{
+  "handoff_id": "step01-WF02-REQ154-20260827",
+  "run_id": "WF02-REQ154-20260827",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ154-20260827/step-01-code-designer.json",
+  "created_at": "2026-08-27T06:39:11Z",
+  "started_at": "2026-08-27T06:39:11Z",
+  "completed_at": "2026-08-27T07:15:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-154"],
+    "issue_ids": ["ISS-0350"],
+    "requirement_text": {
+      "REQ-154": "RESTATEMENT OF LUA-08 AS ONE HALF OF A TWO-LAYER PAIR, AND WHY. Decision 0014 lists LUA-08 and LUA-10 together on its watchlist of requirements not satisfiable as literally worded, with this reasoning: they are \"satisfiable, but NOT BY ONE MECHANISM, and the requirements are not interchangeable.\" :max_instructions is in-band and, per the library's documentation, raises a CATCHABLE error recoverable via pcall -- meaning a hostile script can pcall its own budget exhaustion and continue running. LUA-08's literal text (\"Exceeding the limit MUST terminate the script with a structured timeout error\", acceptance \"Infinite loop terminates within configured limit\") therefore is NOT met by :max_instructions alone: a script that traps the error is not terminated. This requirement builds layer 1 and states plainly that it is INSUFFICIENT ON ITS OWN; REQ-155 builds the mandatory layer 2, and LUA-08 must not be reported met until both have landed. For contrast, note what this replaces rather than ports. R-Co had to hand-build R-Co/src/lua/instruction_limiter.zig (126 lines) with two invariants: INV-2, the limiter pointer lives in LUA_REGISTRYINDEX because a __limiter__ global was writable by any script (_G.__limiter__ = nil \"defeats LUA-08 entirely\"); and INV-4, ONE combined LUA_MASKCOUNT hook carrying both the instruction count and the elapsed-time check, because that hook is \"the only mechanism in this codebase that can interrupt a tight while true do end loop.\" NEITHER INVARIANT PORTS. There is no registry and no hook here -- the budget is a library option, and the tight-loop interruption problem INV-4 existed to solve is REQ-155's, solved by preemptive BEAM scheduling instead. Say this in the moduledoc so a future reader does not go looking for a hook that was correctly never written. Scope: 1. Wire a CONFIGURABLE :max_instructions budget into REQ-153's executor path (configurable per LUA-08's \"configurable maximum instruction count\" -- a hardcoded constant does not satisfy it). 2. Convert budget exhaustion into a structured error distinguishable from every other failure arm, so REQ-162's SCRIPT_ERROR event and REQ-155's kill can be told apart by the caller. 3. Test the hazard directly, using REQ-148's spike answer (a) as the established fact: assert what a script that pcalls its own budget exhaustion actually does. If it continues, that observation is exactly why REQ-155 exists and the test must record it as expected behaviour of layer 1, not as a bug in this requirement. NOT IN THIS REQUIREMENT: the out-of-band host kill (REQ-155), memory limiting (REQ-156). GATE: SECURITY-REVIEWER is a hard gate -- this is a resource-exhaustion boundary on a tenant-supplied input path."
+    },
+    "iss_0350_scope": "ISS-0350 (MAJOR, open): the unreviewed human commit in WF02-REQ153's branch removed the is_binary(script_source) guard from execute_with_manifest/2. This is the same file REQ-154 owns. ORCH explicitly authorizes REQ-154 to also restore the is_binary guard (and @impl if correct per the Executor behaviour) as part of this run, since the lock is already held. The design doc MUST cover this restoration. See docs/issues/ISS-0350.yaml for full details.",
+    "spike_finding": "REQ-148 spike OQ-2(a): pcall catches budget exhaustion with [false, \"instruction budget exceeded\"]. The inner loop stops; Lua.eval!/2 returns normally. There is NO continuation-after-pcall hazard -- a script that pcalls its budget exhaustion receives the error but execution does not continue past pcall. Full details: lib/letflow/design/req148-lua-runtime-spike.md Section 3.",
+    "artifacts_in": [
+      "docs/agents/instructions/core-directives.md",
+      "docs/guides/backend_developer_guide.md",
+      "docs/migration/decisions/0014-s5-lua-runtime-selection.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/design/req153-lua-executor.md",
+      "lib/letflow/design/req148-lua-runtime-spike.md",
+      "docs/issues/ISS-0350.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req154-lua-instruction-budget.md",
+      "test/specs/REQ-154.md"
+    ],
+    "branch_name": "feature/WF02-REQ154-20260827"
+  },
+  "task": {
+    "description": "Produce the design artefact for REQ-154 at lib/letflow/design/req154-lua-instruction-budget.md. REQ-154 extends REQ-153's Letflow.Engine.Lua.Executor module (lib/letflow/engine/lua/executor.ex) to add a configurable :max_instructions budget. This run ALSO restores the is_binary guard removed by ISS-0350 -- the design must cover both the new budget feature and the guard restoration. Do NOT write implementation code (.ex). Write only: public function signatures with @spec types, key data structures, invariants, acceptance criterion mappings, and open questions.",
+    "acceptance_criteria": [
+      "Every acceptance criterion from REQ-154 maps to a concrete design element",
+      "The design specifies how :max_instructions is passed into the executor (function parameter vs. module config vs. Application env -- state the chosen mechanism and reason)",
+      "The design specifies the exact error shape for budget exhaustion, distinguishable by pattern match from {:error, <runtime_message_string>} and {:error, :invalid_script_ref}",
+      "The design specifies that the is_binary(script_source) guard is restored (ISS-0350 fix, in-scope per ORCH's explicit authorization in this handoff's context.iss_0350_scope)",
+      "The design covers the moduledoc changes required: LUA-08 layer-1 restatement, INV-2/INV-4 non-port explanation",
+      "The design covers the pcall-catches-budget test case, noting REQ-148's spike answer (a): pcall returns [false, 'instruction budget exceeded'], loop does NOT continue",
+      "No implementation code present (no .ex code blocks with function bodies)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design for REQ-154 (LUA-08 layer-1 instruction budget) complete. Key decisions: (1) execute_with_manifest/3 overload takes :max_instructions opt; 2-arity behaviour callback reads Application config and delegates; (2) budget-exhaustion error shape {error, {:budget_exceeded, limit}} distinguishable from string errors and :invalid_script_ref; (3) detection via Lua.RuntimeException message match on 'instruction budget exceeded'; (4) budget threaded via Sandbox.new([max_instructions: budget]) per INV-SBX-1 — Sandbox.new/1 must be updated by ELIXIR-DEV to pass the opt to Lua.new/1; (5) ISS-0350 fix: is_binary guard and @impl restored on 2-arity callback; (6) moduledoc covers LUA-08 layer-1 restatement, :max_instructions pcall-catchability, INV-2/INV-4 non-port explanation, and REQ-155 as mandatory layer 2.",
+    "artifacts_out": ["lib/letflow/design/req154-lua-instruction-budget.md"],
+    "issues": []
+  }
+}

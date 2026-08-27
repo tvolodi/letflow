@@ -7678,7 +7678,7 @@ requirements:
   - id: REQ-154
     title: In-band instruction budget for Lua script execution -- layer 1 of the two-layer pair (LUA-08 restated)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S5
     impl_order: 306  # letflow-queue task id
     description: >

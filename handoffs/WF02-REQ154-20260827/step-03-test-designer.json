@@ -1,0 +1,62 @@
+{
+  "handoff_id": "step03-WF02-REQ154-20260827",
+  "run_id": "WF02-REQ154-20260827",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ154-20260827/step-03-test-designer.json",
+  "created_at": "2026-08-27T08:13:07Z",
+  "started_at": "2026-08-27T08:13:07Z",
+  "completed_at": "2026-08-27T08:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-154"],
+    "issue_ids": ["ISS-0350"],
+    "requirement_text": {
+      "REQ-154": "In-band instruction budget for Lua script execution (LUA-08 layer 1). Configurable :max_instructions budget, structured {:error, {:budget_exceeded, limit}} error, tests for all 4 acceptance criteria, moduledoc with LUA-08 layer-1 restatement and INV-2/INV-4 non-port explanation."
+    },
+    "artifacts_in": [
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req154-lua-instruction-budget.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua/sandbox.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req154-lua-instruction-budget.md",
+      "test/specs/REQ-154.md"
+    ],
+    "branch_name": "feature/WF02-REQ154-20260827",
+    "acceptance_criteria": [
+      "the instruction budget is configurable (not a hardcoded literal) and a test drives two different configured budgets and asserts the smaller one halts a loop sooner",
+      "a test runs an unbounded `while true do end` loop under a configured budget and asserts the execution terminates rather than hanging",
+      "budget exhaustion surfaces as a structured error value distinguishable by pattern match from other failure arms, asserted by a test that matches on it specifically rather than on a catch-all {:error, _}",
+      "a test asserts what a script that pcalls its own budget exhaustion does, matching REQ-148's spike answer (a); assert {:ok, %{manifest_hash: _}} (pcall catches, loop stops, no continuation hazard)",
+      "the moduledoc states that this requirement RESTATES LUA-08 as layer 1, :max_instructions is in-band and pcall-catchable, REQ-155 supplies layer 2",
+      "the moduledoc states that R-Co's INV-2 and INV-4 do not port",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "task": {
+    "description": "Write or validate the test spec for REQ-154 at test/specs/REQ-154.md. ELIXIR-DEV has already written 4 new tests in test/letflow/engine/lua/executor_test.exs for AC-1..4. Your job: (1) read the existing tests; (2) verify they cover all 7 acceptance criteria; (3) write test/specs/REQ-154.md documenting what each test validates and why. If any AC is not covered by an existing test, write the missing test code as a spec (not in the .exs file -- TEST-DESIGN-VALIDATOR and TEST-RUNNER will catch gaps). Do NOT run mix test yourself -- that is TEST-RUNNER's job.",
+    "acceptance_criteria": [
+      "test/specs/REQ-154.md exists and covers all 7 ACs",
+      "AC-1: two-budget comparison test documented",
+      "AC-2: while-true termination test documented",
+      "AC-3: structured error pattern-match test documented",
+      "AC-4: pcall-catches-budget test documented (expected {:ok, _} per REQ-148 spike OQ-2(a))",
+      "AC-5 and AC-6: moduledoc content verification noted (to be verified by reading executor.ex)",
+      "AC-7: covered by TEST-RUNNER (mix test/compile step)",
+      "Each test entry in the spec names the test module, describe block, and test name"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "test/specs/REQ-154.md written. All 7 ACs documented: AC-1..4 covered by 4 new ExUnit tests in describe 'instruction budget (REQ-154)'; AC-5 and AC-6 covered by @moduledoc source text assertions (both present and quoted); AC-7 deferred to TEST-RUNNER for real mix test/compile output. Rationale for {:ok, %{manifest_hash: _}} on pcall-caught budget exhaustion (AC-4) documented per REQ-148 spike OQ-2(a).",
+    "artifacts_out": ["test/specs/REQ-154.md"]
+  }
+}

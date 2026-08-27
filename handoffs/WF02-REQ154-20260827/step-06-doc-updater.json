@@ -1,0 +1,48 @@
+{
+  "handoff_id": "step06-WF02-REQ154-20260827",
+  "run_id": "WF02-REQ154-20260827",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ154-20260827/step-06-doc-updater.json",
+  "created_at": "2026-08-27T09:08:10Z",
+  "started_at": "2026-08-27T09:08:10Z",
+  "completed_at": "2026-08-27T14:10:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-154"],
+    "issue_ids": ["ISS-0350"],
+    "requirement_text": {
+      "REQ-154": "In-band instruction budget for Lua script execution (LUA-08 layer 1). All 7 ACs and ISS-0350 fix independently verified by RELEASE-VALIDATOR."
+    },
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/issues/ISS-0350.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua/sandbox.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req154-lua-instruction-budget.md",
+      "test/specs/REQ-154.md"
+    ],
+    "branch_name": "feature/WF02-REQ154-20260827",
+    "release_validator_verdict": "PASS -- all 7 ACs independently verified; ISS-0350 fix confirmed; 2110/2112 tests pass."
+  },
+  "task": {
+    "description": "Flip REQ-154 status from in_progress to done in docs/requirements.yaml. Append a done event to the current run-history volume (docs/status/requirement_status.v5.yaml) -- find the current volume via docs/status/requirement_status.index.yaml. Also mark ISS-0350 as resolved in docs/issues/ISS-0350.yaml (set status: resolved, add resolution_note). Commit all changes to the feature branch.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-154 status: done",
+      "docs/status/requirement_status.v5.yaml has a new done event for REQ-154 appended (append-only, do not edit prior entries)",
+      "docs/status/requirement_status.index.yaml entries count incremented by 1",
+      "docs/issues/ISS-0350.yaml status: resolved with resolution_note",
+      "All changes committed and pushed to feature/WF02-REQ154-20260827"
+    ]
+  },
+  "result": {"status": "PASS", "summary": "REQ-154 flipped to done; done event appended to v5.yaml; ISS-0350 resolved.", "artifacts_out": ["docs/requirements.yaml", "docs/status/requirement_status.v5.yaml", "docs/status/requirement_status.index.yaml", "docs/issues/ISS-0350.yaml"]}
+}

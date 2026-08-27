@@ -259,10 +259,17 @@ defmodule Letflow.Engine.Lua.Sandbox do
   `platform.now` is wired in, so every `Lua.t()` this module produces has it (INV-PLAT-1).
   """
   @spec new(opts :: keyword()) :: Lua.t()
-  def new(_opts) do
+  def new(opts) do
     sandboxed_paths = Enum.map(@sandbox_deny_set, fn {path, _reason} -> path end)
+    lua_opts = [sandboxed: sandboxed_paths]
 
-    Lua.new(sandboxed: sandboxed_paths)
+    lua_opts =
+      case Keyword.fetch(opts, :max_instructions) do
+        {:ok, budget} -> Keyword.put(lua_opts, :max_instructions, budget)
+        :error -> lua_opts
+      end
+
+    Lua.new(lua_opts)
     |> Letflow.Engine.Lua.Platform.install()
   end
 end

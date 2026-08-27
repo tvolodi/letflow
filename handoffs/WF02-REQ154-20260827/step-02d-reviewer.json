@@ -1,0 +1,65 @@
+{
+  "handoff_id": "step02d-WF02-REQ154-20260827",
+  "run_id": "WF02-REQ154-20260827",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ154-20260827/step-02d-reviewer.json",
+  "created_at": "2026-08-27T08:08:54Z",
+  "started_at": "2026-08-27T08:08:54Z",
+  "completed_at": "2026-08-27T08:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-154"],
+    "issue_ids": ["ISS-0350"],
+    "requirement_text": {
+      "REQ-154": "In-band instruction budget for Lua script execution (LUA-08 layer 1). Configurable :max_instructions budget in the executor, structured budget-exhaustion error, tests for all 4 acceptance criteria, moduledoc with LUA-08 layer-1 restatement and INV-2/INV-4 non-port explanation."
+    },
+    "artifacts_in": [
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua/sandbox.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req154-lua-instruction-budget.md",
+      "docs/migration/decisions/0014-s5-lua-runtime-selection.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua/sandbox.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req154-lua-instruction-budget.md",
+      "test/specs/REQ-154.md"
+    ],
+    "branch_name": "feature/WF02-REQ154-20260827",
+    "prior_step_result": "SECURITY-REVIEWER PASS (step-02c): all INV-1..8 checked, no violations."
+  },
+  "task": {
+    "description": "Gate the REQ-154 implementation for OTP idiom correctness, supervision integrity, scope creep, and decision-record consistency. Read executor.ex and sandbox.ex on branch feature/WF02-REQ154-20260827. Check: (1) is the implementation idiomatic Elixir/OTP? (2) no supervision tree changes or process boundary violations? (3) does it stay within REQ-154's scope (no REQ-155/REQ-156 features snuck in)? (4) does it respect decision 0014's choices (tv-labs/lua, Lua.new/1 for VM construction)?",
+    "acceptance_criteria": [
+      "No unsupervised processes spawned or supervision tree changed",
+      "The budget is passed through Sandbox.new/1 to Lua.new/1 -- no direct Lua.new/1 call in executor.ex",
+      "No REQ-155 (out-of-band host kill) or REQ-156 (memory limiting) features present",
+      "Decision 0014 (tv-labs/lua runtime selection) not contradicted",
+      "Error handling is idiomatic {:ok, _} | {:error, _} -- no bare raise or unhandled exceptions on the happy path",
+      "scope creep check: no changes to files outside owned_modules (other than config/config.exs for the lua_max_instructions setting)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": [
+      "CHECK-1 OTP idiom: PASS. No unsupervised Tasks or Processes spawned. try/rescue is appropriate wrapping for a raising library (Lua.eval!/2). All public return paths use {:ok, _} | {:error, _}. Observation (not a FAIL): the '_e in FunctionClauseError -> {:error, :invalid_script_ref}' rescue clause's comment says 'reject non-binary gracefully' but with the when is_binary(script_source) guard restored (ISS-0350 fix), non-binary inputs are rejected at the function-clause level before the try block is entered; the rescue could only catch FunctionClauseErrors from inside the library call. The comment is stale/misleading but the guard itself is correct and the risk is low. Not blocking.",
+      "CHECK-2 Supervision integrity: PASS. No supervision tree changes, no process spawning, no GenServer or Supervisor involvement. The change is entirely within executor.ex function bodies and sandbox.ex's new/1.",
+      "CHECK-3 Scope creep: PASS. Changed files: config/config.exs (authorized: lua_max_instructions key only), executor.ex, sandbox.ex, executor_test.exs, design doc, handoff files. No REQ-155 features (Task.async, Process.exit, out-of-band kill). No REQ-156 features (memory limiting). All files are within owned_modules or explicitly authorized.",
+      "CHECK-4 Decision-record consistency (0014): PASS. Runtime is tv-labs/lua. VM construction via Lua.new/1 (in sandbox.ex only). Script execution via Lua.eval!/2. No contradictions with decision 0014.",
+      "CHECK-5 No direct Lua.new/1 in executor.ex: PASS. executor.ex calls Sandbox.new(max_instructions: budget) only. Lua.new/1 is invoked exclusively inside sandbox.ex. INV-SBX-1 maintained.",
+      "CHECK-6 Moduledoc REQ-154 note: PASS. (a) 'restates LUA-08 as layer 1 of a two-layer pair' present. (b) ':max_instructions is an in-band, pcall-catchable budget' present. (c) 'Layer 2 (REQ-155) supplies...' present with Process.exit/2 on a monitored Task named explicitly. (d) INV-2 and INV-4 non-ports both stated with rationale. All four sub-checks met."
+    ],
+    "issues": [],
+    "observations": [
+      "The FunctionClauseError rescue comment in executor.ex is stale: it says 'Guard: script_ref is term() per the behaviour; reject non-binary gracefully' but the actual non-binary rejection is now done by the when is_binary(script_source) function-clause guard (ISS-0350 restoration). The rescue can only fire for FunctionClauseErrors raised inside the try block (library code). This predates REQ-154 and was carried from the original design. Low risk; filed as an observation rather than a blocking issue since the guard correctly handles the intent."
+    ]
+  }
+}

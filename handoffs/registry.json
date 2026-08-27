@@ -2648,7 +2648,7 @@
             "lock_acquired_at": "2026-08-27T06:32:50Z",
             "lock_released_at": null,
             "released_lock": false,
-            "last_known_step": "Step 05 COMPLETED PASS -- all 7 ACs + ISS-0350 independently verified; v5.yaml entries count fix applied; dispatch Step 06 DOC-UPDATER",
+            "last_known_step": "Step 06 COMPLETED PASS -- REQ-154 done, done event appended v5.yaml (10 entries), ISS-0350 resolved -- all independently confirmed; dispatch Step Final ELIXIR-DEV",
             "backfilled": false,
             "queue_task_id": 306,
             "queue_agent_id": "orch-main",

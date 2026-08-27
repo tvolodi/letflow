@@ -1,0 +1,71 @@
+run_id: WF02-REQ160-20260827
+step: WF-02 Step 4 (TEST-RUNNER)
+requirement_ids:
+  - REQ-160
+branch: feature/WF02-REQ160-20260827
+commit: 53e3a56
+timestamp: "2026-08-27T20:13:10Z"
+
+environment:
+  postgres: "already running via docker (letflow-1-postgres-1), port 5463 per .env LETFLOW_DB_PORT"
+  docker_access: "direct docker CLI denied permission on unix socket; not needed since containers were already up and healthy"
+  toolchain: "asdf shims on PATH (elixir/erlang), mix available"
+
+compile_check:
+  command: "mix compile --warnings-as-errors --force"
+  result: PASS
+  output: |
+    Compiling 129 files (.ex)
+    Generated letflow app
+    EXIT:0
+
+full_suite_run_1:
+  command: "./scripts/test_parallel.sh"
+  result: PASS
+  output: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.DDWyu4
+    test_parallel: TEST_PARALLEL_GROUP=tp1746121 (shared by all 8 partitions)
+    partition 1: 229 tests, 0 properties, 0 failures, exit 0
+    partition 2: 243 tests, 1 property, 0 failures, exit 0
+    partition 3: 393 tests, 0 properties, 0 failures, exit 0
+    partition 4: 197 tests, 0 properties, 0 failures, exit 0
+    partition 5: 312 tests, 0 properties, 0 failures, exit 0
+    partition 6: 241 tests, 2 properties, 0 failures, exit 0
+    partition 7: 329 tests, 0 properties, 0 failures, exit 0
+    partition 8: 313 tests, 2 properties, 0 failures, exit 0
+    ---
+    combined: 2257 tests, 5 properties, 0 failures (2262/2262 passed)
+
+full_suite_run_2:
+  command: "./scripts/test_parallel.sh"
+  result: PASS
+  output: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.f9OiQI
+    test_parallel: TEST_PARALLEL_GROUP=tp1757777 (shared by all 8 partitions)
+    partition 1: 229 tests, 0 properties, 0 failures, exit 0
+    partition 2: 243 tests, 1 property, 0 failures, exit 0
+    partition 3: 393 tests, 0 properties, 0 failures, exit 0
+    partition 4: 197 tests, 0 properties, 0 failures, exit 0
+    partition 5: 312 tests, 0 properties, 0 failures, exit 0
+    partition 6: 241 tests, 2 properties, 0 failures, exit 0
+    partition 7: 329 tests, 0 properties, 0 failures, exit 0
+    partition 8: 313 tests, 2 properties, 0 failures, exit 0
+    ---
+    combined: 2257 tests, 5 properties, 0 failures (2262/2262 passed)
+
+iss_0340_sighting: false
+note: >
+  ISS-0340 (Letflow.Api.ContextTest "scoped_repo_opts/1 is 1-arity") did NOT reappear
+  in either run. No structural attribution was needed since there were zero failures
+  in both runs -- 0 failures on run 1 and 0 failures on run 2, 2262/2262 passed both
+  times. No count-matching reasoning was applied because there was nothing to attribute.
+
+failure_attribution: "N/A — no failures observed in either run"
+
+verdict: PASS

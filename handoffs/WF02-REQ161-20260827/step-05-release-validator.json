@@ -1,0 +1,45 @@
+{
+  "handoff_id": "step05-WF02-REQ161-20260827",
+  "run_id": "WF02-REQ161-20260827",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ161-20260827/step-05-release-validator.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-161"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ161-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ161-20260827/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ161-20260827/step-02d-reviewer-recheck.json",
+      "handoffs/WF02-REQ161-20260827/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ161-20260827/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req161-lua-platform-fail.md",
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ161-20260827",
+    "commit": "b962e06"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR (WF-02 Step 5) for REQ-161 -- independently re-derive that all 7 real acceptance criteria in docs/requirements.yaml's REQ-161 entry are actually met, before this requirement is marked done. Do not trust any prior agent's PASS verdict as evidence by itself -- re-verify against the real code and real test output yourself. This run went through one small REVIEWER rework (2 stale do_fail/1 moduledoc references, fixed directly by ORCH) but otherwise passed every gate on first attempt: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, TEST-DESIGN-VALIDATOR (which independently re-verified TEST-DESIGNER's genuine 'zero gaps found' mutation-testing result), and TEST-RUNNER (2272/2272 x2).",
+    "acceptance_criteria": [
+      "Read docs/requirements.yaml REQ-161's 7 acceptance criteria verbatim and independently map each to a real, currently-passing test in test/letflow/engine/lua/platform_test.exs -- run at least a handful of those specific tests yourself.",
+      "Independently run mix test test/letflow/engine/lua/platform_test.exs and mix compile --warnings-as-errors and quote real output.",
+      "Independently confirm the central claim -- exit({:script_failed, ...}) is genuinely uninterceptable by pcall -- by reading do_fail/2's real code and, ideally, running a quick ad hoc script through Platform.install/3 yourself to observe the behavior directly, not merely citing prior verdicts.",
+      "Confirm no owned_modules boundary violation occurred across the whole run (git diff main...feature/WF02-REQ161-20260827 --stat touches only lib/letflow/engine/lua/platform.ex, test/letflow/engine/lua/platform_test.exs, lib/letflow/design/req161-lua-platform-fail.md, test/specs/REQ-161.md, plus this run's own handoffs/ bookkeeping).",
+      "Verdict: PASS only if independently re-derived, not merely re-stated from prior agents' reports.",
+      "CRITICAL: when writing this handoff's top-level status field (line 9), use exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED. Run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

@@ -18,7 +18,7 @@ defmodule Letflow.Engine.Lua.Executor do
   @impl Letflow.Engine.LuaScriptAudit.Executor
   @spec execute_with_manifest(binary(), String.t()) ::
           {:ok, %{manifest_hash: String.t()}} | {:error, term()}
-  def execute_with_manifest(script_source, _registered_hash) when is_binary(script_source) do
+  def execute_with_manifest(script_source, _registered_hash) do
     lua = Sandbox.new()
 
     try do
@@ -28,6 +28,10 @@ defmodule Letflow.Engine.Lua.Executor do
     rescue
       e in [Lua.RuntimeException, Lua.CompilerException] ->
         {:error, Exception.message(e)}
+
+      # Guard: script_ref is term() per the behaviour; reject non-binary gracefully
+      _e in FunctionClauseError ->
+        {:error, :invalid_script_ref}
     end
   end
 end

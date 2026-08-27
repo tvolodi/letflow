@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step03b-WF02-REQ162-20260827",
+  "run_id": "WF02-REQ162-20260827",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ162-20260827/step-03b-test-design-validator.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-162"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ162-20260827/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req162-lua-script-error-capture.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/specs/REQ-162.md"
+    ],
+    "branch_name": "feature/WF02-REQ162-20260827",
+    "commit": "2c5a249"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate (WF-02 Step 3b) on REQ-162's test suite. TEST-DESIGNER ran 6 mutation tests against lib/letflow/engine/lua/executor.ex (commit 2c5a249): 4 already caught, 2 real gaps found and closed (typed-case stack trace could have leaked a struct-atom-derived string that bypassed the existing AC7 substring check; untyped/fallback message path had zero prior coverage). Landing at 46 passing tests. Verify this claim independently -- do not trust TEST-DESIGNER's self-report. Re-run at least 2 of the 6 claimed mutations yourself against the real code and confirm the results.",
+    "acceptance_criteria": [
+      "Every one of REQ-162's 8 real acceptance criteria (docs/requirements.yaml) maps to at least one runnable test -- verified by reading the test file, not the spec's claim about itself.",
+      "Independently re-apply the 2 gap-closing mutations (typed-case stack-trace leak via inspect(original.__struct__)+raw Exception.message/1, and the untyped-fallback message leak) and confirm the NEW tests genuinely fail against them and pass against the real code.",
+      "Independently re-apply at least 1 of the 4 'already caught' mutations (recommend the :script_error/:script_failed tag collision, since it's the highest-value distinguishability property) and confirm existing tests genuinely catch it.",
+      "No skipped, pending, or excluded tests anywhere in the REQ-162 sections of test/letflow/engine/lua/executor_test.exs.",
+      "Confirm the working tree is clean after your verification -- git diff --stat lib/letflow/engine/lua/executor.ex empty after any mutation you apply and revert.",
+      "test/specs/REQ-162.md's mutation-testing findings table accurately reflects what was actually done.",
+      "mix test test/letflow/engine/lua/executor_test.exs and mix compile --warnings-as-errors both independently re-run and confirmed clean, with real output quoted.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

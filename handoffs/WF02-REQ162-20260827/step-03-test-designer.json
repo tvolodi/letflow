@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step03-WF02-REQ162-20260827",
+  "run_id": "WF02-REQ162-20260827",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ162-20260827/step-03-test-designer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-162"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ162-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ162-20260827/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ162-20260827/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req162-lua-script-error-capture.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/specs/REQ-162.md"
+    ],
+    "branch_name": "feature/WF02-REQ162-20260827",
+    "commit": "9ef20df"
+  },
+  "task": {
+    "description": "TEST-DESIGNER (WF-02 Step 3) for REQ-162. ELIXIR-DEV already wrote 9 new tests in test/letflow/engine/lua/executor_test.exs covering all 8 ACs, and both SECURITY-REVIEWER and REVIEWER passed the implementation. Your job is to actively find real coverage gaps using MUTATION TESTING: deliberately break the real code in executor.ex, run the existing suite, and see if it fails. If it doesn't, that's a real gap -- add a test, then revert. This session's track record: mutation testing has repeatedly found real gaps. Specific mutation targets: (1) swap the instruction_count_report/2 clause order or change {:consumed, count} to always report {:configured_budget, budget} regardless of whether state is populated, confirm AC2/AC3's tests catch it; (2) mutate the typed-case stack trace to use Exception.message(exception) directly instead of the sanitized to_map/2 call_stack, confirm AC7's test catches an Elixir-detail leak; (3) mutate the capabilities threading to pass a hardcoded non-empty set instead of the real grant_set() parameter, confirm AC6's test catches it; (4) mutate the SCRIPT_ERROR tag from :script_error to something colliding with an existing tag (e.g. reuse :script_failed), confirm AC5's distinguishability test catches the collision; (5) mutate the budget-exceeded string-match branch to run AFTER the script_error branch instead of before, confirm a real budget-exceeded scenario would be misclassified and that some test catches it.",
+    "acceptance_criteria": [
+      "Mutation-test AC2/AC3: swap the instruction_count_report/2 clause priority or force always-budget-fallback, confirm existing tests catch it, then revert.",
+      "Mutation-test AC7: use the raw exception message instead of the sanitized call_stack in the typed case, confirm a test catches an Elixir-internal leak, then revert.",
+      "Mutation-test AC6: hardcode the capabilities field instead of threading the real parameter, confirm a test catches it, then revert.",
+      "Mutation-test AC5: collide the :script_error tag with :script_failed or another existing tag, confirm the distinguishability test catches it, then revert.",
+      "Mutation-test the budget-exceeded-must-run-first ordering: reorder the two branches, confirm a real budget-exhaustion scenario is caught by an existing test as misclassified, then revert.",
+      "Confirm every one of REQ-162's 8 real acceptance criteria (docs/requirements.yaml) has at least one test that would fail if that specific behavior regressed -- verified by actually breaking it.",
+      "Update test/specs/REQ-162.md with the mutation-testing findings table."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

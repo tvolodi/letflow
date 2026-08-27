@@ -354,3 +354,17 @@ history:
       "2026-08-27T06:59:00Z") landed on main from this same run while this
       branch was in flight and only became visible on rebase; there was no
       process gap after all.
+
+  - req: REQ-155
+    event: started
+    agent: ORCH
+    at: "2026-08-27T11:07:00Z"
+    note: >
+      WF02-REQ155-20260827 started (queue task 307, GH#607, stage S5).
+      Claimed via get_next_task after REQ-157's completion. Out-of-band
+      host-enforced wall-clock kill for Lua script execution -- layer 2 of
+      the two-layer pair (LUA-10 restated), depends on REQ-154 (done).
+      Step 00 git-setup PASS (ORCH, direct): branch
+      feature/WF02-REQ155-20260827 created from main (7b6fcff) and pushed.
+      Dispatching Step 1 to CODE-DESIGNER next. 12 on-disk entries before
+      this append; 13 after.

@@ -2677,6 +2677,28 @@
             "queue_task_id": 309,
             "queue_agent_id": "orch-secondary",
             "note": "WF-02 for REQ-157 (queue task 309, GH#609, stage S5). Capability model and capability check at every gated host-function call site (LUA-05, LUA-06) -- ports R-Co capabilities.zig + host_api registerAll matrix. Does not touch lib/letflow/engine/lua/executor.ex (locked by concurrent WF02-REQ154-20260827). SECURITY-REVIEWER hard gate -- authorization boundary for tenant-supplied scripts. Queue claimed via get_next_task 2026-08-27T06:47:48Z. Full pipeline (design x2 rework, security, idiom, test-design w/ mutation-testing gap catch, test-run, release-validation) all PASS; one CI-only fix (handoff schema H3 violation, next_action moved into result); one pre-existing unrelated CI failure (ExecutorTest AC1 flaky function_exported? check, ISS-0350's own documented flakiness, executor.ex not in this branch's diff) structurally cleared, not blocking."
+        },
+        {
+            "run_id": "WF02-REQ155-20260827",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-155"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/lua/executor.ex",
+                "test/letflow/engine/lua/executor_test.exs",
+                "lib/letflow/design/req155-lua-wallclock-kill.md",
+                "test/specs/REQ-155.md"
+            ],
+            "lock_acquired_at": "2026-08-27T11:07:00Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ155-20260827 created; Step 1 dispatched to CODE-DESIGNER",
+            "backfilled": false,
+            "queue_task_id": 307,
+            "queue_agent_id": "orch-ai-dala",
+            "note": "WF-02 for REQ-155 (queue task 307, GH#607, stage S5). Out-of-band host-enforced wall-clock kill for Lua script execution -- layer 2 of the two-layer pair (LUA-10 restated), depends on REQ-154 (done). Extends lib/letflow/engine/lua/executor.ex with a Task.Supervisor.async_nolink/2-based supervised, non-cooperative timeout, reusing the pattern already established in lib/letflow/engine/plugin_interface.ex. SECURITY-REVIEWER hard gate. Queue claimed via get_next_task 2026-08-27T11:06:25Z."
         }
     ]
 }

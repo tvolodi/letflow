@@ -686,8 +686,12 @@ volumes:
     path: docs/status/requirement_status.v5.yaml
     status: current
     opened: 2026-08-26
-    entries: 10
+    entries: 11
     note: >
+      Incremented to 11 by conflict resolution at Step Final (WF02-REQ154-20260827 rebase onto
+      main) — main had REQ-157 started event appended by a sibling session; both entries composed.
+      `grep -c "^  - req:" docs/status/requirement_status.v5.yaml` = 11 on-disk entries.
+
       Incremented to 10 by DOC-UPDATER done-event append (WF02-REQ154-20260827, Step 06) --
       `grep -c "^  - req:" docs/status/requirement_status.v5.yaml` = 10 on-disk entries.
 

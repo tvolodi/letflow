@@ -28,6 +28,13 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     end
 
     test "execute_with_manifest/2 is exported" do
+      # `function_exported?/3` checks only already-loaded code -- unlike calling a
+      # function, it does not implicitly load the module first (see
+      # `:erlang.function_exported/3`). Under `mix test --partitions`, ExUnit's
+      # random async ordering can make this the very first reference to `Executor`
+      # in that partition's VM, so without `Code.ensure_loaded/1` first this
+      # assertion is a real, reproduced flake (not a race in the code under test).
+      assert {:module, Executor} = Code.ensure_loaded(Executor)
       assert function_exported?(Executor, :execute_with_manifest, 2)
     end
   end
@@ -399,11 +406,27 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
         end)
 
       assert_receive :started, 1_000
-      # Give execute_with_manifest/3 a moment to actually spawn its own supervised
-      # task before checking the supervisor's children.
-      Process.sleep(50)
 
-      children = Task.Supervisor.children(Letflow.Engine.Lua.TaskSupervisor)
+      # Poll for the in-flight child instead of a single fixed sleep+check: under
+      # host load contention a fixed sleep can miss the window entirely (checked
+      # too early, before execute_with_manifest/3 has spawned its supervised task,
+      # or too late, after scheduler jitter has delayed this process past it).
+      # Poll in small increments up to a bound well under the call's own
+      # timeout_ms (300) above, so the loop still proves a real in-flight child
+      # was observed -- it never falls back to asserting something trivially
+      # true, it just gives the spawn more chances to be caught mid-flight.
+      children =
+        Enum.reduce_while(1..20, [], fn _attempt, _acc ->
+          case Task.Supervisor.children(Letflow.Engine.Lua.TaskSupervisor) do
+            [] ->
+              Process.sleep(10)
+              {:cont, []}
+
+            found ->
+              {:halt, found}
+          end
+        end)
+
       assert children != [], "expected at least one in-flight child while the script is running"
 
       # Let the in-flight call finish (times out on its own) so the test doesn't

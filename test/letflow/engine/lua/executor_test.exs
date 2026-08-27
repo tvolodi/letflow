@@ -998,6 +998,51 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       end
     end
 
+    # Gap found by TEST-DESIGNER mutation testing: the pre-existing AC7 test only
+    # refutes "/" and "Elixir." substrings in each frame's source/name. Mutating
+    # script_error_stack_trace/1's typed clause to build frames from
+    # `inspect(original.__struct__)` (e.g. "Lua.VM.RuntimeError" -- Elixir's own
+    # `inspect/1` strips the "Elixir." prefix for module atoms, so it contains
+    # neither "/" nor "Elixir.") and `Exception.message(exception)` (the raw,
+    # unsanitized message) left all 44 then-existing tests passing -- no test pinned
+    # `stack_trace` to the library's own sanitized `to_map/1` output, so an
+    # Elixir-struct-name leak that happens not to contain those two substrings would
+    # ship undetected. Confirmed by mutation (44/44 passed with the mutant in place);
+    # reverting restored the pre-mutation source and this test passes against it.
+    # This test closes that gap by pinning stack_trace to the exact sanitized value.
+    test "AC7 regression: typed-case stack_trace is exactly Lua.RuntimeException.to_map/1's own call_stack" do
+      exception =
+        try do
+          Lua.eval!(Sandbox.new(max_instructions: 1_000_000), "return 1 // 0")
+          flunk("expected Lua.RuntimeException to be raised")
+        rescue
+          e in Lua.RuntimeException -> e
+        end
+
+      script_error = Executor.build_script_error(exception, 1_000_000, Capabilities.new())
+      expected_call_stack = Lua.RuntimeException.to_map(exception).call_stack
+
+      assert script_error.stack_trace == expected_call_stack
+    end
+
+    # Gap found by TEST-DESIGNER mutation testing: no test exercised the
+    # untyped/fallback script_error_message/1 clause at all. Mutating it from the
+    # fixed placeholder to `Exception.message(exception)` (the raw, unsanitized
+    # message -- which for an arbitrary wrapped Elixir exception can legitimately
+    # embed argument dumps or module names, per the moduledoc's own REQ-162
+    # section) left all 45 then-existing tests passing. This test closes that gap.
+    test "AC7 fallback case: an untyped wrapped exception yields the fixed placeholder message and empty stack_trace, never the raw exception detail" do
+      exception = Lua.RuntimeException.exception(%RuntimeError{message: "boom /etc/passwd Elixir.Secret"})
+
+      script_error = Executor.build_script_error(exception, 1_000, Capabilities.new())
+
+      assert script_error.message == "internal script execution error"
+      assert script_error.stack_trace == []
+      refute script_error.message =~ "boom"
+      refute script_error.message =~ "/etc/passwd"
+      refute script_error.message =~ "Elixir."
+    end
+
     # design §7 regression guard, mirroring REQ-148 §5's own warning: a real,
     # uncaught VM-opcode error's .original.state must be a populated %Lua.VM.State{}
     # carrying a non-negative :instruction_count. If a future tv-labs/lua upgrade

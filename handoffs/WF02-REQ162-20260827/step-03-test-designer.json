@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "TEST-DESIGNER",
   "file": "handoffs/WF02-REQ162-20260827/step-03-test-designer.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -39,6 +39,19 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "Genuine mutation testing performed against lib/letflow/engine/lua/executor.ex per all 5 specified targets. Mutations #1 (instruction_count_report clause order), #3 (hardcoded capabilities), #4 (:script_error/:script_failed tag collision), #5 (budget-exceeded branch ordering) were all already caught by ELIXIR-DEV's existing 44 tests -- no gap. Mutation #2 (typed-case stack_trace built from inspect(original.__struct__) + raw Exception.message/1 instead of the sanitized Lua.RuntimeException.to_map/1 call_stack) was a REAL GAP: all 44 existing tests passed with the mutant in place, because the pre-existing AC7 test only refutes '/' and 'Elixir.' substrings, and inspect(Lua.VM.RuntimeError) renders as 'Lua.VM.RuntimeError' with neither substring. Closed by adding 'AC7 regression: typed-case stack_trace is exactly Lua.RuntimeException.to_map/1's own call_stack', which pins stack_trace to the library's sanitized output -- verified this new test fails against the mutant (1/45 failed) and passes against the reverted code. A sixth mutation outside the 5 specified targets (untyped/fallback script_error_message/1 changed to leak Exception.message/1 instead of the fixed placeholder) found a second real gap -- no test exercised that clause at all. Closed by adding 'AC7 fallback case: an untyped wrapped exception yields the fixed placeholder message and empty stack_trace, never the raw exception detail' -- verified it fails against that mutant (1/46 failed) and passes against the reverted code. lib/letflow/engine/lua/executor.ex is fully reverted to ELIXIR-DEV's shipped implementation (git diff --stat shows no changes to that file); only test/letflow/engine/lua/executor_test.exs was extended (44 -> 46 tests). Final: mix test test/letflow/engine/lua/executor_test.exs -> 46 passed; mix compile --warnings-as-errors clean. test/specs/REQ-162.md updated with a full mutation-testing findings table (6 rows) matching REQ-159/160/161's format. All 8 real acceptance criteria in docs/requirements.yaml now have at least one test verified-by-breaking. Routing to TEST-DESIGN-VALIDATOR next.",
+    "tests_added": [
+      "AC7 regression: typed-case stack_trace is exactly Lua.RuntimeException.to_map/1's own call_stack",
+      "AC7 fallback case: an untyped wrapped exception yields the fixed placeholder message and empty stack_trace, never the raw exception detail"
+    ],
+    "files_changed": [
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/specs/REQ-162.md"
+    ],
+    "test_counts": {
+      "before": 44,
+      "after": 46,
+      "final_run": "46 passed"
+    }
   }
 }

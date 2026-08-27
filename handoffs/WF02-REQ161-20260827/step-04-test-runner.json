@@ -1,0 +1,38 @@
+{
+  "handoff_id": "step04-WF02-REQ161-20260827",
+  "run_id": "WF02-REQ161-20260827",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ161-20260827/step-04-test-runner.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-161"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ161-20260827/step-03b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ161-20260827",
+    "commit": "284e720"
+  },
+  "task": {
+    "description": "TEST-RUNNER (WF-02 Step 4) for REQ-161. Run the FULL test suite (scripts/test_parallel.sh) at least twice consecutively. Quote real output for every run. If any test fails, apply structural failure attribution per docs/agents/instructions/core-directives.md ('Failure Attribution Is Structural, Never By Count-Matching') -- diff-exclusion, merge-base reproduction, or demonstrated external mechanism. ISS-0340 (Letflow.Api.ContextTest 'scoped_repo_opts/1 is 1-arity') is a known, previously-reopened flake unrelated to any Lua work -- if it reappears, diff-exclude it rather than treating it as a regression.",
+    "acceptance_criteria": [
+      "Full suite (scripts/test_parallel.sh) run at least twice consecutively; real output quoted for each run.",
+      "mix compile --warnings-as-errors independently re-run and confirmed clean.",
+      "Any failure is attributed structurally, never by count-matching across runs.",
+      "Final verdict: PASS only if all runs are clean (modulo a diff-excluded known flake like ISS-0340), FAIL with a structured failure report otherwise.",
+      "CRITICAL: when writing this handoff's top-level status field (line 9), use exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED -- NOT DONE/COMPLETE/PASS. Run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

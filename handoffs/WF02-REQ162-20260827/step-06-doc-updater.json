@@ -1,0 +1,38 @@
+{
+  "handoff_id": "step06-WF02-REQ162-20260827",
+  "run_id": "WF02-REQ162-20260827",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ162-20260827/step-06-doc-updater.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-162"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ162-20260827/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ162-20260827",
+    "commit": "998e830"
+  },
+  "task": {
+    "description": "DOC-UPDATER (WF-02 Step 6) for REQ-162, RELEASE-VALIDATOR PASSed (commit 998e830). Flip REQ-162's status to 'done' in docs/requirements.yaml. Append ONE 'done' event to the CURRENT run-history volume -- confirm which volume is current via docs/status/requirement_status.index.yaml's status: current marker (was volume 5, at 25 entries as of REQ-162's started event -- RE-CHECK this count fresh, do not trust this cached number). Recount via `grep -c \"^  - req:\" <volume>` BEFORE and AFTER your append, and update the index's entries:/note: fields accordingly (prepend a new note, never edit prior notes). Use a real UTC timestamp from the clock (date -u +%Y-%m-%dT%H:%M:%SZ). This run passed every gate cleanly on the first attempt -- no rework rounds -- and RELEASE-VALIDATOR did an empirical verification (ran a real 1//0 script and observed the actual instruction_count field). This is the final S5 Lua host-function requirement chain (REQ-153 through REQ-162) -- worth a brief mention that all 8 platform.* capability-matrix rows are now real, and the full uncaught-error/deliberate-failure/kill taxonomy (SCRIPT_FAILED, SCRIPT_ERROR, budget, timeout, memory-limit) is complete.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-162 status flipped to 'done'.",
+      "Exactly one 'done' event appended to the current run-history volume, with a real UTC timestamp.",
+      "Volume recounted via grep before and after the append; index.yaml's entries:/note: updated to match, note prepended not overwritten.",
+      "No other status-history events edited or removed (append-only discipline)."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

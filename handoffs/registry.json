@@ -2647,7 +2647,7 @@
             "lock_acquired_at": "2026-08-27T06:32:50Z",
             "lock_released_at": null,
             "released_lock": false,
-            "last_known_step": "Step 00 PENDING (ELIXIR-DEV dispatched)",
+            "last_known_step": "Step 00 COMPLETED PASS -- branch feature/WF02-REQ154-20260827 created at 9d09ec0e, pushed to origin",
             "backfilled": false,
             "queue_task_id": 306,
             "queue_agent_id": "orch-main",

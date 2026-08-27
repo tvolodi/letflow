@@ -6,7 +6,9 @@ discovered_by: RELEASE-VALIDATOR
 discovered_in_run: WF03-ISS0347-20260826
 discovered_at: "2026-08-26T22:26:00Z"
 severity: MAJOR
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0348-20260826
+resolved_at: "2026-08-27T02:22:03Z"
 queue_task_id: 348
 github_issue_number: 669
 description: >

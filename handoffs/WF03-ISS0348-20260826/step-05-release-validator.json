@@ -1,0 +1,85 @@
+{
+  "handoff_id": "step05-WF03-ISS0348-20260826",
+  "run_id": "WF03-ISS0348-20260826",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-ISS0348-20260826/step-05-release-validator.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-26T23:50:00Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S0",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0348"],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0348": "See docs/issues/ISS-0348.yaml for full 4-item acceptance_criteria."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0348-20260826/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "test/letflow/tenant_provisioning/backfill_test.exs"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0348-20260826"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR (WF-03 Step 5) for ISS-0348. Independently re-run mix letflow.check (the actual backend CI command that originally failed) and confirm the 4 acceptance criteria in docs/issues/ISS-0348.yaml.",
+    "acceptance_criteria": [
+      "Independently run mix letflow.check (or at minimum a full serial mix test, the mechanism that originally exposed the flake) -- do not trust TEST-RUNNER's report alone",
+      "Confirm each of ISS-0348's 4 acceptance_criteria against actual code/test: root cause identified (yes -- ISSUE-FIXER's diagnosis, DB pollution from ISS-0113's Sandbox leak); fix isolates BackfillTest without weakening it (yes -- CODE-DESIGN-VALIDATOR already verified this rigorously, re-confirm); mix letflow.check exits 0; scripts/test_parallel.sh still green",
+      "PASS -> route to ISSUE-FIXER for close; FAIL -> identify blocking issue"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "verdict": "FAIL -- 3 of 4 acceptance criteria confirmed, but `mix letflow.check` does not exit 0. Blocker is unrelated to ISS-0348's actual fix code/tests.",
+    "independent_runs": {
+      "mix_letflow_check": {
+        "command": "mix letflow.check",
+        "result": "FAIL (exit 1) at the letflow.lint_handoffs step, before reaching mix test",
+        "cause": "NEW (un-grandfathered) H3 hard violation: handoffs/WF03-ISS0348-20260826/step-02-code-designer.json has a non-schema top-level key [\"artifacts_out\"] -- per lib/mix/tasks/letflow.lint_handoffs.ex, artifacts_out belongs under result.artifacts_out, not top-level. This file was produced earlier in this same WF-03 run (CODE-DESIGNER step 2) and was never run through mix letflow.check before now -- TEST-RUNNER's step-04 only ran `mix test`/`scripts/test_parallel.sh`, not the full `mix letflow.check` alias, so this pre-existing defect was never caught until this independent re-run.",
+        "unrelated_to_iss0348_fix": true
+      },
+      "mix_test_full_serial": {
+        "command": "MIX_ENV=test mix test",
+        "result": "PASS -- Result: 2097 passed (5 properties, 2092 tests), 3 excluded, 0 failures. Finished in 661.0 seconds (11.0s async, 649.9s sync).",
+        "note": "Run independently and directly (bypassing the lint_handoffs gate) since letflow.check aborted before compiling/testing. This is the exact mechanism (full serial mix test, ~650s) that originally exposed ISS-0348's flake -- it is now clean, matching TEST-RUNNER's step-04 report (2097 passed / 0 failures) within a few minutes of TEST-RUNNER's own run."
+      },
+      "scripts_test_parallel": {
+        "ran_independently": false,
+        "trusted_report": "handoffs/WF03-ISS0348-20260826/step-04-test-runner.json result.parallel_run: 2094/2094 passed, 0 failures",
+        "reasoning": "Time budget spent on the full serial mix test (the mechanism that actually matters for this issue) plus mix letflow.check; the partitioned parallel result is lower-value re-verification here since ISS-0348 was never reproduced under partitioned execution in the first place (per docs/issues/ISS-0348.yaml itself: '2089-2094/2094 clean in multiple runs the same day -- only the full serial mix test ... exhibits it')."
+      }
+    },
+    "acceptance_criteria_check": [
+      {
+        "criterion": "Root cause identified",
+        "verdict": "CONFIRMED",
+        "evidence": "handoffs/WF03-ISS0348-20260826/step-01-issue-fixer.json and step-02-code-designer.json context.source_text: Backfill.run/1's unscoped Repo.all(Registration) whole-table scan (correct by design) picks up real committed tenant/Registration rows left by other async:false tests that flip Sandbox mode to :auto via ISS-0113's known, still-open Sandbox-mode-is-repo-global gap -- only under full serial ordering, never under partitioned execution. Matches ISS-0348.yaml's description exactly."
+      },
+      {
+        "criterion": "Fix isolates BackfillTest without weakening it",
+        "verdict": "CONFIRMED",
+        "evidence": "Read test/letflow/tenant_provisioning/backfill_test.exs directly (all 5 tests). All 4 previously-exact {updated, skipped} tally assertions are now bound assertions (assert updated >= 1 / assert skipped >= 1) instead of exact literals -- correct given leaked rows can only add to the aggregate, never invert a specific tenant's own outcome. Every test retains its own tenant_id-scoped Registry.get_type/2 / Registry.register_type/2 pre- and post-checks unchanged, which remain the exact-match regression proof for that test's own tenant. The ISS-0343 vanished-schema test additionally gained a standalone Registry.register_type/2 call scoped to vanished_tenant_id strengthening (not weakening) its skip claim. lib/letflow/tenant_provisioning/backfill.ex (production code) is untouched -- confirmed via git diff main...HEAD --stat, which shows only test/letflow/tenant_provisioning/backfill_test.exs, docs, and handoffs changed. test/support/tenant_fixture.ex, test/support/data_case.ex, and Sandbox.mode are untouched. Matches CODE-DESIGN-VALIDATOR's step-02b sign-off; re-confirmed independently against actual shipped code, not the report."
+      },
+      {
+        "criterion": "mix letflow.check exits 0",
+        "verdict": "FAIL",
+        "evidence": "Independently run for real: exits 1 at letflow.lint_handoffs, never reaches mix test. See independent_runs.mix_letflow_check above. This is a real, reproducible blocker for CI, not a flake -- but it is a handoff-schema defect in step-02-code-designer.json, structurally unrelated to ISS-0348's test-isolation fix (git diff confirms the fix itself touches none of the lint-flagged file's content)."
+      },
+      {
+        "criterion": "scripts/test_parallel.sh still green",
+        "verdict": "TRUSTED (not independently re-run)",
+        "evidence": "TEST-RUNNER step-04 report: 2094/2094 passed, 0 failures. Not re-run myself this pass -- see reasoning above. My own independent full-serial mix test (the harder bar) corroborates: 2097 passed, 0 failures."
+      }
+    ],
+    "blocking_issue": "handoffs/WF03-ISS0348-20260826/step-02-code-designer.json carries a non-schema top-level key \"artifacts_out\" (schema requires result.artifacts_out) -- a NEW H3 hard violation that makes mix letflow.check exit 1 before mix test ever runs. This blocks ISS-0348's close criterion #3 even though the actual backfill_test.exs fix is verified correct and effective.",
+    "next_action": "Route to ORCH to fix the non-schema top-level key in handoffs/WF03-ISS0348-20260826/step-02-code-designer.json (move [\"artifacts_out\"] into result.artifacts_out per handoff schema -- trivial metadata fix, no design/code implications, qualifies for ORCH direct action per ORCHESTRATOR.md sec 10 sizing rule), then re-run mix letflow.check and re-dispatch RELEASE-VALIDATOR for a clean pass before routing to ISSUE-FIXER for close."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

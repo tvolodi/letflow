@@ -21,6 +21,7 @@ defmodule Letflow.Engine.Lua.PlatformTest do
 
   use ExUnit.Case, async: false
 
+  alias Letflow.Engine.Lua.Capabilities
   alias Letflow.Engine.Lua.Platform
   alias Letflow.Engine.Lua.Sandbox
 
@@ -127,6 +128,202 @@ defmodule Letflow.Engine.Lua.PlatformTest do
     test "states install/1's composition point -- Sandbox.new calls it", %{moduledoc: text} do
       assert text =~ "Sandbox.new"
       assert text =~ "install"
+    end
+  end
+
+  describe "REQ-157: closed-set enumeration (AC1)" do
+    test "a script enumerates exactly the 8 platform.* names via pairs(platform), no more, no fewer" do
+      script = """
+      local names = {}
+      for k, _v in pairs(platform) do
+        table.insert(names, k)
+      end
+      table.sort(names)
+      return table.concat(names, ",")
+      """
+
+      {[result], _lua} = Lua.eval!(Sandbox.new(), script)
+
+      expected =
+        ~w(call_service emit_event fail get_instance_state log now read_variable write_variable)
+        |> Enum.sort()
+        |> Enum.join(",")
+
+      assert result == expected
+    end
+
+    test "platform.ex's source contains exactly one Lua.set!(_, [:platform, occurrence (the single fold)" do
+      source = File.read!("lib/letflow/engine/lua/platform.ex")
+
+      # Matches only an actual call-site pattern (`Lua.set!(<accumulator>, [:platform,`),
+      # not the moduledoc/comment prose describing the invariant in words -- guards
+      # against a future hand-added 9th `Lua.set!` call bypassing the matrix fold,
+      # regardless of what the fold's own accumulator variable happens to be named.
+      occurrences =
+        ~r/Lua\.set!\([a-z_]+,\s*\[:platform,/
+        |> Regex.scan(source)
+        |> length()
+
+      assert occurrences == 1
+    end
+  end
+
+  describe "REQ-157: per-function capability-denial tests, empty grant set (AC2)" do
+    setup do
+      lua = Platform.install(Sandbox.new(), Capabilities.new())
+      %{lua: lua}
+    end
+
+    test "platform.read_variable(...) raises Lua.RuntimeException", %{lua: lua} do
+      assert_raise Lua.RuntimeException, fn ->
+        Lua.eval!(lua, "return platform.read_variable('x')")
+      end
+    end
+
+    test "platform.write_variable(...) raises Lua.RuntimeException", %{lua: lua} do
+      assert_raise Lua.RuntimeException, fn ->
+        Lua.eval!(lua, "return platform.write_variable('x', 'y')")
+      end
+    end
+
+    test "platform.log(...) raises Lua.RuntimeException", %{lua: lua} do
+      assert_raise Lua.RuntimeException, fn ->
+        Lua.eval!(lua, "return platform.log('hello')")
+      end
+    end
+
+    test "platform.emit_event(...) raises Lua.RuntimeException", %{lua: lua} do
+      assert_raise Lua.RuntimeException, fn ->
+        Lua.eval!(lua, "return platform.emit_event('evt')")
+      end
+    end
+
+    test "platform.get_instance_state(...) raises Lua.RuntimeException", %{lua: lua} do
+      assert_raise Lua.RuntimeException, fn ->
+        Lua.eval!(lua, "return platform.get_instance_state()")
+      end
+    end
+
+    test "platform.call_service(\"any-service\") raises Lua.RuntimeException", %{lua: lua} do
+      assert_raise Lua.RuntimeException, fn ->
+        Lua.eval!(lua, "return platform.call_service('any-service')")
+      end
+    end
+  end
+
+  describe "REQ-157: structured denial fields (AC3)" do
+    test "rescuing read_variable's denial exposes function, required, and granted" do
+      lua = Platform.install(Sandbox.new(), Capabilities.new())
+
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.read_variable('x')")
+        end
+
+      assert exception.original[:function] == :read_variable
+      assert exception.original[:capability_required] == "variable:read"
+      assert exception.original[:capabilities_granted] == []
+    end
+  end
+
+  describe "REQ-157: call_service denial without any grant (AC4)" do
+    test "platform.call_service(\"billing\") without a service:call:billing grant raises with the exact required capability" do
+      lua = Platform.install(Sandbox.new(), Capabilities.new())
+
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.call_service('billing')")
+        end
+
+      assert exception.original[:capability_required] == "service:call:billing"
+    end
+  end
+
+  describe "REQ-157: call_service grant is parameterised, not blanket (AC5)" do
+    setup do
+      lua = Platform.install(Sandbox.new(), Capabilities.new(["service:call:alpha"]))
+      %{lua: lua}
+    end
+
+    test "a service:call:alpha grant lets platform.call_service('alpha') pass the gate (reaches the stub's own raise)",
+         %{lua: lua} do
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.call_service('alpha')")
+        end
+
+      # Passed the gate: this is the stub's "not yet implemented" raise, not a capability
+      # denial -- no capability_required field on this exception.
+      assert exception.original[:capability_required] == nil
+      assert exception.original[:stub] == true
+    end
+
+    test "the same grant does NOT authorise platform.call_service('beta')", %{lua: lua} do
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.call_service('beta')")
+        end
+
+      assert exception.original[:capability_required] == "service:call:beta"
+      assert exception.original[:capabilities_granted] == ["service:call:alpha"]
+    end
+  end
+
+  describe "REQ-157: now and fail are callable with an empty capability set (AC6)" do
+    test "platform.now() returns its normal value with no raise at all" do
+      lua = Platform.install(Sandbox.new(), Capabilities.new())
+
+      {[result], _lua} = Lua.eval!(lua, "return platform.now()")
+
+      assert is_binary(result)
+      assert {:ok, %DateTime{}, 0} = DateTime.from_iso8601(result)
+    end
+
+    test "platform.fail() raises the stub's own explicit-failure error, not a capability denial" do
+      lua = Platform.install(Sandbox.new(), Capabilities.new())
+
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.fail()")
+        end
+
+      assert exception.original[:reason] == :explicit_fail
+      assert exception.original[:capability_required] == nil
+    end
+  end
+
+  describe "REQ-157: moduledoc content (AC7)" do
+    setup do
+      {:docs_v1, _anno, _lang, _fmt, moduledoc, _meta, _docs} =
+        Code.fetch_docs(Letflow.Engine.Lua.Platform)
+
+      %{"en" => text} = moduledoc
+      %{moduledoc: text}
+    end
+
+    test "reproduces the 8-row capability matrix in substance", %{moduledoc: text} do
+      for name <-
+            ~w(call_service read_variable write_variable log emit_event get_instance_state now fail) do
+        assert text =~ name
+      end
+
+      assert text =~ "service:call:"
+      assert text =~ "variable:read"
+      assert text =~ "variable:write"
+      assert text =~ "audit:log"
+      assert text =~ "event:emit"
+      assert text =~ "instance:read"
+    end
+
+    test "states the now/fail ungated rationale", %{moduledoc: text} do
+      assert text =~ "pure time read with no state reach"
+      assert text =~ "may always terminate itself"
+    end
+
+    test "carries the binding statement guarding against a future gate on now or fail", %{
+      moduledoc: text
+    } do
+      assert text =~ "A test that expects a gate on `now` or `fail` is reading the matrix wrong"
     end
   end
 end

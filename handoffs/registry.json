@@ -2792,6 +2792,28 @@
             "queue_task_id": 312,
             "queue_agent_id": "orch-ai-dala",
             "note": "WF-02 for REQ-160 (queue task 312, GH#612, stage S5). Lua host API 2/2 -- write path -- platform.write_variable (staged into a process-dictionary buffer, applied atomically only on script success via VariableMerge.merge/3, discarded on EVERY failure arm: raised error, instruction budget, wall-clock kill, memory limit), call_service (injected ServiceCaller behaviour mirroring TimeSource, never raises, structured error on failure), emit_event (hooks into real Letflow.EventStore.append/2, new host-authored actor_id field). Depends on REQ-159/158/157 (all done). Design needed 1 rework: CODE-DESIGN-VALIDATOR found a real kill-race gap (Task.shutdown/2's documented {:ok, reply} return on a timeout arm was a real third observation channel the design's channel enumeration had missed) -- fixed by stating INV-write-discard-on-race as an explicit, named invariant REQ-155 SS4.3/REQ-156 SS5.2's own code must honor. Test design needed 1 rework: TEST-DESIGN-VALIDATOR found AC1's three harder failure arms (instruction budget/wall-clock/memory kill) were only inferred structurally, not directly tested, and AC2's VariableMerge.merge/3 atomicity test was planned in the spec but never implemented -- both closed with real tests reusing REQ-154/155/156's own kill harnesses. TEST-DESIGNER's own mutation-testing pass (before that rework) separately found and closed 2 real gaps: capability-gate-must-precede-body ordering, and LuaNumberMarshalling call-site verification (behaviorally undetectable since from_lua/to_lua are literal identity functions, so closed via a structural source-inspection test instead). SECURITY-REVIEWER and REVIEWER both passed clean on first attempt. 2262/2262 full-suite, 2 consecutive clean runs. One CI-only fix after PR open: 3 handoffs used non-schema top-level status values (FAIL/COMPLETE/DONE instead of FAILED/COMPLETED) caught by mix letflow.lint_handoffs. Queue task 312 released done cleanly."
+        },
+        {
+            "run_id": "WF02-REQ161-20260827",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-161"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/lua/platform.ex",
+                "test/letflow/engine/lua/platform_test.exs",
+                "lib/letflow/design/req161-lua-platform-fail.md",
+                "test/specs/REQ-161.md"
+            ],
+            "lock_acquired_at": "2026-08-27T20:31:00Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ161-20260827 created; Step 1 dispatched to CODE-DESIGNER",
+            "backfilled": false,
+            "queue_task_id": 313,
+            "queue_agent_id": "orch-ai-dala",
+            "note": "WF-02 for REQ-161 (queue task 313, GH#613, stage S5). platform.fail terminates by a mechanism the script cannot intercept (LUA-15 restated per decision 0014's watchlist). An ordinary raised Lua error would let a script pcall its own platform.fail and continue running, defeating the requirement -- the design must find/confirm an uninterceptable termination mechanism (REQ-148's spike likely already answered whether a host-raised error is pcall-catchable in the adopted runtime; cite it, don't re-derive). Must also distinguish SCRIPT_FAILED (deliberate) from REQ-162's SCRIPT_ERROR (uncaught crash) -- must not collapse the two. fail is UNGATED by design per R-Co's matrix -- do not add a capability gate. Depends on REQ-160 (done). SECURITY-REVIEWER hard gate. Queue claimed via get_next_task 2026-08-27T20:30:47Z."
         }
     ]
 }

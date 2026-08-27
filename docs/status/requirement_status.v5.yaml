@@ -582,3 +582,20 @@ history:
       flipped pending -> done in docs/requirements.yaml. `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 21 on-disk entries before this
       append; 22 after.
+
+  - req: REQ-161
+    event: started
+    agent: ORCH
+    at: "2026-08-27T20:30:47Z"
+    note: >
+      WF02-REQ161-20260827 started (queue task 313, GH#613, stage S5).
+      Claimed via get_next_task after REQ-160's completion. platform.fail
+      terminates by a mechanism the script cannot intercept (LUA-15
+      restated) -- decision 0014's watchlist item: an ordinary raised
+      Lua error would let a script pcall its own platform.fail call and
+      continue running, defeating the requirement entirely. Depends on
+      REQ-160 (done). SECURITY-REVIEWER hard gate. Step 00 git-setup
+      PASS (ORCH, direct): branch feature/WF02-REQ161-20260827 created
+      from main (4ad5347) and pushed. Dispatching Step 1 to
+      CODE-DESIGNER next. 22 on-disk entries before this append; 23
+      after.

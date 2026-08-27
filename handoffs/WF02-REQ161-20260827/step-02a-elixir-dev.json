@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step02a-WF02-REQ161-20260827",
+  "run_id": "WF02-REQ161-20260827",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ161-20260827/step-02a-elixir-dev.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-161"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req161-lua-platform-fail.md",
+      "lib/letflow/engine/lua/platform.ex",
+      "lib/letflow/engine/lua_number_marshalling.ex"
+    ],
+    "branch_name": "feature/WF02-REQ161-20260827",
+    "commit": "067d1b9"
+  },
+  "task": {
+    "description": "Implement REQ-161 strictly per the APPROVED design at lib/letflow/design/req161-lua-platform-fail.md (passed CODE-DESIGN-VALIDATOR, commit 067d1b9). Read the full design doc before writing any code. In lib/letflow/engine/lua/platform.ex: replace the existing run_stub(:fail, ...) clause's body -- which currently raises Lua.RuntimeException, the exact pcall-catchable hazard this requirement exists to fix -- with a call to a new private do_fail/1 per design section 3.2: (1) coerce the first Lua argument (reason) to a String.t() (use as-is if already binary; otherwise Lua.decode!/2 if a table reference then inspect/1, or inspect/1 directly; default to \"script called platform.fail with no reason\" if missing); (2) decode the second argument (details) via Lua.decode!/2 if a table reference, then apply LuaNumberMarshalling.from_lua/1 one level deep on any resulting map's values (mirror do_call_service/3's/do_emit_event/3's existing decode_lua_payload/2 + normalize_from_lua/1 pipeline already in this file); default details to nil if missing; (3) construct %{reason: reason_string, details: normalized_details} and call exit({:script_failed, script_failure}) -- this call never returns, add no_return() to run_stub/5's @spec union. Add the two new @type declarations from design section 2.4/3.3: script_failure() and script_failed_exit_reason(). The @capability_matrix's :fail row (required: :none) is UNEDITED -- do not add a capability gate, this function is ungated by design. Add the new moduledoc section per design section 6 (6 numbered items: restates LUA-15, explains the pcall-continuation hazard, names the exit/1 mechanism and why it's uninterceptable citing deps/lua source, states plainly the engine-side half has no real call site today, states the SCRIPT_FAILED/SCRIPT_ERROR non-collapse property reserving the :script_failed tag, states the honest executor.ex stringification gap meaning tests must assert at the raw process/monitor boundary not through Executor). Do NOT edit executor.ex, plugin_interface.ex, or lua_script_audit.ex -- none are in this requirement's owned_modules; the engine-side wiring gap is deliberately left open (design's own OQ-1).",
+    "owned_modules": [
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs",
+      "lib/letflow/design/req161-lua-platform-fail.md",
+      "test/specs/REQ-161.md"
+    ],
+    "acceptance_criteria": [
+      "AC1: a script that wraps its own platform.fail call in pcall and continues STILL yields a SCRIPT_FAILED outcome and does NOT run to completion -- prove this at the raw process/Task boundary (spawn/Task.async a process running Lua.eval!/2 directly against Platform.install/3's output, assert the process is dead and the exit reason is {:script_failed, %{...}}), NOT through Executor.execute_with_manifest/2,3 (whose handle_yield_result/3 stringifies the reason today, per the design's own documented gap in section 4).",
+      "AC2: the structured failure carries the reason/details the script passed, readable by the host, via the exit reason's payload.",
+      "AC3: SCRIPT_FAILED ({:script_failed, %{...}}) is pattern-match-distinguishable from any other exit/crash reason (a plain Lua.RuntimeException struct, :killed, a wallclock timeout tuple, etc) -- a test demonstrates the pattern match succeeds for SCRIPT_FAILED and fails for at least one other real reason shape already produced elsewhere in this codebase.",
+      "AC4: platform.fail is callable with an EMPTY capability set -- a test confirms no capability grant is required (install/3 with no grants still permits fail to run and terminate the process).",
+      "AC5: moduledoc states this restates LUA-15, explains the pcall-continuation hazard an ordinary raise would create, and names exit/1 as the mechanism used instead.",
+      "AC6: moduledoc states explicitly that LUA-15's engine-side half (event recording + error-policy transition) has no real call site today.",
+      "AC7: mix test and mix compile --warnings-as-errors both pass, real output quoted."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

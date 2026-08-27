@@ -623,3 +623,27 @@ history:
       docs/requirements.yaml. `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 23 on-disk entries before
       this append; 24 after.
+
+  - req: REQ-162
+    event: started
+    agent: ORCH
+    at: "2026-08-27T22:40:25Z"
+    note: >
+      WF02-REQ162-20260827 started (queue task 314, GH#614, stage S5).
+      Claimed via get_next_task after REQ-161's completion. Uncaught
+      Lua errors captured as structured SCRIPT_ERROR events (LUA-16
+      restated) -- stack trace, capability state at failure (from
+      REQ-157's real capability set, not re-derived), and an
+      instruction-count field whose retrievability must be resolved
+      empirically per REQ-148 spike answer (c), never zero-filled if
+      not retrievable. Must distinguish SCRIPT_ERROR from four other
+      arms by pattern match: REQ-161's SCRIPT_FAILED, REQ-154's budget
+      error, REQ-155's timeout, REQ-156's memory limit. The literal
+      "division by zero" acceptance text is a Lua 5.1 assumption --
+      in 5.3, 1/0 yields inf (no raise); must substitute 1//0 or 1%0
+      and document why. Depends on REQ-161, REQ-157 (both done).
+      SECURITY-REVIEWER hard gate (error reports are a data-disclosure
+      surface). Step 00 git-setup PASS (ORCH, direct): branch
+      feature/WF02-REQ162-20260827 created from main (3c74cee) and
+      pushed. Dispatching Step 1 to CODE-DESIGNER next. 24 on-disk
+      entries before this append; 25 after.

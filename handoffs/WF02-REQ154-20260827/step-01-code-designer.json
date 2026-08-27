@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ154-20260827/step-01-code-designer.json",
   "created_at": "2026-08-27T06:39:11Z",
   "started_at": "2026-08-27T06:39:11Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-08-27T07:15:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -49,5 +49,10 @@
       "No implementation code present (no .ex code blocks with function bodies)"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "Design for REQ-154 (LUA-08 layer-1 instruction budget) complete. Key decisions: (1) execute_with_manifest/3 overload takes :max_instructions opt; 2-arity behaviour callback reads Application config and delegates; (2) budget-exhaustion error shape {error, {:budget_exceeded, limit}} distinguishable from string errors and :invalid_script_ref; (3) detection via Lua.RuntimeException message match on 'instruction budget exceeded'; (4) budget threaded via Sandbox.new([max_instructions: budget]) per INV-SBX-1 — Sandbox.new/1 must be updated by ELIXIR-DEV to pass the opt to Lua.new/1; (5) ISS-0350 fix: is_binary guard and @impl restored on 2-arity callback; (6) moduledoc covers LUA-08 layer-1 restatement, :max_instructions pcall-catchability, INV-2/INV-4 non-port explanation, and REQ-155 as mandatory layer 2.",
+    "artifacts_out": ["lib/letflow/design/req154-lua-instruction-budget.md"],
+    "issues": []
+  }
 }

@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step03-rework1-WF02-REQ160-20260827",
+  "run_id": "WF02-REQ160-20260827",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ160-20260827/step-03-test-designer-rework1.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-160"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ160-20260827/step-03-test-designer.json",
+      "handoffs/WF02-REQ160-20260827/step-03b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req160-lua-host-api-write.md",
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs",
+      "test/specs/REQ-160.md"
+    ],
+    "branch_name": "feature/WF02-REQ160-20260827",
+    "commit": "179bc2f",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR FAILED Step 3b (commit 179bc2f) on real coverage gaps against REQ-160's own acceptance criteria, not on the mutation-testing work (which was independently re-verified and confirmed genuine). Read handoffs/WF02-REQ160-20260827/step-03b-test-design-validator.json in full for the complete findings and instructions_to_test_designer array. Apply exactly those 4 required fixes, verbatim, quoted below for convenience -- do not deviate:\n\n1. AC1: add three concrete behavioral tests exercising write_variable staged inside a script that then (a) exhausts a small, explicitly configured :max_instructions budget (REQ-154), (b) blocks past a small configured wall-clock timeout and is killed via Task.shutdown(task, :brutal_kill) (REQ-155), and (c) allocates past a small configured :max_heap_words limit (REQ-156) -- mirror whatever fixture/harness pattern REQ-154/155/156's own test suites already use to trigger these kills (they are status: done, so real, runnable mechanisms exist to reuse), then assert (same shape as the existing raised-error test) that the write is never observed via take_staged_writes/0 read from any process other than the one that ran the script, and that the killed process's own buffer is simply gone. The existing structural guard test is good supplementary evidence and should stay, but does not substitute for these three.\n\n2. AC2: add the atomicity test test/specs/REQ-160.md section 3's third bullet already specifies -- stage three writes via a successful script, call Letflow.Engine.VariableMerge.merge/3 directly against the map take_staged_writes/0 returns (current variables %{}, no validations), and assert the single call's return is {:ok, new_variables, events} with all three keys present in new_variables, per design section 2.6.\n\n3. Add the missing call_service write-direction marshalling assertion (spec section 6, second bullet): have a double (or a capturing wrapper around FakeServiceCaller) assert directly on the Elixir-side types (is_integer/1, is_float/1) of the payload it received for an integer-valued and a whole-number-float-valued argument, rather than relying solely on the general structural guard test.\n\n4. Either implement the cross-tenant emit_event isolation test test/specs/REQ-160.md section 12's second bullet plans, or correct that section of the spec to state plainly that only the narrower literal AC7 (no Repo call with a script-derived prefix, confirmed by grep + single-tenant success) is covered, and that the broader two-tenant functional isolation check was descoped -- with a reason. Do the same correction for section 2 (state plainly which of the four failure arms are actually implemented vs. inferred) rather than leaving the section's headline text implying all four are directly tested.\n\nOnce these are added, re-running the full mutation-testing pass is NOT required again (the two independently re-verified mutations already hold), but re-confirm mix test and mix compile --warnings-as-errors are still clean with the new tests added, and update the mutation-testing findings table's 'Net result' section and test count if it changes.",
+    "acceptance_criteria": [
+      "AC1: three new concrete behavioral tests for instruction-budget/wall-clock/memory-limit kill arms, each showing a staged write is discarded (not merely inferred structurally).",
+      "AC2: VariableMerge.merge/3 atomicity test implemented exactly as spec section 3 bullet 3 describes.",
+      "call_service write-direction marshalling assertion added per spec section 6 bullet 2.",
+      "Spec sections 2 and 12 either get the real tests implemented or are corrected to honestly state descoped/inferred coverage with a reason -- no overstatement remains.",
+      "mix test test/letflow/engine/lua/platform_test.exs and mix compile --warnings-as-errors both re-run clean with real output quoted after the additions."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

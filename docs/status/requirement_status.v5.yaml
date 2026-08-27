@@ -484,3 +484,17 @@ history:
       an unrelated recurrence of the already-tracked ISS-0340 flake,
       structurally cleared via isolation testing. Status flipped pending ->
       done in docs/requirements.yaml.
+
+  - req: REQ-159
+    event: started
+    agent: ORCH
+    at: "2026-08-27T16:52:00Z"
+    note: >
+      WF02-REQ159-20260827 started (queue task 311, GH#611, stage S5).
+      Claimed via get_next_task after REQ-158's completion. Lua host
+      API 1/2 -- read path -- platform.read_variable, get_instance_state,
+      log (LUA-11 read half, LUA-13), depends on REQ-158 and REQ-150
+      (both done). Step 00 git-setup PASS (ORCH, direct): branch
+      feature/WF02-REQ159-20260827 created from main (f79d828) and
+      pushed. Dispatching Step 1 to CODE-DESIGNER next. 18 on-disk
+      entries before this append; 19 after.

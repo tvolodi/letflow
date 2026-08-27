@@ -2746,6 +2746,28 @@
             "queue_task_id": 310,
             "queue_agent_id": "orch-ai-dala",
             "note": "WF-02 for REQ-158 (queue task 310, GH#610, stage S5). Capability manifest validation on script load, wired to the existing LuaScriptAudit hash path (LUA-07), depends on REQ-157 (done). Feeds LuaScriptAudit's INV-LSA-2 mismatch check rather than bypassing it. SECURITY-REVIEWER hard gate -- the manifest is what bounds a script's authority. Queue claimed via get_next_task 2026-08-27T15:14:42Z. Design PASS first pass. SECURITY-REVIEWER found and ELIXIR-DEV fixed a real hash-collision BLOCKER (delimiter injection in the raw-separator byte layout -- fixed via length-prefixed framing, independently re-verified structurally collision-free). REVIEWER PASS. TEST-DESIGNER found and closed a mutation-detectable gap (hash-comparison tests only compared against themselves, never an independently-reconstructed value -- would have missed a systematic framing weakening), independently re-verified by TEST-DESIGN-VALIDATOR reproducing the mutation from scratch. AC2 (rejection before execution) satisfied as a disclosed caller-discipline scope gap, mirroring REQ-058's precedent, deferred to REQ-159/160/161. 6+ cumulative clean full-suite runs; one unrelated ISS-0340 recurrence structurally cleared."
+        },
+        {
+            "run_id": "WF02-REQ159-20260827",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-159"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/lua/platform.ex",
+                "test/letflow/engine/lua/platform_test.exs",
+                "lib/letflow/design/req159-lua-host-api-read.md",
+                "test/specs/REQ-159.md"
+            ],
+            "lock_acquired_at": "2026-08-27T16:52:00Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ159-20260827 created; Step 1 dispatched to CODE-DESIGNER",
+            "backfilled": false,
+            "queue_task_id": 311,
+            "queue_agent_id": "orch-ai-dala",
+            "note": "WF-02 for REQ-159 (queue task 311, GH#611, stage S5). Lua host API 1/2 -- read path -- platform.read_variable, get_instance_state, log (LUA-11 read half, LUA-13). Depends on REQ-158 (manifest/capability infra) and REQ-150 (number marshalling rule, both done). Real host-function bodies for the first time (REQ-157's stubs implemented for real) -- capability-gated at each call site per REQ-157, tenant prefix supplied by calling engine code never script input, number conversion cites REQ-150's rule rather than reinventing it. SECURITY-REVIEWER hard gate. Queue claimed via get_next_task 2026-08-27T16:51:31Z."
         }
     ]
 }

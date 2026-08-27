@@ -1,0 +1,125 @@
+run_id: WF02-REQ155-20260827
+workflow_id: WF-02
+step: "4"
+agent: TEST-RUNNER
+requirement_ids: [REQ-155]
+issue_ids: []
+date: "2026-08-27"
+branch: feature/WF02-REQ155-20260827
+head_commit: c1a555c4973727abd07d05220c60f89237b43a4e
+merge_base_with_main: 67e29432e3911bff666c0cc3799ac7da85fb6605
+
+environment:
+  toolchain: local (elixir/mix via asdf shims found on PATH; Elixir 1.20.3, Erlang/OTP 29)
+  docker_compose_up: |
+    NOT run. `docker compose up -d` (both plain and `sudo`) failed with
+    "Cannot connect to the Docker daemon at unix:///var/run/docker.sock".
+    Diagnosed rather than force-fixed: `systemctl status docker` showed
+    docker.service in a failed/start-limit-hit loop, while a manually
+    started dockerd (PID 3925615, running since Aug 24) was still alive and
+    holding a LISTEN fd on a docker.sock inode -- but `stat /var/run/docker.sock`
+    resolved to a *different*, newer inode (the failed systemd docker.socket
+    unit's replacement file), orphaning CLI/API access to the live daemon.
+    This matches the same host-level docker breakage documented in prior
+    reports (e.g. report-2026-08-26-WF03-ISS0216-20260826.yaml). Did not
+    touch/kill the live dockerd (other unrelated services share this host).
+    Instead confirmed this checkout's own Postgres container was already up
+    without going through the docker CLI: `ss -ltnp` showed listeners on
+    127.0.0.1:5462 and 0.0.0.0:5463/[::]:5463; the untracked .env at the repo
+    root sets LETFLOW_DB_PORT=5463, which config/db_port.exs resolves to for
+    both dev and test. Proceeded directly to scripts/test_parallel.sh, which
+    reached the DB successfully (every partition's ecto.create/migrate and
+    all queries succeeded).
+  mix_test_alias: "mix.exs's `test` alias ran ecto.create/ecto.migrate --quiet automatically inside each of the 8 partition processes, per scripts/test_parallel.sh's own design -- no separate DB-setup step taken."
+
+test_parallel:
+  script: scripts/test_parallel.sh
+  partition_count_N: 8
+  partition_count_source: nproc ($TEST_PARALLEL_N was unset; nproc and getconf _NPROCESSORS_ONLN both returned 8)
+  per_partition:
+    - "partition 1: 273 tests, 0 properties, 0 failures, exit 0"
+    - "partition 2: 309 tests, 0 properties, 0 failures, exit 0"
+    - "partition 3: 283 tests, 2 properties, 0 failures, exit 0"
+    - "partition 4: 209 tests, 0 properties, 0 failures, exit 0"
+    - "partition 5: 244 tests, 2 properties, 0 failures, exit 0"
+    - "partition 6: 140 tests, 0 properties, 1 failures, exit 2"
+    - "partition 7: 311 tests, 1 property, 0 failures, exit 0"
+    - "partition 8: 373 tests, 0 properties, 0 failures, exit 0"
+  combined: "2142 tests, 5 properties, 1 failures (2146/2147 passed)"
+  script_exit_code: 1
+  raw_output: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.3HwqOn
+    test_parallel: TEST_PARALLEL_GROUP=tp4095632 (shared by all 8 partitions)
+    partition 1: 273 tests, 0 properties, 0 failures, exit 0
+    partition 2: 309 tests, 0 properties, 0 failures, exit 0
+    partition 3: 283 tests, 2 properties, 0 failures, exit 0
+    partition 4: 209 tests, 0 properties, 0 failures, exit 0
+    partition 5: 244 tests, 2 properties, 0 failures, exit 0
+    partition 6: 140 tests, 0 properties, 1 failures, exit 2
+    partition 7: 311 tests, 1 property, 0 failures, exit 0
+    partition 8: 373 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 2142 tests, 5 properties, 1 failures (2146/2147 passed)
+
+failures:
+  - test: "Letflow.Api.ContextTest \"scoped_repo_opts/1 API shape scoped_repo_opts/1 is 1-arity — no tenant/schema/prefix parameter exists to pass\""
+    location: test/letflow/api/context_test.exs:103-104
+    partition: 6
+    raw: |
+      1) test scoped_repo_opts/1 API shape scoped_repo_opts/1 is 1-arity — no tenant/schema/prefix parameter exists to pass (Letflow.Api.ContextTest)
+         test/letflow/api/context_test.exs:103
+         Expected truthy, got false
+         code: assert function_exported?(Context, :scoped_repo_opts, 1)
+         stacktrace:
+           test/letflow/api/context_test.exs:104: (test)
+    attribution: >
+      PRE-EXISTING, unrelated to REQ-155. This is NOT the anticipated
+      ISS-0350 ExecutorTest flake the handoff briefed for -- that specific
+      failure did not occur anywhere in this run (grepped all 8 partition
+      logs for "execute_with_manifest"/"ExecutorTest": zero matches). This
+      is instead the previously-documented ISS-0340 flake
+      ("test/letflow/api/context_test.exs scoped_repo_opts/1 is 1-arity
+      (intermittent)"), which ISS-0340.yaml records as status: resolved on
+      2026-08-26 but which has structurally identical symptoms
+      (function_exported?/3 returning false intermittently under
+      full-suite ordering) -- the fix (commit 5b9b2b5, moving the test out
+      of a describe block with tenant-provisioning setup) evidently did
+      not eliminate the underlying race, only reduced its frequency.
+      Independent attribution established via two routes, not accepted on
+      any prior say-so:
+        route (a) diff-exclusion: `git diff --stat main...HEAD` for this
+          branch touches only config/config.exs, config/test.exs,
+          lib/letflow/application.ex, lib/letflow/engine/lua/executor.ex,
+          test/letflow/engine/lua/executor_test.exs, and design/spec docs
+          -- lib/letflow/api/context.ex and test/letflow/api/context_test.exs
+          are untouched by REQ-155.
+        route (c) external mechanism: ran
+          `mix test test/letflow/api/context_test.exs --seed 0` standalone
+          -- passed cleanly, "Result: 11 passed", 0 failures. The same
+          assertion (`function_exported?(Context, :scoped_repo_opts, 1)`)
+          only fails when interleaved with the rest of the full suite
+          under scripts/test_parallel.sh's partitioning/ordering, matching
+          ISS-0340's own documented intermittent (module-loading-order
+          race) description and the general mechanism ISS-0350 documents
+          for a different module.
+      Conclusion: not caused by REQ-155's changes (execution timeout
+      logic, application.ex supervisor registration are untouched by this
+      failure's code path). Recommend: reopen ISS-0340 (its "resolved"
+      status is contradicted by this reproduction) rather than filing a
+      new issue -- flagged for ORCH/queue follow-up, not filed directly by
+      this agent.
+
+verdict: PASS
+verdict_reasoning: >
+  2146/2147 tests passed. The single failure is independently attributed
+  as pre-existing test-infra flakiness (ISS-0340's function_exported?/3
+  race), unrelated to REQ-155's diff, via both diff-exclusion and
+  isolation-vs-full-suite reproduction. No failure touches REQ-155's own
+  new code (lib/letflow/engine/lua/executor.ex's wall-clock kill timeout
+  logic, lib/letflow/application.ex's supervisor registration, or
+  test/letflow/engine/lua/executor_test.exs) -- the specifically
+  anticipated ISS-0350 ExecutorTest flake did not even occur this run.
+  No rework required for ELIXIR-DEV.

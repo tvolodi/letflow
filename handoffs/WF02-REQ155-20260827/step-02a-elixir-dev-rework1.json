@@ -1,0 +1,49 @@
+{
+  "handoff_id": "step02a-rework1-WF02-REQ155-20260827",
+  "run_id": "WF02-REQ155-20260827",
+  "workflow_id": "WF-02",
+  "step": "2a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ155-20260827/step-02a-elixir-dev-rework1.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-155"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ155-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ155-20260827/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "config/test.exs",
+      "test/letflow/engine/lua/executor_test.exs"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "config/test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ155-20260827"
+  },
+  "task": {
+    "description": "REWORK ITERATION 1. RELEASE-VALIDATOR (step-05, commit 29476e2) FAILed Step 5: config/test.exs's `lua_wallclock_timeout_ms: 200` is too tight for the test environment under 8-way parallel load, causing an intermittent spurious {:error, {:wallclock_timeout, 200}} in an UNRELATED pre-existing test in the same file -- 'INV-LSA-2 with real executor (AC6) a registered_hash that does not match the script's SHA-256 returns mismatch error' (test/letflow/engine/lua/executor_test.exs, uses the default execute_with_manifest/2 arity, which reads lua_wallclock_timeout_ms from Application config). Reproduced 1-of-2 full-suite runs by RELEASE-VALIDATOR. Fix: raise config/test.exs's lua_wallclock_timeout_ms default to a value with real headroom for non-timeout-path tests running under full parallel load (RELEASE-VALIDATOR suggests 1000-2000ms) -- every one of REQ-155's OWN timing-sensitive tests (T1, T2, T4, T5) already passes an explicit :timeout_ms via the /3 arity and is completely unaffected by this default, so raising it costs nothing for REQ-155's own test correctness. After the fix, re-run the full test/letflow/engine/lua/executor_test.exs AND at least 3 full mix test / scripts/test_parallel.sh runs (not just one) to build actual confidence the intermittent failure is gone, since a single clean run does not prove a flaky bug is fixed -- quote all of them, don't stop at the first green run.",
+    "acceptance_criteria": [
+      "config/test.exs's lua_wallclock_timeout_ms raised to a value giving real headroom under parallel load (e.g. 1000-2000ms), with a one-line comment explaining why (REQ-155's rework, avoid a too-tight default flaking unrelated tests)",
+      "REQ-155's own timing-sensitive tests (T1/T2/T4/T5) confirmed unaffected -- they use explicit :timeout_ms via /3 already",
+      "At least 3 full mix test or scripts/test_parallel.sh runs quoted, not just one, to build real confidence against the intermittent failure",
+      "mix compile --warnings-as-errors still clean"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "config/test.exs"
+    ],
+    "notes": "Confirmed by reading test/letflow/engine/lua/executor_test.exs (grep for timeout_ms/wallclock) that REQ-155's own timing tests (T1/T2/T4/T5, and every other explicit-timeout assertion in the file: lines 196,202,211,220,240,266,274,327,338,362,378,397) all pass :timeout_ms via the 3-arity execute_with_manifest/3 overload and therefore never read the Application-config default -- they are unaffected by this change.\n\nFirst attempt raised lua_wallclock_timeout_ms from 200 to 1500ms per RELEASE-VALIDATOR's suggested range. mix compile --warnings-as-errors --force: clean (`Compiling 127 files (.ex)` / `Generated letflow app`, no warnings). mix test test/letflow/engine/lua/executor_test.exs alone: `Result: 24 passed`. However, the FIRST scripts/test_parallel.sh run at 1500ms still showed a failure under real 8-way parallel load:\n  test_parallel: N=8 (source: nproc)\n  partition 5: 244 tests, 2 properties, 1 failures, exit 2\n  combined: 2142 tests, 5 properties, 1 failures (2146/2147 passed)\nThe failure was NOT the same test RELEASE-VALIDATOR reported -- it was 'manifest hash correctness execute_with_manifest returns the SHA-256 of the script source on success' (test/letflow/engine/lua/executor_test.exs:169), a different 2-arity-default test that does real (if small) Lua execution work:\n  right: {:error, {:wallclock_timeout, 1500}}\nThis showed 1500ms still had insufficient headroom against real BEAM scheduler contention across 8 concurrent partitions -- the issue is not limited to the one test RELEASE-VALIDATOR found, so a small bump was not enough. Raised further to 5000ms and re-verified everything:\n\n1. mix compile --warnings-as-errors --force: clean (`Compiling 127 files (.ex)` / `Generated letflow app`, no warnings/errors).\n\n2. mix test test/letflow/engine/lua/executor_test.exs (isolated, at 5000ms):\n   Running ExUnit with seed: 411512, max_cases: 16\n   Excluding tags: [:keycloak]\n   ........................\n   Finished in 1.8 seconds (1.8s async, 0.00s sync)\n   Result: 24 passed\n\n3. scripts/test_parallel.sh run 1/4 (at 5000ms):\n   test_parallel: N=8 (source: nproc)\n   partition 1: 273 tests, 0 properties, 0 failures, exit 0\n   partition 2: 309 tests, 0 properties, 0 failures, exit 0\n   partition 3: 283 tests, 2 properties, 0 failures, exit 0\n   partition 4: 209 tests, 0 properties, 0 failures, exit 0\n   partition 5: 244 tests, 2 properties, 0 failures, exit 0\n   partition 6: 140 tests, 0 properties, 0 failures, exit 0\n   partition 7: 311 tests, 1 property, 0 failures, exit 0\n   partition 8: 373 tests, 0 properties, 0 failures, exit 0\n   combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed)\n\n4. scripts/test_parallel.sh run 2/4 (at 5000ms): identical per-partition counts, combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed).\n\n5. scripts/test_parallel.sh run 3/4 (at 5000ms): identical per-partition counts, combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed).\n\n6. scripts/test_parallel.sh run 4/4 (at 5000ms, extra run added because of the 1500ms flake observed earlier in this same rework iteration): identical per-partition counts, combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed).\n\n7. Re-ran mix test test/letflow/engine/lua/executor_test.exs once more standalone after the parallel runs: Result: 24 passed.\n\nFinal value: lua_wallclock_timeout_ms: 5000 (not 1000-2000 as originally suggested -- the suggested range was tried first at 1500ms and empirically failed under real 8-way load in this environment, so judgment was used to go higher per the task's own instruction to use observed behavior over the suggested number). config/test.exs's comment block updated to document both the original 200ms flake and the 1500ms flake actually observed during this rework, and why 5000ms was chosen.\n\nToolchain: mix/elixir were not on PATH by default in this shell; `source ~/.asdf/asdf.sh` (asdf, elixir 1.20.3-otp-29, erlang 29.0.5) made them available. All commands above were run for real, to completion, in the foreground -- no backgrounded/polled runs.",
+    "confidence": "high"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

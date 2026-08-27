@@ -1,0 +1,63 @@
+{
+  "handoff_id": "step01-WF02-REQ155-20260827",
+  "run_id": "WF02-REQ155-20260827",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ155-20260827/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-155"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-155": "RESTATEMENT OF LUA-10 AS THE MANDATORY SECOND LAYER, AND WHY. LUA-10 (Wall Clock Timeout, MUST) reads \"Each script execution MUST have a configurable wall clock timeout enforced BY THE HOST (not relying on Lua to cooperate),\" acceptance \"Script that blocks on a host function MUST still be terminable.\" Decision 0014 pairs it with LUA-08 on its watchlist because the two are NOT interchangeable and NOT satisfiable by one mechanism: REQ-154's :max_instructions is in-band and catchable, so it is by construction a cooperative limit, and LUA-10's parenthetical forbids exactly that. This requirement supplies the non-cooperative layer, and together with REQ-154 it is what makes LUA-08 and LUA-10 both genuinely met. Decision 0014 (a) records why this is cheap here and was expensive in R-Co: R-Co needed INV-4's combined LUA_MASKCOUNT hook because that was \"the only mechanism in the codebase that can interrupt a tight while true do end loop.\" The BEAM equivalent is not a hook at all -- a preemptively-scheduled process is interruptible by construction, so Process.exit(pid, :kill) from a supervising process terminates a tight loop with no cooperation from the script and no in-VM instrumentation. Scope: 1. Run each script execution in its own process, supervised, and enforce a CONFIGURABLE wall-clock timeout from OUTSIDE that process. The established pattern in this repo is the one lib/letflow/engine/plugin_interface.ex already implements for plugins -- Task.Supervisor.async_nolink/2 under the already-supervised Letflow.Engine.PluginTaskSupervisor (registered at lib/letflow/application.ex:45), then Task.yield/2, then Task.shutdown(task, :brutal_kill) on timeout. Reuse that shape rather than inventing a second one; if a separate supervisor is warranted for scripts, say why in the moduledoc rather than adding one silently. 2. The timeout must fire even when the script has trapped its own instruction-budget error, which is the whole reason this layer exists. 3. Timeout termination must surface as a structured error distinguishable from REQ-154's in-band budget error. 4. Carry forward, honestly, the same disclosed limitation lib/letflow/engine/plugin_interface.ex's moduledoc already states: this covers a hang, a raise, and an exit, but NOT a hard kill of the BEAM node itself or System.halt/0. Do not claim more. NOT IN THIS REQUIREMENT: memory limiting (REQ-156). GATE: SECURITY-REVIEWER is a hard gate. Queue task 307, GH#607. See docs/requirements.yaml REQ-155 for full description and acceptance_criteria."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ155-20260827/step-00-git-setup.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/plugin_interface.ex",
+      "lib/letflow/application.ex",
+      "lib/letflow/design/req154-lua-instruction-budget.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req155-lua-wallclock-kill.md",
+      "test/specs/REQ-155.md"
+    ],
+    "branch_name": "feature/WF02-REQ155-20260827"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-155. Write lib/letflow/design/req155-lua-wallclock-kill.md covering the out-of-band, host-enforced wall-clock timeout for Lua script execution (LUA-10 restated, layer 2 of the LUA-08/LUA-10 pair alongside REQ-154's in-band instruction budget). Read lib/letflow/engine/lua/executor.ex (the module you'll be extending -- read directly, not assumed), lib/letflow/engine/plugin_interface.ex (the established Task.Supervisor.async_nolink/2 + Task.yield/2 + Task.shutdown(task, :brutal_kill) pattern this requirement must reuse), lib/letflow/application.ex (to confirm Letflow.Engine.PluginTaskSupervisor's registration), lib/letflow/design/req154-lua-instruction-budget.md (the sibling layer-1 design, so layer 2's structured error is genuinely distinguishable from layer 1's), and docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md (the decision record this restates). Also write test/specs/REQ-155.md (test spec skeleton, no test code). Design must specify: (1) how the wall-clock timeout is threaded through as a configurable value (not hardcoded) into whatever new/extended function wraps script execution; (2) the exact supervised-task shape (async_nolink/yield/shutdown) and which supervisor is used, with a moduledoc requirement to name it and justify any deviation from PluginTaskSupervisor; (3) the structured error shape for a timeout, and how it's distinguished by pattern match from REQ-154's {:error, {:budget_exceeded, limit}} shape; (4) the moduledoc's required content restating LUA-10 as layer 2, the LUA-08/LUA-10 non-interchangeability rationale, and the carried-forward PluginInterface limitation disclosure (does not cover BEAM node kill / System.halt/0). Do NOT write actual .ex function bodies -- signatures, @specs, and type shapes only, per WF-02 Step 1(e)'s no-implementation-code rule (this exact rule caused REQ-157's design to fail validation twice this session over literal Elixir code in the design doc -- read that lesson into this one: describe control flow in prose/tables, never as a literal Elixir expression, however small).",
+    "acceptance_criteria": [
+      "Design specifies a configurable (non-hardcoded) wall-clock timeout parameter threaded into the script-execution wrapper",
+      "Design specifies the exact supervised-task mechanism (Task.Supervisor.async_nolink/2, Task.yield/2, Task.shutdown(task, :brutal_kill)) reusing lib/letflow/engine/plugin_interface.ex's established shape, naming the supervisor used",
+      "Design specifies a structured timeout error distinguishable by pattern match from REQ-154's {:error, {:budget_exceeded, limit}} shape",
+      "Design specifies that the timeout must fire even when the script has already trapped its own in-band instruction-budget error and continues looping",
+      "Design states the required moduledoc content: LUA-10 restatement as layer 2, the LUA-08/LUA-10 non-interchangeability rationale, and the carried-forward BEAM-kill/System.halt/0 limitation disclosure",
+      "Design covers all 8 acceptance criteria listed in docs/requirements.yaml's REQ-155 entry (read it directly), mapped one-to-one to concrete design elements",
+      "No implementation code (.ex function bodies) -- signatures, @specs, and type shapes only; describe control flow in prose/tables, never as a literal Elixir expression, however small",
+      "Open questions listed explicitly if any exist, not silently resolved"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "lib/letflow/design/req155-lua-wallclock-kill.md",
+      "test/specs/REQ-155.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "summary": "Designed REQ-155 (LUA-10 layer 2) as an extension of Letflow.Engine.Lua.Executor.execute_with_manifest/2,3: a new required `:timeout_ms` opt (with a `default_timeout_ms/0` helper reading Application config `:lua_wallclock_timeout_ms`, mirroring REQ-154's `:lua_max_instructions`/`default_budget/0`), wrapping the existing Lua-evaluation body in the plugin_interface.ex async_nolink/yield/shutdown shape under a new dedicated supervisor `Letflow.Engine.Lua.TaskSupervisor` (justified in the moduledoc by this repo's existing one-Task.Supervisor-per-subsystem precedent: SandboxPool.TaskSupervisor and PluginTaskSupervisor already coexist as separate supervisors). A timeout surfaces as `{:error, {:wallclock_timeout, timeout_ms}}`, pattern-distinguishable from REQ-154's `{:error, {:budget_exceeded, limit}}` by leading atom. Design explains why the kill fires regardless of in-band trapping (Task.yield/2 measures wall-clock time from outside the task, blind to Lua-level control flow) and carries forward PluginInterface's disclosed BEAM-node-kill/System.halt/0 limitation. All 8 requirements.yaml acceptance criteria are mapped 1:1 in Design §9. No .ex function bodies included -- only @spec/@type signatures, tuple/error-shape tables, and prose describing control flow and yield-result branching. Open questions (default timeout value, pid-exposure mechanism for the process-death test, budget/timeout relationship, helper consolidation) listed explicitly in Design §11. test/specs/REQ-155.md written as prose-only test descriptions (T1-T8) mapped to the 8 acceptance criteria, no test code.",
+    "notes": "Did not touch lib/letflow/engine/lua/executor.ex, lib/letflow/engine/plugin_interface.ex, lib/letflow/application.ex, or any file outside the two owned design/test-spec artifacts. Not committed/pushed -- ORCH handles git per instructions."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

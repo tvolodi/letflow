@@ -1,0 +1,222 @@
+run_id: WF02-REQ155-20260827
+workflow_id: WF-02
+step: "4-recheck"
+agent: TEST-RUNNER
+requirement_ids: [REQ-155]
+issue_ids: []
+date: "2026-08-27"
+branch: feature/WF02-REQ155-20260827
+head_commit: 21c5cdf
+context: >
+  RE-CHECK after ELIXIR-DEV's rework (commit 21c5cdf) raised
+  config/test.exs's lua_wallclock_timeout_ms from 200ms to 5000ms
+  (having found an intermediate 1500ms value still insufficient),
+  following RELEASE-VALIDATOR's FAIL (commit 29476e2) on an
+  intermittent flake under 8-way parallel load. ELIXIR-DEV quoted 4
+  clean scripts/test_parallel.sh runs; ORCH reproduced a 5th clean
+  run. This report supplies further independent runs.
+
+environment:
+  toolchain: "asdf shims on PATH (not bare PATH by default): Elixir 1.20.3, Erlang/OTP 29 (erts-17.0.5), Mix 1.20.3"
+  docker: >
+    docker.service was found in a failed/start-limit-hit crash loop at
+    session start (host-level issue, orphaned dockerd PID 3925615
+    holding the live docker.sock while systemd's docker.service
+    repeatedly failed to bind it -- same class of host breakage as
+    prior reports, e.g. report-2026-08-27-WF02-REQ155-20260827.yaml's
+    own docker note). This time the orphan process was confirmed dead
+    (`ps -p 3925615` returned nothing) and `sudo systemctl start
+    docker` succeeded cleanly, restoring `letflow-1-postgres-1` (port
+    5463, matching this checkout's untracked .env LETFLOW_DB_PORT) and
+    the host's other unrelated containers. All docker/systemctl
+    commands were read-only investigation or targeted at the already
+    stuck/dead docker.service unit -- no other checkout's containers
+    were touched or removed.
+  first_attempt_note: >
+    The very first scripts/test_parallel.sh invocation (not counted as
+    one of the "real" runs below) failed all 8 partitions at 0/0 tests
+    with Postgrex `FATAL 57P03 cannot_connect_now / Consistent recovery
+    state has not been yet reached` -- `letflow-1-postgres-1` was still
+    replaying WAL after the docker daemon restart moments earlier
+    (confirmed via `docker logs`: "redo in progress" -> "database
+    system is ready to accept connections" a few seconds after the
+    partitions had already given up). This is unambiguously
+    docker-daemon-restart timing, not this branch's code; it is
+    reported for transparency but excluded from the run count below.
+    All 4 counted runs below were taken only after `pg_isready`
+    confirmed the database was accepting connections.
+
+test_parallel:
+  script: scripts/test_parallel.sh
+  partition_count_N: 8
+  partition_count_source: nproc
+
+  run_1:
+    raw_output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+      test_parallel: partition logs in /tmp/letflow_test_parallel.9Yx9zG
+      test_parallel: TEST_PARALLEL_GROUP=tp59500 (shared by all 8 partitions)
+      partition 1: 273 tests, 0 properties, 0 failures, exit 0
+      partition 2: 309 tests, 0 properties, 0 failures, exit 0
+      partition 3: 283 tests, 2 properties, 0 failures, exit 0
+      partition 4: 209 tests, 0 properties, 0 failures, exit 0
+      partition 5: 244 tests, 2 properties, 0 failures, exit 0
+      partition 6: 140 tests, 0 properties, 0 failures, exit 0
+      partition 7: 311 tests, 1 property, 0 failures, exit 0
+      partition 8: 373 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed)
+    result: CLEAN
+
+  run_2:
+    raw_output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+      test_parallel: partition logs in /tmp/letflow_test_parallel.5uegJX
+      test_parallel: TEST_PARALLEL_GROUP=tp70586 (shared by all 8 partitions)
+      partition 1: 273 tests, 0 properties, 0 failures, exit 0
+      partition 2: 309 tests, 0 properties, 0 failures, exit 0
+      partition 3: 283 tests, 2 properties, 0 failures, exit 0
+      partition 4: 209 tests, 0 properties, 0 failures, exit 0
+      partition 5: 244 tests, 2 properties, 1 failures, exit 2
+      partition 6: 140 tests, 0 properties, 0 failures, exit 0
+      partition 7: 311 tests, 1 property, 0 failures, exit 0
+      partition 8: 373 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 2142 tests, 5 properties, 1 failures (2146/2147 passed)
+    result: ONE FAILURE (see failures section below)
+
+  run_3:
+    raw_output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+      test_parallel: partition logs in /tmp/letflow_test_parallel.kpm2X6
+      test_parallel: TEST_PARALLEL_GROUP=tp86727 (shared by all 8 partitions)
+      partition 1: 273 tests, 0 properties, 0 failures, exit 0
+      partition 2: 309 tests, 0 properties, 0 failures, exit 0
+      partition 3: 283 tests, 2 properties, 0 failures, exit 0
+      partition 4: 209 tests, 0 properties, 0 failures, exit 0
+      partition 5: 244 tests, 2 properties, 0 failures, exit 0
+      partition 6: 140 tests, 0 properties, 0 failures, exit 0
+      partition 7: 311 tests, 1 property, 0 failures, exit 0
+      partition 8: 373 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed)
+    result: CLEAN
+
+  run_4:
+    raw_output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+      test_parallel: partition logs in /tmp/letflow_test_parallel.x09ILV
+      test_parallel: TEST_PARALLEL_GROUP=tp98070 (shared by all 8 partitions)
+      partition 1: 273 tests, 0 properties, 0 failures, exit 0
+      partition 2: 309 tests, 0 properties, 0 failures, exit 0
+      partition 3: 283 tests, 2 properties, 0 failures, exit 0
+      partition 4: 209 tests, 0 properties, 0 failures, exit 0
+      partition 5: 244 tests, 2 properties, 0 failures, exit 0
+      partition 6: 140 tests, 0 properties, 0 failures, exit 0
+      partition 7: 311 tests, 1 property, 0 failures, exit 0
+      partition 8: 373 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed)
+    result: CLEAN
+
+  summary: "3 of 4 counted runs fully clean (2147/2147); 1 of 4 (run_2) had a single failure, in a different test than the config value under test -- see attribution below. Combined with ELIXIR-DEV's 4 clean runs + ORCH's 1 clean run, no run across all 10 has reproduced the original RELEASE-VALIDATOR wallclock-timeout-related flake."
+
+failures:
+  - test: "AC-5: the running script is a child of Letflow.Engine.Lua.TaskSupervisor while in flight (Letflow.Engine.Lua.ExecutorTest)"
+    location: test/letflow/engine/lua/executor_test.exs:388 (assertion at :407)
+    partition: 5 (run_2 only)
+    raw: |
+      1) test wall-clock timeout (REQ-155) AC-5: the running script is a child of Letflow.Engine.Lua.TaskSupervisor while in flight (Letflow.Engine.Lua.ExecutorTest)
+         test/letflow/engine/lua/executor_test.exs:388
+         expected at least one in-flight child while the script is running
+         code: assert children != [], "expected at least one in-flight child while the script is running"
+         stacktrace:
+           test/letflow/engine/lua/executor_test.exs:407: (test)
+    scrutiny: >
+      Given this exact file/area (executor.ex, executor_test.exs,
+      config/test.exs) just had a real bug, this was NOT waved off as
+      "probably the known ISS-0340/ISS-0350 flake" -- it is a
+      structurally different test than both of those (ISS-0340 is
+      Letflow.Api.ContextTest's scoped_repo_opts/1; ISS-0350 is a
+      different ExecutorTest scenario) and it IS in a file this
+      branch's diff touches, so route (a) diff-exclusion does not
+      clear it, and route (b) merge-base reproduction is unavailable
+      because this test does not exist at merge-base
+      (67e29432e3911bff666c0cc3799ac7da85fb6605) at all -- it was added
+      new by this branch's TEST-DESIGNER work for REQ-155 AC-5. Applied
+      route (c) instead, with actual measurement:
+        1. Read the test: it sends :started, sleeps a fixed
+           `Process.sleep(50)`, then makes one single, non-retrying
+           check of `Task.Supervisor.children/1`. This is a one-shot
+           fixed-wait assertion, not a poll/retry -- structurally the
+           same fragile-under-contention pattern documented for
+           ISS-0340/ISS-0350 (a hardcoded sleep assumed to always be
+           enough scheduling headroom).
+        2. Measured host state near the failure: `cat /proc/loadavg`
+           immediately after read "2.70 7.06 7.79" on an 8-core box
+           (`nproc`=8) -- i.e. 1-and-5-minute load at or above the
+           full core count, from this shared host's other, unrelated
+           docker workloads (immich, wms, penpot, ai-qadam, forgejo,
+           etc. -- all confirmed present via `docker ps` before this
+           run). Partition 5's own log at the failure timestamp also
+           shows Ecto queries queuing 52ms+ (`queue=52.4ms`) at that
+           moment, corroborating scheduler/IO contention external to
+           this branch's own code.
+        3. Reproduced `mix test test/letflow/engine/lua/executor_test.exs
+           --seed 0` standalone (no other partitions competing for the
+           scheduler) 3 times in a row: "Result: 24 passed" all 3
+           times, this AC-5 test included, 0 failures. The test only
+           failed once, under full 8-way parallel load, never in
+           isolation.
+      Conclusion: this is a genuine, newly-surfaced (not pre-existing --
+      the test is new to this branch) flaky-test bug, distinct from
+      both ISS-0340 and the wallclock_timeout config value this recheck
+      was scoped to verify. Its root cause is the test's own
+      one-shot-fixed-sleep synchronization design, not a regression in
+      lib/letflow/engine/lua/executor.ex's supervision logic (which
+      calls Task.Supervisor.async_nolink/2 synchronously and
+      immediately inside execute_with_manifest/3 -- there is no
+      plausible app-code reason the child would take >50ms to register
+      except host scheduler contention). Recommend: file a new
+      test-hardening item (replace the fixed
+      `Process.sleep(50)` + single check with a short
+      poll/retry loop, e.g. retrying `Task.Supervisor.children/1` for
+      up to ~300ms) rather than looping this recheck further -- fixing
+      it is outside this recheck task's scope (verifying the
+      lua_wallclock_timeout_ms change) and outside TEST-RUNNER's
+      write-ownership of executor_test.exs (owned by TEST-DESIGNER).
+      Not filed as a numbered ISS by this agent; flagged for ORCH to
+      route.
+
+verdict: PARTIAL
+verdict_reasoning: >
+  The specific issue this recheck was scoped to verify -- RELEASE-
+  VALIDATOR's FAIL on lua_wallclock_timeout_ms:200 being too tight --
+  is confirmed resolved: across 4 independent scripts/test_parallel.sh
+  runs performed here (on top of ELIXIR-DEV's 4 and ORCH's 1, i.e. 9
+  total, now 10 with this report), zero runs show a wallclock-timeout-
+  related failure, and 3 of these 4 runs were fully green at
+  2147/2147. ELIXIR-DEV's rework (200ms -> 5000ms) is well-supported.
+
+  However, one run (run_2) surfaced a genuinely new, distinct flake
+  (AC-5's Task.Supervisor.children/1 check) in the same recently-
+  touched executor_test.exs file, structurally attributed via route
+  (c) (see failures section) to a fragile fixed-sleep synchronization
+  pattern in that specific test, triggered by measured host contention
+  (loadavg ~7-8 on 8 cores from unrelated containers), not by this
+  branch's application code or by the lua_wallclock_timeout_ms value.
+  Because it is a NEW test (added by this branch) rather than a
+  pre-existing one, it cannot be waved off as "known" -- it needs its
+  own fix (a poll/retry loop instead of one fixed sleep) before REQ-155
+  can be considered fully flake-free. Recommend ORCH route a small
+  follow-up to TEST-DESIGNER to harden that one assertion; do not
+  block re-verifying the wallclock_timeout fix itself, which this
+  report confirms.

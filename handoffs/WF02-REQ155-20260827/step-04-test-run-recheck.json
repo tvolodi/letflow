@@ -1,0 +1,45 @@
+{
+  "handoff_id": "step04-recheck-WF02-REQ155-20260827",
+  "run_id": "WF02-REQ155-20260827",
+  "workflow_id": "WF-02",
+  "step": "4",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ155-20260827/step-04-test-run-recheck.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-155"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ155-20260827/step-04-test-run.json",
+      "handoffs/WF02-REQ155-20260827/step-05-release-validator.json",
+      "handoffs/WF02-REQ155-20260827/step-02a-elixir-dev-rework1.json"
+    ],
+    "artifacts_in": [
+      "config/test.exs",
+      "test/letflow/engine/lua/executor_test.exs",
+      "scripts/test_parallel.sh"
+    ],
+    "branch_name": "feature/WF02-REQ155-20260827",
+    "commit": "21c5cdf"
+  },
+  "task": {
+    "description": "TEST-RUNNER (WF-02 Step 4) RE-CHECK for REQ-155 after rework. RELEASE-VALIDATOR (Step 5, commit 29476e2) FAILed on an intermittent flake caused by config/test.exs's lua_wallclock_timeout_ms:200 being too tight under 8-way parallel load. ELIXIR-DEV's rework (commit 21c5cdf) raised it to 5000ms after empirically finding an intermediate 1500ms value still insufficient; ELIXIR-DEV quoted 4 consecutive clean scripts/test_parallel.sh runs (2147/2147 each), and ORCH independently reproduced a 5th clean run. Your job: run scripts/test_parallel.sh yourself, at least twice, to add further independent confidence this intermittent issue is actually resolved (not just lucky on a handful of runs) -- quote both/all runs. If you see ANY failure (even one you might attribute as pre-existing/unrelated), scrutinize it carefully given this exact area (executor.ex timeout handling, config/test.exs) just had a real bug in it -- do not casually wave off a new failure here as 'probably the same known flake' without structural verification per core-directives.md.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run at least 2 times, real output quoted for each",
+      "If any failure occurs, structurally attributed (not assumed pre-existing) with extra scrutiny given this area's recent bug",
+      "Report updated test/reports/report file or note reusing the prior one is insufficient -- write a fresh report with today's recheck timestamp"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "artifacts_out": [
+      "test/reports/report-2026-08-27-WF02-REQ155-20260827-recheck.yaml"
+    ],
+    "notes": "Ran scripts/test_parallel.sh 4 times (a 5th, earlier attempt was excluded from the count: all 8 partitions aborted at 0/0 tests with Postgrex 'FATAL 57P03 cannot_connect_now / Consistent recovery state has not been yet reached' because letflow-1-postgres-1 was still replaying WAL seconds after this host's docker.service (found in a crash loop at session start, unrelated orphaned dockerd) was restarted -- confirmed via `docker logs` and re-run only after `pg_isready` succeeded). Of the 4 counted runs: run_1 combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed); run_2 combined: 2142 tests, 5 properties, 1 failures (2146/2147 passed) -- partition 5 failed 'AC-5: the running script is a child of Letflow.Engine.Lua.TaskSupervisor while in flight (Letflow.Engine.Lua.ExecutorTest)' at test/letflow/engine/lua/executor_test.exs:388/407 ('expected at least one in-flight child while the script is running'); run_3 combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed); run_4 combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed). CONCLUSION ON THE ORIGINAL ISSUE: the lua_wallclock_timeout_ms 200->5000 fix is well-supported -- zero of these 4 runs (plus ELIXIR-DEV's prior 4 and ORCH's prior 1, 9 runs total before this report) show a wallclock-timeout-related failure. SCRUTINY ON THE NEW FAILURE (per instructions, not waved off): the run_2 failure is a DIFFERENT test than both ISS-0340 (Letflow.Api.ContextTest scoped_repo_opts/1) and the ISS-0350 ExecutorTest scenario previously seen, and it lives in a file (executor_test.exs) this branch's diff touches, so route (a) diff-exclusion does not clear it; route (b) merge-base reproduction is unavailable because this AC-5 test does not exist at merge-base 67e29432e3911bff666c0cc3799ac7da85fb6605 at all (added new by this branch's TEST-DESIGNER work). Applied route (c) with actual measurement: (1) the test uses one fixed Process.sleep(50) then a single non-retrying Task.Supervisor.children/1 check -- structurally the same fragile one-shot-sleep pattern as ISS-0340/ISS-0350; (2) `cat /proc/loadavg` immediately after read '2.70 7.06 7.79' on an 8-core host (nproc=8), i.e. at/above full core saturation from this shared host's other unrelated docker workloads (immich, wms, penpot, ai-qadam, forgejo, confirmed via docker ps), and partition 5's own log showed Ecto queries queuing 52ms+ at the failure timestamp; (3) `mix test test/letflow/engine/lua/executor_test.exs --seed 0` run standalone 3 times in isolation (no partition contention) passed cleanly all 3 times ('Result: 24 passed', 0 failures), including this AC-5 test. Conclusion: a genuine, newly-surfaced (not pre-existing -- new to this branch), narrowly test-code flake in AC-5's own fixed-sleep synchronization, triggered by measured host contention external to this branch's application code and unrelated to the lua_wallclock_timeout_ms value under test. VERDICT: PARTIAL -- the specific issue this recheck was scoped to verify (wallclock timeout too tight) is resolved; a separate, newly-found flaky-test bug in the same file needs its own follow-up (harden AC-5's assertion into a short poll/retry loop instead of one fixed Process.sleep(50)+single-check) before REQ-155 is fully flake-free. Recommend ORCH route that follow-up to TEST-DESIGNER (owner of executor_test.exs) rather than looping this recheck further. Full run outputs and reasoning in the report file."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

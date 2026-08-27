@@ -1,0 +1,45 @@
+{
+  "handoff_id": "step02a-rework2-WF02-REQ155-20260827",
+  "run_id": "WF02-REQ155-20260827",
+  "workflow_id": "WF-02",
+  "step": "2a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ155-20260827/step-02a-elixir-dev-rework2.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-155"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ155-20260827/step-04-test-run-recheck.json"
+    ],
+    "artifacts_in": [
+      "test/letflow/engine/lua/executor_test.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/engine/lua/executor_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ155-20260827"
+  },
+  "task": {
+    "description": "REWORK ITERATION 2. TEST-RUNNER's recheck (step-04-test-run-recheck.json) found a NEW, genuinely-reproduced flake (1-of-4 scripts/test_parallel.sh runs) in test/letflow/engine/lua/executor_test.exs's AC-5 test 'the running script is a child of Letflow.Engine.Lua.TaskSupervisor while in flight' (around lines 388-407). It structurally uses a single fixed `Process.sleep(50)` followed by one non-retrying `Task.Supervisor.children/1` check to observe the script mid-flight -- under real host load contention (measured: loadavg near/above core count, DB query queueing 52ms+), a fixed 50ms sleep is not a reliable synchronization primitive; the in-flight window can be missed or the process can already be gone by the time the check runs, or conversely might not yet have started, depending on scheduler timing. Fix: replace the fixed-sleep-then-single-check pattern with a short poll/retry loop (e.g. repeatedly check Task.Supervisor.children/1 with a small sleep between attempts, up to a bounded total wait well under the test's own configured timeout_ms) so the assertion becomes robust to scheduling jitter without weakening what it actually proves (a real in-flight child must still be observed at least once; it must not merely retry until the timeout silently passes an assertion that never legitimately succeeded). After the fix, run test/letflow/engine/lua/executor_test.exs standalone AND at least 3 scripts/test_parallel.sh runs to build confidence, same discipline as rework iteration 1.",
+    "acceptance_criteria": [
+      "AC-5's in-flight-child test replaced with a poll/retry pattern instead of a single fixed sleep+check, with a bounded total wait",
+      "The assertion still genuinely proves a real in-flight child is observed, not weakened into an always-pass",
+      "mix compile --warnings-as-errors clean",
+      "test/letflow/engine/lua/executor_test.exs standalone run quoted",
+      "At least 3 scripts/test_parallel.sh full-suite runs quoted, not just one"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "test/letflow/engine/lua/executor_test.exs"
+    ],
+    "notes": "Fix 1 (in scope, AC-5): replaced the fixed `Process.sleep(50)` + single `Task.Supervisor.children/1` check (old lines ~404-407) with a bounded poll/retry loop: `Enum.reduce_while(1..20, [], fn _, _ -> case Task.Supervisor.children(...) do [] -> Process.sleep(10); {:cont, []}; found -> {:halt, found} end end)`. Max total wait is 20 * 10ms = 200ms, well under the call's own `timeout_ms: 300`, so the test still terminates promptly. The final `assert children != []` is unchanged and still requires a genuine non-empty observation was captured during the loop -- it cannot pass without the running script's task actually being seen as an in-flight child at least once.\n\nFix 2 (found during verification, same file, in owned_modules -- not part of the originally-reported flake but blocking a clean 3-run confirmation of it): while re-running scripts/test_parallel.sh to verify fix 1, discovered a SEPARATE, unrelated, reproduced flake in the same file: 'test behaviour implementation (AC1) execute_with_manifest/2 is exported' (line 30) failed with 'Expected truthy, got false' on `function_exported?(Executor, :execute_with_manifest, 2)` in 2 of the first 4 test_parallel.sh runs (partition 5 both times). Root cause: `function_exported?/3` (`:erlang.function_exported/3`) checks only already-loaded code and does NOT implicitly load the module first, unlike calling a function on it. Under `mix test --partitions`, ExUnit's random async test ordering can make this assertion the very first reference to `Letflow.Engine.Lua.Executor` in that partition's BEAM VM, so the module may not yet be loaded, and the check spuriously returns false. This is a genuine bug in the test's synchronization, not a race in the code under test -- confirmed by `Executor.execute_with_manifest/2` demonstrably existing (grep of lib/letflow/engine/lua/executor.ex:130). Fixed by adding `assert {:module, Executor} = Code.ensure_loaded(Executor)` immediately before the `function_exported?` assertion. This file is explicitly in this handoff's `owned_modules`, and leaving it unfixed would have made a clean 3-run confirmation of fix 1 impossible to obtain honestly, so it was fixed in the same pass rather than deferred silently or hidden.\n\n--- mix compile --warnings-as-errors ---\n(no output; exit 0 -- clean)\n\n--- mix test test/letflow/engine/lua/executor_test.exs (standalone, after both fixes) ---\nRunning ExUnit with seed: 191240, max_cases: 16\nExcluding tags: [:keycloak]\n........................\nFinished in 1.8 seconds (1.8s async, 0.00s sync)\nResult: 24 passed\n\n--- scripts/test_parallel.sh run 1 (before fix 2 was applied; fix 1 only) ---\ntest_parallel: N=8 (source: nproc)\ncombined: 2142 tests, 5 properties, 0 failures (2147/2147 passed)\n\n--- scripts/test_parallel.sh run 2 (before fix 2 was applied; fix 1 only) ---\ncombined: 2142 tests, 5 properties, 0 failures (2147/2147 passed)\n\n--- scripts/test_parallel.sh run 3 (before fix 2 was applied; fix 1 only) ---\npartition 5: 244 tests, 2 properties, 1 failures, exit 2\ncombined: 2142 tests, 5 properties, 1 failures (2146/2147 passed)\n-- failure: 'execute_with_manifest/2 is exported' (AC1, line 30) -- the pre-existing, unrelated flake described above. AC-5's own test passed in this run.\n\n--- scripts/test_parallel.sh run 4 (before fix 2 was applied; fix 1 only, re-confirming) ---\npartition 5: 244 tests, 2 properties, 1 failures, exit 2\ncombined: 2142 tests, 5 properties, 1 failures (2146/2147 passed)\n-- same AC1 failure reproduced again. Fix 2 (Code.ensure_loaded/1) applied at this point.\n\n--- mix compile --warnings-as-errors (after fix 2) ---\n(no output; exit 0 -- clean)\n\n--- mix test test/letflow/engine/lua/executor_test.exs (standalone, after fix 2) ---\nRunning ExUnit with seed: ..., max_cases: 16\n........................\nFinished in 1.8 seconds\nResult: 24 passed\n\n--- scripts/test_parallel.sh run 5 (after fix 2, clean run 1 of 3 required) ---\ncombined: 2142 tests, 5 properties, 0 failures (2147/2147 passed)\n\n--- scripts/test_parallel.sh run 6 (after fix 2, clean run 2 of 3 required) ---\ncombined: 2142 tests, 5 properties, 0 failures (2147/2147 passed)\n\n--- scripts/test_parallel.sh run 7 (after fix 2, clean run 3 of 3 required) ---\ncombined: 2142 tests, 5 properties, 0 failures (2147/2147 passed)\n\nOverall: 3 consecutive clean scripts/test_parallel.sh runs obtained after both fixes, each 2147/2147 passed, 0 failures. No sign of either the original AC-5 sleep-race flake or the newly-discovered AC1 function_exported? flake recurring. Did not commit or push -- ORCH handles git per instructions."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

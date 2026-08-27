@@ -1,0 +1,90 @@
+{
+  "handoff_id": "step01b-WF02-REQ155-20260827",
+  "run_id": "WF02-REQ155-20260827",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ155-20260827/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-155"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ155-20260827/step-00-git-setup.json",
+      "handoffs/WF02-REQ155-20260827/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req155-lua-wallclock-kill.md",
+      "test/specs/REQ-155.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/plugin_interface.ex",
+      "lib/letflow/application.ex",
+      "lib/letflow/design/req154-lua-instruction-budget.md"
+    ],
+    "branch_name": "feature/WF02-REQ155-20260827",
+    "commit": "f1e8a51"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) hard gate on REQ-155's design.",
+    "acceptance_criteria": [
+      "All 8 REQ-155 acceptance criteria mapped to concrete design elements",
+      "Zero literal Elixir code (function bodies, closures, case/raise expressions) anywhere in the design doc -- only permitted @spec/@type signatures",
+      "Design genuinely reuses plugin_interface.ex's supervised-task shape; any supervisor deviation is justified, not silent",
+      "Timeout error shape confirmed distinguishable from REQ-154's budget-exceeded shape",
+      "Design addresses the trapped-instruction-budget-error-then-still-times-out requirement",
+      "Open questions present and explicit"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "checks": [
+      {
+        "check": "8 acceptance criteria mapped",
+        "outcome": "PASS",
+        "detail": "Section 9 maps each of the 8 requirements.yaml acceptance_criteria entries to a concrete design element (opts/config for AC-1, section 6 blindness guarantee for AC-2, Task.shutdown/Task.Supervisor.children for AC-3, section 5 error-shape table for AC-4, section 4.1/4.4/8 for AC-5, section 1/8 for AC-6, section 7/8 for AC-7, TEST-RUNNER step for AC-8)."
+      },
+      {
+        "check": "No literal Elixir code",
+        "outcome": "PASS",
+        "detail": "Grepped for `fn `, `raise `, `case `, `cond `, `do:`, `->` across the full document. Only two hits: 'to re-raise it' (prose, not the word 'raise' as an expression) and a table cell narrating 'Task.shutdown(task, :brutal_kill) is invoked, then {:error, {:wallclock_timeout, timeout_ms}} is returned' -- this is a type/tuple shape and a function-call name mentioned in prose, not a literal function body, closure, or control-flow expression. No @spec/@type fence contains anything beyond signatures. Confirmed clean, unlike REQ-157's three prior failures."
+      },
+      {
+        "check": "Genuine reuse of plugin_interface.ex shape / supervisor deviation justified",
+        "outcome": "PASS",
+        "detail": "Read lib/letflow/engine/plugin_interface.ex directly (lines 171-222): confirms async_nolink/2 + Task.yield/2 + handle_yield_result branches + Task.shutdown(task, :brutal_kill) on nil -- design's section 4 accurately mirrors this shape and its 4-way yield-result table. The design introduces a new Letflow.Engine.Lua.TaskSupervisor rather than reusing PluginTaskSupervisor; section 4.4 gives an explicit justification (separate concern, hot-path vs ad hoc dispatch, separate crash/telemetry namespace, precedent of SandboxPool.TaskSupervisor + PluginTaskSupervisor already being two supervisors for two concerns) and section 8 item 3 requires this justification appear in the moduledoc -- not silent."
+      },
+      {
+        "check": "Timeout error shape distinguishable from REQ-154's budget shape",
+        "outcome": "PASS",
+        "detail": "Read lib/letflow/design/req154-lua-instruction-budget.md: confirms REQ-154's shape is {:error, {:budget_exceeded, limit :: pos_integer()}}. REQ-155's shape {:error, {:wallclock_timeout, timeout_ms :: pos_integer()}} carries a distinct leading atom, unconfoundable by pattern match; section 5 states this explicitly with a comparison table."
+      },
+      {
+        "check": "Addresses trapped-budget-error-then-still-times-out",
+        "outcome": "PASS",
+        "detail": "Section 6 explicitly walks through the case where a script catches its own :max_instructions exhaustion and re-enters another unbounded loop, and states Task.yield/2 has no visibility into Lua-level control flow and the outer kill fires unconditionally regardless of how many times the script trapped and re-triggered its own error."
+      },
+      {
+        "check": "Open questions explicit, not silently resolved",
+        "outcome": "PASS",
+        "detail": "Section 11 lists OQ-1 through OQ-4 (production default timeout value, the pid/process-death test-observability mechanism, the budget/timeout relationship sanity check, and default-helper consolidation), none resolved silently."
+      },
+      {
+        "check": "Cross-module dependencies listed",
+        "outcome": "PASS",
+        "detail": "Section 10 lists Executor, Application, Sandbox (no change), PluginTaskSupervisor (read-only), and the new config key, plus an invariants table."
+      },
+      {
+        "check": "No TBD/deferral language on load-bearing items",
+        "outcome": "PASS",
+        "detail": "No 'TBD' found; the only deferred items are the explicitly-flagged, non-blocking open questions in section 11."
+      }
+    ],
+    "verdict_summary": "REQ-155's design at lib/letflow/design/req155-lua-wallclock-kill.md PASSES this gate on first pass. All 8 acceptance criteria map to concrete design elements (section 9); the document is free of literal Elixir code -- verified by grepping fn/raise/case/cond/do:/-> and manually inspecting both hits (one is the prose word 're-raise', the other a table cell narrating a function call and tuple shape, not an executable expression); the supervised-task mechanism is verified against the actual lib/letflow/engine/plugin_interface.ex source (async_nolink/2, Task.yield/2, Task.shutdown(:brutal_kill), the 4-arm yield-result branching) and matches; the new Letflow.Engine.Lua.TaskSupervisor deviation from PluginTaskSupervisor is explicitly justified rather than silent, with a moduledoc requirement to state it; the {:error, {:wallclock_timeout, timeout_ms}} shape is confirmed structurally distinct from REQ-154's {:error, {:budget_exceeded, limit}} by reading req154's design directly; section 6 directly addresses the trapped-budget-then-loops-again scenario; and open questions (OQ-1..OQ-4) are stated rather than resolved. No gaps found."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -7795,7 +7795,7 @@ requirements:
   - id: REQ-156
     title: Configurable memory limit for Lua script execution, per REQ-149's decided mechanism (LUA-09 restated)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 308  # letflow-queue task id
     description: >

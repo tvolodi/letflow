@@ -295,6 +295,20 @@ REQ-156 must reference this document and carry the clause-satisfaction statement
 own moduledoc. Decision 0014's "must not mark LUA-09 met without resolving it" is
 satisfied by this resolution.
 
+**Post-implementation cross-reference note (added by REQ-156's DOC-UPDATER step,
+non-mandatory, documentation-only).** This document's Section 3 recommends
+`:max_heap_size` in isolation and is silent on how that mechanism composes with
+REQ-155's already-merged `Task.Supervisor`-based execution path. REQ-156's
+implementation design, `lib/letflow/design/req156-lua-memory-limit-impl.md` §2 and §5,
+resolved that composition question: reading the installed Elixir 1.20.3 source
+(`task/supervisor.ex`, `task/supervised.ex`) found that `Task.Supervisor.async_nolink/2,3`
+structurally cannot carry a `:max_heap_size` `spawn_opt` (its `async_opts` type accepts
+only `:shutdown`, and `Task.Supervised` spawns via bare `spawn_link`/`spawn` with no
+options list). The memory-limited path therefore bypasses `Task.Supervisor` entirely and
+spawns directly via `:erlang.spawn_opt/2` with `:monitor` in the option list, as detailed
+in that document's §2 and §5. This does not change the recommendation or resolution
+above; it is a pointer for a future reader of this document.
+
 ---
 
 ## Deliverables Summary

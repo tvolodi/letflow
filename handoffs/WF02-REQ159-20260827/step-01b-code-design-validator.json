@@ -1,0 +1,61 @@
+{
+  "handoff_id": "step01b-WF02-REQ159-20260827",
+  "run_id": "WF02-REQ159-20260827",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ159-20260827/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-159"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ159-20260827/step-00-git-setup.json",
+      "handoffs/WF02-REQ159-20260827/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req159-lua-host-api-read.md",
+      "test/specs/REQ-159.md",
+      "lib/letflow/engine/lua/platform.ex",
+      "lib/letflow/design/req150-lua-number-marshalling.md",
+      "lib/letflow/design/req157-lua-capability-model.md",
+      "lib/letflow/instances.ex"
+    ],
+    "branch_name": "feature/WF02-REQ159-20260827",
+    "commit": "1b465cd"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) hard gate on REQ-159's design at lib/letflow/design/req159-lua-host-api-read.md. First review pass.",
+    "acceptance_criteria": [
+      "All 8 REQ-159 acceptance criteria mapped to concrete design elements",
+      "Zero literal Elixir code anywhere in the design doc",
+      "The execution-context threading mechanism assessed as genuinely tenant-isolation-safe -- explicit verdict on whether a script could ever influence which tenant's data is accessed, treated with security-review-level rigor",
+      "read_variable confirmed to never make a per-call Repo query using script-influenced values",
+      "log confirmed to source identity/instance/trace fields only from execution_context, no script override path",
+      "LuaNumberMarshalling naming/functions confirmed to match REQ-150 Section 3 exactly",
+      "Capability requirements confirmed unchanged from REQ-157's matrix",
+      "Open questions explicit"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "checks": {
+      "acceptance_criteria_traceability": "PASS - all 8 REQ-159 ACs mapped in design §8 to concrete sections",
+      "no_literal_elixir_code": "PASS - grep for `fn `, `raise `, `case `, `cond `, `do:`, `->` returns only prose false-positives (e.g. 'raise shape', 'this case', 'in case', markdown table hyphens); no real Elixir function bodies present",
+      "tenant_isolation_mechanism": "PASS-WITH-CONCERN - the install/3 closure-capture mechanism is structurally airtight for CROSS-TENANT isolation: prefix is only ever execution_context.prefix (never script-derived), read_variable never calls Repo at all, and get_instance_state's only Repo.get/3 call (§5.2 step 3) uses execution_context.prefix exclusively. No code path exists where a script-supplied value reaches a prefix argument.",
+      "read_variable_no_repo_query": "PASS - §4.1 confirms plain map lookup on the closed-over execution_context.variables, explicitly 'No Letflow.Repo call is made'",
+      "log_correlation_fields_host_only": "PASS - §6.1 step 3 and §6.3 confirm script_identity/instance_id/trace_id sourced exclusively from execution_context with no script override path, even under the empty-context sentinel (§6.2)",
+      "lua_number_marshalling_match": "PASS - module Letflow.Engine.LuaNumberMarshalling at lib/letflow/engine/lua_number_marshalling.ex, to_lua/1 and from_lua/1 signatures and identity-function behavior for integer/float/nil match REQ-150 §3 verbatim, cited by section number, no second rule invented",
+      "capability_matrix_unchanged": "PASS - read_variable=\"variable:read\", get_instance_state=\"instance:read\", log=\"audit:log\" all confirmed unchanged against REQ-157 design §4.1's matrix table; only stub tags change (§7.2)",
+      "open_questions_explicit": "FAIL - see finding below; a real open question is NOT listed in §11 and is instead silently resolved by assertion in §5.1"
+    },
+    "critical_finding": "Design §5.1 asserts, as settled fact, that get_instance_state's script-supplied instance_id argument may name ANY instance the calling tenant owns ('any instance the calling tenant owns is a legitimate target... e.g. a parent instance reading a known child's state'), not merely the instance the script is itself running on behalf of. This is a same-tenant, cross-instance AUTHORIZATION decision, distinct from the tenant-boundary (prefix) question the design otherwise handles rigorously. It is NOT grounded in any cited source: not in REQ-159's requirement text or its 8 acceptance criteria (docs/requirements.yaml, checked directly -- AC3 only requires 'valid instance' vs 'invalid instance', silent on cross-instance scope), not in LUA-11/LUA-13's text, not in decision 0014 (which only speaks to cross-tenant prefix isolation, (e)), and not in R-Co's host_api/mod.zig capability comment reproduced in REQ-157's design (which only names the instance:read capability string, not a scoping rule). The 'parent instance reading a known child's state' scenario is invented in-place to justify the unrestricted read; no parent/child instance relationship concept has been established anywhere in the artifacts read for this design. This means: any script holding instance:read (a capability grant, not an identity check) can read ANY other instance's full state and variables within the same tenant, and the design treats this as intentionally in-scope rather than flagging it as a decision requiring REVIEWER/product sign-off. Per this workflow's own discipline (open questions must be explicit, not silently resolved), this is exactly the failure mode: a security-relevant scope decision was made silently, inside justificatory prose, instead of being surfaced in §11's Open Questions alongside OQ-1/OQ-2.",
+      "required_fix": "Either (a) restrict get_instance_state to the execution_context.instance_id itself by default -- i.e. require the script-supplied instance_id to equal execution_context.instance_id, returning a structured error (e.g. reason: \"forbidden\") otherwise -- unless a cited source (requirement text, decision record, or explicit REVIEWER-approved addendum) establishes that cross-instance reads within a tenant are intended; or (b) if unrestricted same-tenant cross-instance reads really are intended, move this to an explicit Open Question in §11 (not resolved by design-author assertion) naming exactly what is unresolved -- whether Letflow's process model has any parent/child or ownership relationship between instances, and who (REVIEWER or a future requirement) decides the authorization scope -- rather than asserting a policy invented for this design alone. Remove or replace the unsupported 'parent instance reading a known child's state' justification in §5.1 with a citation or an OQ entry."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

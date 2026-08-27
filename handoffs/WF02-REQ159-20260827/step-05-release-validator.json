@@ -1,0 +1,70 @@
+{
+  "handoff_id": "step05-WF02-REQ159-20260827",
+  "run_id": "WF02-REQ159-20260827",
+  "workflow_id": "WF-02",
+  "step": "5",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ159-20260827/step-05-release-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-159"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ159-20260827/step-01-code-designer.json",
+      "handoffs/WF02-REQ159-20260827/step-01b-code-design-validator-recheck.json",
+      "handoffs/WF02-REQ159-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ159-20260827/step-02c-security-review.json",
+      "handoffs/WF02-REQ159-20260827/step-02d-reviewer.json",
+      "handoffs/WF02-REQ159-20260827/step-03-test-designer.json",
+      "handoffs/WF02-REQ159-20260827/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ159-20260827/step-04-test-run.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "lib/letflow/engine/lua/platform.ex",
+      "lib/letflow/engine/lua_number_marshalling.ex",
+      "test/letflow/engine/lua/platform_test.exs",
+      "test/letflow/engine/lua_number_marshalling_test.exs",
+      "test/reports/report-2026-08-27-WF02-REQ159-20260827.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ159-20260827",
+    "commit": "35d74c9"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR (WF-02 Step 5) for REQ-159. Independently re-run scripts/test_parallel.sh yourself (2 consecutive clean runs reported, 2229/2229 each). Then confirm every one of REQ-159's real acceptance_criteria (read docs/requirements.yaml directly) is satisfied by checking the actual code/tests yourself: (1) read_variable returns current value/nil, with integer AND float round-trip proving REQ-150's identity rule is genuinely applied; (2) log emits a structured entry with script identity, instance ID, trace ID all individually asserted; (3) get_instance_state returns state for a valid instance and a structured error (not a raise) for an invalid one; (4) each of the 3 functions has a capability-denial test; (5) the number conversion used is LuaNumberMarshalling per REQ-150's naming, cited by section number, no second rule introduced; (6) integer/float round-trip proves the central rule is applied, not just referenced; (7) no host function in this diff calls Letflow.Repo with a script-supplied prefix -- the moduledoc states the tenant prefix comes from calling engine code; (8) mix test/mix compile --warnings-as-errors pass. This run went through 1 design rework for a real cross-instance authorization gap (get_instance_state originally allowed reading any tenant-owned instance) and separately a test-coverage gap where the fix's actual mechanism (no Repo call at all) wasn't verified, only its return value -- independently spot-check that get_instance_state's current implementation genuinely enforces self-instance-only access with no Repo call on mismatch, not just trust the review chain. Also check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness.",
+    "acceptance_criteria": [
+      "Independent re-run of scripts/test_parallel.sh with real quoted output",
+      "All 8 of REQ-159's real acceptance criteria independently re-verified against actual code/tests, not against any prior step's report",
+      "get_instance_state's self-instance-only restriction independently spot-checked as genuinely enforced (no Repo call on mismatch), not just trusted from the review chain",
+      "docs/status/requirement_status.yaml / docs/requirements.yaml staleness checked",
+      "Clear PASS routing to DOC-UPDATER, or FAIL naming the specific blocking gap and which agent it routes back to"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "test_run": {
+      "method": "scripts/test_parallel.sh, run independently and in isolation (first two attempts were invalidated by my own error -- I launched two concurrent full-suite runs, which produced non-reproducible DBConnection pool-exhaustion and timing-flake failures in TenantSchemaReaperTest and the REQ-156 memory-limit test, both unrelated to REQ-159; a clean single sequential re-run confirms these were self-inflicted contention, not real regressions).",
+      "clean_run_output": "test_parallel: N=8 (source: nproc)\npartition 1: 229 tests, 0 properties, 0 failures, exit 0\npartition 2: 243 tests, 1 property, 0 failures, exit 0\npartition 3: 393 tests, 0 properties, 0 failures, exit 0\npartition 4: 197 tests, 0 properties, 0 failures, exit 0\npartition 5: 312 tests, 0 properties, 0 failures, exit 0\npartition 6: 241 tests, 2 properties, 0 failures, exit 0\npartition 7: 329 tests, 0 properties, 0 failures, exit 0\npartition 8: 280 tests, 2 properties, 0 failures, exit 0\ncombined: 2224 tests, 5 properties, 0 failures (2229/2229 passed)\nexit code 0",
+      "compile_check": "mix compile --warnings-as-errors: exit 0, no warnings"
+    },
+    "acceptance_criteria_verification": [
+      "AC1 (read_variable current value/nil): platform_test.exs lines 460-491 -- 'returns the current value for a set variable', 'returns nil for an unset variable', plus a malformed-argument case. Verified against do_read_variable/3 in platform.ex (plain Map.fetch on execution_context.variables, no Repo).",
+      "AC2 (log structured entry, 3 correlation fields individually asserted): platform_test.exs lines 750-764 asserts script_identity=, instance_id=, trace_id= individually via ExUnit.CaptureLog, plus message text. do_log/3 sources all three exclusively from execution_context, never script args.",
+      "AC3 (get_instance_state valid + structured error, no raise): platform_test.exs lines 557-626 cover a valid own instance (returns status/variables table) and invalid_id/no_execution_context/not_found, all returning {nil, %{reason: ...}} tuples, never a raise. Confirmed in do_get_instance_state/3's 4 clauses -- none raises.",
+      "AC4 (capability-denial test per function): read_variable (line 510), get_instance_state (line 716), log (line 871) each assert Lua.RuntimeException with the exact capability_required string from @capability_matrix.",
+      "AC5 (LuaNumberMarshalling per REQ-150 naming, cited by section): platform.ex calls LuaNumberMarshalling.to_lua/1 at lines 389 and 451; moduledoc/module doc of lua_number_marshalling.ex cites 'REQ-150 SS3' (owning module/function), 'REQ-150 SS2.1'/'SS2.2' (normative rule). Confirmed req150-lua-number-marshalling.md has SS2.1, SS2.2, SS3 as actual headings -- citation is accurate, no second rule introduced anywhere in platform.ex.",
+      "AC6 (integer/float round-trip proves rule applied, not just referenced): platform_test.exs lines 493-508 round-trips int_var=3 and float_var=3.0 through platform.read_variable and asserts math.type returns 'integer'/'float' respectively plus exact values -- proves LuaNumberMarshalling.to_lua/1's identity rule is genuinely exercised, not merely cited in a comment. Same pattern repeated for get_instance_state's variables map (lines 567-575, count=1 integer, ratio=2.5 float).",
+      "AC7 (no Repo call with script-supplied prefix): platform.ex has exactly one Repo.get call (fetch_instance_state/3, line 439), always prefix: prefix where prefix is execution_context.prefix, never the script-supplied raw_id/instance_id. platform_test.exs lines 989-1009 is a structural source-grep guard asserting exactly this and refuting 'prefix: raw_id'/'prefix: instance_id' substrings.",
+      "AC8 (mix test / mix compile --warnings-as-errors pass): both independently re-run above with real quoted output; 0 failures, 0 warnings."
+    ],
+    "get_instance_state_security_spot_check": "Read do_get_instance_state/3 (platform.ex lines 416-436) directly. Clause order confirmed: (1) prefix == nil -> no_execution_context, no Repo reference at all; (2) Ecto.UUID.cast/1 on the argument -- :error -> invalid_id, still no Repo reference; (3) only inside the {:ok, instance_id} branch does 'instance_id == execution_context.instance_id' get checked, and the else branch (mismatch) calls encode_error/2 directly -- fetch_instance_state/3 (the only function in this module that references Repo) is syntactically unreachable from that else branch. Only the true branch calls fetch_instance_state/3, which does Repo.get/3. This is a genuine before-any-Repo-reference check, not merely a return-value coincidence. Independently confirmed via the test file's telemetry-based proof too: 'no Repo.get/3 (no [:letflow, :repo, :query] telemetry event) fires for a same-tenant sibling id' (platform_test.exs lines 677-712) attaches a real :telemetry handler on [:letflow, :repo, :query] and asserts a zero count for a same-tenant sibling id -- this is exactly the mutation-testing gap TEST-DESIGNER's note (lines 664-676) describes closing, and I re-ran this specific test as part of the full suite above (it passed, and by inspection could not pass under the 'always call fetch_instance_state' mutation TEST-DESIGNER describes).",
+    "staleness_check": "docs/requirements.yaml REQ-159 status: pending (line 7972) -- not yet flipped, as expected before DOC-UPDATER's Step 6. docs/status/requirement_status.v5.yaml's REQ-159 entry (line 488) shows only a 'started' event from ORCH at Step 00 -- no premature 'done'/'verified' event exists. No staleness found.",
+    "next_action": "Route to DOC-UPDATER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

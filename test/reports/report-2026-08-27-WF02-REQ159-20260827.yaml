@@ -1,0 +1,160 @@
+run_id: WF02-REQ159-20260827
+date: "2026-08-27"
+agent: TEST-RUNNER
+branch: feature/WF02-REQ159-20260827
+verdict: PASS
+
+full_suite_run_1:
+  command: "scripts/test_parallel.sh"
+  partition_count: 8
+  partition_count_source: "nproc (no TEST_PARALLEL_N override set)"
+  per_partition:
+    - partition: 1
+      tests: 229
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 2
+      tests: 243
+      properties: 1
+      failures: 0
+      exit_code: 0
+    - partition: 3
+      tests: 393
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 4
+      tests: 197
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 5
+      tests: 312
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 6
+      tests: 241
+      properties: 2
+      failures: 0
+      exit_code: 0
+    - partition: 7
+      tests: 329
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 8
+      tests: 280
+      properties: 2
+      failures: 0
+      exit_code: 0
+  combined_final_line: "combined: 2224 tests, 5 properties, 0 failures (2229/2229 passed)"
+  total_tests: 2229
+  passed: 2229
+  failed: 0
+  properties: "5/5"
+  script_exit_code: 0
+  wall_clock: "2m19.361s (real)"
+  full_raw_output: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.fnjnkj
+    test_parallel: TEST_PARALLEL_GROUP=tp1234944 (shared by all 8 partitions)
+    partition 1: 229 tests, 0 properties, 0 failures, exit 0
+    partition 2: 243 tests, 1 property, 0 failures, exit 0
+    partition 3: 393 tests, 0 properties, 0 failures, exit 0
+    partition 4: 197 tests, 0 properties, 0 failures, exit 0
+    partition 5: 312 tests, 0 properties, 0 failures, exit 0
+    partition 6: 241 tests, 2 properties, 0 failures, exit 0
+    partition 7: 329 tests, 0 properties, 0 failures, exit 0
+    partition 8: 280 tests, 2 properties, 0 failures, exit 0
+    ---
+    combined: 2224 tests, 5 properties, 0 failures (2229/2229 passed)
+
+full_suite_run_2:
+  command: "scripts/test_parallel.sh"
+  partition_count: 8
+  partition_count_source: "nproc (no TEST_PARALLEL_N override set)"
+  combined_final_line: "combined: 2224 tests, 5 properties, 0 failures (2229/2229 passed)"
+  total_tests: 2229
+  passed: 2229
+  failed: 0
+  properties: "5/5"
+  script_exit_code: 0
+  wall_clock: "2m23.943s (real)"
+  full_raw_output: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.Vq3kDA
+    test_parallel: TEST_PARALLEL_GROUP=tp1246338 (shared by all 8 partitions)
+    partition 1: 229 tests, 0 properties, 0 failures, exit 0
+    partition 2: 243 tests, 1 property, 0 failures, exit 0
+    partition 3: 393 tests, 0 properties, 0 failures, exit 0
+    partition 4: 197 tests, 0 properties, 0 failures, exit 0
+    partition 5: 312 tests, 0 properties, 0 failures, exit 0
+    partition 6: 241 tests, 2 properties, 0 failures, exit 0
+    partition 7: 329 tests, 0 properties, 0 failures, exit 0
+    partition 8: 280 tests, 2 properties, 0 failures, exit 0
+    ---
+    combined: 2224 tests, 5 properties, 0 failures (2229/2229 passed)
+
+failures_attribution:
+  branch_failures: 0
+  pre_existing_failures: 0
+  unattributed_failures: 0
+  telemetry_scrutiny: >
+    This run added test/letflow/engine/lua/platform_test.exs's new
+    ":telemetry.attach/4"-based test ("no Repo.get/3 (no [:letflow, :repo,
+    :query] telemetry event) fires for a same-tenant sibling id", line
+    677). Inspected the test body directly: it attaches with a handler_id
+    built from {__MODULE__, :get_instance_state_query_counter,
+    make_ref()} -- unique per test invocation, no risk of colliding with
+    another test's handler_id -- and registers `on_exit(fn ->
+    :telemetry.detach(handler_id) end)`, which ExUnit runs even on
+    assertion failure inside the test, so the handler cannot leak past
+    this test regardless of outcome. Also grepped the suite for every
+    other test referencing the same [:letflow, :repo, :query] event or
+    ":repo, :query" telemetry (test/letflow/router_test.exs,
+    test/letflow/definitions/store_test.exs,
+    test/letflow/plugs/tenant_status_test.exs,
+    test/letflow/api/context_test.exs,
+    test/letflow/plugs/api_pipeline_integration_test.exs) -- all passed
+    with 0 failures in both runs, with identical pass counts run-to-run,
+    which is what you'd expect if no stray handler from the new test was
+    double-counting or interfering with theirs. No telemetry-handler
+    failure or interference was observed in either run.
+  note: >
+    Both full-suite runs reproduced zero test failures across all 8
+    partitions each (2229/2229 passed, exit 0 from every partition, both
+    runs, identical per-partition test/property counts run-to-run). ISS-
+    0340 (Letflow.Api.ContextTest "scoped_repo_opts/1 is 1-arity",
+    reopened per docs/issues/ISS-0340.yaml) did NOT appear in either run.
+    Had it appeared, diff-exclusion would have cleared it structurally
+    since lib/letflow/api/context.ex is untouched by this branch's diff
+    (artifacts_in: lib/letflow/engine/lua/platform.ex,
+    lib/letflow/engine/lua_number_marshalling.ex, and their test files)
+    -- but since it did not reproduce at all, no attribution was needed.
+  no_rework_needed: >
+    No failure was caused by REQ-159's own new code (platform.ex,
+    lua_number_marshalling.ex, or their new tests including the new
+    telemetry-based test) -- both runs were fully green, so there is
+    nothing to route back to ELIXIR-DEV.
+
+environment:
+  toolchain: "asdf shims at $HOME/.asdf/shims (mix/elixir/erl resolved from there, not bare PATH)"
+  database: "Postgres reachable on 127.0.0.1:5463 (LETFLOW_DB_PORT from untracked .env, container letflow-1-postgres-1 already Running/healthy via docker compose)"
+  docker_note: "docker compose up -d required sudo (host user tvolodi is not in the docker group, `docker compose` as plain user fails with 'permission denied ... docker API'); `sudo -n docker compose up -d` succeeded with containers already Running/healthy (no-op)."
+  parallelism: "TEST_PARALLEL_N not set; N derived from nproc = 8, both runs."
+
+conclusion: >
+  Full suite green on both runs: 2229/2229 tests passed (5/5 properties),
+  0 failures, identical per-partition counts both times. The new
+  :telemetry.attach/4-based test in platform_test.exs was specifically
+  inspected for leak risk (unique handler_id via make_ref(), on_exit
+  detach) and no telemetry-related failure or interference with any other
+  [:letflow, :repo, :query]-consuming test was observed. No rework
+  required for lib/letflow/engine/lua/platform.ex or
+  lib/letflow/engine/lua_number_marshalling.ex.

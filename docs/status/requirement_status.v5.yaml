@@ -498,3 +498,41 @@ history:
       feature/WF02-REQ159-20260827 created from main (f79d828) and
       pushed. Dispatching Step 1 to CODE-DESIGNER next. 18 on-disk
       entries before this append; 19 after.
+
+  - req: REQ-159
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-27T18:08:14Z"
+    note: >
+      WF02-REQ159-20260827 complete. First requirement to implement real
+      platform.* host-function bodies: platform.read_variable, platform.
+      get_instance_state, platform.log (LUA-11 read half, LUA-13), using the
+      new Letflow.Engine.LuaNumberMarshalling module settled by REQ-150. Step
+      1b CODE-DESIGN-VALIDATOR found and required fixing a real design-stage
+      authorization gap: get_instance_state's original design, via an
+      unsupported invented "parent reading child's state" scenario, allowed
+      reading ANY instance the tenant owned -- fixed to restrict reads to a
+      script's own instance only, returning :forbidden uniformly for anything
+      else, real instance or nonexistent. TEST-DESIGNER separately found and
+      closed a real mutation-detectable test gap via active mutation testing:
+      the existing tests verified the CORRECT RETURN VALUE of the self-
+      instance check but not the actual security property -- that no
+      Repo/database call happens at all on a mismatch -- closed with a
+      :telemetry.attach/4-based test proving zero Repo calls occur, and
+      independently re-verified by TEST-DESIGN-VALIDATOR reproducing the exact
+      mutation from scratch, then spot-checked again at the source level by
+      RELEASE-VALIDATOR. SECURITY-REVIEWER additionally confirmed no timing
+      side-channel exists between a same-tenant-sibling-instance rejection and
+      a nonexistent-instance rejection: both take the identical zero-Repo-call
+      code path. ELIXIR-DEV made two well-justified implementation deviations
+      from the design's literal text -- run_stub's real arity, forced by
+      Lua.encode!/2's actual needs, and log's explicit Lua.decode!/2 step,
+      since the design's assumption that table args arrive pre-decoded was
+      factually wrong -- both confirmed by REVIEWER as forced by the real
+      tv-labs/lua library API rather than shortcuts, and documented via a
+      design-doc addendum TEST-DESIGNER added. Passed design (with the Step 1b
+      rework above), CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (hard gate),
+      REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, and
+      RELEASE-VALIDATOR (Step 5 PASS). Status flipped pending -> done in
+      docs/requirements.yaml. `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 20 on-disk entries.

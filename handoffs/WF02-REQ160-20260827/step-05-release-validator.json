@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "RELEASE-VALIDATOR",
   "file": "handoffs/WF02-REQ160-20260827/step-05-release-validator.json",
-  "status": "IN_PROGRESS",
+  "status": "DONE",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -39,6 +39,80 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "verdict": "PASS -- REQ-160's 8 acceptance criteria are independently re-derived as met, against the real code and real, freshly-run test output, not against prior agents' reports.",
+    "checks_performed": [
+      "Read docs/requirements.yaml REQ-160 entry in full (8 acceptance_criteria, verbatim).",
+      "Read lib/letflow/design/req160-lua-host-api-write.md in full, including SS2.2's INV-write-discard-on-race derivation and SS9's traceability table.",
+      "Read lib/letflow/engine/lua/platform.ex in full (845 lines) -- moduledoc REQ-160 section, @staged_writes_pdict_key, do_write_variable/2, stage_write/2, take_staged_writes/0, do_call_service/3, do_emit_event/3, ServiceCaller/NoServiceCaller.",
+      "Read test/letflow/engine/lua/platform_test.exs in full (1861 lines, 90 tests).",
+      "grep -rn 'take_staged_writes|stage_write|staged_writes_pdict_key' across lib/ and test/ -- confirmed take_staged_writes/0 has zero call sites outside platform.ex's own @spec/def and the test file's direct test-process calls; no other module under lib/ references the staging mechanism at all -- INV-write-discard-on-race's 'only escape hatch is a normal per-process return, never read by this module itself' claim holds structurally, not just by assertion.",
+      "Ran: export PATH=\"$HOME/.asdf/shims:$PATH\"; mix test test/letflow/engine/lua/platform_test.exs -- real output: 'Finished in 8.2 seconds (0.00s async, 8.2s sync) / Result: 90 passed', 0 failures.",
+      "Ran: export PATH=\"$HOME/.asdf/shims:$PATH\"; mix compile --warnings-as-errors -- exit code 0, no warnings, no output.",
+      "Ran: git diff main...feature/WF02-REQ160-20260827 --stat -- 17 files changed, all within scope: handoffs/WF02-REQ160-20260827/* (bookkeeping), lib/letflow/design/req160-lua-host-api-write.md, lib/letflow/engine/lua/platform.ex, test/letflow/engine/lua/platform_test.exs, test/reports/report-2026-08-27-WF02-REQ160-20260827.yaml, test/specs/REQ-160.md. No owned_modules boundary violation -- docs/requirements.yaml and docs/status/ not yet touched, which is correct since this run's DOC-UPDATER step has not yet occurred."
+    ],
+    "acceptance_criteria_mapping": [
+      {
+        "ac": "1 -- failed script (raised error, instruction budget, wall-clock kill, memory kill) leaves instance variable state unchanged",
+        "tests": [
+          "'a script that writes then raises leaves the buffer un-drained by anything in platform.ex itself (AC1)' (line 1146)",
+          "'REQ-154's instruction-budget exhaustion discards the staged write -- never observed from any other process (AC1)' (line 1178)",
+          "'REQ-155's wall-clock kill discards the staged write -- the killed process's buffer is simply gone (AC1)' (line 1220)",
+          "'REQ-156's memory-limit kill discards the staged write -- the killed process's buffer is simply gone (AC1)' (line 1252)"
+        ],
+        "verified": "all 4 pass; each independently confirmed via the harness pattern (Task.async/Task.shutdown brutal_kill, raw spawn_opt + max_heap_size monitor) actually kills a distinct OS-scheduled process and this (test) process's own take_staged_writes/0 observes an empty map -- a genuine cross-process, not same-process, discard proof"
+      },
+      {
+        "ac": "2 -- script that writes several variables and succeeds applies ALL of them, no partial state observable, atomicity proven",
+        "tests": [
+          "'several writes in one script accumulate, last-write-wins on a duplicate key, no partial state (AC2)' (line 1096)",
+          "'REQ-160/AC2: VariableMerge.merge/3 applies all staged writes atomically in a single call (design SS2.6)' (line 1293)"
+        ],
+        "verified": "pass; the second test confirms staged writes flow into a real VariableMerge.merge/3 call producing the whole {'a'=>1,'b'=>2,'c'=>3} map in one non-yielding function call"
+      },
+      {
+        "ac": "3 -- platform.call_service round-trips through host to a registered service, response as Lua table readable from script",
+        "tests": ["'a successful call returns the response as a Lua table readable from inside the script' (line 1384)"],
+        "verified": "pass"
+      },
+      {
+        "ac": "4 -- service call FAILURE returns structured error (not raise); MISSING capability DOES raise; distinct",
+        "tests": [
+          "'a service-side failure returns [nil, error_table], not a raise' (line 1463)",
+          "'a MISSING service:call:<id> capability raises via the fold-level gate, never reaching call_service's body' (line 1519, with SpyServiceCaller proving the body is never entered)"
+        ],
+        "verified": "pass; structurally distinct code paths confirmed in platform.ex (capability gate in install/3's fold vs. do_call_service/3's own body, no raise possible after the gate passes)"
+      },
+      {
+        "ac": "5 -- emit_event without event:emit raises; with grant, emits event observable by host",
+        "tests": [
+          "'a MISSING event:emit capability raises via the fold-level gate' (line 1737)",
+          "'a granted emit_event call succeeds and the event is observable via a direct read' (line 1606)"
+        ],
+        "verified": "pass; the granted test reads back the real event via Letflow.EventStore.read/2 against a real provisioned tenant schema"
+      },
+      {
+        "ac": "6 -- number conversion uses REQ-150's named module/function; moduledoc cites section; no second rule",
+        "tests": ["'every REQ-160 numeric-crossing call site routes through LuaNumberMarshalling.from_lua/1 or .to_lua/1 by name' (line 1831, structural/source-level guard)"],
+        "verified": "pass; moduledoc REQ-160 section (platform.ex lines 153-200) explicitly cites 'REQ-150 SS2.1/SS2.2' by number"
+      },
+      {
+        "ac": "7 -- no host function in this requirement calls Repo with a prefix derived from script input; moduledoc states tenant prefix supplied by calling engine per decision 0014(e)",
+        "tests": [
+          "'write_variable makes zero Repo calls (AC7)' (line 1316)",
+          "'call_service makes zero Repo calls (AC7)' (line 1537)",
+          "'emit_event's one Repo call always uses execution_context.prefix, never a script-supplied argument (AC7)' (line 1651)"
+        ],
+        "verified": "pass; source-level assertion confirms the single EventStore.append(attrs, prefix: execution_context.prefix) call site and refutes prefix: event_type / prefix: idempotency_key patterns"
+      },
+      {
+        "ac": "8 -- mix test and mix compile --warnings-as-errors both pass with real output quoted",
+        "tests": "N/A -- process criterion, not a code test",
+        "verified": "confirmed directly by this validator's own commands, quoted above: mix test -> 90 passed, 0 failures; mix compile --warnings-as-errors -> exit 0, no output"
+      }
+    ],
+    "inv_write_discard_on_race_spot_check": "Confirmed in real code: platform.ex's @staged_writes_pdict_key is process-dictionary-scoped (Process.get/put/delete), never touching Lua.t() state (grep confirms zero calls to Process.* from Lua-reachable code, and the sandbox denies os.* entirely). take_staged_writes/0 (lines 351-356) is the only reader/clearer, and structural test 'platform.ex's source has zero call sites of take_staged_writes() other than its own @spec/def lines (AC1)' (line 1350) plus this validator's own grep both confirm no code path inside platform.ex ever calls it -- the design's stated 'this module never calls it itself; some future, out-of-scope caller is the first real caller' claim holds in the shipped code exactly as documented.",
+    "owned_modules_boundary": "No violation. Full branch diff (git diff main...feature/WF02-REQ160-20260827 --stat) touches only: lib/letflow/design/req160-lua-host-api-write.md, lib/letflow/engine/lua/platform.ex, test/letflow/engine/lua/platform_test.exs, test/specs/REQ-160.md, test/reports/report-2026-08-27-WF02-REQ160-20260827.yaml, and this run's own handoffs/WF02-REQ160-20260827/* bookkeeping files. docs/requirements.yaml status flip and docs/status/ history event are correctly not yet present -- that is DOC-UPDATER's responsibility at a later step, not a gap in this run.",
+    "timestamp": "2026-08-27T20:15:00Z"
   }
 }

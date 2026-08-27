@@ -1,0 +1,53 @@
+run_id: WF02-REQ153-20260827
+date: "2026-08-27"
+agent: TEST-RUNNER
+branch: feature/WF02-REQ153-20260827
+verdict: PASS
+
+targeted_suite:
+  command: "mix test test/letflow/engine/lua/executor_test.exs"
+  result: "11 passed"
+  exit_code: 0
+  final_line: "Result: 11 passed"
+  duration: "0.1 seconds (0.1s async, 0.00s sync)"
+  seed: 41972
+
+full_suite:
+  command: "mix test"
+  final_line: "Result: 2100/2108 passed (5/5 properties, 2095/2103 tests), 3 excluded"
+  total_tests: 2108
+  passed: 2100
+  failed: 8
+  excluded: 3
+  properties: "5/5"
+  exit_code: 1
+  duration: "990.2 seconds (17.1s async, 973.0s sync)"
+
+compile_check:
+  command: "mix compile --warnings-as-errors"
+  exit_code: 0
+  output: "Compiling 1 file (.ex)"
+
+failures_attribution:
+  branch_failures: 0
+  pre_existing_failures: 8
+  note: >
+    All 8 failures are in test files not included in
+    git diff origin/main...feature/WF02-REQ153-20260827.
+    No failures are attributable to this branch.
+
+pre_existing_failures:
+  - file: test/letflow/engine/lua/sandbox_test.exs
+    module: Letflow.Engine.Lua.SandboxTest
+    count: 1
+    root_cause: "ErlangError :enoent — System.cmd(\"grep\") fails on Windows (grep not in PATH)"
+
+  - file: test/letflow/tenant_provisioning/backfill_test.exs
+    module: Letflow.TenantProvisioning.BackfillTest
+    count: 4
+    root_cause: pre-existing
+
+  - file: test/letflow/tenant_schema_reaper_test.exs
+    module: Letflow.TenantSchemaReaperTest
+    count: 3
+    root_cause: pre-existing

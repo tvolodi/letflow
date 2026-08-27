@@ -1,0 +1,114 @@
+{
+  "run_id": "WF02-REQ153-20260827",
+  "step": "04",
+  "status": "COMPLETED",
+  "result": {
+    "agent": "TEST-RUNNER",
+    "timestamp": "2026-08-27T09:38:25Z",
+    "verdict": "PASS",
+    "targeted_suite": {
+      "command": "mix test test/letflow/engine/lua/executor_test.exs",
+      "result": "11 passed",
+      "exit_code": 0,
+      "final_line": "Result: 11 passed",
+      "duration": "0.1 seconds (0.1s async, 0.00s sync)"
+    },
+    "full_suite": {
+      "command": "mix test",
+      "final_line": "Result: 2100/2108 passed (5/5 properties, 2095/2103 tests), 3 excluded",
+      "failed_count": 8,
+      "exit_code": 1,
+      "duration": "990.2 seconds (17.1s async, 973.0s sync)"
+    },
+    "compile_check": {
+      "command": "mix compile --warnings-as-errors",
+      "result": "Compiling 1 file (.ex)",
+      "exit_code": 0
+    },
+    "branch_diff_files": [
+      "handoffs/WF02-REQ153-20260827/step-00-git-setup.json",
+      "handoffs/WF02-REQ153-20260827/step-01-code-designer.json",
+      "handoffs/WF02-REQ153-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ153-20260827/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ153-20260827/step-02d-reviewer.json",
+      "handoffs/WF02-REQ153-20260827/step-03-test-designer.json",
+      "handoffs/WF02-REQ153-20260827/step-03b-test-design-validator.json",
+      "lib/letflow/design/req153-lua-executor.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/specs/REQ-153.md"
+    ],
+    "full_suite_failures": [
+      {
+        "number": 1,
+        "test": "test the only call site (AC1) Lua.new( appears exactly once under lib/, inside sandbox.ex",
+        "module": "Letflow.Engine.Lua.SandboxTest",
+        "file": "test/letflow/engine/lua/sandbox_test.exs",
+        "in_branch_diff": false,
+        "attribution": "pre-existing",
+        "root_cause": "ErlangError :enoent — System.cmd(\"grep\", ...) fails on Windows because grep is not in PATH"
+      },
+      {
+        "number": 2,
+        "test": "test regression: ISS-0332 -- higher existing schema_version is skipped (schema_version_not_monotonic)",
+        "module": "Letflow.TenantProvisioning.BackfillTest",
+        "file": "test/letflow/tenant_provisioning/backfill_test.exs",
+        "in_branch_diff": false,
+        "attribution": "pre-existing"
+      },
+      {
+        "number": 3,
+        "test": "test regression: ISS-0332 -- idempotent: already-v2 tenant is skipped, not errored",
+        "module": "Letflow.TenantProvisioning.BackfillTest",
+        "file": "test/letflow/tenant_provisioning/backfill_test.exs",
+        "in_branch_diff": false,
+        "attribution": "pre-existing"
+      },
+      {
+        "number": 4,
+        "test": "test regression: ISS-0343 -- a tenant whose schema vanished mid-sweep is skipped, not a crash of the whole run",
+        "module": "Letflow.TenantProvisioning.BackfillTest",
+        "file": "test/letflow/tenant_provisioning/backfill_test.exs",
+        "in_branch_diff": false,
+        "attribution": "pre-existing"
+      },
+      {
+        "number": 5,
+        "test": "test regression: ISS-0332 -- backfill updates pre-existing tenant to schema_version 2",
+        "module": "Letflow.TenantProvisioning.BackfillTest",
+        "file": "test/letflow/tenant_provisioning/backfill_test.exs",
+        "in_branch_diff": false,
+        "attribution": "pre-existing"
+      },
+      {
+        "number": 6,
+        "test": "test sweep_orphans/2 concurrent-invocation liveness guard (ISS-0110) spares an old row while another invocation's connection is open, reclaims it once that connection closes",
+        "module": "Letflow.TenantSchemaReaperTest",
+        "file": "test/letflow/tenant_schema_reaper_test.exs",
+        "in_branch_diff": false,
+        "attribution": "pre-existing"
+      },
+      {
+        "number": 7,
+        "test": "test sweep_orphans/2 schema_name format guard skips an old row with a malformed schema_name instead of attempting a drop",
+        "module": "Letflow.TenantSchemaReaperTest",
+        "file": "test/letflow/tenant_schema_reaper_test.exs",
+        "in_branch_diff": false,
+        "attribution": "pre-existing"
+      },
+      {
+        "number": 8,
+        "test": "test sweep_orphans/2 reclaims an old, well-formed orphaned row drops the real schema and deletes both rows",
+        "module": "Letflow.TenantSchemaReaperTest",
+        "file": "test/letflow/tenant_schema_reaper_test.exs",
+        "in_branch_diff": false,
+        "attribution": "pre-existing"
+      }
+    ],
+    "attribution_summary": "All 8 failures are in files not present in git diff origin/main...feature/WF02-REQ153-20260827. Zero failures attributable to this branch.",
+    "notes": [
+      "executor.ex uses Sandbox.new/0, not Lua.new() directly — SandboxTest failure 1 is not caused by this branch",
+      "mix compile --warnings-as-errors: PASS (compiles 1 file cleanly, exit 0)"
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "step": "06-doc-updater",
+  "result": {
+    "verdict": "PASS",
+    "agent": "DOC-UPDATER",
+    "run": "WF02-REQ153-20260827",
+    "at": "2026-08-27T04:43:57Z",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ153-20260827/step-06-doc-updater.json"
+    ],
+    "notes": [
+      "REQ-153 status flipped in_progress -> done in docs/requirements.yaml",
+      "done event appended to docs/status/requirement_status.v5.yaml (7th entry, on-disk count verified via Select-String)",
+      "docs/status/requirement_status.index.yaml entries incremented 6 -> 7",
+      "roll_rule check: v5.yaml is well under max_lines:1200 ceiling, no roll needed"
+    ]
+  },
+  "status": "COMPLETED"
+}

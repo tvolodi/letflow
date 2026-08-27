@@ -7618,7 +7618,7 @@ requirements:
   - id: REQ-153
     title: Per-invocation Lua state isolation and a concrete LuaScriptAudit.Executor implementation (LUA-02, resolving script_ref)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S5
     impl_order: 305  # letflow-queue task id
     description: >

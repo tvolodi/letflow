@@ -7969,7 +7969,7 @@ requirements:
   - id: REQ-159
     title: Lua host API 1/2 -- read path -- platform.read_variable, get_instance_state, log (LUA-11 read half, LUA-13)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 311  # letflow-queue task id
     description: >

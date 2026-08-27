@@ -6,9 +6,12 @@ discovered_by: TEST-RUNNER
 discovered_in_run: WF02-REQ151-20260826
 discovered_at: 2026-08-26T13:11:00Z
 severity: MINOR
-status: resolved
+status: reopened
 resolved_in_run: WF03-ISS0340-20260826
 resolved_at: "2026-08-26T17:45:00Z"
+reopened_at: "2026-08-27T12:16:00Z"
+reopened_by: TEST-RUNNER
+reopened_in_run: WF02-REQ155-20260827
 queue_task_id: 340
 github_issue_number: 654
 github_issue: https://github.com/tvolodi/letflow/issues/654
@@ -21,6 +24,25 @@ description: >
   touches (lib/letflow/engine/lua/, mix.exs Lua dep, REQ-058 guardrail
   test) is related to lib/letflow/api/context.ex. Root cause/reproducing
   mechanism not yet found.
+reopen_note: >
+  Reproduced again during WF02-REQ155-20260827's Step 4 full-suite run
+  (test_parallel.sh, partition 6, `assert function_exported?(Context,
+  :scoped_repo_opts, 1)` -> false), 1 of 2147 tests. TEST-RUNNER
+  independently confirmed this branch's own diff (config/config.exs,
+  config/test.exs, lib/letflow/application.ex,
+  lib/letflow/engine/lua/executor.ex, its test, docs) does not touch
+  lib/letflow/api/context.ex, and that the assertion passes reliably
+  standalone (`mix test test/letflow/api/context_test.exs --seed 0` ->
+  11 passed) -- confirming the same full-suite-ordering race this
+  issue's WF03-ISS0340-20260826 fix was meant to close is still live.
+  That prior fix's own acceptance criteria (20 standalone reruns + 5
+  full-parallel-suite reruns) evidently did not catch this recurrence
+  rate. Left `resolved_in_run`/`resolved_at` above untouched (append-only
+  history, not overwritten) and added `reopened_*` fields alongside per
+  this project's own precedent for not destructively editing a past
+  status determination. Not blocking WF02-REQ155-20260827's own PASS
+  verdict -- structurally cleared for that run per core-directives.md's
+  attribution rule.
 acceptance_criteria:
   - >
     a reproducing mechanism for the intermittent failure is identified

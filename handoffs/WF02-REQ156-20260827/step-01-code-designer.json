@@ -1,0 +1,63 @@
+{
+  "handoff_id": "step01-WF02-REQ156-20260827",
+  "run_id": "WF02-REQ156-20260827",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ156-20260827/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": [
+      "REQ-156"
+    ],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-156": "Implements the mechanism REQ-149 decided. RESTATEMENT OF LUA-09, AND WHY. LUA-09 (Memory Limit, MUST) reads 'Each script execution MUST have a configurable memory limit. Allocations exceeding the limit MUST fail gracefully and terminate the script,' acceptance 'Script attempting to allocate 1 GB with 16 MB limit fails cleanly.' The chosen runtime documents :max_instructions and :max_call_depth and NO memory-limit option. R-Co had a real one via LuaJIT's custom allocator hook; a pure-BEAM VM allocates ordinary BEAM terms and offers no equivalent allocation-refusal point. The BEAM's nearest primitive, a per-process :max_heap_size, KILLS the process rather than failing an allocation gracefully -- so LUA-09's two clauses come apart: 'terminate the script' is achievable, 'fail gracefully' as an in-script observable allocation failure is NOT achievable (per REQ-149's empirical finding). THE RESTATEMENT THIS REQUIREMENT MUST WRITE. This requirement's moduledoc must state which of LUA-09's two clauses the shipped mechanism satisfies and which it does not, in those words -- not a general claim that LUA-09 is met. FORBIDDEN SHORTCUT: :max_instructions must not be used as a proxy for a memory limit (decision 0014 OQ-1 rejects it as unsound). Scope: 1. Implement REQ-149's recommended mechanism (:max_heap_size with kill:true, spawn_opt-based), configurable per execution, wired into REQ-155's supervised execution process. 2. Limit breach must surface as a structured error distinguishable from REQ-154's budget error and REQ-155's timeout error. 3. Test at the scale LUA-09's own acceptance criterion names -- a script attempting a large allocation under a small configured limit. GATE: SECURITY-REVIEWER is a hard gate. Queue task 308, GH#608. See docs/requirements.yaml REQ-156 for full description and acceptance_criteria."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ156-20260827/step-00-git-setup.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req149-lua-memory-limit.md",
+      "lib/letflow/design/req155-lua-wallclock-kill.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req156-lua-memory-limit-impl.md",
+      "test/specs/REQ-156.md"
+    ],
+    "branch_name": "feature/WF02-REQ156-20260827"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-156. Write lib/letflow/design/req156-lua-memory-limit-impl.md implementing REQ-149's RECOMMENDED MECHANISM (lib/letflow/design/req149-lua-memory-limit.md, read it in full first -- it already decided :max_heap_size with kill:true, spawn_opt-based, empirically verified). Read the current lib/letflow/engine/lua/executor.ex (as extended by REQ-155's merged wall-clock-kill work -- read directly, not assumed) and lib/letflow/design/req155-lua-wallclock-kill.md to understand exactly how script execution is currently supervised (Task.Supervisor.async_nolink/2 under Letflow.Engine.Lua.TaskSupervisor, Task.yield/2, Task.shutdown on timeout) -- this design must wire a per-execution :max_heap_size option into that SAME supervised execution path, not invent a parallel one. Also write test/specs/REQ-156.md (test spec skeleton, no test code). Design must specify: (1) a configurable max_heap_words option (nil = unconstrained) threaded through the execution call, per REQ-149's exact configuration shape (Section 3); (2) how max_heap_size is passed into the spawned/async task (spawn_opt-equivalent under Task.Supervisor -- research whether Task.Supervisor.async_nolink/2 exposes a way to pass spawn_opt, since Task itself wraps Process.spawn -- if it does NOT, the design must specify the alternative mechanism honestly, e.g. a raw Process.spawn_opt/Process.monitor-based execution path instead of Task.Supervisor, with the same async_nolink-equivalent unlink/monitor semantics, and must NOT silently claim Task.Supervisor exposes an option it doesn't); (3) the {:DOWN, ref, :process, pid, :killed} signal handling, translated into a structured {:error, :memory_limit_exceeded}-shaped result distinguishable by pattern match from REQ-154's {:error, {:budget_exceeded, _}} and REQ-155's {:error, {:wallclock_timeout, _}}; (4) the required moduledoc content per REQ-156's own acceptance criteria -- explicitly stating LUA-09's 'terminate' clause is met and 'fail gracefully' is NOT met (per REQ-149's finding), and that :max_instructions was rejected as a memory proxy per decision 0014 OQ-1; (5) if the implementation mechanism ends up diverging from REQ-149's literal recommendation for any real technical reason (e.g. Task.Supervisor limitation), state the divergence explicitly and note that req149-lua-memory-limit.md itself may need a corresponding update -- do not silently diverge. No implementation code (.ex function bodies) -- signatures, @specs, and type shapes only, describing control flow in prose/tables, never as a literal Elixir expression, however small (this exact rule cost REQ-157's design 2 rework rounds this session -- read that lesson into this one).",
+    "acceptance_criteria": [
+      "Design specifies a configurable max_heap_words option (nil = unconstrained), matching REQ-149's exact configuration shape",
+      "Design specifies HONESTLY whether Task.Supervisor.async_nolink/2 can carry a spawn_opt-equivalent max_heap_size option, and if not, specifies the real alternative mechanism actually used -- no silent assumption",
+      "Design specifies the {:DOWN, ..., :killed} -> structured {:error, :memory_limit_exceeded} translation, pattern-distinguishable from REQ-154's and REQ-155's error shapes",
+      "Design states the required moduledoc content: LUA-09 restatement, 'terminate' clause MET / 'fail gracefully' clause NOT MET (per REQ-149), :max_instructions rejected as a memory proxy",
+      "Any divergence from REQ-149's literal recommendation is stated explicitly, with a note that req149-lua-memory-limit.md may need updating",
+      "Design covers all 7 acceptance criteria listed in docs/requirements.yaml's REQ-156 entry (read it directly), mapped one-to-one to concrete design elements",
+      "No implementation code (.ex function bodies) -- signatures, @specs, and type shapes only; describe control flow in prose/tables, never as a literal Elixir expression, however small",
+      "Open questions listed explicitly if any exist, not silently resolved"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "lib/letflow/design/req156-lua-memory-limit-impl.md",
+      "test/specs/REQ-156.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "summary": "Designed REQ-156's memory-limit mechanism, composing REQ-149's decided max_heap_size/kill:true/spawn_opt mechanism into REQ-155's supervised execution path. Verified by reading the actual installed Elixir 1.20.3-otp-29 source (task/supervisor.ex, task/supervised.ex -- matching .tool-versions) that Task.Supervisor.async_nolink/2,3's async_opts type accepts only :shutdown and that Task.Supervised spawns via bare spawn_link/spawn with no options list -- so max_heap_size cannot be threaded through Task.Supervisor at all. Design branches execute_with_manifest/3 on :max_heap_words: nil keeps REQ-155's Task.Supervisor.async_nolink + Task.yield + Task.shutdown path unchanged; a configured pos_integer() uses a direct :erlang.spawn_opt/2 with [:monitor, max_heap_size: %{size: ..., kill: true, error_logger: false}], with the caller's own bounded receive standing in for Task.yield/2 and its own Process.exit(pid, :kill) standing in for Task.shutdown(:brutal_kill). Resolved the :killed-DOWN ambiguity (BEAM heap-kill vs. caller's own timeout-kill both produce reason :killed) structurally via message-arrival ordering, not by inspecting the reason. Added the new {:error, :memory_limit_exceeded} arm, distinguishable by pattern match from REQ-154's {:error, {:budget_exceeded, _}} and REQ-155's {:error, {:wallclock_timeout, _}}. No divergence from REQ-149's recommended mechanism itself (spawn_opt-based max_heap_size is exactly what was implemented); REQ-149's artefact was simply silent on composition with Task.Supervisor, which this design resolves and recommends (non-mandatory) as an addendum. Specified required moduledoc content (LUA-09 restatement, terminate MET / fail gracefully NOT MET, :max_instructions rejected per decision 0014 OQ-1) and mapped all 7 requirements.yaml acceptance criteria to concrete design elements. Wrote test/specs/REQ-156.md as a prose test spec skeleton (7 test items). No implementation code included in either artifact -- signatures, @specs, and type/behavior tables only. 5 open questions listed explicitly, none blocking implementation."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

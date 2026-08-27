@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step03b-recheck-WF02-REQ160-20260827",
+  "run_id": "WF02-REQ160-20260827",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ160-20260827/step-03b-test-design-validator-recheck.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-160"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ160-20260827/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ160-20260827/step-03-test-designer-rework1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs",
+      "test/specs/REQ-160.md"
+    ],
+    "branch_name": "feature/WF02-REQ160-20260827",
+    "commit": "7cde58e",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR re-check of REQ-160's test suite after rework commit 7cde58e addressing the 4 required fixes from your original FAIL (step-03b-test-design-validator.json). Verify each fix independently against the real test file, not the rework's self-report. Test count moved 85 -> 90.",
+    "acceptance_criteria": [
+      "AC1's 3 new kill-arm tests (instruction-budget, wall-clock, memory-limit) genuinely exercise REQ-154/155/156's real mechanisms (not a fake/simplified stand-in) and genuinely assert the write never reaches a buffer any other process can see -- read each test body directly.",
+      "AC2's VariableMerge.merge/3 atomicity test genuinely calls the real merge/3 function with take_staged_writes/0's real output.",
+      "The call_service write-direction marshalling test genuinely asserts on real Elixir types (is_integer/1/is_float/1) of what the double received, not a round-tripped Lua value.",
+      "test/specs/REQ-160.md sections 2, 3, 6, 12 no longer overstate coverage -- every claim of 'tested' is backed by a real test; anything descoped is stated as such with a reason.",
+      "No new skipped/pending tests introduced; mix test and mix compile --warnings-as-errors independently re-run and confirmed clean.",
+      "No regression in previously-passing coverage (mutation tests 1-7 from the original pass should still hold conceptually; spot-check at least one)."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

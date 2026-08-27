@@ -42,9 +42,9 @@
       "single_registration_point": "Confirmed in platform.ex: @capability_matrix is the sole literal list of 8 rows; install/2's Enum.reduce is the only Lua.set!(_, [:platform, _]) call site under lib/, mechanically guarded by the regex-count test (exactly 1 occurrence)",
       "dual_denial_observability": "check!/3 both raises Lua.RuntimeException (script-visible, LUA-06's 'MUST raise a Lua error') and carries the full denial map on exception.original (host-reportable, unrescued exception fields readable by any rescuer per moduledoc note about Executor.execute_with_manifest/2's existing rescue clause)",
       "capability_matrix_correctness": "matches requirements.yaml's THE CLOSED SET verbatim: call_service parameterised, 5 constant-capability functions, now/fail both :none"
-    }
+    },
+    "next_action": "Route to DOC-UPDATER"
   },
-  "next_action": "Route to DOC-UPDATER",
   "rework_count": 0,
   "max_rework": 3
 }

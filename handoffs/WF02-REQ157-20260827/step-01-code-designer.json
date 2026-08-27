@@ -1,0 +1,66 @@
+{
+  "handoff_id": "step01-WF02-REQ157-20260827",
+  "run_id": "WF02-REQ157-20260827",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ157-20260827/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-27T07:20:00Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-157"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-157": "Capability model and capability check at every gated host-function call site (LUA-05, LUA-06). Ports R-Co/src/lua/capabilities.zig (string-grant set with has/add) and R-Co/src/lua/host_api/mod.zig's registerAll capability matrix. Closed set of 8 platform.* functions: call_service->service:call:<svc_id>, read_variable->variable:read, write_variable->variable:write, log->audit:log, emit_event->event:emit, get_instance_state->instance:read, now->NONE (ungated by design), fail->NONE (ungated by design). Build: (1) capability-set representation + check function with structured denial details (function, capability required, capabilities granted); (2) single registration point enforcing the closed set (test that adding a 9th function without a matrix row fails); (3) denial raises a Lua error AND is reportable to host; (4) call_service grant is parameterised by service id, not blanket. NOT IN SCOPE: host functions' own bodies (REQ-159/160) beyond stubs needed to test the gate; platform.now already shipped (REQ-152). SECURITY-REVIEWER hard gate -- this is the authorization boundary for tenant-supplied scripts. Queue task 309, GH#609. See docs/requirements.yaml REQ-157 for full description and acceptance_criteria."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ157-20260827/step-00-git-setup.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/engine/lua/platform.ex",
+      "lib/letflow/engine/lua/sandbox.ex",
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua_script_audit.ex",
+      "lib/letflow/design/req152-lua-time-denial.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/capabilities.ex",
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/capabilities_test.exs",
+      "test/letflow/engine/lua/platform_test.exs",
+      "lib/letflow/design/req157-lua-capability-model.md",
+      "test/specs/REQ-157.md"
+    ],
+    "branch_name": "feature/WF02-REQ157-20260827"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-157. Write lib/letflow/design/req157-lua-capability-model.md covering the capability-set representation, the single registration point enforcing the closed 8-function set, the structured-denial shape (raised AND host-reportable), and call_service's per-service-id parameterisation. Also write test/specs/REQ-157.md (test spec skeleton, no test code). Do not touch lib/letflow/engine/lua/executor.ex (locked, owned by concurrent WF02-REQ154-20260827 run).",
+    "acceptance_criteria": [
+      "Design specifies a capability-set data shape (grant_set) with has?/add semantics and a check/3 function returning :ok | {:error, denial()} where denial() names the function, the capability required, and the capabilities granted",
+      "Design specifies a single registration point (a capability matrix iterated once) that installs exactly the 8 platform.* functions, and states the mechanism by which adding a 9th function without a matching matrix row is structurally prevented or caught by a test",
+      "Design specifies how a denial is simultaneously (a) raised as a Lua error observable from inside the script (LUA-06) and (b) a structured Elixir-side value a host caller can read, without requiring a change to lib/letflow/engine/lua/executor.ex's existing Lua.RuntimeException rescue clause",
+      "Design specifies call_service's capability as parameterised by service id (service:call:<svc_id>), not a blanket service:call, and states the exact mechanism that prevents a grant for one service authorising another",
+      "Design states, as a moduledoc-level requirement, that now and fail are ungated by design (not omissions), with the R-Co rationale (pure time read with no state reach; a script may always terminate itself) reproduced in substance",
+      "Design covers all 8 acceptance criteria listed in docs/requirements.yaml's REQ-157 entry (read it directly), mapped one-to-one to concrete design elements",
+      "No implementation code (.ex function bodies) -- signatures, @specs, and type shapes only",
+      "Open questions listed explicitly if any exist (e.g. R-Co source files not present in this checkout, exact REQ-162 consumption shape of the structured denial), not silently resolved"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "lib/letflow/design/req157-lua-capability-model.md",
+      "test/specs/REQ-157.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "summary": "New module Letflow.Engine.Lua.Capabilities: grant_set (MapSet of capability strings), new/0,1, add/2, has?/2 (exact-string membership only), check/3 (:ok | {:error, denial()} with :none short-circuiting unconditionally to :ok), check!/3 (raises on denial), service_capability/1 (single formatter for service:call:<svc_id>). Letflow.Engine.Lua.Platform extended: an 8-row @capability_matrix (name, required-capability-fn, stub-fn) folded once by install/2 (the single registration point, INV-CAP-1) -- call_service's required-fn is parameterised by the call's first argument via service_capability/1, now/fail's required-fn always returns :none. install/1 (REQ-152's existing signature, still the only call Sandbox.new/1 makes) becomes a thin delegate to install/2 with an empty grant set, so sandbox.ex and executor.ex (locked) need no changes -- every production Sandbox.new/0,1 VM already exposes all 8 platform.* names, the 6 gated ones permanently denying until a future requirement (REQ-158/159/160) calls install/2 with a populated grant set directly. Denial mechanism: Capabilities.check!/3 raises Lua.RuntimeException via its keyword-list exception/1 clause (scope/function/message, the only 3 keys the library validates) plus two extra keys (capability_required, capabilities_granted) that survive unrendered on exception.original -- a real Lua.RuntimeException matched by Executor's existing unmodified rescue clause, carrying the structured denial for a future REQ-162 to read without needing Executor touched in this run. All 8 REQ-157 acceptance criteria mapped in design doc section 7. 3 open questions: OQ-1 (R-Co's capabilities.zig/host_api/mod.zig not present in this checkout -- design built from docs/requirements.yaml's own restatement instead, flagged for reconciliation if the originals ever become available), OQ-2 (exact REQ-162 consumption shape of the structured fields left undecided), OQ-3 (pairs(platform) assumed as the closed-set enumeration mechanism for AC1's test; flagged as a spike ELIXIR-DEV should confirm early, with a fallback noted if it doesn't enumerate function-valued table entries as expected)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

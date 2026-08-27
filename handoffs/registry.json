@@ -2733,12 +2733,14 @@
                 "lib/letflow/engine/lua/manifest.ex",
                 "test/letflow/engine/lua/manifest_test.exs",
                 "lib/letflow/design/req158-lua-manifest-validation.md",
-                "test/specs/REQ-158.md"
+                "test/specs/REQ-158.md",
+                "lib/letflow/engine/lua/executor.ex",
+                "test/letflow/engine/lua/executor_test.exs"
             ],
             "lock_acquired_at": "2026-08-27T15:15:00Z",
             "lock_released_at": null,
             "released_lock": false,
-            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ158-20260827 created; Step 1 dispatched to CODE-DESIGNER",
+            "last_known_step": "Step 1b PASS (first pass, no rework) -- design requires a coordinated hash-computation change to executor.ex; owned_modules expanded to include it (no concurrent run holds it). Dispatching Step 2a to ELIXIR-DEV.",
             "backfilled": false,
             "queue_task_id": 310,
             "queue_agent_id": "orch-ai-dala",

@@ -299,17 +299,16 @@ defmodule Letflow.Engine.Lua.PlatformTest do
       %{lua: lua}
     end
 
-    test "a service:call:alpha grant lets platform.call_service('alpha') pass the gate (reaches the stub's own raise)",
+    test "a service:call:alpha grant lets platform.call_service('alpha') pass the gate (reaches the real body, never raises)",
          %{lua: lua} do
-      exception =
-        assert_raise Lua.RuntimeException, fn ->
-          Lua.eval!(lua, "return platform.call_service('alpha')")
-        end
+      # Passed the gate: call_service's real body (REQ-160) never raises -- the default
+      # NoServiceCaller returns a structured error instead.
+      script = """
+      local response, err = platform.call_service('alpha')
+      return response, err.reason
+      """
 
-      # Passed the gate: this is the stub's "not yet implemented" raise, not a capability
-      # denial -- no capability_required field on this exception.
-      assert exception.original[:capability_required] == nil
-      assert exception.original[:stub] == true
+      assert {[nil, "service_caller_not_configured"], _lua} = Lua.eval!(lua, script)
     end
 
     test "the same grant does NOT authorise platform.call_service('beta')", %{lua: lua} do
@@ -895,7 +894,7 @@ defmodule Letflow.Engine.Lua.PlatformTest do
       assert Enum.find(matrix, &(&1.name == :log)).required == "audit:log"
     end
 
-    test "write_variable, call_service, emit_event still raise the not_yet_implemented stub error" do
+    test "write_variable, call_service, emit_event are real (REQ-160) -- none raises when granted" do
       lua =
         Platform.install(
           Sandbox.new(),
@@ -903,19 +902,19 @@ defmodule Letflow.Engine.Lua.PlatformTest do
           execution_context()
         )
 
-      for {call, function_name} <- [
-            {"platform.write_variable('x', 'y')", :write_variable},
-            {"platform.call_service('x')", :call_service},
-            {"platform.emit_event('evt')", :emit_event}
-          ] do
-        exception =
-          assert_raise Lua.RuntimeException, fn ->
-            Lua.eval!(lua, "return #{call}")
-          end
+      assert {[], _lua} = Lua.eval!(lua, "return platform.write_variable('x', 'y')")
 
-        assert exception.original[:function] == function_name
-        assert exception.original[:stub] == true
-      end
+      assert {[nil, "service_caller_not_configured"], _lua} =
+               Lua.eval!(lua, """
+               local r, err = platform.call_service('x')
+               return r, err.reason
+               """)
+
+      assert {[nil, "no_execution_context"], _lua} =
+               Lua.eval!(lua, """
+               local r, err = platform.emit_event('evt', nil, 'idem-1')
+               return r, err.reason
+               """)
     end
 
     test "now and fail remain callable with an empty grant set, unaffected by execution_context" do
@@ -1006,6 +1005,529 @@ defmodule Letflow.Engine.Lua.PlatformTest do
       assert source =~ "fetch_instance_state(instance_id, execution_context.prefix, lua)"
       refute source =~ "prefix: raw_id"
       refute source =~ "prefix: instance_id"
+    end
+  end
+
+  # =====================================================================================
+  # REQ-160 -- lib/letflow/design/req160-lua-host-api-write.md
+  # =====================================================================================
+
+  defmodule FakeServiceCaller do
+    @moduledoc false
+    @behaviour Platform.ServiceCaller
+
+    @impl Platform.ServiceCaller
+    def call("billing", %{"amount" => amount}), do: {:ok, %{"charged" => amount}}
+    def call("billing", _payload), do: {:error, :bad_payload}
+    def call(_service_id, _payload), do: {:error, :unknown_service}
+  end
+
+  defp put_service_caller!(module) do
+    previous = Application.get_env(:letflow, :lua_platform_service_caller)
+    Application.put_env(:letflow, :lua_platform_service_caller, module)
+
+    on_exit(fn ->
+      if previous do
+        Application.put_env(:letflow, :lua_platform_service_caller, previous)
+      else
+        Application.delete_env(:letflow, :lua_platform_service_caller)
+      end
+    end)
+
+    :ok
+  end
+
+  # Registers a minimal, permissive event type (accepts any JSON object) so
+  # `Registry.validate_payload/3` passes -- mirrors event_store_test.exs's own
+  # `register_event_type!/2` fixture.
+  defp register_event_type!(tenant_id, json_schema \\ %{"type" => "object"}) do
+    name = "req160_evt_" <> to_string(System.unique_integer([:positive, :monotonic]))
+
+    assert {:ok, _event_type} =
+             Letflow.EventStore.Registry.register_type(
+               %{
+                 "name" => name,
+                 "schema_version" => 1,
+                 "json_schema" => json_schema,
+                 "description" => "REQ-160 test fixture"
+               },
+               tenant_id
+             )
+
+    name
+  end
+
+  # ---------------------------------------------------------------------------------
+  # platform.write_variable -- staging, accumulation, discard-on-failure (AC1, AC2)
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-160: platform.write_variable stages into a process-local buffer" do
+    test "a single write is retrievable via take_staged_writes/0 (AC2)" do
+      lua =
+        Platform.install(Sandbox.new(), Capabilities.new(["variable:write"]), execution_context())
+
+      assert {[], _lua} = Lua.eval!(lua, "return platform.write_variable('x', 42)")
+      assert Platform.take_staged_writes() == %{"x" => 42}
+    end
+
+    test "several writes in one script accumulate, last-write-wins on a duplicate key, no partial state (AC2)" do
+      lua =
+        Platform.install(Sandbox.new(), Capabilities.new(["variable:write"]), execution_context())
+
+      script = """
+      platform.write_variable('a', 1)
+      platform.write_variable('b', 2)
+      platform.write_variable('a', 3)
+      return true
+      """
+
+      assert {[true], _lua} = Lua.eval!(lua, script)
+      assert Platform.take_staged_writes() == %{"a" => 3, "b" => 2}
+    end
+
+    test "take_staged_writes/0 clears the buffer -- a second call observes an empty map" do
+      lua =
+        Platform.install(Sandbox.new(), Capabilities.new(["variable:write"]), execution_context())
+
+      assert {[], _lua} = Lua.eval!(lua, "return platform.write_variable('x', 1)")
+      assert Platform.take_staged_writes() == %{"x" => 1}
+      assert Platform.take_staged_writes() == %{}
+    end
+
+    test "a script execution that never calls write_variable leaves an empty buffer" do
+      assert Platform.take_staged_writes() == %{}
+    end
+
+    test "a malformed (non-string) name is a no-op -- returns nil, stages nothing" do
+      lua =
+        Platform.install(Sandbox.new(), Capabilities.new(["variable:write"]), execution_context())
+
+      assert {[nil], _lua} = Lua.eval!(lua, "return platform.write_variable(42, 'y')")
+      assert Platform.take_staged_writes() == %{}
+    end
+
+    test "round-trips an integer AND a float via LuaNumberMarshalling.from_lua/1 (AC6)" do
+      lua =
+        Platform.install(Sandbox.new(), Capabilities.new(["variable:write"]), execution_context())
+
+      script = """
+      platform.write_variable('int_var', 3)
+      platform.write_variable('float_var', 3.0)
+      return true
+      """
+
+      assert {[true], _lua} = Lua.eval!(lua, script)
+      assert %{"int_var" => 3, "float_var" => 3.0} = Platform.take_staged_writes()
+    end
+
+    test "a script that writes then raises leaves the buffer un-drained by anything in platform.ex itself (AC1)" do
+      lua =
+        Platform.install(Sandbox.new(), Capabilities.new(["variable:write"]), execution_context())
+
+      script = """
+      platform.write_variable('x', 1)
+      error('boom')
+      """
+
+      assert_raise Lua.RuntimeException, fn -> Lua.eval!(lua, script) end
+
+      # The buffer still exists in THIS process's dictionary (nothing here proves it was
+      # "discarded" by magic) -- the discard guarantee (AC1) is that no code path in
+      # platform.ex itself ever reads this out and forwards it anywhere on a failure
+      # path (see the structural guard test below); a killed/crashed process's own
+      # process dictionary is destroyed with the process (design §2.2/2.3), which this
+      # module has no code path that could circumvent.
+      assert Platform.take_staged_writes() == %{"x" => 1}
+    end
+
+    test "write_variable makes zero Repo calls (AC7)" do
+      lua =
+        Platform.install(Sandbox.new(), Capabilities.new(["variable:write"]), execution_context())
+
+      handler_id = {__MODULE__, :write_variable_query_counter, make_ref()}
+      counter = :counters.new(1, [])
+
+      :telemetry.attach(
+        handler_id,
+        [:letflow, :repo, :query],
+        fn _event, _measurements, _metadata, _config -> :counters.add(counter, 1, 1) end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      assert {[], _lua} = Lua.eval!(lua, "return platform.write_variable('x', 1)")
+      assert :counters.get(counter, 1) == 0
+    end
+
+    test "capability denial for variable:write, unaffected by execution_context (AC4-analogue)" do
+      lua = Platform.install(Sandbox.new(), Capabilities.new(), execution_context())
+
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.write_variable('x', 1)")
+        end
+
+      assert exception.original[:function] == :write_variable
+      assert exception.original[:capability_required] == "variable:write"
+    end
+  end
+
+  describe "REQ-160: structural guard -- take_staged_writes/0 is never called from inside platform.ex itself" do
+    test "platform.ex's source has zero call sites of take_staged_writes() other than its own @spec/def lines (AC1)" do
+      source = File.read!("lib/letflow/engine/lua/platform.ex")
+
+      # The function is defined with `def take_staged_writes do` (no parens, 0-arity) --
+      # any actual CALL site would use parens: `take_staged_writes()`. Excluding this
+      # function's own `@spec`/`def` lines (which also spell the name with parens as
+      # part of their signature, not a call), zero occurrences of the call pattern
+      # proves no code path in this module (including every write_variable/run_stub/
+      # install path) ever reads the buffer out itself; only an external caller
+      # (deliberately out of scope for this requirement, design §2.5 OQ-1) can ever
+      # invoke it.
+      call_site_lines =
+        source
+        |> String.split("\n")
+        |> Enum.reject(fn line ->
+          String.starts_with?(String.trim(line), "@spec take_staged_writes") or
+            String.starts_with?(String.trim(line), "def take_staged_writes")
+        end)
+        |> Enum.filter(&(&1 =~ "take_staged_writes()"))
+
+      assert call_site_lines == []
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # platform.call_service -- round trip (AC3), failure vs. missing-capability (AC4)
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-160: platform.call_service -- round trip through an injected ServiceCaller (AC3)" do
+    setup do
+      put_service_caller!(FakeServiceCaller)
+      :ok
+    end
+
+    test "a successful call returns the response as a Lua table readable from inside the script" do
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(["service:call:billing"]),
+          execution_context()
+        )
+
+      script = """
+      local response = platform.call_service('billing', {amount = 100})
+      return response.charged
+      """
+
+      assert {[100], _lua} = Lua.eval!(lua, script)
+    end
+
+    test "an integer/float payload round-trips via LuaNumberMarshalling (AC6)" do
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(["service:call:billing"]),
+          execution_context()
+        )
+
+      script = """
+      local response = platform.call_service('billing', {amount = 2.5})
+      return math.type(response.charged), response.charged
+      """
+
+      assert {["float", 2.5], _lua} = Lua.eval!(lua, script)
+    end
+  end
+
+  describe "REQ-160: platform.call_service -- failure returns a structured error, never raises (AC4)" do
+    setup do
+      put_service_caller!(FakeServiceCaller)
+      :ok
+    end
+
+    test "a service-side failure returns [nil, error_table], not a raise" do
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(["service:call:billing"]),
+          execution_context()
+        )
+
+      script = """
+      local response, err = platform.call_service('billing', {wrong_key = 1})
+      return response, err.reason
+      """
+
+      assert {[nil, "bad_payload"], _lua} = Lua.eval!(lua, script)
+    end
+
+    test "an invalid (non-string) service_id argument returns a structured error, not a raise" do
+      # `required_capability/2`'s `:call_service_arg0` resolution for a non-binary
+      # first arg falls back to `service_capability("")` (`"service:call:"`) -- grant
+      # exactly that so the call passes the gate and reaches the real body, exercising
+      # the "invalid_arguments" structured-return path specifically, not the gate.
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(["service:call:"]),
+          execution_context()
+        )
+
+      script = """
+      local response, err = platform.call_service(42, {})
+      return response, err.reason
+      """
+
+      assert {[nil, "invalid_arguments"], _lua} = Lua.eval!(lua, script)
+    end
+
+    test "the default NoServiceCaller returns service_caller_not_configured when nothing is injected" do
+      Application.delete_env(:letflow, :lua_platform_service_caller)
+
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(["service:call:anything"]),
+          execution_context()
+        )
+
+      script = """
+      local response, err = platform.call_service('anything', {})
+      return response, err.reason
+      """
+
+      assert {[nil, "service_caller_not_configured"], _lua} = Lua.eval!(lua, script)
+    end
+  end
+
+  describe "REQ-160: call_service -- missing capability raises; is a genuinely distinct path from a service failure (AC4)" do
+    test "a MISSING service:call:<id> capability raises via the fold-level gate, never reaching call_service's body" do
+      put_service_caller!(FakeServiceCaller)
+
+      lua = Platform.install(Sandbox.new(), Capabilities.new(), execution_context())
+
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.call_service('billing', {amount = 1})")
+        end
+
+      # Distinguishing field: a capability denial carries `capability_required`; a
+      # service-call failure (asserted separately above) never raises at all, so it
+      # could never carry this field either way -- these are structurally two
+      # different outcomes (raise vs. return), not merely two different messages.
+      assert exception.original[:function] == :call_service
+      assert exception.original[:capability_required] == "service:call:billing"
+    end
+
+    test "call_service makes zero Repo calls (AC7)" do
+      put_service_caller!(FakeServiceCaller)
+
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(["service:call:billing"]),
+          execution_context()
+        )
+
+      handler_id = {__MODULE__, :call_service_query_counter, make_ref()}
+      counter = :counters.new(1, [])
+
+      :telemetry.attach(
+        handler_id,
+        [:letflow, :repo, :query],
+        fn _event, _measurements, _metadata, _config -> :counters.add(counter, 1, 1) end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      assert {[100], _lua} =
+               Lua.eval!(lua, "return platform.call_service('billing', {amount = 100}).charged")
+
+      assert :counters.get(counter, 1) == 0
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # platform.emit_event -- real EventStore.append/2 hook (AC5), structured errors,
+  # tenant-prefix discipline (AC7)
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-160: platform.emit_event -- granted, hooks into the real EventStore.append/2 (AC5)" do
+    setup do
+      %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
+      event_type = register_event_type!(tenant_id)
+      instance_id = Ecto.UUID.generate()
+      actor_id = Ecto.UUID.generate()
+
+      seed_projection!(schema_name, instance_id)
+
+      %{
+        schema_name: schema_name,
+        instance_id: instance_id,
+        actor_id: actor_id,
+        event_type: event_type
+      }
+    end
+
+    test "a granted emit_event call succeeds and the event is observable via a direct read", %{
+      schema_name: schema_name,
+      instance_id: instance_id,
+      actor_id: actor_id,
+      event_type: event_type
+    } do
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(["event:emit"]),
+          execution_context(%{instance_id: instance_id, prefix: schema_name, actor_id: actor_id})
+        )
+
+      script = """
+      return platform.emit_event('#{event_type}', {reason = 'test'}, 'idem-req160-1')
+      """
+
+      assert {[true], _lua} = Lua.eval!(lua, script)
+
+      assert {:ok, [event]} = Letflow.EventStore.read(instance_id, prefix: schema_name)
+      assert event.event_type == event_type
+      assert event.actor_id == actor_id
+      assert event.payload["reason"] == "test"
+    end
+
+    test "an unknown event_type returns a structured error, never raises", %{
+      instance_id: instance_id,
+      schema_name: schema_name,
+      actor_id: actor_id
+    } do
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(["event:emit"]),
+          execution_context(%{instance_id: instance_id, prefix: schema_name, actor_id: actor_id})
+        )
+
+      script = """
+      local ok, err = platform.emit_event('nonexistent_event_type', nil, 'idem-req160-2')
+      return ok, err.reason
+      """
+
+      assert {[nil, "unknown_event_type"], _lua} = Lua.eval!(lua, script)
+    end
+
+    test "emit_event's one Repo call always uses execution_context.prefix, never a script-supplied argument (AC7)",
+         %{
+           schema_name: schema_name,
+           instance_id: instance_id,
+           actor_id: actor_id,
+           event_type: event_type
+         } do
+      source = File.read!("lib/letflow/engine/lua/platform.ex")
+
+      assert source =~ "EventStore.append(attrs, prefix: execution_context.prefix)"
+      refute source =~ "prefix: event_type"
+      refute source =~ "prefix: idempotency_key"
+
+      # Functional confirmation: the real, provisioned tenant schema (never a
+      # script-supplied value) is genuinely what gets used -- the call succeeds
+      # against it.
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(["event:emit"]),
+          execution_context(%{instance_id: instance_id, prefix: schema_name, actor_id: actor_id})
+        )
+
+      script = """
+      return platform.emit_event('#{event_type}', nil, 'idem-req160-3')
+      """
+
+      assert {[true], _lua} = Lua.eval!(lua, script)
+    end
+  end
+
+  describe "REQ-160: platform.emit_event -- missing execution context fields (AC5-adjacent)" do
+    test "nil actor_id (populated context otherwise) returns no_execution_context, no EventStore call attempted" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+      seed_projection!(schema_name, instance_id)
+
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(["event:emit"]),
+          execution_context(%{instance_id: instance_id, prefix: schema_name, actor_id: nil})
+        )
+
+      script = """
+      local ok, err = platform.emit_event('whatever', nil, 'idem-req160-4')
+      return ok, err.reason
+      """
+
+      assert {[nil, "no_execution_context"], _lua} = Lua.eval!(lua, script)
+    end
+
+    test "empty-context sentinel returns no_execution_context, unaffected by which args are passed" do
+      lua = Platform.install(Sandbox.new(), Capabilities.new(["event:emit"]), execution_context())
+
+      script = """
+      local ok, err = platform.emit_event('whatever', nil, 'idem-req160-5')
+      return ok, err.reason
+      """
+
+      assert {[nil, "no_execution_context"], _lua} = Lua.eval!(lua, script)
+    end
+
+    test "an invalid (non-string) idempotency_key argument returns invalid_arguments, not no_execution_context" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+      actor_id = Ecto.UUID.generate()
+      seed_projection!(schema_name, instance_id)
+
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(["event:emit"]),
+          execution_context(%{instance_id: instance_id, prefix: schema_name, actor_id: actor_id})
+        )
+
+      script = """
+      local ok, err = platform.emit_event('whatever', nil, 42)
+      return ok, err.reason
+      """
+
+      assert {[nil, "invalid_arguments"], _lua} = Lua.eval!(lua, script)
+    end
+  end
+
+  describe "REQ-160: emit_event -- capability denial is distinct from a granted call's failure (AC5)" do
+    test "a MISSING event:emit capability raises via the fold-level gate" do
+      lua = Platform.install(Sandbox.new(), Capabilities.new(), execution_context())
+
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.emit_event('evt', nil, 'idem')")
+        end
+
+      assert exception.original[:function] == :emit_event
+      assert exception.original[:capability_required] == "event:emit"
+    end
+  end
+
+  describe "REQ-160: matrix regression guard" do
+    test "the 3 edited rows carry their new stub tags; required capabilities unchanged" do
+      matrix = Platform.capability_matrix()
+
+      assert Enum.find(matrix, &(&1.name == :write_variable)) ==
+               %{name: :write_variable, required: "variable:write", stub: :write_variable}
+
+      assert Enum.find(matrix, &(&1.name == :call_service)) ==
+               %{name: :call_service, required: :call_service_arg0, stub: :call_service}
+
+      assert Enum.find(matrix, &(&1.name == :emit_event)) ==
+               %{name: :emit_event, required: "event:emit", stub: :emit_event}
     end
   end
 end

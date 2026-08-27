@@ -1,0 +1,63 @@
+{
+  "handoff_id": "step02a-WF02-REQ154-20260827",
+  "run_id": "WF02-REQ154-20260827",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ154-20260827/step-02a-elixir-dev.json",
+  "created_at": "2026-08-27T06:48:51Z",
+  "started_at": "2026-08-27T06:48:51Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-154"],
+    "issue_ids": ["ISS-0350"],
+    "requirement_text": {
+      "REQ-154": "Wire a CONFIGURABLE :max_instructions budget into REQ-153's executor path. Convert budget exhaustion into a structured error distinguishable from every other failure arm ({:error, {:budget_exceeded, limit :: pos_integer()}}). Test the hazard directly using REQ-148's spike answer (a). GATE: SECURITY-REVIEWER is a hard gate. NOT IN THIS REQUIREMENT: the out-of-band host kill (REQ-155), memory limiting (REQ-156)."
+    },
+    "iss_0350_in_scope": "Restore is_binary(script_source) guard and @impl on execute_with_manifest/2. ORCH-authorized companion fix.",
+    "spike_finding": "REQ-148 OQ-2(a): pcall catches budget exhaustion with [false, 'instruction budget exceeded']. The inner loop stops. Lua.eval!/2 returns normally. No continuation hazard. Full details in lib/letflow/design/req148-lua-runtime-spike.md Section 3.",
+    "artifacts_in": [
+      "lib/letflow/design/req154-lua-instruction-budget.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua/sandbox.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "docs/guides/backend_developer_guide.md",
+      "docs/anti-patterns.md",
+      "docs/issues/ISS-0350.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua/sandbox.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req154-lua-instruction-budget.md",
+      "test/specs/REQ-154.md"
+    ],
+    "branch_name": "feature/WF02-REQ154-20260827",
+    "acceptance_criteria": [
+      "the instruction budget is configurable (not a hardcoded literal) and a test drives two different configured budgets and asserts the smaller one halts a loop sooner, with real mix test output quoted",
+      "a test runs an unbounded `while true do end` loop under a configured budget and asserts the execution terminates rather than hanging",
+      "budget exhaustion surfaces as a structured error value distinguishable by pattern match from other failure arms, asserted by a test that matches on it specifically rather than on a catch-all {:error, _}",
+      "a test asserts what a script that pcalls its own budget exhaustion does, matching REQ-148's spike answer (a); the test asserts {:ok, %{manifest_hash: _}} (script completes normally, loop stops, no continuation hazard)",
+      "the moduledoc states that this requirement RESTATES LUA-08 as layer 1 of a two-layer pair, that :max_instructions is in-band and pcall-catchable so LUA-08's literal text is NOT met by this requirement alone, and that REQ-155 supplies the mandatory host-enforced layer 2",
+      "the moduledoc states that R-Co's INV-2 (registry-stored limiter) and INV-4 (one combined LUA_MASKCOUNT hook) do not port, and why",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "task": {
+    "description": "Implement REQ-154 per the design at lib/letflow/design/req154-lua-instruction-budget.md. Files to modify: (1) lib/letflow/engine/lua/executor.ex -- add execute_with_manifest/3 overload with :max_instructions opt, update execute_with_manifest/2 to read Application config via default_budget/0, restore is_binary guard and @impl (ISS-0350), update @spec to include {:error, {:budget_exceeded, pos_integer()}} arm, update moduledoc with LUA-08 layer-1 restatement and INV-2/INV-4 non-port explanation. (2) lib/letflow/engine/lua/sandbox.ex -- update Sandbox.new/1 to pass :max_instructions from opts to Lua.new/1. (3) config/config.exs or config/test.exs -- add config :letflow, lua_max_instructions: <N> with a reasonable value. (4) test/letflow/engine/lua/executor_test.exs -- add tests for all 4 new ACs (two-budget comparison, while-true termination, structured error pattern match, pcall-budget pcall-returns-ok). After implementation: run mix compile --warnings-as-errors and mix test (full suite), quote real output in result.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "mix test passes with all REQ-154 acceptance criteria verified (real output quoted)",
+      "execute_with_manifest/2 has @impl and when is_binary(script_source) guard",
+      "execute_with_manifest/3 has when is_binary(script_source) guard and no @impl",
+      "budget exhaustion returns {:error, {:budget_exceeded, limit}} not a bare error string",
+      "Sandbox.new/1 passes :max_instructions to Lua.new/1 when present in opts",
+      "moduledoc contains the LUA-08 layer-1 restatement and INV-2/INV-4 non-port text"
+    ]
+  },
+  "result": null
+}

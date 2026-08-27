@@ -2640,6 +2640,7 @@
             "status": "IN_PROGRESS",
             "owned_modules": [
                 "lib/letflow/engine/lua/executor.ex",
+                "lib/letflow/engine/lua/sandbox.ex",
                 "test/letflow/engine/lua/executor_test.exs",
                 "lib/letflow/design/req154-lua-instruction-budget.md",
                 "test/specs/REQ-154.md"
@@ -2647,7 +2648,7 @@
             "lock_acquired_at": "2026-08-27T06:32:50Z",
             "lock_released_at": null,
             "released_lock": false,
-            "last_known_step": "Step 00 COMPLETED PASS -- branch feature/WF02-REQ154-20260827 created at 9d09ec0e, pushed to origin",
+            "last_known_step": "Step 01b COMPLETED PASS -- design gate passed; dispatch Step 02a ELIXIR-DEV",
             "backfilled": false,
             "queue_task_id": 306,
             "queue_agent_id": "orch-main",

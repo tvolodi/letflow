@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ160-20260827/step-03b-test-design-validator-recheck.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -37,6 +37,21 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "verdict": "PASS. All 4 required fixes from the original FAIL (step-03b-test-design-validator.json) are genuinely present in commit 7cde58e, not a self-report shortcut. mix test and mix compile --warnings-as-errors independently re-run clean at 90 tests / 0 failures. lib/letflow/engine/lua/platform.ex is untouched by this rework. Spec sections 2, 3, 6, 12 no longer overstate coverage.",
+    "checks_performed": [
+      "Read step-03b-test-design-validator-recheck.json's 6 acceptance criteria, the original FAIL result (step-03b-test-design-validator.json), and TEST-DESIGNER's rework1 self-report (step-03-test-designer-rework1.json).",
+      "Read all 3 new kill-arm test bodies directly (platform_test.exs lines 1178-1291): the instruction-budget test uses real Sandbox.new(max_instructions: 500) inside a Task.async, confirms the write reached the task-process buffer, then asserts the (different) test process's take_staged_writes/0 == %{}. The wall-clock test uses Task.async + Task.yield(task, 150) == nil + Task.shutdown(task, :brutal_kill), asserting Process.alive?(task.pid) == false and the buffer is unobserved. The memory-limit test uses :erlang.spawn_opt/2 with [:monitor, max_heap_size: %{size: ..., kill: true, error_logger: false}], asserting a real :DOWN/:killed message.",
+      "Cross-checked those primitives against the real REQ-155/REQ-156 mechanisms in lib/letflow/engine/lua/executor.ex (lines 70-146, 232-427: Task.Supervisor.async_nolink + Task.yield + Task.shutdown(:brutal_kill) for REQ-155; :erlang.spawn_opt/2 + max_heap_size for REQ-156) -- confirmed the test file uses the same real BEAM primitives (plain Task.async instead of the supervised async_nolink is an acceptable simplification for a unit test; the kill mechanism itself -- Task.shutdown(:brutal_kill) / max_heap_size kill -- is identical, not a fake stand-in). Sandbox.new(max_instructions:) is the real REQ-154 mechanism (sandbox.ex lines 267-268 pass it straight into the underlying Lua VM options).",
+      "Read the VariableMerge.merge/3 atomicity test (lines 1293-1314): calls Letflow.Engine.VariableMerge.merge(%{}, staged, nil) directly, where merge/3 is grep-confirmed as the real function at lib/letflow/engine/variable_merge.ex:208, and staged is take_staged_writes/0's genuine return value from a real script run -- not a stub or hand-built map.",
+      "Read the call_service write-direction marshalling test (lines 1426-1455): SpyServiceCaller.call/2 (lines ~1033-1045) sends the payload it actually received to self(); the test asserts is_integer(payload[\"amount\"]) and is_float(payload[\"rate\"]) directly on that received payload -- not on a value round-tripped back through Lua.",
+      "Read test/specs/REQ-160.md sections 2, 3, 6, 12 in full: each now explicitly marks 'Implemented' with the exact new test name for the AC1 kill arms, AC2's atomicity test, and AC6's write-direction test; section 12 explicitly marks the broader two-tenant functional-isolation test as 'Descoped' with a stated reason (AC7's literal text is a source-level property already covered by the structural guard + single-tenant test, distinct from Postgres schema-per-tenant isolation which is out of this requirement's scope). No remaining unqualified 'tested'/'covered' claims found without a backing test name.",
+      "grep for '@tag :skip', '@moduletag :skip', ':skip', 'TODO' over platform_test.exs -- zero matches.",
+      "export PATH=\"$HOME/.asdf/shims:$PATH\"; mix compile --warnings-as-errors -> exit 0, no output (clean).",
+      "export PATH=\"$HOME/.asdf/shims:$PATH\"; mix test test/letflow/engine/lua/platform_test.exs -> 'Result: 90 passed', 0 failures.",
+      "git diff 179bc2f 7cde58e -- lib/letflow/engine/lua/platform.ex -> empty (confirmed platform.ex genuinely untouched by this rework).",
+      "Spot-checked mutation 1 (Map.put/3 -> Map.put_new/3 in stage_write/2, lib/letflow/engine/lua/platform.ex:643) by applying it myself: mix test -> 'Result: 89/90 passed, Failed: 1 test' (the existing last-write-wins test caught it, exactly as the spec's mutation table claims). Reverted via git checkout -- lib/letflow/engine/lua/platform.ex; confirmed git status --porcelain lib/ test/ empty and mix test -> 'Result: 90 passed' again, tree genuinely clean."
+    ],
+    "next_step": "Route to next WF-02 step (Step 4, TEST-RUNNER) per ORCHESTRATOR.md for REQ-160."
   }
 }

@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step01b-WF02-REQ161-20260827",
+  "run_id": "WF02-REQ161-20260827",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ161-20260827/step-01b-code-design-validator.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-161"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ161-20260827/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req161-lua-platform-fail.md",
+      "test/specs/REQ-161.md",
+      "lib/letflow/design/req148-lua-runtime-spike.md",
+      "lib/letflow/engine/lua/platform.ex"
+    ],
+    "branch_name": "feature/WF02-REQ161-20260827",
+    "commit": "8fc26b4"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) hard gate on REQ-161's design at lib/letflow/design/req161-lua-platform-fail.md. CODE-DESIGNER's central claim: platform.fail terminates via exit({:script_failed, %{reason:, details:}}) instead of raise, because REQ-148's spike answer (b) found host-raised errors ARE pcall-catchable, and deps/lua's pcall/xpcall implementations only rescue (never catch :exit). Independently re-verify this claim against the real vendored Lua library source -- do not trust the design doc's own account. Also verify the SCRIPT_FAILED-vs-SCRIPT_ERROR distinction, the honest gap disclosures (executor.ex's handle_yield_result/3 stringifying the exit reason today; no engine-side dispatch call site yet), and that platform.fail remains ungated (required: :none, unedited).",
+    "acceptance_criteria": [
+      "Independently read deps/lua/lib/lua/vm/stdlib.ex's lua_pcall/2 and lua_xpcall/2, and the native-function dispatch path (do_call_function/3 or equivalent), and confirm directly that they only `rescue` and never `catch :exit` -- do not take the design's citation at face value, read the real source lines yourself.",
+      "Confirm exit({:script_failed, %{reason:, details:}}) is not one of Elixir/OTP's reserved exit-reason rewrite atoms (:kill, :normal, :shutdown) that would be silently transformed or swallowed -- verify against real OTP semantics.",
+      "Confirm the structured payload genuinely survives to a real monitor via :DOWN delivery, unmodified -- not assumed.",
+      "Confirm SCRIPT_FAILED ({:script_failed, %{...}}) and any plausible future SCRIPT_ERROR shape (a normal Lua.eval!/2 return carrying a Lua.RuntimeException, per the design) are structurally non-collapsible -- one is a process-exit signal, the other a normal return value; verify this claim's logic holds.",
+      "Confirm the design's own disclosed gap (executor.ex's handle_yield_result/3 stringifies any exit reason today, so the SCRIPT_FAILED/SCRIPT_ERROR distinction is only provable at the raw task/monitor boundary, not through Executor) is accurately stated, not overstated or understated -- read handle_yield_result/3's real code.",
+      "Confirm platform.fail's capability_matrix row is unedited (required: :none) -- no capability gate was added.",
+      "All 7 real acceptance criteria in docs/requirements.yaml's REQ-161 entry mapped to concrete design elements in a traceability table.",
+      "Zero literal Elixir code anywhere in the design doc -- @spec/@type only."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

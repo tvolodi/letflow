@@ -1,0 +1,68 @@
+{
+  "handoff_id": "step01-WF02-REQ160-20260827",
+  "run_id": "WF02-REQ160-20260827",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ160-20260827/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-160"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-160": "Second of two sibling requirements splitting the platform.* surface; REQ-159 covers the read path. This one covers the functions with OUTBOUND EFFECT: their correctness condition is transactional, not per-call. LUA-11 write half (MUST): 'platform.write_variable(name, value) MUST stage a write; writes are applied atomically on script success and DISCARDED ON SCRIPT FAILURE.' Acceptance: 'Failed script does not leave partial variable writes in instance state.' A write_variable that applies immediately satisfies the function signature and violates the requirement. Staging must survive every failure arm S5 has built: sandbox violation, REQ-154's instruction budget, REQ-155's wall-clock kill, REQ-156's memory limit, and REQ-161's platform.fail. The kill arm is the sharp one -- a brutal kill of the execution process must not leave a half-applied write, which means the staging buffer cannot live only inside the killed process's own state UNLESS the apply step happens strictly after the process exits normally. LUA-12 (Service Call, MUST): 'platform.call_service(service_id, payload) MUST invoke a registered service synchronously. Response MUST be returned as Lua table. Service call failures MUST RETURN A STRUCTURED ERROR, NOT RAISE.' Acceptance: 'Calling a registered service round-trips through host.' Note the asymmetry with LUA-06: a MISSING CAPABILITY raises (LUA-06), a SERVICE FAILURE returns a structured error (LUA-12). Both behaviours must be tested and must differ. CAPABILITY GATES: write_variable requires variable:write; call_service requires service:call:<svc_id> (parameterised per service, per REQ-157); emit_event requires event:emit. NUMBER MARSHALLING: same constraint as REQ-159 -- use REQ-150's central conversion, cite its normative section, introduce no second rule. TENANT BOUNDARY: same as REQ-159 -- the tenant prefix comes from the calling engine code, never from script input. NOT IN THIS REQUIREMENT: platform.fail (REQ-161). GATE: SECURITY-REVIEWER is a hard gate. Queue task 312, GH#612. See docs/requirements.yaml REQ-160 for full description and acceptance_criteria."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ160-20260827/step-00-git-setup.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req159-lua-host-api-read.md",
+      "lib/letflow/design/req157-lua-capability-model.md",
+      "lib/letflow/design/req150-lua-number-marshalling.md",
+      "lib/letflow/design/req155-lua-wallclock-kill.md",
+      "lib/letflow/design/req156-lua-memory-limit-impl.md",
+      "lib/letflow/engine/lua/platform.ex",
+      "lib/letflow/engine/lua_number_marshalling.ex",
+      "lib/letflow/engine/variable_merge.ex",
+      "lib/letflow/engine/service_task.ex",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs",
+      "lib/letflow/design/req160-lua-host-api-write.md",
+      "test/specs/REQ-160.md"
+    ],
+    "branch_name": "feature/WF02-REQ160-20260827"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-160. Write lib/letflow/design/req160-lua-host-api-write.md. This is the architecturally hardest Lua requirement this session -- read lib/letflow/engine/lua/platform.ex in full (REQ-159's now-merged state, including the execution_context/install/3 mechanism and the 3 real stub replacements) and lib/letflow/design/req155-lua-wallclock-kill.md + req156-lua-memory-limit-impl.md in full (the two kill mechanisms this design must survive) before starting. THE CENTRAL ARCHITECTURAL QUESTION: where does a staged write live such that it is (a) applied atomically on script success, (b) discarded on every failure arm including a brutal external kill of the executing process? Investigate and verify (don't just assert) this hypothesis: since REQ-155/156's kill mechanisms terminate the SCRIPT-EXECUTING PROCESS itself (via Process.exit(:kill) or the BEAM's own max_heap_size enforcement) and the caller only learns the outcome via the process's normal return value OR a :DOWN monitor message, a staging buffer that lives ENTIRELY inside the script-executing process's own memory (e.g., accumulated via Process.put/get, or a value threaded through the Lua VM's own state and returned as part of the final result) is automatically discarded by any kill -- because the process's memory, including that buffer, ceases to exist along with it. On SUCCESS, the buffer only needs to reach the caller via the SAME normal-return path Executor already uses (the process's return value), which then gets merged into instance state via a single Letflow.Engine.VariableMerge.merge/3 call (read lib/letflow/engine/variable_merge.ex to confirm its exact signature and atomicity properties -- does a single merge/3 call already guarantee no partial-application-observable state, or does something else need to guarantee that?). This means 'survives a kill' may not require anything special at all -- it requires the OPPOSITE: making sure nothing escapes the process except through its normal, single, atomic return value. Verify this reasoning is sound by reading the actual REQ-155/156 kill code paths, and design accordingly -- or, if you find a flaw in this reasoning, design the correct alternative and explain why the above doesn't work. SEPARATELY, for call_service: search this codebase for any existing 'registered service' or service-invocation abstraction (grep for ServiceRegistry, register_service, service dispatch outside of ServiceTask's HTTP-service-task BPMN concept, which is a different thing -- a BPMN node config, not a Lua-callable service registry). If none exists (likely, confirmed no hits during ORCH's own pre-dispatch search), this design must specify a minimal INJECTED behaviour, mirroring LuaScriptAudit's Executor-behaviour pattern (an injected module implementing a callback, not a real dispatch mechanism built here) -- state this as an explicit, honest scope decision, not silently assume infrastructure that doesn't exist. Also specify: emit_event's real behavior (what does 'emit an event observable by the host' mean concretely in this codebase -- is there an existing event-emission mechanism to hook into, e.g. Letflow.EventStore? search and cite it, or flag as an open question). Design must also specify: write_variable's staging data structure and how multiple writes in one script accumulate before the single atomic merge; call_service's structured-error-vs-raise distinction (LUA-12 vs LUA-06) implemented as genuinely different code paths; the number-marshalling citation (REQ-150, from_lua/1 for the write direction this time, not to_lua/1); the tenant-prefix-never-from-script discipline (same as REQ-159). Also write test/specs/REQ-160.md (test spec skeleton, no test code). No implementation code (.ex function bodies) -- signatures, @specs, and type shapes only, describing control flow in prose/tables, never as a literal Elixir expression, however small (this rule has cost rework on most Lua-hardening designs this session -- grep your own draft before submitting).",
+    "acceptance_criteria": [
+      "Design specifies where staged writes live and rigorously justifies (not merely asserts) that this location makes writes automatically discarded on every failure arm including a brutal process kill, and applied atomically on success via a single VariableMerge.merge/3-style call -- verified against the actual REQ-155/156 kill mechanisms' real code, not assumed",
+      "Design specifies call_service's structured-error-vs-missing-capability-raise distinction as genuinely different code paths (LUA-12 returns, LUA-06 raises)",
+      "Design honestly assesses whether a 'registered service' abstraction exists in this codebase; if not, specifies a minimal injected-behaviour design (mirroring LuaScriptAudit's Executor pattern) rather than assuming infrastructure that doesn't exist",
+      "Design honestly assesses whether an event-emission mechanism exists for emit_event to hook into; cites it if found, flags as an open question if not",
+      "Design cites REQ-150's number-marshalling rule by section number for the write direction (from_lua/1), introduces no second rule",
+      "Design states the tenant-prefix-never-from-script discipline consistently with REQ-159's precedent",
+      "Design covers all 8 acceptance criteria listed in docs/requirements.yaml's REQ-160 entry (read it directly), mapped one-to-one to concrete design elements",
+      "No implementation code (.ex function bodies) -- signatures, @specs, and type shapes only; describe control flow in prose/tables, never as a literal Elixir expression, however small -- grep your own draft for fn /raise /case /cond /do:/-> before submitting",
+      "Open questions listed explicitly if any exist, not silently resolved"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "lib/letflow/design/req160-lua-host-api-write.md",
+      "test/specs/REQ-160.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "summary": "Designed REQ-160's write-path host functions (write_variable, call_service, emit_event) extending REQ-159's execution_context/install/3 mechanism on lib/letflow/engine/lua/platform.ex. Central architectural finding: read REQ-155 (Task.shutdown(:brutal_kill)) and REQ-156 (BEAM max_heap_size kill, both the nil-limit Task.Supervisor path and the configured-limit direct spawn_opt path) directly and confirmed both kill mechanisms terminate the exact one process running the entire script body, observable by the caller only via that process's own normal return or a payload-less :DOWN message -- no third channel exists. This verifies the hypothesis: a staged-writes buffer living entirely in that process's own memory (chosen mechanism: the process dictionary, keyed under Platform, read/cleared once by a new public take_staged_writes/0) is automatically discarded on every kill/raise arm with zero extra mechanism, and only needs to reach a caller through the same normal-return channel on success. Read variable_merge.ex directly and confirmed merge/3 is a pure, single-invocation, non-yielding function -- its own atomicity is confirmed, not assumed. Flagged as an explicit, deferred open question (OQ-1, mirroring REQ-159's own OQ-1) that executor.ex is out of this requirement's owned_modules, so the actual wiring of take_staged_writes/0's result into Executor's return shape and a real VariableMerge.merge/3 + persistence call site is not built here. For call_service: grepped the codebase, confirmed no registered-service abstraction exists (ServiceTask is a different, BPMN-node HTTP-dispatch concept) and designed a minimal injected ServiceCaller behaviour resolved the same way Platform's existing TimeSource is (Application env, read fresh per call), mirroring LuaScriptAudit's Executor pattern -- stated as an honest scope decision, no real implementation shipped. Specified the LUA-12-vs-LUA-06 raise/return split as structurally different code paths: the capability-gate raise happens in install/3's fold, one step before run_stub/5 is ever invoked for a given call; every code path inside call_service's own run_stub/5 clause returns a value and never raises. For emit_event: grepped for EventStore, found and cited Letflow.EventStore.append/2 (a real, already-shipped, tenant-scoped mechanism) as the event-emission hook, added one new execution_context field (actor_id, host-authored only) to support it, and specified its own capability-gate-vs-append-failure split with the identical raise/return discipline as call_service. Cited REQ-150 SS2.1 (from_lua/1, write direction) and SS2.2 (to_lua/1, read direction for call_service's response) by section number throughout, introducing no second marshalling rule. Stated the tenant-prefix-never-from-script discipline per-function against decision 0014(e), consistent with REQ-159's precedent. Traceability table maps all 8 of REQ-160's real acceptance criteria (read from docs/requirements.yaml directly) to concrete design elements. Five open questions listed explicitly (OQ-1 through OQ-5), none silently resolved. Wrote test/specs/REQ-160.md as a 14-item prose test spec skeleton plus two open items for TEST-DESIGNER, no test code. Grepped both files for 'fn ', 'raise ', 'case ', 'cond ', 'do:', '->' before submitting -- all matches are ordinary prose, no literal Elixir code in either file."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

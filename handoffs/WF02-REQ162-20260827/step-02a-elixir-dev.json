@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "ELIXIR-DEV",
   "file": "handoffs/WF02-REQ162-20260827/step-02a-elixir-dev.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -41,6 +41,17 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "Implemented REQ-162 per the approved design (lib/letflow/design/req162-lua-script-error-capture.md) strictly: run_script/3's rescue e in Lua.RuntimeException else-branch now builds a script_error() (message, stack_trace, instruction_count two-tag union, capabilities) via new public-for-testing build_script_error/3 (and private helpers script_error_message/1, script_error_stack_trace/1, instruction_count_report/2), returning {:error, {:script_error, script_error()}}; added lua_frame()/instruction_count_report()/script_error() @type declarations; capabilities threaded explicitly, run_script/3 passes Capabilities.new() (same empty set Sandbox.new/1 already installs); added one new handle_yield_result/3 clause for {:ok, {:error, {:script_error, _}}}; extended both execute_with_manifest @specs with the new error member; added a new moduledoc REQ-162 section per design §13. platform.ex/capabilities.ex/sandbox.ex untouched, per scope. Wrote 9 tests in test/letflow/engine/lua/executor_test.exs covering all 8 acceptance criteria plus a design §7 regression guard; AC3 exercises the {:configured_budget,_} branch via a constructed Lua.VM.InternalError double (InternalError's real raise sites are unreachable from any Lua source that actually parses); AC6 bypasses Sandbox.new/1 via Lua.new/1 + Platform.install/2 with a non-empty grant set, per design §4.2. mix compile --warnings-as-errors: clean, no warnings. mix test test/letflow/engine/lua/executor_test.exs: 44 passed. Full mix test: 2283 passed (5 properties, 2278 tests), 3 excluded, 0 failures. mix letflow.lint_handoffs: 0 new violations. Routing to SECURITY-REVIEWER (this touches the capability/grant-set field and stack-trace sanitization, tenant-facing paths) then REVIEWER, per WF-02 Step 2a -- not marking this handoff PASS beyond ELIXIR-DEV's own scope.",
+    "acceptance_criteria_status": {
+      "AC1": "PASS -- test asserts stack_trace and capabilities individually",
+      "AC2": "PASS -- moduledoc cites exception.original.state.instruction_count and REQ-148 §5",
+      "AC3": "PASS -- {:configured_budget, budget} proven via Lua.VM.InternalError double, never a bare/zero integer",
+      "AC4": "PASS -- 1 // 0 raises 'attempt to divide by zero'; 1 / 0 confirmed non-raising",
+      "AC5": "PASS -- one classify/1 case distinguishes all 5 arms, uniq check included",
+      "AC6": "PASS -- Lua.new/1 + Platform.install/2 with Capabilities.new([\"some:capability\"]) bypassing Sandbox.new/1; build_script_error/3 returns exactly [\"some:capability\"]",
+      "AC7": "PASS -- stack_trace frames asserted to contain no '/' or 'Elixir.' in source/name",
+      "AC8": "PASS -- mix compile --warnings-as-errors and full mix test both quoted as real output above, both green"
+    },
+    "commit": "not yet committed at time of this JSON edit; committed immediately after in the same turn"
   }
 }

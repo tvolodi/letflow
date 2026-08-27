@@ -10,8 +10,11 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
 
   use ExUnit.Case, async: true
 
+  alias Letflow.Engine.Lua.Capabilities
   alias Letflow.Engine.Lua.Executor
   alias Letflow.Engine.Lua.Manifest
+  alias Letflow.Engine.Lua.Platform
+  alias Letflow.Engine.Lua.Sandbox
   alias Letflow.Engine.LuaScriptAudit
 
   # ---------------------------------------------------------------------------------
@@ -795,6 +798,222 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
                  timeout_ms: 250,
                  max_heap_words: generous_heap_words
                )
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-162 -- uncaught Lua runtime errors captured as structured SCRIPT_ERROR
+  # (LUA-16 restated). Covers all 8 acceptance criteria.
+  # ---------------------------------------------------------------------------------
+
+  describe "SCRIPT_ERROR capture (REQ-162)" do
+    # AC1: a structured SCRIPT_ERROR carries a stack trace and capability state at
+    # failure -- asserted individually.
+    test "AC1: an uncaught runtime error produces SCRIPT_ERROR with a stack trace and capability state, asserted individually" do
+      assert {:error, {:script_error, script_error}} =
+               Executor.execute_with_manifest("return 1 // 0", "h",
+                 max_instructions: 1_000_000,
+                 timeout_ms: 5_000,
+                 max_heap_words: nil
+               )
+
+      # Stack trace, asserted individually
+      assert is_list(script_error.stack_trace)
+
+      # Capability state at failure, asserted individually -- the real
+      # execute_with_manifest/2,3 path always installs the empty grant set today
+      # (design §4.1, OQ-1: an inherited, pre-existing gap this requirement does not
+      # close), so `[]` is the correct value to assert here, not `nil`/omitted.
+      assert script_error.capabilities == []
+    end
+
+    # AC2: moduledoc names the exact mechanism and cites REQ-148 by section.
+    test "AC2: moduledoc names the instruction-count mechanism and cites REQ-148 by section" do
+      {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} = Code.fetch_docs(Executor)
+
+      assert moduledoc =~ "exception.original.state.instruction_count"
+      assert moduledoc =~ "REQ-148"
+      assert moduledoc =~ "§5"
+    end
+
+    # AC3: when the count is not retrievable, the event does NOT carry a zero-filled
+    # or silently-omitted-but-implied-present instruction_count -- it is explicitly
+    # budget-labelled instead. Lua.VM.InternalError declares no :state field at all
+    # (confirmed by reading deps/lua/lib/lua/vm/internal_error.ex), and its only real
+    # raise sites ("goto target not found", "unimplemented instruction", "break
+    # outside loop") are unreachable from any Lua source that actually parses -- so
+    # this test constructs the exception double directly, per design §4.2's own
+    # "shaping-function level" testing precedent, and calls the public
+    # (`@doc false`) `Executor.build_script_error/3` seam.
+    test "AC3: instruction_count reports {:configured_budget, _} (never zero-filled) when the count is unretrievable" do
+      exception = %Lua.RuntimeException{original: %Lua.VM.InternalError{value: "boom"}}
+
+      script_error = Executor.build_script_error(exception, 4242, Capabilities.new())
+
+      assert script_error.instruction_count == {:configured_budget, 4242}
+      refute match?({:consumed, _}, script_error.instruction_count)
+      refute is_integer(script_error.instruction_count)
+    end
+
+    # AC4: 1//0 (integer floor division) raises "attempt to divide by zero" in this
+    # Lua 5.3 runtime; 1/0 (float division) does not raise at all -- it evaluates to
+    # inf, per Lua 5.3 §3.4.1 (design §8, moduledoc REQ-162 section).
+    test "AC4: 1 // 0 raises 'attempt to divide by zero'; 1 / 0 does not raise" do
+      assert {:error, {:script_error, script_error}} =
+               Executor.execute_with_manifest("return 1 // 0", "h",
+                 max_instructions: 1_000_000,
+                 timeout_ms: 5_000,
+                 max_heap_words: nil
+               )
+
+      assert script_error.message =~ "attempt to divide by zero"
+
+      assert {:ok, %{manifest_hash: _}} =
+               Executor.execute_with_manifest("return 1 / 0", "h",
+                 max_instructions: 1_000_000,
+                 timeout_ms: 5_000,
+                 max_heap_words: nil
+               )
+    end
+
+    # AC5: SCRIPT_ERROR is pattern-match-distinguishable from all 4 other real arms
+    # (SCRIPT_FAILED, budget_exceeded, wallclock_timeout, memory_limit_exceeded) in
+    # one case/cond. SCRIPT_FAILED is never observed through
+    # execute_with_manifest/2,3 (design §9/platform.ex moduledoc: it collapses into
+    # an opaque string there) -- it is represented here as the raw exit-reason shape
+    # req161-lua-platform-fail.md establishes, since that raw shape is what a real
+    # caller (a Task.yield/2 `{:exit, reason}` clause, or a :DOWN message) actually
+    # observes.
+    test "AC5: SCRIPT_ERROR is pattern-match-distinguishable from all 4 other real arms" do
+      script_error_result =
+        Executor.execute_with_manifest("return 1 // 0", "h",
+          max_instructions: 1_000_000,
+          timeout_ms: 5_000,
+          max_heap_words: nil
+        )
+
+      budget_result =
+        Executor.execute_with_manifest("while true do end", "h",
+          max_instructions: 500,
+          timeout_ms: 5_000,
+          max_heap_words: nil
+        )
+
+      timeout_result =
+        Executor.execute_with_manifest("while true do end", "h",
+          max_instructions: 1_000_000_000,
+          timeout_ms: 200,
+          max_heap_words: nil
+        )
+
+      memory_result =
+        Executor.execute_with_manifest(@gigabyte_allocating_script, "h",
+          max_instructions: 1_000_000_000,
+          timeout_ms: 5_000,
+          max_heap_words: @sixteen_mb_in_words
+        )
+
+      script_failed_result = {:exit, {:script_failed, %{reason: "deliberate", details: nil}}}
+
+      classify = fn
+        {:error, {:script_error, _}} -> :script_error
+        {:error, {:budget_exceeded, _}} -> :budget_exceeded
+        {:error, {:wallclock_timeout, _}} -> :wallclock_timeout
+        {:error, :memory_limit_exceeded} -> :memory_limit_exceeded
+        {:exit, {:script_failed, _}} -> :script_failed
+        other -> other
+      end
+
+      classified =
+        Enum.map(
+          [
+            script_error_result,
+            budget_result,
+            timeout_result,
+            memory_result,
+            script_failed_result
+          ],
+          classify
+        )
+
+      assert classified == [
+               :script_error,
+               :budget_exceeded,
+               :wallclock_timeout,
+               :memory_limit_exceeded,
+               :script_failed
+             ]
+
+      assert Enum.uniq(classified) == classified
+    end
+
+    # AC6: capability state is read from Capabilities.grant_set(), not re-derived.
+    # execute_with_manifest/2,3's real sandbox is hardwired to the empty grant set
+    # (Sandbox.new/1 -> Platform.install/1, design §4.1) so this cannot be proven end
+    # to end today -- per design §4.2, this test constructs a Lua.t() directly via
+    # Lua.new/1 + Platform.install/2 with an explicit non-empty grant set, bypassing
+    # Sandbox.new/1's hardcoded empty-set call, and asserts the shaping function
+    # produces exactly that one capability.
+    test "AC6: capabilities are read from Capabilities.grant_set(), not re-derived" do
+      grant_set = Capabilities.new(["some:capability"])
+
+      deny_paths = Enum.map(Sandbox.deny_set(), fn {path, _reason} -> path end)
+
+      lua =
+        Lua.new(sandboxed: deny_paths)
+        |> Platform.install(grant_set)
+
+      exception =
+        try do
+          Lua.eval!(lua, "return 1 // 0")
+          flunk("expected Lua.RuntimeException to be raised")
+        rescue
+          e in Lua.RuntimeException -> e
+        end
+
+      script_error = Executor.build_script_error(exception, 1_000, grant_set)
+
+      assert script_error.capabilities == ["some:capability"]
+    end
+
+    # AC7: no stack trace frame's source/name fields contain a '/' path separator or
+    # an 'Elixir.' prefix -- structurally guaranteed (design §6.1/§6.3) but asserted
+    # anyway so a future library change that starts populating `source` from a real
+    # file path is caught by a failing test.
+    test "AC7: stack trace frames contain no '/' path separator or 'Elixir.' prefix" do
+      assert {:error, {:script_error, script_error}} =
+               Executor.execute_with_manifest(
+                 "local function f() return 1 // 0 end return f()",
+                 "h",
+                 max_instructions: 1_000_000,
+                 timeout_ms: 5_000,
+                 max_heap_words: nil
+               )
+
+      for frame <- script_error.stack_trace do
+        if frame.source, do: refute(frame.source =~ "/")
+        if frame.source, do: refute(frame.source =~ "Elixir.")
+        if frame.name, do: refute(frame.name =~ "/")
+        if frame.name, do: refute(frame.name =~ "Elixir.")
+      end
+    end
+
+    # design §7 regression guard, mirroring REQ-148 §5's own warning: a real,
+    # uncaught VM-opcode error's .original.state must be a populated %Lua.VM.State{}
+    # carrying a non-negative :instruction_count. If a future tv-labs/lua upgrade
+    # removes or renames either field, this test fails loudly instead of the
+    # SCRIPT_ERROR silently reporting {:configured_budget, _} forever with no signal.
+    test "regression guard (design §7): a real uncaught VM opcode error carries a non-negative consumed instruction_count" do
+      assert {:error, {:script_error, script_error}} =
+               Executor.execute_with_manifest("return 1 // 0", "h",
+                 max_instructions: 1_000_000,
+                 timeout_ms: 5_000,
+                 max_heap_words: nil
+               )
+
+      assert {:consumed, count} = script_error.instruction_count
+      assert is_integer(count)
+      assert count >= 0
     end
   end
 end

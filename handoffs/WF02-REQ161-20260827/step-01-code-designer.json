@@ -6,11 +6,13 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF02-REQ161-20260827/step-01-code-designer.json",
-  "status": "IN_PROGRESS",
+  "status": "DONE",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
-    "requirement_ids": ["REQ-161"],
+    "requirement_ids": [
+      "REQ-161"
+    ],
     "issue_ids": [],
     "artifacts_in": [
       "docs/requirements.yaml",
@@ -39,6 +41,12 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "DONE",
+    "summary": "Designed platform.fail termination via exit({:script_failed, %{reason:, details:}}) from inside the native function, verified against deps/lua source (do_call_function/3, lua_pcall/2, lua_xpcall/2 all rescue-only, no catch :exit clause anywhere on the call chain) to be uninterceptable by pcall/xpcall. Structured payload rides the exit reason itself, delivered verbatim to a monitor via standard OTP :DOWN semantics. SCRIPT_FAILED ({:script_failed, %{reason:, details:}}) is structurally reserved and distinguished from a future SCRIPT_ERROR shape by tag. Documented honestly that executor.ex's handle_yield_result/3 currently stringifies this exit reason via format_exit_reason/1, so the pattern-match distinction is only provable at the raw task/monitor boundary today, not through Executor.execute_with_manifest/2,3. Documented that no engine-side call site exists yet for SCRIPT_FAILED event recording + error-policy transition (plugin_interface.ex and lua_script_audit.ex both cited). fail row left ungated (required: :none), unedited.",
+    "artifacts_out": [
+      "lib/letflow/design/req161-lua-platform-fail.md",
+      "test/specs/REQ-161.md"
+    ],
+    "zero_literal_elixir_code": true
   }
 }

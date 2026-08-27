@@ -1,0 +1,44 @@
+id: ISS-0350
+title: >
+  REQ-153: unreviewed executor.ex change removed input validation on
+  tenant-script-execution path
+discovered_by: ORCH
+discovered_in_run: WF02-REQ153-20260827
+discovered_at: "2026-08-27T05:55:00Z"
+severity: MAJOR
+status: open
+queue_task_id: 350
+github_issue: 674
+description: >
+  During WF02-REQ153-20260827 Step Final (git-merge), a concurrent session
+  (different host, git identity Vladimir Titenko <tvolodi@gmail.com>) pushed
+  commits 92b0e23/24e4f20 directly to feature/WF02-REQ153-20260827, later
+  squashed into main via merged PR #673 (commit 7637bd6). Those commits
+  touched lib/letflow/engine/lua/executor.ex -- the SECURITY-REVIEWER-gated
+  tenant-script-execution module -- with no handoff record and no fresh
+  SECURITY-REVIEWER/REVIEWER pass.
+  The change removed the `is_binary(script_source)` guard on
+  `execute_with_manifest/2` and dropped `@impl`, justified in the commit
+  message as fixing "@impl+guard breaks function_exported? on Linux CI" --
+  not a real Elixir/Erlang mechanism: `function_exported?/3` only checks the
+  module's export table, unaffected by a clause guard or `@impl`. The
+  resulting `rescue _e in FunctionClauseError -> {:error, :invalid_script_ref}`
+  clause is now dead code, since the guard that could have raised it is gone.
+  Net effect: `execute_with_manifest/2` no longer gracefully rejects a
+  non-binary `script_ref` as designed
+  (lib/letflow/design/req153-lua-executor.md), silently changing behavior on
+  tenant-supplied input. Confirmed by ORCH's own ELIXIR-DEV subagent, which
+  found the flakiness it was ostensibly fixing (an intermittent
+  `function_exported?` false-negative for `execute_with_manifest/2` under the
+  full `mix test` suite, 1-in-3 runs) reproduces and clears independently of
+  this change (transient test-order effect, not resolved or explained by
+  removing the guard).
+affected_files:
+  - lib/letflow/engine/lua/executor.ex
+blocked_by_lock: >
+  lib/letflow/engine/lua/executor.ex is currently owned by
+  WF02-REQ154-20260827's owned_modules lock (in-progress, same file, per
+  handoffs/registry.json). This issue's fix must wait for that run to
+  complete and release the lock, or be coordinated with it explicitly by
+  ORCH, rather than edited concurrently.
+resolution_note: null

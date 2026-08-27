@@ -1022,6 +1022,28 @@ defmodule Letflow.Engine.Lua.PlatformTest do
     def call(_service_id, _payload), do: {:error, :unknown_service}
   end
 
+  # Mutation-testing finding (TEST-DESIGNER, REQ-160 Step 3): reordering `install/3`'s
+  # fold wrapper so `run_stub/5` executes BEFORE `Capabilities.check!/3` (instead of
+  # after), while leaving `check!/3`'s own raise in place afterward, left every
+  # pre-existing test in this file passing (82/82) -- every capability-denial test here
+  # only asserts that SOME `Lua.RuntimeException` was eventually raised, never that the
+  # stub body was never entered. A spy `ServiceCaller` that records whether it was ever
+  # invoked closes this gap for `call_service` specifically (design §4.3's own "a denied
+  # call never reaches this function's body" claim).
+  defmodule SpyServiceCaller do
+    @moduledoc false
+    @behaviour Platform.ServiceCaller
+
+    @impl Platform.ServiceCaller
+    def call(service_id, payload) do
+      # `call_service` runs synchronously inline in the calling (test) process --
+      # `Lua.eval!/2` does not spawn a separate process -- so `self()` here IS the test
+      # process that will assert on this mailbox.
+      send(self(), {:spy_service_caller_called, service_id, payload})
+      {:ok, %{}}
+    end
+  end
+
   defp put_service_caller!(module) do
     previous = Application.get_env(:letflow, :lua_platform_service_caller)
     Application.put_env(:letflow, :lua_platform_service_caller, module)
@@ -1348,6 +1370,24 @@ defmodule Letflow.Engine.Lua.PlatformTest do
 
       assert :counters.get(counter, 1) == 0
     end
+
+    # Mutation-testing finding (TEST-DESIGNER, REQ-160 Step 3): reordering `install/3`'s
+    # fold wrapper to run `run_stub/5` BEFORE `Capabilities.check!/3` (rather than
+    # after) leaves every pre-existing capability-denial test in this file passing,
+    # because `check!/3`'s raise still eventually happens -- it just happens too late,
+    # after the stub body already ran. `SpyServiceCaller` proves the body was never
+    # entered at all for a denied call, closing that gap directly (design §4.3).
+    test "a MISSING capability means the ServiceCaller spy is never invoked at all" do
+      put_service_caller!(SpyServiceCaller)
+
+      lua = Platform.install(Sandbox.new(), Capabilities.new(), execution_context())
+
+      assert_raise Lua.RuntimeException, fn ->
+        Lua.eval!(lua, "return platform.call_service('billing', {amount = 1})")
+      end
+
+      refute_received {:spy_service_caller_called, _service_id, _payload}
+    end
   end
 
   # ---------------------------------------------------------------------------------
@@ -1514,6 +1554,49 @@ defmodule Letflow.Engine.Lua.PlatformTest do
       assert exception.original[:function] == :emit_event
       assert exception.original[:capability_required] == "event:emit"
     end
+
+    # Mutation-testing finding (TEST-DESIGNER, REQ-160 Step 3), mirrors the equivalent
+    # `call_service` spy test above: a fully populated `execution_context` (prefix,
+    # instance_id, actor_id all set, a real registered event type) is used here
+    # specifically so that IF `run_stub/5` were reordered ahead of `Capabilities.check!/3`,
+    # `do_emit_event/3` would actually reach `EventStore.append/2` (a real `Repo` call) --
+    # an empty execution context would not distinguish the two orderings, since
+    # `do_emit_event/3`'s own "no_execution_context" short-circuit would make it look
+    # like the body was never entered either way. The telemetry counter proves zero
+    # `Repo` queries fire for a denied call with a context that WOULD otherwise reach
+    # `Repo`.
+    test "a MISSING capability means EventStore.append/2 is never reached (Repo-query spy)" do
+      %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
+      event_type = register_event_type!(tenant_id)
+      instance_id = Ecto.UUID.generate()
+      actor_id = Ecto.UUID.generate()
+      seed_projection!(schema_name, instance_id)
+
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(),
+          execution_context(%{instance_id: instance_id, prefix: schema_name, actor_id: actor_id})
+        )
+
+      handler_id = {__MODULE__, :emit_event_denial_query_counter, make_ref()}
+      counter = :counters.new(1, [])
+
+      :telemetry.attach(
+        handler_id,
+        [:letflow, :repo, :query],
+        fn _event, _measurements, _metadata, _config -> :counters.add(counter, 1, 1) end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      assert_raise Lua.RuntimeException, fn ->
+        Lua.eval!(lua, "return platform.emit_event('#{event_type}', nil, 'idem-spy-1')")
+      end
+
+      assert :counters.get(counter, 1) == 0
+    end
   end
 
   describe "REQ-160: matrix regression guard" do
@@ -1528,6 +1611,60 @@ defmodule Letflow.Engine.Lua.PlatformTest do
 
       assert Enum.find(matrix, &(&1.name == :emit_event)) ==
                %{name: :emit_event, required: "event:emit", stub: :emit_event}
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # Structural guard: LuaNumberMarshalling call sites (AC6) genuinely present.
+  # ---------------------------------------------------------------------------------
+
+  # Mutation-testing finding (TEST-DESIGNER, REQ-160 Step 3):
+  # `LuaNumberMarshalling.from_lua/1` and `.to_lua/1` are BOTH literal identity
+  # functions (`def from_lua(value), do: value` / `def to_lua(value), do: value`,
+  # `lib/letflow/engine/lua_number_marshalling.ex`, REQ-150 §2.1/§2.2's own normative
+  # rule). Because of that, deleting a call to either one from any REQ-160 call site
+  # (`do_write_variable/2`, `do_call_service/3`, `normalize_from_lua/1`,
+  # `convert_map_to_lua/1`) produces IDENTICAL runtime behavior for every input,
+  # including a whole-number float -- confirmed directly: removing
+  # `LuaNumberMarshalling.from_lua/1` from `do_write_variable/2`'s call site left every
+  # one of this file's 84 tests passing (84/84), even the float-specific round-trip
+  # test. No behavioral test, of any input shape, can ever catch this mutation --
+  # REQ-150's own identity rule makes it structurally undetectable at the value level.
+  # The only test that CAN catch "a call site quietly stopped routing through the
+  # named module/function" (REQ-150 §3's actual requirement -- not "the value must
+  # come out unchanged," but "every numeric-touching call site must use this one named
+  # conversion, not invent its own") is a structural/source-level one, mirroring this
+  # file's own established convention for the Repo-prefix and single-Lua.set!
+  # invariants above.
+  describe "REQ-160: structural guard -- LuaNumberMarshalling call sites are genuinely present" do
+    test "every REQ-160 numeric-crossing call site routes through LuaNumberMarshalling.from_lua/1 or .to_lua/1 by name" do
+      source = File.read!("lib/letflow/engine/lua/platform.ex")
+
+      # write_variable (write direction)
+      assert source =~ "stage_write(name, LuaNumberMarshalling.from_lua(value))"
+
+      # call_service / emit_event payload decoding (write direction, one level deep)
+      assert source =~
+               "Map.new(value, fn {key, v} -> {key, LuaNumberMarshalling.from_lua(v)} end)"
+
+      assert source =~ "defp normalize_from_lua(value), do: LuaNumberMarshalling.from_lua(value)"
+
+      # call_service response encoding (read direction, one level deep)
+      assert source =~
+               "Map.new(map, fn {key, value} -> {key, LuaNumberMarshalling.to_lua(value)} end)"
+
+      assert source =~ "defp convert_map_to_lua(other), do: LuaNumberMarshalling.to_lua(other)"
+
+      # Total occurrence count is a floor, not just individual substrings -- guards
+      # against a future edit that keeps these exact strings elsewhere (e.g. in a
+      # comment) while deleting the real call.
+      from_lua_call_sites =
+        ~r/LuaNumberMarshalling\.from_lua\(/ |> Regex.scan(source) |> length()
+
+      to_lua_call_sites = ~r/LuaNumberMarshalling\.to_lua\(/ |> Regex.scan(source) |> length()
+
+      assert from_lua_call_sites >= 3
+      assert to_lua_call_sites >= 3
     end
   end
 end

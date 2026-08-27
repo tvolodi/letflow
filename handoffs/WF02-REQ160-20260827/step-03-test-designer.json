@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "TEST-DESIGNER",
   "file": "handoffs/WF02-REQ160-20260827/step-03-test-designer.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -40,6 +40,78 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "COMPLETED",
+    "summary": "Ran 7 deliberate mutations against lib/letflow/engine/lua/platform.ex, one per acceptance criterion (AC7's zero-Repo-calls got its own dedicated mutation on top of the 6 named ones). Each mutation was applied, mix test test/letflow/engine/lua/platform_test.exs was run and its result recorded, then the mutation was reverted (platform.ex is byte-identical to the pre-existing committed version: `git diff --stat lib/letflow/engine/lua/platform.ex` is empty). Baseline before any TEST-DESIGNER addition: 82 tests passing. Final state: 85 tests passing, all against the real (unmutated) implementation. Full detail, including the exact mutated line and exact pass/fail counts for every mutation, is in test/specs/REQ-160.md's 'Mutation-testing findings' section.",
+    "mutations": [
+      {
+        "id": 1,
+        "target": "write_variable last-write-wins",
+        "mutation": "stage_write/2: Map.put/3 -> Map.put_new/3",
+        "existing_suite_caught_it": true,
+        "result": "81/82 passed, 1 failure (existing 'last-write-wins' test)",
+        "action": "none needed"
+      },
+      {
+        "id": 2,
+        "target": "take_staged_writes/0 clear-after-read",
+        "mutation": "removed the Process.delete/1 call",
+        "existing_suite_caught_it": true,
+        "result": "81/82 passed, 1 failure (existing 'clears the buffer -- a second call observes an empty map' test)",
+        "action": "none needed"
+      },
+      {
+        "id": 3,
+        "target": "call_service never-raises",
+        "mutation": "{:error, reason} arm: encode_error(...) -> raise \"...\"",
+        "existing_suite_caught_it": true,
+        "result": "78/82 passed, 4 failures (multiple existing tests exercise this arm, including the default NoServiceCaller path)",
+        "action": "none needed"
+      },
+      {
+        "id": 4,
+        "target": "LUA-06-vs-LUA-12 capability-gate-precedes-body (call_service AND emit_event)",
+        "mutation": "install/3's fold wrapper: reordered run_stub/5 to execute BEFORE Capabilities.check!/3 (the gate still eventually raises, just after the stub body already ran)",
+        "existing_suite_caught_it": false,
+        "result": "82/82 passed unchanged -- every existing capability-denial test only asserts 'some Lua.RuntimeException was eventually raised', never that the stub body was never entered",
+        "action": "GAP CLOSED: added SpyServiceCaller (a ServiceCaller double that send/2's a message when invoked) plus a call_service test asserting refute_received after a denied call; and an emit_event test using a Repo-query telemetry counter asserting zero queries fire for a denied call made with a FULLY POPULATED execution context (prefix/instance_id/actor_id all set, a real registered event type) so the body, if reached, would genuinely attempt a Repo call via EventStore.append/2. Both new tests fail against the reordered mutation (82/84, both new tests in the failure list) and pass against the real code (85/85)."
+      },
+      {
+        "id": 5,
+        "target": "emit_event tenant-prefix discipline (highest-value test)",
+        "mutation": "EventStore.append/2 call: prefix: execution_context.prefix -> prefix: event_type (script-supplied)",
+        "existing_suite_caught_it": true,
+        "result": "81/84 passed, 3 failures (the existing functional emit_event test, the 'granted call succeeds' test, and the existing structural 'tenant-prefix discipline' source-inspection test)",
+        "action": "none needed -- this is the property SECURITY-REVIEWER's PASS rests on and it is already well covered by both a functional and a structural test"
+      },
+      {
+        "id": 6,
+        "target": "LuaNumberMarshalling.from_lua/1 usage (write_variable call site)",
+        "mutation": "removed the LuaNumberMarshalling.from_lua/1 call in do_write_variable/2, passing the raw Lua value straight to stage_write/2",
+        "existing_suite_caught_it": false,
+        "result": "84/84 passed unchanged, including the existing float-specific round-trip test -- LuaNumberMarshalling.from_lua/1 and .to_lua/1 are BOTH literal identity functions (def from_lua(value), do: value, per REQ-150's own normative identity rule), so no behavioral test of any input shape can ever distinguish 'called the identity function' from 'skipped it'",
+        "action": "GAP CLOSED, by a structural test rather than a behavioral one (behavioral detection is impossible by construction given REQ-150's identity rule): added a source-inspection test asserting every REQ-160 numeric-crossing call site (do_write_variable/2, normalize_from_lua/1, convert_map_to_lua/1) textually invokes LuaNumberMarshalling.from_lua/.to_lua by name, plus a floor count (>=3 each) on total occurrences. This test fails (84/85) when the call is removed and passes (85/85) against the real code."
+      },
+      {
+        "id": 7,
+        "target": "zero-Repo-calls mechanism is real, not inferred (AC7)",
+        "mutation": "inserted a real Repo.query(\"SELECT 1\") call into do_write_variable/2",
+        "existing_suite_caught_it": true,
+        "result": "84/85 passed, 1 failure (the existing 'write_variable makes zero Repo calls (AC7)' telemetry-counter test)",
+        "action": "none needed -- confirms the existing zero-Repo-calls telemetry-counter mechanism (mirroring REQ-159's own precedent) is a genuine spy that fires on a real injected Repo call, not merely inferred from a correct return value"
+      }
+    ],
+    "new_tests_added": [
+      "REQ-160: call_service -- missing capability raises... > 'a MISSING capability means the ServiceCaller spy is never invoked at all'",
+      "REQ-160: emit_event -- capability denial... > 'a MISSING capability means EventStore.append/2 is never reached (Repo-query spy)'",
+      "REQ-160: structural guard -- LuaNumberMarshalling call sites are genuinely present > 'every REQ-160 numeric-crossing call site routes through LuaNumberMarshalling.from_lua/1 or .to_lua/1 by name'"
+    ],
+    "final_test_run_output": "$ export PATH=\"$HOME/.asdf/shims:$PATH\"; mix test test/letflow/engine/lua/platform_test.exs\n(SQL debug logs from real-Postgres tenant-provisioning fixtures omitted here for brevity -- present in the real terminal output)\n.....\nFinished in 6.7 seconds (0.00s async, 6.7s sync)\n\nResult: 85 passed\n\nExit status: 0 (confirmed via $? after the run)",
+    "compile_check": "mix compile --warnings-as-errors -> no output, exit status 0 (clean compile, no warnings)",
+    "platform_ex_diff_after_revert": "git diff --stat lib/letflow/engine/lua/platform.ex -> empty (byte-identical to the committed pre-TEST-DESIGNER version; every mutation was fully reverted)",
+    "files_changed": [
+      "test/letflow/engine/lua/platform_test.exs (extended: +3 tests, 82 -> 85; SpyServiceCaller test double added)",
+      "test/specs/REQ-160.md (updated: open items resolved, full mutation-testing findings table added)"
+    ],
+    "acceptance_criteria_status": "All 8 acceptance_criteria in this handoff's task are satisfied: 6 named mutations run + 1 dedicated AC7 zero-Repo-calls mutation + AC8 (every one of REQ-160's 8 real docs/requirements.yaml acceptance criteria has at least one test proven, by mutation, to fail on regression) is satisfied by the combination of existing + new tests documented above."
   }
 }

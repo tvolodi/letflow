@@ -354,15 +354,29 @@ what's proven (the gate ran) separate from what isn't (the body works).
 @spec install(lua :: Lua.t(), capabilities :: Capabilities.grant_set()) :: Lua.t()
 ```
 
-- The single registration point (§1.1, §4.1). Folds over `@capability_matrix`; for each
-  `matrix_row`, calls `Lua.set!(lua, [:platform, row.name], fn args ->
-  Capabilities.check!(capabilities, row.name, row.required.(args)); row.stub.(args) end)`
-  (illustrative shape only — exact fold/accumulator mechanics are ELIXIR-DEV's to write;
-  no function bodies are specified by this design per CODE-DESIGNER's no-implementation-
-  code constraint). `capabilities` is captured once per `install/2` call and closed over
-  by every one of the 8 installed wrappers — the grant set is fixed for the lifetime of
-  that `Lua.t()`, matching `Sandbox.new/0,1`'s "construction never fails, never mutates
-  after" invariant style.
+- The single registration point (§1.1, §4.1). Folds over `@capability_matrix`, calling
+  `Lua.set!/3` once per `matrix_row` to bind `[:platform, row.name]` to a Lua-callable
+  wrapper. Each installed wrapper, when invoked with the Lua call's argument list, must
+  perform the following steps, in this order (a description of required behavior, not an
+  Elixir expression — the exact closure/accumulator mechanics are ELIXIR-DEV's to write):
+  1. Resolve `row` — the matrix entry for the function name being installed (fixed at
+     fold time, one `Lua.set!` call per row; no runtime name lookup is needed since each
+     wrapper is built for one specific row).
+  2. Apply `row.required` to the call's argument list to compute the capability this
+     particular call requires — either a `capability()` string (constant for 6 of the 8
+     rows, or parameterised by the first argument for `:call_service`, §4.2) or `:none`
+     (for `:now`/`:fail`, §5).
+  3. Pass that computed value, together with `capabilities` (the grant set closed over
+     from this `install/2` call, §4.4 below) and `row.name`, to `Capabilities.check!/3`
+     (§2.4) — this is the single gate call every wrapper makes; on denial it raises and
+     the wrapper never proceeds to step 4 (§6.1).
+  4. Only if `check!/3` returns (i.e. the call was permitted, or `required` was `:none`),
+     invoke `row.stub` with the same argument list and return its result as the Lua
+     call's return value.
+  `capabilities` is captured once per `install/2` call and closed over by every one of
+  the 8 installed wrappers — the grant set is fixed for the lifetime of that `Lua.t()`,
+  matching `Sandbox.new/0,1`'s "construction never fails, never mutates after" invariant
+  style.
 
 ```
 @spec install(lua :: Lua.t()) :: Lua.t()
@@ -409,18 +423,18 @@ binding statement (`req152-lua-time-denial.md` §5), extended here to `fail`.
 
 ### 6.1 The raise (LUA-06's "MUST raise")
 
-`Capabilities.check!/3` (§2.4), on denial, executes (illustrative — exact call is
-ELIXIR-DEV's to write):
+`Capabilities.check!/3` (§2.4), on denial, raises `Lua.RuntimeException` via its
+keyword-list `exception/1` clause (§0). The keyword list passed to `raise` must carry
+exactly these five keys (a description of the required shape, not an Elixir expression —
+the exact `raise` call is ELIXIR-DEV's to write):
 
-```
-raise Lua.RuntimeException,
-  scope: [:platform],
-  function: denial.function,
-  message: "capability denied: #{denial.function} requires #{denial.required}, " <>
-           "granted: #{inspect(denial.granted)}",
-  capability_required: denial.required,
-  capabilities_granted: denial.granted
-```
+| Key | Value | Validated by the library? |
+|---|---|---|
+| `:scope` | `[:platform]` — the Lua-side location of the failing call | Yes — required by `exception/1`'s keyword-list clause |
+| `:function` | `denial.function` — the atom name of the denied `platform.*` call | Yes — required by `exception/1`'s keyword-list clause |
+| `:message` | A human-readable sentence stating which function was denied, the capability it required, and the capabilities the script's grant set actually held (rendering `denial.required` and `denial.granted`) | Yes — required by `exception/1`'s keyword-list clause |
+| `:capability_required` | `denial.required` — the single missing capability string | No — not one of the three keys the clause validates or that `message/1` renders |
+| `:capabilities_granted` | `denial.granted` — the calling script's full grant list at check time | No — not one of the three keys the clause validates or that `message/1` renders |
 
 Per `deps/lua/lib/lua/runtime_exception.ex`'s keyword-list `exception/1` clause (§0):
 only `:scope`, `:function`, `:message` are validated as present, but the **entire**

@@ -1,0 +1,52 @@
+{
+  "handoff_id": "step03b-WF02-REQ157-20260827",
+  "run_id": "WF02-REQ157-20260827",
+  "workflow_id": "WF-02",
+  "step": "3b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ157-20260827/step-03b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-157"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ157-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ157-20260827/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "test/specs/REQ-157.md",
+      "test/letflow/engine/lua/capabilities_test.exs",
+      "test/letflow/engine/lua/platform_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ157-20260827",
+    "commit": "efdcaf2"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR (WF-02 Step 3b) hard gate on REQ-157's test coverage.",
+    "acceptance_criteria": [
+      "All 8 REQ-157 acceptance criteria have real runnable test coverage, verified independently",
+      "The reported mutation-gap fix (field assertions on the 6 per-function denial tests) confirmed present and would actually catch a skipped capability check",
+      "No TODO/skip markers in test/specs/REQ-157.md",
+      "Test isolation confirmed (async: true/false usage reasoned about correctly per TEST-DESIGNER's notes)",
+      "No hardcoded secrets"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_reviewed": [
+      "docs/requirements.yaml (REQ-157 entry, 8 acceptance_criteria, lines 7850-7918)",
+      "test/specs/REQ-157.md",
+      "test/letflow/engine/lua/capabilities_test.exs (11 cases)",
+      "test/letflow/engine/lua/platform_test.exs (39 total cases across both files)",
+      "lib/letflow/engine/lua/capabilities.ex",
+      "lib/letflow/engine/lua/platform.ex"
+    ],
+    "notes": "All 8 REQ-157 acceptance_criteria read directly from docs/requirements.yaml (not from the spec's paraphrase) and independently mapped to real, runnable tests:\n1. closed-set enumeration (exactly 8 names, no more/fewer) -> platform_test.exs 'REQ-157: closed-set enumeration (AC1)', pairs(platform) enumeration test + single-Lua.set! source-guard regex test.\n2. per-function denial test for each of the 6 gated functions -> 'REQ-157: per-function capability-denial tests, empty grant set (AC2)', one case per function (read_variable/write_variable/log/emit_event/get_instance_state/call_service).\n3. structured denial fields (function, capability required, capabilities granted) -> asserted on all 6 AC2 cases plus the dedicated 'REQ-157: structured denial fields (AC3)' case.\n4. call_service('X') without service:call:X -> 'REQ-157: call_service denial without any grant (AC4)'.\n5. service:call:alpha grant does not authorise call_service('beta') -> 'REQ-157: call_service grant is parameterised, not blanket (AC5)', 2 cases (alpha passes gate/reaches stub, beta still denied with correct required/granted fields).\n6. now/fail callable with empty capability set -> 'REQ-157: now and fail are callable with an empty capability set (AC6)', now returns cleanly with no raise at all, fail raises the stub's own explicit_fail (not a capability-shaped) exception.\n7. moduledoc reproduces the capability matrix + now/fail rationale -> 'REQ-157: moduledoc content (AC7)', 3 cases reading Code.fetch_docs/1 on the real Platform moduledoc, verified the actual moduledoc text in lib/letflow/engine/lua/platform.ex contains the matrix table, the ungated rationale, and the binding statement verbatim.\n8. mix test / mix compile --warnings-as-errors pass -> verified myself, see below (not asserted inside a test, matching REQ-151/152 convention, TEST-RUNNER's formal responsibility at Step 4).\n\nMutation-gap fix verified directly, not just trusted from TEST-DESIGNER's report: read the 6 AC2 test bodies in platform_test.exs and confirmed each now asserts exception.original[:function], [:capability_required], and [:capabilities_granted] against the exact matrix-row values (previously bare assert_raise per the spec's own account of the gap). Then independently re-ran the mutation myself rather than trusting the reported counts: edited lib/letflow/engine/lua/platform.ex's install/2 fold to skip Capabilities.check!/3 for write_variable only (`if row.name != :write_variable do Capabilities.check!(...) end`), ran `mix test test/letflow/engine/lua/capabilities_test.exs test/letflow/engine/lua/platform_test.exs` -> Result: 38/39 passed, with the sole failure being exactly the write_variable AC2 case (`exception.original[:capability_required]` observed nil, expected \"variable:write\"). This confirms the field assertions catch a skipped capability check that a bare assert_raise would have missed (the stub for write_variable, like all 6 gated stubs, also raises Lua.RuntimeException unconditionally on its own not-yet-implemented path). Reverted via `git checkout -- lib/letflow/engine/lua/platform.ex`; confirmed clean via `git status --porcelain lib/ test/` (empty output) and a byte-identical diff against a pre-mutation backup copy; re-ran the suite -> Result: 39 passed (clean).\n\nOther standard checks: grep for TODO/:skip across test/specs/REQ-157.md and both test files returned no matches. grep for password/secret/api_key/connection-string patterns returned no matches in either test file. capabilities_test.exs is async: true (pure MapSet logic, no shared state, correctly isolated); platform_test.exs is async: false with every Application.put_env(:letflow, :lua_platform_time_source, ...) swap reverted via on_exit (verified directly in the 'the time source is injectable' describe block) -- correct given the shared, process-independent application-env state platform.now/0 reads. No test depends on another test's side effects or execution order; each denial test builds its own lua/grant fixture inline or via its own setup block. No wall-clock or unseeded-randomness dependence (FixedTimeSource uses a hardcoded ~U[2026-01-01 ...] literal, no DateTime.utc_now/0 or :rand in assertions).\n\nReal mix output, run independently (not copied from TEST-DESIGNER's report):\n```\n$ mix test test/letflow/engine/lua/capabilities_test.exs test/letflow/engine/lua/platform_test.exs\nRunning ExUnit with seed: 859624, max_cases: 16\nExcluding tags: [:keycloak]\n.......................................\nFinished in 0.3 seconds (0.2s async, 0.08s sync)\nResult: 39 passed\n```\n\nVerdict: PASS. All 5 of this step's acceptance_criteria are met."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

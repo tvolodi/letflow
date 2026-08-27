@@ -1565,3 +1565,34 @@ Two lessons beyond the original entry:
    was violated twice more. The mitigation that actually works is mechanical: before any
    call to `get_next_task`, `set_lock`, or `register_task`, state explicitly whether you
    intend to *do the work it returns*. If not, do not make the call.
+
+## Subagents write a handoff's top-level `status` field with an ad hoc value instead of the schema enum
+
+**What happened.** `mix letflow.lint_handoffs`'s `[H1]` check requires every handoff
+JSON's top-level `status` field to be one of `PENDING`, `IN_PROGRESS`, `COMPLETED`,
+`FAILED`, `ESCALATED`, `CANCELLED`. Across WF02-REQ160-20260827, three different
+subagents (TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR) each independently
+wrote a plausible-sounding but non-schema value instead: `"FAIL"`, `"COMPLETE"`, and
+`"DONE"` respectively — each one a natural word for "I'm done with a failing/passing
+result," none of them the actual enum member. This was caught only at CI (PR #681's
+first `Backend gate` run failed on it), not by ORCH inline. The same mistake recurred a
+third time, in the very next run: CODE-DESIGNER on WF02-REQ161-20260827 wrote top-level
+`status: "DONE"` on its own step-01 handoff.
+
+**Why it keeps happening.** Every one of these agents also writes a *nested*
+`result.status` field, which legitimately holds a verdict string like `"PASS"`, `"FAIL"`,
+or `"DONE"` (free-form, not schema-constrained) — the two fields sit right next to each
+other in the same file, and it is easy to let the nested field's word choice bleed into
+the sibling top-level field, which looks identical in shape but is schema-constrained.
+Agents are consistently NOT running `mix letflow.lint_handoffs` themselves before
+declaring a handoff finished, because the task they were given (test-running,
+release-validating, designing) doesn't foreground "and now lint your own handoff file."
+
+**Mitigation that actually worked this time.** ORCH caught two of the three violations
+only when CI failed on the open PR, and caught the third by proactively re-reading the
+handoff's top few lines immediately after a task-notification arrived (before dispatching
+the next step) rather than waiting for CI. The cheap, mechanical fix: whenever a handoff
+is written or edited by any agent (not just ORCH), run `mix letflow.lint_handoffs`
+(or at minimum grep the file's own top-level `status` line against the 6-value enum)
+before considering that step done — the nested `result.status`/`result.verdict` field is
+free text and does not need this check; only the sibling top-level field does.

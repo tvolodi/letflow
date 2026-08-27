@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step02a-WF02-REQ162-20260827",
+  "run_id": "WF02-REQ162-20260827",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ162-20260827/step-02a-elixir-dev.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-162"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req162-lua-script-error-capture.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua/capabilities.ex",
+      "lib/letflow/engine/lua/sandbox.ex"
+    ],
+    "branch_name": "feature/WF02-REQ162-20260827",
+    "commit": "39f6bda"
+  },
+  "task": {
+    "description": "Implement REQ-162 strictly per the APPROVED design at lib/letflow/design/req162-lua-script-error-capture.md (passed CODE-DESIGN-VALIDATOR, commit 39f6bda). Read the full design doc before writing any code. In lib/letflow/engine/lua/executor.ex: (1) In run_script/3's existing rescue e in Lua.RuntimeException clause: keep the existing budget-exceeded string-match branch FIRST unchanged; when it doesn't match, build a script_error() value (design section 3) from the exception and the sandbox's grant set, returning {:error, {:script_error, script_error()}} instead of the current bare {:error, Exception.message(e)}. (2) Add the script_error()/lua_frame()/instruction_count_report() @type declarations (design section 3). (3) Instruction count: inspect exception.original for a populated %Lua.VM.State{} in its :state field -- if present, {:consumed, state.instruction_count}; if absent/nil, {:configured_budget, budget} using the same budget run_script/3 already threads as its own parameter (design section 2.3) -- NEVER a zero-filled instruction_count. (4) Stack trace: typed case (exception.original is %Lua.VM.RuntimeError{}/%Lua.VM.TypeError{}/%Lua.VM.AssertionError{}) uses Lua.RuntimeException.to_map(exception).call_stack; untyped/fallback case uses a fixed non-leaking placeholder message and an empty stack_trace list (design section 6). (5) Capabilities field: threaded as an explicit parameter to the shaping function, rendered via MapSet.to_list/1 -- run_script/3 passes Letflow.Engine.Lua.Capabilities.new() (the same empty set Sandbox.new/1 already installs today) since closing that wiring gap is explicitly out of scope (design section 4.1, OQ-1). (6) Add one new handle_yield_result/3 clause matching {:ok, {:error, {:script_error, _}} = result} returning result unchanged, symmetric to the existing budget_exceeded clause (design section 5) -- verify run_with_heap_limit/5 needs no change (design claims it already passes results through unmodified; confirm this yourself against the real code). (7) Extend execute_with_manifest/2,3's @spec return union with {:error, {:script_error, script_error()}}. (8) Add the new moduledoc section per design section 13 (5 numbered items). Do NOT touch platform.ex, capabilities.ex, or sandbox.ex -- design section 4.1 explicitly keeps the capability-wiring gap open, out of this requirement's scope.",
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req162-lua-script-error-capture.md",
+      "test/specs/REQ-162.md"
+    ],
+    "acceptance_criteria": [
+      "AC1: a test asserts an uncaught runtime error produces a structured SCRIPT_ERROR carrying a stack trace and capability state at failure, both asserted individually.",
+      "AC2: moduledoc states which restatement branch holds (instruction count retrievable via exception.original.state.instruction_count), naming the mechanism and citing REQ-148 section 5 by number.",
+      "AC3: a test asserts that when the count is not retrievable, the emitted event does NOT carry a zero-filled or silently-omitted-but-implied-present instruction_count -- the two-tag union structurally prevents this; write a test exercising the {:configured_budget, _} branch (e.g. via an exception.original shape with no :state field, like Lua.VM.InternalError if reachable, or a constructed test double).",
+      "AC4: the division-by-zero test uses 1//0 (which raises 'attempt to divide by zero' in this Lua 5.3 runtime), NOT 1/0 (which yields inf, no raise) -- moduledoc records this substitution and why.",
+      "AC5: a single test asserts SCRIPT_ERROR is pattern-match-distinguishable from all 4 other real arms (SCRIPT_FAILED, budget_exceeded, wallclock_timeout, memory_limit_exceeded) in one case/cond.",
+      "AC6: capability state is read from Capabilities.grant_set() (not re-derived); per design section 4.2, since execute_with_manifest/2,3's real path always uses an empty grant set today, prove this property by constructing a Lua.t() directly via Lua.new/1 + Platform.install/2 with an explicit non-empty Capabilities.new([\"some:capability\"]) grant set, bypassing Sandbox.new/1's hardcoded empty-set call -- assert the shaping function produces exactly that one capability in its output.",
+      "AC7: a test asserts the stack trace contains no '/' path separator or 'Elixir.' prefix in any frame's source/name fields (design section 6.3).",
+      "AC8: mix test and mix compile --warnings-as-errors both pass, real output quoted."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

@@ -26,6 +26,7 @@ defmodule Letflow.Engine.Lua.PlatformTest do
   alias Letflow.Engine.Lua.Capabilities
   alias Letflow.Engine.Lua.Platform
   alias Letflow.Engine.Lua.Sandbox
+  alias Letflow.Engine.VariableMerge
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
@@ -1162,6 +1163,156 @@ defmodule Letflow.Engine.Lua.PlatformTest do
       assert Platform.take_staged_writes() == %{"x" => 1}
     end
 
+    # TEST-DESIGN-VALIDATOR rework (handoffs/WF02-REQ160-20260827/step-03-test-designer-rework1.json,
+    # fix 1): the raised-error test above only proves the SAME process's buffer is
+    # untouched -- it does not exercise REQ-154/155/156's three harder failure arms
+    # AC1's own text names by name, nor does it prove the write is unobservable from any
+    # OTHER process. Each test below drives the real REQ-154/155/156 mechanism (mirroring
+    # test/letflow/engine/lua/executor_test.exs's own harness for each) against a script
+    # that first stages a write via `platform.write_variable`, then asserts THIS (test)
+    # process's own `take_staged_writes/0` -- a process wholly distinct from whichever
+    # process actually ran the script -- returns an empty map. Process dictionaries are
+    # strictly per-process (never inherited, copied, or merged across processes by the
+    # BEAM), so this is not an inference: it is a direct observation that the staged
+    # write never reached anywhere outside the process that died/raised.
+    test "REQ-154's instruction-budget exhaustion discards the staged write -- never observed from any other process (AC1)" do
+      lua =
+        Platform.install(
+          Sandbox.new(max_instructions: 500),
+          Capabilities.new(["variable:write"]),
+          execution_context()
+        )
+
+      script = """
+      platform.write_variable('x', 1)
+      while true do end
+      """
+
+      test_pid = self()
+
+      task =
+        Task.async(fn ->
+          outcome =
+            try do
+              Lua.eval!(lua, script)
+              :did_not_raise
+            rescue
+              e in Lua.RuntimeException -> {:raised, Exception.message(e)}
+            end
+
+          # Read from INSIDE the process that ran the script -- confirms the write did
+          # reach the staging buffer (so the assertion below is a genuine cross-process
+          # discard, not a script that never staged anything in the first place).
+          send(test_pid, {:budget_task_result, outcome, Platform.take_staged_writes()})
+        end)
+
+      Task.await(task)
+
+      assert_receive {:budget_task_result, {:raised, message}, staged_inside_task_process}
+      assert message =~ "instruction budget exceeded"
+      assert staged_inside_task_process == %{"x" => 1}
+
+      # This (test) process is a DIFFERENT process from the one that ran the script --
+      # its own take_staged_writes/0 must never observe the write.
+      assert Platform.take_staged_writes() == %{}
+    end
+
+    test "REQ-155's wall-clock kill discards the staged write -- the killed process's buffer is simply gone (AC1)" do
+      lua =
+        Platform.install(
+          Sandbox.new(max_instructions: 1_000_000_000),
+          Capabilities.new(["variable:write"]),
+          execution_context()
+        )
+
+      script = """
+      platform.write_variable('x', 1)
+      while true do end
+      """
+
+      # Mirrors executor_test.exs's own REQ-155 harness (Task.async -> Task.yield ->
+      # Task.shutdown(task, :brutal_kill) on a nil yield) rather than inventing a new
+      # mechanism.
+      task = Task.async(fn -> Lua.eval!(lua, script) end)
+
+      assert Task.yield(task, 150) == nil,
+             "the infinite loop must not have returned within the wall-clock window"
+
+      Task.shutdown(task, :brutal_kill)
+
+      # The process is genuinely dead -- not merely abandoned -- so its process
+      # dictionary (where the staged write lived) no longer exists anywhere to read.
+      refute Process.alive?(task.pid)
+
+      assert Platform.take_staged_writes() == %{},
+             "no other process (including this test process) ever observed the write " <>
+               "the killed process staged"
+    end
+
+    test "REQ-156's memory-limit kill discards the staged write -- the killed process's buffer is simply gone (AC1)" do
+      lua =
+        Platform.install(
+          Sandbox.new(max_instructions: 1_000_000_000),
+          Capabilities.new(["variable:write"]),
+          execution_context()
+        )
+
+      script = """
+      platform.write_variable('x', 1)
+      local t = {}
+      for i = 1, 1000000 do
+        t[i] = string.rep('x', 1024)
+      end
+      return #t
+      """
+
+      # Mirrors executor_test.exs's own REQ-156 harness: Task.Supervisor/Task.async
+      # cannot carry a max_heap_size spawn_opt, so the script runs in a process spawned
+      # directly via :erlang.spawn_opt/2 with :monitor plus max_heap_size: kill: true --
+      # the same mechanism lib/letflow/engine/lua/executor.ex's run_with_heap_limit/4
+      # uses.
+      small_heap_words = trunc(1 * 1024 * 1024 / :erlang.system_info(:wordsize))
+      parent = self()
+
+      {pid, monitor_ref} =
+        :erlang.spawn_opt(
+          fn -> send(parent, {:heap_task_done, Lua.eval!(lua, script)}) end,
+          [:monitor, max_heap_size: %{size: small_heap_words, kill: true, error_logger: false}]
+        )
+
+      assert_receive {:DOWN, ^monitor_ref, :process, ^pid, :killed}, 5_000
+
+      refute_received {:heap_task_done, _}
+      refute Process.alive?(pid)
+
+      assert Platform.take_staged_writes() == %{},
+             "no other process (including this test process) ever observed the write " <>
+               "the memory-limit-killed process staged"
+    end
+
+    test "REQ-160/AC2: VariableMerge.merge/3 applies all staged writes atomically in a single call (design §2.6)" do
+      lua =
+        Platform.install(Sandbox.new(), Capabilities.new(["variable:write"]), execution_context())
+
+      script = """
+      platform.write_variable('a', 1)
+      platform.write_variable('b', 2)
+      platform.write_variable('c', 3)
+      return true
+      """
+
+      assert {[true], _lua} = Lua.eval!(lua, script)
+      staged = Platform.take_staged_writes()
+      assert map_size(staged) == 3
+
+      # There is no intermediate call, no partial map, and no way to observe a state
+      # with only one or two of the three keys applied -- merge/3 is a single,
+      # non-yielding function call over the WHOLE staged map at once.
+      assert {:ok, new_variables, events} = VariableMerge.merge(%{}, staged, nil)
+      assert %{"a" => 1, "b" => 2, "c" => 3} = new_variables
+      assert is_list(events)
+    end
+
     test "write_variable makes zero Repo calls (AC7)" do
       lua =
         Platform.install(Sandbox.new(), Capabilities.new(["variable:write"]), execution_context())
@@ -1260,6 +1411,46 @@ defmodule Letflow.Engine.Lua.PlatformTest do
       """
 
       assert {["float", 2.5], _lua} = Lua.eval!(lua, script)
+    end
+  end
+
+  # TEST-DESIGN-VALIDATOR rework (handoffs/WF02-REQ160-20260827/step-03-test-designer-rework1.json,
+  # fix 3): the AC6 test above only proves the READ direction (`to_lua/1` on the
+  # response). Spec section 6's second bullet also requires a WRITE-direction
+  # assertion -- the double must assert directly on the Elixir-side types
+  # (`is_integer/1`/`is_float/1`) of what it actually received, not merely on a value
+  # that survived a round trip back through Lua. `SpyServiceCaller` (already defined
+  # above for the mutation-testing gap on capability-gate ordering) already captures
+  # its raw received payload via `send/2` -- reused here for its actual received-types
+  # shape instead of inventing a second double.
+  describe "REQ-160: platform.call_service -- write-direction marshalling (AC6)" do
+    setup do
+      put_service_caller!(SpyServiceCaller)
+      :ok
+    end
+
+    test "the double receives real Elixir integer()/float() types for an integer- and a whole-number-float-valued argument, not collapsed" do
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(["service:call:billing"]),
+          execution_context()
+        )
+
+      script = """
+      platform.call_service('billing', {amount = 7, rate = 2.0})
+      return true
+      """
+
+      assert {[true], _lua} = Lua.eval!(lua, script)
+
+      assert_received {:spy_service_caller_called, "billing", payload}
+
+      assert is_integer(payload["amount"])
+      assert payload["amount"] == 7
+
+      assert is_float(payload["rate"])
+      assert payload["rate"] == 2.0
     end
   end
 

@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "TEST-DESIGNER",
   "file": "handoffs/WF02-REQ160-20260827/step-03-test-designer-rework1.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -37,6 +37,20 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "COMPLETED",
+    "summary": "Applied all 4 required fixes from step-03b-test-design-validator.json's instructions_to_test_designer, verbatim. lib/letflow/engine/lua/platform.ex was NOT touched -- only test/letflow/engine/lua/platform_test.exs and test/specs/REQ-160.md changed.",
+    "fixes_applied": [
+      "Fix 1 (AC1): added 3 new behavioral tests to the 'REQ-160: platform.write_variable stages into a process-local buffer' describe block. (a) instruction-budget: Sandbox.new(max_instructions: 500) + a script that writes then loops, run inside a Task.async; the task's own process confirms the write reached ITS buffer, then the test process (a genuinely different process) asserts its own take_staged_writes/0 returns %{}. (b) wall-clock: mirrors executor_test.exs's own REQ-155 harness exactly -- Task.async -> Task.yield(task, 150) returning nil -> Task.shutdown(task, :brutal_kill); asserts Process.alive?(task.pid) == false and take_staged_writes/0 == %{}. (c) memory-limit: mirrors executor_test.exs's own REQ-156 harness exactly (and lib/letflow/engine/lua/executor.ex's run_with_heap_limit/4 mechanism) -- :erlang.spawn_opt/2 with [:monitor, max_heap_size: %{size: ~1MB in words, kill: true, error_logger: false}]; asserts the :DOWN reason is :killed and take_staged_writes/0 == %{}. The pre-existing structural guard test was kept as supplementary evidence only.",
+      "Fix 2 (AC2): added 'REQ-160/AC2: VariableMerge.merge/3 applies all staged writes atomically in a single call (design section 2.6)' -- stages 3 writes via a successful script, calls Letflow.Engine.VariableMerge.merge(%{}, staged, nil) directly, asserts {:ok, new_variables, events} with all three keys present in new_variables.",
+      "Fix 3: added a new describe block 'REQ-160: platform.call_service -- write-direction marshalling (AC6)' reusing the existing SpyServiceCaller double (originally added for the capability-gate-ordering mutation) as a capturing double: script passes {amount = 7, rate = 2.0}; test asserts is_integer(payload[\"amount\"]) and is_float(payload[\"rate\"]) directly on the double's received payload, not on a value round-tripped back through Lua.",
+      "Fix 4: corrected test/specs/REQ-160.md sections 2, 3, 6, 12, the 'Resolution of open items' section, and the mutation-testing findings table's 'Net result'/test-count to accurately state which tests are implemented vs. descoped, with reasons. Section 12's broader two-tenant functional isolation check is explicitly marked descoped with a stated reason (AC7's literal text is a source-level 'prefix is always execution_context.prefix' property, not a claim about live cross-tenant read/write isolation, which is already provided independently by Postgres schema-per-tenant provisioning)."
+    ],
+    "test_count": "90 tests passing (up from 85), 0 failures, 0 skipped",
+    "verification": [
+      "export PATH=\"$HOME/.asdf/shims:$PATH\"; mix compile --warnings-as-errors -> exit 0, no output (clean)",
+      "export PATH=\"$HOME/.asdf/shims:$PATH\"; mix test test/letflow/engine/lua/platform_test.exs -> 'Finished in 8.2 seconds (0.00s async, 8.2s sync)' / 'Result: 90 passed'",
+      "git status --porcelain / git diff --stat confirm only test/letflow/engine/lua/platform_test.exs and test/specs/REQ-160.md changed -- lib/letflow/engine/lua/platform.ex untouched",
+      "Full mutation-testing re-pass was not required per the rework handoff's own instructions (the two independently re-verified mutations from the original Step 3b pass -- mutation 4 capability-gate-ordering, mutation 6 LuaNumberMarshalling structural guard -- still hold since platform.ex was not modified in this rework)"
+    ]
   }
 }

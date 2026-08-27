@@ -1,0 +1,38 @@
+{
+  "handoff_id": "step06-WF02-REQ160-20260827",
+  "run_id": "WF02-REQ160-20260827",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ160-20260827/step-06-doc-updater.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-160"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ160-20260827/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ160-20260827",
+    "commit": "dcd7d6a"
+  },
+  "task": {
+    "description": "DOC-UPDATER (WF-02 Step 6) for REQ-160, RELEASE-VALIDATOR PASSed (commit dcd7d6a). Flip REQ-160's status to 'done' in docs/requirements.yaml. Append ONE 'done' event to the CURRENT run-history volume -- confirm which volume is current via docs/status/requirement_status.index.yaml's status: current marker (was volume 5, docs/status/requirement_status.v5.yaml, at 21 entries as of REQ-160's started event -- RE-CHECK this count fresh, do not trust this cached number, since other concurrent sessions may have appended since). Recount via `grep -c \"^  - req:\" <volume>` BEFORE and AFTER your append, and update the index's entries:/note: fields accordingly (prepend a new note, never edit prior notes). Use a real UTC timestamp from the clock, not a guessed/memory one. This run had two rework rounds (design: 1 iteration for a kill-race invariant; test-design: 1 iteration for missing kill-arm/atomicity tests) -- both are visible in the branch's commit history and don't need special note-taking beyond the normal done-event, but if requirements.yaml has a place for a brief history/notes field on the requirement itself, a one-line mention of the rework rounds is appropriate color, not required.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-160 status flipped to 'done'.",
+      "Exactly one 'done' event appended to the current run-history volume, with a real UTC timestamp.",
+      "Volume recounted via grep before and after the append; index.yaml's entries:/note: updated to match, note prepended not overwritten.",
+      "No other status-history events edited or removed (append-only discipline)."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

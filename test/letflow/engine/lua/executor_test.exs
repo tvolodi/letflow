@@ -427,6 +427,11 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       assert moduledoc =~ "layer 2"
       assert moduledoc =~ "enforced by the host"
       assert moduledoc =~ "cooperate"
+      # AC-6 also requires the moduledoc to state that neither LUA-08 nor LUA-10 is
+      # satisfied without both layers landed together -- distinct from merely naming
+      # "layer 2", which the four assertions above already cover.
+      assert moduledoc =~ "Neither LUA-08 nor LUA-10 is met",
+             "moduledoc must state that neither LUA-08 nor LUA-10 is met without both layers"
     end
 
     # T8/AC-7: moduledoc carries forward the BEAM-node-kill / System.halt/0
@@ -435,7 +440,13 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} = Code.fetch_docs(Executor)
 
       assert moduledoc =~ "System.halt/0"
-      assert moduledoc =~ "NOT"
+      assert moduledoc =~ "BEAM node"
+      # A bare "NOT" is too weak on its own to prove the disclosure is attached to the
+      # right subject -- assert it appears specifically as the negation covering the
+      # BEAM-node-kill / System.halt/0 sentence, not merely somewhere unrelated in the
+      # moduledoc.
+      assert moduledoc =~ "does **NOT** cover a hard kill of the BEAM node",
+             "moduledoc must explicitly negate coverage of a BEAM node kill / System.halt/0"
     end
   end
 end

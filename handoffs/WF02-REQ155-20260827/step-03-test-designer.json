@@ -1,0 +1,63 @@
+{
+  "handoff_id": "step03-WF02-REQ155-20260827",
+  "run_id": "WF02-REQ155-20260827",
+  "workflow_id": "WF-02",
+  "step": "3",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ155-20260827/step-03-test-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-155"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-155": "Out-of-band host-enforced wall-clock kill for Lua script execution -- layer 2 of the two-layer pair (LUA-10 restated). See docs/requirements.yaml REQ-155 for full description and 8 acceptance_criteria. Queue task 307, GH#607."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ155-20260827/step-01-code-designer.json",
+      "handoffs/WF02-REQ155-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ155-20260827/step-02c-security-review.json",
+      "handoffs/WF02-REQ155-20260827/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req155-lua-wallclock-kill.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/specs/REQ-155.md"
+    ],
+    "branch_name": "feature/WF02-REQ155-20260827"
+  },
+  "task": {
+    "description": "TEST-DESIGNER (WF-02 Step 3) for REQ-155. Scope test: real application-executable surface (lib/letflow/engine/lua/executor.ex) -- continue to full procedure. ELIXIR-DEV already wrote 8 functional tests (T1-T8, plus a regression guard) in test/letflow/engine/lua/executor_test.exs while implementing (Step 2a), including a documented deviation from test/specs/REQ-155.md's originally-proposed T2 script (a goto-based loop substituted for the design's pcall-then-loop-again script, because the latter doesn't actually exercise layer-2 necessity against this Lua runtime -- independently verified correct by both SECURITY-REVIEWER and REVIEWER). Your job: (1) read docs/requirements.yaml's REQ-155 entry directly for the exact 8 acceptance_criteria; (2) reconcile test/specs/REQ-155.md against the ACTUAL tests now in executor_test.exs -- it was written before implementation and does not yet reflect the goto-loop substitution or the tests' final shape; update it to match reality; (3) independently verify every one of REQ-155's 8 acceptance criteria has at least one test case that would fail if the behavior were violated -- if you find a gap, ADD the missing test(s) yourself, don't just report it; (4) verify no test depends on wall-clock time in a flaky way (timing-based tests should have adequate margins for CI jitter -- REVIEWER already spot-checked this but re-verify with fresh eyes) or unseeded randomness; (5) verify test isolation (executor_test.exs is async: true -- confirm no shared mutable state between tests, e.g. Application.put_env swaps, if any, are reverted).",
+    "acceptance_criteria": [
+      "test/specs/REQ-155.md accurately reflects the actual test cases present in executor_test.exs, including the goto-loop substitution and why",
+      "All 8 of docs/requirements.yaml REQ-155's acceptance_criteria have at least one test case that would fail if violated -- gaps closed by adding tests, not just reported",
+      "Timing-based tests confirmed to have adequate CI-jitter margins, not flaky-by-construction",
+      "No unseeded-randomness dependence",
+      "Test isolation confirmed under async: true",
+      "mix test on the affected files quoted as real output after any additions"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "test/specs/REQ-155.md",
+      "test/letflow/engine/lua/executor_test.exs"
+    ],
+    "ac_to_test_mapping": {
+      "AC-1 (configurable timeout, two values, shorter terminates sooner)": "T1 -- \"AC-1: a shorter configured timeout terminates measurably sooner than a longer one\" (asserts {:error,{:wallclock_timeout,100}} vs {:error,{:wallclock_timeout,600}} and short_elapsed_ms < 400 < long_elapsed_ms)",
+      "AC-2 (pcall-trapped budget exhaustion, host timeout still terminates)": "T2 -- \"AC-2: wall-clock timeout still fires when the script traps its own budget error and loops again via a construct the instruction budget does not instrument\" (pcall + goto-loop substitution, documented in test/specs/REQ-155.md deviation note)",
+      "AC-3 (execution process actually dead after timeout)": "T3 -- \"AC-3: the task's process is dead and no longer tracked by the supervisor after a timeout\" (Task.Supervisor.children/1 before/after snapshot equality)",
+      "AC-4 (structured, pattern-matchable, distinguishable error)": "T4 + T5 -- \"AC-4: wallclock_timeout does not match budget_exceeded...\" and \"AC-4 regression guard: budget_exceeded is unaffected...\" (each refutes the other's shape plus bare-string/atom arms)",
+      "AC-5 (supervised task, moduledoc names supervisor + justifies not reusing PluginTaskSupervisor)": "T6 -- \"AC-5: the running script is a child of Letflow.Engine.Lua.TaskSupervisor while in flight\" (runtime) + \"AC-5: moduledoc names Letflow.Engine.Lua.TaskSupervisor and justifies not reusing PluginTaskSupervisor\" (doc)",
+      "AC-6 (moduledoc restates LUA-10 as layer 2, non-cooperation clause, neither layer sufficient alone)": "T7 -- \"AC-6: moduledoc restates LUA-10 as layer 2 of the LUA-08/LUA-10 pair\" -- GAP FOUND AND CLOSED: original assertions only checked \"LUA-10\"/\"layer 2\"/\"enforced by the host\"/\"cooperate\"; added assertion on the literal substring \"Neither LUA-08 nor LUA-10 is met\" so the 'neither is met without both layers' clause is actually verified, not just implied by the other four substrings",
+      "AC-7 (moduledoc carries forward BEAM-node-kill / System.halt/0 limitation)": "T8 -- \"AC-7: moduledoc discloses the BEAM-node-kill / System.halt/0 limitation\" -- GAP FOUND AND CLOSED: original assertion (`moduledoc =~ \"NOT\"`) could pass on any unrelated negation in the moduledoc; added `moduledoc =~ \"BEAM node\"` and the exact substring `\"does **NOT** cover a hard kill of the BEAM node\"` so the negation is verified as attached to its actual subject",
+      "AC-8 (mix test / mix compile --warnings-as-errors pass, real output quoted)": "Not a unit test -- TEST-RUNNER's responsibility per WF-02 Step 4. TEST-DESIGNER ran `mix test test/letflow/engine/lua/executor_test.exs` after edits (see notes) as a self-check; full-suite mix test and mix compile --warnings-as-errors remain TEST-RUNNER's to run and quote."
+    },
+    "notes": "1) Reconciled test/specs/REQ-155.md (written pre-implementation) against the actual executor_test.exs: rewrote it end-to-end to describe the real T1-T8 tests by their actual test names/assertions, and added an explicit 'Deviation from the original T2 design' section documenting why the pcall-then-second-loop script was replaced with the pcall-then-goto-loop script (this runtime's :max_instructions counter is permanently exhausted once tripped, so a second while/for loop would be terminated by layer 1 alone and would not prove layer 2's necessity; a goto loop is not instrumented by the budget counter at all, confirmed empirically by ELIXIR-DEV and independently verified by SECURITY-REVIEWER and REVIEWER reading the vendored tv-labs/lua runtime source). 2) Mapped all 8 real acceptance_criteria from docs/requirements.yaml (not paraphrased) to specific tests -- see ac_to_test_mapping. Found and closed 2 real coverage gaps in T7 (AC-6) and T8 (AC-7): both original assertions were satisfiable by substrings that did not actually pin the claim requirement's own text tied to the right subject/clause -- added targeted assertions to executor_test.exs for both, then re-ran the suite. 3) Timing-margin re-check (fresh eyes): T1 uses timeout_ms 100 vs 600 with a 400ms upper bound on the short call (4x margin over the 100ms configured value) -- generous enough to absorb CI scheduling jitter without weakening the assertion that elapsed time tracks the configured value, not a hardcoded constant. T2/T4 use timeout_ms 300/100 with no additional wall-clock assertion beyond the returned tuple (no jitter risk). T3 uses timeout_ms 150 plus a fixed 50ms settle sleep before the before/after Task.Supervisor.children/1 comparison -- Letflow.Engine.Lua.TaskSupervisor is used by no other test file (grep-confirmed) and ExUnit runs tests within one Case module sequentially by default, so this snapshot comparison is not exposed to cross-test or cross-module interference; margin judged adequate. T6 uses timeout_ms 300 with a 50ms settle sleep before checking Task.Supervisor.children/1 is non-empty -- adequate margin, no upper-bound assertion that could flake under a slow CI host. No test asserts a tight upper bound on total test-file runtime. 4) No unseeded randomness anywhere in the REQ-155 describe block (no :rand, Enum.random, or similar) -- confirmed by inspection. 5) Test isolation under async: true confirmed: all REQ-155 tests use the /3-arity execute_with_manifest overload specifically to avoid any Application.put_env config swap; no test in the block mutates any shared global state (Application env, ETS, ...); the one piece of shared state read (Letflow.Engine.Lua.TaskSupervisor) is read-only via Task.Supervisor.children/1 and is confirmed used by no other test file, and within-module ExUnit execution is sequential by default, so no ordering hazard exists between T3/T6 and the rest of the suite. Real mix test output after all edits: `mix test test/letflow/engine/lua/executor_test.exs` -> 'Finished in 1.8 seconds (1.8s async, 0.00s sync)' / 'Result: 24 passed' / 0 failures, seed 300815. Did not touch lib/letflow/engine/lua/capabilities.ex or platform.ex, per instructions."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

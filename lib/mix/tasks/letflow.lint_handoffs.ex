@@ -556,6 +556,7 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
         s when is_binary(s) -> s
         _ -> ""
       end
+
     created_at = Map.get(data, "created_at")
 
     names = artifacts_in |> Enum.map(&Path.basename/1) |> MapSet.new()

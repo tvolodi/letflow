@@ -200,9 +200,7 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # AC-2: while true terminates under a budget rather than hanging.
     test "AC-2: while true do end terminates with budget_exceeded rather than hanging" do
       assert {:error, {:budget_exceeded, 1000}} =
-               Executor.execute_with_manifest("while true do end", "h",
-                 max_instructions: 1000
-               )
+               Executor.execute_with_manifest("while true do end", "h", max_instructions: 1000)
     end
 
     # AC-3: budget exhaustion is distinguishable by pattern match from other error arms.

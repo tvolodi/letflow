@@ -1,0 +1,37 @@
+{
+  "handoff_id": "step04-WF02-REQ160-20260827",
+  "run_id": "WF02-REQ160-20260827",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ160-20260827/step-04-test-runner.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-160"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ160-20260827/step-03b-test-design-validator-recheck.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ160-20260827",
+    "commit": "53e3a56"
+  },
+  "task": {
+    "description": "TEST-RUNNER (WF-02 Step 4) for REQ-160. Run the FULL test suite (not just the targeted platform_test.exs file) at least twice consecutively to check for flakes, given this run's history of intermittent failures under parallel load (e.g. ISS-0340, a known recurring flaky test unrelated to Lua work; and REQ-155's own timeout-tuning history). Use scripts/test_parallel.sh if it exists, otherwise `mix test`. Quote real output for every run, not a paraphrase. If any test fails, apply structural failure attribution per docs/agents/instructions/core-directives.md ('Failure Attribution Is Structural, Never By Count-Matching') -- diff-exclusion, merge-base reproduction, or demonstrated external mechanism with measurement -- never by comparing pass/fail counts across runs. ISS-0340 (Letflow.Api.ContextTest 'scoped_repo_opts/1 is 1-arity') is a known, previously-reopened flake unrelated to any Lua work in this run -- if it reappears, diff-exclude it (confirm via git diff that this run's changes don't touch that test file or its dependencies) rather than treating it as a regression, and note it in your report if seen.",
+    "acceptance_criteria": [
+      "Full suite (mix test, or scripts/test_parallel.sh) run at least twice consecutively; real output quoted for each run.",
+      "mix compile --warnings-as-errors independently re-run and confirmed clean.",
+      "Any failure is attributed structurally (diff-exclusion/merge-base/demonstrated mechanism), never by count-matching across runs.",
+      "Final verdict: PASS only if all runs are clean (modulo a diff-excluded known flake like ISS-0340), FAIL with a structured failure report otherwise."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

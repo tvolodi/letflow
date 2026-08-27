@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step02c-WF02-REQ162-20260827",
+  "run_id": "WF02-REQ162-20260827",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ162-20260827/step-02c-security-reviewer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-162"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ162-20260827/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ162-20260827/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req162-lua-script-error-capture.md",
+      "lib/letflow/engine/lua/executor.ex"
+    ],
+    "branch_name": "feature/WF02-REQ162-20260827",
+    "commit": "e937135"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER hard gate (WF-02 Step 2c) on REQ-162's implementation, commit e937135 on lib/letflow/engine/lua/executor.ex. This requirement's own text explicitly names SECURITY-REVIEWER as a hard gate because a SCRIPT_ERROR's stack trace and message are a data-disclosure surface -- a script author's error view must never leak host filesystem paths, Elixir module internals, other tenants' data, or capability grants beyond what that script's own execution held. ELIXIR-DEV made build_script_error/3 public (marked @doc false) as a deliberate test seam -- verify this does not create an unintended public API surface or a new way to invoke error-shaping logic outside its intended call site. Read the approved design (lib/letflow/design/req162-lua-script-error-capture.md) and the real diff (git show e937135 -- lib/letflow/engine/lua/executor.ex) in full before verdict.",
+    "acceptance_criteria": [
+      "Confirm the typed-case stack trace (Lua.RuntimeException.to_map(exception).call_stack) genuinely cannot contain an Elixir module atom, a BEAM stacktrace frame, or a real host filesystem path -- verify by reading the real vendored source path that constructs it, not just trusting the design's structural-guarantee argument.",
+      "Confirm the untyped/fallback case's fixed placeholder message and empty stack_trace genuinely discard the original exception's message/details rather than partially leaking them.",
+      "Confirm the capabilities field only ever reflects the CURRENT script execution's own grant set -- never another tenant's, another script's, or a superset/host-internal capability list.",
+      "Confirm build_script_error/3 being made public (test seam) does not introduce a new caller-reachable code path that could be invoked with attacker-controlled or cross-tenant data from somewhere other than run_script/3's own rescue clause.",
+      "Confirm no new Letflow.Repo call or tenant-prefix-derivation was introduced anywhere in this diff.",
+      "Confirm the instruction_count two-tag union cannot be manipulated by a script to fabricate a false 'consumed' vs 'configured_budget' signal.",
+      "Cross-check against docs/agents/instructions/security-invariants.md INV-1..INV-8 explicitly, naming which apply and confirming each holds.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

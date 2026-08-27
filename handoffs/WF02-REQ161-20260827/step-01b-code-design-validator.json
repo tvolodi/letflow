@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ161-20260827/step-01b-code-design-validator.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -39,6 +39,19 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "COMPLETED",
+    "verdict": "PASS",
+    "summary": "REQ-161 design (lib/letflow/design/req161-lua-platform-fail.md) passes CODE-DESIGN-VALIDATOR gate. All 8 acceptance criteria independently re-verified against real source, not the design doc's own citations.",
+    "findings": [
+      "AC1 CONFIRMED: deps/lua/lib/lua/vm/stdlib.ex lua_pcall/2 (lines 252-260) and lua_xpcall/2 (lines 268-284) each have exactly two `rescue` clauses and zero `catch` clauses of any kind -- verified by direct read. deps/lua/lib/lua.ex do_call_function/3's {:native_func, fun} clause (lines 851-856) is `rescue e -> {:error, e, recover_state(e, state)}` only, no catch. The one bare `catch thrown_value -> ...` in the file (line 1277-1280) lives in execute_function/4, the Lua.API/deflua macro path, structurally unreachable from platform.ex (which uses Lua.set!/3 directly) -- and even if reached, a bare catch with no `:exit` kind only matches throw/1, never exit/1. Design's citation is accurate.",
+      "AC2 CONFIRMED: {:script_failed, %{reason:, details:}} is a 2-tuple, not one of :kill/:normal/:shutdown. Real OTP semantics: exit(:kill) is unconditionally rewritten to :killed on delivery (BEAM VM-level special case for the untrappable kill signal); exit(:normal) from a process to itself is a no-op (does not terminate); :shutdown carries no special monitor-delivery rewrite (it is only meaningful to supervisors' own child-exit handling, not to Process.monitor/1's :DOWN delivery). None of these apply to an arbitrary tagged tuple -- delivered verbatim.",
+      "AC3 CONFIRMED: standard, unconditional Process.monitor/1 :DOWN delivery semantics -- arbitrary exit-reason terms are delivered unmodified except for the :kill/:normal special cases above, which do not apply here.",
+      "AC4 CONFIRMED: SCRIPT_FAILED is delivered only as a process-exit signal (Task.yield {:exit, reason} or a :DOWN message) requiring the evaluating process to be dead; a Lua.RuntimeException from an uncaught script error is a normal return value from Lua.eval!/2 with the process alive. Structurally non-collapsible by construction (different delivery channel entirely, not merely different tags).",
+      "AC5 CONFIRMED: read executor.ex lines 422-423 (handle_yield_result({:exit, reason}, ...)) and lines 367-371 (raw-heap-limit :DOWN handling) directly -- both match the design's citation exactly: every non-:killed exit reason (including a deliberate {:script_failed, _}) is collapsed into an {:error, \"... task crashed: \" <> format_exit_reason(reason)} string via inspect/1 fallback. Design's disclosure is accurate, neither over- nor understated.",
+      "AC6 CONFIRMED: platform.ex line 278, %{name: :fail, required: :none, stub: :fail}, is byte-for-byte identical to the current shipped row -- unedited.",
+      "AC7 CONFIRMED: design section 9's traceability table maps all 7 real REQ-161 acceptance_criteria from docs/requirements.yaml (verified against the full requirement entry) to concrete design sections (SS2/2.3/3.2, SS2.4/3.2, SS3.3, SS3.1, SS6 items 1-3, SS5/SS6 item 4, and the ELIXIR-DEV/TEST-RUNNER-owned final row) -- no gaps, no TBD language.",
+      "AC8 CONFIRMED: all 5 code-fenced blocks in the design doc (lines 228-231, 288-290, 324-327, 349-352, 360-363) contain only @type/@spec declarations -- do_fail/1's control flow is described in numbered prose (section 3.2), not as an Elixir function body. Short inline backtick citations of real vendored/existing code (e.g. `rescue e -> ...`, `catch thrown_value -> ...`) are citations of evidence, not new implementation code authored by this design. Zero literal implementation code confirmed.",
+      "Also independently confirmed plugin_interface.ex and lua_script_audit.ex moduledoc 'no call site' disclosures the design cites in SS5 are real (grepped both files directly)."
+    ]
   }
 }

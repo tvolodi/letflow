@@ -536,3 +536,22 @@ history:
       RELEASE-VALIDATOR (Step 5 PASS). Status flipped pending -> done in
       docs/requirements.yaml. `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 20 on-disk entries.
+
+  - req: REQ-160
+    event: started
+    agent: ORCH
+    at: "2026-08-27T18:25:30Z"
+    note: >
+      WF02-REQ160-20260827 started (queue task 312, GH#612, stage S5).
+      Claimed via get_next_task after REQ-159's completion. Lua host
+      API 2/2 -- write path -- platform.write_variable (staged and
+      atomic across every failure arm: raised script error, REQ-154's
+      instruction budget, REQ-155's wall-clock kill, REQ-156's memory
+      limit), call_service, emit_event (LUA-11 write half, LUA-12).
+      Depends on REQ-159, REQ-158, REQ-157 (all done). The
+      transactional-staging-surviving-a-brutal-process-kill requirement
+      is the architecturally hardest Lua host-function work this
+      session. Step 00 git-setup PASS (ORCH, direct): branch
+      feature/WF02-REQ160-20260827 created from main (44ba8a2) and
+      pushed. Dispatching Step 1 to CODE-DESIGNER next. 20 on-disk
+      entries before this append; 21 after.

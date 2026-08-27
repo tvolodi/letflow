@@ -2770,6 +2770,28 @@
             "queue_task_id": 311,
             "queue_agent_id": "orch-ai-dala",
             "note": "WF-02 for REQ-159 (queue task 311, GH#611, stage S5). Lua host API 1/2 -- read path -- platform.read_variable, get_instance_state, log (LUA-11 read half, LUA-13). Depends on REQ-158 (manifest/capability infra) and REQ-150 (number marshalling rule, both done). First requirement implementing real platform.* host-function bodies (REQ-157's stubs implemented for real). Design needed 1 rework: CODE-DESIGN-VALIDATOR found a real unauthorized cross-instance read gap (get_instance_state originally allowed reading ANY tenant-owned instance via an unsupported invented scenario) -- fixed to self-instance-only. TEST-DESIGNER found and closed a mutation-detectable test gap via active mutation testing (tests verified the correct return value but not the actual security property of zero Repo calls on mismatch), independently re-verified by TEST-DESIGN-VALIDATOR and RELEASE-VALIDATOR. SECURITY-REVIEWER additionally confirmed no timing side-channel between sibling-instance and nonexistent-instance rejections. ELIXIR-DEV's two implementation deviations (run_stub arity, log's explicit Lua.decode!/2) confirmed forced by the real tv-labs/lua library API, not shortcuts. 3+ cumulative clean full-suite runs. Queue task 311 released cleanly."
+        },
+        {
+            "run_id": "WF02-REQ160-20260827",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-160"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/lua/platform.ex",
+                "test/letflow/engine/lua/platform_test.exs",
+                "lib/letflow/design/req160-lua-host-api-write.md",
+                "test/specs/REQ-160.md"
+            ],
+            "lock_acquired_at": "2026-08-27T18:25:30Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ160-20260827 created; Step 1 dispatched to CODE-DESIGNER",
+            "backfilled": false,
+            "queue_task_id": 312,
+            "queue_agent_id": "orch-ai-dala",
+            "note": "WF-02 for REQ-160 (queue task 312, GH#612, stage S5). Lua host API 2/2 -- write path -- platform.write_variable (staged, applied atomically only on script success, discarded on EVERY failure arm: raised error, instruction budget, wall-clock kill, memory limit), call_service, emit_event (LUA-11 write half, LUA-12). Depends on REQ-159/158/157 (all done). The staging buffer must survive a brutal process kill, meaning it cannot live only inside the killed process's own state -- architecturally the hardest Lua work this session. SECURITY-REVIEWER hard gate. Queue claimed via get_next_task 2026-08-27T18:24:44Z."
         }
     ]
 }

@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step00-WF02-REQ153-20260827",
+  "run_id": "WF02-REQ153-20260827",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ153-20260827/step-00-git-setup.json",
+  "created_at": "2026-08-27T08:45:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-153"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-153": "Per-invocation Lua state isolation and a concrete LuaScriptAudit.Executor implementation (LUA-02, resolving script_ref). Build a module implementing @behaviour Letflow.Engine.LuaScriptAudit.Executor backed by tv-labs/lua via REQ-151's Sandbox.new/0. Fix script_ref's concrete shape (opaque term() in the behaviour -- S5 decides). Fresh state per invocation, no reuse. Do NOT change lua_script_audit.ex. NOT IN SCOPE: resource limits (REQ-154..156), host API beyond platform.now (REQ-152), capability enforcement (REQ-157), manifest validation (REQ-158). SECURITY-REVIEWER hard gate -- first requirement executing tenant-supplied script text end to end. Queue task 305, GH#605. See docs/requirements.yaml REQ-153 for full description."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_SETUP.md",
+      "docs/requirements.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/",
+      "test/letflow/engine/lua/"
+    ],
+    "branch_name": "feature/WF02-REQ153-20260827"
+  },
+  "task": {
+    "description": "Perform GIT_SETUP.md's standard procedure for WF-02 run WF02-REQ153-20260827. Create branch feature/WF02-REQ153-20260827 from an up-to-date main and push it immediately.",
+    "acceptance_criteria": [
+      "git pull --ff-only origin main exits 0",
+      "git branch --show-current outputs feature/WF02-REQ153-20260827",
+      "git push -u origin feature/WF02-REQ153-20260827 exits 0"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

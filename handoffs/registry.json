@@ -2610,6 +2610,26 @@
             "queue_task_id": 348,
             "queue_agent_id": "orch-main",
             "note": "WF-03 for ISS-0348 (queue task 348, GH#669). Letflow.TenantProvisioning.BackfillTest: 4 count-mismatch failures under full serial mix letflow.check, suspected DB-state pollution from other tests' committed tenant rows under async:false/Sandbox :auto. Does not manifest under scripts/test_parallel.sh's partitioned execution. Discovered by RELEASE-VALIDATOR during WF03-ISS0347-20260826."
+        },
+        {
+            "run_id": "WF02-REQ153-20260827",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-153"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/lua/",
+                "test/letflow/engine/lua/"
+            ],
+            "lock_acquired_at": "2026-08-27T08:45:00Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PENDING (ELIXIR-DEV dispatched)",
+            "backfilled": false,
+            "queue_task_id": 305,
+            "queue_agent_id": "orch-main",
+            "note": "WF-02 for REQ-153 (queue task 305, GH#605, stage S5). Per-invocation Lua state isolation and concrete LuaScriptAudit.Executor implementation (LUA-02). First requirement executing tenant-supplied script text end-to-end; SECURITY-REVIEWER hard gate applies. Queue claimed 2026-08-27T03:42:48Z via get_next_task."
         }
     ]
 }

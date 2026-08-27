@@ -686,7 +686,7 @@ volumes:
     path: docs/status/requirement_status.v5.yaml
     status: current
     opened: 2026-08-26
-    entries: 5
+    entries: 6
     note: >
       Incremented to 3 by WF02-REQ150-20260826's own Step Final rebase, which
       appended the REQ-150-done event (DOC-UPDATER) alongside the pre-existing

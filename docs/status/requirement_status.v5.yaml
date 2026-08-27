@@ -249,3 +249,13 @@ history:
       test-design-validator, test-runner (2092/2092 passing), and
       release-validator (independent re-verification). Status flipped
       in_progress -> done in docs/requirements.yaml.
+
+  - req: REQ-153
+    event: started
+    agent: ORCH
+    at: "2026-08-27T08:45:00Z"
+    note: >
+      WF02-REQ153-20260827 started (queue task 305, GH#605, stage S5).
+      Step 00 git-setup PENDING (ELIXIR-DEV dispatched): branch
+      feature/WF02-REQ153-20260827 to be created and pushed. 5 on-disk
+      entries before this append; 6 after.

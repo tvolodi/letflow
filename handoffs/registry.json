@@ -2735,12 +2735,13 @@
                 "lib/letflow/design/req158-lua-manifest-validation.md",
                 "test/specs/REQ-158.md",
                 "lib/letflow/engine/lua/executor.ex",
-                "test/letflow/engine/lua/executor_test.exs"
+                "test/letflow/engine/lua/executor_test.exs",
+                "test/letflow/engine/lua/manifest_executor_audit_test.exs"
             ],
             "lock_acquired_at": "2026-08-27T15:15:00Z",
             "lock_released_at": null,
             "released_lock": false,
-            "last_known_step": "Step 1b PASS (first pass, no rework) -- design requires a coordinated hash-computation change to executor.ex; owned_modules expanded to include it (no concurrent run holds it). Dispatching Step 2a to ELIXIR-DEV.",
+            "last_known_step": "Step 2a COMPLETED PASS -- manifest.ex built, executor.ex hash coverage extended; owned_modules expanded again for manifest_executor_audit_test.exs (new end-to-end test file, needs real Postgres). Dispatching Step 2c SECURITY-REVIEWER.",
             "backfilled": false,
             "queue_task_id": 310,
             "queue_agent_id": "orch-ai-dala",

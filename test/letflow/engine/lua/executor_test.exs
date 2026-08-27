@@ -717,5 +717,30 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
 
       assert {:error, {:wallclock_timeout, 300}} = Task.await(task, 1_000)
     end
+
+    # Gap found by TEST-DESIGNER mutation testing: design §5.1's fourth table row and
+    # §5.2 specify a caller-issued kill ("this path's Task.shutdown(:brutal_kill)
+    # equivalent") when a script hangs WITHOUT tripping the heap limit while a memory
+    # limit IS configured -- a materially different code branch inside
+    # run_with_heap_limit/4 (the `after timeout_ms -> Process.exit(pid, :kill) ...`
+    # clause) than the BEAM-issued heap-kill branch AC-1/AC-2/AC-3 above exercise.
+    # Confirmed by mutation: replacing that branch's body with a bogus return value
+    # left all 32 then-existing REQ-156/154/155 tests passing (no test exercised this
+    # branch), and reverting the mutation restored the pre-mutation pass count -- so
+    # this test was added to close that gap, not merely to report it.
+    test "a memory-limited call whose script hangs without tripping the heap limit is terminated by the caller's own timeout kill, not the BEAM heap-kill path" do
+      # A tight `while true do end` loop allocates essentially nothing on the Lua
+      # heap, so a heap limit generous enough to never trip (200 MB, same order of
+      # magnitude as AC-1's "large" limit above) leaves only the caller's own
+      # wall-clock bound to end this call.
+      generous_heap_words = trunc(200 * 1024 * 1024 / @word_size_bytes)
+
+      assert {:error, {:wallclock_timeout, 250}} =
+               Executor.execute_with_manifest("while true do end", "h",
+                 max_instructions: 1_000_000_000,
+                 timeout_ms: 250,
+                 max_heap_words: generous_heap_words
+               )
+    end
   end
 end

@@ -686,8 +686,11 @@ volumes:
     path: docs/status/requirement_status.v5.yaml
     status: current
     opened: 2026-08-26
-    entries: 8
+    entries: 9
     note: >
+      Incremented to 9 by TEST-RUNNER Step 04 done-event append (WF02-REQ154-20260827) --
+      `grep -c "^  - req:" docs/status/requirement_status.v5.yaml` = 9 on-disk entries.
+
       Incremented to 8 by ORCH's own REQ-154 started-event append (Step 00,
       WF02-REQ154-20260827) -- `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 8 on-disk entries.

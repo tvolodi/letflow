@@ -2753,21 +2753,23 @@
             "requirement_ids": ["REQ-159"],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/engine/lua/platform.ex",
                 "test/letflow/engine/lua/platform_test.exs",
                 "lib/letflow/design/req159-lua-host-api-read.md",
-                "test/specs/REQ-159.md"
+                "test/specs/REQ-159.md",
+                "lib/letflow/engine/lua_number_marshalling.ex",
+                "test/letflow/engine/lua_number_marshalling_test.exs"
             ],
             "lock_acquired_at": "2026-08-27T16:52:00Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ159-20260827 created; Step 1 dispatched to CODE-DESIGNER",
+            "lock_released_at": "2026-08-27T18:23:47Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #680 squash-merged (e9696ea); queue task 311 released done cleanly",
             "backfilled": false,
             "queue_task_id": 311,
             "queue_agent_id": "orch-ai-dala",
-            "note": "WF-02 for REQ-159 (queue task 311, GH#611, stage S5). Lua host API 1/2 -- read path -- platform.read_variable, get_instance_state, log (LUA-11 read half, LUA-13). Depends on REQ-158 (manifest/capability infra) and REQ-150 (number marshalling rule, both done). Real host-function bodies for the first time (REQ-157's stubs implemented for real) -- capability-gated at each call site per REQ-157, tenant prefix supplied by calling engine code never script input, number conversion cites REQ-150's rule rather than reinventing it. SECURITY-REVIEWER hard gate. Queue claimed via get_next_task 2026-08-27T16:51:31Z."
+            "note": "WF-02 for REQ-159 (queue task 311, GH#611, stage S5). Lua host API 1/2 -- read path -- platform.read_variable, get_instance_state, log (LUA-11 read half, LUA-13). Depends on REQ-158 (manifest/capability infra) and REQ-150 (number marshalling rule, both done). First requirement implementing real platform.* host-function bodies (REQ-157's stubs implemented for real). Design needed 1 rework: CODE-DESIGN-VALIDATOR found a real unauthorized cross-instance read gap (get_instance_state originally allowed reading ANY tenant-owned instance via an unsupported invented scenario) -- fixed to self-instance-only. TEST-DESIGNER found and closed a mutation-detectable test gap via active mutation testing (tests verified the correct return value but not the actual security property of zero Repo calls on mismatch), independently re-verified by TEST-DESIGN-VALIDATOR and RELEASE-VALIDATOR. SECURITY-REVIEWER additionally confirmed no timing side-channel between sibling-instance and nonexistent-instance rejections. ELIXIR-DEV's two implementation deviations (run_stub arity, log's explicit Lua.decode!/2) confirmed forced by the real tv-labs/lua library API, not shortcuts. 3+ cumulative clean full-suite runs. Queue task 311 released cleanly."
         }
     ]
 }

@@ -1,0 +1,57 @@
+{
+  "handoff_id": "step02a-WF02-REQ155-20260827",
+  "run_id": "WF02-REQ155-20260827",
+  "workflow_id": "WF-02",
+  "step": "2a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ155-20260827/step-02a-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-155"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ155-20260827/step-01-code-designer.json",
+      "handoffs/WF02-REQ155-20260827/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req155-lua-wallclock-kill.md",
+      "test/specs/REQ-155.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/plugin_interface.ex",
+      "lib/letflow/application.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/application.ex"
+    ],
+    "branch_name": "feature/WF02-REQ155-20260827"
+  },
+  "task": {
+    "description": "ELIXIR-DEV (WF-02 Step 2a) for REQ-155. Implement lib/letflow/design/req155-lua-wallclock-kill.md, which passed CODE-DESIGN-VALIDATOR on first pass. Extend lib/letflow/engine/lua/executor.ex per the design: thread a required :timeout_ms option through execute_with_manifest/3 (no default at that arity), add a default_timeout_ms/0 reading Application.fetch_env!(:letflow, :lua_wallclock_timeout_ms) used by the /2 arity, wrap script execution in a Task.Supervisor.async_nolink/2 call under a new Letflow.Engine.Lua.TaskSupervisor (register it in lib/letflow/application.ex's supervision tree per the design's justification for not reusing PluginTaskSupervisor), Task.yield/2 on the configured timeout, and Task.shutdown(task, :brutal_kill) + {:error, {:wallclock_timeout, timeout_ms}} on nil. Reuse lib/letflow/engine/plugin_interface.ex's exact yield-result handling shape (read it directly). Add the moduledoc content the design requires (LUA-10 restated as layer 2, LUA-08/LUA-10 non-interchangeability rationale, the carried-forward BEAM-kill/System.halt/0 limitation disclosure, and justification for the new supervisor). Add a lua_wallclock_timeout_ms default to config/config.exs (check how REQ-154's lua_max_instructions config entry looks, mirror its shape/placement). Write functional tests in test/letflow/engine/lua/executor_test.exs per the design's test-suite section and test/specs/REQ-155.md's spec, sufficient to prove: two different configured timeouts terminate at different times; a script that pcalls its own budget exhaustion and loops again still gets killed by the wall-clock timeout; the execution process is actually dead after a timeout (Process.alive?/1 or Task.Supervisor.children/1); the timeout error is pattern-distinguishable from REQ-154's budget error. Do not touch lib/letflow/engine/lua/capabilities.ex or platform.ex (unrelated, merged REQ-157 work). Follow the standard Step 2a procedure: verify branch, implement, mix compile --warnings-as-errors, mix format --check-formatted, self-review checklist (no tenant-input SQL interpolation -- N/A, no unresolved {:ok,_} = match on external-I/O path, new public functions have @doc, all call sites of any changed function signature still compile -- check execute_with_manifest/2's own callers). No migrations needed. Quote real mix compile / mix test output in your result, not a claim of success.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0 (quote real output)",
+      "mix format --check-formatted passes",
+      "All callers of execute_with_manifest/2,3 still compile unchanged in signature (only opts grows)",
+      "Design's test-suite section implemented as real ExUnit tests proving actual process death and the trapped-budget-still-times-out scenario",
+      "Self-review checklist items all checked per Step 2a's standard procedure",
+      "New Letflow.Engine.Lua.TaskSupervisor registered in the supervision tree and verified to start cleanly (mix test booting the app confirms this implicitly)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/application.ex",
+      "config/config.exs",
+      "config/test.exs",
+      "test/letflow/engine/lua/executor_test.exs"
+    ],
+    "notes": "Implemented REQ-155 (LUA-10 layer 2, host-enforced wall-clock kill) exactly per lib/letflow/design/req155-lua-wallclock-kill.md. execute_with_manifest/3 now requires both :max_instructions and :timeout_ms (no default at that arity); execute_with_manifest/2 delegates to /3 with default_budget()/default_timeout_ms(), the latter reading Application.fetch_env!(:letflow, :lua_wallclock_timeout_ms). Script evaluation (run_script/2, REQ-154's existing rescue clauses unchanged in substance) now runs inside a Task.Supervisor.async_nolink/2 call under a new, dedicated Letflow.Engine.Lua.TaskSupervisor (registered in lib/letflow/application.ex, after Letflow.Engine.PluginRegistry, no start-order dependency). Task.yield/2 bounded by :timeout_ms; nil -> Task.shutdown(task, :brutal_kill) + {:error, {:wallclock_timeout, timeout_ms}}, mirroring plugin_interface.ex's handle_yield_result/4 shape exactly (4 result classes + the new timeout arm). Added config :letflow, lua_wallclock_timeout_ms: 5_000 to config/config.exs (mirrors lua_max_instructions' comment/placement convention) and a short override (200ms) in config/test.exs for the 2-arity default path. Moduledoc extended with the LUA-10-layer-2 restatement, the non-interchangeability rationale, the decision-0014(a) mechanism restatement, the named-supervisor justification, and the carried-forward BEAM-node-kill/System.halt/0 limitation disclosure -- all covered by new moduledoc-content tests (T6b/T7/T8 in executor_test.exs).\n\nAll 5 existing REQ-154 opts-based test calls in executor_test.exs were updated to add timeout_ms (previously missing, would now KeyError since :timeout_ms is required with no default at that arity -- this is an intended, load-bearing behavior change per design Sec3.2, not a regression).\n\nT2 (AC-2, decision 0014's required two-layer test) needed empirical adjustment from the literal test-spec wording: I verified directly against the real tv-labs/lua runtime (via scratch probes calling Letflow.Engine.Lua.Sandbox/Lua.eval! outside the test suite) that this runtime's :max_instructions counter is permanently exhausted once tripped -- any further while/for/recursive Lua construct after the trip re-raises {:budget_exceeded, _} almost instantly (confirmed empirically, not assumed), which layer 1 ALONE already terminates in well under a millisecond. A second bare `while true do end` after the pcall-caught first loop is therefore NOT a valid layer-2-necessity test: it would pass or fail identically whether or not the wall-clock layer exists, so it would not be the test decision 0014 requires. I found empirically that a `goto`-based loop (`::top:: goto top`) is NOT instrumented by this runtime's instruction-budget check at all (confirmed: hangs indefinitely, verified with a bounded probe) -- exactly the kind of in-band escape hatch LUA-10's parenthetical exists to guard against. T2 uses this real construct: traps the first loop's budget error via pcall, then loops forever via goto, and is provably killed only by the wall-clock layer. This is documented inline in the test file's comment above T2 so a future reader understands why the script isn't the spec's literal wording.\n\nReal command output:\n\n$ mix compile --warnings-as-errors\n(no output, exit 0)\n\n$ mix format --check-formatted\n(no output, exit 0)\n\n$ mix test test/letflow/engine/lua/executor_test.exs\nRunning ExUnit with seed: 561363, max_cases: 16\nExcluding tags: [:keycloak]\n........................\nFinished in 1.7 seconds (1.7s async, 0.00s sync)\nResult: 24 passed\n(re-run 3x with --seed 1/2/3: 24 passed each time, no flakiness in the new timing-sensitive tests)\n\nOne pre-existing test, 'execute_with_manifest/2 is exported' (test/letflow/engine/lua/executor_test.exs:30, uses function_exported?/3), fails when run in isolation via `mix test test/letflow/engine/lua/executor_test.exs:30` both BEFORE and AFTER my changes (verified via git stash) -- a pre-existing test-isolation issue (function_exported?/3 needs the module already loaded in-process) unrelated to REQ-155; it passes when the full file/suite runs normally since another test loads the module first. Flagging for TEST-RUNNER/REVIEWER rather than silently fixing a test outside REQ-155's scope.\n\n$ mix test (full suite, run in isolation after an earlier mistake of launching 4 concurrent `mix test` invocations against the shared partitioned test DB caused spurious 6-13 failures from cross-run tenant-schema contention -- confirmed via a clean solo re-run):\nFinished in 675.4 seconds (11.7s async, 663.6s sync)\nResult: 2150 passed (5 properties, 2145 tests), 3 excluded\n\nSelf-review: no tenant-input SQL interpolation (N/A, no SQL in this module); no unresolved {:ok,_} = match on an externally-reachable path (handle_yield_result/3 covers all 4 Task.yield/2 outcomes plus the timeout case explicitly, no bare match); all new public functions (execute_with_manifest/2,3, still the only public functions besides the @behaviour callback) retain @doc; default_timeout_ms/0 and default_budget/0 are private per design Sec3.3/3.4. Callers of execute_with_manifest/2,3 checked: lib/letflow/engine/lua_script_audit.ex calls only the unchanged-signature /2 arity; test/letflow/engine/lua_script_audit_test.exs uses only its own Double module (unaffected); all 5 in-repo /3 call sites are in executor_test.exs itself, updated. New Letflow.Engine.Lua.TaskSupervisor confirmed registered and starting cleanly -- the full mix test run (which boots the application) passed, and executor_test.exs's own AC-5/AC-3/AC-4 tests directly exercise Task.Supervisor.children(Letflow.Engine.Lua.TaskSupervisor). Did not touch lib/letflow/engine/lua/capabilities.ex or platform.ex. No migrations needed, none added. Not committed/pushed -- leaving that to ORCH per instructions."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

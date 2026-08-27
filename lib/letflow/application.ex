@@ -43,7 +43,13 @@ defmodule Letflow.Application do
         {Task.Supervisor, name: Letflow.SandboxPool.TaskSupervisor},
         {Letflow.SandboxPool, []},
         {Task.Supervisor, name: Letflow.Engine.PluginTaskSupervisor},
-        {Letflow.Engine.PluginRegistry, plugin_registrations_from_config()}
+        {Letflow.Engine.PluginRegistry, plugin_registrations_from_config()},
+        # REQ-155: dedicated Task.Supervisor for host-enforced wall-clock kill of Lua
+        # script execution (LUA-10 layer 2). Deliberately separate from
+        # PluginTaskSupervisor above -- see Letflow.Engine.Lua.Executor's moduledoc
+        # for why sharing it would conflate two independently-reasoned-about
+        # subsystems. No other child depends on start order here.
+        {Task.Supervisor, name: Letflow.Engine.Lua.TaskSupervisor}
       ] ++ http_child()
 
     # See https://hexdocs.pm/elixir/Supervisor.html

@@ -135,3 +135,9 @@ config :letflow, :oidc_jit_provisioning, %{
 # separately-named Letflow.SandboxPool instance instead (design doc §4.7
 # INV-SP-7) rather than mutating this global default.
 config :letflow, :sandbox_pool, max_concurrent_sandboxes: 1
+
+# REQ-155: shorter-than-production default so a test exercising the 2-arity
+# execute_with_manifest/2 default path (rather than /3's explicit :timeout_ms) does
+# not wait out the full production default on a timeout. Tests that need a specific
+# timeout value use the 3-arity overload directly rather than mutating this global.
+config :letflow, lua_wallclock_timeout_ms: 200

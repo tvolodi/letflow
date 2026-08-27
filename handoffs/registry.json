@@ -2648,7 +2648,7 @@
             "lock_acquired_at": "2026-08-27T06:32:50Z",
             "lock_released_at": null,
             "released_lock": false,
-            "last_known_step": "Step 02d COMPLETED PASS -- REVIEWER all idiom/scope/decision-record checks clear; dispatch Step 03 TEST-DESIGNER",
+            "last_known_step": "Step 03 COMPLETED PASS -- TEST-DESIGNER wrote test/specs/REQ-154.md covering all 7 ACs; dispatch Step 03b TEST-DESIGN-VALIDATOR",
             "backfilled": false,
             "queue_task_id": 306,
             "queue_agent_id": "orch-main",

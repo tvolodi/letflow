@@ -15,7 +15,11 @@ defmodule Letflow.Engine.Lua.Executor do
 
   alias Letflow.Engine.Lua.Sandbox
 
-  @impl Letflow.Engine.LuaScriptAudit.Executor
+  @doc """
+  Implements `Letflow.Engine.LuaScriptAudit.Executor.execute_with_manifest/2`.
+  Runs `script_source` (a binary containing Lua source text) in a fresh sandbox
+  and returns the SHA-256 hex of the source as the manifest hash.
+  """
   @spec execute_with_manifest(binary(), String.t()) ::
           {:ok, %{manifest_hash: String.t()}} | {:error, term()}
   def execute_with_manifest(script_source, _registered_hash) do

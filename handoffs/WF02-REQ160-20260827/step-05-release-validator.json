@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step05-WF02-REQ160-20260827",
+  "run_id": "WF02-REQ160-20260827",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ160-20260827/step-05-release-validator.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-160"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ160-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ160-20260827/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ160-20260827/step-02d-reviewer.json",
+      "handoffs/WF02-REQ160-20260827/step-03b-test-design-validator-recheck.json",
+      "handoffs/WF02-REQ160-20260827/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req160-lua-host-api-write.md",
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ160-20260827",
+    "commit": "e419893"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR (WF-02 Step 5) for REQ-160 -- independently re-derive that all 8 real acceptance criteria in docs/requirements.yaml's REQ-160 entry are actually met, before this requirement is marked done. Do not trust any prior agent's PASS verdict as evidence by itself -- re-verify against the real code and real test output yourself. This run went through one design rework (kill-race invariant) and one test-design rework (missing kill-arm tests/atomicity test) before reaching this point -- both hard gates (SECURITY-REVIEWER, REVIEWER) and both test gates (TEST-DESIGN-VALIDATOR after rework, TEST-RUNNER) ultimately passed clean.",
+    "acceptance_criteria": [
+      "Read docs/requirements.yaml REQ-160's 8 acceptance criteria verbatim and independently map each to a real, currently-passing test in test/letflow/engine/lua/platform_test.exs -- run at least a handful of those specific tests yourself.",
+      "Independently run mix test test/letflow/engine/lua/platform_test.exs and mix compile --warnings-as-errors and quote real output.",
+      "Confirm the approved design (lib/letflow/design/req160-lua-host-api-write.md) and the real implementation (lib/letflow/engine/lua/platform.ex) are consistent -- spot check at least the INV-write-discard-on-race invariant's real code manifestation.",
+      "Confirm no owned_modules boundary violation occurred across the whole run (git diff across all commits on this branch touches only lib/letflow/engine/lua/platform.ex, test/letflow/engine/lua/platform_test.exs, lib/letflow/design/req160-lua-host-api-write.md, test/specs/REQ-160.md, plus this run's own handoffs/ and docs/status/ bookkeeping).",
+      "Verdict: PASS only if independently re-derived, not merely re-stated from prior agents' reports."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

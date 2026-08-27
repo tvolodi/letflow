@@ -2,6 +2,11 @@ import Config
 
 config :letflow, ecto_repos: [Letflow.Repo]
 
+# REQ-154: default instruction budget for tenant-supplied Lua scripts.
+# The 2-arity execute_with_manifest/2 reads this value; the 3-arity overload
+# accepts :max_instructions per call and does not use this config.
+config :letflow, lua_max_instructions: 100_000
+
 # REQ-152: production/dev default time source for Letflow.Engine.Lua.Platform.now/0 —
 # set explicitly here (rather than relying solely on Application.get_env/3's inline
 # default) so the configured implementation is legible by reading config, not only by

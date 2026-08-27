@@ -2597,19 +2597,19 @@
                 "ISS-0348"
             ],
             "stage": "S0",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "test/letflow/tenant_provisioning/backfill_test.exs",
                 "lib/letflow/tenant_provisioning.ex"
             ],
             "lock_acquired_at": "2026-08-26T22:33:39Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 PENDING (ELIXIR-DEV dispatched)",
+            "lock_released_at": "2026-08-27T04:45:00Z",
+            "released_lock": true,
+            "last_known_step": "Step Final PASS -- PR #671 merged (965a1fc), both CI gates green pre-rebase; post-rebase backend gate failure attributed to unrelated pre-existing main state (empty handoffs/WF02-REQ153-20260827/step-01-code-designer.json from commit 89ae6ec, filed as GH#672 -- queue register_task returned 401 unauthorized at filing time, so no ISS- id allocated yet)",
             "backfilled": false,
             "queue_task_id": 348,
             "queue_agent_id": "orch-main",
-            "note": "WF-03 for ISS-0348 (queue task 348, GH#669). Letflow.TenantProvisioning.BackfillTest: 4 count-mismatch failures under full serial mix letflow.check, suspected DB-state pollution from other tests' committed tenant rows under async:false/Sandbox :auto. Does not manifest under scripts/test_parallel.sh's partitioned execution. Discovered by RELEASE-VALIDATOR during WF03-ISS0347-20260826."
+            "note": "WF-03 for ISS-0348 (queue task 348, GH#669) DONE. Letflow.TenantProvisioning.BackfillTest: 4 count-mismatch failures under full serial mix letflow.check, DB-state pollution from other tests' committed tenant rows under async:false/Sandbox :auto -- fixed by isolating BackfillTest's assertions from cross-test state (lib/letflow/design/iss0348-backfill-test-isolation.md). mix letflow.check green end-to-end at step-05b (2097 passed / 0 failures, lint_handoffs clean). ISS-0348 resolved, GH#669 closed. Incidental unrelated finding (empty WF02-REQ153 handoff file blocking lint_handoffs on main) filed as GH#672, did not block this merge -- letflow-queue register_task returned 401 unauthorized when attempting to allocate an ISS- id for it; local .env/env token both checked and match, genuinely unreachable at filing time."
         },
         {
             "run_id": "WF02-REQ153-20260827",

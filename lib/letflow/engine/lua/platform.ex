@@ -217,7 +217,7 @@ defmodule Letflow.Engine.Lua.Platform do
   wrap `platform.fail(...)` in `pcall` and keep running exactly as decision 0014 warns
   against, and nothing in the old stub stopped it.
 
-  **The actual mechanism**: `do_fail/1` calls `exit({:script_failed, %{reason: reason,
+  **The actual mechanism**: `do_fail/2` calls `exit({:script_failed, %{reason: reason,
   details: details}})` from inside the `platform.fail` native function itself, terminating
   the calling process outright. This is uninterceptable because `tv-labs/lua`'s entire
   `pcall`/`xpcall`/native-call boundary is implemented via Elixir `try/rescue` —
@@ -329,7 +329,7 @@ defmodule Letflow.Engine.Lua.Platform do
   @type staged_writes :: %{optional(String.t()) => term()}
 
   # REQ-161 design §2.4/§3.3. The structured SCRIPT_FAILED payload carried on the exit
-  # signal `do_fail/1` raises via `exit/1` -- never recovered from the terminated
+  # signal `do_fail/2` raises via `exit/1` -- never recovered from the terminated
   # process's own memory, since there is no process left to read it from once the exit
   # signal has been sent. `:script_failed` is reserved to mean "a script deliberately
   # called `platform.fail`" -- a future SCRIPT_ERROR (REQ-162) MUST NOT reuse this tag.

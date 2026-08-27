@@ -1,0 +1,167 @@
+run_id: WF02-REQ162-20260827
+date: "2026-08-27"
+agent: TEST-RUNNER
+branch: feature/WF02-REQ162-20260827
+verdict: PASS
+
+full_suite_run_1:
+  command: "scripts/test_parallel.sh"
+  partition_count: 8
+  partition_count_source: "nproc (no TEST_PARALLEL_N override set)"
+  per_partition:
+    - partition: 1
+      tests: 229
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 2
+      tests: 243
+      properties: 1
+      failures: 0
+      exit_code: 0
+    - partition: 3
+      tests: 393
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 4
+      tests: 197
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 5
+      tests: 322
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 6
+      tests: 241
+      properties: 2
+      failures: 0
+      exit_code: 0
+    - partition: 7
+      tests: 329
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 8
+      tests: 323
+      properties: 2
+      failures: 0
+      exit_code: 0
+  combined_final_line: "combined: 2277 tests, 5 properties, 0 failures (2282/2282 passed)"
+  total_tests: 2282
+  passed: 2282
+  failed: 0
+  properties: "5/5"
+  script_exit_code: 0
+  full_raw_output: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.xnNPnE
+    test_parallel: TEST_PARALLEL_GROUP=tp2552405 (shared by all 8 partitions)
+    partition 1: 229 tests, 0 properties, 0 failures, exit 0
+    partition 2: 243 tests, 1 property, 0 failures, exit 0
+    partition 3: 393 tests, 0 properties, 0 failures, exit 0
+    partition 4: 197 tests, 0 properties, 0 failures, exit 0
+    partition 5: 322 tests, 0 properties, 0 failures, exit 0
+    partition 6: 241 tests, 2 properties, 0 failures, exit 0
+    partition 7: 329 tests, 0 properties, 0 failures, exit 0
+    partition 8: 323 tests, 2 properties, 0 failures, exit 0
+    ---
+    combined: 2277 tests, 5 properties, 0 failures (2282/2282 passed)
+
+full_suite_run_2:
+  command: "scripts/test_parallel.sh"
+  partition_count: 8
+  partition_count_source: "nproc (no TEST_PARALLEL_N override set)"
+  combined_final_line: "combined: 2277 tests, 5 properties, 0 failures (2282/2282 passed)"
+  total_tests: 2282
+  passed: 2282
+  failed: 0
+  properties: "5/5"
+  script_exit_code: 0
+  full_raw_output: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.m6LHsh
+    test_parallel: TEST_PARALLEL_GROUP=tp2563831 (shared by all 8 partitions)
+    partition 1: 229 tests, 0 properties, 0 failures, exit 0
+    partition 2: 243 tests, 1 property, 0 failures, exit 0
+    partition 3: 393 tests, 0 properties, 0 failures, exit 0
+    partition 4: 197 tests, 0 properties, 0 failures, exit 0
+    partition 5: 322 tests, 0 properties, 0 failures, exit 0
+    partition 6: 241 tests, 2 properties, 0 failures, exit 0
+    partition 7: 329 tests, 0 properties, 0 failures, exit 0
+    partition 8: 323 tests, 2 properties, 0 failures, exit 0
+    ---
+    combined: 2277 tests, 5 properties, 0 failures (2282/2282 passed)
+
+compile_check:
+  command: "mix compile --force --warnings-as-errors"
+  result: "clean -- 129 files compiled, 'Generated letflow app', exit 0, no warnings"
+
+ripple_scrutiny:
+  reason: >
+    This run's diff touches lib/letflow/engine/lua/executor.ex, a heavily
+    shared module consumed by every Lua-executing test file, not just
+    executor_test.exs.
+  method: >
+    Enumerated every test file referencing letflow/engine/lua before
+    running the suite: test/letflow/engine/lua/manifest_test.exs,
+    test/letflow/engine/lua/sandbox_test.exs,
+    test/letflow/engine/lua/platform_test.exs,
+    test/letflow/engine/lua/manifest_executor_audit_test.exs,
+    test/letflow/engine/lua_script_audit_test.exs, and the new/changed
+    test/letflow/engine/lua/executor_test.exs itself. All of these are
+    exercised as part of the full-suite partitions above (the suite is
+    not filtered), and every partition reported 0 failures in both runs,
+    with identical per-partition test and property counts run-to-run --
+    the same signature you'd expect if executor.ex's change had zero
+    behavioral impact on its consumers.
+  conclusion: >
+    No ripple effect detected in any Lua-related consumer test file, or
+    anywhere else in the suite, across two consecutive full-suite runs.
+
+failures_attribution:
+  branch_failures: 0
+  pre_existing_failures: 0
+  unattributed_failures: 0
+  iss_0340_check: >
+    docs/issues/ISS-0340.yaml (Letflow.Api.ContextTest "scoped_repo_opts/1
+    is 1-arity", reopened, intermittent full-suite-ordering race unrelated
+    to Lua work) did NOT appear in either run. Had it appeared, it would
+    have been structurally clearable by diff-exclusion since this branch's
+    diff (git diff --name-only main...HEAD) does not touch
+    lib/letflow/api/context.ex -- but since it did not reproduce, no
+    attribution was needed either way.
+  note: >
+    Both full-suite runs reproduced zero test failures across all 8
+    partitions each (2282/2282 passed, exit 0 from every partition, both
+    runs, identical per-partition test/property counts run-to-run). Per
+    core-directives.md's "Failure Attribution Is Structural, Never By
+    Count-Matching," this identical-count-twice result is reported as
+    what it is (two independently clean runs), not used as a substitute
+    for attribution -- there was nothing to attribute.
+  no_rework_needed: >
+    No failure was caused by REQ-162's own change to
+    lib/letflow/engine/lua/executor.ex (SCRIPT_ERROR capture) or its new
+    tests in test/letflow/engine/lua/executor_test.exs -- both runs were
+    fully green, so there is nothing to route back to ELIXIR-DEV.
+
+environment:
+  toolchain: "asdf shims at $HOME/.asdf/shims (mix/elixir/erl resolved from there, not bare PATH)"
+  database: "Postgres reachable on 127.0.0.1:5463 (LETFLOW_DB_PORT from untracked .env), container letflow-1-postgres-1 already Running/healthy via docker compose"
+  docker_note: "docker compose up -d as plain user (tvolodi) failed with 'permission denied ... docker API' (host user not in the docker group); sudo -n docker compose ps confirmed containers letflow-1-postgres-1 and letflow-1-keycloak-1 already Running/healthy, so no start action was needed."
+  parallelism: "TEST_PARALLEL_N not set; N derived from nproc = 8, both runs."
+
+conclusion: >
+  Full suite green on both consecutive runs: 2282/2282 tests passed (5/5
+  properties), 0 failures, identical per-partition counts both times.
+  mix compile --force --warnings-as-errors is clean (129 files, exit 0).
+  Ripple risk from executor.ex's shared-module status was specifically
+  checked against every Lua-consuming test file; none showed any
+  regression. ISS-0340 did not reproduce in either run. No rework
+  required for lib/letflow/engine/lua/executor.ex or its tests.

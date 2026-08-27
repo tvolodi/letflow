@@ -90,9 +90,11 @@ running (`instance_id`), a trace/correlation id, and the identity of the script 
 (`script_identity`) — none of which may come from the Lua call's own arguments, because a
 script controls those arguments completely. A `read_variable("x")` call's only
 script-supplied argument is `"x"`; a `get_instance_state(id)` call's only script-supplied
-argument is `id` (see §5 for why that one argument *is* accepted from the script, and why
-accepting it does not violate the tenant boundary). `log(level, message, context)`'s three
-arguments are all script-authored content, never identity claims.
+argument is `id` (see §5.1 for why that argument is checked against, and must equal,
+`execution_context.instance_id` before anything else happens — a script may only ever
+name its own instance, never another one, so accepting the argument at all does not widen
+scope beyond "self"). `log(level, message, context)`'s three arguments are all
+script-authored content, never identity claims.
 
 ### 2.2 Two shapes considered
 
@@ -325,19 +327,35 @@ matches on a binary `required` value and returns it unchanged, `platform.ex:212`
 
 ## 5. `platform.get_instance_state(instance_id)`
 
-### 5.1 Why the script-supplied `instance_id` argument is acceptable here
+### 5.1 Default scope: a script may only read its own instance's state (decided)
 
-Unlike `execution_context.prefix` (never script-supplied, §2), the `instance_id`
-*argument* to this specific function is allowed to come from the script, because it
-answers a different question: "which instance's public state" (any instance the calling
-tenant owns is a legitimate target — e.g. a parent instance reading a known child's
-state), not "which tenant." The tenant boundary is enforced entirely by which `prefix`
-the resulting `Repo.get/3` call uses, and that `prefix` is always
-`execution_context.prefix` — never anything derived from the `instance_id` argument
-itself. A script cannot use this function to read another tenant's data because there is
-no `prefix` value it can supply or influence; it can only ever query the current
-tenant's own schema, for whichever row (by id) it names — the same shape as
-`Letflow.Instances.get_by_id/2`'s own contract, reused here directly (§5.2).
+`get_instance_state`'s script-supplied `instance_id` argument is checked against
+`execution_context.instance_id` (§2.3) **before** anything else. The script-supplied
+value is accepted only when it is exactly equal to `execution_context.instance_id` —
+i.e. a script may read only the state of the instance it is itself running on behalf of,
+never any other instance, even one owned by the same tenant. Any other value — whether
+or not it names a real instance in this tenant's schema — is rejected uniformly with a
+structured `reason: "forbidden"` error (§5.3), and **no `Repo` lookup is attempted** for
+that value at all.
+
+This is a default-scope decision (ORCH, REWORK ITERATION 1 of this design), not an open
+question: nothing in REQ-159's requirement text, its 8 acceptance criteria
+(`docs/requirements.yaml`), LUA-11/LUA-13's text, decision 0014, or REQ-157's capability
+matrix asks for — or even mentions — a script reading any instance's state other than its
+own. `instance:read` is a capability grant (whether a script may call this function at
+all), not an authorization to name an arbitrary instance id; granting the capability does
+not by itself widen *which* instance may be read. Least privilege therefore applies:
+absent an explicit requirement for broader (e.g. same-tenant cross-instance, or
+parent/child) access, the function is scoped to "self" only. No parent/child or
+ownership relationship between instances is established anywhere in the artifacts read
+for this design (§0) — if a future requirement needs cross-instance reads, it must
+introduce and cite that concept explicitly, with its own capability/authorization design,
+rather than this design inventing one.
+
+The tenant boundary itself is still enforced exactly as before, independently of this
+scope check: the `prefix` the eventual `Repo.get/3` call uses (for the one case that
+passes the self-check) is always `execution_context.prefix`, never anything derived from
+the `instance_id` argument (§5.2 step 3).
 
 ### 5.2 Real implementation
 
@@ -346,8 +364,8 @@ tenant's own schema, for whichever row (by id) it names — the same shape as
         [term()]
 ```
 
-Control flow, in prose, mirroring `Letflow.Instances.get_by_id/2`'s three-way outcome
-exactly:
+Control flow, in prose, mirroring `Letflow.Instances.get_by_id/2`'s three-way outcome,
+plus the self-scope check from §5.1 applied first:
 
 1. If `execution_context.prefix` is `nil` (the empty-context sentinel, §2.3.1) — returns
    the two-value Lua result `[nil, error_table]` (§5.4) with `reason: "no_execution_context"`,
@@ -358,18 +376,26 @@ exactly:
    binary, or `Ecto.UUID.cast/1` rejects it, returns `[nil, error_table]` with
    `reason: "invalid_id"` — mirrors `Letflow.Instances.get_by_id/2`'s `{:error,
    :invalid_id}` arm, no round trip to the database for a value that cannot be a valid
-   id.
-3. Otherwise, calls `Letflow.Repo.get(Letflow.EventStore.InstanceProjection, instance_id,
-   prefix: execution_context.prefix)`. A `nil` result (row absent, or belonging to a
-   different tenant schema — indistinguishable, same INV-5 shape
+   id. This check runs before the self-scope check (step 3) so a malformed argument is
+   always reported as `"invalid_id"`, never `"forbidden"`.
+3. Otherwise, compares `instance_id` (cast) against `execution_context.instance_id`
+   (§5.1). If they are not equal — regardless of whether `instance_id` names a real
+   instance anywhere in this tenant's schema — returns `[nil, error_table]` with
+   `reason: "forbidden"`, and **no `Repo` call is made** for this arm. This is the only
+   place this function's outcome depends on anything other than "does this row exist,"
+   and it is checked strictly before any database access.
+4. Otherwise (`instance_id == execution_context.instance_id`), calls
+   `Letflow.Repo.get(Letflow.EventStore.InstanceProjection, instance_id, prefix:
+   execution_context.prefix)`. A `nil` result (row absent — e.g. `execution_context` names
+   an instance id that was since deleted, or was never a real row; the same INV-5 shape
    `Letflow.Instances.get_by_id/2` already documents) returns `[nil, error_table]` with
    `reason: "not_found"`.
-4. Otherwise, builds a Lua table (§5.4, success shape) from the found
+5. Otherwise, builds a Lua table (§5.4, success shape) from the found
    `InstanceProjection`'s `:status` (its `Ecto.Enum` string form, e.g. `"ACTIVE"`) and
    `:variables` (each value passed through `LuaNumberMarshalling.to_lua/1`, §3, same as
    `read_variable`) and returns `[state_table]`.
 
-No arm of this function raises. Step 1–3's failure arms are ordinary structured returns,
+No arm of this function raises. Steps 1–4's failure arms are ordinary structured returns,
 exactly satisfying "MUST return a structured error (not a raise propagating to the Lua
 caller as an unhandled exception)."
 
@@ -379,12 +405,17 @@ caller as an unhandled exception)."
 @type get_instance_state_error :: %{reason: String.t()}
 ```
 
-`reason` is one of `"no_execution_context"`, `"invalid_id"`, `"not_found"` — three
-distinct strings, each naming a genuinely different failure cause, so a script (or a test
-asserting on this function) can distinguish "you gave me garbage" from "that id does not
-exist here" from "the host never told me who I am." No `message` field is added beyond
-`reason` — LUA-13's structured-entry requirement (§6) is the function that owns
-human-readable text; this one's contract is machine-checkable reason codes.
+`reason` is one of `"no_execution_context"`, `"invalid_id"`, `"forbidden"`, `"not_found"`
+— four distinct strings, each naming a genuinely different failure cause, so a script (or
+a test asserting on this function) can distinguish "you gave me garbage" from "that is not
+your instance" from "that id does not exist here" from "the host never told me who I am."
+`"forbidden"` is returned for any `instance_id` other than
+`execution_context.instance_id` (§5.1, §5.2 step 3), independent of whether that other id
+exists — a real, existing sibling instance and a fabricated id are indistinguishable in
+this function's response, by design, so a script cannot use the error to probe which
+other ids exist. No `message` field is added beyond `reason` — LUA-13's structured-entry
+requirement (§6) is the function that owns human-readable text; this one's contract is
+machine-checkable reason codes.
 
 ### 5.4 Lua-visible return shapes
 
@@ -530,9 +561,9 @@ closed over alongside `capabilities`, and `run_stub/3`'s call site widened to
 |---|---|---|
 | 1 | `read_variable` returns the current value for a set variable and `nil` for an unset one (LUA-11 read-half text) | §4.1 steps 2–4 |
 | 2 | `log` emits a structured entry carrying script identity, instance ID, and trace ID — all three asserted individually (LUA-13's own acceptance) | §6.1 step 3, §6.3 |
-| 3 | `get_instance_state` returns instance state for a valid instance and a structured error (not a raise) for an invalid one | §5.2 (all 4 steps), §5.3, §5.4 |
+| 3 | `get_instance_state` returns instance state for a valid instance and a structured error (not a raise) for an invalid one — "valid" scoped to the script's own instance by default (§5.1); any other instance id, real or not, is uniformly `"forbidden"`, never distinguished from a genuinely nonexistent one | §5.1, §5.2 (all 5 steps), §5.3, §5.4 |
 | 4 | Each of the 3 functions has a capability-denial test (missing `variable:read`/`instance:read`/`audit:log` each raises a Lua error) | §4.3, §5.5, §6.4 — `required` unchanged, `Capabilities.check!/3` still runs first in the fold (§7.4), unedited ordering from REQ-157 |
-| 5 | Number conversion uses REQ-150's named module/function; moduledoc cites REQ-150's normative section by number; no second conversion rule introduced | §3 (module/function creation), §4.1 step 3, §5.2 step 4 (both call sites), moduledoc instruction in §3's closing paragraph |
+| 5 | Number conversion uses REQ-150's named module/function; moduledoc cites REQ-150's normative section by number; no second conversion rule introduced | §3 (module/function creation), §4.1 step 3, §5.2 step 5 (both call sites), moduledoc instruction in §3's closing paragraph |
 | 6 | A test round-trips at least one integer and one float through `read_variable`, asserting the subtype matches REQ-150's rule | §3 closing paragraph (the design's own note that this is `read_variable`'s job); §9 test spec names this case explicitly |
 | 7 | No host function in this requirement calls `Letflow.Repo` with a prefix derived from script-supplied input; moduledoc states the tenant prefix is supplied by the calling engine code (decision 0014 (e)) | §2 (entire section, in particular §2.4), §4.1 (no `Repo` call at all), §5.1–§5.2 (prefix always `execution_context.prefix`) |
 | 8 | `mix test` and `mix compile --warnings-as-errors` both pass with real output quoted | Not a design-time artifact — ELIXIR-DEV/TEST-RUNNER responsibility at Steps 2/4, same convention as REQ-157's own §8 traceability row |

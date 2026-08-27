@@ -75,13 +75,14 @@ defmodule Letflow.Engine.Lua.Platform do
   as an unconditional `:ok` without ever consulting the calling script's grant set
   (INV-CAP-4).
 
-  Every one of the six gated functions is stubbed only enough to prove the gate ran
-  (`Letflow.Engine.Lua.Capabilities.check!/3` raises a `Lua.RuntimeException` on denial,
-  LUA-06's "MUST raise a Lua error") — none of the six has a real implementation yet
-  (REQ-159/160/161/162). `install/1` remains a thin delegate to `install/2` with an empty
-  `Letflow.Engine.Lua.Capabilities.new()` grant set, so every production `Sandbox.new/0,1`
-  VM exposes all 8 names with the six gated ones permanently denying until a future
-  requirement calls `install/2` directly with a populated grant set.
+  At the time REQ-157 shipped, every one of the six gated functions was stubbed only
+  enough to prove the gate ran (`Letflow.Engine.Lua.Capabilities.check!/3` raises a
+  `Lua.RuntimeException` on denial, LUA-06's "MUST raise a Lua error") — none of the six
+  had a real implementation yet. REQ-159 and REQ-160 (below) have since replaced all six
+  stubs with real implementations. `install/1` remains a thin delegate to `install/2`
+  with an empty `Letflow.Engine.Lua.Capabilities.new()` grant set, so every production
+  `Sandbox.new/0,1` VM exposes all 8 names with the six gated ones permanently denying
+  until a future requirement calls `install/2` directly with a populated grant set.
 
   ## REQ-159 (LUA-11 read half, LUA-13) — `read_variable`, `get_instance_state`, `log`
 
@@ -90,8 +91,9 @@ defmodule Letflow.Engine.Lua.Platform do
   variables map, no `Letflow.Repo` call), `get_instance_state` (the one function in this
   set that reads `Letflow.Repo`, and only ever the calling script's own instance — see
   below), and `log` (emits via `Logger.log/3`, tagged with host-authored correlation
-  fields only). `write_variable`, `call_service`, `emit_event` are REQ-160's and remain
-  `:not_yet_implemented`; `now`/`fail` are untouched.
+  fields only). `write_variable`, `call_service`, `emit_event` were `:not_yet_implemented`
+  at the time this section was written; see the REQ-160 section below for their real
+  implementations. `now`/`fail` are untouched by either requirement.
 
   A new `execution_context` value (`instance_id`, `prefix`, `trace_id`, `script_identity`,
   `variables`) is captured once per `install/3` call, the same closure-capture mechanism
@@ -147,11 +149,61 @@ defmodule Letflow.Engine.Lua.Platform do
   reference through to `Logger.log/3`'s metadata (which would leak a VM-internal,
   process-local id into a log entry — never useful to a reader and not safely
   serializable).
+
+  ## REQ-160 (LUA-11 write half, LUA-12) — `write_variable`, `call_service`, `emit_event`
+
+  Implements `lib/letflow/design/req160-lua-host-api-write.md`. The three remaining
+  `:not_yet_implemented` stubs become real. **None of the three ever raises** except via
+  the fold-level `Capabilities.check!/3` gate, structurally prior to any of them
+  running.
+
+  `write_variable(name, value)` stages the write into a **process-dictionary** buffer
+  private to the one BEAM process executing the current script (design §2.2/2.3) — never
+  into `Lua.t()`'s own state. Because REQ-155's wall-clock kill and REQ-156's memory-limit
+  kill both terminate that same process, and the only two channels a caller ever observes
+  a kill through are a payload-less `:DOWN` message or (on the two timeout-specific arms)
+  a structured error tuple those two designs' own code returns *unconditionally*
+  regardless of what a killed process's own reply might contain
+  (`INV-write-discard-on-race`, design §2.2), a staged write is discarded automatically
+  by any kill or raised script error, with no special discard mechanism needed here. The
+  new public `take_staged_writes/0` reads and clears that buffer; this module never calls
+  it itself — some future, out-of-scope caller (design §2.5 OQ-1, `executor.ex`, not in
+  this requirement's `owned_modules`) is the first real caller. Makes no `Letflow.Repo`
+  call; never raises.
+
+  `call_service(service_id, payload)` resolves an injected `#{inspect(__MODULE__)}.ServiceCaller`
+  implementation from application env (`Application.get_env(:letflow,
+  :lua_platform_service_caller, ...)`, read fresh on every call — mirrors `TimeSource`'s
+  own resolution exactly), defaulting to `#{inspect(__MODULE__)}.NoServiceCaller`, which
+  always returns `{:error, :service_caller_not_configured}`. A service-call **failure**
+  returns a structured `[nil, error_table]` Lua result; it never raises. This is
+  genuinely distinct from a **missing** `service:call:<id>` capability, which raises at
+  the fold level, one step before `call_service`'s own body is ever entered — a denied
+  call never reaches this function's body, and this function's body never raises (design
+  §4.3). Makes no `Letflow.Repo` call.
+
+  `emit_event(event_type, payload, idempotency_key)` hooks into the real, already-shipped
+  `Letflow.EventStore.append/2` (`lib/letflow/event_store.ex`). Its `prefix:` option is
+  **always** `execution_context.prefix` — never anything derived from `event_type`,
+  `payload`, or `idempotency_key`, the three script-supplied arguments (decision 0014
+  (e)). This is the one function this requirement adds that calls `Letflow.Repo` at all
+  (transitively, via `append/2`). Any `{:error, reason}` from `append/2` becomes a
+  structured `[nil, error_table]` Lua result, never a raise; the only raise on this
+  function's entire call path is the fold-level `event:emit` capability gate.
+  `execution_context` gains one new field for this, `actor_id` — host-authored only,
+  exactly like `trace_id`/`script_identity` (REQ-159 §2.3), never taken from a script
+  argument.
+
+  Every numeric value any of these three functions moves across the Elixir/Lua boundary
+  goes through `Letflow.Engine.LuaNumberMarshalling.from_lua/1` (write direction) or
+  `to_lua/1` (read direction) exclusively — no second, ad hoc numeric-conversion rule is
+  introduced anywhere in this section (REQ-150 §2.1/§2.2).
   """
 
   alias Letflow.Engine.Lua.Capabilities
   alias Letflow.Engine.Lua.Platform.TimeSource
   alias Letflow.Engine.LuaNumberMarshalling
+  alias Letflow.EventStore
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Repo
 
@@ -160,6 +212,11 @@ defmodule Letflow.Engine.Lua.Platform do
   @type iso8601_utc :: String.t()
 
   @default_time_source Letflow.Engine.Lua.Platform.SystemClock
+  @default_service_caller Letflow.Engine.Lua.Platform.NoServiceCaller
+
+  # Process-dictionary key for REQ-160's write_variable staging buffer (design §2.3) --
+  # private to this module, never read/written anywhere else under `lib/`.
+  @staged_writes_pdict_key {__MODULE__, :staged_writes}
 
   # `required` is a description of how to compute the required capability from the Lua
   # call's argument list, not a raw closure — Elixir module attributes cannot hold
@@ -171,7 +228,14 @@ defmodule Letflow.Engine.Lua.Platform do
   # requires: the tags are resolved only inside `install/2`'s fold, nowhere else.
   @type required_capability_spec :: :none | :call_service_arg0 | Capabilities.capability()
   @type stub_spec ::
-          :now | :fail | :read_variable | :get_instance_state | :log | :not_yet_implemented
+          :now
+          | :fail
+          | :read_variable
+          | :get_instance_state
+          | :log
+          | :write_variable
+          | :call_service
+          | :emit_event
 
   @type matrix_row :: %{
           name: atom(),
@@ -180,27 +244,35 @@ defmodule Letflow.Engine.Lua.Platform do
         }
   @type capability_matrix :: [matrix_row()]
 
-  # REQ-159 design §2.3. `nil` is permitted on every field except `variables` (defaults
-  # to `%{}`) so `install/1`/`install/2`'s existing callers keep compiling and behaving
-  # exactly as before -- see `empty_execution_context/0` and `install/3` below.
+  # REQ-159 design §2.3, extended by REQ-160 design §5.2 with `actor_id`. `nil` is
+  # permitted on every field except `variables` (defaults to `%{}`) so `install/1`/
+  # `install/2`'s existing callers keep compiling and behaving exactly as before -- see
+  # `empty_execution_context/0` and `install/3` below.
   @type execution_context :: %{
           instance_id: String.t() | nil,
           prefix: String.t() | nil,
           trace_id: String.t() | nil,
           script_identity: String.t() | nil,
+          actor_id: String.t() | nil,
           variables: map()
         }
+
+  # REQ-160 design §2.4. Key: the variable name exactly as the script's first
+  # `write_variable` argument. Value: the write's second argument, after
+  # `LuaNumberMarshalling.from_lua/1` has been applied. Last write wins (`Map.put/3`
+  # semantics) -- no history, no error on a duplicate key.
+  @type staged_writes :: %{optional(String.t()) => term()}
 
   # The entire closed set of `platform.*` functions — exactly 8 rows, no more, no fewer
   # (INV-CAP-2). `install/2` folds over this list; it is the ONLY call site under `lib/`
   # that ever installs a `platform.*` global via `Lua.set!/3` (INV-CAP-1). See moduledoc
   # for the human-readable version of this same table.
   @capability_matrix [
-    %{name: :call_service, required: :call_service_arg0, stub: :not_yet_implemented},
+    %{name: :call_service, required: :call_service_arg0, stub: :call_service},
     %{name: :read_variable, required: "variable:read", stub: :read_variable},
-    %{name: :write_variable, required: "variable:write", stub: :not_yet_implemented},
+    %{name: :write_variable, required: "variable:write", stub: :write_variable},
     %{name: :log, required: "audit:log", stub: :log},
-    %{name: :emit_event, required: "event:emit", stub: :not_yet_implemented},
+    %{name: :emit_event, required: "event:emit", stub: :emit_event},
     %{name: :get_instance_state, required: "instance:read", stub: :get_instance_state},
     %{name: :now, required: :none, stub: :now},
     %{name: :fail, required: :none, stub: :fail}
@@ -256,7 +328,31 @@ defmodule Letflow.Engine.Lua.Platform do
   """
   @spec empty_execution_context() :: execution_context()
   def empty_execution_context do
-    %{instance_id: nil, prefix: nil, trace_id: nil, script_identity: nil, variables: %{}}
+    %{
+      instance_id: nil,
+      prefix: nil,
+      trace_id: nil,
+      script_identity: nil,
+      actor_id: nil,
+      variables: %{}
+    }
+  end
+
+  @doc """
+  REQ-160 design §2.4. Reads the current process's `write_variable` staging buffer
+  (`%{}` if none was ever staged) and **clears** the process-dictionary entry before
+  returning it, so a hypothetical second call in the same process observes an empty
+  buffer rather than a stale one. Performs no `Letflow.Repo` call, no
+  `Letflow.Engine.VariableMerge.merge/3` call, and no persistence of any kind -- a pure
+  read-and-clear of process-local state. Deliberately unwired to any real caller by this
+  requirement (design §2.5 OQ-1) -- the future caller must invoke this from inside the
+  same process that ran the script, strictly after `Lua.eval!/2` has returned normally.
+  """
+  @spec take_staged_writes() :: staged_writes()
+  def take_staged_writes do
+    writes = Process.get(@staged_writes_pdict_key, %{})
+    Process.delete(@staged_writes_pdict_key)
+    writes
   end
 
   @doc """
@@ -331,12 +427,12 @@ defmodule Letflow.Engine.Lua.Platform do
   defp required_capability(required, _args) when is_binary(required), do: required
 
   # Runs the stub body for a row, only ever reached after `Capabilities.check!/3` has
-  # returned (i.e. the call was permitted, or `required` was `:none`). `now`/`fail` and
-  # the three still-unimplemented REQ-160 rows ignore both `execution_context` and `lua`
-  # (they neither read tenant context nor build a Lua table); `read_variable`,
-  # `get_instance_state`, `log` are REQ-159's three real implementations -- see moduledoc
-  # "Deviation from the design's literal `run_stub/4`" for why this is `run_stub/5`, not
-  # the design's literal `run_stub/4`.
+  # returned (i.e. the call was permitted, or `required` was `:none`). `now`/`fail`
+  # ignore both `execution_context` and `lua` (they neither read tenant context nor
+  # build a Lua table); `read_variable`, `get_instance_state`, `log` are REQ-159's three
+  # real implementations, and `write_variable`, `call_service`, `emit_event` are
+  # REQ-160's -- see moduledoc "Deviation from the design's literal `run_stub/4`" for why
+  # this is `run_stub/5`, not the design's literal `run_stub/4`.
   @spec run_stub(stub_spec(), atom(), [term()], execution_context(), Lua.t()) ::
           [term()] | {[term()], Lua.t()}
   defp run_stub(:now, _function_name, _args, _execution_context, _lua), do: [__MODULE__.now()]
@@ -355,14 +451,6 @@ defmodule Letflow.Engine.Lua.Platform do
       reason: :explicit_fail
   end
 
-  defp run_stub(:not_yet_implemented, function_name, _args, _execution_context, _lua) do
-    raise Lua.RuntimeException,
-      scope: [:platform],
-      function: function_name,
-      message: "#{function_name} is not yet implemented (REQ-159/160)",
-      stub: true
-  end
-
   defp run_stub(:read_variable, _function_name, args, execution_context, lua) do
     do_read_variable(args, execution_context, lua)
   end
@@ -373,6 +461,18 @@ defmodule Letflow.Engine.Lua.Platform do
 
   defp run_stub(:log, _function_name, args, execution_context, lua) do
     {do_log(args, execution_context, lua), lua}
+  end
+
+  defp run_stub(:write_variable, _function_name, args, execution_context, _lua) do
+    do_write_variable(args, execution_context)
+  end
+
+  defp run_stub(:call_service, _function_name, args, execution_context, lua) do
+    do_call_service(args, execution_context, lua)
+  end
+
+  defp run_stub(:emit_event, _function_name, args, execution_context, lua) do
+    do_emit_event(args, execution_context, lua)
   end
 
   # ── read_variable (LUA-11 read half, REQ-159 design §4) ──────────────────────────────
@@ -515,6 +615,205 @@ defmodule Letflow.Engine.Lua.Platform do
 
   defp log_text(value) when is_binary(value), do: value
   defp log_text(value), do: inspect(value)
+
+  # ── write_variable (LUA-11 write half, REQ-160 design §3) ────────────────────────────
+  #
+  # Stages the write into the CURRENT PROCESS's own process dictionary (design §2.2/2.3)
+  # -- never into `Lua.t()`'s own state (§2.3 explicitly rejects that mechanism). Makes
+  # no `Letflow.Repo` call, ever. Never raises.
+  @spec do_write_variable(args :: [term()], execution_context :: execution_context()) ::
+          [term()]
+  defp do_write_variable([name | rest], _execution_context) when is_binary(name) do
+    value = List.first(rest)
+    stage_write(name, LuaNumberMarshalling.from_lua(value))
+    []
+  end
+
+  # Malformed (non-binary) `name` is a no-op with respect to staging -- `stage_write/2`
+  # is never called -- and returns Lua `nil` (design §3.2 step 1).
+  defp do_write_variable(_args, _execution_context), do: [nil]
+
+  # `stage_write/2` (design §2.4) -- reads the current buffer from the process
+  # dictionary (defaulting to `%{}` on the first write of a given execution), and
+  # writes the updated map back to the same process-dictionary key. Last write wins
+  # (`Map.put/3` semantics).
+  @spec stage_write(name :: String.t(), value :: term()) :: :ok
+  defp stage_write(name, value) do
+    current = Process.get(@staged_writes_pdict_key, %{})
+    Process.put(@staged_writes_pdict_key, Map.put(current, name, value))
+    :ok
+  end
+
+  # ── call_service (LUA-12, REQ-160 design §4) ──────────────────────────────────────────
+  #
+  # Only ever reached once `Capabilities.check!/3` has already passed for this specific
+  # call (design §4.3) -- no arm below raises for any reason; the only raise on this
+  # entire call path is the fold-level capability gate, structurally prior to this
+  # function ever running. Makes no `Letflow.Repo` call.
+  @spec do_call_service(args :: [term()], execution_context :: execution_context(), Lua.t()) ::
+          {[term()], Lua.t()}
+  defp do_call_service([service_id | rest], _execution_context, lua) when is_binary(service_id) do
+    payload =
+      rest
+      |> List.first()
+      |> decode_lua_payload(lua)
+      |> normalize_from_lua()
+
+    caller = Application.get_env(:letflow, :lua_platform_service_caller, @default_service_caller)
+
+    case caller.call(service_id, payload) do
+      {:ok, response} when is_map(response) ->
+        {encoded, lua} = Lua.encode!(lua, convert_map_to_lua(response))
+        {[encoded], lua}
+
+      {:error, reason} ->
+        encode_error(lua, stringify_reason(reason))
+    end
+  end
+
+  defp do_call_service(_args, _execution_context, lua) do
+    encode_error(lua, "invalid_arguments")
+  end
+
+  # ── emit_event (REQ-160 design §5) ────────────────────────────────────────────────────
+  #
+  # `prefix:` is ALWAYS `execution_context.prefix` (decision 0014 (e)) -- never anything
+  # derived from `event_type`/`payload`/`idempotency_key`, the three script-supplied
+  # arguments. This is the one function this requirement adds that calls `Letflow.Repo`
+  # at all (transitively, via `EventStore.append/2`). Never raises -- the only raise on
+  # this call path is the fold-level `event:emit` capability gate.
+  @spec do_emit_event(args :: [term()], execution_context :: execution_context(), Lua.t()) ::
+          {[term()], Lua.t()}
+  defp do_emit_event(_args, execution_context, lua)
+       when is_nil(execution_context.prefix) or is_nil(execution_context.instance_id) or
+              is_nil(execution_context.actor_id) do
+    encode_error(lua, "no_execution_context")
+  end
+
+  defp do_emit_event([event_type, payload, idempotency_key | _rest], execution_context, lua)
+       when is_binary(event_type) and is_binary(idempotency_key) do
+    decoded_payload =
+      payload
+      |> decode_lua_payload(lua)
+      |> normalize_from_lua()
+
+    json_payload = Jason.encode!(decoded_payload || %{})
+
+    attrs = %{
+      instance_id: execution_context.instance_id,
+      event_type: event_type,
+      payload: json_payload,
+      actor_id: execution_context.actor_id,
+      idempotency_key: idempotency_key
+    }
+
+    case EventStore.append(attrs, prefix: execution_context.prefix) do
+      {:ok, _append_result} -> {[true], lua}
+      {:error, reason} -> encode_error(lua, stringify_reason(reason))
+    end
+  end
+
+  defp do_emit_event(_args, _execution_context, lua) do
+    encode_error(lua, "invalid_arguments")
+  end
+
+  # `payload` arrives as whatever the Lua call passed -- `nil`/a string/number are
+  # already plain Elixir terms, but a table argument is still its internal `{:tref, id}`
+  # reference until explicitly decoded (mirrors `decode_log_context/2` above, same
+  # underlying `tv-labs/lua` boundary behaviour, shared here by `call_service` and
+  # `emit_event`). Per `Lua.decode_list!/2`'s own doctest, `Lua.decode!/2` decodes a
+  # table into a PROPLIST (`[{key, value}]`), not a map -- `normalize_decoded_table/1`
+  # below turns an object-shaped proplist (every key a binary -- the shape
+  # `call_service`'s/`emit_event`'s payload is documented to be, "typically a table")
+  # into an actual `map()`, since `ServiceCaller.call/2`'s callback contract and
+  # `Jason.encode!/1` both expect one; this is a shape normalization, not a second
+  # numeric-conversion rule (REQ-150's identity rule is applied separately, in
+  # `normalize_from_lua/1` below).
+  defp decode_lua_payload(nil, _lua), do: nil
+  defp decode_lua_payload(payload, lua), do: Lua.decode!(lua, payload)
+
+  # REQ-150 §2.1 (write direction) applied to every value of a decoded table, one level
+  # deep -- mirrors `fetch_instance_state/3`'s own per-value application above. A
+  # decoded payload that is not an object-shaped proplist has the same identity rule
+  # applied directly (REQ-150's rule is identity for every numeric/`nil` shape
+  # regardless of surrounding structure, so this is not a second conversion rule).
+  defp normalize_from_lua(value) when is_list(value) do
+    if object_shaped_proplist?(value) do
+      Map.new(value, fn {key, v} -> {key, LuaNumberMarshalling.from_lua(v)} end)
+    else
+      LuaNumberMarshalling.from_lua(value)
+    end
+  end
+
+  defp normalize_from_lua(value), do: LuaNumberMarshalling.from_lua(value)
+
+  # `true` for `[]` (the empty table -- treated as an empty object, matching
+  # `Jason.encode!(%{})`'s "{}" ) and for a non-empty list where every element is a
+  # `{binary(), _}` pair (a Lua table keyed entirely by string keys, e.g.
+  # `{amount = 100}`) -- `false` for an array-shaped table (integer keys) or a bare
+  # list of scalars, neither of which this requirement's own acceptance criteria (both
+  # of which use only string-keyed payloads) require converting to a map.
+  defp object_shaped_proplist?([]), do: true
+
+  defp object_shaped_proplist?(list) when is_list(list) do
+    Enum.all?(list, fn
+      {key, _value} -> is_binary(key)
+      _other -> false
+    end)
+  end
+
+  defp object_shaped_proplist?(_other), do: false
+
+  # REQ-150 §2.2 (read direction), symmetric with `normalize_from_lua/1` above.
+  defp convert_map_to_lua(map) when is_map(map) do
+    Map.new(map, fn {key, value} -> {key, LuaNumberMarshalling.to_lua(value)} end)
+  end
+
+  defp convert_map_to_lua(other), do: LuaNumberMarshalling.to_lua(other)
+
+  # Renders a `call_service`/`emit_event` failure reason as a Lua-encodable string
+  # (design §4.5/§5.4). An atom (e.g. `:service_caller_not_configured`,
+  # `:unknown_event_type`) stringifies to its own name; a tagged tuple (e.g.
+  # `{:invalid_metadata, _}`, `{:sequence_conflict, _}`) stringifies to its head atom's
+  # name (OQ-3: this design does not specify a richer rendering, and none of REQ-160's
+  # own acceptance criteria require one); anything else falls back to `inspect/1`.
+  defp stringify_reason(reason) when is_binary(reason), do: reason
+  defp stringify_reason(reason) when is_atom(reason), do: to_string(reason)
+
+  defp stringify_reason(reason) when is_tuple(reason) and tuple_size(reason) > 0 do
+    reason |> elem(0) |> stringify_reason()
+  end
+
+  defp stringify_reason(reason), do: inspect(reason)
+
+  defmodule ServiceCaller do
+    @moduledoc """
+    Behaviour for `Letflow.Engine.Lua.Platform.call_service/3`'s injectable service
+    dispatcher (REQ-160 design §4.2), mirroring `TimeSource`'s own injection pattern in
+    this same file. A real implementation is not built by this requirement -- the
+    default, `Letflow.Engine.Lua.Platform.NoServiceCaller`, always returns
+    `{:error, :service_caller_not_configured}`. Installed via
+    `Application.put_env(:letflow, :lua_platform_service_caller, <module>)`, resolved
+    fresh on every `call_service` invocation (never cached).
+    """
+
+    @callback call(service_id :: String.t(), payload :: term()) ::
+                {:ok, response :: map()} | {:error, reason :: term()}
+  end
+
+  defmodule NoServiceCaller do
+    @moduledoc """
+    Default `ServiceCaller` implementation. Always returns a structured, honest
+    "nothing is wired yet" error -- never a crash -- until some future requirement
+    configures a real implementation via application env (REQ-160 design §4.2, OQ-2).
+    """
+
+    @behaviour ServiceCaller
+
+    @impl ServiceCaller
+    @spec call(String.t(), term()) :: {:error, :service_caller_not_configured}
+    def call(_service_id, _payload), do: {:error, :service_caller_not_configured}
+  end
 
   defmodule TimeSource do
     @moduledoc """

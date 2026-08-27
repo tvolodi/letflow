@@ -1,0 +1,57 @@
+{
+  "handoff_id": "step01b-recheck-WF02-REQ160-20260827",
+  "run_id": "WF02-REQ160-20260827",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ160-20260827/step-01b-code-design-validator-recheck.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-160"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ160-20260827/step-01-code-designer.json",
+      "handoffs/WF02-REQ160-20260827/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req160-lua-host-api-write.md",
+      "test/specs/REQ-160.md",
+      "lib/letflow/design/req155-lua-wallclock-kill.md",
+      "lib/letflow/design/req156-lua-memory-limit-impl.md"
+    ],
+    "branch_name": "feature/WF02-REQ160-20260827",
+    "commit": "4d6298f",
+    "rework_pass": 1,
+    "rework_commit": "4d6298f"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR re-check of REQ-160's design after rework commit 4d6298f addressing F1-CENTRAL-RACE.",
+    "acceptance_criteria": [
+      "Section 2.2's fix confirmed present and its citations of REQ-155 section 4.3 / REQ-156 section 5.2 confirmed accurate against those actual merged documents",
+      "The new INV-write-discard-on-race invariant confirmed precisely stated and adequately cross-referenced from section 2.5/8/OQ-6",
+      "Full document re-skim confirms no other similar race or unstated assumption exists",
+      "All 8 ACs still mapped, no regression elsewhere",
+      "Zero literal Elixir code anywhere"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "F1-CENTRAL-RACE is fully resolved. Section 2.2 now correctly enumerates the third observation channel (Task.shutdown/2's {:ok, reply} race on REQ-155's timeout arm, and REQ-156's raw spawn_opt path's possible late {ref, reply} mailbox message), states INV-write-discard-on-race precisely and unconditionally, and cross-references it from section 2.5 (constraining the future staged_variables field), section 8's cross-module dependency table (a dedicated row naming the invariant as an external dependency), and OQ-6 (flagging the doc-only follow-up for REQ-155/156's own artefacts). A full re-read of the entire document found no second instance of this defect class: the ServiceCaller callback (section 4.2) is a synchronous, in-process call with no kill-race surface, and emit_event's EventStore.append/2 side effect (section 5) is never claimed to be rolled back or atomic with respect to a later kill -- the design makes no false claim there needing an invariant, and none of REQ-160's 8 ACs require emit_event-side-effect/kill atomicity, so this is not a gap under this requirement's scope.",
+    "findings": [],
+    "checks_performed": [
+      "Re-read req155-lua-wallclock-kill.md and req156-lua-memory-limit-impl.md in full: REQ-155 section 4.3 is genuinely the Task.yield/2 interpretation table whose row 4 is the timeout arm invoking Task.shutdown(task, :brutal_kill); REQ-156 section 5.2 is genuinely 'The caller's own kill on timeout,' the memory-limit-timeout arm. Both citations in req160's section 2.2 and the INV-write-discard-on-race statement are accurate against the real documents, not misattributed.",
+      "INV-write-discard-on-race read in full at section 2.2 (lines 168-212): states unconditionally that the structured error tuple MUST be returned regardless of what Task.shutdown/2 or the drained mailbox contain, explicitly extending to 'not today, and not after any future wiring adds a staged_variables field.' Section 2.5 step 2 repeats the constraint inline at the exact point a future implementer would extend the success shape. Section 8 has a dedicated cross-module-dependency row naming the invariant and the two branches. OQ-6 discusses whether REQ-155/156's own docs should get a documentation addendum. All three cross-references confirmed present and worded so a future implementer wiring OQ-1/section 2.5 would have to actively ignore explicit, repeated text to violate it -- not phrased vaguely.",
+      "Full top-to-bottom re-read of req160-lua-host-api-write.md (all ~834 lines). ServiceCaller (section 4.2): resolved synchronously via Application.get_env on every call, no Task/kill involved -- no analogous race surface. emit_event (section 5): EventStore.append/2 is a direct synchronous Repo call inside the script's own process; the design never claims this side effect is atomic with, or rolled back by, a later kill of the same script -- and REQ-160's 8 ACs (docs/requirements.yaml) do not require that property, only write_variable's staged-write discard. No other unstated-assumption-shaped gap found.",
+      "All 8 REQ-160 ACs re-confirmed against docs/requirements.yaml verbatim text, still mapped in section 9's table with no regression: VariableMerge.merge/3 atomicity re-verified against lib/letflow/engine/variable_merge.ex's real @spec (section 2.6); LUA-06/LUA-12 raise/return split re-confirmed structurally distinct (section 4.3); ServiceCaller scoping re-confirmed honestly stated (section 4.2, mirrors the real lib/letflow/engine/lua_script_audit.ex Executor @callback pattern at line 82/108); EventStore.append/2 citation re-verified against lib/letflow/event_store.ex:214 real @spec; OQ-1 still explicitly flags the deferred executor.ex wiring gap.",
+      "Grepped `fn `, `raise `, `case `, `cond `, `do:`, `->` across the whole document: every hit is prose ('raises a Lua.RuntimeException', 'raise shape', 'never raises') or an inline code-span naming a real function/module -- no literal Elixir function body or executable code introduced by the rework."
+    ],
+    "verdict": "PASS",
+    "instructions_to_code_designer": null,
+    "next_step": "Design is ready for WF-02 Step 2a (ELIXIR-DEV implementation) against lib/letflow/design/req160-lua-host-api-write.md."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

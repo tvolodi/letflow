@@ -1,0 +1,66 @@
+{
+  "handoff_id": "step02c-WF02-REQ160-20260827",
+  "run_id": "WF02-REQ160-20260827",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ160-20260827/step-02c-security-reviewer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-160"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ160-20260827/step-01b-code-design-validator-recheck.json",
+      "handoffs/WF02-REQ160-20260827/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req160-lua-host-api-write.md",
+      "lib/letflow/engine/lua/platform.ex"
+    ],
+    "branch_name": "feature/WF02-REQ160-20260827",
+    "commit": "77d03e2"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER hard gate (WF-02 Step 2c) on REQ-160's implementation, commit 77d03e2 on lib/letflow/engine/lua/platform.ex. This requirement adds a tenant-data write path: platform.emit_event calls Letflow.EventStore.append/2 (a real Letflow.Repo write, tenant-schema-scoped via the `prefix:` option). Gate against docs/agents/instructions/security-invariants.md INV-1..INV-8. Read the approved design (lib/letflow/design/req160-lua-host-api-write.md) and the real diff (git show 77d03e2 -- lib/letflow/engine/lua/platform.ex) in full before verdict.",
+    "acceptance_criteria": [
+      "emit_event's Letflow.EventStore.append/2 call uses prefix: execution_context.prefix ALWAYS, never a value derived from event_type/payload/idempotency_key (the three script-supplied arguments) -- verify this against the actual committed code, not the design's claim about itself.",
+      "write_variable and call_service make zero Letflow.Repo calls -- verify no Repo/Ecto call was introduced anywhere in their real implementation.",
+      "call_service's injected ServiceCaller.call/2 callback receives only service_id and payload (script-controlled) -- confirm no tenant prefix, execution_context, or any other tenant-identifying value is passed to it, foreclosing a future implementation from accepting a script-supplied tenant identifier in place of a real one.",
+      "No script-supplied argument (event_type, payload, idempotency_key, service_id) can ever influence which tenant schema is targeted by any Repo call in this diff.",
+      "actor_id (new execution_context field) is host-authored only -- confirm no code path in this diff derives actor_id from a script argument.",
+      "Capability gating for call_service/emit_event is unchanged and still runs at the fold level (Capabilities.check!/3) strictly before either function's body -- confirm the diff did not weaken or bypass this.",
+      "No new sandbox-escape surface: confirm the ServiceCaller/NoServiceCaller nested modules and Lua.decode!/2 usage do not introduce any new way for a script to reach unintended host state.",
+      "Cross-check against docs/agents/instructions/security-invariants.md INV-1..INV-8 explicitly, naming which invariants apply and confirming each holds."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "checks_performed": [
+      "Read approved design lib/letflow/design/req160-lua-host-api-write.md in full",
+      "git show 77d03e2 -- lib/letflow/engine/lua/platform.ex (full diff) and current file state",
+      "grep -n 'Repo\\.' lib/letflow/engine/lua/platform.ex -- confirmed the only Repo call in the entire file is Repo.get/3 inside do_get_instance_state (REQ-159, prefix-scoped, out of this diff's scope); do_write_variable/stage_write and do_call_service make zero Repo calls",
+      "Traced do_emit_event/3 (platform.ex ~L679-711): EventStore.append(attrs, prefix: execution_context.prefix) -- prefix literal is always execution_context.prefix, a host-authored value closed over at install/3 call time; event_type/payload/idempotency_key flow only into `attrs` fields (event_type, payload, idempotency_key), never into the `prefix:` option",
+      "Traced do_call_service/3 (~L649-668): caller.call(service_id, payload) -- exactly 2 args, both script-controlled (service_id, decoded/normalized payload); no execution_context, prefix, or tenant identifier passed into the ServiceCaller callback signature",
+      "grep -n actor_id platform.ex -- actor_id is read only from execution_context (host-supplied, closed over at install/3), never assigned from any of the 3 script arguments to emit_event; empty_execution_context/0 defaults it to nil, no code path in this diff writes to it",
+      "Confirmed install/3's Enum.reduce fold (L400-407) is structurally unchanged: Capabilities.check!/3 still runs unconditionally before run_stub/5 for every one of the 8 capability_matrix rows, including the 3 newly-implemented ones",
+      "Reviewed ServiceCaller/NoServiceCaller nested modules and decode_lua_payload/normalize_from_lua/object_shaped_proplist? helpers -- ServiceCaller resolution is Application-env only (not script-reachable), NoServiceCaller always errors, Lua.decode!/2 usage is confined to decoding the script's own payload argument (no VM-internal state exposed to the script beyond the existing 8 gated names)",
+      "Checked docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md -- status decided 2026-08-23, confirming S5 has in fact started; this makes INV-3's stated precondition ('deferred until S5's decision record exists') met, so INV-3 was evaluated as a live check on this diff rather than skipped as NOT-APPLICABLE"
+    ],
+    "invariant_assessment": {
+      "INV-1": "APPLIES -- emit_event is a new tenant-data write path (EventStore.append/2, transitively Letflow.Repo). Verified prefix: is always execution_context.prefix, never derived from event_type/payload/idempotency_key; tenant_id attribution is EventStore.append/2's own pre-existing (already-reviewed) responsibility, unchanged by this diff. HOLDS.",
+      "INV-2": "NOT-APPLICABLE -- no API response-shaping code touched (S4 not started).",
+      "INV-3": "APPLIES (decision 0014 is decided 2026-08-23, so S5's stated precondition is met -- security-invariants.md's own text describing S5 as 'not started' is stale in the same way INV-1's text once was; noted as an observation, not a blocker for this diff). Verified: the 8-row capability_matrix is unchanged in size/shape, all 3 newly-real functions are still gated by Capabilities.check!/3 strictly before their bodies run, no ambient network/filesystem access is introduced (call_service only reaches a host-injected, Application-env-resolved ServiceCaller, never a script-reachable network primitive), and no new global is installed outside install/3's single Lua.set!/3 call site. HOLDS.",
+      "INV-4": "NOT-APPLICABLE -- no secret material (API keys, signing keys, DB URLs) is resolved, logged, or serialized anywhere in this diff.",
+      "INV-5": "NOT-APPLICABLE -- no lookup-by-ID endpoint (S4 not started).",
+      "INV-6": "APPLIES (meta-invariant) -- this handoff itself is the required proof-of-scoping artifact; satisfied by this document.",
+      "INV-7": "NOT-APPLICABLE -- no Repo.query/raw SQL introduced; EventStore.append/2 and Repo.get/3 (unchanged) both use Ecto's parameterized query API.",
+      "INV-8": "APPLIES -- do_write_variable, do_call_service, do_emit_event all touch tenant-controlled input (script arguments) and/or external I/O (EventStore.append, injected ServiceCaller). Verified every arm returns a structured [nil, error_table]/{[...], lua} result on failure; none raises except via the fold-level capability gate, which precedes all three bodies. No bare pattern match that can raise on realistic script input. HOLDS."
+    },
+    "findings": [],
+    "verdict": "All 8 acceptance criteria verified directly against the committed code (commit 77d03e2), not against the design doc's or moduledoc's claims about itself. emit_event's prefix: is unconditionally execution_context.prefix; write_variable/call_service make zero Repo calls; call_service's ServiceCaller.call/2 receives only (service_id, payload); actor_id is host-authored only; capability gating at the install/3 fold is unchanged and still runs before every stub body; the ServiceCaller/NoServiceCaller modules and Lua.decode!/2 usage introduce no new sandbox-escape surface. INV-1, INV-3 (newly live given decision 0014 is decided), INV-6, and INV-8 apply and all hold; INV-2/INV-5/INV-7 are not applicable to this diff; INV-4 is not applicable (no secret material touched). No blocking issues found. PASS.",
+    "instructions_to_elixir_dev": null
+  }
+}

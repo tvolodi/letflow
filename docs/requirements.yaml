@@ -8022,7 +8022,7 @@ requirements:
   - id: REQ-160
     title: Lua host API 2/2 -- write path -- platform.write_variable staged-and-atomic, call_service, emit_event (LUA-11 write half, LUA-12)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 312  # letflow-queue task id
     description: >

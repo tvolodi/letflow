@@ -1,0 +1,64 @@
+{
+  "handoff_id": "step02d-WF02-REQ160-20260827",
+  "run_id": "WF02-REQ160-20260827",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ160-20260827/step-02d-reviewer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-160"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ160-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ160-20260827/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req160-lua-host-api-write.md",
+      "lib/letflow/engine/lua/platform.ex"
+    ],
+    "branch_name": "feature/WF02-REQ160-20260827",
+    "commit": "87141a0"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-160's implementation, commit 77d03e2 on lib/letflow/engine/lua/platform.ex (SECURITY-REVIEWER already PASSed at commit 87141a0). Gate on idiomatic OTP usage, supervision integrity, scope creep, and decision-record consistency. Read the approved design (lib/letflow/design/req160-lua-host-api-write.md), the real diff (git show 77d03e2 -- lib/letflow/engine/lua/platform.ex), and the current full file before verdict. Note ELIXIR-DEV's own self-reported deviation: it added normalize_from_lua/1 and object_shaped_proplist?/1 helpers beyond the design text, because Lua.decode!/2 returns a proplist rather than a map -- verify this deviation is a genuine necessity (confirmed against the real vendored Lua library, not assumed) and is idiomatically implemented, not a shortcut or scope creep.",
+    "acceptance_criteria": [
+      "Implementation matches the approved design's specified control flow for write_variable/call_service/emit_event (section 3.2/4.4/5.3) -- no invented mechanism replacing what was approved.",
+      "The normalize_from_lua/1 / object_shaped_proplist?/1 addition is verified as a genuine, necessary correction (confirm Lua.decode!/2's real return shape against the vendored library source) and is idiomatic, minimal, and does not silently change LuaNumberMarshalling's contract.",
+      "ServiceCaller/NoServiceCaller nested behaviour module mirrors the existing TimeSource/SystemClock pattern in the same file idiomatically -- no unnecessary abstraction, no missing @callback typespec.",
+      "run_stub/5's new clauses and the deleted :not_yet_implemented clause preserve the existing dispatch structure/style; no dead code left behind.",
+      "No scope creep: nothing touched outside lib/letflow/engine/lua/platform.ex and test/letflow/engine/lua/platform_test.exs (this requirement's owned_modules); executor.ex/sandbox.ex/req155/req156 design docs untouched, per design section 2.5 OQ-1's explicit deferral.",
+      "Decision-record consistency: confirm nothing in this diff contradicts an S0 decision record (docs/migration/decisions/), specifically decision 0014 (scripting-plugin-runtime-strategy) which SECURITY-REVIEWER already cited as 'decided'.",
+      "Moduledoc accurately describes the new behavior and does not misdescribe REQ-160 as still pending anywhere (the FAIL-prevention rubric from the design's own precedent).",
+      "mix compile --warnings-as-errors and mix format --check-formatted both verified clean by REVIEWER independently, not merely trusted from ELIXIR-DEV's report."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "REQ-160's implementation of write_variable/call_service/emit_event on lib/letflow/engine/lua/platform.ex is idiomatic, matches the approved design's control flow, and introduces no scope creep. The self-reported normalize_from_lua/1 deviation is a genuine, independently-verified necessity, not a shortcut.",
+    "checks_performed": [
+      "Read lib/letflow/design/req160-lua-host-api-write.md in full (834 lines) and diffed its §3.2/§4.4/§5.3 control-flow prose against do_write_variable/3, do_call_service/3, do_emit_event/3 in the committed code -- every numbered step in the design (malformed-name no-op, LuaNumberMarshalling.from_lua/1 on write, ServiceCaller resolution via Application env, [nil, error_table] on failure, capability gate raising strictly before the stub body, prefix always execution_context.prefix, [true]/[nil, error_table] returns) is present in the code with no invented mechanism substituted.",
+      "Ran `git show 77d03e2 -- lib/letflow/engine/lua/platform.ex` and `git diff db45e0c 77d03e2 --stat` -- confirmed the only files touched are lib/letflow/engine/lua/platform.ex, test/letflow/engine/lua/platform_test.exs, and the step-02a handoff json. executor.ex, sandbox.ex, and the req155/req156 design docs are untouched, consistent with design §1's explicit out-of-scope list and §2.5 OQ-1's deferral.",
+      "Read deps/lua/lib/lua.ex directly. Lua.decode!/2 (line 1044) delegates to Value.decode/2, and Lua.decode_list!/2's own doctest (line 1062-1064) shows `Lua.encode_list!(Lua.new(), [1, %{a: 2}, true])` decoded back as `[1, [{\"a\", 2}], true]` -- a Lua table decodes to a proplist `[{key, value}]`, never a map(). This independently confirms ELIXIR-DEV's claim: normalize_from_lua/1's object_shaped_proplist?/1 check is a genuine, necessary correction, not an assumption. The added code is minimal (one small recursive dispatch plus a shape predicate), is scoped to the write-direction call sites that actually hand payloads to ServiceCaller.call/2 and Jason.encode!/1, and does not touch LuaNumberMarshalling.from_lua/1's own contract -- it is applied AFTER the marshalling call at the leaf level (Map.new(value, fn {key, v} -> {key, LuaNumberMarshalling.from_lua(v)} end)), i.e. it changes the container shape (proplist -> map), not the numeric identity rule LuaNumberMarshalling owns. The moduledoc's own account of the deviation (lines 118-151, 725-731) is accurate and matches the vendored source exactly, including the correct observation that `Lua.decode!/2` does not run automatically at the Lua.set!/3 call boundary (deps/lua/lib/lua/vm/value.ex decode/3 path) -- this is the same category of doc-vs-real-dependency gap already on record for InstanceProjection's JSONArray/unique_constraint deviations, and it is disclosed rather than hidden.",
+      "Compared the new ServiceCaller/NoServiceCaller nested modules (lines 789-816) against the existing TimeSource/SystemClock pair (lines 818-844) line by line: both follow the identical shape -- a @callback-bearing behaviour module with a moduledoc naming its resolution mechanism (Application.get_env(:letflow, <key>, <default>), read fresh per call, never cached), and a minimal @behaviour-implementing default module with @impl + @spec on its one callback. ServiceCaller's @callback call/2 has a full typespec (service_id :: String.t(), payload :: term()) :: {:ok, map()} | {:error, term()}); NoServiceCaller's call/2 has @impl ServiceCaller and a narrowed @spec. No unnecessary abstraction: no extra callback, no protocol, no macro -- exactly the two functions (install-time resolution point + honest not-configured default) TimeSource already established as this file's precedent for injectable, application-env-resolved dependencies. This is imitation of an established idiom, not new abstraction ahead of need.",
+      "Confirmed the :not_yet_implemented run_stub/5 clause and its dedicated @capability_matrix stub tag are fully deleted (not merely dead-code-orphaned) -- grep of the current file shows no remaining reference to :not_yet_implemented anywhere in stub_spec, capability_matrix, or run_stub/5. The three new run_stub/5 clauses (write_variable/call_service/emit_event) follow the exact same one-line dispatch-to-a-do_*/N helper style as the five pre-existing clauses; no structural deviation in the fold or dispatch shape.",
+      "Read docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md in full. Nothing in this diff contradicts it: emit_event's one Repo call (via EventStore.append/2) uses execution_context.prefix exclusively per decision (e), and no new native dependency, NIF, or runtime-strategy change is introduced -- this requirement only adds pure-Elixir logic on top of the already-decided tv-labs/lua binding.",
+      "Read the moduledoc's REQ-160 section (lines 153-200) end to end -- it accurately describes write_variable/call_service/emit_event as real implementations, states plainly that none of the three ever raises except the fold-level capability gate, and does not describe REQ-160 as pending anywhere; the moduledoc's REQ-157 section was correctly updated (git diff) to say REQ-159/160 'have since replaced all six stubs' rather than leaving the old 'none of the six has a real implementation yet' text stale.",
+      "Independently ran `export PATH=\"$HOME/.asdf/shims:$PATH\"; mix compile --warnings-as-errors --force` -- 'Compiling 129 files (.ex)', 'Generated letflow app', exit 0, no warnings. Independently ran `mix format --check-formatted` -- exit 0, no output (fully formatted). Independently ran `mix test test/letflow/engine/lua/platform_test.exs` against a real Postgres-backed test tenant -- 'Result: 82 passed', 0 failures.",
+      "Checked docs/anti-patterns.md -- no entry applicable to this diff's scope."
+    ],
+    "findings": [
+      "Idiomatic: control flow matches the design's §3.2/§4.4/§5.3 prose exactly; the run_stub/5 arity deviation from the design's literal run_stub/4 was already reviewed and accepted at REQ-159's gate and is unchanged here.",
+      "Idiomatic: ServiceCaller/NoServiceCaller mirrors TimeSource/SystemClock faithfully -- same Application-env resolution pattern, same @callback/@behaviour/@impl/@spec discipline, no gratuitous abstraction.",
+      "Genuine fix, not scope creep: normalize_from_lua/1 and object_shaped_proplist?/1 are verified necessary against the real deps/lua/lib/lua.ex source (Lua.decode!/2 returns a proplist, confirmed via its own doctest), are minimal in scope, and leave LuaNumberMarshalling's own contract (numeric/nil identity rule) untouched -- they operate strictly on container shape, one level above the marshalling call.",
+      "No scope creep: diff is confined to platform.ex and platform_test.exs; executor.ex/sandbox.ex and the req155/req156 design docs are untouched, consistent with design §1's and OQ-1's explicit deferral.",
+      "No decision-record conflict: decision 0014's tenant-prefix-never-from-script rule (e) is honored on emit_event's one Repo call site; no new runtime/NIF dependency introduced.",
+      "Dead code removed cleanly: the :not_yet_implemented stub tag and its run_stub/5 clause are fully deleted, not left orphaned.",
+      "Minor observation, not blocking: emit_event's structured-error stringify_reason/1 falls back to inspect/1 for non-atom/non-tuple reasons (e.g. an Ecto.Changeset.t()) per design OQ-3, which the design itself explicitly leaves open and none of REQ-160's 8 acceptance criteria require resolving -- correctly left as-is."
+    ],
+    "instructions_to_elixir_dev": null
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "handoff_id": "step05-WF02-REQ156-20260827",
+  "run_id": "WF02-REQ156-20260827",
+  "workflow_id": "WF-02",
+  "step": "5",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ156-20260827/step-05-release-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-156"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ156-20260827/step-01-code-designer.json",
+      "handoffs/WF02-REQ156-20260827/step-01b-code-design-validator-recheck.json",
+      "handoffs/WF02-REQ156-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ156-20260827/step-02c-security-review.json",
+      "handoffs/WF02-REQ156-20260827/step-02d-reviewer.json",
+      "handoffs/WF02-REQ156-20260827/step-03-test-designer.json",
+      "handoffs/WF02-REQ156-20260827/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ156-20260827/step-04-test-run.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "lib/letflow/engine/lua/executor.ex",
+      "config/config.exs",
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/reports/report-2026-08-27-WF02-REQ156-20260827.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ156-20260827",
+    "commit": "09506a7"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR (WF-02 Step 5) for REQ-156. Independently re-run scripts/test_parallel.sh yourself at least once (do not trust TEST-RUNNER's Step 4 report alone -- 2 consecutive clean runs reported, 2156/2156 each). Then confirm every one of REQ-156's real acceptance_criteria (read docs/requirements.yaml directly) is satisfied by checking the actual code/tests yourself: (1) configurable max_heap_words with a two-limit test proving the smaller one halts sooner; (2) a real-scale (1GB attempt / 16MB limit) test asserting a structured error, not a hang/exhaustion/success; (3) the memory-limit error pattern-distinguishable from REQ-154's and REQ-155's error shapes; (4) the implemented mechanism matches REQ-149's recommendation, with any divergence stated in the moduledoc; (5) moduledoc states which LUA-09 clause is met (terminate) and which is not (fail gracefully), in those words; (6) no code path uses :max_instructions as a memory proxy; (7) mix test/mix compile --warnings-as-errors pass. Also check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness -- REQ-156 should still show pending/in_progress at this point.",
+    "acceptance_criteria": [
+      "Independent re-run of scripts/test_parallel.sh with real quoted output",
+      "All of REQ-156's real acceptance criteria independently re-verified against actual code/tests, not against any prior step's report",
+      "docs/status/requirement_status.yaml / docs/requirements.yaml staleness checked",
+      "Clear PASS routing to DOC-UPDATER, or FAIL naming the specific blocking gap and which agent it routes back to"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran scripts/test_parallel.sh (8 partitions): combined 2151 tests, 5 properties, 0 failures (2156/2156 passed), matching TEST-RUNNER's Step 4 count without relying on it. MIX_ENV=test mix compile --warnings-as-errors also re-run independently: clean, no warnings, no output. Read lib/letflow/engine/lua/executor.ex and test/letflow/engine/lua/executor_test.exs directly and re-verified each of REQ-156's 7 acceptance criteria against actual code: (1) execute_with_manifest/3 requires :max_heap_words explicitly (keyword.fetch!), and executor_test.exs's 'AC-1' test drives ~1MB vs ~200MB limits on the same allocating script, asserting {:error, :memory_limit_exceeded} for the small limit and {:ok, _} for the large one, with elapsed-time ordering asserted too; (2) 'AC-2' test runs @gigabyte_allocating_script (~976MB target, matches LUA-09's '1 GB' text) under @sixteen_mb_in_words and asserts {:error, :memory_limit_exceeded}, bounded by the call's own 5000ms timeout_ms so a regression fails loud rather than hanging; (3) 'AC-3' test classifies budget_result/timeout_result/memory_result via one classify/1 function and asserts Enum.uniq(classified) == classified, proving all three arms are pattern-distinguishable; (4) implemented mechanism (:erlang.spawn_opt/2 with max_heap_size: %{size:, kill: true}) is exactly req149-lua-memory-limit.md's recommended Candidate A, and the moduledoc's REQ-156 section explicitly states the one real divergence (Task.Supervisor.async_nolink/2,3 cannot carry max_heap_size, so that path is bypassed via direct spawn_opt for the memory-limited case) -- both a moduledoc statement and an executor_test.exs assertion ('AC-4: moduledoc states Task.Supervisor.async_nolink/2,3 cannot carry :max_heap_size') cover this; (5) moduledoc lines 97-100 read exactly '\"terminate the script\" is MET' and '\"fail gracefully\" is NOT MET', and executor_test.exs's 'AC-5' test asserts those literal substrings via Code.fetch_docs; (6) grepped executor.ex: Sandbox.new(max_instructions: budget) and the max_heap_size map are built from disjoint variables (budget vs max_heap_words) on separate call sites, and executor_test.exs's 'AC-6' test asserts this by source-level check (source =~ patterns, refute cross-contamination); no other lib/ file references :max_instructions as memory-related; (7) mix test / mix compile --warnings-as-errors both re-run and pass (test suite: 2156/2156, 0 failures; compile: clean, no warnings). Checked docs/requirements.yaml (REQ-156 status: pending) and docs/status/requirement_status.v5.yaml (last REQ-156 event at line 403 is a 'started' event, no done/verified event) -- no staleness, DOC-UPDATER has not yet flipped status, consistent with this gate running before Step 6.",
+    "test_run_output": "test_parallel: N=8 (source: nproc)\ntest_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)\npartition 1: 273 tests, 0 properties, 0 failures, exit 0\npartition 2: 309 tests, 0 properties, 0 failures, exit 0\npartition 3: 283 tests, 2 properties, 0 failures, exit 0\npartition 4: 209 tests, 0 properties, 0 failures, exit 0\npartition 5: 253 tests, 2 properties, 0 failures, exit 0\npartition 6: 140 tests, 0 properties, 0 failures, exit 0\npartition 7: 311 tests, 1 property, 0 failures, exit 0\npartition 8: 373 tests, 0 properties, 0 failures, exit 0\n---\ncombined: 2151 tests, 5 properties, 0 failures (2156/2156 passed)",
+    "next_action": "Route to DOC-UPDATER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

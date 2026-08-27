@@ -660,6 +660,56 @@ defmodule Letflow.Engine.Lua.PlatformTest do
       {nonexistent_values, _} = nonexistent_result
       assert sibling_values == nonexistent_values
     end
+
+    # Mutation-testing finding (TEST-DESIGNER, REQ-159 Step 3): the design and moduledoc
+    # both state "forbidden" is returned with NO `Repo` call attempted at all -- but
+    # every test above only asserts the RETURN VALUE. A mutation that runs
+    # `fetch_instance_state/3` (i.e. calls `Repo.get/3`) UNCONDITIONALLY and only
+    # afterward substitutes the "forbidden" error for a non-matching id produces the
+    # exact same return values on every test above and is caught by none of them --
+    # confirmed directly: reordering `do_get_instance_state/3`'s self-instance equality
+    # check to run after `fetch_instance_state/3` rather than before it left all
+    # pre-existing tests in this file passing (56/56). This test closes that gap by
+    # asserting, via `:telemetry`, that the `[:letflow, :repo, :query]` event never
+    # fires for a same-tenant-sibling id -- the same telemetry-counter idiom
+    # `test/letflow/api/context_test.exs` already uses to prove a `Repo` call did or
+    # did not happen.
+    test "no Repo.get/3 (no [:letflow, :repo, :query] telemetry event) fires for a same-tenant sibling id" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      own_id = Ecto.UUID.generate()
+      sibling_id = Ecto.UUID.generate()
+
+      seed_projection!(schema_name, own_id)
+      seed_projection!(schema_name, sibling_id)
+
+      lua =
+        Platform.install(
+          Sandbox.new(),
+          Capabilities.new(["instance:read"]),
+          execution_context(%{instance_id: own_id, prefix: schema_name})
+        )
+
+      handler_id = {__MODULE__, :get_instance_state_query_counter, make_ref()}
+      counter = :counters.new(1, [])
+
+      :telemetry.attach(
+        handler_id,
+        [:letflow, :repo, :query],
+        fn _event, _measurements, _metadata, _config -> :counters.add(counter, 1, 1) end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      script = """
+      local state, err = platform.get_instance_state('#{sibling_id}')
+      return state, err.reason
+      """
+
+      assert {[nil, "forbidden"], _lua} = Lua.eval!(lua, script)
+
+      assert :counters.get(counter, 1) == 0
+    end
   end
 
   describe "REQ-159: platform.get_instance_state -- capability denial (AC4)" do

@@ -499,6 +499,22 @@ tagged with is host-authored, unconditionally.
 `platform.ex:120`. Only the row's `stub` tag changes, from `:not_yet_implemented` to a
 new `:log` tag dispatching to §6.1's logic.
 
+**Post-implementation cross-reference note (added by TEST-DESIGNER's Step 3, at
+REVIEWER's recommendation, non-blocking, documentation-only).** §6.1 step 1 above states
+a Lua-table `context` argument arrives "already converted to an Elixir term by
+`tv-labs/lua`'s own argument-marshalling at the call boundary." That is factually
+incorrect: confirmed directly against `deps/lua/lib/lua/vm/value.ex`'s `decode/3`, which
+only runs when something explicitly calls `Lua.decode!/2`/`decode_list!/2` — an
+un-decoded table argument is still its internal `{:tref, id}` VM-internal reference. The
+shipped `do_log/3` therefore calls `Lua.decode!/2` on `context` explicitly before handing
+it to `Logger.log/3`'s metadata; without that step, a raw `{:tref, id}` reference would
+leak into the emitted log entry's metadata — never useful to a reader, and not safely
+serializable. This does not change step 1's other claims (scalar/`nil` arguments do
+arrive as plain Elixir terms already) or any recommendation in this section; it is a
+pointer for a future reader of this document. See
+`lib/letflow/engine/lua/platform.ex`'s moduledoc, "A related, smaller correction to
+design §6.1 step 1," for the full account.
+
 ---
 
 ## 7. Matrix and fold changes, precisely
@@ -552,6 +568,32 @@ once per row, same as `install/2` does today.
 `install/3`'s fold body is `install/2`'s existing fold body with `execution_context`
 closed over alongside `capabilities`, and `run_stub/3`'s call site widened to
 `run_stub/4`. No other structural change to the `Enum.reduce/3` shape.
+
+**Post-implementation cross-reference note (added by TEST-DESIGNER's Step 3, at
+REVIEWER's recommendation, non-blocking, documentation-only).** §7.3 above specifies
+`run_stub/3` widening to `run_stub/4` (`stub_spec()`, `atom()`, `[term()]`,
+`execution_context()`), implying the installed wrapper stays the single-argument
+`fn args -> ... end` shape `install/2` already used. That literal shape cannot actually
+implement `get_instance_state`'s success case: `tv-labs/lua` requires every
+dynamically-built Lua table to be produced via `Lua.encode!/2` against the *current
+call's* `Lua.t()`/state (confirmed directly against `deps/lua/lib/lua.ex` — a bare
+Elixir map returned from a `Lua.set!/3` callback fails `Util.encoded?/1` and raises
+"maps must be explicitly encoded to tables using `Lua.encode!/2`"), and a single-argument
+callback has no access to that state at all. `Lua.set!/3` itself documents a second,
+arity-2 callback form (`fn args, lua -> ... end`) precisely for this case, so the shipped
+`install/3` fold uses that form instead, and the shipped `run_stub/3` becomes
+`run_stub/5` (the same three prior arguments, plus `execution_context()` per this design,
+plus the call's own `Lua.t()`) rather than the `run_stub/4` specified above. This is the
+same category of "design text doesn't compile/run against the real dependency" gap
+already on record for this codebase (see `Letflow.EventStore.InstanceProjection`'s
+`JSONArray`/`unique_constraint` deviations) — every other structural property this
+section actually cares about (one fold, one `Lua.set!/3` call site per row, `capabilities`
+and `execution_context` both closed over once, the five unaffected rows unedited beyond
+ignoring the extra argument) is preserved exactly. See
+`lib/letflow/engine/lua/platform.ex`'s moduledoc, "Deviation from the design's literal
+`run_stub/4`," for the full account against the vendored source. This does not change any
+recommendation or resolution in this section; it is a pointer for a future reader of this
+document.
 
 ---
 

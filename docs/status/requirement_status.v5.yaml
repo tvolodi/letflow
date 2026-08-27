@@ -647,3 +647,25 @@ history:
       feature/WF02-REQ162-20260827 created from main (3c74cee) and
       pushed. Dispatching Step 1 to CODE-DESIGNER next. 24 on-disk
       entries before this append; 25 after.
+
+  - req: REQ-162
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-27T23:54:00Z"
+    note: >
+      WF02-REQ162-20260827 complete. Uncaught Lua errors are now captured
+      host-side as structured SCRIPT_ERROR events (LUA-16 restated),
+      distinguishable by pattern match from SCRIPT_FAILED (REQ-161),
+      REQ-154's budget error, REQ-155's wall-clock timeout, and REQ-156's
+      memory-limit error. This is the final requirement in the S5
+      REQ-153..REQ-162 Lua host-function chain: all 8 platform.*
+      capability-matrix rows are now real, and the full uncaught-error/
+      deliberate-failure/kill taxonomy (SCRIPT_FAILED, SCRIPT_ERROR,
+      budget-exceeded, wallclock-timeout, memory-limit) is complete and
+      pattern-match-distinguishable end to end. Every gate (SECURITY-REVIEWER
+      hard gate included, given error reports are a data-disclosure surface)
+      passed clean on the first attempt -- no rework rounds. RELEASE-VALIDATOR
+      did an empirical verification rather than a code read alone: it ran a
+      real 1//0 script via `mix run` and observed the actual
+      instruction_count field first-hand. 25 on-disk entries before this
+      append; 26 after.

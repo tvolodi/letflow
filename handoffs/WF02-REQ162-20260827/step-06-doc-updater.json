@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "DOC-UPDATER",
   "file": "handoffs/WF02-REQ162-20260827/step-06-doc-updater.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -33,6 +33,17 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "requirements_flipped": ["REQ-162"],
+    "volume": "docs/status/requirement_status.v5.yaml",
+    "entries_before": 25,
+    "entries_after": 26,
+    "done_event_at": "2026-08-27T23:54:00Z",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ162-20260827/step-06-doc-updater.json"
+    ]
   }
 }

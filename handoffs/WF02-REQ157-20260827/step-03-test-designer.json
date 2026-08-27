@@ -1,0 +1,54 @@
+{
+  "handoff_id": "step03-WF02-REQ157-20260827",
+  "run_id": "WF02-REQ157-20260827",
+  "workflow_id": "WF-02",
+  "step": "3",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ157-20260827/step-03-test-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-157"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-157": "Capability model and capability check at every gated host-function call site (LUA-05, LUA-06). Ports R-Co/src/lua/capabilities.zig (string-grant set with has/add) and R-Co/src/lua/host_api/mod.zig's registerAll capability matrix. Closed set of 8 platform.* functions: call_service->service:call:<svc_id>, read_variable->variable:read, write_variable->variable:write, log->audit:log, emit_event->event:emit, get_instance_state->instance:read, now->NONE (ungated by design), fail->NONE (ungated by design). Build: (1) capability-set representation + check function with structured denial details (function, capability required, capabilities granted); (2) single registration point enforcing the closed set (test that adding a 9th function without a matrix row fails); (3) denial raises a Lua error AND is reportable to host; (4) call_service grant is parameterised by service id, not blanket. NOT IN SCOPE: host functions' own bodies (REQ-159/160) beyond stubs needed to test the gate; platform.now already shipped (REQ-152). SECURITY-REVIEWER hard gate -- this is the authorization boundary for tenant-supplied scripts. Queue task 309, GH#609. See docs/requirements.yaml REQ-157 for full description and acceptance_criteria."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ157-20260827/step-01-code-designer.json",
+      "handoffs/WF02-REQ157-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ157-20260827/step-02c-security-review.json",
+      "handoffs/WF02-REQ157-20260827/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req157-lua-capability-model.md",
+      "lib/letflow/engine/lua/capabilities.ex",
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/capabilities_test.exs",
+      "test/letflow/engine/lua/platform_test.exs",
+      "test/specs/REQ-157.md"
+    ],
+    "branch_name": "feature/WF02-REQ157-20260827"
+  },
+  "task": {
+    "description": "TEST-DESIGNER (WF-02 Step 3) for REQ-157. Scope test: this requirement has real application-executable surface (lib/letflow/engine/lua/capabilities.ex, lib/letflow/engine/lua/platform.ex) -- continue to full procedure, do not route around it. NOTE: ELIXIR-DEV already wrote functional test coverage in test/letflow/engine/lua/capabilities_test.exs (11 cases) and test/letflow/engine/lua/platform_test.exs (extended, 28 cases total including REQ-152's pre-existing ones), and a prose test spec already exists at test/specs/REQ-157.md from Step 1 (written by CODE-DESIGNER). Your job: (1) read requirements.yaml's REQ-157 entry directly for the full, exact 8 acceptance_criteria; (2) read test/specs/REQ-157.md and update it if it does not yet fully match the ACTUAL test cases now in capabilities_test.exs/platform_test.exs (the spec was written before implementation existed -- reconcile spec-to-code, don't just assume it's still accurate); (3) independently verify every one of REQ-157's 8 acceptance criteria has at least one test case that would fail if the behavior were violated -- if you find a gap, ADD the missing test case(s) to capabilities_test.exs or platform_test.exs (do not just note the gap, close it); (4) verify no test depends on wall-clock time or unseeded randomness (the now/TimeSource tests use dependency injection per ELIXIR-DEV's report -- confirm this directly); (5) verify test fixtures are self-sufficient and don't leak state between tests. Do not touch lib/letflow/engine/lua/executor.ex (locked, concurrent WF02-REQ154-20260827 run).",
+    "acceptance_criteria": [
+      "test/specs/REQ-157.md accurately reflects the actual test cases present in capabilities_test.exs/platform_test.exs",
+      "All 8 of docs/requirements.yaml REQ-157's acceptance_criteria have at least one test case that would fail if violated -- gaps closed by adding tests, not just reported",
+      "No test depends on wall-clock time or unseeded randomness (confirmed by reading the time-source tests directly)",
+      "Tests are self-sufficient, no cross-test pollution",
+      "mix test on the affected files quoted as real output after any additions"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "test/specs/REQ-157.md",
+      "test/letflow/engine/lua/platform_test.exs"
+    ],
+    "notes": "Reconciled test/specs/REQ-157.md against the actual shipped test suite (it was written before implementation existed, per Step 1 convention) -- updated §3/§4 to describe the real assertions and to record the gap found and closed.\n\nAC-to-test mapping (8 ACs, docs/requirements.yaml REQ-157, verbatim):\n1. 'exactly the eight functions ... enumerated from inside a script' -> platform_test.exs describe 'REQ-157: closed-set enumeration (AC1)', test 'a script enumerates exactly the 8 platform.* names via pairs(platform)' + source-level single-fold guard test.\n2. 'for EACH of the six gated functions a capability-denial test' -> platform_test.exs describe 'REQ-157: per-function capability-denial tests, empty grant set (AC2)', 6 cases (read_variable/write_variable/log/emit_event/get_instance_state/call_service).\n3. 'structured details include function, capability required, capabilities granted' -> now asserted on ALL SIX AC2 cases (was previously only bare assert_raise; see gap below), plus the dedicated 'REQ-157: structured denial fields (AC3)' case.\n4. 'call_service(\"X\") without service:call:X grant produces structured error' -> describe 'REQ-157: call_service denial without any grant (AC4)'.\n5. 'service:call:alpha grant does NOT authorise call_service(\"beta\")' -> describe 'REQ-157: call_service grant is parameterised, not blanket (AC5)', 2 cases.\n6. 'now and fail callable with an EMPTY capability set' -> describe 'REQ-157: now and fail are callable with an empty capability set (AC6)', 2 cases.\n7. 'moduledoc reproduces the capability matrix + now/fail rationale' -> describe 'REQ-157: moduledoc content (AC7)', 3 cases, reading Code.fetch_docs/1 on Platform's real moduledoc.\n8. 'mix test and mix compile --warnings-as-errors both pass' -> verified directly below, not asserted inside a test (matches design §9's own convention, TEST-RUNNER's Step 4 responsibility to re-confirm).\n\nCoverage gap found and closed: the six AC2 per-function denial tests, as shipped by ELIXIR-DEV, used bare `assert_raise Lua.RuntimeException` with no field assertions. Every one of the six gated stubs (`run_stub(:not_yet_implemented, ...)`) raises Lua.RuntimeException unconditionally regardless of whether `Capabilities.check!/3` ran -- so a bug that silently skipped the capability check for one row would be indistinguishable from a genuine denial under a bare assert_raise. Confirmed by mutation-testing the shipped lib/letflow/engine/lua/platform.ex directly: short-circuited `Capabilities.check!/3` for `write_variable` (`if row.name != :write_variable do Capabilities.check!(...) end`), ran `mix test test/letflow/engine/lua/platform_test.exs` -> 'Result: 27 passed' (mutant undetected). Reverted, then added capability_required/capabilities_granted/function field assertions to all six AC2 cases. Re-applied the identical mutant -> 'Result: 26/27 passed', exactly the write_variable case failing (`capability_required` observed nil instead of 'variable:write'). Reverted the mutant again (diff against pre-mutation backup confirmed byte-identical) -> full suite green again at 39 passed.\n\nWall-clock/randomness: read platform_test.exs's FixedTimeSource module and the 'the time source is injectable' describe block directly -- Application.put_env(:letflow, :lua_platform_time_source, FixedTimeSource) swaps in a fixed ~U[2026-01-01 00:00:00.000000Z] literal in setup, reverted via on_exit; no DateTime.utc_now/0, no sleep, no :rand anywhere in either test file.\n\nIsolation: capabilities_test.exs is `async: true`, pure functions on locally-constructed MapSets, no shared state. platform_test.exs is `async: false` (documented reason: shared application-env mutation), every test that calls Application.put_env reverts it in on_exit; no test depends on another test's side effects; each denial test builds its own lua/grant fixture via `setup` or inline `Platform.install(Sandbox.new(), ...)`.\n\nReal mix output (final, after gap-closing edit):\n```\n$ mix test test/letflow/engine/lua/capabilities_test.exs test/letflow/engine/lua/platform_test.exs\nRunning ExUnit with seed: 167274, max_cases: 16\nExcluding tags: [:keycloak]\n.......................................\nFinished in 0.2 seconds (0.1s async, 0.07s sync)\nResult: 39 passed\n\n$ mix compile --warnings-as-errors\n(no output -- clean)\n\n$ mix format --check-formatted test/letflow/engine/lua/platform_test.exs\n(no output -- clean)\n```\nlib/letflow/engine/lua/executor.ex was not touched (locked)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

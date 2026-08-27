@@ -1,0 +1,50 @@
+{
+  "handoff_id": "step05-WF02-REQ157-20260827",
+  "run_id": "WF02-REQ157-20260827",
+  "workflow_id": "WF-02",
+  "step": "5",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ157-20260827/step-05-release-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-157"],
+    "issue_ids": [],
+    "branch_name": "feature/WF02-REQ157-20260827",
+    "commit": "e9eb7b5"
+  },
+  "result": {
+    "status": "PASS",
+    "test_rerun": {
+      "command": "bash scripts/test_parallel.sh (PATH prefixed with /home/tvolodi/.asdf/shims; postgres already listening on 5463 per .env's LETFLOW_DB_PORT, no docker needed)",
+      "output": "test_parallel: N=8 (source: nproc)\ntest_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)\ntest_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)\ntest_parallel: partition logs in /tmp/letflow_test_parallel.6zbJ59\ntest_parallel: TEST_PARALLEL_GROUP=tp3711984 (shared by all 8 partitions)\npartition 1: 273 tests, 0 properties, 0 failures, exit 0\npartition 2: 309 tests, 0 properties, 0 failures, exit 0\npartition 3: 283 tests, 2 properties, 0 failures, exit 0\npartition 4: 209 tests, 0 properties, 0 failures, exit 0\npartition 5: 231 tests, 2 properties, 0 failures, exit 0\npartition 6: 140 tests, 0 properties, 0 failures, exit 0\npartition 7: 311 tests, 1 property, 0 failures, exit 0\npartition 8: 373 tests, 0 properties, 0 failures, exit 0\n---\ncombined: 2129 tests, 5 properties, 0 failures (2134/2134 passed)",
+      "note": "Same 2134/2134 count as Step 4's TEST-RUNNER report -- coincidental, not treated as either confirming or regressing since this was an independent re-run, not a comparison exercise.",
+      "mix_compile_warnings_as_errors": "MIX_ENV=test mix compile --warnings-as-errors: clean, zero output, exit 0"
+    },
+    "acceptance_criteria_reverification": [
+      {"ac": "1. platform table exposes exactly the 8 functions, no others, enumerated from inside a script", "verified": true, "evidence": "platform_test.exs 'REQ-157: closed-set enumeration (AC1)' -- pairs(platform) enumeration test plus a regex-count test asserting exactly one Lua.set!(_, [:platform, occurrence in platform.ex (single fold, INV-CAP-1)"},
+      {"ac": "2. capability-denial test for each of the 6 gated functions", "verified": true, "evidence": "platform_test.exs 'REQ-157: per-function capability-denial tests, empty grant set (AC2)' -- one test per read_variable/write_variable/log/emit_event/get_instance_state/call_service, each asserting Lua.RuntimeException with the matching capability_required"},
+      {"ac": "3. denial structured details include function, required, granted", "verified": true, "evidence": "capabilities.ex check/3 returns %{function:, required:, granted:} (all three, granted never elided); check!/3 raises Lua.RuntimeException with :function (library-validated key) plus :capability_required/:capabilities_granted on :original; both capabilities_test.exs and platform_test.exs assert all three fields by test"},
+      {"ac": "4. platform.call_service('X') without service:call:X grant -> structured error", "verified": true, "evidence": "platform_test.exs 'REQ-157: call_service denial without any grant (AC4)'"},
+      {"ac": "5. service:call:alpha grant does NOT authorise call_service('beta') -- parameterised, not blanket", "verified": true, "evidence": "capabilities.ex has?/2 is MapSet.member?/2 exact-match (no prefix/wildcard); platform_test.exs 'REQ-157: call_service grant is parameterised, not blanket (AC5)' proves alpha grant passes the gate for 'alpha' (reaches stub raise, no capability_required field) but 'beta' still denies with capabilities_granted == [\"service:call:alpha\"]"},
+      {"ac": "6. now/fail callable with an empty capability set", "verified": true, "evidence": "platform_test.exs 'REQ-157: now and fail are callable with an empty capability set (AC6)' -- platform.now() returns normally, platform.fail() raises its own explicit_fail stub error not a capability denial (capability_required == nil in both no-gate cases)"},
+      {"ac": "7. moduledoc reproduces R-Co's matrix + now/fail ungated rationale", "verified": true, "evidence": "platform.ex moduledoc contains the full 8-row table, 'pure time read with no state reach', 'may always terminate itself', and the verbatim binding sentence 'A test that expects a gate on `now` or `fail` is reading the matrix wrong' -- all also asserted by platform_test.exs's 'REQ-157: moduledoc content (AC7)' describe block"},
+      {"ac": "8. mix test and mix compile --warnings-as-errors pass with real output quoted", "verified": true, "evidence": "independent re-run this step: 2134/2134 passed, 0 failures; mix compile --warnings-as-errors clean with zero output"}
+    ],
+    "staleness_check": {
+      "docs/requirements.yaml": "REQ-157 status: pending (line 7853) -- correct, not yet flipped",
+      "docs/status/requirement_status.yaml": "no REQ-157 entry present -- correct, DOC-UPDATER appends this at Step 6, not before this gate",
+      "docs/status/requirement_status.index.yaml": "no REQ-157 reference yet -- consistent with the above"
+    },
+    "additional_checks": {
+      "single_registration_point": "Confirmed in platform.ex: @capability_matrix is the sole literal list of 8 rows; install/2's Enum.reduce is the only Lua.set!(_, [:platform, _]) call site under lib/, mechanically guarded by the regex-count test (exactly 1 occurrence)",
+      "dual_denial_observability": "check!/3 both raises Lua.RuntimeException (script-visible, LUA-06's 'MUST raise a Lua error') and carries the full denial map on exception.original (host-reportable, unrescued exception fields readable by any rescuer per moduledoc note about Executor.execute_with_manifest/2's existing rescue clause)",
+      "capability_matrix_correctness": "matches requirements.yaml's THE CLOSED SET verbatim: call_service parameterised, 5 constant-capability functions, now/fail both :none"
+    },
+    "next_action": "Route to DOC-UPDATER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

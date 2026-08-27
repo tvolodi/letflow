@@ -7850,7 +7850,7 @@ requirements:
   - id: REQ-157
     title: Capability model and capability check at every gated host-function call site (LUA-05, LUA-06)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S5
     impl_order: 309  # letflow-queue task id
     description: >

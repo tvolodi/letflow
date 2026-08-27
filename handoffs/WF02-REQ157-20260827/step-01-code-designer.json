@@ -1,0 +1,68 @@
+{
+  "handoff_id": "step01-WF02-REQ157-20260827",
+  "run_id": "WF02-REQ157-20260827",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ157-20260827/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-27T07:08:40Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-157"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-157": "Capability model and capability check at every gated host-function call site (LUA-05, LUA-06). Ports R-Co/src/lua/capabilities.zig (string-grant set with has/add) and R-Co/src/lua/host_api/mod.zig's registerAll capability matrix. Closed set of 8 platform.* functions: call_service->service:call:<svc_id>, read_variable->variable:read, write_variable->variable:write, log->audit:log, emit_event->event:emit, get_instance_state->instance:read, now->NONE (ungated by design), fail->NONE (ungated by design). Build: (1) capability-set representation + check function with structured denial details (function, capability required, capabilities granted); (2) single registration point enforcing the closed set (test that adding a 9th function without a matrix row fails); (3) denial raises a Lua error AND is reportable to host; (4) call_service grant is parameterised by service id, not blanket. NOT IN SCOPE: host functions' own bodies (REQ-159/160) beyond stubs needed to test the gate; platform.now already shipped (REQ-152). SECURITY-REVIEWER hard gate -- this is the authorization boundary for tenant-supplied scripts. Queue task 309, GH#609. See docs/requirements.yaml REQ-157 for full description and acceptance_criteria."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ157-20260827/step-00-git-setup.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/engine/lua/platform.ex",
+      "lib/letflow/engine/lua/sandbox.ex",
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua_script_audit.ex",
+      "lib/letflow/design/req152-lua-time-denial.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/capabilities.ex",
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/capabilities_test.exs",
+      "test/letflow/engine/lua/platform_test.exs",
+      "lib/letflow/design/req157-lua-capability-model.md",
+      "test/specs/REQ-157.md"
+    ],
+    "branch_name": "feature/WF02-REQ157-20260827"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-157. Write lib/letflow/design/req157-lua-capability-model.md covering the capability-set representation, the single registration point enforcing the closed 8-function set, the structured-denial shape (raised AND host-reportable), and call_service's per-service-id parameterisation. Also write test/specs/REQ-157.md (test spec skeleton, no test code). Do not touch lib/letflow/engine/lua/executor.ex (locked, owned by concurrent WF02-REQ154-20260827 run).",
+    "acceptance_criteria": [
+      "Design specifies a capability-set data shape (grant_set) with has?/add semantics and a check/3 function returning :ok | {:error, denial()} where denial() names the function, the capability required, and the capabilities granted",
+      "Design specifies a single registration point (a capability matrix iterated once) that installs exactly the 8 platform.* functions, and states the mechanism by which adding a 9th function without a matching matrix row is structurally prevented or caught by a test",
+      "Design specifies how a denial is simultaneously (a) raised as a Lua error observable from inside the script (LUA-06) and (b) a structured Elixir-side value a host caller can read, without requiring a change to lib/letflow/engine/lua/executor.ex's existing Lua.RuntimeException rescue clause",
+      "Design specifies call_service's capability as parameterised by service id (service:call:<svc_id>), not a blanket service:call, and states the exact mechanism that prevents a grant for one service authorising another",
+      "Design states, as a moduledoc-level requirement, that now and fail are ungated by design (not omissions), with the R-Co rationale (pure time read with no state reach; a script may always terminate itself) reproduced in substance",
+      "Design covers all 8 acceptance criteria listed in docs/requirements.yaml's REQ-157 entry (read it directly), mapped one-to-one to concrete design elements",
+      "No implementation code (.ex function bodies) -- signatures, @specs, and type shapes only",
+      "Open questions listed explicitly if any exist (e.g. R-Co source files not present in this checkout, exact REQ-162 consumption shape of the structured denial), not silently resolved",
+      "REWORK ITERATION 1: CODE-DESIGN-VALIDATOR (step-01b, commit d3938a3) returned FAIL. Everything else in the design stands (all 8 ACs mapped, denial mechanism verified as a real correct use of Lua.RuntimeException's exception/1 clause, service_capability parameterisation verified correct, OQ-3's pairs(platform) approach verified low-risk and acceptable to leave open) -- the ONLY defect is two spots containing literal, complete, copy-paste-ready .ex code bodies instead of prose/type-shape descriptions, which WF-02 Step 1b(e) forbids with no partial credit for an 'illustrative only' label: (1) section 4.4's install/2 fold shows a complete working anonymous-function body (`fn args -> Capabilities.check!(...); row.stub.(args) end`) -- replace with a prose/table description of what the folded function must do (look up the matrix row for the called name, compute the required capability via the row's required-capability-fn, call Capabilities.check!/3 with it, then invoke the row's stub-fn) without writing the actual Elixir expression. (2) section 6.1 shows a complete `raise Lua.RuntimeException, scope: ..., message: ..., capability_required: ..., capabilities_granted: ...` expression -- replace with a description of the raise's shape (keyword list with keys :scope, :function, :message per the library's exception/1 clause, plus the two extra keys :capability_required and :capabilities_granted riding on exception.original) without writing the literal raise call. Update lib/letflow/design/req157-lua-capability-model.md and re-run CODE-DESIGN-VALIDATOR. On finishing, flip this handoff's status to COMPLETED/FAILED as normal with a real result, same as your first attempt.",
+      "REWORK ITERATION 2: CODE-DESIGN-VALIDATOR's re-check (step-01b, commit b88e051) confirmed the iteration-1 fixes held (sections 4.4 and 6.1 are clean prose, no regression elsewhere) but found a THIRD spot during its mandated re-skim, present in the document all along and missed by both prior passes: section 4.3's `now` stub bullet states the row's `stub` is literally `fn _args -> [Platform.now()] end` -- a real Elixir closure, the same class of violation as iterations 4.4/6.1. Fix: replace this literal closure with a prose/type-shape description (e.g. \"the now row's stub returns Platform.now/0's result, wrapped as the single-element Lua return list the tv-labs/lua calling convention expects\") -- describe the behavior and return shape, do not write the fn literal. Before resubmitting, re-skim the ENTIRE document once more (not just section 4.3) for any other .ex code fragment outside a permitted @spec/@type block -- two rounds have each found one violation the previous round missed, so do not assume this is now exhaustive without actually re-reading start to finish. On finishing, flip this handoff's status to COMPLETED/FAILED as normal with a real result."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "lib/letflow/design/req157-lua-capability-model.md",
+      "test/specs/REQ-157.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "summary": "REWORK ITERATION 2 pass. CODE-DESIGN-VALIDATOR's step-01b re-check (commit b88e051) confirmed iteration-1's two fixes (sections 4.4, 6.1) held clean, but its mandated re-skim found a THIRD literal-code spot in section 4.3: the `now` stub bullet stated the row's `stub` was literally `fn _args -> [Platform.now()] end`. Fixed: replaced with prose -- 'the now row's stub ignores its argument list and returns Platform.now/0's result wrapped as the single-element Lua return list the tv-labs/lua calling convention expects for a return value' -- no fn literal remains there.\n\nPer this iteration's explicit instruction not to trust a partial fix, I re-read the ENTIRE document start to finish (not just section 4.3) before resubmitting, and found ONE ADDITIONAL violation neither prior round had caught: section 4.1's capability-matrix table (the 'required' column, all 8 rows) contained literal Elixir closures for every row -- `fn [svc_id | _rest] -> Capabilities.service_capability(svc_id) end`, six `fn _args -> \"<capability-string>\" end` variants, and two `fn _args -> :none end` (now/fail). These are real, complete, copy-paste-ready anonymous functions embedded directly in a markdown table -- the same violation class as 4.4/6.1/4.3, just not yet flagged because it's a table cell rather than a code fence. Fixed: replaced every cell with a prose description of the function's behavior (e.g. 'Ignores all but the first argument (the svc_id the script passed) and returns Capabilities.service_capability(svc_id)'; 'Ignores its arguments and always returns the constant string \"variable:read\"'; 'Ignores its arguments and always returns :none') -- no fn literal remains anywhere in section 4.1's table either.\n\nTotal literal-code spots found and fixed THIS round: 2 (the flagged section-4.3 `now`-stub closure, plus the newly discovered 8-row section-4.1 matrix table). Combined with iteration 1's two fixes (4.4, 6.1), that is 4 literal-code spots removed across all rework rounds so far. I grepped the full document afterward for `fn `, `raise `, `case `, `cond `, and end-of-line `end`/`do` patterns outside @spec/@type blocks and manually re-read all 619 lines top to bottom; every remaining `fn`/`raise`/`case` occurrence left in the document is now either inside a @spec/@type code fence (permitted), or is prose narrating what a raise/case/function DOES in words (e.g. '`Capabilities.check!/3` ... raises `Lua.RuntimeException`', 'a `case`/`Keyword.get` on it') rather than an actual literal expression. Everything else in the design (grant_set/check/3/check!/3 shapes, service_capability/1, install/1->install/2 delegation description, moduledoc requirements for now/fail, cross-module dependency tables, the AC traceability table in section 7, INV-CAP-1..4, OQ-1/OQ-2/OQ-3) is unchanged from the prior PASS-on-substance version. test/specs/REQ-157.md re-read in full this round too -- it is prose/table only (test names and assertions in words), no code bodies; not modified."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

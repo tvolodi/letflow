@@ -6,8 +6,8 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF02-REQ157-20260827/step-01-code-designer.json",
-  "status": "COMPLETED",
-  "completed_at": "2026-08-27T07:20:00Z",
+  "status": "PENDING",
+  "completed_at": null,
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -49,7 +49,8 @@
       "Design states, as a moduledoc-level requirement, that now and fail are ungated by design (not omissions), with the R-Co rationale (pure time read with no state reach; a script may always terminate itself) reproduced in substance",
       "Design covers all 8 acceptance criteria listed in docs/requirements.yaml's REQ-157 entry (read it directly), mapped one-to-one to concrete design elements",
       "No implementation code (.ex function bodies) -- signatures, @specs, and type shapes only",
-      "Open questions listed explicitly if any exist (e.g. R-Co source files not present in this checkout, exact REQ-162 consumption shape of the structured denial), not silently resolved"
+      "Open questions listed explicitly if any exist (e.g. R-Co source files not present in this checkout, exact REQ-162 consumption shape of the structured denial), not silently resolved",
+      "REWORK ITERATION 1: CODE-DESIGN-VALIDATOR (step-01b, commit d3938a3) returned FAIL. Everything else in the design stands (all 8 ACs mapped, denial mechanism verified as a real correct use of Lua.RuntimeException's exception/1 clause, service_capability parameterisation verified correct, OQ-3's pairs(platform) approach verified low-risk and acceptable to leave open) -- the ONLY defect is two spots containing literal, complete, copy-paste-ready .ex code bodies instead of prose/type-shape descriptions, which WF-02 Step 1b(e) forbids with no partial credit for an 'illustrative only' label: (1) section 4.4's install/2 fold shows a complete working anonymous-function body (`fn args -> Capabilities.check!(...); row.stub.(args) end`) -- replace with a prose/table description of what the folded function must do (look up the matrix row for the called name, compute the required capability via the row's required-capability-fn, call Capabilities.check!/3 with it, then invoke the row's stub-fn) without writing the actual Elixir expression. (2) section 6.1 shows a complete `raise Lua.RuntimeException, scope: ..., message: ..., capability_required: ..., capabilities_granted: ...` expression -- replace with a description of the raise's shape (keyword list with keys :scope, :function, :message per the library's exception/1 clause, plus the two extra keys :capability_required and :capabilities_granted riding on exception.original) without writing the literal raise call. Update lib/letflow/design/req157-lua-capability-model.md and re-run CODE-DESIGN-VALIDATOR. On finishing, flip this handoff's status to COMPLETED/FAILED as normal with a real result, same as your first attempt."
     ]
   },
   "result": {
@@ -61,6 +62,6 @@
     "next_action": "Route to CODE-DESIGN-VALIDATOR",
     "summary": "New module Letflow.Engine.Lua.Capabilities: grant_set (MapSet of capability strings), new/0,1, add/2, has?/2 (exact-string membership only), check/3 (:ok | {:error, denial()} with :none short-circuiting unconditionally to :ok), check!/3 (raises on denial), service_capability/1 (single formatter for service:call:<svc_id>). Letflow.Engine.Lua.Platform extended: an 8-row @capability_matrix (name, required-capability-fn, stub-fn) folded once by install/2 (the single registration point, INV-CAP-1) -- call_service's required-fn is parameterised by the call's first argument via service_capability/1, now/fail's required-fn always returns :none. install/1 (REQ-152's existing signature, still the only call Sandbox.new/1 makes) becomes a thin delegate to install/2 with an empty grant set, so sandbox.ex and executor.ex (locked) need no changes -- every production Sandbox.new/0,1 VM already exposes all 8 platform.* names, the 6 gated ones permanently denying until a future requirement (REQ-158/159/160) calls install/2 with a populated grant set directly. Denial mechanism: Capabilities.check!/3 raises Lua.RuntimeException via its keyword-list exception/1 clause (scope/function/message, the only 3 keys the library validates) plus two extra keys (capability_required, capabilities_granted) that survive unrendered on exception.original -- a real Lua.RuntimeException matched by Executor's existing unmodified rescue clause, carrying the structured denial for a future REQ-162 to read without needing Executor touched in this run. All 8 REQ-157 acceptance criteria mapped in design doc section 7. 3 open questions: OQ-1 (R-Co's capabilities.zig/host_api/mod.zig not present in this checkout -- design built from docs/requirements.yaml's own restatement instead, flagged for reconciliation if the originals ever become available), OQ-2 (exact REQ-162 consumption shape of the structured fields left undecided), OQ-3 (pairs(platform) assumed as the closed-set enumeration mechanism for AC1's test; flagged as a spike ELIXIR-DEV should confirm early, with a fallback noted if it doesn't enumerate function-valued table entries as expected)."
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

@@ -2637,7 +2637,7 @@
             "requirement_ids": ["REQ-154"],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/engine/lua/executor.ex",
                 "lib/letflow/engine/lua/sandbox.ex",
@@ -2646,9 +2646,9 @@
                 "test/specs/REQ-154.md"
             ],
             "lock_acquired_at": "2026-08-27T06:32:50Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 06 COMPLETED PASS -- REQ-154 done, done event appended v5.yaml (10 entries), ISS-0350 resolved -- all independently confirmed; dispatch Step Final ELIXIR-DEV",
+            "lock_released_at": "2026-08-27T10:14:13Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #675 squash-merged (1967c365); queue task 306 released done",
             "backfilled": false,
             "queue_task_id": 306,
             "queue_agent_id": "orch-main",

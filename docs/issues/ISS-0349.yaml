@@ -1,0 +1,48 @@
+id: ISS-0349
+title: >
+  handoffs/WF02-REQ153-20260827/step-01-code-designer.json is an empty file,
+  fails letflow.lint_handoffs [PARSE] gate on main
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0348-20260826
+discovered_at: "2026-08-27T04:40:00Z"
+severity: MAJOR
+status: resolved
+resolved_in_run: WF03-ISS0348-20260826
+resolved_at: "2026-08-27T04:52:00Z"
+queue_task_id: 349
+github_issue: 672
+description: >
+  Discovered incidentally by ORCH during WF03-ISS0348-20260826's Step Final
+  (git-merge), while rebasing feature/WF03-ISS0348-20260826 onto main. After
+  the rebase, CI's backend gate (mix letflow.check) failed in ~35s (too fast
+  to be a real full test run) with: letflow.lint_handoffs: FAIL -- 1 new
+  (un-grandfathered) violation(s): [PARSE]
+  handoffs/WF02-REQ153-20260827/step-01-code-designer.json: could not
+  read/decode: %Jason.DecodeError{position: 0, token: nil, data: ""}.
+  git log showed this file introduced as a 0-byte file by commit 89ae6ec
+  ("chore(ORCH): dispatch WF02-REQ153-20260827 step-01 to CODE-DESIGNER"),
+  already on main -- structurally unrelated to WF03-ISS0348-20260826's own
+  diff (that branch never touches handoffs/WF02-REQ153-20260827/). Blocked
+  mix letflow.check for every branch rebased onto main.
+affected_files:
+  - handoffs/WF02-REQ153-20260827/step-01-code-designer.json
+resolution_note: >
+  Removed the empty placeholder file (commit e096d2e). It carried zero
+  content -- CODE-DESIGNER's step-01 dispatch for WF02-REQ153 never actually
+  wrote a real handoff, so deleting it returns that run's own step-01 to its
+  true unstarted state for its own ORCH to redispatch, rather than
+  fabricating design content on its behalf. Confirmed fix: mix
+  letflow.lint_handoffs: OK -- 0 new violations across 1069 handoff files
+  (25 pre-existing grandfathered, traced to ISS-0190). Scope check: this
+  fix touches only the broken handoff artifact, never
+  lib/letflow/engine/lua/ or test/letflow/engine/lua/ (WF02-REQ153's own
+  owned_modules lock per handoffs/registry.json).
+acceptance_criteria:
+  - >
+    Root cause identified: why
+    handoffs/WF02-REQ153-20260827/step-01-code-designer.json was committed
+    as a 0-byte file
+  - >
+    File is either populated with valid handoff JSON or properly retracted
+    per HANDOFF_PROTOCOL.md
+  - mix letflow.check exits 0 on main after the fix, run and quoted for real

@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "ELIXIR-DEV",
   "file": "handoffs/WF02-REQ161-20260827/step-02a-elixir-dev.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -39,6 +39,11 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "summary": "Implemented REQ-161 in lib/letflow/engine/lua/platform.ex per the approved design (lib/letflow/design/req161-lua-platform-fail.md). Replaced run_stub(:fail, ...)'s body with a call to a new private do_fail/2 (also threads the call's Lua.t() through, needed for Lua.decode!/2 on table-shaped reason/details arguments -- a deviation from the design's literal do_fail/1 arity, flagged here since the design text alone would not compile against a table-shaped argument). do_fail/2 coerces reason to a String.t() (binary as-is; {:tref,_} decoded then inspect/1; anything else inspect/1; nil defaults to the documented fallback string), decodes+normalizes details via the existing decode_lua_payload/2 + normalize_from_lua/1 pipeline (nil default), and calls exit({:script_failed, %{reason:, details:}}) -- never returns. Added script_failure()/script_failed_exit_reason() @type declarations and no_return() to run_stub/5's @spec union. @capability_matrix's :fail row left byte-for-byte unedited (required: :none, no gate added). Added the 6-item REQ-161 moduledoc section per design section 6. Removed one now-dead defp object_shaped_proplist?/1 clause the Elixir 1.20 type checker proved unreachable once do_fail/2 added a third call site into the existing normalize_from_lua/1 pipeline (mix compile --warnings-as-errors caught this; fixed, not suppressed). Updated two pre-existing tests in test/letflow/engine/lua/platform_test.exs that asserted the OLD raise-based behavior (REQ-157's 'now and fail ungated' tests) to assert the new exit-based behavior instead, and added a new 'REQ-161: platform.fail terminates by exit/1' describe block (AC1-AC4 plus a table-reason-argument case) and a 'REQ-161: moduledoc content' describe block (AC5/AC6), all asserting at the raw Task.Supervisor.async_nolink/Task.yield boundary against Letflow.Engine.Lua.TaskSupervisor (never through Executor.execute_with_manifest/2,3), per the design's own documented executor.ex stringification gap. executor.ex, plugin_interface.ex, lua_script_audit.ex left untouched. mix compile --warnings-as-errors: clean, no output. mix test test/letflow/engine/lua/platform_test.exs: 100/100 passed. Full mix test (single clean invocation, no other mix test process running concurrently): 'Finished in 682.0 seconds (9.4s async, 672.6s sync)' / 'Result: 2275 passed (5 properties, 2270 tests), 3 excluded' -- 0 failures. (An earlier full-suite attempt showed 3 failures, traced to two mix test invocations I accidentally launched concurrently colliding on the shared test database -- not a code defect; the clean rerun confirms 0 failures.) mix letflow.lint_handoffs: 'OK -- 0 new violations across 1172 handoff files (25 pre-existing grandfathered, traced to ISS-0190)'. Routing to SECURITY-REVIEWER (this touches the Lua sandbox call boundary) then REVIEWER per WF-02 Step 2b/2c -- not marking this handoff's own gates passed.",
+    "artifacts_out": [
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs"
+    ]
   }
 }

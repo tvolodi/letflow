@@ -333,16 +333,15 @@ defmodule Letflow.Engine.Lua.PlatformTest do
       assert {:ok, %DateTime{}, 0} = DateTime.from_iso8601(result)
     end
 
-    test "platform.fail() raises the stub's own explicit-failure error, not a capability denial" do
+    test "platform.fail() terminates the process via exit, not a capability denial (REQ-161 AC4)" do
       lua = Platform.install(Sandbox.new(), Capabilities.new())
 
-      exception =
-        assert_raise Lua.RuntimeException, fn ->
+      task =
+        Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn ->
           Lua.eval!(lua, "return platform.fail()")
-        end
+        end)
 
-      assert exception.original[:reason] == :explicit_fail
-      assert exception.original[:capability_required] == nil
+      assert {:exit, {:script_failed, %{reason: _, details: nil}}} = Task.yield(task, 1_000)
     end
   end
 
@@ -924,12 +923,12 @@ defmodule Letflow.Engine.Lua.PlatformTest do
       assert {[result], _lua} = Lua.eval!(lua, "return platform.now()")
       assert is_binary(result)
 
-      exception =
-        assert_raise Lua.RuntimeException, fn ->
+      task =
+        Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn ->
           Lua.eval!(lua, "return platform.fail()")
-        end
+        end)
 
-      assert exception.original[:reason] == :explicit_fail
+      assert {:exit, {:script_failed, %{reason: _, details: nil}}} = Task.yield(task, 1_000)
     end
   end
 
@@ -1856,6 +1855,142 @@ defmodule Letflow.Engine.Lua.PlatformTest do
 
       assert from_lua_call_sites >= 3
       assert to_lua_call_sites >= 3
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-161 (LUA-15 restated): platform.fail terminates uninterceptably
+  # ---------------------------------------------------------------------------------
+  #
+  # Every test in this section asserts at the RAW Task/process boundary -- never
+  # through `Letflow.Engine.Lua.Executor.execute_with_manifest/2,3` -- because the
+  # design's own §4 documents that `Executor`'s `handle_yield_result/3` stringifies any
+  # non-`:killed` exit reason (including a deliberate `{:script_failed, _}` one) via
+  # `format_exit_reason/1` before it ever reaches an `Executor` caller. Asserting through
+  # `Executor` would prove nothing about the pattern-matchability this requirement's own
+  # acceptance criteria require.
+  describe "REQ-161: platform.fail terminates by exit/1, not by a pcall-catchable raise" do
+    # `Task.async/1` LINKS the new process to the caller -- an abnormal exit from a
+    # linked, non-trapping process would crash this test process too. Every test below
+    # therefore submits its script via `Task.Supervisor.async_nolink/2` against the same
+    # `Letflow.Engine.Lua.TaskSupervisor` production code already uses
+    # (`Letflow.Engine.Lua.Executor`'s `:max_heap_words == nil` path), exactly mirroring
+    # the real, shipped mechanism rather than inventing a test-only one.
+    defp async_fail(fun) do
+      Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fun)
+    end
+
+    test "AC1: a script that wraps platform.fail in pcall and continues STILL yields SCRIPT_FAILED and does not run to completion" do
+      script = """
+      local ok, err = pcall(function()
+        platform.fail("boom")
+      end)
+
+      -- If pcall could actually catch this, execution would reach here and this
+      -- return would be observed by the caller. It must never be observed.
+      return "script continued past pcall -- REQ-161 REGRESSION"
+      """
+
+      task = async_fail(fn -> Lua.eval!(Sandbox.new(), script) end)
+
+      assert {:exit, {:script_failed, %{reason: "boom", details: nil}}} =
+               Task.yield(task, 1_000)
+    end
+
+    test "AC2: the structured failure carries the reason/details the script passed, readable by the host" do
+      script = """
+      platform.fail("bad input", {code = 42, note = "x"})
+      """
+
+      task = async_fail(fn -> Lua.eval!(Sandbox.new(), script) end)
+
+      assert {:exit, {:script_failed, %{reason: "bad input", details: details}}} =
+               Task.yield(task, 1_000)
+
+      assert details["code"] == 42
+      assert details["note"] == "x"
+    end
+
+    test "AC2: a missing reason/details pair defaults to the documented fallback string and nil" do
+      task = async_fail(fn -> Lua.eval!(Sandbox.new(), "platform.fail()") end)
+
+      assert {:exit, {:script_failed, %{reason: reason, details: nil}}} = Task.yield(task, 1_000)
+      assert reason == "script called platform.fail with no reason"
+    end
+
+    test "AC3: {:script_failed, _} is pattern-match-distinguishable from a real, unrelated crash" do
+      fail_task = async_fail(fn -> Lua.eval!(Sandbox.new(), "platform.fail('deliberate')") end)
+      assert {:exit, fail_reason} = Task.yield(fail_task, 1_000)
+      assert match?({:script_failed, %{reason: "deliberate", details: nil}}, fail_reason)
+
+      # A genuine uncaught Lua runtime error -- NOT a `platform.fail` call at all --
+      # propagates out of `Lua.eval!/2` as a raised `Lua.RuntimeException`, which Task
+      # reports as an `{:exit, {exception, stacktrace}}` tuple, never as `:exit/1`.
+      crash_task = async_fail(fn -> Lua.eval!(Sandbox.new(), "error('boom')") end)
+      assert {:exit, crash_reason} = Task.yield(crash_task, 1_000)
+      refute match?({:script_failed, _}, crash_reason)
+      assert {%Lua.RuntimeException{}, _stacktrace} = crash_reason
+
+      # A forcibly killed process -- the other real crash shape `executor.ex` already
+      # handles specially (`:killed`, the BEAM-reserved rewrite of `exit(pid, :kill)`).
+      killed_task = async_fail(fn -> Process.sleep(:infinity) end)
+      Process.exit(killed_task.pid, :kill)
+      assert {:exit, :killed} = Task.yield(killed_task, 1_000)
+      refute match?({:script_failed, _}, :killed)
+    end
+
+    test "AC4: platform.fail is callable with an EMPTY capability grant set and still terminates the process" do
+      lua = Platform.install(Sandbox.new(), Capabilities.new())
+
+      task = async_fail(fn -> Lua.eval!(lua, "platform.fail('no capability needed')") end)
+
+      assert {:exit, {:script_failed, %{reason: "no capability needed", details: nil}}} =
+               Task.yield(task, 1_000)
+    end
+
+    test "a table-shaped reason argument is decoded then rendered via inspect/1, not left as a raw table reference" do
+      task = async_fail(fn -> Lua.eval!(Sandbox.new(), "platform.fail({oops = true})") end)
+
+      assert {:exit, {:script_failed, %{reason: reason, details: nil}}} = Task.yield(task, 1_000)
+      assert reason =~ "oops"
+      refute reason =~ "tref"
+    end
+  end
+
+  describe "REQ-161: moduledoc content (AC5, AC6)" do
+    test "restates LUA-15 and explains the pcall-continuation hazard, naming exit/1 as the mechanism" do
+      {:docs_v1, _, _, _, %{"en" => text}, _, _} =
+        Code.fetch_docs(Letflow.Engine.Lua.Platform)
+
+      assert text =~ "LUA-15"
+      assert text =~ "pcall"
+      assert text =~ "exit({:script_failed"
+      assert text =~ "rescue"
+    end
+
+    test "states plainly that LUA-15's engine-side half has no real call site today" do
+      {:docs_v1, _, _, _, %{"en" => text}, _, _} =
+        Code.fetch_docs(Letflow.Engine.Lua.Platform)
+
+      assert text =~ "no real call site today"
+      assert text =~ "plugin_interface.ex"
+      assert text =~ "lua_script_audit.ex"
+    end
+
+    test "states the SCRIPT_FAILED/SCRIPT_ERROR non-collapse property, reserving :script_failed" do
+      {:docs_v1, _, _, _, %{"en" => text}, _, _} =
+        Code.fetch_docs(Letflow.Engine.Lua.Platform)
+
+      assert text =~ "SCRIPT_ERROR"
+      assert text =~ "reserved"
+    end
+
+    test "states the honest executor.ex stringification gap" do
+      {:docs_v1, _, _, _, %{"en" => text}, _, _} =
+        Code.fetch_docs(Letflow.Engine.Lua.Platform)
+
+      assert text =~ "format_exit_reason"
+      assert text =~ "process/monitor boundary"
     end
   end
 end

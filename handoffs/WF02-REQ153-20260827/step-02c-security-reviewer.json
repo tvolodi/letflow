@@ -1,0 +1,100 @@
+{
+  "agent": "SECURITY-REVIEWER",
+  "requirement": "REQ-153",
+  "branch": "feature/WF02-REQ153-20260827",
+  "timestamp": "2026-08-27T00:00:00Z",
+  "status": "PASS",
+
+  "scope_test": {
+    "verdict": "IN-SCOPE",
+    "reason": "The diff introduces lib/letflow/engine/lua/executor.ex which executes tenant-supplied Lua script text. Although it touches no migrations, API routes, or secret resolution paths, it is the first module in this codebase to accept and run tenant-authored code — INV-3 (sandbox) and INV-8 (error handling) both apply. INV-1, INV-2, INV-4, INV-5, INV-7 were assessed and ruled NOT-APPLICABLE (reasoning below)."
+  },
+
+  "changed_files": [
+    "lib/letflow/engine/lua/executor.ex",
+    "test/letflow/engine/lua/executor_test.exs",
+    "lib/letflow/design/req153-lua-executor.md",
+    "handoffs/WF02-REQ153-20260827/step-00-git-setup.json",
+    "handoffs/WF02-REQ153-20260827/step-01-code-designer.json",
+    "handoffs/WF02-REQ153-20260827/step-02a-elixir-dev.json"
+  ],
+
+  "invariant_assessments": [
+    {
+      "invariant": "INV-1",
+      "title": "Tenant data isolation",
+      "verdict": "NOT-APPLICABLE",
+      "reasoning": "executor.ex contains zero Repo calls, zero Ecto queries, and no database access of any kind. The executor accepts a binary (Lua source text) and returns a SHA-256 hash. No tenant-scoped data is read or written. The test module explicitly notes 'No database access required'. The INV-1 scope test (a) prefix-scoped queries, (b) migration placement, (c) tenant_id derivation — none apply here."
+    },
+    {
+      "invariant": "INV-2",
+      "title": "Server-side field authorisation",
+      "verdict": "NOT-APPLICABLE",
+      "reasoning": "No API routes or response serialisation introduced by this diff."
+    },
+    {
+      "invariant": "INV-3",
+      "title": "Untrusted runtime sandboxing",
+      "verdict": "APPLIES — PASS",
+      "reasoning": "This is the primary invariant for this change. Verified: (1) Sandbox.new/0 is called unconditionally at the start of every execute_with_manifest/2 invocation — there is no code path in executor.ex that creates or obtains a Lua.t() by any other means. (2) Lua.new/1 is never called anywhere in executor.ex. (3) The alias in executor.ex is 'alias Letflow.Engine.Lua.Sandbox' — the only Lua construction visible to this module is via that alias. (4) sandbox.ex declares 'Sandbox.new/0 and Sandbox.new/1 are the ONLY permitted call sites of Lua.new/1 anywhere under lib/ (INV-SBX-1)' and implements a fixed 33-entry deny-set covering io, os (including all time functions per REQ-152), file, package, load, loadfile, require, dofile, debug, and string.dump. The deny-set is restated explicitly in source (not by reference to the library's @default_sandbox) so a future library upgrade cannot silently reopen denied paths. (5) Each invocation creates a fresh Lua.t() — the state variable 'lua' is local to the function, never returned or stored. No module-level or process-level Lua.t() exists. Sandbox containment is structurally enforced, not runtime-checked.",
+      "checks_performed": [
+        "Read executor.ex in full: single Sandbox.new() call at top of execute_with_manifest, Lua.new/1 absent",
+        "Read sandbox.ex in full: deny-set of 33 entries, infallible construction (INV-SBX-4), single entry point documented",
+        "Confirmed no module attribute, Agent, GenServer, ETS table, or process dictionary usage in executor.ex"
+      ]
+    },
+    {
+      "invariant": "INV-4",
+      "title": "Secrets by reference only",
+      "verdict": "NOT-APPLICABLE",
+      "reasoning": "No secrets resolved, interpolated, or threaded through executor.ex. The only inputs are a binary (script source) and a string (registered_hash, ignored with _). The only output is a SHA-256 hex string of the script bytes. No System.get_env, no config lookups, no credential fields."
+    },
+    {
+      "invariant": "INV-5",
+      "title": "Not-found/forbidden indistinguishability",
+      "verdict": "NOT-APPLICABLE",
+      "reasoning": "No lookup-by-ID and no cross-tenant resource probe paths introduced."
+    },
+    {
+      "invariant": "INV-6",
+      "title": "New data-access paths prove their scoping",
+      "verdict": "SATISFIED",
+      "reasoning": "This handoff is the INV-6 proof artifact. The executor introduces no data-access path — it is a pure Lua runner with no DB interaction. INV-6's 'demonstrate tenant scoping' requirement is satisfied by the absence of any scoping obligation rather than by a positive scoping proof."
+    },
+    {
+      "invariant": "INV-7",
+      "title": "No SQL string interpolation",
+      "verdict": "NOT-APPLICABLE",
+      "reasoning": "No SQL of any kind in executor.ex. grep-confirmed: zero Repo.query calls, zero raw SQL strings."
+    },
+    {
+      "invariant": "INV-8",
+      "title": "No unhandled crashes on realistic failure paths",
+      "verdict": "APPLIES — PASS",
+      "reasoning": "Verified: (1) execute_with_manifest/2 wraps Lua.eval! in a try/rescue block that catches Lua.RuntimeException and Lua.CompilerException, returning {:error, Exception.message(e)} for both — these are the two documented failure modes for Lua.eval!. (2) Sandbox.new/0 is documented as infallible (INV-SBX-4 in sandbox.ex: 'Construction never fails: there is no {:ok, _} | {:error, _} return shape ... no external I/O, no config lookup, and no user input at construction time') — its placement outside the try block is therefore correct and intentional, not an oversight. (3) The function clause guard 'when is_binary(script_source)' ensures a non-binary argument does not silently reach the Lua runtime — a non-binary caller would trigger a FunctionClauseError at the boundary, not inside the Lua runtime. (4) Exception.message(e) for Lua.RuntimeException/CompilerException returns the Lua VM's error string from the tenant's own script — this does not leak internal Elixir/OTP state beyond what the calling tenant already supplied. (5) A truly catastrophic exception (e.g. OOM killing the BEAM scheduler) that is not a Lua.RuntimeException or Lua.CompilerException would propagate. Per INV-8's own text: 'Where OTP's own let-it-crash philosophy is the deliberate choice ... that is not a violation of this invariant.' The executor is a stateless function module, not a shared long-lived process; catastrophic failures would crash only the calling process, which is the caller's supervision responsibility. This is idiomatic OTP and not an INV-8 violation.",
+      "checks_performed": [
+        "Read executor.ex: try/rescue present, covers Lua.RuntimeException and Lua.CompilerException",
+        "Read sandbox.ex INV-SBX-4 note: construction infallible, Sandbox.new outside try is correct",
+        "Confirmed no bare {:ok, x} = pattern on fallible external calls",
+        "Confirmed Exception.message(e) returns only Lua-layer error string, not Elixir internal state"
+      ]
+    }
+  ],
+
+  "additional_findings": [
+    {
+      "finding": "Cross-invocation state leak — NONE",
+      "detail": "Each call to execute_with_manifest/2 constructs a new Lua.t() assigned to a local variable 'lua'. There are no module attributes (@table, @agent, etc.), no GenServer, no ETS table, no process dictionary read/write in executor.ex. Tests AC3 and AC4 in executor_test.exs explicitly verify the isolation property via Sandbox.new() round-trip checks. The isolation invariant is structural: every invocation gets a fresh VM."
+    },
+    {
+      "finding": "script_ref injection risk — CONTAINED",
+      "detail": "The script_source binary is passed directly to Lua.eval! inside the sandbox. The sandbox deny-set blocks all ambient network/filesystem/process-control capabilities (os.execute, io.*, load, require, package, debug, all os time functions). A malicious script cannot escape the BEAM process via denied paths. Infinite loops (CPU exhaustion) are not addressed by this module — that is a resource-limit concern outside the security invariant scope for this requirement. No injection risk exists at the Elixir API boundary: the input is a binary, not interpolated into any query or system call."
+    }
+  ],
+
+  "result": {
+    "status": "PASS",
+    "blocker_count": 0,
+    "summary": "All applicable invariants pass. INV-3 (sandbox) is satisfied: Sandbox.new/0 is the sole Lua.t() construction path, never bypassed, providing a 33-entry deny-set covering all dangerous capabilities. INV-8 (error handling) is satisfied: Lua.eval! failures are caught and returned as {:error, _}; Sandbox.new/0 is documented infallible. No tenant DB access, no SQL, no secrets, no cross-invocation state. The executor is safe to merge."
+  }
+}

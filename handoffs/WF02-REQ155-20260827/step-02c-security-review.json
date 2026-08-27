@@ -1,0 +1,55 @@
+{
+  "handoff_id": "step02c-WF02-REQ155-20260827",
+  "run_id": "WF02-REQ155-20260827",
+  "workflow_id": "WF-02",
+  "step": "2c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ155-20260827/step-02c-security-review.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-155"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ155-20260827/step-01-code-designer.json",
+      "handoffs/WF02-REQ155-20260827/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ155-20260827/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req155-lua-wallclock-kill.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/application.ex",
+      "config/config.exs",
+      "config/test.exs",
+      "test/letflow/engine/lua/executor_test.exs",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "branch_name": "feature/WF02-REQ155-20260827",
+    "commit": "1e4a4b2"
+  },
+  "result": {
+    "status": "PASS",
+    "invariants": {
+      "INV-1": "NOT-APPLICABLE. No tenant-scoped Ecto schema, migration, or business table touched -- this diff is engine-internal (Task.Supervisor wiring, config, Lua VM execution).",
+      "INV-2": "NOT-APPLICABLE. No API response-shaping code (S4 not started).",
+      "INV-3": "NOT-APPLICABLE per its own text (S5 decision record not yet cited for the WASM/host-capability-allowlist boundary this invariant names). Note: REQ-155 is adjacent (S5 scripting) but INV-3 concerns capability-gated host functions, not wall-clock termination; the sandbox's capability allowlist itself is REQ-151/152/156 territory, unchanged here.",
+      "INV-4": "APPLIES (config resolution touched) and PASSES. Both new config keys (`lua_wallclock_timeout_ms` in config/config.exs:17 and config/test.exs:143) are plain integers (5_000 / 200ms), not secrets. Resolved via Application.fetch_env!/2 at point of use (executor.ex default_timeout_ms/0), never threaded as a literal or logged. grep for hardcoded secret patterns in the diff: none.",
+      "INV-5": "NOT-APPLICABLE (S4 not started, no lookup-by-ID endpoint).",
+      "INV-6": "APPLIES (meta-invariant) and PASSES via this handoff itself: this is not a new data-access path (no new table/route/host-function touching tenant data) but a genuinely new execution-control path, and it is documented with which invariants apply/why below.",
+      "INV-7": "APPLIES (repo-wide check) and PASSES. `grep -rn \"Repo.query\" lib/ priv/repo/migrations/` was re-run; the diff introduces no SQL at all -- no Repo/Ecto code touched by this change.",
+      "INV-8": "APPLIES and PASSES. All 4 external-I/O-adjacent outcomes of Task.yield/2 ({:ok, ok-result}, {:ok, error-result}, {:exit, reason}, nil-timeout) are handled by explicit handle_yield_result/3 clauses with no bare `{:ok, _} =` match; an unrecognized task return value falls through to a typed {:error, _} arm rather than crashing the caller. Confirmed no unhandled-crash path reaches the caller of execute_with_manifest/2,3."
+    },
+    "specific_findings": [
+      "(1) Genuine out-of-band kill, verified by reading code, not trusting the design doc: execute_with_manifest/3 (executor.ex:165-178) spawns run_script/2 via Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn -> ... end) -- async_nolink means the task is NOT linked to the caller, so caller/task failures don't propagate to each other, and the caller retains an ownable reference for Task.shutdown/2. Task.yield(task, timeout_ms) bounds the wait; on nil (timeout), Task.shutdown(task, :brutal_kill) is called (executor.ex:244-247) -- per Elixir/OTP semantics this delivers an untrappable `:kill` exit signal to the task's process, terminating it unconditionally regardless of what the process is doing (including a tight non-yielding loop, since BEAM preemptive scheduling means the kill signal is delivered by the VM, not cooperatively polled by the target process). This is real process death, not merely abandoning the wait. T3 in executor_test.exs (AC-3, lines 335-355) independently proves this empirically: it snapshots Task.Supervisor.children/1 before and after a timed-out call and asserts no lingering child remains -- the kill actually removed the process from the supervisor's child set, not just stopped waiting on it.",
+      "(2) Goto-loop substitution independently verified against the actual vendored runtime source (deps/lua/lib/lua/vm/state.ex, dispatcher.ex, executor.ex), not merely taken on ELIXIR-DEV's word. State.tick!/2 (state.ex:145-158) is the sole instruction-budget accounting function, documented and confirmed by grep to be called only 'at loop back-edges and call boundaries' -- concretely, at the while/for/repeat continuation re-entry points (executor.ex:746, 786, 813, 839, 1403, 1471). The goto-handling clause (executor.ex:679-692, `do_execute([{:goto, id} | _rest], ...)`) jumps directly to `target_tail` with `instruction_count` passed through completely unchanged -- it is not one of the call sites that invokes State.tick!/2 anywhere in the module. This means a `::top:: goto top` loop structurally never reaches an instruction-budget check: it is not a runtime quirk or a probe that could have been mis-run, it is the absence of a tick! call on that code path, visible directly in the vendored source. ELIXIR-DEV's empirical claim is confirmed independently and precisely: T2 (executor_test.exs:318-332) is a valid, necessary proof that layer 2 is required -- a script that traps its :max_instructions error via pcall and then escapes via goto is provably uncatchable by layer 1 alone, and is only terminated by the wall-clock kill. Additionally, state.ex:142-143's own doc ('a caught budget error stays spent -- a protected call cannot refund the work it burned') independently corroborates ELIXIR-DEV's other claim, that the design's originally-proposed pcall-then-loop-again test would not have exercised layer-2 necessity (a second while/for loop after a trip re-ticks against an already-near-exhausted counter and re-raises almost immediately under layer 1 alone).",
+      "(3) :timeout_ms is genuinely per-call configurable, not tenant-influenceable: execute_with_manifest/3 requires it as a caller-supplied opt (Keyword.fetch!(opts, :timeout_ms), executor.ex:168) with no default at that arity; execute_with_manifest/2 (the behaviour-conforming, tenant-input-facing arity) reads it only from Application config (default_timeout_ms/0, executor.ex:262-265) via Application.fetch_env!(:letflow, :lua_wallclock_timeout_ms) -- a host-controlled compile/deploy-time value, never derived from script_source or registered_hash (the only tenant-supplied arguments to /2). No code path lets script content reach the timeout value.",
+      "(4) TaskSupervisor isolation confirmed: `{Task.Supervisor, name: Letflow.Engine.Lua.TaskSupervisor}` is registered as a sibling child in application.ex's supervision tree (alongside the pre-existing SandboxPool.TaskSupervisor and PluginTaskSupervisor, same established one-supervisor-per-subsystem convention). Task.Supervisor's own children are started via async_nolink (unlinked), and a plain Task.Supervisor's default strategy tolerates arbitrary child task crashes/kills without itself restarting or affecting sibling tasks -- this is stock, unmodified Task.Supervisor behavior, not custom logic that could be misconfigured. T6/AC-5 (executor_test.exs:388-412) empirically confirms a script is a visible child while in flight; T3/AC-3 confirms it is removed (not orphaned) after a brutal_kill, with no other child count perturbation implied elsewhere in the suite.",
+      "(5) Moduledoc limitation disclosure (executor.ex:81-90) accurately scoped: it states the mechanism covers a hanging script, a raising script, and a task that exits for any other reason -- consistent with the actual handle_yield_result/3 clause coverage (5 arms: ok-success, budget_exceeded, invalid_script_ref, string-error, unrecognized-value, plus exit and nil/timeout) -- and explicitly excludes a hard BEAM-node kill or System.halt/0, correctly reasoning that both terminate the node the supervising process itself runs on, so no supervisor/monitor on that same node could ever observe or react to either. This is accurate and not overstated; it does not claim protection it lacks."
+    ],
+    "verdict": "PASS. No BLOCKER findings. Out-of-scope-for-this-diff invariants (INV-1, INV-2, INV-3, INV-5) correctly recorded NOT-APPLICABLE per the scope test (no tenant-scoped table/schema/migration, no API response shaping, no new host-capability surface, no lookup-by-ID endpoint touched). Live invariants (INV-4, INV-6, INV-7, INV-8) all verified PASS by direct code reading, not by trusting ELIXIR-DEV's self-report. The goto-loop test substitution and the brutal_kill process-death claim were both independently re-derived from the vendored Lua runtime's actual source (deps/lua/lib/lua/vm/{state,executor,dispatcher}.ex), not merely accepted from the handoff notes."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

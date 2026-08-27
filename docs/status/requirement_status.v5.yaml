@@ -284,3 +284,13 @@ history:
       Step 00 git-setup PENDING (ELIXIR-DEV dispatched): branch
       feature/WF02-REQ154-20260827 to be created and pushed. 7 on-disk
       entries before this append; 8 after.
+
+  - req: REQ-157
+    event: started
+    agent: ORCH
+    at: "2026-08-27T06:59:00Z"
+    note: >
+      WF02-REQ157-20260827 started (queue task 309, GH#609, stage S5).
+      Step 00 git-setup PASS (ELIXIR-DEV): branch
+      feature/WF02-REQ157-20260827 created and pushed. Dispatching Step 1
+      to CODE-DESIGNER next. 8 on-disk entries before this append; 9 after.

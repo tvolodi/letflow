@@ -141,6 +141,54 @@ defmodule Letflow.Engine.Lua.ManifestTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # 3b. Delimiter-injection collision regression (rework 1, SECURITY-REVIEWER BLOCKER)
+  # ---------------------------------------------------------------------------------
+
+  describe "compute_hash/2 is not vulnerable to delimiter-injection collisions" do
+    test "a capability string containing an embedded LF does not collide with the equivalent split list" do
+      script = "return 1"
+      script_id = "script-1"
+
+      manifest_with_embedded_lf = %Manifest{
+        script_id: script_id,
+        capabilities: ["a\nb", "c"]
+      }
+
+      manifest_split = %Manifest{
+        script_id: script_id,
+        capabilities: ["a", "b", "c"]
+      }
+
+      refute Manifest.compute_hash(manifest_with_embedded_lf, script) ==
+               Manifest.compute_hash(manifest_split, script),
+             "['a\\nb', 'c'] and ['a', 'b', 'c'] must never collide -- this is the exact " <>
+               "collision SECURITY-REVIEWER found against the raw-0x0A-separator encoding"
+    end
+
+    test "a NUL byte inside script_id or script_source does not create an analogous framing collision" do
+      script_id_a = "ab"
+      capabilities_a = ["c"]
+      script_id_b = "a\0b"
+      capabilities_b = ["c"]
+      script_source = "return 1"
+
+      manifest_a = %Manifest{script_id: script_id_a, capabilities: capabilities_a}
+      manifest_b = %Manifest{script_id: script_id_b, capabilities: capabilities_b}
+
+      refute Manifest.compute_hash(manifest_a, script_source) ==
+               Manifest.compute_hash(manifest_b, script_source),
+             "script_id 'ab' and script_id 'a\\0b' must never collide under length-prefixed framing"
+
+      manifest_source_a = %Manifest{script_id: "script-1", capabilities: ["a"]}
+      script_source_with_nul = "return\01"
+
+      refute Manifest.compute_hash(manifest_source_a, "return1") ==
+               Manifest.compute_hash(manifest_source_a, script_source_with_nul),
+             "a literal NUL byte inside script_source must still change the hash"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # 4. Load-time rejection of a manifest modified after registration (AC1)
   # ---------------------------------------------------------------------------------
 

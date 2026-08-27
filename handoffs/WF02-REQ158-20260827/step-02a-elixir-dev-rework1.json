@@ -1,0 +1,50 @@
+{
+  "handoff_id": "step02a-rework1-WF02-REQ158-20260827",
+  "run_id": "WF02-REQ158-20260827",
+  "workflow_id": "WF-02",
+  "step": "2a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ158-20260827/step-02a-elixir-dev-rework1.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-158"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ158-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ158-20260827/step-02c-security-review.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/lua/manifest.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/manifest.ex",
+      "test/letflow/engine/lua/manifest_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ158-20260827"
+  },
+  "task": {
+    "description": "REWORK ITERATION 1. SECURITY-REVIEWER (step-02c, commit 0f65867) returned FAIL with a confirmed BLOCKER: Manifest.compute_hash/2 joins sorted/deduped capability strings with a raw 0x0A separator and never forbids 0x0A inside a capability string. Two genuinely different capability sets ([\"a\\nb\", \"c\"] vs [\"a\", \"b\", \"c\"]) hash identically -- empirically confirmed. This defeats LUA-07's core guarantee: a manifest could be edited across an embedded LF without changing its registered hash. Everything else in the implementation stands (executor.ex's integration, the end-to-end audit test, the load-time-rejection test, the legacy bare-binary path assessed as currently safe since capability enforcement isn't wired to real sandbox authority yet) -- the fix is contained entirely to lib/letflow/engine/lua/manifest.ex's compute_hash/2. Fix per SECURITY-REVIEWER's precise instructions (preferred approach): replace the raw-separator-joined encoding with delimiter-injection-proof length-prefixed framing -- for each canonicalized (sorted, deduped) capability string, encode as a 32-bit big-endian byte-length prefix followed by the string's bytes, concatenated in the existing sort order; apply the identical length-prefixing to script_id and script_source too, replacing the 0x00 separators (the moduledoc's claim that 0x00 'cannot appear inside a String.t() in practice' is not actually true for Elixir binaries and must not be relied on). Add regression tests proving the exact collision case found (['a\\nb','c'] vs ['a','b','c'], same script_id and script_source, must now produce DIFFERENT hashes) plus a similar case for script_id/script_source NUL-byte framing. Re-run manifest_test.exs, manifest_executor_audit_test.exs, and the full scripts/test_parallel.sh suite (at least twice) after the fix.",
+    "acceptance_criteria": [
+      "compute_hash/2 uses length-prefixed framing (not raw byte-value separators) for script_id, each capability, and script_source",
+      "A regression test proves the exact collision case SECURITY-REVIEWER found no longer collides",
+      "A regression test proves NUL-byte content in script_id or script_source doesn't create a similar collision",
+      "mix compile --warnings-as-errors clean",
+      "manifest_test.exs and manifest_executor_audit_test.exs re-run and pass",
+      "At least 2 scripts/test_parallel.sh full-suite runs quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Replaced compute_hash/2's raw-separator-joined byte layout (0x00 around script_id/capability-blob/script_source, 0x0A between capability entries) with delimiter-injection-proof length-prefixed framing: each of script_id, every canonicalized (sorted, deduped) capability string, and script_source is now encoded as <<byte_size(field)::32>> <> field, concatenated in that order (capabilities in the existing sort order), via a new private length_prefixed/1 helper. No separator byte value is relied on any more, so no field's alphabet needs to avoid any particular byte. Rewrote the moduledoc's 'hash algorithm' section to describe the new framing precisely and to explicitly retract the old 'byte value cannot appear in practice' claim as false for Elixir binaries, explaining why length-prefixing avoids needing that assumption at all. Verified executor.ex and lua_script_audit.ex require no changes: both call Manifest.compute_hash/2 opaquely (grep confirms no independent byte-layout logic or hash-length assumption in either file); the output shape (64-char lowercase hex SHA-256) is unchanged so no downstream assumption breaks.",
+    "artifacts_out": [
+      "lib/letflow/engine/lua/manifest.ex",
+      "test/letflow/engine/lua/manifest_test.exs"
+    ],
+    "notes": "1) mix compile --warnings-as-errors: clean, no warnings, no errors (output: 'Compiling 1 file (.ex)' then exit 0).\n\n2) mix test test/letflow/engine/lua/manifest_test.exs test/letflow/engine/lua/manifest_executor_audit_test.exs: 'Result: 28 passed' -- all green, no failures. New regression tests added under 'compute_hash/2 is not vulnerable to delimiter-injection collisions': (a) manifest with capabilities [\"a\\nb\", \"c\"] vs [\"a\", \"b\", \"c\"] (same script_id 'script-1', same script_source 'return 1') now produce DIFFERENT hashes -- exact collision case from SECURITY-REVIEWER's report, now refuted; (b) script_id 'ab'+['c'] vs script_id 'a\\0b'+['c'] produce different hashes, and script_source 'return1' vs 'return\\01' (embedded NUL) produce different hashes -- both pass under the new length-prefixed framing.\n\n3) scripts/test_parallel.sh run 1 (N=8, nproc): 'partition 1: 296 tests, 1 property, 0 failures, exit 0' / 'partition 2: 403 tests, 0 properties, 0 failures, exit 0' / 'partition 3: 249 tests, 0 properties, 0 failures, exit 0' / 'partition 4: 247 tests, 0 properties, 0 failures, exit 0' / 'partition 5: 296 tests, 2 properties, 0 failures, exit 0' / 'partition 6: 219 tests, 0 properties, 0 failures, exit 0' / 'partition 7: 307 tests, 2 properties, 0 failures, exit 0' / 'partition 8: 165 tests, 0 properties, 0 failures, exit 0' -- combined: 2182 tests, 5 properties, 0 failures (2187/2187 passed).\n\n4) scripts/test_parallel.sh run 2 (N=8, nproc): identical per-partition counts and 'combined: 2182 tests, 5 properties, 0 failures (2187/2187 passed)'.\n\nasdf shims present at $HOME/.asdf/shims and used for both mix/elixir invocations (PATH prefixed with $HOME/.asdf/shims). No changes made to lib/letflow/engine/lua/executor.ex or lib/letflow/engine/lua_script_audit.ex -- confirmed unnecessary by grep (both call Manifest.compute_hash/2 opaquely, no duplicated byte-layout logic, no hash-length assumption anywhere else in the codebase that this change would break). Not committed or pushed per instructions -- ORCH handles git."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

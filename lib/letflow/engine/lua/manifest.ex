@@ -26,23 +26,43 @@ defmodule Letflow.Engine.Lua.Manifest do
   to use via `compute_hash/2` after it (this module is the single source of the
   byte-layout formula; `Executor` calls it rather than duplicating the logic).
 
+  ### Framing: length-prefixed fields, not raw byte-value separators
+
+  An earlier revision of this module joined fields with raw separator bytes
+  (`0x00` between `script_id`/capabilities/`script_source`, `0x0A` between
+  capability-list entries) on the assumption that those byte values "cannot
+  appear inside a `String.t()` in practice." **That assumption is false.**
+  `String.t()`/`binary()` values in Elixir can contain any byte, including a
+  literal `0x00` or `0x0A` — nothing in `validate_shape/1` forbids it. A
+  raw-separator scheme is therefore vulnerable to a delimiter-injection
+  collision: e.g. `capabilities: ["a\nb", "c"]` and
+  `capabilities: ["a", "b", "c"]` joined with `<<0x0A>>` both produce the
+  byte-identical string `"a\nb\nc"`, even though they are two genuinely
+  different capability declarations — this was found and empirically
+  confirmed by SECURITY-REVIEWER.
+
+  To close this class of collision entirely, every variable-length field is
+  instead **length-prefixed**: each field is encoded as its own byte length as
+  an unsigned 32-bit big-endian integer (`<<byte_size(field)::32>>`),
+  immediately followed by the field's raw bytes. Because the reader always
+  knows exactly how many bytes belong to a field before reading them, the byte
+  boundary between fields is unambiguous regardless of what bytes appear
+  inside any field — there is no separator byte value to collide with, so no
+  assumption about which bytes a field "cannot practically contain" is needed.
+
   The digest is computed over the concatenation, in this exact order, of:
 
-  1. The raw bytes of `manifest.script_id`.
-  2. One `0x00` (NUL) separator byte.
-  3. The manifest's capability list, canonicalized before inclusion: converted
+  1. `<<byte_size(manifest.script_id)::32>> <> manifest.script_id`.
+  2. The manifest's capability list, canonicalized before inclusion: converted
      through `Letflow.Engine.Lua.Capabilities.new/1` and back to a list (this
      deduplicates and gives a `MapSet`-backed set), then sorted in ascending
-     lexicographic (byte) order, then each entry joined to the next by a single
-     `0x0A` (LF) separator byte. An empty capability list contributes zero bytes
-     at this step (not a placeholder string).
-  4. One further `0x00` (NUL) separator byte.
-  5. The raw bytes of `script_source`, exactly as supplied — no trimming, no
-     line-ending normalization, no encoding transformation of any kind.
-
-  The two `0x00` separators (steps 2 and 4) exist so that a `script_id` value and
-  a capability-list rendering can never be concatenated ambiguously with each
-  other or with the script source that follows.
+     lexicographic (byte) order, then each entry `cap` encoded as
+     `<<byte_size(cap)::32>> <> cap` and concatenated in that sort order. An
+     empty capability list contributes zero bytes at this step (not a
+     placeholder string).
+  3. `<<byte_size(script_source)::32>> <> script_source`, `script_source`
+     exactly as supplied — no trimming, no line-ending normalization, no
+     encoding transformation of any kind.
 
   **Determinism (INV-MAN-1):** `compute_hash/2` is pure — no I/O, no randomness,
   no wall-clock or process-identity input. Equal inputs (per the canonicalization
@@ -119,12 +139,24 @@ defmodule Letflow.Engine.Lua.Manifest do
       |> Capabilities.new()
       |> Enum.to_list()
       |> Enum.sort()
-      |> Enum.join(<<0x0A>>)
+      |> Enum.map(&length_prefixed/1)
+      |> IO.iodata_to_binary()
 
     digest_input =
-      script_id <> <<0x00>> <> canonical_capabilities <> <<0x00>> <> script_source
+      length_prefixed(script_id) <> canonical_capabilities <> length_prefixed(script_source)
 
     :crypto.hash(:sha256, digest_input) |> Base.encode16(case: :lower)
+  end
+
+  # Encodes `field` as an unambiguous, delimiter-free frame: its byte length
+  # as an unsigned 32-bit big-endian integer, followed by its raw bytes. Used
+  # for every variable-length field `compute_hash/2` folds into the digest, so
+  # that no separator byte value (and therefore no assumption about which
+  # bytes a field "cannot practically contain") is needed to keep field
+  # boundaries unambiguous — see the moduledoc's "Framing" section.
+  @spec length_prefixed(binary()) :: binary()
+  defp length_prefixed(field) when is_binary(field) do
+    <<byte_size(field)::32>> <> field
   end
 
   @doc """

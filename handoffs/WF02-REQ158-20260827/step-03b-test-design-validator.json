@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step03b-WF02-REQ158-20260827",
+  "run_id": "WF02-REQ158-20260827",
+  "workflow_id": "WF-02",
+  "step": "3b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ158-20260827/step-03b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-158"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ158-20260827/step-02a-elixir-dev-rework1.json",
+      "handoffs/WF02-REQ158-20260827/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "test/specs/REQ-158.md",
+      "test/letflow/engine/lua/manifest_test.exs",
+      "test/letflow/engine/lua/manifest_executor_audit_test.exs",
+      "lib/letflow/engine/lua/manifest.ex",
+      "lib/letflow/engine/lua/executor.ex"
+    ],
+    "branch_name": "feature/WF02-REQ158-20260827",
+    "commit": "c625758"
+  },
+  "result": {
+    "status": "PASS",
+    "notes": {
+      "ac_coverage": "All 7 REQ-158 acceptance_criteria (read verbatim from docs/requirements.yaml lines 7955-7966) map to real, runnable tests: AC1 -> manifest_test.exs validate_at_load/3 modified-manifest-mismatch test; AC2 -> both tests in 'load-time rejection happens before any execution' describe block; AC3 -> manifest_executor_audit_test.exs successful-execution test (real Executor + real LuaScriptAudit + real Postgres, asserts persisted AuditRecord.manifest_hash equals Manifest.compute_hash/2's independently-recomputed value); AC4 -> manifest_executor_audit_test.exs's two mismatch tests (arbitrary wrong hash, and stale-hash-after-race), both asserting LuaScriptAudit's own {:manifest_hash_mismatch,...} and zero rows written; AC5 -> moduledoc-content test asserting SHA-256/lowercase/length-prefixed/32-bit plus the full hash sensitivity/determinism suite; AC6 -> moduledoc test asserting manifest.zig-absent-from-checkout language; AC7 -> mix test/mix compile output quoted below.",
+      "independent_reconstruction_test_verified": "Read manifest_test.exs lines 142-172 directly. The 'matches an independently-reconstructed digest' test builds expected_input via raw Elixir binary literals (<<byte_size(...)::32>> <> field, for script_id 'script-1', sorted-deduped capabilities 'a' then 'b', then script_source) and calls :crypto.hash(:sha256, ...) |> Base.encode16(case: :lower) directly -- it never calls Manifest.compute_hash/2 or Manifest's private length_prefixed/1 to build the expected value, only to build the actual value under test. This is genuinely independent, not circular. Cross-checked against lib/letflow/engine/lua/manifest.ex's actual implementation (compute_hash/2 + private length_prefixed/1, lines 141-167) and its moduledoc's documented byte layout (lines 60-72): field order (script_id, then sorted+deduped capabilities, then script_source), 32-bit big-endian length prefix per field -- the test's reconstruction matches exactly.",
+      "mutant_verified_myself": "Applied TEST-DESIGNER's reported 16-bit-length-prefix mutant myself directly to lib/letflow/engine/lua/manifest.ex's length_prefixed/1 (changed ::32 to ::16) and ran `mix test test/letflow/engine/lua/manifest_test.exs`. Result: 28/29 passed, with the single failure being exactly the independently-reconstructed-digest test (left: hash under mutant, right: expected_hash from the test's own independent computation) -- every other determinism/sensitivity/collision test still passed, confirming TEST-DESIGNER's claim that only this new test detects the mutation. Reverted via `git checkout -- lib/letflow/engine/lua/manifest.ex`; confirmed `git status --porcelain lib/ test/` is empty and `mix test test/letflow/engine/lua/manifest_test.exs` re-runs green (29 passed) after the revert.",
+      "doc_gap_fix_verified": "Read lib/letflow/engine/lua/manifest.ex's moduledoc directly (lines 11-16): contains 'should prefer the map shape ... rather than Executor's legacy bare-binary() shape'. Read lib/letflow/engine/lua/executor.ex's @typedoc for script_ref directly (lines 188-193, immediately above `@type script_ref :: binary() | %{manifest: Manifest.t(), script_source: binary()}`): contains 'New callers should prefer the manifest-carrying map shape ... the bare binary() shape is legacy'. Both genuinely present, matching the two new moduledoc/typedoc-assertion tests in manifest_test.exs (lines 335-361).",
+      "no_todo_skip": "grep for TODO/@tag :skip/skip: across both test files: no matches.",
+      "no_hardcoded_secrets": "grep for password/secret/api_key/token= across both test files: no matches. wrong_hash/stale_hash values in manifest_executor_audit_test.exs are deliberately-fake all-zero test fixtures, not real secrets.",
+      "test_isolation_verified": "manifest_test.exs: async: true, all functions under test pure, no Repo/process state -- correct. manifest_executor_audit_test.exs: read in full; each of the 3 tests independently calls its own provisioned_tenant/0 (not shared via setup), which inserts a uniquely-slugged Tenant, provisions a real Postgres schema via TenantProvisioning.provision_tenant_schema/1 + replay_migrations/2, and registers on_exit/1 that DROP SCHEMA ... CASCADEs and deletes Registration/Tenant rows. No shared mutable fixtures, no cross-test ordering dependency -- confirmed by the observed mix test run's debug log showing schema creation/drop symmetric per test.",
+      "mix_test_output": "Ran independently: `mix test test/letflow/engine/lua/manifest_test.exs test/letflow/engine/lua/manifest_executor_audit_test.exs` -> 'Excluding tags: [:keycloak]' then 'Result: 32 passed', 0 failures.",
+      "verdict": "PASS. All 7 acceptance criteria have real, verified test coverage; the reported independent-reconstruction test is genuinely non-circular and I independently reproduced its mutant-catching claim by applying the 16-bit-prefix mutant myself and reverting cleanly; the doc-gap fix is genuinely present in both files; no TODO/skip markers; no hardcoded secrets; test isolation (including real-Postgres schema provisioning/cleanup) confirmed; no test-order dependency found."
+    }
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

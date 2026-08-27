@@ -1,0 +1,60 @@
+{
+  "handoff_id": "step01b-WF02-REQ158-20260827",
+  "run_id": "WF02-REQ158-20260827",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ158-20260827/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-158"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ158-20260827/step-00-git-setup.json",
+      "handoffs/WF02-REQ158-20260827/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req158-lua-manifest-validation.md",
+      "test/specs/REQ-158.md",
+      "lib/letflow/engine/lua_script_audit.ex",
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua/capabilities.ex",
+      "lib/letflow/design/req157-lua-capability-model.md"
+    ],
+    "branch_name": "feature/WF02-REQ158-20260827",
+    "commit": "f33a81d"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) hard gate on REQ-158's design at lib/letflow/design/req158-lua-manifest-validation.md. First review pass. Verify: (1) every one of REQ-158's 7 real acceptance_criteria (read docs/requirements.yaml directly) is mapped to a concrete design element; (2) NO literal Elixir code anywhere in the design -- grep for `fn `, `raise `, `case `, `cond `, `do:`, `->` and manually verify every hit is either a permitted @spec/@type signature or prose (watch for false-positive substring matches like 'se-cond' or 'lower-case' vs actual violations); this exact check has failed 2 of the 3 prior Lua-hardening designs this session; (3) the core design decision -- that the manifest hash must cover manifest+script bytes, not script alone, requiring a coordinated (prose-described) change to executor.ex's hash computation -- is genuinely sound and correctly justified against the requirement's own acceptance criteria (in particular the 'modified manifest without re-registration is rejected' and 'hash flows into LuaScriptAudit's audit row' criteria); assess whether a script-only hash really could NOT satisfy these criteria, as claimed, or whether there's a simpler alternative the designer missed; (4) the design's claim that it 'feeds' LuaScriptAudit's verify_manifest_hash/2 (INV-LSA-2) rather than reimplementing/bypassing it is accurate -- read lua_script_audit.ex directly to confirm verify_manifest_hash/2's actual signature/behavior matches what the design assumes; (5) the manifest reuses REQ-157's capability() type rather than redefining it -- read lib/letflow/engine/lua/capabilities.ex to confirm the type actually referenced exists as described; (6) the hash algorithm and covered bytes/fields are stated precisely enough to make 'modified manifest is rejected' well-defined; (7) the R-Co manifest.zig absence is correctly flagged as an open question rather than silently assumed; (8) open questions otherwise explicit.",
+    "acceptance_criteria": [
+      "All 7 REQ-158 acceptance criteria mapped to concrete design elements",
+      "Zero literal Elixir code anywhere in the design doc (watch for false-positive substring matches)",
+      "The manifest+script hash-coverage decision assessed as genuinely necessary and correctly justified, not just asserted",
+      "The 'feeds INV-LSA-2, does not bypass it' claim verified against the actual lua_script_audit.ex source",
+      "Confirmed the design reuses REQ-157's actual capability() type rather than inventing a new one",
+      "Hash algorithm and covered fields stated precisely",
+      "R-Co source absence correctly flagged as an open question",
+      "Open questions explicit"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-158 design (lib/letflow/design/req158-lua-manifest-validation.md) passes all 8 checks. All 7 verbatim acceptance criteria from docs/requirements.yaml are mapped in §7's traceability table to concrete design elements. Grep for fn /raise /case /cond / do:/-> found only 2 hits, both prose false positives ('capability list', 'hex digits'); all 10 code fences contain only @type/@spec signatures, no function bodies -- zero literal Elixir code. The manifest+script hash-coverage decision (option (a)) was independently re-derived and confirmed genuinely necessary, not merely asserted: AC3 requires Manifest.compute_hash/2's output to equal the value Executor returns as actual_hash (which becomes the audit row's manifest_hash, confirmed by reading lua_script_audit.ex's execute_script_for_audit/6 and executor_result/3); since compute_hash/2's byte layout (§4.2) always includes script_id + NUL separator bytes even when capabilities is empty, a script-source-only hash can structurally never equal it, so AC3 forces the executor.ex change regardless of capability-list contents (the design's own phrasing, 'diverges the moment a real capability is declared,' is if anything an understatement of how strong this forcing is, not a flaw). A decorator/wrapper-Executor alternative (intercepting Executor's output rather than editing executor.ex internals) was considered and found equivalent in substance, not simpler -- it still requires script_ref to carry the manifest and still requires the same hash-coverage change, just relocated; the design correctly treats the coverage decision as the substantive one and leaves its implementation site (direct edit vs wrapper) to Step 2a. Verified against actual source: lua_script_audit.ex's verify_manifest_hash/2 (private, two-clause equality guard) and its {:manifest_hash_mismatch, registered_hash, actual_hash} error shape match the design's §5.4 assumptions exactly; capabilities.ex's capability :: String.t() and new/1 (@spec new(capabilities :: [capability()]) :: grant_set()) match §2.1/§2.3's reuse claims exactly, no redefinition. Hash algorithm (SHA-256, lowercase hex, matching executor.ex's existing :crypto.hash(:sha256, ...) |> Base.encode16(case: :lower) convention) and exact byte order (script_id, 0x00, canonicalized/sorted/deduped capabilities joined by 0x0A, 0x00, raw script_source) are stated precisely (§4.1-4.2). R-Co/src/lua/manifest.zig's absence was independently re-confirmed via find (no result) and is correctly flagged as non-blocking OQ-1, not silently assumed equivalent. OQ-2/OQ-3/OQ-4 are explicit and appropriately scoped forward. No gaps found; design is ready for Step 2a (ELIXIR-DEV).",
+    "checks": {
+      "all_7_ac_mapped": "PASS",
+      "zero_literal_elixir_code": "PASS",
+      "hash_coverage_decision_sound": "PASS",
+      "feeds_not_bypasses_lsa2_verified": "PASS",
+      "capability_type_reused_not_redefined": "PASS",
+      "hash_algorithm_and_fields_precise": "PASS",
+      "rco_absence_flagged_as_open_question": "PASS",
+      "open_questions_explicit": "PASS"
+    }
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

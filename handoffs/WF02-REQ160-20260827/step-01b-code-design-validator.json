@@ -1,0 +1,78 @@
+{
+  "handoff_id": "step01b-WF02-REQ160-20260827",
+  "run_id": "WF02-REQ160-20260827",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ160-20260827/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-160"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ160-20260827/step-00-git-setup.json",
+      "handoffs/WF02-REQ160-20260827/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req160-lua-host-api-write.md",
+      "test/specs/REQ-160.md",
+      "lib/letflow/engine/lua/platform.ex",
+      "lib/letflow/design/req155-lua-wallclock-kill.md",
+      "lib/letflow/design/req156-lua-memory-limit-impl.md",
+      "lib/letflow/engine/variable_merge.ex"
+    ],
+    "branch_name": "feature/WF02-REQ160-20260827",
+    "commit": "901052b"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) hard gate on REQ-160's design at lib/letflow/design/req160-lua-host-api-write.md. First review pass.",
+    "acceptance_criteria": [
+      "All 8 REQ-160 acceptance criteria mapped to concrete design elements",
+      "Zero literal Elixir code anywhere in the design doc",
+      "The process-dictionary staging buffer's kill-survival claim independently re-verified against the actual REQ-155/156 kill code, checking specifically for races or residual-state escape paths",
+      "VariableMerge.merge/3's atomicity claim independently re-verified by reading the actual function, not trusted from the design's description",
+      "LUA-12-vs-LUA-06 raise/return split confirmed as genuinely distinct code paths",
+      "The injected ServiceCaller behaviour confirmed honestly scoped (mirrors LuaScriptAudit's pattern, not assumed to exist)",
+      "emit_event's EventStore.append/2 citation confirmed accurate against the real function signature",
+      "The deferred executor.ex wiring gap confirmed explicitly flagged as an open question",
+      "Open questions explicit"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Central kill-survival claim (task brief point 1) is not fully closed. Task.shutdown/2 and the raw-process kill path can both observe a late-arriving successful reply from the process being 'killed' (a documented BEAM/Task race: a message already sent by the dying process before the kill signal lands is not retracted). REQ-155 (Sec 4.3) and REQ-156 (Sec 5.1-5.2) happen to return the timeout/memory error unconditionally on that branch, so the current wording is accidentally safe, but neither REQ-155/156 nor REQ-160 states this as a deliberate, load-bearing invariant, and REQ-160 Sec 2.2 misstates the caller's channels as strictly 'Task.yield/2's return value... or a :DOWN message', omitting that Task.shutdown/2 itself (and the raw spawn_opt kill path's mailbox) can also carry a late reply. Everything else checked out.",
+    "findings": [
+      {
+        "id": "F1-CENTRAL-RACE",
+        "severity": "BLOCKING",
+        "location": "req160-lua-host-api-write.md §2.2",
+        "description": "Task.shutdown(task, :brutal_kill) is documented Elixir behavior to return {:ok, reply} instead of :ok when the task's process already sent its normal-completion message before the kill signal was delivered (the exact race the task brief asked to check: 'a script completes and stages writes, then gets killed by a slow-to-arrive timeout signal after it already started returning a result but before the caller fully received it'). This is a real, second observation channel into the killed process's outcome beyond Task.yield/2's return value and beyond a payload-less :DOWN message -- contradicting §2.2's claim that 'the caller's only channels into that process's outcome are (a) the process's own normal return/message... or (b) a :DOWN message that carries no payload.' The equivalent race exists on REQ-156's raw spawn_opt/monitor path (§5.1/5.2): a {ref, reply} message sent by the process just before the caller's own kill can be sitting in the caller's mailbox at the same time as (or instead of) the :DOWN message; §5.2 only says the design 'drains the resulting :DOWN message' -- it does not address a possible unconsumed {ref, reply} message left in the mailbox.",
+        "why_it_matters": "REQ-160's entire safety argument for 'staged writes are discarded on every kill' rests on the claim that nothing but a payload-less :DOWN or a normal return can reach the caller. That happens to still hold today only because REQ-155/156's timeout/memory-kill branches return the structured error unconditionally, without ever reading whatever Task.shutdown/2 or the raw kill path's mailbild actually observed. But this is never stated as a required invariant. §2.5's own deferred wiring gap tasks a FUTURE requirement with extending Executor's return shape and threading a real reply payload through this exact code path. Without an explicit, stated rule that the timeout/memory-limit branches MUST discard whatever Task.shutdown/2 or the drained mailbox returns -- even a successful, staged-write-carrying reply -- a future implementer wiring §2.5's steps 1-3 could plausibly pattern-match on Task.shutdown/2's {:ok, reply} arm (a documented, legitimate Elixir idiom for 'the task finished right before we killed it, here's its result') and let a killed script's staged writes through. This is precisely the ambiguity-reaches-implementation failure mode this gate exists to catch, and the task brief flagged this exact race as the single most important thing to check.",
+        "required_fix": [
+          "In req160-lua-host-api-write.md §2.2, correct the channel enumeration to acknowledge Task.shutdown/2's documented {:ok, reply} return (and the raw spawn_opt path's possible late {ref, reply} mailbox message) as a real third channel, not assume it away.",
+          "State explicitly, as a hard invariant this design (and any future §2.5 wiring) must preserve: on the timeout arm (REQ-155 §4.3 row 4) and the memory-limit-timeout arm (REQ-156 §5.2), the structured error tuple MUST be returned unconditionally, regardless of what Task.shutdown/2 itself returns or what is drained from the mailbox -- a late-arriving successful reply on either of those two branches must never be substituted for the error tuple, even after §2.5's future wiring adds a staged_variables field to the success shape.",
+          "Either get REQ-155/REQ-156's own already-merged design docs amended with an addendum stating this discard-on-race invariant explicitly (since it is their code paths that must honor it), or state within REQ-160's own design that this is a cross-cutting invariant REQ-160 depends on and names by requirement/section so a future OQ-1 wiring implementer cannot miss it.",
+          "Address the analogous mailbox-hygiene gap in REQ-156 §5.2 (or flag it as this design's own open question if it is judged out of REQ-160's scope, but do not leave it unaddressed given how load-bearing it is to REQ-160's central claim)."
+        ]
+      }
+    ],
+    "other_checks_passed": [
+      "All 8 REQ-160 acceptance criteria (docs/requirements.yaml lines 8065-8073) map to concrete design elements in §9's traceability table -- verified against the requirement's own text, not the design's paraphrase.",
+      "Zero literal Elixir code: grepped `fn `, `raise `, `case `, `cond `, `do:`, `->` across the whole design doc -- every hit is prose (e.g. 'raises a Lua.RuntimeException', 'no case to special-case here') or an @spec/@type fence; no executable Elixir body present.",
+      "VariableMerge.merge/3 read directly from lib/letflow/engine/variable_merge.ex: signature `def merge(current_variables, incoming_variables, variable_validations)` matches the design's @spec; moduledoc's own two-phase description (Phase 1 validate all with no state change, Phase 2 apply all only if Phase 1 succeeds, abort-all-or-nothing) confirms the design's atomicity claim is accurate, not assumed.",
+      "LUA-12 vs LUA-06 split confirmed structurally distinct in the already-merged lib/letflow/engine/lua/platform.ex: `Capabilities.check!/3` runs at line 308, strictly before `run_stub/5` dispatch at line 309 inside `install/3`'s fold -- a capability denial never reaches run_stub's :call_service clause, and every arm inside that clause returns rather than raises (confirmed no raise inside the :call_service/:emit_event run_stub bodies).",
+      "ServiceCaller behaviour: grepped `ServiceRegistry`/`register_service` across lib/ -- no hits outside the design doc's own citation, confirming no such abstraction exists; the injected @callback pattern genuinely mirrors LuaScriptAudit.Executor (lib/letflow/engine/lua_script_audit.ex:82-108, a real nested behaviour module with @callback), and the design states plainly that no concrete ServiceCaller implementation ships with this requirement (§4.2, OQ-2).",
+      "emit_event's Letflow.EventStore.append/2 citation confirmed accurate: real @spec at lib/letflow/event_store.ex:214-216, attrs keys (:instance_id, :event_type, :payload, :actor_id, :idempotency_key, optional :metadata) and opts ([prefix: String.t()]) match the design's §5.1 citation exactly, including the :unknown_event_type error arm the design names.",
+      "executor.ex wiring gap explicitly flagged as OQ-1 in §10 (not glossed over elsewhere in prose) -- §2.5 and §8's cross-module-dependency table both point at the same open gap consistently.",
+      "Remaining open questions (OQ-2 through OQ-5) are all explicit, each naming what is left open and why it does not block REQ-160's own 8 acceptance criteria."
+    ],
+    "verdict": "FAIL",
+    "instructions_to_code_designer": "Fix F1-CENTRAL-RACE only -- every other check passed. Revise §2.2 to honestly enumerate the caller's real observation channels into a killed/timed-out task, including Task.shutdown/2's documented {:ok, reply} race-window return and the raw spawn_opt path's possible late {ref, reply} mailbox message (REQ-156 §5.2). Then state explicitly, as a named invariant, that the timeout/memory-limit branches must discard the structured error's tuple unconditionally regardless of what is actually observed on that race window, and that this invariant is what REQ-160's staged-write-discard guarantee actually depends on -- not merely 'Task.yield/2's return value or a payload-less :DOWN'. Do not silently rely on REQ-155/156's current code happening to ignore Task.shutdown/2's return value; say so explicitly and flag it as a constraint any future §2.5/OQ-1 wiring must not violate."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

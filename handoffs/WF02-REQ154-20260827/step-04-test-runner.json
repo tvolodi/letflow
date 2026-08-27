@@ -1,0 +1,48 @@
+{
+  "handoff_id": "step04-WF02-REQ154-20260827",
+  "run_id": "WF02-REQ154-20260827",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ154-20260827/step-04-test-runner.json",
+  "created_at": "2026-08-27T08:20:27Z",
+  "started_at": "2026-08-27T08:20:27Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-154"],
+    "issue_ids": [],
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "mix test passes; all REQ-154 tests (AC-1..4) pass with real output quoted",
+      "the full suite passes with no new failures compared to the pre-run baseline (1 pre-existing SandboxTest AC1 Windows grep failure is known and acceptable)"
+    ],
+    "artifacts_in": [
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua/sandbox.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua/sandbox.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req154-lua-instruction-budget.md",
+      "test/specs/REQ-154.md"
+    ],
+    "branch_name": "feature/WF02-REQ154-20260827",
+    "known_pre_existing_failure": "SandboxTest AC1 -- System.cmd('grep', ...) returns :enoent on Windows. Pre-existing on main. Not attributable to REQ-154."
+  },
+  "task": {
+    "description": "Run mix compile --warnings-as-errors and mix test on branch feature/WF02-REQ154-20260827 and quote real output. Use the local Elixir toolchain at 'C:/Program Files/Elixir/bin/mix' (check docs/anti-patterns.md for the toolchain note). If tests fail, diagnose the root cause and rework executor.ex or the tests as needed (max 3 attempts). Do NOT guess or invent output.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0 with real quoted output",
+      "mix test output quoted; all 15+ executor tests pass",
+      "full suite: no new failures compared to baseline (1 pre-existing Windows grep failure is acceptable)",
+      "AC-1..4 tests each individually identified as passing in the output"
+    ]
+  },
+  "result": null
+}

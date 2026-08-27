@@ -7,9 +7,9 @@
   "to_agent": "ELIXIR-DEV",
   "file": "handoffs/WF02-REQ153-20260827/step-final-git-merge.json",
   "created_at": "2026-08-27T00:00:00Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-08-27T00:05:00Z",
+  "completed_at": "2026-08-27T05:55:00Z",
+  "status": "FAILED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -36,7 +36,34 @@
       "REQ-153 status remains done in docs/requirements.yaml on main post-merge"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "FAIL",
+    "summary": "Blocked, not by a normal rebase conflict, but by a live concurrent session actively pushing unreviewed code to origin/feature/WF02-REQ153-20260827 while this Step Final was in progress. Timeline: (1) checked out feature/WF02-REQ153-20260827, rebased cleanly onto origin/main with one trivial add/add conflict on handoffs/WF02-REQ153-20260827/step-final-git-merge.json (resolved by keeping the IN_PROGRESS content) and one modify/delete on step-01-code-designer.json (main's copy was a 0-byte placeholder retracted by commit e096d2e/ISS-0349 -- kept the feature branch's genuine design-artefact content from commit a897888). mix format/compile clean. First mix test full run: 2107/2108 (1 unlisted failure, tail-truncated). Second full run: 2106/2108, with two failures: (a) executor_test.exs AC1 'execute_with_manifest/2 is exported' -- function_exported? false in the full suite but 11/11 pass in isolation, non-reproducible on a third full run (2108/2108 clean) -- transient test-order flakiness, not a real defect; (b) letflow.lint_handoffs_test.exs T-H6-ZERO-NEW -- genuine crash: step-06-doc-updater.json's top-level result field was a bare string 'PASS' instead of the standard {status,summary,artifacts_out} object every other step-06-doc-updater.json in the corpus uses, and Mix.Tasks.Letflow.LintHandoffs.check_advisory/2's get_in(data,[\"result\",\"artifacts_out\"]) crashes (Access.get/3 FunctionClauseError) on a non-map result. Confirmed via a disposable git worktree at origin/main that this test passes cleanly there (22/22) -- the crash is attributable to this branch's own step-06 artifact, not pre-existing. Fixed by rewriting step-06-doc-updater.json into the standard object shape; re-ran full suite clean (2108/2108, 5/5 properties, 2103/2103 tests, 3 excluded, 0 failures) and committed (f7da6c7 on my local branch). (2) On `git push origin feature/WF02-REQ153-20260827` (plain, then --force-with-lease), both were rejected: first non-fast-forward, then 'stale info'. Re-fetching per protocol's escalation instructions revealed a SECOND, live agent session had independently pushed to the SAME remote branch, on the pre-rebase base, and had already opened PR #673 (base main, head feature/WF02-REQ153-20260827, mergeStateStatus DIRTY/CONFLICTING, backend CI FAILURE at push time). Their commits 2224cec and 204d3da fixed the identical step-06 bug more thoroughly (a defensive code fix in check_advisory/2 itself, plus normalizing all 10 handoff files in the run to the correct schema) -- superior to my narrower single-file fix, so I reset my branch to before my own fix, cherry-picked both of their commits cleanly onto my already-rebased-onto-current-main branch, re-verified mix format/compile clean and a full mix test run clean (2108/2108, 0 failures), and re-attempted --force-with-lease. That push was ALSO rejected as stale info. Re-fetching again surfaced a THIRD new commit from that same live session, 92b0e23 ('remove guard from execute_with_manifest/2 -- @impl+guard breaks function_exported? on Linux CI'), pushed directly to lib/letflow/engine/lua/executor.ex -- REQ-153's own tenant-script-execution module, a SECURITY-REVIEWER-gated path -- with NO accompanying handoff record on that branch and no fresh SECURITY-REVIEWER/REVIEWER re-approval for the change. The commit's stated rationale is also technically unsound: Erlang/Elixir function_exported?/3 checks only module/function/arity in the export table: a function clause's guard does not affect whether the function is exported, so 'guard breaks function_exported? on Linux CI' does not describe a real BEAM/Elixir mechanism, and the actual effect of the change is to delete the execute_with_manifest/2 input-validation guard (is_binary(script_source)) and add a now-dead rescue clause (FunctionClauseError can no longer be raised by this arity once the guard is gone), silently changing what happens when a non-binary script_ref reaches this function. STOPPING here per this step's explicit instruction not to force a merge through under these conditions: this is a hard-gate bypass in progress on the same branch I am supposed to merge, not an ordinary conflict I can resolve unilaterally. I did not push (both attempts were cleanly rejected by --force-with-lease itself, so the remote and PR #673 are exactly as the other session left them -- no data was lost or overwritten by me). I returned this checkout to a clean local `main` without altering origin/feature/WF02-REQ153-20260827 or PR #673.",
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "A second, live agent session is concurrently pushing directly to origin/feature/WF02-REQ153-20260827 during this Step Final run, including an unreviewed functional change to lib/letflow/engine/lua/executor.ex (commit 92b0e23) with no handoff record and no fresh SECURITY-REVIEWER/REVIEWER pass -- this is the exact tenant-script-execution path REQ-153's own SECURITY-REVIEWER gate covers. The commit's stated justification ('@impl+guard breaks function_exported? on Linux CI') does not describe any real Elixir/Erlang semantic and appears to be a misdiagnosis of the same transient function_exported?-under-full-suite flakiness I independently reproduced-then-failed-to-reproduce (isolated run 11/11 pass; one full run failed; two other full runs 2108/2108 clean) -- i.e. likely papering over a non-bug by deleting real input validation."
+      },
+      {
+        "severity": "BLOCKER",
+        "description": "PR #673 already exists for this branch (opened by the other session), base main / head feature/WF02-REQ153-20260827, and was mergeStateStatus DIRTY / mergeable CONFLICTING with backend CI FAILURE the last time I checked it (before their newest commit). ORCH needs to reconcile which session owns this run's lock before Step Final can safely proceed -- two agents holding write access to one feature branch at once violates the 'one branch belongs to one run' assumption GIT_MERGE.md's force-with-lease authorization depends on."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ153-20260827",
+      "local_head_at_stop": "f3ad56f (rebased onto origin/main 5ffbe40 + cherry-picked origin's e29bd20/2224cec and f3ad56f-content-equivalent-of/204d3da)",
+      "remote_head_at_stop": "92b0e23 (pushed by the other live session, NOT overwritten)",
+      "push_attempts": [
+        "git push origin feature/WF02-REQ153-20260827 -- rejected, non-fast-forward",
+        "git push --force-with-lease origin feature/WF02-REQ153-20260827 (attempt 1) -- rejected, stale info",
+        "git push --force-with-lease origin feature/WF02-REQ153-20260827 (attempt 2, after cherry-picking origin's fix commits) -- rejected, stale info",
+        "no bare --force was used at any point"
+      ],
+      "pr_url": "https://github.com/tvolodi/letflow/pull/673",
+      "pr_state_last_seen": "OPEN, mergeStateStatus DIRTY, mergeable CONFLICTING, backend CI FAILURE, frontend CI SUCCESS"
+    },
+    "next_action": "ORCH must resolve the concurrent-session collision on this run's lock before Step Final can be retried: (a) confirm which session is authoritative and stop the other, (b) route commit 92b0e23 (lib/letflow/engine/lua/executor.ex) through SECURITY-REVIEWER and REVIEWER before it is allowed to reach main -- do not let a future Step Final attempt merge it unreviewed, (c) once the branch is single-owned and any accepted executor.ex change is gated, re-dispatch Step Final."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

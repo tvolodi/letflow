@@ -198,6 +198,71 @@ defmodule Letflow.Engine.Lua.Platform do
   goes through `Letflow.Engine.LuaNumberMarshalling.from_lua/1` (write direction) or
   `to_lua/1` (read direction) exclusively — no second, ad hoc numeric-conversion rule is
   introduced anywhere in this section (REQ-150 §2.1/§2.2).
+
+  ## REQ-161 (LUA-15 restated) — `platform.fail` terminates by a mechanism the script cannot intercept
+
+  Implements `lib/letflow/design/req161-lua-platform-fail.md`. LUA-15 reads: "a script may
+  call `platform.fail(reason, details)` to deliberately abort its own execution; this MUST
+  terminate the script's execution in a way that cannot depend on the script declining to
+  catch the error." Decision 0014's LUA-15 watchlist entry names the concrete hazard this
+  restatement exists to close: an ordinary Elixir `raise` from inside a host function is
+  exactly the shape a Lua `pcall` wrapper can catch, letting the script's own execution
+  continue past the point it was supposed to have terminated at.
+
+  **The prior `:fail` stub was that exact hazard, not a placeholder.** It built a message
+  and called `raise Lua.RuntimeException, ...` — an ordinary `Exception` struct raised via
+  `raise/2`. REQ-148's spike §4 (OQ-2 (b)) proved directly against the real, vendored
+  `tv-labs/lua` runtime that a host function's `raise` IS caught by the calling script's own
+  `pcall`, and the script's execution continues past the `pcall` block — i.e. a script could
+  wrap `platform.fail(...)` in `pcall` and keep running exactly as decision 0014 warns
+  against, and nothing in the old stub stopped it.
+
+  **The actual mechanism**: `do_fail/2` calls `exit({:script_failed, %{reason: reason,
+  details: details}})` from inside the `platform.fail` native function itself, terminating
+  the calling process outright. This is uninterceptable because `tv-labs/lua`'s entire
+  `pcall`/`xpcall`/native-call boundary is implemented via Elixir `try/rescue` —
+  `deps/lua/lib/lua.ex`'s `do_call_function/3` (the `{:native_func, fun}` call clause) and
+  `deps/lua/lib/lua/vm/stdlib.ex`'s `lua_pcall/2`/`lua_xpcall/2` are each `rescue`-only, with
+  no `catch` clause of any kind on the call chain a `platform.*` function can reach — and
+  `rescue` has no clause pattern that ever matches an `exit/1` call. An unhandled `exit/1`
+  ends the calling process immediately; there is no "resume after exit," so a `pcall`
+  wrapper cannot "continue past" a call that ends the very process trying to continue.
+  (Full trace: this design's §2.2.)
+
+  **LUA-15's engine-side half has no real call site today.** LUA-15 also names two
+  engine-side obligations beyond producing the structured failure: recording a SCRIPT_FAILED
+  event, and transitioning the instance per the node's error policy. Neither
+  `lib/letflow/engine/plugin_interface.ex` (its own moduledoc: no `resolve_*`/`invoke/2,3`
+  wiring into the engine's node-dispatch path exists yet) nor
+  `lib/letflow/engine/lua_script_audit.ex` (its own moduledoc: "nothing in this codebase
+  calls `execute_script_for_audit/6`") has a caller that could consume a script's outcome and
+  act on it. `Letflow.Engine.Lua.Executor.execute_with_manifest/2,3` is the closest existing
+  caller of `Lua.eval!/2`, and it itself has no caller yet either. This requirement produces
+  the structured SCRIPT_FAILED outcome only — it does not, and cannot yet, wire the
+  event-recording/error-policy-transition half.
+
+  **SCRIPT_FAILED and a future SCRIPT_ERROR (REQ-162) do not collapse into the same shape.**
+  `{:script_failed, %{reason: String.t(), details: term()}}` is produced only by a
+  deliberate `platform.fail` call, observed as a process exit reason (a `:DOWN` message, or
+  `Task.yield/2`'s `{:exit, reason}` clause) — the evaluating process is dead. A future
+  SCRIPT_ERROR (an uncaught Lua runtime error propagating out of `Lua.eval!/2` as a
+  `Lua.RuntimeException` or similar, per REQ-153/154/155's existing `rescue` clauses in
+  `executor.ex`) is a normal function return/raise, not an `exit/1`, and necessarily carries
+  different fields. `:script_failed` is reserved to mean "deliberate `platform.fail` call,"
+  specifically so REQ-162 must not reuse this tag.
+
+  **Honest gap: this distinction does not survive `Executor.execute_with_manifest/2,3`
+  today.** Read directly, not assumed: `executor.ex`'s `handle_yield_result/3` clause for
+  `{:exit, reason}`, and its raw-heap-limit `:DOWN` handling, both collapse every non-`:killed`
+  exit reason — including a deliberate `{:script_failed, _}` one — into an opaque,
+  `inspect/1`-rendered string via `format_exit_reason/1`, indistinguishable in shape from any
+  other task crash. `executor.ex` is not in this requirement's `owned_modules` and is not
+  edited to special-case `{:script_failed, _}` ahead of that stringification. This
+  requirement's own tests therefore assert the SCRIPT_FAILED distinction at the raw
+  process/monitor boundary (a `Task.async`/`Task.yield` or `Process.monitor` observation of
+  `Lua.eval!/2` running directly against `Platform.install/3`'s output) — not through
+  `Executor.execute_with_manifest/2,3`, whose own `{:error, String.t()}` return shape does
+  not preserve it.
   """
 
   alias Letflow.Engine.Lua.Capabilities
@@ -262,6 +327,14 @@ defmodule Letflow.Engine.Lua.Platform do
   # `LuaNumberMarshalling.from_lua/1` has been applied. Last write wins (`Map.put/3`
   # semantics) -- no history, no error on a duplicate key.
   @type staged_writes :: %{optional(String.t()) => term()}
+
+  # REQ-161 design §2.4/§3.3. The structured SCRIPT_FAILED payload carried on the exit
+  # signal `do_fail/2` raises via `exit/1` -- never recovered from the terminated
+  # process's own memory, since there is no process left to read it from once the exit
+  # signal has been sent. `:script_failed` is reserved to mean "a script deliberately
+  # called `platform.fail`" -- a future SCRIPT_ERROR (REQ-162) MUST NOT reuse this tag.
+  @type script_failure :: %{reason: String.t(), details: term()}
+  @type script_failed_exit_reason :: {:script_failed, script_failure()}
 
   # The entire closed set of `platform.*` functions — exactly 8 rows, no more, no fewer
   # (INV-CAP-2). `install/2` folds over this list; it is the ONLY call site under `lib/`
@@ -434,21 +507,11 @@ defmodule Letflow.Engine.Lua.Platform do
   # REQ-160's -- see moduledoc "Deviation from the design's literal `run_stub/4`" for why
   # this is `run_stub/5`, not the design's literal `run_stub/4`.
   @spec run_stub(stub_spec(), atom(), [term()], execution_context(), Lua.t()) ::
-          [term()] | {[term()], Lua.t()}
+          [term()] | {[term()], Lua.t()} | no_return()
   defp run_stub(:now, _function_name, _args, _execution_context, _lua), do: [__MODULE__.now()]
 
-  defp run_stub(:fail, _function_name, args, _execution_context, _lua) do
-    message =
-      case args do
-        [msg | _] when is_binary(msg) -> "script called platform.fail: #{msg}"
-        _ -> "script called platform.fail"
-      end
-
-    raise Lua.RuntimeException,
-      scope: [:platform],
-      function: :fail,
-      message: message,
-      reason: :explicit_fail
+  defp run_stub(:fail, _function_name, args, _execution_context, lua) do
+    do_fail(args, lua)
   end
 
   defp run_stub(:read_variable, _function_name, args, execution_context, lua) do
@@ -473,6 +536,53 @@ defmodule Letflow.Engine.Lua.Platform do
 
   defp run_stub(:emit_event, _function_name, args, execution_context, lua) do
     do_emit_event(args, execution_context, lua)
+  end
+
+  # ── fail (LUA-15 restated, REQ-161 design §3.2) ───────────────────────────────────────
+  #
+  # Never returns: the only signal this function produces is the `exit/1` call in step
+  # 3, which (design §2.2) no part of `tv-labs/lua`'s call chain intercepts -- not
+  # `pcall`, not `xpcall`, not any other construct on the call boundary. Reached only
+  # once the fold-level `:none` capability check has trivially passed (design §3.1 --
+  # `fail` is ungated, never actually denies).
+  @spec do_fail(args :: [term()], Lua.t()) :: no_return()
+  defp do_fail(args, lua) do
+    {reason_arg, details_arg} =
+      case args do
+        [reason, details | _rest] -> {reason, details}
+        [reason] -> {reason, nil}
+        [] -> {nil, nil}
+      end
+
+    reason_string = coerce_fail_reason(reason_arg, lua)
+    details = decode_fail_details(details_arg, lua)
+
+    script_failure = %{reason: reason_string, details: details}
+    exit({:script_failed, script_failure})
+  end
+
+  # Step 1 (design §3.2): a binary `reason` is used as-is; a table reference (still its
+  # internal `{:tref, id}` reference at this boundary -- see moduledoc "A related,
+  # smaller correction to design §6.1 step 1") is decoded via `Lua.decode!/2` then
+  # rendered via `inspect/1` (mirrors `do_log/3`'s `decode_log_context/2` handling of
+  # the identical shape); anything else (a number, a boolean, ...) is rendered via
+  # `inspect/1` directly; a missing `reason` defaults to the literal fallback string.
+  defp coerce_fail_reason(nil, _lua), do: "script called platform.fail with no reason"
+  defp coerce_fail_reason(reason, _lua) when is_binary(reason), do: reason
+  defp coerce_fail_reason({:tref, _} = tref, lua), do: inspect(Lua.decode!(lua, tref))
+  defp coerce_fail_reason(reason, _lua), do: inspect(reason)
+
+  # Step 2 (design §3.2): a table reference is decoded via `Lua.decode!/2` (mirrors
+  # `decode_lua_payload/2` above), then normalized through
+  # `LuaNumberMarshalling.from_lua/1` one level deep on any resulting map's values
+  # (mirrors `do_call_service/3`'s/`do_emit_event/3`'s own `normalize_from_lua/1`). A
+  # missing `details` argument defaults to `nil`.
+  defp decode_fail_details(nil, _lua), do: nil
+
+  defp decode_fail_details(details, lua) do
+    details
+    |> decode_lua_payload(lua)
+    |> normalize_from_lua()
   end
 
   # ── read_variable (LUA-11 read half, REQ-159 design §4) ──────────────────────────────
@@ -761,8 +871,6 @@ defmodule Letflow.Engine.Lua.Platform do
       _other -> false
     end)
   end
-
-  defp object_shaped_proplist?(_other), do: false
 
   # REQ-150 §2.2 (read direction), symmetric with `normalize_from_lua/1` above.
   defp convert_map_to_lua(map) when is_map(map) do

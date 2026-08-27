@@ -1,0 +1,45 @@
+{
+  "handoff_id": "step06-WF02-REQ161-20260827",
+  "run_id": "WF02-REQ161-20260827",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ161-20260827/step-06-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-161"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ161-20260827/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ161-20260827",
+    "commit": "23f3294"
+  },
+  "task": {
+    "description": "DOC-UPDATER (WF-02 Step 6) for REQ-161, RELEASE-VALIDATOR PASSed (commit 23f3294). Flip REQ-161's status to 'done' in docs/requirements.yaml. Append ONE 'done' event to the CURRENT run-history volume -- confirm which volume is current via docs/status/requirement_status.index.yaml's status: current marker (was volume 5, docs/status/requirement_status.v5.yaml, at 23 entries as of REQ-161's started event -- RE-CHECK this count fresh, do not trust this cached number). Recount via `grep -c \"^  - req:\" <volume>` BEFORE and AFTER your append, and update the index's entries:/note: fields accordingly (prepend a new note, never edit prior notes). Use a real UTC timestamp from the clock (date -u +%Y-%m-%dT%H:%M:%SZ). This run had one small REVIEWER rework (2 stale do_fail/1 moduledoc references, fixed directly by ORCH as a sizing-rule-eligible mechanical text fix) -- worth a brief mention in the done-event note.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-161 status flipped to 'done'.",
+      "Exactly one 'done' event appended to the current run-history volume, with a real UTC timestamp.",
+      "Volume recounted via grep before and after the append; index.yaml's entries:/note: updated to match, note prepended not overwritten.",
+      "No other status-history events edited or removed (append-only discipline)."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-161 status flipped pending -> done in docs/requirements.yaml. One 'done' event appended to current volume (docs/status/requirement_status.v5.yaml), timestamp 2026-08-27T22:28:33Z. Volume recounted before (23) and after (24) via grep; index.yaml entries:/note updated (new note prepended, prior notes untouched).",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ161-20260827/step-06-doc-updater.json"
+    ]
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "handoff_id": "step02d-WF02-REQ161-20260827",
+  "run_id": "WF02-REQ161-20260827",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ161-20260827/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-161"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ161-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ161-20260827/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req161-lua-platform-fail.md",
+      "lib/letflow/engine/lua/platform.ex"
+    ],
+    "branch_name": "feature/WF02-REQ161-20260827",
+    "commit": "252d0f7"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-161's implementation, commit fa161fe on lib/letflow/engine/lua/platform.ex (SECURITY-REVIEWER already PASSed at commit 252d0f7). Gate on idiomatic OTP usage, supervision integrity, scope creep, and decision-record consistency. Read the approved design (lib/letflow/design/req161-lua-platform-fail.md), the real diff (git show fa161fe -- lib/letflow/engine/lua/platform.ex), and the current full file before verdict. Note ELIXIR-DEV's own self-reported deviations: (1) do_fail/1 arity in the design became do_fail/2 (threading Lua.t() through), already verified by SECURITY-REVIEWER as mechanically forced by Lua.decode!/2's real signature; (2) removal of a now-dead object_shaped_proplist?/1 clause the Elixir 1.20 type checker proved unreachable once do_fail/2 added a third call site into normalize_from_lua/1 -- verify this removal is genuinely dead-code cleanup forced by --warnings-as-errors, not a silent behavior change.",
+    "acceptance_criteria": [
+      "Implementation matches the approved design's specified control flow for do_fail (section 3.2) -- no invented mechanism replacing what was approved.",
+      "exit({:script_failed, %{...}}) usage is idiomatic OTP -- correct use of exit/1 vs raise, no unnecessary process spawning, matches the file's existing style.",
+      "The do_fail/1 -> do_fail/2 arity deviation is cleanly integrated (call site, @spec, moduledoc all consistent with the real /2 arity, no stale /1 references left anywhere).",
+      "The object_shaped_proplist?/1 dead-clause removal is verified as genuine unreachable-code cleanup (confirm via git diff and reasoning about the new call site) not a silent behavior change to REQ-160's existing call_service/emit_event marshalling.",
+      "No scope creep: nothing touched outside lib/letflow/engine/lua/platform.ex and test/letflow/engine/lua/platform_test.exs (this requirement's owned_modules); executor.ex/plugin_interface.ex/lua_script_audit.ex untouched, per design's explicit deferral.",
+      "Decision-record consistency: confirm nothing in this diff contradicts decision 0014 or the LUA-15 restatement's own reasoning.",
+      "Moduledoc's new REQ-161 section accurately describes the exit/1 mechanism, the pcall-hazard rationale, and honestly states the engine-side wiring gap -- no overstatement.",
+      "mix compile --warnings-as-errors and mix format --check-formatted both independently re-run by REVIEWER, not merely trusted from ELIXIR-DEV's report."
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "verdict": "FAIL -- one rework item, otherwise clean. Idiomatic OTP usage is correct and the implementation matches design section 3.2's control flow exactly: do_fail/2 coerces reason (binary as-is, table decoded+inspected, missing -> fallback string), decodes/normalizes details through the existing decode_lua_payload/normalize_from_lua pipeline (reused, no new conversion rule), and calls exit({:script_failed, %{reason:, details:}}) with no other exit path -- correctly never returns, no @spec claims a return value, and no unnecessary process is spawned (exit/1 runs in the calling process, exactly as design section 2.3 requires). This is genuinely uninterceptable by pcall for the reasons the design traces (rescue-only call chain in deps/lua), and is a materially better fix than the prior raise-based Lua.RuntimeException stub.\n\nFAIL reason (AC3): the do_fail/1 -> do_fail/2 arity deviation is NOT cleanly integrated everywhere. The @spec (line 548) and the real call site (line 514, do_fail(args, lua)) are correctly /2, but the moduledoc's REQ-161 section still says '`do_fail/1` calls exit(...)' twice -- line 220 ('The actual mechanism: `do_fail/1` calls `exit({:script_failed, ...`) and line 332 (a comment: 'the structured SCRIPT_FAILED payload carried on the exit signal `do_fail/1` raises via `exit/1`'). Both are stale references to the design's literal arity that were never updated when the arity-2 deviation was made, even though SECURITY-REVIEWER already reviewed and accepted the deviation itself. Route back to ELIXIR-DEV: two-line moduledoc fix, s/do_fail\\/1/do_fail\\/2/ at both sites, no logic change needed.\n\nOther findings, all clean, no further rework needed once the above is fixed:\n\n1. AC1 (design section 3.2 control flow): matches exactly -- verified argument destructuring, coerce_fail_reason/2 and decode_fail_details/2 clauses against design section 3.2 steps 1-3.\n2. AC2 (exit/1 idiom): correct use of exit/1 over raise for an uninterceptable termination signal; matches this file's own established idiom (write_variable's process-dictionary side channel, TimeSource/ServiceCaller injection) of choosing the mechanism that actually delivers the required property rather than the 'obvious' one.\n3. AC4 (object_shaped_proplist?/1 dead-clause removal): verified genuine, not a behavior change. Read git show fa161fe~1 for the pre-image: normalize_from_lua/1 has exactly two clauses -- one guarded `when is_list(value)` (which alone calls object_shaped_proplist?/1) and an unguarded fallback that calls LuaNumberMarshalling.from_lua/1 directly without ever calling object_shaped_proplist?/1. Every call to object_shaped_proplist?/1 in this module is therefore always already inside an is_list(value) branch, at all three call sites (do_call_service, do_emit_event, and now do_fail's decode_fail_details) -- the removed `defp object_shaped_proplist?(_other), do: false` catch-all was unreachable dead code before this diff too; adding a third call site simply gave Elixir 1.20's success typing enough call-site evidence to prove it. REQ-160's call_service/emit_event marshalling is untouched -- confirmed the two decode_lua_payload/normalize_from_lua pipelines at lines 770 and 808 are byte-identical to before this diff.\n4. AC5 (scope): git show --stat fa161fe confirms only lib/letflow/engine/lua/platform.ex, test/letflow/engine/lua/platform_test.exs, and this run's own step-02a handoff json changed. executor.ex, plugin_interface.ex, lua_script_audit.ex untouched, matching the design's explicit section 1.3/5 deferral.\n5. AC6 (decision-record consistency): no conflict with decision 0014. The LUA-15 restatement's own reasoning (exit/1 over raise, the rescue-vs-exit distinction, the still-open engine-side wiring gap) is followed faithfully rather than re-decided.\n6. AC7 (moduledoc accuracy): the REQ-161 section (lines 202-265, aside from the AC3 do_fail/1 typo) accurately states the LUA-15 restatement, the pcall hazard, the exit/1 mechanism and why it's uninterceptable, and honestly discloses both the engine-side LUA-15 wiring gap and the executor.ex stringification gap -- no overstatement found.\n7. AC8: independently re-ran both checks myself (export PATH=\"$HOME/.asdf/shims:$PATH\"). `mix compile --force --warnings-as-errors`: 'Compiling 129 files (.ex)' / 'Generated letflow app', 0 errors, 0 warnings. `mix format --check-formatted`: clean, no output, exit 0.",
+    "acceptance_criteria_results": {
+      "ac1_design_control_flow_match": "PASS",
+      "ac2_exit_idiom": "PASS",
+      "ac3_arity_deviation_clean": "FAIL -- moduledoc lines 220 and 332 still say do_fail/1, real arity is do_fail/2",
+      "ac4_dead_clause_genuine": "PASS",
+      "ac5_no_scope_creep": "PASS",
+      "ac6_decision_record_consistency": "PASS",
+      "ac7_moduledoc_accuracy": "PASS (once AC3 fixed)",
+      "ac8_independent_compile_format": "PASS -- mix compile --force --warnings-as-errors clean, mix format --check-formatted clean"
+    },
+    "rework_required": [
+      "lib/letflow/engine/lua/platform.ex line 220: change 'The actual mechanism: `do_fail/1` calls `exit(...' to `do_fail/2`",
+      "lib/letflow/engine/lua/platform.ex line 332: change the comment 'the structured SCRIPT_FAILED payload carried on the exit signal `do_fail/1` raises via `exit/1`' to `do_fail/2`"
+    ]
+  }
+}

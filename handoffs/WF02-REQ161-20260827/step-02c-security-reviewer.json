@@ -1,0 +1,139 @@
+{
+  "handoff_id": "step02c-WF02-REQ161-20260827",
+  "run_id": "WF02-REQ161-20260827",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ161-20260827/step-02c-security-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-161"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ161-20260827/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ161-20260827/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req161-lua-platform-fail.md",
+      "lib/letflow/engine/lua/platform.ex"
+    ],
+    "branch_name": "feature/WF02-REQ161-20260827",
+    "commit": "fa161fe"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER hard gate (WF-02 Step 2c) on REQ-161's implementation, commit fa161fe on lib/letflow/engine/lua/platform.ex. This requirement is UNGATED by design (platform.fail requires no capability) -- verify that is correct and does not open an unintended surface, and that the exit/1 termination mechanism itself introduces no new sandbox-escape or availability hazard. ELIXIR-DEV deviated from the design's literal do_fail/1 arity to do_fail/2 (threading Lua.t() through, needed for Lua.decode!/2 on table-shaped reason/details arguments) -- verify this deviation is genuinely necessary and does not silently change any security-relevant behavior. Read the approved design (lib/letflow/design/req161-lua-platform-fail.md) and the real diff (git show fa161fe -- lib/letflow/engine/lua/platform.ex) in full before verdict. Gate against docs/agents/instructions/security-invariants.md INV-1..INV-8.",
+    "acceptance_criteria": [
+      "Confirm platform.fail's capability_matrix row (required: :none) is genuinely unedited and that leaving it ungated is intentional/correct per R-Co's matrix precedent cited in the design -- not an accidental omission of a needed gate.",
+      "Confirm exit({:script_failed, %{reason:, details:}}) cannot be abused to exfiltrate data, crash unrelated processes, or affect any process other than the one executing the failing script (the calling process's own Task/monitor boundary).",
+      "Confirm the reason/details normalization pipeline (decode_lua_payload/2 + normalize_from_lua/1, reused from REQ-160) introduces no new tenant-prefix or cross-tenant data path -- platform.fail makes zero Letflow.Repo calls.",
+      "Confirm the do_fail/1 -> do_fail/2 arity deviation (threading Lua.t()) is genuinely required by Lua.decode!/2's real signature, not a shortcut, and does not change what data a script can smuggle out via reason/details.",
+      "Confirm no code path lets a script's platform.fail call affect ANY OTHER script execution's process (isolation across concurrent script executions is preserved).",
+      "Cross-check against docs/agents/instructions/security-invariants.md INV-1..INV-8 explicitly, naming which apply and confirming each holds.",
+      "CRITICAL: when writing your verdict, the handoff's top-level status field (this file, line 9) must be exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED -- run mix letflow.lint_handoffs yourself before finishing. This exact schema mistake recurred 4 times across the REQ-160/REQ-161 runs (see docs/anti-patterns.md's newest entry)."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "checks_performed": [
+      "Read approved design lib/letflow/design/req161-lua-platform-fail.md in full.",
+      "git show fa161fe -- lib/letflow/engine/lua/platform.ex (full diff).",
+      "Read current lib/letflow/engine/lua/platform.ex in full for the edited regions (moduledoc REQ-161 section, @capability_matrix, run_stub/5, do_fail/2, coerce_fail_reason/2, decode_fail_details/2, decode_lua_payload/2, normalize_from_lua/1).",
+      "grep -n \"Repo\\.\" lib/letflow/engine/lua/platform.ex -- only 3 hits, all inside get_instance_state's do_get_instance_state/3 (lines 114/618/649); zero in do_fail/2, coerce_fail_reason/2, decode_fail_details/2, decode_lua_payload/2, or normalize_from_lua/1.",
+      "grep -n 'name: :fail' -A2 -B2 lib/letflow/engine/lua/platform.ex -- confirms @capability_matrix's :fail row is `%{name: :fail, required: :none, stub: :fail}`, byte-identical to the pre-commit row (diff shows only the run_stub clause body changed, not the matrix list).",
+      "Read deps/lua/lib/lua.ex def decode!/2 -- confirmed real signature is `decode!(t(), term())`, i.e. it requires the Lua.t() state to resolve a {:tref, id} reference via Value.decode(value, state); do_fail/1 could not call it without threading `lua` through, confirming the do_fail/1 -> do_fail/2 deviation is a genuine signature necessity, not a shortcut.",
+      "grep -n 'async_nolink|Task.Supervisor|link' lib/letflow/engine/lua/executor.ex -- confirmed executor.ex is unedited by this commit (not in the diff) and its Task.Supervisor.async_nolink/2 + unlinked max_heap_words spawn path (both per-script-execution, unlinked, monitor-only) is untouched, so isolation across concurrent script executions is preserved.",
+      "Traced exit({:script_failed, %{...}}) semantics: exit/1 called from inside the process currently executing Lua.eval!/2 terminates only that one process (ordinary BEAM exit/1 semantics -- no fan-out, no signal to any other process except via that process's own monitors/links, which executor.ex's async_nolink path deliberately does not establish beyond the observing Task/monitor). The payload (reason/details) travels only on that one process's own exit reason term, delivered verbatim to whichever process monitors it (Task.yield / :DOWN) -- no shared/global state is written, so it cannot affect or be read by a different script execution's process.",
+      "mix letflow.lint_handoffs (PATH includes ~/.asdf/shims) -- 'OK -- 0 new violations across 1173 handoff files (25 pre-existing grandfathered)'."
+    ],
+    "acceptance_criteria_verdicts": [
+      {
+        "criterion": "1. capability_matrix :fail row (required: :none) unedited and intentional",
+        "verdict": "PASS",
+        "evidence": "Diff (git show fa161fe) touches only the run_stub(:fail, ...) clause body and adds do_fail/2 + helpers; the @capability_matrix list (lines 344-352 current file) is not in the diff's changed-lines set at all. Design §3.1 cites R-Co's own capability matrix precedent (platform.fail is deliberately a no-capability-required control-flow primitive, analogous to platform.now) -- ungating is a deliberate, documented design decision, not an omission."
+      },
+      {
+        "criterion": "2. exit({:script_failed, ...}) cannot exfiltrate data, crash unrelated processes, or affect any process other than the one running the failing script",
+        "verdict": "PASS",
+        "evidence": "exit/1's target is implicit: it always terminates the calling process (the one process running Lua.eval!/2 for this one script execution, per REQ-153/155's established one-process-per-script-execution invariant, cited and unedited). No pid argument, no broadcast, no ETS/process-dictionary write anywhere in do_fail/2's body. Delivery to a caller is exclusively via that one process's own :DOWN/Task.yield exit-reason channel -- executor.ex's async_nolink path establishes no link (only a monitor from the awaiting side), so a script's platform.fail cannot terminate or signal any other process, related or not."
+      },
+      {
+        "criterion": "3. reason/details pipeline makes zero Letflow.Repo calls, no tenant-prefix path",
+        "verdict": "PASS",
+        "evidence": "grep confirms all 3 Repo. references in platform.ex are in do_get_instance_state/3 (a different stub), none reachable from do_fail/2, coerce_fail_reason/2, decode_fail_details/2, decode_lua_payload/2, or normalize_from_lua/1. This pipeline is pure data transformation (Lua.decode!/2 + LuaNumberMarshalling.from_lua/1), no DB access, no execution_context.prefix use (do_fail/2's run_stub clause explicitly ignores _execution_context)."
+      },
+      {
+        "criterion": "4. do_fail/1 -> do_fail/2 arity deviation genuinely required by Lua.decode!/2, doesn't change smugglable data",
+        "verdict": "PASS",
+        "evidence": "deps/lua/lib/lua.ex's decode!/2 signature is decode!(%Lua{state: state}, value) -- it needs the Lua.t() struct to call Value.decode(value, state) for resolving a {:tref, id} table reference. do_fail/1 (design's literal signature) could not call Lua.decode!/2 at all without a Lua.t(), so threading `lua` through to do_fail/2 is mechanically forced, not a shortcut. It changes zero data-shape: `lua` is used only to decode {:tref, _} references already present in the args list (the same table-shaped arguments a script could always pass); no new field, no new value is derived from `lua` itself (e.g. no capability state, no VM internals) that a script could use to smuggle additional data beyond what reason/details already carry."
+      },
+      {
+        "criterion": "5. isolation across concurrent script executions preserved",
+        "verdict": "PASS",
+        "evidence": "executor.ex (owning Task.Supervisor.async_nolink/2 and the unlinked max_heap_words spawn path) is not touched by this commit -- confirmed by the diff being scoped entirely to platform.ex. Each script execution runs in its own unlinked process; exit/1 from inside one such process cannot propagate to another's, per ordinary BEAM semantics and unchanged executor.ex wiring."
+      },
+      {
+        "criterion": "6. INV-1..INV-8 applicability and verdicts",
+        "verdict": "PASS",
+        "evidence": "See invariant-by-invariant section below."
+      },
+      {
+        "criterion": "7. handoff status field schema correctness",
+        "verdict": "PASS",
+        "evidence": "Top-level status set to exactly COMPLETED (not DONE/PASS/COMPLETE). mix letflow.lint_handoffs run and reports 0 new violations."
+      }
+    ],
+    "invariants": [
+      {
+        "id": "INV-1",
+        "applies": true,
+        "verdict": "PASS",
+        "reasoning": "Per security-invariants.md's 2026-08-17 update, INV-1 applies to any diff touching a tenant-scoped table/schema/migration. This diff touches neither -- platform.ex's :fail stub and its new do_fail/2 helpers make zero Ecto/Repo calls and read no tenant-scoped state (confirmed by grep above; the only Repo calls in the file are in an unrelated, unedited stub). No :prefix-scoping question arises because there is no data access at all on this path. Verdict: satisfied trivially -- no tenant-data table is touched, and the code that IS touched provably never reaches one."
+      },
+      {
+        "id": "INV-2",
+        "applies": false,
+        "reasoning": "No multi-tenant API response-shaping is touched; S4 has not started. platform.fail's do_fail/2 return value is never serialised to an API response -- it only ever appears as a BEAM process exit reason consumed internally by executor.ex (itself unedited)."
+      },
+      {
+        "id": "INV-3",
+        "applies": true,
+        "verdict": "PASS (partially -- the applicable slice)",
+        "reasoning": "INV-3's Reference says its full mechanism is deferred pending S5's own decision record, but this specific commit is squarely an S5 sandboxing-boundary change (a Lua host-capability-gated function's termination semantics), so it is reviewed on its own narrow claim: platform.fail's capability row (required: :none) is unchanged, it grants no new host capability, and the exit/1 mechanism this commit adds strengthens sandbox integrity (closes a pcall-based sandbox-escape/continuation hazard per decision 0014's LUA-15 watchlist) rather than weakening it. No new ambient network/filesystem access or host function is introduced by this diff."
+      },
+      {
+        "id": "INV-4",
+        "applies": true,
+        "verdict": "PASS",
+        "reasoning": "No secret material is resolved, logged, or threaded through any value in this diff. do_fail/2's reason/details come entirely from script-authored Lua arguments, never from config/env. grep -rn 'System.get_env' and the hardcoded-secret heuristic grep were not newly triggered by this diff (no config/secret-resolution code touched)."
+      },
+      {
+        "id": "INV-5",
+        "applies": false,
+        "reasoning": "No lookup-by-ID endpoint is touched; S4 has not started."
+      },
+      {
+        "id": "INV-6",
+        "applies": true,
+        "verdict": "PASS",
+        "reasoning": "This handoff itself is the proof artifact INV-6 requires: it explicitly lists which of INV-1..INV-8 apply and how each is satisfied, per the meta-invariant's own How-to-verify."
+      },
+      {
+        "id": "INV-7",
+        "applies": true,
+        "verdict": "PASS",
+        "reasoning": "grep -rn 'Repo.query' turns up nothing in this diff's changed lines; do_fail/2's pipeline builds no SQL of any kind, raw or parameterised."
+      },
+      {
+        "id": "INV-8",
+        "applies": true,
+        "verdict": "PASS",
+        "reasoning": "do_fail/2's args pattern-match (`case args do [reason, details | _rest] -> ...; [reason] -> ...; [] -> ...; end`) is exhaustive over every possible Lua call arity, with no arm that can fail to match on realistic (or any) input -- an empty list, one arg, or two-or-more args are all handled explicitly. coerce_fail_reason/2 and decode_fail_details/2 are each defined over an exhaustive clause set (nil, binary, {:tref, _}, catch-all). The one intentional 'crash' in this design IS the feature (exit/1 terminating the one process running the failing script) -- this is the documented, deliberate one-process-per-script-execution isolation model INV-8's own Reference names as the accepted exception, not an unhandled-crash defect: it destroys only the process that opted into failing, under a supervision boundary (async_nolink + Task.yield/monitor) that already expects and handles arbitrary task exit reasons for unrelated reasons (timeouts, heap limits, real bugs)."
+      }
+    ],
+    "findings": [],
+    "verdict": "PASS -- REQ-161's platform.fail implementation (commit fa161fe) is verified against the approved design and against INV-1/INV-4/INV-6/INV-7/INV-8 (applicable today) plus a narrow S5-sandboxing slice of INV-3; INV-2 and INV-5 remain correctly NOT-APPLICABLE (S4 not started). The capability row is unedited and ungating is intentional per design §3.1. exit/1 terminates only the one process running the failing script, with the payload delivered solely via that process's own exit-reason/monitor channel -- no exfiltration path, no cross-process effect. The reason/details pipeline makes zero Repo calls and touches no tenant-prefix path. The do_fail/1 -> do_fail/2 arity deviation is mechanically forced by Lua.decode!/2's real (t(), term()) signature, verified by reading deps/lua/lib/lua.ex directly, and changes no smugglable data shape. executor.ex's isolation mechanism (Task.Supervisor.async_nolink/2, unlinked per-execution processes) is untouched by this diff. No BLOCKER findings."
+  }
+}

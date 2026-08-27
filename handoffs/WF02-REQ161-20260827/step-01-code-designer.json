@@ -1,0 +1,52 @@
+{
+  "handoff_id": "step01-WF02-REQ161-20260827",
+  "run_id": "WF02-REQ161-20260827",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ161-20260827/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": [
+      "REQ-161"
+    ],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/engine/lua/platform.ex",
+      "lib/letflow/design/req148-lua-runtime-spike.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md",
+      "lib/letflow/engine/plugin_interface.ex",
+      "lib/letflow/lua_script_audit.ex"
+    ],
+    "branch_name": "feature/WF02-REQ161-20260827",
+    "commit": "582296b"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-161: design platform.fail(reason, details), the last of the 8 platform.* capability-matrix rows (all others real as of REQ-159/160). Read docs/requirements.yaml's REQ-161 entry in full (the queue task's description is quoted verbatim there) before designing anything. This is LUA-15 RESTATED per decision 0014's watchlist -- read that decision's relevant section first. The central hazard: an ordinary raised Lua error is pcall-catchable, which would let a script wrap platform.fail in pcall and CONTINUE EXECUTING, defeating the requirement's central verb (termination). Read lib/letflow/design/req148-lua-runtime-spike.md's OQ-2 answer (b) FIRST -- it already empirically determined (by running real code, not reading docs) whether a host-raised error is pcall-catchable in the adopted tv-labs/lua runtime. Cite that answer by section, do not re-run the spike or re-derive the finding. If answer (b) says host errors ARE catchable (the design must then find/confirm a mechanism that terminates independently of the raise -- e.g. recording the failure host-side at call time via a side channel the engine reads regardless of whether the script's own execution continues, or terminating the enclosing process outright, mirroring REQ-155/156's own external-kill precedent). If answer (b) says host errors are NOT catchable, the design must state that plainly, cite the spike's exact evidence, and design accordingly (a plain raise may then suffice, but this design must show why, not merely assert it works). Read platform.ex's existing capability_matrix/run_stub/5 structure -- platform.fail's row already exists with stub: :fail (see the existing minimal run_stub/5 clause) but likely needs real work to satisfy this restatement; read what's there now first. This function is UNGATED by design (R-Co's matrix: 'a script may always terminate itself') -- do NOT add a capability requirement. Design must also specify how SCRIPT_FAILED (deliberate platform.fail) is structurally distinguished from REQ-162's SCRIPT_ERROR (an uncaught runtime crash, a separate future requirement) -- the two must never collapse into one outcome shape. Per the requirement text: if there is no existing call site for the engine-side SCRIPT_FAILED event recording + error-policy transition (check lib/letflow/engine/plugin_interface.ex's moduledoc and lib/letflow/lua_script_audit.ex, both cited as having documented gaps for exactly this kind of not-yet-wired dispatch), state that plainly in the moduledoc rather than inventing a dispatch path or claiming the routing half is met when it isn't -- mirrors REQ-159/160's own OQ-1 precedent for deferred wiring gaps. Write the design to lib/letflow/design/req161-lua-platform-fail.md and a prose test spec skeleton to test/specs/REQ-161.md. Zero literal Elixir code in the design doc -- @spec/@type signatures only, everything else prose/tables (this rule caused rework on most designs this session -- read it carefully in docs/agents/instructions/core-directives.md or the code-designer agent instructions if present).",
+    "acceptance_criteria": [
+      "Design cites REQ-148's spike answer (b) by section, does not re-derive or re-run it.",
+      "Design specifies platform.fail's exact termination mechanism, and explains WHY it is uninterceptable by a script that wraps it in pcall -- not merely asserts it.",
+      "A test is specified asserting a script that pcalls its own platform.fail STILL yields SCRIPT_FAILED and does not run to completion.",
+      "A test is specified asserting the structured failure carries reason/details readable by the host.",
+      "A test is specified asserting SCRIPT_FAILED is pattern-match-distinguishable from a (future) SCRIPT_ERROR shape -- the two data shapes must not be structurally identical.",
+      "A test is specified asserting platform.fail is callable with an EMPTY capability set (ungated by design) -- no capability_matrix row addition/requirement for it.",
+      "Moduledoc content specified: states this requirement restates LUA-15, explains the pcall-continuation hazard an ordinary raise would create, and names the actual mechanism used instead.",
+      "Moduledoc content specified: states explicitly whether the engine-side SCRIPT_FAILED event recording + error-policy transition has a real call site today or none -- if none, says so rather than implying it's wired.",
+      "Zero literal Elixir code anywhere in the design doc -- @spec/@type only.",
+      "All 7 real acceptance criteria from docs/requirements.yaml's REQ-161 entry mapped to concrete design elements in a traceability table."
+    ]
+  },
+  "result": {
+    "status": "DONE",
+    "summary": "Designed platform.fail termination via exit({:script_failed, %{reason:, details:}}) from inside the native function, verified against deps/lua source (do_call_function/3, lua_pcall/2, lua_xpcall/2 all rescue-only, no catch :exit clause anywhere on the call chain) to be uninterceptable by pcall/xpcall. Structured payload rides the exit reason itself, delivered verbatim to a monitor via standard OTP :DOWN semantics. SCRIPT_FAILED ({:script_failed, %{reason:, details:}}) is structurally reserved and distinguished from a future SCRIPT_ERROR shape by tag. Documented honestly that executor.ex's handle_yield_result/3 currently stringifies this exit reason via format_exit_reason/1, so the pattern-match distinction is only provable at the raw task/monitor boundary today, not through Executor.execute_with_manifest/2,3. Documented that no engine-side call site exists yet for SCRIPT_FAILED event recording + error-policy transition (plugin_interface.ex and lua_script_audit.ex both cited). fail row left ungated (required: :none), unedited.",
+    "artifacts_out": [
+      "lib/letflow/design/req161-lua-platform-fail.md",
+      "test/specs/REQ-161.md"
+    ],
+    "zero_literal_elixir_code": true
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "handoff_id": "step03b-WF02-REQ161-20260827",
+  "run_id": "WF02-REQ161-20260827",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ161-20260827/step-03b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-161"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ161-20260827/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req161-lua-platform-fail.md",
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs",
+      "test/specs/REQ-161.md"
+    ],
+    "branch_name": "feature/WF02-REQ161-20260827",
+    "commit": "d60d871"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate (WF-02 Step 3b) on REQ-161's test suite. TEST-DESIGNER ran 5 mutation tests against lib/letflow/engine/lua/platform.ex (commit d60d871) and found NO coverage gaps -- all 5 mutations were caught by ELIXIR-DEV's existing 100 tests, so no new test code was added. Verify this claim independently -- do not trust TEST-DESIGNER's self-report; a 'no gap found' result is exactly the kind of finding that most needs independent re-verification since there's no diff to inspect. Re-run at least 2 of the 5 claimed mutations yourself against the real code and confirm the existing tests genuinely catch them.",
+    "acceptance_criteria": [
+      "Every one of REQ-161's 7 real acceptance criteria (docs/requirements.yaml) maps to at least one runnable test -- verified by reading the test file, not the spec's claim about itself.",
+      "Independently re-apply at least 2 of TEST-DESIGNER's 5 claimed mutations (recommend: mutation 1, reverting exit/1 to the old raise-based hazard, since it's the central regression this requirement exists to prevent; and mutation 3, the tag-collision one, since it's the AC3 distinguishability property) and confirm the existing tests genuinely fail against the mutated code and pass against the real code.",
+      "Confirm the working tree is genuinely clean after your verification -- git diff --stat lib/letflow/engine/lua/platform.ex empty, since TEST-DESIGNER claims it made zero code changes.",
+      "No skipped, pending, or excluded tests anywhere in the REQ-161 section of test/letflow/engine/lua/platform_test.exs.",
+      "Confirm no REQ-161 test routes through Executor.execute_with_manifest/2,3 (which would mask the raw exit-reason shape per design section 4's documented gap) -- grep and read directly.",
+      "test/specs/REQ-161.md's new mutation-testing findings table accurately reflects what was actually done.",
+      "mix test test/letflow/engine/lua/platform_test.exs and mix compile --warnings-as-errors both independently re-run and confirmed clean, with real output quoted."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "PASS. TEST-DESIGNER's 'no coverage gap found, no new test code needed' self-report is independently confirmed. All 7 of REQ-161's acceptance criteria map to runnable tests in the 'REQ-161' describe blocks of test/letflow/engine/lua/platform_test.exs (AC1-AC4 in the 'terminates by exit/1' describe, AC5/AC6 in the 'moduledoc content' describe, AC7 is TEST-RUNNER/ELIXIR-DEV's own responsibility per convention). I independently re-applied mutation 1 (reverted do_fail/2's exit({:script_failed, ...}) back to raise Lua.RuntimeException) and mutation 3 (changed the exit tag from :script_failed to :generic_failure) directly against the real, unedited platform.ex, ran mix test test/letflow/engine/lua/platform_test.exs against each mutation, and both genuinely failed 8/100 tests -- exactly matching the findings table's reported failure count and the specific test names (AC1, both AC2 tests, AC3, AC4, the table-shaped-reason test, and the REQ-159/REQ-157 matrix regression guards). I reverted both mutations and confirmed git diff --stat lib/letflow/engine/lua/platform.ex and git status --porcelain are both empty, and mix test returns 100 passed again on the real code. No @tag :skip, :pending, or exclude markers exist anywhere in the file (grep confirmed). Grep confirms no REQ-161 test calls Executor.execute_with_manifest/2,3 -- the only match is the explanatory comment at line 1866 stating why the tests intentionally bypass Executor (its handle_yield_result/3 stringifies the exit reason, masking pattern-matchability, per design section 4). test/specs/REQ-161.md's mutation-testing findings table (5 mutations, all 8/100-failure or 1/100-failure counts, test names) matches what I independently observed for mutations 1 and 3; the table's own reported counts for mutations 2, 4, and 5 (not independently re-run by me, per the 2-of-5 minimum) are internally consistent with the code and tests I read.",
+    "checks_performed": [
+      "Read docs/requirements.yaml REQ-161 entry in full (7 acceptance_criteria) and lib/letflow/design/req161-lua-platform-fail.md in full.",
+      "Read lib/letflow/engine/lua/platform.ex do_fail/2 (lines 548-562) and run_stub(:fail, ...) (lines 513-515) and the capability_matrix's :fail row (required: :none, unchanged).",
+      "Read all REQ-161 describe blocks in test/letflow/engine/lua/platform_test.exs (lines 1862-1995): 'terminates by exit/1, not by a pcall-catchable raise' (AC1-AC4 plus a table-shaped-reason test) and 'moduledoc content (AC5, AC6)'. Mapped each AC to a specific test by name.",
+      "Baseline: mix compile --force --warnings-as-errors -> 'Compiling 129 files (.ex)', 'Generated letflow app', RC=0, no warnings. mix test test/letflow/engine/lua/platform_test.exs -> 'Result: 100 passed'.",
+      "Mutation 1 (self-applied): changed 'exit({:script_failed, script_failure})' to 'raise Lua.RuntimeException, message: inspect(script_failure)' in do_fail/2. Ran mix test test/letflow/engine/lua/platform_test.exs -> 'Result: 92/100 passed', 8 failures: AC1, both AC2 tests, AC3, AC4, the table-shaped-reason test, and 2 REQ-159/REQ-157 matrix regression guard tests -- exactly the failure set the findings table's row 1 claims.",
+      "Reverted mutation 1 via Edit. Confirmed git diff --stat lib/letflow/engine/lua/platform.ex empty. Re-ran mix test -> 'Result: 100 passed'.",
+      "Mutation 3 (self-applied): changed 'exit({:script_failed, script_failure})' to 'exit({:generic_failure, script_failure})'. Ran mix test -> 'Result: 92/100 passed', same 8 failures including AC3 (the distinguishability test) -- matching the findings table's row 3.",
+      "Reverted mutation 3 via Edit. Confirmed git diff --stat lib/letflow/engine/lua/platform.ex empty and git status --porcelain empty. Re-ran mix test -> 'Result: 100 passed'. Re-ran mix compile --force --warnings-as-errors -> 'Compiling 129 files (.ex)', 'Generated letflow app', RC=0.",
+      "grep -n '@tag :skip\\|:skip\\|pending\\|excluded\\|TODO' test/letflow/engine/lua/platform_test.exs -> no matches anywhere in the file, including the REQ-161 sections.",
+      "grep -n 'execute_with_manifest' test/letflow/engine/lua/platform_test.exs -> only one match, a comment (line 1866) explaining why the REQ-161 tests deliberately avoid it, not a call.",
+      "Read test/specs/REQ-161.md's mutation-testing findings table in full and cross-checked its row 1 and row 3 claims (mutation, file/line, 8/100 failed, test names, gap found: No) against my own independently-observed results -- they match exactly.",
+      "Ran mix letflow.lint_handoffs before completing."
+    ],
+    "instructions_to_test_designer": null
+  }
+}

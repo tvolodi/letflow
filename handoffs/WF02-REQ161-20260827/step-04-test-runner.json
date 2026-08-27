@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step04-WF02-REQ161-20260827",
+  "run_id": "WF02-REQ161-20260827",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ161-20260827/step-04-test-runner.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-161"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ161-20260827/step-03b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ161-20260827",
+    "commit": "284e720"
+  },
+  "task": {
+    "description": "TEST-RUNNER (WF-02 Step 4) for REQ-161. Run the FULL test suite (scripts/test_parallel.sh) at least twice consecutively. Quote real output for every run. If any test fails, apply structural failure attribution per docs/agents/instructions/core-directives.md ('Failure Attribution Is Structural, Never By Count-Matching') -- diff-exclusion, merge-base reproduction, or demonstrated external mechanism. ISS-0340 (Letflow.Api.ContextTest 'scoped_repo_opts/1 is 1-arity') is a known, previously-reopened flake unrelated to any Lua work -- if it reappears, diff-exclude it rather than treating it as a regression.",
+    "acceptance_criteria": [
+      "Full suite (scripts/test_parallel.sh) run at least twice consecutively; real output quoted for each run.",
+      "mix compile --warnings-as-errors independently re-run and confirmed clean.",
+      "Any failure is attributed structurally, never by count-matching across runs.",
+      "Final verdict: PASS only if all runs are clean (modulo a diff-excluded known flake like ISS-0340), FAIL with a structured failure report otherwise.",
+      "CRITICAL: when writing this handoff's top-level status field (line 9), use exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED -- NOT DONE/COMPLETE/PASS. Run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "mix compile --warnings-as-errors: clean, exit 0, no warnings. scripts/test_parallel.sh run twice consecutively on commit 284e720 (branch feature/WF02-REQ161-20260827, N=8 partitions), both runs identical and fully green: combined 2267 tests, 5 properties, 0 failures (2272/2272 passed) both times. No ISS-0340 (Letflow.Api.ContextTest 'scoped_repo_opts/1 is 1-arity') flake observed in either run -- nothing to diff-exclude. No failures to attribute; structural failure-attribution procedure was not needed since both runs were fully clean.",
+    "run_1_output": "test_parallel: N=8 (source: nproc)\ntest_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)\ntest_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)\ntest_parallel: partition logs in /tmp/letflow_test_parallel.LLzsBh\ntest_parallel: TEST_PARALLEL_GROUP=tp2223776 (shared by all 8 partitions)\npartition 1: 229 tests, 0 properties, 0 failures, exit 0\npartition 2: 243 tests, 1 property, 0 failures, exit 0\npartition 3: 393 tests, 0 properties, 0 failures, exit 0\npartition 4: 197 tests, 0 properties, 0 failures, exit 0\npartition 5: 312 tests, 0 properties, 0 failures, exit 0\npartition 6: 241 tests, 2 properties, 0 failures, exit 0\npartition 7: 329 tests, 0 properties, 0 failures, exit 0\npartition 8: 323 tests, 2 properties, 0 failures, exit 0\n---\ncombined: 2267 tests, 5 properties, 0 failures (2272/2272 passed)\nEXIT=0",
+    "run_2_output": "test_parallel: N=8 (source: nproc)\ntest_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)\ntest_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)\ntest_parallel: partition logs in /tmp/letflow_test_parallel.noi0Pt\ntest_parallel: TEST_PARALLEL_GROUP=tp2235882 (shared by all 8 partitions)\npartition 1: 229 tests, 0 properties, 0 failures, exit 0\npartition 2: 243 tests, 1 property, 0 failures, exit 0\npartition 3: 393 tests, 0 properties, 0 failures, exit 0\npartition 4: 197 tests, 0 properties, 0 failures, exit 0\npartition 5: 312 tests, 0 properties, 0 failures, exit 0\npartition 6: 241 tests, 2 properties, 0 failures, exit 0\npartition 7: 329 tests, 0 properties, 0 failures, exit 0\npartition 8: 323 tests, 2 properties, 0 failures, exit 0\n---\ncombined: 2267 tests, 5 properties, 0 failures (2272/2272 passed)\nEXIT=0",
+    "compile_output": "mix compile --warnings-as-errors; EXIT_CODE=0 (no warnings or errors printed)",
+    "completed_at": "2026-08-27T22:22:57Z"
+  }
+}

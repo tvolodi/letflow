@@ -599,3 +599,27 @@ history:
       from main (4ad5347) and pushed. Dispatching Step 1 to
       CODE-DESIGNER next. 22 on-disk entries before this append; 23
       after.
+
+  - req: REQ-161
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-27T22:28:33Z"
+    note: >
+      WF02-REQ161-20260827 complete. platform.fail now terminates by a
+      mechanism the script cannot intercept (LUA-15 restated), replacing the
+      old raise-based stub -- the exact pcall-catchable hazard LUA-15's
+      restatement exists to fix -- with an exit/1-based uninterceptable
+      termination mechanism. CODE-DESIGN-VALIDATOR verified the exit/1
+      approach against the real vendored deps/lua source rather than assumed
+      behaviour, and RELEASE-VALIDATOR empirically re-confirmed it by running
+      an actual ad hoc script and observing the raw crash/exit term, not just
+      a passing test. One small REVIEWER rework round: 2 stale do_fail/1
+      moduledoc arity references, fixed directly by ORCH as a
+      sizing-rule-eligible mechanical text fix. Passed design,
+      CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (hard gate), REVIEWER (with
+      the one small rework above), TEST-DESIGNER, TEST-DESIGN-VALIDATOR,
+      TEST-RUNNER, and RELEASE-VALIDATOR (Step 5 PASS, empirical
+      re-confirmation). Status flipped pending -> done in
+      docs/requirements.yaml. `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 23 on-disk entries before
+      this append; 24 after.

@@ -2652,6 +2652,30 @@
             "queue_task_id": 306,
             "queue_agent_id": "orch-main",
             "note": "WF-02 for REQ-154 (queue task 306, GH#606, stage S5). In-band instruction budget for Lua script execution -- layer 1 of the two-layer pair (LUA-08 restated). Extends REQ-153's executor with configurable :max_instructions budget and structured budget-exhaustion error. SECURITY-REVIEWER hard gate (tenant-script-execution resource-exhaustion boundary). Queue claimed 2026-08-27T06:30:45Z via get_next_task."
+        },
+        {
+            "run_id": "WF02-REQ157-20260827",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-157"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/lua/capabilities.ex",
+                "lib/letflow/engine/lua/platform.ex",
+                "test/letflow/engine/lua/capabilities_test.exs",
+                "test/letflow/engine/lua/platform_test.exs",
+                "lib/letflow/design/req157-lua-capability-model.md",
+                "test/specs/REQ-157.md"
+            ],
+            "lock_acquired_at": "2026-08-27T06:50:00Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PENDING (ELIXIR-DEV dispatched)",
+            "backfilled": false,
+            "queue_task_id": 309,
+            "queue_agent_id": "orch-secondary",
+            "note": "WF-02 for REQ-157 (queue task 309, GH#609, stage S5). Capability model and capability check at every gated host-function call site (LUA-05, LUA-06) -- ports R-Co capabilities.zig + host_api registerAll matrix. Does not touch lib/letflow/engine/lua/executor.ex (locked by concurrent WF02-REQ154-20260827). SECURITY-REVIEWER hard gate -- authorization boundary for tenant-supplied scripts. Queue claimed via get_next_task 2026-08-27T06:47:48Z."
         }
     ]
 }

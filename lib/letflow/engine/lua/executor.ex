@@ -1,15 +1,30 @@
 defmodule Letflow.Engine.Lua.Executor do
   @moduledoc """
   REQ-153 (LUA-02 restated) + REQ-154 (LUA-08 layer 1 restated) + REQ-155 (LUA-10
-  layer 2 restated) — concrete `Executor` implementation for the tv-labs/lua BEAM
-  runtime. Implements `@behaviour Letflow.Engine.LuaScriptAudit.Executor`.
+  layer 2 restated) + REQ-158 (LUA-07, coordinated hash change) — concrete
+  `Executor` implementation for the tv-labs/lua BEAM runtime. Implements
+  `@behaviour Letflow.Engine.LuaScriptAudit.Executor`.
 
-  `script_ref` concrete shape: a binary containing the Lua source text to execute.
+  `script_ref` concrete shape (widened by REQ-158, design
+  `lib/letflow/design/req158-lua-manifest-validation.md` §5.3.1): either a bare
+  `binary()` containing the Lua source text to execute (legacy shape, treated as
+  paired with an empty manifest — `script_id: ""`, `capabilities: []` — so a
+  bare-binary caller's hash is still `Letflow.Engine.Lua.Manifest.compute_hash/2`'s
+  output, just over an empty manifest), or a two-key map
+  `%{manifest: Letflow.Engine.Lua.Manifest.t(), script_source: binary()}` that
+  carries a real manifest alongside the source text. A value that is neither
+  shape returns `{:error, :invalid_script_ref}` without ever invoking the Lua
+  runtime.
 
   Every call to `execute_with_manifest/2` creates a fresh `Lua.t()` via
   `Letflow.Engine.Lua.Sandbox.new/1` — no state is reused between invocations
-  (LUA-02 isolation invariant). The manifest hash is the lowercase hex-encoded
-  SHA-256 of the raw script source bytes, computed after execution succeeds.
+  (LUA-02 isolation invariant). **REQ-158 change:** the manifest hash is no
+  longer the bare SHA-256 of the script source alone — it is
+  `Letflow.Engine.Lua.Manifest.compute_hash/2`'s output over the paired manifest
+  and script source (manifest+script bytes, per that module's documented byte
+  layout), computed after execution succeeds. This module calls
+  `Manifest.compute_hash/2` directly rather than duplicating its byte-layout
+  logic (design §5.3, "reuse that function directly").
 
   ## REQ-154: LUA-08 layer 1 restatement
 
@@ -167,28 +182,32 @@ defmodule Letflow.Engine.Lua.Executor do
 
   @behaviour Letflow.Engine.LuaScriptAudit.Executor
 
+  alias Letflow.Engine.Lua.Manifest
   alias Letflow.Engine.Lua.Sandbox
+
+  @typedoc "See moduledoc's REQ-158 section for the two accepted shapes."
+  @type script_ref :: binary() | %{manifest: Manifest.t(), script_source: binary()}
 
   @doc """
   Implements `Letflow.Engine.LuaScriptAudit.Executor.execute_with_manifest/2`.
-  Runs `script_source` (a binary containing Lua source text) in a fresh sandbox,
-  under a supervised task bounded by a host-enforced wall-clock timeout, and returns
-  the SHA-256 hex of the source as the manifest hash. Reads the instruction budget
-  from Application config (`:letflow, :lua_max_instructions`), the wall-clock timeout
+  Runs the paired script source (see moduledoc's `script_ref` shapes) in a fresh
+  sandbox, under a supervised task bounded by a host-enforced wall-clock timeout,
+  and returns `Letflow.Engine.Lua.Manifest.compute_hash/2`'s output (manifest+
+  script bytes, REQ-158) as the manifest hash. Reads the instruction budget from
+  Application config (`:letflow, :lua_max_instructions`), the wall-clock timeout
   from Application config (`:letflow, :lua_wallclock_timeout_ms`), and the heap word
   limit from Application config (`:letflow, :lua_max_heap_words`, REQ-156).
   """
   @impl Letflow.Engine.LuaScriptAudit.Executor
-  @spec execute_with_manifest(script_source :: binary(), registered_hash :: String.t()) ::
+  @spec execute_with_manifest(script_ref :: script_ref(), registered_hash :: String.t()) ::
           {:ok, %{manifest_hash: String.t()}}
           | {:error, {:budget_exceeded, pos_integer()}}
           | {:error, {:wallclock_timeout, pos_integer()}}
           | {:error, :memory_limit_exceeded}
           | {:error, String.t()}
           | {:error, :invalid_script_ref}
-  def execute_with_manifest(script_source, registered_hash)
-      when is_binary(script_source) do
-    execute_with_manifest(script_source, registered_hash,
+  def execute_with_manifest(script_ref, registered_hash) do
+    execute_with_manifest(script_ref, registered_hash,
       max_instructions: default_budget(),
       timeout_ms: default_timeout_ms(),
       max_heap_words: default_max_heap_words()
@@ -223,7 +242,7 @@ defmodule Letflow.Engine.Lua.Executor do
   `:killed` sources are told apart.
   """
   @spec execute_with_manifest(
-          script_source :: binary(),
+          script_ref :: script_ref(),
           registered_hash :: String.t(),
           opts :: keyword()
         ) ::
@@ -233,39 +252,63 @@ defmodule Letflow.Engine.Lua.Executor do
           | {:error, :memory_limit_exceeded}
           | {:error, String.t()}
           | {:error, :invalid_script_ref}
-  def execute_with_manifest(script_source, _registered_hash, opts)
-      when is_binary(script_source) do
+  def execute_with_manifest(script_ref, _registered_hash, opts) do
     budget = Keyword.fetch!(opts, :max_instructions)
     timeout_ms = Keyword.fetch!(opts, :timeout_ms)
     max_heap_words = Keyword.fetch!(opts, :max_heap_words)
 
-    case max_heap_words do
-      nil ->
-        task =
-          Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn ->
-            run_script(script_source, budget)
-          end)
+    case normalize_script_ref(script_ref) do
+      :error ->
+        {:error, :invalid_script_ref}
 
-        task
-        |> Task.yield(timeout_ms)
-        |> handle_yield_result(task, timeout_ms)
+      {:ok, {manifest, script_source}} ->
+        case max_heap_words do
+          nil ->
+            task =
+              Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn ->
+                run_script(manifest, script_source, budget)
+              end)
 
-      heap_words when is_integer(heap_words) and heap_words > 0 ->
-        run_with_heap_limit(script_source, budget, timeout_ms, heap_words)
+            task
+            |> Task.yield(timeout_ms)
+            |> handle_yield_result(task, timeout_ms)
+
+          heap_words when is_integer(heap_words) and heap_words > 0 ->
+            run_with_heap_limit(manifest, script_source, budget, timeout_ms, heap_words)
+        end
     end
   end
+
+  # REQ-158, design §5.3.1: script_ref widened from a bare binary to optionally
+  # carry a Manifest.t() alongside the source text. A bare binary is treated as
+  # paired with an empty manifest (script_id: "", capabilities: []) so its hash is
+  # still Manifest.compute_hash/2's output, just over an empty manifest -- this is
+  # what keeps every pre-REQ-158 bare-binary caller (REQ-153/154/155/156's own
+  # tests) compiling and running unchanged, while every hash this module now
+  # returns is uniformly produced by Manifest.compute_hash/2, never duplicated.
+  @spec normalize_script_ref(script_ref()) :: {:ok, {Manifest.t(), binary()}} | :error
+  defp normalize_script_ref(script_source) when is_binary(script_source) do
+    {:ok, {%Manifest{script_id: "", capabilities: []}, script_source}}
+  end
+
+  defp normalize_script_ref(%{manifest: %Manifest{} = manifest, script_source: script_source})
+       when is_binary(script_source) do
+    {:ok, {manifest, script_source}}
+  end
+
+  defp normalize_script_ref(_other), do: :error
 
   # The entirety of what REQ-154's execute_with_manifest/3 previously did
   # synchronously in the caller's process, now the body of the supervised task
   # (design §4.2). Returns exactly one of the four in-band outcomes; the fifth arm,
   # {:error, {:wallclock_timeout, _}}, is produced only by handle_yield_result/3
   # below and never by this function.
-  defp run_script(script_source, budget) do
+  defp run_script(manifest, script_source, budget) do
     lua = Sandbox.new(max_instructions: budget)
 
     try do
       Lua.eval!(lua, script_source)
-      manifest_hash = :crypto.hash(:sha256, script_source) |> Base.encode16(case: :lower)
+      manifest_hash = Manifest.compute_hash(manifest, script_source)
       {:ok, %{manifest_hash: manifest_hash}}
     rescue
       e in Lua.RuntimeException ->
@@ -296,14 +339,14 @@ defmodule Letflow.Engine.Lua.Executor do
   # generated by the caller before spawning, since the child cannot know the BIF's
   # atomically-returned monitor_ref in advance. `monitor_ref` is the spawn_opt :monitor
   # reference, used only to identify :DOWN messages for this specific pid.
-  defp run_with_heap_limit(script_source, budget, timeout_ms, max_heap_words) do
+  defp run_with_heap_limit(manifest, script_source, budget, timeout_ms, max_heap_words) do
     parent = self()
     reply_ref = make_ref()
 
     {pid, monitor_ref} =
       :erlang.spawn_opt(
         fn ->
-          send(parent, {reply_ref, run_script(script_source, budget)})
+          send(parent, {reply_ref, run_script(manifest, script_source, budget)})
         end,
         [:monitor, max_heap_size: %{size: max_heap_words, kill: true, error_logger: false}]
       )

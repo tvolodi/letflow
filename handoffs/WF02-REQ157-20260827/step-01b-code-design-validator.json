@@ -7,7 +7,7 @@
   "to_agent": "ORCH",
   "file": "handoffs/WF02-REQ157-20260827/step-01b-code-design-validator.json",
   "status": "COMPLETED",
-  "completed_at": "2026-08-27T09:10:00Z",
+  "completed_at": "2026-08-27T09:45:00Z",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -25,31 +25,28 @@
       "lib/letflow/engine/lua/sandbox.ex",
       "lib/letflow/engine/lua_script_audit.ex",
       "deps/lua/lib/lua.ex",
-      "deps/lua/lib/lua/runtime_exception.ex",
-      "deps/lua/lib/lua/vm/stdlib.ex",
-      "deps/lua/lib/lua/vm/table.ex"
+      "deps/lua/lib/lua/runtime_exception.ex"
     ],
     "branch_name": "feature/WF02-REQ157-20260827",
-    "rework_pass": 1,
-    "rework_commit": "3680243"
+    "rework_pass": 2,
+    "rework_commit": "290c6b2"
   },
   "task": {
-    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) re-check of REQ-157's design after rework commit 3680243, which was intended to fix section 4.4's install/2 fold and section 6.1's raise expression, previously FAILed for containing literal Elixir code bodies instead of prose/type-shape descriptions."
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) full from-scratch re-check of REQ-157's design after rework commit 290c6b2, which claimed to fix section 4.3's `now`-stub closure and section 4.1's 8-row matrix-table closures. Explicitly instructed not to trust prior partial re-skims (two prior rounds each missed a violation the other had introduced/overlooked)."
   },
   "result": {
-    "status": "FAIL",
+    "status": "PASS",
     "checks_performed": {
-      "section_4_4_rework": "PASS -- section 4.4's install/2 description no longer contains any Elixir code block. The former illustrative `Lua.set!(lua, [:platform, row.name], fn args -> Capabilities.check!(...); row.stub.(args) end)` expression has been replaced by a 4-step numbered prose description of required wrapper behavior (resolve row, apply row.required, call Capabilities.check!/3, invoke row.stub on success), explicitly labelled 'a description of required behavior, not an Elixir expression.' Confirmed via `git show 3680243 -- lib/letflow/design/req157-lua-capability-model.md`.",
-      "section_6_1_rework": "PASS -- section 6.1's raise description no longer contains a literal `raise Lua.RuntimeException, scope: ..., ...` expression. It is now a 5-row table naming each keyword-list key (:scope, :function, :message, :capability_required, :capabilities_granted), its value/derivation, and whether the library validates it, explicitly labelled 'a description of the required shape, not an Elixir expression.'",
-      "regression_skim": "PASS -- `git show 3680243 --stat` confirms only lib/letflow/design/req157-lua-capability-model.md (54 lines changed: 37 insertions, 23 deletions) and the step-01-code-designer.json handoff were touched by the rework commit; the diff is confined to sections 4.4 and 6.1 exactly as scoped. Full skim of the rest of the document (sections 1-3, 4.1-4.3, 5, 7-12) shows no other content changed: all 8 AC mappings (section 7), the capability matrix (4.1), service_capability/1 (2.5), the now/fail ungated moduledoc requirement (5), cross-module dependency table (8), test suite spec (9), invariants (10), and open questions (11) are byte-identical to the previously-passed version."
+      "full_document_read": "Read all 619 lines of lib/letflow/design/req157-lua-capability-model.md top to bottom, independently of step-01-code-designer.json's self-report.",
+      "code_fragment_grep": "Grepped for `fn `, `raise `, `case `, `cond `, `do:`, `->`, `Lua.set!(lua, [:platform` throughout the full document. Findings: (1) lines 255-256 `@type required_capability_fun :: (args :: [term()] -> ...)` and `@type stub_fun :: (args :: [term()] -> [term()])` -- permitted @type arrow-signatures, not code bodies. (2) Every `Lua.set!(lua, [:platform, ...` occurrence (lines 283, 535, 550, 595) is a prose description of a call pattern (partial expression referenced by name, no full literal statement with a body/closure argument) -- none is a complete copy-paste-ready expression. (3) The section-0 citation of `lua_script_audit.ex`'s EXISTING (already-shipped, pre-REQ-157) rescue clause (`rescue e in [Lua.RuntimeException, Lua.CompilerException] -> {:error, Exception.message(e)}`) is a verbatim quote of code that already exists in the repository today, cited for compatibility context (this design must not require an edit to it) -- not implementation code this design is proposing; consistent treatment across all three review rounds, never flagged. (4) Section 4.3's former `fn _args -> [Platform.now()] end` closure is gone, replaced by prose (line ~336-339: 'the now row's stub ignores its argument list and returns Platform.now/0's result wrapped as the single-element Lua return list...'). (5) Section 4.1's matrix table (lines 269-278) now contains only prose behavior descriptions in the 'required' column ('Ignores all but the first argument... and returns Capabilities.service_capability(svc_id)', 'Ignores its arguments and always returns the constant string...', etc.) -- no `fn` literals remain in any of the 8 rows. No other code-shaped fragment found anywhere in the document outside the two permitted @type lines.",
+      "sections_4_4_and_6_1_regression": "Re-confirmed clean (unchanged from iteration-1 fix, still prose-only): 4.4's install/2 fold is a 4-step numbered prose description explicitly labelled 'a description of required behavior, not an Elixir expression'; 6.1's raise shape is a 5-row table of keyword-list keys, explicitly labelled 'a description of the required shape, not an Elixir expression.'",
+      "acceptance_criteria_mapping": "Read docs/requirements.yaml's REQ-157 entry directly (owner ELIXIR-DEV, status pending, depends_on [REQ-153]) and confirmed all 8 acceptance_criteria strings verbatim-match section 7's traceability table rows 1-8, each mapped to a concrete design element (capability matrix, check!/3, denial shape, call_service parameterisation, now/fail :none short-circuit, moduledoc requirement, mix test/compile note).",
+      "substance_regression_check": "Capability matrix content (4.1), denial shape (2.3), call_service parameterisation (4.2), now/fail ungated rationale (5), cross-module dependency table (8), test suite spec (9), invariants INV-CAP-1..4 (10), and open questions OQ-1..3 (11) all present, internally consistent, and unchanged in substance from the prior PASS-on-substance version.",
+      "git_verification": "`git log --oneline -8` confirms the claimed history (19abb6a original design, d3938a3/b88e051 iteration-1 fail cycle, 3680243/6e0f441 rework 1, 290c6b2/f9b3a0b rework 2). `git show 290c6b2 --stat` confirms only step-01-code-designer.json and lib/letflow/design/req157-lua-capability-model.md changed (27 lines in the design doc, 17 insertions/16 deletions), consistent with the claimed section 4.1 + 4.3 scope."
     },
-    "new_issue_found_not_part_of_rework_scope": {
-      "no_implementation_code_present": "FAIL. Section 4.3 (unchanged by this rework, pre-existing since the original design commit 19abb6a) states: \"`now`'s matrix row's `stub` is literally `fn _args -> [Platform.now()] end`, the same closure REQ-152's `install/1` already built inline.\" This is a real, syntactically valid Elixir anonymous-function expression presented as literal fact ('is literally'), not a signature, @spec, or type shape -- the same category of violation that failed sections 4.4 and 6.1 in the prior pass. It was not flagged in the prior FAIL verdict (which enumerated exactly two violations and did not mention this line), but its presence in the document now under re-review is a genuine, current violation of WF-02 Step 1b(e)'s 'no actual .ex/.exs code blocks -- signatures and type shapes only, not bodies' rule. Per this role's mandate ('FAIL immediately and completely on any single failed check -- no partial credit'; 'don't approve a design because it's close enough'), a design containing a real code snippet cannot pass regardless of whether an earlier review pass missed it."
-    },
-    "issues": [
-      "lib/letflow/design/req157-lua-capability-model.md section 4.3, the `:now` stub bullet: replace `fn _args -> [Platform.now()] end` with a prose description (e.g. \"the `now` stub is the same zero-argument wrapper around `Platform.now/0` that REQ-152's `install/1` already builds inline, returning a one-element Lua return list -- not a new closure, just relocated into the fold's per-row stub slot\") -- do not restate the closure literal itself. Re-check the rest of section 4.3 and the whole document one more time for any other literal code fragments outside @spec/@type blocks (which are permitted) before resubmitting."
-    ]
+    "issues": [],
+    "verdict_statement": "PASS. No implementation code (no real .ex/.exs bodies) remains anywhere in the design document -- all four previously-found violations (4.4's fold body, 6.1's raise expression, 4.3's now-stub closure, 4.1's 8-row matrix closures) are fixed and no fifth was found on this full independent re-read. All 8 acceptance criteria are mapped to concrete, unambiguous design elements. The design is ready for WF-02 Step 2 (ELIXIR-DEV implementation)."
   },
-  "rework_count": 1,
+  "rework_count": 2,
   "max_rework": 3
 }

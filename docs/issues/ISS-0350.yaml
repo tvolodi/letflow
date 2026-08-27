@@ -6,7 +6,7 @@ discovered_by: ORCH
 discovered_in_run: WF02-REQ153-20260827
 discovered_at: "2026-08-27T05:55:00Z"
 severity: MAJOR
-status: open
+status: resolved
 queue_task_id: 350
 github_issue: 674
 description: >
@@ -41,4 +41,4 @@ blocked_by_lock: >
   handoffs/registry.json). This issue's fix must wait for that run to
   complete and release the lock, or be coordinated with it explicitly by
   ORCH, rather than edited concurrently.
-resolution_note: null
+resolution_note: "Restored in WF02-REQ154-20260827 (executor.ex, is_binary guard + @impl on execute_with_manifest/2). SECURITY-REVIEWER and REVIEWER both passed."

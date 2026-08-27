@@ -686,8 +686,11 @@ volumes:
     path: docs/status/requirement_status.v5.yaml
     status: current
     opened: 2026-08-26
-    entries: 9
+    entries: 10
     note: >
+      Incremented to 10 by DOC-UPDATER done-event append (WF02-REQ154-20260827, Step 06) --
+      `grep -c "^  - req:" docs/status/requirement_status.v5.yaml` = 10 on-disk entries.
+
       Incremented to 9 by TEST-RUNNER Step 04 done-event append (WF02-REQ154-20260827) --
       `grep -c "^  - req:" docs/status/requirement_status.v5.yaml` = 9 on-disk entries.
 

@@ -308,3 +308,19 @@ history:
       to coerce non-binary summary to empty string before String.length/1. After
       fix only pre-existing failure remains. executor_test.exs: 15/15 pass.
       AC-1 PASS, AC-2 PASS, AC-3 PASS, AC-4 PASS. Verdict: PASS.
+
+  - req: REQ-154
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-27T14:10:00Z"
+    note: >
+      WF02-REQ154-20260827 complete. In-band instruction budget for Lua script
+      execution (LUA-08 layer 1 of 2). execute_with_manifest/3 added to
+      Letflow.Engine.Lua.Executor with configurable :max_instructions opt;
+      execute_with_manifest/2 delegates via default_budget/0 (Application config
+      :lua_max_instructions). Budget exhaustion returns {:error, {:budget_exceeded,
+      limit}}. Sandbox.new/1 updated to pass :max_instructions to Lua.new/1.
+      ISS-0350 fix: is_binary guard and @impl restored on execute_with_manifest/2.
+      Moduledoc states LUA-08 layer-1 restatement and INV-2/INV-4 non-port
+      explanation. 4 new AC tests (AC-1..4) + 11 inherited REQ-153 tests all pass
+      (15/15). Status flipped in_progress -> done.

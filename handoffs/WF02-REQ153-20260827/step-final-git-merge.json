@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step-final-WF02-REQ153-20260827",
+  "run_id": "WF02-REQ153-20260827",
+  "workflow_id": "WF-02",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ153-20260827/step-final-git-merge.json",
+  "created_at": "2026-08-27T00:00:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-153"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "handoffs/WF02-REQ153-20260827/step-05-release-validator.json",
+      "handoffs/WF02-REQ153-20260827/step-06-doc-updater.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/",
+      "test/letflow/engine/lua/"
+    ],
+    "branch_name": "feature/WF02-REQ153-20260827"
+  },
+  "task": {
+    "description": "All prior WF-02 steps for REQ-153 already PASSED on origin/feature/WF02-REQ153-20260827 (design, implementation, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER/VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR all PASS; DOC-UPDATER already flipped REQ-153 to done on that branch). The branch was never rebased/merged to main -- this checkout's local main and handoffs/registry.json are stale relative to it. Perform GIT_MERGE.md's standard procedure (Step Final) for run WF02-REQ153-20260827: checkout the existing feature/WF02-REQ153-20260827 branch, rebase onto current origin/main, resolve any conflicts per protocol, verify mix format/compile/test, push, open PR, wait for CI, merge, and return to a clean main. Use RELEASE-VALIDATOR's step-05 result.verdict ('All 8 acceptance criteria independently verified. 11/11 executor tests pass.') as the PR summary basis.",
+    "acceptance_criteria": [
+      "git branch --show-current outputs main after completion",
+      "git log --oneline -1 shows the squash-merge commit for this run",
+      "git status shows a clean working tree",
+      "gh pr view <n> --json state,mergedAt shows MERGED (or PARTIAL correctly reported if gh unavailable)",
+      "REQ-153 status remains done in docs/requirements.yaml on main post-merge"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

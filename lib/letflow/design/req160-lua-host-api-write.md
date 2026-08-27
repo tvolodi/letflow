@@ -131,21 +131,85 @@ per this requirement's `depends_on: [REQ-159, REQ-156, REQ-155]`):
   process. Nothing the process attempted to hold, compute, or accumulate in its own
   memory before the kill is ever observed by the caller through this channel.
 
-**Conclusion: the hypothesis holds, verified rather than assumed.** Both kill
-mechanisms — REQ-155's `Task.shutdown(:brutal_kill)` and REQ-156's `max_heap_size`
-scheduler kill — terminate the exact one process in which the entire script body
-(sandbox construction through `Lua.eval!/2`'s return) executes, and in both cases the
-caller's *only* channels into that process's outcome are (a) the process's own normal
-return/message, reachable only if the process finishes running, or (b) a `:DOWN`
-message that carries no payload from the process's own memory. There is no third
-channel — no shared ETS table, no message sent *during* execution, no side-channel read
-of the process's state — through which a value inside that process's memory could
-escape independently of its normal termination. Therefore: **a value that exists only
-in that process's own memory (heap, or process dictionary) for the whole duration of
-the script's execution is discarded by construction on every kill arm**, with zero
-additional code required to make that true. The design obligation is the *converse* one
-the task brief names: making sure nothing escapes the process except through that one
-normal-return channel.
+**Conclusion, corrected: the hypothesis holds, but only given one additional,
+explicitly-stated invariant — not from channel enumeration alone.** A first pass at
+this section claimed the caller's only channels into the killed process's outcome were
+(a) a normal return, reachable only on a finished process, or (b) a payload-less
+`:DOWN` message — and that no third channel exists. **That enumeration was wrong, and
+CODE-DESIGN-VALIDATOR correctly rejected it (F1-CENTRAL-RACE).** A real third channel
+exists on both kill paths:
+
+- **REQ-155's path**: `Task.shutdown(task, :brutal_kill)` (invoked from the timeout arm
+  of REQ-155 §4.3's outcome table, row 4) is documented Elixir/OTP behavior to return
+  `{:ok, reply}` — not bare `:ok` — when the task process had already sent its own
+  normal-completion message before the kill signal actually landed. `reply` there is
+  the task's real, in-band return value (e.g. `{:ok, %{manifest_hash: _}}`), observed
+  by the process invoking `Task.shutdown/2` itself, independent of the `:DOWN` message.
+- **REQ-156's raw `spawn_opt`/monitor path**: the equivalent race exists at REQ-156
+  §5.2 ("the caller's own kill on timeout"). Because the spawned process communicates
+  its normal result via an explicit `{ref, reply}` send (§5.1's message protocol) before
+  exiting, that `{ref, reply}` message can already be sitting in the caller's mailbox —
+  sent by the process microseconds before the caller's own kill signal reaches it — at
+  the same time as, or instead of, the `:DOWN` message §5.2 says the caller "drains."
+  §5.2's text only describes draining "the resulting `:DOWN` message"; it does not
+  address a possible unconsumed `{ref, reply}` message left in the mailbox alongside or
+  ahead of it.
+
+So there **is** a third channel: a legitimate, documented "the task finished right
+before we killed it, here is its result" reply, reachable on exactly the two branches
+that matter most to this design — REQ-155 §4.3's timeout arm and REQ-156 §5.2's
+memory-limit-timeout arm. Nothing about a value living only in the process's own memory
+prevents that value from riding out on this channel *if a caller ever reads it* — the
+memory-locality argument in the rest of §2.2 constrains where the value can escape
+*from*, not what a caller is permitted to *do* with it once it has escaped via a
+legitimate reply. Therefore the "no third channel" framing is replaced by the following
+invariant, which is what REQ-160's discard-on-kill guarantee actually rests on:
+
+#### INV-write-discard-on-race
+
+**On REQ-155 §4.3's timeout arm and REQ-156 §5.2's memory-limit-timeout arm, the
+structured error tuple (`{:error, {:wallclock_timeout, timeout_ms}}`) MUST be returned
+unconditionally on those two branches, regardless of what `Task.shutdown/2` itself
+returns or what is found in the drained mailbox.** A late-arriving `{:ok, reply}` from
+`Task.shutdown/2`, or a late-arriving `{ref, reply}` message found alongside/instead of
+the `:DOWN` message on REQ-156's raw path, must never be substituted for the timeout
+error tuple on those branches — not today, and not after any future wiring (§2.5) adds
+a `staged_variables` field to the success shape.
+
+This invariant is what REQ-160 actually depends on, and it is cross-cutting: the code
+that must honor it is REQ-155 §4.3 and REQ-156 §5.2's own already-merged branches, not
+any code this requirement (`platform.ex`) owns or edits. **As it happens, both merged
+branches already satisfy INV-write-discard-on-race today** — REQ-155 §4.3's table
+entry for the timeout row returns `{:error, {:wallclock_timeout, timeout_ms}}`
+unconditionally, without ever pattern-matching on what `Task.shutdown/2` returned, and
+REQ-156 §5.2's text returns the same tuple unconditionally after its kill-and-drain
+step, without reading the drained message's contents either. But this is accidental
+safety, not a stated contract: neither §4.3 nor §5.2, as merged, names
+INV-write-discard-on-race or says explicitly that a late successful reply must be
+discarded rather than substituted. This matters precisely because §2.5's own deferred
+wiring gap (OQ-1) tasks a *future* implementer with extending the success return shape
+to carry `staged_variables` — exactly the kind of change under which a future
+maintainer, touching REQ-155 §4.3 or REQ-156 §5.2's code to thread that new field
+through, could plausibly pattern-match on `Task.shutdown/2`'s legitimate `{:ok, reply}`
+idiom on the timeout branch and accidentally let a killed script's staged writes leak
+through. **REQ-160's design binds itself to INV-write-discard-on-race as a named,
+external dependency of its own correctness** — it is not built or edited here (amending
+REQ-155/REQ-156's own merged design docs with this invariant, if warranted, is a
+documentation-only follow-up for a future DOC-UPDATER/run, not this one; `req155-lua-wallclock-kill.md`
+and `req156-lua-memory-limit-impl.md` are not in this requirement's `owned_modules`) —
+but any future §2.5/OQ-1 wiring must treat it as load-bearing and must not violate it.
+
+With INV-write-discard-on-race stated and (today) honored, the rest of the argument
+holds: on every path that does *not* hit REQ-155 §4.3's timeout arm or REQ-156 §5.2's
+memory-limit-timeout arm — i.e. every arm where the process's own in-band return value
+or a payload-less `:killed`/other `:DOWN` reason is what the caller acts on — there
+remains no route for a value in the killed process's own memory to reach the caller
+except a normal, complete, single return. The design obligation, restated precisely:
+making sure nothing escapes the process except through that one normal-return channel
+**on the arms that read the process's own reply at all**, and, on the two
+timeout/memory-limit arms that discard whatever the process's reply might contain,
+making sure that discard is unconditional (INV-write-discard-on-race) rather than
+merely happening to look that way today.
 
 This also covers the failure arms REQ-160's own text names beyond the two kills: a
 sandbox violation or REQ-154's instruction-budget exhaustion both raise inside the same
@@ -240,7 +304,16 @@ effect, some future change (to `executor.ex`, outside this requirement) must:
    because `take_staged_writes/0` executes in the same process, at a point still before
    any kill arm could apply (evaluation already finished normally);
 2. extend the success return shape to carry the result, e.g.
-   `{:ok, %{manifest_hash: String.t(), staged_variables: staged_writes()}}`;
+   `{:ok, %{manifest_hash: String.t(), staged_variables: staged_writes()}}` —
+   **constrained by INV-write-discard-on-race (§2.2): this new field must never be
+   populated from, or read out of, whatever `Task.shutdown/2` returns or whatever is
+   drained from the mailbox on REQ-155 §4.3's timeout arm or REQ-156 §5.2's
+   memory-limit-timeout arm. Those two branches keep returning the structured error
+   tuple unconditionally, exactly as they do today, regardless of a late `{:ok, reply}`
+   or late `{ref, reply}` arriving on that race window.** This step only ever applies
+   to the genuine, non-raced success path (the task's normal, on-time
+   `Task.yield/2` return, or the raw path's own `{ref, reply}` receive that is not
+   preceded by a caller-issued kill);
 3. at whatever call site later holds both the instance's `current_variables` and this
    returned `staged_variables` map, call `Letflow.Engine.VariableMerge.merge/3` exactly
    once (§2.6) and route its result into the same durable-persistence path every other
@@ -678,6 +751,7 @@ established for its own three functions.
 | `Letflow.Engine.Lua.Platform` (extended) | → `Letflow.Engine.Lua.Capabilities` | Unchanged from REQ-157/159 — `check!/3` remains the single gate call per wrapper, structurally prior to any of this requirement's three function bodies (§4.3) |
 | (future, not built here) | → `Letflow.Engine.Lua.Platform.take_staged_writes/0` | Whatever requirement extends `executor.ex`'s return shape (§2.5 OQ-1) becomes the first real caller |
 | (future, not built here) | → `Letflow.Engine.VariableMerge.merge/3` | The same future caller, once it holds both `current_variables` and a `staged_variables` map from `take_staged_writes/0` |
+| REQ-160 (this design, depends on) | ← REQ-155 §4.3 (timeout arm) and REQ-156 §5.2 (memory-limit-timeout arm), both already merged | **INV-write-discard-on-race (§2.2):** those two branches must return the structured error tuple unconditionally regardless of what `Task.shutdown/2` or the drained mailbox actually contain; REQ-160's discard-on-kill guarantee depends on this invariant holding in code this requirement does not own or edit |
 
 ---
 
@@ -733,6 +807,17 @@ not addressed — this design's §5.3 step 5 treats any `{:ok, _}` result identi
 (`[true]`), including the duplicate-idempotency-key case, since neither LUA-12's text
 nor REQ-160's 8 acceptance criteria ask for the two to be distinguished from inside a
 script. Left open for a future requirement if that distinction is ever needed.
+
+**OQ-6.** Whether REQ-155's `req155-lua-wallclock-kill.md` §4.3 and REQ-156's
+`req156-lua-memory-limit-impl.md` §5.2 should themselves be amended with a
+documentation-only addendum naming INV-write-discard-on-race explicitly (§2.2) is left
+open. Both files are already merged and are not in this requirement's `owned_modules`,
+so this design does not edit them; it instead states the invariant here, as an external
+dependency REQ-160 binds itself to, and cites the exact branches (REQ-155 §4.3's
+timeout row, REQ-156 §5.2) that must keep honoring it. Whether a future DOC-UPDATER run
+adds the addendum to those two design docs — purely for discoverability at their own
+source, so a future maintainer editing REQ-155/156 directly (not via REQ-160's OQ-1)
+also sees the constraint — is a follow-up decision for ORCH/DOC-UPDATER, not built here.
 
 **OQ-5.** §2.3's process-dictionary choice is explicitly not the only mechanism that
 would satisfy §2.2's proof (an ETS table keyed by `self()`, cleaned up via a

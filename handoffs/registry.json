@@ -2617,19 +2617,41 @@
             "requirement_ids": ["REQ-153"],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/engine/lua/",
                 "test/letflow/engine/lua/"
             ],
             "lock_acquired_at": "2026-08-27T08:45:00Z",
+            "lock_released_at": "2026-08-27T06:32:50Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #673 squash-merged (7637bd6e); queue task 305 returned 404 (already released or expired).",
+            "backfilled": false,
+            "queue_task_id": 305,
+            "queue_agent_id": "orch-main",
+            "note": "WF-02 for REQ-153 (queue task 305, GH#605, stage S5). Per-invocation Lua state isolation and concrete LuaScriptAudit.Executor implementation (LUA-02). First requirement executing tenant-supplied script text end-to-end; SECURITY-REVIEWER hard gate applies. Queue claimed 2026-08-27T03:42:48Z via get_next_task. Step Final handoff showed FAIL (concurrent session conflict) but PR #673 was merged by human at 7637bd6e; registry corrected to COMPLETED by ORCH 2026-08-27T06:32:50Z."
+        },
+        {
+            "run_id": "WF02-REQ154-20260827",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-154"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/lua/executor.ex",
+                "test/letflow/engine/lua/executor_test.exs",
+                "lib/letflow/design/req154-lua-instruction-budget.md",
+                "test/specs/REQ-154.md"
+            ],
+            "lock_acquired_at": "2026-08-27T06:32:50Z",
             "lock_released_at": null,
             "released_lock": false,
             "last_known_step": "Step 00 PENDING (ELIXIR-DEV dispatched)",
             "backfilled": false,
-            "queue_task_id": 305,
+            "queue_task_id": 306,
             "queue_agent_id": "orch-main",
-            "note": "WF-02 for REQ-153 (queue task 305, GH#605, stage S5). Per-invocation Lua state isolation and concrete LuaScriptAudit.Executor implementation (LUA-02). First requirement executing tenant-supplied script text end-to-end; SECURITY-REVIEWER hard gate applies. Queue claimed 2026-08-27T03:42:48Z via get_next_task."
+            "note": "WF-02 for REQ-154 (queue task 306, GH#606, stage S5). In-band instruction budget for Lua script execution -- layer 1 of the two-layer pair (LUA-08 restated). Extends REQ-153's executor with configurable :max_instructions budget and structured budget-exhaustion error. SECURITY-REVIEWER hard gate (tenant-script-execution resource-exhaustion boundary). Queue claimed 2026-08-27T06:30:45Z via get_next_task."
         }
     ]
 }

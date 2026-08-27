@@ -174,40 +174,88 @@ defmodule Letflow.Engine.Lua.PlatformTest do
       %{lua: lua}
     end
 
-    test "platform.read_variable(...) raises Lua.RuntimeException", %{lua: lua} do
-      assert_raise Lua.RuntimeException, fn ->
-        Lua.eval!(lua, "return platform.read_variable('x')")
-      end
+    # Each case below asserts not merely "some Lua.RuntimeException was raised" but that
+    # the raised exception's `capability_required` field is present and matches the exact
+    # capability the row's own matrix entry names. This distinguishes a genuine capability
+    # DENIAL from that function's own "not yet implemented" stub raise (which never carries
+    # a `capability_required` field, per `run_stub(:not_yet_implemented, ...)`). Without
+    # this distinction, a bug that skipped `Capabilities.check!/3` entirely for one row
+    # (the stub still raises "not implemented" either way, granted or not) would pass a
+    # bare `assert_raise Lua.RuntimeException` unnoticed -- confirmed by mutation-testing
+    # the shipped code: temporarily short-circuiting the `check!/3` call for
+    # `write_variable` left every test in this file passing until this field assertion
+    # was added.
+    test "platform.read_variable(...) raises a capability denial for variable:read", %{
+      lua: lua
+    } do
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.read_variable('x')")
+        end
+
+      assert exception.original[:function] == :read_variable
+      assert exception.original[:capability_required] == "variable:read"
+      assert exception.original[:capabilities_granted] == []
     end
 
-    test "platform.write_variable(...) raises Lua.RuntimeException", %{lua: lua} do
-      assert_raise Lua.RuntimeException, fn ->
-        Lua.eval!(lua, "return platform.write_variable('x', 'y')")
-      end
+    test "platform.write_variable(...) raises a capability denial for variable:write", %{
+      lua: lua
+    } do
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.write_variable('x', 'y')")
+        end
+
+      assert exception.original[:function] == :write_variable
+      assert exception.original[:capability_required] == "variable:write"
+      assert exception.original[:capabilities_granted] == []
     end
 
-    test "platform.log(...) raises Lua.RuntimeException", %{lua: lua} do
-      assert_raise Lua.RuntimeException, fn ->
-        Lua.eval!(lua, "return platform.log('hello')")
-      end
+    test "platform.log(...) raises a capability denial for audit:log", %{lua: lua} do
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.log('hello')")
+        end
+
+      assert exception.original[:function] == :log
+      assert exception.original[:capability_required] == "audit:log"
+      assert exception.original[:capabilities_granted] == []
     end
 
-    test "platform.emit_event(...) raises Lua.RuntimeException", %{lua: lua} do
-      assert_raise Lua.RuntimeException, fn ->
-        Lua.eval!(lua, "return platform.emit_event('evt')")
-      end
+    test "platform.emit_event(...) raises a capability denial for event:emit", %{lua: lua} do
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.emit_event('evt')")
+        end
+
+      assert exception.original[:function] == :emit_event
+      assert exception.original[:capability_required] == "event:emit"
+      assert exception.original[:capabilities_granted] == []
     end
 
-    test "platform.get_instance_state(...) raises Lua.RuntimeException", %{lua: lua} do
-      assert_raise Lua.RuntimeException, fn ->
-        Lua.eval!(lua, "return platform.get_instance_state()")
-      end
+    test "platform.get_instance_state(...) raises a capability denial for instance:read", %{
+      lua: lua
+    } do
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.get_instance_state()")
+        end
+
+      assert exception.original[:function] == :get_instance_state
+      assert exception.original[:capability_required] == "instance:read"
+      assert exception.original[:capabilities_granted] == []
     end
 
-    test "platform.call_service(\"any-service\") raises Lua.RuntimeException", %{lua: lua} do
-      assert_raise Lua.RuntimeException, fn ->
-        Lua.eval!(lua, "return platform.call_service('any-service')")
-      end
+    test "platform.call_service(\"any-service\") raises a capability denial for service:call:any-service",
+         %{lua: lua} do
+      exception =
+        assert_raise Lua.RuntimeException, fn ->
+          Lua.eval!(lua, "return platform.call_service('any-service')")
+        end
+
+      assert exception.original[:function] == :call_service
+      assert exception.original[:capability_required] == "service:call:any-service"
+      assert exception.original[:capabilities_granted] == []
     end
   end
 

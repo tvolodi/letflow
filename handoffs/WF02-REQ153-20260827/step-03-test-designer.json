@@ -1,0 +1,61 @@
+{
+  "run_id": "WF02-REQ153-20260827",
+  "step": "03-test-designer",
+  "agent": "TEST-DESIGNER",
+  "timestamp": "2026-08-27T09:12:00Z",
+  "verdict": "PASS",
+  "summary": "Reviewed and improved executor_test.exs. Tests for AC3 and AC4 were vacuous — both asserted {:ok, _} on scripts whose return values are discarded by execute_with_manifest/2, meaning a state-leaking implementation would pass the same assertion. Fixed both by using Lua error() to signal leakage: if the global/table is present, the script calls error(), execute_with_manifest catches Lua.RuntimeException and returns {:error, _}; asserting {:ok, _} now genuinely proves absence. All 11 tests pass. Spec written to test/specs/REQ-153.md.",
+
+  "ac_coverage": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "note": "module_info(:attributes) + function_exported? both tested. No change needed."
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "note": "Source-text assertion on lua_script_audit.ex confirms the module does not reference the concrete Executor. No change needed."
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS (improved)",
+      "note": "Original test was vacuous: assert {:ok, _} on 'return MY_GLOBAL' does not distinguish nil from 42 because execute_with_manifest discards the Lua return value. Fixed: now asserts {:ok, _} on a script that calls Lua error() if MY_GLOBAL ~= nil. This assertion genuinely fails if state leaked."
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS (improved)",
+      "note": "Original test used Sandbox.new() directly for execution 2, not the executor. Fixed: now asserts {:ok, _} through the executor on a script that calls Lua error() if table T ~= nil. Proves distinct state through the executor API."
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "note": "Two tests use the real Executor module (not a double) to verify INV-LSA-1: nil and malformed instance_id both return {:error, :invalid_instance_id}. No change needed."
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "note": "Real SHA-256 computed for a known script; test supplies a wrong hash and asserts {:error, {:manifest_hash_mismatch, wrong_hash, real_hash}}. No change needed."
+    },
+    {
+      "ac": "AC7",
+      "verdict": "PASS",
+      "note": "Code.fetch_docs/1 used to read the compiled @moduledoc; asserts it contains 'binary'. No change needed."
+    },
+    {
+      "ac": "AC8",
+      "verdict": "PASS",
+      "note": "mix test test/letflow/engine/lua/executor_test.exs: 11 passed in 0.1s."
+    }
+  ],
+
+  "tests_added_or_modified": true,
+  "files_changed": [
+    "test/letflow/engine/lua/executor_test.exs",
+    "test/specs/REQ-153.md"
+  ],
+  "nature_of_changes": "AC3 and AC4 test bodies replaced to use Lua error()-based absence proofs through the executor rather than vacuous {:ok, _} assertions or Sandbox.new() bypass. No new test cases added; existing test cases corrected to be fail-first.",
+
+  "next_step": "TEST-DESIGN-VALIDATOR",
+  "routing_note": "TEST-DESIGN-VALIDATOR must re-apply at least one mutant from the pre-fix failure report. The pre-fix condition was 'code under test did not exist' for AC3/AC4 specifically, but here the code exists and the tests were simply vacuous — a different class. The relevant mutant: in Letflow.Engine.Lua.Executor.execute_with_manifest/2, change 'lua = Sandbox.new()' to a module-level singleton (reuse the same Lua state). With this mutant, MY_GLOBAL = 42 from AC3 exec 1 would persist into AC3 exec 2, causing Lua error() to fire, executor to return {:error, _}, and the AC3 test to FAIL. The mutant also triggers AC4 failure. Reverting the mutant makes both tests pass again."
+}

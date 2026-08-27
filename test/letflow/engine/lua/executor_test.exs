@@ -54,24 +54,16 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       # Execution 1: set a global
       assert {:ok, _} = Executor.execute_with_manifest("MY_GLOBAL = 42", "any-hash")
 
-      # Execution 2: fresh VM -- MY_GLOBAL must not exist
-      {:ok, _} = Executor.execute_with_manifest("", "any-hash")
-
-      # Verify by actually evaluating a script that checks for the global
-      # A fresh VM via execute_with_manifest must not carry over MY_GLOBAL
-      script2 = "return MY_GLOBAL"
-      # This must succeed (nil is a valid return, not an error)
-      assert {:ok, _} = Executor.execute_with_manifest(script2, "any-hash")
-
-      # More direct: use Sandbox.new() + Lua.eval! to confirm isolation property:
-      # two consecutive execute_with_manifest calls each get a pristine state
-      lua1 = Letflow.Engine.Lua.Sandbox.new()
-      {_, state_after_exec1} = Lua.eval!(lua1, "SENTINEL = true")
-      assert Lua.get!(state_after_exec1, [:SENTINEL]) == true
-
-      lua2 = Letflow.Engine.Lua.Sandbox.new()
-      assert Lua.get!(lua2, [:SENTINEL]) == nil,
-             "Sandbox.new() must produce a fresh VM with no SENTINEL global"
+      # Execution 2 through the same executor: if MY_GLOBAL leaked, Lua's error() fires
+      # and the executor returns {:error, _}. assert {:ok, _} therefore PROVES absence.
+      # (Asserting {:ok, _} on `return MY_GLOBAL` would be vacuous because execute_with_manifest
+      # discards the Lua return value -- both nil and 42 would yield {:ok, _} there.)
+      assert {:ok, _} =
+               Executor.execute_with_manifest(
+                 "if MY_GLOBAL ~= nil then error('global_leaked: MY_GLOBAL = ' .. tostring(MY_GLOBAL)) end",
+                 "any-hash"
+               ),
+             "MY_GLOBAL must be absent (nil) in a fresh executor invocation"
     end
   end
 
@@ -81,15 +73,17 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
 
   describe "distinct state (AC4)" do
     test "a table mutated in execution 1 is pristine in execution 2" do
-      # Write a script that populates a table and confirm it does not bleed over
-      script1 = "T = {}; T.x = 99"
-      assert {:ok, _} = Executor.execute_with_manifest(script1, "h1")
+      # Execution 1: create and populate a table
+      assert {:ok, _} = Executor.execute_with_manifest("T = {}; T.x = 99", "h1")
 
-      # In a second, fresh execution, T.x must not exist
-      # We verify via Sandbox.new() directly, mirroring the Executor's own construction
-      lua = Letflow.Engine.Lua.Sandbox.new()
-      assert Lua.get!(lua, [:T]) == nil,
-             "table T from execution 1 must not survive into a fresh Sandbox.new() VM"
+      # Execution 2 through the same executor: if T leaked, Lua's error() fires and the
+      # executor returns {:error, _}. assert {:ok, _} PROVES T is nil/absent.
+      assert {:ok, _} =
+               Executor.execute_with_manifest(
+                 "if T ~= nil then error('table_T_leaked: T.x = ' .. tostring(T.x)) end",
+                 "h2"
+               ),
+             "table T from execution 1 must not survive into execution 2"
     end
   end
 

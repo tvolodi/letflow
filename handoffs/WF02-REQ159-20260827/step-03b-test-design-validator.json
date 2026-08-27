@@ -1,0 +1,54 @@
+{
+  "handoff_id": "step03b-WF02-REQ159-20260827",
+  "run_id": "WF02-REQ159-20260827",
+  "workflow_id": "WF-02",
+  "step": "3b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ159-20260827/step-03b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-159"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ159-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ159-20260827/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "test/specs/REQ-159.md",
+      "test/letflow/engine/lua/platform_test.exs",
+      "test/letflow/engine/lua_number_marshalling_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ159-20260827",
+    "commit": "f8d2a4d"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR (WF-02 Step 3b) hard gate on REQ-159's test coverage.",
+    "acceptance_criteria": [
+      "All 8 REQ-159 acceptance criteria have real runnable test coverage, verified independently",
+      "The reported telemetry-based no-Repo-call test confirmed present, correctly implemented (handler cleanup, genuine measurement), and would actually catch the described mutation",
+      "The design-doc addendum confirmed genuinely present",
+      "No TODO/skip markers",
+      "Test isolation confirmed, including telemetry handler cleanup and real-Postgres fixtures",
+      "No hardcoded secrets"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All 8 REQ-159 acceptance criteria map to real, runnable tests in test/letflow/engine/lua/platform_test.exs and test/letflow/engine/lua_number_marshalling_test.exs, verified by direct reading against docs/requirements.yaml's REQ-159 entry and by running the suite myself: `mix test test/letflow/engine/lua/platform_test.exs test/letflow/engine/lua_number_marshalling_test.exs` -> 65 passed. The telemetry-based no-Repo-call test ('no Repo.get/3 (no [:letflow, :repo, :query] telemetry event) fires for a same-tenant sibling id', platform_test.exs:677-712) is present, attaches via :telemetry.attach/4 with a unique {module, name, make_ref()} handler id, detaches via on_exit(fn -> :telemetry.detach(handler_id) end) so it cannot leak into later tests, and measures absence of the real [:letflow, :repo, :query] event (Ecto's default telemetry_prefix for Letflow.Repo, confirmed against config and against test/letflow/api/context_test.exs's pre-existing, passing use of the identical event name for the identical purpose -- the new test mirrors that idiom correctly, not superficially: same handler-id shape, same :counters accumulator, same on_exit detach). I independently re-verified the discriminating power of this test rather than trusting the report: I applied the described mutation myself directly to lib/letflow/engine/lua/platform.ex (do_get_instance_state calling fetch_instance_state/Repo unconditionally first, then deciding forbidden/not_found/success after the fact), ran the suite, and got 56/57 passed with the sole failure being exactly the new telemetry test (assert :counters.get(counter,1)==0, left: 1, right: 0) -- matching TEST-DESIGNER's claimed numbers exactly. I then reverted via `git checkout -- lib/letflow/engine/lua/platform.ex`, confirmed `git status --porcelain lib/ test/` was empty, and re-ran the suite: 65 passed again, clean. The design-doc addendum is genuinely present in lib/letflow/design/req159-lua-host-api-read.md: two 'Post-implementation cross-reference note' sections (end of §6.4 and end of §7.4) document run_stub/3 becoming run_stub/5 (three prior args + execution_context + the call's own Lua.t()) rather than the originally-specified run_stub/4, and log's do_log/3 calling Lua.decode!/2 on the context argument explicitly before it reaches Logger.log/3's metadata -- both addenda match what is actually shipped in lib/letflow/engine/lua/platform.ex (arity-2 Lua.set!/3 wrapper fn args, call_lua -> ..., run_stub/5 clauses, and decode_log_context/2 calling Lua.decode!/2). No TODO/@tag :skip markers found in either test file or the spec. Test isolation confirmed: telemetry handler cleanup as above; real-Postgres fixtures (provisioned_tenant/0) each provision their own tenant with a freshly-generated id and drop the schema plus delete tenants/registrations rows in on_exit, unconditionally; every seed_projection! call uses a locally-generated instance_id, no shared/reused fixture state; module is async: false, ruling out interleaving on the process-global Sandbox.mode(:auto) call. No hardcoded secrets found (grepped for password/secret/api_key/SECRET across both test files and the spec -- no hits).",
+    "checks": {
+      "ac_coverage": "PASS - 8/8, see AC-to-test mapping table in test/specs/REQ-159.md cross-checked against docs/requirements.yaml REQ-159 acceptance_criteria",
+      "telemetry_test_present_and_correct": "PASS - attach/detach correct, genuine no-call measurement, independently re-confirmed via self-applied mutation (56/57 -> revert -> 65/65)",
+      "design_doc_addendum_present": "PASS - run_stub/5 arity and Lua.decode!/2 addenda both present in lib/letflow/design/req159-lua-host-api-read.md and match shipped code",
+      "no_todo_skip_markers": "PASS",
+      "test_isolation": "PASS - telemetry handler on_exit detach; real-Postgres fixtures use on_exit teardown, fresh ids per test, async: false",
+      "no_hardcoded_secrets": "PASS",
+      "mix_test_run": "65 passed (test/letflow/engine/lua/platform_test.exs + test/letflow/engine/lua_number_marshalling_test.exs), quoted output captured directly"
+    }
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

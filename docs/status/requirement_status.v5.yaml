@@ -451,3 +451,36 @@ history:
       feature/WF02-REQ158-20260827 created from main (76b089d) and
       pushed. Dispatching Step 1 to CODE-DESIGNER next. 16 on-disk
       entries before this append; 17 after.
+
+  - req: REQ-158
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-27T16:35:39Z"
+    note: >
+      WF02-REQ158-20260827 complete. Manifest representation (ported from
+      R-Co/src/lua/manifest.zig, capability set + identity fields, with
+      dropped fields named/justified in the moduledoc), a load-time
+      validate_at_load/3 entry point that rejects a modified manifest before
+      any script text executes, and a manifest hash that feeds
+      LuaScriptAudit's existing INV-LSA-2 mismatch check (LUA-07) rather than
+      reimplementing or bypassing it. SECURITY-REVIEWER found and ELIXIR-DEV
+      fixed a REAL hash-collision BLOCKER: under the original raw-separator
+      byte layout, two different capability sets could hash identically via
+      delimiter injection (e.g. ["a\nb","c"] vs ["a","b","c"]) -- fixed with
+      length-prefixed framing (a 32-bit length prefix per field) and
+      independently re-verified structurally collision-free by
+      SECURITY-REVIEWER's recheck. TEST-DESIGNER separately found and closed
+      a real mutation-detectable test gap: every prior test compared the hash
+      function only against itself on different inputs, never against an
+      independently-reconstructed expected value, so a systematic framing
+      weakening (e.g. shrinking to a 16-bit length prefix) would have slipped
+      through completely undetected -- TEST-DESIGN-VALIDATOR independently
+      reproduced that same mutation from scratch to confirm the fix closed
+      the gap. AC2 (rejection before execution) is satisfied with a disclosed
+      caller-discipline scope gap: validate_at_load/3 has no production
+      caller yet, mirroring REQ-058's own accepted "no caller yet" precedent,
+      examined and accepted as non-blocking by SECURITY-REVIEWER twice,
+      deferred to REQ-159/160/161. RELEASE-VALIDATOR's independent re-run hit
+      an unrelated recurrence of the already-tracked ISS-0340 flake,
+      structurally cleared via isolation testing. Status flipped pending ->
+      done in docs/requirements.yaml.

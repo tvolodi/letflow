@@ -1,0 +1,148 @@
+run_id: WF02-REQ158-20260827
+date: "2026-08-27"
+agent: TEST-RUNNER
+branch: feature/WF02-REQ158-20260827
+verdict: PASS
+
+full_suite_run_1:
+  command: "scripts/test_parallel.sh"
+  started_utc: "2026-08-27T16:21:04Z"
+  partition_count: 8
+  partition_count_source: "nproc (no TEST_PARALLEL_N override set)"
+  per_partition:
+    - partition: 1
+      tests: 296
+      properties: 1
+      failures: 0
+      exit_code: 0
+    - partition: 2
+      tests: 403
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 3
+      tests: 249
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 4
+      tests: 247
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 5
+      tests: 296
+      properties: 2
+      failures: 0
+      exit_code: 0
+    - partition: 6
+      tests: 219
+      properties: 0
+      failures: 0
+      exit_code: 0
+    - partition: 7
+      tests: 311
+      properties: 2
+      failures: 0
+      exit_code: 0
+    - partition: 8
+      tests: 165
+      properties: 0
+      failures: 0
+      exit_code: 0
+  combined_final_line: "combined: 2186 tests, 5 properties, 0 failures (2191/2191 passed)"
+  total_tests: 2191
+  passed: 2191
+  failed: 0
+  properties: "5/5"
+  script_exit_code: 0
+  full_raw_output: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.U2mbvA
+    test_parallel: TEST_PARALLEL_GROUP=tp893060 (shared by all 8 partitions)
+    partition 1: 296 tests, 1 property, 0 failures, exit 0
+    partition 2: 403 tests, 0 properties, 0 failures, exit 0
+    partition 3: 249 tests, 0 properties, 0 failures, exit 0
+    partition 4: 247 tests, 0 properties, 0 failures, exit 0
+    partition 5: 296 tests, 2 properties, 0 failures, exit 0
+    partition 6: 219 tests, 0 properties, 0 failures, exit 0
+    partition 7: 311 tests, 2 properties, 0 failures, exit 0
+    partition 8: 165 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 2186 tests, 5 properties, 0 failures (2191/2191 passed)
+
+full_suite_run_2:
+  command: "scripts/test_parallel.sh"
+  started_utc: "2026-08-27T16:23:28Z"
+  partition_count: 8
+  partition_count_source: "nproc (no TEST_PARALLEL_N override set)"
+  combined_final_line: "combined: 2186 tests, 5 properties, 0 failures (2191/2191 passed)"
+  total_tests: 2191
+  passed: 2191
+  failed: 0
+  properties: "5/5"
+  script_exit_code: 0
+  full_raw_output: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.rEKL1c
+    test_parallel: TEST_PARALLEL_GROUP=tp904471 (shared by all 8 partitions)
+    partition 1: 296 tests, 1 property, 0 failures, exit 0
+    partition 2: 403 tests, 0 properties, 0 failures, exit 0
+    partition 3: 249 tests, 0 properties, 0 failures, exit 0
+    partition 4: 247 tests, 0 properties, 0 failures, exit 0
+    partition 5: 296 tests, 2 properties, 0 failures, exit 0
+    partition 6: 219 tests, 0 properties, 0 failures, exit 0
+    partition 7: 311 tests, 2 properties, 0 failures, exit 0
+    partition 8: 165 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 2186 tests, 5 properties, 0 failures (2191/2191 passed)
+
+failures_attribution:
+  branch_failures: 0
+  pre_existing_failures: 0
+  unattributed_failures: 0
+  note: >
+    Both full-suite runs reproduced zero test failures across all 8
+    partitions each (2191/2191 passed, exit 0 from every partition, both
+    runs). This branch's diff (lib/letflow/engine/lua/manifest.ex,
+    lib/letflow/engine/lua/executor.ex, and their new test files
+    test/letflow/engine/lua/manifest_test.exs and
+    test/letflow/engine/lua/manifest_executor_audit_test.exs, per
+    handoffs/WF02-REQ158-20260827/step-04-test-run.json's artifacts_in)
+    carries a security-relevant fix (a hash-collision vulnerability in
+    manifest.ex fixed via length-prefixed framing, per Step 2c). Given the
+    heightened scrutiny requirement for anything touching manifest.ex or
+    executor.ex: no failures were observed at all in either run, in any
+    partition, so there is nothing to structurally attribute -- diff
+    exclusion, merge-base reproduction, and external-mechanism analysis
+    were all unnecessary because the null hypothesis (0 failures) held
+    twice in a row. This clears the bar of "not casually attributed": the
+    verdict rests on two clean full-suite reproductions on this exact
+    commit, not on any assumption.
+    ISS-0340 (Letflow.Api.ContextTest "scoped_repo_opts/1 is 1-arity",
+    reopened per docs/issues/ISS-0340.yaml) did NOT appear in either run.
+    Had it appeared, diff-exclusion would have cleared it structurally
+    since lib/letflow/api/context.ex is untouched by this branch's diff
+    -- but since it did not reproduce at all, no attribution was needed.
+  no_rework_needed: >
+    No failure was caused by REQ-158's own new code (manifest.ex,
+    executor.ex, or their new tests) -- both runs were fully green, so
+    there is nothing to route back to ELIXIR-DEV.
+
+environment:
+  toolchain: "Elixir 1.20.3 (compiled with Erlang/OTP 29), asdf shims at $HOME/.asdf/shims"
+  database: "Postgres reachable on 127.0.0.1:5463 (LETFLOW_DB_PORT from untracked .env, container letflow-1-postgres-1 already healthy via docker compose)"
+  docker_note: "docker compose up -d required sudo (host user tvolodi is not in the docker group); containers were already Running/healthy, no-op."
+  deps: "mix deps.get ran successfully (network access available in this environment)."
+
+conclusion: >
+  Full suite green on both runs: 2191/2191 tests passed (5/5 properties),
+  0 failures, identical results both times. Combined with the 2 clean
+  ELIXIR-DEV rework runs already on record (2187/2187 each, per this
+  handoff's task description), this is the 3rd and 4th consecutive clean
+  full-suite run for this branch. No rework required for
+  lib/letflow/engine/lua/manifest.ex or executor.ex.

@@ -7920,7 +7920,7 @@ requirements:
   - id: REQ-158
     title: Capability manifest validation on script load, wired to the existing LuaScriptAudit hash path (LUA-07)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 310  # letflow-queue task id
     description: >

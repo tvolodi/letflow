@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step06-WF02-REQ158-20260827",
+  "run_id": "WF02-REQ158-20260827",
+  "workflow_id": "WF-02",
+  "step": "6",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ158-20260827/step-06-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-158"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ158-20260827/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v5.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ158-20260827",
+    "commit": "d175969"
+  },
+  "task": {
+    "description": "DOC-UPDATER (WF-02 Step 6) for REQ-158, which passed RELEASE-VALIDATOR (Step 5, PASS -- see step-05-release-validator.json). (1) Flip REQ-158's status in docs/requirements.yaml from 'pending' to 'done'. (2) Append a 'done' event for REQ-158 to the current run-history volume -- check docs/status/requirement_status.index.yaml for the current volume, recount `grep -c \"^  - req:\" <current volume path>` before and after appending, update the index's note with the new count per its own established convention. The done event's note should mention: the requirement's substance (manifest representation + load-time validation entry point + hash feeding LuaScriptAudit's existing INV-LSA-2 check, LUA-07); that Step 2c SECURITY-REVIEWER found and ELIXIR-DEV fixed a REAL hash-collision BLOCKER via delimiter injection (two different capability sets could hash identically under the original raw-separator byte layout), fixed with length-prefixed framing and independently re-verified structurally collision-free; that TEST-DESIGNER separately found and closed a real mutation-detectable test gap (all prior tests only compared the hash function against itself, never against an independently-reconstructed value, so a systematic framing weakening would have slipped through undetected); that AC2 (rejection before execution) is satisfied as a disclosed caller-discipline scope gap -- validate_at_load/3 has no production caller yet, mirroring REQ-058's own accepted 'no caller yet' precedent, examined and accepted as non-blocking by SECURITY-REVIEWER twice, deferred to REQ-159/160/161; and that RELEASE-VALIDATOR's independent re-run hit an unrelated ISS-0340 recurrence, structurally cleared. (3) README.md: check for staleness (likely none, per REQ-155/156's precedent). (4) Confirm no docs/migration/stage-N-*.md or decisions/ file was named in REQ-158's acceptance_criteria requiring an update.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-158 status flipped pending -> done",
+      "A new REQ-158 done event appended to the current run-history volume with a real UTC timestamp and all required fields, mentioning the security-bug find/fix, the mutation-testing gap closure, the disclosed AC2 caller-discipline scope gap, and the ISS-0340 recurrence",
+      "requirement_status.index.yaml's current-volume entry count updated to match a fresh recount, with a note explaining the increment",
+      "README.md checked for staleness, updated if genuinely stale",
+      "No migration-doc file was named in REQ-158's acceptance_criteria requiring update -- confirmed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "notes": "REQ-158 status flipped pending -> done in docs/requirements.yaml. Appended a 'done' event for REQ-158 to the current run-history volume (docs/status/requirement_status.v5.yaml, confirmed current via docs/status/requirement_status.index.yaml) with at: 2026-08-27T16:35:39Z (real UTC clock timestamp via `date -u`), covering: the manifest representation + load-time validate_at_load/3 entry point + hash feeding LuaScriptAudit's existing INV-LSA-2 check (LUA-07); the SECURITY-REVIEWER-found/ELIXIR-DEV-fixed hash-collision BLOCKER (delimiter injection allowing two different capability sets to hash identically under the original raw-separator byte layout, e.g. [\"a\\nb\",\"c\"] vs [\"a\",\"b\",\"c\"]), fixed via 32-bit length-prefixed framing and independently re-verified structurally collision-free by SECURITY-REVIEWER's recheck; the TEST-DESIGNER-found/closed mutation-detectable test gap (prior tests only compared the hash function against itself, never against an independently-reconstructed expected value, so a framing weakening such as a 16-bit prefix would have gone undetected; TEST-DESIGN-VALIDATOR independently reproduced the mutation to confirm the fix); AC2's disclosed caller-discipline scope gap (validate_at_load/3 has no production caller yet, mirroring REQ-058's precedent, examined and accepted non-blocking by SECURITY-REVIEWER twice, deferred to REQ-159/160/161); and RELEASE-VALIDATOR's independent re-run hitting an unrelated recurrence of the already-tracked ISS-0340 flake, structurally cleared via isolation testing. Verified append-only via `git diff --numstat docs/status/requirement_status.v5.yaml` = 33 insertions, 0 deletions. Recount: `grep -c \"^  - req:\" docs/status/requirement_status.v5.yaml` was 17 before this run's append and is 18 after. Updated requirement_status.index.yaml's volume-5 entry: entries: 17 -> 18, with a new note paragraph (prepended above the prior REQ-158-started note, per this file's own append convention of adding newest notes at the top of the note block) stating the recount and citing this run/step. Volume 5 remains well under its roll ceiling (486 lines / 26,675 bytes vs. 1200 lines / 120,000 bytes), so no roll was needed. Checked README.md via `grep -in 'lua|manifest'` -- zero matches, confirmed not stale, consistent with REQ-155/156 precedent; no README change made. Read REQ-158's full acceptance_criteria in docs/requirements.yaml -- none names a docs/migration/stage-N-*.md or docs/migration/decisions/*.md file, confirmed no migration-doc update owed by this requirement."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

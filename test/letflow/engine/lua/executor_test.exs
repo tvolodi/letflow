@@ -11,6 +11,7 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
   use ExUnit.Case, async: true
 
   alias Letflow.Engine.Lua.Executor
+  alias Letflow.Engine.Lua.Manifest
   alias Letflow.Engine.LuaScriptAudit
 
   # ---------------------------------------------------------------------------------
@@ -133,9 +134,12 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
   # ---------------------------------------------------------------------------------
 
   describe "INV-LSA-2 with real executor (AC6)" do
-    test "a registered_hash that does not match the script's SHA-256 returns mismatch error" do
+    test "a registered_hash that does not match the script's manifest+script hash returns mismatch error" do
       script = "return 2 + 2"
-      real_hash = :crypto.hash(:sha256, script) |> Base.encode16(case: :lower)
+      # REQ-158: a bare-binary script_ref is paired with an empty manifest
+      # (script_id: "", capabilities: []) -- the hash is Manifest.compute_hash/2's
+      # output, not the bare SHA-256 of the script source alone.
+      real_hash = Manifest.compute_hash(%Manifest{script_id: "", capabilities: []}, script)
       wrong_hash = "0000000000000000000000000000000000000000000000000000000000000000"
 
       assert wrong_hash != real_hash
@@ -173,9 +177,9 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
   # ---------------------------------------------------------------------------------
 
   describe "manifest hash correctness" do
-    test "execute_with_manifest returns the SHA-256 of the script source on success" do
+    test "execute_with_manifest returns Manifest.compute_hash/2's output over an empty manifest for a bare-binary script_ref" do
       script = "return 'hello'"
-      expected_hash = :crypto.hash(:sha256, script) |> Base.encode16(case: :lower)
+      expected_hash = Manifest.compute_hash(%Manifest{script_id: "", capabilities: []}, script)
 
       assert {:ok, %{manifest_hash: ^expected_hash}} =
                Executor.execute_with_manifest(script, "ignored")
@@ -183,6 +187,56 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
 
     test "a Lua syntax error returns {:error, reason}" do
       assert {:error, _reason} = Executor.execute_with_manifest("this is not lua ===", "h")
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-158 -- script_ref widened to optionally carry a Manifest.t() alongside the
+  # script source; manifest_hash now covers manifest+script bytes via
+  # Manifest.compute_hash/2, not the bare script-source hash alone.
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-158: manifest-aware script_ref" do
+    test "a %{manifest:, script_source:} script_ref produces Manifest.compute_hash/2's exact output" do
+      manifest = %Manifest{script_id: "script-abc", capabilities: ["variable:read"]}
+      script = "return 1 + 1"
+      expected_hash = Manifest.compute_hash(manifest, script)
+
+      assert {:ok, %{manifest_hash: ^expected_hash}} =
+               Executor.execute_with_manifest(
+                 %{manifest: manifest, script_source: script},
+                 "ignored"
+               )
+    end
+
+    test "changing the manifest's capabilities (script source unchanged) changes the returned hash" do
+      script = "return 1 + 1"
+      manifest_a = %Manifest{script_id: "script-abc", capabilities: ["variable:read"]}
+
+      manifest_b = %Manifest{
+        script_id: "script-abc",
+        capabilities: ["variable:read", "variable:write"]
+      }
+
+      assert {:ok, %{manifest_hash: hash_a}} =
+               Executor.execute_with_manifest(%{manifest: manifest_a, script_source: script}, "h")
+
+      assert {:ok, %{manifest_hash: hash_b}} =
+               Executor.execute_with_manifest(%{manifest: manifest_b, script_source: script}, "h")
+
+      refute hash_a == hash_b,
+             "a modified capability list must change the manifest_hash Executor returns"
+    end
+
+    test "a script_ref that is neither a binary nor a %{manifest:, script_source:} map returns {:error, :invalid_script_ref}" do
+      assert {:error, :invalid_script_ref} = Executor.execute_with_manifest(12345, "h")
+      assert {:error, :invalid_script_ref} = Executor.execute_with_manifest(%{}, "h")
+
+      assert {:error, :invalid_script_ref} =
+               Executor.execute_with_manifest(
+                 %{manifest: :not_a_manifest, script_source: "x"},
+                 "h"
+               )
     end
   end
 

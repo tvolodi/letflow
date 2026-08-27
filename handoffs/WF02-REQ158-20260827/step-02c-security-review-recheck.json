@@ -1,0 +1,48 @@
+{
+  "handoff_id": "step02c-recheck-WF02-REQ158-20260827",
+  "run_id": "WF02-REQ158-20260827",
+  "workflow_id": "WF-02",
+  "step": "2c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ158-20260827/step-02c-security-review-recheck.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-158"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ158-20260827/step-02c-security-review.json",
+      "handoffs/WF02-REQ158-20260827/step-02a-elixir-dev-rework1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/lua/manifest.ex",
+      "test/letflow/engine/lua/manifest_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ158-20260827",
+    "commit": "019c050"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER re-check of REQ-158 after rework commit 019c050 (length-prefixed hash framing).",
+    "acceptance_criteria": [
+      "Length-prefixed framing independently re-derived as collision-free for this specific implementation, not just trusted from the report",
+      "The exact original collision case re-tested against the fixed function and confirmed to now produce different hashes",
+      "Regression tests confirmed real and effective",
+      "No regression elsewhere in the implementation",
+      "Concerns 1 and 3 from the original review re-assessed and current status stated"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "framing_analysis": "compute_hash/2 now builds digest_input as length_prefixed(script_id) <> canonical_capabilities <> length_prefixed(script_source), where length_prefixed/1 is <<byte_size(field)::32>> <> field and canonical_capabilities is the concatenation of length_prefixed/1 over the sorted, deduped (via Capabilities.new/1 -> MapSet, a pure dedup with no string transformation) capability list. Re-derived independently: this is a sequence of length-prefixed frames -- one frame for script_id, one frame per canonicalized capability (in fixed sort order), one frame for script_source -- concatenated with no separator. The 32-bit length prefix is always byte_size/1 of the actual field content, never attacker-supplied independently of the field, so it cannot be spoofed by field content: a field cannot make its own prefix lie about its length. Length-prefixed frame concatenation is injective for an arbitrary sequence of frames (not just a fixed frame count): given the byte string, a frame boundary is always recoverable by reading the next 4 bytes as a length and skipping that many content bytes, repeated until the string is consumed -- so two different ordered frame sequences (script_id, cap_1..cap_k, script_source) can never produce an identical concatenation. This holds regardless of what bytes any field contains (0x00, 0x0A, or anything else), so the collision class found in the prior review (delimiter injection via embedded separator bytes) is structurally eliminated, not just patched for the one case found.",
+    "empirical_reverification": "Re-ran the exact original collision case as ExUnit tests against the real, current compute_hash/2 (via `MIX_ENV=test MIX_TEST_PARTITION=99 mix test --partitions 1 test/letflow/engine/lua/manifest_test.exs`, no scratch file needed -- ELIXIR-DEV's own regression test at manifest_test.exs:148-165 is byte-identical in intent to my original repro). Manifest.compute_hash(%Manifest{script_id: \"s\", capabilities: [\"a\\nb\", \"c\"]}, \"return 1\") and Manifest.compute_hash(%Manifest{script_id: \"s\", capabilities: [\"a\", \"b\", \"c\"]}, \"return 1\") now produce DIFFERENT hashes -- confirmed via full suite run: `Result: 25 passed` for manifest_test.exs, including this test and the NUL-byte variant (manifest_test.exs:168-188). Also confirmed against the git diff (019c050) that the OLD code was exactly `Enum.join(<<0x0A>>)` for capabilities and `script_id <> <<0x00>> <> canonical_capabilities <> <<0x00>> <> script_source` -- the new regression tests would fail against that old implementation (['a\\nb','c'] joined with 0x0A equals ['a','b','c'] joined with 0x0A), confirming the tests are real regression coverage, not tautological.",
+    "regression_test_assessment": "manifest_test.exs's new describe block 'compute_hash/2 is not vulnerable to delimiter-injection collisions' (lines 147-189) contains two tests: (1) the exact LF-embedded-capability collision from my original review, asserting refute on hash equality; (2) a NUL-byte variant covering script_id and script_source. Both assert on the real public compute_hash/2, no mocking, and both would fail (assert an equality that is actually true) against the pre-fix raw-separator implementation -- verified by reading the git diff of the old byte layout. Not weakened or tautological: they compare genuinely different structured inputs designed to exploit the exact separator-collision mechanism.",
+    "no_other_regression": "Full manifest_test.exs run: 25/25 passed (validate_shape/1, determinism, canonicalization, sensitivity, the new collision regressions, validate_at_load/3, pre-execution-rejection, moduledoc-content assertions, to_grant_set/1). manifest_executor_audit_test.exs run against a real Postgres tenant schema: 3/3 passed, including the AC3 end-to-end test that reads back a persisted AuditRecord.manifest_hash and asserts it equals Manifest.compute_hash/2's current output, and the AC4 tamper-detection test asserting {:manifest_hash_mismatch, stale_hash, actual_hash} when the manifest changes after registration. Moduledoc (manifest.ex lines 29-51) now correctly documents the length-prefixed framing, explicitly retracts the old '0x00 cannot appear in practice' claim as false, and states the exact reason (String.t()/binary() can contain any byte) -- matches source directly, not just the commit message's claim.",
+    "concern_1_reassessment": "Unchanged from the original review, still non-blocking for the same reason: validate_at_load/3 is still called only from test files (grep -rn 'validate_at_load' lib/ test/ was not re-run this pass but the diff touches only manifest.ex and its test file -- executor.ex and lua_script_audit.ex are unmodified in commit 019c050, per `git show 019c050 --stat`). This is the same disclosed OQ-4 gap the design doc already accounts for; the hash fix does not change this status since it concerns wiring, not the hash function. Still tracked as a pre-existing, disclosed scope gap rather than a new defect.",
+    "concern_3_reassessment": "Unchanged and, if anything, strengthened: the legacy bare-binary script_ref path's safety argument depended on capability enforcement not yet being wired to real sandbox authority (OQ-3) -- untouched by this diff, which only modifies manifest.ex's hash byte-layout. The collision fix actually makes the manifest system MORE trustworthy going into the still-pending OQ-3 wiring (a future caller relying on manifest hashes for authority decisions will no longer be exposed to the delimiter-injection collision). The prior conditional/time-limited caveat (must be resolved before real Platform.install/2 enforcement lands) still stands as stated.",
+    "verdict_reasoning": "The BLOCKER from the prior review (hash-collision via raw-separator canonicalization) is closed by a correct, independently re-derived length-prefixed framing scheme with no residual collision path found. Regression tests are real, targeted, and would have caught the original bug. No other part of the implementation regressed. Concerns 1 and 3 (non-blocking scope gaps, both explicitly disclosed in the approved design) are unchanged by this fix. PASS."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

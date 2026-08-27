@@ -399,3 +399,17 @@ history:
       original Step 4 and has been reopened -- see docs/issues/ISS-0340.yaml
       (status: reopened), not fixed as part of this requirement. Status
       flipped pending -> done in docs/requirements.yaml.
+
+  - req: REQ-156
+    event: started
+    agent: ORCH
+    at: "2026-08-27T13:58:30Z"
+    note: >
+      WF02-REQ156-20260827 started (queue task 308, GH#608, stage S5).
+      Claimed via get_next_task after REQ-155's completion. Configurable
+      memory limit for Lua script execution, per REQ-149's decided
+      mechanism (LUA-09 restated), depends on REQ-149 (done) and REQ-155
+      (done). Step 00 git-setup PASS (ORCH, direct): branch
+      feature/WF02-REQ156-20260827 created from main (3dbbdb2) and
+      pushed. Dispatching Step 1 to CODE-DESIGNER next. 14 on-disk
+      entries before this append; 15 after.

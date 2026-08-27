@@ -1,0 +1,53 @@
+{
+  "handoff_id": "step01b-recheck-WF02-REQ159-20260827",
+  "run_id": "WF02-REQ159-20260827",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ159-20260827/step-01b-code-design-validator-recheck.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-159"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ159-20260827/step-01-code-designer.json",
+      "handoffs/WF02-REQ159-20260827/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req159-lua-host-api-read.md",
+      "test/specs/REQ-159.md"
+    ],
+    "branch_name": "feature/WF02-REQ159-20260827",
+    "commit": "31d5ccb",
+    "rework_pass": 1,
+    "rework_commit": "31d5ccb"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR re-check of REQ-159's design after rework commit 31d5ccb.",
+    "acceptance_criteria": [
+      "Section 5.1's fix confirmed present and correctly scoped (self-instance-only, :forbidden for anything else, no Repo lookup on rejection)",
+      "Control-flow and error-reason updates confirmed internally consistent",
+      "test/specs/REQ-159.md's updated tests confirmed to genuinely test the restriction",
+      "Full document re-skim confirms no other unstated authorization assumption exists",
+      "All 8 ACs still mapped, no regression elsewhere",
+      "Zero literal Elixir code anywhere"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "checks": {
+      "section_5_1_fix_present": "PASS - the 'parent instance reading a known child's state' justification is fully removed. Section 5.1 is now titled 'Default scope: a script may only read its own instance's state (decided)' and states the script-supplied instance_id must equal execution_context.instance_id exactly, any other value (real or not) rejected uniformly with reason:\"forbidden\", no Repo lookup attempted for that value. It is explicitly framed as a decided design choice ('this is a default-scope decision ... not an open question') grounded in least-privilege reasoning and an honest citation check ('nothing in REQ-159's requirement text, its 8 acceptance criteria, LUA-11/LUA-13's text, decision 0014, or REQ-157's capability matrix asks for -- or even mentions -- a script reading any instance's state other than its own'), rather than inventing an ungrounded scenario as before.",
+      "control_flow_error_enum_consistency": "PASS - Section 5.2 step 2 checks argument well-formedness first (reason: invalid_id, ordered before the self-check so malformed input is never misreported as forbidden), step 3 explicitly compares instance_id (cast) against execution_context.instance_id and returns reason: forbidden with 'no Repo call is made' for this arm, step 4 only reaches Repo.get/3 when the two are equal. Section 5.3's four-value reason enum (no_execution_context, invalid_id, forbidden, not_found) matches this control flow exactly, and explicitly states forbidden is returned identically whether or not the other id exists, by design, so a script cannot use the error to probe which ids exist.",
+      "test_spec_restriction_coverage": "PASS - test/specs/REQ-159.md section 6 now has two explicit forbidden sub-cases under the same bullet, both asserting the identical \"forbidden\" outcome: (a) 'the other id belongs to a real InstanceProjection row in the same tenant schema (proves same-tenant cross-instance reads are rejected by default, not merely cross-tenant ones)' and (b) 'the other id is well-formed but names no row anywhere.' This directly satisfies the fix's own claim that a real sibling and a fabricated id are indistinguishable in the response. Section 5's valid-instance test also now requires the execution context's instance_id to equal the row's id, consistent with the self-scope restriction.",
+      "full_document_reskim_no_other_hidden_assumption": "PASS - re-read section 0 (sources), 1 (scope), 2 (execution-context threading, closure-capture rationale, rejected alternatives (b)/(c)), 3 (LuaNumberMarshalling identity-function rules), 4 (read_variable - plain map lookup on execution_context.variables, never Repo), 6 (log - all three correlation fields sourced exclusively from execution_context, explicit 'never from the script's own arguments' statement), 7 (matrix/fold mechanics), 9 (cross-module deps), 10 (invariants), 11 (open questions OQ-1/OQ-2). No new unstated authorization assumption found: every place instance_id/prefix/trace_id/script_identity flows traces back to execution_context, itself sourced only from install/3's caller (trusted engine code, not the script), with no Lua-visible override path documented anywhere. OQ-1 (production wiring not yet built) and OQ-2 (log context size bound) remain properly flagged as open rather than silently resolved.",
+      "acceptance_criteria_traceability": "PASS - all 8 REQ-159 ACs (read directly from docs/requirements.yaml lines 8011-8019) still map in design section 8 to concrete design elements; AC3's row now explicitly notes the self-scope restriction and that any other instance id is uniformly forbidden.",
+      "no_regression_elsewhere": "PASS - cross-tenant prefix isolation unchanged (section 2.4, section 5.2 step 4 still uses execution_context.prefix exclusively), read_variable's map-only lookup unchanged (section 4.1, no Repo call), log's context-only sourcing unchanged (section 6.1/6.3), LuaNumberMarshalling identity-function rules unchanged and matching REQ-150 section 3, capability matrix rows (variable:read/instance:read/audit:log) unchanged (section 7.2/4.3/5.5/6.4).",
+      "no_literal_elixir_code": "PASS - grepped lib/letflow/design/req159-lua-host-api-read.md and test/specs/REQ-159.md for `fn `, `raise `, `case `, `cond `, `do:`, `->`; all hits are prose (e.g. 'raise shape', 'a raise propagating', 'still raise the', 'that would raise if') or code-fence @spec/@type declarations (signatures and type shapes only, not function bodies) -- no literal Elixir function implementation is present anywhere."
+    }
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

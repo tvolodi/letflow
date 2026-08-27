@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "DOC-UPDATER",
   "file": "handoffs/WF02-REQ161-20260827/step-06-doc-updater.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -33,6 +33,13 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "summary": "REQ-161 status flipped pending -> done in docs/requirements.yaml. One 'done' event appended to current volume (docs/status/requirement_status.v5.yaml), timestamp 2026-08-27T22:28:33Z. Volume recounted before (23) and after (24) via grep; index.yaml entries:/note updated (new note prepended, prior notes untouched).",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ161-20260827/step-06-doc-updater.json"
+    ]
   }
 }

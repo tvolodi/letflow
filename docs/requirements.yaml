@@ -8076,7 +8076,7 @@ requirements:
   - id: REQ-161
     title: platform.fail terminates by a mechanism the script cannot intercept (LUA-15 restated)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 313  # letflow-queue task id
     description: >

@@ -2648,7 +2648,7 @@
             "lock_acquired_at": "2026-08-27T06:32:50Z",
             "lock_released_at": null,
             "released_lock": false,
-            "last_known_step": "Step 04 COMPLETED PASS -- 2110/2112 tests (1 pre-existing Windows grep, 1 lint_handoffs fix applied); 15/15 executor tests pass; dispatch Step 05 RELEASE-VALIDATOR",
+            "last_known_step": "Step 05 COMPLETED PASS -- all 7 ACs + ISS-0350 independently verified; v5.yaml entries count fix applied; dispatch Step 06 DOC-UPDATER",
             "backfilled": false,
             "queue_task_id": 306,
             "queue_agent_id": "orch-main",

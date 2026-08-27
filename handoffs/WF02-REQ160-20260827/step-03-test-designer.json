@@ -1,0 +1,45 @@
+{
+  "handoff_id": "step03-WF02-REQ160-20260827",
+  "run_id": "WF02-REQ160-20260827",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ160-20260827/step-03-test-designer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-160"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ160-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ160-20260827/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ160-20260827/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req160-lua-host-api-write.md",
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs",
+      "test/specs/REQ-160.md"
+    ],
+    "branch_name": "feature/WF02-REQ160-20260827",
+    "commit": "26c546f"
+  },
+  "task": {
+    "description": "TEST-DESIGNER (WF-02 Step 3) for REQ-160. ELIXIR-DEV already wrote 82 passing tests in test/letflow/engine/lua/platform_test.exs during Step 2a as basic self-verification, and both SECURITY-REVIEWER and REVIEWER passed the implementation. Your job is NOT to rubber-stamp that existing coverage -- it is to actively find real coverage gaps using MUTATION TESTING: deliberately break a small piece of lib/letflow/engine/lua/platform.ex's new REQ-160 code (write_variable/call_service/emit_event and their helpers), run the existing test suite, and see whether it actually fails. If it doesn't fail, that's a real gap -- add a test that would have caught it, then revert your deliberate break. This project's track record this session: mutation testing has repeatedly found real gaps other passes missed (REQ-155's fixed-sleep race, REQ-156's untested timeout-during-memory-limited-call branch, REQ-158's hash self-comparison blind spot, REQ-159's return-value-correct-but-mechanism-unverified gap for zero-Repo-calls). Do the same here. Update test/specs/REQ-160.md (prose test spec) to match whatever final test file state you land on.",
+    "acceptance_criteria": [
+      "Mutation-test write_variable's last-write-wins semantics: mutate Map.put to something that doesn't overwrite, confirm a test catches it.",
+      "Mutation-test take_staged_writes/0's clear-after-read behavior: mutate it to not clear, confirm a test catches a stale-buffer-on-second-call scenario.",
+      "Mutation-test call_service's never-raises property: mutate one error arm to raise instead of return, confirm a test catches it (not just a happy-path test that never exercises that arm).",
+      "Mutation-test the LUA-06-vs-LUA-12 distinction: mutate the capability check ordering (if trivially mutable) or confirm via a telemetry/mock spy that a missing-capability call truly never enters call_service's/emit_event's body at all -- not just that it happens to raise for some other reason.",
+      "Mutation-test emit_event's prefix discipline: mutate the append/2 call to use a script-supplied value instead of execution_context.prefix, confirm a test catches the wrong-tenant-schema outcome (this is the single highest-value test given SECURITY-REVIEWER's PASS rested on this exact property).",
+      "Mutation-test the LuaNumberMarshalling.from_lua/1/to_lua/1 usage: mutate one call site to skip the conversion, confirm a test catches a value that would otherwise pass through unconverted (not just a test with an already-integer input where the mutation would be invisible).",
+      "Confirm zero-Repo-calls for write_variable/call_service is verified by a real mechanism (e.g. a Repo-call-count spy or telemetry, mirroring REQ-159's own precedent), not merely inferred from the return value being correct.",
+      "Every one of REQ-160's 8 real acceptance criteria (docs/requirements.yaml) has at least one test that would fail if that specific behavior regressed -- verified by actually breaking it, not just present in the file."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

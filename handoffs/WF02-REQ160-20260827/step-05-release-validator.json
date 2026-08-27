@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "RELEASE-VALIDATOR",
   "file": "handoffs/WF02-REQ160-20260827/step-05-release-validator.json",
-  "status": "DONE",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",

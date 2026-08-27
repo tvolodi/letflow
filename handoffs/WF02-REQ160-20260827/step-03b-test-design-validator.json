@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ160-20260827/step-03b-test-design-validator.json",
-  "status": "FAIL",
+  "status": "FAILED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",

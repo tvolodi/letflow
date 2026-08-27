@@ -1,0 +1,48 @@
+{
+  "handoff_id": "step03b-WF02-REQ156-20260827",
+  "run_id": "WF02-REQ156-20260827",
+  "workflow_id": "WF-02",
+  "step": "3b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ156-20260827/step-03b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-156"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ156-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ156-20260827/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "test/specs/REQ-156.md",
+      "test/letflow/engine/lua/executor_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ156-20260827",
+    "commit": "9670391"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR (WF-02 Step 3b) hard gate on REQ-156's test coverage.",
+    "acceptance_criteria": [
+      "All of REQ-156's real acceptance criteria have real runnable test coverage, verified independently",
+      "The reported mutation-gap fix (new test for the timeout-during-memory-limited-call branch) confirmed present and would actually catch the described bug",
+      "No TODO/skip markers in test/specs/REQ-156.md",
+      "Test isolation confirmed, including no process/monitor leakage",
+      "No hardcoded secrets"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "notes": "Independently verified against docs/requirements.yaml REQ-156 (lines 7795-7848), test/specs/REQ-156.md (T1-T8), and test/letflow/engine/lua/executor_test.exs's 'configurable memory limit (REQ-156)' describe block (lines 501-745).\n\nAC MAPPING (7 real acceptance_criteria, verbatim from requirements.yaml):\n- AC1 (configurable, smaller halts sooner) -> test at line 548, drives two distinct max_heap_words values (~1MB vs ~200MB) via opts, asserts small_result = memory_limit_exceeded, large_result = ok, and timing ordering. PASS -- genuinely load-bearing (not a no-op), confirmed by reading the assertions directly.\n- AC2 (1GB attempt / 16MB limit, structured error not hang/exhaust/success) -> test at line 587, uses @gigabyte_allocating_script (~976MB target) under @sixteen_mb_in_words, asserts {:error, :memory_limit_exceeded}, bounded by its own 5_000ms timeout_ms plus ExUnit's own 60s default. PASS, matches LUA-09's named scale exactly (not scaled down for convenience).\n- AC3 (pattern-distinguishable from budget_exceeded/wallclock_timeout) -> test at line 599, single classify/1 closure matches all three arms, asserts Enum.uniq(classified) == classified. PASS -- genuinely demonstrates non-unifiability, not three isolated asserts.\n- AC4 (implemented mechanism matches REQ-149's recommendation; divergence stated in moduledoc) -> moduledoc (executor.ex lines ~116-124) documents the one real divergence (Task.Supervisor.async_nolink/2,3 cannot carry max_heap_size, so spawn_opt/2 used directly); test at line 676 asserts the moduledoc states this plainly. PASS.\n- AC5 (moduledoc restates LUA-09, states which clause MET/NOT MET, in those words) -> test at line 656 asserts moduledoc =~ 'LUA-09', =~ literal '\"terminate the script\" is MET', =~ literal '\"fail gracefully\" is NOT MET'. Read the moduledoc directly (lines 97-103) -- both literal phrases are present verbatim. PASS, not a weak substring (both quote marks and MET/NOT MET verdict required together).\n- AC6 (no max_instructions-as-memory-proxy code path; moduledoc records rejection) -> test at line 641 does a source-level static check (Sandbox.new(max_instructions: budget) never mentions max_heap_words; max_heap_size map built only from max_heap_words, refutes 'max_heap_size: %{size: budget'); tests at 666 and confirm moduledoc content citing decision 0014 OQ-1. Read executor.ex's run_script/2 and run_with_heap_limit/4 directly -- confirmed the two options are threaded independently, no cross-reference. PASS.\n- AC7 (mix test / mix compile --warnings-as-errors pass) -> verified myself below (real output), not merely re-quoted from TEST-DESIGNER.\n\nT8 GAP-FIX VERIFICATION (independent, not trusted from TEST-DESIGNER's report): read run_with_heap_limit/4 (executor.ex lines ~305-341) directly. Confirmed it has two structurally distinct kill paths: (a) a {:DOWN, ^monitor_ref, :process, ^pid, :killed} message observed DURING the bounded receive (BEAM heap-kill, -> :memory_limit_exceeded), and (b) the `after timeout_ms ->` clause, reached only when nothing was observed in time, which does Process.exit(pid, :kill) itself and returns {:error, {:wallclock_timeout, timeout_ms}}. T8 (executor_test.exs line 731) configures a generous 200MB max_heap_words with a tight 'while true do end' loop (allocates ~nothing, cannot trip the heap limit) and a 250ms timeout_ms, asserting {:error, {:wallclock_timeout, 250}} -- this can only be produced by branch (b), so the test genuinely targets the claimed gap rather than incidentally re-exercising branch (a).\n\nI independently reproduced the mutation rather than trusting the reported counts:\n1. Ran `mix test test/letflow/engine/lua/executor_test.exs` unmodified: Result: 33 passed (seed 4599).\n2. Edited executor.ex's `after timeout_ms ->` clause to return `{:error, :mutant_marker_gap_probe}` instead of `{:error, {:wallclock_timeout, timeout_ms}}`.\n3. Re-ran the suite: Result: 32/33 passed, Failed: 1 -- the sole failure was 'configurable memory limit (REQ-156) a memory-limited call whose script hangs without tripping the heap limit is terminated by the caller's own timeout kill, not the BEAM heap-kill path', with the printed diff left: {:error, {:wallclock_timeout, 250}} / right: {:error, :mutant_marker_gap_probe} -- exactly matching TEST-DESIGNER's claim.\n4. Reverted with `git checkout -- lib/letflow/engine/lua/executor.ex`. Confirmed via `git status --porcelain lib/ test/` (empty output) that the tree is clean.\n5. Re-ran the suite again: Result: 33 passed (seed 222257) -- clean revert confirmed both by git status and by a green re-run.\n\nThis confirms the reported gap was real and the added test closes it, verified by my own mutation application rather than by copying TEST-DESIGNER's reported counts.\n\nSPEC HYGIENE: test/specs/REQ-156.md contains no 'TODO' or '@tag :skip' markers (grepped and read in full, T1-T8 plus coverage notes).\n\nTEST ISOLATION / PROCESS-MONITOR LEAKAGE: read run_with_heap_limit/4's three receive branches directly -- the normal-completion branch calls Process.demonitor(monitor_ref, [:flush]) explicitly; both :DOWN branches consume a monitor message the VM has already delivered (no leaked monitor once :DOWN fires); the `after` branch issues Process.exit(pid, :kill) and drains the resulting :DOWN with its own bounded receive (1_000ms) before returning. No test starts a process it doesn't let this cleanup logic reap. The new T8 test uses the same execute_with_manifest/3 entry point as every other test in this describe block, introducing no new leakage surface. Tests do not share mutable state (@sixteen_mb_in_words / @small_alloc_heap_words / script fixtures are read-only module attributes computed once; each test passes its own explicit opts, per the spec's own coverage-notes constraint against shared hardcoded values defeating AC-1). No test depends on another having run first -- confirmed each test builds its own Executor call from scratch and does not read shared/global mutable state. No hardcoded secrets found (grepped for password/secret/api_key/token/aws_/BEGIN PRIVATE -- zero matches in both files).\n\nVERDICT: PASS. All 7 real REQ-156 acceptance criteria have runnable, non-trivial test coverage; the T8 gap-closing test was independently verified via my own mutation-and-revert cycle (not copied from TEST-DESIGNER's report) to actually discriminate the branch it claims to cover; no spec hygiene issues; no isolation or leakage issues; no secrets.",
+    "evidence": {
+      "mix_test_baseline": "Result: 33 passed (seed 4599)",
+      "mix_test_with_mutant": "Result: 32/33 passed, Failed: 1 -- test 'a memory-limited call whose script hangs without tripping the heap limit is terminated by the caller's own timeout kill, not the BEAM heap-kill path'; left: {:error, {:wallclock_timeout, 250}}, right: {:error, :mutant_marker_gap_probe}",
+      "revert_confirmation": "git status --porcelain lib/ test/ -> empty output; mix test re-run -> Result: 33 passed (seed 222257)"
+    }
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

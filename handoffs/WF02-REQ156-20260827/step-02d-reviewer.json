@@ -1,0 +1,60 @@
+{
+  "handoff_id": "step02d-WF02-REQ156-20260827",
+  "run_id": "WF02-REQ156-20260827",
+  "workflow_id": "WF-02",
+  "step": "2d",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ156-20260827/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-156"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ156-20260827/step-01-code-designer.json",
+      "handoffs/WF02-REQ156-20260827/step-01b-code-design-validator-recheck.json",
+      "handoffs/WF02-REQ156-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ156-20260827/step-02c-security-review.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req156-lua-memory-limit-impl.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "config/config.exs",
+      "test/letflow/engine/lua/executor_test.exs",
+      "docs/migration/decisions/"
+    ],
+    "branch_name": "feature/WF02-REQ156-20260827",
+    "commit": "e7d32bc"
+  },
+  "task": {
+    "description": "REVIEWER (WF-02 Step 2d) hard gate on REQ-156.",
+    "acceptance_criteria": [
+      "Idiom verdict on the two-execution-path design (Task.Supervisor for nil, raw spawn_opt for configured) -- approve or request cleaner unification",
+      "Confirm no scope creep vs REQ-156's requirements.yaml entry",
+      "Confirm no decision-record contradiction",
+      "Confirm supervision integrity for both paths",
+      "Confirm AC-2's real-scale (1GB/16MB) test is appropriately guarded (timing, CI resource usage) and genuinely proves the claim"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Verified independently: mix compile --warnings-as-errors clean; mix test test/letflow/engine/lua/executor_test.exs -> 32 passed in 3.2s (all synchronous/parallel, no slow outlier). Findings below.",
+    "findings": [
+      "IDIOM (Q1) -- APPROVED, not a smell. The two-execution-path split is a forced consequence of a source-verified fact, not a design choice ELIXIR-DEV could have avoided: Task.Supervisor.async_nolink/2,3's async_opts type accepts only :shutdown, and Task.Supervised.start_link/2,3 spawn via bare spawn_link/3 / spawn/4 with zero options -- there is no spawn_opt injection point anywhere in that call chain. This was re-verified by reading the same installed source (task/supervisor.ex, task/supervised.ex) the design doc cites; the finding holds. Given that, :erlang.spawn_opt/2 + :monitor is the only way to attach max_heap_size, and :monitor (OTP 24+) atomically returns {pid, monitor_ref}, giving the same unlinked-but-monitored relationship Task.Supervisor.async_nolink/2 provides -- this is the correct primitive, not a downgrade. The nil branch is untouched byte-for-byte (confirmed in diff), so REQ-155's existing behavior and tests are not at risk. The moduledoc documents the divergence explicitly (observability: the heap-limited path does not appear under Letflow.Engine.Lua.TaskSupervisor's children) rather than papering over it. This is the right amount of complexity for what the BEAM actually offers, not scope creep or a shortcut.",
+      "SCOPE -- clean. Diff touches only config/config.exs (new :lua_max_heap_words key, nil default, matching REQ-149/154/155's precedent of leaving unscaled defaults until operational data justifies a value), lib/letflow/engine/lua/executor.ex, and its test file. No new modules, no behaviour/macro introduced, no touching of REQ-157+ (capabilities) or unrelated code. Matches REQ-156's stated scope (\"wired into REQ-155's supervised execution process\") exactly.",
+      "DECISION-RECORD CONSISTENCY -- clean. Moduledoc and code match REQ-149's recommended mechanism (Candidate A, max_heap_size kill:true) verbatim, including the config shape (max_heap_words, nil = unconstrained, word-not-byte units via :erlang.system_info(:wordsize)). :max_instructions is never referenced when building the max_heap_size map (verified in diff: Sandbox.new(max_instructions: budget) and max_heap_size: %{size: max_heap_words, ...} are built from disjoint variables) -- decision 0014 OQ-1's rejection is honored in code, not just in prose. Moduledoc states the 'terminate' MET / 'fail gracefully' NOT MET split in the literal words REQ-156's requirements.yaml entry demands.",
+      "SUPERVISION INTEGRITY -- confirmed for both paths. nil path: Letflow.Engine.Lua.TaskSupervisor still runs the task, verified by a dedicated new test asserting Task.Supervisor.children/1 is non-empty during a nil-limit call -- not orphaned, not bypassed for that branch. Configured path: the raw-spawned process is unlinked (no crash propagates to caller) but immediately monitored via the atomic spawn_opt [:monitor, ...] return, so no gap exists between spawn and monitor attachment (a real risk with separate spawn/Process.monitor calls, correctly avoided here). The :killed-reason race between a BEAM heap-kill and a caller timeout-kill is resolved structurally by message-arrival order within a single receive/after, which is sound: only the caller can kill this unlinked, unnamed pid, so a :killed DOWN arriving before the caller's own after-branch fires cannot be attributed to the caller.",
+      "TEST QUALITY -- AC-2 genuinely proves the claim, not a weaker proxy. It runs LUA-09's own literal scale (1 GB attempted, ~16 MB limit, unscaled) and asserts {:error, :memory_limit_exceeded} specifically -- not just 'some error'. It is adequately guarded: independently verified total suite time is 3.2s for all 32 tests including AC-2, because the heap kill fires almost immediately once the process's heap crosses ~16 MB (long before the script could get near 1 GB), so the 'attempted 1 GB' framing does not imply a slow test -- confirmed empirically, not just asserted in a comment. The test's own :timeout_ms (5_000) plus ExUnit's default 60s outer bound is a real safety net: a regression that silently disabled the heap-kill path would surface as a wallclock_timeout failure, not a hang. AC-1's use of a smaller ~20MB/~1MB-ratio script (documented as a deliberate speed tradeoff, with AC-2 preserving the literal named scale) is a reasonable, explicitly justified choice, not scope-shrinking of the acceptance criterion.",
+      "No type-safety or scope-creep issues found requiring a docs/issues/ filing for this review."
+    ],
+    "verification": {
+      "mix_compile_warnings_as_errors": "clean, independently re-run",
+      "mix_test_executor": "32 passed, 3.2s, independently re-run",
+      "commit_reviewed": "e7d32bc"
+    }
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

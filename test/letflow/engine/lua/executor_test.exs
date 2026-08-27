@@ -200,13 +200,15 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       assert {:error, {:budget_exceeded, 500}} =
                Executor.execute_with_manifest(loop_script, "h",
                  max_instructions: 500,
-                 timeout_ms: 5_000
+                 timeout_ms: 5_000,
+                 max_heap_words: nil
                )
 
       assert {:ok, %{manifest_hash: _}} =
                Executor.execute_with_manifest(loop_script, "h",
                  max_instructions: 50000,
-                 timeout_ms: 5_000
+                 timeout_ms: 5_000,
+                 max_heap_words: nil
                )
     end
 
@@ -215,7 +217,8 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       assert {:error, {:budget_exceeded, 1000}} =
                Executor.execute_with_manifest("while true do end", "h",
                  max_instructions: 1000,
-                 timeout_ms: 5_000
+                 timeout_ms: 5_000,
+                 max_heap_words: nil
                )
     end
 
@@ -224,7 +227,8 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       result =
         Executor.execute_with_manifest("while true do end", "h",
           max_instructions: 500,
-          timeout_ms: 5_000
+          timeout_ms: 5_000,
+          max_heap_words: nil
         )
 
       # Must NOT match {:error, msg} (string) or {:error, :invalid_script_ref}
@@ -244,7 +248,8 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       assert {:ok, %{manifest_hash: _}} =
                Executor.execute_with_manifest(script, "h",
                  max_instructions: 1000,
-                 timeout_ms: 5_000
+                 timeout_ms: 5_000,
+                 max_heap_words: nil
                )
     end
   end
@@ -270,7 +275,8 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
         :timer.tc(fn ->
           Executor.execute_with_manifest(@infinite_loop, "h",
             max_instructions: 1_000_000_000,
-            timeout_ms: 100
+            timeout_ms: 100,
+            max_heap_words: nil
           )
         end)
 
@@ -278,7 +284,8 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
         :timer.tc(fn ->
           Executor.execute_with_manifest(@infinite_loop, "h",
             max_instructions: 1_000_000_000,
-            timeout_ms: 600
+            timeout_ms: 600,
+            max_heap_words: nil
           )
         end)
 
@@ -334,7 +341,8 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       assert {:error, {:wallclock_timeout, 300}} =
                Executor.execute_with_manifest(script, "h",
                  max_instructions: 200,
-                 timeout_ms: 300
+                 timeout_ms: 300,
+                 max_heap_words: nil
                )
     end
 
@@ -345,7 +353,8 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       assert {:error, {:wallclock_timeout, 150}} =
                Executor.execute_with_manifest(@infinite_loop, "h",
                  max_instructions: 1_000_000_000,
-                 timeout_ms: 150
+                 timeout_ms: 150,
+                 max_heap_words: nil
                )
 
       # Give the (already brutally-killed) task's DOWN bookkeeping a moment to
@@ -366,7 +375,8 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       result =
         Executor.execute_with_manifest(@infinite_loop, "h",
           max_instructions: 1_000_000_000,
-          timeout_ms: 100
+          timeout_ms: 100,
+          max_heap_words: nil
         )
 
       assert {:error, {:wallclock_timeout, 100}} = result
@@ -382,7 +392,8 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       result =
         Executor.execute_with_manifest(@infinite_loop, "h",
           max_instructions: 500,
-          timeout_ms: 5_000
+          timeout_ms: 5_000,
+          max_heap_words: nil
         )
 
       assert {:error, {:budget_exceeded, 500}} = result
@@ -401,7 +412,8 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
 
           Executor.execute_with_manifest(@infinite_loop, "h",
             max_instructions: 1_000_000_000,
-            timeout_ms: 300
+            timeout_ms: 300,
+            max_heap_words: nil
           )
         end)
 
@@ -470,6 +482,265 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       # moduledoc.
       assert moduledoc =~ "does **NOT** cover a hard kill of the BEAM node",
              "moduledoc must explicitly negate coverage of a BEAM node kill / System.halt/0"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-156 -- configurable memory limit (LUA-09 restated)
+  # ---------------------------------------------------------------------------------
+  #
+  # All tests here target execute_with_manifest/3 so each test drives its own
+  # :max_heap_words explicitly (test/specs/REQ-156.md's stated rationale, mirroring
+  # REQ-154/155's own pattern) -- no test relies on config/test.exs's
+  # :lua_max_heap_words default.
+  #
+  # Word/byte conversion: :max_heap_words counts BEAM machine words, not bytes.
+  # word_size_bytes comes from :erlang.system_info(:wordsize) (typically 8 on a
+  # 64-bit BEAM) rather than a hardcoded `8` literal, per design §3, so the
+  # conversion stays correct if this ever runs on a different word size.
+  describe "configurable memory limit (REQ-156)" do
+    @word_size_bytes :erlang.system_info(:wordsize)
+
+    # LUA-09's own acceptance text names "1 GB attempted / 16 MB limit" as the scale
+    # to test at -- both are converted from the literal MB/GB figures via
+    # @word_size_bytes rather than picked "for convenience". This script is shared by
+    # T2 and T3's third arm (per the design's coverage note), but each test below
+    # independently asserts its own outcome rather than depending on the other
+    # having run first.
+    @sixteen_mb_in_words trunc(16 * 1024 * 1024 / @word_size_bytes)
+    @gigabyte_allocating_script """
+    local t = {}
+    for i = 1, 1000000 do
+      -- 1000 x 1024-byte chunks per outer iteration isn't needed -- one 1024-byte
+      -- string per iteration, times 1,000,000 iterations, targets ~1 GB total
+      -- (1_000_000 * 1024 bytes ~= 976 MB), matching LUA-09's own "1 GB" example.
+      t[i] = string.rep("x", 1024)
+    end
+    return #t
+    """
+
+    # AC-1 uses a smaller allocating script than AC-2's literal "1 GB" scale, for test
+    # speed only -- running @gigabyte_allocating_script to full, unkilled completion
+    # (needed for AC-1's "larger limit succeeds" arm) measured ~18s real time in this
+    # environment (tv-labs/lua interpreter throughput, not the memory-limit mechanism
+    # under test), which is too slow to run twice per `mix test` invocation across
+    # dozens of CI/local runs. This script targets ~20 MB (20,000 x 1024-byte
+    # strings) -- a 1:20 attempted/limit ratio against @small_alloc_heap_words below
+    # (~1 MB), the same order of magnitude as AC-2's own 1 GB : 16 MB (~1:64) ratio,
+    # so it still genuinely exercises the same mechanism rather than being a
+    # convenience no-op. AC-2 below keeps the literal "1 GB attempted / 16 MB limit"
+    # scale LUA-09's own acceptance criterion names, unscaled.
+    @small_alloc_heap_words trunc(1 * 1024 * 1024 / @word_size_bytes)
+    @moderate_allocating_script """
+    local t = {}
+    for i = 1, 20000 do
+      t[i] = string.rep("x", 1024)
+    end
+    return #t
+    """
+
+    # AC-1/T1: the memory limit is configurable per call (not hardcoded) -- a smaller
+    # configured limit halts the same allocating script with a structured error,
+    # while a materially larger limit lets the same script run to completion. This
+    # demonstrates the configured value is load-bearing (not a no-op), per design
+    # §8 AC-1 and test/specs/REQ-156.md T1's "outcome differs" alternative to a pure
+    # timing comparison.
+    test "AC-1: a smaller configured max_heap_words halts sooner than a larger one on the same allocating script" do
+      {small_elapsed_us, small_result} =
+        :timer.tc(fn ->
+          Executor.execute_with_manifest(@moderate_allocating_script, "h",
+            max_instructions: 1_000_000_000,
+            timeout_ms: 5_000,
+            max_heap_words: @small_alloc_heap_words
+          )
+        end)
+
+      {large_elapsed_us, large_result} =
+        :timer.tc(fn ->
+          Executor.execute_with_manifest(@moderate_allocating_script, "h",
+            max_instructions: 1_000_000_000,
+            timeout_ms: 5_000,
+            max_heap_words: trunc(200 * 1024 * 1024 / @word_size_bytes)
+          )
+        end)
+
+      assert {:error, :memory_limit_exceeded} = small_result
+      assert {:ok, %{manifest_hash: _}} = large_result
+
+      small_elapsed_ms = small_elapsed_us / 1_000
+      large_elapsed_ms = large_elapsed_us / 1_000
+
+      assert small_elapsed_ms < large_elapsed_ms,
+             "the smaller max_heap_words limit (#{small_elapsed_ms}ms) must halt the " <>
+               "allocating script sooner than the larger limit's full run " <>
+               "(#{large_elapsed_ms}ms)"
+    end
+
+    # AC-2/T2: LUA-09's own acceptance criterion, at the scale it names -- a script
+    # attempting to allocate ~1 GB under a ~16 MB configured limit fails cleanly with
+    # a structured error, rather than hanging, exhausting the test node's memory, or
+    # returning success. The outer ExUnit test timeout (default 60s, well above this
+    # call's own 5_000ms :timeout_ms) is this test's own safety bound -- if a
+    # regression removed the memory-kill path entirely, this call would return
+    # {:error, {:wallclock_timeout, 5_000}} instead (still a structured error, not a
+    # hang), and the assertion below would fail loudly rather than the suite hanging.
+    test "AC-2: a script attempting to allocate 1 GB under a 16 MB configured limit fails cleanly" do
+      assert {:error, :memory_limit_exceeded} =
+               Executor.execute_with_manifest(@gigabyte_allocating_script, "h",
+                 max_instructions: 1_000_000_000,
+                 timeout_ms: 5_000,
+                 max_heap_words: @sixteen_mb_in_words
+               )
+    end
+
+    # AC-3/T3: the memory-limit error is pattern-distinguishable from REQ-154's
+    # budget_exceeded and REQ-155's wallclock_timeout -- one case/cond construct
+    # matches all three arms distinctly, proving no two can unify under one pattern.
+    test "AC-3: memory_limit_exceeded is pattern-distinguishable from budget_exceeded and wallclock_timeout" do
+      budget_result =
+        Executor.execute_with_manifest("while true do end", "h",
+          max_instructions: 500,
+          timeout_ms: 5_000,
+          max_heap_words: nil
+        )
+
+      timeout_result =
+        Executor.execute_with_manifest("while true do end", "h",
+          max_instructions: 1_000_000_000,
+          timeout_ms: 200,
+          max_heap_words: nil
+        )
+
+      memory_result =
+        Executor.execute_with_manifest(@gigabyte_allocating_script, "h",
+          max_instructions: 1_000_000_000,
+          timeout_ms: 5_000,
+          max_heap_words: @sixteen_mb_in_words
+        )
+
+      classify = fn
+        {:error, {:budget_exceeded, _}} -> :budget_exceeded
+        {:error, {:wallclock_timeout, _}} -> :wallclock_timeout
+        {:error, :memory_limit_exceeded} -> :memory_limit_exceeded
+        other -> other
+      end
+
+      assert classify.(budget_result) == :budget_exceeded
+      assert classify.(timeout_result) == :wallclock_timeout
+      assert classify.(memory_result) == :memory_limit_exceeded
+
+      classified = Enum.map([budget_result, timeout_result, memory_result], classify)
+
+      assert Enum.uniq(classified) == classified,
+             "all three resource-limit arms must classify distinctly; got #{inspect(classified)}"
+    end
+
+    # AC-6/T6: no code path in this module uses :max_instructions as a memory-limit
+    # proxy -- static/source-level check, since this is a negative claim about the
+    # absence of a code path (design §9, test/specs/REQ-156.md T6 item 1).
+    test "AC-6: no code path reads max_heap_words when computing max_instructions, or vice versa" do
+      source = File.read!("lib/letflow/engine/lua/executor.ex")
+
+      # Sandbox.new/1 (which applies max_instructions to the Lua VM) is called with
+      # only `budget`, never mentioning max_heap_words on the same call.
+      assert source =~ "Sandbox.new(max_instructions: budget)"
+
+      # The spawn_opt max_heap_size map is built only from max_heap_words, never from
+      # budget/max_instructions.
+      assert source =~ "max_heap_size: %{size: max_heap_words"
+      refute source =~ "max_heap_size: %{size: budget"
+    end
+
+    # AC-5/T5: moduledoc restates LUA-09 and states which clause is met and which is
+    # not, in those words.
+    test "AC-5: moduledoc restates LUA-09 and states 'terminate' MET / 'fail gracefully' NOT MET" do
+      {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} = Code.fetch_docs(Executor)
+
+      assert moduledoc =~ "LUA-09"
+      assert moduledoc =~ ~s("terminate the script" is MET)
+      assert moduledoc =~ ~s("fail gracefully" is NOT MET)
+    end
+
+    # AC-6/T6: moduledoc records the :max_instructions-as-memory-proxy rejection,
+    # citing decision 0014 OQ-1 by name.
+    test "AC-6: moduledoc states :max_instructions was rejected as a memory proxy, citing decision 0014 OQ-1" do
+      {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} = Code.fetch_docs(Executor)
+
+      assert moduledoc =~ "rejected as a memory-limit proxy"
+      assert moduledoc =~ "decision 0014"
+      assert moduledoc =~ "OQ-1"
+    end
+
+    # AC-4: moduledoc states the Task.Supervisor.async_nolink/2,3 finding plainly
+    # (§7 item 3 of the design) rather than silently resolving it.
+    test "AC-4: moduledoc states Task.Supervisor.async_nolink/2,3 cannot carry max_heap_size" do
+      {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} = Code.fetch_docs(Executor)
+
+      assert moduledoc =~ "Task.Supervisor.async_nolink/2,3` cannot carry `:max_heap_size`"
+      assert moduledoc =~ ":erlang.spawn_opt/2"
+    end
+
+    # A configured max_heap_words of nil keeps the REQ-155 supervised-task path
+    # observable exactly as before -- a nil-limit execution still shows up as a
+    # Letflow.Engine.Lua.TaskSupervisor child while in flight, unlike a
+    # memory-limited execution (design §5.4).
+    test "a nil max_heap_words leaves the REQ-155 TaskSupervisor-based path unchanged" do
+      test_pid = self()
+
+      task =
+        Task.async(fn ->
+          send(test_pid, :started)
+
+          Executor.execute_with_manifest("while true do end", "h",
+            max_instructions: 1_000_000_000,
+            timeout_ms: 300,
+            max_heap_words: nil
+          )
+        end)
+
+      assert_receive :started, 1_000
+
+      children =
+        Enum.reduce_while(1..20, [], fn _attempt, _acc ->
+          case Task.Supervisor.children(Letflow.Engine.Lua.TaskSupervisor) do
+            [] ->
+              Process.sleep(10)
+              {:cont, []}
+
+            found ->
+              {:halt, found}
+          end
+        end)
+
+      assert children != [],
+             "a nil max_heap_words call must still run under Letflow.Engine.Lua.TaskSupervisor"
+
+      assert {:error, {:wallclock_timeout, 300}} = Task.await(task, 1_000)
+    end
+
+    # Gap found by TEST-DESIGNER mutation testing: design §5.1's fourth table row and
+    # §5.2 specify a caller-issued kill ("this path's Task.shutdown(:brutal_kill)
+    # equivalent") when a script hangs WITHOUT tripping the heap limit while a memory
+    # limit IS configured -- a materially different code branch inside
+    # run_with_heap_limit/4 (the `after timeout_ms -> Process.exit(pid, :kill) ...`
+    # clause) than the BEAM-issued heap-kill branch AC-1/AC-2/AC-3 above exercise.
+    # Confirmed by mutation: replacing that branch's body with a bogus return value
+    # left all 32 then-existing REQ-156/154/155 tests passing (no test exercised this
+    # branch), and reverting the mutation restored the pre-mutation pass count -- so
+    # this test was added to close that gap, not merely to report it.
+    test "a memory-limited call whose script hangs without tripping the heap limit is terminated by the caller's own timeout kill, not the BEAM heap-kill path" do
+      # A tight `while true do end` loop allocates essentially nothing on the Lua
+      # heap, so a heap limit generous enough to never trip (200 MB, same order of
+      # magnitude as AC-1's "large" limit above) leaves only the caller's own
+      # wall-clock bound to end this call.
+      generous_heap_words = trunc(200 * 1024 * 1024 / @word_size_bytes)
+
+      assert {:error, {:wallclock_timeout, 250}} =
+               Executor.execute_with_manifest("while true do end", "h",
+                 max_instructions: 1_000_000_000,
+                 timeout_ms: 250,
+                 max_heap_words: generous_heap_words
+               )
     end
   end
 end

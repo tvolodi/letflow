@@ -1,0 +1,65 @@
+{
+  "handoff_id": "step01b-WF02-REQ156-20260827",
+  "run_id": "WF02-REQ156-20260827",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ156-20260827/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-156"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ156-20260827/step-00-git-setup.json",
+      "handoffs/WF02-REQ156-20260827/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req156-lua-memory-limit-impl.md",
+      "test/specs/REQ-156.md",
+      "lib/letflow/design/req149-lua-memory-limit.md",
+      "lib/letflow/design/req155-lua-wallclock-kill.md",
+      "lib/letflow/engine/lua/executor.ex"
+    ],
+    "branch_name": "feature/WF02-REQ156-20260827",
+    "commit": "5738fee"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) hard gate on REQ-156's design at lib/letflow/design/req156-lua-memory-limit-impl.md. First review pass. Verify: (1) every one of REQ-156's 7 real acceptance_criteria (read docs/requirements.yaml directly) is mapped to a concrete design element; (2) NO literal Elixir code anywhere in the design -- grep for `fn `, `raise `, `case `, `cond `, `do:`, `->` and manually verify every hit is either a permitted @spec/@type signature or prose, including inside table cells; this exact check failed REQ-157's design twice this session; (3) CODE-DESIGNER's claim that Task.Supervisor.async_nolink/2,3 cannot carry a spawn_opt-equivalent option is independently verified against real Elixir source (if the Elixir/Erlang installation's source is available in this environment, e.g. under an asdf install path or via `elixir -e`, check task/supervisor.ex and task/supervised.ex directly; if source isn't available, verify the claim is at least internally consistent and doesn't contradict anything in Elixir's documented Task API); (4) the proposed alternative mechanism (raw :erlang.spawn_opt/2 + :monitor path bypassing Task.Supervisor for the memory-limited case) is a coherent, complete design that genuinely achieves the same unlink/monitor/kill semantics REQ-155 established for the Task.Supervisor path, not a hand-wave; (5) the :killed-reason ambiguity between a BEAM heap-kill and a caller-issued timeout-kill is resolved by a sound mechanism (read the design's proposed resolution and assess whether it's actually race-free); (6) the {:error, :memory_limit_exceeded} shape is genuinely distinguishable from REQ-154's and REQ-155's error shapes; (7) required moduledoc content (LUA-09 clause table: terminate MET, fail-gracefully NOT MET; :max_instructions rejection) is specified; (8) open questions are explicit, not silently resolved.",
+    "acceptance_criteria": [
+      "All 7 REQ-156 acceptance criteria mapped to concrete design elements",
+      "Zero literal Elixir code anywhere in the design doc",
+      "The Task.Supervisor spawn_opt limitation claim independently verified or at minimum assessed for internal consistency",
+      "The alternative spawn_opt/monitor mechanism assessed as coherent and complete, not hand-waved",
+      "The :killed-reason race resolution assessed as sound",
+      "Error shape distinguishability confirmed",
+      "Required moduledoc content specified",
+      "Open questions explicit"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Literal Elixir code found embedded in a table cell in lib/letflow/design/req156-lua-memory-limit-impl.md, §5, line 181. This is the exact failure mode that sank REQ-157's sibling design three times this session. All other checks passed but per WF-02 Step 1b, a single failed check is a total FAIL -- no partial credit.",
+    "checks": {
+      "acceptance_criteria_mapping": "PASS - all 7 REQ-156 ACs from docs/requirements.yaml mapped to concrete design elements in §8, each citing the specific section/table that satisfies it.",
+      "no_literal_code": "FAIL - line 181, §5 table (row for `max_heap_words` = nil): `Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn -> run_script(script_source, budget) end)`. This is a literal function-call expression with an anonymous-function literal (`fn -> ... end`), not a @spec/@type signature, and it is inside a table cell -- both markers explicitly called out as forbidden in this session's prior REQ-157 rework cycles.",
+      "async_nolink_spawn_opt_claim": "PASS, independently verified against installed source at /home/tvolodi/.asdf/installs/elixir/1.20.3-otp-29/lib/elixir/lib/task/supervisor.ex and task/supervised.ex (matches .tool-versions pin). Confirmed `@type async_opts :: [shutdown: :brutal_kill | timeout()]` (supervisor.ex line ~93) is the only key accepted for async/async_nolink options, and Task.Supervised.start_link/2,3 and start/3 (supervised.ex lines 9-18) call bare `spawn/4` and `spawn_link/3`/`spawn_link/4` with no options list -- no spawn_opt path exists in this call chain. Design's claim is accurate.",
+      "alternative_mechanism_coherence": "PASS - the :erlang.spawn_opt/2 with [:monitor, max_heap_size: ...] path (§2, §5) is a coherent, complete substitute: :monitor as a spawn_opt element atomically returns {pid, ref} (documented OTP 24+ behavior), giving the same unlinked+monitored relationship as async_nolink without a race window between spawn and monitor/1.",
+      "killed_reason_race_resolution": "PASS - §5.3's resolution is structural (ordering-based, not reason-inspection-based): the caller only issues its own kill after its bounded wait has already expired, so any :killed DOWN observed during the wait cannot originate from the caller. Sound and race-free as described.",
+      "error_shape_distinguishability": "PASS - §4.1 confirms three structurally distinct shapes: {:budget_exceeded, limit} (REQ-154), {:wallclock_timeout, ms} (REQ-155), bare :memory_limit_exceeded (REQ-156) -- no pattern-match ambiguity.",
+      "moduledoc_content": "PASS - §7 specifies all required content: LUA-09 clause table (terminate MET / fail-gracefully NOT MET), decision-0014 OQ-1 :max_instructions rejection, the async_nolink finding, the branching mechanism, and the observability divergence.",
+      "open_questions_explicit": "PASS - §10 lists 5 open questions (OQ-1..OQ-5), none silently resolved, each with a blocking/non-blocking disposition stated."
+    },
+    "instructions_for_code_designer": [
+      "Remove the literal Elixir expression at §5 line 181's table cell: `Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn -> run_script(script_source, budget) end)`.",
+      "Replace with prose describing the same fact without executable syntax, e.g.: 'Unchanged from REQ-155: the script body is submitted to Letflow.Engine.Lua.TaskSupervisor via async_nolink/2 exactly as REQ-155 §4.1-§4.3 already specify, byte-for-byte' -- name the function (async_nolink/2) and its arguments' roles in prose/table-cell text without writing out a callable expression or an fn/anonymous-function literal.",
+      "Re-grep the entire document for `fn `, `raise `, `case `, `cond `, `do:`, `->` after the edit and manually confirm every remaining hit is either inside a @spec/@type fence or is prose (e.g. the word 'case' used as an English noun, as at line 203, which is fine and was not flagged as a violation).",
+      "No other changes required -- all other checks (AC mapping, source-verified async_nolink claim, alternative mechanism, :killed race resolution, error-shape distinguishability, moduledoc content, open questions) passed and should not be altered."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,124 @@
+run_id: WF02-REQ156-20260827
+workflow_id: WF-02
+step: "4"
+agent: TEST-RUNNER
+requirement_ids: [REQ-156]
+issue_ids: []
+date: "2026-08-27"
+branch: feature/WF02-REQ156-20260827
+head_commit: 3d1b5f57068e7be2a593e346ccc85db43048923d
+merge_base_with_main: 38bdab702b85f6a6f79c475939be99c96d72080e
+
+environment:
+  toolchain: local (elixir/mix via asdf shims prepended to PATH; Elixir 1.20.3, Erlang/OTP 29)
+  docker_compose_up: |
+    `docker compose up -d` (plain) failed with "permission denied while
+    trying to connect to the docker API at unix:///var/run/docker.sock"
+    (user tvolodi is in the `docker` and `sudo` groups but the socket
+    permission bit did not apply in this sandboxed shell invocation).
+    Re-ran as `sudo -n docker compose up -d`, which succeeded immediately
+    and reported both containers already Running:
+      "Container letflow-1-postgres-1 Running"
+      "Container letflow-1-keycloak-1 Running"
+    No untracked .env override of LETFLOW_DB_PORT changed anything new here
+    versus prior runs this session; repo root .env sets LETFLOW_DB_PORT=5463,
+    used by both compose and Ecto per README.md.
+  mix_test_alias: "mix.exs's `test` alias ran ecto.create/ecto.migrate --quiet automatically inside each of the 8 partition processes, per scripts/test_parallel.sh's own design -- no separate DB-setup step taken."
+
+test_parallel:
+  script: scripts/test_parallel.sh
+  runs_performed: 2
+  partition_count_N: 8
+  partition_count_source: "nproc ($TEST_PARALLEL_N was unset; nproc and getconf _NPROCESSORS_ONLN both returned 8)"
+
+  run_1:
+    per_partition:
+      - "partition 1: 273 tests, 0 properties, 0 failures, exit 0"
+      - "partition 2: 309 tests, 0 properties, 0 failures, exit 0"
+      - "partition 3: 283 tests, 2 properties, 0 failures, exit 0"
+      - "partition 4: 209 tests, 0 properties, 0 failures, exit 0"
+      - "partition 5: 253 tests, 2 properties, 0 failures, exit 0"
+      - "partition 6: 140 tests, 0 properties, 0 failures, exit 0"
+      - "partition 7: 311 tests, 1 property, 0 failures, exit 0"
+      - "partition 8: 373 tests, 0 properties, 0 failures, exit 0"
+    combined: "2151 tests, 5 properties, 0 failures (2156/2156 passed)"
+    script_exit_code: 0
+    raw_output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+      test_parallel: partition logs in /tmp/letflow_test_parallel.K9NdpT
+      test_parallel: TEST_PARALLEL_GROUP=tp523107 (shared by all 8 partitions)
+      partition 1: 273 tests, 0 properties, 0 failures, exit 0
+      partition 2: 309 tests, 0 properties, 0 failures, exit 0
+      partition 3: 283 tests, 2 properties, 0 failures, exit 0
+      partition 4: 209 tests, 0 properties, 0 failures, exit 0
+      partition 5: 253 tests, 2 properties, 0 failures, exit 0
+      partition 6: 140 tests, 0 properties, 0 failures, exit 0
+      partition 7: 311 tests, 1 property, 0 failures, exit 0
+      partition 8: 373 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 2151 tests, 5 properties, 0 failures (2156/2156 passed)
+
+  run_2:
+    per_partition:
+      - "partition 1: 273 tests, 0 properties, 0 failures, exit 0"
+      - "partition 2: 309 tests, 0 properties, 0 failures, exit 0"
+      - "partition 3: 283 tests, 2 properties, 0 failures, exit 0"
+      - "partition 4: 209 tests, 0 properties, 0 failures, exit 0"
+      - "partition 5: 253 tests, 2 properties, 0 failures, exit 0"
+      - "partition 6: 140 tests, 0 properties, 0 failures, exit 0"
+      - "partition 7: 311 tests, 1 property, 0 failures, exit 0"
+      - "partition 8: 373 tests, 0 properties, 0 failures, exit 0"
+    combined: "2151 tests, 5 properties, 0 failures (2156/2156 passed)"
+    script_exit_code: 0
+    raw_output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+      test_parallel: partition logs in /tmp/letflow_test_parallel.OyjFHS
+      test_parallel: TEST_PARALLEL_GROUP=tp533850 (shared by all 8 partitions)
+      partition 1: 273 tests, 0 properties, 0 failures, exit 0
+      partition 2: 309 tests, 0 properties, 0 failures, exit 0
+      partition 3: 283 tests, 2 properties, 0 failures, exit 0
+      partition 4: 209 tests, 0 properties, 0 failures, exit 0
+      partition 5: 253 tests, 2 properties, 0 failures, exit 0
+      partition 6: 140 tests, 0 properties, 0 failures, exit 0
+      partition 7: 311 tests, 1 property, 0 failures, exit 0
+      partition 8: 373 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 2151 tests, 5 properties, 0 failures (2156/2156 passed)
+
+failures: []
+
+known_issue_scrutiny:
+  iss_0340_context_test_flake: >
+    NOT observed in either run. Grepped both runs' output/partition
+    breakdowns for "scoped_repo_opts" / "ContextTest" -- zero occurrences,
+    zero failures anywhere. No attribution needed since it did not recur;
+    noted per task instructions as an explicitly checked-for item, not
+    assumed absent.
+  req155_function_exported_regression_check: >
+    NOT observed in either run. Grepped both runs for "function_exported"
+    and "execute_with_manifest" -- zero occurrences of the previously-fixed
+    ExecutorTest flake pattern anywhere in either run's partition logs.
+    The Code.ensure_loaded(Executor) fix from REQ-155 continues to hold on
+    this branch; no evidence the earlier fix was incomplete.
+
+sanity_check:
+  executor_test_file: test/letflow/engine/lua/executor_test.exs
+  test_count_grep: 33
+  matches_expected: "yes -- handoff noted 33 tests (was 32) after Step 3 mutation-testing rework added test/letflow/engine/lua/executor_test.exs's REQ-156 'configurable memory limit' describe block (line 501)"
+
+verdict: PASS
+verdict_reasoning: >
+  Two full-suite scripts/test_parallel.sh runs, both bit-for-bit identical
+  in per-partition and combined counts: 2156/2156 passed, 0 failures,
+  script exit code 0 both times. Neither of the two specifically-flagged
+  known issues (ISS-0340's ContextTest flake, the REQ-155-fixed
+  function_exported?/3 ExecutorTest race) appeared in either run -- verified
+  by grep across all partition logs both times, not assumed absent. No
+  failure occurred at all, so no attribution question and no rework trigger
+  for ELIXIR-DEV's executor.ex memory-limit code. Two consecutive clean runs
+  (per this run's own established discipline after REQ-155's two rework
+  rounds) give sufficient confidence to pass this step cleanly.

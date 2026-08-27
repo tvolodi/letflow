@@ -1,0 +1,64 @@
+{
+  "handoff_id": "step01-WF02-REQ156-20260827",
+  "run_id": "WF02-REQ156-20260827",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ156-20260827/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": [
+      "REQ-156"
+    ],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-156": "Implements the mechanism REQ-149 decided. RESTATEMENT OF LUA-09, AND WHY. LUA-09 (Memory Limit, MUST) reads 'Each script execution MUST have a configurable memory limit. Allocations exceeding the limit MUST fail gracefully and terminate the script,' acceptance 'Script attempting to allocate 1 GB with 16 MB limit fails cleanly.' The chosen runtime documents :max_instructions and :max_call_depth and NO memory-limit option. R-Co had a real one via LuaJIT's custom allocator hook; a pure-BEAM VM allocates ordinary BEAM terms and offers no equivalent allocation-refusal point. The BEAM's nearest primitive, a per-process :max_heap_size, KILLS the process rather than failing an allocation gracefully -- so LUA-09's two clauses come apart: 'terminate the script' is achievable, 'fail gracefully' as an in-script observable allocation failure is NOT achievable (per REQ-149's empirical finding). THE RESTATEMENT THIS REQUIREMENT MUST WRITE. This requirement's moduledoc must state which of LUA-09's two clauses the shipped mechanism satisfies and which it does not, in those words -- not a general claim that LUA-09 is met. FORBIDDEN SHORTCUT: :max_instructions must not be used as a proxy for a memory limit (decision 0014 OQ-1 rejects it as unsound). Scope: 1. Implement REQ-149's recommended mechanism (:max_heap_size with kill:true, spawn_opt-based), configurable per execution, wired into REQ-155's supervised execution process. 2. Limit breach must surface as a structured error distinguishable from REQ-154's budget error and REQ-155's timeout error. 3. Test at the scale LUA-09's own acceptance criterion names -- a script attempting a large allocation under a small configured limit. GATE: SECURITY-REVIEWER is a hard gate. Queue task 308, GH#608. See docs/requirements.yaml REQ-156 for full description and acceptance_criteria."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ156-20260827/step-00-git-setup.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req149-lua-memory-limit.md",
+      "lib/letflow/design/req155-lua-wallclock-kill.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req156-lua-memory-limit-impl.md",
+      "test/specs/REQ-156.md"
+    ],
+    "branch_name": "feature/WF02-REQ156-20260827"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-156. Write lib/letflow/design/req156-lua-memory-limit-impl.md implementing REQ-149's RECOMMENDED MECHANISM (lib/letflow/design/req149-lua-memory-limit.md, read it in full first -- it already decided :max_heap_size with kill:true, spawn_opt-based, empirically verified). Read the current lib/letflow/engine/lua/executor.ex (as extended by REQ-155's merged wall-clock-kill work -- read directly, not assumed) and lib/letflow/design/req155-lua-wallclock-kill.md to understand exactly how script execution is currently supervised (Task.Supervisor.async_nolink/2 under Letflow.Engine.Lua.TaskSupervisor, Task.yield/2, Task.shutdown on timeout) -- this design must wire a per-execution :max_heap_size option into that SAME supervised execution path, not invent a parallel one. Also write test/specs/REQ-156.md (test spec skeleton, no test code). Design must specify: (1) a configurable max_heap_words option (nil = unconstrained) threaded through the execution call, per REQ-149's exact configuration shape (Section 3); (2) how max_heap_size is passed into the spawned/async task (spawn_opt-equivalent under Task.Supervisor -- research whether Task.Supervisor.async_nolink/2 exposes a way to pass spawn_opt, since Task itself wraps Process.spawn -- if it does NOT, the design must specify the alternative mechanism honestly, e.g. a raw Process.spawn_opt/Process.monitor-based execution path instead of Task.Supervisor, with the same async_nolink-equivalent unlink/monitor semantics, and must NOT silently claim Task.Supervisor exposes an option it doesn't); (3) the {:DOWN, ref, :process, pid, :killed} signal handling, translated into a structured {:error, :memory_limit_exceeded}-shaped result distinguishable by pattern match from REQ-154's {:error, {:budget_exceeded, _}} and REQ-155's {:error, {:wallclock_timeout, _}}; (4) the required moduledoc content per REQ-156's own acceptance criteria -- explicitly stating LUA-09's 'terminate' clause is met and 'fail gracefully' is NOT met (per REQ-149's finding), and that :max_instructions was rejected as a memory proxy per decision 0014 OQ-1; (5) if the implementation mechanism ends up diverging from REQ-149's literal recommendation for any real technical reason (e.g. Task.Supervisor limitation), state the divergence explicitly and note that req149-lua-memory-limit.md itself may need a corresponding update -- do not silently diverge. No implementation code (.ex function bodies) -- signatures, @specs, and type shapes only, describing control flow in prose/tables, never as a literal Elixir expression, however small (this exact rule cost REQ-157's design 2 rework rounds this session -- read that lesson into this one).",
+    "acceptance_criteria": [
+      "Design specifies a configurable max_heap_words option (nil = unconstrained), matching REQ-149's exact configuration shape",
+      "Design specifies HONESTLY whether Task.Supervisor.async_nolink/2 can carry a spawn_opt-equivalent max_heap_size option, and if not, specifies the real alternative mechanism actually used -- no silent assumption",
+      "Design specifies the {:DOWN, ..., :killed} -> structured {:error, :memory_limit_exceeded} translation, pattern-distinguishable from REQ-154's and REQ-155's error shapes",
+      "Design states the required moduledoc content: LUA-09 restatement, 'terminate' clause MET / 'fail gracefully' clause NOT MET (per REQ-149), :max_instructions rejected as a memory proxy",
+      "Any divergence from REQ-149's literal recommendation is stated explicitly, with a note that req149-lua-memory-limit.md may need updating",
+      "Design covers all 7 acceptance criteria listed in docs/requirements.yaml's REQ-156 entry (read it directly), mapped one-to-one to concrete design elements",
+      "No implementation code (.ex function bodies) -- signatures, @specs, and type shapes only; describe control flow in prose/tables, never as a literal Elixir expression, however small",
+      "Open questions listed explicitly if any exist, not silently resolved",
+      "REWORK ITERATION 1: CODE-DESIGN-VALIDATOR (step-01b, commit 64f6883) returned FAIL. Everything else in the design stands (all 7 ACs mapped, the async_nolink spawn_opt claim independently verified against actual Elixir source, the alternative spawn_opt/monitor mechanism judged coherent, the :killed-reason race resolution judged sound, error-shape distinguishability confirmed, moduledoc content specified, open questions explicit) -- the ONLY defect is one literal Elixir expression in section 5's table (the max_heap_words=nil row): `Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn -> run_script(script_source, budget) end)`. Replace it with prose stating the same fact without executable syntax -- e.g. 'Unchanged from REQ-155: the script body is submitted to Letflow.Engine.Lua.TaskSupervisor via async_nolink/2 exactly as REQ-155's own design already specifies, byte-for-byte' -- name the function and its arguments' roles in words, do not write a callable expression or an fn/anonymous-function literal. After fixing, re-grep the ENTIRE document for `fn `, `raise `, `case `, `cond `, `do:`, `->` and manually confirm every remaining hit is either inside a permitted @spec/@type fence or is prose (e.g. the English word 'case' used as a noun is fine) before resubmitting. On finishing, flip this handoff's status to COMPLETED/FAILED as normal with a real result."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "lib/letflow/design/req156-lua-memory-limit-impl.md",
+      "test/specs/REQ-156.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "summary": "REWORK ITERATION 1 fix. CODE-DESIGN-VALIDATOR (step-01b) FAILED the design solely on one literal Elixir expression embedded in the section 5 table's `nil` row: `Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn -> run_script(script_source, budget) end)` (a callable expression containing an anonymous-function literal). Replaced it with prose: the cell now reads 'The script body is submitted to Letflow.Engine.Lua.TaskSupervisor via async_nolink/2, with the supervisor as the first argument and a zero-argument closure over the script source and budget as the second, exactly as REQ-155 Sec 4.1-4.3 already specify, byte-for-byte,' followed by prose describing the subsequent Task.yield/2 and Task.shutdown(task, :brutal_kill) calls without executable syntax. No other content in the table row or document was changed. Re-grepped the ENTIRE document for `fn `, `raise `, `case `, `cond `, `do:`, `->` after the edit: exactly one hit remains, at the line the validator itself already reviewed and explicitly cleared ('the memory-kill case covers' -- the English noun 'case', not code, no arrow operator, no callable expression). No other occurrences of any forbidden pattern exist anywhere in the file. All content the validator already passed (7 AC mapping, source-verified async_nolink/spawn_opt claim, the alternative spawn_opt/monitor mechanism, the :killed-race resolution, error-shape distinguishability, moduledoc content, 5 explicit open questions) was left untouched."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

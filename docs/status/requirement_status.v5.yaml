@@ -413,3 +413,27 @@ history:
       feature/WF02-REQ156-20260827 created from main (3dbbdb2) and
       pushed. Dispatching Step 1 to CODE-DESIGNER next. 14 on-disk
       entries before this append; 15 after.
+
+  - req: REQ-156
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-27T14:58:20Z"
+    note: >
+      WF02-REQ156-20260827 complete. Configurable memory limit for Lua script
+      execution via :max_heap_size (LUA-09 restated), per REQ-149's decided
+      mechanism. Design needed 1 rework iteration -- a single literal-Elixir-
+      code violation in a table cell; substance was approved first pass,
+      including a source-verified finding (confirmed against real Elixir
+      1.20.3 source, task/supervisor.ex and task/supervised.ex) that
+      Task.Supervisor.async_nolink/2 structurally cannot carry a
+      max_heap_size spawn_opt, so the memory-limited path spawns directly via
+      :erlang.spawn_opt/2 instead. TEST-DESIGNER found and closed a real
+      mutation-detectable coverage gap: a caller-issued-kill-on-timeout
+      branch, distinct from the BEAM heap-kill branch, was previously
+      untested -- independently re-verified by TEST-DESIGN-VALIDATOR
+      reproducing the same mutation from scratch. Design, security, idiom,
+      test-design, test-run, and release-validation all passed with only that
+      one design rework and one test-design gap-closure -- no implementation
+      rework was needed at all (unlike sibling REQ-155, which needed 2
+      implementation rework rounds). Status flipped pending -> done in
+      docs/requirements.yaml.

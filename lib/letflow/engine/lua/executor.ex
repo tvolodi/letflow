@@ -89,6 +89,63 @@ defmodule Letflow.Engine.Lua.Executor do
   itself is running on. This is an accepted, stated limitation, not a gap this module
   papers over.
 
+  ## REQ-156: LUA-09 restatement — configurable memory limit
+
+  LUA-09 literal: *"Each script execution MUST have a configurable memory limit.
+  Allocations exceeding the limit MUST fail gracefully and terminate the script."*
+
+  LUA-09 has two clauses. **"terminate the script" is MET**: `:max_heap_size` with
+  `kill: true` (REQ-149 §3, empirically verified: exit reason `:killed`) gives a hard,
+  unconditional allocation boundary enforced by the BEAM scheduler itself, with no
+  cooperation from the running script. **"fail gracefully" is NOT MET**: there is no
+  allocator hook in a pure-BEAM Lua VM (`tv-labs/lua`), and no allocation-failure
+  exception exists for `pcall` to intercept — the BEAM kills the process before any
+  Lua-level trap can fire. The script observes nothing; it simply stops running. This
+  is not a gap this module can close without replacing the Lua runtime with one that
+  has a custom allocator hook (REQ-149 §3; decision 0014 named this "the weakest point
+  of the Lua decision").
+
+  **`:max_instructions` is rejected as a memory-limit proxy**, per decision 0014's
+  OQ-1: allocation is not proportional to instruction count — a single opcode can
+  allocate an arbitrarily large string (`string.rep("x", 1_000_000_000)`), while a
+  tight arithmetic loop allocates nothing while exhausting an instruction budget. No
+  code path in this module tightens `:max_instructions` in response to a memory
+  concern, or vice versa — the two options are independently threaded through `opts`
+  and independently enforced.
+
+  **`Task.Supervisor.async_nolink/2,3` cannot carry `:max_heap_size`.** Read directly
+  from the installed Elixir source (`task/supervisor.ex`, `task/supervised.ex`):
+  `async_nolink/2,3`'s `async_opts` type accepts only `:shutdown`, and
+  `Task.Supervised.start_link/2,3` spawn via bare `spawn_link/3` / `spawn/4` with no
+  options list at all — there is no way to inject `max_heap_size` through
+  `Task.Supervisor`. Therefore, when a memory limit is configured, this module
+  bypasses `Task.Supervisor` entirely for that call and spawns the script's process
+  directly via `:erlang.spawn_opt/2` with `[:monitor, max_heap_size: %{size:
+  max_heap_words, kill: true, error_logger: false}]`.
+
+  **Branching on `:max_heap_words`.** `nil` (unconstrained) keeps the REQ-155 path
+  completely unchanged — `Task.Supervisor.async_nolink/2` + `Task.yield/2` +
+  `Task.shutdown(task, :brutal_kill)`. A configured `pos_integer()` uses the new
+  `spawn_opt`/monitor path instead: the caller's own bounded `receive`/`after` stands
+  in for `Task.yield/2`, and `Process.exit(pid, :kill)` stands in for
+  `Task.shutdown(task, :brutal_kill)` if the caller's own timeout fires first.
+
+  **Resolving the `:killed` ambiguity structurally, not by reason atom.** Both a
+  BEAM-issued `max_heap_size` kill and a caller-issued timeout kill produce the
+  identical exit reason `:killed` on the `:DOWN` message — the atom alone does not say
+  who killed the process. This module resolves the ambiguity by message-arrival
+  order: the caller only issues its own kill *after* its bounded wait has already
+  expired with nothing observed. A `:killed` `:DOWN` message received *during* that
+  bounded wait — before the caller has taken any killing action of its own — cannot
+  be attributed to the caller, because nothing else monitors or otherwise has standing
+  to kill that unlinked process. It can only be the BEAM's own `max_heap_size`
+  enforcement, and is reported as `{:error, :memory_limit_exceeded}`.
+
+  **Observability divergence from the `nil` path.** When a memory limit is
+  configured, the executing process is not a child of `Letflow.Engine.Lua.TaskSupervisor`
+  and does not appear in `Task.Supervisor.children/1` on that supervisor, because it
+  is spawned directly rather than through any supervisor.
+
   ## What R-Co had, and why it does not port
 
   **INV-2 (registry-stored limiter):** R-Co stored the limiter pointer in
@@ -117,40 +174,53 @@ defmodule Letflow.Engine.Lua.Executor do
   Runs `script_source` (a binary containing Lua source text) in a fresh sandbox,
   under a supervised task bounded by a host-enforced wall-clock timeout, and returns
   the SHA-256 hex of the source as the manifest hash. Reads the instruction budget
-  from Application config (`:letflow, :lua_max_instructions`) and the wall-clock
-  timeout from Application config (`:letflow, :lua_wallclock_timeout_ms`).
+  from Application config (`:letflow, :lua_max_instructions`), the wall-clock timeout
+  from Application config (`:letflow, :lua_wallclock_timeout_ms`), and the heap word
+  limit from Application config (`:letflow, :lua_max_heap_words`, REQ-156).
   """
   @impl Letflow.Engine.LuaScriptAudit.Executor
   @spec execute_with_manifest(script_source :: binary(), registered_hash :: String.t()) ::
           {:ok, %{manifest_hash: String.t()}}
           | {:error, {:budget_exceeded, pos_integer()}}
           | {:error, {:wallclock_timeout, pos_integer()}}
+          | {:error, :memory_limit_exceeded}
           | {:error, String.t()}
           | {:error, :invalid_script_ref}
   def execute_with_manifest(script_source, registered_hash)
       when is_binary(script_source) do
     execute_with_manifest(script_source, registered_hash,
       max_instructions: default_budget(),
-      timeout_ms: default_timeout_ms()
+      timeout_ms: default_timeout_ms(),
+      max_heap_words: default_max_heap_words()
     )
   end
 
   @doc """
-  Runs `script_source` in a fresh sandbox with an explicit instruction budget and an
-  explicit wall-clock timeout. `opts` must include `:max_instructions` (a
-  `pos_integer()`) and `:timeout_ms` (a `pos_integer()`, milliseconds) — both are
-  required, with no default at this arity, so a caller (in particular a test) can
-  drive two different configured values in the same run without round-tripping
+  Runs `script_source` in a fresh sandbox with an explicit instruction budget, an
+  explicit wall-clock timeout, and an explicit heap word limit. `opts` must include
+  `:max_instructions` (a `pos_integer()`), `:timeout_ms` (a `pos_integer()`,
+  milliseconds), and `:max_heap_words` (a `pos_integer()` or `nil`, REQ-156) — all
+  three are required, with no default at this arity, so a caller (in particular a
+  test) can drive different configured values in the same run without round-tripping
   through `Application.put_env/3`. Not part of the behaviour — use this overload in
-  tests that need a specific budget and/or timeout per call site.
+  tests that need a specific budget, timeout, and/or heap limit per call site.
 
-  The script body runs inside a task supervised by `Letflow.Engine.Lua.TaskSupervisor`
-  (`Task.Supervisor.async_nolink/2`). The call blocks on `Task.yield/2` for at most
-  `:timeout_ms`; if the task has not produced a result by then, the task's process is
-  killed via `Task.shutdown(task, :brutal_kill)` and `{:error, {:wallclock_timeout,
-  timeout_ms}}` is returned instead. This is unconditional and has no dependency on
-  what the script itself did with any in-band `:max_instructions` error — see the
-  moduledoc's REQ-155 section.
+  When `:max_heap_words` is `nil` (unconstrained), the script body runs inside a task
+  supervised by `Letflow.Engine.Lua.TaskSupervisor` (`Task.Supervisor.async_nolink/2`),
+  exactly as REQ-155 established: the call blocks on `Task.yield/2` for at most
+  `:timeout_ms`, and on a `nil` yield the task's process is killed via
+  `Task.shutdown(task, :brutal_kill)`, returning `{:error, {:wallclock_timeout,
+  timeout_ms}}`.
+
+  When `:max_heap_words` is a `pos_integer()`, `Task.Supervisor` is bypassed entirely
+  (it cannot carry a `max_heap_size` spawn option — see the moduledoc's REQ-156
+  section) and the script body runs in a process spawned directly via
+  `:erlang.spawn_opt/2` with `[:monitor, max_heap_size: %{size: max_heap_words, kill:
+  true, error_logger: false}]`. A BEAM heap-kill observed before the caller's own
+  wall-clock timeout fires returns `{:error, :memory_limit_exceeded}`; the caller's
+  own timeout, if it fires first, kills the process directly and returns
+  `{:error, {:wallclock_timeout, timeout_ms}}` — see the moduledoc for how the two
+  `:killed` sources are told apart.
   """
   @spec execute_with_manifest(
           script_source :: binary(),
@@ -160,21 +230,29 @@ defmodule Letflow.Engine.Lua.Executor do
           {:ok, %{manifest_hash: String.t()}}
           | {:error, {:budget_exceeded, pos_integer()}}
           | {:error, {:wallclock_timeout, pos_integer()}}
+          | {:error, :memory_limit_exceeded}
           | {:error, String.t()}
           | {:error, :invalid_script_ref}
   def execute_with_manifest(script_source, _registered_hash, opts)
       when is_binary(script_source) do
     budget = Keyword.fetch!(opts, :max_instructions)
     timeout_ms = Keyword.fetch!(opts, :timeout_ms)
+    max_heap_words = Keyword.fetch!(opts, :max_heap_words)
 
-    task =
-      Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn ->
-        run_script(script_source, budget)
-      end)
+    case max_heap_words do
+      nil ->
+        task =
+          Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn ->
+            run_script(script_source, budget)
+          end)
 
-    task
-    |> Task.yield(timeout_ms)
-    |> handle_yield_result(task, timeout_ms)
+        task
+        |> Task.yield(timeout_ms)
+        |> handle_yield_result(task, timeout_ms)
+
+      heap_words when is_integer(heap_words) and heap_words > 0 ->
+        run_with_heap_limit(script_source, budget, timeout_ms, heap_words)
+    end
   end
 
   # The entirety of what REQ-154's execute_with_manifest/3 previously did
@@ -203,6 +281,63 @@ defmodule Letflow.Engine.Lua.Executor do
       # Guard: script_ref is term() per the behaviour; reject non-binary gracefully
       _e in FunctionClauseError ->
         {:error, :invalid_script_ref}
+    end
+  end
+
+  # REQ-156, design §5: the max_heap_words-configured path. Task.Supervisor cannot
+  # carry a max_heap_size spawn_opt (moduledoc REQ-156 section), so this bypasses it
+  # entirely and spawns directly via :erlang.spawn_opt/2 with :monitor (atomically
+  # returning {pid, monitor_ref}, race-free) plus max_heap_size: kill: true.
+  #
+  # Two distinct references are in play, deliberately: `reply_ref` is this module's
+  # own tag for the spawned process's normal-completion message (mirroring the
+  # {ref, reply} shape Task.Supervised's own protocol uses internally, but owned by
+  # this module's code, not borrowed from Task's private contract) -- it must be
+  # generated by the caller before spawning, since the child cannot know the BIF's
+  # atomically-returned monitor_ref in advance. `monitor_ref` is the spawn_opt :monitor
+  # reference, used only to identify :DOWN messages for this specific pid.
+  defp run_with_heap_limit(script_source, budget, timeout_ms, max_heap_words) do
+    parent = self()
+    reply_ref = make_ref()
+
+    {pid, monitor_ref} =
+      :erlang.spawn_opt(
+        fn ->
+          send(parent, {reply_ref, run_script(script_source, budget)})
+        end,
+        [:monitor, max_heap_size: %{size: max_heap_words, kill: true, error_logger: false}]
+      )
+
+    receive do
+      {^reply_ref, result} ->
+        Process.demonitor(monitor_ref, [:flush])
+        result
+
+      # Design §5.3: this :killed DOWN is observed strictly before the `after` clause
+      # below has had any chance to issue the caller's own kill -- so it cannot be
+      # attributed to the caller. Nothing else monitors or links to this process, so
+      # it can only be the BEAM's own max_heap_size enforcement.
+      {:DOWN, ^monitor_ref, :process, ^pid, :killed} ->
+        {:error, :memory_limit_exceeded}
+
+      {:DOWN, ^monitor_ref, :process, ^pid, reason} ->
+        {:error, "#{inspect(__MODULE__)} task crashed: " <> format_exit_reason(reason)}
+    after
+      # This module's own bounded wait standing in for Task.yield/2, and the
+      # unconditional kill below standing in for Task.shutdown(task, :brutal_kill) --
+      # design §5.2. Reaching this branch means nothing was observed within
+      # timeout_ms, so any :killed DOWN this process is about to trigger below is
+      # attributable to this caller's own action, not the BEAM's heap enforcement.
+      timeout_ms ->
+        Process.exit(pid, :kill)
+
+        receive do
+          {:DOWN, ^monitor_ref, :process, ^pid, _reason} -> :ok
+        after
+          1_000 -> :ok
+        end
+
+        {:error, {:wallclock_timeout, timeout_ms}}
     end
   end
 
@@ -262,5 +397,10 @@ defmodule Letflow.Engine.Lua.Executor do
   @spec default_timeout_ms() :: pos_integer()
   defp default_timeout_ms do
     Application.fetch_env!(:letflow, :lua_wallclock_timeout_ms)
+  end
+
+  @spec default_max_heap_words() :: pos_integer() | nil
+  defp default_max_heap_words do
+    Application.fetch_env!(:letflow, :lua_max_heap_words)
   end
 end

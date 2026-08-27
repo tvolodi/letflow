@@ -2728,7 +2728,7 @@
             "requirement_ids": ["REQ-158"],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/engine/lua/manifest.ex",
                 "test/letflow/engine/lua/manifest_test.exs",
@@ -2739,13 +2739,13 @@
                 "test/letflow/engine/lua/manifest_executor_audit_test.exs"
             ],
             "lock_acquired_at": "2026-08-27T15:15:00Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 2a COMPLETED PASS -- manifest.ex built, executor.ex hash coverage extended; owned_modules expanded again for manifest_executor_audit_test.exs (new end-to-end test file, needs real Postgres). Dispatching Step 2c SECURITY-REVIEWER.",
+            "lock_released_at": "2026-08-27T16:50:37Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #679 squash-merged (c15670f); queue task 310 released done cleanly",
             "backfilled": false,
             "queue_task_id": 310,
             "queue_agent_id": "orch-ai-dala",
-            "note": "WF-02 for REQ-158 (queue task 310, GH#610, stage S5). Capability manifest validation on script load, wired to the existing LuaScriptAudit hash path (LUA-07), depends on REQ-157 (done). Feeds LuaScriptAudit's INV-LSA-2 mismatch check rather than bypassing it. SECURITY-REVIEWER hard gate -- the manifest is what bounds a script's authority. Queue claimed via get_next_task 2026-08-27T15:14:42Z."
+            "note": "WF-02 for REQ-158 (queue task 310, GH#610, stage S5). Capability manifest validation on script load, wired to the existing LuaScriptAudit hash path (LUA-07), depends on REQ-157 (done). Feeds LuaScriptAudit's INV-LSA-2 mismatch check rather than bypassing it. SECURITY-REVIEWER hard gate -- the manifest is what bounds a script's authority. Queue claimed via get_next_task 2026-08-27T15:14:42Z. Design PASS first pass. SECURITY-REVIEWER found and ELIXIR-DEV fixed a real hash-collision BLOCKER (delimiter injection in the raw-separator byte layout -- fixed via length-prefixed framing, independently re-verified structurally collision-free). REVIEWER PASS. TEST-DESIGNER found and closed a mutation-detectable gap (hash-comparison tests only compared against themselves, never an independently-reconstructed value -- would have missed a systematic framing weakening), independently re-verified by TEST-DESIGN-VALIDATOR reproducing the mutation from scratch. AC2 (rejection before execution) satisfied as a disclosed caller-discipline scope gap, mirroring REQ-058's precedent, deferred to REQ-159/160/161. 6+ cumulative clean full-suite runs; one unrelated ISS-0340 recurrence structurally cleared."
         }
     ]
 }

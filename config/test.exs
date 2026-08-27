@@ -140,4 +140,15 @@ config :letflow, :sandbox_pool, max_concurrent_sandboxes: 1
 # execute_with_manifest/2 default path (rather than /3's explicit :timeout_ms) does
 # not wait out the full production default on a timeout. Tests that need a specific
 # timeout value use the 3-arity overload directly rather than mutating this global.
-config :letflow, lua_wallclock_timeout_ms: 200
+#
+# REQ-155 rework 1 (RELEASE-VALIDATOR step-05 FAIL): 200ms had no headroom under
+# scripts/test_parallel.sh's 8-way parallel load and intermittently timed out
+# unrelated 2-arity tests that do real (if small) Lua work -- e.g. "manifest hash
+# correctness ... returns the SHA-256 of the script source on success" -- not just
+# the near-zero-work mismatch-error path RELEASE-VALIDATOR originally reproduced.
+# 1500ms still measured a timeout under real 8-way parallel load (elixir-dev rework
+# 1, observed run), so raised further to 5000ms for real headroom against BEAM
+# scheduler contention across 8 concurrent partitions. REQ-155's own timing tests
+# (T1/T2/T4/T5) already pass an explicit :timeout_ms via the 3-arity overload and
+# are unaffected by this default.
+config :letflow, lua_wallclock_timeout_ms: 5000

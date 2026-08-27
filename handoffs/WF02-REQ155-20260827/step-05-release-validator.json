@@ -1,0 +1,41 @@
+{
+  "handoff_id": "step05-WF02-REQ155-20260827",
+  "run_id": "WF02-REQ155-20260827",
+  "workflow_id": "WF-02",
+  "step": "5",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ155-20260827/step-05-release-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-155"],
+    "issue_ids": [],
+    "branch_name": "feature/WF02-REQ155-20260827"
+  },
+  "result": {
+    "status": "FAIL",
+    "acceptance_criteria_check": {
+      "AC1_configurable_timeout_two_timeout_test": "PASS - executor.ex execute_with_manifest/3 requires :timeout_ms as a mandatory opt, no literal default at that arity; ExecutorTest 'AC-1' (100ms vs 600ms) asserts distinct elapsed times and distinct configured values in the returned error.",
+      "AC2_kill_fires_despite_trapped_budget_error": "PASS - ExecutorTest T2/AC-2 (goto-loop) pcalls the budget error, then loops via `goto` (empirically confirmed uninstrumented by :max_instructions), and asserts wallclock_timeout still fires.",
+      "AC3_process_actually_dead": "PASS - ExecutorTest T3/AC-3 asserts Task.Supervisor.children/1 has no lingering child after the timeout, i.e. Task.shutdown(:brutal_kill) actually removed it, not merely abandoned.",
+      "AC4_structurally_distinguishable_error": "PASS - {:error,{:wallclock_timeout,_}} vs {:error,{:budget_exceeded,_}} have distinct leading atoms; T4/T5 assert both directions by pattern match.",
+      "AC5_supervised_task_moduledoc_names_supervisor": "PASS - lib/letflow/application.ex:52 registers {Task.Supervisor, name: Letflow.Engine.Lua.TaskSupervisor}; moduledoc names it and gives an explicit rationale for not reusing Letflow.Engine.PluginTaskSupervisor (separate crash/telemetry namespace, no quota benefit to sharing).",
+      "AC6_LUA10_layer2_restatement": "PASS - moduledoc contains 'LUA-10', 'layer 2', 'enforced by the host', 'cooperate', and the literal 'Neither LUA-08 nor LUA-10 is met' sentence.",
+      "AC7_BEAM_halt_limitation_disclosure": "PASS - moduledoc states verbatim-in-substance 'does **NOT** cover a hard kill of the BEAM node ... or a call to System.halt/0', carried forward from plugin_interface.ex's disclosure.",
+      "AC8_mix_test_and_compile_pass": "CONDITIONAL - mix compile --warnings-as-errors is clean. scripts/test_parallel.sh independently re-run twice (see raw output below): run 1 = 2146/2147 (1 failure), run 2 = 2147/2147. The run-1 failure is NOT the ISS-0340 ContextTest flake TEST-RUNNER hit -- it is a different, new failure inside test/letflow/engine/lua/executor_test.exs's own AC6 (INV-LSA-2 mismatch) test, which uses the default execute_with_manifest/2 arity and therefore config/test.exs's lua_wallclock_timeout_ms: 200. Under 8-way parallel load that 200ms default was too tight for a trivial 'return 2 + 2' eval to complete, producing {:error,{:executor_failed,{:wallclock_timeout,200}}} instead of the expected manifest-hash-mismatch result -- an intermittent false failure directly caused by this branch's own config/test.exs change, not pre-existing infra flakiness."
+    },
+    "test_runs": {
+      "compile": "mix compile --warnings-as-errors: clean, no output, exit 0",
+      "run_1": "test_parallel: N=8 (nproc). partition 1: 273/0/0 exit0; partition 2: 309/0/0 exit0; partition 3: 283/2/0 exit0; partition 4: 209/0/0 exit0; partition 5: 244/2/1 exit2; partition 6: 140/0/0 exit0; partition 7: 311/1/0 exit0; partition 8: 373/0/0 exit0 -- combined: 2142 tests, 5 properties, 1 failures (2146/2147 passed). Failing test: 'INV-LSA-2 with real executor (AC6) a registered_hash that does not match the script's SHA-256 returns mismatch error (Letflow.Engine.Lua.ExecutorTest)' at test/letflow/engine/lua/executor_test.exs:129 -- got {:error, {:executor_failed, {:wallclock_timeout, 200}}} instead of {:error, {:manifest_hash_mismatch, wrong_hash, real_hash}}.",
+      "run_2": "Immediate re-run, same script, same branch: partition 1: 273/0/0 exit0; partition 2: 309/0/0 exit0; partition 3: 283/2/0 exit0; partition 4: 209/0/0 exit0; partition 5: 244/2/0 exit0; partition 6: 140/0/0 exit0; partition 7: 311/1/0 exit0; partition 8: 373/0/0 exit0 -- combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed). Confirms intermittent, not deterministic."
+    },
+    "iss_0340_check": "Not applicable this run -- the ContextTest scoped_repo_opts/1 flake TEST-RUNNER hit in Step 4 did not reproduce here at all (grepped all 8 partition logs, no match). Confirmed independently that lib/letflow/api/context.ex is untouched by this branch: `git diff --stat main...HEAD` lists only config/config.exs, config/test.exs, docs/issues/ISS-0340.yaml, handoffs/*, lib/letflow/application.ex, lib/letflow/design/req155-lua-wallclock-kill.md, lib/letflow/engine/lua/executor.ex, test/letflow/engine/lua/executor_test.exs, test/reports/*, test/specs/REQ-155.md -- context.ex/context_test.exs are absent.",
+    "staleness_check": "docs/requirements.yaml REQ-155 status: pending (correct, unflipped). docs/status/requirement_status.v5.yaml's only REQ-155 event is 'started' (2026-08-27T11:07:00Z, agent ORCH) -- no done/verified event logged yet. No staleness.",
+    "blocking_gap": "A new, intermittent test flake was introduced by this branch's own config/test.exs change (lua_wallclock_timeout_ms: 200 applied globally to the default execute_with_manifest/2 arity), which under realistic 8-way parallel `mix test` load spuriously times out an unrelated pre-existing test (the AC6 INV-LSA-2 manifest-mismatch test in the same file) roughly 1 run in 2 observed here. This is distinct from and additional to the pre-existing, unrelated ISS-0340 ContextTest race -- it lives inside this branch's own diff (config/test.exs + executor_test.exs's shared file) and was not caught by TEST-RUNNER's single Step-4 run. AC-8 requires mix test to pass with real output quoted; a test suite that intermittently fails on an unrelated assertion because of this branch's chosen test-env timeout value does not satisfy that reliably. Recommended fix (small, does not require redesign): either raise config/test.exs's lua_wallclock_timeout_ms to a value with enough headroom for non-timeout-path tests running under full-suite parallel load (e.g. 1000-2000ms -- all of REQ-155's own timing-sensitive tests already pass an explicit :timeout_ms via the /3 arity and are unaffected by this default), or give the AC6 mismatch test (and any other default-arity call in the suite) its own generous explicit timeout so it stops depending on the tight global default.",
+    "next_action": "Route back to ELIXIR-DEV for a targeted fix to config/test.exs's lua_wallclock_timeout_ms default (or the affected test's arity/timeout), then back through TEST-RUNNER and this gate before DOC-UPDATER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

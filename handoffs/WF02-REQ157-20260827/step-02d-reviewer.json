@@ -1,0 +1,55 @@
+{
+  "handoff_id": "step02d-WF02-REQ157-20260827",
+  "run_id": "WF02-REQ157-20260827",
+  "workflow_id": "WF-02",
+  "step": "2d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ157-20260827/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-157"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ157-20260827/step-01-code-designer.json",
+      "handoffs/WF02-REQ157-20260827/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ157-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ157-20260827/step-02c-security-review.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req157-lua-capability-model.md",
+      "lib/letflow/engine/lua/capabilities.ex",
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/capabilities_test.exs",
+      "test/letflow/engine/lua/platform_test.exs",
+      "docs/migration/decisions/"
+    ],
+    "branch_name": "feature/WF02-REQ157-20260827",
+    "commit": "5cdcd37"
+  },
+  "task": {
+    "description": "REVIEWER (WF-02 Step 2d) hard gate on REQ-157.",
+    "acceptance_criteria": [
+      "Idiom/style verdict on the data-tag dispatch pattern (approve, or specific improvement requested)",
+      "Confirm no scope creep vs REQ-157's requirements.yaml entry",
+      "Confirm no decision-record (docs/migration/decisions/) contradicted",
+      "Confirm supervision integrity N/A reasoning holds (no process/GenServer/gen_statem changes in this diff)",
+      "Confirm test coverage in capabilities_test.exs/platform_test.exs is idiomatic ExUnit (describe blocks, clear assertions, no flaky patterns)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "findings": {
+      "1_idiom_verdict_data_tag_dispatch": "APPROVE. The design's raw-closure-on-module-attribute shape (`required_capability_fun()`/`stub_fun()` per §4.1) is not representable in real Elixir -- module attributes only accept literal/escapable terms (lists, tuples, maps, atoms, numbers, bitstrings, PIDs, &Mod.fun/arity), never captured/anonymous functions. ELIXIR-DEV's own compile-error quote confirms this is a genuine language constraint, not a stylistic dodge. The substitution -- `required_capability_spec :: :none | :call_service_arg0 | capability()` / `stub_spec :: :now | :fail | :not_yet_implemented` resolved by two small private multi-clause functions (`required_capability/2`, `run_stub/3`) called from inside `install/2`'s single fold -- is exactly this codebase's house idiom for closed-set dispatch: `lib/letflow/engine/service_task.ex`, `pin_resolver.ex`, `pin_rebind.ex`, `expr.ex` all resolve tagged/enumerated data via multi-clause private functions rather than stored closures or behaviours. `@capability_matrix` stays a literal, `inspect`-able 8-row list (preserving the design's 'one place to add a 9th row' property, INV-CAP-1/INV-CAP-2), and both dispatch functions are private with exactly one call site, sandwiched around `Capabilities.check!/3` inside `install/2` -- so the substitution cannot introduce a second path that reaches a stub without the check running first. No cleaner shape is warranted; a behaviour or protocol here would be scope creep for a fixed 8-row table (see finding 4).",
+      "2_scope_creep": "None found. Diff (`git show 5cdcd37 --stat`) touches exactly: new `capabilities.ex`, extended `platform.ex`, the two test files, and the step-02a handoff -- no `executor.ex` (correctly left alone per the concurrent REQ154 lock), no web/, no migrations. Every public function traces to a REQ-157 acceptance-criterion line (`docs/requirements.yaml` REQ-157: capability-set + check/3, single registration point, LUA-06 structured denial, call_service parameterisation). `install/1`'s reduction to a one-line delegate is exactly what the design's §1.1 compatibility requirement calls for, not an added abstraction. The 6 gated stub bodies do no real work beyond a labeled 'not yet implemented' raise, matching 'NOT IN THIS REQUIREMENT: the host functions' own bodies (REQ-159, REQ-160)'.",
+      "3_decision_record_consistency": "No contradiction. Decision 0014 is 'decided' and named as the source for REQ-157's matrix; the moduledoc restates the R-Co host_api/mod.zig matrix in substance (all 8 rows, capabilities, now/fail ungated rationale) matching REQ-157's requirements.yaml text verbatim in substance. REQ-152's shipped `platform.now` binding statement ('a future requirement adding a capability gate to it by symmetry is wrong') is honored -- `now`'s row has `required: :none`, never gated. Design doc's OQ-1 (R-Co source not present in this checkout, matrix taken from requirements.yaml's restatement) and OQ-2/OQ-3 (REQ-162 consumption shape of the denial fields; `pairs(platform)` enumeration mechanism) are legitimately still open -- none is something this implementation was scoped to resolve, and none is silently answered by a design choice made here (the denial fields exist as documented in §6.2 regardless of how REQ-162 later consumes them; the enumeration test in platform_test.exs AC1 empirically confirms `pairs` works but that was already OQ-3's proposed mechanism, not a resolution of the open question about whether the underlying `do_set_nested` table shape guarantees it in general).",
+      "4_supervision_integrity": "Confirmed N/A holds. Both files are pure data/dispatch logic -- no `GenServer`, `gen_statem`, `Supervisor`, `spawn`, or process-related code anywhere in the diff. `install/2` closes over an immutable `grant_set` per call; no shared/global state introduced. `Letflow.InstanceSupervisor`-managed instance isolation is untouched by this requirement.",
+      "5_test_quality": "Idiomatic. `capabilities_test.exs`'s describe blocks map to the module's public functions; `platform_test.exs`'s describe blocks map 1:1 to REQ-157's AC1-AC7 plus REQ-152's pre-existing AC4/AC5/AC7 groups, kept unmodified. Assertions are behavioral (real Lua calls raising/returning, not implementation peeking) except for one intentional structural test (platform_test.exs:155, a single-fold source-scan enforcing INV-CAP-1) which is an appropriate use of a source-level test for a closed-set invariant, not a smell. Time-source tests use dependency injection (`Application.put_env` swap + restore) rather than sleeps or wall-clock reads -- no flakiness risk. No shared mutable fixture state between tests; each grant set is constructed fresh."
+    },
+    "notes": "Read `git show 5cdcd37 --stat`, both full source files, both full test files' structure, the REQ-157 requirements.yaml entry, decision 0014, and the approved design doc's §4.1/§9/§11 (OQ-1..3). Cross-checked the data-tag dispatch pattern against existing closed-set dispatch idioms in lib/letflow/engine/ (service_task.ex, pin_resolver.ex, pin_rebind.ex, expr.ex) -- all use multi-clause private functions over tagged data, confirming this diff fits house style rather than introducing a new pattern. No BLOCKER found. TEST-DESIGNER may proceed."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

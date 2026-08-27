@@ -2706,7 +2706,7 @@
             "requirement_ids": ["REQ-156"],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/engine/lua/executor.ex",
                 "test/letflow/engine/lua/executor_test.exs",
@@ -2714,13 +2714,13 @@
                 "test/specs/REQ-156.md"
             ],
             "lock_acquired_at": "2026-08-27T13:58:30Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ156-20260827 created; Step 1 dispatched to CODE-DESIGNER",
+            "lock_released_at": "2026-08-27T15:13:36Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #678 squash-merged (14a3a6c); queue task 308 released done cleanly",
             "backfilled": false,
             "queue_task_id": 308,
             "queue_agent_id": "orch-ai-dala",
-            "note": "WF-02 for REQ-156 (queue task 308, GH#608, stage S5). Configurable memory limit for Lua script execution (LUA-09 restated), per REQ-149's decided mechanism (lib/letflow/design/req149-lua-memory-limit.md), depends on REQ-149 and REQ-155 (both done). SECURITY-REVIEWER hard gate. Queue claimed via get_next_task 2026-08-27T13:57:57Z."
+            "note": "WF-02 for REQ-156 (queue task 308, GH#608, stage S5). Configurable memory limit for Lua script execution (LUA-09 restated), per REQ-149's decided mechanism (lib/letflow/design/req149-lua-memory-limit.md), depends on REQ-149 and REQ-155 (both done). SECURITY-REVIEWER hard gate. Queue claimed via get_next_task 2026-08-27T13:57:57Z. Design needed 1 rework (literal-code fix; substance approved first pass, including a source-verified finding that Task.Supervisor.async_nolink/2 cannot carry max_heap_size). Security/idiom PASS first pass. TEST-DESIGNER found and closed 1 mutation-detectable coverage gap (caller-issued-kill-on-timeout branch), independently re-verified by TEST-DESIGN-VALIDATOR reproducing the mutation from scratch. No implementation rework needed. 2+ cumulative clean full-suite runs at every gate."
         }
     ]
 }

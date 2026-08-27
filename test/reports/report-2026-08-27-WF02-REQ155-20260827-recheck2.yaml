@@ -1,0 +1,137 @@
+run_id: WF02-REQ155-20260827
+workflow_id: WF-02
+step: "4-recheck2"
+agent: TEST-RUNNER
+requirement_ids: [REQ-155]
+issue_ids: []
+date: "2026-08-27"
+branch: feature/WF02-REQ155-20260827
+head_commit: c1af105
+
+context: >
+  SECOND RE-CHECK, requested after two prior rounds of rework on this
+  same run: (1) config/test.exs's lua_wallclock_timeout_ms 200ms ->
+  5000ms (commit 21c5cdf, verified in
+  report-2026-08-27-WF02-REQ155-20260827-recheck.yaml); (2) two flakes
+  in test/letflow/engine/lua/executor_test.exs found during that first
+  recheck and a subsequent run: AC-5's one-shot fixed-Process.sleep(50)
+  in-flight-child check (structurally attributed there via route (c),
+  measurement, to host scheduler contention -- see that report's
+  "failures" section), and a separate long-standing
+  function_exported?/3 module-loading race (ISS-0350-class). ELIXIR-DEV's
+  commit c1af105 replaces the AC-5 fixed sleep with a bounded poll/retry
+  loop and adds Code.ensure_loaded(Executor) before the
+  function_exported? check, and quoted 3 consecutive clean
+  scripts/test_parallel.sh runs. This report supplies fully independent
+  verification: 3 more runs, executed one at a time in the foreground,
+  no background/Monitor wait.
+
+environment:
+  toolchain: "asdf shims on PATH (not on bare PATH by default -- had to prepend $HOME/.asdf/shims): Elixir 1.20.3, Erlang/OTP 29 (erts-17.0.5), Mix 1.20.3"
+  docker: >
+    letflow-1-postgres-1 and letflow-1-keycloak-1 were already running
+    at session start (docker.sock not directly accessible to this
+    session's user -- required `sudo -n docker compose up -d`, which
+    reported both containers already Running; no container was
+    created, restarted, or removed).
+  db_port: "5463 (from this checkout's untracked .env: LETFLOW_DB_PORT=5463)"
+  partition_count_N: 8
+  partition_count_source: nproc
+
+test_parallel:
+  script: scripts/test_parallel.sh
+
+  run_1:
+    raw_output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+      test_parallel: partition logs in /tmp/letflow_test_parallel.bcB7q0
+      test_parallel: TEST_PARALLEL_GROUP=tp229997 (shared by all 8 partitions)
+      partition 1: 273 tests, 0 properties, 0 failures, exit 0
+      partition 2: 309 tests, 0 properties, 0 failures, exit 0
+      partition 3: 283 tests, 2 properties, 0 failures, exit 0
+      partition 4: 209 tests, 0 properties, 0 failures, exit 0
+      partition 5: 244 tests, 2 properties, 0 failures, exit 0
+      partition 6: 140 tests, 0 properties, 0 failures, exit 0
+      partition 7: 311 tests, 1 property, 0 failures, exit 0
+      partition 8: 373 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed)
+    result: CLEAN
+
+  run_2:
+    raw_output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+      test_parallel: partition logs in /tmp/letflow_test_parallel.y2Hb3g
+      test_parallel: TEST_PARALLEL_GROUP=tp241121 (shared by all 8 partitions)
+      partition 1: 273 tests, 0 properties, 0 failures, exit 0
+      partition 2: 309 tests, 0 properties, 0 failures, exit 0
+      partition 3: 283 tests, 2 properties, 0 failures, exit 0
+      partition 4: 209 tests, 0 properties, 0 failures, exit 0
+      partition 5: 244 tests, 2 properties, 0 failures, exit 0
+      partition 6: 140 tests, 0 properties, 0 failures, exit 0
+      partition 7: 311 tests, 1 property, 0 failures, exit 0
+      partition 8: 373 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed)
+    result: CLEAN
+
+  run_3:
+    raw_output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+      test_parallel: partition logs in /tmp/letflow_test_parallel.2EnFn2
+      test_parallel: TEST_PARALLEL_GROUP=tp251992 (shared by all 8 partitions)
+      partition 1: 273 tests, 0 properties, 0 failures, exit 0
+      partition 2: 309 tests, 0 properties, 0 failures, exit 0
+      partition 3: 283 tests, 2 properties, 0 failures, exit 0
+      partition 4: 209 tests, 0 properties, 0 failures, exit 0
+      partition 5: 244 tests, 2 properties, 0 failures, exit 0
+      partition 6: 140 tests, 0 properties, 0 failures, exit 0
+      partition 7: 311 tests, 1 property, 0 failures, exit 0
+      partition 8: 373 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed)
+    result: CLEAN
+
+  summary: >
+    3 of 3 counted runs fully clean, identical per-partition test/property
+    counts across all 3 runs (2147/2147 passed each time). No occurrence
+    of the AC-5 in-flight-child failure, the function_exported? race, or
+    any other failure. Combined with ELIXIR-DEV's own 3 quoted clean runs
+    of the same script after commit c1af105, that is 6 consecutive clean
+    full-suite runs post-fix, with zero recurrences of either flake this
+    run's rework rounds targeted.
+
+failures: []
+
+attribution_note: >
+  No failure occurred in any of the 3 runs, so no structural attribution
+  work was required this round (core-directives.md's "Failure Attribution
+  Is Structural, Never By Count-Matching" applies when a failure is
+  observed and a determination of pre-existing-vs-new must be made; there
+  is nothing to attribute here). This is noted explicitly, per this
+  task's instruction to apply full scrutiny to ANY failure seen, rather
+  than silently omitting the section -- there is genuinely nothing to
+  report in it this time.
+
+verdict: PASS
+verdict_reasoning: >
+  Both flakes that drove the two prior rework rounds on this run
+  (AC-5's fixed Process.sleep(50) one-shot check, and the
+  function_exported?/3 module-loading race) were root-cause fixed in
+  commit c1af105 (bounded poll/retry loop for AC-5; Code.ensure_loaded
+  before the function_exported? check for the module race). Across 3
+  independent, foreground, one-at-a-time scripts/test_parallel.sh runs
+  performed directly by this agent, all 3 were fully clean at 2147/2147
+  with identical per-partition breakdowns, and 0 failures of any kind
+  were observed -- so there is no evidence to attribute, structurally or
+  otherwise. Combined with ELIXIR-DEV's own 3 clean runs on the same
+  commit, confidence is high (6 consecutive clean runs post-fix) that
+  both flakes are genuinely resolved rather than merely unlucky-not-to-
+  reproduce. Recommend PASS; hand off to RELEASE-VALIDATOR for its own
+  independent re-run per core-directives.md.

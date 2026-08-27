@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step04-recheck2-WF02-REQ155-20260827",
+  "run_id": "WF02-REQ155-20260827",
+  "workflow_id": "WF-02",
+  "step": "4",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ155-20260827/step-04-test-run-recheck2.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-155"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ155-20260827/step-04-test-run-recheck.json",
+      "handoffs/WF02-REQ155-20260827/step-02a-elixir-dev-rework2.json"
+    ],
+    "artifacts_in": [
+      "test/letflow/engine/lua/executor_test.exs",
+      "scripts/test_parallel.sh"
+    ],
+    "branch_name": "feature/WF02-REQ155-20260827",
+    "commit": "c1af105"
+  },
+  "task": {
+    "description": "TEST-RUNNER (WF-02 Step 4) SECOND RE-CHECK for REQ-155. ELIXIR-DEV's rework iteration 2 (commit c1af105) fixed two flakes in test/letflow/engine/lua/executor_test.exs: (1) AC-5's fixed-sleep in-flight-child check, replaced with a bounded poll/retry loop; (2) the long-standing 'execute_with_manifest/2 is exported' function_exported? flake, root-cause fixed via Code.ensure_loaded(Executor) before the check. ELIXIR-DEV quoted 3 consecutive clean scripts/test_parallel.sh runs after both fixes. Run scripts/test_parallel.sh yourself at least 3 times (this run has already needed two rounds of rework from insufficient confidence on a single/few runs -- do not settle for fewer than 3 clean runs before recommending PASS). Quote every run. If ANY failure occurs, apply full structural attribution scrutiny per core-directives.md given this exact file has now had two real bugs found in it during this run.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run at least 3 times, real output quoted for each",
+      "If any failure occurs, structurally attributed with full scrutiny, not casually waved off",
+      "Fresh test report written"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "test/reports/report-2026-08-27-WF02-REQ155-20260827-recheck2.yaml"
+    ],
+    "notes": "Ran scripts/test_parallel.sh 3 times, foreground, one at a time (asdf shims prepended to PATH: $HOME/.asdf/shims; Elixir 1.20.3, OTP 29, Mix 1.20.3). docker compose containers (letflow-1-postgres-1, letflow-1-keycloak-1) were already Running at session start; confirmed via `sudo -n docker compose up -d`, no container created/restarted. DB port 5463 from this checkout's untracked .env (LETFLOW_DB_PORT=5463). All 3 runs were fully clean and identical: 'combined: 2142 tests, 5 properties, 0 failures (2147/2147 passed)' with the same per-partition breakdown each time (partition 1: 273 tests/0 props/0 fail; partition 2: 309/0/0; partition 3: 283/2/0; partition 4: 209/0/0; partition 5: 244/2/0; partition 6: 140/0/0; partition 7: 311/1/0; partition 8: 373/0/0), all exit 0. Zero occurrences of either flake this run's rework rounds targeted (AC-5 in-flight-child check, function_exported?/3 module race). No failure occurred in any run, so no structural attribution analysis was needed this round (core-directives.md's attribution requirement applies when a failure is observed to determine pre-existing-vs-new; nothing to attribute here, noted explicitly in the report rather than omitted). Combined with ELIXIR-DEV's own 3 quoted clean runs on commit c1af105, that is 6 consecutive clean full-suite runs post-fix. Verdict: PASS. Full report at test/reports/report-2026-08-27-WF02-REQ155-20260827-recheck2.yaml. Did not commit/push per instructions -- ORCH handles git."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

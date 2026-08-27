@@ -324,3 +324,33 @@ history:
       Moduledoc states LUA-08 layer-1 restatement and INV-2/INV-4 non-port
       explanation. 4 new AC tests (AC-1..4) + 11 inherited REQ-153 tests all pass
       (15/15). Status flipped in_progress -> done.
+
+  - req: REQ-157
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-27T10:34:27Z"
+    note: >
+      WF02-REQ157-20260827 complete. Capability model and capability check at
+      every gated host-function call site (LUA-05, LUA-06). Platform table
+      exposes exactly the eight functions of R-Co's host_api/mod.zig matrix
+      (call_service, read_variable, write_variable, log, emit_event,
+      get_instance_state, now, fail) and no others, enumerated from inside a
+      script. Capability-denial tests present for all six gated functions,
+      each asserting a structured Lua error naming function, capability
+      required, and capabilities granted. call_service's grant confirmed
+      parameterised by service id (service:call:alpha does not authorise
+      call_service('beta')). now and fail confirmed callable with an empty
+      capability set. Moduledoc reproduces the R-Co capability matrix
+      including the now/fail ungated-by-design rationale. Passed design,
+      CODE-DESIGN-VALIDATOR (2 rework iterations to remove literal Elixir
+      code from the design doc), SECURITY-REVIEWER (hard gate, authorization
+      boundary for tenant-supplied scripts), REVIEWER, TEST-DESIGNER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER, and RELEASE-VALIDATOR
+      (independent re-verification, Step 5 PASS). Status flipped
+      pending -> done in docs/requirements.yaml.
+      CORRECTION to this run's own earlier draft of this note: it originally
+      claimed no `started` event had ever been logged for REQ-157 in this
+      volume. That was wrong -- the started event above (agent: ORCH, at:
+      "2026-08-27T06:59:00Z") landed on main from this same run while this
+      branch was in flight and only became visible on rebase; there was no
+      process gap after all.

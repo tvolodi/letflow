@@ -686,8 +686,20 @@ volumes:
     path: docs/status/requirement_status.v5.yaml
     status: current
     opened: 2026-08-26
-    entries: 11
+    entries: 12
     note: >
+      Incremented to 12 by conflict resolution at Step Final (WF02-REQ157-20260827
+      rebase onto main) -- main already carried REQ-157's own started event
+      (appended by a sibling/earlier session of this same run) plus
+      WF02-REQ154-20260827's two done-event appends and its own composed
+      count of 11; this run's own REQ-157 done-event append composes on top
+      of that, `grep -c "^  - req:" docs/status/requirement_status.v5.yaml`
+      = 12 on-disk entries. This run's own done-event note originally
+      claimed REQ-157 had no started event anywhere in this volume -- that
+      was written before this rebase surfaced main's already-landed started
+      event; corrected in the done-event's own note rather than silently
+      fixed, per this file's append-only, never-rewrite convention.
+
       Incremented to 11 by conflict resolution at Step Final (WF02-REQ154-20260827 rebase onto
       main) — main had REQ-157 started event appended by a sibling session; both entries composed.
       `grep -c "^  - req:" docs/status/requirement_status.v5.yaml` = 11 on-disk entries.

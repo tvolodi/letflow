@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step06-WF02-REQ157-20260827",
+  "run_id": "WF02-REQ157-20260827",
+  "workflow_id": "WF-02",
+  "step": "6",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ157-20260827/step-06-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-157"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ157-20260827/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v5.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ157-20260827",
+    "commit": "8eb1e3b"
+  },
+  "task": {
+    "description": "DOC-UPDATER (WF-02 Step 6) for REQ-157, which passed RELEASE-VALIDATOR (Step 5, PASS -- see step-05-release-validator.json). (1) Flip REQ-157's status in docs/requirements.yaml from 'pending' to 'done' (entry starts around line 7850). (2) Append a 'done' event for REQ-157 to the current run-history volume -- per docs/status/requirement_status.index.yaml, volume 5 (docs/status/requirement_status.v5.yaml) is current with 8 entries as of this writing; re-count with `grep -c \"^  - req:\" docs/status/requirement_status.v5.yaml` before appending (do not trust the '8' figure blindly -- recount per the index's own rule) and update the index's note with the new count, same append-discipline as every other entry (real UTC timestamp, all 5 required fields: req/event/at/note, check the volume's own header for the exact required field set). NOTE A PROCESS GAP while appending: no 'started' event was ever logged for REQ-157 in this volume (grep confirms zero REQ-157 entries currently) -- this should have happened at Step 00 (git setup) but was missed. Do not fabricate a backfilled timestamp for it. Simply append the 'done' event now and note in its own entry (or as a short separate note in the index) that no started event preceded it for this run, so this is visible rather than silently absent -- follow whatever this project's established convention is for a missed prior event (check docs/anti-patterns.md and the index's own history for how similar gaps were previously handled, e.g. the REQ-018/019 backfilled-registry precedent) rather than inventing a new convention. (3) README.md: check whether REQ-157 altered documented current behavior (the platform.* Lua API surface) -- if README.md documents platform.* functions or the Lua sandboxing model anywhere, confirm it's not now stale; update if so. (4) No docs/migration/stage-N-*.md or decisions/ file was named in REQ-157's acceptance_criteria for update -- confirm this by re-reading the requirements.yaml entry, and skip if correct.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-157 status flipped pending -> done",
+      "requirement_status.v5.yaml has a new REQ-157 done event with a real UTC timestamp and all required fields",
+      "requirement_status.index.yaml's volume 5 entry count updated to match a fresh recount, with a note explaining the increment",
+      "The missing started-event gap for REQ-157 explicitly noted, not silently ignored, using this project's established convention for such gaps",
+      "README.md checked for staleness re: platform.* Lua API surface, updated if stale"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "notes": "REQ-157 status flipped pending -> done in docs/requirements.yaml (entry at the id: REQ-157 block). Appended a 'done' event for REQ-157 to docs/status/requirement_status.v5.yaml with all 5 required fields (req/event/agent/at/note) and a real clock timestamp (2026-08-27T10:34:27Z from `date -u`). `git diff --numstat` on that file showed 34 insertions / 1 deletion -- the sole deletion was the pre-existing 'No newline at end of file' marker on the prior tail entry being closed out by my append, not any content removed/reordered (confirmed by reading the diff: prior content unchanged, only new lines added after it). Recounted via `grep -c \"^  - req:\" docs/status/requirement_status.v5.yaml` = 9 (up from 8 declared). Updated requirement_status.index.yaml's volume-5 entries: 8 -> 9 and prepended a new note paragraph (kept prior notes intact, per append convention for this free-text field) explaining the increment with the exact grep command and count. PROCESS GAP handling: confirmed via `grep -n \"REQ-157\" docs/status/requirement_status.v5.yaml` that no started-event exists for REQ-157 in this volume. Per this project's established convention (the index's own recount-every-time notes, e.g. the ISS-0346/GH#665 entry which records a declared-count drift explicitly rather than retroactively 'fixing' history), I did NOT fabricate a backfilled started-event or timestamp. Instead I documented the gap in prose in two places: (a) the new done-event's own note field states the started-event was never logged and that this done-event stands alone by design, and (b) the index's volume-5 note states the same with the confirming grep command. README.md: grep for 'lua' (case-insensitive) across README.md returned zero matches -- the file does not document platform.* functions or any Lua sandboxing model at any level of detail, so there is nothing stale to update; skipped per acceptance criterion's own conditional ('if README.md documents... update if stale'). Confirmed via re-reading the REQ-157 entry in docs/requirements.yaml that its acceptance_criteria names no docs/migration/stage-N-*.md or docs/migration/decisions/*.md file (criteria reference only R-Co source paths and the module's own moduledoc) -- so no migration-doc update was required or attempted."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -275,3 +275,12 @@ history:
       confirmed held with real executor via execute_script_for_audit/6 tests.
       11/11 executor tests pass. 2100/2108 full suite (8 pre-existing, none
       attributable to this branch). Status flipped in_progress -> done.
+  - req: REQ-154
+    event: started
+    agent: ORCH
+    at: "2026-08-27T06:32:50Z"
+    note: >
+      WF02-REQ154-20260827 started (queue task 306, GH#606, stage S5).
+      Step 00 git-setup PENDING (ELIXIR-DEV dispatched): branch
+      feature/WF02-REQ154-20260827 to be created and pushed. 7 on-disk
+      entries before this append; 8 after.

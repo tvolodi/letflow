@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "TEST-DESIGNER",
   "file": "handoffs/WF02-REQ161-20260827/step-03-test-designer.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -38,6 +38,59 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "summary": "ELIXIR-DEV's existing 100 tests in test/letflow/engine/lua/platform_test.exs already cover all 7 REQ-161 acceptance criteria with genuinely regression-sensitive tests. Performed 5 real mutations against the shipped lib/letflow/engine/lua/platform.ex, ran mix test after each, confirmed a failure, then reverted and re-confirmed 100/100 passing. No coverage gap was found; no new test code was added. test/specs/REQ-161.md updated with the full findings table.",
+    "mutations": [
+      {
+        "id": 1,
+        "target": "AC1 -- do_fail/2's exit({:script_failed, ...}) call, platform.ex ~line 561",
+        "mutation": "Reverted to the OLD hazard: raise Lua.RuntimeException instead of exit/1",
+        "result": "8/100 tests failed",
+        "caught_by": ["AC1 pcall-continuation test", "both AC2 tests", "AC3 distinguishability", "AC4 empty-capability", "table-shaped-reason test", "REQ-159/REQ-157 matrix-regression guards"],
+        "existing_test_or_added": "existing -- no new test needed",
+        "reverted_and_reconfirmed": true
+      },
+      {
+        "id": 2,
+        "target": "AC2 -- reason/details map construction, platform.ex ~line 560",
+        "mutation": "Swapped keys: %{reason: details, details: reason_string}",
+        "result": "8/100 tests failed",
+        "caught_by": ["both AC2 tests", "AC1", "AC3", "AC4", "table-shaped-reason test", "REQ-159/REQ-157 guards"],
+        "existing_test_or_added": "existing -- no new test needed",
+        "reverted_and_reconfirmed": true
+      },
+      {
+        "id": 3,
+        "target": "AC3 -- exit tag, platform.ex ~line 561",
+        "mutation": "Changed :script_failed to a generic :generic_failure tag",
+        "result": "8/100 tests failed",
+        "caught_by": ["AC3 distinguishability test", "AC1", "both AC2 tests", "AC4", "table-shaped-reason test", "REQ-159/REQ-157 guards"],
+        "existing_test_or_added": "existing -- no new test needed",
+        "reverted_and_reconfirmed": true
+      },
+      {
+        "id": 4,
+        "target": "AC4 -- empty-capability-set genuineness + :fail row's required field, platform.ex line 351",
+        "mutation": "Verified Capabilities.new/0 (capabilities.ex line 61) returns a genuinely empty MapSet, not a wildcard grant. Then mutated the :fail matrix row's required: :none to required: \"some:capability\"",
+        "result": "8/100 tests failed",
+        "caught_by": ["AC4 empty-capability test", "AC1", "both AC2 tests", "AC3", "table-shaped-reason test", "REQ-159/REQ-157 guards"],
+        "existing_test_or_added": "existing -- no new test needed",
+        "reverted_and_reconfirmed": true
+      },
+      {
+        "id": 5,
+        "target": "AC5/AC6 -- moduledoc exact-string assertion",
+        "mutation": "Reworded 'no real call site today' to softer text in the REQ-161 moduledoc section",
+        "result": "1/100 tests failed",
+        "caught_by": ["REQ-161: moduledoc content (AC5, AC6) -- 'states plainly that LUA-15's engine-side half has no real call site today'"],
+        "existing_test_or_added": "existing -- no new test needed",
+        "reverted_and_reconfirmed": true
+      }
+    ],
+    "additional_verification": "grep confirmed no REQ-161 test calls Executor.execute_with_manifest/2,3 -- all REQ-161 tests assert at the raw Task.yield/2 boundary directly against Platform.install/3's output, per design section 4's layering discipline. The only match in the REQ-161 describe block is an explanatory comment, not a call.",
+    "test_files_changed": ["test/specs/REQ-161.md (mutation-testing findings table added)"],
+    "test_code_changed": "none -- test/letflow/engine/lua/platform_test.exs was not modified; the existing 100 tests already provide complete, regression-sensitive coverage for all 7 acceptance criteria",
+    "final_mix_test_output": "Finished in 8.6 seconds (0.00s async, 8.6s sync)\nResult: 100 passed",
+    "lint_handoffs": "mix letflow.lint_handoffs run -- 0 new violations"
   }
 }

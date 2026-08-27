@@ -1,0 +1,52 @@
+{
+  "handoff_id": "step02c-WF02-REQ154-20260827",
+  "run_id": "WF02-REQ154-20260827",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ154-20260827/step-02c-security-reviewer.json",
+  "created_at": "2026-08-27T08:03:41Z",
+  "started_at": "2026-08-27T08:03:41Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-154"],
+    "issue_ids": ["ISS-0350"],
+    "requirement_text": {
+      "REQ-154": "In-band instruction budget for Lua script execution. Wire a CONFIGURABLE :max_instructions budget into the Lua executor path. Convert budget exhaustion into a structured error {:error, {:budget_exceeded, limit}}. This is a resource-exhaustion boundary on a tenant-supplied input path. GATE: SECURITY-REVIEWER is a hard gate."
+    },
+    "artifacts_in": [
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua/sandbox.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req154-lua-instruction-budget.md",
+      "docs/issues/ISS-0350.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua/sandbox.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/design/req154-lua-instruction-budget.md",
+      "test/specs/REQ-154.md"
+    ],
+    "branch_name": "feature/WF02-REQ154-20260827",
+    "security_context": "This change extends the Lua executor (a tenant-supplied script execution path) with a configurable instruction budget. The resource-exhaustion boundary is the primary security concern: a tenant script without a budget could exhaust BEAM scheduler time. The budget is implemented via Lua.new(max_instructions: N) -- an in-band pcall-catchable limit. The guard is restored on execute_with_manifest/2 (ISS-0350 fix). SECURITY-REVIEWER should gate against INV-1 through INV-8 in security-invariants.md.",
+    "prior_security_review_ref": "Step-02c of WF02-REQ153-20260827 reviewed the base executor; this review covers the budget extension and ISS-0350 restoration."
+  },
+  "task": {
+    "description": "Gate the REQ-154 implementation (executor.ex and sandbox.ex changes on branch feature/WF02-REQ154-20260827) against security-invariants.md INV-1..INV-8. Key concerns: (1) resource exhaustion boundary -- does the budget limit prevent unbounded resource use from tenant scripts? (2) is the budget configurable (not bypassable by tenant script code)? (3) is the guard on execute_with_manifest/2 correctly restored (ISS-0350)? (4) pcall-catchable budget limitation -- is it documented and tested? Read the actual source files, not the design doc alone.",
+    "acceptance_criteria": [
+      "INV-1 through INV-8 from security-invariants.md each checked against the implementation",
+      "The instruction budget cannot be modified or bypassed by tenant Lua script code (budget is a VM-level option, not a Lua global)",
+      "The is_binary guard is present on execute_with_manifest/2 and execute_with_manifest/3",
+      "No SQL string interpolation of tenant/user input (INV-7)",
+      "No unresolved {:ok, _} = match on a path reachable from external I/O (INV-8)",
+      "The pcall-catchable limitation is acknowledged in the moduledoc and tested"
+    ]
+  },
+  "result": null
+}

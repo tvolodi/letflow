@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF02-REQ162-20260827/step-01-code-designer.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -38,6 +38,7 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "DESIGN_COMPLETE",
+    "summary": "Design written to lib/letflow/design/req162-lua-script-error-capture.md and test/specs/REQ-162.md. Independently determined (deps/lua/lib/lua.ex, runtime_exception.ex, vm/runtime_error.ex, vm/state.ex, vm/executor.ex, all read directly) that branch (a) of LUA-16's restatement holds: the consumed instruction count IS retrievable on the uncaught-error path, via exception.original.state.instruction_count -- a DIFFERENT accessor path than REQ-148 spike Section 5 (OQ-2(c))'s success-path lua_after.state.instruction_count finding, since Lua.RuntimeException's own top-level :state field is never populated by any exception/1 clause. A narrower branch-(b) fallback ({:configured_budget, budget}) is retained for exception shapes (Lua.VM.InternalError, unconfirmed Lua.VM.ArgumentError raise sites) that carry no :state at all. SCRIPT_ERROR capture lives in executor.ex's run_script/3, extending its existing rescue e in Lua.RuntimeException clause (not platform.ex, which only sits inside the Lua.eval!/2 call, never at the boundary that observes an error escaping it). SCRIPT_ERROR shape is {:error, {:script_error, script_error()}} with fields message/stack_trace/instruction_count/capabilities, pattern-match-distinct from SCRIPT_FAILED (REQ-161, a process exit(/1) reason, never a return value), budget-exceeded/wallclock-timeout/memory-limit (REQ-154/155/156, either a different tag atom or produced by entirely disjoint task-level code). Division-by-zero substitution: 1//0 (raises 'attempt to divide by zero'), not 1/0 (yields inf, confirmed non-raising) or 1%0 (raises but with 'n%0' wording, less literal). Stack-trace sanitization: never surface Elixir __STACKTRACE__; use only Lua.RuntimeException.to_map/2's already-clean, Lua-only call_stack (source/line/name, structurally incapable of embedding a host path or Elixir module) for the typed exception case, and a fixed non-leaking placeholder (never a passthrough) for the untyped/InternalError fallback case. Capability-state field reads Letflow.Engine.Lua.Capabilities' real grant_set() type; documented an inherited, pre-existing wiring gap (Sandbox.new/1 always installs the empty Capabilities.new() grant set today, per capabilities.ex/platform.ex's own OQ-1) that means this field reports [] in production until a future requirement threads manifest.capabilities through -- AC6 is proven instead at the layer that owns the property, per req161's own established precedent for an analogous gap. All 8 real acceptance criteria mapped in a traceability table (design section 12). mix letflow.lint_handoffs run, 0 new violations."
   }
 }

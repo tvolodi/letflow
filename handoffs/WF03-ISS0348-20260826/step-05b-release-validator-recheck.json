@@ -6,7 +6,8 @@
   "from_agent": "ORCH",
   "to_agent": "RELEASE-VALIDATOR",
   "file": "handoffs/WF03-ISS0348-20260826/step-05b-release-validator-recheck.json",
-  "status": "PENDING",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-27T02:20:00Z",
   "priority": "NORMAL",
   "context": {
     "stage": "S0",
@@ -33,7 +34,29 @@
       "If clean: PASS, route to ISSUE-FIXER for close"
     ]
   },
-  "result": {},
+  "result": {
+    "status": "PASS",
+    "verdict": "PASS -- blocking H3 handoff-schema violation from step-05's FAIL is confirmed resolved. mix letflow.check now exits 0 end-to-end, including a fresh full-serial mix test run under the exact mechanism (mix letflow.check.test) that originally exposed ISS-0348.",
+    "checks": [
+      {
+        "criterion": "handoffs/WF03-ISS0348-20260826/step-02-code-designer.json no longer has top-level artifacts_out",
+        "verdict": "CONFIRMED",
+        "evidence": "Parsed the JSON directly: top-level keys are ['completed_at','context','file','from_agent','handoff_id','max_rework','priority','result','rework_count','run_id','status','step','task','to_agent','workflow_id'] -- no 'artifacts_out' among them. result.artifacts_out (['lib/letflow/design/iss0348-backfill-test-isolation.md']) is present and correctly nested. Confirmed against commit 36ba0fd (chore(ORCH): fix ISS-0348's own step-02 handoff -- top-level artifacts_out is not a valid schema field), which is present in this branch's history."
+      },
+      {
+        "criterion": "mix letflow.check exits 0 with no test failures and no ISS-0069 warnings",
+        "verdict": "CONFIRMED -- re-ran fresh myself (did not rely solely on ORCH's or my own prior run)",
+        "evidence": "Ran `mix letflow.check` independently on branch feature/WF03-ISS0348-20260826 (working tree clean, git status empty before the run). Full alias completed all 7 steps in order with no early abort: letflow.check_toolchain: OK (Elixir 1.20.3 / OTP 29); letflow.check_requirements_registration and letflow.check_deferral_staleness produced no error lines; letflow.lint_handoffs: OK -- 0 new violations across 1067 handoff files (25 pre-existing grandfathered, traced to ISS-0190) -- this is the exact check that aborted step-05's run at exit 1 on step-02-code-designer.json's top-level artifacts_out; it is now clean; format --check-formatted and compile --warnings-as-errors produced no failure output (reaching the test step at all proves these passed, since the alias aborts on first failing task); full serial test run finished in 656.5s (10.0s async, 646.5s sync) with 'Result: 2097 passed (5 properties, 2092 tests), 3 excluded', 0 failures; final step printed 'mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings.' No compile warnings, no assertion failures, no crash traces outside of tests that deliberately simulate failures (e.g. ISS-0065 negative-path cleanup test, PRM-07 sandbox-release-failure event tests) as part of their own coverage.",
+        "reasoning_for_fresh_rerun": "Chose to re-run fully rather than rely on my own step-05 run's already-fresh mix-test confidence, because step-05's FAIL was specifically because I never reached a clean end-to-end mix letflow.check pass (it aborted at lint_handoffs before doing so) -- the acceptance criterion here is exit-0 for the FULL alias, not just the test suite, so a fresh full run was the only way to directly confirm the fix rather than reasoning about it."
+      },
+      {
+        "criterion": "backfill_test.exs fix isolates BackfillTest without weakening it",
+        "verdict": "RECONFIRMED (no code changed since step-05's already-thorough re-verification)",
+        "evidence": "git diff main...HEAD --stat still shows only test/letflow/tenant_provisioning/backfill_test.exs, docs, and handoffs changed since main; lib/letflow/tenant_provisioning/backfill.ex, test/support/tenant_fixture.ex, test/support/data_case.ex untouched. No lib/ or test/ files changed between step-05 and this re-check -- only handoffs/WF03-ISS0348-20260826/step-02-code-designer.json's metadata shape changed (commit 36ba0fd). Not re-reading the test file line by line again since step-05 already did this rigorously and nothing in scope changed."
+      }
+    ],
+    "next_action": "Route to ISSUE-FIXER for close"
+  },
   "rework_count": 1,
   "max_rework": 3
 }

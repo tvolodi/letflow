@@ -555,3 +555,30 @@ history:
       feature/WF02-REQ160-20260827 created from main (44ba8a2) and
       pushed. Dispatching Step 1 to CODE-DESIGNER next. 20 on-disk
       entries before this append; 21 after.
+
+  - req: REQ-160
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-27T20:17:26Z"
+    note: >
+      WF02-REQ160-20260827 complete. Lua host API 2/2 -- write path --
+      platform.write_variable staged-and-atomic across every S5 failure arm
+      (raised script error, REQ-154's instruction budget, REQ-155's
+      wall-clock kill, REQ-156's memory limit), call_service, emit_event
+      (LUA-11 write half, LUA-12). This run went through one design rework
+      (Step 1b CODE-DESIGN-VALIDATOR rejected the original design for a
+      kill-race invariant gap -- fixed by adding INV-write-discard-on-race,
+      ensuring the staging buffer's only escape hatch is a normal per-process
+      return, never read by platform.ex itself on a killed process) and one
+      test-design rework (missing kill-arm and atomicity tests, closed with
+      dedicated tests for each of the four failure arms plus a
+      VariableMerge.merge/3 atomicity test). RELEASE-VALIDATOR (Step 5)
+      independently re-derived all 8 acceptance criteria against real code
+      and freshly-run tests: `mix test test/letflow/engine/lua/platform_test.exs`
+      -- 90 tests, 0 failures; `mix compile --warnings-as-errors` -- exit 0,
+      no warnings. Passed design (with Step 1b rework), CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER (hard gate), REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR
+      (with rework), TEST-RUNNER, and RELEASE-VALIDATOR (Step 5 PASS). Status
+      flipped pending -> done in docs/requirements.yaml. `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 21 on-disk entries before this
+      append; 22 after.

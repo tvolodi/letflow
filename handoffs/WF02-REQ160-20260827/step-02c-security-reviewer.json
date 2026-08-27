@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step02c-WF02-REQ160-20260827",
+  "run_id": "WF02-REQ160-20260827",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ160-20260827/step-02c-security-reviewer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-160"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ160-20260827/step-01b-code-design-validator-recheck.json",
+      "handoffs/WF02-REQ160-20260827/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req160-lua-host-api-write.md",
+      "lib/letflow/engine/lua/platform.ex"
+    ],
+    "branch_name": "feature/WF02-REQ160-20260827",
+    "commit": "77d03e2"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER hard gate (WF-02 Step 2c) on REQ-160's implementation, commit 77d03e2 on lib/letflow/engine/lua/platform.ex. This requirement adds a tenant-data write path: platform.emit_event calls Letflow.EventStore.append/2 (a real Letflow.Repo write, tenant-schema-scoped via the `prefix:` option). Gate against docs/agents/instructions/security-invariants.md INV-1..INV-8. Read the approved design (lib/letflow/design/req160-lua-host-api-write.md) and the real diff (git show 77d03e2 -- lib/letflow/engine/lua/platform.ex) in full before verdict.",
+    "acceptance_criteria": [
+      "emit_event's Letflow.EventStore.append/2 call uses prefix: execution_context.prefix ALWAYS, never a value derived from event_type/payload/idempotency_key (the three script-supplied arguments) -- verify this against the actual committed code, not the design's claim about itself.",
+      "write_variable and call_service make zero Letflow.Repo calls -- verify no Repo/Ecto call was introduced anywhere in their real implementation.",
+      "call_service's injected ServiceCaller.call/2 callback receives only service_id and payload (script-controlled) -- confirm no tenant prefix, execution_context, or any other tenant-identifying value is passed to it, foreclosing a future implementation from accepting a script-supplied tenant identifier in place of a real one.",
+      "No script-supplied argument (event_type, payload, idempotency_key, service_id) can ever influence which tenant schema is targeted by any Repo call in this diff.",
+      "actor_id (new execution_context field) is host-authored only -- confirm no code path in this diff derives actor_id from a script argument.",
+      "Capability gating for call_service/emit_event is unchanged and still runs at the fold level (Capabilities.check!/3) strictly before either function's body -- confirm the diff did not weaken or bypass this.",
+      "No new sandbox-escape surface: confirm the ServiceCaller/NoServiceCaller nested modules and Lua.decode!/2 usage do not introduce any new way for a script to reach unintended host state.",
+      "Cross-check against docs/agents/instructions/security-invariants.md INV-1..INV-8 explicitly, naming which invariants apply and confirming each holds."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

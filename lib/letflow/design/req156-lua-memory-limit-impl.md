@@ -178,7 +178,7 @@ call:
 
 | `max_heap_words` value | Execution path used |
 |---|---|
-| `nil` | **Unchanged from REQ-155.** `Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn -> run_script(script_source, budget) end)`, then `Task.yield/2` bounded by `timeout_ms`, then `Task.shutdown(task, :brutal_kill)` on a `nil` yield — exactly REQ-155 §4.1–§4.3, byte-for-byte. |
+| `nil` | **Unchanged from REQ-155.** The script body is submitted to `Letflow.Engine.Lua.TaskSupervisor` via `async_nolink/2`, with the supervisor as the first argument and a zero-argument closure over the script source and budget as the second, exactly as REQ-155 §4.1–§4.3 already specify, byte-for-byte. The resulting task is then awaited via `Task.yield/2` bounded by `timeout_ms`, followed by `Task.shutdown(task, :brutal_kill)` on a `nil` yield, both also unchanged from REQ-155. |
 | `pos_integer()` | **New path, this requirement.** The script body runs in a process started directly via `:erlang.spawn_opt/2` (not under `Letflow.Engine.Lua.TaskSupervisor`, and not via `Task` at all), monitored from the moment of spawn (the `:monitor` spawn option), with `max_heap_size: %{size: max_heap_words, kill: true, error_logger: false}` also set at spawn time. |
 
 ### 5.1 The new path's message protocol and outcome table

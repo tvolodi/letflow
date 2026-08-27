@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step03b-WF02-REQ161-20260827",
+  "run_id": "WF02-REQ161-20260827",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ161-20260827/step-03b-test-design-validator.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-161"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ161-20260827/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req161-lua-platform-fail.md",
+      "lib/letflow/engine/lua/platform.ex",
+      "test/letflow/engine/lua/platform_test.exs",
+      "test/specs/REQ-161.md"
+    ],
+    "branch_name": "feature/WF02-REQ161-20260827",
+    "commit": "d60d871"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate (WF-02 Step 3b) on REQ-161's test suite. TEST-DESIGNER ran 5 mutation tests against lib/letflow/engine/lua/platform.ex (commit d60d871) and found NO coverage gaps -- all 5 mutations were caught by ELIXIR-DEV's existing 100 tests, so no new test code was added. Verify this claim independently -- do not trust TEST-DESIGNER's self-report; a 'no gap found' result is exactly the kind of finding that most needs independent re-verification since there's no diff to inspect. Re-run at least 2 of the 5 claimed mutations yourself against the real code and confirm the existing tests genuinely catch them.",
+    "acceptance_criteria": [
+      "Every one of REQ-161's 7 real acceptance criteria (docs/requirements.yaml) maps to at least one runnable test -- verified by reading the test file, not the spec's claim about itself.",
+      "Independently re-apply at least 2 of TEST-DESIGNER's 5 claimed mutations (recommend: mutation 1, reverting exit/1 to the old raise-based hazard, since it's the central regression this requirement exists to prevent; and mutation 3, the tag-collision one, since it's the AC3 distinguishability property) and confirm the existing tests genuinely fail against the mutated code and pass against the real code.",
+      "Confirm the working tree is genuinely clean after your verification -- git diff --stat lib/letflow/engine/lua/platform.ex empty, since TEST-DESIGNER claims it made zero code changes.",
+      "No skipped, pending, or excluded tests anywhere in the REQ-161 section of test/letflow/engine/lua/platform_test.exs.",
+      "Confirm no REQ-161 test routes through Executor.execute_with_manifest/2,3 (which would mask the raw exit-reason shape per design section 4's documented gap) -- grep and read directly.",
+      "test/specs/REQ-161.md's new mutation-testing findings table accurately reflects what was actually done.",
+      "mix test test/letflow/engine/lua/platform_test.exs and mix compile --warnings-as-errors both independently re-run and confirmed clean, with real output quoted."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

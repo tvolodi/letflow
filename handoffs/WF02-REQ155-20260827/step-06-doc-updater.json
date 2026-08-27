@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step06-WF02-REQ155-20260827",
+  "run_id": "WF02-REQ155-20260827",
+  "workflow_id": "WF-02",
+  "step": "6",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ155-20260827/step-06-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-155"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ155-20260827/step-05-release-validator-recheck.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v5.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ155-20260827",
+    "commit": "30aab7e"
+  },
+  "task": {
+    "description": "DOC-UPDATER (WF-02 Step 6) for REQ-155, which passed RELEASE-VALIDATOR's recheck (Step 5, PASS -- see step-05-release-validator-recheck.json). (1) Flip REQ-155's status in docs/requirements.yaml from 'pending' to 'done' (entry around line 7738). (2) Append a 'done' event for REQ-155 to the current run-history volume -- check docs/status/requirement_status.index.yaml for the current volume (was v5 as of this run's start, may have advanced -- verify with `grep -n \"status: current\" -B2 docs/status/requirement_status.index.yaml`), recount `grep -c \"^  - req:\" <current volume path>` before and after appending, and update the index's note with the new count per its own established convention. The done event's note should mention the requirement's substance AND the fact this run needed 2 rework iterations that each found and fixed real bugs: (a) config/test.exs's lua_wallclock_timeout_ms was too tight (200ms) under parallel load and caused an intermittent spurious failure in an unrelated test, fixed by raising to 5000ms after an intermediate 1500ms value was also found insufficient; (b) two flaky tests in executor_test.exs were hardened/fixed -- AC-5's fixed-sleep in-flight-child check replaced with a poll/retry loop, and a long-standing 'execute_with_manifest/2 is exported' function_exported? race root-cause-fixed via Code.ensure_loaded/1. Also mention ISS-0340 was found recurring during this run's original Step 4 and reopened (docs/issues/ISS-0340.yaml). (3) README.md: check whether REQ-155 altered documented current behavior (Lua script execution timeout/kill semantics) -- update if README documents this level of detail, skip with a stated reason if not. (4) Confirm no docs/migration/stage-N-*.md or decisions/ file was named in REQ-155's own acceptance_criteria requiring an update.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-155 status flipped pending -> done",
+      "A new REQ-155 done event appended to the current run-history volume with a real UTC timestamp and all required fields, mentioning the rework history and the ISS-0340 reopen",
+      "requirement_status.index.yaml's current-volume entry count updated to match a fresh recount, with a note explaining the increment",
+      "README.md checked for staleness re: Lua execution timeout semantics, updated if stale",
+      "No migration-doc file was named in REQ-155's acceptance_criteria requiring update -- confirmed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "notes": "1) Flipped REQ-155's status field in docs/requirements.yaml (line ~7741) from pending to done. 2) Appended one done event for REQ-155 to docs/status/requirement_status.v5.yaml (the current volume per the index's `status: current` marker), agent DOC-UPDATER, at 2026-08-27T13:44:03Z (real clock time via `date -u`), covering the requirement's substance (out-of-band wall-clock kill, LUA-10 layer 2), the 2 rework iterations and the real bugs each fixed (lua_wallclock_timeout_ms 200ms -> 1500ms (still insufficient) -> 5000ms under parallel load; executor_test.exs AC-5 fixed-sleep replaced with poll/retry, and the execute_with_manifest/2 function_exported? race root-cause-fixed via Code.ensure_loaded/1), and the ISS-0340 reopen (docs/issues/ISS-0340.yaml, confirmed status: reopened on disk). Verified via `git diff --numstat docs/status/requirement_status.v5.yaml` = insertions 31 / deletions 0 (append-only, confirmed). Recount: `grep -c \"^  - req:\" docs/status/requirement_status.v5.yaml` was 13 before the append and is 14 after. Volume size after append: 401 lines / 22,020 bytes, well under the roll_rule ceiling (max_lines: 1200, max_bytes: 120000) -- no roll needed. 3) Updated docs/status/requirement_status.index.yaml's volume-5 entry: `entries: 13` -> `entries: 14`, and prepended a new note paragraph following the file's own established convention ('Incremented to 14 by WF02-REQ155-20260827 (DOC-UPDATER)'s own REQ-155 done-event append (Step 6) -- grep -c recount = 14 on-disk entries, no rebase conflict on this file.'), leaving all prior note text untouched (append-only). 4) README.md checked via `grep -n -i lua README.md` -- zero matches. README.md does not document Lua script execution or timeout/kill semantics at any level of detail, so there is nothing stale to update; skipped per the task's own stated condition. 5) Read REQ-155's full entry in docs/requirements.yaml (lines 7738-7789): its acceptance_criteria list (8 items) names no docs/migration/stage-N-*.md file and no docs/migration/decisions/*.md file as an update target -- decision 0014 is referenced only in the description's rationale prose, not as something this requirement's AC requires touching. Confirmed no migration-doc update was owed here."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

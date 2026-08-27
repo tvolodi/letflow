@@ -368,3 +368,34 @@ history:
       feature/WF02-REQ155-20260827 created from main (7b6fcff) and pushed.
       Dispatching Step 1 to CODE-DESIGNER next. 12 on-disk entries before
       this append; 13 after.
+
+  - req: REQ-155
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-27T13:44:03Z"
+    note: >
+      WF02-REQ155-20260827 complete. Out-of-band host-enforced wall-clock kill
+      for Lua script execution -- layer 2 of the two-layer pair (LUA-10
+      restated). Script execution runs under a supervised task with a
+      CONFIGURABLE wall-clock timeout enforced from outside the process
+      (Process.exit(pid, :kill) on timeout), proven to still terminate a
+      script that has pcalled its own REQ-154 instruction-budget exhaustion
+      and kept looping, with the dead process/no-child asserted post-timeout
+      and the timeout error structurally distinguishable from REQ-154's
+      in-band budget error. Passed design, SECURITY-REVIEWER (hard gate),
+      REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, and
+      RELEASE-VALIDATOR (Step 5 recheck, PASS). This run needed 2 rework
+      iterations, each of which found and fixed a real bug rather than a
+      cosmetic one: (a) config/test.exs's lua_wallclock_timeout_ms was too
+      tight at 200ms under parallel test-suite load, causing an intermittent
+      spurious failure in an unrelated test -- an intermediate 1500ms was
+      tried and also found insufficient before it was raised to 5000ms;
+      (b) two flaky tests in executor_test.exs were hardened/root-cause-fixed
+      -- AC-5's fixed-sleep in-flight-child check was replaced with a
+      poll/retry loop, and a long-standing "execute_with_manifest/2 is
+      exported" function_exported?/3 race was root-cause-fixed via
+      Code.ensure_loaded/1 rather than papered over. Separately, ISS-0340 (a
+      previously "resolved" flaky test) was found recurring during this run's
+      original Step 4 and has been reopened -- see docs/issues/ISS-0340.yaml
+      (status: reopened), not fixed as part of this requirement. Status
+      flipped pending -> done in docs/requirements.yaml.

@@ -7738,7 +7738,7 @@ requirements:
   - id: REQ-155
     title: Out-of-band host-enforced wall-clock kill for Lua script execution -- layer 2 of the two-layer pair (LUA-10 restated)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 307  # letflow-queue task id
     description: >

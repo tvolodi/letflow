@@ -259,3 +259,19 @@ history:
       Step 00 git-setup PENDING (ELIXIR-DEV dispatched): branch
       feature/WF02-REQ153-20260827 to be created and pushed. 5 on-disk
       entries before this append; 6 after.
+
+  - req: REQ-153
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-27T04:43:57Z"
+    note: >
+      WF02-REQ153-20260827 complete. Per-invocation Lua state isolation and
+      concrete LuaScriptAudit.Executor implementation (LUA-02). Module
+      Letflow.Engine.Lua.Executor at lib/letflow/engine/lua/executor.ex:
+      implements @behaviour Letflow.Engine.LuaScriptAudit.Executor, calls
+      Sandbox.new/0 per invocation (no state reuse), runs Lua source via
+      Lua.eval!/2, returns {:ok, %{manifest_hash: sha256_hex}}. script_ref
+      concrete shape settled as binary source text. INV-LSA-1 and INV-LSA-2
+      confirmed held with real executor via execute_script_for_audit/6 tests.
+      11/11 executor tests pass. 2100/2108 full suite (8 pre-existing, none
+      attributable to this branch). Status flipped in_progress -> done.

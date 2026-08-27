@@ -1,0 +1,41 @@
+{
+  "handoff_id": "step02c-WF02-REQ161-20260827",
+  "run_id": "WF02-REQ161-20260827",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ161-20260827/step-02c-security-reviewer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-161"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ161-20260827/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ161-20260827/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req161-lua-platform-fail.md",
+      "lib/letflow/engine/lua/platform.ex"
+    ],
+    "branch_name": "feature/WF02-REQ161-20260827",
+    "commit": "fa161fe"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER hard gate (WF-02 Step 2c) on REQ-161's implementation, commit fa161fe on lib/letflow/engine/lua/platform.ex. This requirement is UNGATED by design (platform.fail requires no capability) -- verify that is correct and does not open an unintended surface, and that the exit/1 termination mechanism itself introduces no new sandbox-escape or availability hazard. ELIXIR-DEV deviated from the design's literal do_fail/1 arity to do_fail/2 (threading Lua.t() through, needed for Lua.decode!/2 on table-shaped reason/details arguments) -- verify this deviation is genuinely necessary and does not silently change any security-relevant behavior. Read the approved design (lib/letflow/design/req161-lua-platform-fail.md) and the real diff (git show fa161fe -- lib/letflow/engine/lua/platform.ex) in full before verdict. Gate against docs/agents/instructions/security-invariants.md INV-1..INV-8.",
+    "acceptance_criteria": [
+      "Confirm platform.fail's capability_matrix row (required: :none) is genuinely unedited and that leaving it ungated is intentional/correct per R-Co's matrix precedent cited in the design -- not an accidental omission of a needed gate.",
+      "Confirm exit({:script_failed, %{reason:, details:}}) cannot be abused to exfiltrate data, crash unrelated processes, or affect any process other than the one executing the failing script (the calling process's own Task/monitor boundary).",
+      "Confirm the reason/details normalization pipeline (decode_lua_payload/2 + normalize_from_lua/1, reused from REQ-160) introduces no new tenant-prefix or cross-tenant data path -- platform.fail makes zero Letflow.Repo calls.",
+      "Confirm the do_fail/1 -> do_fail/2 arity deviation (threading Lua.t()) is genuinely required by Lua.decode!/2's real signature, not a shortcut, and does not change what data a script can smuggle out via reason/details.",
+      "Confirm no code path lets a script's platform.fail call affect ANY OTHER script execution's process (isolation across concurrent script executions is preserved).",
+      "Cross-check against docs/agents/instructions/security-invariants.md INV-1..INV-8 explicitly, naming which apply and confirming each holds.",
+      "CRITICAL: when writing your verdict, the handoff's top-level status field (this file, line 9) must be exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED -- run mix letflow.lint_handoffs yourself before finishing. This exact schema mistake recurred 4 times across the REQ-160/REQ-161 runs (see docs/anti-patterns.md's newest entry)."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

@@ -185,7 +185,11 @@ defmodule Letflow.Engine.Lua.Executor do
   alias Letflow.Engine.Lua.Manifest
   alias Letflow.Engine.Lua.Sandbox
 
-  @typedoc "See moduledoc's REQ-158 section for the two accepted shapes."
+  @typedoc "See moduledoc's REQ-158 section for the two accepted shapes. New " <>
+             "callers should prefer the manifest-carrying map shape " <>
+             "(`%{manifest: Manifest.t(), script_source: binary()}`) -- the bare " <>
+             "`binary()` shape is legacy, retained only because ~40 pre-existing " <>
+             "test call sites still pass a bare script string."
   @type script_ref :: binary() | %{manifest: Manifest.t(), script_source: binary()}
 
   @doc """

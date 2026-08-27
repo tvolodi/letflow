@@ -8,6 +8,13 @@ defmodule Letflow.Engine.Lua.Manifest do
   (`lib/letflow/engine/lua_script_audit.ex`), which shipped only the
   audit-persistence half.
 
+  A caller constructing a `Letflow.Engine.Lua.Executor.script_ref()` value
+  should prefer the map shape `%{manifest: t(), script_source: binary()}` to
+  pair this struct with a script's source text, rather than `Executor`'s
+  legacy bare-`binary()` shape, which exists only to keep ~40 pre-existing
+  test call sites (predating this requirement) compiling and running
+  unchanged.
+
   This module has no dependency on `Letflow.Engine.Lua.Executor` or
   `Letflow.Engine.LuaScriptAudit`, and neither of those modules calls into this one
   (INV-MAN-2) — the one exception is `Letflow.Engine.Lua.Executor`'s own

@@ -138,6 +138,38 @@ defmodule Letflow.Engine.Lua.ManifestTest do
       refute Manifest.compute_hash(manifest, "return 1") ==
                Manifest.compute_hash(manifest, "return 2")
     end
+
+    test "matches an independently-reconstructed digest over the documented byte layout (TEST-DESIGNER, mutation-testing gap)" do
+      # Rebuilds the exact byte layout the moduledoc claims -- 32-bit
+      # big-endian length-prefixed script_id, then each canonicalized
+      # (deduped-and-sorted) capability length-prefixed and concatenated in
+      # that order, then length-prefixed script_source -- entirely
+      # independently of Manifest's own private length_prefixed/1 helper, so
+      # this test does not merely call the same code twice. This is the test
+      # that would have caught two mutations verified during Step 3 to slip
+      # past every other test in this file: (a) shrinking the length prefix
+      # from 32 bits to 16 bits, and (b) reordering the three concatenated
+      # segments -- neither mutation broke any of the relative
+      # determinism/sensitivity/collision assertions above, because those
+      # only ever compare compute_hash/2 against itself, never against a
+      # value computed a second, independent way.
+      manifest = %Manifest{script_id: "script-1", capabilities: ["b", "a", "a"]}
+      script = "return 1 + 1"
+
+      expected_input =
+        <<byte_size("script-1")::32>> <>
+          "script-1" <>
+          <<byte_size("a")::32>> <>
+          "a" <>
+          <<byte_size("b")::32>> <>
+          "b" <>
+          <<byte_size(script)::32>> <>
+          script
+
+      expected_hash = :crypto.hash(:sha256, expected_input) |> Base.encode16(case: :lower)
+
+      assert Manifest.compute_hash(manifest, script) == expected_hash
+    end
   end
 
   # ---------------------------------------------------------------------------------
@@ -282,9 +314,29 @@ defmodule Letflow.Engine.Lua.ManifestTest do
       assert moduledoc =~ "SHA-256"
       assert moduledoc =~ "lowercase"
       assert moduledoc =~ "script_id"
+      assert moduledoc =~ "script_source"
+      # The CURRENT algorithm (post rework-1 SECURITY-REVIEWER fix) is
+      # length-prefixed framing, not the raw 0x00/0x0A separator scheme an
+      # earlier revision used -- assert the moduledoc documents what the code
+      # actually does today, not only the historical vulnerability it
+      # replaced.
+      assert moduledoc =~ "length-prefixed"
+      assert moduledoc =~ "32-bit"
+    end
+
+    test "moduledoc explains why the earlier raw-separator scheme was replaced" do
+      {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} = Code.fetch_docs(Manifest)
+
       assert moduledoc =~ "0x00"
       assert moduledoc =~ "0x0A"
-      assert moduledoc =~ "script_source"
+      assert moduledoc =~ "delimiter-injection"
+    end
+
+    test "moduledoc steers future callers toward the manifest-carrying map shape over the legacy bare-binary Executor.script_ref shape" do
+      {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} = Code.fetch_docs(Manifest)
+
+      assert moduledoc =~ "should prefer"
+      assert moduledoc =~ "legacy"
     end
 
     test "moduledoc states R-Co's manifest.zig is absent from this checkout and no field is claimed deliberately dropped" do
@@ -293,6 +345,19 @@ defmodule Letflow.Engine.Lua.ManifestTest do
       assert moduledoc =~ "manifest.zig"
       assert moduledoc =~ "not present in this checkout"
       assert moduledoc =~ "No field of the original is named here as"
+    end
+
+    test "Executor's script_ref @typedoc also steers toward the manifest-carrying map shape over the legacy bare-binary shape (REVIEWER's flagged doc gap)" do
+      {:docs_v1, _, _, _, _, _, type_docs} = Code.fetch_docs(Executor)
+
+      {{:type, :script_ref, 0}, _, _, %{"en" => typedoc}, _} =
+        Enum.find(type_docs, fn {{kind, name, _arity}, _, _, _, _} ->
+          kind == :type and name == :script_ref
+        end)
+
+      assert typedoc =~ "should prefer"
+      assert typedoc =~ "legacy"
+      assert typedoc =~ "manifest"
     end
   end
 

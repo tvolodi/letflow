@@ -1,0 +1,70 @@
+{
+  "handoff_id": "step03-WF02-REQ158-20260827",
+  "run_id": "WF02-REQ158-20260827",
+  "workflow_id": "WF-02",
+  "step": "3",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ158-20260827/step-03-test-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-158"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-158": "Completes LUA-07, whose audit-persistence half already shipped as REQ-058. Capability manifest validation on script load, wired to the existing LuaScriptAudit hash path. See docs/requirements.yaml REQ-158 for full description and acceptance_criteria. Queue task 310, GH#610."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ158-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ158-20260827/step-02a-elixir-dev-rework1.json",
+      "handoffs/WF02-REQ158-20260827/step-02c-security-review-recheck.json",
+      "handoffs/WF02-REQ158-20260827/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req158-lua-manifest-validation.md",
+      "lib/letflow/engine/lua/manifest.ex",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/manifest_test.exs",
+      "test/letflow/engine/lua/manifest_executor_audit_test.exs",
+      "test/specs/REQ-158.md"
+    ],
+    "branch_name": "feature/WF02-REQ158-20260827"
+  },
+  "task": {
+    "description": "TEST-DESIGNER (WF-02 Step 3) for REQ-158. Scope test: real application-executable surface -- continue to full procedure. ELIXIR-DEV already wrote functional tests across manifest_test.exs (25 tests including 2 security regression tests added during rework) and manifest_executor_audit_test.exs (3 end-to-end tests). Your job: (1) read requirements.yaml's REQ-158 entry directly for the exact 7 acceptance_criteria; (2) reconcile test/specs/REQ-158.md against the ACTUAL tests now present across both files (it was written before implementation and before the rework's security-fix tests were added); (3) independently verify every one of REQ-158's 7 acceptance criteria has at least one test case that would fail if violated -- this session's TEST-DESIGNER passes on REQ-155 and REQ-156 each found a real mutation-detectable gap; apply the same mutation-testing discipline here (try breaking validate_at_load/3's ordering, or the hash-comparison logic, or the length-prefix framing itself, and see if any existing test would fail to notice) -- if you find a gap, ADD the missing test(s) yourself; (4) address REVIEWER's flagged (non-blocking) documentation gap: neither the moduledoc nor the @typedoc for executor.ex's script_ref type textually steers future callers toward the manifest-carrying map shape over the legacy bare-binary shape -- add a one-sentence note; (5) verify no test depends on wall-clock time or unseeded randomness; (6) verify test isolation, especially the real-Postgres end-to-end tests' schema provisioning/cleanup.",
+    "acceptance_criteria": [
+      "test/specs/REQ-158.md accurately reflects the actual test cases present across manifest_test.exs and manifest_executor_audit_test.exs, including the rework's security regression tests",
+      "All 7 of docs/requirements.yaml REQ-158's acceptance_criteria have at least one test case that would fail if violated -- gaps closed by adding tests, not just reported",
+      "REVIEWER's flagged documentation gap (steer future callers toward the manifest-carrying script_ref shape) addressed with a one-sentence doc addition",
+      "No test depends on wall-clock time or unseeded randomness",
+      "Test isolation confirmed, including real-Postgres schema provisioning/cleanup for the end-to-end tests",
+      "mix test on the affected files quoted as real output after any additions"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "test/specs/REQ-158.md",
+      "test/letflow/engine/lua/manifest_test.exs",
+      "lib/letflow/engine/lua/manifest.ex",
+      "lib/letflow/engine/lua/executor.ex"
+    ],
+    "notes": {
+      "summary": "Reconciled test/specs/REQ-158.md against the real, shipped tests (it predated both the implementation and the rework's delimiter-injection regression tests, and still described the superseded raw-0x00/0x0A-separator hash scheme instead of the current length-prefixed framing). Verified all 7 of REQ-158's real acceptance_criteria (read directly from docs/requirements.yaml lines 7958-7966, not paraphrased) each have a specific failing test -- mapping table added to the spec's new final section. Ran active mutation testing against lib/letflow/engine/lua/manifest.ex as instructed and found one real gap, closed it.",
+      "mutation_testing": [
+        "Mutation 1 -- hash-comparison always returns :ok (validate_at_load/3's `if computed_hash == registered_hash` replaced with `if true`): CAUGHT. mix test result before fix: 25/28 passed (3 failures) against the then-28-test baseline. Reverted, confirmed clean baseline restored (mix compile --warnings-as-errors clean).",
+        "Mutation 2 -- ordering: compute_hash/2 called before validate_shape/1 inside validate_at_load/3 (moved the hash computation ahead of the shape-error case clause): CAUGHT. mix test result: 27/28 passed (1 failure -- the shape-invalid-manifest short-circuit test, which fails with a FunctionClauseError from compute_hash/2's own is_binary(script_id) guard on the nil script_id fixture). Reverted, confirmed clean.",
+        "Mutation 3 -- length-prefix framing shrunk from 32-bit to 16-bit (<<byte_size(field)::32>> -> <<byte_size(field)::16>>): NOT CAUGHT by any pre-existing test. mix test result: 28/28 passed unchanged -- every determinism/sensitivity/collision test in the file only ever compares compute_hash/2 against itself on two different inputs, never against an independently-computed absolute value, so a systematic framing change that preserves all relative properties slips through undetected. GAP CLOSED: added a new test in manifest_test.exs, 'matches an independently-reconstructed digest over the documented byte layout', which reconstructs the expected SHA-256 input entirely independently (via :crypto.hash/2 directly, not calling any of Manifest's own helpers) per the moduledoc's documented 32-bit-length-prefixed, script_id-then-sorted-capabilities-then-script_source byte layout. Verified this new test: passes against real code (mix test manifest_test.exs -> 26 passed after adding it, before the other new doc-gap tests), and fails under both the 16-bit-prefix mutant (25/26 passed, the new test is the one failure) and a second mutant that reorders the three concatenated segments (25/26 passed, same test fails). Both mutants reverted and a clean mix compile --warnings-as-errors + mix test run confirmed after each revert."
+      ],
+      "documentation_gap_fix": "Added one sentence to lib/letflow/engine/lua/manifest.ex's moduledoc (top, before the INV-MAN-2 paragraph): 'A caller constructing a Letflow.Engine.Lua.Executor.script_ref() value should prefer the map shape %{manifest: t(), script_source: binary()} ... rather than Executor's legacy bare-binary() shape, which exists only to keep ~40 pre-existing test call sites ... compiling and running unchanged.' Added the matching one-sentence steer inline to executor.ex's `@typedoc` for `script_ref`. Two new tests in manifest_test.exs assert both doc strings (moduledoc via Code.fetch_docs/1's module doc, and the script_ref type's own doc via the type_docs component of Code.fetch_docs/1) contain 'should prefer'/'legacy'/'manifest'.",
+      "wall_clock_and_randomness": "Confirmed no test in either file depends on wall-clock time or unseeded randomness. manifest_test.exs uses only fixed, literal test-authored values. manifest_executor_audit_test.exs uses Ecto.UUID.generate() for instance_id/actor_id -- used only to obtain unique identifiers, matching the existing lua_script_audit_test.exs convention, not as an input any assertion's pass/fail depends on being a particular value.",
+      "test_isolation": "manifest_test.exs: every function under test is pure (no Repo, no process state) -- async: true is correct and safe. manifest_executor_audit_test.exs: each test calls its own provisioned_tenant() helper independently (not shared via setup), which creates a uniquely-slugged Tenant + a real Postgres schema via TenantProvisioning.provision_tenant_schema/1 + replay_migrations/2, and registers an on_exit/1 that DROP SCHEMA ... CASCADEs and deletes the Registration/Tenant rows -- verified by reading the file in full. This mirrors test/letflow/engine/lua_script_audit_test.exs's established shape exactly. No cross-test leakage risk found.",
+      "mix_compile_output": "mix compile --warnings-as-errors: clean, no output (0 warnings).",
+      "mix_test_output": "mix test test/letflow/engine/lua/manifest_test.exs test/letflow/engine/lua/manifest_executor_audit_test.exs -> 'Excluding tags: [:keycloak]' then 32 passed. (28 pre-existing + 1 new golden/independent-reimplementation hash test + 2 new doc-gap-assertion tests + 1 new moduledoc historical-explanation test = 32.) Full raw run confirms 0 failures.",
+      "ac_to_test_mapping": "Full table with all 7 acceptance_criteria (verbatim from docs/requirements.yaml) written into test/specs/REQ-158.md's new closing section -- AC1: validate_at_load/3 modified-manifest-rejected test; AC2: both load-time-rejection-before-execution tests; AC3: manifest_executor_audit_test.exs successful-execution test; AC4: manifest_executor_audit_test.exs both hash-mismatch tests; AC5: moduledoc hash-algorithm/byte-layout test; AC6: moduledoc R-Co-manifest.zig-provenance test; AC7: this handoff's quoted mix test/mix compile output (not a test-file assertion)."
+    }
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

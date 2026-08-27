@@ -266,16 +266,16 @@ one-directional shape (`req152-lua-time-denial.md` §8).
 `@capability_matrix` is a **module attribute, defined exactly once**, listing all 8
 `platform.*` functions:
 
-| `name` | `required` (function of Lua call args) | Notes |
+| `name` | `required` (behavior of the row's `required_capability_fun`, given the Lua call's argument list) | Notes |
 |---|---|---|
-| `:call_service` | `fn [svc_id \| _rest] -> Capabilities.service_capability(svc_id) end` | Parameterised — required capability depends on the first call argument (§4.2). |
-| `:read_variable` | `fn _args -> "variable:read" end` | Constant, ignores args. |
-| `:write_variable` | `fn _args -> "variable:write" end` | Constant, ignores args. |
-| `:log` | `fn _args -> "audit:log" end` | Constant, ignores args. |
-| `:emit_event` | `fn _args -> "event:emit" end` | Constant, ignores args. |
-| `:get_instance_state` | `fn _args -> "instance:read" end` | Constant, ignores args. |
-| `:now` | `fn _args -> :none end` | Ungated by design (§5). |
-| `:fail` | `fn _args -> :none end` | Ungated by design (§5). |
+| `:call_service` | Ignores all but the first argument (the `svc_id` the script passed) and returns `Capabilities.service_capability(svc_id)` (§2.5) | Parameterised — required capability depends on the first call argument (§4.2). |
+| `:read_variable` | Ignores its arguments and always returns the constant string `"variable:read"` | Constant, ignores args. |
+| `:write_variable` | Ignores its arguments and always returns the constant string `"variable:write"` | Constant, ignores args. |
+| `:log` | Ignores its arguments and always returns the constant string `"audit:log"` | Constant, ignores args. |
+| `:emit_event` | Ignores its arguments and always returns the constant string `"event:emit"` | Constant, ignores args. |
+| `:get_instance_state` | Ignores its arguments and always returns the constant string `"instance:read"` | Constant, ignores args. |
+| `:now` | Ignores its arguments and always returns `:none` | Ungated by design (§5). |
+| `:fail` | Ignores its arguments and always returns `:none` | Ungated by design (§5). |
 
 This is **the entire closed set** — exactly 8 rows, no more, no fewer. Adding a 9th
 `platform.*` function means adding a 9th row here; there is no other place in the
@@ -333,10 +333,11 @@ Each matrix row's `stub` function is the placeholder body invoked **only after**
   keyword-list-exception mechanism (§6). No capability state or manifest concept
   attaches to this stub — that is REQ-162's territory if it needs one.
 - `:now` — unchanged from REQ-152; `install/2` (§4.4) reuses the exact existing `now/0`
-  wrapper, not a new stub — `now`'s matrix row's `stub` is literally
-  `fn _args -> [Platform.now()] end`, the same closure REQ-152's `install/1` already
-  built inline. This is a refactor of where that closure is constructed (into the fold,
-  §4.4), not a behavior change — REQ-152's own `platform_test.exs` cases (exact-value
+  behavior, not a new stub — the `now` row's `stub` ignores its argument list and returns
+  `Platform.now/0`'s result wrapped as the single-element Lua return list the tv-labs/lua
+  calling convention expects for a return value, the same behavior REQ-152's `install/1`
+  already built inline. This is a refactor of where that behavior is constructed (into the
+  fold, §4.4), not a behavior change — REQ-152's own `platform_test.exs` cases (exact-value
   injection, ISO 8601 parseability) must still pass unmodified after this requirement
   (see §9's regression note).
 

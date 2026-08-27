@@ -1,0 +1,48 @@
+{
+  "handoff_id": "step01b-recheck-WF02-REQ156-20260827",
+  "run_id": "WF02-REQ156-20260827",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ156-20260827/step-01b-code-design-validator-recheck.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-156"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ156-20260827/step-01-code-designer.json",
+      "handoffs/WF02-REQ156-20260827/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req156-lua-memory-limit-impl.md",
+      "test/specs/REQ-156.md"
+    ],
+    "branch_name": "feature/WF02-REQ156-20260827",
+    "commit": "983f0f0",
+    "rework_pass": 1,
+    "rework_commit": "983f0f0"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR re-check of REQ-156's design after rework commit 983f0f0.",
+    "acceptance_criteria": [
+      "Section 5's literal-code violation confirmed fixed",
+      "Full re-grep of the ENTIRE document confirms no other literal-code violation exists anywhere, not just in section 5",
+      "The other 7 previously-passed checks confirmed still intact (no regression)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read lib/letflow/design/req156-lua-memory-limit-impl.md end to end (all 348 lines) and re-grepped the entire document for `fn `, `raise `, `case `, `cond `, `do:`, `->`. The §5 line-181 violation from the prior FAIL is confirmed fixed: the table cell now reads as prose ('submitted to Letflow.Engine.Lua.TaskSupervisor via async_nolink/2, with the supervisor as the first argument and a zero-argument closure over the script source and budget as the second, exactly as REQ-155 §4.1-§4.3 already specify, byte-for-byte') -- no fn/anonymous-function literal, no callable expression. The full-document re-grep found zero fn/raise/do:/-> hits anywhere, and every 'case'/'cond' hit is genuine English prose (lines 26, 113, 167, 181, 197, 203, 204, 214, 229, 333, 346 -- e.g. 'memory-kill case', 'REQ-155's case', 'unconditional', 'conditioned on', and one meta-reference '`case`/`cond` in a test' describing how a future test would pattern-match, not an actual code fragment). Design is exhaustively clean of literal implementation code. All 7 previously-passed checks spot-checked and still intact: AC mapping (§8, all 7 ACs mapped, unchanged), the source-verified async_nolink/Task.Supervisor limitation claim (§2, unchanged, cites task/supervisor.ex and task/supervised.ex), the alternative spawn_opt/monitor mechanism (§2 and §5, still coherent and complete), the :killed-reason race resolution (§5.3, still structural/ordering-based and sound), error-shape distinguishability (§4.1, three structurally distinct shapes unchanged), moduledoc content requirements (§7, all 5 items present and unchanged), open questions (§10, OQ-1..OQ-5 all present with blocking/non-blocking dispositions stated, none silently resolved). No regression from the rework edit.",
+    "checks": {
+      "section5_fix_confirmed": "PASS - line 181's table cell is prose, no literal Elixir expression or fn literal remains.",
+      "full_document_regrep": "PASS - zero fn/raise/do:/-> hits document-wide; all case/cond hits are prose or meta-description, not executable code.",
+      "regression_check_on_prior_7_passes": "PASS - AC mapping, async_nolink source-verified claim, alternative mechanism coherence, :killed race resolution, error-shape distinguishability, moduledoc content, open questions all confirmed intact and unaltered by the rework."
+    },
+    "verdict_for_next_step": "Design is ready for Step 2a (ELIXIR-DEV implementation)."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

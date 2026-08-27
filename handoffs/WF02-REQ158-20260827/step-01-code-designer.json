@@ -1,0 +1,64 @@
+{
+  "handoff_id": "step01-WF02-REQ158-20260827",
+  "run_id": "WF02-REQ158-20260827",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ158-20260827/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-158"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-158": "Completes LUA-07, whose audit-persistence half already shipped as REQ-058 (lib/letflow/engine/lua_script_audit.ex, S3). That module's own moduledoc records that it ports 'only the audit-persistence path, against an injected Executor behaviour ... not a real Lua interpreter.' This requirement supplies the missing half: the manifest itself, its validation against the script artifact at load time, and the hash that LuaScriptAudit already persists. LUA-07 (Capability Manifest Validation, MUST): 'On script load, the platform MUST validate the script's manifest against the script artifact. Manifest hash MUST be recorded with each execution.' Acceptance: 'Modified manifest without re-registration is rejected.' Scope: 1. A manifest representation -- at minimum, the declared capability set REQ-157 checks against, and whatever identity fields the hash covers. Port R-Co/src/lua/manifest.zig's shape; state in the moduledoc any field deliberately dropped and why. 2. Validation at LOAD time (not at call time): a manifest that does not match its script artifact is rejected before any script text executes. This ordering is the requirement's substance -- validating after execution would satisfy the words and none of the point. 3. The manifest hash computed here is the value LuaScriptAudit's registered_hash is compared against. Do NOT re-implement or bypass LuaScriptAudit's INV-LSA-2 mismatch check; feed it. 4. The hash function and exactly what bytes it covers must be stated in the moduledoc, since 'modified manifest is rejected' is only meaningful relative to a defined covered set. GATE: SECURITY-REVIEWER is a hard gate -- the manifest is what bounds a script's authority. Queue task 310, GH#610. See docs/requirements.yaml REQ-158 for full description and acceptance_criteria."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ158-20260827/step-00-git-setup.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/engine/lua_script_audit.ex",
+      "lib/letflow/engine/lua/executor.ex",
+      "lib/letflow/engine/lua/capabilities.ex",
+      "lib/letflow/design/req157-lua-capability-model.md",
+      "lib/letflow/design/req153-lua-executor.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/lua/manifest.ex",
+      "test/letflow/engine/lua/manifest_test.exs",
+      "lib/letflow/design/req158-lua-manifest-validation.md",
+      "test/specs/REQ-158.md"
+    ],
+    "branch_name": "feature/WF02-REQ158-20260827"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-158. Write lib/letflow/design/req158-lua-manifest-validation.md. Read lib/letflow/engine/lua_script_audit.ex in full (the existing REQ-058 audit-persistence path this requirement feeds -- read its moduledoc on INV-LSA-1/INV-LSA-2, the Executor behaviour's execute_with_manifest/2 callback, and verify_manifest_hash/2's exact comparison). Read lib/letflow/engine/lua/executor.ex in full (the REQ-153/154/155/156 execute_with_manifest/2,3 implementation -- note it currently computes manifest_hash as a bare SHA-256 of script_source alone, lines ~268; REQ-158 must decide whether/how this hash computation needs to change to cover a real manifest, or whether the manifest concept sits ALONGSIDE the existing script-hash mechanism as a separate validation gate performed before execute_with_manifest is ever called). Read lib/letflow/engine/lua/capabilities.ex and lib/letflow/design/req157-lua-capability-model.md (the capability grant_set shape REQ-157 already built -- REQ-158's manifest is what would declare which capabilities a script is allowed to request; do not redesign REQ-157's grant_set, reference and reuse its capability() type). Attempt R-Co/src/lua/manifest.zig via find/grep -- if absent (likely, per this session's established pattern of R-Co source being unavailable in this checkout), proceed from the requirement text's own restatement and flag it as an open question the same way REQ-157/REQ-149's designs did. Also write test/specs/REQ-158.md (test spec skeleton, no test code). Design must specify: (1) the manifest data shape (at minimum: declared capability set matching REQ-157's capability() type, plus whatever identity fields the requirement text implies e.g. a script/process identifier); explicitly state any R-Co manifest.zig field dropped and why (framed as an open question if the original source can't be read); (2) the LOAD-TIME validation entry point -- a function that validates a manifest against a script artifact BEFORE any execution happens, distinct from and prior to executor.ex's execute_with_manifest call; (3) exactly how this module's computed hash relates to LuaScriptAudit's registered_hash parameter -- does it produce a new manifest-covering hash that becomes the registered_hash callers pass to execute_script_for_audit/6 (extending what's hashed beyond bare script_source), or does it validate the manifest as a separate pre-check with its own independent hash while leaving execute_with_manifest's script-hash mechanism untouched? Decide explicitly and justify, do not leave this ambiguous; (4) explicit statement that this design does NOT reimplement or bypass LuaScriptAudit's verify_manifest_hash/2 (INV-LSA-2) -- it feeds that function's registered_hash argument; (5) the hash algorithm and exactly which bytes/fields it covers, stated precisely enough that 'a modified manifest is rejected' is a well-defined claim. No implementation code (.ex function bodies) -- signatures, @specs, and type shapes only, describing control flow in prose/tables, never as a literal Elixir expression, however small (this exact rule has cost 2 of the 3 prior Lua-hardening designs this session at least one rework round -- read that lesson into this one and grep your own draft before submitting).",
+    "acceptance_criteria": [
+      "Design specifies a manifest data shape including at minimum the declared capability set (reusing REQ-157's capability() type, not redefining it) and script identity fields",
+      "Design specifies a LOAD-TIME validation entry point, structurally prior to and distinct from any script execution",
+      "Design explicitly decides and justifies the relationship between this module's hash and LuaScriptAudit's registered_hash parameter -- not left ambiguous",
+      "Design explicitly states it feeds LuaScriptAudit's verify_manifest_hash/2 (INV-LSA-2) rather than reimplementing or bypassing it",
+      "Design states the exact hash algorithm and covered bytes/fields",
+      "Design names any R-Co manifest.zig field deliberately not ported, and why (or flags this as an open question if the source is unavailable in this checkout)",
+      "Design covers all 7 acceptance criteria listed in docs/requirements.yaml's REQ-158 entry (read it directly), mapped one-to-one to concrete design elements",
+      "No implementation code (.ex function bodies) -- signatures, @specs, and type shapes only; describe control flow in prose/tables, never as a literal Elixir expression, however small -- grep your own draft for fn /raise /case /cond /do:/-> before submitting",
+      "Open questions listed explicitly if any exist, not silently resolved"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "lib/letflow/design/req158-lua-manifest-validation.md",
+      "test/specs/REQ-158.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "summary": "Designed Letflow.Engine.Lua.Manifest: a manifest struct (script_id + capabilities, reusing REQ-157's Capabilities.capability() type verbatim), a load-time validation entry point (validate_at_load/3) that is structurally independent of and prior to Executor/LuaScriptAudit, and a precisely-specified SHA-256 hash covering script_id + canonicalized (deduped, sorted) capabilities + raw script_source bytes, hex-encoded lowercase to match executor.ex's existing convention. Decided the hash/registered_hash relationship explicitly: the hash covers manifest+script (option (a)), which requires a coordinated (prose-only, not implemented here) change to lib/letflow/engine/lua/executor.ex's run_script/2 so its manifest_hash computation also covers the manifest, not script_source alone -- this is what makes 'the hash produced here flows into LuaScriptAudit's audit row' and 'a modified manifest is rejected' both true simultaneously. Kept the load-time gate (validate_at_load/3) as a separate, earlier, independently-callable function with zero dependency on LuaScriptAudit or Executor, so INV-LSA-1/INV-LSA-2 and verify_manifest_hash/2 are fed, never reimplemented or bypassed -- a runtime mismatch still produces LuaScriptAudit's own {:manifest_hash_mismatch, ...} error and writes no audit row regardless of what this module checked earlier. R-Co/src/lua/manifest.zig confirmed absent from this checkout via find (same pattern as REQ-157/REQ-149); no field is claimed 'deliberately dropped' since the original was never read -- flagged as OQ-1. All 7 requirements.yaml acceptance criteria traced to concrete design elements in §7. No implementation code included -- verified by grepping the draft for fn /raise /case /cond /do:/-> and confirming every hit was either a permitted @spec/@type block or a false-positive substring match (e.g. 'second', 'lowercase', 're-registration')."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

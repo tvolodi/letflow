@@ -1,0 +1,52 @@
+{
+  "handoff_id": "step03b-WF02-REQ167-20260828",
+  "run_id": "WF02-REQ167-20260828",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ167-20260828/step-03b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-167"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ167-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ167-20260828/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/wasm/capability_gate.ex",
+      "test/letflow/engine/wasm/capability_gate_test.exs",
+      "test/specs/REQ-167.md"
+    ],
+    "branch_name": "feature/WF02-REQ167-20260828",
+    "commit": "78d4101"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate (WF-02 Step 3b) on REQ-167's test suite after TEST-DESIGNER's mutation-driven strengthening pass (commit 78d4101, 16->18 tests). Read handoffs/WF02-REQ167-20260828/step-03-test-designer.json's full result first -- it documents 6 mutation findings, 2 of which were genuine gaps closed with new tests (AC4 pid-liveness, AC6 empty-manifest exact-shape). Verify independently, do not trust the report.",
+    "acceptance_criteria": [
+      "Every one of REQ-167's real acceptance criteria (see docs/requirements.yaml REQ-167 entry) has a runnable, passing test mapped to it -- confirm via test/specs/REQ-167.md's traceability, cross-checked against actual test names in capability_gate_test.exs.",
+      "No skipped/pending tests in capability_gate_test.exs.",
+      "Fixtures under priv/wasm_fixtures/req167_*.wat are self-sufficient and isolated -- no test depends on external state or execution order.",
+      "Independently spot-check at least 2 of TEST-DESIGNER's 6 reported mutation findings yourself (re-apply the mutation, confirm the reported pass/fail behavior) -- pick the two genuinely-new-gap ones (AC4 pid-liveness and AC6 empty-manifest-shape) since those are the most consequential claims.",
+      "Confirm the AC2/WASI-regression mutation finding (a hardcoded wasi: true would let path_open resolve) is real by re-applying it yourself -- this is the single most security-relevant mutation finding in this run.",
+      "mix test test/letflow/engine/wasm/capability_gate_test.exs passes in full, real output quoted.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified TEST-DESIGNER's 78d4101 pass on capability_gate_test.exs. All 7 of docs/requirements.yaml's REQ-167 acceptance criteria have runnable, passing test coverage traceable through test/specs/REQ-167.md's T1-T6 to named tests in capability_gate_test.exs (AC1/WASM-06 -> describe 'AC1: a module granted only var:read cannot import platform_call_service'; AC2/whitelist-by-inspection -> describe 'AC2: build_import_table/1 builds a genuine whitelist from the manifest'; AC3/filesystem-surface -> describe 'AC3: the req163-named filesystem surface is rejected under any manifest' using priv/wasm_fixtures/req167_path_open.wat's wasi_snapshot_preview1/path_open surface, never the literal wasi:filesystem/types string; AC4/AC5/AC6 moduledoc content -> describe 'moduledoc content restates WASM-07 per design section 7', three tests reading Code.fetch_docs/1 directly; 'mix test and mix compile --warnings-as-errors both pass' -> re-run myself, see below). No @tag :skip or @tag :pending anywhere in the file; no 'TODO: implement test' text. Fixtures (req167_no_imports.wat, req167_path_open.wat, req167_platform_call_only.wat, req167_unregistered_import.wat) are each a small self-contained inline WAT module with no shared mutable state, no dependency on another test's side effects, and no ordering requirement between tests (async: false is a NIF-concurrency-safety choice documented in the file's own moduledoc, not a hidden ordering dependency) -- each test independently reads its own fixture file and calls a pure function or a fresh start_instance/2. No hardcoded secrets or connection strings in any test/fixture file. Ran `mix test test/letflow/engine/wasm/capability_gate_test.exs` myself against the unmodified commit: 'Result: 18 passed' (0 failures), quoted below. Independently re-applied 3 of TEST-DESIGNER's 6 reported mutations directly against lib/letflow/engine/wasm/capability_gate.ex in the working tree (not trusting the report's own numbers), each followed by a full mix test run and a git checkout revert, verified clean after each: (1) AC6 empty-manifest-shape mutation (Enum.reduce/3 accumulator seeded with %{\"env\" => %{}} instead of %{}) -- measured 17/18 passed, 1 failed, and the failure is exactly 'an empty capability list produces exactly %{}, not a namespace-present-but-empty map' asserting left: %{\"env\" => %{}}, right: %{} -- matches the report's claim exactly. (2) AC4 pid-liveness mutation (GenServer.stop(pid) inserted into the {:ok, {:ok, pid}} success branch before returning) -- measured 14/18 passed, 4 failed; the new test 'the returned pid is alive and usable immediately after a successful call' fails cleanly on `assert Process.alive?(pid)` (Expected truthy, got false), a direct, unambiguous assertion rather than the incidental double-stop crash the report describes the OLD suite catching it via -- confirms the new test genuinely strengthens detection precision as claimed, not merely duplicating existing incidental coverage. (3) AC2/WASI-regression mutation (added wasi: true to the Wasmex.start_link/1 call) -- the single most security-relevant finding in this run, re-applied and measured directly: 16/18 passed, 2 failed, both failures are the AC3/path_open tests, each returning {:ok, pid} instead of the expected {:error, {:instantiation_denied, {:unresolved_import, \"wasi_snapshot_preview1\", \"path_open\"}}} -- i.e. a hardcoded wasi: true genuinely lets path_open resolve via wasmex's native WASI implementation, and the EXISTING (not new) AC3 tests already catch this because they assert the specific unresolved_import tuple rather than a bare {:error, _}. This is a real, security-critical regression-detection property already present in the suite, not an overclaimed finding. All three mutations were reverted via `git checkout -- lib/letflow/engine/wasm/capability_gate.ex` immediately after measurement; `git status --porcelain lib/ test/` and `git diff --stat lib/letflow/engine/wasm/capability_gate.ex` were both empty after every single revert, and a final `mix test` re-run confirmed 18/18 green on the untouched implementation before writing this verdict. No coverage gap found; no overclaimed finding found. mix letflow.lint_handoffs run against the full handoff tree: 0 new violations (25 pre-existing grandfathered violations traced to ISS-0190, none introduced by this handoff).",
+    "verification_evidence": {
+      "mix_test_full_suite_unmodified": "Running ExUnit with seed: 272207, max_cases: 16\nExcluding tags: [:keycloak]\n\n..................\nFinished in 0.2 seconds (0.00s async, 0.2s sync)\n\nResult: 18 passed",
+      "mutation_1_ac6_empty_manifest_reapplied": "Enum.reduce(%{}, ...) changed to Enum.reduce(%{\"env\" => %{}}, ...) -- measured: Result: 17/18 passed, Failed: 1 test -- 'an empty capability list produces exactly %{}, not a namespace-present-but-empty map', assertion left: %{\"env\" => %{}}, right: %{}. Reverted; git diff --stat and git status --porcelain both empty afterward.",
+      "mutation_2_ac4_pid_liveness_reapplied": "GenServer.stop(pid) inserted before {:ok, pid} in the success branch -- measured: Result: 14/18 passed, Failed: 4 tests, including 'the returned pid is alive and usable immediately after a successful call' failing cleanly on assert Process.alive?(pid) (Expected truthy, got false). Reverted; git diff --stat and git status --porcelain both empty afterward.",
+      "mutation_3_ac2_wasi_regression_reapplied": "wasi: true added to the Wasmex.start_link/1 call in start_instance/2 -- measured: Result: 16/18 passed, Failed: 2 tests, both AC3/path_open tests, each returning {:ok, pid} instead of the expected {:error, {:instantiation_denied, {:unresolved_import, \"wasi_snapshot_preview1\", \"path_open\"}}}. Confirms the reported security-critical finding is real: a hardcoded wasi: true regression is genuinely caught by the existing (not newly added) AC3 assertions because they assert the specific unresolved_import tuple shape. Reverted; git diff --stat and git status --porcelain both empty afterward.",
+      "lint_handoffs": "letflow.lint_handoffs: OK -- 0 new violations across 1236 handoff files (25 pre-existing grandfathered, traced to ISS-0190).",
+      "mix_compile_warnings_as_errors": "mix compile --warnings-as-errors run against the unmodified tree: no output, exit clean (no warnings, no errors)."
+    },
+    "candidate_issues": []
+  }
+}

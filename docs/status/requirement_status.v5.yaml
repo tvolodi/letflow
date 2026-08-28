@@ -981,3 +981,41 @@ history:
       gate. Depends on REQ-166 (done). Builds on
       Letflow.Engine.Wasm.ModuleRegistry (REQ-166) and PluginHandler
       (REQ-165).
+
+  - req: REQ-167
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-28T06:15:38Z"
+    note: >
+      WF02-REQ167-20260828 complete (RELEASE-VALIDATOR Step 5 PASS, commit
+      78d4101). WASM import whitelist built FROM the module manifest's
+      declared capabilities (WASM-06) in
+      lib/letflow/engine/wasm/capability_gate.ex: a module declaring var:read
+      only cannot import platform_call_service, instantiation fails
+      structurally ({:instantiation_denied, {:unresolved_import, ...}}) with
+      no calling-process crash, and the import table is inspected
+      structurally (Map.has_key?/refute) rather than via invoke-and-catch.
+      WASM-07's no-filesystem-by-default guarantee is restated and tested
+      against REQ-163's named core-modules import surface
+      (wasi_snapshot_preview1::path_open) rather than the component-model-
+      specific wasi:filesystem/types literal that would produce a false
+      pass under core modules -- moduledoc explains this substitution
+      explicitly, restates WASM-07 citing req163-wasm-abi-choice.md, and
+      states plainly that no filesystem-grant path exists today. mix test
+      test/letflow/engine/wasm/: 48 passed, 0 failures. mix compile
+      --warnings-as-errors --force: clean, 0 warnings. Scope confirmed via
+      git diff --stat main...HEAD: only capability_gate.ex (new),
+      req167-wasm-import-whitelist.md (new design doc), 4 new
+      priv/wasm_fixtures/req167_*.wat fixtures, capability_gate_test.exs
+      (new), test/specs/REQ-167.md (new), and a 12-line
+      CapabilityGateTaskSupervisor addition to application.ex --
+      module_registry.ex and plugin_handler.ex both confirmed untouched
+      (empty targeted diff). Passed design, SECURITY-REVIEWER (hard gate,
+      sandbox boundary for guest code), REVIEWER, TEST-DESIGNER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER, and RELEASE-VALIDATOR (Step 5
+      independent re-verification of all 7 real acceptance criteria against
+      shipped code and freshly re-run test/compile output). No REQ-167
+      reference found under docs/migration/ needing a companion update.
+      Status flipped pending -> done in docs/requirements.yaml. `grep -c
+      "^  - req:" docs/status/requirement_status.v5.yaml` = 40 on-disk
+      entries before this append; 41 after.

@@ -1,0 +1,62 @@
+{
+  "handoff_id": "step02a-WF02-REQ167-20260828",
+  "run_id": "WF02-REQ167-20260828",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ167-20260828/step-02a-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-167"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req167-wasm-import-whitelist.md",
+      "lib/letflow/engine/wasm/module_registry.ex",
+      "lib/letflow/application.ex"
+    ],
+    "branch_name": "feature/WF02-REQ167-20260828"
+  },
+  "task": {
+    "description": "Implement REQ-167 strictly per the APPROVED design at lib/letflow/design/req167-wasm-import-whitelist.md (passed CODE-DESIGN-VALIDATOR clean, no rework). Read the full design doc before writing any code -- it is unusually detailed. This environment has Rust 1.97.1 and wasmex's native NIF already built -- use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching mix commands. Steps: (1) Create lib/letflow/engine/wasm/capability_gate.ex implementing Letflow.Engine.Wasm.CapabilityGate per design section 3 exactly: capability()/manifest()/valtype()/import_descriptor()/import_table()/instantiation_defect()/gate_error() types; build_import_table/1 (section 5.1, pure function, filter-then-group @known_imports by manifest.capabilities membership); start_instance/2 (section 5.2, builds the table then attempts real instantiation via Wasmex.start_link/1 with the built imports: map and NO wasi: key, inside a Task.Supervisor.async_nolink/2 task under a NEW Letflow.Engine.Wasm.CapabilityGateTaskSupervisor, never inline, read back via Task.yield/2 with a bounded timeout -- branch exactly per section 5.2 step 6: {:ok,{:ok,pid}} -> {:ok, pid} (do NOT stop this instance -- unlike ModuleRegistry's proving instance, this one is the real one the caller owns and must stop themselves); {:ok,{:error,reason}} -> {:error, {:instantiation_denied, {:crashed, reason}}}; {:exit, reason} matched against the unresolved-import pattern -> {:error, {:instantiation_denied, {:unresolved_import, namespace, function}}}, any other crash shape -> {:error, {:instantiation_denied, {:crashed, raw_reason}}}; nil (timeout) -> Task.shutdown(:brutal_kill) then {:error, {:instantiation_denied, {:timeout, timeout_ms}}}). (2) Add the @known_imports registry per design section 6 EXACTLY (two entries: var:read/env/read_variable/[i32,i32]->[i32], service:call/env/platform_call_service/[i32,i32]->[i32] -- use trivial stub callbacks that return a constant, per section 6's own note that no test ever invokes the granted function). (3) Add the new Task.Supervisor child spec to lib/letflow/application.ex's supervision tree (design section 10) -- this is the one file outside capability_gate.ex this design touches. Do NOT modify lib/letflow/engine/wasm/module_registry.ex or lib/letflow/engine/wasm/plugin_handler.ex -- both are explicitly out of scope (design section 0/4/10 -- the crash-classification regex duplication is intentional, not a bug). (4) Write the moduledoc content per design section 7 EXACTLY -- all three of AC4/AC5/AC6's required statements (WASM-07 restated; literal wasi:filesystem/types name explicitly NOT the surface tested and why that would be a false pass; explicit 'no filesystem-grant path exists today' statement) must appear verbatim in substance, not just alluded to.",
+    "owned_modules": [
+      "lib/letflow/engine/wasm/",
+      "lib/letflow/application.ex",
+      "test/letflow/engine/wasm/",
+      "priv/wasm_fixtures/",
+      "lib/letflow/design/req167-wasm-import-whitelist.md",
+      "test/specs/REQ-167.md"
+    ],
+    "acceptance_criteria": [
+      "AC1: a test asserts a module declaring only var:read and importing the service-call host function FAILS TO INSTANTIATE, with a structured {:error, {:instantiation_denied, {:unresolved_import, \"env\", \"platform_call_service\"}}} result.",
+      "AC2: a test asserts the import table built by build_import_table/1 is a genuine whitelist -- a host function not named by the manifest is ABSENT as a key in the returned map (asserted by inspecting the map directly, never by invoking and catching an error), and symmetrically present when granted.",
+      "AC3: a test asserts a module attempting the req163-named filesystem surface (wasi_snapshot_preview1/path_open) is rejected under any manifest, since no manifest content can grant it (the registry has zero filesystem entries).",
+      "AC4: the moduledoc states WASM-07's literal 'wasi:filesystem/types' name is NOT the surface tested, names wasi_snapshot_preview1/path_open (and siblings) as what IS tested, and explains why asserting the literal name would be a false pass under core modules.",
+      "AC5: the moduledoc states this module restates WASM-07 -- intent implemented, concrete name replaced per req163.",
+      "AC6: the moduledoc states plainly that no explicit filesystem-grant path exists today.",
+      "AC7: mix test and mix compile --warnings-as-errors both pass, real output quoted.",
+      "Additional (from the design's own structural proof, section 4 -- not a numbered AC but required by what you're implementing): a test proving the crash-propagation containment works here too (start_instance/2 on an unresolved-import module must not crash the calling test process), mirroring REQ-166's own equivalent test."
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Implemented Letflow.Engine.Wasm.CapabilityGate (lib/letflow/engine/wasm/capability_gate.ex) exactly per lib/letflow/design/req167-wasm-import-whitelist.md sections 3/5/6/7: capability()/manifest()/valtype()/import_descriptor()/import_table()/instantiation_defect()/gate_error() types; build_import_table/1 as a pure filter-then-group function over the two-entry @known_imports registry (var:read/env/read_variable/[i32,i32]->[i32], service:call/env/platform_call_service/[i32,i32]->[i32], trivial stub callbacks); start_instance/2 building the table then attempting real instantiation via Wasmex.start_link/1 (imports: table, no wasi: key) inside Task.Supervisor.async_nolink/2 under a new Letflow.Engine.Wasm.CapabilityGateTaskSupervisor, never inline, read back via Task.yield/2 (5000ms) with the exact branch shape section 5.2 step 6 specifies ({:ok,{:ok,pid}} -> {:ok, pid} without stopping the instance; {:ok,{:error,reason}} -> {:crashed, reason}; {:exit, reason} classified via the unresolved-import regex or {:crashed, raw_reason}; nil -> Task.shutdown(:brutal_kill) then {:timeout, timeout_ms}). Added the Task.Supervisor child spec for CapabilityGateTaskSupervisor to lib/letflow/application.ex's supervision tree (design section 10), alongside ModuleRegistryTaskSupervisor, with a comment explaining why it is a separate supervisor. Did not touch lib/letflow/engine/wasm/module_registry.ex or plugin_handler.ex (confirmed by git diff --stat below). Moduledoc contains all three AC4/AC5/AC6 statements verbatim in substance (WASM-07 restated; wasi:filesystem/types explicitly named as NOT the surface tested, with the false-pass explanation for core modules; wasi_snapshot_preview1/path_open and siblings named as what IS tested; an explicit 'no code path today' / 'not implemented' statement for the future filesystem-grant clause). Added 5 WAT fixtures under priv/wasm_fixtures/ (req167_platform_call_only.wat, req167_path_open.wat with the real 9-param/1-result WASI Preview 1 path_open signature, req167_unregistered_import.wat, req167_no_imports.wat) and a new test/letflow/engine/wasm/capability_gate_test.exs (18 tests) covering AC1 (structured unresolved-import denial + crash-propagation containment mirroring REQ-166's test), AC2 (build_import_table/1 whitelist inspection: absent/present/empty/both-granted cases, plus the exact {:fn, params, results, callback} shape), AC3 (req163-named wasi_snapshot_preview1/path_open denied under both an empty and a maximally-permissive manifest, with a comment explaining why the literal wasi:filesystem/types string is deliberately never asserted), the T5-equivalent whitelist-exhaustiveness test (an entirely unregistered import name denied under the maximally-permissive manifest), the no-imports-instantiates-cleanly case, and moduledoc content checks for AC4/AC5/AC6. `mix compile --warnings-as-errors`: clean, no warnings, no output. `mix test`: full suite result 'Result: 2337 passed (5 properties, 2332 tests), 3 excluded' (finished in 685.2s), including the new capability_gate_test.exs's 18 tests among them (confirmed passing standalone first: 'Result: 16 passed' -- note: 18 tests total in the file, 16 in the leaf `describe` count reported by that earlier partial run before two more were added; full-suite run above includes all of them and is the authoritative count). `mix letflow.lint_handoffs`: 'letflow.lint_handoffs: OK -- 0 new violations across 1232 handoff files (25 pre-existing grandfathered, traced to ISS-0190).' Committed to feature/WF02-REQ167-20260828; not pushed, not merged, no self-approval past this handoff. Routes next to SECURITY-REVIEWER (tenant-data-path judgment call: this touches no tenant data/API route/migration/secrets directly, but the change is in lib/letflow/ under an active security invariant area (WASM sandboxing) so SECURITY-REVIEWER should make the final call) and then REVIEWER before TEST-DESIGNER.",
+    "artifacts_out": [
+      "lib/letflow/engine/wasm/capability_gate.ex",
+      "lib/letflow/application.ex",
+      "test/letflow/engine/wasm/capability_gate_test.exs",
+      "priv/wasm_fixtures/req167_platform_call_only.wat",
+      "priv/wasm_fixtures/req167_path_open.wat",
+      "priv/wasm_fixtures/req167_unregistered_import.wat",
+      "priv/wasm_fixtures/req167_no_imports.wat"
+    ],
+    "verification": {
+      "mix compile --warnings-as-errors": "clean, no warnings/errors",
+      "mix test": "Result: 2337 passed (5 properties, 2332 tests), 3 excluded -- Finished in 685.2 seconds (11.9s async, 673.3s sync)",
+      "mix letflow.lint_handoffs": "letflow.lint_handoffs: OK -- 0 new violations across 1232 handoff files (25 pre-existing grandfathered, traced to ISS-0190)."
+    },
+    "not_modified": ["lib/letflow/engine/wasm/module_registry.ex", "lib/letflow/engine/wasm/plugin_handler.ex"]
+  }
+}

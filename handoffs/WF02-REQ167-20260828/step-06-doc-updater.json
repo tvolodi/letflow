@@ -1,0 +1,41 @@
+{
+  "handoff_id": "step06-WF02-REQ167-20260828",
+  "run_id": "WF02-REQ167-20260828",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ167-20260828/step-06-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-167"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ167-20260828/step-05-release-validator.json"
+    ],
+    "branch_name": "feature/WF02-REQ167-20260828",
+    "commit": "78d4101"
+  },
+  "task": {
+    "description": "DOC-UPDATER pass (WF-02 Step 6) for REQ-167 (queue task 319, GH#619). RELEASE-VALIDATOR independently passed Step 5 -- see handoffs/WF02-REQ167-20260828/step-05-release-validator.json for full detail. Flip REQ-167's status to done in docs/requirements.yaml, and append the required status-history event.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml: REQ-167's status field flipped from pending to done.",
+      "Append a 'done' event to the current run-history volume (find it via docs/status/requirement_status.index.yaml) with a real UTC timestamp from the clock (not memory) -- REQ-167, run WF02-REQ167-20260828.",
+      "Keep docs/status/requirement_status.index.yaml's volume count in lockstep with the append.",
+      "If any other doc explicitly needs updating as a result of this requirement's completion (e.g. a migration-stage doc's requirement checklist, if REQ-167 is referenced there) update it -- check docs/migration/ for any REQ-167 reference first.",
+      "Commit the doc updates to the feature branch (do not push yet -- ORCH handles Step Final).",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "COMPLETED -- REQ-167 flipped pending -> done in docs/requirements.yaml; done-event appended to docs/status/requirement_status.v5.yaml (append-only, 0 deletions confirmed via git diff --numstat); index entries count kept in lockstep (40 -> 41).",
+    "summary": "Flipped REQ-167's status field from pending to done in docs/requirements.yaml (line ~8456). Appended a 'done' event for REQ-167 to the current run-history volume, docs/status/requirement_status.v5.yaml (found via docs/status/requirement_status.index.yaml, which named volume 5 as current), timestamp 2026-08-28T06:15:38Z taken from `date -u +\"%Y-%m-%dT%H:%M:%SZ\"`, agent DOC-UPDATER, citing RELEASE-VALIDATOR's Step 5 PASS (commit 78d4101) and all 7 real acceptance criteria. Verified the append via `git diff --numstat docs/status/requirement_status.v5.yaml` = 38 insertions / 0 deletions, and via `grep -c \"^  - req:\"` = 41 on-disk entries (up from 40), well under the volume's roll_rule ceiling (1021 lines / 56346 bytes vs 1200-line/120000-byte ceiling) -- no roll needed. Updated docs/status/requirement_status.index.yaml's volume-5 entry: entries: 40 -> 41, with a new note describing this append, per the append-only convention (prior note text left untouched, new note prepended). Checked docs/migration/ for any REQ-167 reference (`grep -rn REQ-167 docs/migration/`) -- none found, so no companion migration-stage doc needed updating. Checked README.md for WASM mentions -- none found, so no README update needed. Ran `mix letflow.lint_handoffs` -- result below.",
+    "files_changed": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ]
+  }
+}

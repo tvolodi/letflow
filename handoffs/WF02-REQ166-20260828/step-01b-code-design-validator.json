@@ -1,0 +1,45 @@
+{
+  "handoff_id": "step01b-WF02-REQ166-20260828",
+  "run_id": "WF02-REQ166-20260828",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ166-20260828/step-01b-code-design-validator.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-166"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ166-20260828/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req166-wasm-module-abi-validation.md",
+      "test/specs/REQ-166.md",
+      "lib/letflow/design/req163-wasm-abi-choice.md",
+      "lib/letflow/engine/wasm/plugin_handler.ex"
+    ],
+    "branch_name": "feature/WF02-REQ166-20260828",
+    "commit": "316f964"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) hard gate on REQ-166's design at lib/letflow/design/req166-wasm-module-abi-validation.md. This design's central claim: Wasmex.Module.compile/2 + Wasmex.Module.exports/1 can validate a module's export names/signatures WITHOUT ever instantiating it (never calling Wasmex.start_link/1), which is what structurally proves a rejected module can never reach Wasmex.call_function/4. The designer claims to have verified this LIVE against the real installed wasmex v0.15.1 dependency (via mix run scripts compiling real WAT fixtures), not just read documentation. Independently re-verify this yourself -- run your own mix run scripts compiling a conforming .wat and a non-conforming one (e.g. missing 'execute', or execute with wrong arity), calling Wasmex.Module.compile/2 and Wasmex.Module.exports/1 on each, and confirm the shapes described (the {:fn, params, results}/{:memory, ...} tuple format, absence-detection, signature-mismatch-detection) actually match what you observe. Do not trust the design doc's own claimed output.",
+    "acceptance_criteria": [
+      "Independently compile a conforming WAT module (with all 5 required exports: init, execute, deinit, get_capabilities, alloc, plus a memory export) via Wasmex.Store.new/0 + Wasmex.Module.compile/2 and confirm Wasmex.Module.exports/1's real return shape matches the design's citation.",
+      "Independently compile a WAT module missing the 'execute' export and confirm Wasmex.Module.exports/1's output genuinely omits that key -- proving absence-detection works as claimed.",
+      "Independently compile a WAT module where 'execute' has the wrong arity/signature and confirm the exports map's tuple for that key differs from the expected signature -- proving signature-mismatch-detection works as claimed.",
+      "Confirm Wasmex.Module.compile/2 genuinely never instantiates the module or resolves any import (i.e. a module with unresolved imports still compiles successfully) -- this is the load-bearing claim for 'never invocable'.",
+      "Confirm the design's export contract (5 exports: init/execute/deinit/get_capabilities + alloc) accurately cites req163-wasm-abi-choice.md sections 3.1/3.2 -- read those sections yourself and confirm no drift.",
+      "Confirm the structured error shape ({:invalid_abi, [export_defect()]} with :missing/:wrong_kind/:wrong_signature variants) is complete enough for ELIXIR-DEV to implement without improvising.",
+      "Confirm the opaque RegisteredModule struct mechanism genuinely forecloses any code path from a failed registration to Wasmex.call_function/4 -- check for any gap in this reasoning.",
+      "All 6 real acceptance criteria mapped in a traceability table; zero literal Elixir function-body code in the design doc.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

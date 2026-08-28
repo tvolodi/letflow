@@ -1,0 +1,60 @@
+id: ISS-0351
+title: >
+  ModuleRegistry.register/1 timeout path leaves a Wasmtime native thread
+  spinning after Task.shutdown(:brutal_kill)
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF02-REQ166-20260828
+discovered_at: "2026-08-28T04:42:27Z"
+severity: MINOR
+status: open
+description: >
+  While mutation-testing lib/letflow/engine/wasm/module_registry.ex's stage-2
+  timeout branch (Step 3, WF02-REQ166-20260828), TEST-DESIGNER live-verified
+  (real register/1 call, not simulated) that a genuinely-hanging WAT module
+  (an unconditional infinite loop in its start function) correctly drives
+  register/1's real 5000ms timeout path, returning
+  {:error, {:instantiation_failed, {:timeout, 5000}}} after ~5043-5061ms
+  across two runs -- the timeout detection and Task.yield/2 bound are real
+  and working as designed.
+
+  However, the same check found that Task.shutdown(task, :brutal_kill) does
+  not actually stop the underlying native Wasmtime execution: the BEAM's
+  dirty-NIF scheduler thread running the guest module's infinite loop keeps
+  consuming CPU after the Elixir Task is killed. Measured via
+  /proc/<beam_pid>/stat utime+stime fields: ~305 extra clock ticks
+  accumulated over a 3-second idle window with nothing else running,
+  confirming the native thread is a non-preemptible busy loop that
+  Task.shutdown/2 (an Erlang-process-level operation) cannot reach or stop.
+
+  This is a real resource-leak path on a pathological/malicious WASM module
+  input (an intentionally-hanging guest), though narrow in current blast
+  radius: today only checked-in WAT test fixtures ever reach register/1
+  (REQ-166 has no tenant-facing upload path yet), so this is not yet an
+  exploitable tenant-facing DoS. It becomes one once a future requirement
+  wires a tenant-facing module-upload/registration path to
+  ModuleRegistry.register/1 -- flagging now while the mechanism is fresh,
+  before that dependency exists, per the project's no-silent-decisions norm
+  and this being the *first* Letflow module to call Wasmex.start_link/1 on
+  content that could eventually be less trusted.
+
+  Not fixed as part of REQ-166: out of TEST-DESIGNER's scope (diagnosis
+  only, not implementation), and this is a real design decision (how to
+  actually bound/kill a native Wasmtime execution thread -- e.g. an
+  epoch-interruption / fuel-metering mechanism in wasmex/wasmtime, if
+  exposed, rather than relying on Erlang-level task cancellation) that
+  belongs to whichever requirement first exposes a tenant-facing WASM
+  module-registration or execution path, not squeezed into this one.
+
+  A committed automated test for this was deliberately NOT added: it would
+  leave a permanently CPU-spinning orphaned native thread for the rest of
+  that mix test process's lifetime on every CI run that reaches it. The live
+  verification above is TEST-DESIGNER's own one-off reproduction, not part
+  of the merged test suite.
+affected_files:
+  - lib/letflow/engine/wasm/module_registry.ex
+related:
+  - REQ-166
+  - REQ-165  # wasmex native dependency, PluginHandler's own per-call fresh-instance / GenServer.stop pattern
+source: >
+  handoffs/WF02-REQ166-20260828/step-03-test-designer.json (AC4 finding,
+  acceptance_criteria_results), WF02-REQ166-20260828 Step 3.

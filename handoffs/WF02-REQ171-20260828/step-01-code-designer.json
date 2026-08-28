@@ -1,0 +1,50 @@
+{
+  "handoff_id": "step01-WF02-REQ171-20260828",
+  "run_id": "WF02-REQ171-20260828",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ171-20260828/step-01-code-designer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-171"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md",
+      "lib/letflow/engine/lua/platform.ex",
+      "lib/letflow/engine/lua_number_marshalling.ex",
+      "lib/letflow/engine/wasm/module_registry.ex",
+      "lib/letflow/engine/wasm/capability_gate.ex",
+      "lib/letflow/engine/wasm/memory_guard.ex",
+      "lib/letflow/engine/wasm/resource_limits.ex",
+      "lib/letflow/engine/wasm/plugin_handler.ex",
+      "lib/letflow/engine/plugin_interface.ex",
+      "lib/letflow/design/req163-wasm-abi-choice.md"
+    ],
+    "branch_name": "feature/WF02-REQ171-20260828",
+    "commit": "05c9baa"
+  },
+  "task": {
+    "description": "CODE-DESIGNER pass (WF-02 Step 1) for REQ-171 (queue task 323, GH#623). Read REQ-171's full entry in docs/requirements.yaml (id: REQ-171) before anything else. Produce a design artefact under lib/letflow/design/ (e.g. req171-wasm-host-api-read.md), design-only (zero implementation code). This is the FIRST requirement in this pipeline that actually wires the previously-built, independently-shipped WASM modules (ModuleRegistry REQ-166, CapabilityGate REQ-167, MemoryGuard REQ-168, ResourceLimits REQ-169) together with a real host function dispatch -- every one of those four requirements explicitly left 'wiring into a real dispatch path' as a stated open question for a future requirement. This is that future requirement, at least for its read-only quarter of the eventual host API.\n\nDIRECTION OF CONFORMANCE IS SETTLED (decision 0014 (4), read it directly): the Lua host API (already shipped, REQ-159/REQ-152) is the DEFINITION WASM conforms to. Read lib/letflow/engine/lua/platform.ex directly and in full for the real, current semantics of read_variable (do_read_variable/3, ~line 596), log (do_log/3, ~line 681), and now/0 (~line 362) -- these are what WASM-side read_variable/log/now must match, differing ONLY in ABI (string encoding, return shape), never in observable behavior. Do NOT modify platform.ex or any Lua-side file -- if a genuine semantic conflict surfaces during design, state it as a finding for ORCH, do not silently resolve it by changing the Lua side.\n\nuuid HAS NO LUA COUNTERPART (verify this yourself -- grep lib/letflow/engine/lua/ for uuid, confirm zero hits in platform.ex's function matrix). The requirement's own text requires an EXPLICIT decision, stated in the moduledoc: either implement uuid as a documented WASM-side addition with no Lua twin, or raise it as a gap in the Lua host API (a candidate issue, not silently absorbed). Decide and justify.\n\nNUMBER MARSHALLING: read lib/letflow/engine/lua_number_marshalling.ex in full -- REQ-150's rule (identity conversion for integer()/float()/nil, no subtype coercion) is Lua-specific in naming but WASM-12's parity requirement means the WASM ABI must conform to the SAME normative rule despite WASM having its own numeric representation (core-module i32/i64/f32/f64, per req163-wasm-abi-choice.md). Cite REQ-150's section by number; do not invent a second numeric rule. Decide explicitly whether this reuses Letflow.Engine.LuaNumberMarshalling directly, or whether a WASM-specific companion is needed given WASM's typed-register ABI is structurally different from Lua's single dynamic number type -- state your reasoning.\n\nCAPABILITY GATING: this design must consume REQ-167's CapabilityGate.build_import_table/1 (manifest-derived whitelist) as the ONLY gating mechanism -- no second capability model. Read capability_gate.ex's real public contract yourself.\n\nMEMORY ACCESS: any host function that reads/writes guest linear memory (e.g. resolving a string argument's pointer/length pair, or writing a return string back into guest memory) MUST go through REQ-168's MemoryGuard.read/4 / write/4 -- read memory_guard.ex's real public contract yourself. This is likely this design's single most safety-critical section, mirroring REQ-168's own stakes -- if you make any claim about how a host function's callback receives/returns values through wasmex's imports: mechanism (the {:fn, params, results, callback} tuple shape CapabilityGate's own @known_imports registry already established, capability_gate.ex section 6), verify it live against the real installed dependency before writing it into the design, per this pipeline's now-consistent discipline (REQ-165 through REQ-170 all found real, live-verified divergences from documentation-only claims -- do not assume this integration is simpler just because each individual piece already passed its own gate).\n\nTENANT BOUNDARY: identical to REQ-159's own established pattern -- host functions receive already-resolved values; the tenant prefix is supplied by the calling ENGINE code, never derived from guest input. State this explicitly, citing decision 0014 (e).\n\nMANDATORY LIVE VERIFICATION (use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching mix run scripts): confirm live how a host function callback actually receives its arguments and returns a value through wasmex's real NIF boundary -- what Elixir types arrive in the callback's argument list for i32-typed WASM params, what shape the callback must return, and whether returning a value that doesn't match the declared results type produces a clean error or a crash. If a string must cross the boundary (e.g. read_variable's variable name argument, or its return value), it necessarily crosses as a raw (pointer, length) pair into/out of guest linear memory -- verify live exactly how a host callback resolves such a pointer/length pair via the Wasmex.Memory handle available to it (does the callback receive a memory/instance handle directly, or must it be threaded in via closure capture at import-table construction time? read capability_gate.ex's own build_import_table/1 and its @known_imports registry to see how REQ-167 already anticipated this).",
+    "acceptance_criteria": [
+      "AC1: for each of read_variable, log, and now, a test asserts the WASM-side semantic behavior matches the Lua-side behavior REQ-159/REQ-152 established -- design must specify the exact test strategy proving this (same inputs, same observable outcome, differing only in ABI).",
+      "AC2: a test asserts read_variable returns the current value for a set variable and a defined not-present representation for an unset one, matching the Lua side's nil semantics under the chosen ABI's return shape -- design must specify the exact not-present representation chosen for the WASM ABI.",
+      "AC3: a test asserts log emits a structured entry carrying script/module identity, instance ID, and trace ID -- design must specify exactly how these three fields cross the WASM boundary (as separate arguments? encoded in one string? read from ExecutionContext at the host side, never guest-supplied for the identity fields presumably) and cite platform.ex's do_log/3 (~line 681) for the Lua-side field set being matched.",
+      "AC4: a test asserts now returns a value parseable as the same ISO 8601 UTC instant the Lua side returns for the same injected clock -- design must specify the exact mechanism proving parity against a fixed time (the same TimeSource injection platform.ex's now/0 already uses, per REQ-152).",
+      "AC5: the moduledoc states uuid has NO counterpart in R-Co's eight-function Lua host API matrix, and records the explicit decision taken (WASM-side addition vs. Lua-side gap) -- design must state which decision and why, not merely note the asymmetry.",
+      "AC6: number conversion uses REQ-150's named module/function, citing its section by number, introducing no second rule -- design must state explicitly whether Letflow.Engine.LuaNumberMarshalling is reused directly or a WASM-specific companion is needed given the differing ABI shapes, with reasoning; a test round-trips an integer and a float asserting the subtype matches REQ-150's rule.",
+      "AC7: capability gating for these functions comes from REQ-167's manifest-derived whitelist, no second capability model -- design must show the moduledoc naming REQ-167 as the source and specify exactly how build_import_table/1's output is consumed.",
+      "AC8: no host function calls Letflow.Repo with a prefix derived from guest-supplied input -- design must state the tenant prefix is supplied by the calling engine code, per decision 0014 (e), and specify exactly where/how that prefix reaches the host function implementation (likely a closure-captured ExecutionContext-equivalent, mirroring platform.ex's own execution_context parameter threading).",
+      "AC9: mix test and mix compile --warnings-as-errors both pass -- not a design element, but the design's chosen types/signatures must give ELIXIR-DEV something both commands can meaningfully enforce.",
+      "Zero literal Elixir code in the design doc -- @spec/@type/interface descriptions only.",
+      "Full traceability table mapping every one of REQ-171's real acceptance criteria (read from docs/requirements.yaml) to a planned test."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

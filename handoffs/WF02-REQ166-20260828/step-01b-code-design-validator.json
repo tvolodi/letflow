@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ166-20260828/step-01b-code-design-validator.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -40,6 +40,31 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "FAIL",
+    "summary": "Independent live wasmex verification confirmed most of the design's export-introspection claims (AC1-3 of the validator's own checklist) are accurate, but found two concrete, load-bearing defects that require rework before this design can be implemented against.",
+    "verified_true": [
+      "AC1: MIX_ENV=test mix run compiling a conforming WAT (init/execute/deinit/get_capabilities/alloc + memory, all exact signatures per req163 §3.1/§3.2) via Wasmex.Store.new/0 + Wasmex.Module.compile/2, then Wasmex.Module.exports/1, returned exactly the map the design cites in §1.3, including the extra 'bad_execute' export being harmlessly present and ignorable.",
+      "AC2: recompiling with 'execute' omitted produced an exports map with the 'execute' key genuinely absent (Map.has_key?/2 -> false) -- absence-detection confirmed.",
+      "AC3: recompiling with execute's arity reduced to (param i32) -> i32 produced exports['execute'] = {:fn, [:i32], [:i32]}, which differs from the required {:fn, [:i32,:i32], [:i32]} -- signature-mismatch-detection confirmed.",
+      "AC4 (partial): Wasmex.Module.compile/2 on a module with an unresolved wasi_snapshot_preview1/path_open import returned {:ok, %Wasmex.Module{}} and exports/1 on it returned the full normal export map -- compile/2 genuinely does not resolve imports or fail on them. This part of the 'never instantiates' claim held up.",
+      "AC5 (partial): req163 §3.1's four export/type rows and §3.2's memory + implicit alloc convention are cited verbatim and accurately in REQ-166's design §0/§5.2 -- no drift found in that citation.",
+      "AC8: no literal Elixir function bodies found in the design doc -- only @spec/@type/@moduledoc content, consistent with a design-only artefact."
+    ],
+    "fail_reasons": [
+      {
+        "id": "F1",
+        "severity": "blocking",
+        "title": "Design's 'never instantiates' scope decision directly contradicts req163 §4, its own cited gate-approved authority, and misreads that section",
+        "detail": "req163-wasm-abi-choice.md §4 (gate-approved, cited by this design as the non-re-derivable source of the export contract) states verbatim: 'REQ-166's registration-time validation (§3.1) must attempt instantiation as part of registration and treat that failure identically to a missing required export: rejected at registration, with a structured error naming the unresolved import ... not merely at first invocation.' This assigns import-driven, instantiation-based rejection explicitly to REQ-166's own register/1, not to REQ-167. REQ-166's design §1.5 cites this exact section ('req163 §4 / the NOT IN THIS REQUIREMENT list') to justify the opposite conclusion -- that register/1 must NEVER call Wasmex.start_link/1 -- and §4's whole 'never invocable' structural proof is built on that premise. The design does not surface this conflict, does not resolve it, and does not explain why it is overriding req163 §4's explicit MUST. This is not a stylistic nit: it means an ELIXIR-DEV building strictly from this design produces a register/1 that a later reader (or REQ-167's own CODE-DESIGNER, per the design's own §7 open-question note) will find contradicts a gate-approved sibling artefact's explicit instruction, and the entire 'a rejected module is never invocable' proof (§4) is unsound as a universal claim once req163 §4's instantiation-based import check is folded in, since register/1 as designed would then need to call start_link/1 -- exactly the operation §4's proof rests on register/1 never performing. This must be resolved (either by getting req163 amended/reconciled, or by this design explicitly and correctly arguing why req163 §4 does not bind REQ-166 -- which §1.5's current citation fails to do, since it cites the very passage that says the opposite) before implementation, not left as a silent scope pick."
+      },
+      {
+        "id": "F2",
+        "severity": "blocking",
+        "title": "Design §1.5's 'verified live' claim about Wasmex.start_link/1's exit-signal behavior is factually false, reproduced independently",
+        "detail": "§1.5 states, as a live-verified fact ('Live-tested ... confirmed both with and without Process.flag(:trap_exit, true) in the calling process'), that GenServer.start_link/3's :proc_lib handshake 'absorbs the init-time crash into an ordinary {:error, reason} value, it does not leak an :EXIT signal to a non-trapping caller.' Independent reproduction (MIX_ENV=test mix run, both %{store:, module:} and %{bytes:} argument forms, both with a bare call and with a try/rescue/catch wrapper) shows the opposite: calling Wasmex.start_link/1 on a module with an unresolved import, from a process NOT trapping exits, crashes that calling process outright (script exits with code 1, no return value ever printed, try/rescue/catch does not intercept it because the failure arrives as a linked EXIT signal, not a raised exception in the caller). This claim is not load-bearing for REQ-166's chosen design (register/1 never calls start_link/1 per §1.2/§4), but it is asserted as independently live-verified evidence in a design whose central claim rests entirely on precise, tested characterization of wasmex's real behavior -- a demonstrably false 'verified live' claim in that same section undermines confidence in the rest of §1's live-verification claims and must be corrected (either fixed to describe the real crash-propagates-without-trap_exit behavior, or removed if not needed for §1.5's actual argument)."
+      }
+    ],
+    "verification_method": "Ran /tmp scratchpad mix run scripts against the real installed wasmex 0.15.1 (deps/wasmex, matching mix.lock) under MIX_ENV=test, using Wasmex.Store.new/0, Wasmex.Module.compile/2, Wasmex.Module.exports/1, Wasmex.Wat.to_wasm/1, and Wasmex.start_link/1 directly, with inline WAT fixtures for: (1) a fully-conforming module, (2) execute omitted, (3) execute with wrong arity, (4) an unresolved wasi_snapshot_preview1 import, and (5) start_link/1 on case-4's module with and without Process.flag(:trap_exit, true).",
+    "routing": "Route back to CODE-DESIGNER for rework: resolve F1 (reconcile or correctly override req163 §4's explicit assignment of instantiation-based import rejection to REQ-166's registration path, and re-derive/qualify §4's 'never invocable' proof accordingly) and correct or remove F2's false live-verification claim in §1.5."
   }
 }

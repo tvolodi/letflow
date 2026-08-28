@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step03b-WF02-REQ165-20260828",
+  "run_id": "WF02-REQ165-20260828",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ165-20260828/step-03b-test-design-validator.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-165"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ165-20260828/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "lib/letflow/engine/wasm/plugin_handler.ex",
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "lib/mix/tasks/letflow.check_toolchain.ex",
+      "test/mix/tasks/letflow_check_toolchain_test.exs",
+      "test/specs/REQ-165.md"
+    ],
+    "branch_name": "feature/WF02-REQ165-20260828",
+    "commit": "e0f55d4"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate (WF-02 Step 3b) on REQ-165's test suite. TEST-DESIGNER ran 5 mutation tests: 2 real gaps found and closed (GenServer.stop/1 cleanup leak detection; letflow.check_toolchain.ex's F9 rustc-not-found path had ZERO prior coverage), 1 partial gap strengthened (AC4's process-boundary proof was weaker than intended -- only caught by an incidental sanity test, not the real PluginInterface.invoke/2-based AC4 test), 2 already caught cleanly. Verify this claim independently -- do not trust TEST-DESIGNER's self-report. Re-run at least 3 of the 5 claimed mutations yourself against the real code (prioritize the 2 real gaps and the partial-gap strengthening, since those are the load-bearing findings) and confirm the results. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" for Rust/wasmex-touching commands.",
+    "acceptance_criteria": [
+      "Every one of REQ-165's 9 real acceptance criteria (docs/requirements.yaml) maps to at least one runnable test -- verified by reading the test file, not the spec's claim about itself.",
+      "Independently re-apply the GenServer.stop/1 cleanup-removal mutation and confirm the new leak-detection test genuinely fails against it and passes against the real code.",
+      "Independently re-apply the F9 rustc-not-found mutation (or the emptied-PATH technique the new tests use) and confirm the new test genuinely exercises this path.",
+      "Independently re-apply the executed_in_pid-hardcoded-to-a-live-pid mutation and confirm the STRENGTHENED AC4 test (asserting handler_pid was not in a pre-call Process.list() snapshot) genuinely catches it, where the original weaker test would not have.",
+      "No skipped, pending, or excluded tests anywhere in the REQ-165 test additions.",
+      "Confirm the working tree is clean after your verification -- git diff --stat lib/ empty after any mutation you apply and revert.",
+      "test/specs/REQ-165.md's mutation-testing findings table accurately reflects what was actually done.",
+      "mix test test/letflow/engine/wasm/ test/mix/tasks/letflow_check_toolchain_test.exs and mix compile --warnings-as-errors both independently re-run and confirmed clean, with real output quoted.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

@@ -99,6 +99,26 @@ defmodule Letflow.Engine.Wasm.MemoryGuardTest do
                {:error, {:length_exceeds_memory, offset, length, 65536}}
     end
 
+    test "end-of-range sum chosen so a truncated-to-64-bit accumulator would wrap to zero and falsely accept, but exact bignum arithmetic correctly rejects it (pure arithmetic only, per §5.4)" do
+      # If step 4 computed `range_end` via native/wrapping 64-bit arithmetic
+      # (e.g. masking the sum to 0xFFFFFFFFFFFFFFFF) instead of Elixir's
+      # exact bignum arithmetic, `offset + length == 2**64` would wrap to
+      # `0`, which is `<= memory_size` and would be falsely accepted. This
+      # magnitude was chosen specifically to distinguish exact bignum
+      # arithmetic from a 64-bit-truncated simulation -- mutation-tested:
+      # a local mutant computing
+      # `Bitwise.band(offset + length, 0xFFFFFFFFFFFFFFFF)` before the
+      # comparison falsely returns `:ok` for this exact input, while the
+      # real (unmutated) implementation correctly rejects it as shown
+      # below. Pure `check_bounds/3` call only, per the mandatory safety
+      # constraint -- never a live Wasmex.Memory call.
+      offset = 0
+      length = 18_446_744_073_709_551_616
+
+      assert MemoryGuard.check_bounds(offset, length, 65536) ==
+               {:error, {:length_exceeds_memory, offset, length, 65536}}
+    end
+
     test "defensive: negative offset" do
       assert MemoryGuard.check_bounds(-1, 1, 65536) ==
                {:error, {:invalid_argument, :offset, -1}}
@@ -149,6 +169,30 @@ defmodule Letflow.Engine.Wasm.MemoryGuardTest do
       assert Process.whereis(Letflow.Engine.PluginTaskSupervisor) |> Process.alive?()
     end
 
+    test "length running past memory end via write/4 -- the implicit byte_size(data) length, not a caller-supplied one, must be what gets bounds-checked" do
+      # Mutation-tested: a mutant that derives `length` from a hardcoded
+      # small constant instead of `byte_size(data)` lets a bounds check
+      # that only accounts for e.g. 1 byte through, then hands the real
+      # (larger) `data` binary to `Wasmex.Memory.write_binary/4` --
+      # exactly the length-confusion bug this test exists to catch.
+      # Against that mutant this call returns
+      # `{:error, {:invalid_pointer, {:memory_access_failed, "out of bounds memory access"}}}`
+      # (wasmex's own native bounds check on the raw write catches it as a
+      # fallback), which does NOT match the clean, pre-native-call
+      # rejection asserted below -- proving this test distinguishes the
+      # correct implementation from the mutant. No test in the prior
+      # suite exercised write/4's `length_exceeds_memory` path at all.
+      {_pid, store, memory} = start_instance()
+      size = Wasmex.Memory.size(store, memory)
+      data = :binary.copy(<<1>>, 10)
+
+      assert MemoryGuard.write(store, memory, size - 5, data) ==
+               {:error, {:invalid_pointer, {:length_exceeds_memory, size - 5, 10, size}}}
+
+      assert Process.alive?(self())
+      assert Process.whereis(Letflow.Engine.PluginTaskSupervisor) |> Process.alive?()
+    end
+
     test "malformed pointer via write/4, offset beyond size" do
       {_pid, store, memory} = start_instance()
       size = Wasmex.Memory.size(store, memory)
@@ -190,6 +234,29 @@ defmodule Letflow.Engine.Wasm.MemoryGuardTest do
       assert moduledoc =~ "does NOT bound a fault"
       assert moduledoc =~ "Wasmtime"
       assert moduledoc =~ "native code"
+    end
+
+    test "cites req165-wasmex-process-boundary.md section 7.2 by name and quotes its residual-risk disclosure verbatim (not just a generic phrase that could appear by accident)" do
+      # The three substrings in the previous test ("does NOT bound a
+      # fault" / "Wasmtime" / "native code") are specific enough combined,
+      # but none of them actually pins down that this moduledoc is CITING
+      # req165 section 7.2 specifically, as design section 6 requires --
+      # a moduledoc could independently invent similar wording about
+      # Wasmtime faults without ever citing that source. This test checks
+      # the citation itself: the source file name, the section number, and
+      # a run of req165's own verbatim disclosure text, so an accidental
+      # substring match is not plausible.
+      {:docs_v1, _anno, _lang, _fmt, %{"en" => moduledoc}, _meta, _docs} =
+        Code.fetch_docs(Letflow.Engine.Wasm.MemoryGuard)
+
+      assert moduledoc =~ "req165-wasmex-process-boundary.md"
+      assert moduledoc =~ "§7.2"
+
+      # Matched as a regex tolerating the moduledoc's own line-wrap
+      # whitespace (the source wraps this sentence across lines) rather
+      # than as one literal substring.
+      assert moduledoc =~
+               ~r/does not raise, exit, or trap in\s+the ordinary BEAM sense/
     end
   end
 end

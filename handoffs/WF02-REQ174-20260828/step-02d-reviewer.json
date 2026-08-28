@@ -1,0 +1,21 @@
+{
+  "handoff_id": "WF02-REQ174-20260828-step02d",
+  "run_id": "WF02-REQ174-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 2d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "lib/letflow/engine/wasm/module_version_registry.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 326, GH#626, stage S5. SECURITY-REVIEWER PASSED (hard gate, 1 rework round -- an overreaching 'unconditional teardown' claim, corrected in commit 6bc9ea4 to accurately describe the two known skip paths and correctly attribute isolation to never-sharing-a-Store). Implementation is documentation-only across module_version_registry.ex, plugin_handler.ex, and the design doc, plus a new WASM fixture priv/wasm_fixtures/req174_memory_write.wat. Design: lib/letflow/design/req174-wasm-instance-pooling-or-decline.md (commit approved after 1 rework round removing literal code fences and a wrong function name). Full commit chain on this branch: f09a9d7 (initial decline decision, moduledoc) -> 6bc9ea4 (teardown-claim correction)."},
+  "task": {
+    "description": "Idiom/scope-creep/decision-record-consistency review of this branch's commits (f09a9d7, 6bc9ea4). Check: (1) whether recording a DECLINE decision purely via moduledoc additions (no new module, no new logic) is a genuinely complete and correctly-scoped response to REQ-174, or whether something structural is missing -- weigh against the acceptance criteria; (2) whether the new priv/wasm_fixtures/req174_memory_write.wat fixture is a minimal, correctly-scoped, single-purpose fixture (write_marker/read_marker exports, zero imports) matching the design's own SS4.1 spec, with no scope creep; (3) decision-record consistency -- confirm the moduledoc's citation of decision 0014 (e) is accurate, and that the corrected teardown/isolation language (post SECURITY-REVIEWER fix) doesn't contradict anything already on record from REQ-165/170/173's own moduledocs; (4) confirm git diff --stat across both commits touches only the 2 .ex moduledocs, the 1 new .wat fixture, and the design doc -- no production logic file was modified anywhere; (5) OTP idiom is not really applicable here since no new code was written, but check that the moduledoc additions are placed sensibly within each file's existing documentation structure, not awkwardly appended.",
+    "acceptance_criteria": [
+      "the moduledoc records an explicit decision: pooling adopted, or pooling declined with its reason -- WASM-13 is a SHOULD and declining is legitimate, but silence is not",
+      "the moduledoc states that this requirement restates WASM-13 by ADDING the per-invocation memory-reset correctness constraint, which is absent from WASM-13's original text, and cites decision 0014 (e) and the wasmex Store-reuse behaviour that motivates it",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

@@ -36,11 +36,24 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
 
   describe "AC6: plugin_interface.ex is unmodified" do
     test "git diff --stat against plugin_interface.ex is empty" do
+      # `main` only exists as a local branch in a dev checkout; CI's checkout
+      # of a PR branch has no local `main` ref, only `origin/main`. Try both
+      # so this test works in either shape.
+      base_ref =
+        Enum.find(["origin/main", "main"], fn ref ->
+          match?(
+            {_, 0},
+            System.cmd("git", ["rev-parse", "--verify", ref], stderr_to_stdout: true)
+          )
+        end)
+
+      assert base_ref, "expected either 'origin/main' or 'main' to resolve as a git ref"
+
       {output, 0} =
         System.cmd("git", [
           "diff",
           "--stat",
-          "main...HEAD",
+          "#{base_ref}...HEAD",
           "--",
           "lib/letflow/engine/plugin_interface.ex"
         ])

@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step01-WF02-REQ170-20260828",
+  "run_id": "WF02-REQ170-20260828",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ170-20260828/step-01-code-designer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-170"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md",
+      "lib/letflow/engine/wasm/resource_limits.ex",
+      "lib/letflow/engine/wasm/plugin_handler.ex",
+      "lib/letflow/engine/plugin_interface.ex"
+    ],
+    "branch_name": "feature/WF02-REQ170-20260828",
+    "commit": "0a35581"
+  },
+  "task": {
+    "description": "CODE-DESIGNER pass (WF-02 Step 1) for REQ-170 (queue task 322, GH#622). Read REQ-170's full entry in docs/requirements.yaml (id: REQ-170) before anything else. Produce a design artefact under lib/letflow/design/ (e.g. req170-wasm-wallclock-timeout.md) per this project's CODE-DESIGNER conventions, design-only (zero implementation code). This is the requirement that cashes in decision 0014's mandatory process boundary as an actual guarantee, not just a structural claim.\n\nReal API surface already confirmed present this session (verify it yourself again, do not just trust this): deps/wasmex/lib/wasmex.ex's Wasmex.call_function/4 (line 417-424) takes a timeout arg (default 5000ms), and its own moduledoc (lines 399-416) documents: 'If a call times out, Wasmex interrupts its WebAssembly execution and keeps the Store available for subsequent calls.' Decision 0014's containment argument point (ii) cites this exact claim as 'the interruption primitive WASM-11 needs' -- but that citation is DOCUMENTATION READ, NOT RUN. This requirement's whole point is to verify it live.\n\nMANDATORY LIVE VERIFICATION (use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching mix run scripts -- and given this pipeline's now-strong track record of real findings on exactly these 'documentation read, not run' WASM claims (REQ-166's crash-propagation claim, REQ-168's SIGABRT hazard, REQ-169's memory-cap-doesn't-trap divergence), do not assume this one holds either): (1) build a genuinely host-blocking or long-running guest call (a WAT infinite loop, or reuse/adapt req169_hang.wat's shape), call Wasmex.call_function/4 with a short timeout (e.g. 500ms), and confirm live whether the call actually returns within roughly that bound with a clean {:error, _} or similar -- or hangs, crashes, or behaves otherwise; (2) if it does return, confirm live whether the SAME Store/pid can be used for a SUBSEQUENT call afterward and that subsequent call succeeds normally -- this is the literal 'keeps the Store available for subsequent calls' claim, verify it by actually making a second call and checking its result, not by assuming; (3) confirm this codebase's OWN existing supervised-task boundary (the Task.Supervisor.async_nolink/2 + Task.yield/2 pattern already used identically by module_registry.ex/capability_gate.ex/memory_guard.ex/PluginInterface.invoke) independently terminates an invocation when wrapped around a call that itself has a LONGER (or no) wasmex-level timeout than the outer task bound -- i.e. prove the outer boundary is a real, independent backstop, not merely redundant with wasmex's own timeout; read lib/letflow/engine/plugin_interface.ex's existing invoke/2,3 and handle_yield_result/4 directly, since this requirement's outer-boundary half may already exist there rather than needing a new implementation -- decide and state explicitly whether this requirement needs new code or is substantially already covered by REQ-165's PluginInterface plus a wasmex-level timeout configuration point; (4) confirm the timeout error shape (both wasmex's own timeout return, and the outer supervised-task's own timeout/kill path) is distinguishable by pattern match from REQ-169's ResourceLimits fuel-exhaustion/memory-cap error shapes.\n\nOQ-5 DISCIPLINE (read decision 0014's OQ-5 text directly): whether a fuel-bounded guest can still block a BEAM scheduler long enough to degrade the node is explicitly NOT this requirement's deliverable (needs a load spike and S6 thresholds). But if your own live verification in this design pass produces ANY evidence bearing on this (e.g. a timed-out guest that visibly stalls something, a scheduler-yielding concern you notice while running these probes), you MUST record it explicitly in the design doc as a finding to be filed as a candidate issue against OQ-5 -- do not silently absorb it as an implementation detail or tuning note. State plainly in the design whether any such evidence was observed.",
+    "acceptance_criteria": [
+      "AC1: a test asserts a guest blocked in a host call is terminated by the configured timeout and the caller receives a structured error, which is WASM-11's own acceptance criterion -- design must specify the exact mechanism and live-verified error shape.",
+      "AC2: a test verifies wasmex's documented interrupt-and-keep-Store behavior by running it -- design must state the real, live-verified result (does a subsequent call on the same Store succeed after a timeout, or not) and, if it diverges from decision 0014's documentation-sourced claim, record that divergence explicitly per this requirement's own text.",
+      "AC3: a test asserts the outer supervised task terminates the invocation independently of wasmex's own timeout (e.g. asserting the task process is dead and the caller received {:error, reason}) -- design must specify exactly how this independence is proven, not merely asserted.",
+      "AC4: the timeout is configurable, with a test driving two values and asserting the shorter binds sooner -- design must specify the exact configuration surface.",
+      "AC5: the timeout error is distinguishable by pattern match from REQ-169's fuel-exhaustion and memory-cap errors -- design must state the exact distinguishing shape, live-verified.",
+      "AC6: the moduledoc states OQ-5 is NOT settled by this requirement and names what would settle it (a load spike plus S6 thresholds); any scheduler-stall evidence observed while building this requirement is filed as an issue against OQ-5 rather than absorbed -- design must state plainly whether any such evidence was found in this design pass's own live verification.",
+      "AC7: mix test and mix compile --warnings-as-errors both pass -- not a design element, but the design's chosen types/signatures must give ELIXIR-DEV something both commands can meaningfully enforce.",
+      "Zero literal Elixir code in the design doc -- @spec/@type/interface descriptions only.",
+      "Full traceability table mapping every one of REQ-170's real acceptance criteria (read from docs/requirements.yaml) to a planned test."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

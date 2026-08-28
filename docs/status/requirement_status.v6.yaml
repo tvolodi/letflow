@@ -240,3 +240,23 @@ history:
       independently re-verified all 8 acceptance criteria (own compile/test
       runs, own git diff verification) and PASSED. Unblocks REQ-173 (WASM
       module hot reload, depends_on: [REQ-172]).
+  - req: REQ-173
+    event: started
+    agent: ORCH
+    at: "2026-08-28T18:41:00Z"
+    note: >
+      WF02-REQ173-20260828 started (queue task 325, GH#625, stage S5).
+      WASM-14 hot reload: when a new module version activates, in-flight
+      invocations of the prior version must complete normally against the
+      OLD version's behaviour, and new invocations must use the NEW
+      version. Concurrency requirement -- the acceptance test must hold an
+      invocation open (a guest blocked in a controllable host call),
+      activate a new version DURING it, and assert both halves in one
+      overlapping scenario, not two sequential invocations. Prior
+      version's resources must be released only after its last in-flight
+      invocation completes. A version's capability set must not leak
+      across an in-flight invocation when the new version's manifest
+      declares a different one -- SECURITY-REVIEWER hard gate, version
+      confusion is an authorization hazard. NOT IN THIS REQUIREMENT:
+      instance pooling is REQ-174's, which depends_on this one. Depends on
+      REQ-172 (done).

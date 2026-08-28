@@ -3091,6 +3091,24 @@
       "last_known_step": "Step Final",
       "queue_task_id": 324,
       "note": "PR #693 merged (squash commit 1979e29). REQ-172: WASM host API 2/2 -- write path (write_variable/call_service/fail) at Lua parity, plus the shared Lua/Wasm parity test harness (test/support/host_api_parity.ex) satisfying WASM-12's own acceptance criterion. Design went through 2 CODE-DESIGN-VALIDATOR rework rounds: iteration 1 found the design's claim that fail's exit/1 crashes the Wasmex instance process was FALSE (live-verified against real wasmex 0.15.1 -- the process survives, caught by wasmex's own catch clause); the real mechanism is a process-dictionary stash immediately before exit/1, read by plugin_handler.ex's call_export/3 strictly before its existing GenServer.stop/1 runs. Iteration 2 was a narrow literal-code-in-design format fix. SECURITY-REVIEWER passed clean. REVIEWER required one rework round (missing moduledoc AC6 semantic-difference disclosures, caught by TEST-DESIGNER's own mutation-tested suite). TEST-DESIGN-VALIDATOR passed with independent mutation re-verification. RELEASE-VALIDATOR independently re-verified all 8 acceptance criteria. Mid-run, ORCH found and fixed a real regression it had introduced: all 14 of this run's handoff files had a malformed context field (string instead of the required object shape), crashing Mix.Tasks.Letflow.LintHandoffs -- fixed and reverified (22/22 lint tests pass) before Step Final. CI needed one real fix (mix format, same recurring gap as REQ-167's PR #688) plus 2 benign :wasm_hang isolated-subprocess timing-flake reruns (main suite passed clean, 2437/2437, on every run). Queue task 324 released done. Unblocks REQ-173 (WASM module hot reload)."
+    },
+    {
+      "run_id": "WF02-REQ173-20260828",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-173"
+      ],
+      "stage": "S5",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/engine/wasm/"
+      ],
+      "lock_acquired_at": "2026-08-28T18:41:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00",
+      "queue_task_id": 325,
+      "note": "WASM module hot reload (WASM-14): in-flight invocations of the prior version complete normally, new invocations use the new version. Concurrency requirement requiring a real overlapping-activation test. Depends on REQ-172 (done). Step 00 bookkeeping committed to main; feature branch about to be created."
     }
   ]
 }

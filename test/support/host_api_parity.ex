@@ -390,7 +390,12 @@ defmodule Letflow.Test.HostApiParity do
       platform.fail('#{@fail_reason}', {x = 1})
       """
 
-      task = Task.async(fn -> Lua.eval!(lua, script) end)
+      # `Task.async/1` LINKS the new process to the caller -- an abnormal exit from a
+      # linked, non-trapping process would crash the calling test process too. Use
+      # `Task.Supervisor.async_nolink/2` against the same
+      # `Letflow.Engine.Lua.TaskSupervisor` production code already uses, exactly
+      # mirroring `platform_test.exs`'s own REQ-161 harness.
+      task = Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn -> Lua.eval!(lua, script) end)
 
       case Task.yield(task, 1_000) do
         {:exit, {:script_failed, %{reason: reason, details: details}}} ->

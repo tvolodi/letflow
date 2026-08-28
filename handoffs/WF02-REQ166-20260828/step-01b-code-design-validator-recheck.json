@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step01b-recheck-WF02-REQ166-20260828",
+  "run_id": "WF02-REQ166-20260828",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ166-20260828/step-01b-code-design-validator-recheck.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-166"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ166-20260828/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ166-20260828/step-01-code-designer-rework1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req166-wasm-module-abi-validation.md",
+      "test/specs/REQ-166.md",
+      "lib/letflow/design/req163-wasm-abi-choice.md"
+    ],
+    "branch_name": "feature/WF02-REQ166-20260828",
+    "commit": "de27b0b",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR re-check of REQ-166's design after rework commit de27b0b addressing F1 (register/1 must ALSO attempt real instantiation, treating unresolved-import failure identically to a missing export, per req163 sec4's explicit assignment) and F2 (the false crash-propagation claim, now fixed with a Task.Supervisor-based monitored instantiation attempt, justified per req155's own one-supervisor-per-concern precedent). Verify independently -- re-run your own live wasmex experiments, do not trust the rework's self-report.",
+    "acceptance_criteria": [
+      "Confirm register/1's redesigned two-stage flow (static check via compile/2+exports/1, THEN a real instantiation attempt via a Task.Supervisor-wrapped start_link/1) correctly treats an unresolved-import failure identically to a missing/malformed export -- rejected at registration with a structured error.",
+      "Independently reproduce the Task.Supervisor.async_nolink/2 + Task.yield/2 wrapping around start_link/1 on a module with an unresolved import yourself, and confirm the calling process survives (exit code 0) and receives the task outcome as an ordinary value, not a crash -- this is the load-bearing fix for F2.",
+      "Confirm the design states, and justifies, that the instantiation instance is started then immediately stopped (never kept alive) before register/1 returns, reconciled with decision 0014(e)'s per-invocation isolation principle.",
+      "Confirm the new dedicated Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor (or whatever the rework named it) is justified per an existing precedent (req155 sec4.4's one-supervisor-per-concern pattern is cited -- verify that citation is accurate by reading req155's actual sec4.4).",
+      "Confirm the re-derived 'never invocable' proof is sound: a registered_module() value is only constructed after BOTH stages pass.",
+      "Confirm req163-wasm-abi-choice.md section 4 is now cited and applied accurately -- no remaining contradiction.",
+      "All 6 real REQ-166 acceptance criteria still correctly mapped; zero literal Elixir code in the design doc.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

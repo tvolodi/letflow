@@ -1,0 +1,21 @@
+{
+  "handoff_id": "WF02-REQ174-20260828-step03",
+  "run_id": "WF02-REQ174-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 3",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "priv/wasm_fixtures/req174_memory_write.wat",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 326, GH#626, stage S5. SECURITY-REVIEWER and REVIEWER both PASSED (each with 1 rework round, both narrow documentation-accuracy fixes now confirmed correct). Design: lib/letflow/design/req174-wasm-instance-pooling-or-decline.md (SS4 specifies the test shape). Design DECLINES instance pooling -- no pooling module exists, no new logic was written. The moduledoc (lib/letflow/engine/wasm/module_version_registry.ex and plugin_handler.ex) now correctly states: teardown runs on success and rescued-exception paths but is NOT unconditional (skipped on an uncaught GenServer.call-timeout exit, left to the Process.monitor/:DOWN crash-safety net); isolation is correctly attributed to NEVER SHARING A STORE BETWEEN INVOCATIONS (a fresh Wasmex.Store is allocated at every invocation, so even a leaked/orphaned instance from a timeout is never reused by a later invocation). The fixture priv/wasm_fixtures/req174_memory_write.wat already exists (one exported memory page, write_marker export writing byte 1 at offset 0, read_marker export reading it back) -- exploit Wasm's zero-initialized-memory guarantee: invocation N writing the marker must NOT be observable in invocation N+1's read, because each invocation gets a genuinely fresh Store/memory, not a reset one."},
+  "task": {
+    "description": "Write ExUnit tests satisfying REQ-174's acceptance criteria. Per the design's own SS4 test-design shape: Test A (via ModuleVersionRegistry.invoke/4 or equivalent, in test/letflow/engine/wasm/module_version_registry_test.exs) -- register/activate the req174_memory_write.wat module, invoke write_marker (invocation N), then invoke read_marker (invocation N+1) on the SAME registered/activated module, assert read_marker returns 0 (not 1) -- proving no residue crosses invocations. Test B (via PluginHandler.run_guest/3 or its equivalent call path, in test/letflow/engine/wasm/plugin_handler_test.exs) -- same two-call pattern, independently, since it's a distinct instantiation call site from ModuleVersionRegistry's. Apply this project's mutation-testing discipline where it makes sense (e.g. temporarily make the test use a SHARED store/pid across both calls to confirm the test would actually catch a real isolation violation, then revert -- this is exactly the kind of test whose discriminating power should be proven, not assumed, per this project's history of catching test-design flaws this way). Do not write a new pooling module -- none exists, and the design explicitly declines pooling. Do not modify any production logic in lib/letflow/engine/wasm/. Run mix compile --warnings-as-errors and mix test yourself, quote real output.",
+    "acceptance_criteria": [
+      "a test asserts per-invocation isolation regardless of which way the decision went: data written to guest memory in invocation N is NOT observable in invocation N+1 of the same module",
+      "the moduledoc states that this requirement restates WASM-13 by ADDING the per-invocation memory-reset correctness constraint, which is absent from WASM-13's original text, and cites decision 0014 (e) and the wasmex Store-reuse behaviour that motivates it",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

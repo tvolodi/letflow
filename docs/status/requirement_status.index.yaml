@@ -686,17 +686,11 @@ volumes:
     path: docs/status/requirement_status.v5.yaml
     status: current
     opened: 2026-08-26
-    entries: 45
+    entries: 46
     note: >
-      Incremented to 45 by WF02-REQ169-20260828 (DOC-UPDATER)'s own REQ-169
-      done-event append (Step 6, RELEASE-VALIDATOR Step 5 PASS, commit
-      57148c8) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v5.yaml` = 45 on-disk entries, no rebase
-      conflict on this file.
-
-      Incremented to 44 by ORCH's REQ-169 started-event append (Step 00,
-      WF02-REQ169-20260828) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v5.yaml` = 44 on-disk entries.
+      Incremented to 46 by ORCH's REQ-170 started-event append (Step 00,
+      WF02-REQ170-20260828) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 46 on-disk entries.
 
       Incremented to 42 by ORCH's REQ-168 started-event append (Step 00,
       WF02-REQ168-20260828) -- `grep -c "^  - req:"

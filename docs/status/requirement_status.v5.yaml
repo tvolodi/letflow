@@ -1139,3 +1139,22 @@ history:
       docs/requirements.yaml. `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 44 on-disk entries before
       this append; 45 after.
+  - req: REQ-170
+    event: started
+    agent: ORCH
+    at: "2026-08-28T09:27:07Z"
+    note: >
+      WF02-REQ170-20260828 started (queue task 322, GH#622, stage S5).
+      Claimed via get_next_task after REQ-169's completion. WASM
+      per-invocation wall-clock timeout enforced across the process
+      boundary (WASM-11) -- the requirement that cashes in decision
+      0014's mandatory process boundary as an actual guarantee. Two
+      layers to assert: wasmex's own documented interrupt-and-keep-Store
+      behavior (read from docs, not run -- this requirement verifies it
+      live) and REQ-165's supervised-task boundary independently
+      terminating the invocation regardless of whether the first
+      mechanism cooperates. OQ-5 (scheduler safety under real load) is
+      explicitly NOT this requirement's deliverable -- any scheduler-stall
+      evidence found while building this must be filed as an issue
+      against OQ-5, not silently absorbed. SECURITY-REVIEWER hard gate.
+      Depends on REQ-169 (done).

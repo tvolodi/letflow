@@ -1,0 +1,40 @@
+{
+  "handoff_id": "step02d-WF02-REQ163-20260828",
+  "run_id": "WF02-REQ163-20260828",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ163-20260828/step-02d-reviewer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-163"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ163-20260828/step-01-code-designer.json",
+      "handoffs/WF02-REQ163-20260828/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req163-wasm-abi-choice.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "branch_name": "feature/WF02-REQ163-20260828",
+    "commit": "08e8d64"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-163's decision artefact -- no code exists for this requirement, so this gate's focus is decision-record consistency and scope-creep, not OTP idiom. CODE-DESIGN-VALIDATOR already independently re-verified the cited wasmex web evidence and passed. Your job: confirm this artefact does not silently reopen or contradict decision 0014's own settled premises (wasmex adoption, process-boundary mandate), confirm the artefact's own placement decision (lib/letflow/design/ vs. a new docs/migration/decisions/ record) is consistent with how this project has handled similar scoping calls before (cite the REQ-150/OQ-6 precedent it claims to mirror and verify that precedent is real), and confirm no scope creep -- this requirement's own text is explicit that NO mix.exs change and NO lib/letflow/engine/ file may be touched.",
+    "acceptance_criteria": [
+      "Confirm the artefact does not silently reopen or contradict any of decision 0014's settled premises -- read 0014 in full and check for contradiction, not just citation.",
+      "Confirm the REQ-150/OQ-6 placement precedent the artefact cites is real -- read lib/letflow/design/req150-lua-number-marshalling.md's own framing/placement rationale and confirm it is genuinely analogous.",
+      "Confirm no scope creep: git diff --stat main...feature/WF02-REQ163-20260828 touches only this run's own handoffs/, docs/status/, handoffs/registry.json bookkeeping, and lib/letflow/design/req163-wasm-abi-choice.md -- no mix.exs, no lib/letflow/engine/ file.",
+      "Confirm the artefact's open questions (section 6) are genuinely deferred rather than silently resolved by assumption.",
+      "Confirm the artefact does not overstate its own authority -- it explicitly should not claim to bind REQ-166/167/171/172 beyond what a design-level (not decision-record-level) artefact can bind, while still being concrete enough to prevent those future requirements from re-deriving the same research.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

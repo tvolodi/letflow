@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "DOC-UPDATER",
   "file": "handoffs/WF02-REQ163-20260828/step-06-doc-updater.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -33,6 +33,13 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "summary": "REQ-163 status flipped pending -> done in docs/requirements.yaml. Appended one 'done' event to docs/status/requirement_status.v5.yaml (current volume): 27 entries before, 28 after, confirmed via grep -c and git diff --numstat (0 deletions). docs/status/requirement_status.index.yaml volume 5 entry: entries bumped 27 -> 28, new note prepended (prior notes untouched). No other status-history events edited. README.md not touched (no documented behavior changed by this decision-only requirement). No docs/migration/decisions/*.md file was named in REQ-163's acceptance criteria, so none was required to be updated; the design artefact lib/letflow/design/req163-wasm-abi-choice.md was already produced by CODE-DESIGNER and verified by prior gates.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ163-20260828/step-06-doc-updater.json"
+    ]
   }
 }

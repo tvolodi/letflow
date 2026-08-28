@@ -1633,3 +1633,28 @@ following the pattern this session's WASM/decision requirements established (ass
 file is untouched via `git diff --stat <ref>...HEAD`) should use this same defensive
 resolution, or an equivalent that doesn't assume the local branch layout of whichever
 sandbox happens to run it first.
+
+## `mix test` passing locally does not mean CI's `mix format --check-formatted` will pass
+
+**What happened.** REQ-167's PR #688 failed CI's backend gate on the very first run, in
+under a minute — too fast to be a real compile/test failure. The actual cause: `mix
+format --check-formatted` rejected `test/letflow/engine/wasm/capability_gate_test.exs`
+over two long `assert {:error, {:instantiation_denied, {...}}} = ...` lines that exceeded
+the formatter's line-length rule. Every prior gate in this run (ELIXIR-DEV,
+SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR, TEST-RUNNER,
+RELEASE-VALIDATOR) had run `mix compile` and `mix test` repeatedly, all green — none of
+them ran `mix format --check-formatted`, which is only invoked as part of CI's `mix
+letflow.check` composite task, not by any of those individual commands.
+
+**Why seven independent local gates didn't catch it.** `mix test` and `mix compile` do
+not check formatting at all — a file can be perfectly valid, warning-free Elixir and
+still fail `mix format --check-formatted` if a human or an agent typed a line that
+differs from what `mix format` would have produced. This is the same shape of gap as the
+`git diff main...HEAD` anti-pattern above: no amount of re-running the same *kind* of
+check surfaces a defect only a *different* check would catch.
+
+**Mitigation.** Any agent role that adds or edits `.ex`/`.exs` files should run `mix
+format` (not just `mix format --check-formatted`) on the files it touched before
+declaring its step done — this both fixes the issue and is a no-op if already formatted.
+Cheaper than waiting for a CI round-trip to discover it. Consider adding this as an
+explicit step in ELIXIR-DEV's and TEST-DESIGNER's own acceptance-criteria templates.

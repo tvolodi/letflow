@@ -1,0 +1,68 @@
+{
+  "handoff_id": "step03-WF02-REQ170-20260828",
+  "run_id": "WF02-REQ170-20260828",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ170-20260828/step-03-test-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-170"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ170-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ170-20260828/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ170-20260828/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req170-wasm-wallclock-timeout.md",
+      "lib/letflow/engine/wasm/call_timeout.ex",
+      "lib/letflow/engine/wasm/plugin_handler.ex",
+      "test/letflow/engine/wasm/call_timeout_test.exs",
+      "test/letflow/engine/wasm/plugin_handler_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ170-20260828"
+  },
+  "task": {
+    "description": "TEST-DESIGNER pass (WF-02 Step 3) on REQ-170. ELIXIR-DEV already wrote tests (in call_timeout_test.exs and additions to plugin_handler_test.exs), all passing per SECURITY-REVIEWER/REVIEWER's independent reruns. Your job is a MUTATION-DRIVEN review and strengthening pass: read the shipped call_timeout.ex and the plugin_handler.ex extension in full, then find and fill real coverage gaps by actually mutating the implementation locally and confirming the existing suite fails to catch each mutation before adding a test that does. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching mix commands. Revert every mutation before finishing.\n\nSAFETY NOTE: do not write or run any test/probe that reproduces design section 1.5's 32-concurrent-hang saturation scenario -- it durably occupies wasmex's shared native thread pool for the rest of any process that runs it. Mutation probes involving timing should use small, bounded fixtures (like the existing tests already do), not large concurrent hang counts.",
+    "acceptance_criteria": [
+      "Mutate CallTimeout.classify/1's substring match for the {:exit,_} shape (the GenServer.call timeout substring) to something looser or wrong, and confirm an existing test catches a false-negative or false-positive classification.",
+      "Mutate CallTimeout.classify/1's substring match for the nil-clause (outer Task.yield timeout) shape similarly, and confirm coverage.",
+      "Mutate plugin_handler.ex's new node_config['timeout_ms'] read to ignore the config and always use the hardcoded default, and confirm an existing test catches the timeout no longer being configurable (this is AC4's own central concern).",
+      "Mutate plugin_handler.ex's call_export/3 to NOT pass timeout_ms through to Wasmex.call_function/4 (i.e. silently drop the argument, falling back to wasmex's own 5000ms default regardless of what was configured) and confirm an existing test catches this -- if the existing AC4 test only checks a relative ordering (shorter binds sooner) with generous tolerance, verify it would actually catch a config that's silently ignored, not just budget mismeasurement.",
+      "Confirm the AC6 moduledoc-content test is not trivially satisfiable by an adversarial moduledoc scattering matched keywords without real context (mirroring the precedent already established in REQ-169's own mutation pass for its equivalent test) -- strengthen if needed.",
+      "Do not modify lib/letflow/engine/wasm/call_timeout.ex or plugin_handler.ex -- test/fixture files only.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Genuine mutation-driven strengthening pass against the shipped lib/letflow/engine/wasm/call_timeout.ex and plugin_handler.ex (REQ-170). Applied 7 mutations locally, one at a time, confirming pass/fail of the pre-existing 26-test suite before writing any new test, then reverted each mutation before moving on. 4 mutations exposed real coverage gaps and were closed with new tests; 3 mutations were already caught by the pre-existing suite (recorded, no new test needed). Full mutation table and rationale in test/specs/REQ-170.md's new 'Mutation-driven strengthening pass' section. Did not modify call_timeout.ex or plugin_handler.ex -- test/fixture files only; git diff against both is empty.",
+    "mutations": [
+      {"id": "M1", "target": "call_timeout.ex @genserver_call_timeout_substring -> wrong literal", "pre_existing_suite_caught": true, "gap": false},
+      {"id": "M2", "target": "call_timeout.ex @genserver_call_timeout_substring -> loosened to bare \"timeout\"", "pre_existing_suite_caught": false, "gap": true, "closed_by": "call_timeout_test.exs: 'a reason containing the word timeout outside the exact GenServer.call-timeout shape classifies as :not_timeout'"},
+      {"id": "M3", "target": "call_timeout.ex @outer_task_timeout_substring -> wrong literal", "pre_existing_suite_caught": true, "gap": false},
+      {"id": "M4", "target": "call_timeout.ex @outer_task_timeout_substring -> loosened to bare \"within\"", "pre_existing_suite_caught": false, "gap": true, "closed_by": "call_timeout_test.exs: 'a reason containing the word within outside the exact outer-timeout shape classifies as :not_timeout'"},
+      {"id": "M5", "target": "plugin_handler.ex handle_node/1: timeout_ms hardcoded, node_config[\"timeout_ms\"] ignored", "pre_existing_suite_caught": true, "gap": false},
+      {"id": "M6", "target": "plugin_handler.ex call_export/3: Wasmex.call_function/4 called 3-arity, timeout_ms silently dropped (AC4's central concern per handoff)", "pre_existing_suite_caught": false, "gap": true, "closed_by": "plugin_handler_test.exs: 'timeout_ms longer than wasmex's hardcoded 5_000ms default still governs the wait (guards against timeout_ms being silently dropped)' -- configures 7_000ms, asserts elapsed > 6_000ms, which only holds if the config (not wasmex's hardcoded 5_000ms default) governed the wait"},
+      {"id": "M7", "target": "call_timeout.ex moduledoc temporarily replaced with an adversarial sourdough-bread/bakery-staffing paragraph planting every AC6-checked keyword out of context (mirrors REQ-169's own precedent)", "pre_existing_suite_caught": false, "gap": true, "closed_by": "call_timeout_test.exs: 'the OQ-5 filing and DIVERGENCE claims cite the actual mechanism terms and design doc, not just isolated keyword fragments' -- requires TOKIO_RUNTIME, the design-doc filename citation, and ordered-proximity regex anchors"}
+    ],
+    "verification": {
+      "baseline_before_new_tests": "mix test test/letflow/engine/wasm/call_timeout_test.exs test/letflow/engine/wasm/plugin_handler_test.exs -> Result: 26 passed",
+      "after_new_tests_against_real_code": "same command -> Result: 30 passed",
+      "each_new_test_reverified_to_fail_against_its_own_mutation": true,
+      "mutations_reverted": "git diff lib/letflow/engine/wasm/call_timeout.ex lib/letflow/engine/wasm/plugin_handler.ex -> empty",
+      "broader_directory_sanity": "mix test test/letflow/engine/wasm/ -> Result: 98 passed",
+      "compile": "WASMEX_BUILD=true mix compile --warnings-as-errors -> exit 0, no warnings"
+    },
+    "files_changed": [
+      "test/letflow/engine/wasm/call_timeout_test.exs",
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "test/specs/REQ-170.md"
+    ],
+    "next_step": "TEST-DESIGN-VALIDATOR"
+  }
+}

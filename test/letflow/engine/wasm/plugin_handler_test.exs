@@ -353,6 +353,50 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
              "expected the 300ms-configured call (#{short_elapsed_ms}ms) to bind sooner than " <>
                "the 2_000ms-configured call (#{long_elapsed_ms}ms)"
     end
+
+    # Mutation-driven strengthening (WF-02 Step 3, REQ-170): the relative-
+    # ordering test above only proves a SHORTER configured value binds
+    # sooner than a LONGER one -- it does not prove `call_export/3` actually
+    # threads `timeout_ms` through to `Wasmex.call_function/4`'s 4th
+    # argument at all. Mutating `call_export/3` to silently drop the
+    # argument (`Wasmex.call_function(pid, export, [])`, falling back to
+    # wasmex's own hardcoded 5_000ms default regardless of what
+    # `node_config["timeout_ms"]` says) was NOT caught by that test:
+    # confirmed locally, both the 300ms- and 2_000ms-configured calls
+    # collapsed to ~5_000ms under the mutation, and since 5_000 < 5_000 is
+    # false either way the ordering happened to still be observed as "short
+    # < long" by luck of scheduling jitter in one run (26/26 passed against
+    # the mutation). This test closes the gap by configuring a `timeout_ms`
+    # LONGER than wasmex's own hardcoded 5_000ms default and asserting the
+    # elapsed wait exceeds that hardcoded default -- if `timeout_ms` were
+    # silently dropped, the call would instead bind at ~5_000ms and this
+    # assertion would fail.
+    test "timeout_ms longer than wasmex's hardcoded 5_000ms default still governs the wait (guards against timeout_ms being silently dropped)" do
+      hang_context =
+        context(%{
+          node_config: %{
+            "wasm_fixture" => "wasm_fixtures/req170_hang.wat",
+            "export" => "hang",
+            "timeout_ms" => 7_000
+          }
+        })
+
+      {elapsed_us, result} =
+        :timer.tc(fn -> PluginInterface.invoke(PluginHandler, hang_context) end)
+
+      elapsed_ms = System.convert_time_unit(elapsed_us, :microsecond, :millisecond)
+
+      assert {:error, _reason} = result
+
+      assert elapsed_ms > 6_000,
+             "expected the call to be bounded by the configured 7_000ms timeout_ms, not " <>
+               "wasmex's own hardcoded 5_000ms default; took #{elapsed_ms}ms -- a value near " <>
+               "5_000ms means timeout_ms is being silently dropped before reaching " <>
+               "Wasmex.call_function/4"
+
+      # Still comfortably below the outer PluginInterface default (30_000ms).
+      assert elapsed_ms < 15_000
+    end
   end
 
   # ---------------------------------------------------------------------

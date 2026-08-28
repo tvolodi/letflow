@@ -203,6 +203,51 @@ defmodule Letflow.Engine.Wasm.CallTimeoutTest do
       normalized = String.replace(moduledoc, ~r/\s+/, " ")
       assert normalized =~ "does **not** hold" or normalized =~ "does not hold"
     end
+
+    # Mutation-driven strengthening (WF-02 Step 3, REQ-170), mirroring
+    # REQ-169's own identical precedent (test/specs/REQ-169.md,
+    # resource_limits_test.exs's "cites the actual mechanism terms" test):
+    # the three loose keyword/substring checks above (this describe block)
+    # are individually satisfiable by an adversarial moduledoc that merely
+    # scatters "OQ-5"/"NOT settled by this requirement"/"load spike"/"S6"/
+    # "worker-pool-exhaustion"/"node-global"/"filed"/"DIVERGENCE"/
+    # "decision 0014"/"does **not** hold" across unrelated sentences with no
+    # real WASM-11/wasmex context at all. Confirmed locally: temporarily
+    # replacing CallTimeout's real moduledoc with a short adversarial
+    # paragraph about sourdough bread and bakery staffing (planting every
+    # one of those fragments in an unrelated sentence, e.g. "the bakery has
+    # a worker-pool-exhaustion problem (too few bakers), described as
+    # node-global understaffing, which HR has filed as a complaint") still
+    # passed all 3 existing AC6 tests above (13/13 green for the file). This
+    # test closes that gap by requiring the real mechanism terms
+    # (TOKIO_RUNTIME, wasmex) and the load-bearing citation (design doc
+    # filename) to co-occur, in order, with the claims they support --
+    # not merely appear anywhere in the moduledoc.
+    test "the OQ-5 filing and DIVERGENCE claims cite the actual mechanism terms and design doc, not just isolated keyword fragments" do
+      {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} = Code.fetch_docs(CallTimeout)
+
+      # Real mechanism term, not just the generic "worker-thread pool"
+      # phrase an adversary could reuse in an unrelated sentence.
+      assert moduledoc =~ "TOKIO_RUNTIME"
+
+      # Load-bearing citation of the gate-approved design doc by filename --
+      # an adversarial paraphrase satisfying only the loose checks above
+      # would not be traceable back to its authorizing source.
+      assert moduledoc =~ "req170-wasm-wallclock-timeout.md"
+
+      # The "does not hold" divergence claim must be anchored to the actual
+      # dependency it was live-verified against, not floating free.
+      assert moduledoc =~ ~r/wasmex.{0,300}(does \*\*not\*\* hold|does not hold)/is
+
+      # The worker-pool-exhaustion finding must be anchored to the actual
+      # mechanism name (TOKIO_RUNTIME), which appears after "node-global" in
+      # the real moduledoc's own wording.
+      assert moduledoc =~ ~r/node-global.{0,150}TOKIO_RUNTIME/is
+
+      # The OQ-5-not-settled statement must co-occur with what would settle
+      # it (load spike + S6), not merely both appear anywhere in the doc.
+      assert moduledoc =~ ~r/NOT settled by this requirement.{0,200}load spike.{0,100}S6/is
+    end
   end
 
   # ---------------------------------------------------------------------
@@ -232,6 +277,41 @@ defmodule Letflow.Engine.Wasm.CallTimeoutTest do
 
     test "classifies {:complete, _} as :not_timeout" do
       assert CallTimeout.classify({:complete, %{}}) == :not_timeout
+    end
+
+    # Mutation-driven strengthening (WF-02 Step 3, REQ-170): loosening
+    # @genserver_call_timeout_substring from the exact
+    # "{:timeout, {GenServer, :call," shape down to the bare word "timeout"
+    # was NOT caught by any of the tests above -- every real timeout string
+    # this module actually produces already contains "timeout" as a
+    # substring, so the loosened match still agrees with them, and the only
+    # "unrelated" fixture above ("wasm guest call failed: some other
+    # reason") happens not to contain the word "timeout" either, so it
+    # doesn't exercise the loosened match at all. Confirmed locally: with
+    # the substring loosened to "timeout", all pre-existing tests in this
+    # file and plugin_handler_test.exs still passed (26/26). This test
+    # closes the gap with a reason string that DOES contain "timeout" as a
+    # substring but is NOT the specific GenServer.call-timeout shape.
+    test "a reason containing the word 'timeout' outside the exact GenServer.call-timeout shape classifies as :not_timeout (guards against an over-loosened substring match)" do
+      reason = "handler reported a downstream HTTP timeout while querying an external service"
+      refute String.contains?(reason, "{:timeout, {GenServer, :call,")
+      refute String.contains?(reason, "did not respond within")
+
+      assert CallTimeout.classify({:error, reason}) == :not_timeout
+    end
+
+    # Mutation-driven strengthening (WF-02 Step 3, REQ-170): symmetrically,
+    # loosening @outer_task_timeout_substring from "did not respond within"
+    # down to the bare word "within" was also NOT caught by any of the
+    # tests above, for the same reason -- confirmed locally, 26/26 still
+    # passed. This test closes that gap with a reason string containing
+    # "within" but not the specific outer-Task.yield-timeout shape.
+    test "a reason containing the word 'within' outside the exact outer-timeout shape classifies as :not_timeout (guards against an over-loosened substring match)" do
+      reason = "handler returned a value within acceptable bounds; no timeout involved"
+      refute String.contains?(reason, "{:timeout, {GenServer, :call,")
+      refute String.contains?(reason, "did not respond within")
+
+      assert CallTimeout.classify({:error, reason}) == :not_timeout
     end
   end
 end

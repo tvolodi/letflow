@@ -1659,6 +1659,16 @@ declaring its step done — this both fixes the issue and is a no-op if already 
 Cheaper than waiting for a CI round-trip to discover it. Consider adding this as an
 explicit step in ELIXIR-DEV's and TEST-DESIGNER's own acceptance-criteria templates.
 
+**Recurrence.** This same gate failure — under-a-minute CI failure, `mix format
+--check-formatted` rejecting a file every prior local `mix compile`/`mix test` run had
+already passed clean — recurred verbatim on REQ-172's PR #693 (3 files) and REQ-173's
+PR #694 (3 files), both after this entry was already written down. The mitigation above
+was never actually wired into any agent's own acceptance criteria (only "considered"),
+and simply having the anti-pattern documented did not stop it recurring twice more.
+ORCH now adds "run `mix format` on touched files" directly to ELIXIR-DEV/TEST-DESIGNER
+dispatch handoffs as of REQ-173's Step Final fix, rather than relying on this doc alone
+to be read and acted on.
+
 ## A test that intentionally hangs a real native resource can pass locally and cascade-fail unrelated tests in CI
 
 **What happened.** REQ-170's own test suite (`test/letflow/engine/wasm/call_timeout_test.exs`,

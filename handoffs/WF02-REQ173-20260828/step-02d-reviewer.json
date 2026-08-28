@@ -1,0 +1,21 @@
+{
+  "handoff_id": "WF02-REQ173-20260828-step02d",
+  "run_id": "WF02-REQ173-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 2d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "lib/letflow/engine/wasm/module_version_registry.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 325, GH#625, stage S5. SECURITY-REVIEWER PASSED (commit 8d4157a unchanged) -- no findings against INV-1..INV-8, including a full trace of all four do_invoke/run_call branches confirming exactly one release (explicit or via :DOWN) per checkout, and confirmation that capability sets are always derived from a checked-out version's own immutable manifest snapshot, never the current post-activation one. Implementation per approved design lib/letflow/design/req173-wasm-module-hot-reload.md (commit c7d10ea, itself approved after 1 rework round fixing the invoke/4 outer-timeout classification mechanism)."},
+  "task": {
+    "description": "Idiom/supervision/scope-creep/decision-record-consistency review of commit 8d4157a. Specifically check: (1) OTP idiom in the new GenServer (Letflow.Engine.Wasm.ModuleVersionRegistry) -- state shape, handle_call/handle_info clause organization, private-function boundaries; (2) supervision integrity -- confirm the new supervision-tree wiring in lib/letflow/application.ex places ModuleVersionRegistry and its dedicated Task.Supervisor correctly (restart strategy, ordering, whether a crash in the registry would appropriately affect or not affect in-flight WASM invocations elsewhere); (3) whether the design's composition-over-modification approach was actually followed -- confirm module_registry.ex, capability_gate.ex, and plugin_handler.ex are genuinely untouched (git diff --stat); (4) decision-record consistency -- confirm the moduledoc correctly cites decision 0014's mandate that invoke/4 mirror PluginInterface.invoke/2,3's dispatch pattern (async_nolink -> Task.yield/2 -> Task.shutdown(:brutal_kill)), and that this mirroring (not literal reuse) is accurately represented, matching the design's own resolved position from its rework round; (5) scope creep -- confirm the diff is confined to the new module_version_registry.ex file plus the minimal necessary application.ex supervision-tree addition, nothing else; (6) code quality of the timeout classification logic (matching exit({:timeout, {GenServer, :call, _}}) vs. other exit reasons) -- confirm it's implemented exactly as the design's live-verified mechanism specifies, not a plausible-looking approximation.",
+    "acceptance_criteria": [
+      "a test holds an invocation open (a guest blocked in a controllable host call), activates a new module version DURING it, and asserts the held invocation completes normally against the OLD version's observable behaviour -- WASM-14's own acceptance criterion, with the overlap real rather than sequential",
+      "the same test asserts an invocation started AFTER the activation observes the NEW version's behaviour, so both halves of WASM-14 are proven in one overlapping scenario",
+      "a test asserts the prior version's resources are released only after its last in-flight invocation completes, not at activation time"
+    ]
+  },
+  "result": null
+}

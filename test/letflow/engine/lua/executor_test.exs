@@ -1061,5 +1061,34 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       assert is_integer(count)
       assert count >= 0
     end
+
+    test "AC-5: shorter wall-clock timeout terminates sooner than a longer one" do
+      script = "while true do end"
+      huge_budget = 10_000_000_000
+
+      {short_elapsed_ms, short_result} =
+        :timer.tc(fn ->
+          Executor.execute_with_manifest(script, "h", max_instructions: huge_budget, timeout_ms: 50)
+        end)
+
+      {long_elapsed_ms, long_result} =
+        :timer.tc(fn ->
+          Executor.execute_with_manifest(script, "h", max_instructions: huge_budget, timeout_ms: 200)
+        end)
+
+      assert {:error, {:timeout_exceeded, 50}} = short_result
+      assert {:error, {:timeout_exceeded, 200}} = long_result
+      assert short_elapsed_ms < long_elapsed_ms
+    end
+
+    test "AC-6: a timeout still kills a script after it traps its own budget exhaustion" do
+      script = """
+      local ok, err = pcall(function() while true do end end)
+      while true do end
+      """
+
+      assert {:error, {:timeout_exceeded, 100}} =
+               Executor.execute_with_manifest(script, "h", max_instructions: 10_000_000_000, timeout_ms: 100)
+    end
   end
 end

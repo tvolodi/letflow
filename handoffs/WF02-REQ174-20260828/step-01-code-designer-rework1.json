@@ -1,0 +1,24 @@
+{
+  "handoff_id": "WF02-REQ174-20260828-step01-rework1",
+  "run_id": "WF02-REQ174-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 1 (rework iteration 1)",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "lib/letflow/design/req174-wasm-instance-pooling-or-decline.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 326, GH#626, stage S5. CODE-DESIGN-VALIDATOR FAILED this design (commit 99a1a14) on two narrow, mechanical defects -- the substance (DECLINE decision, live-verification of wasmex having no pooling API, the memory-write isolation test's discriminating power) was independently re-verified and confirmed SOUND. Do not re-litigate the decision or the test design; this is a narrow, targeted fix."},
+  "task": {
+    "description": "Fix exactly two defects. (1) SS1.2 and SS1.3 each contain a fenced ```elixir code block that is a verbatim (or near-verbatim) excerpt of a real shipped .ex file -- SS1.2 quotes deps/wasmex/lib/wasmex.ex's start_link/1 clauses, SS1.3 quotes lib/letflow/engine/wasm/module_version_registry.ex's run_call/6 body verbatim (lines 375-391). Per this project's mechanical, no-exceptions rule against literal implementation code in a design artefact (already enforced twice on REQ-157's design, where 'illustrative only'/'verification evidence' framing was explicitly rejected as not exempting a code block), replace BOTH fenced blocks with prose plus a file/line citation -- e.g. 'see deps/wasmex/lib/wasmex.ex's start_link/1 (around lines 220-290): when no :store key is passed, it allocates a fresh Wasmex.Store via Store.new/0 or Store.new_wasi/1' and 'see lib/letflow/engine/wasm/module_version_registry.ex's run_call/6 (lines 375-391): GenServer.stop(pid) runs on both the rescue path and the normal-return path, unconditionally' -- convey the same verified facts in prose, cite the location, do not reproduce the code. (2) The design (and its own citations) incorrectly names 'PluginHandler.run_guest/3's instantiate/1' as the second fresh-Store call site -- the real function is start_instance/1 (lib/letflow/engine/wasm/plugin_handler.ex, ~line 152), called from run_guest/3 via `with {:ok, pid} <- start_instance(bytes)`. Correct every occurrence of this wrong name throughout the document. Do not change anything else -- the DECLINE decision, the wasmex-has-no-pooling-API finding, the req174_memory_write.wat test design, the acceptance-criteria scoping (SS4.5), and INV-174-2 all stand as validated.",
+    "acceptance_criteria": [
+      "the moduledoc records an explicit decision: pooling adopted, or pooling declined with its reason -- WASM-13 is a SHOULD and declining is legitimate, but silence is not",
+      "a test asserts per-invocation isolation regardless of which way the decision went: data written to guest memory in invocation N is NOT observable in invocation N+1 of the same module",
+      "the moduledoc states that this requirement restates WASM-13 by ADDING the per-invocation memory-reset correctness constraint, which is absent from WASM-13's original text, and cites decision 0014 (e) and the wasmex Store-reuse behaviour that motivates it",
+      "no fenced code block reproduces a real .ex/.exs file's literal content anywhere in the design",
+      "every reference to the PluginHandler call site correctly names start_instance/1, not instantiate/1",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

@@ -1,0 +1,39 @@
+{
+  "handoff_id": "step02d-WF02-REQ164-20260828",
+  "run_id": "WF02-REQ164-20260828",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ164-20260828/step-02d-reviewer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-164"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ164-20260828/step-01-code-designer.json",
+      "handoffs/WF02-REQ164-20260828/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req164-wasm-compilation-hosting.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "branch_name": "feature/WF02-REQ164-20260828",
+    "commit": "be966f9"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-164's decision artefact -- decision-record consistency and scope, no code. CODE-DESIGN-VALIDATOR already PASSed. Your job: confirm this artefact does not silently reopen or contradict decision 0014's premises, confirm the artefact's placement decision (lib/letflow/design/ vs. a new docs/migration/decisions/ record) is consistent with the REQ-163 precedent it claims to mirror, confirm no scope creep, and give a final sanity check on the REQ-175 cancellation consequence since a wrongly-triggered cancellation of a real requirement is a consequential, hard-to-reverse-cheaply action for the next DOC-UPDATER step to take.",
+    "acceptance_criteria": [
+      "Confirm the artefact does not silently reopen or contradict decision 0014's settled premises.",
+      "Confirm the REQ-163 placement precedent the artefact cites is accurately characterized (re-read lib/letflow/design/req163-wasm-abi-choice.md's own placement rationale).",
+      "Confirm no scope creep: git diff --stat main...feature/WF02-REQ164-20260828 touches only this run's own handoffs/, docs/status/, handoffs/registry.json bookkeeping, and lib/letflow/design/req164-wasm-compilation-hosting.md.",
+      "Give a final sanity check specifically on the REQ-175 cancellation trigger: is the NO decision genuinely well-supported enough that cancelling a real, already-drafted requirement is the correct action, or does anything in REQ-175's own text suggest cancellation might be premature (e.g. a caller that already exists, a stakeholder commitment)? This is the one place in this run where a wrong call has real downstream cost.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

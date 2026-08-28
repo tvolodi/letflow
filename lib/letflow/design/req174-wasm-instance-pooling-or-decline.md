@@ -67,59 +67,40 @@ exclusion) that decision 0014 (e) worries about.
 ### 1.2 `Wasmex.start_link/1` allocates a brand-new `Store` (and therefore brand-new
 linear memory) on every call unless one is explicitly supplied
 
-```elixir
-# deps/wasmex/lib/wasmex.ex
-def start_link(%{} = opts) when is_map_key(opts, :module) and not is_map_key(opts, :store),
-  do: ...
-...
-store = Map.get(opts, :store, nil)
-...
-# init/1, when no :store was supplied:
-Wasmex.Store.new_wasi(opts[:wasi])   # or
-Wasmex.Store.new()
-```
+See `deps/wasmex/lib/wasmex.ex`'s `start_link/1` (around lines 220-290): its clauses
+branch on whether `opts` carries a `:store` key. When no `:store` key is passed, `init/1`
+allocates a fresh `Wasmex.Store` itself — via `Wasmex.Store.new_wasi/1` when a `:wasi`
+option was given, otherwise `Wasmex.Store.new/0` — rather than reusing a caller-supplied
+one.
 
 Both existing call sites this requirement is scoped against —
 `ModuleVersionRegistry.instantiate/2` (`lib/letflow/engine/wasm/module_version_registry.ex`,
-`Wasmex.start_link(%{bytes: bytes, imports: table})`) and `PluginHandler.run_guest/3`'s
-`instantiate/1` (`lib/letflow/engine/wasm/plugin_handler.ex`,
-`Wasmex.start_link(%{bytes: bytes})`) — call `start_link/1` **without** a `:store` key.
-Per the code above, every single invocation therefore gets a freshly allocated
-`Wasmex.Store` and a freshly instantiated `Wasmex.Instance` inside it — not a reset of
-previously-used linear memory, but linear memory that was never written by any other
-invocation in the first place. This is a stronger isolation property than "reset
-between invocations": there is no shared object across invocations for residue to
-survive in.
+`Wasmex.start_link(%{bytes: bytes, imports: table})`) and `PluginHandler.start_instance/1`
+(`lib/letflow/engine/wasm/plugin_handler.ex`, ~line 154, called from `run_guest/3` via
+`with {:ok, pid} <- start_instance(bytes)`, itself `Wasmex.start_link(%{bytes: bytes})`) —
+call `start_link/1` **without** a `:store` key. Per the behaviour above, every single
+invocation therefore gets a freshly allocated `Wasmex.Store` and a freshly instantiated
+`Wasmex.Instance` inside it — not a reset of previously-used linear memory, but linear
+memory that was never written by any other invocation in the first place. This is a
+stronger isolation property than "reset between invocations": there is no shared object
+across invocations for residue to survive in.
 
 ### 1.3 Both existing call sites already release the instance unconditionally on
 every path, including the failure path
 
 `ModuleVersionRegistry.run_call/6` (design `req173-wasm-module-hot-reload.md` §4 step
-5, verified directly in the shipped module):
-
-```elixir
-call_result =
-  try do
-    Wasmex.call_function(pid, export, args, timeout_ms)
-  rescue
-    exception ->
-      GenServer.stop(pid)
-      release(snapshot.module_name, snapshot.version_id, monitor_ref)
-      reraise exception, __STACKTRACE__
-  end
-
-GenServer.stop(pid)
-release(snapshot.module_name, snapshot.version_id, monitor_ref)
-```
-
-`GenServer.stop(pid)` runs on **both** the exception path and the normal-return path —
-the only path that does not reach it explicitly is a `GenServer.call` timeout `exit`
-from `Wasmex.call_function/4` itself, which is left to the `Process.monitor`/`:DOWN`
-crash-safety net (design §6), not to a leaked, reusable instance. `PluginHandler.run_guest/3`
+5, verified directly in `lib/letflow/engine/wasm/module_version_registry.ex`'s `run_call/6`,
+lines 375-391): `GenServer.stop(pid)` runs on **both** the `rescue` path (immediately
+before `release/3` and `reraise`) and the normal-return path (immediately before the
+final `release/3`) — unconditionally, not gated by the outcome of
+`Wasmex.call_function/4`. The only path that does not reach it explicitly is a
+`GenServer.call` timeout `exit` from `Wasmex.call_function/4` itself, which is left to
+the `Process.monitor`/`:DOWN` crash-safety net (design §6), not to a leaked, reusable
+instance. `PluginHandler.start_instance/1`, called from `run_guest/3` (lines 132-140),
 follows the identical pattern (`GenServer.stop(pid)` unconditionally, "on every path,
 including the error path, so a wasmex instance is never leaked" per its own inline
-comment). Neither module retains an instance, a `pid`, or a `Store` past a single
-invocation under any outcome — success, guest exception, or trap.
+comment at line 130). Neither module retains an instance, a `pid`, or a `Store` past a
+single invocation under any outcome — success, guest exception, or trap.
 
 ### 1.4 Conclusion this design's decision rests on
 

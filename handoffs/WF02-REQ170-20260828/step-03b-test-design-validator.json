@@ -1,0 +1,60 @@
+{
+  "handoff_id": "step03b-WF02-REQ170-20260828",
+  "run_id": "WF02-REQ170-20260828",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ170-20260828/step-03b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-170"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ170-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ170-20260828/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/wasm/call_timeout.ex",
+      "lib/letflow/engine/wasm/plugin_handler.ex",
+      "test/letflow/engine/wasm/call_timeout_test.exs",
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "test/specs/REQ-170.md"
+    ],
+    "branch_name": "feature/WF02-REQ170-20260828",
+    "commit": "c20928b"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate (WF-02 Step 3b) on REQ-170's test suite after TEST-DESIGNER's mutation-driven strengthening pass (26->30 tests). Read handoffs/WF02-REQ170-20260828/step-03-test-designer.json's full result first -- it documents 7 mutation findings, 4 of which were genuine gaps closed with new tests (loosened substrings on both classify/1 clauses, a silently-dropped timeout_ms in call_export/3, an adversarially-satisfiable AC6 moduledoc test). Verify independently, do not trust the report.",
+    "acceptance_criteria": [
+      "Every one of REQ-170's real acceptance criteria (see docs/requirements.yaml REQ-170 entry) has a runnable, passing test mapped to it.",
+      "No skipped/pending tests.",
+      "Independently spot-check at least 2 of the 4 genuinely-new-gap mutations yourself (prioritize M6, the silently-dropped timeout_ms -- the most security/correctness-relevant one -- and M7, the adversarial moduledoc) -- re-apply each, confirm the reported pass/fail behavior, revert.",
+      "Confirm call_timeout.ex and plugin_handler.ex are byte-identical to their pre-TEST-DESIGNER-pass state (no implementation drift).",
+      "Confirm docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md's REVIEWER-made correction (now committed as part of commit c20928b) is internally consistent with what's actually in the file -- spot check the WASM-11 correction entry and OQ-5 amendment are present and coherent.",
+      "mix test test/letflow/engine/wasm/ passes in full, real output quoted.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently verified TEST-DESIGNER's Step 3 mutation-strengthening pass on REQ-170's suite. All 7 requirement acceptance criteria (AC1-AC7, docs/requirements.yaml) map to at least one runnable, passing test per test/specs/REQ-170.md's traceability table, cross-checked directly against the test source: AC1/AC3/AC4 in plugin_handler_test.exs, AC2/AC5/AC6 in call_timeout_test.exs, AC7 discharged by this validator's own compile/test runs. No @tag :skip, no 'TODO: implement test' anywhere in either file. No hardcoded secrets/connection strings. Each test builds its own ExecutionContext via a per-test Ecto.UUID.generate() helper, no shared hardcoded IDs; both files run async: false by design (real Wasmtime NIF instances) but no test depends on another test's side effects -- each is self-sufficient.\n\nIndependently re-applied 2 of the 4 genuinely-new-gap mutations myself (not just read the report): (1) M6 -- plugin_handler.ex call_export/3 changed to call Wasmex.call_function/4 as 3-arity (dropping timeout_ms, falling back to wasmex's hardcoded 5000ms default). Ran mix test test/letflow/engine/wasm/plugin_handler_test.exs: 12/14 passed, 2 failed, including the M6-closing test ('timeout_ms longer than wasmex's hardcoded 5_000ms default still governs the wait') with elapsed_ms=5003 (fails the >6_000 assertion) -- confirms the reported pass/fail behavior exactly. Reverted via git checkout --, confirmed git status --porcelain lib/ empty. (2) M7 -- call_timeout.ex moduledoc replaced with an adversarial bakery-staffing paragraph scattering every AC6 keyword (OQ-5, NOT settled by this requirement, load spike, S6, worker-pool-exhaustion, node-global, filed, DIVERGENCE, decision 0014, does **not** hold) out of context. Ran mix test test/letflow/engine/wasm/call_timeout_test.exs: 15/16 passed, exactly 1 failed -- the new strengthened test ('the OQ-5 filing and DIVERGENCE claims cite the actual mechanism terms and design doc...'), failing on 'assert moduledoc =~ \"TOKIO_RUNTIME\"'; the 3 pre-existing loose AC6 tests all passed against the adversarial doc, exactly matching the reported gap. Reverted via git checkout --, confirmed git status --porcelain lib/ empty and a follow-up mix test test/letflow/engine/wasm/ run green (98 passed) after both reverts.\n\nConfirmed call_timeout.ex and plugin_handler.ex are byte-identical to their pre-TEST-DESIGNER-pass state: git diff e60c1db -- lib/letflow/engine/wasm/call_timeout.ex lib/letflow/engine/wasm/plugin_handler.ex is empty, and git log e60c1db..HEAD for those two paths shows no commits (TEST-DESIGNER's commit c20928b only touched the decision doc and handoff files, matching its own claim).\n\nConfirmed docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md's correction is internally consistent: the new WASM-11 correction paragraph under 'Reasoning (a)' (point ii/iii) is present; WASM-11 was removed from the 'Requirements judged satisfiable substantially as worded' list and a new WASM-11 entry added inside the 'Requirements NOT satisfiable as literally worded' section (verified by line-range check, entry falls between that header at line 376 and the next header 'Open questions' at line 595); the REQ-VALIDATOR restatement watchlist was updated to include WASM-11 with a dated note; and OQ-5 carries a matching amendment citing the same live-verified TOKIO_RUNTIME worker-pool-exhaustion finding. No contradiction found between the correction's claims and the rest of the file.\n\nmix test test/letflow/engine/wasm/ (real output, this validator's own run, post-revert): 'Finished in 12.8 seconds (0.00s async, 12.8s sync)\\n\\nResult: 98 passed'. WASMEX_BUILD=true mix compile --warnings-as-errors: exit 0, no output (clean).\n\nVERDICT: PASS. No coverage gaps found; TEST-DESIGNER's report was not overclaiming on the 2 mutations spot-checked.",
+    "verification": {
+      "acceptance_criteria_coverage": "AC1-AC7 each mapped to >=1 passing test per test/specs/REQ-170.md traceability table, cross-checked against test source directly",
+      "no_skipped_tests": true,
+      "no_hardcoded_secrets": true,
+      "test_fixture_isolation": "per-test Ecto.UUID.generate(), no shared hardcoded IDs, no cross-test dependency",
+      "mutations_reapplied_by_validator": ["M6", "M7"],
+      "M6_result": "12/14 passed, 2 failed including the M6-closing test (elapsed_ms=5003, fails >6_000 assertion) -- matches TEST-DESIGNER's report",
+      "M7_result": "15/16 passed, exactly 1 failed (the new strengthened moduledoc-content test) -- matches TEST-DESIGNER's report",
+      "mutations_reverted": "git status --porcelain lib/ test/ empty after each revert; confirmed via git checkout -- and a clean full-suite rerun",
+      "implementation_byte_identical": "git diff e60c1db -- lib/letflow/engine/wasm/call_timeout.ex lib/letflow/engine/wasm/plugin_handler.ex is empty; no commits touch those paths since e60c1db",
+      "decision_0014_consistency_checked": true,
+      "mix_test_wasm_dir": "Result: 98 passed (0 failed)",
+      "mix_compile_warnings_as_errors": "exit 0, clean"
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  }
+}

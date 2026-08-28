@@ -8607,7 +8607,7 @@ requirements:
   - id: REQ-170
     title: WASM per-invocation wall-clock timeout enforced across the process boundary (WASM-11)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 322  # letflow-queue task id
     description: >

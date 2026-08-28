@@ -1,0 +1,51 @@
+{
+  "handoff_id": "step02d-WF02-REQ170-20260828",
+  "run_id": "WF02-REQ170-20260828",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ170-20260828/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-170"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ170-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ170-20260828/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req170-wasm-wallclock-timeout.md",
+      "lib/letflow/engine/wasm/call_timeout.ex",
+      "lib/letflow/engine/wasm/plugin_handler.ex"
+    ],
+    "branch_name": "feature/WF02-REQ170-20260828"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-170's implementation. SECURITY-REVIEWER already passed Step 2c (see step-02c-security-reviewer.json). Your scope: idiomatic OTP usage, decision-record consistency, and scope creep -- read the real diff and the approved design (lib/letflow/design/req170-wasm-wallclock-timeout.md) in full before verdict. Note: unlike REQ-168/169, decision 0014 itself was NOT touched by this design or implementation -- the design explicitly states (section 2) that revisiting decision 0014's containment adequacy conclusion is a follow-up decision-record amendment, NOT this design's job. Confirm this scoping decision is sound (i.e., confirm the design correctly declined to edit decision 0014 itself, unlike the REQ-168/169 precedent where REVIEWER did make such an edit) -- decide whether decision 0014 genuinely needs a correction now (mirroring your own REQ-169 precedent) or whether the design's stated reasoning for deferring that edit is sound.",
+    "acceptance_criteria": [
+      "Confirm Letflow.Engine.Wasm.CallTimeout follows this codebase's existing conventions -- compare against resource_limits.ex/memory_guard.ex for structure, typespec style, error-tuple shape conventions, moduledoc format.",
+      "Confirm plugin_handler.ex's extension is genuinely minimal and additive -- diff it against main and confirm only the changes design section 4.3 describes are present, nothing more.",
+      "Confirm plugin_interface.ex is genuinely untouched (git diff --stat against main).",
+      "Confirm no scope creep: only lib/letflow/engine/wasm/call_timeout.ex, plugin_handler.ex (extended), req170_hang.wat, and the test files are touched -- module_registry.ex, capability_gate.ex, memory_guard.ex, resource_limits.ex, and application.ex must be untouched.",
+      "Confirm typespecs (@spec, @type) are complete and accurate for all public functions, including plugin_handler.ex's changed arities.",
+      "DECIDE: does docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md need a correction now, mirroring your own precedent on REQ-168/169 (both of which you personally corrected in the same review), given this finding is more severe than either of those? If yes, make the edit yourself in this review, following the same 'same edit' discipline decision 0014's own text requires. If no, state explicitly why this finding is different enough from WASM-10's wording mismatch to warrant deferring to a separate future decision-record amendment rather than an immediate correction.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "detail": "REVIEWER gate PASS on REQ-170 (independent re-read of the real diff, not the prior self-report). (1) Idiom: Letflow.Engine.Wasm.CallTimeout (lib/letflow/engine/wasm/call_timeout.ex, 185 lines) matches this codebase's established convention exactly -- compared line-by-line against resource_limits.ex and module_registry.ex: moduledoc with a 'Scope boundary' section, substring-based classify/1 mirroring classify_call_result/1's and classify_crash/1's shape, module attributes for match substrings, complete @spec/@type on the public function and both @typedoc-documented types, tagged-tuple/enumerated-atom error shapes throughout, no bare wasmex strings surfaced uninterpreted. No process/GenServer/gen_statem concerns in this module -- it is a pure classifier by design (§4.1 states this explicitly), so OTP-idiom question 1 does not apply here; the only stateful code touched is plugin_handler.ex's existing handle_node/1, unchanged in structure. (2) Supervision: unaffected -- PluginInterface.invoke/2,3's existing Task.Supervisor.async_nolink/2 + Task.yield/2 + Task.shutdown(:brutal_kill) boundary is reused completely unmodified (confirmed git diff main...HEAD -- lib/letflow/engine/plugin_interface.ex is empty); no new process, no shared/singleton state introduced. (3) Type-safety: config()/classification() are already tagged/enumerated per the design; no gap worth filing. (4) Scope creep: git diff --stat main...HEAD touches exactly call_timeout.ex (new), plugin_handler.ex (+31/-11, confirmed by full diff read -- adds one node_config key, extends run_guest/2->3 and call_export/2->3, nothing else), req170_hang.wat (new fixture), call_timeout_test.exs, plugin_handler_test.exs, test/specs/REQ-170.md, the design doc, and this run's own handoffs -- module_registry.ex, capability_gate.ex, memory_guard.ex, resource_limits.ex, and application.ex are all untouched, confirmed. plugin_handler.ex's extension is genuinely minimal and additive, matching design §4.3 exactly, nothing beyond it. No premature abstraction: CallTimeout stays a narrow, single-purpose module per the established one-module-per-concern precedent; the ResourceLimits/CallTimeout composition point (§4.4) is correctly left as a stated-not-built future concern (OQ-2), not scope creep. DECISION 0014 DISPOSITION: corrected now, in this review, mirroring the REQ-168/169 precedent -- WASM-11 was misclassified on decision 0014's 'satisfiable substantially as worded' list (the same pattern the WASM-10 correction exists to catch, per decision 0014's own explicit self-imposed rule that a requirement moved onto the 'not satisfiable as worded' list must be watchlisted 'in the same edit'). Edited docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md: (a) removed WASM-11 from the satisfiable-as-worded list and added a dated correction entry restating its intent (host respects the timeout; execution interruption is not claimed), mirroring WASM-10's format; (b) added a dated correction note directly to reasoning section (a)'s point (ii)/(iii), since REQ-170's finding -- unlike WASM-10's, which only affected a downstream requirement's wording -- falsifies a claim used as direct evidence in the Decision's own containment reasoning; (c) amended OQ-5 with REQ-170's evidence (the specific mechanism OQ-5 names, a blocked BEAM scheduler, was NOT observed; a different, more severe, node-global native-thread-pool exhaustion WAS observed); (d) updated the REQ-VALIDATOR watchlist to include WASM-11. Deliberately did NOT redecide whether decision 0014's overall containment-adequacy conclusion still holds, and did NOT reverse the Decision itself (still bind wasmex behind a process boundary) -- that judgement requires the real load spike plus S6 operational thresholds OQ-5 already calls for, not a single design-session's live probe; making that call here would itself be scope creep, redeciding a stage-level operational-adequacy question inside a per-requirement review gate. This mirrors the discipline decision 0014's own text models: correct falsified factual claims immediately and in the same edit; defer policy/adequacy judgements to the open question already scoped to resolve them. The design doc's own choice not to edit decision 0014 itself (§2/§7/§8, correctly deferring 'is this design's job') was sound as far as it went -- CODE-DESIGNER correctly identified the finding and declined to make a policy call beyond its scope -- but ELIXIR-DEV/CODE-DESIGNER are not REVIEWER, and the mechanical, precedent-established portion of this correction (watchlist sync, restating a falsified requirement/evidentiary claim) is exactly REVIEWER's job per decision 0014's own text, so it is made now rather than left as a dangling TODO for a future decision-record amendment that decision 0014's own discipline says would otherwise be 'policed by nothing downstream' in the meantime.",
+    "files_reviewed": [
+      "lib/letflow/engine/wasm/call_timeout.ex",
+      "lib/letflow/engine/wasm/plugin_handler.ex",
+      "lib/letflow/engine/plugin_interface.ex (confirmed untouched)",
+      "lib/letflow/engine/wasm/resource_limits.ex (convention comparison)",
+      "lib/letflow/engine/wasm/module_registry.ex (convention comparison)",
+      "lib/letflow/design/req170-wasm-wallclock-timeout.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md (edited)"
+    ]
+  }
+}

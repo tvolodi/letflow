@@ -223,6 +223,27 @@ does between fuel checks. This is a real, accepted residual risk — a Wasmtime 
 bug can still take the node down, and no supervisor will save it. It is stated here
 rather than hidden, and it is the price of WASM support at all.
 
+**Correction to point (ii) — REVIEWER, WF-02 Step 2d, REQ-170, 2026-08-28.** Point (ii)
+as written above is **live-verified false**, not merely imprecisely worded (contrast
+WASM-10's correction, which found the security property held even though the "trap"
+wording did not): a genuinely hanging guest is never interrupted by `wasmex`'s documented
+mechanism at any bound tested up to 30 seconds, and the Store does not stay usable — it
+is permanently wedged (`lib/letflow/design/req170-wasm-wallclock-timeout.md` §1.1-§1.4).
+Point (iii)'s "a hang degrades one task" is also incomplete in light of the same
+verification: the *task* is bounded, but the underlying native compute is not degraded,
+it is **leaked** — permanently, into `wasmex`'s node-global, CPU-count-sized worker-thread
+pool, a resource shared by every tenant's WASM calls on the node — and enough leaked
+invocations stall unrelated, non-hanging guest calls (§1.5). This is filed here as a
+correction to the *evidence* this reasoning cites, not as a re-derivation of the
+paragraph's overall adequacy conclusion: whether the *containment argument as a whole*
+still holds — given (i) still stands unmodified, the caller-facing guarantee in (iii)
+still holds for the calling process/task even though the native-compute claim does not,
+and no bug or crash is required to reach this exhaustion surface (only an ordinary
+adversarial-by-default guest, WASM-11's own threat model) — is exactly OQ-5's question,
+not settled here. See OQ-5's amendment below and REQ-170's design doc §2/§7/§8 for the
+full evidence. This correction narrows what (ii)/(iii) may be cited for; it does not by
+itself reverse the Decision.
+
 The two conclusions differ because the evidence differs, not because a uniform answer
 was avoided.
 
@@ -521,8 +542,39 @@ describe (§1.1-§1.4 of that design), so only WASM-10 moves to this section.
 Requirements judged satisfiable substantially as worded, subject to the above:
 LUA-02, LUA-05, LUA-06, LUA-07, LUA-11, LUA-12, LUA-13;
 WASM-02, WASM-06, WASM-08, WASM-09 (`:consume_fuel` is a direct analogue, live-verified
-by REQ-169), WASM-11, WASM-12, WASM-14. Each still needs its own acceptance test;
-"satisfiable" is not "satisfied."
+by REQ-169), WASM-12, WASM-14. Each still needs its own acceptance test;
+"satisfiable" is not "satisfied." (WASM-11 removed 2026-08-28, REVIEWER, REQ-170 —
+see the entry below.)
+
+**WASM-11 — Wall-Clock Timeout (correction: REVIEWER, WF-02 Step 2d, REQ-170,
+2026-08-28).** Literal text: "Exceeding the timeout MUST INTERRUPT EXECUTION." This
+record's own containment argument, reasoning (a) point (ii) above, cited `wasmex`'s
+documentation — "a timed-out call is interrupted and its Store stays usable" — as "the
+interruption primitive WASM-11 needs," and WASM-11 was carried on the "satisfiable
+substantially as worded" list on that basis, again without live-verifying the claim, the
+same category of gap as WASM-10's. REQ-170's live verification
+(`lib/letflow/design/req170-wasm-wallclock-timeout.md` §1.1-§1.4, real installed
+`wasmex` v0.15.1) found the literal wording, and the cited primitive itself, do **not**
+hold: a genuinely hanging guest is never interrupted at any bound tested up to 30
+seconds; the calling process instead crashes with an ordinary `GenServer.call` timeout
+`exit`; the `Store` becomes permanently unusable for subsequent calls, not merely "not
+proven usable"; and no BEAM-side mechanism (link death, `Process.exit/2`,
+`Task.shutdown/2`, `GenServer.stop/1`) can reach or terminate the already-dispatched
+native execution once started, because `wasmex`'s per-`Store` executor task discards its
+own `JoinHandle`. *Intent restatement:* the property WASM-11's own acceptance criterion
+actually names — "Host-blocking call respects timeout" — is live-verified true: the
+*caller* (the host) reliably stops waiting within a configured bound, via
+`Letflow.Engine.PluginInterface.invoke/2,3`'s existing, unmodified supervised-task
+boundary (REQ-057/165), independent of whether `wasmex`'s own interrupt fires. What is
+not true is the body clause's literal claim that the guest's *execution* is interrupted.
+A caller needing to know whether the underlying native compute was reclaimed cannot —
+REQ-170's design doc §1.4/§1.5 additionally live-verified a **more severe** consequence
+than WASM-10's: the leaked native execution permanently consumes one thread of
+`wasmex`'s node-global, CPU-count-sized worker-thread pool per timed-out invocation,
+with no reclamation mechanism, and a saturated pool was live-observed to stall an
+unrelated, non-hanging guest call belonging to no tenant involved in the original hangs
+(§1.5). This node-wide, cross-tenant exhaustion surface bears directly on OQ-5 below and
+is filed there, not resolved here — see OQ-5's amendment.
 
 **A caution on this list.** LUA-14 sat on it in this record's first revision, asserted
 satisfiable while this record's own LUA-03 evidence listed a default deny-set that leaves
@@ -532,9 +584,13 @@ downstream. REVIEWER caught it. **WASM-10 repeated the identical pattern** — c
 this list from documentation alone ("direct analogue"), and only shown wrong once
 REQ-169 actually ran the mechanism; REVIEWER caught it too and moved it to the section
 above rather than leaving the requirement's own design doc as the only place the gap is
-recorded. Every entry above is a judgement made from documentation that was read, not
-from software that was run; expansion should treat the list as a starting position to
-verify, not a clearance.
+recorded. **WASM-11 repeated the identical pattern a third time, and more severely** —
+carried on this list on the strength of this record's own reasoning (a) point (ii), which
+REQ-170 live-verified is itself false, not merely imprecisely worded; REVIEWER moved it
+to the section above in the same edit rather than leaving REQ-170's design doc as the
+only place the gap is recorded. Every entry above is a judgement made from documentation
+that was read, not from software that was run; expansion should treat the list as a
+starting position to verify, not a clearance.
 
 ## Open questions
 
@@ -582,6 +638,26 @@ guarantees, and none was measured. If a fuel-bounded guest still blocks a schedu
 enough to degrade the node, the Port fallback from (c) returns. Needs a load spike, and
 likely S6 operational thresholds.
 
+**OQ-5 amendment — REVIEWER, WF-02 Step 2d, REQ-170, 2026-08-28.** REQ-170's live
+verification (`lib/letflow/design/req170-wasm-wallclock-timeout.md` §1.4/§1.5/§8)
+measured the specific mechanism OQ-5 names — a BEAM scheduler thread itself blocked — and
+did **not** observe it (near-zero `:erlang.statistics(:scheduler_wall_time)` utilization
+during a live hang). It found a **different, arguably more severe** mechanism bearing on
+OQ-5's underlying concern instead: `wasmex`'s own native worker-thread pool
+(`TOKIO_RUNTIME`, node-global, sized to `available_parallelism()`) is a shared,
+cross-tenant resource that a hung guest permanently consumes one thread of, with no
+BEAM-side reclamation possible; 32 concurrent hangs (2x this host's
+`System.schedulers_online()`) exhausted it and stalled a subsequently dispatched,
+completely unrelated, non-hanging guest call. This does not settle OQ-5 — it still needs
+a real load spike plus S6's operational thresholds, exactly as originally scoped — but it
+is new, load-bearing evidence for whoever does settle it, and for the reasoning (a)
+point (ii)/(iii) correction above: candidate mitigations named by REQ-170 §8 include an
+operator-configurable cap on concurrently in-flight WASM invocations, independent of the
+per-invocation wall-clock bound WASM-11 already provides. Whether this evidence changes
+the containment argument's overall adequacy conclusion is not decided here — that
+judgement needs the load spike this open question already calls for, not a single
+design-session's probe.
+
 **OQ-6 — Number marshalling across the 5.1→5.3 integer/float split. SETTLED by REQ-150,
 `lib/letflow/design/req150-lua-number-marshalling.md`.** Per (b), the one dialect
 difference with semantic weight. How Lua integers and floats round-trip through
@@ -626,12 +702,13 @@ worded" — each restated requirement must say plainly that it is a restatement 
 so no future reader mistakes a satisfied intent for a satisfied literal text.
 REQ-VALIDATOR should treat an unrestated **LUA-01, LUA-03, LUA-04, LUA-08/LUA-10 (as a
 two-layer pair), LUA-09, LUA-14, LUA-15, LUA-16, WASM-01, WASM-03/04/05, WASM-07,
-WASM-10, or WASM-13** as a validation failure. That is the full watchlist; it is the
-same set as the "Requirements NOT satisfiable as literally worded" section above, and
+WASM-10, WASM-11, or WASM-13** as a validation failure. That is the full watchlist; it is
+the same set as the "Requirements NOT satisfiable as literally worded" section above, and
 the two must be kept in sync — if a later pass moves a requirement onto that list, it
 belongs here in the same edit, because a requirement that is restated but unwatched is
 policed by nothing. (WASM-10 added 2026-08-28, REVIEWER, REQ-169 — see that section's
-entry for why.)
+entry for why. WASM-11 added 2026-08-28, REVIEWER, REQ-170 — see that section's entry;
+this is the third instance of this pattern and the most severe.)
 
 Sequencing per Decision (4): the Lua half lands first and defines the host API; the WASM
 half follows and conforms to it per WASM-12. OQ-1 blocks LUA-09; OQ-3 and OQ-4 block the

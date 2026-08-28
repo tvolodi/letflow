@@ -684,10 +684,34 @@ volumes:
 
   - volume: 5
     path: docs/status/requirement_status.v5.yaml
-    status: current
+    status: closed
     opened: 2026-08-26
-    entries: 46
+    closed: 2026-08-28
+    entries: 47
+    lines: 1204
+    bytes_working_tree: 69312
+    # SHA-256 of lines 1..1204 with CRLF normalised to LF, i.e. the frozen prefix.
+    # The hashed stream terminates EVERY line with a single \n, including the
+    # last, so it ends in \n. Exact definition and reference implementations:
+    # lib/letflow/design/iss-0119-status-file-readability.md §8.
+    # Asserted unchanged by test/docs/requirement_status_invariants_test.exs.
+    frozen_prefix_lines: 1204
+    frozen_prefix_sha256: "675f6be1c5474c22a70ca6c3aa67fa64c13439fc4cce45325ec964904aae3809"
+    closure_note: >
+      Closed under WF02-REQ170-20260828's Step 6 DOC-UPDATER append at 1204
+      lines / 69312 bytes / 47 entries -- over its own declared roll_rule
+      ceiling (max_lines: 1200), confirmed via `wc -l` per this volume's own
+      "WHEN THIS VOLUME IS FULL" procedure. `git diff --numstat` on this file
+      across this append showed insertions-only (0 deletions). Successor:
+      docs/status/requirement_status.v6.yaml.
     note: >
+      Incremented to 47 by WF02-REQ170-20260828 (DOC-UPDATER)'s own REQ-170
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 47 on-disk entries, no rebase
+      conflict on this file. This append crossed the roll ceiling (1204
+      lines), so this volume was closed and volume 6 opened in the same
+      commit per this index's `roll_rule.on_exceed` procedure.
+
       Incremented to 46 by ORCH's REQ-170 started-event append (Step 00,
       WF02-REQ170-20260828) -- `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 46 on-disk entries.
@@ -771,6 +795,22 @@ volumes:
       roll, matching every prior roll's own pattern (volume 4's own footer:
       "no entry above this footer was moved, edited or deleted"). `entries:`
       will be incremented per HOW-TO-APPEND step 6 as real appends land.
+
+  - volume: 6
+    path: docs/status/requirement_status.v6.yaml
+    status: current
+    opened: 2026-08-28
+    entries: 0
+    note: >
+      Opened by WF02-REQ170-20260828's own Step 6 DOC-UPDATER roll, successor
+      to volume 5. Created with volume 5's header text verbatim (volume
+      number, opening date and predecessor path updated) and an empty
+      `history:` list, per this index's `roll_rule.on_exceed` procedure --
+      volume 5's full 47 entries were kept in volume 5 rather than split
+      across the roll, matching every prior roll's own pattern (volume 5's
+      own footer: "no entry above this footer was moved, edited or
+      deleted"). `entries:` will be incremented per HOW-TO-APPEND step 6 as
+      real appends land.
 
 
 known_anomalies:

@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step02c-WF02-REQ165-20260828",
+  "run_id": "WF02-REQ165-20260828",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ165-20260828/step-02c-security-reviewer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-165"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ165-20260828/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ165-20260828/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "mix.exs",
+      ".tool-versions",
+      ".github/workflows/ci.yml",
+      "lib/mix/tasks/letflow.check_toolchain.ex",
+      "lib/letflow/engine/wasm/plugin_handler.ex",
+      "priv/wasm_fixtures/"
+    ],
+    "branch_name": "feature/WF02-REQ165-20260828",
+    "commit": "96292e1"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER hard gate (WF-02 Step 2c) on REQ-165's implementation, commit 96292e1. Decision 0014 explicitly names SECURITY-REVIEWER as a hard gate 'on the whole WASM half' because plugins execute tenant-supplied input -- this is the FIRST WASM-half requirement, so this gate sets the pattern every future WASM requirement is judged against. This is also Letflow's FIRST native-code build dependency (a Rust NIF) -- a categorically different security surface than any prior Elixir-only or Lua-sandboxed code this project has shipped. Read the approved design (lib/letflow/design/req165-wasmex-process-boundary.md) and the real diff (git show 96292e1) in full before verdict.",
+    "acceptance_criteria": [
+      "Confirm the process boundary (Task.Supervisor.async_nolink/2 under the existing, unmodified Letflow.Engine.PluginTaskSupervisor) genuinely isolates a guest call the same way it does for existing in-process Elixir plugin handlers -- no new supervision gap introduced.",
+      "Confirm the moduledoc's residual-native-crash-risk disclosure (design section 7.2) is accurate and not understated -- specifically verify the claim that a NIF/Wasmtime crash is NOT observable/recoverable via Task.yield/2 or any supervisor, and that this is a real, accepted limitation of adopting any Rust-NIF-backed dependency, not specific to a bug in this implementation.",
+      "Confirm GenServer.stop/1 cleanup happens on EVERY path in run_trivial_guest/0 (success and error), so a failed/timed-out guest invocation cannot leak a live Wasmtime instance -- read the real code.",
+      "Confirm the trivial guest fixtures (priv/wasm_fixtures/*.wat) are genuinely trivial and harmless -- no capability, no I/O, no ambient access; this is not yet the full REQ-166 capability-gated ABI, so confirm this requirement doesn't accidentally grant more surface than its own stated trivial scope.",
+      "Confirm WASMEX_BUILD=true and the Rust toolchain pin do not introduce a supply-chain risk beyond what decision 0014 already accepted by choosing wasmex -- e.g. confirm the pinned Rust version (1.97.1) and wasmex version (~> 0.15.1) are pinned/ranged sanely, not unpinned to 'latest'.",
+      "Confirm no tenant-supplied data reaches the guest in this requirement's own trivial scope (the fixtures are checked-in, not tenant-controlled) -- this requirement does not yet handle real tenant WASM artifacts (that's REQ-166+), so confirm the design/implementation doesn't silently expand into that territory.",
+      "Cross-check against docs/agents/instructions/security-invariants.md INV-1..INV-8 explicitly, naming which apply (INV-3, sandboxing of untrusted code, is the most likely candidate given this touches the WASM half even in trivial form) and confirming each holds.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

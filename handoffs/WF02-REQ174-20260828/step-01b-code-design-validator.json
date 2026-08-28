@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ174-20260828-step01b",
+  "run_id": "WF02-REQ174-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 1b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req174-wasm-instance-pooling-or-decline.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 326, GH#626, stage S5. CODE-DESIGNER decided DECLINE on instance pooling, live-verified: grep -rln 'pool' deps/wasmex/lib/ returns nothing (no pooling API exists in the installed dependency -- decision 0014 (e)'s 'wasmex pooling reuses a Store' is characterized as describing a hypothetical design buildable on wasmex's primitives, not an existing feature). Also claims Wasmex.start_link/1 always allocates a brand-new Store when no :store key is passed, and that both ModuleVersionRegistry.instantiate/2 (REQ-173) and PluginHandler.run_guest/3's instantiate/1 (REQ-165/170/171/172) call it exactly that way, with GenServer.stop/1 unconditional on every path. Test design: a new req174_memory_write.wat fixture exploiting Wasm's zero-initialized-memory guarantee, with two independent tests (one via ModuleVersionRegistry, one via PluginHandler) asserting a marker written in invocation N is NOT observable in invocation N+1. Hard gate -- this project's history includes designs whose live-verification claims turned out to be wrong (REQ-172's design was FAILED twice for exactly this class of error) -- do not accept CODE-DESIGNER's grep/read results as given, reproduce them yourself."},
+  "task": {
+    "description": "Independently re-verify every live-verification claim in the design against the real installed wasmex dependency and the real shipped Letflow source, not the design's narrative. Specifically: (1) reproduce the grep yourself -- confirm no pooling API exists anywhere in deps/wasmex (check the actual wasmex version installed, e.g. via mix.lock, and consider whether a newer/different wasmex version might have added pooling that this design's grep missed due to a naming difference, e.g. 'Pool', 'reuse', 'recycle'); (2) confirm Wasmex.start_link/1 genuinely allocates a fresh Store per call at both cited call sites (ModuleVersionRegistry.instantiate/2, PluginHandler.run_guest/3's instantiate/1) by reading those functions yourself, and confirm GenServer.stop/1 truly runs unconditionally on every path (success, exception, trap) at both sites; (3) assess whether DECLINE is actually a sound engineering call given the current state, or whether the design is rationalizing a decision to avoid work -- specifically weigh whether wasmex's own internal Tokio thread-pool (mentioned in its CHANGELOG per the design) has any bearing on isolation that the design might have dismissed too quickly; (4) verify the proposed test design (req174_memory_write.wat's zero-initialized-memory exploit) would actually be a real, discriminating test -- would a hypothetical shared-Store bug actually make this test fail, or could Wasm's own memory-zeroing-on-instantiation semantics make this test pass regardless of whether isolation is real (i.e. does the test actually prove anything, or would it pass trivially)?; (5) confirm the moduledoc/design states the decline decision explicitly with its reason, cites decision 0014 (e), and states the ADDED memory-reset-as-correctness constraint per the acceptance criteria's own wording; (6) confirm the design correctly scopes out the adopt-only acceptance criteria (reset mechanism, superseded-version exclusion, p50 benchmark) as inapplicable with reasoning, rather than silently dropping them; (7) confirm no implementation code is present.",
+    "acceptance_criteria": [
+      "the moduledoc records an explicit decision: pooling adopted, or pooling declined with its reason -- WASM-13 is a SHOULD and declining is legitimate, but silence is not",
+      "a test asserts per-invocation isolation regardless of which way the decision went: data written to guest memory in invocation N is NOT observable in invocation N+1 of the same module",
+      "if pooling is adopted, a test asserts memory reset happens between invocations by construction -- e.g. an invocation that fails or traps mid-write still leaves no residue for the next invocation -- and the moduledoc states this is a correctness requirement per decision 0014's restatement, not a performance detail",
+      "if pooling is adopted, a test asserts a pooled instance of a module version superseded by REQ-173's activation is never handed to a new invocation",
+      "if pooling is adopted, WASM-13's p50 latency comparison is recorded as a benchmark with real measured numbers quoted in the moduledoc or a design artefact; no CI test asserts a latency threshold",
+      "the moduledoc states that this requirement restates WASM-13 by ADDING the per-invocation memory-reset correctness constraint, which is absent from WASM-13's original text, and cites decision 0014 (e) and the wasmex Store-reuse behaviour that motivates it",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

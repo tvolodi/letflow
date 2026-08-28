@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF02-REQ168-20260828/step-01-code-designer.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -37,6 +37,12 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "summary": "Design artefact lib/letflow/design/req168-wasm-memory-isolation.md and test/specs/REQ-168.md written for REQ-168 (WASM-08). Design-only, zero implementation code -- @spec/@type/prose only. Every claim about wasmex v0.15.1's real out-of-bounds memory-access behavior was independently live-verified this session (real MIX_ENV=test mix run scripts, WASMEX_BUILD=true, real installed deps/wasmex), not inferred from docs or the library's own @spec annotations (three of which -- get_byte/3, read_binary/4, write_binary/4 -- were found to be incomplete: each can return {:error, _} despite a declared non-error return type). Key live findings, all reproducible via the (git-ignored, scratch/) probe scripts referenced in the design's section 1: (1) Wasmex.Memory.size/2 returns bytes directly, not pages. (2) wasmex's own NIF already cleanly bounds-checks offset-beyond-size, length-past-end, and even a classic native-word wraparound-shaped pair (offset=2^64-10, length=20) for get_byte/set_byte/read_binary/write_binary -- all return a clean {:error, \"out of bounds memory access\"} tuple, no crash, up through at least length=2^32-1 (the max value a real WASM32 guest's i32-derived pointer/length could ever produce). (3) CRITICAL, previously-undocumented finding: at a magnitude far beyond any real memory region (no genuine WASM32 guest value could reach it) -- observed threshold between 2^32 (still clean) and 2^40 (aborts) -- wasmex's own Rust-side buffer-allocation path is NOT safe: length=2^63 causes an uncatchable native panic ('capacity overflow') in a spawned NIF thread that leaves the calling process's Wasmex.Utils.native_request/1 blocked forever in a timeout-less `receive` (confirmed hung even after a 15s bound); length=2^40 causes a real Rust allocator abort that SIGABRTs the entire OS process (confirmed live: shell exit code 134, 'Aborted (core dumped)') -- under decision 0014's chosen runtime this IS the BEAM node, reproducing WASM-08's literal 'host crash' failure mode for real, not hypothetically. (4) Two independent Wasmex instances of the identical module bytes have genuinely isolated linear memory (write in one never observable via the other), confirmed live. The design (Letflow.Engine.Wasm.MemoryGuard, new module per this project's one-module-per-orthogonal-concern precedent, no new Task.Supervisor needed) closes the extreme-magnitude hazard by performing the entire bounds decision in Elixir's arbitrary-precision integer arithmetic (which cannot wrap at any magnitude, unlike the Rust/fixed-width case the requirement's own framing describes) using the real, freshly-fetched memory size, before any offset/length value is ever handed to wasmex -- so the dangerous magnitudes discovered live are never presented to wasmex at all. Moduledoc requirement cites req165-wasmex-process-boundary.md section 7.2 verbatim for the still-uncovered residual class (a genuine Wasmtime/NIF engine fault unrelated to pointer magnitude). Full traceability table (REQ-168's 6 real acceptance_criteria plus this handoff's own AC1-AC6) to design elements and planned tests included in both files. mix letflow.lint_handoffs run: 0 new violations. No lib/letflow application code, migrations, or existing WASM module (module_registry.ex, capability_gate.ex, plugin_handler.ex) touched.",
+    "artifacts_out": [
+      "lib/letflow/design/req168-wasm-memory-isolation.md",
+      "test/specs/REQ-168.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   }
 }

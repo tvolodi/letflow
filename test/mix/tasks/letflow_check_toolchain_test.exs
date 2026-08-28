@@ -61,6 +61,24 @@ defmodule Mix.Tasks.Letflow.CheckToolchainTest do
 
   defp running_otp, do: List.to_string(:erlang.system_info(:otp_release))
 
+  # Same "read it the way the task itself reads it" discipline as
+  # running_elixir/0 and running_otp/0 above, extended to Rust for
+  # REQ-165's F9 coverage: shells out to `rustc --version` exactly like
+  # `running_rust_version/0` in the task does, so no version is hardcoded.
+  defp running_rust_raw do
+    case System.cmd("rustc", ["--version"], stderr_to_stdout: true) do
+      {output, 0} -> String.trim(output)
+      _ -> nil
+    end
+  end
+
+  defp running_rust_version do
+    case running_rust_raw() do
+      nil -> nil
+      raw -> raw |> String.split(~r/\s+/, trim: true) |> Enum.at(1)
+    end
+  end
+
   # Yields a version string that CANNOT equal `version` on any host: it is
   # `version` plus one more character, so it differs in length. This is how
   # "off pin" is expressed without naming a version.
@@ -180,6 +198,10 @@ defmodule Mix.Tasks.Letflow.CheckToolchainTest do
     "  OTP     expected #{expected} (from erlang #{token})   running #{running}   #{verdict}"
   end
 
+  defp rust_row_match(expected, running, verdict) do
+    "  Rust    expected #{expected}   running #{running}   #{verdict}"
+  end
+
   # ==================================================================
 
   describe "matching pin" do
@@ -234,6 +256,89 @@ defmodule Mix.Tasks.Letflow.CheckToolchainTest do
       assert result == :ok
       assert stderr == ""
       assert stdout =~ "letflow.check_toolchain: OK"
+    end
+  end
+
+  # REQ-165: mutation-testing gap found by TEST-DESIGNER (test/specs/REQ-165.md
+  # findings table). This whole `describe` block did not previously exist --
+  # zero tests in this file exercised the `rust` row at all (match, mismatch,
+  # or F9 not-found), even though `lib/mix/tasks/letflow.check_toolchain.ex`
+  # already implemented all three. Confirmed by mutating
+  # `running_rust_version/0` to swallow a `System.cmd/2` failure into
+  # `{:ok, ""}` instead of `:not_found`: the full 30-test suite still passed.
+  describe "rust pin (REQ-165)" do
+    # A matching rust pin, generated at run time from the same `rustc
+    # --version` shell-out the task itself performs, so this passes on any
+    # host with a pinned-and-matching Rust toolchain (which every host that
+    # runs this suite has, per .tool-versions + CI's Rust setup step).
+    test "a matching rust pin reports OK with no mismatch" do
+      version = running_rust_version()
+      assert is_binary(version), "expected `rustc` to be on PATH while running this suite"
+
+      pin = "elixir #{running_elixir()}\nerlang #{running_otp()}.7.13\nrust #{version}\n"
+      {result, stdout, stderr} = run_with_pin(pin)
+
+      assert result == :ok
+      assert stderr == ""
+      assert stdout =~ "letflow.check_toolchain: OK"
+      assert stdout =~ "Rust #{running_rust_raw()}"
+    end
+
+    # off_pin/1 makes an expected value that cannot equal the running one on
+    # any host (see its own doc), so this is host-independent too.
+    test "a mismatched rust pin reports a MISMATCH row naming expected and running" do
+      version = running_rust_version()
+      assert is_binary(version), "expected `rustc` to be on PATH while running this suite"
+
+      expected = off_pin(version)
+      pin = "elixir #{running_elixir()}\nerlang #{running_otp()}.7.13\nrust #{expected}\n"
+      {result, _stdout, stderr} = run_with_pin(pin)
+
+      assert result == :ok
+      assert stderr =~ "TOOLCHAIN OFF PIN"
+      assert stderr =~ rust_row_match(expected, running_rust_raw(), "<-- MISMATCH")
+    end
+
+    # No `rust` line at all is the existing "not pinned" shape, reusing
+    # F3/F4's row -- and must not, by itself, turn an otherwise-matching
+    # pin into a warning.
+    test "no rust pin is treated as not-pinned and still reports OK" do
+      pin = "elixir #{running_elixir()}\nerlang #{running_otp()}.7.13\n"
+      {result, stdout, stderr} = run_with_pin(pin)
+
+      assert result == :ok
+      assert stderr == ""
+      assert stdout =~ "letflow.check_toolchain: OK"
+    end
+
+    # F9: rustc pinned but not found/not runnable on PATH. Induced for real
+    # by emptying PATH for the duration of the call (restored via on_exit),
+    # which makes `System.cmd("rustc", ...)` raise :enoent -- exactly the
+    # failure `running_rust_version/0`'s rescue/catch clauses exist for.
+    # This is the exact regression the F9 mutation above slipped past every
+    # other test in this file.
+    test "F9 rustc not found on PATH reports a NOT FOUND row and still returns ok" do
+      original_path = System.get_env("PATH")
+
+      on_exit(fn ->
+        case original_path do
+          nil -> System.delete_env("PATH")
+          value -> System.put_env("PATH", value)
+        end
+      end)
+
+      System.put_env("PATH", "")
+
+      pin = "elixir #{running_elixir()}\nerlang #{running_otp()}.7.13\nrust 1.97.1\n"
+      {result, stdout, stderr} = run_with_pin(pin)
+
+      assert result == :ok
+      assert stderr =~ "TOOLCHAIN OFF PIN"
+
+      assert stderr =~
+               "  Rust    expected 1.97.1   running (rustc not found or not runnable)   <-- NOT FOUND"
+
+      refute stdout =~ "TOOLCHAIN"
     end
   end
 

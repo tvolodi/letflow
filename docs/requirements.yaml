@@ -8329,7 +8329,7 @@ requirements:
   - id: REQ-165
     title: Adopt wasmex in mix.exs behind a mandatory process boundary, with a pinned Rust toolchain in CI (WASM-01 restated, OQ-7)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 317  # letflow-queue task id
     description: >

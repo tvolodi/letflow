@@ -1,0 +1,49 @@
+{
+  "handoff_id": "step04-WF02-REQ165-20260828",
+  "run_id": "WF02-REQ165-20260828",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ165-20260828/step-04-test-runner.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-165"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ165-20260828/step-03b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/wasm/plugin_handler.ex",
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "feature/WF02-REQ165-20260828",
+    "commit": "df8191c"
+  },
+  "task": {
+    "description": "TEST-RUNNER (WF-02 Step 4) for REQ-165. Run the FULL test suite (scripts/test_parallel.sh, with WASMEX_BUILD=true and PATH including $HOME/.cargo/bin) at least twice consecutively -- this run touches mix.exs, .github/workflows/ci.yml, and a shared Mix task (letflow.check_toolchain.ex), so pay extra attention to any ripple effect. Quote real output for every run. Also: this is Letflow's first requirement modifying .github/workflows/ci.yml itself -- after pushing this branch (which you do NOT do, ORCH handles push/PR), the REAL CI run on the eventual PR is the only true verification that the Rust-toolchain-pin CI mechanism works end-to-end in GitHub Actions' actual runner environment, which differs from this sandbox. Note this limitation explicitly in your report rather than claiming CI is proven correct from local runs alone.",
+    "acceptance_criteria": [
+      "Full suite (scripts/test_parallel.sh, with WASMEX_BUILD=true) run at least twice consecutively; real output quoted for each run.",
+      "mix compile --warnings-as-errors independently re-run and confirmed clean.",
+      "Any failure is attributed structurally, never by count-matching across runs.",
+      "Explicitly note that the CI YAML changes themselves cannot be fully verified until a real GitHub Actions run occurs on the eventual PR -- local test runs verify the Elixir/wasmex code, not the CI config's own correctness in GitHub's runner environment.",
+      "Final verdict: PASS only if all local runs are clean (modulo a diff-excluded known flake like ISS-0340), FAIL with a structured failure report otherwise.",
+      "CRITICAL: when writing this handoff's top-level status field (line 9), use exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED. Run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS -- full suite run 3x consecutively via scripts/test_parallel.sh (WASMEX_BUILD=true). Run 1: 3 failures (2293/2296). Runs 2 and 3: fully clean (2296/2296 each). mix compile --force --warnings-as-errors: clean, 0 warnings. Full details, raw output for all 3 runs, and structural failure attribution in test/reports/report-2026-08-28-WF02-REQ165-20260828.yaml.",
+    "report_file": "test/reports/report-2026-08-28-WF02-REQ165-20260828.yaml",
+    "compile_check": "mix compile --force --warnings-as-errors -> clean, exit 0, 0 warnings",
+    "test_run_1": "combined: 2291 tests, 5 properties, 3 failures (2293/2296 passed), script_exit_code 1",
+    "test_run_2": "combined: 2291 tests, 5 properties, 0 failures (2296/2296 passed), script_exit_code 0",
+    "test_run_3": "combined: 2291 tests, 5 properties, 0 failures (2296/2296 passed), script_exit_code 0",
+    "failure_attribution": "All 3 run-1 failures were in test/letflow/support/tenant_schema_reaper_test.exs (partition 8), carrying a measured Postgres 'FATAL 53300 too_many_connections' / DBConnection checkout-timeout signature. Structurally attributed as environmental connection-pool exhaustion, NOT caused by this branch: (route 1) neither test/support/tenant_schema_reaper_test.exs nor scripts/test_parallel.sh appear in git diff --stat main...HEAD for this branch (which touches only ci.yml, .tool-versions, mix.exs [adds wasmex dep only], mix.lock, plugin_handler.ex/its test, letflow.check_toolchain.ex/its test, wasm fixtures, and docs); (route 3) the actual measured Postgres error is the mechanism, not an assertion. This exact file+mechanism is already documented in docs/issues/ISS-0287.yaml (status: resolved) -- its recurrence here, on a branch that never touches test_parallel.sh or pool config, suggests ISS-0287's fix is incomplete at N=8. Recommend ORCH reopen ISS-0287 (not filed as new by this agent, per core-directives 'No Issue Left Local-Only' -- filing/registration belongs to ORCH via letflow-queue). No failure touched REQ-165's own new code (plugin_handler.ex, letflow.check_toolchain.ex, or their tests) in any of the 3 runs.",
+    "ci_yaml_caveat": "This run touches .github/workflows/ci.yml (Rust-toolchain-pin mechanism). Local runs above verify only the Elixir/Rust build and test code paths in this sandbox -- they do NOT prove the CI YAML mechanism itself works. Only a real GitHub Actions run on the eventual PR, in GitHub's actual runner environment, proves that. Not claimed as verified here.",
+    "docker": "docker compose up -d failed with permission denied for the normal user; sudo docker compose up -d succeeded (letflow-1-keycloak-1 and letflow-1-postgres-1 already Running).",
+    "lint_handoffs": "mix letflow.lint_handoffs run before finishing; see command output in agent's final report."
+  }
+}

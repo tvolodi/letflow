@@ -1,0 +1,60 @@
+{
+  "handoff_id": "step02d-WF02-REQ165-20260828",
+  "run_id": "WF02-REQ165-20260828",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ165-20260828/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-165"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ165-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ165-20260828/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "mix.exs",
+      ".tool-versions",
+      ".github/workflows/ci.yml",
+      "lib/mix/tasks/letflow.check_toolchain.ex",
+      "lib/letflow/engine/wasm/plugin_handler.ex"
+    ],
+    "branch_name": "feature/WF02-REQ165-20260828",
+    "commit": "98e3eb3"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-165's implementation, commit 96292e1 (SECURITY-REVIEWER already PASSed at commit 98e3eb3). Decision 0014 explicitly assigns REVIEWER sign-off to THIS requirement specifically, as the first that adds wasmex -- Letflow's first native-code build dependency. Gate on idiomatic OTP usage, supervision integrity, scope creep, and decision-record consistency. Read the approved design (lib/letflow/design/req165-wasmex-process-boundary.md), the real diff (git show 96292e1), and the current full state of the touched files before verdict. Pay particular attention to: (1) whether the letflow.check_toolchain.ex extension (new rust recognized tool, running_rust_version/0, F9 failure mode) is idiomatically consistent with the module's existing Elixir/OTP checks and genuinely preserves the never-fails-the-build guarantee; (2) whether the CI config diff is technically correct as YAML (not just plausible-looking); (3) whether the OQ-D1 resolution (NIF-load introspection facts ELIXIR-DEV found) is genuinely verified rather than asserted; (4) whether this diff has any ripple effect on other test files or the broader build given it touches mix.exs/CI/a shared Mix task.",
+    "acceptance_criteria": [
+      "Implementation matches the approved design's specified control flow (design sections 1-7) -- no invented mechanism replacing what was approved.",
+      "lib/mix/tasks/letflow.check_toolchain.ex's rust extension is idiomatically consistent with its existing Elixir/OTP checks (same never-raises discipline, same report/warn_block shape) -- confirm by reading the whole file, and confirm all pre-existing tests for this module still pass unmodified.",
+      "The .github/workflows/ci.yml diff is technically correct YAML that will actually work as intended (the $GITHUB_OUTPUT step, the dtolnay/rust-toolchain@stable step, the WASMEX_BUILD env scoping) -- read the exact diff, don't just trust it compiles as YAML syntax.",
+      "OQ-D1's resolution (wasmex's NIF-load introspection facts: module_info(:attributes) external_resource entries, :code.priv_dir(:wasmex) shared-library path, no new OS ports opened) is genuinely verified fact, not asserted without evidence -- if ELIXIR-DEV's handoff shows real command output for these, confirm it's plausible and correctly interpreted.",
+      "No scope creep: git diff --stat main...feature/WF02-REQ165-20260828 touches only this requirement's owned_modules -- confirm lib/letflow/engine/plugin_interface.ex is genuinely absent from the diff.",
+      "Decision-record consistency: confirm nothing in this diff contradicts decision 0014's Decision (2)/(4) or Reasoning (a)/(d)/(f), or decision 0005's toolchain-pinning convention.",
+      "Moduledoc accuracy: the WASM-01 restatement and residual-crash-risk disclosure match the design's required content and plugin_interface.ex's existing vocabulary.",
+      "Confirm no ripple effect on other test files given mix.exs/CI/a shared Mix task were touched -- independently re-run the full test suite yourself, don't just trust ELIXIR-DEV's '2294 passed' report.",
+      "mix compile --warnings-as-errors and mix format --check-formatted both independently re-run by REVIEWER.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS -- REQ-165 implementation (commit 96292e1) passes REVIEWER's hard gate. ROUTE TO TEST-DESIGNER.",
+    "summary": "All 9 acceptance criteria independently re-verified against the real committed code, not asserted from ELIXIR-DEV's report. (1) Implementation matches design §1-7 exactly: mix.exs deps/0 gains {:wasmex, \"~> 0.15.1\"} appended after :lua per the design's placement note; mix.lock locks rustler/rustler_precompiled transitively with no redundant direct entry; .tool-versions gains exactly one 'rust 1.97.1' line; plugin_handler.ex's run_guest/2 implements the read-fixture -> start_link -> call_function -> GenServer.stop (on every path, via `with`) -> outcome-map algorithm verbatim, including executed_in_pid and the deliberately-longer wasmex-internal timeout vs. the outer PluginInterface.invoke timeout. (2) Read lib/mix/tasks/letflow.check_toolchain.ex in full (both old and new): the rust extension is additive only -- @recognised_tools gains \"rust\", parse/1 grows a third tuple element, report/4 and not_checked/4 thread running_rust through unchanged control flow, running_rust_version/0 uses System.cmd + rescue/catch (never raises, mirroring run/1's own outer guard discipline), F9 is documented in the moduledoc alongside F1-F8. Ran `mix test test/mix/tasks/letflow_check_toolchain_test.exs` myself: all 30 pre-existing tests pass unmodified (the substring-based stdout/stderr assertions still match because the new '/ Rust ...' suffix is appended after the existing asserted substrings, not interleaved). (3) Read .github/workflows/ci.yml in full as YAML: the 'Read pinned Rust version' step's heredoc-free `run:` block correctly greps '^rust ' and appends 'version=<value>' to $GITHUB_OUTPUT; the consuming dtolnay/rust-toolchain@stable step correctly references ${{ steps.rust_pin.outputs.version }} (step id 'rust_pin' matches); WASMEX_BUILD: true is scoped as env: under the 'Run backend gate' step only, not job-wide; step ordering places Rust setup after Elixir/OTP setup and before the deps cache/install steps, as the design requires. No YAML syntax defects found. (4) OQ-D1 resolution independently reproduced from scratch, not merely read: installed rust 1.97.1 via rustup in this sandbox (matches the pin exactly), ran `WASMEX_BUILD=true mix deps.compile wasmex --force` myself and observed the real cargo invocation ('Compiling crate wasmex in release mode (native/wasmex)', 'Copying .../target/release/libwasmex.so to priv/native/wasmex.so') -- this is a genuine from-source build, not wasmex's rustler_precompiled fetch path. The plugin_handler_test.exs AC7 assertions (Wasmex.Native's external_resource attributes naming native/wasmex/src/*.rs, :code.priv_dir(:wasmex)-relative native/wasmex.so existing on disk, :erlang.ports/0 unchanged before/after a guest call) are plausible and correctly interpreted given the real deps/wasmex/priv/native/wasmex.so (72MB, present) and deps/wasmex/native/wasmex/target/release build artifacts found on disk. (5) `git diff --stat main...feature/WF02-REQ165-20260828` confirms lib/letflow/engine/plugin_interface.ex is absent from the 16-file diff; read plugin_interface.ex in full and confirmed invoke/2,3's Task.Supervisor.async_nolink/Task.yield/Task.shutdown(:brutal_kill) mechanism the design cites at lines 187-232 is exactly what ships, unmodified. No new supervisor, no new @callback, no new ExecutionContext field. (6) Read decision 0014 Decision (1)-(4) and Reasoning (a),(d),(f) in full: Decision (2)'s 'every guest invocation must cross a process boundary first ... never called inline' is satisfied (handle_node/1 only ever runs inside invoke/2,3's Task); Decision (4)'s Lua-before-WASM sequencing is not implicated by this diff; Reasoning (a)'s residual-native-crash-risk framing and (d)'s 'PluginInterface needs no contract change' claim are both restated verbatim in substance in plugin_handler.ex's moduledoc; Reasoning (f)'s naming of wasmex as 'Letflow's first native-code build dependency' is exactly the CI/toolchain-pin work this diff does. No conflict with decision 0005's pinning convention -- the design mirrors it via the same .tool-versions/setup-action/never-fails-advisory-task shape rather than inventing a second mechanism. (7) Moduledoc content matches design §7.1/7.2 verbatim in substance and reuses plugin_interface.ex's own disclosed-and-uncovered vocabulary ('a hard kill of the BEAM node itself, or System.halt/0' appears in both files identically). (8) Independently re-ran the FULL suite myself (not trusting the '2294 passed' report): `WASMEX_BUILD=true mix test` -> 'Result: 2294 passed (5 properties, 2289 tests), 3 excluded' -- identical count to ELIXIR-DEV's report, confirming no ripple effect from the mix.exs/CI/shared-Mix-task changes. (9) Independently ran `mix compile --warnings-as-errors` (clean, 'Generated letflow app', zero warnings) and `mix format --check-formatted` (exit 0, no diffs). Also ran `mix letflow.check_toolchain` directly: prints the expected OK line naming Elixir/OTP/Rust all matching the pin. Ran `mix letflow.lint_handoffs`: 0 new violations (25 pre-existing grandfathered, unrelated to this branch) -- same as ELIXIR-DEV reported. No idiom violations, no supervision-integrity concerns (guest execution stays inside the pre-existing, unmodified PluginTaskSupervisor-backed Task boundary; no new process/supervisor introduced), no scope creep (the handler is deliberately trivial, no WASM-02 ABI machinery built ahead of REQ-166, no speculative config.exs entry added, matching the design's own explicit anti-scope-creep notes in §1 and §3.3). One minor, non-blocking observation for future maintainers, not filed as an issue since it is purely informational and already flagged as an open question by the design itself: OQ-D2 (precompiled-target availability for ubuntu-latest) remains genuinely unconfirmed since CI hasn't run yet in this workflow -- that is CI's job to demonstrate, not this local sandbox's, and does not change any of the acceptance criteria above.",
+    "verification_evidence": {
+      "rust_installed": "rustc 1.97.1 (8bab26f4f 2026-07-14) via rustup, exact match to .tool-versions pin",
+      "real_native_build_reproduced": "WASMEX_BUILD=true mix deps.compile wasmex --force -> 'Compiling crate wasmex in release mode (native/wasmex)' + 'Copying .../target/release/libwasmex.so to priv/native/wasmex.so'",
+      "check_toolchain_module_tests": "mix test test/mix/tasks/letflow_check_toolchain_test.exs -> 30 passed, 0 failures, unmodified",
+      "check_toolchain_task_output": "letflow.check_toolchain: OK -- Elixir 1.20.3 / OTP 29 / Rust rustc 1.97.1 (8bab26f4f 2026-07-14) matches .tool-versions.",
+      "full_suite": "WASMEX_BUILD=true mix test -> Result: 2294 passed (5 properties, 2289 tests), 3 excluded -- matches ELIXIR-DEV's reported count exactly",
+      "compile_warnings_as_errors": "clean, 0 warnings",
+      "format_check": "exit 0, no diffs",
+      "lint_handoffs": "0 new violations across 1210 handoff files (25 pre-existing grandfathered)",
+      "diff_stat_scope_check": "git diff --stat main...feature/WF02-REQ165-20260828 -- lib/letflow/engine/plugin_interface.ex produced no output; confirmed by direct reading of the current file that invoke/2,3 is unmodified"
+    }
+  }
+}

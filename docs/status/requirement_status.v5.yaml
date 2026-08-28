@@ -883,3 +883,30 @@ history:
       done in docs/requirements.yaml. `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 35 on-disk entries before
       this append; 36 after.
+
+  - req: REQ-165
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-28T02:54:59Z"
+    note: >
+      WF02-REQ165-20260828 complete (RELEASE-VALIDATOR PASS, commit f518c8a).
+      Adopted wasmex (Wasmtime via a Rust NIF) behind the mandatory process
+      boundary decision 0014 requires -- Letflow's FIRST native-code build
+      dependency and the first WASM-half requirement with real code (REQ-163/
+      164 were decision-only). Every gate passed clean on the first attempt:
+      design, both hard gates (SECURITY-REVIEWER and REVIEWER, the latter
+      explicitly named by decision 0014 as this requirement's sign-off),
+      mutation-tested test design, full-suite run, and release validation.
+      REVIEWER independently rebuilt the entire Rust toolchain from scratch to
+      verify the native build rather than trusting a report. RELEASE-VALIDATOR
+      empirically confirmed the process boundary via an ad hoc script, not
+      just a code read. TEST-DESIGNER's mutation testing found and closed 2
+      real coverage gaps: a GenServer leak-detection gap, and zero prior
+      coverage of the new toolchain-check F9 failure mode. This branch was
+      rebased mid-run onto concurrent work from another session (REQ-155/
+      REQ-123-related commits, plus ORCH's own ISS-0287 reopen) with no
+      conflicts. Unblocks REQ-166 (the full plugin ABI, building on REQ-163's
+      core-modules decision). Status flipped pending -> done in
+      docs/requirements.yaml. `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 36 on-disk entries before this
+      append; 37 after.

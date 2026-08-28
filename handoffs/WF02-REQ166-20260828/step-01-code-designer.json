@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step01-WF02-REQ166-20260828",
+  "run_id": "WF02-REQ166-20260828",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ166-20260828/step-01-code-designer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-166"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req163-wasm-abi-choice.md",
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "lib/letflow/engine/wasm/plugin_handler.ex",
+      "lib/letflow/engine/plugin_interface.ex"
+    ],
+    "branch_name": "feature/WF02-REQ166-20260828",
+    "commit": "496b479"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-166: design WASM module ABI validation and rejection of non-conforming modules AT REGISTRATION (WASM-02). Read docs/requirements.yaml's REQ-166 entry in full (search '- id: REQ-166') -- the queue task's full description and 6 real acceptance criteria are there verbatim. Read lib/letflow/design/req163-wasm-abi-choice.md section 3 in full -- this is the ALREADY-SETTLED export contract this requirement implements: the four named exports (init: (i32 i32) -> i32, execute: (i32 i32) -> i32, deinit: () -> (), get_capabilities: () -> i32) PLUS the implicit fifth export the descriptor convention requires (alloc: (i32) -> i32), all under the core-modules ABI REQ-163 chose. Do NOT re-derive this mapping -- cite req163's section 3.1/3.2 by section number. Read lib/letflow/engine/wasm/plugin_handler.ex (REQ-165's shipped module) for the existing pattern this design should reuse/extend: Wasmex.start_link/1, Wasmex.call_function/4 for invoking exports, and how it already reads .wat fixture bytes. REQ-166's own scope is REGISTRATION-time validation -- a new function/module that, given a module's compiled bytes, checks the module's actual export section against the required 5-export contract (4 named in WASM-02's text + the implicit alloc) BEFORE any invocation is attempted, and rejects with a STRUCTURED error naming the specific missing export(s) if any required export is absent or has the wrong WASM function type signature. Design where this validation logically lives (a new module under lib/letflow/engine/wasm/, e.g. a module_registry.ex or abi_validator.ex -- your call, state which and why) and its relationship to REQ-165's PluginHandler (does PluginHandler call this validator before invoking, or is validation a separate registration-time step entirely decoupled from invocation -- the requirement's own text says 'registration is a distinct step from invocation, with its own entry point' -- design that entry point). Determine how to inspect a compiled wasmex module's export section programmatically -- research wasmex's real API for this (Wasmex.Module has functions for introspecting a compiled module's exports; verify via WebFetch/hexdocs what's actually available, do not guess) since this is required to check export presence AND signature (a module could export 'execute' with the wrong parameter/result types, which is also non-conforming). Design the structured error shape (must name which export(s) are missing/malformed). Design how 'never invocable' is proven -- e.g. a registration step returns {:error, _} and the design must show there's no code path that lets a rejected module's compiled bytes reach Wasmex.call_function/4 at all afterward.",
+    "acceptance_criteria": [
+      "Design specifies exactly where the 5-export contract (4 named + implicit alloc) comes from -- cites req163-wasm-abi-choice.md section 3.1/3.2 by section number, does not re-derive the mapping.",
+      "Design specifies a registration-time validation function/module, decoupled from invocation, with its own entry point -- not a check embedded inside the existing handle_node/1 invocation path.",
+      "Design specifies the real wasmex API used to inspect a compiled module's export names AND signatures (researched/verified, not guessed) -- Wasmex.Module or whatever the real v0.15.1 API exposes for export introspection.",
+      "Design specifies the structured error shape naming which specific export(s) are missing or have the wrong signature -- 'invalid module' alone does not satisfy this.",
+      "Design specifies exactly how a rejected module is proven 'never invocable' -- no code path from a failed registration to Wasmex.call_function/4.",
+      "Design specifies moduledoc content citing REQ-163's artefact as the source of the export contract.",
+      "All 6 real acceptance criteria from docs/requirements.yaml's REQ-166 entry mapped to concrete design elements in a traceability table.",
+      "Zero literal Elixir code in the design doc -- @spec/@type only.",
+      "Design doc written to lib/letflow/design/req166-wasm-module-abi-validation.md and a prose test spec skeleton to test/specs/REQ-166.md."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

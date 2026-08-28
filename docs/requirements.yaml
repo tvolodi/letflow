@@ -8778,7 +8778,7 @@ requirements:
   - id: REQ-173
     title: WASM module hot reload -- in-flight invocations of the prior version complete, new invocations use the new version (WASM-14)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 325  # letflow-queue task id
     description: >

@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF02-REQ163-20260828/step-01-code-designer.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -33,6 +33,11 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "COMPLETED",
+    "artifacts_out": [
+      "lib/letflow/design/req163-wasm-abi-choice.md"
+    ],
+    "summary": "Decision: WASM plugin ABI targets wasmex's core-module calling convention, not the component model. Grounded in wasmex v0.15.1 published docs (hex.pm, released 2026-08-07; wasmex.hexdocs.pm, accessed 2026-08-28): core modules are wasmex's original, non-beta surface (Wasmex.start_link/1, Wasmex.call_function/3,4, valid types :i32/:i64/:v128/:f32/:f64 quoted from Wasmex.html); Wasmex.Components is explicitly documented as 'beta quality' and Wasmex.Wasi.WasiP2Options has no filesystem field at all. Artefact placed at lib/letflow/design/req163-wasm-abi-choice.md (not a new docs/migration/decisions/ record) because the choice operates entirely inside decision 0014's already-settled premise and nothing outside S5 depends on it -- same precedent as REQ-150/OQ-6. Restates WASM-02's four exports (init, execute, deinit, get_capabilities) as concrete core-module function types plus one implicit `alloc` export the variable-length-return descriptor convention requires, all built on wasmex's linear-memory model. Names the exact REQ-167 denial surface: the wasi_snapshot_preview1 import namespace (e.g. path_open) is never resolved because Letflow's host supplies no WasiOptions, so a filesystem-importing module fails instantiation and must be rejected AT REGISTRATION, mirroring WASM-02's own rejection discipline. Maps REQ-150 section 2's numeric rule onto :i64 (integer) / :f64 (float), flagging the one representational gap Lua/BEAM doesn't have -- integers outside i64's 64-bit range must fail closed, not truncate -- for REQ-171/REQ-172 to handle explicitly. Cites R-Co's wasmtime_bindings.zig 'deferred to Stage 10' header via decision 0014's existing verified quote (the R-Co path at c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\ is not reachable from this Linux sandbox) and states the choice is Letflow's own. No mix.exs change, no lib/letflow/engine/ change -- confirmed via git diff --stat.",
+    "ready_for": "CODE-DESIGN-VALIDATOR"
   }
 }

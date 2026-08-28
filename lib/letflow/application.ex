@@ -61,7 +61,17 @@ defmodule Letflow.Application do
         # an independent concern from both, per §2.2's reasoning (mirroring
         # req155-lua-wallclock-kill.md §4.4's own precedent). No other child
         # depends on start order here.
-        {Task.Supervisor, name: Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor}
+        {Task.Supervisor, name: Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor},
+        # REQ-167: dedicated Task.Supervisor for CapabilityGate.start_instance/2's
+        # real, manifest-gated instantiation attempt (design
+        # req167-wasm-import-whitelist.md §0/§2.2's identical reasoning) -- the
+        # same unresolved-import crash-propagation hazard ModuleRegistryTaskSupervisor
+        # exists for, but deliberately its own supervisor rather than a reuse of
+        # ModuleRegistryTaskSupervisor: module registration (REQ-166) and
+        # capability-gated instantiation (REQ-167) are orthogonal concerns with
+        # different inputs and different callers, per req166 §2.2's own precedent.
+        # No other child depends on start order here.
+        {Task.Supervisor, name: Letflow.Engine.Wasm.CapabilityGateTaskSupervisor}
       ] ++ http_child()
 
     # See https://hexdocs.pm/elixir/Supervisor.html

@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step01b-WF02-REQ167-20260828",
+  "run_id": "WF02-REQ167-20260828",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ167-20260828/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-167"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ167-20260828/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req167-wasm-import-whitelist.md",
+      "test/specs/REQ-167.md",
+      "lib/letflow/design/req163-wasm-abi-choice.md",
+      "lib/letflow/design/req166-wasm-module-abi-validation.md"
+    ],
+    "branch_name": "feature/WF02-REQ167-20260828"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR hard gate (WF-02 Step 1b) on REQ-167's design (lib/letflow/design/req167-wasm-import-whitelist.md, test/specs/REQ-167.md). This is the WASM sandbox-boundary requirement (WASM-06 import whitelist + WASM-07 restated filesystem denial) -- do not rubber-stamp; this pipeline's prior two WASM designs (REQ-165, REQ-166) both required genuine rework after this exact gate independently reproduced false live-behavior claims and cross-document citation errors. Read REQ-167's full entry in docs/requirements.yaml first, then the design artefact and test spec in full, then req163-wasm-abi-choice.md and req166-wasm-module-abi-validation.md for the cited prior art.",
+    "acceptance_criteria": [
+      "Independently verify (your own MIX_ENV=test mix run script, WASMEX_BUILD=true, export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\", against the real installed deps/wasmex) every live-wasmex-behavior claim in the design -- particularly: that Wasmex.start_link/1's imports option is a genuine selective grant with no implicit universal fallback; that an ungranted import produces the same {{:badmatch, {:error, \"unknown import: ...\"}}, stacktrace} crash shape REQ-166 already reproduced; that no wasmex API exposes a running instance's resolved import table (so AC2's inspection must target the pure build_import_table/1 return value, not a live instance query) -- confirm this claim is actually true and not an excuse to weaken AC2's own requirement to inspect something.",
+      "Confirm the design's identification of REQ-163's named concrete import surface (wasi_snapshot_preview1/path_open) for the WASM-07 restatement is accurate by re-reading req163-wasm-abi-choice.md section 4 yourself.",
+      "Confirm the new Letflow.Engine.Wasm.CapabilityGate module boundary decision (fully decoupled from ModuleRegistry and PluginHandler, new dedicated CapabilityGateTaskSupervisor) is justified per req155-lua-wallclock-kill.md section 4.4's actual text -- read that section yourself, don't trust the citation.",
+      "Confirm the minimal manifest type (@type manifest :: %{capabilities: [String.t()]}) is a reasonable, non-speculative scope decision -- confirm no existing manifest schema was overlooked (grep lib/letflow/engine/ for 'manifest' yourself).",
+      "Confirm AC4/AC5/AC6 (WASM-07 restatement, false-pass explanation, no-filesystem-grant-today statement) are all planned into the moduledoc content described by the design, not just asserted as done.",
+      "Confirm the traceability table covers every real REQ-167 acceptance criterion from docs/requirements.yaml (not just the 7 paraphrased in step-01's handoff).",
+      "Zero literal Elixir implementation code in the design doc -- grep for def/defp/case-do/cond-do/with-do function bodies yourself.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Independently re-verified every check per WF-02 Step 1b and the handoff's acceptance criteria; found no blocking defect. (1) Live wasmex verification: ran my own MIX_ENV=test mix run script (WASMEX_BUILD=true, .asdf/.cargo PATH) against the real installed wasmex v0.15.1, reproducing all four of design sec1.2's probes verbatim -- (a) module importing env/platform_call_service with imports: supplying only env/read_variable crashes with {{:badmatch,{:error,\"unknown import: `env::platform_call_service` has not been defined\"}},stacktrace}; (b) extending imports: to include platform_call_service succeeds cleanly ({:ok,{:ok,pid}}); (c) a module with no imports at all, given a non-empty imports: map, instantiates cleanly (unused whitelist entries are inert); (d) a module importing wasi_snapshot_preview1/path_open with no wasi: key crashes with the identical unresolved-import shape naming that exact namespace/function. All match the design's claims exactly. Also confirmed via deps/wasmex/lib/wasmex/instance.ex that Wasmex.Instance's struct (resource/reference only) and full export list (new/4, function_export_exists/3, call_exported_function/5,6, memory/2, get_global_value/4, set_global_value/4, inspect/2) expose no accessor for a running instance's resolved import table -- design sec1.3's claim that AC2 must target build_import_table/1's pure return value (not a live instance query) is genuine, not a weakening of AC2. (2) Re-read req163-wasm-abi-choice.md sec4 directly: confirms the exact cited surface (never supply Wasmex.Wasi.WasiOptions/wasi:, wasi_snapshot_preview1/path_open with the real 9-param/1-result signature) matches design sec7/T3 verbatim. (3) Re-read req155-lua-wallclock-kill.md sec4.4 directly: its 'one dedicated Task.Supervisor per subsystem, not a shared one' justification genuinely supports the design's new CapabilityGateTaskSupervisor decision (parallel to req166's ModuleRegistryTaskSupervisor precedent) -- citation is accurate, not misread. (4) grep -rn manifest lib/letflow/engine/ confirms exactly one existing manifest type (Letflow.Engine.Lua.Manifest, Lua-specific hash/script-id machinery) -- no WASM-side manifest schema was overlooked; the minimal @type manifest :: %{capabilities: [String.t()]} is a reasonable non-speculative scope decision, matching Lua.Capabilities's exact-string vocabulary discipline without a hard cross-subsystem dependency. (5) Design sec7 states all three of AC4/AC5/AC6 as explicit planned moduledoc content (not asserted as already-done implementation), with concrete text ELIXIR-DEV must write. (6) Design sec9's traceability table covers all 7 real acceptance_criteria strings from docs/requirements.yaml REQ-167 (verified by reading the requirement's full yaml entry directly), not just a paraphrase. (7) grep -nE for def/defp/case-do/cond-do/with-do function bodies in the design doc returns zero matches; the one defmodule block (lines 228-301) contains only @type/@typedoc/@doc/@spec, no function bodies -- zero implementation code. No TBD/deferral language found; sec8's open questions are explicitly scoped-out follow-ups with justification, not ambiguity reaching implementation. mix letflow.lint_handoffs run clean on this handoff file. Verdict: Route to ELIXIR-DEV (Step 2a)."
+  }
+}

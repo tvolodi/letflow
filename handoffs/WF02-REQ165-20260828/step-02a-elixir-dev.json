@@ -1,0 +1,56 @@
+{
+  "handoff_id": "step02a-WF02-REQ165-20260828",
+  "run_id": "WF02-REQ165-20260828",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ165-20260828/step-02a-elixir-dev.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-165"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "mix.exs",
+      ".tool-versions",
+      ".github/workflows/ci.yml",
+      "lib/mix/tasks/letflow.check_toolchain.ex",
+      "lib/letflow/engine/plugin_interface.ex"
+    ],
+    "branch_name": "feature/WF02-REQ165-20260828",
+    "commit": "266845d"
+  },
+  "task": {
+    "description": "Implement REQ-165 strictly per the APPROVED design at lib/letflow/design/req165-wasmex-process-boundary.md (passed CODE-DESIGN-VALIDATOR, commit 266845d, with independent live re-verification of every wasmex/toolchain claim). Read the full design doc before writing any code. THIS ENVIRONMENT HAS NO RUST TOOLCHAIN INSTALLED -- you must install one yourself (rustup is the standard way; check if it's available or installable in this sandbox) before attempting a real build. If you cannot install Rust in this environment (no internet access to rustup.rs, no permission to write to the install location, or any other blocker), STOP and report that honestly per CLAUDE.md's 'No speculation' rule -- do not claim mix compile succeeded if you did not actually see cargo/rustc build wasmex's native code. Steps: (1) Add {:wasmex, \"~> 0.15.1\"} to mix.exs deps (design section 1, append near :lua per the design's placement note). (2) Add 'rust 1.97.1' to .tool-versions (design section 2). (3) Install Rust 1.97.1 locally (via rustup, pinned to that exact version) if not already present. (4) Run WASMEX_BUILD=true mix deps.get and WASMEX_BUILD=true mix compile, and QUOTE the real cargo/rustc build output (a 'Compiling wasmex' / 'cargo build --release' style line) -- not merely the dependency-fetch output, which alone does not satisfy AC1 per the design's own section 0 finding. (5) Update .github/workflows/ci.yml per design section 2's exact diff: a new step reading the pinned Rust version from .tool-versions via $GITHUB_OUTPUT, a dtolnay/rust-toolchain@stable step consuming it, and WASMEX_BUILD: true added to the 'Run backend gate' step's env. (6) Extend lib/mix/tasks/letflow.check_toolchain.ex per design section 2's exact spec: add 'rust' to @recognised_tools, add the new running_rust_version/0 private helper (returns {:ok, String.t()} | :not_found via System.cmd(\"rustc\", [\"--version\"]), never raising), add the new F9 failure-mode row for rustc-not-found, extending the existing report/parse pipeline additively -- never change the module's core guarantee that run/1 always returns :ok. (7) Create lib/letflow/engine/wasm/plugin_handler.ex (new directory) implementing Letflow.Engine.Wasm.PluginHandler per design section 3 exactly (the run_trivial_guest/0 helper, Wasmex.start_link/1 + call_function/4 + GenServer.stop/1 cleanup on every path including error, the outcome mapping with executed_in_pid). (8) Create the two WAT fixtures at priv/wasm_fixtures/req165_trivial.wat and priv/wasm_fixtures/req165_hang.wat exactly as specified in design sections 3.3/5. (9) Write the moduledoc content per design sections 7.1/7.2 verbatim in substance (WASM-01 mechanism restatement, residual native-crash-risk disclosure). (10) Resolve design's own OQ-D1 (section 9) by actually compiling wasmex and inspecting what it exposes for NIF-load introspection -- do not guess an API; verify it by running code and report what you found. Do NOT touch lib/letflow/engine/plugin_interface.ex -- confirmed by the design as needing zero edits.",
+    "owned_modules": [
+      "mix.exs",
+      "mix.lock",
+      ".tool-versions",
+      ".github/workflows/ci.yml",
+      "lib/mix/tasks/letflow.check_toolchain.ex",
+      "lib/letflow/engine/wasm/",
+      "priv/wasm_fixtures/",
+      "test/letflow/engine/wasm/",
+      "test/mix/tasks/",
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "test/specs/REQ-165.md"
+    ],
+    "acceptance_criteria": [
+      "AC1: mix.exs includes wasmex ~> 0.15.1; WASMEX_BUILD=true mix deps.get and mix compile both complete with the NATIVE BUILD actually succeeding -- real cargo/rustc output quoted, not just a dependency-fetch success.",
+      "AC2: Rust toolchain pinned via .tool-versions (rust 1.97.1) mirroring decision 0005's exact mechanism; CI config diff shown; a real CI run (after this branch is pushed) demonstrates it -- TEST-RUNNER/ORCH will confirm the real CI run later, but your own local verification must be genuine.",
+      "AC3: Letflow.Engine.Wasm.PluginHandler implements @behaviour Letflow.Engine.PluginInterface; a test asserts handle_node/1 (invoked via PluginInterface.invoke/2,3) returns {:complete, map} for the trivial guest.",
+      "AC4: a test asserts the guest invocation runs in a DIFFERENT process from the caller (self() comparison via the executed_in_pid field), proving the process boundary structurally.",
+      "AC5: a test asserts a hanging guest is terminated by the supervised-task timeout and surfaces as {:error, reason} to the caller, never an exception/exit propagating into the calling process.",
+      "AC6: lib/letflow/engine/plugin_interface.ex is unmodified -- confirm via git diff --stat.",
+      "AC7: the new module's moduledoc states the WASM-01 mechanism restatement per design section 7.1, and a test/deployment-check asserts no external Wasm runtime dependency is required at deploy time (resolve OQ-D1 by actually verifying wasmex's real introspection API, don't guess).",
+      "AC8: the moduledoc states the residual native-crash risk per design section 7.2, verified by a moduledoc content-string test mirroring test/letflow/engine/lua/executor_test.exs's existing AC-5 technique.",
+      "AC9: mix test and mix compile --warnings-as-errors both pass, real output quoted."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

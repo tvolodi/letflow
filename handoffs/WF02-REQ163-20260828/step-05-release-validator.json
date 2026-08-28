@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "RELEASE-VALIDATOR",
   "file": "handoffs/WF02-REQ163-20260828/step-05-release-validator.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -34,6 +34,64 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "summary": "Independently re-derived PASS for all 7 REQ-163 acceptance criteria against lib/letflow/design/req163-wasm-abi-choice.md.",
+    "acceptance_criteria_mapping": [
+      {
+        "criterion": "names exactly one choice as a Decision heading, with no 'either' fallback",
+        "section": "## Decision (lines 33-42)",
+        "quote": "**Core modules.** Letflow's WASM plugin ABI targets `wasmex`'s core-module calling convention ... not `Wasmex.Components`. `wasmex`'s `:wasm_component_model` engine option is **not** enabled ... This is not \"either is acceptable\" and not a placeholder pending REQ-166",
+        "verdict": "PASS -- single explicit choice, fallback language explicitly disclaimed"
+      },
+      {
+        "criterion": "quotes real evidence of what the wasmex version Letflow would adopt supports, with source and date named, not inferred from the option's existence",
+        "section": "§1 (lines 46-58, 60-75, 99-104)",
+        "quote": "hex.pm's package page for `wasmex` ... lists the current published release as v0.15.1, dated 2026-08-07 ... 'Starts a GenServer which compiles and instantiates a Wasm module from the given .wasm or .wat bytes.' ... 'Support for the Component Model should be considered beta quality.'",
+        "verdict": "PASS -- version, URL, and access date named for each quote; §1 explicitly rebuts inferring support from :wasm_component_model's existence/default"
+      },
+      {
+        "criterion": "restates WASM-02's four-export ABI into the chosen mode's concrete contract, detailed enough for REQ-166 to implement without improvising",
+        "section": "§3.1 table (lines 186-197) and §3.2 (lines 199-213)",
+        "quote": "init | (param i32 i32) -> i32 ... execute | (param i32 i32) -> i32 ... deinit | () -> () ... get_capabilities | () -> i32 ... Every module MUST export a `memory` ... an `alloc(len: i32) -> ptr: i32` ... fifth *implicit* export",
+        "verdict": "PASS -- concrete WASM type signatures, memory/descriptor convention, and the implicit alloc export are all specified"
+      },
+      {
+        "criterion": "names the exact import surface REQ-167 must assert a filesystem denial against, replacing WASM-07's component-model-specific wasi:filesystem/types",
+        "section": "§4 (lines 226-260)",
+        "quote": "a `.wasm` fixture module whose import section declares `(import \"wasi_snapshot_preview1\" \"path_open\" (func (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))` ... rejected at registration via instantiation failure",
+        "verdict": "PASS -- concrete namespace, function name, and full signature given, plus rejection point"
+      },
+      {
+        "criterion": "states how the chosen ABI represents the values REQ-150's number-marshalling rule governs, so WASM-12 has a defined mapping",
+        "section": "§5 table (lines 264-278) and its Consequence paragraph (280-288)",
+        "quote": "Integer, in range -> :i64 ... Integer, |n| >= 2^63 -> cannot be represented ... MUST fail closed ... Float (any) -> :f64 ... null -> absence of a value in the payload's JSON encoding",
+        "verdict": "PASS -- every REQ-150 §2 case has an explicit WASM-side representation, including the fail-closed rule for the i64 ceiling"
+      },
+      {
+        "criterion": "cites R-Co/src/wasm/wasmtime_bindings.zig's 'deferred to Stage 10' header and states R-Co's stub code settles nothing",
+        "section": "§2 (lines 154-176)",
+        "quote": "'NOTE: Actual C FFI integration deferred to Stage 10. For now, provide type stubs to allow module testing and compilation.' ... There is no working Wasmtime integration anywhere in R-Co ... Picking core modules here is not a port of any R-Co behaviour; it is Letflow choosing, from scratch",
+        "verdict": "PASS -- header quoted verbatim (via decision 0014's already-verified quote, R-Co path unreachable from this sandbox, as the requirement itself anticipates), and the 'settles nothing / Letflow's own choice' claim is stated explicitly"
+      },
+      {
+        "criterion": "no mix.exs change and no file under lib/letflow/engine/ is modified, confirmed by git diff --stat scoped to its commits",
+        "section": "§7 (lines 309-317) plus independent re-run below",
+        "quote": "$ git diff --stat main...HEAD -- mix.exs lib/letflow/engine/ (no output -- zero files changed)",
+        "verdict": "PASS -- independently reran `git diff --stat main...feature/WF02-REQ163-20260828` myself: output touches only handoffs/WF02-REQ163-20260828/*.json and lib/letflow/design/req163-wasm-abi-choice.md (512 insertions, 0 deletions across 5 files); no mix.exs, no lib/letflow/engine/ file present"
+      }
+    ],
+    "independent_web_spot_check": {
+      "url": "https://wasmex.hexdocs.pm/Wasmex.Components.html",
+      "claim_checked": "'Support for the Component Model should be considered beta quality.'",
+      "method": "WebFetch performed directly by RELEASE-VALIDATOR (not read from a prior agent's report)",
+      "result": "CONFIRMED -- WebFetch returned the exact sentence verbatim, matching the artefact's §1 quote"
+    },
+    "diff_scope_check": {
+      "command": "git diff --stat main...feature/WF02-REQ163-20260828",
+      "output": "5 files changed, 512 insertions(+): 4 handoff JSON files under handoffs/WF02-REQ163-20260828/ and lib/letflow/design/req163-wasm-abi-choice.md",
+      "verdict": "PASS -- no mix.exs, no lib/letflow/engine/ file in the diff"
+    },
+    "verdict": "PASS",
+    "notes": "Decision-only requirement, no code and no mix test run applicable. All 7 real acceptance criteria independently re-derived against the artefact text and one live WebFetch, not merely re-cited from CODE-DESIGN-VALIDATOR's or REVIEWER's prior PASS reports. mix letflow.lint_handoffs run with PATH including asdf shims: OK, 0 new violations (25 pre-existing grandfathered, unrelated to this run)."
   }
 }

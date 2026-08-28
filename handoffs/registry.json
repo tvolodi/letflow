@@ -2931,20 +2931,20 @@
             "requirement_ids": ["REQ-167"],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/engine/wasm/",
                 "test/letflow/engine/wasm/",
                 "priv/wasm_fixtures/"
             ],
             "lock_acquired_at": "2026-08-28T05:13:32Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 -- bookkeeping commit to main in progress",
+            "lock_released_at": "2026-08-28T06:36:36Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #688 squash-merged (cec5cad); queue task 319 released done cleanly",
             "backfilled": false,
             "queue_task_id": 319,
             "queue_agent_id": "orch-ai-dala",
-            "note": "WF-02 for REQ-167 (queue task 319, GH#619, stage S5). WASM import whitelist derived from the module manifest (WASM-06): the Wasmtime instance must provide only host functions corresponding to manifest-declared capabilities, built as a whitelist not a denylist, with instantiation FAILING (not a present-but-erroring import) when a module imports anything outside it. Also restates WASM-07 (no filesystem access by default): the literal wasi:filesystem/types acceptance-criterion name is a component-model interface name that doesn't apply under REQ-163's chosen core-modules ABI -- this requirement must assert denial against REQ-163's own named import surface instead, and its moduledoc must explain why asserting the literal component-model name would be a false pass under a core-module runtime. This is the sandbox boundary for guest code -- SECURITY-REVIEWER hard gate. Depends on REQ-166 (done). Builds on Letflow.Engine.Wasm.ModuleRegistry (REQ-166) and PluginHandler (REQ-165). Queue claimed via get_next_task 2026-08-28T05:13:11Z."
+            "note": "WF-02 for REQ-167 (queue task 319, GH#619, stage S5). WASM import whitelist derived from the module manifest (WASM-06): built Letflow.Engine.Wasm.CapabilityGate.build_import_table/1 as a genuine filter-then-group whitelist (never allow-everything-then-remove), and start_instance/2 instantiates a guest against exactly that table inside a new dedicated CapabilityGateTaskSupervisor, with instantiation genuinely FAILING (not a present-but-erroring import) on anything outside the whitelist. Also restated WASM-07 (no filesystem access by default): the literal wasi:filesystem/types acceptance-criterion name is a WASI Preview 2 component-model interface name that does not apply under REQ-163's chosen core-modules ABI, so denial is asserted instead against req163's own named surface (wasi_snapshot_preview1/path_open, live-verified) -- the moduledoc states this explicitly and states plainly that no filesystem-grant path exists today. Design passed CODE-DESIGN-VALIDATOR clean on first attempt (no rework, unlike REQ-165/166's prior WASM designs) after live-verifying every wasmex behavioral claim against the real installed dependency. SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER (full suite 2336/2336), and RELEASE-VALIDATOR all independently passed clean. TEST-DESIGNER's mutation pass (16->18 tests) found and closed 2 real gaps (empty-manifest exact-%{}-shape, post-instantiation pid-liveness) and confirmed a security-critical negative finding (a hardcoded wasi: true regression is already caught by the existing specific-tuple assertions). PR #688's first CI run failed fast on mix format --check-formatted (two long assert lines) -- a check no gate in this pipeline runs directly (only mix test/mix compile were run locally); fixed with a plain mix format pass and documented as a new anti-pattern entry (mix test passing does not imply mix format --check-formatted will pass in CI). Unblocks REQ-168 onward (resource limits, host API, versioning). Queue task 319 released done cleanly."
         }
     ]
 }

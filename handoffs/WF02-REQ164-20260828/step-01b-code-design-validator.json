@@ -1,0 +1,41 @@
+{
+  "handoff_id": "step01b-WF02-REQ164-20260828",
+  "run_id": "WF02-REQ164-20260828",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ164-20260828/step-01b-code-design-validator.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-164"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ164-20260828/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req164-wasm-compilation-hosting.md"
+    ],
+    "branch_name": "feature/WF02-REQ164-20260828",
+    "commit": "f7495a3"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) hard gate on REQ-164's decision artefact at lib/letflow/design/req164-wasm-compilation-hosting.md. This artefact decided NO -- Letflow does not host WASM guest compilation -- meaning WASM-03/04/05 are declined and REQ-175 must be cancelled (by DOC-UPDATER at Step 6, not this design step). Verify the decision's evidentiary grounding is accurate, the REQ-175 consequence is stated precisely enough to act on, and the S6-input honesty disclosure is genuine (not glossed over). This is a decision-only requirement with no code -- your gate should focus on the artefact's logical/evidentiary soundness, not OTP idiom.",
+    "acceptance_criteria": [
+      "Confirm the artefact's Decision heading states an unambiguous NO, not a hedge or 'either' framing.",
+      "Confirm the artefact cites decision 0014's own already-verified R-Co evidence (stub status, zero .wasm files) accurately -- read decision 0014 directly to confirm the citation is not exaggerated or misattributed.",
+      "Confirm the artefact states precisely that WASM-03, WASM-04, WASM-05 are DECLINED (not deferred), with the reason.",
+      "Confirm the artefact states precisely that REQ-175 must be marked cancelled with a status-history event -- read REQ-175's own entry in docs/requirements.yaml to confirm the artefact's characterization of REQ-175's current scope/status is accurate.",
+      "Confirm the S6 operational-inputs disclosure (artifact storage, retention, job execution) genuinely states 'assumed, not available' rather than silently implying readiness -- check this against docs/migration/README.md's stage breakdown to confirm S6 genuinely hasn't been reached yet.",
+      "Confirm the artefact does NOT edit docs/requirements.yaml itself -- run git diff --stat to verify.",
+      "Confirm no mix.exs or lib/letflow/engine/ file was touched.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

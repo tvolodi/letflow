@@ -1596,3 +1596,40 @@ is written or edited by any agent (not just ORCH), run `mix letflow.lint_handoff
 (or at minimum grep the file's own top-level `status` line against the 6-value enum)
 before considering that step done — the nested `result.status`/`result.verdict` field is
 free text and does not need this check; only the sibling top-level field does.
+
+## A test embeds `git diff main...HEAD` directly, assuming a local `main` branch always exists
+
+**What happened.** REQ-165's `plugin_handler_test.exs` had a test asserting
+`lib/letflow/engine/plugin_interface.ex` was untouched, by literally shelling out to
+`git diff --stat main...HEAD -- lib/letflow/engine/plugin_interface.ex` and asserting
+empty output. It passed in every local dev sandbox this session used (including
+ELIXIR-DEV's, SECURITY-REVIEWER's, REVIEWER's, TEST-DESIGNER's, TEST-DESIGN-VALIDATOR's,
+and RELEASE-VALIDATOR's — six separate agent runs, all green) because those sandboxes'
+checkouts happen to have a local branch literally named `main`. It failed on the very
+first real CI run (PR #686) with `fatal: bad revision 'main...HEAD'`: GitHub Actions'
+`actions/checkout@v4` on a PR branch — even with `fetch-depth: 0` (full history) — checks
+out the PR's head commit directly and creates no local branch named `main`; only the
+remote-tracking ref `origin/main` exists.
+
+**Why six independent local runs didn't catch it.** Every gate in this pipeline ran in
+the same kind of sandbox (a persistent local clone with a real `main` branch), so the
+ref existed every single time it was checked — including RELEASE-VALIDATOR's own
+explicit "run the full suite one more time" pass. No amount of re-running the same kind
+of environment surfaces an assumption that's wrong about a *different* kind of
+environment. This is the same shape of gap as environment-dependent flakes generally:
+the fix isn't "run it more," it's "run it somewhere structurally different" — which for
+this project means an actual CI run, not another local pass.
+
+**Mitigation.** Resolve the base ref defensively — try `origin/main` first, fall back to
+`main` — rather than hardcoding either:
+```elixir
+base_ref = Enum.find(["origin/main", "main"], fn ref ->
+  match?({_, 0}, System.cmd("git", ["rev-parse", "--verify", ref], stderr_to_stdout: true))
+end)
+```
+More generally: a test that shells out to `git` with a hardcoded ref name is making an
+environment-shape assumption a normal ExUnit test never has to make. Any future test
+following the pattern this session's WASM/decision requirements established (asserting a
+file is untouched via `git diff --stat <ref>...HEAD`) should use this same defensive
+resolution, or an equivalent that doesn't assume the local branch layout of whichever
+sandbox happens to run it first.

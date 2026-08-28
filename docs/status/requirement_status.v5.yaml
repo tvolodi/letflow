@@ -695,3 +695,31 @@ history:
       feature/WF02-REQ163-20260828 created from main (6c8152f) and
       pushed. Dispatching Step 1 to CODE-DESIGNER next. 26 on-disk
       entries before this append; 27 after.
+
+  - req: REQ-163
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-28T00:26:15Z"
+    note: >
+      WF02-REQ163-20260828 complete. Decision-only requirement (no code, no
+      mix.exs or lib/letflow/engine/ change) settling OQ-4: WASM core modules
+      chosen over the component model for the WASM ABI, grounded in real
+      wasmex v0.15.1 published documentation rather than inferred from the
+      :wasm_component_model option's existence. Independently re-verified via
+      live WebFetch by three separate gates -- CODE-DESIGN-VALIDATOR,
+      REVIEWER, and RELEASE-VALIDATOR each independently confirmed the key
+      wasmex claims against the real published docs, not just each other's
+      say-so. lib/letflow/design/req163-wasm-abi-choice.md restates WASM-02's
+      four-export ABI into the core-module contract, names the exact import
+      surface WASM-07's filesystem-denial test must target, and states the
+      value-representation consequence for REQ-150's number-marshalling rule
+      (WASM-12 parity). This unblocks REQ-166 (execution), REQ-167
+      (capability denial), and REQ-171/172 (host API parity) to build
+      against a concrete ABI rather than R-Co's internally-inconsistent,
+      never-implemented specification prose. Lighter pipeline than a code
+      requirement (CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> REVIEWER ->
+      RELEASE-VALIDATOR -> DOC-UPDATER, no ELIXIR-DEV/SECURITY-REVIEWER/
+      TEST-*), passed every gate on first attempt. Status flipped pending ->
+      done in docs/requirements.yaml. `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 27 on-disk entries before
+      this append; 28 after.

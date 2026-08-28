@@ -8216,7 +8216,7 @@ requirements:
   - id: REQ-163
     title: Settle OQ-4 -- WASM core modules or the component model (blocks the WASM half's ABI and WASM-07)
     owner: CODE-DESIGNER
-    status: pending
+    status: done
     stage: S5
     impl_order: 315  # letflow-queue task id
     description: >

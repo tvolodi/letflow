@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step01b-WF02-REQ163-20260828",
+  "run_id": "WF02-REQ163-20260828",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ163-20260828/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-163"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ163-20260828/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req163-wasm-abi-choice.md"
+    ],
+    "branch_name": "feature/WF02-REQ163-20260828",
+    "commit": "f120550"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) hard gate on REQ-163's decision artefact at lib/letflow/design/req163-wasm-abi-choice.md. This artefact chose 'core modules' over the component model, grounded in wasmex v0.15.1's published documentation (quoted, cited with URLs and access date 2026-08-28). Independently re-verify the cited evidence -- do not trust the artefact's own quotes at face value. Use WebFetch to re-check at least the key claims: hex.pm's current wasmex version, whether Wasmex.Components is genuinely documented as 'beta quality', and whether Wasmex.Wasi.WasiP2Options genuinely has no filesystem field. Also verify the artefact's placement decision (lib/letflow/design/ vs. a new docs/migration/decisions/ record) is reasonable given its own stated reasoning, and that all 7 real acceptance criteria are satisfied.",
+    "acceptance_criteria": [
+      "Independently re-fetch hex.pm's wasmex package page (or hexdocs.pm) and confirm the version number and release date the artefact cites are accurate as of a fresh check -- note if the published version has changed since 2026-08-28 and whether that changes the artefact's conclusion.",
+      "Independently re-fetch Wasmex.Components' hexdocs page and confirm the 'beta quality' quote is accurate, not fabricated or taken out of context.",
+      "Independently re-fetch Wasmex.Wasi.WasiP2Options' hexdocs page and confirm it genuinely has no filesystem/preopen field, supporting the artefact's claim that neither mode offers a lighter-weight filesystem-denial escape hatch.",
+      "Confirm the artefact's Decision heading names exactly one choice with no 'either' fallback.",
+      "Confirm the WASM-02 four-export ABI restatement (section 3) is internally consistent and detailed enough for a hypothetical implementer to build against without further research -- check for any gap or ambiguity in the descriptor-pointer convention or the implicit alloc export requirement.",
+      "Confirm the REQ-167 import-denial surface (section 4) is a real, concrete WASI Preview 1 import name/signature, not an invented one -- spot check that path_open's cited 9-parameter signature is plausible for WASI Preview 1's real snapshot ABI.",
+      "Confirm the REQ-150/WASM-12 numeric mapping (section 5) is consistent with REQ-150's own cited rule -- read lib/letflow/design/req150-lua-number-marshalling.md section 2 directly to verify no contradiction.",
+      "Confirm no mix.exs or lib/letflow/engine/ file was touched -- run git diff --stat yourself.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified all cited wasmex evidence and re-checked the six other acceptance criteria; the artefact passes. WebFetch re-checks: (1) hex.pm/packages/wasmex shows current release v0.15.1, dated 2026-08-07 -- matches the artefact exactly, no newer release exists as of this check. (2) https://wasmex.hexdocs.pm/Wasmex.Components.html contains the verbatim sentence 'Support for the Component Model should be considered beta quality.' in the stated context -- not fabricated, not taken out of context. (3) https://wasmex.hexdocs.pm/Wasmex.Wasi.WasiP2Options.html documents exactly 6 fields (:inherit_stdin, :inherit_stdout, :inherit_stderr, :allow_http, :args, :env) and genuinely has no filesystem/preopen field -- confirms the artefact's claim that neither mode offers a lighter-weight filesystem-denial escape hatch. Other criteria: Decision heading reads 'Core modules.' naming exactly one choice with explicit rejection of a placeholder/either framing (line 40: 'This is not \"either is acceptable\"'). Section 3's four-export ABI restatement is internally consistent and buildable without further research -- the descriptor-pointer convention (8-byte little-endian (ptr,len) pair) is fully specified, and the implicit `alloc(i32)->i32` export requirement is explicitly flagged as a fifth mechanism requirement REQ-166 must validate. Section 4's WASI Preview 1 path_open signature was independently reconstructed from the real WITX definition (fd:i32, dirflags:i32, path ptr+len:i32+i32, oflags:i32, fs_rights_base:i64, fs_rights_inheriting:i64, fdflags:i32, result-fd out-ptr:i32 -> errno:i32) -- exactly 9 params as `i32 i32 i32 i32 i32 i64 i64 i32 i32`, matching the artefact's cited signature precisely; this is a real, non-invented WASI Preview 1 import. Section 5's numeric mapping (integer->i64, float->f64, out-of-i64-range integers fail closed, null carried via JSON absence) does not contradict REQ-150 section 2's no-value-based-coercion rule -- it extends it consistently for the one representational ceiling (i64 width) that REQ-150's BEAM-native rule does not have. git diff --stat main...HEAD confirms only the two handoff JSON files and lib/letflow/design/req163-wasm-abi-choice.md changed -- no mix.exs, no lib/letflow/engine/ file touched. mix letflow.lint_handoffs run with 0 new violations (25 pre-existing grandfathered, unrelated to this run).",
+    "artifacts_out": [
+      "lib/letflow/design/req163-wasm-abi-choice.md"
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step01-WF02-REQ163-20260828",
+  "run_id": "WF02-REQ163-20260828",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ163-20260828/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-163"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md",
+      "docs/migration/decisions/"
+    ],
+    "branch_name": "feature/WF02-REQ163-20260828",
+    "commit": "0106cc9"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-163: settle OQ-4 -- WASM core modules vs. the component model. Read docs/requirements.yaml's REQ-163 entry in full (search '- id: REQ-163') -- the queue task's full description and 7 real acceptance criteria are there verbatim. This is a DECISION-ONLY requirement: no mix.exs change, no lib/letflow/engine/ edit. IMPORTANT: wasmex is NOT currently a dependency of this project (confirmed: grep for 'wasmex' in mix.exs/mix.lock returns nothing) -- there is no deps/wasmex/ to read directly, unlike the deps/lua research this session's other designs relied on. You must research wasmex's REAL, PUBLISHED API surface for the version Letflow would adopt (check hex.pm for the current/latest stable wasmex release, its README/docs, and its Elixir module documentation on hexdocs.pm) using WebFetch/WebSearch, and QUOTE what you found (exact API names, exact version number, exact date accessed) -- never infer support for a mode from the mere existence of an option name like :wasm_component_model on Wasmex.EngineConfig. Read docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md's 'Ownership of execution' section for OQ-4's exact framing and why it blocks the WASM half. Read R-Co/src/wasm/wasmtime_bindings.zig's header (via the R-Co source path referenced in CLAUDE.md, c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\ -- if that path is not reachable from this environment, note that and rely on the requirement text's own quote of the header, which is already given verbatim in the queue task description) to confirm the 'deferred to Stage 10' disclosure and that R-Co's own WASM code settles nothing -- the choice is Letflow's own, not a port. Determine whether this decision belongs in a new docs/migration/decisions/ record (if it settles policy beyond S5) or in lib/letflow/design/req163-wasm-abi-choice.md (if scoped to S5/this stage) -- state which and why, per the requirement's own instruction. Restate WASM-02's four-export ABI (init, execute, deinit, get_capabilities) into the chosen mode's concrete contract in enough detail that a future REQ-166 implementation requirement could build against it without improvising. Name the exact import-denial surface REQ-167's test must target under the chosen mode (WASM-07's literal 'wasi:filesystem/types' is component-model-specific -- if core modules is chosen, name the real equivalent). State how the chosen ABI represents values REQ-150's number-marshalling rule governs, so WASM-12's parity requirement has a defined mapping. This document may need to describe wire/ABI shapes as prose/tables rather than Elixir code, mirroring the zero-literal-code discipline other design docs this session have followed, though this is an architectural decision record, not a code design -- some Wasm-level type signatures (i32/i64/f32/f64, WIT interface types) may be necessary as prose descriptions, not Elixir @spec, since no Elixir module is being designed here.",
+    "acceptance_criteria": [
+      "The artefact names exactly one choice -- core modules or the component model -- as a Decision heading, with no 'either' fallback.",
+      "The artefact quotes real evidence of what the wasmex version Letflow would adopt supports for the chosen mode (read from hex.pm/hexdocs.pm's published API surface for the current stable release, with the source URL/version/date named), rather than inferring support from the :wasm_component_model option's existence.",
+      "The artefact restates WASM-02's four-export ABI (init, execute, deinit, get_capabilities) into the chosen mode's concrete contract, in enough detail that REQ-166 implements against it without improvising.",
+      "The artefact names the exact import surface REQ-167 must assert a filesystem denial against under the chosen mode, replacing WASM-07's component-model-specific 'wasi:filesystem/types' where that is not the chosen mode.",
+      "The artefact states how the chosen ABI represents the values REQ-150's number-marshalling rule governs, so WASM-12's parity requirement has a defined mapping.",
+      "The artefact cites R-Co/src/wasm/wasmtime_bindings.zig's 'deferred to Stage 10' header and states that R-Co's stub code settles nothing here, so the choice is Letflow's own and not a port.",
+      "No mix.exs change and no file under lib/letflow/engine/ is modified, confirmed by git diff --stat scoped to this run's commits."
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "artifacts_out": [
+      "lib/letflow/design/req163-wasm-abi-choice.md"
+    ],
+    "summary": "Decision: WASM plugin ABI targets wasmex's core-module calling convention, not the component model. Grounded in wasmex v0.15.1 published docs (hex.pm, released 2026-08-07; wasmex.hexdocs.pm, accessed 2026-08-28): core modules are wasmex's original, non-beta surface (Wasmex.start_link/1, Wasmex.call_function/3,4, valid types :i32/:i64/:v128/:f32/:f64 quoted from Wasmex.html); Wasmex.Components is explicitly documented as 'beta quality' and Wasmex.Wasi.WasiP2Options has no filesystem field at all. Artefact placed at lib/letflow/design/req163-wasm-abi-choice.md (not a new docs/migration/decisions/ record) because the choice operates entirely inside decision 0014's already-settled premise and nothing outside S5 depends on it -- same precedent as REQ-150/OQ-6. Restates WASM-02's four exports (init, execute, deinit, get_capabilities) as concrete core-module function types plus one implicit `alloc` export the variable-length-return descriptor convention requires, all built on wasmex's linear-memory model. Names the exact REQ-167 denial surface: the wasi_snapshot_preview1 import namespace (e.g. path_open) is never resolved because Letflow's host supplies no WasiOptions, so a filesystem-importing module fails instantiation and must be rejected AT REGISTRATION, mirroring WASM-02's own rejection discipline. Maps REQ-150 section 2's numeric rule onto :i64 (integer) / :f64 (float), flagging the one representational gap Lua/BEAM doesn't have -- integers outside i64's 64-bit range must fail closed, not truncate -- for REQ-171/REQ-172 to handle explicitly. Cites R-Co's wasmtime_bindings.zig 'deferred to Stage 10' header via decision 0014's existing verified quote (the R-Co path at c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\ is not reachable from this Linux sandbox) and states the choice is Letflow's own. No mix.exs change, no lib/letflow/engine/ change -- confirmed via git diff --stat.",
+    "ready_for": "CODE-DESIGN-VALIDATOR"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "handoff_id": "WF02-REQ172-20260828-step01",
+  "run_id": "WF02-REQ172-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "docs/requirements.yaml#REQ-172",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": "Queue task 324, GH#624, stage S5. Feature branch feature/WF02-REQ172-20260828 created off main at b49fd7f. Prior sibling REQ-171 (read path) shipped lib/letflow/engine/wasm/host_api.ex, gate modules module_registry.ex, capability_gate.ex, memory_guard.ex, resource_limits.ex, call_timeout.ex, plugin_handler.ex -- all read directly by REQ-171's own CODE-DESIGNER/ELIXIR-DEV passes, read them again here. Lua side (the definition WASM must conform to, decision 0014 Decision (4)) is lib/letflow/engine/lua/platform.ex: write_variable, call_service, and fail semantics established by REQ-160/REQ-161 -- read those implementations and their own test files in full before designing.",
+  "task": {
+    "description": "Produce the design artefact (lib/letflow/design/req172-wasm-host-api-write-path-and-parity-suite.md or similar) for REQ-172: WASM host API 2/2 -- write_variable, call_service, and fail on the WASM side at parity with Lua's REQ-160/REQ-161, PLUS a shared Lua/Wasm parity test-scenario harness that is executed against both executors (WASM-12's own acceptance criterion -- one scenario run against both, not two separate suites that merely look similar). Design must specify: (1) write_variable's staging/atomic-apply-on-success/discard-on-every-failure-arm semantics (guest trap, REQ-169 fuel exhaustion, REQ-169 memory cap, REQ-170 wall-clock timeout, and fail) -- name the exact mechanism used to stage writes and roll them back; (2) call_service returning a structured error to the guest on service failure (never trapping) while a missing capability (REQ-167) still fails outright -- these two paths must be designed as distinctly different; (3) fail terminating via a mechanism the guest cannot intercept or catch, the WASM analogue of REQ-161's uninterceptable termination; (4) the shared parity harness's shape -- a single named module or fixture holding one scenario definition per host function, executed against both the Lua executor and the WASM handler, structured so a future host function addition is forced to add a parity case rather than being able to skip it; (5) explicit interface/@spec-level design only, no implementation code. Design MUST NOT modify or propose modifying any Lua host-API implementation file (lib/letflow/engine/lua/platform.ex or sibling Lua files) -- Lua is the definition per decision 0014 Decision (4); any semantic conflict discovered is a finding to raise in the design doc, not grounds to alter Lua behaviour. Any semantic difference between the Lua and WASM sides that is not purely ABI (string encoding, return shape) must be enumerated explicitly with justification, or fixed.",
+    "acceptance_criteria": [
+      "ONE shared scenario definition is executed against BOTH the Lua executor and the WASM handler, asserting identical observable outcomes -- WASM-12's own acceptance criterion -- rather than two separately written suites; the shared harness is a single named module or fixture, quoted in the moduledoc",
+      "a test asserts a guest that writes variables and then FAILS leaves instance variable state unchanged, asserted separately for each failure arm: a guest trap, fuel exhaustion (REQ-169), memory cap (REQ-169), wall-clock timeout (REQ-170), and fail",
+      "a test asserts a guest that writes several variables and succeeds applies all of them with no observable partial state",
+      "a test asserts call_service returns a structured error to the guest on service failure rather than trapping, and a separate test asserts a missing service capability fails per REQ-167 -- the two behaviours asserted distinctly",
+      "a test asserts a guest that attempts to catch or ignore its own fail STILL yields a failed outcome and does not run to completion -- the WASM analogue of REQ-161's uninterceptable-termination test",
+      "any semantic difference between the Lua and WASM host APIs that is not purely ABI (string encoding, return shape) is enumerated explicitly in the moduledoc with its justification; the moduledoc states that WASM-12 limits differences to ABI, so an unlisted one means the requirement is unmet",
+      "the moduledoc states that the Lua host API is the definition WASM conforms to per decision 0014 Decision (4), and that no Lua-side behaviour was changed to ease parity; confirmed by `git diff --stat` scoped to this requirement's commits showing no Lua host-API implementation file modified",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

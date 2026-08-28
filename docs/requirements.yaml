@@ -8453,7 +8453,7 @@ requirements:
   - id: REQ-167
     title: WASM import whitelist derived from the manifest, and filesystem access denied by default (WASM-06, WASM-07 restated)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 319  # letflow-queue task id
     description: >

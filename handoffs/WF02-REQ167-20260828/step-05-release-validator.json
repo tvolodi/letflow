@@ -1,0 +1,57 @@
+{
+  "handoff_id": "step05-WF02-REQ167-20260828",
+  "run_id": "WF02-REQ167-20260828",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ167-20260828/step-05-release-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-167"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ167-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ167-20260828/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ167-20260828/step-02d-reviewer.json",
+      "handoffs/WF02-REQ167-20260828/step-03-test-designer.json",
+      "handoffs/WF02-REQ167-20260828/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ167-20260828/step-04-test-runner.json"
+    ],
+    "branch_name": "feature/WF02-REQ167-20260828",
+    "commit": "78d4101"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR pass (WF-02 Step 5) for REQ-167 (queue task 319, GH#619). Independently re-derive that every one of REQ-167's real acceptance criteria in docs/requirements.yaml is genuinely met -- do not trust any prior step's self-report, re-run and re-check yourself. All prior gates (design, security, reviewer, test-design-validator, test-runner) have passed; your job is the final independent cross-check before DOC-UPDATER flips status to done. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching commands.",
+    "acceptance_criteria": [
+      "Re-read REQ-167's full entry in docs/requirements.yaml and independently map each real AC to the shipped code (lib/letflow/engine/wasm/capability_gate.ex) and its tests -- do not just re-read prior handoffs' claims.",
+      "Re-run mix test test/letflow/engine/wasm/ yourself, quote real output.",
+      "Re-run mix compile --warnings-as-errors yourself, quote real output.",
+      "Confirm no scope creep beyond what REQ-167 authorized (cross-check git diff --stat main...HEAD against owned_modules in the handoffs) -- module_registry.ex and plugin_handler.ex must be untouched.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS -- REQ-167's 7 real acceptance criteria in docs/requirements.yaml independently re-verified against shipped code and re-run test/compile output, not against prior handoffs' claims.",
+    "summary": "Independently re-read REQ-167's full entry in docs/requirements.yaml (7 ACs) and mapped each to lib/letflow/engine/wasm/capability_gate.ex and test/letflow/engine/wasm/capability_gate_test.exs: AC1 (var:read-only manifest fails to instantiate importing platform_call_service) -> 'AC1' describe block, start_instance/2's Task.Supervisor.async_nolink + classify_crash path. AC2 (import table built as a genuine whitelist, inspected structurally not via invoke-and-catch) -> 'AC2' describe block asserting Map.has_key?/refute directly on build_import_table/1's output, including the exact %{} vs namespace-present-but-empty distinction. AC3 (req163-named filesystem surface rejected under the chosen ABI) -> 'AC3' describe block against req167_path_open.wat asserting rejection of wasi_snapshot_preview1::path_open under both an empty and a fully-granted manifest. AC4 (moduledoc states wasi:filesystem/types is NOT the tested surface, names path_open/wasi_snapshot_preview1 instead, explains the false-pass reasoning) -> moduledoc 'AC4' section, verified present verbatim by reading lib/letflow/engine/wasm/capability_gate.ex directly (not just the doctest assertions) and cross-checked by the 'AC4' moduledoc-content test via Code.fetch_docs/1. AC5 (moduledoc states this restates WASM-07, citing req163-wasm-abi-choice.md) -> moduledoc 'WASM-07 restatement' section + 'AC5' test. AC6 (moduledoc states plainly whether a filesystem-grant path exists today) -> moduledoc 'AC6' section stating no such path exists, and the corresponding test. AC7 (mix test / mix compile --warnings-as-errors both pass, real output quoted) -> re-run myself, see below. Re-ran `export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" && WASMEX_BUILD=true mix test test/letflow/engine/wasm/` myself (not reused from TEST-RUNNER's report): 'Running ExUnit with seed: 242186, max_cases: 16 ... Finished in 0.4 seconds (0.00s async, 0.4s sync) ... Result: 48 passed', 0 failures (two pre-existing, REQ-167-unrelated type-warning notes on module_registry_test.exs's FunctionClauseError guard tests, not errors, not new). Re-ran `export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" && WASMEX_BUILD=true mix compile --warnings-as-errors --force` myself: 'Compiling 132 files (.ex) ... Generated letflow app' -- clean, zero warnings, zero errors. Scope-creep check: `git diff --stat main...HEAD` shows exactly lib/letflow/design/req167-wasm-import-whitelist.md (new design doc), lib/letflow/engine/wasm/capability_gate.ex (new, 292 lines), 4 new priv/wasm_fixtures/req167_*.wat fixtures, test/letflow/engine/wasm/capability_gate_test.exs (new), test/specs/REQ-167.md (new), lib/letflow/application.ex (+12/-1, adding only a new CapabilityGateTaskSupervisor child spec, justified by and consistent with the design doc's §2.2), and this run's own handoff files. Confirmed via targeted `git diff --stat main...HEAD -- lib/letflow/engine/wasm/module_registry.ex lib/letflow/engine/wasm/plugin_handler.ex` that both are UNTOUCHED (empty diff) -- matches the moduledoc's own stated scope boundary and owned_modules in the elixir-dev/reviewer handoffs. No scope creep found. Ran `mix letflow.lint_handoffs`: 'OK -- 0 new violations across 1238 handoff files (25 pre-existing grandfathered, traced to ISS-0190)' -- all flagged items are pre-existing WF03-ISS* entries unrelated to this run; none touch WF02-REQ167-20260828. Verdict: all 7 real ACs genuinely met by the shipped code and independently reproduced test/compile output. REQ-167 is safe for DOC-UPDATER to mark done.",
+    "acceptance_criteria_verified": [
+      "AC1 (WASM-06 instantiation-fail acceptance criterion) -- re-run test passes, structured {:instantiation_denied, {:unresolved_import, ...}} confirmed, no calling-process crash",
+      "AC2 (whitelist built from manifest, inspected structurally) -- re-run tests pass, including the exact-empty-map precision test",
+      "AC3 (req163-named filesystem surface rejected) -- re-run tests pass against wasi_snapshot_preview1::path_open under both empty and fully-granted manifests",
+      "AC4 (moduledoc: wasi:filesystem/types not the tested surface, names path_open instead, explains false-pass reasoning) -- verified present in capability_gate.ex moduledoc directly and via re-run doc-content test",
+      "AC5 (moduledoc: restates WASM-07, cites req163-wasm-abi-choice.md) -- verified present, re-run test passes",
+      "AC6 (moduledoc states plainly no filesystem-grant path exists today) -- verified present, re-run test passes",
+      "AC7 (mix test + mix compile --warnings-as-errors both pass) -- both independently re-run, real output quoted above: 48 tests passed 0 failures; compile clean with --warnings-as-errors"
+    ],
+    "scope_check": "git diff --stat main...HEAD -- lib/letflow/engine/wasm/module_registry.ex lib/letflow/engine/wasm/plugin_handler.ex is empty -- both untouched, as REQ-167 and its owning handoffs require. application.ex's +12/-1 is limited to registering the new CapabilityGateTaskSupervisor child.",
+    "commands_run": [
+      "export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" && WASMEX_BUILD=true mix test test/letflow/engine/wasm/  -> 48 tests, 0 failures",
+      "export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" && WASMEX_BUILD=true mix compile --warnings-as-errors --force  -> clean, no warnings/errors",
+      "git diff --stat main...HEAD",
+      "git diff --stat main...HEAD -- lib/letflow/engine/wasm/module_registry.ex lib/letflow/engine/wasm/plugin_handler.ex  -> empty",
+      "mix letflow.lint_handoffs  -> OK, 0 new violations"
+    ]
+  }
+}

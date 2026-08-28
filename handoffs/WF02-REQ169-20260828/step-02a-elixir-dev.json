@@ -1,0 +1,53 @@
+{
+  "handoff_id": "step02a-WF02-REQ169-20260828",
+  "run_id": "WF02-REQ169-20260828",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ169-20260828/step-02a-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-169"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req169-wasm-fuel-and-memory-cap.md",
+      "lib/letflow/engine/wasm/memory_guard.ex"
+    ],
+    "branch_name": "feature/WF02-REQ169-20260828"
+  },
+  "task": {
+    "description": "Implement REQ-169 strictly per the APPROVED design at lib/letflow/design/req169-wasm-fuel-and-memory-cap.md (passed CODE-DESIGN-VALIDATOR clean, no rework). Read the full design doc before writing any code -- it is unusually detailed. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching mix commands.\n\nIMPORTANT (caught during CODE-DESIGN-VALIDATOR's own live verification, not in the design doc's prose, so read this carefully): Wasmex.Store.new/2's real argument order is (store_limits, engine) -- verify this yourself against deps/wasmex/lib/wasmex/store.ex before calling it; do not assume the order from the design doc's prose citation alone.\n\nSteps: (1) Create lib/letflow/engine/wasm/resource_limits.ex implementing Letflow.Engine.Wasm.ResourceLimits per design section 4 exactly: config()/build_defect()/arm_fuel_defect()/call_classification() types; build_store/1 (builds a Wasmex.Engine with consume_fuel: true always, never configurable per section 2 item 1, plus a Wasmex.Store built against that engine and a StoreLimits from config.memory_cap_bytes/table_elements_cap); arm_fuel/2 (thin wrapper over Wasmex.StoreOrCaller.set_fuel/2, translating its {:error, binary()} into {:error, {:fuel_not_configured, reason}} -- MUST be documented/designed to be called immediately before every single invocation, never once at Store-creation time, per section 1.2/section 4's contract); classify_call_result/1 (pure classification of an already-completed Wasmex.call_function/4 result via substring match on 'all fuel consumed by WebAssembly' -> :fuel_exhausted, other {:error,_} -> {:trap, reason}, anything else -> :ok); memory_grew_within_cap?/3 (pure arithmetic comparison, no Wasmex dependency). (2) Create the three new fixtures per design section 5.1 exactly: priv/wasm_fixtures/req169_hang.wat, req169_counting.wat, req169_grow.wat. (3) Do NOT add a new Task.Supervisor -- design section 3 explicitly states none is needed since ResourceLimits never calls Wasmex.start_link/1 itself; tests that need a running guest instance dispatch through the existing Letflow.Engine.PluginTaskSupervisor. (4) Do NOT modify module_registry.ex, capability_gate.ex, plugin_handler.ex, or memory_guard.ex. (5) Write the moduledoc content per design section 6 EXACTLY, including the explicit divergence statement (WASM-10's literal 'MUST TRAP' wording does not match live-verified behavior -- memory.grow beyond the cap returns an ordinary success, not a trap; the underlying security property still holds).",
+    "owned_modules": [
+      "lib/letflow/engine/wasm/",
+      "test/letflow/engine/wasm/",
+      "priv/wasm_fixtures/",
+      "lib/letflow/design/req169-wasm-fuel-and-memory-cap.md",
+      "test/specs/REQ-169.md"
+    ],
+    "acceptance_criteria": [
+      "AC1: a test asserts an infinite-loop guest terminates within its configured fuel budget rather than hanging (design section 5.2 test 1).",
+      "AC2: a test asserts fuel is reset per invocation -- two consecutive invocations each get the full budget (design section 5.3, using the counting fixture's exact-equality assertion, not just 'roughly equal').",
+      "AC3: a test asserts a guest attempting to grow linear memory beyond the cap -- tested per the design's HONEST behavior (design section 5.4): the call returns {:ok, [-1]} as an ordinary success (stated as such in the test's own comment, not miscast as an error), and real memory size is unchanged before/after, confirmed via memory_grew_within_cap?/3 returning :within_cap.",
+      "AC4: both fuel budget and memory cap are configurable, with a test driving two different values for each and asserting the tighter one binds sooner (design section 5.5).",
+      "AC5: a test asserts fuel metering is actually enabled -- both the positive case (section 5.2 test 1, a loop that traps proves fuel was live) and the negative canary (section 5.2 test 2, arm_fuel/2 against a consume_fuel:false-built store returns {:error, {:fuel_not_configured, _}}).",
+      "AC6: fuel exhaustion and memory-cap trap surface as errors distinguishable by pattern match from each other and from a future wall-clock timeout (design section 5.6).",
+      "AC7: the moduledoc-content test confirms the divergence statement is present (design section 5.7).",
+      "AC8: mix test and mix compile --warnings-as-errors both pass, real output quoted.",
+      "Run mix format on every file you write/edit before finishing -- a prior run's PR (REQ-167) failed CI on this exact check; run it proactively this time."
+    ]
+  },
+  "result": {
+    "status": "DONE",
+    "summary": "Implemented Letflow.Engine.Wasm.ResourceLimits (lib/letflow/engine/wasm/resource_limits.ex) exactly per the approved design (lib/letflow/design/req169-wasm-fuel-and-memory-cap.md): build_store/1 (Wasmex.Engine with consume_fuel: true always, Wasmex.Store.new/2 called in its real (store_limits, engine) argument order -- verified directly against deps/wasmex/lib/wasmex/store.ex:44-53 before writing any code, contradicting the design doc's own prose citation exactly as the handoff warned), arm_fuel/2 (thin StoreOrCaller.set_fuel/2 wrapper, structured {:error, {:fuel_not_configured, reason}}), classify_call_result/1 (pure substring classification: 'all fuel consumed by WebAssembly' -> :fuel_exhausted, other {:error,_} -> {:trap, reason}, else :ok), and memory_grew_within_cap?/3 (pure arithmetic, no Wasmex dependency). Moduledoc carries the WASM-10 divergence statement verbatim in substance (memory.grow beyond the cap returns an ordinary {:ok, [-1]} success, never a trap; the underlying security property still holds because StoreLimits.memory_size physically bounds real memory growth). Added the three WAT fixtures (priv/wasm_fixtures/req169_hang.wat, req169_counting.wat, req169_grow.wat) verbatim per design section 5.1. Added test/letflow/engine/wasm/resource_limits_test.exs (9 tests, all passing) covering AC1-AC7: fuel-bounded infinite loop + fuel-enabled canary (AC1/AC5), exact-equality fuel reset across two invocations via the counting fixture (AC2), the HONEST memory-cap behavior per design section 5.4 -- grow-beyond-cap asserted as an ordinary {:ok, [-1]} success (explicitly commented as NOT an error), with real memory size unchanged and memory_grew_within_cap?/3 returning :within_cap (AC3), tighter-binds-sooner for both fuel and memory-cap knobs (AC4), three-way pattern-match distinguishability from fuel/trap/future-timeout shapes (AC6), and a moduledoc-content test for the divergence statement (AC7). Did not touch module_registry.ex, capability_gate.ex, plugin_handler.ex, or memory_guard.ex, and added no new Task.Supervisor -- tests dispatch guest calls through the existing Letflow.Engine.PluginTaskSupervisor, mirroring plugin_handler_test.exs/memory_guard_test.exs precedent. mix format run on both new files before every compile/test pass. `mix compile --warnings-as-errors`: clean, no output/warnings. `mix test test/letflow/engine/wasm/resource_limits_test.exs`: 'Result: 9 passed'. Full suite `mix test` (run solo, to completion, ~673s): 'Result: 2366 passed (5 properties, 2361 tests), 3 excluded' -- 0 failures (an earlier run showed 4 spurious failures caused by two concurrent mix test invocations colliding on the shared Postgres connection/tenant-schema state; a clean solo re-run confirms 0 real failures). `mix letflow.lint_handoffs`: 'OK -- 0 new violations across 1256 handoff files (25 pre-existing grandfathered, traced to ISS-0190)'. Committed to feature/WF02-REQ169-20260828; not pushed, merged, or self-approved -- routes next to SECURITY-REVIEWER and REVIEWER per WF-02 Steps 2b/2c.",
+    "artifacts_out": [
+      "lib/letflow/engine/wasm/resource_limits.ex",
+      "priv/wasm_fixtures/req169_hang.wat",
+      "priv/wasm_fixtures/req169_counting.wat",
+      "priv/wasm_fixtures/req169_grow.wat",
+      "test/letflow/engine/wasm/resource_limits_test.exs"
+    ]
+  }
+}

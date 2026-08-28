@@ -1,0 +1,61 @@
+{
+  "handoff_id": "step01b-WF02-REQ169-20260828",
+  "run_id": "WF02-REQ169-20260828",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ169-20260828/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-169"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ169-20260828/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req169-wasm-fuel-and-memory-cap.md",
+      "test/specs/REQ-169.md"
+    ],
+    "branch_name": "feature/WF02-REQ169-20260828"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR hard gate (WF-02 Step 1b) on REQ-169's design (lib/letflow/design/req169-wasm-fuel-and-memory-cap.md, test/specs/REQ-169.md). This design reports a genuine divergence: WASM-10's own acceptance-criterion wording ('Attempt to grow beyond cap MUST TRAP') does not match live-verified behavior -- memory.grow beyond StoreLimits.memory_size returns WASM's own standard -1 success sentinel, not a trap, while the underlying SECURITY property (real memory physically cannot exceed the cap) is confirmed to hold. Do not rubber-stamp this given the pipeline's now-consistent record of real findings on WASM designs (REQ-166's crash-propagation claim, REQ-168's SIGABRT hazard and false-transcript rework) -- independently verify the central claims yourself.",
+    "acceptance_criteria": [
+      "Independently reproduce section 1.1's fuel-exhaustion finding: enable consume_fuel, set a small fuel budget, run an infinite-loop guest, confirm it traps cleanly with '...all fuel consumed by WebAssembly...' rather than hanging or crashing.",
+      "Independently reproduce section 1.2's finding that fuel is NOT auto-reset between invocations (a guest starved by a prior call's leftover-zero fuel if arm_fuel/2 isn't called fresh) -- this is the load-bearing justification for AC2's design.",
+      "Independently reproduce section 1.3's finding that Wasmex.StoreOrCaller.set_fuel/2 itself cleanly fails with a distinguishable message when consume_fuel is false -- confirm this is genuinely a reliable canary, not a fluke.",
+      "Independently reproduce THE CENTRAL DIVERGENCE (section 1.6): confirm memory.grow beyond StoreLimits.memory_size returns {:ok, [-1]} (an ordinary success), not a trap or error, and separately confirm (section 1.5) that real physical memory size genuinely does not exceed the cap regardless. Both halves of this claim matter -- the divergence AND the underlying security property holding.",
+      "Confirm the design's response to the divergence (section 2 item 2-3, section 7) is sound: it does not fabricate a trap that doesn't exist, and its test strategy (section 5.4) asserts the real behavior with an explicit citation, not a silent redefinition of 'trap'.",
+      "Confirm the layered-defense argument (section 2 item 4) tying this design to REQ-168's MemoryGuard is accurate: does MemoryGuard's fresh-every-call Wasmex.Memory.size/2 fetch genuinely still catch a guest that computed an offset under a false assumption its memory.grow succeeded? Reason through this carefully, don't just accept the citation.",
+      "Confirm the module-location decision (new Letflow.Engine.Wasm.ResourceLimits, no new Task.Supervisor) is justified given it never calls Wasmex.start_link/1 itself.",
+      "Confirm the moduledoc content (section 6) accurately states the divergence and does not overclaim or underclaim what was found.",
+      "Confirm test/specs/REQ-169.md and section 5's test strategy are internally consistent with section 1's live findings.",
+      "Full traceability table covers every real REQ-169 acceptance criterion from docs/requirements.yaml.",
+      "Zero literal Elixir implementation code in the design doc.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified every live-claim in lib/letflow/design/req169-wasm-fuel-and-memory-cap.md against the real installed wasmex v0.15.1 (WASMEX_BUILD=true, PluginTaskSupervisor-bounded probes, own script written fresh, not a re-run of the design's own scratch/req169_fuel_memory_probe.exs). All central claims reproduced exactly, including exact wasmtime error strings.",
+    "independent_verification": [
+      "S1.1: enabled consume_fuel, set_fuel(store,1000), infinite-loop guest -> {:ok,{:error,\"Error during function excecution (wasm trap: all fuel consumed by WebAssembly): ...\"}}. Control (consume_fuel:false, no wasmex-level timeout) genuinely never returns within a 3s outer bound (nil/timeout). Matches design exactly.",
+      "S1.2: three consecutive calls, same Store. Call1 traps (fuel exhausted). get_fuel immediately after -> {:ok,0}. Call2 without re-arming traps again but at a different (smaller) backtrace offset than call1/call3 -- i.e. it was starved by leftover zero fuel, exactly as claimed. Call3 after a fresh set_fuel(store,1000) traps at the SAME backtrace offset as call1 (0x21 both times), proving the budget was genuinely and exactly restored. Confirms S1.2's finding precisely, including the 'not merely some fuel but the full budget' detail.",
+      "S1.3: Engine{consume_fuel:false} -> Store.new -> set_fuel/2 returns {:error,\"Could not set fuel: fuel is not configured in this store\"}, get_fuel/2 returns the get-variant of the same message. Exact match, distinguishable from the fuel-exhaustion trap string (no overlap).",
+      "S1.5/S1.6 (the central divergence): StoreLimits{memory_size: 2 pages}, guest at 1 page. grow_by(1) -> {:ok,[1]}, real size 65536->131072 (reached cap exactly). grow_by(5) immediately after -> {:ok,[-1]} (NOT an error, NOT a trap) and real memory size measured before/after that call is IDENTICAL (131072 both times) -- the growth attempt left zero trace. Control: identical grow_by(5) against a Store with no StoreLimits succeeds ({:ok,[1]}, size grows to 393216 = 6 pages), proving the cap and not some fixture defect caused the capped case's rejection. Crash-shape claim (initial declared memory 3 pages vs 1-page cap) also reproduced verbatim: {:exit,{{:badmatch,{:error,\"memory minimum size of 3 pages exceeds memory limits\"}}, [{Wasmex,:init,1,...}, {:gen_server,:init_it,...}]}} -- word-for-word the message the design quotes, and the same GenServer.init/1-triggers-a-linked-exit shape. Also independently verified the guest-authored unreachable-on--1 case (not explicitly required but strengthens confidence): -1-returning grow followed by guest code checking it and executing `unreachable` DOES produce a real trap, 'wasm trap: wasm `unreachable` instruction executed', textually distinct from the fuel-exhaustion string (no 'fuel' substring) -- confirms this is guest-cooperative, not host-forced, exactly as S1.6 states.",
+      "One incidental finding during independent verification, NOT a design defect: Wasmex.Store.new/2's real argument order is (store_limits, engine) per deps/wasmex/lib/wasmex/store.ex -- my own first probe draft called it in the wrong order and got an UndefinedFunctionError (arity/argument mismatch), which I fixed in my own script before treating any result as evidence. The design document itself never asserts a specific Store.new/2 argument order in prose (only cites 'Wasmex.Engine.new/1, Wasmex.Store.new/2' by name at line 352), so this is not something to hold the design to -- ELIXIR-DEV will need to get the argument order right during implementation, which is a normal implementation-detail risk this design's @spec-only nature does not eliminate, not a gap in the design artefact."
+    ],
+    "reasoning_checks": [
+      "Layered-defense argument (S2 item 4, tying to REQ-168 MemoryGuard): read lib/letflow/engine/wasm/memory_guard.ex directly -- read/4 and write/4 both call Wasmex.Memory.size(store, memory) fresh on every invocation (lines 137, 161), never cached, matching the design's citation. Reasoned through the scenario: a guest whose memory.grow returned -1 but which ignores the sentinel and computes a host-function pointer/length pair assuming the grow succeeded will have that pointer/length checked by check_bounds/3 against the REAL (unchanged, still-capped) memory_size -- so it is rejected. The design correctly scopes this claim to host-function-mediated access; the guest's OWN direct i32.load/i32.store at an out-of-bounds offset is caught independently by Wasmtime's own bounds checking (real memory did not grow), which the design does not need to invoke MemoryGuard for. Sound.",
+      "Module-location decision: confirmed via S4's public contract that build_store/1 returns {:ok, {Engine, StoreOrCaller}} and neither arm_fuel/2 nor classify_call_result/1 nor memory_grew_within_cap?/3 calls Wasmex.start_link/1 -- consistent with S3's stated scope boundary. No new Task.Supervisor is justified.",
+      "Moduledoc (S6): cross-checked against S1's findings -- states fuel behaves as documented (true per S1.1-1.4), states the memory-cap divergence in full (does NOT trap, returns -1, guest continues normally) and states the security property is unaffected -- matches S1.5/S1.6 findings with neither overclaim nor underclaim. Also correctly attributes the divergence to WASM-10's restatement, not to decision 0014's underlying evidence ('Growing... will fail'), which is itself accurate.",
+      "test/specs/REQ-169.md T3 explicitly asserts the {:ok,[-1]} success shape and unchanged memory size, with an explicit warning banner not to 'fix' T3 to assert a trap -- internally consistent with design S1.6/S2 item 3/S5.4/S7. No test anywhere in the spec asserts a trap for the memory-cap case.",
+      "Traceability table (S9) checked against docs/requirements.yaml REQ-169's actual 8 acceptance_criteria (lines 8596-8603 as currently in the file) -- all 8 map 1:1 to design elements and planned tests, verbatim-quoted correctly.",
+      "Design doc scanned for literal Elixir bodies: only one `defmodule ... end` skeleton (S4) containing exclusively @type/@spec/@doc declarations, no `def ... do ... end` function bodies anywhere; WAT text blocks are not Elixir. Zero implementation code confirmed."
+    ],
+    "verdict": "PASS. No blocking defect found. Every live-verification claim in section 1 reproduced independently, exactly, including exact error-message text. The divergence is genuine (confirmed, not fabricated), the design's response to it is honest (no invented trap, no silent test-spec mismatch), the layered-defense reasoning holds up under independent scrutiny, and there is zero implementation code in the artefact. Cleared for WF-02 Step 2 (ELIXIR-DEV implementation)."
+  }
+}

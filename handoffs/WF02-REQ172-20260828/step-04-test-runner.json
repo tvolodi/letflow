@@ -8,7 +8,9 @@
   "file": "test/letflow/engine/wasm/host_api_write_test.exs",
   "status": "PENDING",
   "priority": "normal",
-  "context": "Queue task 324, GH#624, stage S5. TEST-DESIGN-VALIDATOR PASSED (hard gate) with independent mutation re-verification. mix test test/letflow/engine/wasm/ test/letflow/engine/lua/ reported 385 passed, 7 excluded. Full suite via scripts/test_parallel.sh reported 2430/2434 passed, 4 failures all structurally cleared as pre-existing/environmental (none of the failing files/modules appear in git diff --name-only main...HEAD; two are rust-toolchain-absent sandbox artifacts). :wasm_hang isolated subprocess run separately verified clean (7 passed, 0 failures).",
+  "context": {
+    "note": "Queue task 324, GH#624, stage S5. TEST-DESIGN-VALIDATOR PASSED (hard gate) with independent mutation re-verification. mix test test/letflow/engine/wasm/ test/letflow/engine/lua/ reported 385 passed, 7 excluded. Full suite via scripts/test_parallel.sh reported 2430/2434 passed, 4 failures all structurally cleared as pre-existing/environmental (none of the failing files/modules appear in git diff --name-only main...HEAD; two are rust-toolchain-absent sandbox artifacts). :wasm_hang isolated subprocess run separately verified clean (7 passed, 0 failures)."
+  },
   "task": {
     "description": "Run the full test suite exactly as CI will (mix letflow.check.test, or if unavailable in this environment, mix test followed by mix test --only wasm_hang as two separate invocations matching that task's two-stage contract) and diagnose any failure. Confirm the 4 previously-observed full-suite failures are genuinely pre-existing/environmental and not a regression introduced by this branch -- reproduce against main if needed to confirm. Report pass/fail with real output quoted.",
     "acceptance_criteria": [

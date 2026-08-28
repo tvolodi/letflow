@@ -8,7 +8,9 @@
   "file": "lib/letflow/design/req172-wasm-host-api-write-path-and-parity-suite.md",
   "status": "PENDING",
   "priority": "normal",
-  "context": "Queue task 324, GH#624, stage S5. Your last verdict PASSED the fail-uninterceptability mechanism (independently live-verified) and passed checks 4-7 in full; the ONLY defect was two blocks of literal implementation code (SS5.2, SS8.4) violating the design's own no-implementation-code rule. CODE-DESIGNER fixed exactly those two spans as commit d8a4dd3 (git diff --stat: 1 file, 11 insertions/14 deletions, both within SS5.2 and SS8.4) and touched nothing else.",
+  "context": {
+    "note": "Queue task 324, GH#624, stage S5. Your last verdict PASSED the fail-uninterceptability mechanism (independently live-verified) and passed checks 4-7 in full; the ONLY defect was two blocks of literal implementation code (SS5.2, SS8.4) violating the design's own no-implementation-code rule. CODE-DESIGNER fixed exactly those two spans as commit d8a4dd3 (git diff --stat: 1 file, 11 insertions/14 deletions, both within SS5.2 and SS8.4) and touched nothing else."
+  },
   "task": {
     "description": "Narrow re-check: confirm SS5.2 and SS8.4 are now prose-only (no standalone fenced code block of literal, runnable Elixir statements or ExUnit assertions), and confirm via `git diff --stat` / a scan that no other section changed since your last-reviewed commit 8106f3a. You already independently live-verified the mechanism itself and checks 4-7 last round -- do not re-do that full verification unless something in this diff makes you doubt it, but do sanity-check that the prose rewrite of SS5.2 didn't quietly drop or alter the ordering/identifiers your live repro confirmed (stash-before-exit, matching map shape) -- and that this narrow-scope fix is what you get.",
     "acceptance_criteria": [

@@ -8,7 +8,9 @@
   "file": "lib/letflow/engine/wasm/host_api.ex",
   "status": "PENDING",
   "priority": "normal",
-  "context": "Queue task 324, GH#624, stage S5. Your prior review (eed0e91) PASSED but did not catch that the moduledoc was missing AC6's 5 required non-ABI semantic-difference disclosures (design SS9) -- TEST-DESIGNER's mutation-tested suite caught this gap via 5 explicit moduledoc-completeness tests. ELIXIR-DEV fixed it as commit 0f206b7: moduledoc-only change, 46 insertions/0 deletions to lib/letflow/engine/wasm/host_api.ex, no other file touched, no logic changed. mix test test/letflow/engine/wasm/ test/letflow/engine/lua/ now reports 385 passed, 7 excluded (up from 380/385), with the 5 new AC6 tests passing by name.",
+  "context": {
+    "note": "Queue task 324, GH#624, stage S5. Your prior review (eed0e91) PASSED but did not catch that the moduledoc was missing AC6's 5 required non-ABI semantic-difference disclosures (design SS9) -- TEST-DESIGNER's mutation-tested suite caught this gap via 5 explicit moduledoc-completeness tests. ELIXIR-DEV fixed it as commit 0f206b7: moduledoc-only change, 46 insertions/0 deletions to lib/letflow/engine/wasm/host_api.ex, no other file touched, no logic changed. mix test test/letflow/engine/wasm/ test/letflow/engine/lua/ now reports 385 passed, 7 excluded (up from 380/385), with the 5 new AC6 tests passing by name."
+  },
   "task": {
     "description": "Narrow re-check: confirm commit 0f206b7 is genuinely moduledoc-only (git diff --stat / git show) with no logic change, confirm the 5 disclosures accurately reflect design SS9's actual content (not just satisfying the test's substring match superficially), and confirm this closes the decision-record-consistency gap your prior review missed. This is not a full fresh pass -- your prior review of the implementation logic, OTP idiom, scope, and take_staged_writes/0 deferral all stand.",
     "acceptance_criteria": [

@@ -1,0 +1,51 @@
+{
+  "handoff_id": "step05-WF02-REQ166-20260828",
+  "run_id": "WF02-REQ166-20260828",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ166-20260828/step-05-release-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-166"],
+    "issue_ids": ["ISS-0351"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ166-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ166-20260828/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ166-20260828/step-02d-reviewer.json",
+      "handoffs/WF02-REQ166-20260828/step-03-test-designer.json",
+      "handoffs/WF02-REQ166-20260828/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ166-20260828/step-04-test-runner.json"
+    ],
+    "branch_name": "feature/WF02-REQ166-20260828",
+    "commit": "637f631"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR pass (WF-02 Step 5) for REQ-166 (queue task 318, GH#618). Independently re-derive that every one of REQ-166's real acceptance criteria in docs/requirements.yaml is genuinely met -- do not trust any prior step's self-report, re-run and re-check yourself. All prior gates (design, security, reviewer, test-design-validator, test-runner) have passed; your job is the final independent cross-check before DOC-UPDATER flips status to done. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching commands.",
+    "acceptance_criteria": [
+      "Re-read REQ-166's full entry in docs/requirements.yaml and independently map each real AC to the shipped code (lib/letflow/engine/wasm/module_registry.ex) and its tests -- do not just re-read prior handoffs' claims.",
+      "Re-run mix test test/letflow/engine/wasm/ yourself, quote real output.",
+      "Re-run mix compile --warnings-as-errors yourself, quote real output.",
+      "Confirm ISS-0351 is a legitimate, narrow, out-of-scope-for-this-requirement finding and does not block REQ-166's own acceptance criteria from being considered met.",
+      "Confirm no scope creep beyond what REQ-166 authorized (cross-check git diff --stat main...HEAD against owned_modules in the handoffs).",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified REQ-166 (docs/requirements.yaml, awk-scoped read) end to end without trusting any prior step's self-report. AC-by-AC re-derivation against lib/letflow/engine/wasm/module_registry.ex (read in full) and test/letflow/engine/wasm/module_registry_test.exs (read in full): AC1 'missing execute rejected with structured error naming it' -> describe block 'AC1' (line 43) asserts {:error, {:invalid_abi, defects}} containing {:missing, \"execute\"}. AC2 'each other required export individually rejected' -> describe 'AC2' (line 57) has one test case per remaining required export (init, deinit, get_capabilities, alloc, memory) plus wrong-kind/wrong-signature variants. AC3 'rejection at registration, never invocation' -> describe 'AC3' (line 146): a non-conforming module never produces a registered_module() value (enforced structurally by @opaque + the module being the only construction site, confirmed by grep -- RegisteredModule{} appears nowhere outside module_registry.ex), an unresolved-import module is rejected at stage 2 before ever completing instantiation, and a stage-gating mutation-guard test proves stage 2 never runs when stage 1 already failed. AC4 'conforming module registers and is invocable' -> describe 'AC4' (line 189): returns {:ok, registered_module()} only after stage 2's real Wasmex.start_link/1 instantiation attempt actually succeeded (the module truly is invocable, not merely export-shaped), and the proving instance is confirmed not leaked via a live Wasmex-process-list diff. AC5 (moduledoc) -> module_registry.ex moduledoc cites req163-wasm-abi-choice.md sections 3.1/3.2/4 by name, lists all five required function exports plus memory, states the two-stage gate, and explicitly states core-modules-not-Components; test 'AC5' (line 338) asserts every one of these substrings is present via Code.fetch_docs/1 (not just eyeballed). AC6 (mix test / compile) -- re-run myself, not copied from TEST-RUNNER: `mix test test/letflow/engine/wasm/` = 'Result: 30 passed', 0 failures (matches TEST-RUNNER's own 30). `mix compile --force --warnings-as-errors` (forced full recompile, not relying on any cached build) = 'Compiling 131 files (.ex)' / 'Generated letflow app', zero warnings, exit 0. Additionally re-ran the full aggregated-partition suite myself via `scripts/test_parallel.sh` as a blocking foreground call (per RELEASE-VALIDATOR's no-background-wait rule) rather than trusting TEST-RUNNER ran it minutes earlier: 8/8 partitions exit 0, combined 2313 tests + 5 properties, 0 failures (2318/2318 passed) -- independently reproduces TEST-RUNNER's exact numbers. ISS-0351 checked directly (docs/issues/ISS-0351.yaml): narrow (Task.shutdown(:brutal_kill) doesn't reach the native Wasmtime dirty-NIF thread on the timeout path), severity MINOR, explicitly not yet tenant-exploitable because REQ-166 ships no tenant-facing upload/invocation path (confirmed true by reading module_registry.ex's own moduledoc 'Scope boundary' section: PluginHandler/PluginInterface are untouched), and explicitly deferred to whichever future requirement first wires a tenant-facing registration path -- none of REQ-166's own six acceptance_criteria depend on the timeout-kill's native-thread cleanup behavior, so ISS-0351 is legitimately out of scope for this requirement's gate and does not block it. Scope-creep check: `git diff --stat main...HEAD` (26 files) touches only lib/letflow/engine/wasm/module_registry.ex (new), lib/letflow/application.ex (14 lines -- re-read the diff directly: adds exactly one new sibling Task.Supervisor child per design section 2.2, nothing else changed), the req166 design doc, 11 new priv/wasm_fixtures/*.wat fixtures, the new test file, test/specs/REQ-166.md, docs/issues/ISS-0351.yaml, and this run's own handoffs/ directory -- no changes to lib/letflow/engine/wasm/plugin_handler.ex or lib/letflow/engine/plugin_interface.ex, consistent with every prior handoff's stated non-touch and with REQ-166's own 'NOT IN THIS REQUIREMENT' scope boundary (capability sandboxing/resource limits/host API/versioning all excluded). Prior gates (design validator, security reviewer, reviewer, test-design validator, test-runner) all independently re-verified rather than copied, and their own independent evidence (live test runs, live deps/wasmex source reads, live crash-propagation reproduction) is consistent with what I re-derived myself. Verdict: REQ-166's acceptance criteria are genuinely met. Cleared for DOC-UPDATER to flip docs/requirements.yaml status to done.",
+    "verified_independently": [
+      "mix test test/letflow/engine/wasm/ (own run): Result: 30 passed, 0 failures",
+      "mix compile --force --warnings-as-errors (own forced full recompile of 131 files): zero warnings, exit 0",
+      "scripts/test_parallel.sh (own blocking foreground run, N=8): 2313 tests + 5 properties, 0 failures, 2318/2318 passed -- matches TEST-RUNNER's independently-reported numbers",
+      "read lib/letflow/engine/wasm/module_registry.ex and test/letflow/engine/wasm/module_registry_test.exs in full and mapped every requirements.yaml AC to a specific describe/test block by line number",
+      "git diff --stat main...HEAD and git diff main...HEAD -- lib/letflow/application.ex read directly to confirm no scope creep beyond REQ-166's design",
+      "grep for RegisteredModule{} construction sites across lib/ and test/: exactly one, inside module_registry.ex itself",
+      "read docs/issues/ISS-0351.yaml in full and cross-checked its narrow/deferred framing against REQ-166's own acceptance_criteria and scope boundary",
+      "mix letflow.lint_handoffs (own run): 0 new violations across 1227 handoff files"
+    ]
+  }
+}

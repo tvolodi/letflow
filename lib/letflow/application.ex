@@ -49,7 +49,19 @@ defmodule Letflow.Application do
         # PluginTaskSupervisor above -- see Letflow.Engine.Lua.Executor's moduledoc
         # for why sharing it would conflate two independently-reasoned-about
         # subsystems. No other child depends on start order here.
-        {Task.Supervisor, name: Letflow.Engine.Lua.TaskSupervisor}
+        {Task.Supervisor, name: Letflow.Engine.Lua.TaskSupervisor},
+        # REQ-166: dedicated Task.Supervisor for ModuleRegistry.register/1's
+        # stage-2 real instantiation attempt (design
+        # req166-wasm-module-abi-validation.md §2.2/§1.5) -- an unresolved-import
+        # crash inside Wasmex.start_link/1 delivers a linked :EXIT signal to a
+        # non-trapping caller, so it must run inside a Task.Supervisor-owned
+        # async_nolink/2 task, never inline. Deliberately its own supervisor, not
+        # a reuse of PluginTaskSupervisor or Lua.TaskSupervisor -- module
+        # registration (once per upload, off any workflow-execution hot path) is
+        # an independent concern from both, per §2.2's reasoning (mirroring
+        # req155-lua-wallclock-kill.md §4.4's own precedent). No other child
+        # depends on start order here.
+        {Task.Supervisor, name: Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor}
       ] ++ http_child()
 
     # See https://hexdocs.pm/elixir/Supervisor.html

@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step02a-WF02-REQ166-20260828",
+  "run_id": "WF02-REQ166-20260828",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ166-20260828/step-02a-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-166"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req166-wasm-module-abi-validation.md",
+      "lib/letflow/engine/wasm/plugin_handler.ex",
+      "lib/letflow/application.ex"
+    ],
+    "branch_name": "feature/WF02-REQ166-20260828",
+    "commit": "fa9cb17"
+  },
+  "task": {
+    "description": "Implement REQ-166 strictly per the APPROVED design at lib/letflow/design/req166-wasm-module-abi-validation.md (passed CODE-DESIGN-VALIDATOR after one rework round, commit fa9cb17). Read the full design doc before writing any code -- it is unusually detailed and precise about the two-stage validation flow; follow it exactly rather than improvising. This environment has Rust 1.97.1 and wasmex's native NIF already built -- use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching mix commands. Steps: (1) Create lib/letflow/engine/wasm/module_registry.ex implementing Letflow.Engine.Wasm.ModuleRegistry per design section 3 exactly: the @opaque RegisteredModule struct, register/1's two-stage flow (design section 5.1) -- stage 1 static export/signature check via Wasmex.Store.new/0 + Wasmex.Module.compile/2 + Wasmex.Module.exports/1 against the exact required-export table in section 5.2, collecting ALL defects not stopping at first; stage 2 (only if stage 1 found zero defects) a real instantiation attempt via Wasmex.start_link/1 run INSIDE a Task.Supervisor.async_nolink/2 task (never inline -- this is load-bearing per the design's own live-reproduced crash-propagation finding in section 1.5) under a NEW dedicated Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor, read back via Task.yield/2 with a bounded timeout, branching on the outcome per section 5.1 step 7 exactly (success -> GenServer.stop the instance then return {:ok, registered_module()}; {:exit, reason} matching the unresolved-import pattern -> {:error, {:instantiation_failed, {:unresolved_import, namespace, function}}}; any other crash shape -> {:crashed, raw_reason}; timeout -> Task.shutdown(:brutal_kill) then {:timeout, timeout_ms}). (2) Add the new Task.Supervisor child spec to lib/letflow/application.ex's supervision tree (design section 2.2) -- this is the one file outside module_registry.ex this design touches. (3) Write the moduledoc content per design section 2.3 (WASM-02 restatement, req163 section 3.1/3.2/4 citations, the two-stage gate description). Do NOT modify lib/letflow/engine/wasm/plugin_handler.ex or lib/letflow/engine/plugin_interface.ex -- both are explicitly out of scope per design section 2.1 (registration is fully decoupled from invocation in this requirement).",
+    "owned_modules": [
+      "lib/letflow/engine/wasm/",
+      "lib/letflow/application.ex",
+      "test/letflow/engine/wasm/",
+      "priv/wasm_fixtures/",
+      "lib/letflow/design/req166-wasm-module-abi-validation.md",
+      "test/specs/REQ-166.md"
+    ],
+    "acceptance_criteria": [
+      "AC1: a test registers a module missing the execute export and asserts registration fails with {:error, {:invalid_abi, defects}} naming {:missing, \"execute\"} among the defects.",
+      "AC2: a test asserts a module missing EACH of the other 5 required exports (init, deinit, get_capabilities, alloc, memory) is likewise rejected -- one test case per required export, plus at least one test asserting multiple simultaneous missing exports all appear in the defects list (design section 5.1 step 5's collect-all-not-stop-on-first requirement).",
+      "AC3: a test asserts rejection happens at REGISTRATION and not at invocation -- a non-conforming module never produces a registered_module() value, and (per the opaque type) no test can construct one to feed into an invocation path; also test the NEW stage-2 rejection case -- a module with all 5 exports correctly shaped but an unresolved WASI import is rejected with {:error, {:instantiation_failed, {:unresolved_import, namespace, function}}}, proving req163 section 4's instantiation-based rejection is genuinely wired in.",
+      "AC4: a test asserts a conforming module (all exports correct AND no unresolved imports) registers successfully with {:ok, registered_module()}, and that the instantiation-proving Wasmex instance is stopped (not leaked) before register/1 returns (mirror REQ-165's own leak-detection test technique from test/letflow/engine/wasm/plugin_handler_test.exs).",
+      "AC5: the moduledoc names the export contract and cites req163-wasm-abi-choice.md as its source (sections 3.1/3.2 for the contract, section 4 for the instantiation-rejection requirement).",
+      "AC6: mix test and mix compile --warnings-as-errors both pass, real output quoted.",
+      "Additional (from design's own rigor, not a numbered AC but required by the design you're implementing): a test asserts that calling register/1 on an unresolved-import module does NOT crash the calling test process (proving the Task.Supervisor wrapping actually works, mirroring the design's own section 1.5 live reproduction) -- this is the single most important test given the entire design's central fix was this exact crash-propagation hazard."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented Letflow.Engine.Wasm.ModuleRegistry (lib/letflow/engine/wasm/module_registry.ex) per design req166-wasm-module-abi-validation.md exactly: @opaque registered_module wrapping a private RegisteredModule struct (module + bytes); register/1's two-stage flow -- stage 1 Wasmex.Store.new/0 + Wasmex.Module.compile/2 + Wasmex.Module.exports/1 checked against the 6-entry required-export table (design section 5.2), collecting ALL defects (not stop-on-first) into {:error, {:invalid_abi, defects}}; stage 2, reached only on a clean stage 1, runs Wasmex.start_link/1 inside a Task.Supervisor.async_nolink/2 task under the new Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor (never inline), read back via Task.yield/2 with a 5000ms bound, branching exactly per design section 5.1 step 7 into {:ok, registered_module()} (instance stopped via GenServer.stop/1 first), {:error, {:instantiation_failed, {:unresolved_import, namespace, function}}} (regex-matched against the live-reproduced wasmex v0.15.1 crash message), {:error, {:instantiation_failed, {:crashed, raw_reason}}}, or {:error, {:instantiation_failed, {:timeout, timeout_ms}}} with Task.shutdown(:brutal_kill). Added {Task.Supervisor, name: Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor} to lib/letflow/application.ex's supervision tree (design section 2.2), alongside its sibling Task.Supervisor children. Moduledoc written per design section 2.3, citing req163-wasm-abi-choice.md sections 3.1/3.2/4 and stating the two-stage gate and the core-modules-not-component-model decision. Did not touch plugin_handler.ex or plugin_interface.ex. Added 11 new WAT fixtures under priv/wasm_fixtures/ (req166_conforming, req166_missing_{execute,init,deinit,get_capabilities,alloc,memory}, req166_missing_multiple, req166_wrong_signature_execute, req166_unresolved_import) and test/letflow/engine/wasm/module_registry_test.exs covering all 7 acceptance criteria including the crash-propagation-containment test. `mix compile --warnings-as-errors`: clean, no output/warnings. `mix test test/letflow/engine/wasm/`: 25 passed. Full `mix test`: 2316 passed (5 properties, 2311 tests), 3 excluded, exit code 0. `mix letflow.lint_handoffs`: 0 new violations. Committed to feature/WF02-REQ166-20260828, not pushed, not merged. Routes next to SECURITY-REVIEWER (touches no tenant-data path directly but is a new registration entry point handling arbitrary uploaded module bytes -- ORCH/SECURITY-REVIEWER to confirm applicability) and REVIEWER per WF-02 gates; this agent does not self-approve or advance past this handoff."
+  }
+}

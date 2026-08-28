@@ -1068,16 +1068,24 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
 
       {short_elapsed_ms, short_result} =
         :timer.tc(fn ->
-          Executor.execute_with_manifest(script, "h", max_instructions: huge_budget, timeout_ms: 50)
+          Executor.execute_with_manifest(script, "h",
+            max_instructions: huge_budget,
+            timeout_ms: 50,
+            max_heap_words: nil
+          )
         end)
 
       {long_elapsed_ms, long_result} =
         :timer.tc(fn ->
-          Executor.execute_with_manifest(script, "h", max_instructions: huge_budget, timeout_ms: 200)
+          Executor.execute_with_manifest(script, "h",
+            max_instructions: huge_budget,
+            timeout_ms: 200,
+            max_heap_words: nil
+          )
         end)
 
-      assert {:error, {:timeout_exceeded, 50}} = short_result
-      assert {:error, {:timeout_exceeded, 200}} = long_result
+      assert {:error, {:wallclock_timeout, 50}} = short_result
+      assert {:error, {:wallclock_timeout, 200}} = long_result
       assert short_elapsed_ms < long_elapsed_ms
     end
 
@@ -1087,8 +1095,12 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       while true do end
       """
 
-      assert {:error, {:timeout_exceeded, 100}} =
-               Executor.execute_with_manifest(script, "h", max_instructions: 10_000_000_000, timeout_ms: 100)
+      assert {:error, {:wallclock_timeout, 100}} =
+               Executor.execute_with_manifest(script, "h",
+                 max_instructions: 10_000_000_000,
+                 timeout_ms: 100,
+                 max_heap_words: nil
+               )
     end
   end
 end

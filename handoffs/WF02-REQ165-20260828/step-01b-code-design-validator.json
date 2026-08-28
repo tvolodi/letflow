@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ165-20260828/step-01b-code-design-validator.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -42,6 +42,78 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "verdict": "PASS",
+    "summary": "Independently re-verified all central claims of lib/letflow/design/req165-wasmex-process-boundary.md against live external sources and the real plugin_interface.ex; every claim checked out exactly as the design states. Design is complete and unambiguous enough for ELIXIR-DEV to implement without improvising.",
+    "independent_verification": [
+      {
+        "claim": "wasmex v0.15.1 mix.exs deps() lists rustler_precompiled ~> 0.9, rustler ~> 0.38, ex_doc, credo",
+        "method": "curl https://raw.githubusercontent.com/tessi/wasmex/main/mix.exs",
+        "result": "CONFIRMED verbatim: deps() = [{:rustler_precompiled, \"~> 0.9\"}, {:rustler, \"~> 0.38\"}, {:ex_doc, \"~> 0.40.3\", only: [:dev, :test]}, {:credo, \"~> 1.7.19\", only: [:dev, :test], runtime: false}]"
+      },
+      {
+        "claim": "WASMEX_BUILD=true is wasmex's own documented switch to force a real source build over a precompiled NIF fetch",
+        "method": "curl https://raw.githubusercontent.com/tessi/wasmex/main/README.md (grep WASMEX_BUILD) and elixir-ci.yml",
+        "result": "CONFIRMED. README line 106: 'If you plan to change something on the Rust part of this project, set the following ENV WASMEX_BUILD=true so that your changes will be picked up.' wasmex's own CI (elixir-ci.yml) sets WASMEX_BUILD: true at workflow env scope and installs dtolnay/rust-toolchain@stable unconditionally in every native-code job -- exactly as the design's §0 states, maintainers never trust the precompiled path for their own CI."
+      },
+      {
+        "claim": "wasmex's own upstream .tool-versions pins rust 1.97.1 in the same file-shape as Letflow's own convention",
+        "method": "curl https://raw.githubusercontent.com/tessi/wasmex/main/.tool-versions",
+        "result": "CONFIRMED verbatim: 'erlang 29.0.3\\nelixir 1.20.2-otp-29\\nrust 1.97.1'. wasmex's own CI installs it via dtolnay/rust-toolchain@stable with toolchain: 1.97.1, matching the design's citation exactly."
+      },
+      {
+        "claim": "dtolnay/rust-toolchain@stable has no version-file: equivalent input, justifying the $GITHUB_OUTPUT shell-step workaround",
+        "method": "curl https://raw.githubusercontent.com/dtolnay/rust-toolchain/master/action.yml",
+        "result": "CONFIRMED -- real documented inputs are toolchain (required), targets, target (alias), components. No version-file/version-from-file input exists; the design's workaround (grep .tool-versions in a preceding shell step, thread the value via $GITHUB_OUTPUT into toolchain:) is the correct, currently-necessary mechanism. Minor inaccuracy found: the design's parenthetical at design doc line 189-190 lists the real inputs as 'toolchain, components, target, profile' -- there is no 'profile' input (that string only appears hardcoded inside the action's internal `rustup toolchain install --profile minimal` step, not exposed as a caller input), and 'targets' (plural) is missing from the design's list. This is a citation slip in an explanatory aside, not load-bearing: it does not affect the actual CI YAML diff in §2 (which only sets `toolchain:`), so it does not change implementability. Flagged as a finding for CODE-DESIGNER to correct in a fast-follow, not a gate failure."
+      },
+      {
+        "claim": "PluginInterface.invoke/2,3's process-boundary and timeout mechanism (Task.Supervisor.async_nolink, Task.yield, Task.shutdown(:brutal_kill), handle_yield_result/4 nil-clause message) matches the design's §4/§5 description exactly",
+        "method": "Read lib/letflow/engine/plugin_interface.ex in full",
+        "result": "CONFIRMED. Lines 186-193 show async_nolink under Letflow.Engine.PluginTaskSupervisor wrapping `handler.handle_node(context)`, piped through Task.yield(timeout_ms) then handle_yield_result/4. The nil clause (lines 221-224) does exactly `Task.shutdown(task, :brutal_kill)` then returns `{:error, \"plugin handler #{inspect(handler)} did not respond within #{timeout_ms}ms\"}` -- matching the design's quoted string and mechanism precisely. Letflow.Engine.PluginTaskSupervisor is confirmed already started in lib/letflow/application.ex:45, unchanged by this requirement, matching §4's grep claim."
+      },
+      {
+        "claim": "plugin_interface.ex needs zero edits",
+        "method": "Read the file in full; confirmed no new @callback, no ExecutionContext field, no handle_yield_result/4 clause is needed for this design's scope",
+        "result": "CONFIRMED. The design's §6 file list correctly excludes lib/letflow/engine/plugin_interface.ex; nothing in §3-§5 requires touching it."
+      },
+      {
+        "claim": "moduledoc content specs (§7.1/§7.2) are worded consistently with plugin_interface.ex's own existing disclosed-and-uncovered crash-class language",
+        "method": "Compared design §7.2's required prose against plugin_interface.ex:52-56's actual 'Does NOT cover' paragraph",
+        "result": "CONFIRMED consistent: both name 'a hard kill of the BEAM node itself, or System.halt/0', both state no monitor/task/supervisor observes it from inside the same node. §7.1's WASM-01 mechanism-clause restatement (Rust NIF vs C API, runtime-loaded shared library vs static platform binary) matches REQ-165's requirements.yaml entry verbatim."
+      },
+      {
+        "claim": "all 9 real acceptance criteria are mapped in a traceability table",
+        "method": "Diffed docs/requirements.yaml REQ-165's 9 acceptance_criteria against design §8's table and test/specs/REQ-165.md's traceability table",
+        "result": "CONFIRMED 1:1 mapping, no gaps, no extra/renumbered criteria."
+      },
+      {
+        "claim": "handler module design (location, @behaviour, handle_node/1, two .wat fixtures) is complete enough to implement without improvising",
+        "method": "Read §3 in full; cross-checked mix.exs's existing deps list (confirmed :lua is the current last entry, matching the design's placement instruction) and lib/mix/tasks/letflow.check_toolchain.ex's real @recognised_tools/F1-F8/not_checked/warn_block shape against the design's characterization of it",
+        "result": "CONFIRMED complete: module path, @behaviour, full internal flow (5 numbered steps with exact Wasmex API calls, cleanup-on-every-path instruction), both .wat fixtures given verbatim, and the check_toolchain extension's shape (@recognised_tools, running_rust_version/0 spec, new F9 failure mode) matches the real existing module's structure exactly (verified: @recognised_tools = [\"elixir\", \"erlang\"], F1-F8 present, not_checked/warn_block helpers present)."
+      },
+      {
+        "claim": "design contains no literal Elixir implementation code (function bodies)",
+        "method": "Scanned every fenced code block in the design doc",
+        "result": "CONFIRMED. Only fenced blocks present: one mix.exs dependency-tuple data literal ({:wasmex, \"~> 0.15.1\"}), shell commands (WASMEX_BUILD=true mix ...), a .tool-versions diff, a ci.yml YAML diff, and two .wat fixtures -- all exempted infra-config/data per AC9's own carve-out. Prose in §3.2/§4/§5 narrates Wasmex API calls (Wasmex.start_link/1, Wasmex.call_function/4, GenServer.stop/1) as running text, never as a def/defp function body. @spec-only declarations throughout, no implementations."
+      }
+    ],
+    "minor_finding_non_blocking": "design doc line ~189-190 mischaracterizes dtolnay/rust-toolchain@stable's input list (claims 'profile' is a real input, omits 'targets'); does not affect the actual CI diff and is not gate-blocking -- recommend CODE-DESIGNER fix the parenthetical in a fast-follow commit.",
+    "artifacts_reviewed": [
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "test/specs/REQ-165.md",
+      "lib/letflow/engine/plugin_interface.ex",
+      ".github/workflows/ci.yml",
+      "docs/migration/decisions/0005-pin-formatting-toolchain.md",
+      "lib/letflow/application.ex",
+      "lib/mix/tasks/letflow.check_toolchain.ex",
+      "mix.exs",
+      "docs/requirements.yaml (REQ-165 entry)",
+      "https://raw.githubusercontent.com/tessi/wasmex/main/mix.exs",
+      "https://raw.githubusercontent.com/tessi/wasmex/main/README.md",
+      "https://raw.githubusercontent.com/tessi/wasmex/main/.tool-versions",
+      "https://raw.githubusercontent.com/tessi/wasmex/main/.github/workflows/elixir-ci.yml",
+      "https://raw.githubusercontent.com/dtolnay/rust-toolchain/master/action.yml"
+    ],
+    "lint_handoffs": "mix letflow.lint_handoffs: OK -- 0 new violations across 1207 handoff files (25 pre-existing grandfathered, traced to ISS-0190)."
   }
 }

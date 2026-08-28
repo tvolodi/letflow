@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF02-REQ169-20260828/step-01-code-designer.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -38,6 +38,13 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "COMPLETED",
+    "summary": "Design produced at lib/letflow/design/req169-wasm-fuel-and-memory-cap.md (new module Letflow.Engine.Wasm.ResourceLimits, lib/letflow/engine/wasm/resource_limits.ex, plus three new fixtures) and test/specs/REQ-169.md, per WF-02 Step 1 conventions -- @spec/@type/prose only, zero implementation code. Every claim about wasmex's fuel-metering and StoreLimits memory-cap behavior was live-verified against the real installed wasmex v0.15.1 dependency via export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" WASMEX_BUILD=true MIX_ENV=test mix run scratch/req169_fuel_memory_probe.exs (probe script preserved, git-ignored per the scratch convention, fully reproducible) -- no claim in the design is asserted from decision 0014's documentation alone.\n\nFuel metering (WASM-09) matched decision 0014's documented behavior exactly, with three findings sharpening the exact mechanism beyond prose: (1.1) an infinite loop under a fuel budget terminates with a clean {:error, \"...all fuel consumed by WebAssembly...\"} -- never a crash or hang; (1.2) fuel is NOT auto-reset per invocation -- omitting a fresh set_fuel/2 call before invocation N+1 genuinely starves it on invocation N's leftover fuel, live-reproduced directly, which is why the design mandates arm_fuel/2 immediately before every single call; (1.3) calling set_fuel/2 itself cleanly fails with a distinguishable string when consume_fuel was left false, which the design turns into AC5's own enforcement canary; (1.4) a tighter fuel budget was measured, quantitatively, to bind sooner (3 vs 250 completed loop iterations at budgets of 20 vs 2,000, read back from a memory counter that survives the trap).\n\nMEMORY CAP (WASM-10) DIVERGES FROM ITS OWN LITERAL ACCEPTANCE WORDING -- flagged per AC7, not worked around silently. Live verification found: memory.grow beyond a configured StoreLimits.memory_size cap does NOT trap. It returns WebAssembly's own standard -1 growth-failure sentinel as an ordinary successful call return ({:ok, [-1]}), and the guest's own execution continues completely normally -- confirmed reproducibly (scratch probes 3/6/10). The underlying SECURITY property WASM-10 actually needs -- a guest's real linear memory cannot be made to exceed the configured cap -- IS independently confirmed true (physical memory size measured unchanged before/after a rejected over-cap grow attempt, and a tighter cap was measured to permit strictly fewer successful grows than a looser one: 1 vs 4 additional pages). Decision 0014's own quoted evidence (\"will fail\") was accurate; WASM-10's own restatement (\"MUST TRAP\") is what does not hold. The design (secs 1.6/2/6/7) states this divergence explicitly in the moduledoc content ELIXIR-DEV must ship and in a dedicated ORCH-facing section, and designs AC3's test around the real, honest behavior (a clean success plus an unchanged physical memory size) rather than asserting a trap that does not occur. The design also notes the layered defense this composes with: REQ-168's already-shipped MemoryGuard independently bounds any host-side dereference against the real (correctly capped) memory size regardless of whether a guest checks the -1 sentinel.\n\nFull traceability table (REQ-169's 8 docs/requirements.yaml acceptance criteria + this handoff's own 8 AC/meta-criteria) is in the design doc sec 9. mix letflow.lint_handoffs run: 0 new violations (25 pre-existing grandfathered, unrelated to this change). No code implemented; nothing pushed, merged, or given to ELIXIR-DEV to build beyond this design.",
+    "artifacts_out": [
+      "lib/letflow/design/req169-wasm-fuel-and-memory-cap.md",
+      "test/specs/REQ-169.md"
+    ],
+    "divergence_found": true,
+    "divergence_summary": "WASM-10's 'traps cleanly' acceptance wording does not match live-verified wasmex/Wasmtime behavior: memory.grow beyond StoreLimits.memory_size returns a clean WASM-spec-standard -1 success value, not a trap. The security property (real memory cannot exceed the cap) is confirmed intact. See design doc sec 1.6/sec 7."
   }
 }

@@ -1,0 +1,41 @@
+{
+  "handoff_id": "step01-rework1-WF02-REQ166-20260828",
+  "run_id": "WF02-REQ166-20260828",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ166-20260828/step-01-code-designer-rework1.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-166"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ166-20260828/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req166-wasm-module-abi-validation.md",
+      "lib/letflow/design/req163-wasm-abi-choice.md"
+    ],
+    "branch_name": "feature/WF02-REQ166-20260828",
+    "commit": "605bc5c",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR FAILED Step 1b (commit 605bc5c) on two findings, both quoted verbatim here. Read handoffs/WF02-REQ166-20260828/step-01b-code-design-validator.json's full result for the complete detail.\n\nF1 (BLOCKING, the substantive one): req163-wasm-abi-choice.md's own §4 -- gate-approved, and cited by your own design as an authority -- states verbatim: \"REQ-166's registration-time validation (§3.1) must attempt instantiation as part of registration and treat that failure identically to a missing required export: rejected at registration, with a structured error naming the unresolved import ... not merely at first invocation.\" Your design's §1.5/§4 currently concludes the opposite -- that register/1 must NEVER call Wasmex.start_link/1 -- citing that exact same section to justify it. This is a real, load-bearing conflict: req163 §4 explicitly assigns import-driven, instantiation-based rejection to REQ-166's OWN registration path (not deferred to REQ-167 -- REQ-167 only needs the exact denial-surface FACT req163 §4 already names, e.g. wasi_snapshot_preview1/path_open, to write its OWN test against a registration mechanism REQ-166 already built). You must RECONCILE this, not silently override it: redesign register/1 so it (a) performs the static export/signature check via Wasmex.Module.compile/2 + exports/1 as before (this part was independently verified correct), AND (b) ALSO attempts real instantiation (Wasmex.start_link/1) as part of the same registration step, treating any instantiation failure (including an unresolved-import failure) identically to a missing/malformed export -- rejected at registration with a structured error. Re-derive your §4 'never invocable' proof on this new basis: it no longer rests on 'register/1 never calls start_link/1' -- it must instead rest on 'a value satisfying the opaque RegisteredModule type is only ever constructed after BOTH the static check AND a successful instantiation attempt have passed; any failure in either step returns {:error, _} and produces no such value.' You will also need to decide, and state explicitly, what becomes of the real Wasmex instance start_link/1 produces during a successful registration attempt -- does register/1 keep it running (and if so, where/how is its lifetime managed, given REQ-165's PluginHandler pattern starts a FRESH instance per invocation, not a long-lived one), or does it deliberately start-then-stop the instance purely to prove instantiation succeeds, with a real invocation later starting its own fresh instance per REQ-165's existing per-call isolation principle (decision 0014 (e))? State which and why -- this is a real design decision your rework must make, not leave open.\n\nF2 (BLOCKING but narrow, easy fix): your design's §1.5 asserts, as an independently live-verified fact, that Wasmex.start_link/1's init-time crash on an unresolved import is 'absorbed' into a clean {:error, reason} and 'does not leak an :EXIT signal to a non-trapping caller.' CODE-DESIGN-VALIDATOR independently reproduced the OPPOSITE: calling start_link/1 (in both %{store:,module:} and %{bytes:} forms) on such a module, from a non-trap_exit process, crashes the CALLER outright via a linked EXIT signal -- not caught by try/rescue/catch. This is actually directly relevant now that your rework (per F1) requires register/1 to call start_link/1 -- your redesigned instantiation-attempt step MUST account for this real crash-propagation behavior (e.g. spawn the instantiation attempt in a separate, monitored/trapping process rather than calling start_link/1 inline from register/1's own caller, so an unresolved-import crash is observed as a message rather than crashing the process that called register/1). Fix or remove the false claim in §1.5, and make sure your reworked §4 (per F1) design correctly handles this real crash-propagation hazard rather than assuming a clean {:error, _} return.",
+    "acceptance_criteria": [
+      "F1 resolved: register/1's design now performs BOTH the static export/signature check (unchanged, already verified correct) AND a real instantiation attempt, treating an unresolved-import instantiation failure identically to a missing/malformed export -- rejected at registration with a structured error naming the failure.",
+      "The 'never invocable' proof (design section 4) is re-derived on the new basis: a RegisteredModule value is only constructed after BOTH checks pass.",
+      "Design explicitly states what happens to the Wasmex instance start_link/1 produces during registration (kept running vs. start-then-stop) and why, reconciled with REQ-165's existing per-invocation-isolation principle (decision 0014 (e)).",
+      "F2 resolved: the false 'verified live' claim in section 1.5 is corrected to reflect the real crash-propagation behavior (an unresolved-import start_link/1 crashes a non-trapping caller via a linked EXIT signal), and the reworked design's instantiation-attempt mechanism correctly handles this (e.g. via a monitored/trapping process boundary), not assumed away.",
+      "req163-wasm-abi-choice.md section 4 is now cited accurately -- no restatement of the export contract itself is needed, only the reconciliation of the instantiation-rejection assignment.",
+      "All 6 real REQ-166 acceptance criteria still mapped correctly in the traceability table, updated for the new register/1 shape.",
+      "Zero literal Elixir code in the design doc."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

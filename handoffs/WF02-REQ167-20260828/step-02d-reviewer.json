@@ -1,0 +1,65 @@
+{
+  "handoff_id": "step02d-WF02-REQ167-20260828",
+  "run_id": "WF02-REQ167-20260828",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ167-20260828/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-167"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ167-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ167-20260828/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req167-wasm-import-whitelist.md",
+      "lib/letflow/engine/wasm/capability_gate.ex",
+      "lib/letflow/application.ex"
+    ],
+    "branch_name": "feature/WF02-REQ167-20260828",
+    "commit": "69e8722"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-167's implementation, commit 69e8722. SECURITY-REVIEWER already passed Step 2c (see step-02c-security-reviewer.json). Your scope: idiomatic OTP usage, supervision integrity, scope creep, and decision-record consistency -- read the real diff (git show 69e8722) and the approved design (lib/letflow/design/req167-wasm-import-whitelist.md) in full before verdict. Do not re-litigate the design's own decisions (e.g. not stopping the returned instance, the new CapabilityGateTaskSupervisor, the crash-classification duplication vs ModuleRegistry) -- those already passed CODE-DESIGN-VALIDATOR; your job is whether the SHIPPED code matches the approved design faithfully and idiomatically.",
+    "acceptance_criteria": [
+      "Confirm Letflow.Engine.Wasm.CapabilityGate follows this codebase's existing conventions for similar modules -- compare directly against lib/letflow/engine/wasm/module_registry.ex (its closest sibling, same design lineage) for structure, typespec style, error-tuple shape conventions, moduledoc format.",
+      "Confirm the new Letflow.Engine.Wasm.CapabilityGateTaskSupervisor child spec in lib/letflow/application.ex is placed correctly in the supervision tree (sibling to ModuleRegistryTaskSupervisor and the other Task.Supervisor children, correct restart strategy inherited, no ordering hazard).",
+      "Confirm no scope creep: only lib/letflow/engine/wasm/capability_gate.ex, lib/letflow/application.ex, priv/wasm_fixtures/req167_*.wat, and test/letflow/engine/wasm/capability_gate_test.exs are touched -- module_registry.ex and plugin_handler.ex must be untouched (design explicitly said out of scope).",
+      "Confirm decision-record consistency: req163-wasm-abi-choice.md's named import-denial surface is cited accurately in the moduledoc/code comments where referenced.",
+      "Confirm typespecs (@spec, @type) are complete and accurate for all public functions.",
+      "Confirm error handling follows this codebase's established {:error, reason} tuple idiom throughout, with no bare exceptions escaping start_instance/2 under any input.",
+      "Confirm the intentional divergence from ModuleRegistry's pattern (start_instance/2 does NOT stop its returned instance on success, unlike ModuleRegistry.register/1's proving instance) is documented clearly enough in the shipped moduledoc that a future caller won't mistake this for a leak.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verified_independently": [
+      "Read git show 69e8722 in full (not the design doc's or ELIXIR-DEV's own claims about the diff) -- confirms exactly 9 files touched by this commit: lib/letflow/application.ex (+12/-1), lib/letflow/engine/wasm/capability_gate.ex (new, 292 lines), 4 priv/wasm_fixtures/req167_*.wat fixtures, test/letflow/engine/wasm/capability_gate_test.exs (new, 205 lines), plus 4 handoff-bookkeeping JSON files.",
+      "`git diff main...69e8722 -- lib/letflow/engine/wasm/module_registry.ex lib/letflow/engine/wasm/plugin_handler.ex` returns empty -- both files genuinely untouched, matching the design's own §0/§10 out-of-scope confirmation.",
+      "Read lib/letflow/engine/wasm/capability_gate.ex and lib/letflow/engine/wasm/module_registry.ex side by side in full.",
+      "Read lib/letflow/design/req167-wasm-import-whitelist.md in full (all 10 sections plus traceability table).",
+      "Read lib/letflow/application.ex's full children list and the exact diff hunk adding CapabilityGateTaskSupervisor.",
+      "Read test/letflow/engine/wasm/capability_gate_test.exs in full (16 tests).",
+      "Ran `mix compile --warnings-as-errors` live: clean, zero output.",
+      "Ran `WASMEX_BUILD=true mix test test/letflow/engine/wasm/capability_gate_test.exs` live: 'Result: 16 passed', 0 failures.",
+      "Grepped lib/letflow/design/req163-wasm-abi-choice.md for the cited §4 section header ('## §4 -- Import-denial surface for REQ-167 (replacing WASM-07's component-model name)') and its traceability-table row naming the wasi_snapshot_preview1/path_open surface -- confirms capability_gate.ex's moduledoc citation of req163 §4 is accurate, not fabricated or mis-numbered."
+    ],
+    "acceptance_criteria_findings": [
+      "1. CONFIRMED -- CapabilityGate follows ModuleRegistry's conventions closely: same moduledoc structure (requirement header, scope-boundary section, design-doc pointer), same @typedoc style with inline design-section citations, same instantiation_defect() three-variant shape ({:unresolved_import, ns, fn} | {:crashed, reason} | {:timeout, ms}), same {:error, {tag, defect}} nesting idiom (gate_error/registration_error), same @task_supervisor/@instantiation_timeout_ms/@unresolved_import_pattern private-constant layout, same classify_crash/1 two-clause structure (verbatim-identical regex and match shape, deliberately duplicated per design §4's documented rationale, not a copy-paste accident). No stylistic drift from its closest sibling.",
+      "2. CONFIRMED -- application.ex's diff appends {Task.Supervisor, name: Letflow.Engine.Wasm.CapabilityGateTaskSupervisor} as the next list element directly after ModuleRegistryTaskSupervisor, inside the same list under Supervisor.start_link(children, opts) with strategy: :one_for_one (read at file's end). :one_for_one plus the accompanying code comment ('No other child depends on start order here') is correct: nothing in capability_gate.ex references any other child by name at start time, and one_for_one means this child's restart is independent of every sibling's -- no ordering hazard exists for a lone Task.Supervisor with no dependents.",
+      "3. CONFIRMED -- module_registry.ex and plugin_handler.ex are untouched (empty `git diff main...69e8722` scoped to those two paths). Commit 69e8722 itself touches only capability_gate.ex, application.ex, the 4 named .wat fixtures, and the test file (plus handoff bookkeeping JSON, which is expected pipeline overhead, not scope creep). No new abstraction, behaviour, or macro appears ahead of what REQ-167 needs -- the module is a plain struct-free set of two public functions plus private helpers, matching ModuleRegistry's own shape exactly, no framework machinery introduced early.",
+      "4. CONFIRMED -- capability_gate.ex's moduledoc and AC4 section cite 'req163-wasm-abi-choice.md's Decision' and name the wasi_snapshot_preview1 namespace/path_open surface; req163's own §4 ('Import-denial surface for REQ-167, replacing WASM-07's component-model name') is exactly this section, and its traceability table's 'WASM-07 replacement import-denial surface' row names the identical wasi_snapshot_preview1/path_open surface. The citation is accurate, not a mis-numbered or fabricated reference.",
+      "5. CONFIRMED -- both public functions (build_import_table/1, start_instance/2) carry complete @spec entries matching their actual clauses exactly (manifest() -> import_table(); (binary(), manifest()) -> {:ok, pid()} | {:error, gate_error()}), and every @type/@typedoc (capability, manifest, valtype, import_descriptor, import_table, instantiation_defect, gate_error) is used consistently throughout the module with no orphaned or unused type.",
+      "6. CONFIRMED -- start_instance/2's case covers all four Task.yield/2 outcomes ({:ok,{:ok,pid}}, {:ok,{:error,reason}}, {:exit,reason}, nil-timeout) with a typed {:error, {:instantiation_denied, _}} result on every non-success branch; the one place a real external crash can occur (Wasmex.start_link/1 on an unresolved import) is isolated inside Task.Supervisor.async_nolink/2, so it cannot become a bare exception in the caller -- verified live by the passing 'does not crash the calling test process' test. No raise/throw/exit appears anywhere in the module's own code.",
+      "7. CONFIRMED -- the moduledoc's start_instance/2 @doc states explicitly and prominently: 'this function does **not** stop it: this is the real instance a caller intends to invoke against, not a proof-of-instantiability throwaway' and 'a live, running instance the caller owns and must GenServer.stop/1 when done' -- this is unambiguous, contrasts directly against ModuleRegistry.register/1's stopped proving instance by name, and leaves no reasonable room for a future caller to mistake the non-stopped pid for a leak rather than an owned resource."
+    ],
+    "scope_test": "IN SCOPE, not waved through: this gate checked OTP idiom, supervision placement, decision-record citation accuracy, and scope boundaries on the shipped code against the gate-approved design and its closest sibling module -- read independently, not taken from ELIXIR-DEV's or SECURITY-REVIEWER's self-reports.",
+    "verdict_summary": "PASS. Letflow.Engine.Wasm.CapabilityGate is a faithful, idiomatic implementation of the gate-approved design: it mirrors ModuleRegistry's structure, typespec style, error-tuple shape, and moduledoc conventions closely (the intentional divergences -- not stopping the success-path instance, a dedicated CapabilityGateTaskSupervisor, duplicated crash-classification logic -- are all design-approved and clearly documented in the shipped moduledoc, not re-litigated here). CapabilityGateTaskSupervisor is placed correctly as a one_for_one sibling of ModuleRegistryTaskSupervisor with no ordering hazard. No scope creep: module_registry.ex and plugin_handler.ex are genuinely untouched; no premature abstraction appears. req163-wasm-abi-choice.md §4 is cited accurately. Typespecs are complete and accurate on both public functions. No bare exception can escape start_instance/2 under any input -- the one real crash path is contained inside Task.Supervisor.async_nolink/2, verified live by a passing crash-containment test. The non-stop-on-success divergence from ModuleRegistry is documented plainly enough that a future caller will read it as an ownership contract, not a leak. Live verification: `mix compile --warnings-as-errors` clean, `mix test test/letflow/engine/wasm/capability_gate_test.exs` 16/16 passed. No BLOCKER findings."
+  }
+}

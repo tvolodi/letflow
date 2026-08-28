@@ -67,6 +67,25 @@ defmodule Letflow.Engine.Wasm.CapabilityGateTest do
       assert is_pid(pid)
       GenServer.stop(pid)
     end
+
+    # Mutation-tested (WF-02 Step 3, REQ-167): mutating the success branch to
+    # call GenServer.stop/1 on the pid before returning it (accidentally
+    # adopting ModuleRegistry's stage-2-proving-instance pattern, which this
+    # module's moduledoc explicitly says it does NOT follow -- see "On
+    # success" above) was NOT caught by any pre-existing assertion shape --
+    # every other test that gets a pid back happens to call GenServer.stop/1
+    # itself afterward, which only fails incidentally (a confusing
+    # already-stopped exit, not a clear assertion) rather than actually
+    # verifying the returned instance is usable. This test asserts the real
+    # property directly.
+    test "the returned pid is alive and usable immediately after a successful call" do
+      manifest = %{capabilities: ["var:read", "service:call"]}
+      bytes = fixture("req167_platform_call_only.wat")
+
+      assert {:ok, pid} = CapabilityGate.start_instance(bytes, manifest)
+      assert Process.alive?(pid)
+      GenServer.stop(pid)
+    end
   end
 
   # ---------------------------------------------------------------------
@@ -94,6 +113,18 @@ defmodule Letflow.Engine.Wasm.CapabilityGateTest do
 
       refute Map.has_key?(Map.get(table, "env", %{}), "read_variable")
       refute Map.has_key?(Map.get(table, "env", %{}), "platform_call_service")
+    end
+
+    # Mutation-tested (WF-02 Step 3, REQ-167): seeding the Enum.reduce/3
+    # accumulator with %{"env" => %{}} instead of %{} produces a table that
+    # still passes every `refute Map.has_key?(Map.get(table, "env", %{}),
+    # ...)` assertion above (an absent key is still absent from a
+    # namespace-present-but-empty map) -- none of them distinguish "no env
+    # namespace at all" from "an empty env namespace." This test asserts the
+    # exact top-level shape design §5.1 step 3 calls for: a genuinely empty
+    # manifest produces exactly %{}, not a partially-empty nested map.
+    test "an empty capability list produces exactly %{}, not a namespace-present-but-empty map" do
+      assert CapabilityGate.build_import_table(%{capabilities: []}) == %{}
     end
 
     test "granting both capabilities exposes both imports (additive, not exclusive)" do

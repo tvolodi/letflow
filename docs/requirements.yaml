@@ -8660,7 +8660,7 @@ requirements:
   - id: REQ-171
     title: WASM host API 1/2 -- read path -- read_variable, log, now, uuid at parity with Lua (WASM-12 read half)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 323  # letflow-queue task id
     description: >

@@ -186,3 +186,20 @@ history:
       Capability gating comes from REQ-167's whitelist, no second model.
       write_variable/call_service/fail are REQ-172's. SECURITY-REVIEWER
       hard gate. Depends on REQ-170 (done), REQ-159 (done), REQ-152 (done).
+  - req: REQ-171
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-28T13:20:10Z"
+    note: >
+      WF02-REQ171-20260828 done (queue task 323, GH#623, stage S5). WASM
+      host API 1/2 -- read path (read_variable, log, now, uuid) at parity
+      with Lua's REQ-159/REQ-152 shipped in lib/letflow/engine/wasm/host_api.ex,
+      with capability gating wired via lib/letflow/engine/wasm/capability_gate.ex
+      (REQ-167's whitelist, no second model). RELEASE-VALIDATOR independently
+      re-verified all 9 acceptance criteria: mix test test/letflow/engine/wasm/
+      -- 119 passed, 0 failures; mix compile --warnings-as-errors --force --
+      exit 0, zero warnings. Scope check confirmed module_registry.ex,
+      memory_guard.ex, resource_limits.ex, plugin_handler.ex, call_timeout.ex,
+      plugin_interface.ex, and lib/letflow/engine/lua/ untouched. uuid decision
+      documented in host_api.ex moduledoc as a WASM-side addition with no Lua
+      counterpart, not presented as parity. Unblocks REQ-172 (write path).

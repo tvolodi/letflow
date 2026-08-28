@@ -965,3 +965,19 @@ history:
       docs/requirements.yaml. `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 38 on-disk entries before
       this append; 39 after.
+  - req: REQ-167
+    event: started
+    agent: ORCH
+    at: "2026-08-28T05:13:32Z"
+    note: >
+      WF02-REQ167-20260828 started (queue task 319, GH#619, stage S5).
+      Claimed via get_next_task after REQ-166's completion. WASM import
+      whitelist derived from the module manifest (WASM-06) plus WASM-07's
+      restated no-filesystem-by-default guarantee, asserted against
+      REQ-163's named core-modules import surface rather than the
+      component-model-specific wasi:filesystem/types literal. Enforcement
+      point is instantiation failure, not a present-but-erroring import.
+      This is the sandbox boundary for guest code -- SECURITY-REVIEWER hard
+      gate. Depends on REQ-166 (done). Builds on
+      Letflow.Engine.Wasm.ModuleRegistry (REQ-166) and PluginHandler
+      (REQ-165).

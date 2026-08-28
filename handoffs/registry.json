@@ -2924,6 +2924,27 @@
             "queue_task_id": 318,
             "queue_agent_id": "orch-ai-dala",
             "note": "WF-02 for REQ-166 (queue task 318, GH#618, stage S5). WASM module ABI validation and rejection of non-conforming modules AT REGISTRATION (WASM-02), implementing the export contract REQ-163 chose (core modules: init/execute/deinit/get_capabilities, plus the implicit alloc export), citing REQ-163's artefact directly. Design went through one genuine rework round: CODE-DESIGN-VALIDATOR caught a real conflict where the first draft misread req163's own section 4 (which explicitly assigns import-driven, instantiation-based rejection to REQ-166's own register/1, not REQ-167) and a false 'verified live' claim that Wasmex.start_link/1 cleanly absorbs an unresolved-import crash (it actually crashes a non-trapping caller via a linked EXIT signal) -- both independently reproduced and fixed, redesigning register/1 as a genuine two-stage flow (static export/signature check, then a Task.Supervisor-wrapped real instantiation attempt). Implemented Letflow.Engine.Wasm.ModuleRegistry with a new dedicated Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor. SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER (full suite 2318/2318), and RELEASE-VALIDATOR all independently passed clean. TEST-DESIGNER's mutation pass (15->20 tests) found the stage-1/stage-2 gate and swapped-signature defect detection were undertested and closed both gaps; it also live-verified a genuine but narrow finding -- Task.shutdown(:brutal_kill) on the timeout path does not stop the underlying native Wasmtime execution thread on a maliciously-hanging module -- filed as ISS-0351 (MINOR, no tenant-facing path exists yet to exploit it, deferred to whichever future requirement adds one). Unblocked REQ-167 (capability sandboxing) and the rest of the plugin ABI work. Queue task 318 released done cleanly."
+        },
+        {
+            "run_id": "WF02-REQ167-20260828",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-167"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/wasm/",
+                "test/letflow/engine/wasm/",
+                "priv/wasm_fixtures/"
+            ],
+            "lock_acquired_at": "2026-08-28T05:13:32Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 -- bookkeeping commit to main in progress",
+            "backfilled": false,
+            "queue_task_id": 319,
+            "queue_agent_id": "orch-ai-dala",
+            "note": "WF-02 for REQ-167 (queue task 319, GH#619, stage S5). WASM import whitelist derived from the module manifest (WASM-06): the Wasmtime instance must provide only host functions corresponding to manifest-declared capabilities, built as a whitelist not a denylist, with instantiation FAILING (not a present-but-erroring import) when a module imports anything outside it. Also restates WASM-07 (no filesystem access by default): the literal wasi:filesystem/types acceptance-criterion name is a component-model interface name that doesn't apply under REQ-163's chosen core-modules ABI -- this requirement must assert denial against REQ-163's own named import surface instead, and its moduledoc must explain why asserting the literal component-model name would be a false pass under a core-module runtime. This is the sandbox boundary for guest code -- SECURITY-REVIEWER hard gate. Depends on REQ-166 (done). Builds on Letflow.Engine.Wasm.ModuleRegistry (REQ-166) and PluginHandler (REQ-165). Queue claimed via get_next_task 2026-08-28T05:13:11Z."
         }
     ]
 }

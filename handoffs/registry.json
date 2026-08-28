@@ -2966,6 +2966,27 @@
             "queue_task_id": 320,
             "queue_agent_id": "orch-ai-dala",
             "note": "WF-02 for REQ-168 (queue task 320, GH#620, stage S5). WASM linear memory isolation and host-side validation of every guest pointer/length pair (WASM-08) -- the entry on decision 0014's satisfiable list with the highest cost if wrong. CODE-DESIGNER's live verification found a genuine, previously-undocumented hazard in wasmex: at extreme non-guest-reachable magnitudes, Wasmex.Memory.read_binary/4 can hang the calling process forever (length=2^63, uncaught native panic, no receive timeout) or SIGABRT the entire OS process -- the BEAM node itself under this project's runtime (length=2^40, confirmed live, exit code 134). Design required one genuine rework round: CODE-DESIGN-VALIDATOR independently caught a false transcript claim (Wasmex.Memory.size/2 was documented as returning {:ok, size}, but actually returns a bare integer) -- the design's own algorithm already used the correct bare-integer form, only the section-1 transcript was wrong, fixed and re-verified live. Implemented Letflow.Engine.Wasm.MemoryGuard: a pure check_bounds/3 using Elixir's arbitrary-precision integer arithmetic (exact at any magnitude, no wraparound possible) rejects any dangerous magnitude before it ever reaches wasmex, regardless of whether wasmex's own internal check would also catch it. No new Task.Supervisor needed (MemoryGuard only calls Wasmex.Memory with already-validated in-range values). SECURITY-REVIEWER (independently proved a flagged design-table-vs-algorithm ordering discrepancy was mathematically benign), REVIEWER (fixed the stale design-doc table entry), TEST-DESIGN-VALIDATOR, TEST-RUNNER (full suite 2354/2354), and RELEASE-VALIDATOR all independently passed clean. TEST-DESIGNER's mutation pass (16->18 tests) found and closed 2 real gaps (a 64-bit-truncation false-accept, a write/4 length-confusion bug). Every gate that touched a dangerous magnitude did so only against the pure check_bounds/3 function, verified explicitly and repeatedly by 5 separate agents across this run -- never a live wasmex call. Unblocks REQ-169 onward (resource limits, host API). Queue task 320 released done cleanly."
+        },
+        {
+            "run_id": "WF02-REQ169-20260828",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-169"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/wasm/",
+                "test/letflow/engine/wasm/",
+                "priv/wasm_fixtures/"
+            ],
+            "lock_acquired_at": "2026-08-28T08:04:32Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 -- bookkeeping commit to main in progress",
+            "backfilled": false,
+            "queue_task_id": 321,
+            "queue_agent_id": "orch-ai-dala",
+            "note": "WF-02 for REQ-169 (queue task 321, GH#621, stage S5). WASM fuel budget (WASM-09) and linear-memory cap (WASM-10) per invocation, paired since both configure the same wasmex objects: Wasmex.EngineConfig's :consume_fuel (default FALSE -- a config that forgets to enable it produces an unlimited guest with no error anywhere) and Wasmex.StoreLimits' memory_size/table_elements. Decision 0014's evidence for both was READ from documentation, not run -- if either doesn't behave as documented, that's a finding to record and report, not work around silently (mirroring this run's own REQ-165/166/167/168 live-verification discipline). Fuel must be per-invocation (reset between calls, not per-store, or invocation N starves invocation N+1). Both breaches must surface as errors distinguishable from each other and from REQ-170's separate wall-clock timeout. SECURITY-REVIEWER hard gate. Depends on REQ-168 (done). Queue claimed via get_next_task 2026-08-28T08:04:21Z."
         }
     ]
 }

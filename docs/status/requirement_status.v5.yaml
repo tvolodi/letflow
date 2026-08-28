@@ -1075,3 +1075,20 @@ history:
       pending -> done in docs/requirements.yaml. `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 42 on-disk entries before
       this append; 43 after.
+  - req: REQ-169
+    event: started
+    agent: ORCH
+    at: "2026-08-28T08:04:32Z"
+    note: >
+      WF02-REQ169-20260828 started (queue task 321, GH#621, stage S5).
+      Claimed via get_next_task after REQ-168's completion. WASM fuel
+      budget (WASM-09) and linear-memory cap (WASM-10) per invocation,
+      paired since both are direct configuration of the same wasmex
+      objects (Wasmex.EngineConfig's :consume_fuel, default FALSE --
+      note the default: a config that forgets to enable it produces an
+      unlimited guest with no error anywhere -- and Wasmex.StoreLimits'
+      memory_size/table_elements). Decision 0014's evidence for both was
+      READ from documentation, not run -- if either doesn't behave as
+      documented, that's a finding to record, not work around silently.
+      Fuel must be per-invocation (reset between calls, not per-store).
+      SECURITY-REVIEWER hard gate. Depends on REQ-168 (done).

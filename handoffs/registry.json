@@ -2858,6 +2858,27 @@
             "queue_task_id": 315,
             "queue_agent_id": "orch-ai-dala",
             "note": "WF-02 for REQ-163 (queue task 315, GH#615, stage S5). Decision-only requirement, no code: settled OQ-4 as CORE MODULES (not the component model) for the WASM ABI, one of two decisions (with REQ-164/OQ-3) unblocking S5's WASM half per decision 0014. Grounded in wasmex v0.15.1's real published documentation (hex.pm, hexdocs.pm, accessed 2026-08-28) -- Wasmex.Components is explicitly documented by its own maintainers as 'beta quality', and its WASI P2 options struct has no filesystem field at all; core modules are wasmex's original, non-beta, five-primitive-type surface. Three separate gates (CODE-DESIGN-VALIDATOR, REVIEWER via citation-check, RELEASE-VALIDATOR) each independently re-fetched the cited wasmex web pages live rather than trusting the artefact's own quotes. Restates WASM-02's four-export ABI (init/execute/deinit/get_capabilities) into a concrete core-module contract with a linear-memory descriptor-pointer convention plus one implicit alloc export; names wasi_snapshot_preview1's path_open (real WASI Preview 1 signature, independently reconstructed and verified) as the exact REQ-167 denial-test target, replacing WASM-07's component-model-only wasi:filesystem/types; maps REQ-150's numeric rule onto :i64/:f64 with an explicit fail-closed rule for the one representational ceiling (integers outside i64's 64-bit range) BEAM-native Elixir does not have. R-Co's own wasm/ code is stubs end to end (wasmtime_bindings.zig's own header: 'deferred to Stage 10') -- this is a specification port, not a code port; the choice is Letflow's own. Lighter pipeline (CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> REVIEWER -> RELEASE-VALIDATOR -> DOC-UPDATER; no ELIXIR-DEV/SECURITY-REVIEWER/TEST-* since no code exists) passed every gate clean on first attempt. Unblocks REQ-166/167/171/172 to build against a concrete ABI. Queue task 315 released done cleanly."
+        },
+        {
+            "run_id": "WF02-REQ164-20260828",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-164"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/design/req164-wasm-compilation-hosting.md",
+                "docs/migration/decisions/",
+                "docs/requirements.yaml"
+            ],
+            "lock_acquired_at": "2026-08-28T00:39:00Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ164-20260828 created; Step 1 dispatched to CODE-DESIGNER",
+            "backfilled": false,
+            "queue_task_id": 316,
+            "queue_agent_id": "orch-ai-dala",
+            "note": "WF-02 for REQ-164 (queue task 316, GH#616, stage S5). Decision-only requirement, no code: settle OQ-3 -- whether Letflow hosts WASM guest compilation at all (WASM-03/04/05). Decision 0014's own evidence leans NO: R-Co/src/wasm/ is stubs end to end and a search for '*.wasm' across the entire R-Co tree returns zero files. If NO, WASM-03/04/05 are DECLINED (not deferred) and REQ-175 must be CANCELLED with a status-history event, not left pending -- this run's DOC-UPDATER step may need to touch docs/requirements.yaml's REQ-175 entry in addition to REQ-164's own. If YES, the artefact must supply REQ-175's language-agnostic restatement (artifact-hash-keyed caching, not source-hash, since Letflow has no Zig toolchain). Also must name which S6 operational inputs (artifact storage, retention, job execution) the decision required and state whether available or assumed. Lighter pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> REVIEWER -> RELEASE-VALIDATOR -> DOC-UPDATER; no ELIXIR-DEV/SECURITY-REVIEWER/TEST-* since no code exists. Queue claimed via get_next_task 2026-08-28T00:38:40Z."
         }
     ]
 }

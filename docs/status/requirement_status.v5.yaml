@@ -723,3 +723,29 @@ history:
       done in docs/requirements.yaml. `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 27 on-disk entries before
       this append; 28 after.
+
+  - req: REQ-164
+    event: started
+    agent: ORCH
+    at: "2026-08-28T00:38:40Z"
+    note: >
+      WF02-REQ164-20260828 started (queue task 316, GH#616, stage S5).
+      Claimed via get_next_task after REQ-163's completion. Second of
+      two decision requirements unblocking S5's WASM half: settle OQ-3
+      -- whether Letflow hosts WASM guest compilation at all
+      (WASM-03/04/05). Decision 0014's own evidence already leans NO:
+      R-Co/src/wasm/ is stubs end to end and a search for '*.wasm'
+      across the entire R-Co tree returns zero files -- there is no
+      working pipeline to port and no artifact corpus to stay
+      compatible with. If NO, WASM-03/04/05 are DECLINED (not
+      deferred) and REQ-175 must be CANCELLED with a status-history
+      event, not left pending. If YES, the artefact must supply
+      REQ-175's language-agnostic restatement (artifact-hash-keyed
+      caching, not source-hash, since Letflow has no Zig toolchain).
+      Decision-only requirement, no code. Lighter pipeline: CODE-
+      DESIGNER -> CODE-DESIGN-VALIDATOR -> REVIEWER -> RELEASE-
+      VALIDATOR -> DOC-UPDATER; no ELIXIR-DEV/SECURITY-REVIEWER/TEST-*.
+      Step 00 git-setup PASS (ORCH, direct): branch
+      feature/WF02-REQ164-20260828 created from main (fadb756) and
+      pushed. Dispatching Step 1 to CODE-DESIGNER next. 28 on-disk
+      entries before this append; 29 after.

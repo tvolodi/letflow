@@ -166,6 +166,37 @@
 # 40 entries. It never moves, edits or deletes an existing entry.
 
 history:
+  - req: REQ-155
+    event: started
+    agent: ORCH
+    at: "2026-08-28T07:13:00Z"
+    note: >
+      WF02-REQ155-20260827 started (queue task 307, GH#607, stage S5).
+      Step 00 git-setup PASS (ELIXIR-DEV): branch
+      feature/WF02-REQ155-20260827 created and pushed. Execution runs under
+      Letflow.Engine.PluginTaskSupervisor with Task.yield/2 and
+      Task.shutdown(task, :brutal_kill) on timeout. 12 on-disk entries before
+      this append; 13 after.
+
+  - req: REQ-155
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-28T07:13:20Z"
+    note: >
+      WF02-REQ155-20260827 complete. Host-enforced Lua wall-clock timeout added
+      in Letflow.Engine.Lua.Executor by running each execution in a supervised
+      Task.Supervisor async_nolink task, awaiting with Task.yield/2, and
+      hard-killing on timeout with Task.shutdown(task, :brutal_kill). The outer
+      host timeout survives even when the script pcall-catches its own
+      :max_instructions budget exhaustion. Timeout surfaces as
+      {:error, {:timeout_exceeded, timeout_ms}} and is distinctly matched from
+      REQ-154's {:error, {:budget_exceeded, limit}}. The moduledoc now states
+      the layer-2 restatement and the host-enforced requirement, and the task
+      uses Letflow.Engine.PluginTaskSupervisor as the existing supervised task
+      boundary. mix compile --warnings-as-errors and mix test
+      test/letflow/engine/lua/executor_test.exs both passed (Result: 17 passed).
+      Status flipped in_progress -> done in docs/requirements.yaml.
+
   - req: REQ-133
     event: done
     agent: FRONTEND-DEV

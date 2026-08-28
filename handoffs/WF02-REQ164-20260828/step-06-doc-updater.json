@@ -1,0 +1,39 @@
+{
+  "handoff_id": "step06-WF02-REQ164-20260828",
+  "run_id": "WF02-REQ164-20260828",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ164-20260828/step-06-doc-updater.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-164", "REQ-175"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ164-20260828/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ164-20260828",
+    "commit": "fcf2b62"
+  },
+  "task": {
+    "description": "DOC-UPDATER (WF-02 Step 6) for REQ-164, RELEASE-VALIDATOR PASSed (commit fcf2b62). This step has TWO status flips, not one: (1) flip REQ-164's status to 'done' in docs/requirements.yaml -- REQ-164 itself is a completed decision requirement. (2) flip REQ-175's status to 'cancelled' in docs/requirements.yaml -- per REQ-164's own decision artefact (lib/letflow/design/req164-wasm-compilation-hosting.md) and REQ-175's own text (independently re-verified by three separate gates: CODE-DESIGN-VALIDATOR, REVIEWER, RELEASE-VALIDATOR), REQ-164 decided NO on hosting WASM guest compilation, so REQ-175 -- the conditional requirement gated on a YES decision -- must be cancelled, not left pending. Append TWO status-history events to the current run-history volume: one 'done' event for REQ-164, one 'cancelled' event for REQ-175, each with its own real UTC timestamp and its own clear reason. Confirm which volume is current via docs/status/requirement_status.index.yaml's status: current marker (was volume 5, at 29 entries as of REQ-164's started event -- RE-CHECK this count fresh). Recount via `grep -c \"^  - req:\" <volume>` BEFORE and AFTER BOTH appends (should go up by exactly 2), and update the index's entries:/note: fields accordingly (prepend a new note, never edit prior notes).",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-164 status flipped to 'done'.",
+      "docs/requirements.yaml REQ-175 status flipped to 'cancelled' (NOT left pending) -- read lib/letflow/design/req164-wasm-compilation-hosting.md's Decision section first to confirm the NO decision before making this edit.",
+      "Exactly two status-history events appended to the current run-history volume (one 'done' for REQ-164, one 'cancelled' for REQ-175, each with a real UTC timestamp and a reason for REQ-175's cancellation citing REQ-164's decision).",
+      "Volume recounted via grep before and after both appends (count increases by exactly 2); index.yaml's entries:/note: updated to match, note prepended not overwritten.",
+      "No other status-history events edited or removed (append-only discipline)."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

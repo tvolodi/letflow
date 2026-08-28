@@ -2845,19 +2845,19 @@
             "requirement_ids": ["REQ-163"],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/design/req163-wasm-abi-choice.md",
                 "docs/migration/decisions/"
             ],
             "lock_acquired_at": "2026-08-28T00:11:00Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ163-20260828 created; Step 1 dispatched to CODE-DESIGNER",
+            "lock_released_at": "2026-08-28T00:37:30Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #684 squash-merged (153a4f6); queue task 315 released done cleanly",
             "backfilled": false,
             "queue_task_id": 315,
             "queue_agent_id": "orch-ai-dala",
-            "note": "WF-02 for REQ-163 (queue task 315, GH#615, stage S5). Decision-only requirement, no code: settle OQ-4 (core modules vs. component model for the WASM ABI), one of two decisions (with REQ-164/OQ-3) unblocking S5's WASM half per decision 0014. Must ground the choice in the real installed/adoptable wasmex version's actual support (read the dependency or its published API, not inferred from :wasm_component_model's existence), restate WASM-02's four-export ABI into the chosen mode's concrete contract, name the exact import surface WASM-07's filesystem-denial test targets, and state the value-representation consequence for REQ-150/WASM-12. R-Co's own wasm/ code is stubs end to end (wasmtime_bindings.zig's own header: 'deferred to Stage 10') -- this is a specification port, not a code port; the choice is Letflow's own. Lighter pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> REVIEWER -> RELEASE-VALIDATOR -> DOC-UPDATER; no ELIXIR-DEV/SECURITY-REVIEWER/TEST-* since no code exists. Queue claimed via get_next_task 2026-08-28T00:10:32Z."
+            "note": "WF-02 for REQ-163 (queue task 315, GH#615, stage S5). Decision-only requirement, no code: settled OQ-4 as CORE MODULES (not the component model) for the WASM ABI, one of two decisions (with REQ-164/OQ-3) unblocking S5's WASM half per decision 0014. Grounded in wasmex v0.15.1's real published documentation (hex.pm, hexdocs.pm, accessed 2026-08-28) -- Wasmex.Components is explicitly documented by its own maintainers as 'beta quality', and its WASI P2 options struct has no filesystem field at all; core modules are wasmex's original, non-beta, five-primitive-type surface. Three separate gates (CODE-DESIGN-VALIDATOR, REVIEWER via citation-check, RELEASE-VALIDATOR) each independently re-fetched the cited wasmex web pages live rather than trusting the artefact's own quotes. Restates WASM-02's four-export ABI (init/execute/deinit/get_capabilities) into a concrete core-module contract with a linear-memory descriptor-pointer convention plus one implicit alloc export; names wasi_snapshot_preview1's path_open (real WASI Preview 1 signature, independently reconstructed and verified) as the exact REQ-167 denial-test target, replacing WASM-07's component-model-only wasi:filesystem/types; maps REQ-150's numeric rule onto :i64/:f64 with an explicit fail-closed rule for the one representational ceiling (integers outside i64's 64-bit range) BEAM-native Elixir does not have. R-Co's own wasm/ code is stubs end to end (wasmtime_bindings.zig's own header: 'deferred to Stage 10') -- this is a specification port, not a code port; the choice is Letflow's own. Lighter pipeline (CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> REVIEWER -> RELEASE-VALIDATOR -> DOC-UPDATER; no ELIXIR-DEV/SECURITY-REVIEWER/TEST-* since no code exists) passed every gate clean on first attempt. Unblocks REQ-166/167/171/172 to build against a concrete ABI. Queue task 315 released done cleanly."
         }
     ]
 }

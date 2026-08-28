@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ165-20260828/step-03b-test-design-validator.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -42,6 +42,19 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "summary": "Independently re-verified TEST-DESIGNER's REQ-165 test suite. All 9 real acceptance criteria (docs/requirements.yaml) map to a runnable test, confirmed by reading test/letflow/engine/wasm/plugin_handler_test.exs and test/mix/tasks/letflow_check_toolchain_test.exs directly (not by trusting test/specs/REQ-165.md's own traceability table, though it matches). No @tag :skip, :pending, TODO-implement-test, or exclude markers found anywhere in the REQ-165 test additions (grep across both files: zero hits).\n\nIndependently re-applied 3 of the 5 claimed mutations directly against lib/ (each applied, tested, reverted, and the revert verified byte-identical via diff against the pre-mutation source before the next mutation):\n\n1. GenServer.stop(pid) cleanup removed from plugin_handler.ex's run_guest/2 success path -> `mix test test/letflow/engine/wasm/` went from 10 passed to 9/10 passed, with the sole failure being the new 'no leaked Wasmex instance after a successful call' test ('expected no leaked Wasmex GenServer after a successful call, got: [#PID<0.355.0>]'). Reverted; re-ran -> 10 passed. git diff --stat lib/ empty; diff against saved original byte-identical.\n\n2. handle_node/1's `executed_in_pid => self()` hardcoded to `Process.whereis(:application_controller)` -> the strengthened AC3/AC4 test failed with exactly the claimed message ('expected executed_in_pid to be a process freshly spawned for this call, not a pre-existing one'), plus the unrelated direct handle_node/1 sanity test also failed (8/10 passed), matching the findings table's note precisely. Additionally isolated the ORIGINAL (pre-strengthening) assertion shape (`handler_pid != test_pid` only, no pids_before/MapSet check) into a standalone probe test file and ran it against the same live mutant: it PASSED (1 passed), concretely confirming TEST-DESIGNER's claim that the original weaker test would NOT have caught this mutation. Reverted plugin_handler.ex; diff against saved original byte-identical; probe file removed (git status clean).\n\n3. lib/mix/tasks/letflow.check_toolchain.ex's running_rust_version/0 rescue/catch clauses changed from `:not_found` to `{:ok, \"\"}` -> `mix test test/mix/tasks/letflow_check_toolchain_test.exs` went from 34 passed to 33/34 passed, with the sole failure being the new F9 test, and the actual failure output showed the exact wrong-row shape the findings table describes (a 'MISMATCH' row with an empty running value, e.g. '  Rust    expected 1.97.1   running    <-- MISMATCH', instead of the expected NOT FOUND row). Confirmed the new F9 test uses the emptied-PATH technique for real (System.put_env(\"PATH\", \"\"), restored via on_exit), genuinely forcing System.cmd(\"rustc\", ...) into the :enoent path that running_rust_version/0's rescue/catch exists for -- not a mocked/stubbed PATH. Reverted; re-ran -> 34 passed. git diff --stat lib/ empty; diff against saved original byte-identical.\n\nMutation 4 (moduledoc heading text swap) and mutation 5 duplicate-numbering note: only 3 of 5 were re-applied per the task's 'at least 3' instruction, prioritizing the 2 real gaps plus the partial-gap strengthening as directed; mutations 3 (plugin_interface.ex timeout message) and 4 (moduledoc heading) in the findings table use the same proven content-assertion technique already exercised structurally by AC7/AC8's existing content tests and were not independently re-applied.\n\ntest/specs/REQ-165.md's mutation-testing findings table was checked line by line against my own measured results for mutations 1, 2 (executed_in_pid), and 5 (F9/rust) and matches exactly, including the specific failure messages and pass/fail counts.\n\nFinal state: `git status --porcelain lib/ test/` empty after every mutation and revert. `mix test test/letflow/engine/wasm/ test/mix/tasks/letflow_check_toolchain_test.exs` -> 'Result: 44 passed' (clean, no failures). `mix compile --warnings-as-errors --force` -> 'Compiling 130 files (.ex)' / 'Generated letflow app' with zero warnings. `mix letflow.lint_handoffs` -> 'OK -- 0 new violations across 1212 handoff files (25 pre-existing grandfathered, traced to ISS-0190)'.\n\nVerdict: PASS. TEST-DESIGNER's self-report is independently corroborated on every checked point; no gap, skip, or fixture-isolation problem found.",
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "lib/letflow/engine/wasm/plugin_handler.ex",
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "lib/mix/tasks/letflow.check_toolchain.ex",
+      "test/mix/tasks/letflow_check_toolchain_test.exs",
+      "test/specs/REQ-165.md"
+    ],
+    "artifacts_out": [
+      "handoffs/WF02-REQ165-20260828/step-03b-test-design-validator.json"
+    ]
   }
 }

@@ -1158,3 +1158,76 @@ history:
       evidence found while building this must be filed as an issue
       against OQ-5, not silently absorbed. SECURITY-REVIEWER hard gate.
       Depends on REQ-169 (done).
+
+  - req: REQ-170
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-28T10:55:29Z"
+    note: >
+      WF02-REQ170-20260828 complete (RELEASE-VALIDATOR Step 5 PASS). WASM
+      per-invocation wall-clock timeout enforced across the process boundary
+      (WASM-11) implemented in lib/letflow/engine/wasm/call_timeout.ex (new)
+      and lib/letflow/engine/wasm/plugin_handler.ex (node_config timeout_ms
+      threaded into Wasmex.call_function/4). Two layers asserted: wasmex's
+      documented interrupt-and-keep-Store claim was run live and found NOT to
+      hold (Store permanently wedged after a timeout, GenServer.call exit) --
+      disclosed in call_timeout.ex's moduledoc verbatim rather than silently
+      absorbed, mirroring decision 0014's WASM-10 precedent; and REQ-165's
+      outer supervised-task boundary independently terminates the invocation
+      well before a longer inner wasmex timeout could fire, confirmed by
+      asserting the dispatched task process is dead. Timeout is configurable
+      (node_config['timeout_ms']), not hardcoded, with a mutation-closing test
+      proving it isn't silently dropped to wasmex's own 5000ms default.
+      CallTimeout.classify/1 distinguishes the timeout error from REQ-169's
+      fuel/memory errors by pattern match. Moduledoc states OQ-5 (scheduler
+      safety under real load) remains unsettled and names what would settle
+      it (a load spike plus S6 thresholds), filing the new
+      worker-pool-exhaustion (TOKIO_RUNTIME) evidence as an issue rather than
+      absorbing it as a tuning detail. mix test test/letflow/engine/wasm/: 98
+      passed, 0 failures. mix compile --force --warnings-as-errors: clean
+      recompile of 135 files, 0 warnings. Full parallel suite (8 partitions):
+      2386/2386 passed. Scope confirmed via git diff --stat main...HEAD:
+      only call_timeout.ex (new), plugin_handler.ex (+31/-11), and
+      docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md
+      (93-line correction, made by REVIEWER's Step 2d pass and independently
+      re-verified as accurate, not overreach, by RELEASE-VALIDATOR) --
+      module_registry.ex, capability_gate.ex, memory_guard.ex,
+      resource_limits.ex, plugin_interface.ex, and application.ex all
+      confirmed untouched. No other REQ-170 reference found under
+      docs/migration/ needing a companion update. Passed design,
+      SECURITY-REVIEWER (hard gate), REVIEWER, TEST-DESIGNER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER, and RELEASE-VALIDATOR (Step 5
+      independent re-verification of all 7 real acceptance criteria against
+      shipped code and freshly re-run test/compile output). Status flipped
+      pending -> done in docs/requirements.yaml. `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 46 on-disk entries before
+      this append; 47 after.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 5 — CLOSED 2026-08-28. DO NOT APPEND TO THIS FILE.
+#
+# This volume holds the complete requirement run history from 2026-08-26 through
+# 2026-08-28 (47 entries, lines 1-1204). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed under WF02-REQ170-20260828's Step 6
+# DOC-UPDATER append, which brought this file to 1204 lines -- over its declared
+# roll_rule ceiling (max_lines: 1200) -- confirmed via `wc -l` per this volume's
+# own "WHEN THIS VOLUME IS FULL" procedure. Reads of this volume are TARGETED
+# reads only -- a line range or a pattern match, never a whole-file read. Use
+# whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v6.yaml
+#
+# Why this file was closed: appending REQ-170's done-event (WF02-REQ170-20260828
+# Step 6) brought the on-disk count to 47 entries across 1204 lines -- over the
+# roll ceiling. No entry above this footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none declared beyond what volumes 1-3 already
+# declare against themselves.
+# ─────────────────────────────────────────────────────────────────────────────

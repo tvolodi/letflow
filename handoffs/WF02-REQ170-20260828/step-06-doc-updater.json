@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step06-WF02-REQ170-20260828",
+  "run_id": "WF02-REQ170-20260828",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ170-20260828/step-06-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-170"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ170-20260828/step-05-release-validator.json"
+    ],
+    "branch_name": "feature/WF02-REQ170-20260828"
+  },
+  "task": {
+    "description": "DOC-UPDATER pass (WF-02 Step 6) for REQ-170 (queue task 322, GH#622). RELEASE-VALIDATOR independently passed Step 5 -- see handoffs/WF02-REQ170-20260828/step-05-release-validator.json for full detail. Flip REQ-170's status to done in docs/requirements.yaml, and append the required status-history event.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml: REQ-170's status field flipped from pending to done.",
+      "Append a 'done' event to the current run-history volume (find it via docs/status/requirement_status.index.yaml) with a real UTC timestamp from the clock (not memory) -- REQ-170, run WF02-REQ170-20260828. Check the current volume's line/byte count first -- it was near 1160 lines at Step 00 -- and roll to a new volume per the volume header's own 'WHEN THIS VOLUME IS FULL' procedure if this append would exceed the 1200-line/120000-byte ceiling.",
+      "Keep docs/status/requirement_status.index.yaml's volume count in lockstep with the append (or with the roll, if one was needed).",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md was already corrected by REVIEWER in Step 2d -- no further update needed there, but check docs/migration/ for any OTHER REQ-170 reference first, per usual.",
+      "Commit the doc updates to the feature branch (do not push yet -- ORCH handles Step Final).",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "DONE -- REQ-170 flipped to done in docs/requirements.yaml; status-history done event appended; current volume rolled from v5 to v6",
+    "detail": "docs/requirements.yaml: REQ-170's status field flipped pending -> done (line ~8610). docs/status/requirement_status.v5.yaml: appended a 'done' event (req: REQ-170, agent: DOC-UPDATER, at: 2026-08-28T10:55:29Z, real UTC timestamp from `date -u`), verified append-only via `git diff --numstat` (44 insertions, 0 deletions before the roll footer, then 73/0 after adding the closure footer) and by re-reading the tail of the file. This append brought volume 5 to 1204 lines (over the 1200-line ceiling; bytes stayed under the 120000 ceiling at 69312), so per the volume's own 'WHEN THIS VOLUME IS FULL' procedure: appended volume 5's closure footer (dated 2026-08-28, 47 entries / 1204 frozen-prefix lines, matching volume 4's precedent of keeping all entries in the closed volume rather than splitting across the roll), created docs/status/requirement_status.v6.yaml with volume 5's header text verbatim (volume number, opening date 2026-08-28, and predecessor path updated) and an empty `history:` list. docs/status/requirement_status.index.yaml updated in lockstep: volume 5 entry set to status: closed with closed: 2026-08-28, entries: 47, lines: 1204, bytes_working_tree: 69312, frozen_prefix_lines: 1204, frozen_prefix_sha256 (computed as SHA-256 of lines 1..1204 with a trailing \\n, per the documented definition), and a closure_note; volume 6 entry added with status: current, opened: 2026-08-28, entries: 0. Checked docs/migration/ for other REQ-170 references beyond decision 0014 (`grep -rln REQ-170 docs/migration/`) -- only decision 0014 references it, already corrected in Step 2d, no further update needed. No docs/migration/stage-N-*.md file was named in REQ-170's acceptance criteria. README.md: no documented current-behavior change (WASM timeout is an internal engine mechanism, not user-facing state-diagram/'Running it' content) -- left unchanged. `mix test test/docs/requirement_status_invariants_test.exs`: 20 passed, 0 failures (invariants including A3 roll-ceiling, A9 entry-count-matches-disk, A4/A4b anomaly sets, all still hold across the new volume 6 and the closed volume 5). `mix letflow.lint_handoffs`: 'OK -- 0 new violations across 1274 handoff files (25 pre-existing grandfathered, traced to ISS-0190)' -- matches RELEASE-VALIDATOR's Step 5 count, no new violations introduced by this step's handoff files. Committed doc updates to feature/WF02-REQ170-20260828; not pushed (ORCH handles Step Final).",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.v6.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ170-20260828/step-06-doc-updater.json"
+    ]
+  }
+}

@@ -3013,22 +3013,22 @@
             "run_id": "WF02-REQ171-20260828",
             "workflow_id": "WF-02",
             "requirement_ids": ["REQ-171"],
-            "issue_ids": [],
+            "issue_ids": ["ISS-0352"],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/engine/wasm/",
                 "test/letflow/engine/wasm/",
                 "priv/wasm_fixtures/"
             ],
             "lock_acquired_at": "2026-08-28T11:53:04Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 -- bookkeeping commit to main in progress",
+            "lock_released_at": "2026-08-28T14:42:33Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #692 squash-merged (2c478f6) after root-fixing ISS-0352's recurrence; queue task 323 released done cleanly",
             "backfilled": false,
             "queue_task_id": 323,
             "queue_agent_id": "orch-ai-dala",
-            "note": "WF-02 for REQ-171 (queue task 323, GH#623, stage S5). WASM host API 1/2 -- read path (read_variable, log, now, uuid) at parity with Lua's REQ-159/REQ-152 -- the first real wiring of ModuleRegistry (REQ-166), CapabilityGate (REQ-167), MemoryGuard (REQ-168), and ResourceLimits (REQ-169) into an actual host function dispatch. Decision 0014 (4): Lua's host API is the definition WASM conforms to -- REQ-159's Lua implementation must not be modified; a genuine semantic conflict is a finding, not resolved by moving the Lua side. uuid has no Lua counterpart in R-Co's eight-function matrix -- must be decided explicitly (WASM-side addition vs. Lua-side gap), not quietly implemented as parity. Number marshalling cites REQ-150's rule, no second rule. Capability gating comes from REQ-167's whitelist, no second model. write_variable/call_service/fail are REQ-172's. SECURITY-REVIEWER hard gate. Depends on REQ-170 (done). Queue claimed via get_next_task 2026-08-28T11:52:51Z."
+            "note": "WF-02 for REQ-171 (queue task 323, GH#623, stage S5). WASM host API 1/2 -- read path (read_variable, log, now, uuid) at parity with Lua's REQ-159/REQ-152 -- the FIRST real wiring of ModuleRegistry, CapabilityGate, MemoryGuard, and ResourceLimits into an actual, guest-reachable host function dispatch: the actual attack surface those four requirements were all built to defend. New Letflow.Engine.Wasm.HostApi; every guest-memory access routes through MemoryGuard; numbers route through LuaNumberMarshalling (REQ-150); capability gating comes exclusively from an additively-extended CapabilityGate.build_import_table/2 (new :none sentinel for always-present imports). uuid decided as a documented WASM-side addition (no Lua counterpart). A genuine cross-runtime divergence (Lua denies at call-time, WASM denies at instantiation-time, per REQ-167/WASM-06's own already-approved text) stated as a finding, not silently reconciled. SECURITY-REVIEWER (the first hard gate directly exercising real guest-to-host data flow -- confirmed tenant/identity data can never be guest-forged) and REVIEWER (verified two intentionally-changed pre-existing REQ-167 tests word-for-word against the design's own justification) both passed clean. TEST-DESIGNER's mutation pass (38->40 tests) found and closed 2 real gaps, including a guest-identity-forging security test. PR #692's CI reproduced ISS-0352's wasmex-native-thread-pool-exhaustion mechanism WORSE than PR #691 (one run took 1897.8s, cascade-failing 18 tests) since REQ-171 added a second WASM test file's worth of real wasmex calls on top of REQ-170's own still-partially-mitigated hang tests. ORCH root-fixed this properly this time instead of reducing the leak count further (already proven insufficient once): tagged every genuinely-hanging test (@tag :wasm_hang, 6 total), excluded the tag from every default mix test invocation (test_helper.exs, mirroring the existing :keycloak precedent), and made mix letflow.check.test run those excluded tests as their own isolated subprocess afterward -- their permanent leaks now die with that short-lived process instead of touching anything else's pool. Verified structurally: the main suite passed 2404/2404 clean on every subsequent CI run, no cascading, ever. Two separate isolated-subprocess timing flakes (different wall-clock-tolerance tests, different runs) were confirmed nondeterministic via a clean rerun, unrelated to the structural fix. ISS-0352 marked resolved. Unblocks REQ-172 (the write half: write_variable/call_service/fail, plus the shared Lua/WASM parity suite). Queue task 323 released done cleanly."
         }
     ]
 }

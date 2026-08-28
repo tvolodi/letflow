@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step01-WF02-REQ165-20260828",
+  "run_id": "WF02-REQ165-20260828",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ165-20260828/step-01-code-designer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-165"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md",
+      "docs/migration/decisions/0005-pin-formatting-toolchain.md",
+      "lib/letflow/engine/plugin_interface.ex",
+      ".github/workflows/ci.yml",
+      ".tool-versions",
+      "lib/letflow/design/req163-wasm-abi-choice.md",
+      "lib/letflow/design/req164-wasm-compilation-hosting.md"
+    ],
+    "branch_name": "feature/WF02-REQ165-20260828",
+    "commit": "a0b6b98"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-165: design adding wasmex to mix.exs behind the mandatory process boundary, pinning a Rust toolchain in CI (OQ-7), and a minimal PluginInterface-implementing handler module proving the process boundary. Read docs/requirements.yaml's REQ-165 entry in full (search '- id: REQ-165') -- the queue task's full description and 9 real acceptance criteria are there verbatim. Read docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md's Decision (2)/(4) and reasoning (a)/(d)/(f) sections for the wasmex adoption, sequencing, and Rust-toolchain-pin rationale. Read docs/migration/decisions/0005-pin-formatting-toolchain.md in full -- this is the precedent decision REQ-165 must mirror for HOW to pin a toolchain (it chose .tool-versions/asdf for Elixir/Erlang, read its own Decision section for the chosen mechanism and why, not just the Options list). Read lib/letflow/engine/plugin_interface.ex in full -- the @behaviour REQ-165's new handler module implements, and its existing moduledoc's disclosed scope boundary/uncovered-crash-class language this requirement must NOT edit but must cite consistently. Read .github/workflows/ci.yml in full to see the exact mechanism it already uses for Elixir/OTP version pinning (setup-beam's version-file input reading .tool-versions) -- the Rust pin should mirror this same mechanism (an asdf-installable Rust plugin, or the closest equivalent CI action that reads a pinned version from .tool-versions, per decision 0005's own established convention) rather than inventing a second toolchain-pinning mechanism. Read lib/letflow/design/req163-wasm-abi-choice.md's core-modules ABI decision and lib/letflow/design/req164-wasm-compilation-hosting.md's compilation-hosting decision for context (both already settled, cited not re-derived). Also research wasmex's real current adoption requirements via WebFetch/WebSearch if needed (its mix.exs dependency spec, minimum Rust version it requires, whether it uses rustler_precompiled to avoid a build step in some cases or always requires a local Rust toolchain -- this matters directly for whether CI truly needs a full Rust install or can use precompiled artifacts, and for OQ-7's real scope). Design: (1) the mix.exs dependency addition and any config needed; (2) the exact Rust-toolchain-pinning mechanism mirroring decision 0005's convention, including the CI config diff; (3) the new handler module's structure implementing @behaviour Letflow.Engine.PluginInterface (module location, e.g. lib/letflow/engine/wasm/plugin_handler.ex or similar under a new lib/letflow/engine/wasm/ directory per this run's owned_modules), its handle_node/1 delegating to a trivial wasmex-invoked guest, and the exact mechanism proving the process boundary (mirroring PluginInterface's own invoke/2,3 supervised-task pattern -- read that code path in plugin_interface.ex directly); (4) the moduledoc content restating WASM-01's mechanism clause and disclosing the residual native-crash risk, per the acceptance criteria's exact wording requirements. This is design work, not implementation -- @spec/@type blocks only, no literal Elixir function bodies, though this design necessarily touches infra config (mix.exs, CI yaml, .tool-versions) which are not Elixir code and may be described precisely (exact dependency line, exact toolchain version) since they are not the 'no literal code' rule's target (that rule targets Elixir function implementations).",
+    "acceptance_criteria": [
+      "Design specifies the exact wasmex mix.exs dependency line/version and any required config, grounded in wasmex's real current documentation (cite version/source), not assumed.",
+      "Design specifies the exact Rust-toolchain-pinning mechanism, mirroring decision 0005's own established convention (read that decision's actual chosen mechanism, not just its Options list) -- state the pinned version, where it's recorded, and the exact CI config change needed.",
+      "Design specifies the new handler module's structure (name, location under lib/letflow/engine/wasm/), its @behaviour Letflow.Engine.PluginInterface implementation, and how handle_node/1 invokes a trivial wasmex guest.",
+      "Design specifies the exact mechanism proving the process boundary structurally (comparing self() inside the handler against the test process pid, or equivalent), mirroring plugin_interface.ex's own invoke/2,3 supervised-task pattern -- cite the real code path read.",
+      "Design specifies how a hanging guest is terminated by a supervised-task timeout and surfaces as {:error, reason}, never an exception/exit into the calling process.",
+      "Design confirms lib/letflow/engine/plugin_interface.ex itself needs no edit -- the new module is a separate handler family per decision 0014, not a contract change.",
+      "Design specifies the moduledoc content restating WASM-01's mechanism clause (Rust NIF not C API, runtime-loaded shared library not static binary) while its acceptance criterion (no external Wasm runtime dependency at deploy time) is stated as met as literally worded.",
+      "Design specifies the moduledoc content disclosing the residual risk decision 0014(a) records (NIF/Wasmtime crash takes down the whole BEAM node, uncovered by the process boundary) in the same terms plugin_interface.ex's own moduledoc already uses for its disclosed-and-uncovered crash class.",
+      "All 9 real acceptance criteria from docs/requirements.yaml's REQ-165 entry mapped to concrete design elements in a traceability table.",
+      "Design doc written to lib/letflow/design/req165-wasmex-process-boundary.md and a prose test spec skeleton to test/specs/REQ-165.md."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

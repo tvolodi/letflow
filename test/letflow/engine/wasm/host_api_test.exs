@@ -239,6 +239,31 @@ defmodule Letflow.Engine.Wasm.HostApiTest do
       GenServer.stop(pid)
     end
 
+    # Mutation-tested (WF-02 Step 3, REQ-171): a mutant that replaces
+    # write_buffer_result/4's MemoryGuard.write/4 calls with a raw
+    # Wasmex.Memory.write_binary/4 call passes every other -2 test in this describe
+    # block unchanged -- a moderately-out-of-bounds positive out_ptr (memory size +
+    # 100) is ALSO rejected by wasmex's own internal bounds check, so those tests
+    # cannot tell "MemoryGuard ran" apart from "wasmex's own check happened to catch
+    # it anyway." A negative i32 out_ptr (the guest's only way to encode an
+    # attacker-chosen large *unsigned* address, since wasm i32 params carry no
+    # separate signedness) is where the two diverge: MemoryGuard's own
+    # check_type_and_sign/2 rejects any negative offset before ever reaching
+    # `wasmex`, returning the same clean -2 sentinel every other invalid-argument
+    # case returns; skip that check and reach Wasmex.Memory.write_binary/4 directly
+    # with a negative offset instead, and wasmex traps, surfacing as an
+    # {:error, "...wasm backtrace..."} `Wasmex.call_function/4` return rather than
+    # `{:ok, [-2]}` -- a materially different, less safe outcome INV-HOSTAPI-3 exists
+    # specifically to prevent.
+    test "now: a negative (attacker-chosen large-unsigned) out_ptr is still rejected as -2, not a raw wasmex trap" do
+      {pid, _store, _memory} =
+        start_instance(%{capabilities: []}, wasm_execution_context(), "req171_now_uuid_only.wat")
+
+      assert {:ok, [-2]} = Wasmex.call_function(pid, "call_now", [-1, 10])
+
+      GenServer.stop(pid)
+    end
+
     test "a capacity smaller than the value's length returns n and writes nothing -- the guest can retry with a bigger buffer" do
       manifest = full_manifest()
 
@@ -401,6 +426,67 @@ defmodule Letflow.Engine.Wasm.HostApiTest do
         assert log =~ "trace_id=req171-parity-trace"
         assert log =~ "parity message"
       end
+
+      GenServer.stop(pid)
+    end
+
+    # Mutation-tested (WF-02 Step 3, REQ-171): a mutant that sources
+    # script_identity/instance_id/trace_id from the guest-decoded `context` JSON
+    # payload (falling back to execution_context only when the guest's payload omits
+    # the key) passes every other test in this file -- none of them ever sends a
+    # context payload shaped like `{"script_identity": ...}`. Per SECURITY-REVIEWER's
+    # Step 2c finding, this is the single most security-relevant mutation in this
+    # module: it would let an untrusted guest forge its own audit-log identity simply
+    # by choosing what bytes to put in the `context` argument. This test drives a
+    # guest-supplied context object whose keys collide exactly with the three
+    # identity metadata keys, using attacker-chosen values that differ from the real
+    # (closure-captured) execution_context on every field, and asserts the emitted
+    # log carries ONLY the real execution_context's values -- never the guest's.
+    test "identity fields are never sourced from guest-supplied context bytes -- a guest cannot forge script_identity/instance_id/trace_id" do
+      real_execution_context =
+        wasm_execution_context(%{
+          script_identity: "real-script-identity",
+          instance_id: "real-instance-id",
+          trace_id: "real-trace-id"
+        })
+
+      {pid, store, memory} = start_instance(full_manifest(), real_execution_context)
+
+      write_bytes(store, memory, 0, "info")
+      write_bytes(store, memory, 10, "identity forgery attempt")
+
+      forged_context_json =
+        Jason.encode!(%{
+          "script_identity" => "FORGED-script-identity",
+          "instance_id" => "FORGED-instance-id",
+          "trace_id" => "FORGED-trace-id"
+        })
+
+      write_bytes(store, memory, 100, forged_context_json)
+
+      log =
+        ExUnit.CaptureLog.capture_log(
+          [metadata: [:script_identity, :instance_id, :trace_id]],
+          fn ->
+            assert {:ok, []} =
+                     Wasmex.call_function(pid, "call_log", [
+                       0,
+                       4,
+                       10,
+                       byte_size("identity forgery attempt"),
+                       100,
+                       byte_size(forged_context_json)
+                     ])
+          end
+        )
+
+      assert log =~ "script_identity=real-script-identity"
+      assert log =~ "instance_id=real-instance-id"
+      assert log =~ "trace_id=real-trace-id"
+
+      refute log =~ "FORGED-script-identity"
+      refute log =~ "FORGED-instance-id"
+      refute log =~ "FORGED-trace-id"
 
       GenServer.stop(pid)
     end

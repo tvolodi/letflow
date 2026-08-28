@@ -1,0 +1,58 @@
+{
+  "handoff_id": "step02d-WF02-REQ171-20260828",
+  "run_id": "WF02-REQ171-20260828",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ171-20260828/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-171"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ171-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ171-20260828/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req171-wasm-host-api-read.md",
+      "lib/letflow/engine/wasm/host_api.ex",
+      "lib/letflow/engine/wasm/capability_gate.ex"
+    ],
+    "branch_name": "feature/WF02-REQ171-20260828"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-171's implementation. SECURITY-REVIEWER already passed Step 2c (see step-02c-security-reviewer.json). Your scope: idiomatic OTP usage, decision-record consistency, and scope creep -- read the real diff and the approved design (lib/letflow/design/req171-wasm-host-api-read.md) in full before verdict. This is a large integration diff (new host_api.ex module plus a real extension to capability_gate.ex, including two intentionally-changed pre-existing REQ-167 tests) -- give the capability_gate.ex extension and the two changed tests particular scrutiny, since 'intentional change to a pre-existing gate-approved test' is exactly the kind of thing that needs independent confirmation it's genuinely intentional and design-sanctioned, not an accidental regression papered over with a plausible-sounding comment.",
+    "acceptance_criteria": [
+      "Confirm Letflow.Engine.Wasm.HostApi follows this codebase's existing conventions -- compare against capability_gate.ex/memory_guard.ex/resource_limits.ex for structure, typespec style, error-tuple shape conventions, moduledoc format.",
+      "Confirm the capability_gate.ex extension (widened import_descriptor()/capability_requirement(), :none sentinel, build_import_table/2) is genuinely additive and the two changed pre-existing tests in capability_gate_test.exs are real, design-sanctioned behavior changes (design section 4.4/4.1's own stated changes) -- read the design's exact justification for each change and confirm the test diffs match it precisely, not just plausibly.",
+      "Confirm no scope creep: only lib/letflow/engine/wasm/host_api.ex (new), capability_gate.ex (extended), the two new fixtures, and the test files are touched -- module_registry.ex, memory_guard.ex, resource_limits.ex, plugin_handler.ex, call_timeout.ex, plugin_interface.ex, and lib/letflow/engine/lua/ files must all be untouched.",
+      "Confirm typespecs (@spec, @type) are complete and accurate for all public and private functions in host_api.ex.",
+      "Confirm error handling follows this codebase's established {:error, reason} tuple idiom throughout, with no bare exceptions escaping any host_api.ex function under adversarial guest input.",
+      "Confirm decision 0014 and REQ-150/REQ-159/REQ-152/REQ-167's citations in the moduledoc are all accurate -- spot-check at least 2 of them against the actual source documents.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-171's implementation (lib/letflow/engine/wasm/host_api.ex new, lib/letflow/engine/wasm/capability_gate.ex extended) PASSES the REVIEWER gate. Independently read the full diff (main...feature/WF02-REQ171-20260828), the full design doc, both changed files in full, and the exact test diff for capability_gate_test.exs -- not trusting ELIXIR-DEV's or CODE-DESIGNER's self-reports. Re-ran the real test suite myself (38/38 passed).",
+    "idiom_findings": [
+      "gen_statem / supervision: not applicable to this diff -- host_api.ex is a pure functional module (no process, no state) invoked as a wasmex callback closure; capability_gate.ex's build_import_table/1,2 remain pure functions as before. No process/supervision boundary is touched or collapsed by this requirement -- consistent with prior REQ-166/167/168/169 gates, which established the same pattern (pure whitelist/bounds-check functions, with the actual gen_statem/process-per-instance layer living elsewhere and untouched here).",
+      "Structure/style match to sibling modules confirmed by direct comparison: host_api.ex's moduledoc format (numbered/lettered sections, 'Invariants' block naming INV-HOSTAPI-1..4, explicit 'per decision NNNN' citations) mirrors capability_gate.ex's and memory_guard.ex's own moduledoc conventions exactly (both use the same INV-<MODULE>-N naming scheme and 'design SN' citation style). @spec coverage is complete for every public function (do_read_variable/6, do_log/8, do_now/3, do_uuid/3, empty_execution_context/0) and every private helper (write_buffer_result/4, validate_utf8/1, read_log_field/4, read_log_context/3) -- matches memory_guard.ex's own practice of typespeccing private helpers, not just public API.",
+      "Error-tuple idiom: every failure path in host_api.ex returns a plain {:error, reason} or is absorbed into the module's own three-range i32 sentinel protocol (n>=0 / -1 / -2), documented explicitly in both the moduledoc and design doc -- no bare exception is allowed to escape (verified: zero raise-only paths; Jason.decode/1, not decode!/1, is used at the one call site that would otherwise raise on malformed guest JSON). This matches the {:error, reason} convention used throughout memory_guard.ex and capability_gate.ex (gate_error/instantiation_defect tuples).",
+      "capability_gate.ex extension is genuinely additive: import_descriptor()'s capability field is widened (capability() | :none), never narrowed; the existing :call_service/platform_call_service row and stub_callback/0 path are untouched; build_import_table/1 keeps its original arity and signature and is now defined in terms of the new build_import_table/2 (mirrors platform.ex's own install/1 -> install/2 -> install/3 layering, cited by name in both the design and the moduledoc) -- an idiomatic 'grow via a new arity, keep the old one delegating' pattern already established elsewhere in this codebase, not a novel one invented for this diff.",
+      "Typespec/error-handling for host_api.ex verified directly (not from the design's self-report): grep for 'Wasmex.Memory.' in host_api.ex returns exactly one hit, inert (a @type reference to Wasmex.Memory.t() in the wasmex_callback_context() typedoc) -- zero actual guest-memory touches bypass MemoryGuard.read/4 or MemoryGuard.write/4, matching INV-HOSTAPI-3 and the design's own AC/invariant list. grep for 'Repo.' in both host_api.ex and capability_gate.ex returns zero hits -- INV-HOSTAPI-1 holds as stated.",
+      "The two changed pre-existing REQ-167 tests in capability_gate_test.exs are genuine, design-sanctioned behavior changes, not a dressed-up regression -- verified by reading the exact test diff against the design's own stated justification: (1) 'an empty capability list produces exactly %{}' -> 'produces exactly the :none-gated rows, nothing else' is design §4.1's own stated resolution (now/uuid must be unconditionally installed via a new :none sentinel, mirroring platform.ex's own now/fail :none rows) -- the new assertion (MapSet.new(Map.keys(table[\"env\"])) == MapSet.new([\"now\", \"uuid\"])) is the direct, correct consequence of that documented change, and a second new test ('REQ-171: :none-gated rows (now/uuid) are present even with an empty manifest') independently re-asserts the same fact via Map.has_key?/2, so the change is not merely asserted once and hoped to be right. (2) The read_variable {:fn, params, results, callback} shape test's params/arity assertion changing from [:i32, :i32]/arity-3 to [:i32, :i32, :i32, :i32]/arity-5 is design §4.4's own explicitly stated 'signature change... to the real 4-param buffer-out shape' for read_variable, replacing REQ-167's own placeholder signature (which the REQ-167 moduledoc itself already flagged as 'illustrative... REQ-171/172 own the real ones'). Both test diffs carry an inline comment citing the exact design section and stating explicitly 'this is the intended, documented behavior change, not a regression' -- and both comments' claims check out word-for-word against the design doc's §4.1/§4.4 text, not just plausibly. No other assertion in either test was weakened, loosened, or removed to make it pass; both changes are strictly the minimal edit the design's own stated new behavior requires.",
+      "Type-safety observation (non-blocking, per REVIEWER charter item 3): host_fn_spec() is now a 5-value atom enum (:read_variable | :log | :now | :uuid | :call_service) hand-matched across 5 separate build_callback/2 clauses with no catch-all -- idiomatic today (Dialyzer would flag an unhandled atom if a 6th value were added without a matching clause), so this is not a defect, just a spot to watch as REQ-172 adds do_write_variable/do_call_service/do_fail: if a future stub value is added without updating both @known_imports and build_callback/2 in lockstep, the failure mode is a FunctionClauseError at import-table-build time, not a compile-time signal. Not filing this as a docs/issues/ type-safety item -- it's within the tolerance of the existing @known_imports-is-the-source-of-truth pattern capability_gate.ex already used before this requirement, and REQ-172 will touch this exact code path directly."
+    ],
+    "scope_findings": [
+      "No scope creep found. Diff footprint (git diff main...feature/WF02-REQ171-20260828 --stat) touches exactly: the design doc, capability_gate.ex (extended), host_api.ex (new), two new .wat fixtures, capability_gate_test.exs and host_api_test.exs, test/specs/REQ-171.md, and this run's own handoff files. Confirmed untouched: module_registry.ex, memory_guard.ex, resource_limits.ex, plugin_handler.ex, call_timeout.ex, plugin_interface.ex, and every file under lib/letflow/engine/lua/ -- none appear in the diff stat.",
+      "No abstraction/plumbing introduced ahead of what REQ-171 needs: the :none sentinel and build_import_table/2 are the minimal extension the design's own §4.1 gap analysis calls for (an unconditional-install mechanism WASM previously lacked, mirroring an existing Lua-side pattern), not a generic capability-DSL or a speculative framework layer. do_call_service's row/stub is explicitly left as REQ-167's original placeholder, correctly deferred to REQ-172 rather than being built out now.",
+      "Decision-record consistency: decision 0014 (e) citation in host_api.ex's moduledoc ('Host functions receive already-resolved values; the tenant prefix is supplied by the calling engine code, never derived inside a script') is a verbatim match to docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md lines 348-349. platform.ex citations (do_read_variable, do_log, map_log_level, do_log's identity-sourcing statement) spot-checked directly against lib/letflow/engine/lua/platform.ex's real source and matched. No decision record is contradicted or silently re-decided by this diff."
+    ],
+    "mix_test_reran": "MIX_ENV=test mix test test/letflow/engine/wasm/host_api_test.exs test/letflow/engine/wasm/capability_gate_test.exs -- 38 tests, 38 passed, 0 failures (re-run independently, WASMEX_BUILD=true, asdf/cargo PATH per design doc).",
+    "verdict": "PASS -- REQ-171's implementation is approved to proceed to the next WF-02 step (TEST-DESIGNER)."
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "handoff_id": "step03-WF02-REQ171-20260828",
+  "run_id": "WF02-REQ171-20260828",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ171-20260828/step-03-test-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-171"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ171-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ171-20260828/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ171-20260828/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req171-wasm-host-api-read.md",
+      "lib/letflow/engine/wasm/host_api.ex",
+      "lib/letflow/engine/wasm/capability_gate.ex",
+      "test/letflow/engine/wasm/host_api_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ171-20260828"
+  },
+  "task": {
+    "description": "TEST-DESIGNER pass (WF-02 Step 3) on REQ-171. ELIXIR-DEV already wrote a substantial test suite (test/letflow/engine/wasm/host_api_test.exs, 38 tests, all passing per SECURITY-REVIEWER/REVIEWER's independent reruns). Your job is a MUTATION-DRIVEN review and strengthening pass: read the shipped host_api.ex and capability_gate.ex extension in full, then find and fill real coverage gaps by actually mutating the implementation locally and confirming the existing suite fails to catch each mutation before adding a test that does. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching mix commands. Revert every mutation before finishing. Given this is the FIRST requirement with real guest-reachable host functions, mutation coverage on the security-relevant boundaries (memory access, identity attribution, capability gating) matters more than usual here.",
+    "acceptance_criteria": [
+      "Mutate do_read_variable/6 to read from a hardcoded/wrong variables source (or ignore the guest-supplied name and always return a fixed variable) and confirm an existing test catches this.",
+      "Mutate do_log/8 to attribute identity fields (script_identity/instance_id/trace_id) from guest-supplied bytes instead of the closure-captured execution_context, and confirm an existing test catches a guest being able to forge its own identity in a log entry -- this is the single most security-relevant mutation in this pass, per SECURITY-REVIEWER's own Step 2c finding.",
+      "Mutate write_buffer_result/4 (or wherever the buffer-return protocol writes to guest memory) to skip the MemoryGuard.write/4 bounds check and write directly via a raw call, and confirm an existing test catches a guest-supplied out-of-bounds out_ptr/out_cap no longer being rejected.",
+      "Mutate the :none sentinel handling in capability_gate.ex's build_import_table/2 to require an actual capability grant for now/uuid (removing the unconditional-install behavior) and confirm an existing test catches now/uuid becoming ungated-by-default no longer holding under an empty manifest.",
+      "Mutate do_now/3 to use a different time source than Letflow.Engine.Lua.Platform.now/0 (e.g. DateTime.utc_now/0 directly) and confirm an existing test catches the Lua/WASM parity guarantee breaking (this is the core parity claim AC1/AC4 depend on).",
+      "Mutate LuaNumberMarshalling.to_lua/1's call site in host_api.ex to skip the conversion (pass the raw value through some other path) and confirm an existing test catches a subtype-preservation violation -- if this mutation is a no-op given to_lua/1 is currently identity, note that explicitly rather than reporting a false gap.",
+      "Do not modify lib/letflow/engine/wasm/host_api.ex, capability_gate.ex, or any other implementation file -- test/fixture files only.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "COMPLETED -- mutation-driven strengthening pass done. Read host_api.ex/capability_gate.ex in full, then locally mutated the implementation six times per the handoff's acceptance criteria (never committed, always reverted -- diff-confirmed byte-identical to the pre-pass copies after every revert), running the suite against each mutation before deciding whether a new test was needed.",
+    "mutations": [
+      {
+        "target": "do_read_variable/6 reads a hardcoded name instead of the guest-supplied one",
+        "outcome": "ALREADY_CAUGHT -- 5/19 host_api_test.exs tests failed immediately",
+        "new_test_added": false
+      },
+      {
+        "target": "do_log/8 sources script_identity/instance_id/trace_id from guest-decoded context JSON instead of the closure-captured execution_context (fallback to real context only when guest payload omits the key)",
+        "outcome": "REAL_GAP_FOUND -- all 19 pre-existing tests kept passing; no test ever sent a context payload shaped like {\"script_identity\": ...}. This is the SECURITY-REVIEWER Step 2c finding.",
+        "new_test_added": true,
+        "test": "test/letflow/engine/wasm/host_api_test.exs -- \"identity fields are never sourced from guest-supplied context bytes -- a guest cannot forge script_identity/instance_id/trace_id\" (describe \"AC3\")",
+        "confirmed_fails_on_mutant": true,
+        "confirmed_passes_on_real_code": true
+      },
+      {
+        "target": "write_buffer_result/4 skips MemoryGuard.write/4, calls Wasmex.Memory.write_binary/4 directly",
+        "outcome": "PARTIAL_GAP_FOUND -- moderately-out-of-bounds positive out_ptr (memory_size+100) still returns -2 under the mutation because wasmex's own internal bounds check also rejects it, so existing tests couldn't distinguish MemoryGuard running from wasmex's own check catching it. A negative i32 out_ptr (attacker-chosen large-unsigned address) diverges: real code returns clean {:ok,[-2]}, mutant traps and returns {:error, \"...wasm backtrace...\"}.",
+        "new_test_added": true,
+        "test": "test/letflow/engine/wasm/host_api_test.exs -- \"now: a negative (attacker-chosen large-unsigned) out_ptr is still rejected as -2, not a raw wasmex trap\"",
+        "confirmed_fails_on_mutant": true,
+        "confirmed_passes_on_real_code": true
+      },
+      {
+        "target": "capability_gate.ex build_import_table/2 :none sentinel -- filter clause removed so :none rows require an actual capability grant",
+        "outcome": "ALREADY_CAUGHT -- 16/38 tests failed including capability_gate_test.exs's existing \"REQ-171: :none-gated rows (now/uuid) are present even with an empty manifest\" and \"an empty capability list produces exactly the :none-gated rows, nothing else\"",
+        "new_test_added": false
+      },
+      {
+        "target": "do_now/3 calls DateTime.utc_now/0 directly instead of Letflow.Engine.Lua.Platform.now/0",
+        "outcome": "ALREADY_CAUGHT -- AC4 parity test failed immediately (mutant ignores the injected FixedTimeSource double)",
+        "new_test_added": false
+      },
+      {
+        "target": "LuaNumberMarshalling.to_lua/1 call site skips the conversion",
+        "outcome": "NO_OP_CONFIRMED, NOT_A_GAP -- to_lua/1 is `def to_lua(value), do: value`, a bare identity function; no call site mutation can change observable behavior. Reported explicitly per the handoff's own instruction rather than manufacturing a false gap.",
+        "new_test_added": false
+      }
+    ],
+    "verification": {
+      "host_api_and_capability_gate_test": "mix test test/letflow/engine/wasm/host_api_test.exs test/letflow/engine/wasm/capability_gate_test.exs -> 40 passed (38 pre-existing + 2 new)",
+      "full_wasm_dir": "mix test test/letflow/engine/wasm/ -> 119 passed",
+      "implementation_files_untouched": "diff against saved pre-mutation copies of host_api.ex and capability_gate.ex -> identical after every revert; only test/letflow/engine/wasm/host_api_test.exs and test/specs/REQ-171.md were modified"
+    },
+    "files_changed": [
+      "test/letflow/engine/wasm/host_api_test.exs",
+      "test/specs/REQ-171.md"
+    ]
+  }
+}

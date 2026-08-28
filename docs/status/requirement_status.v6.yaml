@@ -289,3 +289,24 @@ history:
       registration fix is genuinely solid). Unblocks REQ-174 (WASM instance
       pooling, depends_on: [REQ-173]); REQ-173 was a dependency none of
       REQ-172's siblings needed.
+  - req: REQ-174
+    event: started
+    agent: ORCH
+    at: "2026-08-28T22:42:00Z"
+    note: >
+      WF02-REQ174-20260828 started (queue task 326, GH#626, stage S5).
+      WASM-13 restated (Instance Pooling, SHOULD) per decision 0014 (e):
+      IF pooling is adopted, per-invocation memory reset is a CORRECTNESS
+      requirement (isolation), not a performance detail -- wasmex pooling
+      deliberately reuses a Store, and Letflow is schema-per-tenant
+      (decision 0006), so a pooled instance carrying residue from a prior
+      invocation is a cross-invocation, potentially cross-tenant data
+      leak. Because it is a SHOULD, declining pooling entirely is a
+      legitimate outcome, but silence is not -- the moduledoc must record
+      an explicit decision either way and assert per-invocation isolation
+      regardless. If adopted: memory reset by construction, no CI-gated
+      latency threshold (record p50 as a benchmark with real numbers
+      instead), and REQ-173's own interaction must be honored -- a pooled
+      instance of a version REQ-173's activate/2 superseded must never be
+      handed to a new invocation. SECURITY-REVIEWER hard gate -- this is
+      an isolation boundary. Depends on REQ-173 (done).

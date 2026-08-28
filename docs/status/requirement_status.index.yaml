@@ -800,8 +800,14 @@ volumes:
     path: docs/status/requirement_status.v6.yaml
     status: current
     opened: 2026-08-28
-    entries: 6
+    entries: 7
     note: >
+      Incremented to 7 by ORCH's REQ-174 started-event append (Step 00,
+      WF02-REQ174-20260828) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v6.yaml` = 7 on-disk entries, in the
+      SAME commit as the append this time (see REQ-173's own note below
+      for the prior miss this avoids repeating).
+
       Incremented to 6 by WF02-REQ173-20260828 (DOC-UPDATER)'s own REQ-173
       done-event append (Step 6) -- `grep -c "^  - req:"
       docs/status/requirement_status.v6.yaml` = 6 on-disk entries, no rebase

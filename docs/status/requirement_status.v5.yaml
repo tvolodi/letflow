@@ -910,3 +910,23 @@ history:
       docs/requirements.yaml. `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 36 on-disk entries before this
       append; 37 after.
+
+  - req: REQ-166
+    event: started
+    agent: ORCH
+    at: "2026-08-28T03:31:50Z"
+    note: >
+      WF02-REQ166-20260828 started (queue task 318, GH#618, stage S5).
+      Claimed via get_next_task after REQ-165's completion. WASM
+      module ABI validation and rejection of non-conforming modules
+      AT REGISTRATION, not first invocation (WASM-02). Implements the
+      export contract REQ-163 chose (core modules) -- must cite
+      REQ-163's artefact, not re-derive the mapping. Rejection must
+      name the specific missing export in a structured error, and
+      registration must be a distinct step from invocation so a
+      rejected module is never invocable. SECURITY-REVIEWER hard gate.
+      Depends on REQ-165 (done, provides the process boundary/handler
+      pattern this builds on). Step 00 git-setup PASS (ORCH, direct):
+      branch feature/WF02-REQ166-20260828 created from main (53ce710)
+      and pushed. Dispatching Step 1 to CODE-DESIGNER next. 37 on-disk
+      entries before this append; 38 after.

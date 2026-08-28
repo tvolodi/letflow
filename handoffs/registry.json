@@ -2903,6 +2903,27 @@
             "queue_task_id": 317,
             "queue_agent_id": "orch-ai-dala",
             "note": "WF-02 for REQ-165 (queue task 317, GH#617, stage S5). FIRST WASM-half requirement with real code (REQ-163/164 were decision-only) -- adopted wasmex (Wasmtime via Rust NIF) behind the mandatory process boundary, pinned Rust toolchain in CI via .tool-versions (rust 1.97.1, decision 0005's exact mechanism), a minimal Letflow.Engine.Wasm.PluginHandler implementing PluginInterface unmodified, proving the process boundary and hang-timeout by test. Restated WASM-01's mechanism clause honestly (Rust NIF not C API) while its AC (no external runtime at deploy time) is met as worded; disclosed the residual native-crash risk decision 0014(a) records. Letflow's first native-code build dependency -- ELIXIR-DEV genuinely installed Rust 1.97.1 via rustup (none was present) and produced a real cargo build, not a precompiled-NIF fetch (a critical distinction the design itself flagged: wasmex depends on rustler_precompiled, so WASMEX_BUILD=true was required to force the real path both locally and in CI). SECURITY-REVIEWER (hard gate on the whole WASM half) and REVIEWER (decision-0014-named sign-off for this specific requirement, independently rebuilt the entire toolchain from scratch) both passed clean on first attempt. TEST-DESIGNER's mutation testing found and closed 2 real gaps (a GenServer.stop/1 cleanup leak with zero prior coverage; the new toolchain-check's F9 rustc-not-found path with zero prior coverage) plus strengthened a weak process-boundary assertion. RELEASE-VALIDATOR empirically confirmed both the native build and the process-boundary pid separation via an ad hoc script, not just a code read. This branch was rebased mid-run onto concurrent work from another session (REQ-155/REQ-123/ISS-0287) with zero conflicts. The FIRST REAL CI RUN on the opened PR found a genuine bug none of six local agent sandboxes caught: a test shelled out to `git diff main...HEAD`, which assumes a local `main` branch -- GitHub Actions' PR checkout only creates `origin/main`, not a local `main`. Fixed with a defensive ref-resolution fallback (try origin/main, then main), documented in docs/anti-patterns.md, rebased, and CI went green on the second attempt -- confirming the whole Rust-toolchain-in-CI mechanism genuinely works end-to-end, which no local sandbox run could have proven on its own. Separately, TEST-RUNNER found and ORCH reopened ISS-0287 (Postgres connection-pool exhaustion recurring at N=8 partitions, unrelated to this branch's own diff). Unblocks REQ-166 (the full plugin ABI, building on REQ-163's core-modules decision). Queue task 317 released done cleanly."
+        },
+        {
+            "run_id": "WF02-REQ166-20260828",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-166"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/wasm/",
+                "test/letflow/engine/wasm/",
+                "priv/wasm_fixtures/"
+            ],
+            "lock_acquired_at": "2026-08-28T03:32:00Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ166-20260828 created; Step 1 dispatched to CODE-DESIGNER",
+            "backfilled": false,
+            "queue_task_id": 318,
+            "queue_agent_id": "orch-ai-dala",
+            "note": "WF-02 for REQ-166 (queue task 318, GH#618, stage S5). WASM module ABI validation and rejection of non-conforming modules AT REGISTRATION (WASM-02), implementing the export contract REQ-163 chose (core modules: init/execute/deinit/get_capabilities, plus the implicit alloc export) -- must cite REQ-163's artefact, not re-derive the mapping. Rejection must be a structured error naming the specific missing export, and registration must be a distinct step from invocation so a rejected module is genuinely never invocable (not merely fails later at first call). Builds directly on REQ-165's PluginHandler/process-boundary pattern. SECURITY-REVIEWER hard gate. Depends on REQ-165 (done). Queue claimed via get_next_task 2026-08-28T03:31:50Z."
         }
     ]
 }

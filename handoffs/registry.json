@@ -2908,22 +2908,22 @@
             "run_id": "WF02-REQ166-20260828",
             "workflow_id": "WF-02",
             "requirement_ids": ["REQ-166"],
-            "issue_ids": [],
+            "issue_ids": ["ISS-0351"],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/engine/wasm/",
                 "test/letflow/engine/wasm/",
                 "priv/wasm_fixtures/"
             ],
             "lock_acquired_at": "2026-08-28T03:32:00Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ166-20260828 created; Step 1 dispatched to CODE-DESIGNER",
+            "lock_released_at": "2026-08-28T05:12:43Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #687 squash-merged (3da54ec); queue task 318 released done cleanly",
             "backfilled": false,
             "queue_task_id": 318,
             "queue_agent_id": "orch-ai-dala",
-            "note": "WF-02 for REQ-166 (queue task 318, GH#618, stage S5). WASM module ABI validation and rejection of non-conforming modules AT REGISTRATION (WASM-02), implementing the export contract REQ-163 chose (core modules: init/execute/deinit/get_capabilities, plus the implicit alloc export) -- must cite REQ-163's artefact, not re-derive the mapping. Rejection must be a structured error naming the specific missing export, and registration must be a distinct step from invocation so a rejected module is genuinely never invocable (not merely fails later at first call). Builds directly on REQ-165's PluginHandler/process-boundary pattern. SECURITY-REVIEWER hard gate. Depends on REQ-165 (done). Queue claimed via get_next_task 2026-08-28T03:31:50Z."
+            "note": "WF-02 for REQ-166 (queue task 318, GH#618, stage S5). WASM module ABI validation and rejection of non-conforming modules AT REGISTRATION (WASM-02), implementing the export contract REQ-163 chose (core modules: init/execute/deinit/get_capabilities, plus the implicit alloc export), citing REQ-163's artefact directly. Design went through one genuine rework round: CODE-DESIGN-VALIDATOR caught a real conflict where the first draft misread req163's own section 4 (which explicitly assigns import-driven, instantiation-based rejection to REQ-166's own register/1, not REQ-167) and a false 'verified live' claim that Wasmex.start_link/1 cleanly absorbs an unresolved-import crash (it actually crashes a non-trapping caller via a linked EXIT signal) -- both independently reproduced and fixed, redesigning register/1 as a genuine two-stage flow (static export/signature check, then a Task.Supervisor-wrapped real instantiation attempt). Implemented Letflow.Engine.Wasm.ModuleRegistry with a new dedicated Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor. SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER (full suite 2318/2318), and RELEASE-VALIDATOR all independently passed clean. TEST-DESIGNER's mutation pass (15->20 tests) found the stage-1/stage-2 gate and swapped-signature defect detection were undertested and closed both gaps; it also live-verified a genuine but narrow finding -- Task.shutdown(:brutal_kill) on the timeout path does not stop the underlying native Wasmtime execution thread on a maliciously-hanging module -- filed as ISS-0351 (MINOR, no tenant-facing path exists yet to exploit it, deferred to whichever future requirement adds one). Unblocked REQ-167 (capability sandboxing) and the rest of the plugin ABI work. Queue task 318 released done cleanly."
         }
     ]
 }

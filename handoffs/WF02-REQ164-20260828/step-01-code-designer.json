@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF02-REQ164-20260828/step-01-code-designer.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -32,6 +32,15 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "COMPLETED",
+    "decision": "NO -- Letflow does not host WASM guest compilation",
+    "artifact": "lib/letflow/design/req164-wasm-compilation-hosting.md",
+    "declined_requirements": ["WASM-03", "WASM-04", "WASM-05"],
+    "req_175_disposition": "must be marked cancelled with a status-history event by DOC-UPDATER at Step 6, per artefact Decision section",
+    "s6_inputs_assumed_not_available": ["artifact storage", "retention", "job execution"],
+    "placement": "lib/letflow/design/ (not a new decisions/ record) -- mirrors REQ-163's placement reasoning, operates entirely inside decision 0014's premise",
+    "files_touched": ["lib/letflow/design/req164-wasm-compilation-hosting.md"],
+    "mix_exs_or_engine_touched": false,
+    "requirements_yaml_touched": false
   }
 }

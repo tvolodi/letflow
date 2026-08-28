@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF02-REQ166-20260828/step-01-code-designer.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -37,6 +37,11 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "COMPLETED",
+    "summary": "Designed WASM-02 registration-time ABI validation. New module Letflow.Engine.Wasm.ModuleRegistry (lib/letflow/engine/wasm/module_registry.ex, not yet implemented) with a single entry point register/1, fully decoupled from PluginHandler.handle_node/1's invocation path. Validation uses Wasmex.Module.compile/2 + Wasmex.Module.exports/1 (verified live against the installed wasmex v0.15.1 dependency via MIX_ENV=test mix run scripts compiling real WAT fixtures -- confirmed export_info() shapes {:fn, params, results} / {:memory, %{...}} and that compile/2 never instantiates or resolves imports) -- never Wasmex.start_link/1 -- so a rejected module structurally cannot reach Wasmex.call_function/4 (proof: register/1 only calls Store.new/0 + Module.compile/2; a registered_module() is an @opaque struct only register/1's success branch can construct; every future invocation call site is designed to accept only that opaque value, never raw bytes). Structured error shape: {:invalid_abi, [export_defect()]} with :missing/:wrong_kind/:wrong_signature variants naming the exact export. Cites req163-wasm-abi-choice.md sections 3.1 (four named exports) and 3.2 (implicit alloc + memory export) verbatim, no re-derivation. All 6 REQ-166 acceptance criteria mapped in a traceability table (design doc section 6). Zero literal Elixir implementation code -- @spec/@type declarations only.",
+    "artifacts_out": [
+      "lib/letflow/design/req166-wasm-module-abi-validation.md",
+      "test/specs/REQ-166.md"
+    ]
   }
 }

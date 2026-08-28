@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "TEST-DESIGNER",
   "file": "handoffs/WF02-REQ170-20260828/step-final-ci-fix.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S5",
@@ -30,6 +30,26 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "COMPLETED",
+    "summary": "Reduced the genuine-hang footprint of test/letflow/engine/wasm/call_timeout_test.exs and test/letflow/engine/wasm/plugin_handler_test.exs's REQ-170 blocks without modifying call_timeout.ex or plugin_handler.ex. Two changes: (1) call_timeout_test.exs's AC5 describe block -- the first test (inner wasmex-level timeout_ms=300 hang, classify() check) was converted to a synthetic outcome() value, a reason string captured verbatim from one real live run of that exact call shape (scratch/req170_capture_outcome.exs, git-ignored). This mechanism (inner GenServer.call timeout -> PluginInterface {:exit, reason} -> classify/1) is still proven live elsewhere: plugin_handler_test.exs's 'REQ-170 AC1' test exercises the identical shape and also asserts CallTimeout.classify(result) == :wall_clock_timeout. The block's second test (outer Task.yield/2 timeout shape -> classify()) was KEPT live: it is the only live end-to-end proof that classify/1 recognizes the outer-timeout string (plugin_handler_test.exs's AC3 test exercises the same outer boundary but never calls classify/1). (2) plugin_handler_test.exs's 'REQ-170 AC4' describe block: consolidated 2 tests / 3 live calls (300ms, 2_000ms, 7_000ms) into 1 test / 2 live calls (300ms, 7_000ms) -- a pair straddling wasmex's own hardcoded 5_000ms default proves both 'shorter binds sooner' and 'timeout_ms is not silently dropped to the hardcoded default' (M6's own mutation-guard concern, per test/specs/REQ-170.md) in the minimum number of calls. AC1, AC2, AC3, and REQ-165's own pre-existing AC5 outer-timeout test were left untouched -- each is the sole live end-to-end proof of a distinct mechanism, so touching them would have weakened real coverage for its own AC.",
+    "leak_count": {
+      "before": "~8-9 genuinely-hanging (permanently native-thread-leaking) live wasmex calls across the two files (call_timeout_test.exs: AC2's direct Wasmex.call_function/4 test = 1, AC5's two live-hang tests = 2, total 3; plugin_handler_test.exs: REQ-165's own pre-existing AC5 outer-timeout test = 1, REQ-170 AC1 = 1, REQ-170 AC3 = 1, REQ-170 AC4's two tests = 3 live calls [300ms+2_000ms in test 1, 7_000ms in test 2], total 6; grand total 3+6=9, matching the handoff's own ~8 estimate within its stated margin).",
+      "after": "7 genuinely-hanging live wasmex calls (call_timeout_test.exs: AC2 = 1, AC5's remaining live test = 1, total 2; plugin_handler_test.exs: REQ-165's own AC5 = 1 [untouched, out of scope -- different, already-shipped requirement], REQ-170 AC1 = 1, REQ-170 AC3 = 1, REQ-170 AC4 consolidated = 2, total 5; grand total 2+5=7).",
+      "reduction": "9 -> 7 genuinely-hanging calls (~22% reduction). Every one of REQ-170's 7 real acceptance criteria (AC1-AC7, docs/requirements.yaml) still has at least one live, end-to-end test proving the real mechanism -- this hard constraint from the handoff's own AC1 was prioritized over chasing the 'roughly half' target number once every AC's live proof was already at its structural minimum (each remaining live call proves a distinct mechanism that cannot be made synthetic without losing real coverage of that AC). REQ-170's own test count went from 30 to 29 (one test removed by the AC4 consolidation)."
+    },
+    "verification": {
+      "mix_compile_warnings_as_errors": "PASS -- `export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" && export WASMEX_BUILD=true && MIX_ENV=test mix compile --warnings-as-errors` exited 0, no output (clean).",
+      "mix_test_wasm_dir": "PASS -- `mix test test/letflow/engine/wasm/`: 'Finished in 10.5 seconds (0.00s async, 10.5s sync)\\n\\nResult: 97 passed'. 0 failures.",
+      "mix_test_two_files": "PASS -- `mix test test/letflow/engine/wasm/call_timeout_test.exs test/letflow/engine/wasm/plugin_handler_test.exs`: 'Finished in 10.3 seconds (0.00s async, 10.3s sync)\\n\\nResult: 29 passed'. 0 failures (30 -> 29: one fewer test from the AC4 consolidation).",
+      "mix_test_full_suite": "PASS -- full `mix test` (CI's own invocation, no scripts/test_parallel.sh), run to completion in the background and its exit code confirmed 0: 'Finished in 656.5 seconds (11.5s async, 645.0s sync)\\n\\nResult: 2388 passed (5 properties, 2383 tests), 3 excluded'. 0 failures -- no cascading failure of the kind PR #691 CI hit (module_registry_test.exs and all other WASM/non-WASM tests passed cleanly in the same sequential process).",
+      "mix_letflow_lint_handoffs": "PASS -- `mix letflow.lint_handoffs`: 'letflow.lint_handoffs: OK -- 0 new violations across 1275 handoff files (25 pre-existing grandfathered, traced to ISS-0190).' 0 new violations introduced by this handoff.",
+      "implementation_files_untouched": "Confirmed via `git diff --stat -- lib/letflow/engine/wasm/call_timeout.ex lib/letflow/engine/wasm/plugin_handler.ex`: empty output (no changes)."
+    },
+    "artifacts_out": [
+      "test/letflow/engine/wasm/call_timeout_test.exs",
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "test/specs/REQ-170.md"
+    ],
+    "next_step": "Route to RELEASE-VALIDATOR / ORCH for independent re-verification and merge decision on PR #691; TEST-DESIGN-VALIDATOR was not re-invoked since this is a post-merge-pipeline CI fix per the handoff's own routing (ORCH directly to TEST-DESIGNER), not a normal WF-02 Step 3 -- ORCH should decide whether an additional TEST-DESIGN-VALIDATOR pass is warranted before merge."
   }
 }

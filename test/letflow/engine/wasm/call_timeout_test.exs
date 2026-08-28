@@ -99,17 +99,31 @@ defmodule Letflow.Engine.Wasm.CallTimeoutTest do
   # ---------------------------------------------------------------------
 
   describe "AC5: classify/1 is distinguishable from ResourceLimits.classify_call_result/1" do
-    test "a real captured wall-clock-timeout PluginInterface outcome classifies as :wall_clock_timeout" do
-      hang_context =
-        context(%{
-          node_config: %{
-            "wasm_fixture" => "wasm_fixtures/req170_hang.wat",
-            "export" => "hang",
-            "timeout_ms" => 300
-          }
-        })
+    # CI-hang-footprint reduction (ORCH final-ci-fix handoff,
+    # WF02-REQ170-20260828): this test used to dispatch its OWN live hang
+    # through PluginInterface.invoke/2 with node_config["timeout_ms"] => 300,
+    # duplicating a live end-to-end proof of the exact same mechanism (inner
+    # wasmex-level GenServer.call timeout -> PluginInterface {:exit, reason}
+    # -> classify/1) that plugin_handler_test.exs's "REQ-170 AC1: configured
+    # timeout_ms bounds the caller's wait" test already covers live (same
+    # req170_hang.wat fixture, same node_config["timeout_ms"] shape, and it
+    # also asserts CallTimeout.classify(result) == :wall_clock_timeout).
+    # Converted to a synthetic outcome() value, captured verbatim from one
+    # real run of that exact live call (`scratch/req170_capture_outcome.exs`,
+    # git-ignored per core-directives.md's scratch rule, same node_config
+    # shape as plugin_handler_test.exs's AC1 test): removes one permanently-
+    # leaked native wasmex thread with zero loss of coverage, since the live
+    # end-to-end proof for this mechanism still exists (in plugin_handler_test.exs).
+    test "a real captured wall-clock-timeout PluginInterface outcome (synthetic replay of a live-captured string) classifies as :wall_clock_timeout" do
+      # Captured verbatim, 2026-08-28, from a live
+      # `PluginInterface.invoke(PluginHandler, hang_context)` call against
+      # req170_hang.wat with node_config["timeout_ms"] => 300 -- the exact
+      # shape plugin_handler_test.exs's REQ-170 AC1 test still proves live.
+      captured_reason =
+        "plugin handler Letflow.Engine.Wasm.PluginHandler crashed: " <>
+          "{:timeout, {GenServer, :call, [#PID<0.297.0>, {:call_function, \"hang\", [], 300}, 300]}}"
 
-      assert {:error, _reason} = outcome = PluginInterface.invoke(PluginHandler, hang_context)
+      outcome = {:error, captured_reason}
       assert CallTimeout.classify(outcome) == :wall_clock_timeout
     end
 

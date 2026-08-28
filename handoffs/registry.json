@@ -2952,20 +2952,20 @@
             "requirement_ids": ["REQ-168"],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/engine/wasm/",
                 "test/letflow/engine/wasm/",
                 "priv/wasm_fixtures/"
             ],
             "lock_acquired_at": "2026-08-28T06:37:33Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 -- bookkeeping commit to main in progress",
+            "lock_released_at": "2026-08-28T08:03:43Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #689 squash-merged (1dfb44a); queue task 320 released done cleanly",
             "backfilled": false,
             "queue_task_id": 320,
             "queue_agent_id": "orch-ai-dala",
-            "note": "WF-02 for REQ-168 (queue task 320, GH#620, stage S5). WASM linear memory isolation and host-side validation of every guest pointer/length pair (WASM-08) -- the entry on decision 0014's satisfiable list with the highest cost if wrong: under wasmex/Wasmtime, an unvalidated guest pointer/length dereference is a BEAM-node-level fault (crashes the whole node), not merely a request-level error. Scope: a single validation function bounds-checking (offset, length) against the instance's real linear memory size, rejecting out-of-range offsets, over-length reads, and offset+length integer-overflow wraparound, surfacing a malformed pair as a structured error outcome never an exception/exit/native fault; per-instance memory isolation asserted directly (one instance cannot observe another's memory); moduledoc must honestly disclose this bounds host-side dereferences only, not a fault inside Wasmtime's own native code (mirroring REQ-165's own disclosed residual class). Written once here, before REQ-171/172 (host API) exist, so every host function they build consumes this validator rather than each writing its own. SECURITY-REVIEWER hard gate. Depends on REQ-166 (done). Queue claimed via get_next_task 2026-08-28T06:37:10Z."
+            "note": "WF-02 for REQ-168 (queue task 320, GH#620, stage S5). WASM linear memory isolation and host-side validation of every guest pointer/length pair (WASM-08) -- the entry on decision 0014's satisfiable list with the highest cost if wrong. CODE-DESIGNER's live verification found a genuine, previously-undocumented hazard in wasmex: at extreme non-guest-reachable magnitudes, Wasmex.Memory.read_binary/4 can hang the calling process forever (length=2^63, uncaught native panic, no receive timeout) or SIGABRT the entire OS process -- the BEAM node itself under this project's runtime (length=2^40, confirmed live, exit code 134). Design required one genuine rework round: CODE-DESIGN-VALIDATOR independently caught a false transcript claim (Wasmex.Memory.size/2 was documented as returning {:ok, size}, but actually returns a bare integer) -- the design's own algorithm already used the correct bare-integer form, only the section-1 transcript was wrong, fixed and re-verified live. Implemented Letflow.Engine.Wasm.MemoryGuard: a pure check_bounds/3 using Elixir's arbitrary-precision integer arithmetic (exact at any magnitude, no wraparound possible) rejects any dangerous magnitude before it ever reaches wasmex, regardless of whether wasmex's own internal check would also catch it. No new Task.Supervisor needed (MemoryGuard only calls Wasmex.Memory with already-validated in-range values). SECURITY-REVIEWER (independently proved a flagged design-table-vs-algorithm ordering discrepancy was mathematically benign), REVIEWER (fixed the stale design-doc table entry), TEST-DESIGN-VALIDATOR, TEST-RUNNER (full suite 2354/2354), and RELEASE-VALIDATOR all independently passed clean. TEST-DESIGNER's mutation pass (16->18 tests) found and closed 2 real gaps (a 64-bit-truncation false-accept, a write/4 length-confusion bug). Every gate that touched a dangerous magnitude did so only against the pure check_bounds/3 function, verified explicitly and repeatedly by 5 separate agents across this run -- never a live wasmex call. Unblocks REQ-169 onward (resource limits, host API). Queue task 320 released done cleanly."
         }
     ]
 }

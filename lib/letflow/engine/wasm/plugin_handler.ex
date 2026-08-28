@@ -103,8 +103,21 @@ defmodule Letflow.Engine.Wasm.PluginHandler do
     timeout_ms = Map.get(node_config, "timeout_ms", @default_wasmex_timeout_ms)
 
     case run_guest(fixture, export, timeout_ms) do
-      {:ok, answer} -> {:complete, %{"answer" => answer, "executed_in_pid" => self()}}
-      {:error, reason} -> {:error, reason}
+      {:ok, answer} ->
+        {:complete, %{"answer" => answer, "executed_in_pid" => self()}}
+
+      {:error, reason} ->
+        {:error, reason}
+
+      # REQ-172 -- call_export/3 now distinguishes a guest's own platform.fail call
+      # (design §2.2) from an ordinary guest trap/failure. This handler's own
+      # @callback contract (Letflow.Engine.PluginInterface.outcome/0) has exactly two
+      # shapes, {:complete, _} | {:error, _} -- a future dispatch-integration
+      # requirement may surface {:failed, _, _} more richly; until then it maps onto
+      # the existing {:error, _} outcome, never silently dropped or crashing this
+      # case.
+      {:failed, fail_reason, details} ->
+        {:error, "wasm guest called platform.fail: #{fail_reason} (details: #{inspect(details)})"}
     end
   end
 
@@ -117,7 +130,7 @@ defmodule Letflow.Engine.Wasm.PluginHandler do
   #      wasmex instance is never leaked
   #   5. map the raw i32 result (or any wasmex failure) to {:ok, _} | {:error, _}
   @spec run_guest(String.t(), String.t(), pos_integer()) ::
-          {:ok, integer()} | {:error, String.t()}
+          {:ok, integer()} | {:error, String.t()} | {:failed, String.t(), term()}
   defp run_guest(fixture, export, timeout_ms) do
     with {:ok, bytes} <- read_fixture(fixture),
          {:ok, pid} <- start_instance(bytes) do
@@ -151,13 +164,53 @@ defmodule Letflow.Engine.Wasm.PluginHandler do
   # Wasmex.call_function/4's explicit 4th argument in place of the implicit
   # 3-arity call that used to silently accept wasmex's own 5,000ms default.
   # See the design doc §4.3.
+  #
+  # REQ-172 design §2.2 -- on a Wasmex.call_function/4 {:error, _} return, this
+  # function now checks Process.info(pid, :dictionary) for
+  # Letflow.Engine.Wasm.HostApi's fail-signal key BEFORE returning to run_guest/3 --
+  # run_guest/3's own GenServer.stop(pid) call (unchanged, still runs unconditionally
+  # on every path) would otherwise destroy the pdict signal before anything could ever
+  # observe it (live-verified: Process.info/2 on an already-stopped pid returns nil).
+  # Present -> a distinctly-tagged {:failed, reason, details} outcome, taken from the
+  # stash, never from the discarded/generic error message. Absent -> the existing
+  # generic {:error, _} behavior is unchanged (covers a guest trap, ResourceLimits fuel
+  # exhaustion, and an undetected accidental callback bug alike).
   @spec call_export(pid(), String.t(), pos_integer()) ::
-          {:ok, integer()} | {:error, String.t()}
+          {:ok, integer()} | {:error, String.t()} | {:failed, String.t(), term()}
   defp call_export(pid, export, timeout_ms) do
     case Wasmex.call_function(pid, export, [], timeout_ms) do
-      {:ok, [answer]} -> {:ok, answer}
-      {:ok, other} -> {:error, "wasm guest returned an unexpected shape: #{inspect(other)}"}
-      {:error, reason} -> {:error, "wasm guest call failed: #{inspect(reason)}"}
+      {:ok, [answer]} ->
+        {:ok, answer}
+
+      {:ok, other} ->
+        {:error, "wasm guest returned an unexpected shape: #{inspect(other)}"}
+
+      {:error, reason} ->
+        case fail_signal(pid) do
+          {:ok, %{reason: fail_reason, details: details}} -> {:failed, fail_reason, details}
+          :none -> {:error, "wasm guest call failed: #{inspect(reason)}"}
+        end
+    end
+  end
+
+  # REQ-172 design §2.2 -- reads the fail-signal key (private to
+  # Letflow.Engine.Wasm.HostApi) out of the still-alive Wasmex instance process's own
+  # dictionary. Must be called strictly before that pid is stopped or otherwise torn
+  # down (run_guest/3's own GenServer.stop(pid) call, immediately after this function
+  # returns, satisfies that ordering).
+  @spec fail_signal(pid()) :: {:ok, %{reason: String.t(), details: term()}} | :none
+  defp fail_signal(pid) do
+    fail_signal_key = {Letflow.Engine.Wasm.HostApi, :fail_signal}
+
+    case Process.info(pid, :dictionary) do
+      {:dictionary, entries} ->
+        case List.keyfind(entries, fail_signal_key, 0) do
+          {^fail_signal_key, signal} -> {:ok, signal}
+          nil -> :none
+        end
+
+      nil ->
+        :none
     end
   end
 end

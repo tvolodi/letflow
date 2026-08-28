@@ -788,3 +788,31 @@ history:
       pending -> cancelled in docs/requirements.yaml. `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 30 on-disk entries before
       this append; 31 after.
+
+  - req: REQ-165
+    event: started
+    agent: ORCH
+    at: "2026-08-28T01:12:40Z"
+    note: >
+      WF02-REQ165-20260828 started (queue task 317, GH#617, stage S5).
+      Claimed via get_next_task after REQ-164's completion. FIRST
+      requirement of S5's WASM half with real code (REQ-163/164 were
+      decision-only) -- adopt wasmex (Wasmtime via a Rust NIF) behind
+      the mandatory process boundary decision 0014 requires, with a
+      pinned Rust toolchain in CI (OQ-7), restating WASM-01's mechanism
+      clause honestly (Rust NIF, not the C API; runtime-loaded shared
+      library, not a statically linked platform binary) while its
+      acceptance criterion (no external Wasm runtime dependency at
+      deploy time) is met as literally worded. Must disclose the
+      residual risk decision 0014(a) records: a Wasmtime/NIF crash
+      takes down the whole BEAM node, uncovered by the process
+      boundary. Letflow's first native-code build dependency --
+      SECURITY-REVIEWER hard gate, REVIEWER sign-off explicitly named.
+      Environment pre-check: no Rust toolchain (cargo/rustc) currently
+      installed -- ELIXIR-DEV must install one and report honestly if
+      environment/network restrictions block a successful native
+      build. Full WF-02 pipeline (not the lighter decision-only path
+      REQ-163/164 used). Step 00 git-setup PASS (ORCH, direct): branch
+      feature/WF02-REQ165-20260828 created from main (4601218) and
+      pushed. Dispatching Step 1 to CODE-DESIGNER next. 31 on-disk
+      entries before this append; 32 after.

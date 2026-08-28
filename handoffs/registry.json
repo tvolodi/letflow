@@ -2879,6 +2879,30 @@
             "queue_task_id": 316,
             "queue_agent_id": "orch-ai-dala",
             "note": "WF-02 for REQ-164 (queue task 316, GH#616, stage S5). Decision-only requirement, no code: settled OQ-3 as NO -- Letflow does not host WASM guest compilation (WASM-03/04/05). Grounded in decision 0014's already-verified evidence: R-Co/src/wasm/ is stubs end to end and a search for '*.wasm' across the entire R-Co tree returns zero files -- no working pipeline to port, no artifact corpus to remain compatible with, plus Letflow has no Zig toolchain and no reason to acquire one, and hosting a compiler is an unjustified build-farm security surface. Consequence: WASM-03/04/05 DECLINED (not deferred); REQ-175 -- the conditional requirement gated on a YES decision -- flipped to CANCELLED (not left pending) in this same run, with its own status-history event, since REQ-175's own text explicitly anticipated exactly this outcome. REVIEWER gave particular scrutiny to the REQ-175 cancellation trigger specifically (the one consequential, real downstream action this run sets up) and RELEASE-VALIDATOR independently re-opened REQ-175's own entry rather than trusting REVIEWER's finding -- both confirmed no existing caller or stakeholder commitment makes the cancellation premature. S6 operational inputs (artifact storage, retention, job execution) honestly disclosed as assumed, not available, since S6 hasn't been reached yet. Lighter pipeline (CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> REVIEWER -> RELEASE-VALIDATOR -> DOC-UPDATER; no ELIXIR-DEV/SECURITY-REVIEWER/TEST-* since no code exists) passed every gate clean on first attempt. One CI-only flake on PR open: a timing-comparison test in REQ-156's memory-limit suite (unrelated Lua work, this PR touches zero code files) failed on one of two parallel CI runs while the other passed cleanly at 2285/2285 -- diff-excluded per structural attribution, confirmed by a clean rerun. This completes both WASM-unblocking decisions (with REQ-163's core-modules choice) -- REQ-165 onward can now proceed with a concrete ABI and a settled compilation-hosting scope boundary. Queue task 316 released done cleanly."
+        },
+        {
+            "run_id": "WF02-REQ165-20260828",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-165"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "mix.exs",
+                "mix.lock",
+                ".tool-versions",
+                ".github/workflows/ci.yml",
+                "lib/letflow/engine/wasm/",
+                "test/letflow/engine/wasm/"
+            ],
+            "lock_acquired_at": "2026-08-28T01:13:00Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ165-20260828 created; Step 1 dispatched to CODE-DESIGNER",
+            "backfilled": false,
+            "queue_task_id": 317,
+            "queue_agent_id": "orch-ai-dala",
+            "note": "WF-02 for REQ-165 (queue task 317, GH#617, stage S5). FIRST WASM-half requirement with real code (REQ-163/164 were decision-only) -- adopt wasmex (Wasmtime via Rust NIF) behind the mandatory process boundary, pinned Rust toolchain in CI (OQ-7), a minimal PluginInterface-implementing handler module proving the process boundary by test, restating WASM-01's mechanism clause honestly while its acceptance criterion (no external Wasm runtime at deploy time) is met as worded, and disclosing the residual native-crash risk decision 0014(a) records. Letflow's first native-code build dependency -- SECURITY-REVIEWER hard gate, REVIEWER sign-off explicitly named per decision 0014. Environment pre-check: no Rust toolchain (cargo/rustc) present -- ELIXIR-DEV must install one and report honestly, not speculate, if network/environment restrictions block a successful native build. Full WF-02 pipeline (design -> implementation -> both hard gates -> mutation-tested test design -> full-suite run -> release validation -> doc update), unlike REQ-163/164's lighter decision-only path. Queue claimed via get_next_task 2026-08-28T01:12:40Z."
         }
     ]
 }

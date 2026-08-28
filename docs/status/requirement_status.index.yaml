@@ -686,8 +686,12 @@ volumes:
     path: docs/status/requirement_status.v5.yaml
     status: current
     opened: 2026-08-26
-    entries: 31
+    entries: 32
     note: >
+      Incremented to 32 by ORCH's own REQ-165 started-event append (Step 00,
+      WF02-REQ165-20260828) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 32 on-disk entries.
+
       Incremented to 31 by WF02-REQ164-20260828 (DOC-UPDATER)'s own two
       Step 6 appends -- REQ-164 done-event and REQ-175 cancelled-event
       (REQ-164 decided NO on OQ-3, so REQ-175, the conditional requirement

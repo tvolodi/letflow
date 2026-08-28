@@ -1,0 +1,24 @@
+{
+  "handoff_id": "WF02-REQ172-20260828-step02c",
+  "run_id": "WF02-REQ172-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 2c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/engine/wasm/host_api.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Queue task 324, GH#624, stage S5. REQ-172 explicitly names SECURITY-REVIEWER as a hard gate. Implementation committed as eed0e91 on feature/WF02-REQ172-20260828, per the approved design lib/letflow/design/req172-wasm-host-api-write-path-and-parity-suite.md (commit d8a4dd3). Changed files: lib/letflow/engine/wasm/host_api.ex, capability_gate.ex, plugin_handler.ex; priv/wasm_fixtures/req167_platform_call_only.wat (updated), req172_host_api.wat (new); test/support/host_api_parity.ex (new); test/letflow/engine/wasm/capability_gate_test.exs (one assertion updated). No file under lib/letflow/engine/lua/ touched."
+  },
+  "task": {
+    "description": "Independently review this diff against docs/agents/instructions/security-invariants.md INV-1..INV-8, with particular attention to: (1) write_variable's staged-write mechanism -- confirm no path exists where a partial/uncommitted write becomes observable to other invocations or survives a failure arm (trap, fuel exhaustion, memory cap, wall-clock timeout, fail); (2) call_service's tenant/capability boundary -- confirm the widened 6-param platform_call_service dispatch does not let a guest reach a service call without the REQ-167 capability gate still applying, and that no guest-supplied input can influence which tenant prefix or capability set is used (decision 0014 (e)); (3) the new capability_gate.ex known_host_functions/0 accessor and write_variable/fail import rows -- confirm they don't widen the whitelist beyond what's intended; (4) the fail-signal process-dictionary mechanism in plugin_handler.ex's call_export/3 -- confirm reading another process's dictionary via Process.info(pid, :dictionary) cannot leak anything beyond the intended fail-signal key, and that this doesn't introduce a new way for a guest to fake a fail signal or interfere with a concurrent invocation's signal (each invocation should have its own process, but verify this explicitly against plugin_handler.ex's actual process-per-invocation structure); (5) confirm no host function calls Letflow.Repo (or similar tenant-scoped resource) with a prefix or identifier derived from guest-supplied input anywhere in the new write-path code.",
+    "acceptance_criteria": [
+      "a test asserts a guest that writes variables and then FAILS leaves instance variable state unchanged, asserted separately for each failure arm: a guest trap, fuel exhaustion (REQ-169), memory cap (REQ-169), wall-clock timeout (REQ-170), and fail",
+      "a test asserts call_service returns a structured error to the guest on service failure rather than trapping, and a separate test asserts a missing service capability fails per REQ-167 -- the two behaviours asserted distinctly",
+      "no host function calls Letflow.Repo with a prefix derived from guest-supplied input; the moduledoc states the tenant prefix is supplied by the calling engine code, per decision 0014 (e)",
+      "capability gating for these functions comes from REQ-167's manifest-derived whitelist; no second capability model is introduced"
+    ]
+  },
+  "result": null
+}

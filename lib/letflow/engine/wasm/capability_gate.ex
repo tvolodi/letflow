@@ -88,17 +88,18 @@ defmodule Letflow.Engine.Wasm.CapabilityGate do
   "future grant" clause is not satisfied merely because `manifest()`
   has a generic capability-list shape.**
 
-  ## Placeholder registry, not a resolved host-API vocabulary
+  ## Placeholder registry, now fully resolved (REQ-172)
 
   `@known_imports` was originally a small, fixed placeholder proving the
   *mechanism* (whitelist construction and enforcement) only. REQ-171
-  (`lib/letflow/design/req171-wasm-host-api-read.md`, gate-approved) extends it
-  additively — real rows for `read_variable`, `log`, `now`, `uuid`, dispatching to
-  `Letflow.Engine.Wasm.HostApi`'s real implementations — while `platform_call_service`
-  stays REQ-167's original placeholder stub, REQ-172's job. No test of *this* module
-  ever invokes a granted function through a successfully-instantiated instance for the
-  still-placeholder rows; whitelist presence/absence and instantiation success/failure
-  remain observable without calling the granted function for those.
+  (`lib/letflow/design/req171-wasm-host-api-read.md`, gate-approved) extended it
+  additively with real rows for `read_variable`, `log`, `now`, `uuid`. REQ-172
+  (`lib/letflow/design/req172-wasm-host-api-write-path-and-parity-suite.md`,
+  gate-approved) completes the registry: `platform_call_service`'s signature widens
+  from its original 2-param illustrative placeholder to its real 6-param shape and
+  dispatches to `HostApi.do_call_service/8`, and two new rows (`write_variable`,
+  `fail`) are added — every row now dispatches to a real
+  `Letflow.Engine.Wasm.HostApi` implementation, no placeholder stub remains.
 
   ## REQ-171 — `:none`-gated rows and `build_import_table/2` (design §4)
 
@@ -159,12 +160,13 @@ defmodule Letflow.Engine.Wasm.CapabilityGate do
   @type capability_requirement :: capability() | :none
 
   @typedoc """
-  REQ-171 design §4.7 — which `Letflow.Engine.Wasm.HostApi` function (if any) a row's
-  callback dispatches to. `:call_service` (REQ-167's original placeholder, unchanged)
-  still resolves to `stub_callback/0`; the other four values name a real
-  `Letflow.Engine.Wasm.HostApi.do_*/N` function.
+  REQ-171/172 design §4.7 — which `Letflow.Engine.Wasm.HostApi` function a row's
+  callback dispatches to. As of REQ-172, every row names a real
+  `Letflow.Engine.Wasm.HostApi.do_*/N` function — `:call_service` is no longer a
+  REQ-167 placeholder (its signature and dispatch both went real this requirement).
   """
-  @type host_fn_spec :: :read_variable | :log | :now | :uuid | :call_service
+  @type host_fn_spec ::
+          :read_variable | :log | :now | :uuid | :call_service | :write_variable | :fail
 
   @typedoc """
   One entry in the host-function registry (`@known_imports` below). `capability` is
@@ -223,12 +225,15 @@ defmodule Letflow.Engine.Wasm.CapabilityGate do
   @unresolved_import_pattern ~r/unknown import: `(?<namespace>[^:`]+)::(?<function>[^`]+)` has not been defined/
 
   # design §6's original two-entry placeholder for `var:read`/`service:call`, extended
-  # by REQ-171 design §4.4 with the real `read_variable`/`log`/`now`/`uuid` rows.
-  # `var:read`/`service:call` and `read_variable`/`platform_call_service` are WASM-06's
-  # own acceptance-criterion text, used as-is. `read_variable`'s signature is widened
-  # from the original illustrative `[:i32, :i32] -> [:i32]` to the real 4-param
-  # buffer-out shape (REQ-171 design §5.3) -- `platform_call_service` keeps its
-  # original illustrative signature and placeholder stub, REQ-172's job.
+  # by REQ-171 design §4.4 with the real `read_variable`/`log`/`now`/`uuid` rows, and
+  # by REQ-172 design §6.1 with real `write_variable`/`fail` rows plus
+  # `platform_call_service`'s widened, real signature/dispatch. `var:read`/
+  # `service:call` and `read_variable`/`platform_call_service` are WASM-06's own
+  # acceptance-criterion text, used as-is. `read_variable`'s signature was widened from
+  # the original illustrative `[:i32, :i32] -> [:i32]` to the real 4-param buffer-out
+  # shape (REQ-171 design §5.3); `platform_call_service`'s signature is widened here
+  # from its original illustrative 2-param placeholder to its real 6-param shape
+  # (REQ-172 design §6.1).
   @known_imports [
     %{
       capability: "var:read",
@@ -266,11 +271,42 @@ defmodule Letflow.Engine.Wasm.CapabilityGate do
       capability: "service:call",
       namespace: "env",
       name: "platform_call_service",
-      params: [:i32, :i32],
+      params: [:i32, :i32, :i32, :i32, :i32, :i32],
       results: [:i32],
       stub: :call_service
+    },
+    %{
+      capability: "var:write",
+      namespace: "env",
+      name: "write_variable",
+      params: [:i32, :i32, :i32, :i32],
+      results: [:i32],
+      stub: :write_variable
+    },
+    %{
+      capability: :none,
+      namespace: "env",
+      name: "fail",
+      params: [:i32, :i32, :i32, :i32],
+      results: [],
+      stub: :fail
     }
   ]
+
+  @doc """
+  REQ-172 design §8.4 -- a small, additive, test-only accessor returning the `stub`
+  field of every `@known_imports` row (i.e. every host function this module currently
+  dispatches to a real `Letflow.Engine.Wasm.HostApi` implementation for, plus
+  `:call_service`'s still-real dispatch since REQ-172 widens it), mirroring
+  `Letflow.Engine.Lua.Platform.capability_matrix/0`'s own existing
+  "exposed for introspection/testing" pattern. Used by the shared parity harness's
+  exhaustiveness guard so a future 8th `@known_imports` row without a matching parity
+  scenario is caught by construction, never by a second hand-written literal list.
+  """
+  @spec known_host_functions() :: [host_fn_spec()]
+  def known_host_functions do
+    Enum.map(@known_imports, & &1.stub)
+  end
 
   @doc """
   Builds the `imports:` map (design §5.1) containing an entry for every
@@ -316,14 +352,13 @@ defmodule Letflow.Engine.Wasm.CapabilityGate do
     end)
   end
 
-  # design §4.7's dispatch fold -- for each of the four real rows this requirement
-  # adds, a closure of arity `1 + length(params)` (context, then one argument per
-  # declared param) that calls the corresponding Letflow.Engine.Wasm.HostApi.do_*
-  # function with context, the raw argument list, and the closed-over
-  # execution_context. `:call_service` (unchanged, REQ-172's job) preserves the
-  # existing stub_callback/0 behavior. No capability check runs inside any of these
-  # callback bodies -- this module's own import-table-membership filter, above, is the
-  # only gating WASM ever gets, structurally prior to any guest code running at all.
+  # design §4.7's dispatch fold -- for every row, a closure of arity
+  # `1 + length(params)` (context, then one argument per declared param) that calls
+  # the corresponding Letflow.Engine.Wasm.HostApi.do_* function with context, the raw
+  # argument list, and the closed-over execution_context. No capability check runs
+  # inside any of these callback bodies -- this module's own import-table-membership
+  # filter, above, is the only gating WASM ever gets, structurally prior to any guest
+  # code running at all.
   @spec build_callback(host_fn_spec(), HostApi.execution_context()) :: (... -> term())
   defp build_callback(:read_variable, execution_context) do
     fn context, name_ptr, name_len, out_ptr, out_cap ->
@@ -354,8 +389,38 @@ defmodule Letflow.Engine.Wasm.CapabilityGate do
     fn context, out_ptr, out_cap -> HostApi.do_uuid(context, out_ptr, out_cap) end
   end
 
-  defp build_callback(:call_service, _execution_context) do
-    stub_callback()
+  defp build_callback(:call_service, execution_context) do
+    fn context, service_id_ptr, service_id_len, payload_ptr, payload_len, out_ptr, out_cap ->
+      HostApi.do_call_service(
+        context,
+        service_id_ptr,
+        service_id_len,
+        payload_ptr,
+        payload_len,
+        out_ptr,
+        out_cap,
+        execution_context
+      )
+    end
+  end
+
+  defp build_callback(:write_variable, execution_context) do
+    fn context, name_ptr, name_len, value_ptr, value_len ->
+      HostApi.do_write_variable(
+        context,
+        name_ptr,
+        name_len,
+        value_ptr,
+        value_len,
+        execution_context
+      )
+    end
+  end
+
+  defp build_callback(:fail, _execution_context) do
+    fn context, reason_ptr, reason_len, details_ptr, details_len ->
+      HostApi.do_fail(context, reason_ptr, reason_len, details_ptr, details_len)
+    end
   end
 
   @doc """
@@ -402,17 +467,6 @@ defmodule Letflow.Engine.Wasm.CapabilityGate do
         Task.shutdown(task, :brutal_kill)
         {:error, {:instantiation_denied, {:timeout, @instantiation_timeout_ms}}}
     end
-  end
-
-  # design §6 -- no test invokes a granted function through a running
-  # instance; whitelist presence/absence and instantiation success/
-  # failure are both observable without ever calling it. A trivial,
-  # constant-returning stub suffices wherever a test needs a working,
-  # callable placeholder. Every current registry entry has one i32
-  # result, so a single arity/shape (context + 2 params) covers both.
-  @spec stub_callback() :: (term(), term(), term() -> integer())
-  defp stub_callback do
-    fn _context, _arg1, _arg2 -> 0 end
   end
 
   # design §4/§7 -- identical crash-shape match to

@@ -1,0 +1,129 @@
+run_id: WF02-REQ172-20260828
+workflow_id: WF-02
+step: "4 (re-check, iteration 1)"
+agent: TEST-RUNNER
+requirement_ids: [REQ-172]
+issue_ids: []
+date: "2026-08-28"
+branch: feature/WF02-REQ172-20260828
+head_commit: 01aaa0ae5bb2a4b3524680b421f4ea0432bed07f
+merge_base_with_main: b49fd7ffe9d8363564a19481d999ee630b0217b8
+prior_report: report-2026-08-28-WF02-REQ172-20260828.yaml (superseded; prior verdict FAIL on this same
+  filename, caused by a real regression this run independently caught: a malformed
+  `context` field -- bare string instead of the HANDOFF_PROTOCOL.md-required object
+  -- in handoffs/WF02-REQ172-20260828/step-01-code-designer-rework1.json, crashing
+  Mix.Tasks.Letflow.LintHandoffs's H6 corpus scan)
+
+environment:
+  toolchain: "local via asdf shims (`source $HOME/.asdf/asdf.sh`); Elixir 1.20.3 (OTP 29), Erlang/OTP 29"
+  docker_compose_up: |
+    `docker compose up -d` failed for the invoking user with "permission
+    denied while trying to connect to the docker API at
+    unix:///var/run/docker.sock". Containers were already running
+    (letflow-1-keycloak-1, letflow-1-postgres-1), confirmed via the
+    permission-denied error's own status listing -- no separate `docker ps`
+    was needed. `.env` sets LETFLOW_DB_PORT=5463 (used for this run per
+    README.md).
+  invocation: "scripts/test_parallel.sh (N=8, derived from `nproc`), run as a normal
+    blocking foreground call; completed in ~2.5 minutes wall clock (parallelized
+    across 8 partitions) -- well under the ~11 minute serial estimate in this
+    step's dispatch, so no background/resume workaround was needed this time."
+
+fix_verification:
+  regression: "handoffs/WF02-REQ172-20260828/step-01-code-designer-rework1.json had
+    a bare-string `context` field; ORCH's commit d55fef3 wrapped it (and 13 other
+    handoff files with the same defect) as {\"note\": <text>}, restoring the
+    schema-required object shape."
+  independent_check: "Parsed step-01-code-designer-rework1.json directly with
+    python3's json module: `context` is now `dict`
+    ({'note': 'Queue task 324, GH#624, stage S5. CODE-DESIGN-VALIDATOR FAILED this
+    design (commit bbc9af9) with a specific, live-verified defect...'}), confirming
+    the fix is genuinely present on this branch, not just claimed in a commit
+    message."
+
+compile_check:
+  command: "mix compile --force --warnings-as-errors"
+  result: "clean -- 'Compiling 136 files (.ex)' / 'Generated letflow app', exit 0, zero warnings"
+
+full_suite:
+  command: "scripts/test_parallel.sh"
+  raw_summary: |
+    test_parallel: N=8 (source: nproc)
+    partition 1: 247 tests, 0 properties, 1 failures, exit 2
+    partition 2: 263 tests, 1 property, 0 failures, exit 0
+    partition 3: 402 tests, 0 properties, 0 failures, exit 0
+    partition 4: 209 tests, 0 properties, 0 failures, exit 0
+    partition 5: 338 tests, 0 properties, 0 failures, exit 0
+    partition 6: 264 tests, 2 properties, 2 failures, exit 2
+    partition 7: 350 tests, 0 properties, 0 failures, exit 0
+    partition 8: 356 tests, 2 properties, 0 failures, exit 0
+    ---
+    combined: 2429 tests, 5 properties, 3 failures (2431/2434 passed)
+
+targeted_confirmations:
+  lint_handoffs: >
+    `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` -- Result: 22 passed,
+    0 failures. The H6 regression from the prior run is genuinely gone (previously:
+    FunctionClauseError in Access.get/3 at lib/mix/tasks/letflow.lint_handoffs.ex:544
+    when scanning step-01-code-designer-rework1.json's string `context`).
+  wasm_write_path: >
+    `mix test test/letflow/engine/wasm/host_api_write_test.exs
+    test/letflow/engine/wasm/capability_gate_test.exs` -- Result: 52 passed,
+    1 excluded, 0 failures. REQ-172's own WASM host_api write-path tests pass
+    cleanly.
+  wasm_hang: >
+    `mix test --only wasm_hang` -- Result: 7 passed, 2440 excluded, 0 failures.
+    Matches prior TEST-DESIGN-VALIDATOR/ORCH reports.
+
+failures:
+  - test: "test A9: every indexed volume's declared entries: count equals what is actually on disk (Letflow.Docs.RequirementStatusInvariantsTest)"
+    location: test/docs/requirement_status_invariants_test.exs:464
+    raw: |
+      A9 — a volume's declared entries: count has drifted from what is on disk.
+      [{"docs/status/requirement_status.v6.yaml", 2, 3}]
+    attribution: >
+      PRE-EXISTING/environmental, previously confirmed by direct reproduction
+      against a `main` worktree (identical mismatch). `git diff --name-only
+      main...HEAD -- docs/status/ docs/requirements.yaml` is empty -- this
+      branch touches neither the status volume nor the index. Unrelated to
+      REQ-172.
+
+  - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: test/mix/tasks/letflow_check_toolchain_test.exs:274
+    raw: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...)"
+    attribution: >
+      PRE-EXISTING/environmental, previously confirmed by reproduction on main
+      (identical ENOENT). No `rustc` installed in this sandbox. Unrelated to
+      REQ-172 (WASM host-API write path), which does not touch
+      lib/mix/tasks/letflow.check_toolchain.ex or its tests.
+
+  - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: test/mix/tasks/letflow_check_toolchain_test.exs:289
+    raw: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...)"
+    attribution: "Same as above -- PRE-EXISTING/environmental."
+
+verdict: PASS
+verdict_reasoning: >
+  Independent re-verification (fresh compile + fresh full-suite run, not a re-read
+  of the prior report) confirms: (1) the LintHandoffs/H6 regression flagged in this
+  run's own prior FAIL verdict is genuinely fixed -- step-01-code-designer-rework1.json's
+  `context` field is now a dict (verified by directly parsing the JSON, not by
+  trusting the fix commit's message), and
+  `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` passes cleanly at
+  22/22; (2) `mix compile --force --warnings-as-errors` is clean, 0 warnings;
+  (3) the full suite via `scripts/test_parallel.sh` (8 partitions) reports
+  2431/2434 passed (5/5 properties, 2426/2429 tests -- combined line reads
+  2429 tests/5 properties/3 failures = 2431/2434 total), with exactly 3
+  failures, confirmed by name from each partition's raw log: A9
+  (Letflow.Docs.RequirementStatusInvariantsTest, requirement_status.v6.yaml
+  declared-count drift) and both rust-pin CheckToolchainTest cases (no rustc
+  in this sandbox) -- the same 3 pre-existing/environmental failures already
+  identified and reproduced against `main` in this run's own prior report,
+  no new or different failures; (4) REQ-172's own WASM host_api write-path
+  tests (test/letflow/engine/wasm/host_api_write_test.exs,
+  test/letflow/engine/wasm/capability_gate_test.exs) pass cleanly, 52
+  passed/0 failed, and the :wasm_hang-tagged suite passes cleanly, 7
+  passed/0 failed. Acceptance criterion ("mix test and mix compile
+  --warnings-as-errors both pass with real output quoted") is met, with the
+  3 residual failures being genuinely pre-existing/environmental and
+  unrelated to REQ-172's diff.

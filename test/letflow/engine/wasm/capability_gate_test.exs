@@ -130,11 +130,13 @@ defmodule Letflow.Engine.Wasm.CapabilityGateTest do
     # empty manifest is no longer `%{}` because `now`/`uuid` are `:none`-gated
     # (always installed, regardless of grant state, mirroring platform.ex's
     # own `now`/`fail` rows) -- this is the intended, documented behavior
-    # change, not a regression.
+    # change, not a regression. REQ-172 design §5.4 widens the `:none`-gated
+    # set again, adding `fail` (mirroring platform.ex's own `fail` row, also
+    # `:none`-gated) -- same intended, documented behavior change.
     test "an empty capability list produces exactly the :none-gated rows, nothing else" do
       table = CapabilityGate.build_import_table(%{capabilities: []})
 
-      assert MapSet.new(Map.keys(table["env"])) == MapSet.new(["now", "uuid"])
+      assert MapSet.new(Map.keys(table["env"])) == MapSet.new(["now", "uuid", "fail"])
     end
 
     test "granting both capabilities exposes both imports (additive, not exclusive)" do

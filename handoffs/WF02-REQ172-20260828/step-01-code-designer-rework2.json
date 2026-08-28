@@ -1,0 +1,24 @@
+{
+  "handoff_id": "WF02-REQ172-20260828-step01-rework2",
+  "run_id": "WF02-REQ172-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 1 (rework iteration 2)",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "lib/letflow/design/req172-wasm-host-api-write-path-and-parity-suite.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Queue task 324, GH#624, stage S5. CODE-DESIGN-VALIDATOR did a full fresh re-check of commit 8106f3a and independently live-verified the fail-uninterceptability mechanism is CORRECT (wrote its own repro against real wasmex 0.15.1, confirmed Process.alive?(pid)==true after exit/1, confirmed exit/raise produce byte-identical messages while a genuine trap has an extra '(wasm trap: ...)' segment, confirmed the pdict stash/read-before-stop ordering is structurally enforceable in plugin_handler.ex's real call_export/3 sequence). Checks 4-7 (write_variable discard-per-arm, call_service two-path distinguishability, parity-harness exhaustiveness, SS9 enumeration, no Lua file touched) all passed with no gaps. The ONLY failing item is a format violation: two blocks of literal, directly-runnable Elixir code where the design's own header promises 'no implementation code... every code sample is a type/signature description, never a function body'."
+  },
+  "task": {
+    "description": "Narrow fix only -- the mechanism itself is confirmed correct and does not need to change. Two blocks violate the design/implementation boundary: (1) SS5.2, lines ~554-557: a bare fenced code block with `Process.put(@fail_signal_pdict_key, %{reason: reason_string, details: details})` followed by `exit({:script_failed, %{reason: reason_string, details: details}})` -- missing only the enclosing `def ... do`, i.e. literal copy-pasteable code, not a signature. SS2.2 already states this same ordering correctly in prose with inline backtick fragments -- rewrite SS5.2's block the same way (prose sentence naming the exact call order and identifiers), matching this project's own gate-approved precedent lib/letflow/design/req160-lua-host-api-write.md around lines 264-268 (process-dictionary stage-then-write conveyed entirely in prose, never as a standalone statement block). (2) SS8.4, lines ~877-880: a complete, literal, runnable ExUnit assertion (`assert MapSet.new(Map.keys(...)) == MapSet.new([...])`) -- this is the actual test body TEST-DESIGNER should write later, not a design-level description. Rewrite it as prose describing the exhaustiveness assertion's SHAPE and SOURCE OF TRUTH (compare scenarios()'s key set against known_host_functions/0's derived set) without quoting the literal assert statement. No other change needed anywhere in the document.",
+    "acceptance_criteria": [
+      "SS5.2 no longer contains a standalone fenced code block of literal Elixir statements; the same ordering/identifiers are conveyed in prose matching req160's established style",
+      "SS8.4 no longer contains a literal, runnable ExUnit assert statement; the exhaustiveness check's shape and source of truth are described in prose",
+      "no other section of the design is modified -- the mechanism, SS2, SS5.3, SS7, SS8.2, SS9.5, OQ-2 resolution, and SS11 checklist all stay as validated",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

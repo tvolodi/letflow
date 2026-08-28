@@ -3099,16 +3099,16 @@
         "REQ-173"
       ],
       "stage": "S5",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/engine/wasm/"
       ],
       "lock_acquired_at": "2026-08-28T18:41:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00",
+      "lock_released_at": "2026-08-28T22:40:24Z",
+      "released_lock": true,
+      "last_known_step": "Step Final",
       "queue_task_id": 325,
-      "note": "WASM module hot reload (WASM-14): in-flight invocations of the prior version complete normally, new invocations use the new version. Concurrency requirement requiring a real overlapping-activation test. Depends on REQ-172 (done). Step 00 bookkeeping committed to main; feature branch about to be created."
+      "note": "PR #694 merged (squash commit ff09d8f). REQ-173: WASM module hot reload (WASM-14) -- Letflow.Engine.Wasm.ModuleVersionRegistry: versioned registration, activate/2, invoke/4 with checkout-based version-holding immune to concurrent activation, ref-counted release, per-version capability isolation. Genuinely bumpy path: 2 CODE-DESIGN-VALIDATOR rework rounds -- iteration 1 fixed an unspecified outer-timeout classification mechanism (live-verified the real exit({:timeout, {GenServer, :call, _}}) shape); iteration 2 fixed a real, late-discovered defect found by TEST-DESIGNER's own test run -- register_version/3 could never register a module requiring any host capability, since it delegated entirely to ModuleRegistry.register/1's empty-import validation (REQ-166's own deliberate scope) -- fixed with a new capability-aware instantiation proof reusing CapabilityGate.build_import_table/1. 1 REVIEWER rework round (missing decision-0014 citation). TEST-DESIGN-VALIDATOR closed a real mutation-testing gap on the new capability-aware proof path with independent mutation evidence (17/17 -> 14/17 with the mutant present). RELEASE-VALIDATOR independently PASSED all 6 acceptance criteria, tracing the capability-registration fix against real source. Mid-run, ORCH found and fixed a real declared-count drift in requirement_status.index.yaml (its own Step 00 miss). CI needed the same recurring mix-format fix (3rd occurrence -- REQ-167 PR #688, REQ-172 PR #693, now this -- anti-patterns.md updated to flag the written-down mitigation alone isn't preventing recurrence) plus 3 benign :wasm_hang isolated-subprocess timing-flake reruns across two duplicate CI runs (main suite passed clean, 2454/2454, every single run). Queue task 325 released done. Unblocks REQ-174 (WASM instance pooling)."
     }
   ]
 }

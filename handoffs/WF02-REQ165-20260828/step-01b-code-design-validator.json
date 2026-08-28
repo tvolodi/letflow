@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step01b-WF02-REQ165-20260828",
+  "run_id": "WF02-REQ165-20260828",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ165-20260828/step-01b-code-design-validator.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-165"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ165-20260828/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "test/specs/REQ-165.md",
+      "lib/letflow/engine/plugin_interface.ex",
+      ".github/workflows/ci.yml",
+      "docs/migration/decisions/0005-pin-formatting-toolchain.md"
+    ],
+    "branch_name": "feature/WF02-REQ165-20260828",
+    "commit": "e407700"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) hard gate on REQ-165's design at lib/letflow/design/req165-wasmex-process-boundary.md. This design's central claim: wasmex v0.15.1 depends on rustler_precompiled, so a bare `mix deps.get && mix compile` could succeed via a precompiled NIF download WITHOUT invoking cargo/rustc at all -- satisfying the fetch/compile mechanically while violating the requirement's explicit 'a successful fetch alone does not satisfy this' clause. The design's fix is WASMEX_BUILD=true forcing a real source build, and it claims wasmex's own upstream .tool-versions already pins rust 1.97.1. Independently re-verify these claims against the real, current wasmex source/docs -- do not trust the design doc's own account. Also verify the CI mechanism proposed (dtolnay/rust-toolchain@stable fed via $GITHUB_OUTPUT, since no version-file: equivalent exists for that action) is technically sound, the handler module design is complete and implementable, and the process-boundary/timeout mechanisms genuinely mirror plugin_interface.ex's real invoke/2,3 code.",
+    "acceptance_criteria": [
+      "Independently verify wasmex v0.15.1's real mix.exs dependencies (via WebFetch to its GitHub repo or hex.pm) include rustler_precompiled and rustler as claimed -- quote the real file.",
+      "Independently verify WASMEX_BUILD=true (or an equivalent real, documented mechanism) genuinely forces a source build bypassing precompiled artifacts -- check wasmex's own README/CI docs for this exact env var or the real equivalent.",
+      "Independently verify wasmex's own upstream .tool-versions file (via gh api or WebFetch to the raw GitHub content) genuinely pins the rust version the design cites -- quote the real file content and note the exact version.",
+      "Confirm the CI mechanism (dtolnay/rust-toolchain@stable fed a version via $GITHUB_OUTPUT since no version-file: input exists for that action) is technically sound -- read the real dtolnay/rust-toolchain action's documented inputs to confirm no version-file equivalent actually exists (or if one now does, flag it as a possible simplification).",
+      "Confirm the handler module design (lib/letflow/engine/wasm/plugin_handler.ex, @behaviour Letflow.Engine.PluginInterface, handle_node/1) is complete enough for ELIXIR-DEV to implement without improvising -- check the two .wat fixtures described (trivial answer-returning guest, hanging guest) are correctly specified.",
+      "Confirm the process-boundary proof mechanism (self() captured inside handle_node/1, returned in the outcome map) and the timeout mechanism (relying on PluginInterface.invoke/2,3's existing, unedited Task.yield/Task.shutdown(:brutal_kill) path) genuinely match plugin_interface.ex's real code -- read invoke/2,3 directly yourself.",
+      "Confirm lib/letflow/engine/plugin_interface.ex is correctly identified as needing zero edits.",
+      "Confirm the moduledoc content specifications (WASM-01 mechanism-clause restatement, residual native-crash-risk disclosure) are worded precisely enough to satisfy the requirement's exact acceptance-criteria wording, and consistent with plugin_interface.ex's own existing disclosed-and-uncovered crash-class language.",
+      "All 9 real acceptance criteria mapped in a traceability table; zero literal Elixir function-body code in the design doc (infra config lines and WAT fixtures are not covered by this rule, per the requirement's own nature).",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

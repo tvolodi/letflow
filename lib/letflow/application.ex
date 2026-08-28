@@ -71,7 +71,16 @@ defmodule Letflow.Application do
         # capability-gated instantiation (REQ-167) are orthogonal concerns with
         # different inputs and different callers, per req166 §2.2's own precedent.
         # No other child depends on start order here.
-        {Task.Supervisor, name: Letflow.Engine.Wasm.CapabilityGateTaskSupervisor}
+        {Task.Supervisor, name: Letflow.Engine.Wasm.CapabilityGateTaskSupervisor},
+        # REQ-173: the hot-reload version registry (design
+        # req173-wasm-module-hot-reload.md §7) and its dedicated
+        # Task.Supervisor, for invoke/4's own outer async_nolink task plus
+        # the nested instantiation-attempt task it spawns internally.
+        # Registration order between these two specific children is not
+        # load-bearing (unlike the SandboxPool/SandboxPool.TaskSupervisor
+        # pair above) -- see the design doc §7's own note.
+        {Letflow.Engine.Wasm.ModuleVersionRegistry, name: Letflow.Engine.Wasm.ModuleVersionRegistry},
+        {Task.Supervisor, name: Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor}
       ] ++ http_child()
 
     # See https://hexdocs.pm/elixir/Supervisor.html

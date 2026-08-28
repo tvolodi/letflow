@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "file": "test/letflow/engine/wasm/host_api_write_test.exs",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "normal",
   "context": "Queue task 324, GH#624, stage S5. TEST-DESIGNER's suite (commit 8088567) plus ELIXIR-DEV's moduledoc fix (commit 0f206b7, REVIEWER re-approved) together bring test/letflow/engine/wasm/ + test/letflow/engine/lua/ to 385 passed, 7 excluded. TEST-DESIGNER's own report documents 4 mutants against host_api.ex/capability_gate.ex, all caught, all reverted (verified via md5sum/git diff --stat), plus one independent spot-check re-verification of the stage_write/2 accumulation mutant (7 failures with mutant present vs 5 baseline gap-tests, confirming 2 new tests genuinely catch it). Files: test/letflow/engine/wasm/host_api_write_test.exs (797 lines), test/specs/REQ-172.md (186 lines, mutation-testing writeup), test/support/host_api_parity.ex (parity harness, includes a Task.async->Task.Supervisor.async_nolink fix), 6 new .wat fixtures (req172_fail_then_continue, write_then_fail, write_then_fuel_exhaustion, write_then_hang [tagged :wasm_hang per ISS-0352 convention], write_then_memory_cap_fail, write_then_trap).",
   "task": {
@@ -22,5 +22,66 @@
       "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "completed_at": "2026-08-28T16:46:36Z",
+    "summary": "Hard gate PASSED. All 8 acceptance criteria independently re-derived (not taken on TEST-DESIGNER's report). Independently re-applied the do_fail/5 fail-uninterceptability mutant (removed the stash_fail_signal/2 call) myself in-tree -- caught decisively (7 of the file's tests failed, plus mix compile --warnings-as-errors itself failed on the resulting unused-function warning, an incidental second signal). Reverted via `git checkout --`, confirmed byte-identical (md5sum 37152b8d723248b646ec8cf39ff67078 before and after) and `git status --porcelain lib/ test/` empty, then re-ran the file green (33 passed, 1 excluded). Ran full `mix test` via scripts/test_parallel.sh (2429 tests, 2430/2434 passed, 4 failures) -- all 4 failures structurally cleared as pre-existing/environmental (none of their files or dependency modules appear in `git diff --name-only main...HEAD`; the two rust-pin toolchain tests fail with ErlangError :enoent because `rustc` is absent from this sandbox's PATH, confirmed directly). Targeted test/letflow/engine/wasm/ + test/letflow/engine/lua/ run: 385 passed, 7 excluded, zero failures -- matches handoff's claimed count exactly, independently reproduced. Also ran the isolated `mix test --only wasm_hang` subprocess directly (the ISS-0352 convention `mix letflow.check.test` automates): 7 passed, 0 failures, confirming the new :wasm_hang-tagged test (req172_write_then_hang.wat) integrates correctly rather than reintroducing the cascading-timeout hazard. mix compile --warnings-as-errors: clean, exit 0.",
+    "acceptance_criteria_verdicts": [
+      {
+        "criterion": "ONE shared scenario definition executed against BOTH executors, quoted in the moduledoc",
+        "verdict": "PASS",
+        "evidence": "test/support/host_api_parity.ex's HostApiParity.scenarios/0 (7 entries: read_variable, log, now, uuid[:wasm_only], write_variable, call_service, fail) is called from host_api_write_test.exs's 'WASM-12' describe block via assert_parity/1 once per scenario -- read each scenario's run_lua/run_wasm closures directly and confirmed both genuinely drive Platform.install/Lua.eval! and a real Wasmex instance respectively, folded into the same outcome() shape and compared with ExUnit.Assertions.assert/1 (not two independently-written suites). The harness's own moduledoc states 'ONE scenario registry' and 'WASM-12', asserted by its own test."
+      },
+      {
+        "criterion": "discard on FAIL for every failure arm: trap, fuel exhaustion, memory cap, wall-clock timeout, fail",
+        "verdict": "PASS",
+        "evidence": "5 distinct tests in 'write_variable: discard on every failure arm', each using a genuinely different .wat fixture/mechanism, each asserting staged_writes(pid) was non-empty pre-teardown (proving the write really staged) then HostApi.take_staged_writes() == %{} from a different process. Read all 5 in full."
+      },
+      {
+        "criterion": "several successful writes apply all of them, no partial state",
+        "verdict": "PASS",
+        "evidence": "'write_variable: staging, accumulation...' describe block: single write, 3-write accumulation with last-write-wins (%{\"a\"=>3,\"b\"=>2}), empty-buffer, malformed-value -2, int/float subtype round-trip. Read in full."
+      },
+      {
+        "criterion": "call_service structured error vs. missing-capability instantiation denial, asserted distinctly",
+        "verdict": "PASS",
+        "evidence": "Two separate tests: service-side failure produces {\"ok\":false,...} with n>=0 (never a trap); missing 'service:call' capability fails at CapabilityGate.start_instance/2 with {:error,{:instantiation_denied,...}} using a SpyServiceCaller double asserting refute_received -- proves the real caller body never runs. Structurally distinct call shapes, never folded together."
+      },
+      {
+        "criterion": "guest catching/ignoring its own fail still fails and does not run to completion",
+        "verdict": "PASS",
+        "evidence": "req172_fail_then_continue.wat scenario: refute match?({:ok,[777]}, result), assert {:error,_}, assert fail-signal present, assert the post-fail marker write_variable call never staged. Directly analogous to REQ-161's own AC1 shape."
+      },
+      {
+        "criterion": "every non-ABI semantic difference enumerated in the moduledoc",
+        "verdict": "PASS",
+        "evidence": "Commit 0f206b7 added all 5 (9.1 wall-clock abandonment, 9.2 malformed-name arm, 9.3 var:write/variable:write token divergence, 9.4 call_service granularity, 9.5 fail's structurally different mechanism) -- confirmed by grep against lib/letflow/engine/wasm/host_api.ex directly, matching the 5 corresponding AC6 tests' substring assertions."
+      },
+      {
+        "criterion": "Lua is the definition; no Lua-side file modified",
+        "verdict": "PASS",
+        "evidence": "git diff --name-only main...HEAD run independently: no path under lib/letflow/engine/lua/ appears. Moduledoc states 'decision 0014 (4)' and 'does not modify'/'lib/letflow/engine/lua/', both grepped directly."
+      },
+      {
+        "criterion": "mix test and mix compile --warnings-as-errors both pass, real output quoted",
+        "verdict": "PASS",
+        "evidence": "mix compile --warnings-as-errors: exit 0, clean. mix test test/letflow/engine/wasm/ test/letflow/engine/lua/: 'Finished in 12.8 seconds ... Result: 385 passed, 7 excluded'. Full suite via scripts/test_parallel.sh: 'combined: 2429 tests, 5 properties, 4 failures (2430/2434 passed)' -- all 4 attributed pre-existing/environmental per Failure Attribution Is Structural (route 1: not in diff; rust-pin tests additionally confirmed via direct `rustc` PATH check -> command not found). Isolated `mix test --only wasm_hang`: 'Result: 7 passed, 2440 excluded'."
+      }
+    ],
+    "checks": {
+      "no_skip_tags": "grep -n '@tag :skip' test/letflow/engine/wasm/host_api_write_test.exs -> no matches",
+      "no_todo_left": "grep -n 'TODO: implement test' test/letflow/engine/wasm/host_api_write_test.exs test/specs/REQ-172.md -> no matches",
+      "no_hardcoded_secrets": "reviewed file in full -- no connection strings/secrets, only fixed test probe literals (fixture bytes, JSON payloads)",
+      "fixtures_self_sufficient": "each test builds its own Wasmex instance via start_instance/start_instance_with_store, no shared mutable state between tests; .wat fixtures are static read-only binaries",
+      "wasm_hang_integration": "req172_write_then_hang.wat's test is @tag :wasm_hang, excluded by test_helper.exs's ExUnit.start(exclude: [:keycloak, :wasm_hang]) exactly like the pre-existing call_timeout_test.exs/plugin_handler_test.exs hangs; ran `mix test --only wasm_hang` directly (the isolated subprocess lib/mix/tasks/letflow.check.test.ex automates) and confirmed it passes standalone (7 passed, 0 failures) -- does not reintroduce ISS-0352's cascading-timeout hazard"
+    },
+    "independent_mutation_check": {
+      "mutant": "lib/letflow/engine/wasm/host_api.ex do_fail/5 -- removed the stash_fail_signal(reason_string, details) call before exit/1 (the fail-uninterceptability/distinguishability mechanism, design SS2.2)",
+      "pre_mutation_md5": "37152b8d723248b646ec8cf39ff67078",
+      "applied_via": "Edit tool, in-tree (not a worktree)",
+      "result_with_mutant": "mix compile --warnings-as-errors: FAILED (new 'function stash_fail_signal/2 is unused' warning). mix test test/letflow/engine/wasm/host_api_write_test.exs: 26/33 passed, 1 excluded, 7 failed -- every fail-signal-dependent test (default/explicit/invalid-UTF-8 reason decoding, both fail-signal discard-arm tests [memory-cap-reactive-fail and platform.fail], the AC5 uninterceptability test's fail-signal assertion) failed with `right: :none` where a fail signal was expected.",
+      "reverted_via": "git checkout -- lib/letflow/engine/wasm/host_api.ex",
+      "post_revert_verification": "md5sum matched pre-mutation hash exactly (37152b8d723248b646ec8cf39ff67078); `git status --porcelain lib/ test/` returned empty; re-ran test/letflow/engine/wasm/host_api_write_test.exs -> 33 passed, 1 excluded, 0 failures"
+    }
+  }
 }

@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step04-WF02-REQ170-20260828",
+  "run_id": "WF02-REQ170-20260828",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ170-20260828/step-04-test-runner.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-170"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ170-20260828/step-03-test-designer.json",
+      "handoffs/WF02-REQ170-20260828/step-03b-test-design-validator.json"
+    ],
+    "branch_name": "feature/WF02-REQ170-20260828"
+  },
+  "task": {
+    "description": "TEST-RUNNER pass (WF-02 Step 4) for REQ-170. Design, security-review, reviewer, and test-design-validator gates have all passed. Run the FULL suite (not just the wasm subdirectory) and report real results. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching commands. Attribute any failure structurally before concluding it's unrelated to this branch's diff -- never by count-matching. Be aware of ISS-0287 (Postgres pool-exhaustion recurrence) and ISS-0351 (WASM registry timeout-path CPU-spin) as known background issues.\n\nSAFETY NOTE: do not write or run any ad hoc script reproducing the 32-concurrent-hang saturation scenario from this requirement's own design doc section 1.5 -- it durably occupies wasmex's shared native thread pool for the rest of any process that runs it, which would corrupt every other WASM test's timing assumptions for the remainder of this test run.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors passes clean, real output quoted.",
+      "mix test test/letflow/engine/wasm/ passes in full, real output quoted (expect 98 tests: call_timeout 16 + plugin_handler extended + resource_limits 12 + memory_guard 18 + capability_gate 18 + module_registry 20).",
+      "Full mix test suite run, real output quoted -- pass/fail counts, and structural attribution for any failure.",
+      "mix letflow.lint_handoffs run, 0 new violations (or explain any flagged).",
+      "Write a structured test report per this project's existing test/reports/ convention if a failure needs one; otherwise a clean pass needs no report file.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "COMPLETED -- full suite green, no report file needed",
+    "summary": "All 4 acceptance criteria verified with real output. (1) mix compile --force --warnings-as-errors: 'Compiling 135 files (.ex)' / 'Generated letflow app', exit 0, clean. (2) mix test test/letflow/engine/wasm/: 'Result: 98 passed', 0 failures -- matches expected 98 (call_timeout 16 + plugin_handler extended + resource_limits 12 + memory_guard 18 + capability_gate 18 + module_registry 20); the 5 logged 'GenServer.call ... (EXIT) time out' Task errors during this run are call_timeout's own intentional timeout assertions (hang/300/2000/500/7000ms scenarios), not failures -- confirmed by the 0-failures result. Did not run or reproduce the 32-concurrent-hang saturation scenario from the design doc's section 1.5, per the SAFETY NOTE. (3) Full suite via scripts/test_parallel.sh (N=8, nproc-derived, foreground/blocking): partitions 1-8 each reported exit 0 with 0 failures; combined: 2381 tests, 5 properties, 0 failures (2386/2386 passed). No pool-exhaustion (ISS-0287) or WASM registry timeout-path CPU-spin (ISS-0351) symptoms observed -- all partitions completed promptly with clean exits, so neither background issue surfaced in this run. (4) mix letflow.lint_handoffs: 'OK -- 0 new violations across 1272 handoff files (25 pre-existing grandfathered, traced to ISS-0190)'; none of the flagged pre-existing items are in this run's handoff file. Environment notes: postgres/keycloak containers were already up (docker compose commands required sudo -n, which succeeded non-interactively) on port 5463 per this checkout's untracked .env (LETFLOW_DB_PORT=5463), consistent with README's per-workspace-port guidance -- no collision risk with other checkouts. mix deps.get succeeded (network available); a security-advisory notice for EEF-CVE-2026-74836 (Bandit/Plug HTTP2 window starvation) printed during deps.get is pre-existing dependency-advisory noise unrelated to this branch's diff, not a test failure. No report file written under test/reports/ since this was a clean pass end to end (per the test-runner instructions, a clean pass needs no report file). Conclusion: REQ-170's WASM engine work is fully green at both the targeted subdirectory and full-suite level; ready for RELEASE-VALIDATOR's independent re-run.",
+    "acceptance_criteria_met": [
+      "mix compile --warnings-as-errors passes clean, real output quoted",
+      "mix test test/letflow/engine/wasm/ passes in full (98 tests), real output quoted",
+      "Full mix test suite run, real output quoted -- 2386/2386 passed, 0 failures, no structural attribution needed since nothing failed",
+      "mix letflow.lint_handoffs run -- 0 new violations",
+      "No test report file needed (clean pass)",
+      "Top-level status field set to COMPLETED (enum-valid)"
+    ]
+  }
+}

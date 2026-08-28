@@ -66,6 +66,13 @@ defmodule Letflow.Engine.Wasm.PluginHandler do
   @default_fixture "wasm_fixtures/req165_trivial.wat"
   @default_export "answer"
 
+  # REQ-170 -- matches wasmex's own documented Wasmex.call_function/4
+  # default exactly (deps/wasmex/lib/wasmex.ex), so a caller that never
+  # sets "timeout_ms" in node_config sees no behavior change from before
+  # this requirement. See lib/letflow/design/req170-wasm-wallclock-timeout.md
+  # §4.3/§9 OQ-1.
+  @default_wasmex_timeout_ms 5_000
+
   @doc """
   The sole `@callback` `Letflow.Engine.PluginInterface` requires. Never call
   this directly — always go through
@@ -79,14 +86,23 @@ defmodule Letflow.Engine.Wasm.PluginHandler do
   `priv/wasm_fixtures/req165_hang.wat`'s `"hang"` export without a second
   handler module. Both default to the trivial guest fixture/export when
   absent, which is what the AC3/AC4 tests exercise.
+
+  REQ-170 — `node_config` may also name `"timeout_ms"`, the wasmex-level
+  per-invocation wall-clock bound (see
+  `Letflow.Engine.Wasm.CallTimeout.config()`), threaded into
+  `Wasmex.call_function/4`'s own explicit 4th argument. Defaults to
+  `@default_wasmex_timeout_ms` (5,000ms, matching `wasmex`'s own documented
+  default) when absent, so a caller that never sets this key sees no
+  behavior change from before this requirement.
   """
   @impl Letflow.Engine.PluginInterface
   @spec handle_node(ExecutionContext.t()) :: Letflow.Engine.PluginInterface.outcome()
   def handle_node(%ExecutionContext{node_config: node_config}) do
     fixture = Map.get(node_config, "wasm_fixture", @default_fixture)
     export = Map.get(node_config, "export", @default_export)
+    timeout_ms = Map.get(node_config, "timeout_ms", @default_wasmex_timeout_ms)
 
-    case run_guest(fixture, export) do
+    case run_guest(fixture, export, timeout_ms) do
       {:ok, answer} -> {:complete, %{"answer" => answer, "executed_in_pid" => self()}}
       {:error, reason} -> {:error, reason}
     end
@@ -100,11 +116,12 @@ defmodule Letflow.Engine.Wasm.PluginHandler do
   #   4. GenServer.stop/1 -- on every path, including the error path, so a
   #      wasmex instance is never leaked
   #   5. map the raw i32 result (or any wasmex failure) to {:ok, _} | {:error, _}
-  @spec run_guest(String.t(), String.t()) :: {:ok, integer()} | {:error, String.t()}
-  defp run_guest(fixture, export) do
+  @spec run_guest(String.t(), String.t(), pos_integer()) ::
+          {:ok, integer()} | {:error, String.t()}
+  defp run_guest(fixture, export, timeout_ms) do
     with {:ok, bytes} <- read_fixture(fixture),
          {:ok, pid} <- start_instance(bytes) do
-      result = call_export(pid, export)
+      result = call_export(pid, export, timeout_ms)
       GenServer.stop(pid)
       result
     end
@@ -128,13 +145,16 @@ defmodule Letflow.Engine.Wasm.PluginHandler do
     end
   end
 
-  # wasmex's own call-level timeout (default 5s, per call_function/4's own
-  # default) is deliberately left at its default here -- the outer
-  # PluginInterface.invoke/3 timeout is what a hang test bounds against, not
-  # this call. See the design doc §3.2 step 3 / §5.
-  @spec call_export(pid(), String.t()) :: {:ok, integer()} | {:error, String.t()}
-  defp call_export(pid, export) do
-    case Wasmex.call_function(pid, export, []) do
+  # REQ-170 -- wasmex's own call-level timeout is now an explicit, caller-
+  # configurable argument (see handle_node/1's "timeout_ms" node_config key
+  # and Letflow.Engine.Wasm.CallTimeout), passed as
+  # Wasmex.call_function/4's explicit 4th argument in place of the implicit
+  # 3-arity call that used to silently accept wasmex's own 5,000ms default.
+  # See the design doc §4.3.
+  @spec call_export(pid(), String.t(), pos_integer()) ::
+          {:ok, integer()} | {:error, String.t()}
+  defp call_export(pid, export, timeout_ms) do
+    case Wasmex.call_function(pid, export, [], timeout_ms) do
       {:ok, [answer]} -> {:ok, answer}
       {:ok, other} -> {:error, "wasm guest returned an unexpected shape: #{inspect(other)}"}
       {:error, reason} -> {:error, "wasm guest call failed: #{inspect(reason)}"}

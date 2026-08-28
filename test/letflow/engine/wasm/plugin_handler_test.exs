@@ -16,6 +16,7 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
 
   alias Letflow.Engine.PluginInterface
   alias Letflow.Engine.PluginInterface.ExecutionContext
+  alias Letflow.Engine.Wasm.CallTimeout
   alias Letflow.Engine.Wasm.PluginHandler
 
   defp context(overrides \\ %{}) do
@@ -226,6 +227,131 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
 
       assert moduledoc =~ "does **not** bound a native crash" or
                moduledoc =~ "does not bound a native crash"
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-170 AC1: a guest blocked in a host call is bounded by the
+  # configured wasm-level timeout_ms, and the caller receives a structured
+  # {:error, reason} within it, not the outer @default_timeout_ms 30_000ms.
+  #
+  # HONESTY CLAUSE (design doc §5.2 item 3 / §1.1-§1.4): this test does
+  # NOT prove the guest's underlying native execution is terminated -- it
+  # is not. Live verification (design §1.1-§1.4) found the hung guest's
+  # native compute keeps running forever in wasmex's own separate native
+  # worker-thread pool; only the CALLER's wait is bounded here, via
+  # wasmex's own client-side GenServer.call timeout mechanism crashing the
+  # task, which Letflow.Engine.PluginInterface's existing {:exit, reason}
+  # handling turns into a clean {:error, reason} for the caller.
+  # ---------------------------------------------------------------------
+
+  describe "REQ-170 AC1: configured timeout_ms bounds the caller's wait" do
+    test "returns {:error, reason} within the configured timeout_ms, not the outer default" do
+      hang_context =
+        context(%{
+          node_config: %{
+            "wasm_fixture" => "wasm_fixtures/req170_hang.wat",
+            "export" => "hang",
+            "timeout_ms" => 500
+          }
+        })
+
+      {elapsed_us, result} =
+        :timer.tc(fn -> PluginInterface.invoke(PluginHandler, hang_context) end)
+
+      elapsed_ms = System.convert_time_unit(elapsed_us, :microsecond, :millisecond)
+
+      assert {:error, reason} = result
+      assert is_binary(reason)
+      # Generous upper bound: comfortably bounded by the configured 500ms,
+      # nowhere near PluginInterface's own outer 30_000ms default.
+      assert elapsed_ms < 10_000,
+             "expected the call to be bounded by the configured 500ms timeout_ms, " <>
+               "not the outer 30_000ms default; took #{elapsed_ms}ms"
+
+      assert CallTimeout.classify(result) == :wall_clock_timeout
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-170 AC3: the outer PluginInterface.invoke/3 supervised-task
+  # boundary terminates the invocation independently of a longer (or
+  # absent) inner wasmex-level timeout_ms -- design doc §1.6/§5.4.
+  # ---------------------------------------------------------------------
+
+  describe "REQ-170 AC3: outer invoke_opts timeout_ms bounds the caller independently of node_config timeout_ms" do
+    test "the outer, shorter bound fires and the dispatched task dies shortly after" do
+      hang_context =
+        context(%{
+          node_config: %{
+            "wasm_fixture" => "wasm_fixtures/req170_hang.wat",
+            "export" => "hang",
+            # deliberately LONGER than the outer invoke_opts bound below --
+            # proves the outer boundary does not depend on the inner
+            # wasmex-level timeout ever firing first.
+            "timeout_ms" => 60_000
+          }
+        })
+
+      # Mirrors PluginInterface.invoke/3's own async_nolink/yield/shutdown
+      # shape directly so the dispatched task's pid is observable to this
+      # test (invoke/3's own wrapper does not expose it).
+      task =
+        Task.Supervisor.async_nolink(Letflow.Engine.PluginTaskSupervisor, fn ->
+          PluginHandler.handle_node(hang_context)
+        end)
+
+      {elapsed_us, yield_result} = :timer.tc(fn -> Task.yield(task, 500) end)
+      elapsed_ms = System.convert_time_unit(elapsed_us, :microsecond, :millisecond)
+
+      assert yield_result == nil,
+             "expected the outer 500ms bound to fire before the hung guest ever replies"
+
+      assert elapsed_ms < 5_000,
+             "expected Task.yield/2 to return around its own 500ms bound, took #{elapsed_ms}ms"
+
+      Task.shutdown(task, :brutal_kill)
+
+      refute Process.alive?(task.pid),
+             "expected the dispatched task to be dead shortly after the outer bound fired, " <>
+               "independent of the much longer inner timeout_ms"
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-170 AC4: timeout_ms is configurable -- two different values drive
+  # two different elapsed times, with the shorter one binding sooner.
+  # Real wall-clock timing, loose tolerance (design §5.5): not exact
+  # millisecond assertions.
+  # ---------------------------------------------------------------------
+
+  describe "REQ-170 AC4: the shorter configured timeout_ms binds sooner" do
+    test "a 300ms timeout_ms elapses faster than a 2_000ms timeout_ms" do
+      build_context = fn timeout_ms ->
+        context(%{
+          node_config: %{
+            "wasm_fixture" => "wasm_fixtures/req170_hang.wat",
+            "export" => "hang",
+            "timeout_ms" => timeout_ms
+          }
+        })
+      end
+
+      {short_elapsed_us, short_result} =
+        :timer.tc(fn -> PluginInterface.invoke(PluginHandler, build_context.(300)) end)
+
+      {long_elapsed_us, long_result} =
+        :timer.tc(fn -> PluginInterface.invoke(PluginHandler, build_context.(2_000)) end)
+
+      assert {:error, _} = short_result
+      assert {:error, _} = long_result
+
+      short_elapsed_ms = System.convert_time_unit(short_elapsed_us, :microsecond, :millisecond)
+      long_elapsed_ms = System.convert_time_unit(long_elapsed_us, :microsecond, :millisecond)
+
+      assert short_elapsed_ms < long_elapsed_ms,
+             "expected the 300ms-configured call (#{short_elapsed_ms}ms) to bind sooner than " <>
+               "the 2_000ms-configured call (#{long_elapsed_ms}ms)"
     end
   end
 

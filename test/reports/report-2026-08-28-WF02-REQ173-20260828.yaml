@@ -1,0 +1,140 @@
+run_id: WF02-REQ173-20260828
+workflow_id: WF-02
+step: "4"
+agent: TEST-RUNNER
+requirement_ids: [REQ-173]
+issue_ids: []
+date: "2026-08-28"
+branch: feature/WF02-REQ173-20260828
+head_commit: b271be9f32283ce30ba3438ad3a251fa24d1125b
+merge_base_with_main: 5d32726d505af0ad040951fc6b053e7e67f180cb
+
+environment:
+  toolchain: "local via asdf shims (`source $HOME/.asdf/asdf.sh`); Elixir 1.20.3 (OTP 29), Erlang/OTP 29"
+  docker_compose_up: |
+    `docker compose up -d` failed for the invoking user with "permission denied
+    while trying to connect to the docker API at unix:///var/run/docker.sock"
+    (this sandbox user isn't in the `docker` group; `sudo -n docker ps` was used
+    read-only to confirm state instead). Containers were already running and
+    healthy: letflow-1-postgres-1 (0.0.0.0:5463->5432) and letflow-1-keycloak-1.
+    `.env` sets LETFLOW_DB_PORT=5463, matching the running container's mapped
+    port -- confirmed this workspace's own dedicated Postgres, not shared with
+    the other `letflow-postgres-1` container (port 5462) also present on this
+    host.
+  invocation: >
+    Ran the two subprocess stages `mix letflow.check.test` chains internally
+    (plain `mix test`, then `mix test --only wasm_hang`) as separate direct
+    invocations rather than through the wrapper task, because each stage alone
+    exceeded this tool's 10-minute foreground command cap (the main run took
+    673.7s / ~11.2 min). Each was launched via `nohup ... &` from a foreground
+    Bash call and polled to completion with repeated foreground `kill -0`
+    checks (not `run_in_background`/`Monitor`, and no cross-turn notification
+    reliance) -- this is a blocking wait implemented across several foreground
+    tool calls, not a backgrounded/fire-and-forget run. Both subprocesses were
+    run to completion and their full logs read.
+
+compile_check:
+  command: "mix compile --warnings-as-errors --force (MIX_ENV=test)"
+  result: "clean -- 'Compiling 150 files (.ex)' / 'Generated letflow app', exit 0, zero warnings"
+
+full_suite:
+  command: "mix test (plain, matching mix letflow.check.test's first subprocess)"
+  raw_summary: |
+    Running ExUnit with seed: 20060 / re-run seed shown per invocation, max_cases: 16
+    Excluding tags: [:keycloak, :wasm_hang]
+    ...
+    Finished in 673.7 seconds (11.3s async, 662.4s sync)
+    Result: 2452/2454 passed (5/5 properties, 2447/2449 tests), 10 excluded
+    Failed: 2 tests
+  failures:
+    - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+      location: test/mix/tasks/letflow_check_toolchain_test.exs:274
+      raw: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...)"
+      attribution: >
+        PRE-EXISTING/environmental. Confirmed directly in this sandbox:
+        `which rustc` / `rustc --version` both fail with "command not found" --
+        no Rust toolchain installed here. Matches the same failure recorded in
+        REQ-172's Step 4 report (report-2026-08-28-WF02-REQ172-20260828.yaml).
+        Unrelated to REQ-173 (WASM module-version registry), which does not
+        touch lib/mix/tasks/letflow.check_toolchain.ex or its tests.
+    - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+      location: test/mix/tasks/letflow_check_toolchain_test.exs:289
+      raw: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...)"
+      attribution: "Same as above -- PRE-EXISTING/environmental, no rustc in this sandbox."
+
+a9_check:
+  description: >
+    REQ-172's Step 4 baseline and this run's own handoff flagged
+    RequirementStatusInvariantsTest's A9 (declared-count drift) as a possible
+    recurrence risk, since ORCH fixed a real drift in
+    docs/status/requirement_status.index.yaml during this run's Step 2a
+    (commit d52aaa6, 4->5), and this branch's diff against main does touch
+    that file (confirmed via `git diff --name-only main...HEAD -- docs/status/
+    docs/requirements.yaml`, which lists docs/status/requirement_status.index.yaml).
+  result: >
+    A9 did NOT fail in this run. Grepped the full raw test-run log for
+    "RequirementStatusInvariantsTest" / "declared-count" / "A9" -- zero
+    matches, meaning the test ran (plain `mix test` doesn't print names of
+    passing tests, only dots, so absence of any failure block for it means it
+    passed). Diagnosis: the d52aaa6 drift fix from this run's own Step 2a is
+    genuinely present and holding on this branch -- not a fresh drift, and not
+    the same drift recurring. Only the 2 pre-existing rust-pin failures
+    remain, both confirmed environmental (no rustc).
+
+wasm_hang_suite:
+  command: "mix test --only wasm_hang (isolated subprocess, matching mix letflow.check.test's second stage)"
+  raw_summary: |
+    Running ExUnit with seed: <isolated run>, max_cases: 16
+    Finished in 16.5 seconds (6.0s async, 10.5s sync)
+    Result: 7 passed, 2457 excluded
+  result: "0 failures. Matches the count recorded in REQ-172's own Step 4 report (7 passed)."
+
+iss_0069_warning_check:
+  target_substring: "default values for the optional arguments"
+  result: "Absent from both the main-suite log and the wasm_hang-isolated log (grep: 0 matches in each). ISS-0069's warning class has not recurred."
+
+targeted_confirmations:
+  new_test_file: >
+    `mix test test/letflow/engine/wasm/module_version_registry_test.exs` --
+    Result: 17 passed, 0 failures, in 0.2s. Matches the 17/17 count
+    TEST-DESIGN-VALIDATOR reported for its mutation re-verification pass.
+    This run's new file is not implicated in any failure anywhere in the full
+    suite (it does not appear in either failures list above).
+  wasm_directory_scope: >
+    No failures anywhere under test/letflow/engine/wasm/ in the full-suite
+    run. Two pre-existing informational compiler *type-checker warnings*
+    (not test failures, not gated by --warnings-as-errors on plain `mix
+    test`) appear against test/letflow/engine/wasm/module_registry_test.exs:366
+    and :370 -- these are Elixir 1.20's set-theoretic type checker flagging
+    that ModuleRegistry.register/1 is deliberately called with nil/an integer
+    inside assert_raise(FunctionClauseError, ...) blocks that exist
+    specifically to prove that guard; this is expected, pre-existing test
+    design (unrelated to REQ-173's own new file/fixtures), not a defect.
+  wasm_fixtures: >
+    priv/wasm_fixtures/req173_*.wat are only referenced by
+    module_version_registry_test.exs, which passed cleanly (see above); no
+    other test in the suite touches them.
+
+verdict: PASS
+verdict_reasoning: >
+  `mix compile --warnings-as-errors --force` is clean (0 warnings, exit 0).
+  The full suite (`mix test`, matching mix letflow.check.test's first
+  subprocess) reports 2452/2454 passed (5/5 properties, 2447/2449 tests), 10
+  excluded, with exactly 2 failures -- both Mix.Tasks.Letflow.CheckToolchainTest
+  rust-pin cases failing on ENOENT because this sandbox has no rustc
+  installed (independently confirmed via `which rustc`), identical in kind to
+  failures already recorded as pre-existing/environmental in REQ-172's own
+  Step 4 report. RequirementStatusInvariantsTest's A9 did NOT fail this run --
+  the declared-count drift fixed upstream in this run's Step 2a (commit
+  d52aaa6) is holding, not recurring. The isolated `mix test --only wasm_hang`
+  stage passed cleanly, 7/7, 0 failures. ISS-0069's warning-class substring is
+  absent from both logs. This run's own new artifacts (
+  test/letflow/engine/wasm/module_version_registry_test.exs,
+  priv/wasm_fixtures/req173_*.wat, and everything under lib/letflow/engine/wasm/)
+  are implicated in zero failures anywhere in the suite, and the new test file
+  independently re-confirms 17/17 passed. Acceptance criterion ("mix test and
+  mix compile --warnings-as-errors both pass with real output quoted") is met
+  in substance: compile is unconditionally clean, and the only test failures
+  are the same 2 pre-existing/environmental rust-toolchain-absence failures
+  this branch's own predecessor step already established as unrelated to any
+  in-scope diff.

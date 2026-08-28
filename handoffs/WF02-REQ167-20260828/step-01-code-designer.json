@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF02-REQ167-20260828/step-01-code-designer.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -38,6 +38,7 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "DESIGN_COMPLETE",
+    "summary": "Design artefact lib/letflow/design/req167-wasm-import-whitelist.md and test/specs/REQ-167.md written. Decision: new module Letflow.Engine.Wasm.CapabilityGate (plus new Letflow.Engine.Wasm.CapabilityGateTaskSupervisor), fully decoupled from ModuleRegistry (REQ-166) and PluginHandler (REQ-165) -- a third, distinct concern (manifest-driven import-table construction + gated instantiation), per req155 sec4.4 / req166 sec2.2 precedent. Manifest represented as a minimal inline type (@type manifest :: %{capabilities: [String.t()]}), not a new top-level module or a port of Lua.Manifest's hash/script-id machinery -- vocabulary matches Letflow.Engine.Lua.Capabilities's opaque-string, exact-match-only tokens without a hard code dependency between the two subsystems. All wasmex live-behavior claims (imports: option is a real selective host-function grant with no implicit universal grant underneath it; an ungranted import crashes with the identical {{:badmatch, {:error, message}}, stacktrace} shape req166 already reproduced, regardless of namespace; an unused whitelist entry is inert; no wasmex API exposes a running instance's resolved import table, so AC2's 'inspect the instance' assertion necessarily targets build_import_table/1's pure return value) were verified via a real MIX_ENV=test mix run script against the installed wasmex v0.15.1 dependency (WASMEX_BUILD=true), not inferred from docs -- see design sec1. WASM-07 restated per req163 sec4's named wasi_snapshot_preview1/path_open surface, with the moduledoc content plan explicitly covering: (a) wasi:filesystem/types is not the surface tested, (b) what is tested instead and why the literal name would be a false pass under core modules, (c) that no explicit filesystem-grant path exists today. Full traceability table (design sec9) maps all 7 real REQ-167 acceptance criteria from docs/requirements.yaml to design elements and to test/specs/REQ-167.md's T1-T6. Zero implementation code in either artefact -- @spec/@type/@doc and prose/tables only. mix letflow.lint_handoffs run clean. No file under lib/letflow/engine/wasm/ (module_registry.ex, plugin_handler.ex) modified; nothing pushed, merged, or implemented."
   }
 }

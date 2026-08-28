@@ -1,0 +1,54 @@
+{
+  "handoff_id": "step02d-WF02-REQ168-20260828",
+  "run_id": "WF02-REQ168-20260828",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ168-20260828/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-168"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ168-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ168-20260828/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req168-wasm-memory-isolation.md",
+      "lib/letflow/engine/wasm/memory_guard.ex"
+    ],
+    "branch_name": "feature/WF02-REQ168-20260828"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-168's implementation. SECURITY-REVIEWER already passed Step 2c (see step-02c-security-reviewer.json), including independently confirming that ELIXIR-DEV's flagged design-table-vs-algorithm discrepancy is mathematically benign (offset-range check firing before end-of-range check cannot produce a false accept, since length>=0 guarantees offset<=offset+length). Your scope: idiomatic OTP usage, decision-record/design-doc consistency, and scope creep -- read the real diff and the approved design (lib/letflow/design/req168-wasm-memory-isolation.md) in full before verdict. One specific thing to check in your scope: the design doc's own section 5.2 worked-example table is now technically inaccurate (it names {:length_exceeds_memory,...} for a case that actually returns {:offset_out_of_range,...}) -- decide whether this needs a follow-up doc correction to the design artefact itself (a documentation-consistency concern, distinct from SECURITY-REVIEWER's safety-soundness check) or whether ELIXIR-DEV's in-code/in-test comment explaining the discrepancy is sufficient.",
+    "acceptance_criteria": [
+      "Confirm Letflow.Engine.Wasm.MemoryGuard follows this codebase's existing conventions -- compare against module_registry.ex/capability_gate.ex for structure, typespec style, error-tuple shape conventions, moduledoc format.",
+      "Confirm no scope creep: only lib/letflow/engine/wasm/memory_guard.ex, priv/wasm_fixtures/req168_memory.wat, and test/letflow/engine/wasm/memory_guard_test.exs are touched -- module_registry.ex, capability_gate.ex, plugin_handler.ex, and application.ex must be untouched (design explicitly said no new Task.Supervisor).",
+      "Confirm typespecs (@spec, @type) are complete and accurate for all public functions.",
+      "Confirm error handling follows this codebase's established {:error, reason} tuple idiom throughout.",
+      "Decide and state clearly whether the design doc's section 5.2 table needs a follow-up correction (see task description) -- if you decide yes, you may make that documentation-only edit yourself as part of this review, or explicitly recommend it as a follow-up; state which.",
+      "Confirm the moduledoc accurately cites req165-wasmex-process-boundary.md section 7.2 -- read that section yourself.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REVIEWER gate on Letflow.Engine.Wasm.MemoryGuard (REQ-168) -- PASS. Independently read lib/letflow/engine/wasm/memory_guard.ex, test/letflow/engine/wasm/memory_guard_test.exs, lib/letflow/design/req168-wasm-memory-isolation.md in full, plus module_registry.ex, capability_gate.ex, and req165-wasmex-process-boundary.md section 7.2 for comparison -- did not trust prior self-reports alone.\n\n1. Idiomatic vs. crutch: N/A to this specific gating question (this is a bounds-check/validation module, not a state machine) -- no gen_statem is implicated. Not a crutch: check_bounds/3 is a pure, side-effect-free function; read/4 and write/4 each do exactly one thing (fetch fresh size, validate, dereference) with a `with`/`case` idiom identical in shape to module_registry.ex's `with` pipeline and capability_gate.ex's case-based dispatch.\n\n2. Supervision: no regression. Per design section 3 and confirmed by `git diff main...feature/WF02-REQ168-20260828 --stat`, lib/letflow/application.ex is untouched -- no new Task.Supervisor is registered, and none is needed: MemoryGuard never calls Wasmex.start_link/1 (it operates on an already-running instance's already-obtained handle), so it introduces no new process/isolation surface to supervise. Existing per-instance isolation (ModuleRegistry/CapabilityGate/PluginHandler, each already supervised) is untouched -- module_registry.ex, capability_gate.ex, and plugin_handler.ex all show zero diff lines.\n\n3. Type-safety gaps: none blocking. `bounds_defect()` and `guard_error()` are closed tagged-tuple unions, matching this codebase's existing `instantiation_defect()`/`gate_error()`/`registration_error()` convention in module_registry.ex and capability_gate.ex exactly -- same shape, same style. No untyped map or stringly-typed error surfaces anywhere in the diff. Nothing here rises to a filable type-safety issue.\n\n4. Scope creep: none found. `git diff main...feature/WF02-REQ168-20260828 --stat` shows exactly the files the design and handoff named: lib/letflow/engine/wasm/memory_guard.ex (new), priv/wasm_fixtures/req168_memory.wat (new), test/letflow/engine/wasm/memory_guard_test.exs (new), test/specs/REQ-168.md (new), the design doc itself, and this run's own handoff files. module_registry.ex, capability_gate.ex, plugin_handler.ex, and application.ex all show zero diff lines -- confirmed by the stat output, not merely asserted. No new Task.Supervisor, no new abstraction layer, no behaviour/macro introduced ahead of need -- design section 3 explicitly reasoned why this is a new, orthogonal module rather than a graft, and that reasoning holds under inspection (recurring per-call concern, distinct from ModuleRegistry's registration-time and CapabilityGate's instantiation-time concerns).\n\nAcceptance-criteria-specific findings:\n\n- Convention match confirmed line-by-line against module_registry.ex/capability_gate.ex: moduledoc structure (problem statement, scope-boundary subsection, citation of the gate-approved design doc), @typedoc-preceded @type declarations, @spec on every public function, private helper functions with their own @spec, {:error, reason} tuple idiom throughout with no bare atoms or strings as error values, module-level @moduledoc citing the design doc's exact section numbers. MemoryGuard matches this pattern exactly -- no stylistic divergence found.\n\n- Scope-creep file check: PASS, see point 4 above -- verified via `git diff --stat`, not trusted from any report.\n\n- Typespecs: complete and accurate. check_bounds/3, read/4, write/4 all have @spec; return types (`:ok | {:error, bounds_defect()}`, `{:ok, binary()} | {:error, guard_error()}`, `:ok | {:error, guard_error()}`) match every branch actually reachable in the function bodies -- verified by reading check_type_and_sign/2, check_offset_range/2, check_end_of_range/3, and both case branches in read/4 and write/4 against their declared specs; no branch returns a shape the @spec doesn't declare.\n\n- Error-tuple idiom: confirmed uniform -- every rejection path returns a tagged tuple ({:error, {:invalid_pointer, bounds_defect()}}), no exceptions, no bare :error atoms, matching module_registry.ex's registration_error()/capability_gate.ex's gate_error() pattern exactly.\n\n- req165 section 7.2 citation: verified accurate by reading req165-wasmex-process-boundary.md section 7.2 directly. The moduledoc's quoted passage (\"a Wasmtime- or NIF-layer crash inside a call this module makes does not raise, exit, or trap in the ordinary BEAM sense... it can crash the entire BEAM node... This is an accepted, stated limitation, not a gap this module papers over.\") matches the source section's text verbatim in substance, not paraphrased inaccurately.\n\n- Design doc section 5.2 table discrepancy: decided this DOES need a follow-up doc correction, and made it myself as part of this review (documentation-only edit, per the acceptance criteria's explicit allowance). Corrected lib/letflow/design/req168-wasm-memory-isolation.md section 5.2's worked-example row for offset=length=2^63 from the stale `{:length_exceeds_memory, ...}` to the actually-correct `{:offset_out_of_range, ...}`, and added a dated correction note directly under the table explaining why (step 3 fires before step 4 for this input, per section 2's algorithm), crediting SECURITY-REVIEWER's independent confirmation that this was benign, and noting ELIXIR-DEV's extra test case still demonstrates the end-of-range property the original row intended to show. Rationale for fixing rather than merely recommending: ELIXIR-DEV's in-code/in-test comment (test/letflow/engine/wasm/memory_guard_test.exs lines 71-86) already fully explains the discrepancy at the point of use, but leaving the design doc itself stale would let a future reader of the design artefact alone (without the test file open) walk away with a wrong expectation for this input -- a one-line table correction plus dated note is low-risk and closes that gap now rather than deferring it.\n\nOverall verdict: PASS. No idiom crutch, no supervision regression, no scope creep, no error-handling gap, no type-safety issue requiring an issues/ filing, decision-record consistency intact, and the one documentation-consistency defect found has been corrected as part of this gate. Routes next to TEST-DESIGNER per WF-02's Step 2d gate sequence.",
+    "artifacts_reviewed": [
+      "lib/letflow/design/req168-wasm-memory-isolation.md",
+      "lib/letflow/engine/wasm/memory_guard.ex",
+      "test/letflow/engine/wasm/memory_guard_test.exs",
+      "lib/letflow/engine/wasm/module_registry.ex",
+      "lib/letflow/engine/wasm/capability_gate.ex",
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "handoffs/WF02-REQ168-20260828/step-02c-security-reviewer.json"
+    ],
+    "artifacts_out": [
+      "lib/letflow/design/req168-wasm-memory-isolation.md"
+    ],
+    "next_recommended": "TEST-DESIGNER"
+  }
+}

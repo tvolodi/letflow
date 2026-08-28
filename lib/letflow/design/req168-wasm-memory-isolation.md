@@ -408,9 +408,29 @@ Test setup obtains a real handle the same way §1's probes did:
 | Zero-length at exact end boundary | `offset=65536, length=0, memory_size=65536` | `:ok` |
 | **Offset beyond memory size** | `offset=65537, length=1, memory_size=65536` | `{:error, {:offset_out_of_range, 65537, 65536}}` |
 | **Length running past the memory end** | `offset=65530, length=100, memory_size=65536` | `{:error, {:length_exceeds_memory, 65530, 100, 65536}}` |
-| **Offset+length pair that would overflow a fixed-width check** (mirrors §1.4's `2^63`/`2^64-10` probes, arithmetic only — see §5.4's explicit prohibition on ever live-calling `wasmex` with this magnitude) | `offset=9_223_372_036_854_775_808, length=9_223_372_036_854_775_808, memory_size=65536` | `{:error, {:length_exceeds_memory, ..., 65536}}` (computed exactly, no wraparound — proves Elixir's bignum arithmetic handles the exact magnitude §1.4 found dangerous in `wasmex`'s own Rust layer) |
+| **Offset+length pair that would overflow a fixed-width check** (mirrors §1.4's `2^63`/`2^64-10` probes, arithmetic only — see §5.4's explicit prohibition on ever live-calling `wasmex` with this magnitude) | `offset=9_223_372_036_854_775_808, length=9_223_372_036_854_775_808, memory_size=65536` | `{:error, {:offset_out_of_range, 9_223_372_036_854_775_808, 65536}}` (computed exactly, no wraparound — proves Elixir's bignum arithmetic handles the exact magnitude §1.4 found dangerous in `wasmex`'s own Rust layer) |
 | Negative offset (defensive — §2 step 1) | `offset=-1, length=1, memory_size=65536` | `{:error, {:invalid_argument, :offset, -1}}` |
 | Non-integer length (defensive) | `offset=0, length="10", memory_size=65536` | `{:error, {:invalid_argument, :length, "10"}}` |
+
+**Correction (REVIEWER, WF-02 Step 2d, 2026-08-28):** the row above originally named
+`{:length_exceeds_memory, ..., 65536}}` as the expected result for
+`offset=length=2^63`. That is wrong given §2's algorithm as literally specified: step 3
+(offset-range check) runs before step 4 (end-of-range check) and rejects this input
+first, since `offset` alone (`2^63`) already exceeds `memory_size` (`65536`) — the
+correct tag is `:offset_out_of_range`, as ELIXIR-DEV's shipped `check_bounds/3`
+actually returns and as `test/letflow/engine/wasm/memory_guard_test.exs` (T2, "offset+length
+pair that would overflow a fixed-width check") asserts and documents in-line.
+SECURITY-REVIEWER (step-02c) independently confirmed this is a documentation-only
+worked-example error, not an algorithm or implementation defect: no input exists where
+the implemented check ordering could produce a false ACCEPT the table's originally
+-expected ordering would have rejected, since `length >= 0` (guaranteed by step 1)
+means `offset <= offset+length` always, so passing the end-of-range check necessarily
+implies passing the offset-range check. This correction brings §5.2's table in line
+with the algorithm in §2 and the shipped implementation; ELIXIR-DEV's additional test
+case beyond this table ("length alone at extreme magnitude past a valid offset",
+`offset=0, length=2^63, memory_size=65536` → `{:error, {:length_exceeds_memory, 0,
+9_223_372_036_854_775_808, 65536}}`) still demonstrates the end-of-range/non-wraparound
+property this row was originally trying to show.
 
 ### 5.3 Live integration tests against a real `Wasmex.Memory` handle (AC2, AC4)
 

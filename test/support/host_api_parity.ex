@@ -395,7 +395,10 @@ defmodule Letflow.Test.HostApiParity do
       # `Task.Supervisor.async_nolink/2` against the same
       # `Letflow.Engine.Lua.TaskSupervisor` production code already uses, exactly
       # mirroring `platform_test.exs`'s own REQ-161 harness.
-      task = Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn -> Lua.eval!(lua, script) end)
+      task =
+        Task.Supervisor.async_nolink(Letflow.Engine.Lua.TaskSupervisor, fn ->
+          Lua.eval!(lua, script)
+        end)
 
       case Task.yield(task, 1_000) do
         {:exit, {:script_failed, %{reason: reason, details: details}}} ->

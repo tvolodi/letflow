@@ -390,13 +390,7 @@ defmodule Letflow.Engine.Wasm.CapabilityGate do
   end
 
   defp build_callback(:call_service, execution_context) do
-    fn context,
-       service_id_ptr,
-       service_id_len,
-       payload_ptr,
-       payload_len,
-       out_ptr,
-       out_cap ->
+    fn context, service_id_ptr, service_id_len, payload_ptr, payload_len, out_ptr, out_cap ->
       HostApi.do_call_service(
         context,
         service_id_ptr,

@@ -145,7 +145,11 @@ defmodule Letflow.Engine.Wasm.HostApiWriteTest do
 
     @impl Platform.ServiceCaller
     def call(service_id, payload) do
-      send(Process.whereis(:host_api_write_test_spy_target) || self(), {:spy_called, service_id, payload})
+      send(
+        Process.whereis(:host_api_write_test_spy_target) || self(),
+        {:spy_called, service_id, payload}
+      )
+
       {:ok, %{}}
     end
   end
@@ -276,7 +280,8 @@ defmodule Letflow.Engine.Wasm.HostApiWriteTest do
     end
 
     test "a script execution that never calls write_variable leaves an empty buffer" do
-      {pid, _store, _memory} = start_instance("req172_host_api.wat", ["var:write", "service:call"])
+      {pid, _store, _memory} =
+        start_instance("req172_host_api.wat", ["var:write", "service:call"])
 
       assert staged_writes(pid) == %{}
 
@@ -529,7 +534,8 @@ defmodule Letflow.Engine.Wasm.HostApiWriteTest do
   describe "call_service: structured service failure vs. missing-capability instantiation denial, asserted distinctly (AC4)" do
     test "a service-side failure returns a well-formed {\"ok\": false, ...} envelope -- never a trap" do
       with_service_caller(FakeServiceCaller, fn ->
-        {pid, store, memory} = start_instance("req172_host_api.wat", ["var:write", "service:call"])
+        {pid, store, memory} =
+          start_instance("req172_host_api.wat", ["var:write", "service:call"])
 
         service_id = "billing"
         payload_json = Jason.encode!(%{"fail" => true})
@@ -573,7 +579,8 @@ defmodule Letflow.Engine.Wasm.HostApiWriteTest do
 
     test "call_service makes zero Repo calls" do
       with_service_caller(FakeServiceCaller, fn ->
-        {pid, store, memory} = start_instance("req172_host_api.wat", ["var:write", "service:call"])
+        {pid, store, memory} =
+          start_instance("req172_host_api.wat", ["var:write", "service:call"])
 
         handler_id = {__MODULE__, :call_service_query_counter, make_ref()}
         counter = :counters.new(1, [])
@@ -616,7 +623,8 @@ defmodule Letflow.Engine.Wasm.HostApiWriteTest do
 
   describe "fail: reason/details decoding" do
     test "a missing reason/details pair (len=0) defaults to the documented fallback string and nil" do
-      {pid, _store, _memory} = start_instance("req172_host_api.wat", ["var:write", "service:call"])
+      {pid, _store, _memory} =
+        start_instance("req172_host_api.wat", ["var:write", "service:call"])
 
       assert {:error, _reason} = Wasmex.call_function(pid, "call_fail", [0, 0, 0, 0])
 

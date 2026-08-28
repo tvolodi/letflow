@@ -84,6 +84,13 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
   # CapabilityGate's own identical @instantiation_timeout_ms constants.
   @instantiation_timeout_ms 5_000
 
+  # design §5.3 step 3 -- bounds register_version/3's OWN capability-aware
+  # proving instantiation, mirroring (not sharing) ModuleRegistry's/
+  # CapabilityGate's/this module's own identical @instantiation_timeout_ms
+  # constant value. A separate attribute per this design line's established
+  # "each call site keeps its own copy" precedent (§5.3, §7).
+  @registration_instantiation_timeout_ms 5_000
+
   # Matches the exact wording wasmex v0.15.1 produces for an unresolved
   # import -- deliberately duplicated from ModuleRegistry/CapabilityGate's
   # own identical private classifiers (design §4 step 3, §7: "each module
@@ -114,14 +121,14 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
   @type version_snapshot :: %{
           module_name: module_name(),
           version_id: version_id(),
-          registered_module: ModuleRegistry.registered_module(),
+          bytes: binary(),
           manifest: CapabilityGate.manifest()
         }
 
   @typedoc false
   @type version_entry :: %{
           version_id: version_id(),
-          registered_module: ModuleRegistry.registered_module() | nil,
+          bytes: binary() | nil,
           manifest: CapabilityGate.manifest() | nil,
           ref_count: non_neg_integer(),
           monitors: %{reference() => pid()}
@@ -147,23 +154,91 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
   end
 
   @doc """
-  Design §3 — stage 1/2 ABI validation (`ModuleRegistry.register/1`) runs in
-  the CALLING process, never inside this registry's own `GenServer` loop
-  (see §5). Only on `{:ok, registered_module}` does this function make one
-  fast internal call to commit the new `version_entry()`. Does not affect
-  `current_version_id` — a brand-new version stays inert until `activate/2`
-  is called explicitly.
+  Design §5 (REVISED — two-step validation) — both steps run in the CALLING
+  process, never inside this registry's own `GenServer` loop (§5.1).
+
+  Step 1: `ModuleRegistry.register(bytes)`, reused verbatim, unmodified.
+  `{:ok, _registered_module}` means the module has zero imports and both of
+  `ModuleRegistry`'s own stages passed — proceed straight to commit, using
+  the caller-supplied `bytes` (never `registered_module.bytes`/`.module` —
+  see §2's revision note on why `bytes` alone is now the stored
+  representation). A stage-1 defect (`{:invalid_abi, _}` /
+  `{:compile_error, _}`) is returned unchanged — no capability manifest can
+  rescue a genuine export/signature defect.
+
+  Step 2, entered ONLY when step 1 fails with
+  `{:error, {:instantiation_failed, _defect}}` (which, by `register/1`'s own
+  sequential `with`, is only reachable once stage 1's ABI check already
+  passed — §5.2's guarantee): `register_version/3` performs its OWN
+  capability-aware proof, because `register/1`'s stage 2 always instantiates
+  with NO import table at all and therefore can never validate a module
+  that requires any host capability, correctly manifested or not. This is
+  the fix for the exact defect TEST-DESIGNER's acceptance test surfaced: a
+  capability-requiring module could previously never register at all.
+
+  Either step's success makes one fast internal call to commit the new
+  `version_entry()`. Does not affect `current_version_id` — a brand-new
+  version stays inert until `activate/2` is called explicitly.
   """
   @spec register_version(module_name(), bytes :: binary(), CapabilityGate.manifest()) ::
           {:ok, version_id()} | {:error, ModuleRegistry.registration_error()}
   def register_version(module_name, bytes, %{capabilities: _} = manifest)
       when is_binary(module_name) and is_binary(bytes) do
     case ModuleRegistry.register(bytes) do
-      {:ok, registered_module} ->
-        GenServer.call(__MODULE__, {:commit_version, module_name, registered_module, manifest})
+      {:ok, _registered_module} ->
+        commit_version(module_name, bytes, manifest)
+
+      {:error, {:instantiation_failed, _defect}} ->
+        case prove_capability_instantiation(bytes, manifest) do
+          :ok ->
+            commit_version(module_name, bytes, manifest)
+
+          {:error, _reason} = error ->
+            error
+        end
 
       {:error, _reason} = error ->
         error
+    end
+  end
+
+  @spec commit_version(module_name(), binary(), CapabilityGate.manifest()) :: {:ok, version_id()}
+  defp commit_version(module_name, bytes, manifest) do
+    GenServer.call(__MODULE__, {:commit_version, module_name, bytes, manifest})
+  end
+
+  # Design §5.3 step 2 -- the new, supplemental capability-aware proof, run
+  # ONLY from register_version/3's second branch above. Mirrors
+  # CapabilityGate.start_instance/2's own pattern, adapted for a throwaway
+  # proof: the instantiated pid is GenServer.stop'd unconditionally on
+  # success (never handed back -- this call needs a PROOF, not a live
+  # instance), and reuses the SAME task supervisor invoke/4's own dispatch
+  # tasks use (§7 -- no third supervisor). Runs in the calling process,
+  # never inside this registry's own `handle_call/3` (§5.1).
+  @spec prove_capability_instantiation(binary(), CapabilityGate.manifest()) ::
+          :ok | {:error, {:instantiation_failed, CapabilityGate.instantiation_defect()}}
+  defp prove_capability_instantiation(bytes, manifest) do
+    table = CapabilityGate.build_import_table(manifest)
+
+    task =
+      Task.Supervisor.async_nolink(@task_supervisor, fn ->
+        Wasmex.start_link(%{bytes: bytes, imports: table})
+      end)
+
+    case Task.yield(task, @registration_instantiation_timeout_ms) do
+      {:ok, {:ok, pid}} ->
+        GenServer.stop(pid)
+        :ok
+
+      {:ok, {:error, reason}} ->
+        {:error, {:instantiation_failed, {:crashed, reason}}}
+
+      {:exit, reason} ->
+        {:error, {:instantiation_failed, classify_crash(reason)}}
+
+      nil ->
+        Task.shutdown(task, :brutal_kill)
+        {:error, {:instantiation_failed, {:timeout, @registration_instantiation_timeout_ms}}}
     end
   end
 
@@ -268,7 +343,7 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
       {:ok, snapshot, monitor_ref} ->
         table = CapabilityGate.build_import_table(snapshot.manifest, execution_context)
 
-        case instantiate(snapshot.registered_module.bytes, table) do
+        case instantiate(snapshot.bytes, table) do
           {:ok, pid} ->
             run_call(snapshot, monitor_ref, pid, export, args, timeout_ms)
 
@@ -379,7 +454,7 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
   end
 
   @impl GenServer
-  def handle_call({:commit_version, module_name, registered_module, manifest}, _from, state) do
+  def handle_call({:commit_version, module_name, bytes, manifest}, _from, state) do
     module_state =
       Map.get(state, module_name, %{current_version_id: nil, versions: %{}, next_version_seq: 1})
 
@@ -387,7 +462,7 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
 
     entry = %{
       version_id: version_id,
-      registered_module: registered_module,
+      bytes: bytes,
       manifest: manifest,
       ref_count: 0,
       monitors: %{}
@@ -474,7 +549,7 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
         snapshot = %{
           module_name: module_name,
           version_id: version_id,
-          registered_module: new_entry.registered_module,
+          bytes: new_entry.bytes,
           manifest: new_entry.manifest
         }
 
@@ -499,7 +574,7 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
 
   defp status_for(%{current_version_id: current_version_id}, entry) do
     cond do
-      is_nil(entry.registered_module) -> :released
+      is_nil(entry.bytes) -> :released
       entry.version_id == current_version_id -> :active
       true -> :superseded
     end
@@ -575,15 +650,15 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
 
   # Design §6's release predicate, checked at exactly two trigger points
   # (inside `release`/`:DOWN`, and inside `activate`) and nowhere else: a
-  # version_entry's registered_module/manifest are set to nil (status
-  # becomes :released) the instant it is both (a) not current_version_id
-  # and (b) ref_count 0.
+  # version_entry's bytes/manifest are set to nil (status becomes
+  # :released) the instant it is both (a) not current_version_id and (b)
+  # ref_count 0.
   defp apply_release_predicate(module_state, version_id) do
     entry = Map.fetch!(module_state.versions, version_id)
 
     if entry.ref_count == 0 and module_state.current_version_id != version_id and
-         not is_nil(entry.registered_module) do
-      put_entry(module_state, version_id, %{entry | registered_module: nil, manifest: nil})
+         not is_nil(entry.bytes) do
+      put_entry(module_state, version_id, %{entry | bytes: nil, manifest: nil})
     else
       module_state
     end

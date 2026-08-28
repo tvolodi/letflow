@@ -2,34 +2,31 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistryTest do
   @moduledoc """
   REQ-173 (WASM-14) -- coverage for `Letflow.Engine.Wasm.ModuleVersionRegistry`.
   See `lib/letflow/design/req173-wasm-module-hot-reload.md` (gate-approved,
-  commit c7d10ea) and `test/specs/REQ-173.md` for the full design/spec this
-  suite exercises -- in particular `test/specs/REQ-173.md`'s "Blocking
-  finding" section, which this file's first `describe` block both reproduces
-  and documents: `ModuleRegistry.register/1`'s stage-2 real-instantiation
-  attempt (`module_registry.ex`, unmodified by this requirement, reused
-  verbatim by `register_version/3`) always calls `Wasmex.start_link/1` with
-  NO import table at all (`imports: %{}`, `wasmex.ex:229`) -- so it
-  unconditionally rejects ANY module declaring even one host-function import,
-  regardless of what capability manifest is supplied to `register_version/3`.
-  This blocks the exact `req173_v1_gated.wat`/`req173_v2_gated.wat` scenario
-  design SS8.2/SS8.4 specifies (a real, controllable host-call gate is the
-  only way to hold an invocation open per SS8.1 -- and any such call requires
-  a declared import). The `describe "SS8.4: the one overlapping scenario ..."`
-  block below is written EXACTLY per the design's own prescribed mechanism and
-  is expected -- and, at time of writing, confirmed -- to fail at its very
-  first step (`register_version/3` for `req173_v1_gated.wat`) for this reason,
-  not because of a flaw in this test. It is kept, not deleted, because it
-  correctly encodes WASM-14/AC5 and will start passing (no test edit needed)
-  the moment a future ELIXIR-DEV fix makes `register_version/3` build a real,
-  manifest-derived import table for its own proving instantiation instead of
-  delegating that stage verbatim to `ModuleRegistry.register/1`.
+  reworked at commit 721930a) and `test/specs/REQ-173.md` for the full
+  design/spec this suite exercises.
 
-  The remaining `describe` blocks below use `req173_v1_capless.wat`/
-  `req173_v2_capless.wat` (zero imports, so they DO pass registration) to give
-  genuine, passing coverage of every part of WASM-14/AC1-AC4 that does not
-  require an actually-held-open invocation, plus AC5's design SS8.4 step 14
-  "defense in depth" manifest-disjointness check, which needs no WASM
-  execution at all.
+  **Note (ELIXIR-DEV, WF02-REQ173-20260828 step-02a fix2):** this file's
+  first `describe` block originally reproduced and documented a real defect
+  (`register_version/3` could never register ANY module declaring a host
+  import, regardless of manifest, because `ModuleRegistry.register/1`'s
+  stage-2 proof always instantiates with NO import table at all). The design
+  was reworked (§5.3) to add a second, capability-aware proving path inside
+  `register_version/3` itself, entered only when `register/1`'s own
+  zero-import stage 2 is the specific thing that fails -- so a
+  capability-requiring module now registers successfully when its manifest
+  grants what it needs. That fix makes the original assertions below
+  (`{:error, {:instantiation_failed, ...}}` for `req173_v1_gated.wat`/
+  `req173_v2_gated.wat`) factually wrong now that the defect they documented
+  is fixed, so they are updated here (by ELIXIR-DEV, not TEST-DESIGNER) to
+  assert the now-correct `{:ok, _version_id}` outcome -- this is exactly the
+  "fix's return shape genuinely differs from what TEST-DESIGNER guessed"
+  case the handoff calls out (TEST-DESIGNER wrote these against the
+  pre-rework design, before commit 721930a existed), not a re-litigation of
+  TEST-DESIGNER's own judgment. The `describe "SS8.4: the one overlapping
+  scenario ..."` block, and every other block below, were already written
+  correctly against the target (post-fix) behavior and needed no changes;
+  they exercise WASM-14/AC1-AC5 in full, including the previously-blocked
+  overlapping-activation scenario, which now passes.
 
   `async: false`: builds real Wasmtime instances via `wasmex`'s NIF (mirrors
   every other WASM-NIF test file in this suite), AND drives the single,
@@ -65,16 +62,17 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistryTest do
   end
 
   # ---------------------------------------------------------------------
-  # Blocking finding: register_version/3 rejects ANY module with a real
-  # host import, regardless of manifest -- reproduced and documented here.
-  # See test/specs/REQ-173.md for the full write-up.
+  # Fixed defect (design §5.3): register_version/3 now successfully
+  # registers a module declaring a host import, PROVIDED its manifest
+  # grants the capability that import needs -- via its own capability-aware
+  # proof, entered only when register/1's zero-import stage 2 fails.
   # ---------------------------------------------------------------------
 
-  describe "blocking finding: register_version/3 cannot register a module that declares a host import" do
-    test "req173_v1_gated.wat (imports platform_call_service) is rejected at registration, not merely denied capability at invoke time" do
-      module_name = unique_module_name("blocking-v1")
+  describe "register_version/3's capability-aware proof (design §5.3) registers a module requiring a host capability" do
+    test "req173_v1_gated.wat (imports platform_call_service) registers successfully when the manifest grants \"service:call\"" do
+      module_name = unique_module_name("gated-v1")
 
-      assert {:error, {:instantiation_failed, {:unresolved_import, "env", "platform_call_service"}}} =
+      assert {:ok, _version_id} =
                ModuleVersionRegistry.register_version(
                  module_name,
                  fixture_bytes("req173_v1_gated.wat"),
@@ -82,10 +80,10 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistryTest do
                )
     end
 
-    test "req173_v2_gated.wat (imports write_variable) is rejected at registration too -- the defect is blanket, not specific to one import" do
-      module_name = unique_module_name("blocking-v2")
+    test "req173_v2_gated.wat (imports write_variable) registers successfully when the manifest grants \"var:write\"" do
+      module_name = unique_module_name("gated-v2")
 
-      assert {:error, {:instantiation_failed, {:unresolved_import, "env", "write_variable"}}} =
+      assert {:ok, _version_id} =
                ModuleVersionRegistry.register_version(
                  module_name,
                  fixture_bytes("req173_v2_gated.wat"),
@@ -93,8 +91,8 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistryTest do
                )
     end
 
-    test "the same v1 bytes register successfully once the module declares zero imports (req173_v1_capless.wat), confirming the import declaration -- not anything else about the fixture -- is what stage 2 rejects" do
-      module_name = unique_module_name("blocking-control")
+    test "the same v1 bytes also register successfully when the module declares zero imports (req173_v1_capless.wat), confirming both registration paths (step 1's zero-import success, step 2's capability-aware proof) reach the same outcome" do
+      module_name = unique_module_name("capless-control")
 
       assert {:ok, _version_id} =
                ModuleVersionRegistry.register_version(

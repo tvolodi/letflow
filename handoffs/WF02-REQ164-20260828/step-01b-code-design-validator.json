@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ164-20260828/step-01b-code-design-validator.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -36,6 +36,18 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "verdict": "PASS",
+    "checks": [
+      {"criterion": "Decision heading is unambiguous NO", "result": "PASS", "detail": "\"## Decision\\n\\nNO. Letflow does not host guest compilation.\" -- no hedge, no 'either' framing."},
+      {"criterion": "Decision 0014 R-Co evidence cited accurately", "result": "PASS", "detail": "Read decision 0014 directly: OQ-3 text, stub description (Engine/Store/Instance/Module/Func/Trap/Memory all 'extern struct {}'), and 'find R-Co -name *.wasm -not -path */.git/* -> 0 files' all match the artefact's citation verbatim; not exaggerated or misattributed."},
+      {"criterion": "WASM-03/04/05 stated DECLINED not deferred, with reason", "result": "PASS", "detail": "Artefact explicitly distinguishes declined vs. deferred in its own SS2 and states the reason (no working R-Co pipeline, no Zig toolchain/reason to acquire one, unjustified build-farm security surface, no current caller need)."},
+      {"criterion": "REQ-175 disposition stated precisely and matches its actual entry", "result": "PASS", "detail": "docs/requirements.yaml line 8880-8938: REQ-175 status is 'pending' (conditional, awaiting REQ-164's decision) and its own text states verbatim: 'If REQ-164 decided NO, REQ-164's own acceptance criteria require this requirement to be CANCELLED with a status-history event recording why -- not left pending.' The artefact's characterization matches exactly and correctly assigns the actual flip to DOC-UPDATER at Step 6, not itself."},
+      {"criterion": "S6 disclosure genuinely 'assumed, not available'", "result": "PASS", "detail": "docs/migration/README.md line 22-23: S5 depends on S3, S6 depends on S4 (a stage after S5) -- S6 has not been reached. Artefact SS3 table marks all three S6 inputs (artifact storage, retention, job execution) as 'Assumed, not available' with concrete supporting detail (no storage backend, no retention policy, no Oban/job runner in mix.exs) -- not glossed over."},
+      {"criterion": "docs/requirements.yaml not edited by this step", "result": "PASS", "detail": "git diff --stat main...HEAD shows only 2 handoff JSON files and the design artefact md changed; docs/requirements.yaml absent from the diff."},
+      {"criterion": "no mix.exs or lib/letflow/engine/ file touched", "result": "PASS", "detail": "git diff --stat main...HEAD -- mix.exs lib/letflow/engine/ produced no output (zero files changed), confirming artefact's SS5 claim."}
+    ],
+    "notes": "Decision-only artefact for REQ-164. All 7 acceptance criteria verified against source documents (decision 0014, docs/requirements.yaml REQ-164 and REQ-175 entries, docs/migration/README.md stage table) rather than trusting CODE-DESIGNER's self-report. No gaps found; artefact correctly scopes REQ-175's actual cancellation to DOC-UPDATER at WF-02 Step 6.",
+    "mix_letflow_lint_handoffs": "0 new violations (see command output in session)"
   }
 }

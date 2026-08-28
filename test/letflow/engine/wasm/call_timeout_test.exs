@@ -54,6 +54,14 @@ defmodule Letflow.Engine.Wasm.CallTimeoutTest do
   # ---------------------------------------------------------------------
 
   describe "AC2: wasmex's documented interrupt-and-keep-Store claim, tested directly against Wasmex.call_function/4" do
+    # ISS-0352: this test genuinely, permanently hangs the wasmex NIF native
+    # thread it dispatches to (no BEAM-side mechanism can reclaim it -- see
+    # req170's own design doc section 1.1-1.4). Tagged so it runs isolated
+    # from the rest of the suite (test_helper.exs excludes :wasm_hang by
+    # default; mix letflow.check.test runs it in its own dedicated,
+    # short-lived BEAM node afterward) rather than leaking a thread into the
+    # shared pool every other WASM NIF test in the same process depends on.
+    @tag :wasm_hang
     test "a timed-out call crashes the caller with an ordinary GenServer.call exit, not a clean {:error, _}" do
       {:ok, pid} = Wasmex.start_link(%{bytes: fixture_bytes("req170_hang.wat")})
 
@@ -127,6 +135,9 @@ defmodule Letflow.Engine.Wasm.CallTimeoutTest do
       assert CallTimeout.classify(outcome) == :wall_clock_timeout
     end
 
+    # ISS-0352: genuinely, permanently hangs a wasmex native thread -- see
+    # the tag note above.
+    @tag :wasm_hang
     test "the outer Task.yield/2 timeout shape also classifies as :wall_clock_timeout" do
       hang_context =
         context(%{

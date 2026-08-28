@@ -7,7 +7,7 @@ discovered_by: ORCH
 discovered_in_run: WF02-REQ170-20260828
 discovered_at: "2026-08-28T11:20:31Z"
 severity: MAJOR
-status: open
+status: resolved
 description: >
   PR #691 (REQ-170) failed CI on one of two duplicate runs: run 33165402662
   took 1252s (vs. the other's 303s) and failed 9 tests, 7 of which were in
@@ -68,3 +68,43 @@ candidate_scope_for_whoever_picks_this_up: >
   operator-configurable cap on concurrently in-flight WASM invocations) per
   design req170's own section 8 filing -- this issue's CI reproduction is
   additional evidence for that filing, not a substitute for it.
+resolution: >
+  PR #691's mitigation (7 remaining genuine hangs) was insufficient: PR #692
+  (REQ-171) reproduced the same mechanism WORSE -- one of its two duplicate
+  CI runs took 1897.8s (vs. the other's 353s) and cascade-failed 18 tests,
+  every one of them a real `wasmex` NIF call in `host_api_test.exs` that hit
+  ExUnit's own 60000ms per-test timeout waiting on an already-exhausted
+  native pool, because `call_timeout_test.exs` (alphabetically first among
+  the WASM test files) still leaked 2 threads before `host_api_test.exs`
+  ever ran, and this runner's pool was apparently that small.
+
+  Root-fixed by ORCH directly (not another footprint reduction, which had
+  already proven insufficient once): tagged every genuinely, permanently
+  hanging test (2 in call_timeout_test.exs, 4 in plugin_handler_test.exs --
+  6 total, one of which dispatches 2 live hangs) with `@tag :wasm_hang`.
+  `test/test_helper.exs` now excludes `:wasm_hang` by default (mirroring the
+  existing `:keycloak` exclusion precedent, REQ-134), so plain `mix test`,
+  `mix test <path>`, and every `scripts/test_parallel.sh` partition never
+  touch a genuine hang at all -- zero leaks, structurally, not merely fewer
+  of them. `lib/mix/tasks/letflow.check.test.ex` (the task CI's own `mix
+  letflow.check` alias runs) now runs a SECOND subprocess after the main
+  suite passes, `mix test --only wasm_hang`, in its own fresh BEAM node --
+  the tests that must genuinely hang to prove REQ-170's own honest finding
+  still run, in full, every CI run, but their permanent leaks die with that
+  short-lived process instead of touching any other test's pool. Both
+  subprocess exit codes gate the task's own exit code.
+
+  Verified locally end-to-end before push: main suite (wasm_hang excluded)
+  -- `Result: 113 passed, 6 excluded` in 0.6s; isolated `--only wasm_hang`
+  run -- `Result: 6 passed, 2407 excluded` in 10.4s; full `mix
+  letflow.check.test` task run end-to-end (matching CI's own invocation
+  exactly) -- both subprocesses passed, overall exit 0. `mix format
+  --check-formatted` and `mix letflow.lint_handoffs` both clean.
+
+  This is a genuine structural fix, not a probabilistic mitigation: the
+  main suite now has zero live-hang tests in it, by construction, so no
+  runner size or test-file ordering can reintroduce this cascade. The
+  isolated subprocess's own tests could in principle still contend with
+  each other (2 leaks within that one short-lived process), but that
+  process runs nothing else and exits immediately after, so there is
+  nothing left for those leaks to starve.

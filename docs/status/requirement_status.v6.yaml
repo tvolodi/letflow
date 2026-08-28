@@ -203,3 +203,21 @@ history:
       plugin_interface.ex, and lib/letflow/engine/lua/ untouched. uuid decision
       documented in host_api.ex moduledoc as a WASM-side addition with no Lua
       counterpart, not presented as parity. Unblocks REQ-172 (write path).
+  - req: REQ-172
+    event: started
+    agent: ORCH
+    at: "2026-08-28T14:45:00Z"
+    note: >
+      WF02-REQ172-20260828 started (queue task 324, GH#624, stage S5). WASM
+      host API 2/2 -- write path (write_variable, call_service, fail) at
+      parity with Lua's REQ-160/REQ-161, plus the SHARED Lua/Wasm parity
+      test suite that satisfies WASM-12's own acceptance criterion (one
+      scenario run against both executors, not two similar-looking
+      suites). Three sharp constraints: write_variable stages and discards
+      on every failure arm (trap, fuel exhaustion, memory cap, timeout,
+      fail); call_service returns a structured error on service failure
+      but still fails outright on a missing capability (REQ-167); fail
+      must terminate by a mechanism the guest cannot intercept. Direction
+      of conformance per decision 0014 (4): Lua is the definition, WASM
+      conforms -- no Lua host-API file may be modified. SECURITY-REVIEWER
+      hard gate. Depends on REQ-171 (done), REQ-161 (done).

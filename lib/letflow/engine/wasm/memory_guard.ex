@@ -126,7 +126,12 @@ defmodule Letflow.Engine.Wasm.MemoryGuard do
   this function on a malformed input: every path returns an ordinary tagged
   tuple.
   """
-  @spec read(Wasmex.StoreOrCaller.t(), Wasmex.Memory.t(), offset :: integer(), length :: integer()) ::
+  @spec read(
+          Wasmex.StoreOrCaller.t(),
+          Wasmex.Memory.t(),
+          offset :: integer(),
+          length :: integer()
+        ) ::
           {:ok, binary()} | {:error, guard_error()}
   def read(store, memory, offset, length) do
     memory_size = Wasmex.Memory.size(store, memory)

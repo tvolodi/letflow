@@ -1,0 +1,24 @@
+{
+  "handoff_id": "WF02-REQ173-20260828-step03",
+  "run_id": "WF02-REQ173-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 3",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "lib/letflow/engine/wasm/module_version_registry.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 325, GH#625, stage S5. SECURITY-REVIEWER and REVIEWER both PASSED commit 4fd8183 (implementation, with commit 8d4157a as the base and one doc/name fix on top) with no blocking findings. Design: lib/letflow/design/req173-wasm-module-hot-reload.md (commit c7d10ea, approved after 1 rework round). This is a genuine concurrency requirement -- the design's own SS9/SS10 sections specify the exact test-design shape: reuse REQ-172's existing do_call_service/8 test-double seam (Application.get_env(:letflow, :lua_platform_service_caller, ...), resolved fresh per call) as a CONTROLLABLE, releasable gate to hold an invocation open, rather than the existing uncontrollable *_hang.wat fixtures (which have no release path). Design specifies two module version fixtures with disjoint capability requirements (service:call vs var:write) and different return literals (111 vs 222) so one overlapping scenario can assert both halves of WASM-14 plus capability isolation in both directions, with a synchronous gate wait (not sleep) making the overlap real rather than sequential. Read the design doc's SS9/SS10 (and SS3/SS4's invoke/4 API) in full before writing anything -- it is the authority for the exact test mechanism."},
+  "task": {
+    "description": "Write ExUnit tests (and any needed .wat fixtures) satisfying every REQ-173 acceptance criterion below, using the design's specified controllable-gate mechanism (a fake/test-double service caller that blocks on a synchronization primitive until released, reused from REQ-172's do_call_service/8 seam) to hold one invocation open while a concurrent activate/2 call installs a new module version, then assert BOTH halves in one overlapping scenario: the held invocation completes against the OLD version's behaviour and capability set, and a NEW invocation started after activation observes the NEW version's behaviour and capability set. Assert the prior version's resources are released only after its last in-flight invocation completes (not at activation time) -- check ModuleVersionRegistry's internal release/ref-count behavior via its own accessor functions, not by inference. Assert capability isolation explicitly: when the new version's manifest declares a DIFFERENT capability set than the old one, the held (old-version) invocation must still succeed/fail exactly as the old capability set would dictate, and the new invocation must be governed by the new capability set -- test both directions (old allows what new denies, and vice versa) if the design's fixtures support it. Apply this project's mutation-testing discipline: for each acceptance criterion, mutate the real implementation locally, confirm the pre-existing suite fails to catch it, add a closing test, then revert the mutation and verify the revert (git diff/md5sum) before finishing. Do not modify lib/letflow/engine/wasm/module_registry.ex, capability_gate.ex, or plugin_handler.ex. Run mix compile --warnings-as-errors and mix test yourself, quote real output.",
+    "acceptance_criteria": [
+      "a test holds an invocation open (a guest blocked in a controllable host call), activates a new module version DURING it, and asserts the held invocation completes normally against the OLD version's observable behaviour -- WASM-14's own acceptance criterion, with the overlap real rather than sequential",
+      "the same test asserts an invocation started AFTER the activation observes the NEW version's behaviour, so both halves of WASM-14 are proven in one overlapping scenario",
+      "the two module versions used are observably different in output, so the test can distinguish which version served an invocation rather than merely completing",
+      "a test asserts the prior version's resources are released only after its last in-flight invocation completes, not at activation time",
+      "a test asserts that when the new version's manifest declares a DIFFERENT capability set, an in-flight invocation of the prior version keeps the prior version's capability set, and the new invocation gets the new one -- so activation cannot silently widen or narrow a running invocation's authority",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

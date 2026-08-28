@@ -57,6 +57,22 @@ defmodule Letflow.Engine.Wasm.PluginHandler do
 
   See `lib/letflow/design/req165-wasmex-process-boundary.md` (gate-approved)
   for the full design this module implements.
+
+  ## REQ-174 (WASM-13, SHOULD) — instance pooling: DECLINED
+
+  See `Letflow.Engine.Wasm.ModuleVersionRegistry`'s moduledoc for the full
+  decision record (pooling declined; no first-party `wasmex` pooling API
+  exists; decision `0014-scripting-plugin-runtime-strategy.md` point (e)'s
+  restatement of WASM-13; invariants INV-174-1/INV-174-2) and
+  `lib/letflow/design/req174-wasm-instance-pooling-or-decline.md`
+  (gate-approved) for the live verification it rests on. `run_guest/3` above
+  is the second of REQ-174's two scoped call paths: `start_instance/1` calls
+  `Wasmex.start_link/1` with no `:store` option (line ~155), so every
+  invocation gets a brand-new `Store`/linear memory never touched by any
+  other invocation, and `run_guest/3` stops the instance unconditionally on
+  every path (comment above, lines 124-131) — INV-174-1's isolation-by-
+  construction property holds for this call site exactly as it does for
+  `ModuleVersionRegistry.invoke/4`.
   """
 
   @behaviour Letflow.Engine.PluginInterface

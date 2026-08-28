@@ -2821,7 +2821,7 @@
             "requirement_ids": ["REQ-162"],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/engine/lua/platform.ex",
                 "lib/letflow/engine/lua/executor.ex",
@@ -2831,13 +2831,13 @@
                 "test/specs/REQ-162.md"
             ],
             "lock_acquired_at": "2026-08-27T22:41:00Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ162-20260827 created; Step 1 dispatched to CODE-DESIGNER",
+            "lock_released_at": "2026-08-28T00:09:30Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #683 squash-merged (4f48d3a); queue task 314 released done cleanly",
             "backfilled": false,
             "queue_task_id": 314,
             "queue_agent_id": "orch-ai-dala",
-            "note": "WF-02 for REQ-162 (queue task 314, GH#614, stage S5). Uncaught Lua errors captured as structured SCRIPT_ERROR events (LUA-16 restated). Must resolve empirically whether a consumed-instruction count is retrievable in the adopted tv-labs/lua runtime (REQ-148 spike answer (c) is the hard prerequisite -- cite, don't re-derive) and never zero-fill/silently-omit that field while claiming the requirement met if not retrievable. SCRIPT_ERROR must be pattern-match-distinguishable from 4 other arms: REQ-161's SCRIPT_FAILED, REQ-154's budget error, REQ-155's timeout, REQ-156's memory limit. Capability state at failure must come from REQ-157's real capability set, not a re-derived copy. The literal 'division by zero' acceptance text is a Lua 5.1 assumption -- 1/0 yields inf in 5.3, no raise; must substitute 1//0 or 1%0 (integer-only forms that do raise) and document the substitution. Stack trace must not leak host filesystem paths or Elixir internals beyond what a script author needs (SECURITY-REVIEWER hard gate, data-disclosure surface). Depends on REQ-161, REQ-157 (both done). Likely touches executor.ex (not just platform.ex) since error capture happens at the Lua.eval!/2 call boundary REQ-153/154/155/156 already own. Queue claimed via get_next_task 2026-08-27T22:40:25Z."
+            "note": "WF-02 for REQ-162 (queue task 314, GH#614, stage S5). Uncaught Lua errors captured as structured SCRIPT_ERROR events (LUA-16 restated) in Letflow.Engine.Lua.Executor.run_script/3's existing rescue clause, not platform.ex. Independently determined (deps/lua source read, not assumed from REQ-148's success-path finding) that consumed-instruction count IS retrievable on the uncaught-error path via a different accessor -- exception.original.state.instruction_count, since the outer Lua.RuntimeException's own :state field is always nil. Two-tag instruction_count_report() union never zero-fills. SCRIPT_ERROR reserved and pattern-match-distinguishable from SCRIPT_FAILED/budget/timeout/memory-limit. Capability state read from REQ-157's real type; the pre-existing Sandbox.new/1-always-empty-grant-set gap is honestly disclosed, not patched (out of scope). Division-by-zero substituted to 1//0 (1/0 yields inf in Lua 5.3, no raise). Stack-trace sanitization is a structural guarantee (Lua-level call_stack only, never Elixir's __STACKTRACE__). This is the final requirement in the S5 Lua host-function chain (REQ-153-162) -- all 8 platform.* capability-matrix rows are now real. Every gate passed clean on first attempt, no rework rounds -- CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (hard gate per requirement text), REVIEWER (confirmed the public-@doc-false test-seam pattern is an established codebase convention via REQ-053/059 precedent), and TEST-DESIGN-VALIDATOR (independently re-verified TEST-DESIGNER's mutation testing, which found and closed 2 real gaps: a typed-case leak bypassing the pre-existing substring check, and a completely uncovered untyped-fallback path) all passed on the first pass. RELEASE-VALIDATOR ran a real ad hoc 1//0 script via mix run and observed the actual instruction_count field first-hand. One CI-only fix after PR open: mix format flagged one over-long test line TEST-DESIGNER's mutation pass added, caught by CI not locally. 2282/2282 full-suite, 2 consecutive clean runs, ripple-checked against every Lua-consuming test file. Queue task 314 released done cleanly."
         }
     ]
 }

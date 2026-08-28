@@ -142,7 +142,8 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
   @doc "Supervised singleton, registered as `#{inspect(__MODULE__)}`."
   @spec start_link(opts :: keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) when is_list(opts) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+    name = Keyword.get(opts, :name, __MODULE__)
+    GenServer.start_link(__MODULE__, opts, name: name)
   end
 
   @doc """
@@ -208,6 +209,11 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
   `Wasmex.call_function/4` call. The OUTER bound passed to `Task.yield/2` is
   the strictly larger, internally-computed
   `timeout_ms + #{@outer_yield_margin_ms}`.
+
+  This mirrors, without reusing the code of,
+  `Letflow.Engine.PluginInterface.invoke/2,3`'s own two-layer dispatch
+  (`async_nolink -> Task.yield/2 -> Task.shutdown(:brutal_kill)`), per
+  decision 0014.
   """
   @spec invoke(
           module_name(),

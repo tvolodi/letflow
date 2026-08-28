@@ -1,0 +1,35 @@
+{
+  "handoff_id": "step-final-ci-fix-WF02-REQ170-20260828",
+  "run_id": "WF02-REQ170-20260828",
+  "workflow_id": "WF-02",
+  "step": "final-ci-fix",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ170-20260828/step-final-ci-fix.json",
+  "status": "IN_PROGRESS",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-170"],
+    "issue_ids": [],
+    "branch_name": "feature/WF02-REQ170-20260828",
+    "pr_number": 691
+  },
+  "task": {
+    "description": "PR #691's CI (mix letflow.check, which shells out to plain `mix test` -- a single, non-partitioned BEAM process, confirmed by reading lib/mix/tasks/letflow.check.test.ex) failed on ONE of its two duplicate CI runs (run 33165402662, 21m39s, 9 failures) while the other passed cleanly (run 33165423753, 5m3s, 0 failures) on the IDENTICAL commit. Real, structurally-confirmed root cause (not a guess): this branch's own tests (test/letflow/engine/wasm/call_timeout_test.exs and test/letflow/engine/wasm/plugin_handler_test.exs's new REQ-170 describe blocks) each dispatch a genuinely-hanging guest (req170_hang.wat / req165_hang.wat) through the REAL PluginInterface.invoke -> PluginHandler.handle_node -> Wasmex.start_link/1 entry point. Per this requirement's OWN design doc finding (lib/letflow/design/req170-wasm-wallclock-timeout.md section 1.1-1.4, independently reproduced by CODE-DESIGN-VALIDATOR and SECURITY-REVIEWER), a genuinely-hung wasmex call is NEVER interrupted -- it permanently occupies one thread of wasmex's shared, node-global, CPU-count-sized Tokio native worker pool, with NO BEAM-side mechanism able to reclaim it. Counted directly: call_timeout_test.exs's AC2 test (1 leak, same pid reused for 2 calls so only 1 native thread lost) plus its AC5 describe block's two live-hang tests (2 more leaks) = 3; plugin_handler_test.exs's AC5 outer-timeout test (1 leak), REQ-170 AC1 test (1 leak), REQ-170 AC3 test (1 leak), and REQ-170 AC4's two tests (2 more leaks, since build_context.() creates a fresh PluginInterface.invoke -> fresh Wasmex.start_link per call) = 5. Total: ~8 permanently-leaked native threads accumulate over the course of ONE sequential `mix test` run, before later, unrelated WASM test files (module_registry_test.exs, which also creates real wasmex instances) run in the SAME OS process -- exhausting the shared pool on a CI runner with as few as 2-4 available cores causes exactly the cascading failure observed (module_registry_test.exs tests 6-9 all failed/timed out with the pool exhausted).\n\nThis is the SAME hazard class the design doc's own section 1.5/section 8 already found and filed as OQ-5-adjacent evidence, just manifesting for real in CI at a smaller scale (8 leaks, not 32) because CI's runner has far fewer cores than the design session's own host. Reduce the total genuine-hang footprint of these two test files to the minimum necessary to still prove every acceptance criterion, without weakening any AC's actual coverage.\n\nKey lever: classify/1 (Letflow.Engine.Wasm.CallTimeout) is a PURE function over an already-completed Letflow.Engine.PluginInterface.outcome() value (a plain term, per design section 4.2) -- it does not require a live hang to test. call_timeout_test.exs's existing pure test (line 165-169, 'classify/1's own two substrings never appear in a fuel-exhaustion reason string') already demonstrates this pattern. Wherever a test's ONLY purpose is proving classify/1's own logic (not proving PluginInterface/PluginHandler actually PRODUCE that exact string live), prefer a synthetic/constructed outcome() value over a real hang -- but keep AT LEAST ONE live, end-to-end proof per distinct mechanism (design's own testing philosophy establishes real coverage matters, per req168/169/170's own precedent of testing real behavior, not just pure logic in isolation) so the suite still proves the real strings genuinely match.\n\nSecond lever: where multiple elapsed-time proofs are needed against different timeout_ms values (REQ-170 AC4), choose values that simultaneously prove MULTIPLE things in one fewer call -- e.g., a single pair (300ms, 7000ms) instead of three separate calls (300ms, 2000ms, 7000ms) can prove BOTH 'shorter binds sooner' AND 'timeout_ms is not silently dropped/defaulting to wasmex's hardcoded 5000ms' in one test with 2 leaks instead of two tests with 3 leaks total.\n\nDo NOT weaken or remove the honesty-clause tests (the ones asserting the REAL, live-verified behavior per design section 1.1-1.6) -- those are load-bearing for this requirement's own credibility and must keep at least minimal live coverage. Do NOT modify lib/letflow/engine/wasm/call_timeout.ex or lib/letflow/engine/wasm/plugin_handler.ex -- this is a test-file-only fix.",
+    "acceptance_criteria": [
+      "Reduce the total count of genuinely-hanging (permanently native-thread-leaking) wasmex calls across call_timeout_test.exs and plugin_handler_test.exs to a smaller number than today's ~8 -- target roughly half or fewer, while every one of REQ-170's 7 real acceptance criteria (docs/requirements.yaml) still has at least one live, end-to-end test proving the real mechanism works, not merely a pure/synthetic test standing in for all coverage of that AC.",
+      "Where a test's assertion is purely about classify/1's own string-matching logic (not about proving PluginInterface/PluginHandler produce that string for real), convert it to a synthetic outcome() value -- no live Wasmex call, no leak -- following the existing pure-test precedent already in the file (line 165-169).",
+      "Where AC4's multiple timeout_ms values are tested, consolidate to the minimum number of live calls that still proves both 'shorter binds sooner' and 'timeout_ms is not silently dropped to wasmex's 5000ms default' (a single well-chosen pair should suffice instead of three separate calls).",
+      "Re-run mix test test/letflow/engine/wasm/ locally (export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\", WASMEX_BUILD=true) and confirm all tests still pass with real output quoted.",
+      "Re-run the FULL suite (mix test, not scripts/test_parallel.sh -- match CI's own invocation exactly) at least once locally to sanity-check the reduced leak footprint doesn't still cause cascading failures on this host, real output quoted.",
+      "Do not modify lib/letflow/engine/wasm/call_timeout.ex or lib/letflow/engine/wasm/plugin_handler.ex.",
+      "mix compile --warnings-as-errors passes clean.",
+      "mix letflow.lint_handoffs passes with 0 new violations.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

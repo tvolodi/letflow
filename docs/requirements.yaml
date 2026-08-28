@@ -5952,7 +5952,7 @@ requirements:
   - id: REQ-123
     title: Cutover strategy decision record -- big-bang vs. gradual dual-running
     owner: REVIEWER
-    status: pending
+    status: done
     stage: S8
     impl_order: 256  # letflow-queue task id; depends_on translated to queue task id [252]
     description: >

@@ -686,8 +686,12 @@ volumes:
     path: docs/status/requirement_status.v5.yaml
     status: current
     opened: 2026-08-26
-    entries: 14
+    entries: 36
     note: >
+      Corrected to 36 by WF02-REQ123-20260828 Step 6 append verification --
+      this run appended REQ-123 started/done and re-counted on-disk entries
+      with `grep -c "^  - req:" docs/status/requirement_status.v5.yaml`.
+
       Incremented to 12 by conflict resolution at Step Final (WF02-REQ157-20260827
       rebase onto main) -- main already carried REQ-157's own started event
       (appended by a sibling/earlier session of this same run) plus

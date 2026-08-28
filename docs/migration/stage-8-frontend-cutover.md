@@ -59,10 +59,10 @@ What waits for S7 is **cutover**, not **integration**.
 - [`decisions/0011-frontend-ownership.md`](decisions/0011-frontend-ownership.md)
   — the frontend is migrated, not referenced. Settles the ownership question
   this stage used to leave open.
-- **Still open: cutover strategy** (big-bang vs. gradual/dual-running). Needs a
-  real correctness signal from S7 to decide from — recording a preference now
-  would be guessing. Flag to REVIEWER when S7 lands; do not settle it inside a
-  route requirement.
+- [`decisions/0015-cutover-strategy.md`](decisions/0015-cutover-strategy.md)
+   — explicit decision recorded: S7 signal is currently insufficient to choose
+   big-bang or gradual/dual-running, so cutover selection is deferred until S7
+   parity evidence exists.
 
 ## The guard suite is part of this stage's gate
 

@@ -847,3 +847,39 @@ history:
       feature/WF02-REQ165-20260828 created from main (4601218) and
       pushed. Dispatching Step 1 to CODE-DESIGNER next. 31 on-disk
       entries before this append; 32 after.
+
+  - req: REQ-123
+    event: started
+    agent: ORCH
+    at: "2026-08-28T02:34:22Z"
+    note: >
+      WF02-REQ123-20260828 started (stage S8). Requirement-scoped
+      decision-record task: produce a cutover-strategy decision grounded in
+      actual S7 evidence (big-bang vs gradual/dual-running) and state Zig
+      backend deprecation as a condition, not a date. Baseline evidence on
+      pickup: docs/migration/stage-7-simulation-uat-parity.md still reads
+      "Status: not started" with no expanded S7 requirements and no REVIEWER
+      sign-off, so this run must decide whether that signal is sufficient
+      rather than invent a preference. `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 34 on-disk entries before
+      this append; 35 after.
+
+  - req: REQ-123
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-28T02:34:22Z"
+    note: >
+      WF02-REQ123-20260828 complete. Added
+      docs/migration/decisions/0015-cutover-strategy.md with an explicit
+      decision: S7 signal is currently insufficient to choose big-bang or
+      gradual/dual-running, so cutover selection is deferred until parity
+      evidence exists. The record cites concrete evidence by name from
+      docs/migration/stage-7-simulation-uat-parity.md and
+      docs/migration/stage-8-frontend-cutover.md, states Zig backend
+      deprecation as conditions (not a date), and names the specific missing
+      evidence required to settle the strategy. Updated
+      docs/migration/stage-8-frontend-cutover.md Decisions section to link the
+      record and remove the open-question wording. Status flipped pending ->
+      done in docs/requirements.yaml. `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 35 on-disk entries before
+      this append; 36 after.

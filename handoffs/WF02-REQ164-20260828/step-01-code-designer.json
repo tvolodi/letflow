@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step01-WF02-REQ164-20260828",
+  "run_id": "WF02-REQ164-20260828",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ164-20260828/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-164"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "branch_name": "feature/WF02-REQ164-20260828",
+    "commit": "b7002d4"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-164: settle OQ-3 -- whether Letflow hosts WASM guest compilation at all. Read docs/requirements.yaml's REQ-164 entry in full (search '- id: REQ-164') -- the queue task's full description and 6 real acceptance criteria are there verbatim. ALSO read docs/requirements.yaml's REQ-175 entry in full (search '- id: REQ-175') -- it is the CONDITIONAL requirement whose fate (implemented vs. cancelled) this decision determines; you must read its exact acceptance criteria and current status before writing your decision, since your artefact must be precise about what happens to it. Read docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md's section discussing OQ-3 and the WASM evidence (R-Co/src/wasm/ stub status, zero .wasm files found). This is a DECISION-ONLY requirement: no mix.exs change, no lib/letflow/engine/ edit. Decide YES or NO under a clear Decision heading: does Letflow host guest compilation (a Zig-source-to-.wasm compilation pipeline, WASM-03/04/05)? Decision 0014's own evidence already leans NO (no working pipeline existed anywhere in R-Co to port, zero .wasm artifacts exist to remain compatible with, and Letflow has no Zig toolchain and no reason to acquire one) -- ground your decision in that evidence, verified fresh if possible (this environment likely cannot access the R-Co Windows-local path either, per REQ-163's own precedent -- if so, rely on decision 0014's own already-quoted evidence, as REQ-163's design did). If NO: state explicitly that WASM-03, WASM-04, WASM-05 are DECLINED (not deferred), with the reason, and that REQ-175 must be marked cancelled (not left pending) -- this is a real, load-bearing consequence your artefact must state precisely enough for DOC-UPDATER to act on later (DOC-UPDATER will need to flip REQ-175's status to 'cancelled' in docs/requirements.yaml and append a status-history event explaining why -- your artefact is what justifies that later action, though you do not perform it yourself; docs/requirements.yaml is NOT edited by you in this step, only by DOC-UPDATER at Step 6). If YES: your artefact must supply the language-agnostic restatement REQ-175 needs (accepting a .wasm artifact rather than Zig source; keying the cache on artifact hash + toolchain identity, not source hash, per decision 0014's own restatement principle already quoted in REQ-175's own text). Either way, name explicitly which S6 operational inputs (artifact storage, retention, job execution) this decision required, and state for each whether it was available at decision time or merely assumed -- decision 0014 itself flags OQ-3 as needing S6's input, and an S6-dependent decision made without S6 existing yet must say so honestly rather than present itself as fully grounded. Determine whether this decision belongs in a new docs/migration/decisions/ record or in lib/letflow/design/req164-wasm-compilation-hosting.md -- state which and why, mirroring REQ-163's own placement reasoning (which chose the design-doc path since it operated entirely inside decision 0014's premise).",
+    "acceptance_criteria": [
+      "The artefact records an explicit YES or NO under a Decision heading on whether Letflow hosts WASM guest compilation.",
+      "If NO, the artefact states that WASM-03, WASM-04, and WASM-05 are DECLINED (not deferred) with the reason, and states precisely that REQ-175's status must be changed to cancelled with a status-history event recording why -- not left pending.",
+      "If YES, the artefact supplies the language-agnostic restatement REQ-175 implements against: accepting a .wasm artifact rather than Zig source, and keying the cache on artifact hash plus toolchain identity rather than WASM-04's literal source hash.",
+      "The artefact states that R-Co never built this pipeline, citing that R-Co/src/wasm/ is stubs and that a search for '*.wasm' across R-Co returns zero files, so declining loses nothing that exists.",
+      "The artefact names which S6 operational inputs (artifact storage, retention, job execution) the decision required, and states for each whether it was available or assumed.",
+      "No mix.exs change and no file under lib/letflow/engine/ is modified, confirmed by git diff --stat scoped to this run's commits.",
+      "docs/requirements.yaml is NOT edited by CODE-DESIGNER at this step (DOC-UPDATER handles the REQ-175 cancellation, if applicable, at Step 6)."
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "decision": "NO -- Letflow does not host WASM guest compilation",
+    "artifact": "lib/letflow/design/req164-wasm-compilation-hosting.md",
+    "declined_requirements": ["WASM-03", "WASM-04", "WASM-05"],
+    "req_175_disposition": "must be marked cancelled with a status-history event by DOC-UPDATER at Step 6, per artefact Decision section",
+    "s6_inputs_assumed_not_available": ["artifact storage", "retention", "job execution"],
+    "placement": "lib/letflow/design/ (not a new decisions/ record) -- mirrors REQ-163's placement reasoning, operates entirely inside decision 0014's premise",
+    "files_touched": ["lib/letflow/design/req164-wasm-compilation-hosting.md"],
+    "mix_exs_or_engine_touched": false,
+    "requirements_yaml_touched": false
+  }
+}

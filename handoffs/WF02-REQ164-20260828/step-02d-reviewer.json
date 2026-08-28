@@ -1,0 +1,49 @@
+{
+  "handoff_id": "step02d-WF02-REQ164-20260828",
+  "run_id": "WF02-REQ164-20260828",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ164-20260828/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-164"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ164-20260828/step-01-code-designer.json",
+      "handoffs/WF02-REQ164-20260828/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req164-wasm-compilation-hosting.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "branch_name": "feature/WF02-REQ164-20260828",
+    "commit": "be966f9"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-164's decision artefact -- decision-record consistency and scope, no code. CODE-DESIGN-VALIDATOR already PASSed. Your job: confirm this artefact does not silently reopen or contradict decision 0014's premises, confirm the artefact's placement decision (lib/letflow/design/ vs. a new docs/migration/decisions/ record) is consistent with the REQ-163 precedent it claims to mirror, confirm no scope creep, and give a final sanity check on the REQ-175 cancellation consequence since a wrongly-triggered cancellation of a real requirement is a consequential, hard-to-reverse-cheaply action for the next DOC-UPDATER step to take.",
+    "acceptance_criteria": [
+      "Confirm the artefact does not silently reopen or contradict decision 0014's settled premises.",
+      "Confirm the REQ-163 placement precedent the artefact cites is accurately characterized (re-read lib/letflow/design/req163-wasm-abi-choice.md's own placement rationale).",
+      "Confirm no scope creep: git diff --stat main...feature/WF02-REQ164-20260828 touches only this run's own handoffs/, docs/status/, handoffs/registry.json bookkeeping, and lib/letflow/design/req164-wasm-compilation-hosting.md.",
+      "Give a final sanity check specifically on the REQ-175 cancellation trigger: is the NO decision genuinely well-supported enough that cancelling a real, already-drafted requirement is the correct action, or does anything in REQ-175's own text suggest cancellation might be premature (e.g. a caller that already exists, a stakeholder commitment)? This is the one place in this run where a wrong call has real downstream cost.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "PASS",
+    "findings": [
+      "No silent contradiction of decision 0014: the artefact answers exactly the open question 0014 itself deferred (OQ-3), does not touch 0014's Decision section (bind wasmex behind a process boundary), does not reopen the Lua half, and correctly treats S6's three named operational inputs (artifact storage, retention, job execution) as assumed-not-available rather than silently assuming them solved -- consistent with 0014's own framing that OQ-3 'needs S6's operational input.'",
+      "REQ-163 placement precedent accurately characterized: req163-wasm-abi-choice.md's own 'Why this artefact' section uses the identical template (question operates entirely inside 0014's premise, nothing outside S5 depends on the answer, therefore lib/letflow/design/ per the requirement's own instruction) that req164 claims to mirror. Confirmed by direct read of req163's text, not taken on faith.",
+      "No scope creep: git diff --stat main...feature/WF02-REQ164-20260828 touches only handoffs/WF02-REQ164-20260828/{step-01-code-designer.json, step-01b-code-design-validator.json, step-02d-reviewer.json} and lib/letflow/design/req164-wasm-compilation-hosting.md -- 4 files, 329 insertions, no code, no mix.exs, no lib/letflow/engine/ change, matching the artefact's own §5 confirmation.",
+      "REQ-175 cancellation sanity check (most important item): read REQ-175's full entry in docs/requirements.yaml (lines 8880-8949). REQ-175 is explicitly self-conditional -- its own description states 'CONDITIONAL REQUIREMENT. This requirement exists only if REQ-164 decided YES... If REQ-164 decided NO, REQ-164's own acceptance criteria require this requirement to be CANCELLED with a status-history event recording why -- not left pending,' and acceptance criterion #1 restates the same instruction verbatim. There is no existing caller, no stakeholder commitment, and no ambiguity in the conditional framing -- REQ-175 was drafted anticipating precisely this NO outcome and wrote its own cancellation instruction in advance. REQ-164's artefact quotes this correctly and does not overreach: it recommends cancellation (DOC-UPDATER's job at Step 6) rather than performing it, and correctly leaves REQ-165/166/167/171/172 untouched since those operate on a .wasm artifact regardless of its origin. No sign cancellation is premature. depends_on for REQ-175 is [REQ-164, REQ-166], both fine to cancel against since REQ-166 is unaffected by this decision and REQ-164 (this run) is what triggers the cancellation.",
+      "Evidence chain (R-Co stubs, zero .wasm files, no Zig toolchain, build-farm security surface with no offsetting caller) is grounded in 0014's own already-verified quotes, not re-derived or embellished -- appropriate given the R-Co path's unreachability from this sandbox, consistent with REQ-163's precedent for the same limitation.",
+      "No decision-record disagreement to flag -- the artefact operates as designed: decision-only, no lib/ or mix.exs change, correctly routes the actual docs/requirements.yaml edit to DOC-UPDATER at Step 6."
+    ],
+    "gate": "PASS -- cleared for TEST-DESIGNER (note: TEST-DESIGNER's role is likely a no-op for this decision-only artefact, but the gate is satisfied)"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "handoff_id": "step05-WF02-REQ163-20260828",
+  "run_id": "WF02-REQ163-20260828",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ163-20260828/step-05-release-validator.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-163"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ163-20260828/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ163-20260828/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req163-wasm-abi-choice.md"
+    ],
+    "branch_name": "feature/WF02-REQ163-20260828",
+    "commit": "26f0131"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR (WF-02 Step 5) for REQ-163 -- independently re-derive that all 7 real acceptance criteria in docs/requirements.yaml's REQ-163 entry are actually met, before this requirement is marked done. This is a decision-only requirement with no code -- your 'test run' is independently re-checking the artefact's own claims and evidence, not running mix test. Do not trust CODE-DESIGN-VALIDATOR's or REVIEWER's prior PASS verdicts as evidence by itself -- re-derive independently. Both prior gates already did live WebFetch re-verification of the wasmex documentation; spot-check at least one of those claims yourself rather than re-doing all of them.",
+    "acceptance_criteria": [
+      "Read docs/requirements.yaml REQ-163's 7 acceptance criteria verbatim and confirm each is satisfied by a specific section of lib/letflow/design/req163-wasm-abi-choice.md -- quote the section.",
+      "Independently spot-check at least one of the artefact's cited wasmex web claims yourself via WebFetch (e.g. re-confirm the 'beta quality' Components quote, or the current hex.pm version) -- don't just cite that two prior gates already did this.",
+      "Confirm git diff --stat main...feature/WF02-REQ163-20260828 touches no mix.exs or lib/letflow/engine/ file.",
+      "Verdict: PASS only if independently re-derived, not merely re-stated from prior agents' reports.",
+      "CRITICAL: when writing this handoff's top-level status field (line 9), use exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED. Run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

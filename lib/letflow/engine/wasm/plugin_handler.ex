@@ -67,12 +67,19 @@ defmodule Letflow.Engine.Wasm.PluginHandler do
   `lib/letflow/design/req174-wasm-instance-pooling-or-decline.md`
   (gate-approved) for the live verification it rests on. `run_guest/3` above
   is the second of REQ-174's two scoped call paths: `start_instance/1` calls
-  `Wasmex.start_link/1` with no `:store` option (line ~155), so every
+  `Wasmex.start_link/1` with no `:store` option (line ~171), so every
   invocation gets a brand-new `Store`/linear memory never touched by any
-  other invocation, and `run_guest/3` stops the instance unconditionally on
-  every path (comment above, lines 124-131) — INV-174-1's isolation-by-
-  construction property holds for this call site exactly as it does for
-  `ModuleVersionRegistry.invoke/4`.
+  other invocation. `run_guest/3` stops the instance (comment above,
+  lines 140-147) on the success and error-mapped paths, but that teardown is
+  *not* unconditional: an uncaught `GenServer.call`-timeout `exit` out of
+  `Wasmex.call_function/4`, and the outer `Task.shutdown(task, :brutal_kill)`
+  `PluginInterface.invoke/2,3` applies around this whole callback, can both
+  skip it, orphaning that one instance — pre-existing, disclosed behavior
+  (REQ-165/170), not a change here. INV-174-1's isolation-by-construction
+  property still holds for this call site exactly as it does for
+  `ModuleVersionRegistry.invoke/4`, because it comes from never sharing a
+  `Store` between invocations, not from teardown always running — an
+  orphaned instance is never reused, so it is never observed either.
   """
 
   @behaviour Letflow.Engine.PluginInterface
@@ -142,8 +149,15 @@ defmodule Letflow.Engine.Wasm.PluginHandler do
   #   1. read the fixture bytes
   #   2. Wasmex.start_link/1 -- a fresh Wasmtime instance for this call only
   #   3. Wasmex.call_function/4 -- the guest's named export
-  #   4. GenServer.stop/1 -- on every path, including the error path, so a
-  #      wasmex instance is never leaked
+  #   4. GenServer.stop/1 -- on the success path and the error-mapped path
+  #      reached when call_export/3 returns, so an ordinary or guest-trap
+  #      outcome never leaks the wasmex instance. NOT unconditional: an
+  #      uncaught GenServer.call-timeout exit out of Wasmex.call_function/4,
+  #      or the outer Task.shutdown(:brutal_kill) PluginInterface.invoke/2,3
+  #      applies around this whole callback, can both skip this call and
+  #      orphan the instance instead -- pre-existing, disclosed behavior
+  #      (REQ-165/170), not a leak this function silently introduces.
+  #      Isolation does not depend on this call running (see moduledoc).
   #   5. map the raw i32 result (or any wasmex failure) to {:ok, _} | {:error, _}
   @spec run_guest(String.t(), String.t(), pos_integer()) ::
           {:ok, integer()} | {:error, String.t()} | {:failed, String.t(), term()}
@@ -184,9 +198,11 @@ defmodule Letflow.Engine.Wasm.PluginHandler do
   # REQ-172 design §2.2 -- on a Wasmex.call_function/4 {:error, _} return, this
   # function now checks Process.info(pid, :dictionary) for
   # Letflow.Engine.Wasm.HostApi's fail-signal key BEFORE returning to run_guest/3 --
-  # run_guest/3's own GenServer.stop(pid) call (unchanged, still runs unconditionally
-  # on every path) would otherwise destroy the pdict signal before anything could ever
-  # observe it (live-verified: Process.info/2 on an already-stopped pid returns nil).
+  # run_guest/3's own GenServer.stop(pid) call (unchanged, still runs on this
+  # function's return path -- see run_guest/3's own comment for the paths where
+  # it is skipped instead) would otherwise destroy the pdict signal before
+  # anything could ever observe it (live-verified: Process.info/2 on an
+  # already-stopped pid returns nil).
   # Present -> a distinctly-tagged {:failed, reason, details} outcome, taken from the
   # stash, never from the discarded/generic error message. Absent -> the existing
   # generic {:error, _} behavior is unchanged (covers a guest trap, ResourceLimits fuel

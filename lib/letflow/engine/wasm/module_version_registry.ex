@@ -89,12 +89,19 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
   2. Both existing instantiation call sites — this module's `invoke/4` (via
      `Wasmex.start_link/1` with no `:store` key) and
      `Letflow.Engine.Wasm.PluginHandler.run_guest/3` — already allocate a
-     brand-new `Wasmex.Store` per invocation and unconditionally tear the
-     instance down afterward on every outcome (success, guest
-     exception/trap, or the monitor-mediated timeout path). This is
-     isolation **by construction**, strictly stronger than "reset between
-     invocations": there is no shared `Store` for residue to survive in, so
-     there is nothing to reset.
+     brand-new `Wasmex.Store` per invocation, so there is no shared `Store`
+     for residue to survive in and therefore nothing to reset. Teardown
+     (`GenServer.stop/1`) runs on the success path and on a rescued guest
+     exception, but is *not* unconditional: the crash-safety net documented
+     below exists precisely because a `GenServer.call` timeout `exit` from
+     `Wasmex.call_function/4` (§6 point 1) and the outer
+     `Task.shutdown(task, :brutal_kill)` path (§6 point 2) can both skip it,
+     leaving that one instance's process orphaned rather than stopped. This
+     is pre-existing, disclosed behavior (REQ-165/170/173), not a change
+     introduced here. Isolation does not depend on that teardown running —
+     an orphaned instance is never reused by a later invocation (no pooling
+     exists to reuse it), so it is never observed by one either. Isolation
+     comes from **never sharing a Store**, not from teardown discipline.
   3. The amortised-instantiation-cost benefit WASM-13's own acceptance
      criterion targets (a p50-latency comparison) is unmeasured for
      Letflow's actual module sizes/invocation cadence. Building a stateful
@@ -107,9 +114,16 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
   observes linear-memory state written by invocation N, because each
   invocation runs a `Wasmex.Instance` created from a `Wasmex.start_link/1` call
   that supplied no `:store` option (so `wasmex` allocates a brand-new `Store`,
-  and therefore brand-new linear memory, for that call alone), and the
-  instance is unconditionally stopped before control returns to the invoking
-  process on every outcome. This requirement adds no new production code to
+  and therefore brand-new linear memory, for that call alone). The instance is
+  stopped before control returns to the invoking process on the success path
+  and on a rescued exception, but — as the crash-safety net above documents —
+  that teardown is skipped on an uncaught `GenServer.call`-timeout `exit` and
+  can also be skipped by the outer `Task.shutdown(:brutal_kill)` path; a
+  skipped teardown orphans that instance rather than leaving it available to
+  be reused, so it still can never be observed by a later invocation. The
+  isolation guarantee therefore rests on never sharing a `Store` between
+  invocations, not on teardown running unconditionally. This requirement adds
+  no new production code to
   satisfy this invariant — it already holds in the shipped code above; REQ-174
   adds only the fixture and tests (`priv/wasm_fixtures/req174_memory_write.wat`,
   `test/letflow/engine/wasm/module_version_registry_test.exs`,

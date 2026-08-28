@@ -85,30 +85,39 @@ memory that was never written by any other invocation in the first place. This i
 stronger isolation property than "reset between invocations": there is no shared object
 across invocations for residue to survive in.
 
-### 1.3 Both existing call sites already release the instance unconditionally on
-every path, including the failure path
+### 1.3 Both existing call sites release the instance on the paths that reach that
+call — teardown is not unconditional, but isolation does not require it to be
 
 `ModuleVersionRegistry.run_call/6` (design `req173-wasm-module-hot-reload.md` §4 step
 5, verified directly in `lib/letflow/engine/wasm/module_version_registry.ex`'s `run_call/6`,
 lines 375-391): `GenServer.stop(pid)` runs on **both** the `rescue` path (immediately
 before `release/3` and `reraise`) and the normal-return path (immediately before the
-final `release/3`) — unconditionally, not gated by the outcome of
-`Wasmex.call_function/4`. The only path that does not reach it explicitly is a
-`GenServer.call` timeout `exit` from `Wasmex.call_function/4` itself, which is left to
-the `Process.monitor`/`:DOWN` crash-safety net (design §6), not to a leaked, reusable
-instance. `PluginHandler.start_instance/1`, called from `run_guest/3` (lines 132-140),
-follows the identical pattern (`GenServer.stop(pid)` unconditionally, "on every path,
-including the error path, so a wasmex instance is never leaked" per its own inline
-comment at line 130). Neither module retains an instance, a `pid`, or a `Store` past a
-single invocation under any outcome — success, guest exception, or trap.
+final `release/3`) — but not on a `GenServer.call` timeout `exit` from
+`Wasmex.call_function/4` itself, which propagates uncaught out of the task and is left
+to the `Process.monitor`/`:DOWN` crash-safety net (design §6) purely for ref-count
+release, not for instance teardown; nor on the outer `Task.shutdown(task,
+:brutal_kill)` path, which can kill the task while it is still blocked inside
+`Wasmex.call_function/4`, before `GenServer.stop(pid)` ever runs. Both gaps are
+pre-existing (REQ-165/170/173), disclosed behavior, not new defects. `PluginHandler.
+run_guest/3` (lines 132-140) follows the identical pattern: `GenServer.stop(pid)` runs
+on its normal-return path, but the same two paths — an uncaught `GenServer.call`
+timeout `exit`, and the outer `Task.shutdown(:brutal_kill)`
+`PluginInterface.invoke/2,3` applies around this whole callback — can skip it too. On
+those two paths, neither module retains a *reusable* instance, a `pid` handed back to
+any other invocation, or a shared `Store`; what results instead is an orphaned instance
+process that is simply never torn down, not one that is reused by a subsequent
+invocation.
 
 ### 1.4 Conclusion this design's decision rests on
 
 There is no pooling feature in the installed `wasmex` to adopt, and the two production
 call paths this requirement is scoped against (`ModuleVersionRegistry.invoke/4`,
 `PluginHandler.run_guest/3`) already give per-invocation isolation **by construction** —
-not by resetting a reused `Store`, but by never sharing one across invocations, and by
-tearing the instance down unconditionally afterward. Building a Letflow-owned pool on
+not by resetting a reused `Store`, but by never sharing one across invocations. Teardown
+of the instance runs on the paths described in §1.3, but is not unconditional on every
+path, and isolation does not depend on it being so: an instance whose teardown is
+skipped is orphaned, never reused, and therefore never observed by any later invocation.
+Building a Letflow-owned pool on
 top of `wasmex`'s primitives would mean introducing the exact shared-`Store` residue
 risk decision 0014 (e) flags, purely to recover an amortised-instantiation-cost benefit
 that has not been measured, still needing a manual reset step this design would have to
@@ -128,10 +137,12 @@ worth taking on speculatively.
    existing library feature.
 2. **Isolation-by-construction already exists and is strictly stronger than
    reset-between-invocations.** §1.2/§1.3 — every invocation today gets a Store that
-   was never touched by any other invocation, torn down unconditionally afterward. A
-   hand-built pool would *regress* this to "isolation via a reset step that must be
-   proven unconditional," which is exactly the correctness burden decision 0014 (e)
-   warns about, for a benefit (§3 below) that is currently unmeasured.
+   was never touched by any other invocation; whether that instance is torn down
+   afterward (which happens on most, but per §1.3 not all, paths) is irrelevant to
+   isolation, since an untorn-down instance is orphaned, not reused. A hand-built pool
+   would *regress* this to "isolation via a reset step that must be proven
+   unconditional," which is exactly the correctness burden decision 0014 (e) warns
+   about, for a benefit (§3 below) that is currently unmeasured.
 3. **The amortisation benefit is speculative, not demonstrated.** WASM-13's own
    acceptance criterion is a p50-latency comparison; no such measurement exists yet for
    Letflow's actual module sizes and invocation cadence (S5's plugin workloads are
@@ -159,10 +170,15 @@ any two invocations of the same registered module — whether via
 observes any linear-memory state written by invocation N, because each invocation runs
 against a `Wasmex.Instance` created by a call to `Wasmex.start_link/1` that supplied no
 `:store` option, so `wasmex` allocates a brand-new `Wasmex.Store` (and therefore
-brand-new linear memory, per §1.2) for that call alone, and the instance is
-unconditionally stopped (§1.3) before the function returns control to the invoking
-process on every outcome (success, guest exception/trap, or the monitor-mediated
-timeout path).
+brand-new linear memory, per §1.2) for that call alone. The instance is stopped (§1.3)
+before the function returns control to the invoking process on the success and
+rescued-exception paths; it is *not* stopped on an uncaught `GenServer.call`-timeout
+`exit` or on the outer `Task.shutdown(:brutal_kill)` path (§1.3) — both pre-existing,
+disclosed gaps, not new defects. The invariant holds regardless, because those two
+paths orphan the instance rather than making it available for reuse: no later
+invocation can ever observe an orphaned instance's memory, since nothing reuses it.
+Isolation therefore flows from never sharing a `Store` between invocations, not from
+teardown running unconditionally.
 
 This invariant is a statement about the *existing, shipped* code
 (`module_version_registry.ex`, `plugin_handler.ex`) — this requirement adds no new

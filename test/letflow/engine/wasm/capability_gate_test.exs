@@ -33,7 +33,8 @@ defmodule Letflow.Engine.Wasm.CapabilityGateTest do
       manifest = %{capabilities: ["var:read"]}
       bytes = fixture("req167_platform_call_only.wat")
 
-      assert {:error, {:instantiation_denied, {:unresolved_import, "env", "platform_call_service"}}} =
+      assert {:error,
+              {:instantiation_denied, {:unresolved_import, "env", "platform_call_service"}}} =
                CapabilityGate.start_instance(bytes, manifest)
     end
 
@@ -151,14 +152,16 @@ defmodule Letflow.Engine.Wasm.CapabilityGateTest do
     test "rejected when nothing is granted" do
       bytes = fixture("req167_path_open.wat")
 
-      assert {:error, {:instantiation_denied, {:unresolved_import, "wasi_snapshot_preview1", "path_open"}}} =
+      assert {:error,
+              {:instantiation_denied, {:unresolved_import, "wasi_snapshot_preview1", "path_open"}}} =
                CapabilityGate.start_instance(bytes, %{capabilities: []})
     end
 
     test "rejected even when every capability this registry defines is granted" do
       bytes = fixture("req167_path_open.wat")
 
-      assert {:error, {:instantiation_denied, {:unresolved_import, "wasi_snapshot_preview1", "path_open"}}} =
+      assert {:error,
+              {:instantiation_denied, {:unresolved_import, "wasi_snapshot_preview1", "path_open"}}} =
                CapabilityGate.start_instance(bytes, %{capabilities: ["var:read", "service:call"]})
     end
 
@@ -179,7 +182,9 @@ defmodule Letflow.Engine.Wasm.CapabilityGateTest do
     test "an entirely unregistered import name is denied under the maximally-permissive manifest" do
       bytes = fixture("req167_unregistered_import.wat")
 
-      assert {:error, {:instantiation_denied, {:unresolved_import, "env", "totally_unregistered_function"}}} =
+      assert {:error,
+              {:instantiation_denied,
+               {:unresolved_import, "env", "totally_unregistered_function"}}} =
                CapabilityGate.start_instance(bytes, %{capabilities: ["var:read", "service:call"]})
     end
   end
@@ -191,13 +196,18 @@ defmodule Letflow.Engine.Wasm.CapabilityGateTest do
 
   describe "a module with no imports instantiates cleanly under any manifest" do
     test "with an empty manifest" do
-      assert {:ok, pid} = CapabilityGate.start_instance(fixture("req167_no_imports.wat"), %{capabilities: []})
+      assert {:ok, pid} =
+               CapabilityGate.start_instance(fixture("req167_no_imports.wat"), %{capabilities: []})
+
       GenServer.stop(pid)
     end
 
     test "with a fully-granted manifest (unused entries are inert)" do
       manifest = %{capabilities: ["var:read", "service:call"]}
-      assert {:ok, pid} = CapabilityGate.start_instance(fixture("req167_no_imports.wat"), manifest)
+
+      assert {:ok, pid} =
+               CapabilityGate.start_instance(fixture("req167_no_imports.wat"), manifest)
+
       GenServer.stop(pid)
     end
   end

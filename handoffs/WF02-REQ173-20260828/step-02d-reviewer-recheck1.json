@@ -1,0 +1,19 @@
+{
+  "handoff_id": "WF02-REQ173-20260828-step02d-recheck1",
+  "run_id": "WF02-REQ173-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 2d (narrow re-check after doc/name fix)",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "lib/letflow/engine/wasm/module_version_registry.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 325, GH#625, stage S5. Your prior review (8d4157a) PASSED everything except one narrow gap: invoke/4's docs never named PluginInterface.invoke/2,3 or decision 0014. ELIXIR-DEV fixed it as commit 4fd8183: added the missing citation sentence to invoke/4's @doc, and separately fixed start_link/1 to thread a caller-supplied :name via Keyword.get(opts, :name, __MODULE__) instead of hardcoding __MODULE__ (the minor non-blocking style note you also flagged). mix compile --warnings-as-errors clean; mix test test/letflow/engine/wasm/ 146 passed, 7 excluded, no regression."},
+  "task": {
+    "description": "Narrow re-check: confirm commit 4fd8183 adds the required PluginInterface.invoke/2,3 + decision 0014 citation to invoke/4's documentation, matching the design's SS3 language; confirm the start_link/1 name-threading fix is correct and matches sandbox_pool.ex's precedent; confirm via git diff that nothing else changed. This is not a full fresh pass -- your prior findings on idiom, supervision, scope, and timeout-classification fidelity all stand.",
+    "acceptance_criteria": [
+      "invoke/4's documentation explicitly names PluginInterface.invoke/2,3 and decision 0014, describing the mirrored (not reused) dispatch pattern"
+    ]
+  },
+  "result": null
+}

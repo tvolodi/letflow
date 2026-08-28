@@ -1,0 +1,48 @@
+{
+  "handoff_id": "step05-WF02-REQ165-20260828",
+  "run_id": "WF02-REQ165-20260828",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ165-20260828/step-05-release-validator.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-165"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ165-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ165-20260828/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ165-20260828/step-02d-reviewer.json",
+      "handoffs/WF02-REQ165-20260828/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ165-20260828/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "lib/letflow/engine/wasm/plugin_handler.ex",
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "lib/mix/tasks/letflow.check_toolchain.ex",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "feature/WF02-REQ165-20260828",
+    "commit": "95e1884"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR (WF-02 Step 5) for REQ-165 -- independently re-derive that all 9 real acceptance criteria in docs/requirements.yaml's REQ-165 entry are actually met, before this requirement is marked done. Do not trust any prior agent's PASS verdict as evidence by itself -- re-verify against the real code and real test output yourself. NOTE: this branch was just rebased onto an updated main (which picked up concurrent REQ-155-related work from another session/host) -- confirm the rebase integrated cleanly, nothing from REQ-165's own diff conflicts with or was altered by that rebase, and the full suite is still clean post-rebase. TEST-RUNNER found and this run's ORCH reopened a real, unrelated pre-existing flake (ISS-0287, Postgres connection-pool exhaustion at N=8 partitions) during Step 4 -- diff-excluded since it's not caused by this branch; do not treat it as a REQ-165 regression, but do sanity-check that characterization yourself if you see it recur.",
+    "acceptance_criteria": [
+      "Read docs/requirements.yaml REQ-165's 9 acceptance criteria verbatim and independently map each to a real, currently-passing test -- run at least a handful of those specific tests yourself.",
+      "Independently run mix test test/letflow/engine/wasm/ test/mix/tasks/letflow_check_toolchain_test.exs and mix compile --warnings-as-errors and quote real output (use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true where relevant).",
+      "Independently confirm the process boundary and native-build claims -- read plugin_handler.ex and confirm it matches the approved design; if practical, run a quick ad hoc check confirming wasmex's native library is genuinely loaded (mirroring REQ-160/161/162's own precedent of empirical verification beyond a code read).",
+      "Confirm no owned_modules boundary violation occurred across the whole run (git diff main...feature/WF02-REQ165-20260828 --stat touches only this run's declared owned_modules plus its own handoffs/ bookkeeping) -- confirm lib/letflow/engine/plugin_interface.ex is genuinely absent.",
+      "Confirm the post-rebase state is sound: git log shows a clean rebase onto the latest main, and the full test suite (at least one run) is clean modulo the diff-excluded ISS-0287 flake.",
+      "Verdict: PASS only if independently re-derived, not merely re-stated from prior agents' reports.",
+      "CRITICAL: when writing this handoff's top-level status field (line 9), use exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED. Run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

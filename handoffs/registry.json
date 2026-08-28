@@ -2838,6 +2838,26 @@
             "queue_task_id": 314,
             "queue_agent_id": "orch-ai-dala",
             "note": "WF-02 for REQ-162 (queue task 314, GH#614, stage S5). Uncaught Lua errors captured as structured SCRIPT_ERROR events (LUA-16 restated) in Letflow.Engine.Lua.Executor.run_script/3's existing rescue clause, not platform.ex. Independently determined (deps/lua source read, not assumed from REQ-148's success-path finding) that consumed-instruction count IS retrievable on the uncaught-error path via a different accessor -- exception.original.state.instruction_count, since the outer Lua.RuntimeException's own :state field is always nil. Two-tag instruction_count_report() union never zero-fills. SCRIPT_ERROR reserved and pattern-match-distinguishable from SCRIPT_FAILED/budget/timeout/memory-limit. Capability state read from REQ-157's real type; the pre-existing Sandbox.new/1-always-empty-grant-set gap is honestly disclosed, not patched (out of scope). Division-by-zero substituted to 1//0 (1/0 yields inf in Lua 5.3, no raise). Stack-trace sanitization is a structural guarantee (Lua-level call_stack only, never Elixir's __STACKTRACE__). This is the final requirement in the S5 Lua host-function chain (REQ-153-162) -- all 8 platform.* capability-matrix rows are now real. Every gate passed clean on first attempt, no rework rounds -- CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (hard gate per requirement text), REVIEWER (confirmed the public-@doc-false test-seam pattern is an established codebase convention via REQ-053/059 precedent), and TEST-DESIGN-VALIDATOR (independently re-verified TEST-DESIGNER's mutation testing, which found and closed 2 real gaps: a typed-case leak bypassing the pre-existing substring check, and a completely uncovered untyped-fallback path) all passed on the first pass. RELEASE-VALIDATOR ran a real ad hoc 1//0 script via mix run and observed the actual instruction_count field first-hand. One CI-only fix after PR open: mix format flagged one over-long test line TEST-DESIGNER's mutation pass added, caught by CI not locally. 2282/2282 full-suite, 2 consecutive clean runs, ripple-checked against every Lua-consuming test file. Queue task 314 released done cleanly."
+        },
+        {
+            "run_id": "WF02-REQ163-20260828",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-163"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/design/req163-wasm-abi-choice.md",
+                "docs/migration/decisions/"
+            ],
+            "lock_acquired_at": "2026-08-28T00:11:00Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ163-20260828 created; Step 1 dispatched to CODE-DESIGNER",
+            "backfilled": false,
+            "queue_task_id": 315,
+            "queue_agent_id": "orch-ai-dala",
+            "note": "WF-02 for REQ-163 (queue task 315, GH#615, stage S5). Decision-only requirement, no code: settle OQ-4 (core modules vs. component model for the WASM ABI), one of two decisions (with REQ-164/OQ-3) unblocking S5's WASM half per decision 0014. Must ground the choice in the real installed/adoptable wasmex version's actual support (read the dependency or its published API, not inferred from :wasm_component_model's existence), restate WASM-02's four-export ABI into the chosen mode's concrete contract, name the exact import surface WASM-07's filesystem-denial test targets, and state the value-representation consequence for REQ-150/WASM-12. R-Co's own wasm/ code is stubs end to end (wasmtime_bindings.zig's own header: 'deferred to Stage 10') -- this is a specification port, not a code port; the choice is Letflow's own. Lighter pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> REVIEWER -> RELEASE-VALIDATOR -> DOC-UPDATER; no ELIXIR-DEV/SECURITY-REVIEWER/TEST-* since no code exists. Queue claimed via get_next_task 2026-08-28T00:10:32Z."
         }
     ]
 }

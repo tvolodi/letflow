@@ -669,3 +669,29 @@ history:
       real 1//0 script via `mix run` and observed the actual
       instruction_count field first-hand. 25 on-disk entries before this
       append; 26 after.
+
+  - req: REQ-163
+    event: started
+    agent: ORCH
+    at: "2026-08-28T00:10:32Z"
+    note: >
+      WF02-REQ163-20260828 started (queue task 315, GH#615, stage S5).
+      Claimed via get_next_task after REQ-162's completion. First of
+      two decision requirements (with REQ-164) unblocking S5's WASM
+      half, per decision 0014's "Ownership of execution": settle OQ-4
+      -- core modules vs. the component model for the WASM ABI.
+      Decision artefact only, no mix.exs change, no lib/letflow/engine/
+      edit. Must ground the choice in what the wasmex version Letflow
+      would adopt actually supports (read the dependency/its published
+      API, not inferred from an option name), restate WASM-02's
+      four-export ABI into the chosen mode's concrete contract, name
+      the exact import surface WASM-07's filesystem-denial test must
+      target, and state the value-representation consequence for
+      REQ-150's number-marshalling rule (WASM-12 parity). Lighter
+      pipeline than a code requirement: CODE-DESIGNER -> CODE-DESIGN-
+      VALIDATOR -> REVIEWER -> RELEASE-VALIDATOR -> DOC-UPDATER;
+      ELIXIR-DEV/SECURITY-REVIEWER/TEST-* skipped, no code exists to
+      implement or test. Step 00 git-setup PASS (ORCH, direct): branch
+      feature/WF02-REQ163-20260828 created from main (6c8152f) and
+      pushed. Dispatching Step 1 to CODE-DESIGNER next. 26 on-disk
+      entries before this append; 27 after.

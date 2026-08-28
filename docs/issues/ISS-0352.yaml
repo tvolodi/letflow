@@ -1,0 +1,70 @@
+id: ISS-0352
+title: >
+  CI reproduced wasmex native-thread-pool exhaustion from hang tests
+  (OQ-5-adjacent) -- a real production observation, not just a design-session
+  probe
+discovered_by: ORCH
+discovered_in_run: WF02-REQ170-20260828
+discovered_at: "2026-08-28T11:20:31Z"
+severity: MAJOR
+status: open
+description: >
+  PR #691 (REQ-170) failed CI on one of two duplicate runs: run 33165402662
+  took 1252s (vs. the other's 303s) and failed 9 tests, 7 of which were in
+  test/letflow/engine/wasm/module_registry_test.exs -- a file unrelated to
+  REQ-170's own diff. Root-caused by ORCH directly from the failure log:
+  REQ-170's design (lib/letflow/design/req170-wasm-wallclock-timeout.md
+  section 1.1-1.4) live-verified that a genuinely-hung wasmex guest call is
+  never interrupted and permanently leaks one thread of wasmex's shared,
+  node-global, CPU-count-sized Tokio native worker pool, with no BEAM-side
+  mechanism able to reclaim it. This was previously only a design-session
+  finding (section 1.5's 32-concurrent-hang probe, filed as OQ-5-adjacent
+  evidence in the design doc and decision 0014). This CI run is the FIRST
+  REAL, PRODUCTION reproduction of the same mechanism at much smaller scale:
+  the test suite (before mitigation) created ~9 permanently-leaked native
+  threads over one sequential `mix test` run (CI's `mix letflow.check` shells
+  out to plain `mix test`, not the partitioned scripts/test_parallel.sh, per
+  lib/mix/tasks/letflow.check.test.ex), and on a smaller/more contended CI
+  runner this was enough to exhaust the shared pool mid-run, cascading into
+  unrelated WASM test failures.
+
+  Mitigation applied directly in PR #691 (commit eac174a, TEST-DESIGNER):
+  reduced the genuine-hang footprint from ~9 to ~7 by converting
+  classify/1's pure-logic assertions to synthetic outcome() values where a
+  live call added no additional proof, and consolidating REQ-170 AC4's three
+  live timeout_ms calls into two. A subsequent CI run (after the fix) passed
+  cleanly on both duplicate runs in 5-6 minutes each. This closes the
+  IMMEDIATE flake for this PR but does NOT eliminate the underlying
+  mechanism -- 7 genuine hangs still exist in the suite, permanently
+  leaking 7 native threads every time `mix test` runs the WASM test files in
+  one process, and nothing prevents a future WASM test file (or a busier/
+  smaller CI runner) from tipping the same pool into exhaustion again.
+affected_files:
+  - test/letflow/engine/wasm/call_timeout_test.exs
+  - test/letflow/engine/wasm/plugin_handler_test.exs
+  - test/letflow/engine/wasm/resource_limits_test.exs
+  - lib/mix/tasks/letflow.check.test.ex
+related:
+  - REQ-170
+  - REQ-165  # req165_hang.wat, the original hang fixture and its own AC5 test
+  - REQ-169  # req169_hang.wat
+  - decision-0014  # OQ-5, WASM-11 correction
+source: >
+  handoffs/WF02-REQ170-20260828/step-final-ci-fix.json (root-cause diagnosis
+  and mitigation), lib/letflow/design/req170-wasm-wallclock-timeout.md
+  section 1.4/1.5/8 (original design-session finding), CI run
+  https://github.com/tvolodi/letflow/actions/runs/33165402662 (the real
+  production reproduction).
+candidate_scope_for_whoever_picks_this_up: >
+  (a) Move WASM NIF-heavy test files (module_registry_test.exs,
+  capability_gate_test.exs, memory_guard_test.exs, resource_limits_test.exs,
+  call_timeout_test.exs, plugin_handler_test.exs) to run FIRST in the test
+  suite (before any hang test's leaked threads accumulate) or into their own
+  isolated CI job/process, so a leaked thread from one file cannot starve
+  another. (b) Have CI's mix letflow.check invoke scripts/test_parallel.sh
+  instead of plain `mix test`, and confirm partitioning genuinely isolates
+  this risk (each partition is presumably its own OS process/pool, though
+  this was not verified in this run). (c) The deeper OQ-5 fix (an
+  operator-configurable cap on concurrently in-flight WASM invocations) per
+  design req170's own section 8 filing -- this issue's CI reproduction is
+  additional evidence for that filing, not a substitute for it.

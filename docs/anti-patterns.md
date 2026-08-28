@@ -1658,3 +1658,43 @@ format` (not just `mix format --check-formatted`) on the files it touched before
 declaring its step done — this both fixes the issue and is a no-op if already formatted.
 Cheaper than waiting for a CI round-trip to discover it. Consider adding this as an
 explicit step in ELIXIR-DEV's and TEST-DESIGNER's own acceptance-criteria templates.
+
+## A test that intentionally hangs a real native resource can pass locally and cascade-fail unrelated tests in CI
+
+**What happened.** REQ-170's own test suite (`test/letflow/engine/wasm/call_timeout_test.exs`,
+`plugin_handler_test.exs`) deliberately dispatches genuinely-hanging WASM guests through the
+real `wasmex` NIF, to prove (honestly, per the requirement's own live-verified finding) that a
+hung guest is never actually interrupted -- it permanently leaks one thread of `wasmex`'s
+shared, node-global, CPU-count-sized native worker pool, with no BEAM-side mechanism able to
+reclaim it (see `lib/letflow/design/req170-wasm-wallclock-timeout.md` section 1.1-1.4, ISS-0352).
+Every prior gate in this run (ELIXIR-DEV, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER,
+TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR) ran the FULL suite green, multiple
+times, on their own local sandboxes. PR #691's first real CI run still failed -- one of two
+duplicate CI runs took 1252s (vs. the other's 303s on the identical commit) and failed 9 tests,
+7 of which were in an unrelated file (`module_registry_test.exs`).
+
+**Why seven independent local/gate runs didn't catch it.** CI's `mix letflow.check` shells out
+to plain `mix test` -- a SINGLE, non-partitioned BEAM process (confirmed by reading
+`lib/mix/tasks/letflow.check.test.ex`) -- so every genuinely-leaked native thread from every
+hang test in the whole suite accumulates in that one process before later WASM test files run.
+The suite (before mitigation) created ~9 such permanent leaks. On a fast/lightly-loaded runner,
+`wasmex`'s shared native pool (sized to the runner's own core count) never filled up before the
+suite finished. On a slower/busier runner -- which any given CI run may or may not land on --
+the same 9 leaks were enough to exhaust the pool mid-run, and every subsequent WASM test in that
+one process (regardless of which file it lived in) queued behind the exhausted pool and timed
+out. No local sandbox run, however many times repeated, can surface a defect that depends on
+CI's specific runner-count/environment variance -- this is the same shape of gap as the
+`git diff main...HEAD` and `mix format` anti-patterns above: a different *kind* of run (a real,
+possibly resource-constrained CI runner) is needed, not more repetitions of the same kind.
+
+**Mitigation.** When a test deliberately creates a resource that cannot be cleanly reclaimed
+(a genuinely-hung native call, a leaked OS thread/process, an intentionally-exhausted pool),
+minimize the COUNT of such tests to the smallest number that still proves each acceptance
+criterion -- prefer a synthetic/constructed value over a live repetition wherever the function
+under test is pure (e.g. `CallTimeout.classify/1` takes an already-completed outcome value; most
+of its test cases don't need a fresh live hang, only one end-to-end proof per distinct mechanism
+does). Where multiple parameter values must each be proven live (e.g. two different timeout
+durations), choose values that simultaneously prove multiple properties in one fewer call
+rather than one call per property. This does not eliminate the underlying shared-pool-exhaustion
+risk (see ISS-0352 for the still-open, deeper fix), but keeps the CI-observable footprint small
+enough that a single feature branch's own tests don't tip a busy runner into cascading failure.

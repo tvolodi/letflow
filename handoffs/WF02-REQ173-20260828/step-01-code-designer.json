@@ -1,0 +1,24 @@
+{
+  "handoff_id": "WF02-REQ173-20260828-step01",
+  "run_id": "WF02-REQ173-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "docs/requirements.yaml#REQ-173",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 325, GH#625, stage S5. Feature branch feature/WF02-REQ173-20260828 created off main at 5d32726. This is a NEW capability (versioned module registration + activation), not an extension of REQ-166-172's read/write host-function work, though it builds on the same module_registry.ex (REQ-166) and capability_gate.ex (REQ-167) foundations -- read those in full plus plugin_handler.ex (REQ-165/170/171/172) to understand the current single-version registration/invocation flow you are versioning. This project's live-verification discipline applies: never trust wasmex documentation, verify any load-bearing behavioral claim against the real installed dependency (a repeated, load-bearing lesson from REQ-166 through REQ-172, most recently REQ-172's design being FAILED twice by CODE-DESIGN-VALIDATOR for an unverified claim about wasmex's exit/1 handling)."},
+  "task": {
+    "description": "Produce the design artefact (lib/letflow/design/req173-wasm-module-hot-reload.md or similar) for REQ-173: WASM-14 hot reload. When a new version of a registered module is activated, in-flight invocations of the prior version must complete normally against the OLD version's behaviour and capability set; new invocations after activation must use the NEW version and its capability set. Design must specify: (1) how ModuleRegistry (REQ-166) is extended to support multiple versions of the same module (versioned registration, an activation operation that designates the current version for NEW invocations without affecting invocations already in flight); (2) the exact mechanism by which an in-flight invocation resolves and HOLDS its module version at invocation start, immune to a concurrent activation -- must be concrete and implementable, not hand-waved (e.g. does invocation start capture a version-specific struct/reference that activation cannot mutate out from under it?); (3) reference counting or an equivalent mechanism so the prior version's resources (compiled module, capability table, any other per-version state) are released only after its LAST in-flight invocation completes, never at activation time; (4) how CapabilityGate's per-manifest capability set is captured per-version so an in-flight invocation of the prior version keeps the prior version's capability set even if the new version's manifest declares a different one -- this is a SECURITY-REVIEWER hard-gate concern (version confusion = authorization hazard); (5) the test design's own concurrency shape: the acceptance test must hold an invocation open (a guest blocked in a controllable host call -- consider whether an existing REQ-172/171 host function or fixture, e.g. one of the write_then_hang-style .wat fixtures, can be reused or adapted) then activate a new version DURING that hold, and assert both halves (old-version completion + new-version-for-new-invocations) in ONE overlapping scenario, with the two versions observably different in output. Explicitly out of scope: instance pooling (REQ-174 owns that interaction). Design only -- no implementation code.",
+    "acceptance_criteria": [
+      "a test holds an invocation open (a guest blocked in a controllable host call), activates a new module version DURING it, and asserts the held invocation completes normally against the OLD version's observable behaviour -- WASM-14's own acceptance criterion, with the overlap real rather than sequential",
+      "the same test asserts an invocation started AFTER the activation observes the NEW version's behaviour, so both halves of WASM-14 are proven in one overlapping scenario",
+      "the two module versions used are observably different in output, so the test can distinguish which version served an invocation rather than merely completing",
+      "a test asserts the prior version's resources are released only after its last in-flight invocation completes, not at activation time",
+      "a test asserts that when the new version's manifest declares a DIFFERENT capability set, an in-flight invocation of the prior version keeps the prior version's capability set, and the new invocation gets the new one -- so activation cannot silently widen or narrow a running invocation's authority",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

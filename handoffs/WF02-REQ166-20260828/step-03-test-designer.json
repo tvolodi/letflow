@@ -1,0 +1,95 @@
+{
+  "handoff_id": "step03-WF02-REQ166-20260828",
+  "run_id": "WF02-REQ166-20260828",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ166-20260828/step-03-test-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-166"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ166-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ166-20260828/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ166-20260828/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req166-wasm-module-abi-validation.md",
+      "lib/letflow/engine/wasm/module_registry.ex",
+      "test/letflow/engine/wasm/module_registry_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ166-20260828",
+    "commit": "9fdf5ce"
+  },
+  "task": {
+    "description": "TEST-DESIGNER pass (WF-02 Step 3) on REQ-166. ELIXIR-DEV already wrote an initial test suite (test/letflow/engine/wasm/module_registry_test.exs, 25 tests, all passing per step-02a's own report and independently confirmed by SECURITY-REVIEWER's live rerun in Step 2c). Your job is a MUTATION-DRIVEN review and strengthening pass, not a rewrite from scratch: read the shipped module_registry.ex (commit 9fdf5ce) and the existing test file in full, then find and fill real coverage gaps by actually mutating the implementation locally and confirming the existing suite fails to catch each mutation before adding a test that does.",
+    "acceptance_criteria": [
+      "Mutate check_exports/1 (or defect_for/2) to accept a signature with swapped param/result types on a required export (e.g. execute) and confirm an existing test catches it; if not, add one asserting a mis-shaped signature is rejected as a defect distinct from a plain missing-export defect.",
+      "Mutate instantiate/2 to skip the GenServer.stop/1 call on the success path and confirm an existing test catches the leak (should already be covered per AC4 -- verify, don't assume); if the mutation survives, strengthen the leak-detection test.",
+      "Mutate the stage-1/stage-2 gating so stage 2 runs even when stage 1 found defects (i.e. remove the gate) and confirm an existing test catches a module that is BOTH missing an export AND has an unresolved import being reported only via the stage-1 defects path, not double-invoking stage 2 pointlessly -- add a test if none exists.",
+      "Mutate classify_crash/1's timeout branch (change Task.shutdown(:brutal_kill) to a no-op or a non-brutal shutdown) and confirm an existing test catches an orphaned task/process on timeout; if wasmex's real instantiation can't be reliably slowed for a genuine timeout test, use a proxy (e.g. a task that legitimately hangs) to prove the shutdown call itself is real and reached, and document that limitation explicitly rather than silently skipping it.",
+      "Confirm the crash-propagation-containment test (register/1 on an unresolved-import module must not crash the calling test process) is not accidentally weakened by ExUnit's own process trapping -- verify the test process itself is NOT trap_exit at the point of the call, matching the real caller shape register/1 will have in production.",
+      "Add or confirm a test for register/1 called with non-binary input (e.g. nil, an integer) hits the documented FunctionClauseError guard rather than crashing some other way.",
+      "Do not modify lib/letflow/engine/wasm/module_registry.ex, lib/letflow/application.ex, plugin_handler.ex, or plugin_interface.ex -- test/fixture files only.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "started_at": "2026-08-28T04:29:00Z",
+    "completed_at": "2026-08-28T04:42:27Z",
+    "summary": "Mutation-driven strengthening pass on test/letflow/engine/wasm/module_registry_test.exs (15 -> 20 tests) plus test/specs/REQ-166.md. lib/letflow/engine/wasm/module_registry.ex, application.ex, plugin_handler.ex, plugin_interface.ex all untouched (git diff --stat empty against all four at handoff time -- every mutation below was applied, verified, then `git checkout --`-reverted before moving on). Full mix test output for each mutation is in this run's transcript; per-AC findings:",
+    "acceptance_criteria_results": [
+      {
+        "criterion": "AC1 swapped param/result types on execute",
+        "finding": "Existing 15 tests did NOT catch a defect_for/2 mutant accepting {:ok, {:fn, ^results, ^params}} (the exact transpose) as conforming -- confirmed via `mix test`: 15/16 passed with only the new test failing when the mutation was applied (16th test being the one I added). Added fixture priv/wasm_fixtures/req166_swapped_signature_execute.wat (execute exported (param i32)(result i32 i32), the exact transpose of the required (param i32 i32)(result i32)) and a new test in the AC2 describe block. Reverted mutation; 16/16 pass clean."
+      },
+      {
+        "criterion": "AC2 instantiate/2 skips GenServer.stop/1 on success",
+        "finding": "Already caught by the existing AC4 leak-detection test -- verified live, not assumed: `mix test` with the mutation applied gave 'Result: 15/16 passed', failure was exactly the leak-detection test reporting `leaked: [#PID<...>]`. No new test added for this AC. Mutation reverted; 16/16 pass clean."
+      },
+      {
+        "criterion": "AC3 stage-1/stage-2 gate removed (register/1's `with` chain: :ok <- check_exports -> _ <- check_exports)",
+        "finding": "11 of the (by then) 17 existing tests broke outright on this mutation, but none specifically proved the both-stages-fail case is reported via the wrong path. Added fixture priv/wasm_fixtures/req166_missing_execute_and_unresolved_import.wat (missing execute AND an unresolved wasi_snapshot_preview1::path_open import) plus a new test in the AC3 describe block. With the gate-removal mutation applied, that new test's assertion failed specifically because register/1 returned {:error, {:instantiation_failed, {:unresolved_import, ...}}} instead of the required {:error, {:invalid_abi, [{:missing, \"execute\"}]}} -- the exact wrong-path defect the AC names. Mutation reverted; 17/17 pass clean."
+      },
+      {
+        "criterion": "AC4 timeout branch's Task.shutdown(task, :brutal_kill)",
+        "finding": "No existing coverage. instantiate/2 is private (uncallable directly from a test). Live one-off verification (not a committed test): a WAT module with an unconditional infinite-loop (start $spin) function genuinely hangs Wasmex.start_link/1 (confirmed not to return after 3s via a raw Task.yield/2 probe), and a real end-to-end register/1 call on it correctly returned {:error, {:instantiation_failed, {:timeout, 5000}}} after ~5043ms and ~5061ms across two live runs -- so the timeout branch and its return value ARE real and reachable, directly observed. NOT committed as an automated test: the same live check found the underlying native Wasmtime execution thread keeps consuming CPU after Task.shutdown(:brutal_kill) runs -- measured via /proc/<beam_pid>/stat utime+stime fields: ~305 extra clock ticks over a 3-second idle window with nothing else running, i.e. a non-preemptible dirty-NIF busy loop that Task.shutdown/2 cannot actually stop. Committing that fixture would leave a permanently CPU-spinning orphaned thread for the rest of that mix test process's life on every CI run reaching it -- reporting this to ORCH as a candidate issue against module_registry.ex's cleanup guarantee on this pathological input, not fixing it (out of TEST-DESIGNER's scope, and lib/letflow/engine/wasm/module_registry.ex must stay untouched per this handoff's own AC7). Added instead, as the documented proxy this AC explicitly permits: a new describe block using Process.sleep(:infinity) against the SAME named, running Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor, proving the Task.Supervisor.async_nolink/2 + Task.yield/2 timeout + Task.shutdown(:brutal_kill) mechanism itself works in isolation. Explicitly verified this proxy is NOT mutation-sensitive for instantiate/2's own line: deleted Task.shutdown(task, :brutal_kill) from instantiate/2's timeout branch and reran -- all 20 tests, including the proxy, still passed (mutation survives). This gap is recorded here rather than silently closed; the live end-to-end verification above is the only mutation-relevant evidence obtained for that exact line given the constraints (private function, unsafely-slowable real dependency)."
+      },
+      {
+        "criterion": "AC5 crash-propagation-containment test's trap_exit precondition",
+        "finding": "Added `assert Process.info(test_pid, :trap_exit) == {:trap_exit, false}` immediately before the register/1 call in the existing 'does not crash the calling process' test. Confirmed live that Process.flag(:trap_exit, true) does change Process.info/2's return to {:trap_exit, true}, so this is a real, non-tautological check. Test passes with the real (non-trapping) ExUnit process shape."
+      },
+      {
+        "criterion": "AC6 register/1 with non-binary input",
+        "finding": "No existing test called register/1 with a non-binary argument. Added two new tests (nil, integer 42) asserting FunctionClauseError via assert_raise/2 against the `when is_binary(bytes)` guard. Both pass. Elixir 1.18's static type checker emits an expected compile-time 'incompatible types' warning for these two literal calls against @spec register(bytes :: binary()) -- confirmed via reading lib/mix/tasks/letflow.check.test.ex and mix.exs that this does not affect mix letflow.check.test's gate (fails only on real mix test failures or the unrelated ISS-0069 substring) or mix compile --warnings-as-errors (test/ is not in elixirc_paths(:test))."
+      },
+      {
+        "criterion": "AC7 (do not modify module_registry.ex/application.ex/plugin_handler.ex/plugin_interface.ex)",
+        "finding": "Confirmed: `git diff --stat` against all four files is empty at handoff time. Every mutation above was applied via Edit, verified with `mix test`, then reverted with `git checkout --` before the next mutation."
+      },
+      {
+        "criterion": "AC8 (top-level status field + mix letflow.lint_handoffs)",
+        "finding": "Top-level status set to COMPLETED. mix letflow.lint_handoffs run before finishing; see this handoff's own git history for the actual command output at commit time."
+      }
+    ],
+    "files_changed": [
+      "test/letflow/engine/wasm/module_registry_test.exs (15 -> 20 tests)",
+      "test/specs/REQ-166.md (appended 'Mutation-driven strengthening pass' section)",
+      "priv/wasm_fixtures/req166_swapped_signature_execute.wat (new)",
+      "priv/wasm_fixtures/req166_missing_execute_and_unresolved_import.wat (new)"
+    ],
+    "test_run": "mix test test/letflow/engine/wasm/module_registry_test.exs (with `export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\"` and WASMEX_BUILD=true): Result: 20 passed, 0 failed, at the final (post-revert) state of module_registry.ex.",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "title": "REQ-166 ModuleRegistry.instantiate/2's Task.shutdown(:brutal_kill) on timeout does not reclaim the underlying native Wasmtime thread for a genuinely-hanging module (busy-loop start function)",
+        "description": "Live-verified during this pass (not committed as an automated test, for the reason below): a WAT module whose (start $spin) function loops forever causes register/1 to correctly time out after ~5s with {:error, {:instantiation_failed, {:timeout, 5000}}}, but /proc/<beam_pid>/stat shows the underlying OS thread keeps consuming CPU indefinitely afterward (~305 extra clock ticks measured over a 3s idle window post-registration) -- Task.shutdown(:brutal_kill) terminates the Elixir-side Task/process (Task.Supervisor.children/1 does drop back to []) but cannot preempt a non-yielding dirty-NIF busy loop already in flight. Not filed as a GitHub issue by this agent per ISSUE_QUEUE.md (TEST-DESIGNER reports to ORCH, does not call register_task/gh itself) -- forwarding to ORCH for allocation."
+      }
+    ]
+  }
+}

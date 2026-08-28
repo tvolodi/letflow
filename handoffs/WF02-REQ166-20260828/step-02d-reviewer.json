@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step02d-WF02-REQ166-20260828",
+  "run_id": "WF02-REQ166-20260828",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ166-20260828/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-166"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ166-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ166-20260828/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req166-wasm-module-abi-validation.md",
+      "lib/letflow/engine/wasm/module_registry.ex",
+      "lib/letflow/application.ex"
+    ],
+    "branch_name": "feature/WF02-REQ166-20260828",
+    "commit": "9fdf5ce"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-166's implementation, commit 9fdf5ce. SECURITY-REVIEWER already passed Step 2c (see step-02c-security-reviewer.json). Your scope: idiomatic OTP usage, supervision integrity, scope creep, and decision-record consistency -- read the real diff (git show 9fdf5ce) and the approved design (lib/letflow/design/req166-wasm-module-abi-validation.md) in full before verdict. Do not re-litigate the design's own decisions (e.g. start-then-stop instantiation, Task.Supervisor wrapping) -- those already passed CODE-DESIGN-VALIDATOR after rework; your job is whether the SHIPPED code matches the approved design faithfully and idiomatically, not whether the design itself was the right call.",
+    "acceptance_criteria": [
+      "Confirm Letflow.Engine.Wasm.ModuleRegistry follows this codebase's existing conventions for similar modules (compare directly against lib/letflow/engine/wasm/plugin_handler.ex and lib/letflow/engine/lua/ modules for structure, typespec style, error-tuple shape conventions, moduledoc format).",
+      "Confirm the new Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor child spec in lib/letflow/application.ex is placed correctly in the supervision tree (sibling to other Task.Supervisor children, correct restart strategy inherited from the parent supervisor, no ordering hazard).",
+      "Confirm no scope creep: only lib/letflow/engine/wasm/module_registry.ex, lib/letflow/application.ex, priv/wasm_fixtures/ additions, and test/letflow/engine/wasm/module_registry_test.exs are touched -- plugin_handler.ex and plugin_interface.ex must be untouched (design explicitly said out of scope).",
+      "Confirm decision-record consistency: decision 0014 (scripting/plugin runtime strategy) and req163-wasm-abi-choice.md are both cited accurately in the moduledoc/code comments where referenced, with no silent contradiction.",
+      "Confirm typespecs (@spec, @type, @opaque) are complete and accurate for all public functions.",
+      "Confirm error handling follows this codebase's established {:error, reason} tuple idiom throughout, with no bare exceptions escaping register/1 under any input.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "detail": "Independently reviewed `git show 9fdf5ce` (14 files) and current file contents of lib/letflow/engine/wasm/module_registry.ex, lib/letflow/application.ex, test/letflow/engine/wasm/module_registry_test.exs against the approved design (lib/letflow/design/req166-wasm-module-abi-validation.md) and this codebase's existing conventions (lib/letflow/engine/wasm/plugin_handler.ex, lib/letflow/engine/plugin_interface.ex, lib/letflow/engine/lua/executor.ex). No mix toolchain available in this sandbox (checked `/c/Program Files/Elixir/bin/mix` per docs/anti-patterns.md and PATH -- neither present here); this is a static code review only, consistent with REVIEWER's idiom/scope/supervision mandate, not a re-run of mix test/compile. Findings: (1) Idiomatic, not a crutch -- the Task.Supervisor.async_nolink/2 + Task.yield/2 + Task.shutdown(task, :brutal_kill) sequence in instantiate/2 is a verbatim match of the exact three-call shape already established in plugin_interface.ex:187-222 and lua/executor.ex:367-593; no gen_statem is applicable here (this is a stateless validation function, not a state machine) and none was faked with a case/cond crutch. (2) Supervision integrity confirmed -- the new `{Task.Supervisor, name: Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor}` child (application.ex line 64) sits as a fourth sibling alongside SandboxPool.TaskSupervisor/PluginTaskSupervisor/Lua.TaskSupervisor under the same one_for_one Letflow.Supervisor, inherits the same restart semantics, and the inline comment correctly states it has no start-order dependency (true: nothing else references it at boot, unlike the documented SandboxPool.TaskSupervisor->SandboxPool ordering constraint two lines above it). No instance isolation was collapsed -- InstanceSupervisor is untouched, and the design's start-then-stop decision (already gate-approved, not re-litigated here) is faithfully implemented: instantiate/2 calls GenServer.stop(pid) inside the task before returning, and module_registry_test.exs's AC4 'no leaked instance' test independently verifies this via Process.list/0 filtering on Wasmex's $initial_call. (3) No scope creep -- diff touches exactly module_registry.ex, application.ex, 8 new priv/wasm_fixtures/*.wat, the new test file, and a 5-line status update to step-02a-elixir-dev.json; `git show --stat 9fdf5ce` confirms plugin_handler.ex and plugin_interface.ex are untouched, matching the design's explicit 2.1 scope boundary. (4) Typespecs are complete and accurate on every public and private function (register/1, compile/2, check_exports/1, defect_for/2, instantiate/2, classify_crash/1) and match the design doc's @type/@spec definitions verbatim. (5) Error handling follows the codebase's {:error, reason} tuple idiom throughout (structured tuples here per this requirement's own AC, vs. plugin_handler.ex's binary reasons -- an intentional, AC-driven difference, not an inconsistency), with a catch-all classify_crash/1 clause ensuring no crash shape is ever lost; register/1's `when is_binary(bytes)` guard raising FunctionClauseError on a non-binary argument matches this codebase's own established convention for public entry points (same pattern as expr.ex:192, plugin_registry.ex:122, service_task.ex:300), not a deviation. (6) Decision-record consistency: req163-wasm-abi-choice.md is cited accurately in the moduledoc (verified section numbers/table against the source doc). One non-blocking note: the design doc's own §3.1 (not the shipped code -- module_registry.ex does not cite decision 0014 anywhere) attributes the quoted phrase 'a fresh Wasmtime instance for this call only' to decision 0014 Reasoning (e), but 0014(e)'s actual text is about schema-per-tenant/decision-0006 composition and explicitly flags WASM per-invocation isolation as an open question for WASM-13 pooling, not a settled principle -- the quote itself is really plugin_handler.ex's own inline comment (line 98). This is a design-doc citation imprecision already behind CODE-DESIGN-VALIDATOR's gate, not a shipped-code defect, and does not affect module_registry.ex's correctness or idiom; flagging for awareness rather than blocking on it, per this gate's remit not to re-litigate an already-approved design's citations. No type-safety gap found worth filing under docs/issues/ -- the @opaque RegisteredModule + single-constructor-function discipline already makes the invalid state (an unregistered module reaching invocation) unrepresentable at the type level, which is the type-safety improvement REVIEWER would otherwise be asking for. Verdict: PASS."
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "handoff_id": "step02c-WF02-REQ166-20260828",
+  "run_id": "WF02-REQ166-20260828",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ166-20260828/step-02c-security-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-166"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ166-20260828/step-01b-code-design-validator-recheck.json",
+      "handoffs/WF02-REQ166-20260828/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req166-wasm-module-abi-validation.md",
+      "lib/letflow/engine/wasm/module_registry.ex",
+      "lib/letflow/application.ex"
+    ],
+    "branch_name": "feature/WF02-REQ166-20260828",
+    "commit": "9fdf5ce"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER hard gate (WF-02 Step 2c) on REQ-166's implementation, commit 9fdf5ce on lib/letflow/engine/wasm/module_registry.ex and lib/letflow/application.ex. This requirement's own text explicitly names SECURITY-REVIEWER as a hard gate. REQ-166's register/1 genuinely instantiates arbitrary (possibly tenant-controlled, eventually) module bytes via Wasmex.start_link/1 as part of its own stage-2 check -- this is a real, if trivially scoped, guest-execution surface, distinct from REQ-165's fixture-only invocations. Read the approved design (lib/letflow/design/req166-wasm-module-abi-validation.md) and the real diff (git show 9fdf5ce) in full before verdict.",
+    "acceptance_criteria": [
+      "Confirm stage 2's instantiation attempt genuinely runs inside a Task.Supervisor.async_nolink/2 task under the new dedicated supervisor, never inline in register/1's own process -- read the real code, not just the design's claim about itself.",
+      "Confirm the instantiation-proving Wasmex instance is genuinely stopped (GenServer.stop/1) on every success path, and that a timeout path genuinely calls Task.shutdown(:brutal_kill) -- no leaked instance or orphaned task on any branch.",
+      "Confirm register/1 grants NO capability/WASI options to the instantiation attempt (Wasmex.Store.new/0, not new_wasi/1..3) -- consistent with req163's denial-by-omission posture; a module's imports are never resolved during this check, so nothing a module imports can actually execute during registration.",
+      "Confirm the RegisteredModule opaque struct genuinely cannot be constructed from outside module_registry.ex -- check for any leaked constructor or struct-update syntax reachable externally.",
+      "Confirm the new Task.Supervisor child spec in application.ex does not change any other supervisor's behavior or startup order in a way that could destabilize the app.",
+      "Confirm the {:unresolved_import, namespace, function} regex-parse of the crash reason cannot itself be exploited (e.g. a crafted module whose crash message content could inject something into a structured error field that's later logged/displayed) -- check what the extracted namespace/function strings are ultimately used for.",
+      "Cross-check against docs/agents/instructions/security-invariants.md INV-1..INV-8 explicitly (INV-3, untrusted-code sandboxing, is the most relevant given this is real guest-code instantiation, even of currently-fixture-only content) and confirm each holds.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verified_independently": [
+      "git show 9fdf5ce and current lib/letflow/engine/wasm/module_registry.ex + lib/letflow/application.ex read in full, not taken on ELIXIR-DEV's self-report",
+      "`mix compile --warnings-as-errors` run live (via asdf-installed elixir 1.20.3-otp-29): zero warnings",
+      "`mix test test/letflow/engine/wasm/module_registry_test.exs` run live: 15/15 passed, including the crash-propagation-containment test (register/1 on an unresolved-import module does not crash the caller) and the leaked-Wasmex-instance test",
+      "read deps/wasmex/lib/wasmex.ex directly: start_link/1 with a bare %{bytes: bytes} map (no :wasi key) takes the `Map.get(opts, :wasi, false) -> false -> Wasmex.Store.new()` branch (line ~287-290) -- confirms no WASI/capability grant is made during the stage-2 instantiation attempt, matching the design's denial-by-omission claim",
+      "grepped the full lib/ and test/ trees: %RegisteredModule{} is constructed in exactly one place (module_registry.ex's instantiate/2 success branch); no other file constructs, pattern-matches for construction, or struct-updates it"
+    ],
+    "acceptance_criteria_findings": [
+      "1. CONFIRMED: instantiate/2 (module_registry.ex:224-251) runs Wasmex.start_link/1 exclusively inside Task.Supervisor.async_nolink(@task_supervisor, fn -> ... end) where @task_supervisor = Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor; register/1 itself never calls Wasmex.start_link/1 inline. Proven at runtime, not just by reading the code: the live test 'register/1 on an unresolved-import module does not crash the calling process' passed -- an inline call on that same fixture would kill the test process via a linked :EXIT signal per the design's own live-reproduced finding.",
+      "2. CONFIRMED on every branch. Success: the task itself calls GenServer.stop(pid) synchronously before returning :ok (line 229), and the live 'no leaked Wasmex GenServer' test passed. Timeout: Task.yield returns nil -> Task.shutdown(task, :brutal_kill) is called (line 248) -- because Wasmex.start_link/1 links the Wasmex pid to the task process, a :brutal_kill of the task cascades an :EXIT to any live Wasmex pid it started, so no orphan survives even in the race where GenServer.stop hadn't yet run. Crash/:exit branch: the task process terminating (for any reason) similarly takes its linked Wasmex child down with it.",
+      "3. CONFIRMED: instantiate/2 calls Wasmex.start_link(%{bytes: bytes}) with no :wasi key at all. Verified against deps/wasmex/lib/wasmex.ex directly (not assumed): absence of :wasi defaults to Wasmex.Store.new() (no capabilities), not Wasmex.Store.new_wasi/1..3. No import is resolved, nothing a module imports can execute during registration -- consistent with req163's denial-by-omission posture.",
+      "4. CONFIRMED with the caveat the design/spec both state explicitly and honestly (test/specs/REQ-166.md T3 assertion 3, T4): @opaque is a Dialyzer-level/compile-discipline convention, not a runtime access-control mechanism -- Elixir has no true private-module construction guard, so this is the strongest guarantee the language affords, not an absolute one. Grep confirms zero external construction sites exist today, and the same pattern (@opaque struct, single constructor) is already established precedent in this codebase (lib/letflow/engine/lua/capabilities.ex's grant_set). `mix compile --warnings-as-errors` passes clean. Not a BLOCKER: the design does not overclaim runtime-unforgeable opacity, it correctly scopes the claim to what Elixir's type discipline actually provides, and the existing precedent shows this has already been the project's accepted answer to this exact question.",
+      "5. CONFIRMED: application.ex diff (lib/letflow/application.ex lines 49-63) only appends a new {Task.Supervisor, name: Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor} child after the existing Letflow.Engine.Lua.TaskSupervisor entry, before http_child(). No existing child's spec, order, or restart strategy is touched. The commit's own comment states 'No other child depends on start order here' -- confirmed true by inspection since Task.Supervisor children have no inter-dependencies in this tree.",
+      "6. CONFIRMED not currently exploitable: classify_crash/1's named captures (namespace, function) are only ever placed into the returned {:instantiation_failed, {:unresolved_import, namespace, function}} error tuple. This diff wires register/1 to nothing that logs, displays, or serializes that tuple anywhere (PluginHandler/PluginInterface are explicitly untouched per the design's stated scope boundary) -- so there is no current sink for injection. Flagging as a forward note (not a blocker on this diff): the regex's capture groups ([^:`]+ and [^`]+) exclude backtick/colon but not other control characters, so whichever future dispatch-integration requirement first logs or surfaces this tuple must treat namespace/function as untrusted text at that point, not assume the regex already sanitized them.",
+      "7. See INV-1..INV-8 cross-check below."
+    ],
+    "invariant_crosscheck": [
+      "INV-1 (tenant data isolation) -- NOT-APPLICABLE. Diff (git diff main...HEAD --stat) touches no priv/repo/migrations/*.exs, no Ecto schema, no query, no tenant-scoped table. register/1 persists nothing to any store -- it compiles/instantiates bytes in-memory and returns an opaque in-memory struct. INV-1's preconditions (a diff touching a tenant-scoped table/schema/migration) are not met by this diff.",
+      "INV-2 (server-side field authorisation) -- NOT-APPLICABLE. No API response type or serialization boundary touched; S4 has not started.",
+      "INV-3 (untrusted runtime sandboxing) -- per security-invariants.md's own text, formally NOT-APPLICABLE today: 'Deferred until S5's decision record exists,' and no S5 build-vs-bind decision record exists yet for WASM. Noting for the record (this is the invariant the handoff itself flagged as most relevant, and this run agrees it is the closest thing to a live guest-execution surface pre-S5): the implementation is nonetheless already conservative in the direction INV-3 will eventually require -- Wasmex.Store.new/0 (no capability grant), a bounded 5s timeout, isolation in a dedicated non-inline supervised task, and immediate teardown of the proving instance. This is good practice ahead of the formal gate, not a substitute for it -- once S5's decision record lands, this code path should be re-reviewed against whatever concrete capability-allowlist mechanism that record specifies.",
+      "INV-4 (secrets by reference only) -- NOT-APPLICABLE. No secret material (API keys, tokens, DB URLs) is read, logged, or threaded through this diff.",
+      "INV-5 (not-found/forbidden indistinguishability) -- NOT-APPLICABLE. No lookup-by-ID endpoint; S4 has not started.",
+      "INV-6 (new data-access paths prove their scoping) -- satisfied by this handoff itself: this is the SECURITY-REVIEWER handoff with status PASS and an explicit per-invariant statement, per INV-6's own how-to-verify.",
+      "INV-7 (no SQL string interpolation) -- NOT-APPLICABLE. `grep -rn \"Repo.query\" lib/letflow/engine/wasm/ lib/letflow/application.ex` returns no hits; this diff contains no SQL of any kind.",
+      "INV-8 (no unhandled crashes on realistic failure paths) -- APPLIES and is SATISFIED. register/1's `with` chain and instantiate/2's `case` cover every Wasmex.Module.compile/2, Task.yield/2, and Task.start_link outcome (:ok, {:error, _}, task crash/:exit, timeout) with a typed result -- no bare `{:ok, x} = ...` match against any of the external-facing calls in this diff (confirmed by reading the full file; the `grep -rn \"^\\s*{:ok, .*} = \" lib/letflow/\" heuristic has no hit inside module_registry.ex). The one place a raw external outcome is genuinely allowed to reach a crash shape (Wasmex.start_link/1's unresolved-import case) is deliberately isolated in a Task.Supervisor.async_nolink/2 task specifically so that crash cannot propagate to a shared process -- exactly the 'let a doomed process crash under supervision, don't let it take down unrelated work' distinction INV-8's rule text draws."
+    ],
+    "scope_test": "IN SCOPE per role file's own instruction not to skip the test: this diff adds a real guest-code instantiation path (Wasmex.start_link/1 on arbitrary/eventually-tenant-supplied module bytes) and a new supervisor child -- reviewed in full above rather than waved through as 'not tenant-data yet.'",
+    "verdict_summary": "PASS. All AC1-7 confirmed by independent code read plus live `mix compile --warnings-as-errors` and `mix test` runs (15/15 passed) on this branch/commit, not by trusting the design doc or ELIXIR-DEV's commit message. INV-1, INV-2, INV-4, INV-5, INV-7 not applicable to this diff (no tenant table/migration/schema/secret/SQL/lookup-endpoint touched); INV-3 formally deferred per its own file text pending S5's decision record (implementation already tracks its eventual direction); INV-8 applies and is satisfied; INV-6 satisfied by this handoff. No BLOCKER findings. One non-blocking forward note recorded for whichever future requirement first logs/displays the unresolved-import namespace/function strings."
+  }
+}

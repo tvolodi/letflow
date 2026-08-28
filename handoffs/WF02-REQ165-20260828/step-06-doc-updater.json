@@ -1,0 +1,38 @@
+{
+  "handoff_id": "step06-WF02-REQ165-20260828",
+  "run_id": "WF02-REQ165-20260828",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ165-20260828/step-06-doc-updater.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-165"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ165-20260828/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ165-20260828",
+    "commit": "f518c8a"
+  },
+  "task": {
+    "description": "DOC-UPDATER (WF-02 Step 6) for REQ-165, RELEASE-VALIDATOR PASSed (commit f518c8a). Flip REQ-165's status to 'done' in docs/requirements.yaml. Append ONE 'done' event to the CURRENT run-history volume -- confirm which volume is current via docs/status/requirement_status.index.yaml's status: current marker (RE-CHECK the count fresh -- other concurrent sessions have been active on this repo, per main's recent REQ-155/REQ-123 commits and the ISS-0287 reopen, so do not trust any cached number from this run's started-event). Recount via `grep -c \"^  - req:\" <volume>` BEFORE and AFTER your append, and update the index's entries:/note: fields accordingly (prepend a new note, never edit prior notes). Use a real UTC timestamp from the clock. This is Letflow's first native-code build dependency and the first WASM-half requirement with real code -- every gate passed clean on the first attempt (design, both hard gates, mutation-tested test design, full-suite run, release validation), with REVIEWER independently rebuilding the whole Rust toolchain from scratch to verify, and RELEASE-VALIDATOR empirically confirming the process boundary via an ad hoc script. Also note: this branch was rebased mid-run onto concurrent work from another session (REQ-155/REQ-123 related commits, plus ORCH's own ISS-0287 reopen) with no conflicts, confirmed clean by two independent full-suite runs post-rebase.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-165 status flipped to 'done'.",
+      "Exactly one 'done' event appended to the current run-history volume, with a real UTC timestamp.",
+      "Volume recounted via grep before and after the append; index.yaml's entries:/note: updated to match, note prepended not overwritten.",
+      "No other status-history events edited or removed (append-only discipline)."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step04-WF02-REQ168-20260828",
+  "run_id": "WF02-REQ168-20260828",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ168-20260828/step-04-test-runner.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-168"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ168-20260828/step-03-test-designer.json",
+      "handoffs/WF02-REQ168-20260828/step-03b-test-design-validator.json"
+    ],
+    "branch_name": "feature/WF02-REQ168-20260828",
+    "commit": "69f021e"
+  },
+  "task": {
+    "description": "TEST-RUNNER pass (WF-02 Step 4) for REQ-168. Design, security-review, reviewer, and test-design-validator gates have all passed. Run the FULL suite (not just the wasm subdirectory) and report real results. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching commands. Attribute any failure structurally before concluding it's unrelated to this branch's diff -- never by count-matching. Be aware of ISS-0287 (Postgres pool-exhaustion recurrence at higher TEST_PARALLEL_N) and ISS-0351 (WASM registry timeout-path CPU-spin) as known background issues -- if either surfaces, cross-check against them rather than treating as new.\n\nSAFETY REMINDER: memory_guard_test.exs is designed so that no test ever calls a live Wasmex.Memory function with a magnitude >= 2^40 (this was independently verified by 3 prior gates). Do not modify any test yourself; if you need to write any ad hoc verification script of your own, follow this same constraint.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors passes clean, real output quoted.",
+      "mix test test/letflow/engine/wasm/ passes in full, real output quoted (expect memory_guard_test.exs's 18 tests plus capability_gate_test.exs's 18, module_registry_test.exs's 20, and plugin_handler_test.exs's 10 -- 66 total).",
+      "Full mix test suite run, real output quoted -- pass/fail counts, and structural attribution for any failure.",
+      "mix letflow.lint_handoffs run, 0 new violations (or explain any flagged).",
+      "Write a structured test report per this project's existing test/reports/ convention if a failure needs one; otherwise a clean pass needs no report file.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "COMPLETED -- full suite green, no report file needed (clean pass)",
+    "environment": "Toolchain matches .tool-versions pin exactly (Elixir 1.20.3 / OTP 29). PATH included asdf shims + ~/.cargo/bin, WASMEX_BUILD=true set for all wasmex-touching commands. `mix deps.get` succeeded (network available in this run; fetched wasmex 0.15.1, rustler 0.38.0, etc. -- flagged 1 pre-existing advisory, EEF-CVE-2026-74836 in bandit, unrelated to this branch's diff). Postgres/Keycloak containers were already running (docker-compose managed by sudo since the invoking user is not in the `docker` group on this host); LETFLOW_DB_PORT=5463 per untracked .env, used automatically by Ecto per README. Branch feature/WF02-REQ168-20260828 already checked out at commit 69f021e, git status clean apart from this run's own handoff-file edits.",
+    "compile": "mix compile --warnings-as-errors --force: `Compiling 133 files (.ex)` / `Generated letflow app`, exit 0, zero warnings. Acceptance criterion 1 met.",
+    "wasm_subdir": "mix test test/letflow/engine/wasm/ -- ExUnit seed 845239, `Result: 66 passed`, 0 failures, exit 0. Matches the expected 18 (memory_guard_test.exs) + 18 (capability_gate_test.exs) + 20 (module_registry_test.exs) + 10 (plugin_handler_test.exs) = 66 total exactly. Two type-checker warnings appeared during compilation of module_registry_test.exs (ModuleRegistry.register/1 called with nil and with 42) -- these are expected/intentional: the test deliberately passes non-binary input to assert a FunctionClauseError guard, so the warnings are a byproduct of the type checker seeing the deliberately-wrong-typed call, not a defect. Acceptance criterion 2 met.",
+    "full_suite": "scripts/test_parallel.sh (TEST_PARALLEL_N unset, N=8 from nproc), TEST_PARALLEL_GROUP=tp170029, TEST_POOL_SIZE=10 (computed). Per-partition: p1 341 tests/0 fail, p2 313 tests+3 properties/0 fail, p3 259 tests/0 fail, p4 199 tests+2 properties/0 fail, p5 230 tests/0 fail, p6 193 tests/0 fail, p7 483 tests/0 fail, p8 331 tests/0 fail -- all exit 0. Combined: `2349 tests, 5 properties, 0 failures (2354/2354 passed)`. No pool-exhaustion errors (ISS-0287) and no WASM registry timeout-path CPU-spin (ISS-0351) surfaced in any partition log. Acceptance criterion 3 met -- full suite green, no failures to structurally attribute.",
+    "lint_handoffs": "mix letflow.lint_handoffs: `letflow.lint_handoffs: OK -- 0 new violations across 1250 handoff files (25 pre-existing grandfathered, traced to ISS-0190).` All flagged items (H-SIZE-1/2/3 info, ARTIFACTS_OUT_SELF_REF, H5 registry-coverage notes) are pre-existing across unrelated WF02/WF03 run directories from prior dates -- none reference handoffs/WF02-REQ168-20260828/. Acceptance criterion 4 met.",
+    "report_file": "No test/reports/ file written -- full suite passed clean with zero failures, so per the task's own convention ('a clean pass needs no report file') none is required. Acceptance criterion 5 met (by the clean-pass branch).",
+    "safety_confirmation": "memory_guard_test.exs was not modified. No ad hoc verification script was written; no Wasmex.Memory function was invoked directly by this agent at any magnitude.",
+    "conclusion": "All REQ-168 acceptance criteria for this step are satisfied with real, quoted output. No failures occurred, so no structural attribution or ISS-0287/ISS-0351 cross-check was needed beyond confirming their absence. Ready to hand off to RELEASE-VALIDATOR."
+  }
+}

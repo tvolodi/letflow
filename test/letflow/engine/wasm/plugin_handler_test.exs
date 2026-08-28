@@ -58,13 +58,69 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
   describe "AC3/AC4: trivial guest via PluginInterface.invoke/2" do
     test "returns {:complete, map} and runs in a different process than the caller" do
       test_pid = self()
+      # Mutation-testing gap found by TEST-DESIGNER (test/specs/REQ-165.md):
+      # `handler_pid != test_pid` alone is satisfied by ANY pre-existing
+      # process, including one hardcoded and unrelated to the actual guest
+      # call (e.g. `Process.whereis(:application_controller)`) -- that
+      # mutation was NOT caught by this assertion. Snapshotting the live
+      # process set before the call and asserting `handler_pid` is a
+      # process that did not exist yet closes that gap: only a genuinely
+      # freshly spawned task pid (Task.Supervisor.async_nolink/2, per the
+      # design's §4) can satisfy it.
+      pids_before = MapSet.new(Process.list())
 
       assert {:complete, %{"answer" => 42, "executed_in_pid" => handler_pid}} =
                PluginInterface.invoke(PluginHandler, context())
 
       assert is_pid(handler_pid)
       assert handler_pid != test_pid
+
+      refute MapSet.member?(pids_before, handler_pid),
+             "expected executed_in_pid to be a process freshly spawned for this call, " <>
+               "not a pre-existing one"
+
       assert Process.alive?(test_pid)
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # Mutation-testing gap found by TEST-DESIGNER (see test/specs/REQ-165.md
+  # findings table): removing `run_guest/2`'s `GenServer.stop(pid)` call on
+  # the success path was NOT caught by any of the 9 existing tests -- none
+  # of them observed the wasmex instance's lifetime, only the outcome map.
+  # This test targets that lifetime directly: `Wasmex.start_link/1` starts
+  # an ordinary `use GenServer` process (see `deps/wasmex/lib/wasmex.ex`),
+  # so a leaked instance is a live process whose `$initial_call` process
+  # dictionary entry names the `Wasmex` module. Because `GenServer.stop/1`
+  # is synchronous (it blocks the caller until `terminate/2` completes), a
+  # correct implementation has already reaped the instance by the time
+  # `PluginInterface.invoke/2` returns -- no sleep/wait is needed for this
+  # assertion to be deterministic.
+  # ---------------------------------------------------------------------
+
+  defp wasmex_pids do
+    Process.list()
+    |> Enum.filter(fn pid ->
+      case Process.info(pid, :dictionary) do
+        {:dictionary, dict} ->
+          match?({Wasmex, _, _}, Keyword.get(dict, :"$initial_call"))
+
+        _ ->
+          false
+      end
+    end)
+  end
+
+  describe "no leaked Wasmex instance after a successful call" do
+    test "the wasmex GenServer started for the call is stopped before invoke/2 returns" do
+      before_pids = wasmex_pids()
+
+      assert {:complete, %{"answer" => 42}} = PluginInterface.invoke(PluginHandler, context())
+
+      leaked = wasmex_pids() -- before_pids
+
+      assert leaked == [],
+             "expected no leaked Wasmex GenServer after a successful call, got: #{inspect(leaked)}"
     end
   end
 

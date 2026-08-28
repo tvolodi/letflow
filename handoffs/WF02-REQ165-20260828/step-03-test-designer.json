@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "TEST-DESIGNER",
   "file": "handoffs/WF02-REQ165-20260828/step-03-test-designer.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -40,6 +40,44 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "Mutation testing performed on all 5 specified targets; 2 real coverage gaps found and fixed, 3 mutations already caught cleanly by the existing suite. Every mutation was reverted and verified byte-identical (diff) to the pre-mutation source before this handoff was finalized.",
+    "mutations": [
+      {
+        "target": "run_guest/2's GenServer.stop(pid) cleanup on the success path (plugin_handler.ex)",
+        "caught_by_existing_suite": false,
+        "action": "Added a leak-detection test (Process.list() filtered on $initial_call == {Wasmex,_,_}, before/after) to test/letflow/engine/wasm/plugin_handler_test.exs. Confirmed: fails against the mutant, passes after revert."
+      },
+      {
+        "target": "handle_node/1's executed_in_pid hardcoded to Process.whereis(:application_controller) instead of self()",
+        "caught_by_existing_suite": "partially -- the dedicated AC4 test (via PluginInterface.invoke/2) did NOT catch it; only the separate handle_node/1-direct sanity test did, which bypasses the real AC4 proof",
+        "action": "Strengthened the AC3/AC4 PluginInterface.invoke/2 test in plugin_handler_test.exs to assert handler_pid was not a member of a Process.list() snapshot taken before the call, not merely != test_pid. Confirmed: fails against the mutant, passes after revert."
+      },
+      {
+        "target": "plugin_interface.ex's handle_yield_result/4 timeout message text",
+        "caught_by_existing_suite": true,
+        "action": "No test change needed. Reverted; git diff --stat against plugin_interface.ex confirmed empty (AC6 still holds)."
+      },
+      {
+        "target": "plugin_handler.ex moduledoc's 'Residual risk' heading text",
+        "caught_by_existing_suite": true,
+        "action": "No test change needed. Reverted and confirmed."
+      },
+      {
+        "target": "letflow.check_toolchain.ex's running_rust_version/0 rescue/catch clauses swallowed into {:ok, \"\"} instead of :not_found (F9)",
+        "caught_by_existing_suite": false,
+        "action": "test/mix/tasks/letflow_check_toolchain_test.exs had zero rust-pin tests at all. Added a new 'rust pin (REQ-165)' describe block (match / mismatch / not-pinned / F9-via-emptied-PATH). Confirmed: the new F9 test fails against the mutant, passes after revert."
+      }
+    ],
+    "test_counts": {
+      "plugin_handler_test.exs": "9 -> 10 (1 new test)",
+      "letflow_check_toolchain_test.exs": "30 -> 34 (4 new tests)",
+      "combined_run": "44 passed, 0 failed (post-revert, both files together)"
+    },
+    "artifacts_out": [
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "test/mix/tasks/letflow_check_toolchain_test.exs",
+      "test/specs/REQ-165.md"
+    ],
+    "lint_handoffs": "0 new violations (25 pre-existing grandfathered, traced to ISS-0190)"
   }
 }

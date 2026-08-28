@@ -1032,7 +1032,8 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # embed argument dumps or module names, per the moduledoc's own REQ-162
     # section) left all 45 then-existing tests passing. This test closes that gap.
     test "AC7 fallback case: an untyped wrapped exception yields the fixed placeholder message and empty stack_trace, never the raw exception detail" do
-      exception = Lua.RuntimeException.exception(%RuntimeError{message: "boom /etc/passwd Elixir.Secret"})
+      exception =
+        Lua.RuntimeException.exception(%RuntimeError{message: "boom /etc/passwd Elixir.Secret"})
 
       script_error = Executor.build_script_error(exception, 1_000, Capabilities.new())
 

@@ -34,6 +34,17 @@ themselves incomplete).
 rule, not part of this requirement's shipped artefacts) — ELIXIR-DEV or a future
 auditor can re-run them verbatim.
 
+**Rework pass 1 (2026-08-28):** CODE-DESIGN-VALIDATOR found §1.1's original transcript
+factually wrong (see the correction inline in §1.1 below). As part of that rework, every
+live-call transcript in this section (§1.1 through §1.5, not only the one flagged) was
+re-run fresh against the identical installed `wasmex` 0.15.1 dependency —
+`scratch/rework1_probe_1_1_to_1_3.exs` (§1.1/1.2/1.3/1.5) and, isolated per the
+SIGABRT/hang safety precaution, `scratch/rework1_probe_sigabrt.exs` (§1.4 Shape B) and
+`scratch/rework1_probe_hang.exs` (§1.4 Shape A). Only §1.1 required a correction; §1.2,
+§1.3, §1.4 (both shapes), and §1.5 all reproduced exactly as originally documented,
+confirmed independently in this rework, not merely trusted from the original draft or
+from the validator's own spot-checks.
+
 ---
 
 ## 1 — Live verification findings (session of 2026-08-28, real installed `wasmex` v0.15.1, `WASMEX_BUILD=true`, `PATH` including `.asdf/shims` and `.cargo/bin`)
@@ -51,11 +62,23 @@ under the already-supervised `Letflow.Engine.PluginTaskSupervisor`, bounded by
 `Task.yield/2`, exactly matching `module_registry.ex`'s and `capability_gate.ex`'s
 already-live-verified pattern for calling into `wasmex` — never inline.
 
-### 1.1 `Wasmex.Memory.size/2` returns **bytes**, not pages
+### 1.1 `Wasmex.Memory.size/2` returns **bytes**, not pages — and returns them as a bare
+integer, not a tagged tuple
 
 ```
-Wasmex.Memory.size(store, memory)  #=> {:ok, 65536}     (one 64KB page)
+Wasmex.Memory.size(store, memory)  #=> 65536     (one 64KB page, bare integer)
 ```
+
+**Correction (rework pass 1):** an earlier draft of this section mis-transcribed this
+call's return as `{:ok, 65536}`. Re-verified live in this rework
+(`scratch/rework1_probe_1_1_to_1_3.exs`, same installed `wasmex` 0.15.1): the call
+returns the **bare integer** `65536` directly — `{:ok, size} = Wasmex.Memory.size(store,
+memory)` would raise a `MatchError`. This matches `size/2`'s own `@spec` in
+`deps/wasmex/lib/wasmex/memory.ex:78` (`pos_integer()`, not a tuple type), and matches
+how this design's own algorithm already uses the value (§2 step 2: `memory_size =
+Wasmex.Memory.size(store, memory)`, a bare assignment, never a tuple destructure) — so
+this correction is to this section's transcript only; no other part of this document
+assumed the wrong shape.
 
 Confirms the moduledoc's own worked example (`"1114112 # in bytes (17 pages of 64 kB)"`)
 is accurate: `size/2`'s return value IS the real byte-length boundary directly — no page

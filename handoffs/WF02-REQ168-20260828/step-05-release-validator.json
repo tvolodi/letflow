@@ -1,0 +1,59 @@
+{
+  "handoff_id": "step05-WF02-REQ168-20260828",
+  "run_id": "WF02-REQ168-20260828",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ168-20260828/step-05-release-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-168"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ168-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ168-20260828/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ168-20260828/step-02d-reviewer.json",
+      "handoffs/WF02-REQ168-20260828/step-03-test-designer.json",
+      "handoffs/WF02-REQ168-20260828/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ168-20260828/step-04-test-runner.json"
+    ],
+    "branch_name": "feature/WF02-REQ168-20260828",
+    "commit": "69f021e"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR pass (WF-02 Step 5) for REQ-168 (queue task 320, GH#620). Independently re-derive that every one of REQ-168's real acceptance criteria in docs/requirements.yaml is genuinely met -- do not trust any prior step's self-report, re-run and re-check yourself. All prior gates (design, security, reviewer, test-design-validator, test-runner) have passed; your job is the final independent cross-check before DOC-UPDATER marks it done. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching commands.\n\nSAFETY REMINDER: memory_guard_test.exs is designed so that no test ever calls a live Wasmex.Memory function with a magnitude >= 2^40 (independently verified by 3 prior gates already, given a real live-confirmed SIGABRT hazard at that magnitude). Do not write any ad hoc verification script that violates this constraint.",
+    "acceptance_criteria": [
+      "Re-read REQ-168's full entry in docs/requirements.yaml and independently map each real AC to the shipped code (lib/letflow/engine/wasm/memory_guard.ex) and its tests -- do not just re-read prior handoffs' claims.",
+      "Re-run mix test test/letflow/engine/wasm/ yourself, quote real output.",
+      "Re-run mix compile --warnings-as-errors yourself, quote real output.",
+      "Re-run the AC1 repo-search yourself: grep -rn 'Wasmex.Memory\\.' lib/ --include='*.ex' and confirm hits are confined to memory_guard.ex.",
+      "Confirm no scope creep beyond what REQ-168 authorized (cross-check git diff --stat main...HEAD against owned_modules) -- module_registry.ex, capability_gate.ex, plugin_handler.ex, and application.ex must be untouched.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified REQ-168 (lib/letflow/engine/wasm/memory_guard.ex, commit 69f021e). All 6 real acceptance_criteria in docs/requirements.yaml (lines 8547-8553) confirmed against shipped code/tests, not prior handoffs' claims.",
+    "acceptance_criteria_findings": [
+      "AC1 (single validation function + repo-search): check_bounds/3 is the sole arithmetic core; read/4 and write/4 are the only functions that ever call Wasmex.Memory.*. Re-ran `grep -rn 'Wasmex.Memory\\.' lib/ --include='*.ex'` myself -- all 10 hits are inside lib/letflow/engine/wasm/memory_guard.ex (comments referencing Wasmex.Memory.size/2/read_binary/write_binary plus the 4 real call sites at lines 132,136,156,161). No other file in lib/ references Wasmex.Memory. PASS.",
+      "AC2 (malformed pointer -> structured error, BEAM node stays up): test/letflow/engine/wasm/memory_guard_test.exs describe \"T3 (AC2)\" -- 4 live tests build a real Wasmex instance, pass a malformed offset/length to read/4 and write/4, assert the {:error, {:invalid_pointer, ...}} tuple, then assert Process.alive?(self()) and Process.whereis(Letflow.Engine.PluginTaskSupervisor) |> Process.alive?(). All 4 passed in my own re-run. PASS.",
+      "AC3 (offset-beyond-size, length-past-end, offset+length overflow, each rejected pre-dereference): describe \"T2 (AC3)\" covers all three shapes purely via check_bounds/3 (no live Wasmex call for the extreme-magnitude cases, per the SIGABRT safety constraint -- verified no test in the file calls read/4, write/4, or any live Wasmex.Memory function with a value >= 2^40; the 2^63/2^64-magnitude cases target check_bounds/3 only). PASS.",
+      "AC4 (per-instance isolation): describe \"T4 (AC4)\" starts two real Wasmex instances, writes into instance A, asserts instance B still reads the original zero byte and A retains its write. Passed in my re-run. PASS.",
+      "AC5 (moduledoc discloses the Wasmtime-native residual class, consistent with REQ-165): moduledoc (memory_guard.ex lines 2-46) states 'does NOT bound a fault occurring inside Wasmtime's own native code/runtime itself', cites req165-wasmex-process-boundary.md sec 7.2 by name, and quotes its 'does not raise, exit, or trap in the ordinary BEAM sense' text verbatim. describe \"T5 (AC5)\" tests this via Code.fetch_docs/1 and both passed. PASS.",
+      "AC6 (mix test / mix compile --warnings-as-errors both pass, real output quoted): re-ran both myself, see raw_command_output below. PASS."
+    ],
+    "raw_command_output": {
+      "mix_test_wasm_dir": "export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" && export WASMEX_BUILD=true && mix test test/letflow/engine/wasm/ => 'Running ExUnit with seed: 166524, max_cases: 16' / 'Excluding tags: [:keycloak]' / two pre-existing type warnings in module_registry_test.exs (register/1 called with nil/42, unrelated to REQ-168, not introduced by this change) / 'Finished in 0.4 seconds (0.00s async, 0.4s sync)' / 'Result: 66 passed', 0 failures.",
+      "mix_compile_warnings_as_errors": "export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" && export WASMEX_BUILD=true && mix compile --warnings-as-errors => exit 0, no output (clean compile, no warnings)."
+    },
+    "scope_check": {
+      "command": "git diff --stat main...HEAD",
+      "finding": "14 files changed, all additions (1675 insertions, 0 deletions): design doc, memory_guard.ex, its test file, the .wat fixture, test/specs/REQ-168.md, and prior-step handoff JSONs. module_registry.ex, capability_gate.ex, plugin_handler.ex, and application.ex do NOT appear in the diff -- confirmed untouched. No scope creep beyond REQ-168's owned module."
+    },
+    "safety_constraint_check": "Re-read memory_guard_test.exs in full: confirmed no test calls a live Wasmex.Memory function (via read/4, write/4, or directly) with a magnitude >= 2^40. The two extreme-magnitude tests (2^63, 2^64) call check_bounds/3 only, which is pure Elixir bignum arithmetic with zero Wasmex/NIF dependency. Did not write or run any ad hoc verification script that would violate this constraint.",
+    "verdict": "REQ-168 acceptance criteria are genuinely met by the shipped code and tests as of commit 69f021e on feature/WF02-REQ168-20260828. No discrepancy found between prior gates' self-reports and independently re-derived reality. Cleared for DOC-UPDATER."
+  }
+}

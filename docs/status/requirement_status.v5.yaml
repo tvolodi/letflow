@@ -1034,3 +1034,44 @@ history:
       function every future host function (REQ-171/172) will consume,
       written once here before those requirements exist. SECURITY-REVIEWER
       hard gate. Depends on REQ-166 (done).
+
+  - req: REQ-168
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-28T07:51:17Z"
+    note: >
+      WF02-REQ168-20260828 complete (RELEASE-VALIDATOR Step 5 PASS, commit
+      69f021e). WASM-08 linear memory isolation and host-side validation of
+      every guest pointer/length pair implemented in
+      lib/letflow/engine/wasm/memory_guard.ex: check_bounds/3 is the sole
+      arithmetic core, and read/4 and write/4 are the only functions that
+      ever call Wasmex.Memory.*, confirmed by
+      `grep -rn 'Wasmex.Memory\.' lib/ --include='*.ex'` -- all 10 hits
+      confined to memory_guard.ex. A malformed pointer/length pair from a
+      guest yields a structured {:error, {:invalid_pointer, ...}} outcome,
+      with the BEAM node and its supervisor confirmed alive afterward, never
+      an exception/exit/native fault. Tests cover offset-beyond-size,
+      length-past-end, and offset+length overflow, each rejected
+      pre-dereference via check_bounds/3 alone for the extreme-magnitude
+      cases (no live Wasmex call ever uses a magnitude >= 2^40, per the live
+      SIGABRT safety constraint independently re-verified by 3 prior gates
+      plus RELEASE-VALIDATOR). Per-instance isolation proven with two real
+      Wasmex instances: a write in one is not observable in the other.
+      Moduledoc states the boundary honestly per REQ-165: bounds host-side
+      dereferences only, does NOT bound a fault inside Wasmtime's own native
+      code, citing req165-wasmex-process-boundary.md sec 7.2 by name and
+      quoting its "does not raise, exit, or trap in the ordinary BEAM sense"
+      text verbatim. mix test test/letflow/engine/wasm/: 66 passed, 0
+      failures (2 pre-existing, unrelated module_registry_test.exs warnings).
+      mix compile --warnings-as-errors: exit 0, clean. Scope confirmed via
+      git diff --stat main...HEAD: 14 files, all additions, no deletions --
+      module_registry.ex, capability_gate.ex, plugin_handler.ex, and
+      application.ex all confirmed untouched. No REQ-168 reference found
+      under docs/migration/ needing a companion update. Passed design,
+      SECURITY-REVIEWER (hard gate), REVIEWER, TEST-DESIGNER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER, and RELEASE-VALIDATOR (Step 5
+      independent re-verification of all 6 real acceptance criteria against
+      shipped code and freshly re-run test/compile output). Status flipped
+      pending -> done in docs/requirements.yaml. `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 42 on-disk entries before
+      this append; 43 after.

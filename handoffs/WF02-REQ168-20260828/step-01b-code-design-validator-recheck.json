@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step01b-recheck-WF02-REQ168-20260828",
+  "run_id": "WF02-REQ168-20260828",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ168-20260828/step-01b-code-design-validator-recheck.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-168"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ168-20260828/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ168-20260828/step-01-code-designer-rework1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req168-wasm-memory-isolation.md",
+      "test/specs/REQ-168.md"
+    ],
+    "branch_name": "feature/WF02-REQ168-20260828",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR re-check of REQ-168's design after rework fixing the section 1.1 false-transcript blocker (Wasmex.Memory.size/2 returns a bare integer, not {:ok, size} -- the design's actual algorithm already used the correct form; only the documentation transcript was wrong). Verify the fix independently -- re-run the section 1.1 probe yourself, do not just trust the rework's self-report. Note: your original Step 1b pass already independently verified sections 1.2-1.6, 2, 3, 4, 5, 6, 7, 8 in full and found them sound (see handoffs/WF02-REQ168-20260828/step-01b-code-design-validator.json) -- this recheck can focus narrowly on: (a) confirming section 1.1's transcript is now correct, (b) confirming no other section was altered in a way that reintroduces a problem, and (c) a final overall verdict.",
+    "acceptance_criteria": [
+      "Confirm section 1.1's transcript now correctly shows Wasmex.Memory.size/2 returning a bare integer, verified live by you.",
+      "Confirm sections 2 and 4 (arithmetic algorithm, public contract) still correctly use the bare-integer form with no lingering tagged-tuple assumption.",
+      "Confirm sections 3, 5, 6, 7, 8 were not altered from the version you already passed, or if altered, that the changes are still correct.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Rework 1 verified independently, not trusted from the rework's self-report. (a) Section 1.1: wrote a fresh probe from scratch (scratch/recheck_1_1.exs, not copied from either prior probe script), run as `PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" WASMEX_BUILD=true mix run --no-start scratch/recheck_1_1.exs` against the same installed wasmex 0.15.1. Result: `Wasmex.Memory.size(store, memory)` returns the bare integer `65536` -- `{:ok, 65536}` task result confirms the raw call itself yields `65536` (Task.yield wraps it in `{:ok, _}`, the inner value is the bare integer, not a nested tuple). Then explicitly attempted `{:ok, _size} = Wasmex.Memory.size(store, memory)` inside a supervised task: it raised `** (MatchError) no match of right hand side value: 65536`, task exited `{:badmatch, 65536}`. This exactly matches the corrected transcript in section 1.1 (`Wasmex.Memory.size(store, memory) #=> 65536`) and directly falsifies the original blocker's `{:ok, 65536}` claim. Section 1.1 is now correct. (b) Grepped every `Memory.size` reference in the design doc (lines 65-79 section 1.1, 226/243 section 2, 293/323/332/342/374 section 3) -- every one of the section 2 and section 4-adjacent usages is a bare assignment (`memory_size = Wasmex.Memory.size(store, memory)`), never a tuple destructure; no lingering tagged-tuple assumption anywhere in the document. (c) Diffed the full design doc between the pre-rework commit (bf071de) and the rework commit (a2f4d30): the only changes are the new 'Rework pass 1' paragraph appended after the scratch-script list in section 0, and section 1.1's heading/transcript/added correction note. Sections 1.2-1.6, 2, 3, 4, 5, 6, 7, 8 are byte-for-byte unchanged from the version this validator already passed in the original Step 1b -- nothing was altered, so nothing could have been damaged. `mix letflow.lint_handoffs` run: 0 new violations across 1244 handoff files (pre-existing grandfathered violations unrelated to this run, traced to ISS-0190). REQ-168's design is APPROVED -- gate cleared, ready to advance to Step 2 (ELIXIR-DEV implementation).",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Advance WF-02 Step 2 (ELIXIR-DEV) for REQ-168 on branch feature/WF02-REQ168-20260828"
+  }
+}

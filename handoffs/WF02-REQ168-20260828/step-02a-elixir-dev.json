@@ -1,0 +1,51 @@
+{
+  "handoff_id": "step02a-WF02-REQ168-20260828",
+  "run_id": "WF02-REQ168-20260828",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ168-20260828/step-02a-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-168"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req168-wasm-memory-isolation.md",
+      "lib/letflow/engine/wasm/module_registry.ex",
+      "lib/letflow/engine/wasm/capability_gate.ex"
+    ],
+    "branch_name": "feature/WF02-REQ168-20260828"
+  },
+  "task": {
+    "description": "Implement REQ-168 strictly per the APPROVED design at lib/letflow/design/req168-wasm-memory-isolation.md (passed CODE-DESIGN-VALIDATOR after one rework round fixing a documentation-transcript error -- the design's own algorithm was already correct). Read the full design doc before writing any code. This is the highest-stakes WASM implementation so far: the design's live verification found that wasmex can hang or SIGABRT the entire BEAM node at extreme (non-guest-reachable) memory-access magnitudes -- your job is to implement the Elixir-side guard that ensures no such magnitude ever reaches wasmex, per the design's exact algorithm.\n\nSAFETY INSTRUCTION: while writing tests, NEVER call MemoryGuard.read/4, MemoryGuard.write/4, or any Wasmex.Memory function directly with an offset/length value at or above roughly 2^40 (design section 5.4). The design's own section 5.2 pure-arithmetic tests use such magnitudes ONLY against check_bounds/3 (a pure function with zero Wasmex/NIF dependency) -- never against a live Wasmex.Memory call. A test that accidentally exercises this path for real would abort the test runner's own OS process. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching mix commands.\n\nSteps: (1) Create lib/letflow/engine/wasm/memory_guard.ex implementing Letflow.Engine.Wasm.MemoryGuard per design section 4 exactly: bounds_defect()/guard_error() types; check_bounds/3 (design section 2's exact five-step algorithm -- type/sign guard, fetch-nothing since size is passed in, offset-range check, end-of-range check via exact non-wrapping offset+length arithmetic, success); read/4 (fetches Wasmex.Memory.size/2 fresh as a BARE INTEGER -- not a tagged tuple, per the corrected design section 1.1 -- runs check_bounds/3, and only on :ok calls Wasmex.Memory.read_binary/4, pattern-matching BOTH the documented success shape and an {:error, _} tuple explicitly per section 1.6's finding that three of Wasmex.Memory's own @specs omit their error path); write/4 (write-side counterpart, length implicitly byte_size(data)). (2) Create priv/wasm_fixtures/req168_memory.wat exactly as design section 5.1 specifies (one exported page of memory, a noop export). (3) Do NOT add a new Task.Supervisor -- design section 3 explicitly states none is needed since MemoryGuard only ever calls Wasmex.Memory functions with already-validated, in-range values. (4) Do NOT modify module_registry.ex, capability_gate.ex, or plugin_handler.ex. (5) Write the moduledoc content per design section 6 EXACTLY, including the verbatim citation of req165-wasmex-process-boundary.md section 7.2's residual-risk disclosure.",
+    "owned_modules": [
+      "lib/letflow/engine/wasm/",
+      "test/letflow/engine/wasm/",
+      "priv/wasm_fixtures/",
+      "lib/letflow/design/req168-wasm-memory-isolation.md",
+      "test/specs/REQ-168.md"
+    ],
+    "acceptance_criteria": [
+      "AC1: a single validation function (MemoryGuard.read/4 and write/4) exists that every host-side guest-memory access goes through -- a repo search `grep -rn 'Wasmex.Memory\\.' lib/ --include='*.ex'` must show hits ONLY inside memory_guard.ex itself (plus size/2 and grow/2 calls unrelated to pointer/length dereferencing, which are out of this design's scope) -- run this search yourself and quote the real output.",
+      "AC2: a test asserts a malformed pointer from a guest yields a structured error outcome ({:error, {:invalid_pointer, _}}) to the caller and the BEAM node stays up (test process alive, PluginTaskSupervisor alive) -- design section 5.3 test 2's exact shape.",
+      "AC3: tests cover at minimum an offset beyond memory size, a length running past the memory end, and an offset+length pair that overflows a fixed-width check -- design section 5.2's full table against check_bounds/3 directly (pure, no live Wasmex call for the extreme-magnitude case), plus section 5.3 tests 3-4 for the moderate live cases.",
+      "AC4: a test asserts two instances of the same module do not share linear memory -- design section 5.3 test 5.",
+      "AC5: the moduledoc states this validation bounds host-side dereferences only, not a fault inside Wasmtime's own native code, citing req165-wasmex-process-boundary.md section 7.2 verbatim per design section 6.",
+      "AC6: mix test and mix compile --warnings-as-errors both pass, real output quoted.",
+      "CRITICAL SAFETY: no test in the suite calls read/4, write/4, or any Wasmex.Memory function with a magnitude >= 2^40. Confirm this yourself before finishing by inspecting every test case's actual arguments."
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Implemented Letflow.Engine.Wasm.MemoryGuard per lib/letflow/design/req168-wasm-memory-isolation.md section 4 exactly: bounds_defect()/guard_error() types, check_bounds/3 (pure 5-step algorithm), read/4 and write/4 (fetch Wasmex.Memory.size/2 as a bare integer, run check_bounds/3, only on :ok call Wasmex.Memory.read_binary/4 or write_binary/4, pattern-matching both the documented success shape and an {:error, _} tuple explicitly per section 1.6). Added priv/wasm_fixtures/req168_memory.wat per section 5.1 exactly. Wrote test/letflow/engine/wasm/memory_guard_test.exs covering T1-T5 from test/specs/REQ-168.md (valid-bounds baseline, all named malformed-input shapes against check_bounds/3, live read/4-write/4 malformed-pointer/node-liveness cases, per-instance isolation, moduledoc content). Did not modify module_registry.ex, capability_gate.ex, or plugin_handler.ex, and did not add a new Task.Supervisor, per the design's section 3 and the handoff's explicit instruction.\n\nDESIGN DISCREPANCY FLAGGED (not silently reconciled): design section 5.2's worked table (and test/specs/REQ-168.md T2 case 3, both already-approved artefacts) state that check_bounds(2^63, 2^63, 65536) should return {:error, {:length_exceeds_memory, ...}}. Per section 2's algorithm AS WRITTEN, step 3 (offset-range check) runs before step 4 (end-of-range check) and rejects first here, since offset alone (2^63) already exceeds memory_size -- so the algorithm's own step order (confirmed correct by CODE-DESIGN-VALIDATOR per this run's commit history) actually yields {:offset_out_of_range, 2^63, 65536} for this specific input, not length_exceeds_memory. Implemented check_bounds/3 to match section 2's algorithm exactly (not the worked-example table), adjusted the corresponding test's expected value to match, added a second test case (offset=0, length=2^63) that exercises the end-of-range step at the same extreme magnitude the design intended to demonstrate (exact non-wrapping bignum arithmetic), and left an in-code comment explaining the discrepancy for REVIEWER. Both new test cases still obey the CRITICAL SAFETY constraint -- only check_bounds/3 is called at that magnitude, never a live Wasmex.Memory function.\n\nAC1 (grep -rn 'Wasmex.Memory\\.' lib/ --include='*.ex'): all 11 hits are inside lib/letflow/engine/wasm/memory_guard.ex itself (moduledoc prose plus the module's own size/2, read_binary/4, write_binary/4 call sites) -- no other file in lib/ references Wasmex.Memory.\n\nmix compile --warnings-as-errors: passed clean ('Generated letflow app', no warnings) after fixing one unused-variable warning in check_type_and_sign/2.\n\nmix test (full suite): 'Result: 2354 passed (5 properties, 2349 tests), 3 excluded' -- 0 failures (674.9s). The suite's single error-level log line is Letflow.Engine.Lua.PlatformTest's pre-existing REQ-161 test intentionally exercising a script failure, unrelated to this change.\n\nmix test test/letflow/engine/wasm/memory_guard_test.exs: 'Result: 15 passed' -- 0 failures.\n\nmix letflow.lint_handoffs: 'OK -- 0 new violations across 1245 handoff files (25 pre-existing grandfathered, traced to ISS-0190).'\n\nCRITICAL SAFETY re-verified by inspection: grepped every check_bounds/MemoryGuard.read/MemoryGuard.write/Wasmex.Memory call site in the new test file. The only 2^63-scale magnitudes (two check_bounds/3 calls) never touch read/4, write/4, or any live Wasmex.Memory function; every read/4, write/4, and Wasmex.Memory.size/2 call in the file uses size-relative offsets (<=~65536-scale), far below 2^40.\n\nCommitted to feature/WF02-REQ168-20260828, not pushed. Routes next to SECURITY-REVIEWER (touches a WASM guest-memory-access path) then REVIEWER, per WF-02 Step 2a's gate sequence -- this handoff does not self-approve past Step 2a.",
+    "artifacts_out": [
+      "lib/letflow/engine/wasm/memory_guard.ex",
+      "priv/wasm_fixtures/req168_memory.wat",
+      "test/letflow/engine/wasm/memory_guard_test.exs"
+    ],
+    "next_recommended": "SECURITY-REVIEWER"
+  }
+}

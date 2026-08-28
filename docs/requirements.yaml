@@ -8511,7 +8511,7 @@ requirements:
   - id: REQ-168
     title: WASM linear memory isolation and host-side validation of every guest pointer/length pair (WASM-08)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 320  # letflow-queue task id
     description: >

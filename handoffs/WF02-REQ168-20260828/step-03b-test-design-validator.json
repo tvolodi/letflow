@@ -1,0 +1,55 @@
+{
+  "handoff_id": "step03b-WF02-REQ168-20260828",
+  "run_id": "WF02-REQ168-20260828",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ168-20260828/step-03b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-168"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ168-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ168-20260828/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/wasm/memory_guard.ex",
+      "test/letflow/engine/wasm/memory_guard_test.exs",
+      "test/specs/REQ-168.md"
+    ],
+    "branch_name": "feature/WF02-REQ168-20260828",
+    "commit": "69f021e"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate (WF-02 Step 3b) on REQ-168's test suite after TEST-DESIGNER's mutation-driven strengthening pass (commit 69f021e, 16->18 tests). Read handoffs/WF02-REQ168-20260828/step-03-test-designer.json's full result first -- it documents 5 mutation findings, 2 of which were genuine gaps closed with new tests (a 64-bit-truncation false-accept at check_bounds/3, and write/4's length-confusion bug). Given the stakes (this module's whole purpose is preventing a live-verified BEAM-node-crashing hazard), verify independently and thoroughly -- do not trust the report.",
+    "acceptance_criteria": [
+      "Every one of REQ-168's real acceptance criteria (see docs/requirements.yaml REQ-168 entry) has a runnable, passing test mapped to it.",
+      "No skipped/pending tests in memory_guard_test.exs.",
+      "Independently spot-check both genuinely-new-gap mutations yourself (the 64-bit-truncation mutation on check_end_of_range and the write/4 hardcoded-length mutation) -- re-apply each, confirm the reported pass/fail behavior, revert.",
+      "CRITICAL SAFETY CHECK: independently re-verify, yourself, by reading every single test case's literal arguments in memory_guard_test.exs, that NO test calls a live Wasmex.Memory function (through read/4, write/4, or a direct Wasmex.Memory.* call) with a magnitude >= 2^40. This is the single most important check in this gate given the design's own live-confirmed SIGABRT hazard at that magnitude -- do not skip or rush this.",
+      "Confirm the new 2^64-magnitude test case targets check_bounds/3 only (never read/4, write/4, or any live Wasmex call) by reading its exact code.",
+      "mix test test/letflow/engine/wasm/memory_guard_test.exs passes in full, real output quoted.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "TEST-DESIGN-VALIDATOR independent re-verification of REQ-168's MemoryGuard test suite (commit 69f021e, 18 tests) -- PASS. Read the implementation (lib/letflow/engine/wasm/memory_guard.ex, 170 lines), the full test file (test/letflow/engine/wasm/memory_guard_test.exs, 262 lines), TEST-DESIGNER's full report, and REQ-168's acceptance_criteria in docs/requirements.yaml directly; did not trust the prior report's claims without independent reproduction.\n\nAC MAPPING (all 6 of REQ-168's real acceptance_criteria have runnable, passing coverage):\n1. Single validation function / repo-search: independently re-ran `grep -rn 'Wasmex\\.Memory\\.' lib/ --include='*.ex'` myself -- every hit is inside memory_guard.ex (size/2, read_binary/4, write_binary/4 only); no other guest-memory read/write path exists in lib/. Confirms AC1.\n2. Malformed pointer -> structured error, BEAM node/process stay up: T3 describe block, 4 tests, each asserting `Process.alive?(self())` and the PluginTaskSupervisor is alive after a malformed read/4 or write/4 call. Confirms AC2.\n3. Offset beyond size / length past end / offset+length overflow, each rejected before dereference: T2 describe block covers all three named shapes plus extra defensive cases (negative offset, non-integer length) -- all against pure check_bounds/3. Confirms AC3.\n4. Two instances don't share memory: T4's single test writes <<99>> in instance A, reads 0 from instance B at the same offset, and confirms A still reads its own write. Confirms AC4.\n5. Moduledoc discloses the Wasmtime-native residual-risk boundary consistent with REQ-165: T5, two tests (generic phrase-match plus a stricter citation/quote match on req165 section 7.2). Confirms AC5.\n6. mix test / mix compile --warnings-as-errors pass: both re-run myself, see below. Confirms AC6.\n\nNo `@tag :skip`, no 'TODO: implement test', no pending tests anywhere in memory_guard_test.exs or test/specs/REQ-168.md (grep for skip/TODO/pending returned nothing). No hardcoded secrets/connection strings (grep for password/secret/api_key/token returned nothing). Tests are self-sufficient: each test in T1-T5 calls its own `start_instance()` or uses only its own literal arguments to check_bounds/3 -- no shared mutable fixture state, no test depends on another having run first (module is `async: false` for the documented NIF-serialization reason, not for cross-test data dependency).\n\nINDEPENDENT MUTATION RE-VERIFICATION (both genuinely-new-gap mutants reproduced myself from a clean baseline, not copied from the report):\n\nBaseline: `mix test test/letflow/engine/wasm/memory_guard_test.exs` (with `export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\"` and `WASMEX_BUILD=true`) -- Result: 18 passed, 0 failed.\n\nMutant 1 (64-bit-truncation on check_end_of_range/3): edited `range_end = offset + length` to `range_end = Bitwise.band(offset + length, 0xFFFFFFFFFFFFFFFF)`. Ran the suite: Result: 17/18 passed, 1 failed -- exactly the new 2^64-magnitude test ('end-of-range sum chosen so a truncated-to-64-bit accumulator would wrap to zero...'), with `left: :ok, right: {:error, {:length_exceeds_memory, 0, 18446744073709551616, 65536}}`, matching the reported false-accept mechanism precisely. Reverted with `git checkout -- lib/letflow/engine/wasm/memory_guard.ex`; confirmed `git status --porcelain lib/ test/` empty and re-ran suite: 18 passed again.\n\nMutant 2 (write/4 hardcoded length): edited `length = byte_size(data)` to `length = 1`. Ran the suite: Result: 17/18 passed, 1 failed -- exactly the new write/4 length-confusion test, with `left: {:error, {:invalid_pointer, {:memory_access_failed, \"out of bounds memory access\"}}}, right: {:error, {:invalid_pointer, {:length_exceeds_memory, 65531, 10, 65536}}}`, matching the reported wasmex-native-fallback-vs-clean-rejection mismatch precisely. Reverted with `git checkout -- lib/letflow/engine/wasm/memory_guard.ex`; confirmed `git status --porcelain lib/ test/` empty and re-ran suite: 18 passed again.\n\nBoth mutants were applied and reverted in the working tree directly (not a separate worktree); the revert was verified in both cases via an empty `git status --porcelain lib/ test/` AND a green re-run of the test file before proceeding, per this role's mandatory revert-and-verify discipline.\n\nCRITICAL SAFETY CHECK (magnitude audit, performed personally by reading every literal argument in the file): read all 18 test cases' exact code. Every call to `check_bounds/3` with an extreme magnitude (offset=length=2^63 in T2 case 3; offset=0,length=2^63 in T2 case 4; offset=0,length=2^64 in T2 case 5) is a pure-function call with zero Wasmex/NIF dependency -- confirmed by reading check_bounds/3's own definition, which takes only plain integers and does no NIF call. Every live call to `read/4` or `write/4` (all in T3 and T4) uses only small/moderate literal magnitudes: 0, 1, 2, 10, size+1000, size-1, size-5, size+1, 1000, <<99>>, \"hi\", \"x\", and a 10-byte binary -- none within many orders of magnitude of 2^40 (~1.1e12); the largest live-call magnitude anywhere in the file is `size + 1000` (~66536). No direct `Wasmex.Memory.*` call appears anywhere in the test file outside of `Wasmex.Memory.size/2` (used only to read the real memory size, never to pass an attacker-controlled magnitude) -- confirmed via `grep -n 'Wasmex\\.Memory\\.' test/letflow/engine/wasm/memory_guard_test.exs`. No test, existing or new, ever calls a live Wasmex.Memory function at or above 2^40. This is confirmed independently, not copied from TEST-DESIGNER's claim.\n\nThe new 2^64-magnitude test case (test/letflow/engine/wasm/memory_guard_test.exs:102-120) was read in full: it calls `MemoryGuard.check_bounds(offset, length, 65536)` only -- no `start_instance()`, no `store`/`memory` handle, no `read/4`/`write/4`/`Wasmex.Memory.*` call anywhere in that test. Confirmed pure-function-only.\n\nFINAL VERIFICATION RUN: `mix test test/letflow/engine/wasm/memory_guard_test.exs` -- Result: 18 passed, 0 failed (seed 12245/238043/823140 across the several runs performed, all green on the unmutated implementation). `mix compile --warnings-as-errors` -- clean, no output, exit success. `git status --porcelain lib/ test/` -- empty (no leftover mutant state).\n\nNo coverage gap, no overclaim, and no safety-constraint violation found. TEST-DESIGNER's report is corroborated by independent reproduction on every claim checked.",
+    "artifacts_out": [],
+    "verification_log": [
+      "grep -rn 'Wasmex\\\\.Memory\\\\.' lib/ --include='*.ex' -- all hits confined to memory_guard.ex",
+      "mix compile --warnings-as-errors -- clean",
+      "mix test test/letflow/engine/wasm/memory_guard_test.exs (baseline) -- 18 passed, 0 failed",
+      "mutant 1 (check_end_of_range/3 band-truncation) applied -- 17/18 passed, 1 failed matching reported false-accept; reverted, git status clean, re-run 18 passed",
+      "mutant 2 (write/4 length=1 hardcode) applied -- 17/18 passed, 1 failed matching reported length-confusion mismatch; reverted, git status clean, re-run 18 passed",
+      "magnitude audit of all 18 test cases' literal arguments -- no live Wasmex.Memory call anywhere near 2^40; only pure check_bounds/3 calls use 2^63/2^64 magnitudes",
+      "grep for :skip/TODO/pending in test file and spec -- none found",
+      "grep for password/secret/api_key/token in test file -- none found"
+    ],
+    "next_recommended": "TEST-RUNNER"
+  }
+}

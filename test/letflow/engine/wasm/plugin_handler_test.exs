@@ -145,6 +145,14 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
   # ---------------------------------------------------------------------
 
   describe "AC5: a hanging guest is terminated by the outer task timeout" do
+    # ISS-0352: this test genuinely, permanently hangs the wasmex NIF native
+    # thread it dispatches to (no BEAM-side mechanism can reclaim it -- see
+    # req170's own design doc section 1.1-1.4). Tagged so it runs isolated
+    # from the rest of the suite (test_helper.exs excludes :wasm_hang by
+    # default; mix letflow.check.test runs it in its own dedicated,
+    # short-lived BEAM node afterward) rather than leaking a thread into the
+    # shared pool every other WASM NIF test in the same process depends on.
+    @tag :wasm_hang
     test "surfaces as {:error, reason} naming the outer timeout, no rescue/catch needed" do
       hang_context =
         context(%{
@@ -246,6 +254,9 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
   # ---------------------------------------------------------------------
 
   describe "REQ-170 AC1: configured timeout_ms bounds the caller's wait" do
+    # ISS-0352: genuinely, permanently hangs a wasmex native thread -- see
+    # the tag note above (AC5 describe block).
+    @tag :wasm_hang
     test "returns {:error, reason} within the configured timeout_ms, not the outer default" do
       hang_context =
         context(%{
@@ -280,6 +291,9 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
   # ---------------------------------------------------------------------
 
   describe "REQ-170 AC3: outer invoke_opts timeout_ms bounds the caller independently of node_config timeout_ms" do
+    # ISS-0352: genuinely, permanently hangs a wasmex native thread -- see
+    # the tag note above (AC5 describe block).
+    @tag :wasm_hang
     test "the outer, shorter bound fires and the dispatched task dies shortly after" do
       hang_context =
         context(%{
@@ -343,6 +357,9 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
     # original two tests established (see prior git history for the
     # separately-confirmed-locally mutation finding this consolidation
     # preserves) while cutting the live-hang footprint from 3 calls to 2.
+    # ISS-0352: genuinely, permanently hangs 2 wasmex native threads (one
+    # per call) -- see the tag note above (AC5 describe block).
+    @tag :wasm_hang
     test "a 300ms timeout_ms binds sooner than a 7_000ms timeout_ms, and 7_000ms is not silently dropped to wasmex's hardcoded 5_000ms default" do
       build_context = fn timeout_ms ->
         context(%{

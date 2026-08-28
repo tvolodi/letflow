@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step04-WF02-REQ171-20260828",
+  "run_id": "WF02-REQ171-20260828",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ171-20260828/step-04-test-runner.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-171"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ171-20260828/step-03-test-designer.json",
+      "handoffs/WF02-REQ171-20260828/step-03b-test-design-validator.json"
+    ],
+    "branch_name": "feature/WF02-REQ171-20260828",
+    "commit": "e95185b"
+  },
+  "task": {
+    "description": "TEST-RUNNER pass (WF-02 Step 4) for REQ-171. Design, security-review, reviewer, and test-design-validator gates have all passed. Run the FULL suite (not just the wasm subdirectory) and report real results. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching commands. Attribute any failure structurally before concluding it's unrelated to this branch's diff -- never by count-matching. Be aware of ISS-0287 (Postgres pool-exhaustion recurrence), ISS-0351 (WASM registry timeout-path CPU-spin), and ISS-0352 (wasmex native-thread-pool exhaustion from genuinely-hanging WASM tests, a REAL production-reproduced hazard, mitigated but not eliminated in REQ-170's own test files) as known background issues -- if a WASM test file appears to hang or the suite takes unusually long, check ISS-0352 before assuming this is a new problem specific to REQ-171 (this requirement's own tests do not intentionally hang anything, but the residual risk from REQ-170's tests remains).",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors passes clean, real output quoted.",
+      "mix test test/letflow/engine/wasm/ passes in full, real output quoted (expect 119 tests per TEST-DESIGN-VALIDATOR's own count).",
+      "Full mix test suite run, real output quoted -- pass/fail counts, and structural attribution for any failure.",
+      "mix letflow.lint_handoffs run, 0 new violations (or explain any flagged).",
+      "Write a structured test report per this project's existing test/reports/ convention if a failure needs one; otherwise a clean pass needs no report file.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Full TEST-RUNNER pass for REQ-171 on branch feature/WF02-REQ171-20260828 at commit e95185b. docker compose (postgres on port 5463 per untracked .env LETFLOW_DB_PORT, keycloak) already running and healthy. All commands run with PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true.\n\n1) mix compile --warnings-as-errors --force: 'Compiling 136 files (.ex)' / 'Generated letflow app', exit 0. Clean, no warnings.\n\n2) mix test test/letflow/engine/wasm/: 'Finished in 10.8 seconds (0.00s async, 10.8s sync)' / 'Result: 119 passed' -- matches TEST-DESIGN-VALIDATOR's expected count of 119 exactly. Two pre-existing Dialyzer-style type-check warnings noted from module_registry_test.exs (ModuleRegistry.register(nil) / register(42) given non-binary args to test the documented FunctionClauseError guard) -- these are compiler type-warnings on intentionally-invalid test inputs, not test failures, and did not affect the warnings-as-errors compile step above (compile step ran clean because these warnings are emitted only during mix test's own compile-in-context, not the app compile). Three GenServer.call timeout stack traces logged at 500ms/300ms/7000ms against a function literally named \"hang\" -- these are REQ-170's intentional hang-path tests exercising ISS-0352's known wasmex native-thread-pool exhaustion hazard; each resolved within its own configured timeout and the run still finished at 119/119 passed, so this is the known, mitigated background hazard recurring as expected, not a new failure.\n\n3) scripts/test_parallel.sh (full suite, N=8 partitions via nproc): all 8 partitions exit 0, 0 failures each. Combined: 'combined: 2402 tests, 5 properties, 0 failures (2407/2407 passed)'. No occurrences of ISS-0287 (pool exhaustion) or ISS-0351 (registry timeout-path CPU-spin) signatures in any partition log.\n\n4) mix letflow.lint_handoffs: 'letflow.lint_handoffs: OK -- 0 new violations across 1284 handoff files (25 pre-existing grandfathered, traced to ISS-0190).' This handoff file (step-04-test-runner.json) is not among the flagged files.\n\nNo failures anywhere in the suite -- no test/reports/ file written per the project's convention that a clean pass needs no report file. No structural attribution needed since nothing failed.",
+    "compile_result": "mix compile --warnings-as-errors --force -> 'Compiling 136 files (.ex)', 'Generated letflow app', exit 0, no warnings.",
+    "wasm_subdir_result": "mix test test/letflow/engine/wasm/ -> Result: 119 passed. Matches TEST-DESIGN-VALIDATOR's expected count. 3 intentional 'hang' GenServer.call timeouts logged (ISS-0352 mitigated hazard, resolved within configured timeouts, no test failure). 2 pre-existing type-check warnings from module_registry_test.exs on intentionally-invalid inputs (not failures).",
+    "full_suite_result": "scripts/test_parallel.sh, N=8 partitions -> partition 1: 297 tests/0 failures; partition 2: 400 tests/1 property/0 failures; partition 3: 284 tests/0 failures; partition 4: 238 tests/0 failures; partition 5: 346 tests/2 properties/0 failures; partition 6: 204 tests/0 failures; partition 7: 365 tests/2 properties/0 failures; partition 8: 268 tests/0 failures. combined: 2402 tests, 5 properties, 0 failures (2407/2407 passed).",
+    "lint_handoffs_result": "letflow.lint_handoffs: OK -- 0 new violations across 1284 handoff files (25 pre-existing grandfathered, traced to ISS-0190). This handoff's own file not flagged.",
+    "known_background_issues_checked": "ISS-0287 (Postgres pool exhaustion): no signature found in any partition log, no failures. ISS-0351 (WASM registry timeout-path CPU-spin): no signature found. ISS-0352 (wasmex native-thread-pool exhaustion from REQ-170's intentional hang tests): recurred as expected in the wasm subdirectory run (3 GenServer.call timeouts on a function named 'hang'), fully mitigated -- each call resolved within its configured timeout window and the run still completed at 119/119 passed within 10.8s. Not a new problem, not specific to REQ-171's own tests.",
+    "report_file_written": "none -- full suite passed with 0 failures; project convention is that a clean pass needs no test/reports/ file.",
+    "recommendation": "PASS -- ready for RELEASE-VALIDATOR's independent re-run."
+  }
+}

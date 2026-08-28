@@ -1,0 +1,86 @@
+{
+  "handoff_id": "step03b-WF02-REQ171-20260828",
+  "run_id": "WF02-REQ171-20260828",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ171-20260828/step-03b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-171"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ171-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ171-20260828/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/wasm/host_api.ex",
+      "lib/letflow/engine/wasm/capability_gate.ex",
+      "test/letflow/engine/wasm/host_api_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ171-20260828",
+    "commit": "e95185b"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate (WF-02 Step 3b) on REQ-171's test suite after TEST-DESIGNER's mutation-driven strengthening pass (38->40 tests). Read handoffs/WF02-REQ171-20260828/step-03-test-designer.json's full result first -- it documents 6 mutation findings, 2 of which were genuine gaps closed with new tests. THE MOST IMPORTANT ONE: a guest-identity-forging gap in do_log/8 (a mutation sourcing script_identity/instance_id/trace_id from guest-decoded context JSON instead of the closure-captured execution_context was NOT caught by any pre-existing test). Given this is the security property SECURITY-REVIEWER's own Step 2c gate specifically verified holds in the real shipped code, verify this new test both genuinely closes the gap AND that the underlying shipped code (unchanged, per TEST-DESIGNER's own diff confirmation) is still the version SECURITY-REVIEWER actually reviewed.",
+    "acceptance_criteria": [
+      "Every one of REQ-171's real acceptance criteria (see docs/requirements.yaml REQ-171 entry) has a runnable, passing test mapped to it.",
+      "No skipped/pending tests.",
+      "Independently spot-check the identity-forging gap (do_log/8 mutation) yourself -- re-apply the mutation, confirm the new test fails against it and passes against the real code, revert.",
+      "Independently spot-check the write_buffer_result/4 negative-out_ptr gap yourself -- re-apply, confirm, revert.",
+      "Confirm host_api.ex and capability_gate.ex are byte-identical to their pre-TEST-DESIGNER-pass state (no implementation drift) -- this matters especially here since SECURITY-REVIEWER's Step 2c pass reviewed a specific commit and must still be reviewing what's actually shipped.",
+      "mix test test/letflow/engine/wasm/ passes in full, real output quoted.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS -- REQ-171's post-strengthening test suite (test/letflow/engine/wasm/host_api_test.exs, 21 tests in-file / 119 across test/letflow/engine/wasm/) independently verified. Re-derived every finding from the artefacts and the shipped code myself rather than trusting TEST-DESIGNER's report; both reported mutations reproduce exactly as claimed, host_api.ex/capability_gate.ex are byte-identical to their pre-pass state, and the full wasm test directory passes.",
+    "completed_at": "2026-08-28T13:11:26Z",
+    "checks": [
+      {
+        "check": "Every REQ-171 acceptance criterion has a runnable, passing test",
+        "outcome": "PASS",
+        "evidence": "Read docs/requirements.yaml REQ-171 (lines 8660-8714, 9 acceptance_criteria) directly and cross-mapped against test/letflow/engine/wasm/host_api_test.exs's describe blocks: AC1/AC2 (read_variable parity + set/unset -1 semantics) -> 'AC1/AC2: read_variable' (2 tests); AC3 (log identity fields) -> 'AC3: log carries script_identity/instance_id/trace_id' (4 tests, including the new forgery test); AC4 (now parity under fixed clock) -> 'AC4: now' (1 test); AC5 (uuid, no-Lua-counterpart moduledoc decision) -> 'AC5: uuid' (2 tests); AC6 (REQ-150 number round-trip) -> 'AC6: number conversion round-trips integer/float subtype' (2 tests); AC7 (capability gating from REQ-167/CapabilityGate only) -> 'AC7: capability gating...' (3 tests); AC8 (no guest-derived Repo prefix) -> 'AC8: no host function calls Letflow.Repo...' (2 tests, structural grep + moduledoc). The shared -2 buffer-protocol describe block (5 tests, including the new negative-out_ptr test) covers the cross-cutting §5.2 protocol all of read_variable/now/uuid share. No acceptance criterion is left without a mapped, passing test."
+      },
+      {
+        "check": "No skipped/pending tests; no TODO left in the spec",
+        "outcome": "PASS",
+        "evidence": "grep -n '@tag :skip|@moduletag :skip|TODO' test/letflow/engine/wasm/host_api_test.exs test/specs/REQ-171.md -> zero hits."
+      },
+      {
+        "check": "Test fixtures self-sufficient, no shared hardcoded/polluting state",
+        "outcome": "PASS",
+        "evidence": "Read the test file's helper section (lines 1-93). Every test calls start_instance/2,3, which builds a brand-new Wasmex.start_link/1 instance from the manifest+execution_context passed in and stops its own pid at test end -- no module-level or cross-test shared Wasmex process, no hardcoded tenant/instance ID reused across tests in a way that could collide (each test constructs its own execution_context via wasm_execution_context/1 with test-local values). async: false is used deliberately (real Wasmtime NIF instances, matching capability_gate_test.exs/memory_guard_test.exs's existing pattern in this suite), not as a workaround for shared state."
+      },
+      {
+        "check": "No hardcoded secrets/connection strings",
+        "outcome": "PASS",
+        "evidence": "grep -niE 'password|secret|token\\s*=|api_key|conn_str|postgres://|amqp://' test/letflow/engine/wasm/host_api_test.exs -> zero hits."
+      },
+      {
+        "check": "Independent re-application of the do_log/8 identity-forging mutation",
+        "outcome": "PASS -- reproduced exactly as TEST-DESIGNER reported",
+        "evidence": "Edited lib/letflow/engine/wasm/host_api.ex's do_log/8 metadata construction so script_identity/instance_id/trace_id are read from the guest-decoded `context` map (falling back to execution_context only when the guest payload omits the key), i.e. `Map.get(guest_context_map, \"script_identity\", execution_context.script_identity)` etc. Ran `mix test test/letflow/engine/wasm/host_api_test.exs`: 20/21 passed, 1 failure -- exactly 'AC3: log carries script_identity/instance_id/trace_id identity fields are never sourced from guest-supplied context bytes -- a guest cannot forge script_identity/instance_id/trace_id', with the captured log line reading `script_identity=FORGED-script-identity instance_id=FORGED-instance-id trace_id=FORGED-trace-id`. No other test in the file failed. Reverted with `git checkout -- lib/letflow/engine/wasm/host_api.ex`; md5sum after revert (e428639c1d383123f2d9a95a948dee90) matches the pre-mutation copy; re-ran the suite -> 21/21 passed."
+      },
+      {
+        "check": "Independent re-application of the write_buffer_result/4 negative-out_ptr mutation",
+        "outcome": "PASS -- reproduced exactly as TEST-DESIGNER reported",
+        "evidence": "Edited write_buffer_result/4's two MemoryGuard.write/4 calls to raw Wasmex.Memory.write_binary/4 calls, bypassing MemoryGuard's bounds check entirely. Ran the suite: 20/21 passed, 1 failure -- exactly 'the -2 invalid-argument case (shared §5.2 buffer protocol) now: a negative (attacker-chosen large-unsigned) out_ptr is still rejected as -2, not a raw wasmex trap', with the actual mismatch being `{:ok, [-2]}` expected vs. `{:error, \"...wasm backtrace...\"}` returned -- confirming the mutant surfaces a raw wasmex trap instead of the clean -2 sentinel, exactly the divergence TEST-DESIGNER's comment describes. No other test failed (the moderately-out-of-bounds positive out_ptr tests still passed under the mutant, confirming TEST-DESIGNER's stated reason those couldn't distinguish MemoryGuard from wasmex's own internal check). Reverted; md5sum after revert matches the pre-mutation copy; re-ran the suite -> 21/21 passed."
+      },
+      {
+        "check": "host_api.ex and capability_gate.ex byte-identical to pre-TEST-DESIGNER-pass state",
+        "outcome": "PASS",
+        "evidence": "`git show e95185b --stat` (the test commit) touches only handoffs/*.json, test/letflow/engine/wasm/host_api_test.exs, and test/specs/REQ-171.md -- neither lib/letflow/engine/wasm/host_api.ex nor capability_gate.ex appears in the diff. Both files' md5sums (e428639c1d383123f2d9a95a948dee90 and aa66dbb674d2ae862395741fe3b8c2f4) are unchanged before, during (after each mutation-revert), and after this validation pass. This is also the same code SECURITY-REVIEWER's Step 2c pass (handoffs/WF02-REQ171-20260828/step-02c-security-reviewer.json) independently read and PASSed at commit 25bf28a (the last commit to touch these files, per `git log -1 -- lib/letflow/engine/wasm/host_api.ex lib/letflow/engine/wasm/capability_gate.ex`) -- read do_log/8's real metadata construction directly (host_api.ex lines 235-244) and confirmed script_identity/instance_id/trace_id are sourced exclusively from execution_context, never from decoded_context, matching SECURITY-REVIEWER's own line-by-line finding."
+      },
+      {
+        "check": "mix test test/letflow/engine/wasm/ passes in full",
+        "outcome": "PASS",
+        "evidence": "`mix test test/letflow/engine/wasm/` (WASMEX_BUILD=true, asdf/cargo PATH) -> 'Finished in 10.7 seconds (0.00s async, 10.7s sync)\\nResult: 119 passed'. Also ran `mix compile --warnings-as-errors` -> clean, no output, exit 0."
+      }
+    ],
+    "verdict": "PASS. Route to TEST-RUNNER (WF-02 Step 4)."
+  }
+}

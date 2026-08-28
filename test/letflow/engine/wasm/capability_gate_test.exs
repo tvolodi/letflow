@@ -123,9 +123,18 @@ defmodule Letflow.Engine.Wasm.CapabilityGateTest do
     # namespace-present-but-empty map) -- none of them distinguish "no env
     # namespace at all" from "an empty env namespace." This test asserts the
     # exact top-level shape design §5.1 step 3 calls for: a genuinely empty
-    # manifest produces exactly %{}, not a partially-empty nested map.
-    test "an empty capability list produces exactly %{}, not a namespace-present-but-empty map" do
-      assert CapabilityGate.build_import_table(%{capabilities: []}) == %{}
+    # manifest produces exactly the :none-gated rows and nothing else -- not
+    # a partially-empty nested map.
+    #
+    # REQ-171 design §4.1 changed this exact assertion's expected value: an
+    # empty manifest is no longer `%{}` because `now`/`uuid` are `:none`-gated
+    # (always installed, regardless of grant state, mirroring platform.ex's
+    # own `now`/`fail` rows) -- this is the intended, documented behavior
+    # change, not a regression.
+    test "an empty capability list produces exactly the :none-gated rows, nothing else" do
+      table = CapabilityGate.build_import_table(%{capabilities: []})
+
+      assert MapSet.new(Map.keys(table["env"])) == MapSet.new(["now", "uuid"])
     end
 
     test "granting both capabilities exposes both imports (additive, not exclusive)" do
@@ -136,10 +145,21 @@ defmodule Letflow.Engine.Wasm.CapabilityGateTest do
     end
 
     test "the returned entry has the exact {:fn, params, results, callback} shape wasmex requires" do
+      # REQ-171 design §4.4: read_variable's real signature is the 4-param
+      # buffer-out shape (name_ptr, name_len, out_ptr, out_cap), widened from
+      # REQ-167's original illustrative 2-param placeholder -- a callback of
+      # arity 5 (context + 4 params), not 3.
       table = CapabilityGate.build_import_table(%{capabilities: ["var:read"]})
 
-      assert {:fn, [:i32, :i32], [:i32], callback} = table["env"]["read_variable"]
-      assert is_function(callback, 3)
+      assert {:fn, [:i32, :i32, :i32, :i32], [:i32], callback} = table["env"]["read_variable"]
+      assert is_function(callback, 5)
+    end
+
+    test "REQ-171: :none-gated rows (now/uuid) are present even with an empty manifest" do
+      table = CapabilityGate.build_import_table(%{capabilities: []})
+
+      assert Map.has_key?(Map.get(table, "env", %{}), "now")
+      assert Map.has_key?(Map.get(table, "env", %{}), "uuid")
     end
   end
 

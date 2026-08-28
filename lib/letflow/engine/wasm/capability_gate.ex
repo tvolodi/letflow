@@ -90,15 +90,51 @@ defmodule Letflow.Engine.Wasm.CapabilityGate do
 
   ## Placeholder registry, not a resolved host-API vocabulary
 
-  `@known_imports` is a small, fixed placeholder proving the
-  *mechanism* (whitelist construction and enforcement) only — the real
-  host-function vocabulary, signatures, and callback bodies belong to a
-  future requirement (design §6/§8). No test of this module ever
-  invokes a granted function through a successfully-instantiated
-  instance; whitelist presence/absence and instantiation success/
-  failure are both observable without calling the granted function, so
-  each registry entry's callback is a trivial stub.
+  `@known_imports` was originally a small, fixed placeholder proving the
+  *mechanism* (whitelist construction and enforcement) only. REQ-171
+  (`lib/letflow/design/req171-wasm-host-api-read.md`, gate-approved) extends it
+  additively — real rows for `read_variable`, `log`, `now`, `uuid`, dispatching to
+  `Letflow.Engine.Wasm.HostApi`'s real implementations — while `platform_call_service`
+  stays REQ-167's original placeholder stub, REQ-172's job. No test of *this* module
+  ever invokes a granted function through a successfully-instantiated instance for the
+  still-placeholder rows; whitelist presence/absence and instantiation success/failure
+  remain observable without calling the granted function for those.
+
+  ## REQ-171 — `:none`-gated rows and `build_import_table/2` (design §4)
+
+  `platform.ex`'s Lua-side matrix has a `:none` row (`now`/`fail`): installed
+  unconditionally, gated per-call (gating happens inside the wrapper, not at
+  installation). WASM's gate *is* import-table membership, so there was no
+  equivalent mechanism for "install regardless of grant state" before this
+  requirement. `import_descriptor()` gains a `capability_requirement()` (widened from
+  `capability()`, additively — see below) and a `stub` field; `build_import_table/1`'s
+  filter now includes a `capability: :none` descriptor **unconditionally**, mirroring
+  `required_capability/2`'s own `:none` clause on the Lua side, restated as a filter
+  rather than a per-call check. This is additive to the *same* mechanism — no second
+  registry, no second whitelist.
+
+  `build_import_table/1` is unchanged in signature and now defined as
+  `build_import_table(manifest, Letflow.Engine.Wasm.HostApi.empty_execution_context())`
+  — every entry's callback becomes `HostApi`'s real dispatcher, closed over the
+  *empty* context, so this module's own pre-existing tests (which exercise only
+  whitelist-membership / instantiation success-or-failure, never a granted function's
+  actual return value) continue to pass unchanged. `build_import_table/2` is the new
+  real entry point: `execution_context` is captured once per call and closed over by
+  every installed callback for the lifetime of the returned `import_table()`.
+
+  ## Cross-runtime denial-timing divergence (REQ-171 design §4.3) — inherited, not fixed
+
+  An ungranted **Lua** call to a gated function raises at the moment of that specific
+  call — code before it in the same script has already run. An ungranted **WASM**
+  import causes the entire module to fail **instantiation** — no guest code runs at
+  all. This divergence is inherent to this module's already-approved
+  import-table-membership-is-the-gate architecture (§4.1 above); REQ-171 states it
+  explicitly (its own acceptance criteria are the first to compare Lua/WASM behavior
+  side by side) but does not, and is not positioned to, resolve it. Flagged for
+  REVIEWER/SECURITY-REVIEWER as a known, accepted, pre-existing divergence.
   """
+
+  alias Letflow.Engine.Wasm.HostApi
 
   @typedoc "Per design §2 — a bare capability grant set; opaque string tokens, exact-match only."
   @type capability :: String.t()
@@ -115,16 +151,34 @@ defmodule Letflow.Engine.Wasm.CapabilityGate do
   @type valtype :: :i32 | :i64 | :v128 | :f32 | :f64
 
   @typedoc """
-  One entry in the placeholder host-function registry (`@known_imports`
-  below). `capability` is the exact grant-set token gating this entry
-  (exact-string membership only, no wildcard/prefix matching).
+  REQ-171 design §4.2 — widens `capability()` (never narrows it): `:none` marks a row
+  that is **always** included in the built import table regardless of
+  `manifest.capabilities`'s contents, mirroring `platform.ex`'s own
+  `required_capability_spec()` `:none` case (`now`/`fail`, permanently ungated).
+  """
+  @type capability_requirement :: capability() | :none
+
+  @typedoc """
+  REQ-171 design §4.7 — which `Letflow.Engine.Wasm.HostApi` function (if any) a row's
+  callback dispatches to. `:call_service` (REQ-167's original placeholder, unchanged)
+  still resolves to `stub_callback/0`; the other four values name a real
+  `Letflow.Engine.Wasm.HostApi.do_*/N` function.
+  """
+  @type host_fn_spec :: :read_variable | :log | :now | :uuid | :call_service
+
+  @typedoc """
+  One entry in the host-function registry (`@known_imports` below). `capability` is
+  the exact grant-set token gating this entry (exact-string membership only, no
+  wildcard/prefix matching), or `:none` for a row that is always installed
+  (REQ-171 design §4.1).
   """
   @type import_descriptor :: %{
-          capability: capability(),
+          capability: capability_requirement(),
           namespace: String.t(),
           name: String.t(),
           params: [valtype()],
-          results: [valtype()]
+          results: [valtype()],
+          stub: host_fn_spec()
         }
 
   @typedoc """
@@ -168,44 +222,90 @@ defmodule Letflow.Engine.Wasm.CapabilityGate do
   # not a soundness one -- design §7).
   @unresolved_import_pattern ~r/unknown import: `(?<namespace>[^:`]+)::(?<function>[^`]+)` has not been defined/
 
-  # design §6's placeholder registry, verbatim -- exactly two entries.
-  # `var:read`/`service:call` and `read_variable`/`platform_call_service`
-  # are WASM-06's own acceptance-criterion text, used as-is (design §6
-  # explains why no restatement is needed here, unlike WASM-07's
-  # component-model-shaped literal). Signatures are illustrative
-  # core-module type shapes only -- REQ-171/172 own the real ones.
+  # design §6's original two-entry placeholder for `var:read`/`service:call`, extended
+  # by REQ-171 design §4.4 with the real `read_variable`/`log`/`now`/`uuid` rows.
+  # `var:read`/`service:call` and `read_variable`/`platform_call_service` are WASM-06's
+  # own acceptance-criterion text, used as-is. `read_variable`'s signature is widened
+  # from the original illustrative `[:i32, :i32] -> [:i32]` to the real 4-param
+  # buffer-out shape (REQ-171 design §5.3) -- `platform_call_service` keeps its
+  # original illustrative signature and placeholder stub, REQ-172's job.
   @known_imports [
     %{
       capability: "var:read",
       namespace: "env",
       name: "read_variable",
+      params: [:i32, :i32, :i32, :i32],
+      results: [:i32],
+      stub: :read_variable
+    },
+    %{
+      capability: "audit:log",
+      namespace: "env",
+      name: "log",
+      params: [:i32, :i32, :i32, :i32, :i32, :i32],
+      results: [],
+      stub: :log
+    },
+    %{
+      capability: :none,
+      namespace: "env",
+      name: "now",
       params: [:i32, :i32],
-      results: [:i32]
+      results: [:i32],
+      stub: :now
+    },
+    %{
+      capability: :none,
+      namespace: "env",
+      name: "uuid",
+      params: [:i32, :i32],
+      results: [:i32],
+      stub: :uuid
     },
     %{
       capability: "service:call",
       namespace: "env",
       name: "platform_call_service",
       params: [:i32, :i32],
-      results: [:i32]
+      results: [:i32],
+      stub: :call_service
     }
   ]
 
   @doc """
   Builds the `imports:` map (design §5.1) containing an entry for every
-  `import_descriptor()` in `@known_imports` whose `capability` is a
-  member of `manifest.capabilities` (exact string match) — and,
-  structurally, no entry for any descriptor whose capability is absent.
-  Pure function: no store, no module, no instantiation, no side effect.
+  `import_descriptor()` in `@known_imports` whose `capability` is `:none` (always
+  included, REQ-171 design §4.1) or is a member of `manifest.capabilities` (exact
+  string match) — and, structurally, no entry for any other descriptor whose
+  capability is absent. Every installed callback is closed over the *empty*
+  `Letflow.Engine.Wasm.HostApi.execution_context()` (REQ-171 design §4.6) — this
+  module's own pre-existing tests exercise only whitelist-membership/instantiation
+  success-or-failure, never a granted function's actual return value, so they
+  continue to pass against this empty-context dispatcher unchanged. Pure function: no
+  store, no module, no instantiation, no side effect.
   """
   @spec build_import_table(manifest()) :: import_table()
-  def build_import_table(%{capabilities: capabilities}) do
+  def build_import_table(manifest) do
+    build_import_table(manifest, HostApi.empty_execution_context())
+  end
+
+  @doc """
+  REQ-171 design §4.6 — the real entry point. Identical to `build_import_table/1`
+  except every installed callback closes over the given `execution_context` (captured
+  once per call, fixed for the lifetime of the returned `import_table()`) instead of
+  the empty sentinel.
+  """
+  @spec build_import_table(manifest(), HostApi.execution_context()) ::
+          import_table()
+  def build_import_table(%{capabilities: capabilities}, execution_context) do
     granted = MapSet.new(capabilities)
 
     @known_imports
-    |> Enum.filter(&MapSet.member?(granted, &1.capability))
+    |> Enum.filter(&(&1.capability == :none or MapSet.member?(granted, &1.capability)))
     |> Enum.reduce(%{}, fn descriptor, table ->
-      entry = {:fn, descriptor.params, descriptor.results, stub_callback()}
+      entry =
+        {:fn, descriptor.params, descriptor.results,
+         build_callback(descriptor.stub, execution_context)}
 
       Map.update(
         table,
@@ -214,6 +314,48 @@ defmodule Letflow.Engine.Wasm.CapabilityGate do
         &Map.put(&1, descriptor.name, entry)
       )
     end)
+  end
+
+  # design §4.7's dispatch fold -- for each of the four real rows this requirement
+  # adds, a closure of arity `1 + length(params)` (context, then one argument per
+  # declared param) that calls the corresponding Letflow.Engine.Wasm.HostApi.do_*
+  # function with context, the raw argument list, and the closed-over
+  # execution_context. `:call_service` (unchanged, REQ-172's job) preserves the
+  # existing stub_callback/0 behavior. No capability check runs inside any of these
+  # callback bodies -- this module's own import-table-membership filter, above, is the
+  # only gating WASM ever gets, structurally prior to any guest code running at all.
+  @spec build_callback(host_fn_spec(), HostApi.execution_context()) :: (... -> term())
+  defp build_callback(:read_variable, execution_context) do
+    fn context, name_ptr, name_len, out_ptr, out_cap ->
+      HostApi.do_read_variable(context, name_ptr, name_len, out_ptr, out_cap, execution_context)
+    end
+  end
+
+  defp build_callback(:log, execution_context) do
+    fn context, level_ptr, level_len, message_ptr, message_len, context_ptr, context_len ->
+      HostApi.do_log(
+        context,
+        level_ptr,
+        level_len,
+        message_ptr,
+        message_len,
+        context_ptr,
+        context_len,
+        execution_context
+      )
+    end
+  end
+
+  defp build_callback(:now, _execution_context) do
+    fn context, out_ptr, out_cap -> HostApi.do_now(context, out_ptr, out_cap) end
+  end
+
+  defp build_callback(:uuid, _execution_context) do
+    fn context, out_ptr, out_cap -> HostApi.do_uuid(context, out_ptr, out_cap) end
+  end
+
+  defp build_callback(:call_service, _execution_context) do
+    stub_callback()
   end
 
   @doc """

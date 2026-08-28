@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step06-WF02-REQ171-20260828",
+  "run_id": "WF02-REQ171-20260828",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ171-20260828/step-06-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-171"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ171-20260828/step-05-release-validator.json"
+    ],
+    "branch_name": "feature/WF02-REQ171-20260828"
+  },
+  "task": {
+    "description": "DOC-UPDATER pass (WF-02 Step 6) for REQ-171 (queue task 323, GH#623). RELEASE-VALIDATOR independently passed Step 5 -- see handoffs/WF02-REQ171-20260828/step-05-release-validator.json for full detail. Flip REQ-171's status to done in docs/requirements.yaml, and append the required status-history event.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml: REQ-171's status field flipped from pending to done.",
+      "Append a 'done' event to the current run-history volume (find it via docs/status/requirement_status.index.yaml) with a real UTC timestamp from the clock (not memory) -- REQ-171, run WF02-REQ171-20260828. Volume 6 is small/fresh (opened by REQ-170's own roll) so no roll should be needed, but check its line/byte count first per usual.",
+      "Keep docs/status/requirement_status.index.yaml's volume count in lockstep with the append.",
+      "Check docs/migration/ for any REQ-171 reference that needs updating.",
+      "Commit the doc updates to the feature branch (do not push yet -- ORCH handles Step Final).",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "COMPLETED -- REQ-171 flipped to done, status-history event appended",
+    "summary": "Flipped docs/requirements.yaml REQ-171 status from pending to done. Read docs/status/requirement_status.index.yaml, confirmed volume 6 (docs/status/requirement_status.v6.yaml) is current, read it in full (189 lines pre-append, well under the 1200-line/120000-byte roll ceiling). Appended one 'done' event for REQ-171 (agent DOC-UPDATER, timestamp 2026-08-28T13:20:10Z from `date -u`) summarizing the shipped read-path host API (host_api.ex, capability_gate.ex) and RELEASE-VALIDATOR's independent re-verification (119 tests passed, 0 failures; mix compile --warnings-as-errors --force clean; scope check confirmed no unowned files touched). Confirmed via `git diff --numstat` on the volume file: 17 insertions, 0 deletions -- append-only preserved. Post-append the volume is 205 lines / 12065 bytes, still far under the roll ceiling, so no roll was needed (matches the handoff's own expectation). Updated docs/status/requirement_status.index.yaml's volume-6 entries count from 1 to 2 with a matching note, recounted directly via `grep -c \"^  - req:\" docs/status/requirement_status.v6.yaml` = 2. Checked docs/migration/ for REQ-171 references with `grep -rn REQ-171 docs/migration/` -- zero hits, nothing to update there. Checked README.md for WASM-12/stage-S5/REQ-171 references -- none found, no update needed. Ran `mix letflow.lint_handoffs` -- OK, 0 new violations.",
+    "requirement_flip": "docs/requirements.yaml REQ-171 status: pending -> done",
+    "status_history_append": "docs/status/requirement_status.v6.yaml: appended 1 'done' event for REQ-171 (agent DOC-UPDATER, at 2026-08-28T13:20:10Z). git diff --numstat: 17 insertions, 0 deletions.",
+    "index_update": "docs/status/requirement_status.index.yaml: volume 6 entries 1 -> 2, note appended, no roll needed (205 lines / 12065 bytes, under the 1200-line/120000-byte ceiling)",
+    "migration_docs_check": "grep -rn REQ-171 docs/migration/ -- 0 matches, no migration doc references REQ-171, nothing to update",
+    "readme_check": "no REQ-171/WASM-12/stage-S5 references found in README.md requiring an update",
+    "lint_handoffs": "OK -- 0 new violations (after moving artifacts_out under result, per H3)",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v6.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ171-20260828/step-06-doc-updater.json"
+    ]
+  }
+}

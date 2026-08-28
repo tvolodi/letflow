@@ -12,6 +12,20 @@ defmodule Mix.Tasks.Letflow.Check.Test do
   reader would normally see is hidden or buffered away, while also
   capturing that output for the check below.
 
+  ISS-0352: after the default (`:keycloak`/`:wasm_hang`-excluded) run above
+  passes, this task runs a SECOND subprocess, `mix test --only wasm_hang`,
+  in its own fresh BEAM node. `:wasm_hang` tags a handful of tests in
+  `test/letflow/engine/wasm/` that deliberately, genuinely hang a real
+  `wasmex` NIF call to prove REQ-170's own live-verified finding that no
+  BEAM-side mechanism can reclaim that thread -- it permanently occupies one
+  slot of `wasmex`'s shared, node-global native worker pool for the rest of
+  the OS process. Run in the same process as every other WASM NIF test, this
+  starved unrelated tests once the pool was exhausted (PR #691, then worse on
+  PR #692 -- 18 cascading `ExUnit.TimeoutError`s). Running them as their own
+  short-lived subprocess means their leaks die with that process instead of
+  touching anything else's pool. Both subprocess runs must exit `0` for this
+  task to pass.
+
   Unlike a blanket `test --warnings-as-errors`, this task does **not** fail
   on every warning. `docs/issues/ISS-0044.yaml` (`status: resolved`)
   already diagnosed two warning classes that only ever surface under
@@ -83,7 +97,36 @@ defmodule Mix.Tasks.Letflow.Check.Test do
 
       true ->
         Mix.shell().info("mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings.")
+        run_wasm_hang_tests()
     end
+  end
+
+  # ISS-0352: run the deliberately-hanging :wasm_hang tests in their own
+  # subprocess, isolated from the main run above -- see moduledoc.
+  defp run_wasm_hang_tests do
+    {hang_output, hang_exit_code} = stream_and_capture("mix", ["test", "--only", "wasm_hang"])
+
+    if hang_exit_code != 0 do
+      Mix.raise(
+        "mix letflow.check.test: FAILED -- isolated `mix test --only wasm_hang` run " <>
+          "exited #{hang_exit_code} (real test failure/error)."
+      )
+    end
+
+    if String.contains?(hang_output, @target_substring) do
+      offending_lines =
+        hang_output
+        |> String.split("\n")
+        |> Enum.filter(&String.contains?(&1, @target_substring))
+        |> Enum.join("\n")
+
+      Mix.raise(
+        "mix letflow.check.test: FAILED -- \"#{@target_substring}\" warning found in the " <>
+          "isolated :wasm_hang run (ISS-0069's own class recurring):\n#{offending_lines}"
+      )
+    end
+
+    Mix.shell().info("mix letflow.check.test: OK -- isolated :wasm_hang run also passed clean.")
   end
 
   # Runs `cmd` as a subprocess via an OS-level Port so its combined

@@ -8716,7 +8716,7 @@ requirements:
   - id: REQ-172
     title: WASM host API 2/2 -- write path and the shared Lua/Wasm parity test suite (WASM-12 write half and its acceptance criterion)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 324  # letflow-queue task id
     description: >

@@ -2973,20 +2973,20 @@
             "requirement_ids": ["REQ-169"],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/engine/wasm/",
                 "test/letflow/engine/wasm/",
                 "priv/wasm_fixtures/"
             ],
             "lock_acquired_at": "2026-08-28T08:04:32Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 -- bookkeeping commit to main in progress",
+            "lock_released_at": "2026-08-28T09:26:31Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #690 squash-merged (afd1d94); queue task 321 released done cleanly",
             "backfilled": false,
             "queue_task_id": 321,
             "queue_agent_id": "orch-ai-dala",
-            "note": "WF-02 for REQ-169 (queue task 321, GH#621, stage S5). WASM fuel budget (WASM-09) and linear-memory cap (WASM-10) per invocation, paired since both configure the same wasmex objects: Wasmex.EngineConfig's :consume_fuel (default FALSE -- a config that forgets to enable it produces an unlimited guest with no error anywhere) and Wasmex.StoreLimits' memory_size/table_elements. Decision 0014's evidence for both was READ from documentation, not run -- if either doesn't behave as documented, that's a finding to record and report, not work around silently (mirroring this run's own REQ-165/166/167/168 live-verification discipline). Fuel must be per-invocation (reset between calls, not per-store, or invocation N starves invocation N+1). Both breaches must surface as errors distinguishable from each other and from REQ-170's separate wall-clock timeout. SECURITY-REVIEWER hard gate. Depends on REQ-168 (done). Queue claimed via get_next_task 2026-08-28T08:04:21Z."
+            "note": "WF-02 for REQ-169 (queue task 321, GH#621, stage S5). WASM fuel budget (WASM-09) and linear-memory cap (WASM-10) per invocation, paired since both configure the same wasmex objects. CODE-DESIGNER's live verification (decision 0014's own evidence was documentation-only, never run) found fuel metering behaves exactly as documented (a clean {:error,...} trap, never a crash/hang; NOT auto-reset between invocations -- a fresh arm_fuel/2 must precede every single call or the next one is starved) but found a genuine divergence for the memory cap: WASM-10's literal 'MUST TRAP' wording does not match reality -- memory.grow beyond StoreLimits.memory_size returns an ordinary success value (WASM's own -1 sentinel), never a trap, while the underlying security property (real memory physically cannot exceed the cap) is independently confirmed to hold. Design honestly documented this rather than fabricating a trap that doesn't exist. Implemented Letflow.Engine.Wasm.ResourceLimits (build_store/1 always enables consume_fuel; arm_fuel/2 must run immediately before every invocation; classify_call_result/1 distinguishes fuel-exhaustion/trap/ok; memory_grew_within_cap?/3 lets a caller confirm the cap held). No new Task.Supervisor (never calls Wasmex.start_link/1 itself). SECURITY-REVIEWER (verified at the Rust source level that trap strings cannot be guest-forged), REVIEWER (also corrected a stale WASM-10 claim in decision 0014 itself, moving it off the satisfiable-as-worded list onto the REQ-VALIDATOR watchlist, in the same edit), TEST-DESIGN-VALIDATOR, TEST-RUNNER (full suite 2366/2366), and RELEASE-VALIDATOR all independently passed clean. TEST-DESIGNER's mutation pass (9->12 tests) found and closed 2 real gaps (a loosened fuel-substring false-positive, an adversarially-satisfiable AC7 moduledoc test). Unblocks REQ-170 (wall-clock timeout) and beyond. Queue task 321 released done cleanly."
         }
     ]
 }

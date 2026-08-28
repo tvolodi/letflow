@@ -75,7 +75,24 @@ throughout this design line), not from hexdocs prose:
    any other invocation, concurrent or not, of any version.
 2. **`register/1`'s stage-2 instantiation proof already runs inside its own
    bounded `Task.Supervisor.async_nolink/2` task** (`module_registry.ex:224-251`)
-   — reused as-is; this design adds no second instantiation-proving path.
+   — reused as-is for the ABI-only, zero-import proof it actually performs.
+   Read directly from `module_registry.ex`'s own moduledoc (quoting
+   `req163-wasm-abi-choice.md` §4): stage 2 calls `Wasmex.start_link(%{bytes:
+   bytes})` with **no `imports:` option at all**, so "an instantiation
+   failure — including an unresolved import — is rejected identically to a
+   missing/malformed export: at registration, not first invocation."
+   Structurally, this means `register/1` alone can **never** succeed for any
+   module that imports so much as one host function — capability-requiring
+   or not, correctly manifested or not. **Revision (this rework):** §5 below
+   adds a SECOND, capability-aware instantiation-proving path, run inside
+   `register_version/3` itself (never inside `ModuleRegistry`, which stays
+   unmodified) and only reached when `register/1`'s own zero-import stage 2
+   is the specific thing that failed. This corrects this design's original
+   claim of "adds no second instantiation-proving path," which was the exact
+   gap TEST-DESIGNER's real acceptance test (commit f8ec561) surfaced: the
+   original claim was true of the code as originally specified, but the
+   original spec was wrong to assume `register/1` alone could ever validate
+   a capability-requiring module.
 3. **`CapabilityGate.build_import_table/2` is a pure function of
    `(manifest, execution_context)`** (`capability_gate.ex:334-353`) — no
    store, no module, no side effect, no read of any external "current"
@@ -105,12 +122,34 @@ version_status() :: :active | :superseded | :released
 
 version_entry() :: %{
   version_id: version_id(),
-  registered_module: ModuleRegistry.registered_module() | nil,  # nil once :released
-  manifest: CapabilityGate.manifest() | nil,                    # nil once :released
+  bytes: binary() | nil,                                        # nil once :released
+  manifest: CapabilityGate.manifest() | nil,                     # nil once :released
   ref_count: non_neg_integer(),
   monitors: %{reference() => pid()}   # in-flight checkouts holding this version
 }
+```
 
+**Revision (this rework) — why `bytes` replaces `ModuleRegistry.registered_module()`
+as the stored field.** The original data model stored `ModuleRegistry`'s own
+`@opaque registered_module()` struct (`%RegisteredModule{module:, bytes:}`),
+obtained only from `register/1`'s `{:ok, registered_module}` success branch.
+§5's fix means a capability-requiring version is validated by
+`register_version/3`'s OWN capability-aware proof (§5), not by `register/1`
+reaching its success branch — so no `registered_module()` value is ever
+produced for that version, and none can be constructed from outside
+`ModuleRegistry` (the type is `@opaque` precisely so external modules do not
+construct it; `RegisteredModule`'s `@enforce_keys` also make a
+field-by-field reconstruction brittle and a layering violation even where
+technically possible). Checking every use site in §4/§6: the ONLY field of
+`registered_module()` ever read anywhere in this design is `.bytes`
+(`Wasmex.start_link/1` takes raw bytes, never a compiled `Wasmex.Module.t()`
+— `.module` was carried in the data model but never actually used by
+anything in this design). Storing `bytes :: binary()` directly is therefore
+both sufficient and the only representation every registration path
+(capability-free via `register/1`, or capability-requiring via §5) can
+produce uniformly, without reaching into `ModuleRegistry`'s opaque internals.
+
+```
 module_state() :: %{
   current_version_id: version_id() | nil,
   versions: %{version_id() => version_entry()},
@@ -120,7 +159,7 @@ module_state() :: %{
 registry_state() :: %{optional(module_name()) => module_state()}
 ```
 
-`version_entry().registered_module`/`.manifest` are set to `nil` at the exact
+`version_entry().bytes`/`.manifest` are set to `nil` at the exact
 moment §6's release predicate fires — this is the "resource release" §8's
 tests assert the timing of. `ref_count`, `version_id`, and the entry's
 continued presence in `versions` are retained after release so
@@ -135,10 +174,30 @@ invocation — is a strict subset of `version_entry()`, copied by value:
 version_snapshot() :: %{
   module_name: module_name(),
   version_id: version_id(),
-  registered_module: ModuleRegistry.registered_module(),
+  bytes: binary(),
   manifest: CapabilityGate.manifest()
 }
+
+registration_error() ::
+  ModuleRegistry.registration_error()
+  # {:invalid_abi, [ModuleRegistry.export_defect()]}
+  # | {:compile_error, binary()}
+  # | {:instantiation_failed, ModuleRegistry.instantiation_defect()
+  #                          | CapabilityGate.instantiation_defect()}
 ```
+
+**New (this rework) — `registration_error()`.** §5's capability-aware proof
+(step 2) fails with the SAME `{:instantiation_failed, defect}` shape
+`ModuleRegistry.registration_error()` already declares — `defect` is
+`ModuleRegistry.instantiation_defect()` when it comes from step 1, or the
+structurally-identical `CapabilityGate.instantiation_defect()` when it comes
+from step 2 (both are `{:unresolved_import, ns, fn} | {:crashed, term()} |
+{:timeout, ms}` — the two modules maintain separate, deliberately-duplicated
+copies of this shape, §1/§4's own already-approved precedent). No new error
+variant is introduced and no caller of `register_version/3` needs to
+distinguish which step produced an `:instantiation_failed` — both mean the
+same thing to a caller: "this module, with this manifest, cannot be
+instantiated."
 
 Because Erlang/Elixir terms handed across a `GenServer.call/3` reply are
 copied (no shared mutable memory between the registry process and the
@@ -159,11 +218,29 @@ start_link(opts :: keyword()) :: GenServer.on_start()
 # supervised singleton, registered as Letflow.Engine.Wasm.ModuleVersionRegistry
 
 @spec register_version(module_name(), bytes :: binary(), CapabilityGate.manifest()) ::
-        {:ok, version_id()} | {:error, ModuleRegistry.registration_error()}
-# Stage 1/2 ABI validation (ModuleRegistry.register/1) runs in the CALLING
-# process (see §5) -- never inside this registry's own GenServer loop. Only
-# on {:ok, registered_module} does this function make one fast internal call
-# to commit the new version_entry() into registry_state(). Does not affect
+        {:ok, version_id()} | {:error, ModuleVersionRegistry.registration_error()}
+# Validation (§5, REVISED this rework) runs entirely in the CALLING process
+# -- never inside this registry's own GenServer loop, for the same
+# queueing-hazard reason §5 already gave for register/1 alone. It is now a
+# TWO-STEP validation, not a straight delegation to
+# ModuleRegistry.register/1:
+#   1. ModuleRegistry.register(bytes) -- reused verbatim, unmodified --
+#      always runs first. Its stage 1 (ABI/export shape, capability-
+#      agnostic) and its own stage 2 (zero-import instantiation proof) both
+#      still run exactly as ModuleRegistry implements them today.
+#   2. IF AND ONLY IF step 1 returns {:error, {:instantiation_failed, _}}
+#      (which, by register/1's own sequential `with`, can only happen once
+#      stage 1's ABI check has already passed cleanly -- see §1 fact 2),
+#      register_version/3 performs its OWN capability-aware instantiation
+#      proof (§5, new) using `manifest` -- because stage 1 having passed
+#      does not yet tell us whether `bytes` is genuinely broken or merely
+#      needs capabilities `manifest` grants. Step 2's success is treated as
+#      registration success; step 2's failure is what register_version/3
+#      returns.
+# {:ok, registered_module} from step 1, OR a successful step 2 proof, both
+# lead to the SAME next action: one fast internal call to commit the new
+# version_entry() (§2 -- storing `bytes` directly, not an opaque
+# ModuleRegistry struct) into registry_state(). Does not affect
 # current_version_id -- a brand-new module_name has no current version until
 # activate/2 is called explicitly; a brand-new version of an existing
 # module_name likewise stays inert until activated. No auto-activation of a
@@ -309,7 +386,7 @@ Steps 1-6, run inside that spawned task:
    increment that version's `ref_count`, `Process.monitor/1` the calling
    task's pid, record `{monitor_ref => task_pid}` in the entry's `monitors`
    map, and reply `{:ok, version_snapshot()}` (§2) — a value copy of that
-   version's `registered_module`/`manifest`, tagged with `monitor_ref` so
+   version's `bytes`/`manifest`, tagged with `monitor_ref` so
    the task can quote it back at release time.
    **This is the single instant an in-flight invocation's version is
    decided.** Nothing after this step ever consults `current_version_id`
@@ -317,7 +394,7 @@ Steps 1-6, run inside that spawned task:
 2. **Build the import table** — `CapabilityGate.build_import_table(snapshot.manifest,
    execution_context)`, a pure function (§1.3) of the *snapshot's* manifest,
    never of "whatever the manifest is now."
-3. **Instantiate** — `Wasmex.start_link(%{bytes: snapshot.registered_module.bytes,
+3. **Instantiate** — `Wasmex.start_link(%{bytes: snapshot.bytes,
    imports: table})`, run inside the same task (already itself inside a
    supervised, `async_nolink` task per decision 0014). On failure, classify
    via the identical `{unresolved_import, _, _} | {:crashed, _} | {:timeout, _}`
@@ -338,7 +415,7 @@ Steps 1-6, run inside that spawned task:
 
 **Why a concurrent `activate/2` cannot affect an invocation already past
 step 1:** `activate/2` only ever writes `module_state.current_version_id`
-and (via §6) a *different* version_entry's `registered_module`/`manifest`
+and (via §6) a *different* version_entry's `bytes`/`manifest`
 fields (the one being superseded, and only after it is safe to). It never
 touches the `version_entry` a live snapshot was already copied from except
 to eventually null it out — and by the time that nulling is legal (§6:
@@ -363,7 +440,10 @@ and the one task that owns it — the registry itself, and therefore
 `activate/2` for the same or any other module_name, is never even briefly
 delayed by it.
 
-## 5 — Why registration validation stays out of the registry's `GenServer` loop
+## 5 — Registration validation: why it stays out of the `GenServer` loop, and
+## the two-step fix for capability-requiring modules (REVISED this rework)
+
+### 5.1 — Why registration validation stays out of the registry's `GenServer` loop (unchanged)
 
 `ModuleRegistry.register/1` (unmodified) is itself bounded by an internal
 5-second `Task.yield/2` (`module_registry.ex:129,237-250`). If
@@ -373,23 +453,188 @@ delayed by it.
 an unrelated test assertion — would queue behind it for up to 5 seconds per
 registration. That would silently reintroduce exactly the "guest-adjacent
 work blocking bookkeeping" hazard §4's INV-MVR-1 is designed to rule out, via
-the *registration* path instead of the *invocation* path.
+the *registration* path instead of the *invocation* path. Everything in
+§5.2/§5.3 below inherits this constraint unchanged: it all runs in the
+**calling process**, never inside `ModuleVersionRegistry`'s own
+`handle_call/3`.
 
-`register_version/3` therefore runs `ModuleRegistry.register(bytes)` in the
-**calling process** (whatever process called `register_version/3` — an
-admin/dispatch-integration caller, or a test), and only on `{:ok,
-registered_module}` does it issue one fast `GenServer.call(ModuleVersionRegistry,
-{:commit_version, module_name, registered_module, manifest})` — assign the
-next `version_id` for that `module_name` (from `next_version_seq`), insert
-the new `version_entry()` (`ref_count: 0`, `monitors: %{}`), and reply
+### 5.2 — The defect this rework fixes, and why a straight delegation cannot work
+
+The design as originally gate-approved specified: run `ModuleRegistry.register(bytes)`
+in the calling process, and treat its `{:ok, registered_module}` /
+`{:error, _}` outcome as `register_version/3`'s own final outcome. TEST-
+DESIGNER's real acceptance test (`module_version_registry_test.exs`, commit
+f8ec561) proved this cannot work for a capability-requiring module: per §1
+fact 2, `register/1`'s stage 2 always instantiates with **no** `imports:`
+option at all, so it rejects `req173_v1_gated.wat`/`req173_v2_gated.wat` —
+this design's own §8.2 fixtures — with
+`{:error, {:instantiation_failed, {:unresolved_import, "env", "platform_call_service"}}}`
+/ `{..., "write_variable"}}` respectively, unconditionally, regardless of
+what `manifest` is passed to `register_version/3`. `ModuleRegistry` is
+correct to do this — WASM-06/req163 §4 deliberately make stage 2
+capability-agnostic, and `ModuleRegistry` was never meant to know about
+manifests (§0) — but it means `register_version/3` cannot treat `register/1`
+alone as sufficient validation for any module requiring a host capability.
+
+**Which of `register/1`'s two stages this fix still reuses verbatim, and
+which it supplements:**
+
+* **Stage 1 (`Wasmex.Module.compile/2` + `Wasmex.Module.exports/1` against
+  `@required_exports`)** — reused **fully verbatim, unmodified, inside
+  `register/1` itself**. This design does not call these functions
+  directly and does not duplicate `ModuleRegistry`'s ABI-defect-collection
+  logic anywhere. `ModuleRegistry` is not modified (§0's claim still holds
+  exactly as before).
+* **Stage 2 (zero-import instantiation proof)** — still reused verbatim
+  for what it actually proves (a *zero-import* module instantiates), but
+  **no longer treated as the final word** when it fails. `register/1`'s own
+  sequential `with` (`module_registry.ex:160-165`) guarantees stage 2 is
+  only ever reached once stage 1 already returned `:ok` — so
+  `{:error, {:instantiation_failed, defect}}` from `register/1` is,
+  structurally, proof that **stage 1 already passed**, whatever `defect`
+  turns out to be. §5.3 uses exactly this guarantee.
+
+### 5.3 — The fix: a supplemental, capability-aware proof, run only when needed
+
+`register_version/3`'s validation is now two steps, both in the calling
+process:
+
+**Step 1.** Call `ModuleRegistry.register(bytes)`, exactly as before.
+
+* `{:ok, _registered_module}` — the module has **zero** imports (that is
+  the only way stage 2's no-`imports:` instantiation can succeed) and both
+  stages passed. No further proof is needed or performed — proceed
+  directly to committing (below), using the caller-supplied `bytes`
+  (§2's revised `version_entry().bytes`; `_registered_module`'s `.module`
+  field is discarded, since nothing in this design ever reads it — see
+  §2's revision note). This is the common, capability-free path and it
+  costs exactly the one instantiation attempt it always cost.
+* `{:error, {:invalid_abi, _}}` or `{:error, {:compile_error, _}}` — a
+  genuine stage-1 defect, unrelated to capabilities. Return this error
+  unchanged, exactly as originally specified. No further proof is
+  attempted — a module that fails its export/signature shape is rejected
+  regardless of what manifest accompanies it.
+* `{:error, {:instantiation_failed, _defect}}` — stage 1 already passed
+  (§5.2's guarantee); stage 2's *zero-import* proof failed, which is
+  exactly what happens both for a capability-requiring module (expected,
+  and NOT a real defect) and for a module with a genuine
+  instantiation-time bug unrelated to imports (a real defect). These two
+  cases are indistinguishable from `register/1`'s own return value alone —
+  step 2 is what tells them apart.
+
+**Step 2 — the new capability-aware proof, entered only from step 1's third
+branch above.** Mirrors `CapabilityGate.start_instance/2`'s own pattern
+(`capability_gate.ex:447-470`), adapted for a throwaway proof rather than a
+handed-back live instance:
+
+1. `table = CapabilityGate.build_import_table(manifest)` — the version's
+   OWN manifest (the one passed to `register_version/3`, not some other
+   version's), via `build_import_table/1`'s existing empty-execution-
+   context arity: no real `execution_context` exists yet at registration
+   time (no invocation is in flight), so the empty sentinel
+   (`HostApi.empty_execution_context/0`) is the only sensible one — exactly
+   as `CapabilityGate`'s own moduledoc already documents `build_import_table/1`
+   doing for its own pre-existing "membership/instantiation success-or-
+   failure only" tests.
+2. Spawn `Task.Supervisor.async_nolink(Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor,
+   fn -> Wasmex.start_link(%{bytes: bytes, imports: table}) end)` — reusing
+   the SAME task supervisor §7 already adds for `invoke/4`'s dispatch tasks
+   (both are short-lived, calling-process-owned proof/dispatch tasks; no
+   third supervisor is added for this). This call happens in the calling
+   process, never inside `ModuleVersionRegistry`'s own `handle_call/3` —
+   consistent with §5.1.
+3. `Task.yield(task, @registration_instantiation_timeout_ms)`
+   (`@registration_instantiation_timeout_ms 5_000`, a module attribute,
+   matching `ModuleRegistry`/`CapabilityGate`'s own identical
+   `@instantiation_timeout_ms` constant value — mirrored, not shared,
+   per this design's established duplication precedent). Branch,
+   identically in shape to `ModuleRegistry.instantiate/2`
+   (`module_registry.ex:237-250`) and `CapabilityGate.start_instance/2`
+   (`capability_gate.ex:456-469`) — this is the SAME already-approved
+   "instantiation-proof" timeout-classification shape used twice already
+   in this codebase, not a new third kind of classification:
+   * `{:ok, {:ok, pid}}` — instantiation succeeded against the manifest's
+     grants. `GenServer.stop(pid)` **unconditionally**, immediately —
+     unlike `CapabilityGate.start_instance/2`, this proof never hands the
+     instance back to any caller (register_version/3 needs a PROOF, not a
+     live instance to invoke against — the handoff's own framing). Then
+     proceed to commit, below.
+   * `{:ok, {:error, reason}}` — return
+     `{:error, {:instantiation_failed, {:crashed, reason}}}` from
+     `register_version/3`.
+   * `{:exit, reason}` — classify via a private `classify_crash/1`
+     (duplicated verbatim in shape from `ModuleRegistry`'s/`CapabilityGate`'s
+     own, per §4/§1's already-cited "each module keeps its own private
+     crash classifier" precedent, `capability_gate.ex:196-206`): a reason
+     matching the unresolved-import pattern classifies as
+     `{:error, {:instantiation_failed, {:unresolved_import, ns, fn}}}`;
+     anything else as
+     `{:error, {:instantiation_failed, {:crashed, reason}}}`.
+   * `nil` — `Task.shutdown(task, :brutal_kill)`, then return
+     `{:error, {:instantiation_failed, {:timeout, @registration_instantiation_timeout_ms}}}`.
+
+**This is not a third timeout-classification path.** The handoff's concern
+was specifically about `invoke/4`'s own two-branch classifier (§4 — exit vs.
+`nil`, converging on `{:error, {:timeout, timeout_ms}}` for a LIVE guest
+call with an outer-margin/inner-bound asymmetry). Step 2 above does not
+touch `invoke/4` or its classifier at all — it is a wholly separate call
+site, in a different function, proving instantiability rather than bounding
+a live call. Its own timeout/crash handling is the SAME shape already used,
+twice, by `ModuleRegistry.instantiate/2` and `CapabilityGate.start_instance/2`
+— a third *occurrence* of one already-approved pattern, not a new pattern.
+
+**Commit (both step 1's first branch and step 2's success reach this):**
+`GenServer.call(ModuleVersionRegistry, {:commit_version, module_name, bytes, manifest})`
+— assign the next `version_id` for that `module_name` (from
+`next_version_seq`), insert the new `version_entry()` (`bytes: bytes,
+manifest: manifest, ref_count: 0, monitors: %{}`), and reply
 `{:ok, version_id}`. `{:commit_version, ...}` never calls `Wasmex` or
-`ModuleRegistry` itself — the validation already happened before this
-message was even sent.
+`ModuleRegistry`/`CapabilityGate` itself — all validation (step 1, and step
+2 when reached) already happened, in the calling process, before this
+message is even sent. This preserves §5.1's invariant exactly: nothing
+inside `ModuleVersionRegistry`'s own `handle_call/3` ever runs guest code,
+whether the version being registered needed a capability or not.
+
+### 5.4 — Trace: does this actually let `req173_v1_gated.wat` register?
+
+Concretely, for `register_version(module_name, req173_v1_gated_bytes,
+%{capabilities: ["service:call"]})`:
+
+1. `ModuleRegistry.register(bytes)` — stage 1: the fixture declares all
+   five required exports plus `memory` (confirmed directly in
+   `priv/wasm_fixtures/req173_v1_gated.wat`'s own source), so stage 1
+   returns `:ok`. Stage 2: `Wasmex.start_link(%{bytes: bytes})` with no
+   imports — the module imports `env.platform_call_service`, which cannot
+   resolve against an empty import table, so instantiation crashes with the
+   live-verified `"unknown import: \`env::platform_call_service\` has not
+   been defined"` message (§1.5 of `req166`, reused), classified as
+   `{:error, {:instantiation_failed, {:unresolved_import, "env",
+   "platform_call_service"}}}`.
+2. Per §5.3, this is step 1's third branch — proceed to step 2.
+   `CapabilityGate.build_import_table(%{capabilities: ["service:call"]})`
+   installs exactly the rows whose `capability` is `:none` or
+   `"service:call"` — per `@known_imports` (`capability_gate.ex:237-294`),
+   that includes `env.platform_call_service` (capability `"service:call"`)
+   plus the two `:none` rows (`now`, `uuid`, `fail`... `fail`'s capability
+   is also `:none` — all three `:none` rows are always included). The
+   resulting table has an `"env"` key containing `"platform_call_service"`.
+3. `Wasmex.start_link(%{bytes: bytes, imports: table})` — the module's only
+   import, `env.platform_call_service`, now resolves against the table
+   built in step 2. Instantiation succeeds: `{:ok, pid}`.
+4. `GenServer.stop(pid)` — the proving instance is stopped, never handed
+   back.
+5. Commit: `{:commit_version, module_name, bytes, %{capabilities:
+   ["service:call"]}}` → `{:ok, v1_id}`.
+
+`register_version/3` returns `{:ok, v1_id}`. The same trace, with
+`env.write_variable`/`"var:write"` substituted, holds for
+`req173_v2_gated.wat`. Both of this design's own §8.2 fixtures — the actual
+point of the handoff's fix requirement — register successfully.
 
 ## 6 — Reference counting and the release predicate
 
 **Release predicate**, checked at exactly two trigger points and nowhere
-else: *a version_entry's `registered_module`/`manifest` are set to `nil`
+else: *a version_entry's `bytes`/`manifest` are set to `nil`
 (and its status becomes `:released`) the instant both of the following are
 simultaneously true: (a) it is not `module_state.current_version_id`, and
 (b) its `ref_count` is `0`.*
@@ -474,6 +719,26 @@ successful return) ended the task, since it turns only on whether an
 explicit `release` message was ever sent for that `monitor_ref` before the
 task's process died — never on why the process died.
 
+**New (this rework) — why §5.3's registration-time proof task needs none of
+this machinery.** §5.3's capability-aware proof task never calls
+`{:checkout, _}`, is never `Process.monitor/1`'d by the registry, never
+increments any `ref_count`, and never holds a `version_snapshot()` — the
+version being proven has not been committed yet at all when this task runs
+(commit happens strictly after the proof, §5.3's last paragraph). There is
+therefore nothing for it to leak: if this task crashes or is
+`Task.shutdown(:brutal_kill)`'d by its own `Task.yield/2` timeout (§5.3 step
+3's `nil` branch), `register_version/3` simply returns an error and no
+`version_entry()` was ever created — no `ref_count` exists yet to leave
+stranded, and no monitor was ever set up to clean up. This is the same
+reason `ModuleRegistry.register/1`'s own pre-existing stage-2 proof task
+(reused verbatim, §5.2) never needed this net either: a proof-only
+instantiation, stopped unconditionally on its own success path and never
+surviving past `register/1`'s/`register_version/3`'s return, has no
+crash-safety story to tell beyond "the caller gets an error tuple." §6's
+crash-safety net exists specifically for `invoke/4`'s task, which DOES hold
+a live checkout across steps 2-5 (§4) — §5.3's task never reaches that
+state.
+
 ## 7 — New supervision additions (`lib/letflow/application.ex`)
 
 Two new children, added after `CapabilityGateTaskSupervisor` following the
@@ -491,6 +756,19 @@ registry being a stable, long-lived name that tasks call into, not the other
 way around, so ordering between these two specific children is not
 load-bearing, unlike the `SandboxPool`/`SandboxPool.TaskSupervisor` pair —
 this note exists so ELIXIR-DEV does not assume it is).
+
+**New (this rework) — one task supervisor, two call sites.**
+`ModuleVersionRegistryTaskSupervisor` now hosts BOTH `invoke/4`'s dispatch
+tasks (§4) and `register_version/3`'s §5.3 capability-aware proof tasks — no
+third `Task.Supervisor` is added for the latter. Both are short-lived,
+calling-process-owned tasks (never owned by `ModuleVersionRegistry`'s own
+`GenServer` process), so sharing one supervisor is the same choice
+`ModuleRegistryTaskSupervisor` and `CapabilityGateTaskSupervisor` already
+each make for their own single call site — this design simply has two call
+sites feeding one supervisor instead of one each, which changes nothing
+about isolation: a `Task.Supervisor` does not serialize or otherwise couple
+the tasks it starts, each is an independent linked-to-the-supervisor
+process.
 
 ## 8 — Test design: the overlapping-activation scenario
 
@@ -677,5 +955,6 @@ will need; nothing here should need to change for REQ-174 to use them.
 | Invocation started AFTER activation observes the NEW version | §8.4 step 9 |
 | Two versions observably different in output | §8.2 (three independent differences), §8.4 step 13 |
 | Prior version's resources released only after its last in-flight invocation, not at activation | §6 (predicate + two trigger points), §8.4 steps 8, 12 |
-| New manifest declares a different capability set; old invocation keeps old set, new gets new set | §5's manifest-immutability-per-version, §6, §8.3, §8.4 steps 9, 11, 14 |
+| New manifest declares a different capability set; old invocation keeps old set, new gets new set | §5.3's manifest-immutability-per-version, §6, §8.3, §8.4 steps 9, 11, 14 |
 | `mix test` / `mix compile --warnings-as-errors` pass with real output quoted | ELIXIR-DEV's implementation step; not applicable to this design artefact itself |
+| A module requiring at least one host capability can be successfully registered via `register_version/3` | §5.2 (why a straight delegation fails), §5.3 (the two-step fix), §5.4 (live trace for both §8.2 fixtures) |

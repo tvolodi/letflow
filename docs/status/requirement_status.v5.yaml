@@ -1019,3 +1019,18 @@ history:
       Status flipped pending -> done in docs/requirements.yaml. `grep -c
       "^  - req:" docs/status/requirement_status.v5.yaml` = 40 on-disk
       entries before this append; 41 after.
+  - req: REQ-168
+    event: started
+    agent: ORCH
+    at: "2026-08-28T06:37:33Z"
+    note: >
+      WF02-REQ168-20260828 started (queue task 320, GH#620, stage S5).
+      Claimed via get_next_task after REQ-167's completion. WASM linear
+      memory isolation and host-side validation of every guest
+      pointer/length pair (WASM-08) -- the entry on decision 0014's
+      satisfiable list with the highest cost if wrong, since under
+      wasmex/Wasmtime an unvalidated guest pointer dereference is a
+      BEAM-node-level fault, not a request-level one. A single validation
+      function every future host function (REQ-171/172) will consume,
+      written once here before those requirements exist. SECURITY-REVIEWER
+      hard gate. Depends on REQ-166 (done).

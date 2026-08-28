@@ -2945,6 +2945,27 @@
             "queue_task_id": 319,
             "queue_agent_id": "orch-ai-dala",
             "note": "WF-02 for REQ-167 (queue task 319, GH#619, stage S5). WASM import whitelist derived from the module manifest (WASM-06): built Letflow.Engine.Wasm.CapabilityGate.build_import_table/1 as a genuine filter-then-group whitelist (never allow-everything-then-remove), and start_instance/2 instantiates a guest against exactly that table inside a new dedicated CapabilityGateTaskSupervisor, with instantiation genuinely FAILING (not a present-but-erroring import) on anything outside the whitelist. Also restated WASM-07 (no filesystem access by default): the literal wasi:filesystem/types acceptance-criterion name is a WASI Preview 2 component-model interface name that does not apply under REQ-163's chosen core-modules ABI, so denial is asserted instead against req163's own named surface (wasi_snapshot_preview1/path_open, live-verified) -- the moduledoc states this explicitly and states plainly that no filesystem-grant path exists today. Design passed CODE-DESIGN-VALIDATOR clean on first attempt (no rework, unlike REQ-165/166's prior WASM designs) after live-verifying every wasmex behavioral claim against the real installed dependency. SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER (full suite 2336/2336), and RELEASE-VALIDATOR all independently passed clean. TEST-DESIGNER's mutation pass (16->18 tests) found and closed 2 real gaps (empty-manifest exact-%{}-shape, post-instantiation pid-liveness) and confirmed a security-critical negative finding (a hardcoded wasi: true regression is already caught by the existing specific-tuple assertions). PR #688's first CI run failed fast on mix format --check-formatted (two long assert lines) -- a check no gate in this pipeline runs directly (only mix test/mix compile were run locally); fixed with a plain mix format pass and documented as a new anti-pattern entry (mix test passing does not imply mix format --check-formatted will pass in CI). Unblocks REQ-168 onward (resource limits, host API, versioning). Queue task 319 released done cleanly."
+        },
+        {
+            "run_id": "WF02-REQ168-20260828",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-168"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/wasm/",
+                "test/letflow/engine/wasm/",
+                "priv/wasm_fixtures/"
+            ],
+            "lock_acquired_at": "2026-08-28T06:37:33Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 -- bookkeeping commit to main in progress",
+            "backfilled": false,
+            "queue_task_id": 320,
+            "queue_agent_id": "orch-ai-dala",
+            "note": "WF-02 for REQ-168 (queue task 320, GH#620, stage S5). WASM linear memory isolation and host-side validation of every guest pointer/length pair (WASM-08) -- the entry on decision 0014's satisfiable list with the highest cost if wrong: under wasmex/Wasmtime, an unvalidated guest pointer/length dereference is a BEAM-node-level fault (crashes the whole node), not merely a request-level error. Scope: a single validation function bounds-checking (offset, length) against the instance's real linear memory size, rejecting out-of-range offsets, over-length reads, and offset+length integer-overflow wraparound, surfacing a malformed pair as a structured error outcome never an exception/exit/native fault; per-instance memory isolation asserted directly (one instance cannot observe another's memory); moduledoc must honestly disclose this bounds host-side dereferences only, not a fault inside Wasmtime's own native code (mirroring REQ-165's own disclosed residual class). Written once here, before REQ-171/172 (host API) exist, so every host function they build consumes this validator rather than each writing its own. SECURITY-REVIEWER hard gate. Depends on REQ-166 (done). Queue claimed via get_next_task 2026-08-28T06:37:10Z."
         }
     ]
 }

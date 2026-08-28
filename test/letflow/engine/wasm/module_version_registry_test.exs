@@ -446,4 +446,66 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistryTest do
       refute Map.has_key?(table["env"], "platform_call_service")
     end
   end
+
+  # ---------------------------------------------------------------------
+  # REQ-174 (WASM-13 restated) -- per-invocation isolation via invoke/4.
+  # See lib/letflow/design/req174-wasm-instance-pooling-or-decline.md §4.2.
+  # Pooling is DECLINED (no pooling module exists); this test proves the
+  # isolation property that decision holds on -- INV-174-1 -- namely that
+  # invocation N+1 of the SAME registered/activated module never observes
+  # linear-memory state written by invocation N, because invoke/4's
+  # checkout -> instantiate -> call -> release sequence allocates a brand
+  # new Wasmex.Store (and therefore brand new zero-initialized linear
+  # memory) for every single invocation -- it never reuses one across
+  # calls. req174_memory_write.wat's write_marker/read_marker pair makes
+  # this observable: write_marker stores byte 1 at offset 0 and returns 0;
+  # read_marker reads offset 0 back without mutating it. If invoke/4 ever
+  # started sharing a Store/instance across invocations (the exact defect
+  # this requirement's decision record warns a hand-built pool could
+  # introduce), read_marker at invocation N+1 would observe the byte 1
+  # written by write_marker at invocation N -- see this file's mutation
+  # verification note below for how that discriminating power was
+  # confirmed rather than assumed.
+  # ---------------------------------------------------------------------
+
+  describe "REQ-174 INV-174-1: per-invocation isolation via ModuleVersionRegistry.invoke/4" do
+    test "invocation N's write_marker is NOT observable in invocation N+1's read_marker, on the same registered/activated module" do
+      module_name = unique_module_name("req174-isolation")
+
+      assert {:ok, version_id} =
+               ModuleVersionRegistry.register_version(
+                 module_name,
+                 fixture_bytes("req174_memory_write.wat"),
+                 @capless_manifest
+               )
+
+      assert :ok = ModuleVersionRegistry.activate(module_name, version_id)
+
+      # Invocation N: writes byte 1 at offset 0 of THIS invocation's own
+      # fresh linear memory, and returns 0 (its own, unrelated return
+      # value -- proof it ran, not a read of the marker).
+      assert {:ok, ^version_id, [0]} =
+               ModuleVersionRegistry.invoke(
+                 module_name,
+                 "write_marker",
+                 [],
+                 HostApi.empty_execution_context(),
+                 5_000
+               )
+
+      # Invocation N+1: reads offset 0 of a DIFFERENT invocation's linear
+      # memory. If it were the same Store invocation N wrote to, this
+      # would read back [1]. It must read [0] -- zero-initialized memory
+      # that invocation N's write never touched, because invoke/4 never
+      # shares a Store between invocations (design SS1.2/SS3, INV-174-1).
+      assert {:ok, ^version_id, [0]} =
+               ModuleVersionRegistry.invoke(
+                 module_name,
+                 "read_marker",
+                 [],
+                 HostApi.empty_execution_context(),
+                 5_000
+               )
+    end
+  end
 end

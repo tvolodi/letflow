@@ -202,6 +202,33 @@ start_link(opts :: keyword()) :: GenServer.on_start()
 # CapabilityGate's own moduledocs already scope it). It DOES exercise the
 # real checkout/instantiate/call/release sequence end to end, which is the
 # part WASM-14 is actually about.
+#
+# `invoke/4` itself -- the calling process, not the spawned task, and not
+# ModuleVersionRegistry's own GenServer loop -- is the process that calls
+# Task.yield/2 on the task it spawns (§4's opening paragraph: "run inside a
+# Task.Supervisor.async_nolink/2 task"). This mirrors, without reusing the
+# code of, PluginInterface.invoke/2,3's own two-layer dispatch
+# (async_nolink -> Task.yield/2 -> Task.shutdown(:brutal_kill)), per
+# decision 0014 lines ~325-327 ("the process boundary decision (2)
+# requires for WASM"). `invoke/4` is therefore itself a synchronous
+# function: it spawns the task, blocks on Task.yield/2, and returns the
+# classified result -- it does not hand a Task back to its own caller the
+# way PluginInterface's internal task is never exposed either.
+#
+# `timeout_ms` (this function's own parameter) is the INNER bound -- it is
+# exactly the value threaded into step 4's `Wasmex.call_function(pid,
+# export, args, timeout_ms)`, matching how PluginHandler.call_export/3
+# already uses its own `timeout_ms` (REQ-170/172, plugin_handler.ex:178-
+# 181). The OUTER bound `invoke/4` passes to `Task.yield/2` is a strictly
+# LARGER, internally-computed value, `timeout_ms + @outer_yield_margin_ms`
+# (`@outer_yield_margin_ms 2_000`, a module attribute -- no new public
+# parameter). This mirrors, structurally, the real asymmetry already live
+# in production between PluginInterface's own outer default (30_000ms,
+# plugin_interface.ex:145) and PluginHandler's own inner default (5_000ms,
+# plugin_handler.ex:74) -- outer is always meant to be larger than inner,
+# it is just derived here from the one caller-supplied value instead of
+# configured as two independent defaults, since invoke/4 exposes only one
+# timeout_ms parameter (§3's own signature, unchanged by this fix).
 ```
 
 `checkout/1` and `release/2` are internal (not part of the public API — see
@@ -211,9 +238,69 @@ net covers the one way that could otherwise happen).
 
 ## 4 — The concurrency mechanism: capture-and-hold, immune to concurrent activation
 
-`invoke/4`'s algorithm, run inside a `Task.Supervisor.async_nolink/2` task
-under a new `Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor` (§7 —
-per decision 0014 (2), no guest invocation is ever dispatched inline):
+`invoke/4`'s own body, before anything else, does exactly what
+`PluginInterface.invoke/2,3` does (mirrored, not shared code — §0/§3):
+
+* spawn steps 1-6 below as the body of one
+  `Task.Supervisor.async_nolink(Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor,
+  fn -> ... end)` call (§7 — per decision 0014 (2), no guest invocation is
+  ever dispatched inline);
+* call `Task.yield(task, timeout_ms + @outer_yield_margin_ms)` — this call
+  runs in `invoke/4`'s own process, i.e. `invoke/4` blocks synchronously on
+  its own spawned task, exactly as `PluginInterface.invoke/2,3` blocks on
+  its (§3);
+* branch on that `Task.yield/2` result exactly as follows, producing
+  `invoke/4`'s declared return shape (§3) on every branch:
+
+  * `{:ok, result}` — the task ran steps 1-6 to completion (including
+    step 6's explicit `release`) and returned `result` normally; `invoke/4`
+    returns `result` unchanged. `result` is already one of `invoke/4`'s
+    declared `{:ok, version_id, [integer()]} | {:error, {:unknown_module,
+    _}} | {:error, {:no_active_version, _}} | {:error,
+    {:instantiation_denied, _}} | {:error, {:call_failed, _}}` shapes —
+    steps 1-3 already classify their own failures into these tuples rather
+    than raising (§4 steps 1, 3).
+  * `{:exit, reason}` — the task crashed before returning a value, most
+    commonly because step 4's `Wasmex.call_function(pid, export, args,
+    timeout_ms)` is an ordinary `GenServer.call/3` under the hood and its
+    own client-side timeout (`timeout_ms`, the INNER bound) fired first,
+    crashing the calling task with an exit of shape `{:timeout,
+    {GenServer, :call, _}}` — this is the exact shape
+    `Letflow.Engine.Wasm.CallTimeout`'s moduledoc documents as the
+    dominant, live-verified timeout path for this same
+    `Wasmex.call_function/4` client-side mechanism (call_timeout.ex:36-44,
+    142-149: "THIS is the value that actually, deterministically bounds
+    how long a caller waits"). `invoke/4` pattern-matches the exit reason
+    with a private classifier: a reason matching `{:timeout, {GenServer,
+    :call, _}}` classifies as `{:error, {:timeout, timeout_ms}}` (note:
+    the function's own, un-padded `timeout_ms` parameter is what is
+    reported, never the padded outer value — the outer padding is
+    invisible to `invoke/4`'s caller); any other exit reason (a genuine
+    bug in steps 1-6, or an uncaught exception) classifies as `{:error,
+    {:call_failed, reason}}`. This is the same "duplicate a private crash
+    classifier per module" precedent §4 step 3 already cites
+    (`capability_gate.ex:196-206`), applied here to task-exit reasons
+    instead of instantiation failures.
+  * `nil` — the task neither returned nor crashed within
+    `timeout_ms + @outer_yield_margin_ms`; this is the genuinely-hung case
+    (step 3's `Wasmex.start_link/1` or step 4's guest execution parked
+    with no cooperating timeout of its own — the scenario decision 0014's
+    outer `Task.yield/2` bound exists to backstop). `invoke/4` calls
+    `Task.shutdown(task, :brutal_kill)` — identical to
+    `PluginInterface.invoke/2,3`'s own `nil` clause
+    (`plugin_interface.ex:221-224`) — then returns `{:error, {:timeout,
+    timeout_ms}}` (again the un-padded value).
+
+  Both crash/timeout branches above therefore converge on the SAME
+  declared return shape, `{:error, {:timeout, timeout_ms}}`, exactly
+  mirroring how `Letflow.Engine.Wasm.CallTimeout.classify/1` folds
+  PluginInterface's own `{:exit, reason}` and `nil` clauses into the one
+  `:wall_clock_timeout` classification (call_timeout.ex:108-120) — this
+  design does not invent a third outcome shape for what is, from
+  `invoke/4`'s caller's point of view, the same guarantee: the wait was
+  bounded, once, at `timeout_ms`.
+
+Steps 1-6, run inside that spawned task:
 
 1. **Checkout** — `GenServer.call(ModuleVersionRegistry, {:checkout, module_name})`,
    issued from the task process. Inside the registry's `handle_call/3`:
@@ -322,35 +409,70 @@ call. This is the "nothing to wait for" case, and it is why the predicate is
 stated once and applied at both trigger points rather than being two
 different rules.
 
-**Crash-safety net (why `ref_count` cannot leak forever).** Step 6 requires
-release to run on every path out of `invoke/4`'s task, including failure —
-but a task killed by `Task.shutdown(task, :brutal_kill)` (the outcome of
-`Task.yield/2` timing out, per the process-boundary pattern decision 0014
-mandates for every WASM invocation) is killed with **no** opportunity to run
-its own cleanup code, so step 6's explicit `release` call would never fire
-for a genuinely-hung guest — the checkout hazard §4 exists precisely to
-survive one of. This is the same "leaked, not degraded" class of hazard
-decision 0014's correction to reasoning (a)(ii)/(iii) and REQ-170 already
-found and accepted for the underlying native execution; this design does
-**not** re-litigate that (a leaked native computation stays leaked exactly
-as REQ-170 found — orthogonal to this registry's own bookkeeping), but it
-must not ALSO leak the registry-side `ref_count`, because that bookkeeping
-leak is fully within this design's control and would make WASM-14's own
-"released only after the last in-flight invocation completes" promise false
-in exactly the timeout case it most needs to hold for.
+**Crash-safety net (why `ref_count` cannot leak forever) — both timeout/crash
+paths, not just one.** Step 6 requires release to run on every path out of
+`invoke/4`'s task, including failure. §4's revised opening now names TWO
+genuinely different ways the task can fail to reach step 6 on its own:
 
-The `Process.monitor/1` set up at checkout time (§4 step 1) is this net: if
-the monitored task pid dies for **any** reason — normal return without
-having called `release` (a caller bug), an uncaught exception, or a
-`:brutal_kill` — the registry's `handle_info({:DOWN, monitor_ref, :process,
-_pid, _reason}, state)` clause performs the identical decrement-and-check-
-predicate logic §4 step 6 performs explicitly, keyed off the same
-`monitor_ref` (looked up in the owning version_entry's `monitors` map, then
-removed). An explicit `release` call first calls `Process.demonitor(ref,
+1. **Inner path — the task crashes itself.** Step 4's
+   `Wasmex.call_function/4` GenServer.call times out at `timeout_ms` and
+   exits the task with `{:timeout, {GenServer, :call, _}}` (§4, live-
+   verified as the dominant path per `CallTimeout`'s moduledoc). The task
+   process terminates on its own here — it is not killed from outside —
+   but it terminates via an uncaught `exit`, skipping every subsequent
+   line of its own function body, including step 6's explicit `release`
+   call.
+2. **Outer path — `invoke/4` kills the task.** `Task.yield/2`'s
+   `timeout_ms + @outer_yield_margin_ms` bound elapses with the task still
+   running (a genuinely-hung guest, or instantiation itself hung), and
+   `invoke/4` calls `Task.shutdown(task, :brutal_kill)` (§4's `nil`
+   branch). The task is killed with **no** opportunity to run its own
+   cleanup code, so step 6's explicit `release` call cannot fire here
+   either.
+
+Both are the same class of hazard: the checkout hazard §4 exists precisely
+to survive is "the task holding a checked-out version_snapshot() dies
+before calling release," and it does not matter to the registry WHICH of
+the two paths above caused that death. This is the same "leaked, not
+degraded" class of hazard decision 0014's correction to reasoning
+(a)(ii)/(iii) and REQ-170 already found and accepted for the underlying
+native execution; this design does **not** re-litigate that (a leaked
+native computation stays leaked exactly as REQ-170 found — orthogonal to
+this registry's own bookkeeping, and equally true whether the leak came
+from path 1 or path 2 above), but it must not ALSO leak the registry-side
+`ref_count`, because that bookkeeping leak is fully within this design's
+control and would make WASM-14's own "released only after the last
+in-flight invocation completes" promise false in exactly the timeout case
+it most needs to hold for.
+
+The `Process.monitor/1` set up at checkout time (§4 step 1) is this net,
+and it covers BOTH paths identically because it is keyed off the task
+*process dying*, not off any particular cause of death: whether the
+monitored task pid terminates via path 1's uncaught `exit` (a normal BEAM
+process termination, monitored the same as any other) or path 2's
+`Process.exit(pid, :kill)` (what `Task.shutdown(task, :brutal_kill)`
+performs under the hood), the registry's `handle_info({:DOWN, monitor_ref,
+:process, _pid, _reason}, state)` clause fires either way — `:DOWN` messages
+are generated by the BEAM for *any* reason a monitored process terminates,
+including `:killed`, an ordinary `exit(reason)`, or a normal return — and
+performs the identical decrement-and-check-predicate logic §4 step 6
+performs explicitly, keyed off the same `monitor_ref` (looked up in the
+owning version_entry's `monitors` map, then removed). Concretely: path 1's
+task dies with reason `{:timeout, {GenServer, :call, _}}`, path 2's task
+dies with reason `:killed` — both are merely the `_reason` field of the
+same `:DOWN` tuple shape, and the handler does not pattern-match on
+`_reason` at all, only on the fact that a monitored pid died. So the
+ref-count-release argument holds identically for both.
+
+An explicit `release` call first calls `Process.demonitor(ref,
 [:flush])` specifically so a normal release does not also trigger a
 redundant `:DOWN` decrement — release and the `:DOWN` handler are mutually
 exclusive for a given `monitor_ref`, by construction (one or the other
 fires, never both), so `ref_count` cannot be double-decremented either.
+This mutual exclusion is unaffected by which of path 1/path 2 (or a normal
+successful return) ended the task, since it turns only on whether an
+explicit `release` message was ever sent for that `monitor_ref` before the
+task's process died — never on why the process died.
 
 ## 7 — New supervision additions (`lib/letflow/application.ex`)
 

@@ -1092,3 +1092,50 @@ history:
       documented, that's a finding to record, not work around silently.
       Fuel must be per-invocation (reset between calls, not per-store).
       SECURITY-REVIEWER hard gate. Depends on REQ-168 (done).
+
+  - req: REQ-169
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-28T09:15:56Z"
+    note: >
+      WF02-REQ169-20260828 complete (RELEASE-VALIDATOR Step 5 PASS, commit
+      57148c8). WASM fuel budget (WASM-09) and linear-memory cap (WASM-10) per
+      invocation implemented in lib/letflow/engine/wasm/resource_limits.ex:
+      build_store/1 enables Wasmex.EngineConfig's :consume_fuel: true
+      explicitly (default is false), arm_fuel/2 resets a configurable
+      per-invocation fuel budget between calls (not per-store), and
+      StoreLimits' memory_size caps linear memory per instance, both
+      configurable rather than hardcoded. Live-verified WASM-10 divergence:
+      memory.grow beyond the configured cap does NOT trap as decision 0014
+      had assumed from documentation alone -- it returns an ordinary
+      {:ok, [-1]} success -- but real memory size is provably unchanged
+      (memory_grew_within_cap?/3), so the underlying security property still
+      holds even though the literal "traps cleanly" wording does not.
+      Disclosed, not worked around silently: moduledoc states the divergence
+      by name, and REVIEWER's Step 2d review corrected
+      docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md to
+      move WASM-10 from the "satisfiable substantially as worded" list into
+      the "NOT satisfiable as literally worded" section and add it to the
+      REQ-VALIDATOR watchlist -- independently cross-checked by
+      RELEASE-VALIDATOR against the shipped moduledoc and confirmed a
+      genuine, accurate correction, not scope creep. Fuel exhaustion,
+      ordinary traps, and REQ-170's future wall-clock timeout are
+      distinguishable by pattern match via classify_call_result/1. mix test
+      test/letflow/engine/wasm/: 78 passed, 0 failures (2 pre-existing
+      module_registry_test.exs warnings, unrelated). mix compile
+      --warnings-as-errors --force: clean recompile of 134 files, 0 warnings.
+      Scope confirmed via git diff --stat main...HEAD: only
+      resource_limits.ex (new), its test file (new), 3 new
+      priv/wasm_fixtures/req169_*.wat fixtures, the design doc and test spec
+      (new), 8 handoff JSONs, and the decision-0014 correction above --
+      module_registry.ex, capability_gate.ex, plugin_handler.ex,
+      memory_guard.ex, and application.ex all confirmed byte-identical to
+      main. No other REQ-169 reference found under docs/migration/ needing a
+      companion update. Passed design, SECURITY-REVIEWER (hard gate),
+      REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, and
+      RELEASE-VALIDATOR (Step 5 independent re-verification of all 8 real
+      acceptance criteria against shipped code and freshly re-run
+      test/compile output). Status flipped pending -> done in
+      docs/requirements.yaml. `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 44 on-disk entries before
+      this append; 45 after.

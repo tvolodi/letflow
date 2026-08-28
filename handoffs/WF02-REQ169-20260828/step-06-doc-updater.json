@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step06-WF02-REQ169-20260828",
+  "run_id": "WF02-REQ169-20260828",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ169-20260828/step-06-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-169"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ169-20260828/step-05-release-validator.json"
+    ],
+    "branch_name": "feature/WF02-REQ169-20260828",
+    "commit": "57148c8"
+  },
+  "task": {
+    "description": "DOC-UPDATER pass (WF-02 Step 6) for REQ-169 (queue task 321, GH#621). RELEASE-VALIDATOR independently passed Step 5 -- see handoffs/WF02-REQ169-20260828/step-05-release-validator.json for full detail. Flip REQ-169's status to done in docs/requirements.yaml, and append the required status-history event.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml: REQ-169's status field flipped from pending to done.",
+      "Append a 'done' event to the current run-history volume (find it via docs/status/requirement_status.index.yaml) with a real UTC timestamp from the clock (not memory) -- REQ-169, run WF02-REQ169-20260828.",
+      "Keep docs/status/requirement_status.index.yaml's volume count in lockstep with the append.",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md was already corrected by REVIEWER in Step 2d (WASM-10's satisfiability status) -- no further doc update needed there, but check docs/migration/ for any OTHER REQ-169 reference first, per usual.",
+      "Commit the doc updates to the feature branch (do not push yet -- ORCH handles Step Final).",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "REQ-169 status flipped pending -> done in docs/requirements.yaml. Appended a done-event to the current run-history volume (docs/status/requirement_status.v5.yaml), sourcing the timestamp from `date -u` (2026-08-28T09:15:56Z). docs/status/requirement_status.index.yaml's volume-5 entries count updated 44 -> 45 with a lockstep note; git diff --numstat confirmed insertions-only (47 lines added, 0 deleted) on the volume file, and the post-append size (1141 lines / 63568 bytes) stays well under the 1200-line/120000-byte roll ceiling, so no roll was needed. Checked docs/migration/ for other REQ-169 references beyond decision 0014 (already corrected by REVIEWER in Step 2d) via `grep -rln REQ-169 docs/migration/` -- only that one file matched, no further doc update needed. mix letflow.lint_handoffs run clean.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ169-20260828/step-06-doc-updater.json"
+    ]
+  }
+}

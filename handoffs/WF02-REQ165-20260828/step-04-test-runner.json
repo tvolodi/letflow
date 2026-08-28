@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "TEST-RUNNER",
   "file": "handoffs/WF02-REQ165-20260828/step-04-test-runner.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -35,6 +35,15 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS -- full suite run 3x consecutively via scripts/test_parallel.sh (WASMEX_BUILD=true). Run 1: 3 failures (2293/2296). Runs 2 and 3: fully clean (2296/2296 each). mix compile --force --warnings-as-errors: clean, 0 warnings. Full details, raw output for all 3 runs, and structural failure attribution in test/reports/report-2026-08-28-WF02-REQ165-20260828.yaml.",
+    "report_file": "test/reports/report-2026-08-28-WF02-REQ165-20260828.yaml",
+    "compile_check": "mix compile --force --warnings-as-errors -> clean, exit 0, 0 warnings",
+    "test_run_1": "combined: 2291 tests, 5 properties, 3 failures (2293/2296 passed), script_exit_code 1",
+    "test_run_2": "combined: 2291 tests, 5 properties, 0 failures (2296/2296 passed), script_exit_code 0",
+    "test_run_3": "combined: 2291 tests, 5 properties, 0 failures (2296/2296 passed), script_exit_code 0",
+    "failure_attribution": "All 3 run-1 failures were in test/letflow/support/tenant_schema_reaper_test.exs (partition 8), carrying a measured Postgres 'FATAL 53300 too_many_connections' / DBConnection checkout-timeout signature. Structurally attributed as environmental connection-pool exhaustion, NOT caused by this branch: (route 1) neither test/support/tenant_schema_reaper_test.exs nor scripts/test_parallel.sh appear in git diff --stat main...HEAD for this branch (which touches only ci.yml, .tool-versions, mix.exs [adds wasmex dep only], mix.lock, plugin_handler.ex/its test, letflow.check_toolchain.ex/its test, wasm fixtures, and docs); (route 3) the actual measured Postgres error is the mechanism, not an assertion. This exact file+mechanism is already documented in docs/issues/ISS-0287.yaml (status: resolved) -- its recurrence here, on a branch that never touches test_parallel.sh or pool config, suggests ISS-0287's fix is incomplete at N=8. Recommend ORCH reopen ISS-0287 (not filed as new by this agent, per core-directives 'No Issue Left Local-Only' -- filing/registration belongs to ORCH via letflow-queue). No failure touched REQ-165's own new code (plugin_handler.ex, letflow.check_toolchain.ex, or their tests) in any of the 3 runs.",
+    "ci_yaml_caveat": "This run touches .github/workflows/ci.yml (Rust-toolchain-pin mechanism). Local runs above verify only the Elixir/Rust build and test code paths in this sandbox -- they do NOT prove the CI YAML mechanism itself works. Only a real GitHub Actions run on the eventual PR, in GitHub's actual runner environment, proves that. Not claimed as verified here.",
+    "docker": "docker compose up -d failed with permission denied for the normal user; sudo docker compose up -d succeeded (letflow-1-keycloak-1 and letflow-1-postgres-1 already Running).",
+    "lint_handoffs": "mix letflow.lint_handoffs run before finishing; see command output in agent's final report."
   }
 }

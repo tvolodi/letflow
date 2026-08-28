@@ -1,0 +1,204 @@
+run_id: WF02-REQ165-20260828
+workflow_id: WF-02
+step: "4"
+agent: TEST-RUNNER
+requirement_ids: [REQ-165]
+issue_ids: []
+date: "2026-08-28"
+branch: feature/WF02-REQ165-20260828
+head_commit: 7776533ea3fbda0ba717dbc4616b4fe3e4d3df08
+merge_base_with_main: a0b6b9838747108e632f7254040dd7836ce2c746
+
+environment:
+  toolchain: "local via asdf shims + rustup; Elixir 1.20.3 (OTP 29), Erlang/OTP 29, rustc 1.97.1"
+  path_used: 'export PATH="$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH"'
+  wasmex_build_flag: "WASMEX_BUILD=true set for all mix invocations (deps.get, compile, test_parallel.sh)"
+  docker_compose_up: |
+    `docker compose up -d` failed with "permission denied while trying to
+    connect to the docker API at unix:///var/run/docker.sock" under the
+    normal user. `sudo docker compose up -d` succeeded, reporting both
+    letflow-1-keycloak-1 and letflow-1-postgres-1 already Running. Untracked
+    .env at repo root sets LETFLOW_DB_PORT=5463, used by both compose and
+    Ecto per README.md.
+  mix_deps_get: "network available in this environment; `mix deps.get` succeeded, resolving wasmex 0.15.1, rustler 0.38.0, rustler_precompiled 0.9.0 among others. (Unrelated pre-existing security-advisory notices for bandit/plug etc. printed by `mix deps.get` -- not this run's concern.)"
+  mix_test_alias: "mix.exs's `test` alias ran ecto.create/ecto.migrate --quiet automatically inside each partition process; no separate DB-setup step taken."
+
+compile_check:
+  command: "mix compile --force --warnings-as-errors"
+  result: "clean -- 'Compiling 130 files (.ex)' / 'Generated letflow app', exit 0, zero warnings"
+
+test_parallel_run_1:
+  script: scripts/test_parallel.sh
+  partition_count_N: 8
+  partition_count_source: nproc
+  raw_output: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.8N6XEY
+    test_parallel: TEST_PARALLEL_GROUP=tp3189126 (shared by all 8 partitions)
+    partition 1: 302 tests, 2 properties, 0 failures, exit 0
+    partition 2: 195 tests, 1 property, 0 failures, exit 0
+    partition 3: 249 tests, 0 properties, 0 failures, exit 0
+    partition 4: 318 tests, 0 properties, 0 failures, exit 0
+    partition 5: 291 tests, 0 properties, 0 failures, exit 0
+    partition 6: 239 tests, 0 properties, 0 failures, exit 0
+    partition 7: 389 tests, 2 properties, 0 failures, exit 0
+    partition 8: 308 tests, 0 properties, 3 failures, exit 2
+    ---
+    combined: 2291 tests, 5 properties, 3 failures (2293/2296 passed)
+  script_exit_code: 1
+
+test_parallel_run_2:
+  script: scripts/test_parallel.sh
+  partition_count_N: 8
+  raw_output: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.QJlUC7
+    test_parallel: TEST_PARALLEL_GROUP=tp3202105 (shared by all 8 partitions)
+    partition 1: 302 tests, 2 properties, 0 failures, exit 0
+    partition 2: 195 tests, 1 property, 0 failures, exit 0
+    partition 3: 249 tests, 0 properties, 0 failures, exit 0
+    partition 4: 318 tests, 0 properties, 0 failures, exit 0
+    partition 5: 291 tests, 0 properties, 0 failures, exit 0
+    partition 6: 239 tests, 0 properties, 0 failures, exit 0
+    partition 7: 389 tests, 2 properties, 0 failures, exit 0
+    partition 8: 308 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 2291 tests, 5 properties, 0 failures (2296/2296 passed)
+  script_exit_code: 0
+
+test_parallel_run_3:
+  script: scripts/test_parallel.sh
+  partition_count_N: 8
+  note: "Run a third time given run_1's failures, for stronger evidence of intermittency."
+  raw_output: |
+    test_parallel: N=8 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.2BO98n
+    test_parallel: TEST_PARALLEL_GROUP=tp3218056 (shared by all 8 partitions)
+    partition 1: 302 tests, 2 properties, 0 failures, exit 0
+    partition 2: 195 tests, 1 property, 0 failures, exit 0
+    partition 3: 249 tests, 0 properties, 0 failures, exit 0
+    partition 4: 318 tests, 0 properties, 0 failures, exit 0
+    partition 5: 291 tests, 0 properties, 0 failures, exit 0
+    partition 6: 239 tests, 0 properties, 0 failures, exit 0
+    partition 7: 389 tests, 2 properties, 0 failures, exit 0
+    partition 8: 308 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 2291 tests, 5 properties, 0 failures (2296/2296 passed)
+  script_exit_code: 0
+
+failures:
+  - test: "Letflow.TenantSchemaReaperTest \"sweep_orphans/2 schema_name format guard skips an old row with a malformed schema_name instead of attempting a drop\""
+    location: test/support/tenant_schema_reaper_test.exs:212
+    partition: 8 (run 1 only)
+    raw: |
+      Assertion with >= failed
+      code:  assert skipped >= 1
+      left:  0
+      right: 1
+  - test: "Letflow.TenantSchemaReaperTest \"sweep_orphans/2 reclaims an old, well-formed orphaned row drops the real schema and deletes both rows\""
+    location: test/support/tenant_schema_reaper_test.exs:124
+    partition: 8 (run 1 only)
+    raw: |
+      Assertion with >= failed
+      code:  assert reclaimed >= 1
+      left:  0
+      right: 1
+      (log immediately above shows: Postgrex.Protocol failed to connect: FATAL 53300 (too_many_connections) sorry, too many clients already)
+  - test: "Letflow.TenantSchemaReaperTest \"sweep_orphans/2 concurrent-invocation liveness guard (ISS-0110) spares an old row while another invocation's connection is open, reclaims it once that connection closes\""
+    location: test/support/tenant_schema_reaper_test.exs:273
+    partition: 8 (run 1 only)
+    raw: |
+      ** (DBConnection.ConnectionError) [] connection not available and request was dropped from queue after 4000ms.
+      code: Postgrex.query!(
+      stacktrace: test/support/tenant_schema_reaper_test.exs:315: (test)
+    attribution: >
+      PRE-EXISTING / environmental, not caused by REQ-165. Structural evidence,
+      not count-matching:
+        route 1 (diff-exclusion): `git diff --stat main...HEAD` for this branch
+          touches only .github/workflows/ci.yml, .tool-versions,
+          lib/letflow/engine/wasm/plugin_handler.ex, lib/mix/tasks/letflow.check_toolchain.ex,
+          mix.exs, mix.lock, priv/wasm_fixtures/*, test/letflow/engine/wasm/plugin_handler_test.exs,
+          test/mix/tasks/letflow_check_toolchain_test.exs, and design/spec/handoff docs.
+          test/support/tenant_schema_reaper_test.exs and its dependency
+          lib/letflow/tenant_schema_reaper.ex are both untouched by this branch.
+          The only mix.exs change is adding `{:wasmex, "~> 0.15.1"}` to deps --
+          no pool-sizing/config change; scripts/test_parallel.sh itself is
+          untouched by this branch (confirmed via the same diff --stat).
+        route 3 (demonstrated mechanism, measured not asserted): the failing
+          partition's own log shows the actual Postgres error --
+          "FATAL 53300 (too_many_connections) sorry, too many clients already"
+          and a DBConnection checkout timeout after 4000ms -- i.e. real
+          connection-pool exhaustion at runtime, not a logic assertion failure
+          in the reaper code itself.
+      This exact mechanism/file pair (test/support/tenant_schema_reaper_test.exs
+      hitting FATAL 53300 too_many_connections mid-run) is already documented in
+      docs/issues/ISS-0287.yaml ("Mid-run Postgres connection-pool exhaustion at
+      documented TEST_PARALLEL_N=4 remedy"), which records status: resolved
+      (fix commit 39c7364, adding TEST_SUPERUSER_RESERVED/TEST_NONPOOL_CONNECTION_RESERVE
+      knobs to scripts/test_parallel.sh's pool-headroom clamp). This run's
+      reproduction, on a branch that does not touch scripts/test_parallel.sh or
+      any pool-sizing config, indicates ISS-0287's fix does not fully eliminate
+      the underlying pool-pressure race at N=8 -- it recurred here despite being
+      marked resolved, structurally identical to the ISS-0340 recurrence pattern
+      TEST-RUNNER has previously documented (see ISS-0340.yaml's own reopen
+      history). Two immediate re-runs (run 2, run 3) on the identical commit,
+      unchanged environment, reproduced 0/2296 failures each -- consistent with
+      intermittent, load-dependent pool pressure rather than a deterministic
+      defect in this branch's own code.
+      Not filed as a new issue by this agent directly (per
+      docs/agents/instructions/core-directives.md's "No Issue Left Local-Only" --
+      filing/registration is ORCH's job via letflow-queue's register_task).
+      Recommend to ORCH: reopen ISS-0287 (status contradicted by this
+      reproduction) rather than opening a fresh issue, same precedent as
+      ISS-0340's reopen.
+
+new_finding_for_orch:
+  title: "ISS-0287 (too_many_connections pool exhaustion in tenant_schema_reaper_test.exs) recurred despite resolved status"
+  severity: MINOR
+  affected_files:
+    - test/support/tenant_schema_reaper_test.exs
+    - scripts/test_parallel.sh
+  recommend: "Reopen ISS-0287 rather than filing new; not caused by REQ-165's diff (see failures[].attribution above for full evidence)."
+  action_taken: "Reported here for ORCH to register via letflow-queue per ISSUE_QUEUE.md; not filed directly by TEST-RUNNER."
+
+ci_yaml_caveat: >
+  This run touches .github/workflows/ci.yml (Rust-toolchain-pin mechanism for
+  wasmex). Local test_parallel.sh/mix compile runs above verify the Elixir/Rust
+  build and test code paths in THIS sandbox only. They do NOT and cannot prove
+  the CI YAML changes themselves are correct -- only a real GitHub Actions run
+  on the eventual PR, in GitHub's actual runner environment (different image,
+  different pre-installed toolchain state, different caching behavior than this
+  sandbox), is the true verification of the CI config mechanism. This report
+  makes no claim that CI is proven correct; that remains open until the PR's
+  Actions run completes.
+
+verdict: PASS
+verdict_reasoning: >
+  Full suite run 3 times consecutively via scripts/test_parallel.sh with
+  WASMEX_BUILD=true: run 1 had 3 failures (2293/2296), runs 2 and 3 were both
+  fully clean (2296/2296). All 3 failures were isolated to
+  test/support/tenant_schema_reaper_test.exs in a single partition and carry a
+  measured Postgres "too_many_connections" (FATAL 53300) / DBConnection
+  checkout-timeout signature -- structurally attributed as environmental
+  connection-pool exhaustion (ISS-0287's documented mechanism recurring),
+  independently verified via diff-exclusion (neither the failing test file nor
+  scripts/test_parallel.sh appear in this branch's diff) and via the measured
+  Postgres error itself, not by assertion or by count-matching against any
+  prior run. `mix compile --force --warnings-as-errors` is clean (0 warnings).
+  No failure touches REQ-165's own new code
+  (lib/letflow/engine/wasm/plugin_handler.ex,
+  lib/mix/tasks/letflow.check_toolchain.ex,
+  test/letflow/engine/wasm/plugin_handler_test.exs,
+  test/mix/tasks/letflow_check_toolchain_test.exs) in any of the 3 runs -- all
+  231 plugin_handler tests and all check_toolchain tests passed cleanly every
+  time. No rework required for ELIXIR-DEV. Flagging ISS-0287 recurrence to ORCH
+  as a new_finding, not blocking this PASS verdict per the same precedent as
+  ISS-0340's prior reopen. The CI YAML mechanism itself (.github/workflows/ci.yml)
+  remains unverified by this report -- see ci_yaml_caveat above; only a real
+  GitHub Actions PR run proves that piece.

@@ -551,12 +551,11 @@ mirroring `platform.ex`'s own `decode_fail_details/2`.
 
 ### 5.2 — The uninterceptable-termination mechanism (revised: aborts the call, not the process — live-verified §2.1/§2.2)
 
-```
-Process.put(@fail_signal_pdict_key, %{reason: reason_string, details: details})
-exit({:script_failed, %{reason: reason_string, details: details}})
-```
-
-both called from inside the callback body — which, per §2.1's live-verification
+The callback body first stashes `%{reason: reason_string, details: details}` in the
+process dictionary under `@fail_signal_pdict_key` via `Process.put/2`, then calls
+`exit/1` with `{:script_failed, %{reason: reason_string, details: details}}` — stash
+before exit, same map shape in both places, both calls made from inside the callback
+body — which, per §2.1's live-verification
 finding, runs inside the Wasmex instance's own GenServer process via `handle_info/2`.
 **Corrected claim (this design's prior text was wrong, per CODE-DESIGN-VALIDATOR's
 rework request and the live repro in §2.1): the `exit/1` call does NOT terminate that
@@ -872,14 +871,12 @@ rule, the same discipline REQ-160's/REQ-171's own tests already apply.
 
 ### 8.4 — The exhaustiveness guard (forces a future host function to add a parity case)
 
-A real test (not part of the harness module itself, in the parity test file) asserts:
-
-```
-assert MapSet.new(Map.keys(Letflow.Test.HostApiParity.scenarios())) ==
-         MapSet.new([:read_variable, :log, :now, :uuid, :write_variable, :call_service, :fail])
-```
-
-against a **second, independently-derived** set read directly from
+A real test (not part of the harness module itself, in the parity test file) asserts
+set equality, as two `MapSet`s built for comparison rather than a literal list compared
+by hand, between two independently-derived sides: the key set of
+`Letflow.Test.HostApiParity.scenarios()` (the seven host functions the parity harness
+actually covers — `read_variable`, `log`, `now`, `uuid`, `write_variable`,
+`call_service`, `fail`) on one side, against a **second, independently-derived** set read directly from
 `Letflow.Engine.Wasm.CapabilityGate`'s own `@known_imports` (via a small, additive,
 test-only accessor this requirement adds — `known_host_functions/0`, returning the
 `stub` field of every row — mirroring `Letflow.Engine.Lua.Platform.capability_matrix/0`'s

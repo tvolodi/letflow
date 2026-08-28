@@ -749,3 +749,42 @@ history:
       feature/WF02-REQ164-20260828 created from main (fadb756) and
       pushed. Dispatching Step 1 to CODE-DESIGNER next. 28 on-disk
       entries before this append; 29 after.
+
+  - req: REQ-164
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-28T00:50:32Z"
+    note: >
+      WF02-REQ164-20260828 complete. Decision-only requirement (no code, no
+      mix.exs or lib/letflow/engine/ change) settling OQ-3: NO, Letflow does
+      not host WASM guest compilation. Letflow's WASM plugin pipeline accepts
+      only pre-compiled .wasm artifacts submitted by the caller; Letflow never
+      invokes a Zig or any other compiler as part of plugin intake,
+      registration, or execution. Consequently WASM-03 (Source Compilation
+      Job), WASM-04 (Compile Caching), and WASM-05 (Build Reproducibility) are
+      DECLINED rather than deferred -- R-Co/src/wasm/ is stubs end to end and
+      a search for '*.wasm' across the entire R-Co tree returns zero files,
+      so nothing working exists to inherit. lib/letflow/design/
+      req164-wasm-compilation-hosting.md records the decision, names the
+      S6 operational inputs the decision needed, and states that REQ-175 (the
+      conditional requirement gated on a YES) must be cancelled rather than
+      left pending. Independently re-verified by CODE-DESIGN-VALIDATOR,
+      REVIEWER, and RELEASE-VALIDATOR (three separate gates) before this
+      step. Status flipped pending -> done in docs/requirements.yaml.
+      `grep -c "^  - req:" docs/status/requirement_status.v5.yaml` = 29
+      on-disk entries before this append; 30 after.
+
+  - req: REQ-175
+    event: cancelled
+    agent: DOC-UPDATER
+    at: "2026-08-28T00:50:32Z"
+    note: >
+      WF02-REQ164-20260828 Step 6. REQ-164 decided NO on OQ-3 -- Letflow does
+      not host WASM guest compilation; WASM-03/04/05 declined; this
+      conditional requirement is cancelled per its own text and REQ-164's
+      acceptance criteria. See lib/letflow/design/
+      req164-wasm-compilation-hosting.md's Decision section, which records
+      this cancellation as its own required consequence. Status flipped
+      pending -> cancelled in docs/requirements.yaml. `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 30 on-disk entries before
+      this append; 31 after.

@@ -8275,7 +8275,7 @@ requirements:
   - id: REQ-164
     title: Settle OQ-3 -- whether Letflow hosts WASM guest compilation at all (blocks WASM-03/04/05)
     owner: CODE-DESIGNER
-    status: pending
+    status: done
     stage: S5
     impl_order: 316  # letflow-queue task id
     description: >
@@ -8880,7 +8880,7 @@ requirements:
   - id: REQ-175
     title: Language-agnostic WASM artifact intake pipeline with hash-keyed caching (WASM-03/04/05 restated, conditional on REQ-164)
     owner: ELIXIR-DEV
-    status: pending
+    status: cancelled
     stage: S5
     impl_order: 327  # letflow-queue task id
     description: >

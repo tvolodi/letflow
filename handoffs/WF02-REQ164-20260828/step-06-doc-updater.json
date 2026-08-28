@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "DOC-UPDATER",
   "file": "handoffs/WF02-REQ164-20260828/step-06-doc-updater.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -34,6 +34,13 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "summary": "REQ-164 status flipped pending -> done; REQ-175 status flipped pending -> cancelled (per REQ-164's own Decision section: NO on OQ-3, WASM-03/04/05 declined). Two status-history events appended to docs/status/requirement_status.v5.yaml (current volume, confirmed via index): one 'done' for REQ-164, one 'cancelled' for REQ-175 citing REQ-164's decision. Volume recounted via grep before (29) and after (31) both appends -- exactly +2. Index updated: entries 29 -> 31, new note prepended (prior notes untouched). No other status-history events edited. No README/decision-record change required: decision-only requirement, no documented behavior changed, and REQ-164's design artefact deliberately stays scoped to lib/letflow/design/ per REQ-163's own precedent (neither OQ-3 nor OQ-4 gets a direct edit in decision 0014's own text).",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ164-20260828/step-06-doc-updater.json"
+    ]
   }
 }

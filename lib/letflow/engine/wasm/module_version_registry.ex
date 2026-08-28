@@ -329,7 +329,13 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
 
   # ── The task-side algorithm (design §4 steps 1-6) ───────────────────────
 
-  @spec do_invoke(module_name(), String.t(), [integer()], HostApi.execution_context(), pos_integer()) ::
+  @spec do_invoke(
+          module_name(),
+          String.t(),
+          [integer()],
+          HostApi.execution_context(),
+          pos_integer()
+        ) ::
           {:ok, version_id(), [integer()]}
           | {:error, {:unknown_module, module_name()}}
           | {:error, {:no_active_version, module_name()}}

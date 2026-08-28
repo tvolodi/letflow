@@ -79,7 +79,8 @@ defmodule Letflow.Application do
         # Registration order between these two specific children is not
         # load-bearing (unlike the SandboxPool/SandboxPool.TaskSupervisor
         # pair above) -- see the design doc §7's own note.
-        {Letflow.Engine.Wasm.ModuleVersionRegistry, name: Letflow.Engine.Wasm.ModuleVersionRegistry},
+        {Letflow.Engine.Wasm.ModuleVersionRegistry,
+         name: Letflow.Engine.Wasm.ModuleVersionRegistry},
         {Task.Supervisor, name: Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor}
       ] ++ http_child()
 

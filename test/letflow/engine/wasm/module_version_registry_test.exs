@@ -136,7 +136,13 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistryTest do
       # the gate is released.
       task_a =
         Task.async(fn ->
-          ModuleVersionRegistry.invoke(module_name, "run", [], HostApi.empty_execution_context(), 5_000)
+          ModuleVersionRegistry.invoke(
+            module_name,
+            "run",
+            [],
+            HostApi.empty_execution_context(),
+            5_000
+          )
         end)
 
       # Step 4 -- synchronous wait on the gate, never a sleep.
@@ -166,7 +172,13 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistryTest do
       # NEW version, and (per the disjoint manifests) only succeeds because it
       # was instantiated against v2_manifest's grant of "var:write".
       result_b =
-        ModuleVersionRegistry.invoke(module_name, "run", [], HostApi.empty_execution_context(), 5_000)
+        ModuleVersionRegistry.invoke(
+          module_name,
+          "run",
+          [],
+          HostApi.empty_execution_context(),
+          5_000
+        )
 
       assert {:ok, ^v2_id, [222]} = result_b
 
@@ -188,8 +200,11 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistryTest do
 
       # Step 14 -- AC5 defense-in-depth: the manifests themselves are as
       # disjoint as claimed, independent of invoke/4's own code.
-      table_v1 = CapabilityGate.build_import_table(@v1_manifest, HostApi.empty_execution_context())
-      table_v2 = CapabilityGate.build_import_table(@v2_manifest, HostApi.empty_execution_context())
+      table_v1 =
+        CapabilityGate.build_import_table(@v1_manifest, HostApi.empty_execution_context())
+
+      table_v2 =
+        CapabilityGate.build_import_table(@v2_manifest, HostApi.empty_execution_context())
 
       assert Map.has_key?(table_v1["env"], "platform_call_service")
       refute Map.has_key?(table_v1["env"], "write_variable")

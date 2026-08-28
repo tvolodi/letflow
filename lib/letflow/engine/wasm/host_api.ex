@@ -91,6 +91,52 @@ defmodule Letflow.Engine.Wasm.HostApi do
       `MemoryGuard`'s bounds check, or (`read_variable` only) the name bytes read back
       are not valid UTF-8. No bytes are written.
 
+  ## Semantic differences from Lua (AC6, design §9)
+
+  WASM-12 limits this module's differences from `platform.ex` to ABI only (string
+  encoding, return-envelope shape) — so an unlisted non-ABI difference means the
+  requirement is unmet. Five are known, each with its justification:
+
+    * **9.1 — `write_variable`'s wall-clock-timeout discard arm is abandonment, not
+      destruction.** The observable guarantee (no caller ever commits the write) is
+      identical to Lua's; the underlying mechanism is not — a timed-out WASM
+      invocation's process is leaked, never killed, because no BEAM-side mechanism can
+      terminate it (inherited from `CallTimeout`'s already-accepted REQ-170/decision
+      0014 WASM-11 finding; this requirement only states the consequence for staged
+      writes honestly rather than implying a uniform "process death" story).
+    * **9.2 — `write_variable`'s "malformed name" arm has no WASM equivalent.** Lua's
+      `do_write_variable/2` has a real non-binary-`name`-argument arm because Lua is
+      dynamically typed; WASM's ABI only ever delivers a `(ptr, len)` byte pair for
+      `name`, which is inherently string-shaped, so the only ways it can be malformed
+      are already covered by the `-2` (bad pointer / invalid UTF-8) code. A consequence
+      of the two languages' own type systems, not a design choice.
+    * **9.3 — the capability token is `"var:write"`, not Lua's `"variable:write"`.**
+      Pre-existing token-space divergence inherited from REQ-167/171 (`"var:read"` vs.
+      `"variable:read"` already diverged before this requirement) — not introduced or
+      newly decided here.
+    * **9.4 — `call_service`'s missing-capability granularity is coarser on WASM than
+      on Lua.** Lua's `"service:call:<id>"` is parameterized per service, checked at
+      call time; WASM's `"service:call"` is a single, unparameterized capability
+      checked once at import-table-construction time — once granted, a WASM guest may
+      call `call_service` for any `service_id`, where an equivalently-configured Lua
+      script would still be denied per-service. This is **accepted, not fixed**:
+      closing the granularity gap inside `do_call_service`'s body would require either
+      raising (forbidden by INV-HOSTAPI-2) or a second structured-error shape
+      indistinguishable from an ordinary service failure (defeating AC4's requirement
+      that the two be assertable distinctly).
+    * **9.5 — `fail`'s discard/observation mechanism is structurally different on WASM
+      than on Lua, not merely differently wrapped.** On Lua, `exit/1` crashes the
+      process actually running the script, observed directly. On WASM, `exit/1` inside
+      `do_fail/5` is caught internally by `wasmex`'s own callback dispatch — the
+      instance process never crashes at all — so `fail` is distinguishable from a guest
+      trap or an accidental callback bug only via the `@fail_signal_pdict_key`
+      process-dictionary signal stashed before `exit/1`, a mechanism with no Lua-side
+      analogue. The underlying mechanisms are genuinely different in kind, not just in
+      return-value depth.
+
+  No other non-ABI semantic difference is known. Any ELIXIR-DEV's implementation
+  discovers that is not listed here is a defect against the design.
+
   ## Invariants
 
     * INV-HOSTAPI-1: no function this module defines calls `Letflow.Repo`, ever.

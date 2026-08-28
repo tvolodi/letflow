@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step01-WF02-REQ169-20260828",
+  "run_id": "WF02-REQ169-20260828",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ169-20260828/step-01-code-designer.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-169"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md",
+      "lib/letflow/engine/wasm/memory_guard.ex",
+      "lib/letflow/engine/wasm/capability_gate.ex",
+      "lib/letflow/engine/wasm/module_registry.ex"
+    ],
+    "branch_name": "feature/WF02-REQ169-20260828",
+    "commit": "3dcbc51"
+  },
+  "task": {
+    "description": "CODE-DESIGNER pass (WF-02 Step 1) for REQ-169 (queue task 321, GH#621). Read REQ-169's full entry in docs/requirements.yaml (id: REQ-169) before anything else. Produce a design artefact under lib/letflow/design/ (e.g. req169-wasm-fuel-and-memory-cap.md) per this project's CODE-DESIGNER conventions, design-only (zero implementation code). This requirement pairs WASM-09 (fuel-based execution limit) and WASM-10 (memory cap), both direct configuration of the same underlying wasmex objects.\n\nDecision 0014's own text (section citing WASM-09/WASM-10, read it directly) explicitly flags: its evidence for Wasmex.EngineConfig's :consume_fuel and Wasmex.StoreLimits' memory_size/table_elements was READ from wasmex's published documentation, NOT run. Per decision 0014's own caution and this pipeline's now-consistent discipline (REQ-165 through REQ-168 all live-verified every load-bearing wasmex behavioral claim, and REQ-168 found a genuine, previously-undocumented hazard doing exactly this), you MUST live-verify every claim about fuel/memory-limit behavior against the real installed dependency before writing it into the design -- do not assert documented behavior as fact. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching mix run scripts.\n\nSome real API surface already confirmed present in this session (verify it yourself again, do not just trust this list -- confirm the exact behavior, not just the function signatures): Wasmex.EngineConfig.consume_fuel/2 (defaults false); Wasmex.Engine.new(%Wasmex.EngineConfig{consume_fuel: true}); Wasmex.StoreOrCaller.set_fuel/2 (a Store starts with 0 fuel even with consume_fuel enabled -- fuel must be explicitly poured in before execution, or execution traps immediately); Wasmex.StoreOrCaller.get_fuel/1; Wasmex.Store.new(store_limits, engine) accepting a Wasmex.StoreLimits.t() (memory_size, table_elements, instances, tables, memories); Wasmex.start_link/1 accepts a :store key directly (not just bytes/module -- read wasmex.ex's start_link clauses yourself to confirm the exact combinations of :store/:module/:bytes it accepts).\n\nMANDATORY LIVE VERIFICATION: (1) confirm that enabling consume_fuel via EngineConfig, building a Store with a custom Engine, then calling set_fuel/2 with a small budget, then running a genuinely infinite-loop WAT guest (mirror the pattern from req168's or req165's own trivial fixtures) actually terminates execution within that fuel budget rather than hanging -- and confirm EXACTLY what error/trap shape the caller receives (a clean {:error, _} return? a crash requiring the same Task.Supervisor-wrapping this codebase's other WASM modules already use? read req165/166/167/168's crash-propagation findings first, since fuel exhaustion is very likely to behave like the same unresolved-import-style crash class, not a clean return); (2) confirm that a fresh set_fuel/2 call before each invocation genuinely resets the budget (invocation N does not starve invocation N+1) -- this is one of REQ-169's own real acceptance criteria, live-verify it directly, do not assume; (3) confirm that a StoreLimits memory_size cap, when a guest attempts a memory.grow beyond it, actually traps cleanly (again: confirm the exact error/crash shape, do not assume it matches your prior expectation) and does NOT silently succeed or panic/abort like REQ-168 found at extreme magnitudes -- this is a DIFFERENT resource-limit mechanism (StoreLimits, not MemoryGuard's pointer/length validation) and needs its own live check; (4) confirm fuel exhaustion's error shape and the memory-cap trap's error shape are genuinely distinguishable from each other by pattern match, and both are distinguishable from what a future REQ-170 wall-clock-timeout mechanism would look like (a Task.yield/2 timeout -- already a known shape from req166/167/168's own designs) -- state explicitly, with real evidence, whether they are.\n\nIf ANY of these live checks reveals wasmex/Wasmtime behaving differently than decision 0014's documentation-sourced description (e.g. a crash instead of a clean trap, a fuel budget that doesn't actually reset, a memory cap that doesn't actually bind), this is a REQUIRED FINDING to record explicitly in the design's moduledoc-content section and to flag to ORCH -- per the requirement's own acceptance criterion 7 and decision 0014's own caution, do NOT work around a divergence silently or quietly redesign around it without naming what was expected vs. found.\n\nDecide where this belongs: likely a new module (e.g. Letflow.Engine.Wasm.ResourceLimits or similar) following this project's established one-module-per-orthogonal-concern precedent (req155 sec4.4, already applied by req166/167/168) -- fuel/memory-cap configuration at instantiation time is a distinct concern from ModuleRegistry's export validation, CapabilityGate's import whitelisting, and MemoryGuard's per-call pointer validation. Both the fuel budget and memory cap must be CONFIGURABLE (not hardcoded), per the requirement's own acceptance criteria.",
+    "acceptance_criteria": [
+      "AC1: a test asserts an infinite-loop guest terminates within its configured fuel budget rather than hanging -- design must specify the exact mechanism (EngineConfig+set_fuel) and the exact live-verified error/trap shape the caller receives.",
+      "AC2: a test asserts fuel is reset per invocation (two consecutive invocations each get the full budget) -- design must specify how/when set_fuel/2 is called to guarantee this, live-verified.",
+      "AC3: a test asserts a guest attempting to grow linear memory beyond the configured cap traps cleanly with a structured error -- design must specify the exact live-verified error/trap shape.",
+      "AC4: both the fuel budget and memory cap must be configurable, with a test driving two different values for each and asserting the tighter one binds sooner -- design must specify the public API's exact configuration surface.",
+      "AC5: a test asserts fuel metering is actually enabled (a guest exceeding budget errors rather than completing) -- so a config that silently leaves :consume_fuel false fails the suite -- design must specify this test's exact mechanism.",
+      "AC6: fuel exhaustion and memory-cap trap must surface as errors distinguishable by pattern match from each other and from REQ-170's future wall-clock timeout -- design must state the exact distinguishing shapes, live-verified.",
+      "AC7: if either mechanism diverges from decision 0014's documented behavior, the design's moduledoc-content section must record the divergence explicitly, and the design doc itself must state it plainly for ORCH's attention -- state clearly whether any divergence was found in this design's own live verification, and if so what it was.",
+      "AC8: mix test and mix compile --warnings-as-errors both pass -- not a design element, but the design's chosen types/signatures must give ELIXIR-DEV something both commands can meaningfully enforce.",
+      "Zero literal Elixir code in the design doc -- @spec/@type/interface descriptions only.",
+      "Full traceability table mapping every one of REQ-169's real acceptance criteria (read from docs/requirements.yaml) to a planned test."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

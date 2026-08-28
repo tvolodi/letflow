@@ -6,7 +6,7 @@
   "from_agent": "ORCH",
   "to_agent": "RELEASE-VALIDATOR",
   "file": "handoffs/WF02-REQ165-20260828/step-05-release-validator.json",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S5",
@@ -43,6 +43,31 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "verdict": "PASS -- independently re-derived, not re-stated. All 9 real acceptance criteria in docs/requirements.yaml REQ-165 map to specific currently-passing tests; native build, process boundary, toolchain pin, and post-rebase suite health were each independently re-confirmed against real code/output, not prior agents' reports.",
+    "ac_to_test_mapping": [
+      {"ac": "AC1 (native build succeeds, not just fetch)", "test": "WASMEX_BUILD=true mix compile --warnings-as-errors run directly by RELEASE-VALIDATOR -- exit 0, plus ad hoc mix run script confirming Wasmex.Native's .beam and the compiled native/wasmex.so exist under _build/test/lib/wasmex/priv (not a hex-fetched precompiled artifact path)"},
+      {"ac": "AC2 (Rust toolchain pinned via 0005's mechanism, CI installs it)", "test": ".tool-versions now carries `rust 1.97.1`; git diff main...HEAD -- .github/workflows/ci.yml shows a new step reading that pin and feeding dtolnay/rust-toolchain@stable, plus WASMEX_BUILD: true on the backend gate step; test/mix/tasks/letflow_check_toolchain_test.exs (part of the run command) covers the same pin-comparison mechanism 0005 established"},
+      {"ac": "AC3 (handler implements PluginInterface, returns {:complete, map} for trivial guest)", "test": "PluginHandlerTest 'AC3/AC4: ... returns {:complete, map} and runs in a different process than the caller' -- re-run, passed (33.1ms)"},
+      {"ac": "AC4 (guest runs in a different process, structurally proven)", "test": "same test as AC3: snapshots Process.list() before the call and asserts executed_in_pid is a freshly spawned pid, not merely != test_pid -- re-run, passed; independently re-verified via an ad hoc mix run script (test env) showing invoke_result pid #PID<0.292.0> vs caller #PID<0.95.0>"},
+      {"ac": "AC5 (hanging guest terminated by supervised-task timeout, surfaces as {:error, reason}, never an exception into the caller)", "test": "PluginHandlerTest 'AC5: a hanging guest is terminated by the outer task timeout' -- re-run, passed (100.9ms), asserts reason matches 'did not respond within 100ms' and Process.alive?(test_pid)"},
+      {"ac": "AC6 (plugin_interface.ex unmodified)", "test": "PluginHandlerTest 'AC6: plugin_interface.ex is unmodified' (git diff --stat main...HEAD -- lib/letflow/engine/plugin_interface.ex empty) -- re-run, passed; independently confirmed via git diff main...feature/WF02-REQ165-20260828 --stat -- lib/letflow/engine/plugin_interface.ex (no output) -- file exists in the repo (owned by REQ-148/earlier work) but is untouched by this run's diff"},
+      {"ac": "AC7 (WASM-01 mechanism restatement + no external Wasm runtime dependency at deploy time)", "test": "PluginHandlerTest 'AC7: the wasmex NIF is a loaded shared library...' (3 tests: Wasmex.Native .beam + external_resource attrs name native/wasmex/src/*.rs, wasmex's priv/native/wasmex.so bundled not fetched, and invoking the guest opens zero new OS ports) plus 'moduledoc content AC7' -- all re-run, passed; independently re-verified same facts via ad hoc mix run script"},
+      {"ac": "AC8 (moduledoc discloses residual native-crash risk, uncovered by process boundary)", "test": "PluginHandlerTest 'moduledoc content AC8: moduledoc discloses the residual native-crash risk...' -- re-run, passed; moduledoc text read directly and confirmed to name the BEAM-node-crash class and 'does not bound a native crash'"},
+      {"ac": "AC9 (mix test and mix compile --warnings-as-errors both pass with real output)", "test": "both re-run independently by RELEASE-VALIDATOR: mix compile --warnings-as-errors exit 0 (no warnings), mix test test/letflow/engine/wasm/ test/mix/tasks/letflow_check_toolchain_test.exs -> 'Result: 44 passed', full suite via scripts/test_parallel.sh -> 'combined: 2293 tests, 5 properties, 0 failures (2298/2298 passed)'"}
+    ],
+    "commands_run": [
+      "export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\"; WASMEX_BUILD=true mix compile --warnings-as-errors -> exit 0, no output (no warnings)",
+      "WASMEX_BUILD=true mix test test/letflow/engine/wasm/ test/mix/tasks/letflow_check_toolchain_test.exs -> 'Result: 44 passed'",
+      "WASMEX_BUILD=true mix test test/letflow/engine/wasm/plugin_handler_test.exs --seed 0 --trace -> all 10 tests in that file passed individually (traced names captured)",
+      "ad hoc mix run script (MIX_ENV=test) confirming Wasmex.Native beam path, wasmex.so existence, and PluginInterface.invoke/2 pid boundary -- executed_in_pid #PID<0.292.0> vs test_pid #PID<0.95.0>",
+      "git diff main...feature/WF02-REQ165-20260828 --stat -> 22 files changed, touches only wasm/CI/toolchain/design/test/handoff/report files plus mix.exs/mix.lock; no owned_modules violation",
+      "git diff main...feature/WF02-REQ165-20260828 --stat -- lib/letflow/engine/plugin_interface.ex -> empty (unmodified)",
+      "git log --graph --oneline (main..feature/WF02-REQ165-20260828 and surrounding main history) -> confirms a clean linear rebase: this branch's 18 commits sit cleanly atop main's tip 8d9498c (ISS-0287 reopen), which itself sits atop the REQ-123/REQ-155 concurrent work; no merge commits, no conflict markers, no unexpected file changes introduced by the rebase",
+      "WASMEX_BUILD=true scripts/test_parallel.sh (N=8 partitions) -> 'combined: 2293 tests, 5 properties, 0 failures (2298/2298 passed)' -- ISS-0287 did NOT recur in this run; suite is fully clean post-rebase"
+    ],
+    "owned_modules_check": "PASS -- git diff main...feature/WF02-REQ165-20260828 --stat lists only: .github/workflows/ci.yml, .tool-versions, mix.exs, mix.lock, lib/letflow/engine/wasm/plugin_handler.ex, lib/mix/tasks/letflow.check_toolchain.ex, priv/wasm_fixtures/*.wat, test/letflow/engine/wasm/plugin_handler_test.exs, test/mix/tasks/letflow_check_toolchain_test.exs, lib/letflow/design/req165-wasmex-process-boundary.md, test/specs/REQ-165.md, this run's handoffs/ and test-report bookkeeping. lib/letflow/engine/plugin_interface.ex is absent from the diff (present in the repo, untouched) -- confirms decision 0014's separate-handler-family boundary was respected.",
+    "post_rebase_soundness": "PASS -- linear history (no merge commits), branch cleanly rebased onto main tip 8d9498c which already includes the concurrent REQ-155/REQ-123 work and the ISS-0287 reopen commit; full suite (scripts/test_parallel.sh, WASMEX_BUILD=true, N=8) ran 0 failures, 2298/2298 passed -- ISS-0287's Postgres pool-exhaustion flake did not recur in this run, consistent with ORCH's characterization of it as an intermittent, pre-existing, branch-unrelated flake rather than a REQ-165 regression.",
+    "notes": "No blocking issues found. REQ-165 is genuinely done as specified: wasmex adopted with a forced source build (WASMEX_BUILD=true) proving the pinned Rust toolchain actually compiles native code rather than merely fetching a precompiled artifact; the process boundary is proven structurally (fresh-pid check) and behaviorally (hang -> {:error, reason} without propagating an exit); plugin_interface.ex's contract is untouched; both WASM-01 restated-mechanism and residual-native-crash-risk disclosures are present in the moduledoc and covered by content tests."
   }
 }

@@ -38,7 +38,8 @@ defmodule Letflow.MixProject do
       {:jason, "~> 1.4"},
       {:stream_data, "~> 0.6", only: :test},
       {:ueberauth_oidcc, "~> 0.4"},
-      {:lua, "~> 1.0"}
+      {:lua, "~> 1.0"},
+      {:wasmex, "~> 0.15.1"}
     ]
   end
 

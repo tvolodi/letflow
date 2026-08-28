@@ -2,8 +2,8 @@ defmodule Mix.Tasks.Letflow.CheckToolchain do
   @shortdoc "Warns (never fails) when the running Elixir/OTP differs from .tool-versions"
 
   @moduledoc """
-  Advisory toolchain-drift check. Compares the Elixir and OTP versions this
-  VM is actually running against the versions pinned in the repo-root
+  Advisory toolchain-drift check. Compares the Elixir, OTP, and Rust versions
+  this host is actually running against the versions pinned in the repo-root
   `.tool-versions`, and prints a warning when they differ.
 
   Implements ISS-0106's Part A, specified in
@@ -144,6 +144,16 @@ defmodule Mix.Tasks.Letflow.CheckToolchain do
     * **F6** — present but unreadable for any other reason.
     * **F7** — working directory unavailable.
     * **F8** — anything unforeseen, caught by `run/1`'s outer guard.
+    * **F9** — REQ-165: `rust` pinned in `.tool-versions` but `rustc` is not
+      found on `PATH`, or fails to run (`System.cmd/2` raising or returning a
+      non-zero exit status). Unlike the Elixir/OTP comparisons, the running
+      Rust version can only be obtained by shelling out to `rustc
+      --version`, which can genuinely fail in a way `System.version/0` and
+      `:erlang.system_info/1` structurally cannot -- this is why Rust gets
+      its own failure mode instead of reusing F1-F8's shape verbatim. If
+      `.tool-versions` has no `rust` line at all, the existing "not pinned"
+      row shape (F3/F4's pattern) already covers it with no new logic, since
+      that path never shells out at all.
 
   A version string that "does not parse" is **not** a failure mode, by
   construction: both comparisons are exact string equality on strings derived
@@ -163,7 +173,7 @@ defmodule Mix.Tasks.Letflow.CheckToolchain do
   @pin_file ".tool-versions"
   @record "docs/migration/decisions/0005-pin-formatting-toolchain.md"
   @rule String.duplicate("=", 72)
-  @recognised_tools ["elixir", "erlang"]
+  @recognised_tools ["elixir", "erlang", "rust"]
 
   @doc """
   Runs the check. Always returns `:ok`.
@@ -193,6 +203,7 @@ defmodule Mix.Tasks.Letflow.CheckToolchain do
   defp check do
     running_elixir = System.version()
     running_otp = List.to_string(:erlang.system_info(:otp_release))
+    running_rust = running_rust_version()
 
     case File.cwd() do
       {:error, reason} ->
@@ -203,26 +214,29 @@ defmodule Mix.Tasks.Letflow.CheckToolchain do
               "cannot check the toolchain pin."
           ],
           running_elixir,
-          running_otp
+          running_otp,
+          running_rust
         )
 
       {:ok, cwd} ->
-        cwd |> Path.join(@pin_file) |> read_and_report(running_elixir, running_otp)
+        cwd |> Path.join(@pin_file) |> read_and_report(running_elixir, running_otp, running_rust)
     end
   end
 
-  @spec read_and_report(String.t(), String.t(), String.t()) :: :ok
-  defp read_and_report(path, running_elixir, running_otp) do
+  @spec read_and_report(String.t(), String.t(), String.t(), {:ok, String.t()} | :not_found) ::
+          :ok
+  defp read_and_report(path, running_elixir, running_otp, running_rust) do
     case File.read(path) do
       {:ok, contents} ->
-        contents |> parse() |> report(running_elixir, running_otp)
+        contents |> parse() |> report(running_elixir, running_otp, running_rust)
 
       {:error, :enoent} ->
         # F1
         not_checked(
           ["  #{@pin_file} not found at #{path} -- cannot check the toolchain pin."],
           running_elixir,
-          running_otp
+          running_otp,
+          running_rust
         )
 
       {:error, reason} ->
@@ -233,17 +247,37 @@ defmodule Mix.Tasks.Letflow.CheckToolchain do
               "cannot check the toolchain pin."
           ],
           running_elixir,
-          running_otp
+          running_otp,
+          running_rust
         )
     end
+  end
+
+  # REQ-165/F9: the running Rust version can only be obtained by shelling
+  # out, unlike the Elixir/OTP comparisons above -- this can genuinely fail
+  # (binary absent, PATH without rustc, execution error), so this is the one
+  # comparison input in this module that returns a failure tag instead of a
+  # bare value. Never raises: `System.cmd/2` raising (e.g. `:enoent` for a
+  # missing executable) is caught here, not left to `run/1`'s outer guard.
+  @spec running_rust_version() :: {:ok, String.t()} | :not_found
+  defp running_rust_version do
+    case System.cmd("rustc", ["--version"], stderr_to_stdout: true) do
+      {output, 0} -> {:ok, String.trim(output)}
+      {_output, _nonzero} -> :not_found
+    end
+  rescue
+    _ -> :not_found
+  catch
+    _, _ -> :not_found
   end
 
   # -- parsing ----------------------------------------------------------
 
   # Total by construction: every byte sequence yields a
-  # {elixir_pin, erlang_pin, malformed_lines} triple, with nil for
-  # absent-or-malformed. No step below can fail.
-  @spec parse(String.t()) :: {String.t() | nil, String.t() | nil, [String.t()]}
+  # {elixir_pin, erlang_pin, rust_pin, malformed_lines} quadruple, with nil
+  # for absent-or-malformed. No step below can fail.
+  @spec parse(String.t()) ::
+          {String.t() | nil, String.t() | nil, String.t() | nil, [String.t()]}
   defp parse(contents) do
     {pins, malformed} =
       contents
@@ -251,7 +285,8 @@ defmodule Mix.Tasks.Letflow.CheckToolchain do
       |> Enum.map(&String.trim_trailing(&1, "\r"))
       |> Enum.reduce({%{}, []}, &parse_line/2)
 
-    {Map.get(pins, "elixir"), Map.get(pins, "erlang"), Enum.reverse(malformed)}
+    {Map.get(pins, "elixir"), Map.get(pins, "erlang"), Map.get(pins, "rust"),
+     Enum.reverse(malformed)}
   end
 
   @spec parse_line(String.t(), {map(), [String.t()]}) :: {map(), [String.t()]}
@@ -286,36 +321,78 @@ defmodule Mix.Tasks.Letflow.CheckToolchain do
 
   # -- comparison -------------------------------------------------------
 
-  @spec report({String.t() | nil, String.t() | nil, [String.t()]}, String.t(), String.t()) :: :ok
-  defp report({nil, nil, malformed}, running_elixir, running_otp) do
+  @spec report(
+          {String.t() | nil, String.t() | nil, String.t() | nil, [String.t()]},
+          String.t(),
+          String.t(),
+          {:ok, String.t()} | :not_found
+        ) :: :ok
+  defp report({nil, nil, nil, malformed}, running_elixir, running_otp, running_rust) do
     # F2 (and the both-malformed case of F5)
     not_checked(
       ["  #{@pin_file} contains no elixir pin and no erlang pin." | malformed_lines(malformed)],
       running_elixir,
-      running_otp
+      running_otp,
+      running_rust
     )
   end
 
-  defp report({elixir_pin, erlang_pin, malformed}, running_elixir, running_otp) do
+  defp report(
+         {elixir_pin, erlang_pin, rust_pin, malformed},
+         running_elixir,
+         running_otp,
+         running_rust
+       ) do
     expected_elixir = expected_elixir(elixir_pin)
     expected_otp = expected_otp_major(erlang_pin)
+    rust_matches? = rust_matches?(rust_pin, running_rust)
 
-    if expected_elixir == running_elixir and expected_otp == running_otp do
+    if expected_elixir == running_elixir and expected_otp == running_otp and rust_matches? do
       IO.puts(
         "letflow.check_toolchain: OK -- Elixir #{running_elixir} / OTP #{running_otp} " <>
-          "matches #{@pin_file}."
+          "/ Rust #{rust_running_display(running_rust)} matches #{@pin_file}."
       )
 
       :ok
     else
-      # The block always carries BOTH rows, so a reader never has to infer
+      # The block always carries every row, so a reader never has to infer
       # which comparison was silent.
       warn_block("TOOLCHAIN OFF PIN", [
         elixir_row(expected_elixir, running_elixir),
-        otp_row(expected_otp, erlang_pin, running_otp) | malformed_lines(malformed)
+        otp_row(expected_otp, erlang_pin, running_otp),
+        rust_row(rust_pin, running_rust) | malformed_lines(malformed)
       ])
     end
   end
+
+  # rust_pin nil means "not pinned" -- that path is intentionally treated as
+  # a match (nothing to compare against), mirroring how a bare `nil ==
+  # running` comparison would behave for the other two tools if this design
+  # required a strict pin. F9 (rustc not found/not runnable) only matters
+  # when a pin actually exists to check it against.
+  @spec rust_matches?(String.t() | nil, {:ok, String.t()} | :not_found) :: boolean()
+  defp rust_matches?(nil, _running_rust), do: true
+  defp rust_matches?(_rust_pin, :not_found), do: false
+
+  defp rust_matches?(rust_pin, {:ok, running}) do
+    running_version(running) == rust_pin
+  end
+
+  # `rustc --version` prints e.g. "rustc 1.97.1 (8bab26f4f 2026-01-01)"; the
+  # second whitespace-separated token is the leading semver, compared to the
+  # pin by exact string equality -- same "no fuzzy version-range logic"
+  # discipline the Elixir/OTP checks above already use.
+  @spec running_version(String.t()) :: String.t() | nil
+  defp running_version(raw) do
+    case String.split(raw, ~r/\s+/, trim: true) do
+      [_rustc, version | _rest] -> version
+      _ -> nil
+    end
+  end
+
+  @spec rust_running_display({:ok, String.t()} | :not_found) :: String.t()
+  defp rust_running_display({:ok, running}), do: running
+  defp rust_running_display(:not_found), do: "not found"
 
   # The `-otp-NN` suffix is parsed off and discarded -- it is never compared
   # to anything. See the moduledoc.
@@ -356,6 +433,24 @@ defmodule Mix.Tasks.Letflow.CheckToolchain do
       verdict(expected == running)
   end
 
+  # F9: rustc not found/not runnable is a distinct row shape from
+  # elixir_row/otp_row's "matches"/"MISMATCH" verdict, since "not pinned"
+  # (nil) and "pinned but rustc unavailable" (:not_found) are two different
+  # failure modes that must not be collapsed into one message.
+  @spec rust_row(String.t() | nil, {:ok, String.t()} | :not_found) :: String.t()
+  defp rust_row(nil, running_rust) do
+    "  Rust    expected (no rust pin in #{@pin_file})   running #{rust_running_display(running_rust)}   <-- NOT PINNED"
+  end
+
+  defp rust_row(rust_pin, :not_found) do
+    "  Rust    expected #{rust_pin}   running (rustc not found or not runnable)   <-- NOT FOUND"
+  end
+
+  defp rust_row(rust_pin, {:ok, running}) do
+    "  Rust    expected #{rust_pin}   running #{running}   " <>
+      verdict(running_version(running) == rust_pin)
+  end
+
   @spec verdict(boolean()) :: String.t()
   defp verdict(true), do: "matches"
   defp verdict(false), do: "<-- MISMATCH"
@@ -365,11 +460,15 @@ defmodule Mix.Tasks.Letflow.CheckToolchain do
     Enum.map(lines, &"  Malformed line in #{@pin_file}, ignored: #{&1}")
   end
 
-  @spec not_checked([String.t()], String.t(), String.t()) :: :ok
-  defp not_checked(body_lines, running_elixir, running_otp) do
+  @spec not_checked([String.t()], String.t(), String.t(), {:ok, String.t()} | :not_found) :: :ok
+  defp not_checked(body_lines, running_elixir, running_otp, running_rust) do
     warn_block(
       "TOOLCHAIN PIN NOT CHECKED",
-      body_lines ++ ["  Running: Elixir #{running_elixir} / OTP #{running_otp}"]
+      body_lines ++
+        [
+          "  Running: Elixir #{running_elixir} / OTP #{running_otp} / " <>
+            "Rust #{rust_running_display(running_rust)}"
+        ]
     )
   end
 

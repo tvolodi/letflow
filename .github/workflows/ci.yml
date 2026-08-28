@@ -35,9 +35,19 @@
 #    restructured for that to happen.
 #
 # Toolchain versions: read from .tool-versions (elixir 1.20.3-otp-29,
-# erlang 29.0.5) via setup-beam's version-file input rather than hardcoded
-# here, so CI and local `mix letflow.check_toolchain` can never silently
-# drift apart -- the same file backs both.
+# erlang 29.0.5, rust 1.97.1) via setup-beam's version-file input (Elixir/OTP)
+# and a shell step feeding dtolnay/rust-toolchain@stable (Rust, REQ-165 --
+# there is no version-file: input on that action, so the pinned value is read
+# out of .tool-versions by a preceding step and threaded in via
+# $GITHUB_OUTPUT) rather than hardcoded here, so CI and local
+# `mix letflow.check_toolchain` can never silently drift apart -- the same
+# file backs both.
+#
+# WASMEX_BUILD: true on "Run backend gate" (REQ-165): without it, `wasmex`'s
+# own rustler_precompiled dependency could satisfy `mix compile` by fetching
+# a precompiled NIF for ubuntu-latest and never touch the pinned Rust
+# toolchain at all, silently defeating the point of pinning it -- see
+# lib/letflow/design/req165-wasmex-process-boundary.md §0.
 #
 # actions/checkout uses fetch-depth: 0 (full history) because
 # `mix letflow.lint_handoffs` (one of `letflow.check`'s own steps) shells
@@ -88,6 +98,17 @@ jobs:
           version-file: .tool-versions
           version-type: strict
 
+      - name: Read pinned Rust version from .tool-versions
+        id: rust_pin
+        run: |
+          version=$(grep -E '^rust ' .tool-versions | awk '{print $2}')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Rust (pinned via .tool-versions)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ steps.rust_pin.outputs.version }}
+
       - name: Cache deps and _build
         uses: actions/cache@v4
         with:
@@ -103,6 +124,8 @@ jobs:
 
       - name: Run backend gate
         run: mix letflow.check
+        env:
+          WASMEX_BUILD: true
 
   frontend:
     # REQ-138: frontend gate job, appended alongside `backend` per that

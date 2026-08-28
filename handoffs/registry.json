@@ -3008,6 +3008,27 @@
             "queue_task_id": 322,
             "queue_agent_id": "orch-ai-dala",
             "note": "WF-02 for REQ-170 (queue task 322, GH#622, stage S5). WASM per-invocation wall-clock timeout enforced across the process boundary (WASM-11) -- cashes in decision 0014's mandatory process boundary as an actual guarantee. THE MOST SEVERE FINDING THIS PIPELINE HAS PRODUCED ON THE WASM HALF: live-verified that decision 0014's containment argument point (ii) is FALSE -- wasmex's documented timeout-interrupt-and-keep-Store-usable claim does not hold; a genuinely hung guest is never interrupted at any bound tested up to 30s, the calling process crashes with an ordinary GenServer.call exit, the Store becomes permanently wedged, and the underlying native execution is unreachable by ANY BEAM-side termination mechanism (link death, Process.exit/2, Task.shutdown/2, GenServer.stop/1) because wasmex's own per-Store executor task discards its JoinHandle -- it permanently leaks one thread of wasmex's shared, node-global Tokio worker pool per hung invocation. A live-reproduced 32-concurrent-hang scenario starved an unrelated guest call. Independently reproduced by CODE-DESIGN-VALIDATOR and SECURITY-REVIEWER. What REQ-170 actually, honestly delivers: PluginInterface.invoke/2,3's existing, UNMODIFIED supervised-task boundary (REQ-057/165) reliably bounds the CALLER's wait regardless of wasmex's own timeout -- confirmed even against :infinity. New Letflow.Engine.Wasm.CallTimeout (pure classifier) plus a small additive PluginHandler extension (configurable timeout_ms, default 5000ms matching prior implicit behavior). plugin_interface.ex untouched. REVIEWER corrected decision 0014 in the same review (WASM-11 moved off the satisfiable-as-worded list, OQ-5 amended, REQ-VALIDATOR watchlist synced) -- a factual correction, not a policy re-decision. SECURITY-REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR all independently passed clean. TEST-DESIGNER's mutation pass (26->30 tests) found and closed 4 real gaps. PR #691's FIRST CI RUN failed for real (one of two duplicate runs, 9 test failures cascading from an unrelated file) -- ORCH root-caused this directly: the test suite's own genuinely-hanging guest tests (per this requirement's own design finding) leaked ~9 permanent native threads over CI's single non-partitioned mix test invocation, exhausting wasmex's shared pool on a busier runner and starving module_registry_test.exs's unrelated tests -- the exact hazard class this requirement's own design predicted, now observed for real in production CI, not just a design-session probe. Dispatched a fix (TEST-DESIGNER, commit eac174a): reduced the leak footprint from ~9 to ~7 by converting pure classify/1 logic tests to synthetic outcome() values and consolidating AC4's timeout_ms calls, while keeping at least one live end-to-end test per AC. CI passed cleanly on retry (5-6 min each run, both duplicate runs green). Filed ISS-0352 (MAJOR) for the residual, unfixed underlying mechanism (7 leaks still exist; nothing prevents a future test file or busier runner from re-triggering exhaustion) with candidate scope for a real fix (test-file ordering/isolation, CI using the partitioned test_parallel.sh, or the deeper OQ-5 concurrency cap). Unblocks REQ-171/172 (host API) and beyond. Queue task 322 released done cleanly."
+        },
+        {
+            "run_id": "WF02-REQ171-20260828",
+            "workflow_id": "WF-02",
+            "requirement_ids": ["REQ-171"],
+            "issue_ids": [],
+            "stage": "S5",
+            "status": "IN_PROGRESS",
+            "owned_modules": [
+                "lib/letflow/engine/wasm/",
+                "test/letflow/engine/wasm/",
+                "priv/wasm_fixtures/"
+            ],
+            "lock_acquired_at": "2026-08-28T11:53:04Z",
+            "lock_released_at": null,
+            "released_lock": false,
+            "last_known_step": "Step 00 -- bookkeeping commit to main in progress",
+            "backfilled": false,
+            "queue_task_id": 323,
+            "queue_agent_id": "orch-ai-dala",
+            "note": "WF-02 for REQ-171 (queue task 323, GH#623, stage S5). WASM host API 1/2 -- read path (read_variable, log, now, uuid) at parity with Lua's REQ-159/REQ-152 -- the first real wiring of ModuleRegistry (REQ-166), CapabilityGate (REQ-167), MemoryGuard (REQ-168), and ResourceLimits (REQ-169) into an actual host function dispatch. Decision 0014 (4): Lua's host API is the definition WASM conforms to -- REQ-159's Lua implementation must not be modified; a genuine semantic conflict is a finding, not resolved by moving the Lua side. uuid has no Lua counterpart in R-Co's eight-function matrix -- must be decided explicitly (WASM-side addition vs. Lua-side gap), not quietly implemented as parity. Number marshalling cites REQ-150's rule, no second rule. Capability gating comes from REQ-167's whitelist, no second model. write_variable/call_service/fail are REQ-172's. SECURITY-REVIEWER hard gate. Depends on REQ-170 (done). Queue claimed via get_next_task 2026-08-28T11:52:51Z."
         }
     ]
 }

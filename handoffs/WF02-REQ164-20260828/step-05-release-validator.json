@@ -1,0 +1,39 @@
+{
+  "handoff_id": "step05-WF02-REQ164-20260828",
+  "run_id": "WF02-REQ164-20260828",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ164-20260828/step-05-release-validator.json",
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-164"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ164-20260828/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ164-20260828/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req164-wasm-compilation-hosting.md"
+    ],
+    "branch_name": "feature/WF02-REQ164-20260828",
+    "commit": "6b2558f"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR (WF-02 Step 5) for REQ-164 -- independently re-derive that all 6 real acceptance criteria in docs/requirements.yaml's REQ-164 entry are actually met. Decision-only requirement, no code, no mix test run applicable. Do not trust CODE-DESIGN-VALIDATOR's or REVIEWER's prior PASS verdicts as evidence by itself -- re-derive independently, including your own read of REQ-175's cancellation trigger (REVIEWER already gave this careful scrutiny; you should independently confirm the same conclusion, not skip it because REVIEWER already looked).",
+    "acceptance_criteria": [
+      "Read docs/requirements.yaml REQ-164's 6 acceptance criteria verbatim and confirm each is satisfied by a specific section of lib/letflow/design/req164-wasm-compilation-hosting.md -- quote the section.",
+      "Independently confirm REQ-175's own text genuinely instructs its own cancellation on a REQ-164 NO decision (read REQ-175's entry directly, don't just cite REVIEWER's finding).",
+      "Confirm git diff --stat main...feature/WF02-REQ164-20260828 touches no mix.exs, lib/letflow/engine/, or docs/requirements.yaml file.",
+      "Verdict: PASS only if independently re-derived, not merely re-stated from prior agents' reports.",
+      "CRITICAL: when writing this handoff's top-level status field (line 9), use exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED. Run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  }
+}

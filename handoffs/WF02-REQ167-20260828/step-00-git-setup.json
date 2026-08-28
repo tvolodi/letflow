@@ -1,0 +1,26 @@
+{
+  "handoff_id": "step00-WF02-REQ167-20260828",
+  "run_id": "WF02-REQ167-20260828",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ167-20260828/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-167"],
+    "issue_ids": [],
+    "branch_name": "feature/WF02-REQ167-20260828",
+    "base_commit": "3eab458"
+  },
+  "task": {
+    "description": "WF-02 Step 00 (git setup) for REQ-167 (queue task 319, GH#619). Started-event bookkeeping (docs/status/requirement_status.v5.yaml, docs/status/requirement_status.index.yaml, handoffs/registry.json) committed directly to main (commit 3eab458, pushed). Feature branch feature/WF02-REQ167-20260828 created off that commit.",
+    "acceptance_criteria": []
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Bookkeeping commit 3eab458 pushed to main. Branch feature/WF02-REQ167-20260828 created off main@3eab458. Routes next to Step 1 (CODE-DESIGNER)."
+  }
+}

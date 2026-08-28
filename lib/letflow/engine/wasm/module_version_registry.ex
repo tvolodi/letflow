@@ -442,10 +442,11 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
     end
   end
 
-  # Step 4/5/6 -- calls the guest export, stops the instance unconditionally
-  # (step 5), and releases the checkout (step 6) on every path except the
+  # Step 4/5/6 -- calls the guest export, then stops the instance (step 5)
+  # and releases the checkout (step 6) on the success and rescued-exception
+  # paths. GenServer.stop/1 is NOT unconditional here: it is skipped on the
   # ONE path design §6 deliberately leaves to the Process.monitor/:DOWN
-  # crash-safety net: an ordinary Elixir exception here IS caught (rescue),
+  # crash-safety net. An ordinary Elixir exception here IS caught (rescue),
   # cleaned up, and re-raised; a GenServer.call timeout `exit` from
   # Wasmex.call_function/4 itself is never intercepted by `rescue` at all
   # (Elixir's `rescue` never observes an `exit`), so it is deliberately left

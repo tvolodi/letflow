@@ -1,0 +1,20 @@
+{
+  "handoff_id": "WF02-REQ174-20260828-step02c-recheck1",
+  "run_id": "WF02-REQ174-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 2c (narrow re-check after teardown-claim fix)",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/engine/wasm/module_version_registry.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 326, GH#626, stage S5. Your prior review FAILED f09a9d7 on one specific finding: the moduledoc's 'unconditional teardown on every path' claim was inaccurate. ELIXIR-DEV fixed it (commit -- see git log) in module_version_registry.ex, plugin_handler.ex, and the design doc: teardown is now correctly described as skipped on the uncaught GenServer.call-timeout-exit path and the outer Task.shutdown(:brutal_kill) path (pre-existing REQ-165/170/173 behavior, not a new defect), and isolation is now correctly attributed to never sharing a Store between invocations rather than to teardown discipline. mix compile --warnings-as-errors clean; mix test test/letflow/engine/wasm/ 163 passed, 7 excluded, no regression. No production logic was changed -- documentation-accuracy fix only."},
+  "task": {
+    "description": "Narrow re-check: confirm the corrected moduledoc text in both module_version_registry.ex and plugin_handler.ex (and the design doc) accurately describes teardown as non-unconditional with the two named skip paths, and correctly attributes isolation to never-sharing-a-Store. Confirm via git diff that no production logic changed -- only prose/comments. This is not a full fresh pass -- your prior INV-3 fixture check and no-regression-elsewhere findings stand.",
+    "acceptance_criteria": [
+      "a test asserts per-invocation isolation regardless of which way the decision went: data written to guest memory in invocation N is NOT observable in invocation N+1 of the same module",
+      "the moduledoc states that this requirement restates WASM-13 by ADDING the per-invocation memory-reset correctness constraint, which is absent from WASM-13's original text, and cites decision 0014 (e) and the wasmex Store-reuse behaviour that motivates it"
+    ]
+  },
+  "result": null
+}

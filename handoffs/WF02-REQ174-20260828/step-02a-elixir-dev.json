@@ -1,0 +1,22 @@
+{
+  "handoff_id": "WF02-REQ174-20260828-step02a",
+  "run_id": "WF02-REQ174-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 2a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/design/req174-wasm-instance-pooling-or-decline.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 326, GH#626, stage S5. Design APPROVED by CODE-DESIGN-VALIDATOR (commit 2ff6205) after one rework round (two mechanical fixes -- literal code fences, wrong function name -- the substance was independently confirmed sound both times). Design DECLINES instance pooling: no pooling API exists in the installed wasmex dependency (live-verified, grep -rniE 'pool|reuse|recycle' deps/wasmex/lib/ deps/wasmex/CHANGELOG.md returns only an unrelated Tokio-thread-pool CHANGELOG entry), and both existing instantiation call sites (ModuleVersionRegistry.instantiate/2, REQ-173; PluginHandler.start_instance/1, REQ-165/170/171/172) already allocate a brand-new Wasmex.Store per invocation, giving isolation-by-construction. Read the full design doc before writing any code -- it specifies the exact test fixture and test shape (SS4). IMPORTANT: run `mix format` on every file you touch before declaring this step done -- this project's CI backend gate has failed the format check on the last three requirements in a row (REQ-167 PR #688, REQ-172 PR #693, REQ-173 PR #694) because mix compile/mix test do not check formatting; do not let this be the fourth."},
+  "task": {
+    "description": "Implement REQ-174 per the approved design: add the new WASM fixture priv/wasm_fixtures/req174_memory_write.wat (design SS4 specifies its exact shape -- one exported memory page, a write_marker export writing byte 1 at offset 0, a read_marker export reading it back, exploiting Wasm's zero-initialized-memory guarantee). Add the moduledoc decision record to whichever module the design specifies (likely a new lib/letflow/design-adjacent doc reference or a moduledoc addition to an existing WASM module -- check the design's own Deliverables/Files section for exactly where the DECLINE decision and its INV-174-1/INV-174-2 invariants should be recorded in shipped code, not just the design doc). This requirement does NOT add new pooling logic -- there is no pooling module to implement, since the decision is DECLINE. Do not write test files yet (TEST-DESIGNER's step) beyond what the design assigns to this step. Run mix format on every touched file, then mix compile --warnings-as-errors and mix test yourself and quote real output.",
+    "acceptance_criteria": [
+      "the moduledoc records an explicit decision: pooling adopted, or pooling declined with its reason -- WASM-13 is a SHOULD and declining is legitimate, but silence is not",
+      "the moduledoc states that this requirement restates WASM-13 by ADDING the per-invocation memory-reset correctness constraint, which is absent from WASM-13's original text, and cites decision 0014 (e) and the wasmex Store-reuse behaviour that motivates it",
+      "mix compile --warnings-as-errors passes with real output quoted",
+      "mix test passes with real output quoted (existing suite; new tests are TEST-DESIGNER's step)"
+    ]
+  },
+  "result": null
+}

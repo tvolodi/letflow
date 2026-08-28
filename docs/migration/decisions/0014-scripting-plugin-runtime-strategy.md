@@ -498,20 +498,43 @@ default and assert the denial against whichever ABI is chosen.
 absent from the original: if pooling is adopted, per-invocation memory reset is a
 **correctness** requirement (isolation), not a performance detail. Per (e).
 
+**WASM-10 — Memory Limits (correction: REVIEWER, WF-02 Step 2d, REQ-169,
+2026-08-28).** Literal text: "Attempt to grow beyond cap MUST TRAP." This record's own
+evidence section above called `StoreLimits.memory_size`/`table_elements` "direct
+analogues" and this requirement was originally carried on the "satisfiable
+substantially as worded" list below on that basis — **without live-verifying the trap
+claim**, the same category of gap this record's own caution paragraph already warns
+about for LUA-14. REQ-169's live verification
+(`lib/letflow/design/req169-wasm-fuel-and-memory-cap.md` §1.5-§1.6, real installed
+`wasmex` v0.15.1) found the literal wording does **not** hold: `memory.grow` beyond
+`StoreLimits.memory_size` does not trap — it returns WebAssembly's own standard `-1`
+growth-failure sentinel as an ordinary successful call return, and the guest's
+execution continues normally. *Intent restatement:* the SECURITY property WASM-10
+actually cares about — a guest's real linear memory cannot be made to exceed the
+configured cap — is live-verified true and unaffected; only the FAILURE-VISIBILITY
+mechanism ("traps") is wrong. A caller wanting to know whether the cap bound a growth
+attempt must compare real memory size before/after (`ResourceLimits.memory_grew_within_cap?/3`),
+not pattern-match a trap that will not occur. WASM-09 (`:consume_fuel`) has no such
+gap — REQ-169 confirmed fuel metering behaves exactly as this record and WASM-09
+describe (§1.1-§1.4 of that design), so only WASM-10 moves to this section.
 
 Requirements judged satisfiable substantially as worded, subject to the above:
 LUA-02, LUA-05, LUA-06, LUA-07, LUA-11, LUA-12, LUA-13;
-WASM-02, WASM-06, WASM-08, WASM-09 (`:consume_fuel` is a direct analogue), WASM-10
-(`StoreLimits.memory_size`/`table_elements` are direct analogues), WASM-11, WASM-12,
-WASM-14. Each still needs its own acceptance test; "satisfiable" is not "satisfied."
+WASM-02, WASM-06, WASM-08, WASM-09 (`:consume_fuel` is a direct analogue, live-verified
+by REQ-169), WASM-11, WASM-12, WASM-14. Each still needs its own acceptance test;
+"satisfiable" is not "satisfied."
 
 **A caution on this list.** LUA-14 sat on it in this record's first revision, asserted
 satisfiable while this record's own LUA-03 evidence listed a default deny-set that leaves
 `os.time` reachable — the exact "this one's fine" that is more dangerous than an honestly
 restated gap, because a requirement absent from the watchlist below is policed by nothing
-downstream. REVIEWER caught it. Every entry above is a judgement made from documentation
-that was read, not from software that was run; expansion should treat the list as a
-starting position to verify, not a clearance.
+downstream. REVIEWER caught it. **WASM-10 repeated the identical pattern** — carried on
+this list from documentation alone ("direct analogue"), and only shown wrong once
+REQ-169 actually ran the mechanism; REVIEWER caught it too and moved it to the section
+above rather than leaving the requirement's own design doc as the only place the gap is
+recorded. Every entry above is a judgement made from documentation that was read, not
+from software that was run; expansion should treat the list as a starting position to
+verify, not a clearance.
 
 ## Open questions
 
@@ -602,11 +625,13 @@ premise**, applying every restatement in "Requirements NOT satisfiable as litera
 worded" — each restated requirement must say plainly that it is a restatement and why,
 so no future reader mistakes a satisfied intent for a satisfied literal text.
 REQ-VALIDATOR should treat an unrestated **LUA-01, LUA-03, LUA-04, LUA-08/LUA-10 (as a
-two-layer pair), LUA-09, LUA-14, LUA-15, LUA-16, WASM-01, WASM-03/04/05, WASM-07, or
-WASM-13** as a validation failure. That is the full watchlist; it is the same set as the
-"Requirements NOT satisfiable as literally worded" section above, and the two must be
-kept in sync — if a later pass moves a requirement onto that list, it belongs here in the
-same edit, because a requirement that is restated but unwatched is policed by nothing.
+two-layer pair), LUA-09, LUA-14, LUA-15, LUA-16, WASM-01, WASM-03/04/05, WASM-07,
+WASM-10, or WASM-13** as a validation failure. That is the full watchlist; it is the
+same set as the "Requirements NOT satisfiable as literally worded" section above, and
+the two must be kept in sync — if a later pass moves a requirement onto that list, it
+belongs here in the same edit, because a requirement that is restated but unwatched is
+policed by nothing. (WASM-10 added 2026-08-28, REVIEWER, REQ-169 — see that section's
+entry for why.)
 
 Sequencing per Decision (4): the Lua half lands first and defines the host API; the WASM
 half follows and conforms to it per WASM-12. OQ-1 blocks LUA-09; OQ-3 and OQ-4 block the

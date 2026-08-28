@@ -1,0 +1,66 @@
+{
+  "handoff_id": "step02d-WF02-REQ169-20260828",
+  "run_id": "WF02-REQ169-20260828",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ169-20260828/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-169"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ169-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ169-20260828/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req169-wasm-fuel-and-memory-cap.md",
+      "lib/letflow/engine/wasm/resource_limits.ex"
+    ],
+    "branch_name": "feature/WF02-REQ169-20260828",
+    "commit": "d6154cc"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-169's implementation, commit d6154cc. SECURITY-REVIEWER already passed Step 2c (see step-02c-security-reviewer.json). Your scope: idiomatic OTP usage, decision-record consistency, and scope creep -- read the real diff and the approved design (lib/letflow/design/req169-wasm-fuel-and-memory-cap.md) in full before verdict.",
+    "acceptance_criteria": [
+      "Confirm Letflow.Engine.Wasm.ResourceLimits follows this codebase's existing conventions -- compare against module_registry.ex/capability_gate.ex/memory_guard.ex for structure, typespec style, error-tuple shape conventions, moduledoc format.",
+      "Confirm no scope creep: only lib/letflow/engine/wasm/resource_limits.ex, the three new priv/wasm_fixtures/req169_*.wat fixtures, and test/letflow/engine/wasm/resource_limits_test.exs are touched -- module_registry.ex, capability_gate.ex, plugin_handler.ex, memory_guard.ex, and application.ex must be untouched (design explicitly said no new Task.Supervisor).",
+      "Confirm typespecs (@spec, @type) are complete and accurate for all public functions.",
+      "Confirm error handling follows this codebase's established {:error, reason} tuple idiom throughout.",
+      "Confirm decision 0014's WASM-09/WASM-10 text is cited accurately in the moduledoc.",
+      "Confirm the moduledoc's honest divergence disclosure (WASM-10's 'MUST TRAP' vs. actual behavior) doesn't need any additional documentation-consistency follow-up (mirroring REQ-168's own precedent where REVIEWER fixed a stale design-doc table entry) -- check whether decision 0014's own text needs a similar correction, or whether it's already accurate/out of scope for this review.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verified_independently": [
+      "git show d6154cc --stat and full diff read directly",
+      "current file contents of lib/letflow/engine/wasm/resource_limits.ex read in full",
+      "lib/letflow/design/req169-wasm-fuel-and-memory-cap.md read in full",
+      "test/letflow/engine/wasm/resource_limits_test.exs read in full",
+      "lib/letflow/engine/wasm/memory_guard.ex and capability_gate.ex read for style/convention comparison",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md read in full",
+      "mix compile --warnings-as-errors -- clean, no warnings",
+      "MIX_ENV=test WASMEX_BUILD=true mix test test/letflow/engine/wasm/resource_limits_test.exs -- re-run live, 9/9 passed",
+      "git diff d6154cc~1 d6154cc --stat -- confirmed only resource_limits.ex, the three req169_*.wat fixtures, and resource_limits_test.exs are new production/test files; module_registry.ex, capability_gate.ex, plugin_handler.ex, memory_guard.ex, application.ex all show zero diff against this commit"
+    ],
+    "acceptance_criteria_findings": [
+      "1. PASS -- ResourceLimits follows the established convention exactly: moduledoc opens with the WASM-xx citation + decision-0014 pointer + live-verification pointer, same shape as memory_guard.ex's opening paragraph; error classification (classify_call_result/1) is the same substring-match-over-a-raw-wasmex-string technique as capability_gate.ex's classify_crash/1, explicitly cited as such in the doc comment; every public function returns a plain tagged tuple or bare atom, never an opaque struct, matching memory_guard.ex/capability_gate.ex; @typedoc precedes every @type, @doc precedes every @spec/def, matching house style throughout.",
+      "2. PASS -- diff (d6154cc~1..d6154cc) touches exactly lib/letflow/engine/wasm/resource_limits.ex, priv/wasm_fixtures/req169_{counting,grow,hang}.wat, test/letflow/engine/wasm/resource_limits_test.exs, plus two handoff JSON files. module_registry.ex, capability_gate.ex, plugin_handler.ex, memory_guard.ex, and application.ex are byte-identical to their pre-commit state (empty diff confirmed directly). grep for 'Task.Supervisor' in the new file: zero hits -- no new supervisor added; the design's own §10 claim is verified, not merely trusted.",
+      "3. PASS -- every public function (build_store/1, arm_fuel/2, classify_call_result/1, memory_grew_within_cap?/3) carries a complete @spec; every @type/@typedoc pair is present and matches what the function bodies actually produce (build_defect(), arm_fuel_defect(), call_classification() all have every arm reachable and none unreachable, confirmed by reading the function clauses).",
+      "4. PASS -- every failure path returns {:error, reason} with a structured, non-raw-string reason (new_engine/1, new_store/2, arm_fuel/2 all wrap the raw wasmex string into a tagged tuple before returning); no bare exception raised, no unguarded {:ok, _} = pattern in the shipped module (only in the test file, matching this project's established test-helper convention).",
+      "5. PASS -- moduledoc's fuel-metering paragraph and WASM-09 citation match decision 0014's own text (':consume_fuel' default false, direct analogue) and REQ-169's requirements.yaml description verbatim in substance; the divergence paragraph accurately quotes WASM-10's literal wording ('Attempt to grow beyond cap MUST TRAP') and decision 0014's own quoted evidence ('Growing a linear memory beyond this limit will fail'), correctly distinguishing the two.",
+      "6. FINDING, ACTED ON -- decision 0014's own text needed a correction, mirroring the REQ-168 precedent (commit 3fe9a94, 'REVIEWER fixed a stale design-doc table entry'). Decision 0014 lines ~504-506 (pre-fix) carried WASM-10 on its 'Requirements judged satisfiable substantially as worded' list on the strength of 'StoreLimits.memory_size/table_elements are direct analogues' -- i.e. the decision record itself asserted WASM-10's literal wording (including 'MUST TRAP') was satisfiable, without having live-verified it. REQ-169's own live verification (design §1.5-§1.6) now proves that assertion false: the trap does not occur. This is the exact failure shape decision 0014's own 'A caution on this list' paragraph names for LUA-14 ('asserted satisfiable while ... evidence ... leaves [it] reachable ... a requirement absent from the watchlist below is policed by nothing downstream') -- and the decision's own 'Ownership of execution' section explicitly instructs: 'if a later pass moves a requirement onto that list, it belongs here in the same edit, because a requirement that is restated but unwatched is policed by nothing.' REQ-169's design/moduledoc alone does not satisfy that instruction, since decision 0014 is a separate, higher-authority record that future REQ-ANALYST/REQ-VALIDATOR passes read directly and would otherwise still see WASM-10 marked satisfiable-as-worded with no watchlist entry. Fixed directly in this review (docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md): added a dated WASM-10 correction paragraph to the 'Requirements NOT satisfiable as literally worded' section (restating the intent: the SECURITY property holds, only the trap/failure-visibility mechanism does not), removed WASM-10 from the 'satisfiable substantially as worded' list, extended the 'A caution on this list' paragraph to name the repeat pattern, and added WASM-10 to the REQ-VALIDATOR watchlist sentence in 'Ownership of execution' -- all in this same review, per the decision record's own 'same edit' instruction. This is a documentation-consistency fix to a decision record, not application code, and follows the REQ-168 precedent of REVIEWER correcting documentation directly rather than routing back to ELIXIR-DEV.",
+      "Minor, non-blocking observation (not a defect, noted for completeness): the design doc's own §4 prose for memory_grew_within_cap?/3 (lines ~444-451) describes the :capped branch inconsistently with its own :within_cap description ('size_after == size_before despite ... attempted a larger grow' vs. 'within_cap whenever size_after <= memory_cap_bytes' -- these two clauses do not compose into a coherent two-branch function). The shipped implementation resolves this cleanly and consistently (:capped fires exactly when size_after > memory_cap_bytes, the only sensible complement of :within_cap's own stated condition), and the shipped moduledoc's own prose (lines 256-262 of resource_limits.ex) is internally consistent, unlike the design doc's. This is a design-doc drafting inconsistency that ELIXIR-DEV implicitly corrected rather than literally transcribed -- not scope creep, not a functional defect, and the shipped @spec/@doc pair is coherent and tested (AC3 test in §5.4/test file exercises exactly this path). Not blocking; noted so a future reader of the design doc alone is not confused by its self-contradictory prose."
+    ],
+    "verdict": "PASS -- Letflow.Engine.Wasm.ResourceLimits is idiomatic for this codebase: it follows module_registry.ex/capability_gate.ex/memory_guard.ex's established conventions for moduledoc structure, classify_crash/1-style substring error classification, structured {:error, reason} tuples throughout, and complete @type/@typedoc/@spec/@doc coverage. No scope creep: exactly the five files the handoff named were touched, no existing WASM module modified, no new Task.Supervisor added (verified by diff and grep, not merely trusted from the commit message). Supervision integrity is unaffected -- this module builds an Engine/Store configuration and never itself dispatches a guest call or spawns a process; guest dispatch still goes through the existing, unmodified Letflow.Engine.PluginTaskSupervisor. Decision 0014's WASM-09/WASM-10 text is cited accurately in the moduledoc, and the moduledoc's honest divergence disclosure needed one additional documentation-consistency fix: decision 0014's own watchlist/satisfiable-list was stale (still marking WASM-10 satisfiable-as-worded on documentation-only evidence that REQ-169's live verification has now disproven for the literal 'MUST TRAP' clause) -- corrected directly in this review per the decision record's own 'same edit' instruction and the REQ-168 precedent for REVIEWER fixing documentation directly. mix compile --warnings-as-errors clean; mix test re-run live, 9/9 passed. Cleared to proceed to TEST-DESIGNER.",
+    "files_touched_by_this_review": [
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md (WASM-10 correction, per finding 6 above)",
+      "handoffs/WF02-REQ169-20260828/step-02d-reviewer.json (this file)"
+    ]
+  }
+}

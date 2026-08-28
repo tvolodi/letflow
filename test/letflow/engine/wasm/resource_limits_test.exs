@@ -311,6 +311,39 @@ defmodule Letflow.Engine.Wasm.ResourceLimitsTest do
   end
 
   # ---------------------------------------------------------------------
+  # Mutation-driven strengthening pass (WF-02 Step 3, REQ-169): classify_call_result/1's
+  # fuel-exhaustion match must be the FULL "all fuel consumed by WebAssembly" substring,
+  # not a loose "fuel" match. A loose match would misclassify an ordinary trap that
+  # merely happens to mention the word "fuel" as :fuel_exhausted -- a false positive
+  # that would hide a real, unrelated trap behind the fuel-exhaustion label. Confirmed
+  # locally that mutating @fuel_exhausted_substring from the full phrase down to just
+  # "fuel" left all 9 pre-existing tests green (none of the fixtures' real trap/error
+  # strings happen to contain the bare word "fuel"), so this is a genuine coverage gap
+  # this test closes -- it does not depend on any wasmex fixture, only on
+  # classify_call_result/1's own pure string-matching logic.
+  # ---------------------------------------------------------------------
+
+  describe "classify_call_result/1: fuel-exhaustion match is the full canonical substring, not a loose 'fuel' match" do
+    test "an ordinary trap message that incidentally contains the bare word 'fuel' (but not the canonical fuel-exhaustion phrase) classifies as {:trap, _}, never :fuel_exhausted" do
+      incidental_message =
+        "Error during function excecution (wasm trap: out of fuel-adjacent host resource): error while executing at wasm backtrace"
+
+      refute incidental_message =~ "all fuel consumed by WebAssembly"
+      assert incidental_message =~ "fuel"
+
+      assert ResourceLimits.classify_call_result({:error, incidental_message}) ==
+               {:trap, incidental_message}
+    end
+
+    test "the canonical fuel-exhaustion phrase itself still classifies as :fuel_exhausted (control case, guards against an over-corrected match)" do
+      canonical_message =
+        "Error during function excecution (wasm trap: all fuel consumed by WebAssembly): error while executing at wasm backtrace"
+
+      assert ResourceLimits.classify_call_result({:error, canonical_message}) == :fuel_exhausted
+    end
+  end
+
+  # ---------------------------------------------------------------------
   # AC7 (design §5.7): the divergence itself is asserted as documented.
   # ---------------------------------------------------------------------
 
@@ -322,6 +355,41 @@ defmodule Letflow.Engine.Wasm.ResourceLimitsTest do
       assert moduledoc =~ ~r/does \*\*NOT\*\* trap/
       assert moduledoc =~ "WASM-10"
       assert moduledoc =~ "DIVERGENCE"
+    end
+
+    # Mutation-driven strengthening (WF-02 Step 3, REQ-169): the three loose
+    # substring/regex checks above are individually satisfiable by a moduledoc whose
+    # "DIVERGENCE"/"WASM-10"/"does **NOT** trap" fragments are scattered across
+    # unrelated sentences describing something else entirely -- confirmed locally by
+    # temporarily replacing the real moduledoc with a short adversarial paragraph
+    # that plants all three fragments in an unrelated sentence about "unrelated
+    # retries" with no mention of memory.grow/StoreLimits.memory_size at all; the
+    # three assertions above still passed against it (11/11 green), a genuine gap.
+    # This test closes it by requiring the actual mechanism terms
+    # (memory.grow/StoreLimits.memory_size) to co-occur with the divergence
+    # language, and by requiring the load-bearing citation (design doc filename +
+    # decision 0014) per test/specs/REQ-169.md T7.4 / REQ-168's identical
+    # citation-strengthening precedent (test/specs/REQ-168.md T5 item 3).
+    test "the divergence statement cites the actual mechanism terms and the design doc/decision record, not just isolated keyword fragments" do
+      {:docs_v1, _anno, _lang, _fmt, %{"en" => moduledoc}, _meta, _docs} =
+        Code.fetch_docs(Letflow.Engine.Wasm.ResourceLimits)
+
+      # The "does NOT trap" claim must be anchored to the real mechanism names, not
+      # floating free in an unrelated sentence.
+      assert moduledoc =~ "memory.grow"
+      assert moduledoc =~ "StoreLimits.memory_size"
+
+      assert moduledoc =~ ~r/StoreLimits\.memory_size.{0,200}does \*\*NOT\*\* trap/s
+
+      # The disclosure must cite the gate-approved design doc and decision 0014 by
+      # name -- a prose paraphrase satisfying only the loose keyword checks above
+      # would not be traceable back to its authorizing source.
+      assert moduledoc =~ "req169-wasm-fuel-and-memory-cap.md"
+      assert moduledoc =~ "0014"
+
+      # The underlying security property (real memory cannot exceed the cap despite
+      # the non-trapping divergence) must itself be stated, not merely implied.
+      assert moduledoc =~ ~r/physically, unconditionally bounds/
     end
   end
 end

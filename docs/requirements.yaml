@@ -8556,7 +8556,7 @@ requirements:
   - id: REQ-169
     title: WASM fuel budget and linear-memory cap per invocation (WASM-09, WASM-10)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 321  # letflow-queue task id
     description: >

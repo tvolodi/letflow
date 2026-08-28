@@ -1,0 +1,59 @@
+{
+  "handoff_id": "step03-WF02-REQ169-20260828",
+  "run_id": "WF02-REQ169-20260828",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ169-20260828/step-03-test-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-169"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ169-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ169-20260828/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ169-20260828/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req169-wasm-fuel-and-memory-cap.md",
+      "lib/letflow/engine/wasm/resource_limits.ex",
+      "test/letflow/engine/wasm/resource_limits_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ169-20260828"
+  },
+  "task": {
+    "description": "TEST-DESIGNER pass (WF-02 Step 3) on REQ-169. ELIXIR-DEV already wrote an initial test suite (test/letflow/engine/wasm/resource_limits_test.exs, 9 tests, all passing per SECURITY-REVIEWER/REVIEWER's independent reruns). Your job is a MUTATION-DRIVEN review and strengthening pass: read the shipped resource_limits.ex in full, then find and fill real coverage gaps by actually mutating the implementation locally and confirming the existing suite fails to catch each mutation before adding a test that does. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching mix commands. Revert every mutation before finishing.",
+    "acceptance_criteria": [
+      "Mutate build_store/1 (or new_engine/1) to hardcode consume_fuel: false, or make it accidentally configurable/optional, and confirm an existing test catches fuel metering silently being off -- this is AC5's own central concern (a config that forgets to enable fuel produces an unlimited guest with no error anywhere). If no existing test catches this specific mutation, add one.",
+      "Mutate arm_fuel/2 to skip calling Wasmex.StoreOrCaller.set_fuel/2 entirely (a no-op stub returning :ok unconditionally) and confirm an existing test catches this -- if the AC2 reset test doesn't specifically fail on this mutation (as opposed to only failing on a 'wrong budget value' mutation), that's a real gap.",
+      "Mutate classify_call_result/1's fuel-exhaustion substring match to also match on a broader/wrong substring (e.g. just 'fuel' instead of 'all fuel consumed by WebAssembly') and confirm an existing test would catch a false-positive classification if this ever misfired against a different trap message containing the word 'fuel' incidentally.",
+      "Mutate memory_grew_within_cap?/3's comparison operator (e.g. from <= to <) and confirm an existing test catches the boundary case (size_after exactly equal to memory_cap_bytes).",
+      "Mutate store_limits/1 (or equivalent) to omit passing memory_size to StoreLimits entirely (leaving it nil/unbounded) and confirm an existing test catches an unbounded guest being able to grow memory indefinitely -- this is AC3/AC4's central concern for the memory-cap half.",
+      "Confirm the AC7 moduledoc-content test is not trivially satisfiable by an accidental substring match -- check it asserts a sufficiently specific phrase from the divergence statement.",
+      "Do not modify lib/letflow/engine/wasm/resource_limits.ex or any other implementation file -- test/fixture files only.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "COMPLETED -- mutation-driven strengthening pass done; 2 genuine coverage gaps found and closed, 4 assigned mutations already caught by the existing 9 tests, 0 implementation defects found",
+    "summary": "Read lib/letflow/engine/wasm/resource_limits.ex and test/letflow/engine/wasm/resource_limits_test.exs in full, then ran the 6 mutations named in the handoff's acceptance criteria one at a time against a scratchpad-backed byte-identical original, running `mix test test/letflow/engine/wasm/resource_limits_test.exs` after each and reverting (diff-confirmed identical) before the next. Findings: (1) new_engine/1 hardcoded consume_fuel:false -> 7/9 tests fail immediately, no gap. (2) arm_fuel/2 turned into an unconditional :ok no-op -> 6/9 fail, and specifically the AC2 reset test fails on first_count==0 rather than a budget-value mismatch, satisfying the handoff's discriminating condition; no gap. (3) classify_call_result/1's @fuel_exhausted_substring loosened from the full canonical phrase to bare \"fuel\" -> all 9 original tests stayed GREEN, a genuine gap (none of the fixtures' real trap strings happen to contain the bare word). Added 2 new tests exercising classify_call_result/1's pure string logic directly (no wasmex fixture needed): one asserting an incidental fuel-adjacent trap message classifies as {:trap,_} not :fuel_exhausted, one control case for the canonical phrase. Re-applied the mutation -> new test fails as expected (1/11 red); reverted -> 11/11 green. (4) memory_grew_within_cap?/3's <= mutated to < -> caught by the existing AC3 boundary test (size_after exactly == memory_cap_bytes), no gap. (5) store_limits/1 mutated to pass memory_size: nil -> 2 tests fail including AC4's memory-cap-binds-sooner test, no gap. (6) Per the handoff's explicit 'confirm AC7 is not trivially satisfiable' item: constructed an adversarial moduledoc planting the exact 3 matched fragments (DIVERGENCE/WASM-10/does **NOT** trap) in an unrelated sentence with no mention of memory.grow/StoreLimits.memory_size -> all 3 original AC7 assertions stayed GREEN, a genuine gap. Added a second AC7 test requiring the mechanism terms to co-occur with the divergence claim (proximity regex), plus citation of the design-doc filename and decision 0014 (mirroring test/specs/REQ-168.md's identical citation-strengthening precedent), plus the underlying security-property sentence. Re-applied the adversarial moduledoc -> new test fails as expected (11/12 red); reverted -> 12/12 green. Every mutation was reverted before the next; final state confirmed byte-identical to the pre-mutation original via diff (IMPLEMENTATION FULLY REVERTED). resource_limits.ex was never left modified. mix compile --warnings-as-errors succeeds cleanly. mix letflow.lint_handoffs reports 0 new violations. No implementation defect found -- this was purely a test-coverage strengthening pass; 3 new test blocks added (12 total, up from 9), all passing against the real, unmodified implementation.",
+    "artifacts_out": [
+      "test/letflow/engine/wasm/resource_limits_test.exs",
+      "test/specs/REQ-169.md"
+    ],
+    "mutations_tested": [
+      {"target": "new_engine/1 consume_fuel:true -> false", "caught_by_existing_suite": true, "detail": "7/9 tests fail"},
+      {"target": "arm_fuel/2 -> unconditional :ok no-op", "caught_by_existing_suite": true, "detail": "6/9 fail; AC2 test fails specifically on reset-loss (first_count==0), not a budget-value mismatch"},
+      {"target": "classify_call_result/1 fuel substring 'all fuel consumed by WebAssembly' -> 'fuel'", "caught_by_existing_suite": false, "detail": "GAP -- closed with 2 new tests; verified new test fails against mutant (1/11 red) and passes when reverted"},
+      {"target": "memory_grew_within_cap?/3 <= -> <", "caught_by_existing_suite": true, "detail": "1/9 fails; existing AC3 test already hits the exact boundary (size_after == memory_cap_bytes)"},
+      {"target": "store_limits/1 memory_size -> nil", "caught_by_existing_suite": true, "detail": "2/9 fail, including AC4's memory-tighter-cap test"},
+      {"target": "AC7 moduledoc adversarial rewrite (plants DIVERGENCE/WASM-10/does **NOT** trap fragments in an unrelated sentence)", "caught_by_existing_suite": false, "detail": "GAP -- closed with 1 new test requiring mechanism-term proximity + design-doc/decision-0014 citation; verified new test fails against mutant (11/12 red) and passes when reverted"}
+    ],
+    "test_run": "mix test test/letflow/engine/wasm/resource_limits_test.exs: 12 passed (9 original + 3 new), 0 failures, against the real unmodified implementation. mix compile --warnings-as-errors: clean.",
+    "implementation_modified": false,
+    "candidate_issues": []
+  }
+}

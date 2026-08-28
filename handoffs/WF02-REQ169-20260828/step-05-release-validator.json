@@ -1,0 +1,66 @@
+{
+  "handoff_id": "step05-WF02-REQ169-20260828",
+  "run_id": "WF02-REQ169-20260828",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ169-20260828/step-05-release-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-169"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ169-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ169-20260828/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ169-20260828/step-02d-reviewer.json",
+      "handoffs/WF02-REQ169-20260828/step-03-test-designer.json",
+      "handoffs/WF02-REQ169-20260828/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ169-20260828/step-04-test-runner.json"
+    ],
+    "branch_name": "feature/WF02-REQ169-20260828",
+    "commit": "57148c8"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR pass (WF-02 Step 5) for REQ-169 (queue task 321, GH#621). Independently re-derive that every one of REQ-169's real acceptance criteria in docs/requirements.yaml is genuinely met -- do not trust any prior step's self-report, re-run and re-check yourself. All prior gates (design, security, reviewer, test-design-validator, test-runner) have passed; your job is the final independent cross-check before DOC-UPDATER marks it done. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching commands.",
+    "acceptance_criteria": [
+      "Re-read REQ-169's full entry in docs/requirements.yaml and independently map each real AC to the shipped code (lib/letflow/engine/wasm/resource_limits.ex) and its tests -- do not just re-read prior handoffs' claims.",
+      "Re-run mix test test/letflow/engine/wasm/ yourself, quote real output.",
+      "Re-run mix compile --warnings-as-errors yourself, quote real output.",
+      "Confirm no scope creep beyond what REQ-169 authorized (cross-check git diff --stat main...HEAD against owned_modules) -- module_registry.ex, capability_gate.ex, plugin_handler.ex, memory_guard.ex, and application.ex must be untouched; docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md WAS legitimately touched by REVIEWER's own review pass (a documentation-consistency correction, not scope creep) -- confirm this edit is a real, accurate correction, not an overreach.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verified_independently": [
+      "docs/requirements.yaml lines 8556-8605 (REQ-169) re-read in full directly from the file, not from any prior handoff's paraphrase",
+      "lib/letflow/engine/wasm/resource_limits.ex read in full (279 lines) -- build_store/1, arm_fuel/2, classify_call_result/1, memory_grew_within_cap?/3",
+      "test/letflow/engine/wasm/resource_limits_test.exs read in full (395 lines) -- 11 tests across 6 describe blocks, mapped one by one to REQ-169's 8 acceptance_criteria",
+      "mix test test/letflow/engine/wasm/ re-run live in this session (own shell, not copied from TEST-RUNNER's report): 'Result: 78 passed', 0 failures",
+      "mix compile --warnings-as-errors --force re-run live in this session: clean recompile of 134 files, 'Generated letflow app', zero warnings, zero errors",
+      "git diff --stat main...HEAD -- confirmed 15 files touched: docs/migration/decisions/0014-...md, 8 handoff JSONs, lib/letflow/design/req169-...md, lib/letflow/engine/wasm/resource_limits.ex (new), 3 priv/wasm_fixtures/req169_*.wat (new), test/letflow/engine/wasm/resource_limits_test.exs (new), test/specs/REQ-169.md (new)",
+      "git diff main...HEAD -- lib/letflow/engine/wasm/module_registry.ex capability_gate.ex plugin_handler.ex memory_guard.ex lib/letflow/application.ex -- explicitly re-checked, 0 lines of diff, confirming all five owned-but-untouched modules are byte-identical to main",
+      "git diff main...HEAD -- docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md read in full: adds a dated 'WASM-10 -- Memory Limits (correction: REVIEWER, WF-02 Step 2d, REQ-169, 2026-08-28)' paragraph, moves WASM-10 from the 'satisfiable substantially as worded' list into the 'NOT satisfiable as literally worded' section, restates the security-property-holds/failure-visibility-wrong distinction, and adds WASM-10 to the REQ-VALIDATOR watchlist sentence in the same edit -- cross-checked against resource_limits.ex's own moduledoc (lines 21-43), which independently states the identical live-verified finding (memory.grow beyond cap returns an ordinary {:ok, [-1]} success, never traps; real memory is still physically bounded). The two documents agree exactly; the decision-record edit is a genuine, accurate correction of a documentation-only ('direct analogue', never run) claim decision 0014 had previously made about WASM-10, not scope creep or an unrelated change.",
+      "handoffs/WF02-REQ169-20260828/step-02c-security-reviewer.json and step-02d-reviewer.json read in full -- both independently re-ran mix test/mix compile themselves and reached PASS with reasoning consistent with this pass's own independent findings",
+      "mix letflow.lint_handoffs run against this file before finishing"
+    ],
+    "acceptance_criteria_findings": [
+      "AC1 (infinite loop terminates within fuel budget, WASM-09) -- MET. resource_limits_test.exs:100-110 ('AC1/AC5' describe block) builds a store via build_store/1, arms 1_000 fuel, calls req169_hang.wat's 'hang' export, asserts the result is NOT :outer_timeout and classify_call_result/1 returns :fuel_exhausted. Directly exercises build_store/1 + arm_fuel/2 + classify_call_result/1 against a real Wasmtime instance.",
+      "AC2 (fuel resets per invocation, not starved by prior call) -- MET. resource_limits_test.exs:130-146 calls the same store's 'count_forever' export twice, re-arming fuel before each call, and asserts the surviving loop-iteration counters read back from guest memory are byte-for-byte identical and both > 0 -- a strictly stronger check than 'roughly equal'.",
+      "AC3 (memory cap: growth beyond cap traps/is blocked, WASM-10) -- MET, honestly against real behavior. resource_limits_test.exs:162-200 live-verifies memory.grow beyond StoreLimits.memory_size does NOT trap (returns ordinary {:ok, [-1]}) but real memory size is provably unchanged (size_after == size_before), and memory_grew_within_cap?/3 correctly reports :within_cap. This divergence from AC3's literal 'traps cleanly' wording is the same one recorded in decision 0014's now-corrected text and in the moduledoc -- disclosed, not silently worked around, satisfying AC7 as well.",
+      "AC4 (both knobs configurable; tighter binds sooner) -- MET. resource_limits_test.exs:209-253 drives two different fuel_budget values (20 vs 2_000) and asserts strictly fewer surviving iterations for the tighter one, and two different memory_cap_bytes values (2 vs 5 pages) and asserts strictly fewer successful page-grows for the tighter one. Both knobs are plain map fields on config(), no hardcoded literals in build_store/1/store_limits/1.",
+      "AC5 (fuel metering genuinely enabled, not silently left at false default) -- MET. resource_limits_test.exs:112-122 builds a store directly with consume_fuel: false (bypassing build_store/1 on purpose) and asserts arm_fuel/2 returns {:error, {:fuel_not_configured, reason}} -- the canary AC5 asks for. Independently confirmed build_store/1's new_engine/0 hardcodes %EngineConfig{consume_fuel: true} with no config-driven override path (resource_limits.ex:137-143).",
+      "AC6 (fuel exhaustion, ordinary trap, and REQ-170's future timeout distinguishable) -- MET. resource_limits_test.exs:274-310 exercises a real fuel-exhaustion classification and a real ordinary-trap classification (calling a non-existent export) side by side, asserts they differ, asserts neither string contains 'fuel' where it shouldn't / does contain it where expected, and asserts textual non-collision against PluginInterface's own hardcoded timeout message shape by construction.",
+      "AC7 (divergence recorded in moduledoc and reported, not worked around silently) -- MET. Two dedicated tests (resource_limits_test.exs:350-393) assert the moduledoc states memory.grow does NOT trap, names WASM-10, contains 'DIVERGENCE', anchors the claim to the actual mechanism terms (memory.grow, StoreLimits.memory_size) rather than scattered keywords, and cites both the design doc filename and decision 0014 by name. Independently re-read the live moduledoc text (resource_limits.ex:21-43) and confirmed it matches these assertions verbatim. Also reported upstream: decision 0014 itself was corrected in the same review pass that found this (see scope-creep finding below).",
+      "AC8 (mix test and mix compile --warnings-as-errors both pass, real output quoted) -- MET, re-run independently in this session (not copied from any prior report): mix test test/letflow/engine/wasm/ -> 'Result: 78 passed' (0 failures; two pre-existing, REQ-169-unrelated type warnings from module_registry_test.exs, not this diff's code); mix compile --warnings-as-errors --force -> clean recompile of 134 files, 'Generated letflow app', no warnings.",
+      "Scope-creep check -- MET, no scope creep. git diff --stat main...HEAD touches only: resource_limits.ex (new), its test file (new), 3 new .wat fixtures, the REQ-169 design doc and test spec (new), 8 run-scaffolding handoff JSONs, and docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md. Explicitly re-diffed module_registry.ex, capability_gate.ex, plugin_handler.ex, memory_guard.ex, and application.ex against main: zero lines changed in every one. The decision-0014 edit is a genuine, accurate correction (independently cross-checked against resource_limits.ex's own moduledoc, which states the identical live-verified finding): it moves WASM-10 from decision 0014's 'satisfiable substantially as worded' list (which had been asserted from documentation alone, never run) into the 'NOT satisfiable as literally worded' section with an accurate intent-vs-mechanism restatement, and adds WASM-10 to the REQ-VALIDATOR watchlist in the same edit per the decision record's own stated rule that a restated-but-unwatched requirement is policed by nothing. This mirrors the REQ-168 precedent cited in the handoff and is not an overreach -- it is exactly the kind of documentation-consistency correction decision 0014's own 'caution on this list' paragraph calls for, and it does not touch, weaken, or contradict any other decision-record content.",
+      "Handoff format -- top-level status field set to a value from the exact required enum (COMPLETED); mix letflow.lint_handoffs run against this file before finishing (see below)."
+    ],
+    "test_output_fuel_and_memory_suite": "mix test test/letflow/engine/wasm/ -> 'Running ExUnit with seed: 55229, max_cases: 16' ... 'Result: 78 passed' (0 failures; 2 pre-existing type warnings in module_registry_test.exs unrelated to this diff).",
+    "compile_output": "mix compile --warnings-as-errors --force -> 'Compiling 134 files (.ex)' / 'Generated letflow app' -- clean, zero warnings, zero errors.",
+    "verdict": "PASS -- every one of REQ-169's 8 real acceptance_criteria (docs/requirements.yaml lines 8596-8604) is independently re-verified against the shipped code (lib/letflow/engine/wasm/resource_limits.ex) and its real, independently-re-run tests (78/78 passing, clean --warnings-as-errors compile). No scope creep beyond the authorized files; the five explicitly-named untouched modules are confirmed byte-identical to main. REVIEWER's correction to docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md is a genuine, accurate documentation-consistency fix, independently cross-checked against the shipped moduledoc's own divergence statement and found consistent -- not scope creep. Cleared for DOC-UPDATER to mark REQ-169 done."
+  }
+}

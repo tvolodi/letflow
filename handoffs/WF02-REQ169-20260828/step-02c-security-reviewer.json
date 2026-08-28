@@ -1,0 +1,72 @@
+{
+  "handoff_id": "step02c-WF02-REQ169-20260828",
+  "run_id": "WF02-REQ169-20260828",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ169-20260828/step-02c-security-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-169"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ169-20260828/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ169-20260828/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req169-wasm-fuel-and-memory-cap.md",
+      "lib/letflow/engine/wasm/resource_limits.ex"
+    ],
+    "branch_name": "feature/WF02-REQ169-20260828",
+    "commit": "d6154cc"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER hard gate (WF-02 Step 2c) on REQ-169's implementation, commit d6154cc on lib/letflow/engine/wasm/resource_limits.ex. REQ-169's own text explicitly names SECURITY-REVIEWER as a hard gate. This is a resource-exhaustion-defense module: fuel budget prevents CPU exhaustion (infinite loops), memory cap prevents unbounded memory growth. The design found and honestly documented a genuine divergence -- WASM-10's 'MUST TRAP' wording doesn't match reality (memory.grow beyond cap returns an ordinary success value, not a trap), but the underlying security property (real memory physically cannot exceed the cap) is confirmed to hold. Read the approved design (lib/letflow/design/req169-wasm-fuel-and-memory-cap.md) and the real shipped code in full before verdict.",
+    "acceptance_criteria": [
+      "Confirm build_store/1 ALWAYS enables consume_fuel: true in the Engine it builds -- never configurable/optional, per design section 2 item 1 -- a config that could accidentally leave fuel metering off would produce an unbounded guest with no error anywhere, exactly the hazard decision 0014 and this requirement warn about.",
+      "Confirm arm_fuel/2's contract genuinely requires being called immediately before every single invocation (not just documented as such) -- and independently assess whether anything in the shipped code could tempt a future caller into calling it once at Store-creation time instead, given the live-verified starvation hazard if omitted.",
+      "Confirm StoreLimits.memory_size is genuinely always passed from config.memory_cap_bytes when building the Store -- no code path constructs a Store without a memory cap.",
+      "Confirm classify_call_result/1's substring-matching logic is robust -- verify it correctly distinguishes fuel-exhaustion from a generic trap and cannot be fooled by a guest-controlled string containing 'all fuel consumed by WebAssembly' as part of unrelated guest-authored trap text (check whether wasmex's error strings could ever contain guest-influenced content at that exact position).",
+      "Confirm memory_grew_within_cap?/3 is a pure function with no Wasmex dependency, and that its documented caveat (a caller must independently know an attempt was made; :within_cap alone doesn't prove no attempt occurred) doesn't create a false sense of security if misused by a future caller -- assess whether the moduledoc/docstring makes this limitation clear enough.",
+      "Confirm the moduledoc's divergence statement (WASM-10's 'MUST TRAP' vs. actual behavior) is present, accurate, and does not overclaim/underclaim what was found.",
+      "Cross-check against docs/agents/instructions/security-invariants.md INV-1..INV-8 explicitly -- INV-3 (untrusted-runtime resource limits) and INV-8 (typed error handling) are both squarely this diff's subject matter.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verified_independently": [
+      "git show d6154cc --stat and full diff read directly (not via ELIXIR-DEV report)",
+      "current file contents of lib/letflow/engine/wasm/resource_limits.ex read in full",
+      "lib/letflow/design/req169-wasm-fuel-and-memory-cap.md read in full",
+      "test/letflow/engine/wasm/resource_limits_test.exs read in full",
+      "mix test test/letflow/engine/wasm/resource_limits_test.exs -- re-run live, 9/9 passed, not trusted from commit message",
+      "mix compile --warnings-as-errors -- clean, no warnings",
+      "deps/wasmex/lib/wasmex/store.ex:46 -- confirmed Store.new/2 argument order is (store_limits, engine), matching the design's claim",
+      "deps/wasmex/native/wasmex/src/instance.rs:428 and caller.rs:259/265 -- confirmed the {trap}/{reason} text in Wasmex.call_function/4's {:error, _} return is built entirely from Wasmtime's own trap Display formatting (fixed enum-derived strings like 'wasm trap: all fuel consumed by WebAssembly', 'wasm trap: unreachable') -- WASM guest functions can only return numeric types (i32/i64/f32/f64/v128), never arbitrary strings, so a guest cannot inject text into this error string at all, let alone at the exact substring position classify_call_result/1 matches on",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md -- confirmed status: decided (2026-08-23)",
+      "docs/requirements.yaml -- confirmed REQ-165..REQ-169 exist and REQ-169 depends_on REQ-168, i.e. S5 is genuinely underway, not merely planned"
+    ],
+    "acceptance_criteria_findings": [
+      "1. PASS -- new_engine/0 hardcodes %EngineConfig{consume_fuel: true} with no config-driven override anywhere in build_store/1's call graph; config map has no key that could disable it.",
+      "2. PASS with a documentation-only safeguard noted -- arm_fuel/2 is a separate function from build_store/1; nothing at the type/API level prevents a future caller from calling it once at Store-creation time only. The moduledoc and arm_fuel/2's own @doc both state the 'immediately before every single invocation' contract prominently and explain why (live-reproduced starvation in design section 1.2), matching this project's established convention for other wasmex modules (module_registry.ex, capability_gate.ex, memory_guard.ex) that also rely on documented caller discipline rather than type-enforced sequencing. This is a real residual risk surface but not a defect introduced by this diff -- it is the same shape of trust already accepted for REQ-165 through REQ-168, and design section 3 explicitly scopes actual dispatch-sequencing enforcement to a future wiring requirement (PluginHandler/CapabilityGate integration), not this module. Not a BLOCKER.",
+      "3. PASS -- store_limits/1 is the only path that constructs a StoreLimits struct, and it unconditionally sets memory_size: config.memory_cap_bytes; build_store/1's guard clause requires memory_cap_bytes to be a positive integer, so no code path can construct a Store without a memory cap.",
+      "4. PASS -- verified against wasmex's Rust source directly (see verified_independently): trap/error text is Wasmtime-generated, not guest-controlled, so the guest cannot forge a string containing the fuel-exhaustion substring at any position. The substring match is robust by construction, not merely by observed behavior.",
+      "5. PASS -- memory_grew_within_cap?/3 has no alias to Wasmex/Engine/Store/StoreLimits/StoreOrCaller and performs only integer comparison; its @doc explicitly states 'callers that cannot independently confirm an attempt was made should treat :within_cap as the only fact this function actually proves (memory did not exceed the cap), not as proof no attempt occurred' -- this is a clear, correctly-scoped caveat, not glossed over.",
+      "6. PASS -- moduledoc's divergence section is accurate against the live-verified findings in design section 1.5/1.6: does not claim a trap occurs, does not claim the security property is broken, correctly attributes the underlying property (real memory physically bounded) as separately verified and holding, and correctly names MemoryGuard (REQ-168) as the independent second layer of defense for guests that ignore the -1 sentinel. No overclaim or underclaim found.",
+      "7. INV-1 (tenant data isolation): NOT-APPLICABLE -- no Ecto schema, no migration, no tenant-scoped table touched; this module only configures a Wasmtime Engine/Store pair, no tenant data path.",
+      "7. INV-2 (server-side field authorisation): NOT-APPLICABLE -- S4 not started, no API response shaping in this diff.",
+      "7. INV-3 (untrusted runtime sandboxing): APPLIES -- security-invariants.md's own 'Reference: none yet, S5 not started' text is stale for this diff specifically: decision 0014 is status 'decided' (2026-08-23) and docs/requirements.yaml shows REQ-165..REQ-169 (S5) genuinely in flight, REQ-169 depending on REQ-168. Applying INV-3's actual rule (capability allowlisting, no ambient host-function reachability) to this diff's content: PASS -- this module adds no host function, no import-table entry, and no capability grant; design section 3 explicitly states it does not build the import table (CapabilityGate/REQ-167's job, already shipped and unmodified by this diff). Fuel/memory resource limiting is an orthogonal sandbox dimension from capability allowlisting and this diff does not touch or weaken the capability boundary.",
+      "7. INV-4 (secrets by reference only): NOT-APPLICABLE -- no secret material anywhere in this diff.",
+      "7. INV-5 (not-found/forbidden indistinguishability): NOT-APPLICABLE -- S4 not started, no lookup-by-ID endpoint in this diff.",
+      "7. INV-6 (new data-access paths prove their scoping): satisfied by this handoff itself.",
+      "7. INV-7 (no SQL string interpolation): NOT-APPLICABLE -- grep for Repo.query against the changed file found no matches; this diff contains no SQL.",
+      "7. INV-8 (no unhandled crashes on realistic failure paths): APPLIES and PASS -- grep for bare '{:ok, ...} = ' pattern matches against lib/letflow/engine/wasm/resource_limits.ex found none; build_store/1 uses a with-chain returning {:error, build_defect()} on either Engine.new/1 or Store.new/2 failure, arm_fuel/2 uses a case returning {:error, {:fuel_not_configured, reason}} rather than crashing, and classify_call_result/1 and memory_grew_within_cap?/3 are total functions over their documented input domains. The only bare {:ok, ...} = matches found are in the test file (test/letflow/engine/wasm/resource_limits_test.exs), which is expected/acceptable test-helper style, not the shipped module.",
+      "8. Confirmed -- top-level status set to COMPLETED (exact enum value); mix letflow.lint_handoffs run against this file before finishing."
+    ],
+    "verdict": "PASS -- no BLOCKER found on any applicable invariant. The module correctly, verifiably implements REQ-169's fuel budget and memory cap, and its handling of the WASM-10 'MUST TRAP' divergence is genuinely honest: the moduledoc states plainly that memory.grow beyond the cap returns an ordinary success rather than a trap, does not fabricate detection of an event the runtime does not signal, and correctly identifies MemoryGuard (REQ-168) as the layered defense that still protects the host regardless of guest behavior. Tests re-run independently (9/9 pass), compile clean with --warnings-as-errors. Cleared to proceed to REVIEWER."
+  }
+}

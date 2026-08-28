@@ -1,0 +1,63 @@
+{
+  "handoff_id": "step04-WF02-REQ169-20260828",
+  "run_id": "WF02-REQ169-20260828",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ169-20260828/step-04-test-runner.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-169"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ169-20260828/step-03-test-designer.json",
+      "handoffs/WF02-REQ169-20260828/step-03b-test-design-validator.json"
+    ],
+    "branch_name": "feature/WF02-REQ169-20260828",
+    "commit": "57148c8"
+  },
+  "task": {
+    "description": "TEST-RUNNER pass (WF-02 Step 4) for REQ-169. Design, security-review, reviewer, and test-design-validator gates have all passed. Run the FULL suite (not just the wasm subdirectory) and report real results. Use export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\" and WASMEX_BUILD=true for wasmex-touching commands. Attribute any failure structurally before concluding it's unrelated to this branch's diff -- never by count-matching. Be aware of ISS-0287 (Postgres pool-exhaustion recurrence) and ISS-0351 (WASM registry timeout-path CPU-spin) as known background issues. Note: ELIXIR-DEV's own Step 2a run reported one earlier full-suite attempt showed 4 spurious failures from two concurrent mix test invocations colliding on shared Postgres/tenant-schema state, resolved cleanly on a solo rerun -- if you see similar collisions, ensure no other test process is running concurrently before attributing a real failure.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors passes clean, real output quoted.",
+      "mix test test/letflow/engine/wasm/ passes in full, real output quoted (expect resource_limits_test.exs's 12 tests plus memory_guard's 18, capability_gate's 18, module_registry's 20, plugin_handler's 10 -- 78 total).",
+      "Full mix test suite run, real output quoted -- pass/fail counts, and structural attribution for any failure.",
+      "mix letflow.lint_handoffs run, 0 new violations (or explain any flagged).",
+      "Write a structured test report per this project's existing test/reports/ convention if a failure needs one; otherwise a clean pass needs no report file.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Full TEST-RUNNER pass for REQ-169 on branch feature/WF02-REQ169-20260828 @ 57148c8. No concurrent mix test process was running before this run (checked via `ps aux`); one unrelated long-lived `mix run --no-halt` beam process (pid 3945662, started Aug 24) was present in this same checkout but is an app-server process, not a test invocation, so it does not collide with test partitions. Postgres (letflow-1-postgres-1) and Keycloak were already up via `sudo docker compose ps` (host port 5463 per .env LETFLOW_DB_PORT, matching config/test.exs's db_port.exs indirection) -- no `docker compose up -d` needed. All commands run with `export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\"` and `WASMEX_BUILD=true`.",
+    "compile": {
+      "command": "mix clean && mix compile --warnings-as-errors",
+      "result": "Clean: 'Compiling 134 files (.ex)' / 'Generated letflow app', exit 0, zero warnings."
+    },
+    "wasm_subdir": {
+      "command": "mix test test/letflow/engine/wasm/",
+      "result": "Result: 78 passed -- exactly matches the expected 78 (resource_limits 12 + memory_guard 18 + capability_gate 18 + module_registry 20 + plugin_handler 10). Two informational type-checker warnings appeared at module_registry_test.exs:366 and :370, both on tests that deliberately pass non-binary input (nil, 42) to ModuleRegistry.register/1 to assert it raises FunctionClauseError -- expected given the test's own intent, not a real code issue, and did not affect pass/fail count."
+    },
+    "full_suite": {
+      "command": "bash scripts/test_parallel.sh (N=8, nproc-derived, TEST_POOL_SIZE=10 computed)",
+      "result": "combined: 2361 tests, 5 properties, 0 failures (2366/2366 passed). All 8 partitions: exit 0, 0 failures each (partition breakdown: 312/307/319/184/303/145/339/452 tests, properties split 0/1/2/0/2/0/0/0).",
+      "known_background_issues_check": "ISS-0287 (Postgres pool-exhaustion): not observed -- no DBConnection.ConnectionError or too_many_connections in any partition log, pool sizing correctly clamped by test_parallel.sh's ISS-0287-aware arithmetic (TEST_POOL_SIZE=10, N*pool=80 within the 100 max_connections budget). ISS-0351 (WASM registry timeout-path CPU-spin): not observed -- full suite finished promptly with no hung or excessively slow partition; wasm subdirectory alone finished in 0.4s."
+    },
+    "lint_handoffs": {
+      "command": "mix letflow.lint_handoffs",
+      "result": "letflow.lint_handoffs: OK -- 0 new violations across 1261 handoff files (25 pre-existing grandfathered, traced to ISS-0190). This handoff file (step-04-test-runner.json) is not among any flagged file, before or after this update."
+    },
+    "report_file": "Not written -- full suite passed clean (2366/2366), and per this project's test/reports/ convention a clean pass needs no report file.",
+    "acceptance_criteria_check": [
+      "mix compile --warnings-as-errors passes clean: PASS, real output quoted above.",
+      "mix test test/letflow/engine/wasm/ passes in full: PASS, 78/78 as expected.",
+      "Full mix test suite run with structural attribution: PASS, 2366/2366, 0 failures, no ISS-0287/ISS-0351 recurrence, no concurrent-process collision (none was running).",
+      "mix letflow.lint_handoffs 0 new violations: PASS.",
+      "Structured test report: not needed, clean pass.",
+      "Top-level status field set to a valid enum value (COMPLETED): done, line 9."
+    ]
+  }
+}

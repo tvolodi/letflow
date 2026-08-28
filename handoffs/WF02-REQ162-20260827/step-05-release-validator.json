@@ -1,0 +1,86 @@
+{
+  "handoff_id": "step05-WF02-REQ162-20260827",
+  "run_id": "WF02-REQ162-20260827",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ162-20260827/step-05-release-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-162"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ162-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ162-20260827/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ162-20260827/step-02d-reviewer.json",
+      "handoffs/WF02-REQ162-20260827/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ162-20260827/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req162-lua-script-error-capture.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ162-20260827",
+    "commit": "a40e827"
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR (WF-02 Step 5) for REQ-162 -- independently re-derive that all 8 real acceptance criteria in docs/requirements.yaml's REQ-162 entry are actually met, before this requirement is marked done. Do not trust any prior agent's PASS verdict as evidence by itself -- re-verify against the real code and real test output yourself. This run passed every gate cleanly on the first attempt: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (a hard gate this requirement's own text explicitly names), REVIEWER, TEST-DESIGN-VALIDATOR (which independently re-verified TEST-DESIGNER's 2 real gap-closures), and TEST-RUNNER (2282/2282 x2, ripple-checked against every Lua-consuming test file).",
+    "acceptance_criteria": [
+      "Read docs/requirements.yaml REQ-162's 8 acceptance criteria verbatim and independently map each to a real, currently-passing test in test/letflow/engine/lua/executor_test.exs -- run at least a handful of those specific tests yourself.",
+      "Independently run mix test test/letflow/engine/lua/executor_test.exs and mix compile --warnings-as-errors and quote real output.",
+      "Independently confirm the central claim -- instruction count IS retrievable on the uncaught-error path via exception.original.state.instruction_count -- by reading build_script_error/3's real code directly, and ideally by running a quick ad hoc script (mix run/iex) that triggers a real 1//0 error and observes the actual SCRIPT_ERROR value, not merely citing prior verdicts.",
+      "Confirm no owned_modules boundary violation occurred across the whole run (git diff main...feature/WF02-REQ162-20260827 --stat touches only lib/letflow/engine/lua/executor.ex, test/letflow/engine/lua/executor_test.exs, lib/letflow/design/req162-lua-script-error-capture.md, test/specs/REQ-162.md, plus this run's own handoffs/ bookkeeping).",
+      "Verdict: PASS only if independently re-derived, not merely re-stated from prior agents' reports.",
+      "CRITICAL: when writing this handoff's top-level status field (line 9), use exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED. Run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "PASS -- independently re-derived, not re-stated from prior agents' reports.",
+    "ac_to_test_map": [
+      {"ac": 1, "test": "AC1: an uncaught runtime error produces SCRIPT_ERROR with a stack trace and capability state, asserted individually (executor_test.exs:812-828)"},
+      {"ac": 2, "test": "AC2: moduledoc names the instruction-count mechanism and cites REQ-148 by section (executor_test.exs:831-837) -- verified moduledoc text at executor.ex:164-226 contains 'exception.original.state.instruction_count', 'REQ-148', and '§5'"},
+      {"ac": 3, "test": "AC3: instruction_count reports {:configured_budget, _} (never zero-filled) when the count is unretrievable (executor_test.exs:848-856)"},
+      {"ac": 4, "test": "AC4: 1 // 0 raises 'attempt to divide by zero'; 1 / 0 does not raise (executor_test.exs:861-877)"},
+      {"ac": 5, "test": "AC5: SCRIPT_ERROR is pattern-match-distinguishable from all 4 other real arms (executor_test.exs:887-948)"},
+      {"ac": 6, "test": "AC6: capabilities are read from Capabilities.grant_set(), not re-derived (executor_test.exs:957-977)"},
+      {"ac": 7, "test": "AC7: stack trace frames contain no '/' or 'Elixir.' (executor_test.exs:983-999) plus 2 gap-closure tests (1013-1026, 1034-1044) pinning stack_trace to the library's own sanitized to_map/1 output and the fallback placeholder message"},
+      {"ac": 8, "test": "mix test and mix compile --warnings-as-errors -- both independently re-run this session, real output quoted below"}
+    ],
+    "commands_run": [
+      "export PATH=\"$HOME/.asdf/shims:$PATH\"; mix compile --warnings-as-errors  => no output, clean exit (no warnings/errors)",
+      "export PATH=\"$HOME/.asdf/shims:$PATH\"; mix test test/letflow/engine/lua/executor_test.exs  => 'Finished in 4.4 seconds (4.4s async, 0.00s sync)' / 'Result: 46 passed' (0 failures)"
+    ],
+    "empirical_instruction_count_check": {
+      "method": "MIX_ENV=test mix run against a scratch .exs script that built Letflow.Engine.Lua.Sandbox.new(max_instructions: 1_000_000), ran Lua.eval!(lua, \"return 1 // 0\"), caught the raised Lua.RuntimeException, and inspected exception.original, exception.original.state, exception.original.state.instruction_count, and exception.state directly -- not a citation of prior verdicts.",
+      "observed_output": "original struct: Lua.VM.RuntimeError / original.state struct: Lua.VM.State / instruction_count: 0 / outer exception.state (should be nil): nil",
+      "conclusion": "Confirms the design/code's central claim precisely: exception.original is a %Lua.VM.RuntimeError{} carrying a populated %Lua.VM.State{} in its own :state field with a real (non-negative, here 0 because 1//0 fails almost immediately) instruction_count, while the OUTER Lua.RuntimeException's own :state field is nil as the design's §2.1 reading of runtime_exception.ex predicted. This matches build_script_error/3's instruction_count_report/2 clause (executor.ex:487-490: `defp instruction_count_report(%{state: %Lua.VM.State{instruction_count: count}}, _budget) do {:consumed, count} end`) exactly -- the code reads exactly the field this empirical check found populated."
+    },
+    "boundary_check": {
+      "command": "git diff main...feature/WF02-REQ162-20260827 --stat",
+      "files_touched": [
+        "lib/letflow/engine/lua/executor.ex",
+        "test/letflow/engine/lua/executor_test.exs",
+        "lib/letflow/design/req162-lua-script-error-capture.md",
+        "test/specs/REQ-162.md",
+        "test/reports/report-2026-08-27-WF02-REQ162-20260827.yaml",
+        "handoffs/WF02-REQ162-20260827/step-01-code-designer.json",
+        "handoffs/WF02-REQ162-20260827/step-01b-code-design-validator.json",
+        "handoffs/WF02-REQ162-20260827/step-02a-elixir-dev.json",
+        "handoffs/WF02-REQ162-20260827/step-02c-security-reviewer.json",
+        "handoffs/WF02-REQ162-20260827/step-02d-reviewer.json",
+        "handoffs/WF02-REQ162-20260827/step-03-test-designer.json",
+        "handoffs/WF02-REQ162-20260827/step-03b-test-design-validator.json",
+        "handoffs/WF02-REQ162-20260827/step-04-test-runner.json",
+        "handoffs/WF02-REQ162-20260827/step-05-release-validator.json"
+      ],
+      "verdict": "No owned_modules boundary violation. Exactly one production module edited (lib/letflow/engine/lua/executor.ex), one test file edited, plus this run's own design doc, test spec, test report, and handoffs/ bookkeeping. No file outside ELIXIR-DEV's declared scope for this requirement was touched."
+    },
+    "notes": "Verified code at executor.ex:405-427 (run_script/3's rescue clause), :450-494 (build_script_error/3 and instruction_count_report/2) matches the design doc (lib/letflow/design/req162-lua-script-error-capture.md) exactly -- both the two-tag instruction_count_report() union and the typed/untyped stack-trace split. All 46 tests in executor_test.exs pass (13 REQ-162 tests among them), mix compile --warnings-as-errors is clean, and the empirical mix run check independently confirms the field-access chain the moduledoc and code both claim. PASS is independently derived from re-run tests, re-read code, and a fresh empirical script -- not from citing CODE-DESIGN-VALIDATOR/SECURITY-REVIEWER/REVIEWER/TEST-DESIGN-VALIDATOR/TEST-RUNNER's prior verdicts."
+  }
+}

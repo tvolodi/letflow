@@ -1,0 +1,55 @@
+{
+  "handoff_id": "step02d-WF02-REQ162-20260827",
+  "run_id": "WF02-REQ162-20260827",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ162-20260827/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-162"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ162-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ162-20260827/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req162-lua-script-error-capture.md",
+      "lib/letflow/engine/lua/executor.ex"
+    ],
+    "branch_name": "feature/WF02-REQ162-20260827",
+    "commit": "12d3b3e"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-162's implementation, commit e937135 on lib/letflow/engine/lua/executor.ex (SECURITY-REVIEWER already PASSed at commit 12d3b3e). Gate on idiomatic OTP usage, supervision integrity, scope creep, and decision-record consistency. Read the approved design (lib/letflow/design/req162-lua-script-error-capture.md), the real diff (git show e937135 -- lib/letflow/engine/lua/executor.ex), and the current full file before verdict. Pay particular attention to: (1) whether making build_script_error/3 public (marked @doc false) as a test seam is idiomatic for this codebase or should instead be a private function tested indirectly/via a different mechanism -- check if this file or others in this codebase have an established convention for testing private functions; (2) whether the new handle_yield_result/3 clause and @spec extensions are cleanly integrated with no dead code or stale references (mirroring the exact class of defect REVIEWER found on REQ-161's first pass); (3) whether this diff has any ripple effect on other modules/tests given executor.ex is a heavily shared module.",
+    "acceptance_criteria": [
+      "Implementation matches the approved design's specified control flow (design sections 1-6) -- no invented mechanism replacing what was approved.",
+      "build_script_error/3's public-for-testing pattern is idiomatic for this codebase -- check whether other modules in this file or elsewhere establish this same test-seam convention, or whether a different approach (e.g. testing via the public run_script/3 entry point only) would be more idiomatic; if the public function is kept, confirm its @doc false and narrow purpose are clearly documented so a future reader doesn't mistake it for a stable public API.",
+      "The new handle_yield_result/3 clause and both execute_with_manifest @spec extensions are cleanly integrated -- no stale references to the old bare {:error, String.t()} shape left anywhere in comments/moduledoc/other clauses that should have been updated.",
+      "No scope creep: nothing touched outside lib/letflow/engine/lua/executor.ex and test/letflow/engine/lua/executor_test.exs (this requirement's owned_modules); platform.ex/capabilities.ex/sandbox.ex untouched, per design's explicit deferral.",
+      "Decision-record consistency: confirm nothing in this diff contradicts decision 0014 or REQ-148/157/161's own established conventions.",
+      "Moduledoc's new REQ-162 section accurately describes the mechanism, the branch (a)/(b) instruction-count finding, the 5-arm distinction, and the inherited capability-wiring gap -- no overstatement.",
+      "Confirm no ripple effect on other test files that exercise run_script/3/execute_with_manifest/2,3 -- run the full test suite yourself, don't just trust ELIXIR-DEV's report of 2283 passed.",
+      "mix compile --warnings-as-errors and mix format --check-formatted both independently re-run by REVIEWER."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "PASS",
+    "commit_reviewed": "e937135",
+    "findings": [
+      "AC1 (design match): run_script/3's rescue e in Lua.RuntimeException clause matches design §1.1 exactly -- budget-exceeded string check unchanged and runs first, else-branch replaced with build_script_error/3 building {:error, {:script_error, script_error()}} instead of the old bare Exception.message(e) string. Lua.CompilerException clause is untouched, per design's explicit statement that a compile-time failure carries no runtime state. instruction_count_report/2's clause order (populated %Lua.VM.State{} first, budget fallback second) matches design §2.3's per-instance rule exactly, including the two-tag union (never a bare/zero-filled integer). script_error_message/1 and script_error_stack_trace/1's typed-vs-untyped split matches design §6.1/§6.2 exactly (typed: Lua.VM.RuntimeError/TypeError/AssertionError via Exception.message/1 and RuntimeException.to_map/2's call_stack; untyped: fixed placeholder + []). No invented mechanism.",
+      "AC2 (build_script_error/3 public/@doc false test seam): idiomatic for this codebase. This is not a one-off invention -- lib/letflow/engine.ex (REQ-053), lib/letflow/engine/reconstruction.ex and lib/letflow/engine/pin_resolver.ex (REQ-059) all establish the identical public+@doc false widening as a deliberate test/reuse seam, with design docs (req053, req059) recording the same rationale ('widening visibility to public/@doc false' over defp). ELIXIR-DEV's inline comment at executor.ex:438-446 documents why (Lua.VM.InternalError's only raise sites are unreachable from any script that actually parses, so exercising build_script_error/3 only through execute_with_manifest/2,3 cannot cover AC3/AC6) and states narrow scope (not part of the Executor behaviour, no external caller besides run_script/3 and the test suite). @spec and @doc false are both present. No case for testing through run_script/3 alone -- that path cannot reach the untyped/fallback branch or a non-empty grant set at all, so a narrower approach would leave AC3 and AC6 unprovable.",
+      "AC3 (stale-reference sweep, the REQ-161-class defect): none found. handle_yield_result/3 gained exactly one new clause ({:ok, {:error, {:script_error, _}} = result} -> result) inserted cleanly alongside the existing budget_exceeded/invalid_script_ref/binary-reason clauses; no other clause needed edits since none previously matched a 2-tuple {:script_error, _} shape. Both execute_with_manifest/2,3 @spec unions gained the same new member in the same position. The remaining bare {:error, String.t()} spec member and the literal {:error, Exception.message(e)} return (line 421) are NOT stale -- they belong to the untouched Lua.CompilerException clause, a genuinely different, still-live error path the design explicitly says stays as-is. No dangling comment, moduledoc line, or other clause anywhere in executor.ex still describes the old bare-string RuntimeException shape.",
+      "AC4 (scope): git show e937135 --stat confirms exactly 3 files changed -- lib/letflow/engine/lua/executor.ex, test/letflow/engine/lua/executor_test.exs, and the step-02a handoff json. platform.ex, capabilities.ex, sandbox.ex all untouched, matching the design's explicit deferral of the capability-wiring gap (OQ-1).",
+      "AC5 (decision-record consistency): no conflict with decision 0014 or REQ-148/157/161. Instruction-count mechanism (§2.2) is read directly off deps/lua internals per REQ-148 §5's own precedent and warning (a dedicated regression test for the internal field is present, matching REQ-148 §5's stated obligation). Capabilities threading reads Letflow.Engine.Lua.Capabilities.grant_set() without re-deriving it, per REQ-157. The :script_failed tag reservation from req161-lua-platform-fail.md §3.3 is respected -- this diff never reuses or touches that tag.",
+      "AC6 (moduledoc accuracy): the new ## REQ-162 section (executor.ex lines 164-226) accurately states the Lua 5.1-vs-5.3 division substitution (§8), names the exact branch-(a) mechanism (exception.original.state.instruction_count) and cites REQ-148 §5/OQ-2(c), states the branch-(b) fallback conditions, gives the correct five-arm distinction table content, and discloses the inherited capability-wiring gap (OQ-1) plainly with no overstatement -- matches design §13's specification point-for-point.",
+      "AC7 (ripple effect / full suite): independently re-ran `mix test` (not trusting ELIXIR-DEV's report). Result: 2283 passed (5 properties, 2278 tests), 3 excluded, 0 failures -- exact match to the commit message's claim. No other test file broke; executor.ex's shared surface (execute_with_manifest/2,3, run_script/3, handle_yield_result/3) is unaffected for every pre-existing caller since the only behavioral change is on the previously-bare-string RuntimeException branch.",
+      "AC8 (independent compile/format check): `mix compile --warnings-as-errors` exited clean with zero output. `mix format --check-formatted` exited clean with zero output. Both re-run directly by REVIEWER, not taken from ELIXIR-DEV's report.",
+      "No type-safety gap worth a docs/issues/ filing beyond what design/moduledoc already discloses (OQ-1's capabilities:[] gap and OQ-2's ArgumentError coverage gap are both already tracked as open questions in the design doc, not silent). No scope-creep abstractions introduced -- build_script_error/3 and its three private helpers are narrowly scoped to this requirement's own shape, no premature behaviour/macro/generic plumbing."
+    ]
+  }
+}

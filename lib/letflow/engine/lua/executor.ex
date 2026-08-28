@@ -161,6 +161,70 @@ defmodule Letflow.Engine.Lua.Executor do
   and does not appear in `Task.Supervisor.children/1` on that supervisor, because it
   is spawned directly rather than through any supervisor.
 
+  ## REQ-162 (LUA-16 restated) — uncaught Lua runtime errors captured as structured SCRIPT_ERROR
+
+  LUA-16 literal: *"Uncaught Lua errors MUST be captured by the host and converted to
+  structured SCRIPT_ERROR events with stack trace, instruction count consumed, and
+  capability state at failure."* Its acceptance example ("division by zero in script
+  yields rich error report") is a Lua 5.1 assumption that does not fire as written in
+  this runtime: `1/0` (float division) evaluates to `inf` and never raises (Lua 5.3
+  §3.4.1, confirmed by direct reading of `deps/lua/lib/lua/vm/executor.ex`). Only the
+  integer floor-division/modulo operators raise on a zero divisor; this module's own
+  tests substitute `1//0` (raises `"attempt to divide by zero"`, the closer literal
+  match) rather than `1%0` (raises `"attempt to perform 'n%0'"`, which reads as a
+  modulo failure, not a division one) or `1/0` (does not raise at all).
+
+  **Branch (a) of LUA-16's restatement holds: the consumed instruction count IS
+  retrievable on the uncaught-error path**, via
+  `exception.original.state.instruction_count` — `exception` being the
+  `%Lua.RuntimeException{}` caught by `run_script/3`'s `rescue`, `.original` the
+  wrapped `%Lua.VM.RuntimeError{}`/`%Lua.VM.TypeError{}`/`%Lua.VM.AssertionError{}`
+  struct, and `.state` the `Lua.VM.State.t()` snapshot at the raising instruction. This
+  diverges from REQ-148 §5/OQ-2(c)'s own success-path finding
+  (`lua_after.state.instruction_count`, read off the returned `Lua.t()`): on the
+  raise path there is no returned `Lua.t()` at all, so the value lives one level
+  deeper, inside the wrapped exception instead. The narrower per-instance fallback
+  (branch (b)) is retained for exception shapes with no populated `:state` field
+  (`Lua.VM.InternalError` declares no `:state` field at all; an arbitrary Elixir
+  exception reaching `Lua.eval!/2`'s catch-all clause has none either) — those report
+  `{:configured_budget, budget}` instead, never a zero-filled `instruction_count: 0`.
+
+  **Five-arm distinction.** `{:error, {:script_error, script_error()}}` (this
+  section) is pattern-match-distinguishable from all four other real arms:
+  `{:script_failed, _}` (req161-lua-platform-fail.md §3.3 — a process `exit/1`, not an
+  `{:error, _}` return, and a tag this module never reuses for SCRIPT_ERROR),
+  `{:error, {:budget_exceeded, _}}` (the string-matched branch that runs strictly
+  first in the same `rescue` clause), `{:error, {:wallclock_timeout, _}}` (produced
+  only by `handle_yield_result/3`'s `nil` clause or `run_with_heap_limit/5`'s `after`
+  clause, never inside `run_script/3`), and `:memory_limit_exceeded` (a bare atom, not
+  a 2-tuple).
+
+  **Inherited capability-wiring gap (not closed by this requirement).**
+  `run_script/3` constructs its sandbox via `Sandbox.new(max_instructions: budget)`,
+  which unconditionally installs the empty `Letflow.Engine.Lua.Capabilities.new()`
+  grant set (`sandbox.ex`, `platform.ex`'s own "OQ-1"). The `capabilities` field below
+  is correctly wired to `Letflow.Engine.Lua.Capabilities`'s real type — the same
+  empty-grant-set value `Sandbox.new/1` already installs, not a separately-constructed
+  empty set that merely looks the same — but will report `[]` for every SCRIPT_ERROR
+  produced via the real `execute_with_manifest/2,3` path today, until a future
+  requirement threads `manifest.capabilities` into `Sandbox.new/1`. This mirrors
+  `req161-lua-platform-fail.md` §4's own disclosure convention for an analogous gap.
+
+  **Stack-trace sanitization is structural, not a best-effort filter.** `stack_trace`
+  never surfaces an Elixir-level stacktrace (`__STACKTRACE__`,
+  `Process.info(pid, :current_stacktrace)`). For the typed case (`Lua.VM.RuntimeError`/
+  `TypeError`/`AssertionError`), it is `Lua.RuntimeException.to_map(exception).call_stack`
+  — the library's own Lua-level call-frame render, which cannot embed an Elixir module
+  atom or a host filesystem path because `build_call_stack/1` never reads either. For
+  the untyped/fallback case (`Lua.VM.InternalError`, or an arbitrary Elixir exception),
+  `message` is a fixed, non-leaking placeholder and `stack_trace` is `[]`, rather than
+  attempting to scrub an open-ended message format. A dedicated regression test (per
+  REQ-148 §5's own warning, since this mechanism reaches one level deeper than the
+  success-path read) asserts a real, uncaught VM-opcode error's `.original.state` is a
+  populated `%Lua.VM.State{}` carrying a non-negative `:instruction_count`, so a future
+  `tv-labs/lua` upgrade that removes or renames either field fails loudly instead of
+  silently reporting branch (b) forever.
+
   ## What R-Co had, and why it does not port
 
   **INV-2 (registry-stored limiter):** R-Co stored the limiter pointer in
@@ -182,6 +246,7 @@ defmodule Letflow.Engine.Lua.Executor do
 
   @behaviour Letflow.Engine.LuaScriptAudit.Executor
 
+  alias Letflow.Engine.Lua.Capabilities
   alias Letflow.Engine.Lua.Manifest
   alias Letflow.Engine.Lua.Sandbox
 
@@ -191,6 +256,34 @@ defmodule Letflow.Engine.Lua.Executor do
              "`binary()` shape is legacy, retained only because ~40 pre-existing " <>
              "test call sites still pass a bare script string."
   @type script_ref :: binary() | %{manifest: Manifest.t(), script_source: binary()}
+
+  @typedoc "REQ-162 design §3 — one Lua-level call frame, exactly the shape " <>
+             "`Lua.VM.ErrorFormatter.to_map/3` already documents and builds. `source`/" <>
+             "`name` are Lua-level (a chunk source name, a Lua function name), never an " <>
+             "Elixir module or a host filesystem path -- see moduledoc's REQ-162 section."
+  @type lua_frame :: %{
+          source: String.t() | nil,
+          line: pos_integer() | nil,
+          name: String.t() | nil
+        }
+
+  @typedoc "REQ-162 design §3/§2.3 -- a two-tag union so the branch that fired is part " <>
+             "of the value's own shape, never a bare integer that could be mistaken for " <>
+             "a zero-filled or silently-defaulted count. `{:consumed, n}` when " <>
+             "`exception.original.state` is a populated `%Lua.VM.State{}`; " <>
+             "`{:configured_budget, budget}` otherwise."
+  @type instruction_count_report ::
+          {:consumed, non_neg_integer()} | {:configured_budget, pos_integer()}
+
+  @typedoc "REQ-162 design §3 -- the structured SCRIPT_ERROR payload built from an " <>
+             "uncaught `Lua.RuntimeException` (any Lua.RuntimeException other than the " <>
+             "budget-exceeded one, which stays `{:budget_exceeded, _}`)."
+  @type script_error :: %{
+          message: String.t(),
+          stack_trace: [lua_frame()],
+          instruction_count: instruction_count_report(),
+          capabilities: [Capabilities.capability()]
+        }
 
   @doc """
   Implements `Letflow.Engine.LuaScriptAudit.Executor.execute_with_manifest/2`.
@@ -208,6 +301,7 @@ defmodule Letflow.Engine.Lua.Executor do
           | {:error, {:budget_exceeded, pos_integer()}}
           | {:error, {:wallclock_timeout, pos_integer()}}
           | {:error, :memory_limit_exceeded}
+          | {:error, {:script_error, script_error()}}
           | {:error, String.t()}
           | {:error, :invalid_script_ref}
   def execute_with_manifest(script_ref, registered_hash) do
@@ -254,6 +348,7 @@ defmodule Letflow.Engine.Lua.Executor do
           | {:error, {:budget_exceeded, pos_integer()}}
           | {:error, {:wallclock_timeout, pos_integer()}}
           | {:error, :memory_limit_exceeded}
+          | {:error, {:script_error, script_error()}}
           | {:error, String.t()}
           | {:error, :invalid_script_ref}
   def execute_with_manifest(script_ref, _registered_hash, opts) do
@@ -319,7 +414,7 @@ defmodule Letflow.Engine.Lua.Executor do
         if String.contains?(Exception.message(e), "instruction budget exceeded") do
           {:error, {:budget_exceeded, budget}}
         else
-          {:error, Exception.message(e)}
+          {:error, {:script_error, build_script_error(e, budget, Capabilities.new())}}
         end
 
       e in Lua.CompilerException ->
@@ -329,6 +424,73 @@ defmodule Letflow.Engine.Lua.Executor do
       _e in FunctionClauseError ->
         {:error, :invalid_script_ref}
     end
+  end
+
+  # REQ-162 design §3/§13. Placeholder message for the untyped/fallback stack-trace
+  # case (§6.2 -- exact wording is not load-bearing for any acceptance criterion, only
+  # that it never leaks Elixir/host detail).
+  @script_error_placeholder_message "internal script execution error"
+
+  # Builds the script_error() shape (design §3) from the rescued Lua.RuntimeException,
+  # the configured instruction budget (used only for the {:configured_budget, _}
+  # fallback branch), and the grant set the executing sandbox held for the run.
+  #
+  # Public (with @doc false), not private: this is REQ-162 design §4.2/AC3's
+  # "shaping-function level" test seam. Triggering a Lua.VM.InternalError-wrapping
+  # Lua.RuntimeException naturally from parsed Lua source is not practical (its only
+  # raise sites -- "goto target not found", "unimplemented instruction", "break
+  # outside loop" -- are all unreachable past the compiler's own static checks for
+  # any script that actually parses), so the executor_test.exs suite exercises this
+  # function directly with a constructed exception double rather than only through
+  # `execute_with_manifest/2,3`. Not part of the `Executor` behaviour; no external
+  # caller other than this module's own `run_script/3` and its test suite.
+  @spec build_script_error(Lua.RuntimeException.t(), pos_integer(), Capabilities.grant_set()) ::
+          script_error()
+  @doc false
+  def build_script_error(%Lua.RuntimeException{} = exception, budget, capabilities) do
+    %{
+      message: script_error_message(exception),
+      stack_trace: script_error_stack_trace(exception),
+      instruction_count: instruction_count_report(exception.original, budget),
+      capabilities: MapSet.to_list(capabilities)
+    }
+  end
+
+  # Typed case (design §6.1): the wrapped exception is one of the three VM error
+  # shapes this design confirmed reliably carries :state and has a dedicated
+  # Lua.RuntimeException.to_map/2 clause. message/1 here is Lua.RuntimeException's
+  # own message/1 -- never the raw Elixir inspect/1 of an arbitrary term.
+  defp script_error_message(%Lua.RuntimeException{original: original} = exception)
+       when is_struct(original, Lua.VM.RuntimeError) or is_struct(original, Lua.VM.TypeError) or
+              is_struct(original, Lua.VM.AssertionError) do
+    Exception.message(exception)
+  end
+
+  # Untyped/fallback case (design §6.2): a fixed, non-leaking placeholder --
+  # never the wrapped exception's own message, which for an arbitrary Elixir
+  # exception can legitimately embed argument dumps or module names.
+  defp script_error_message(%Lua.RuntimeException{}), do: @script_error_placeholder_message
+
+  defp script_error_stack_trace(%Lua.RuntimeException{original: original} = exception)
+       when is_struct(original, Lua.VM.RuntimeError) or is_struct(original, Lua.VM.TypeError) or
+              is_struct(original, Lua.VM.AssertionError) do
+    Lua.RuntimeException.to_map(exception).call_stack
+  end
+
+  defp script_error_stack_trace(%Lua.RuntimeException{}), do: []
+
+  # REQ-162 design §2.3's per-instance rule -- inspects exception.original for a
+  # populated %Lua.VM.State{} in its :state field. `%{state: %Lua.VM.State{}}` only
+  # matches when that key is present AND holds a populated struct (not nil, and not
+  # absent -- Lua.VM.InternalError declares no :state field at all, so this clause
+  # structurally cannot match it). Never a zero-filled instruction_count: 0.
+  @spec instruction_count_report(term(), pos_integer()) :: instruction_count_report()
+  defp instruction_count_report(%{state: %Lua.VM.State{instruction_count: count}}, _budget) do
+    {:consumed, count}
+  end
+
+  defp instruction_count_report(_original, budget) do
+    {:configured_budget, budget}
   end
 
   # REQ-156, design §5: the max_heap_words-configured path. Task.Supervisor cannot
@@ -402,6 +564,10 @@ defmodule Letflow.Engine.Lua.Executor do
          _timeout_ms
        )
        when is_integer(limit) do
+    result
+  end
+
+  defp handle_yield_result({:ok, {:error, {:script_error, _}} = result}, _task, _timeout_ms) do
     result
   end
 

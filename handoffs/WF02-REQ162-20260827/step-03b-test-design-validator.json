@@ -1,0 +1,83 @@
+{
+  "handoff_id": "step03b-WF02-REQ162-20260827",
+  "run_id": "WF02-REQ162-20260827",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ162-20260827/step-03b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-162"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ162-20260827/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req162-lua-script-error-capture.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/specs/REQ-162.md"
+    ],
+    "branch_name": "feature/WF02-REQ162-20260827",
+    "commit": "2c5a249"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate (WF-02 Step 3b) on REQ-162's test suite. TEST-DESIGNER ran 6 mutation tests against lib/letflow/engine/lua/executor.ex (commit 2c5a249): 4 already caught, 2 real gaps found and closed (typed-case stack trace could have leaked a struct-atom-derived string that bypassed the existing AC7 substring check; untyped/fallback message path had zero prior coverage). Landing at 46 passing tests. Verify this claim independently -- do not trust TEST-DESIGNER's self-report. Re-run at least 2 of the 6 claimed mutations yourself against the real code and confirm the results.",
+    "acceptance_criteria": [
+      "Every one of REQ-162's 8 real acceptance criteria (docs/requirements.yaml) maps to at least one runnable test -- verified by reading the test file, not the spec's claim about itself.",
+      "Independently re-apply the 2 gap-closing mutations (typed-case stack-trace leak via inspect(original.__struct__)+raw Exception.message/1, and the untyped-fallback message leak) and confirm the NEW tests genuinely fail against them and pass against the real code.",
+      "Independently re-apply at least 1 of the 4 'already caught' mutations (recommend the :script_error/:script_failed tag collision, since it's the highest-value distinguishability property) and confirm existing tests genuinely catch it.",
+      "No skipped, pending, or excluded tests anywhere in the REQ-162 sections of test/letflow/engine/lua/executor_test.exs.",
+      "Confirm the working tree is clean after your verification -- git diff --stat lib/letflow/engine/lua/executor.ex empty after any mutation you apply and revert.",
+      "test/specs/REQ-162.md's mutation-testing findings table accurately reflects what was actually done.",
+      "mix test test/letflow/engine/lua/executor_test.exs and mix compile --warnings-as-errors both independently re-run and confirmed clean, with real output quoted.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "PASS -- REQ-162's test suite (test/letflow/engine/lua/executor_test.exs, 'SCRIPT_ERROR capture (REQ-162)' describe block, lines 809-1063) is accepted. Independently verified, not trusted from TEST-DESIGNER's self-report.",
+    "ac_coverage": [
+      "AC1 (stack trace + capability state, asserted individually) -> test 'AC1: an uncaught runtime error produces SCRIPT_ERROR with a stack trace and capability state, asserted individually' (line 812), two separate assert calls (lines 821, 827). VERIFIED by reading the test body.",
+      "AC2 (moduledoc states branch + mechanism, test asserts it) -> test 'AC2: moduledoc names the instruction-count mechanism and cites REQ-148 by section' (line 831) reads Code.fetch_docs and asserts on 'exception.original.state.instruction_count', 'REQ-148', 'section 5'; moduledoc itself (executor.ex lines 177-190) confirmed to state branch (a) and cite REQ-148 section 5/OQ-2(c) by name.",
+      "AC3 (never zero-filled/omitted) -> test 'AC3: instruction_count reports {:configured_budget, _} (never zero-filled)...' (line 848) plus the AC1/AC4 tests' {:consumed, n} assertions and the design-section-7 regression guard (line 1051) asserting is_integer(count) and count >= 0.",
+      "AC4 (5.3-raising division form + moduledoc substitution note) -> test 'AC4: 1 // 0 raises ... 1 / 0 does not raise' (line 861); moduledoc (executor.ex lines 166-175) records the substitution and cites Lua 5.3 section 3.4.1.",
+      "AC5 (5-arm distinguishability, one test) -> test 'AC5: SCRIPT_ERROR is pattern-match-distinguishable from all 4 other real arms' (line 887), single test driving all 5 arms and asserting Enum.uniq(classified) == classified.",
+      "AC6 (capability state read from REQ-157 set, not re-derived) -> test 'AC6: capabilities are read from Capabilities.grant_set(), not re-derived' (line 957), constructs Lua.t() directly bypassing Sandbox.new/1's hardcoded empty set, asserts exactly ['some:capability'].",
+      "AC7 (no host paths/Elixir internals in stack trace) -> test 'AC7: stack trace frames contain no ...' (line 983) plus the two mutation-driven regression tests 'AC7 regression: typed-case stack_trace is exactly ...to_map/1's own call_stack' (line 1013) and 'AC7 fallback case: an untyped wrapped exception yields the fixed placeholder message...' (line 1034).",
+      "AC8 (mix test / mix compile --warnings-as-errors clean) -> independently re-run by this validator (see verification section below), not merely read from TEST-DESIGNER's report."
+    ],
+    "independent_mutation_verification": {
+      "baseline": "mix test test/letflow/engine/lua/executor_test.exs -> 'Result: 46 passed' (confirmed before any mutation). git status --porcelain lib/ test/ empty at start.",
+      "mutation_1_typed_case_stack_trace_leak": {
+        "applied": "Changed script_error_stack_trace/1's typed clause (executor.ex ~line 477) from `Lua.RuntimeException.to_map(exception).call_stack` to `[%{source: inspect(original.__struct__), line: nil, name: Exception.message(exception)}]` -- exactly the struct-atom-plus-raw-message leak TEST-DESIGNER's finding #2 describes.",
+        "result": "mix test -> 'Result: 45/46 passed', the single failure being the new pinning test 'AC7 regression: typed-case stack_trace is exactly Lua.RuntimeException.to_map/1's own call_stack'. Confirms this mutation genuinely bypasses the pre-existing AC7 substring test (which does not fail) and is caught only by the new regression test.",
+        "revert": "git checkout -- lib/letflow/engine/lua/executor.ex; git diff --stat lib/letflow/engine/lua/executor.ex empty; mix test -> 'Result: 46 passed'."
+      },
+      "mutation_2_untyped_fallback_message_leak": {
+        "applied": "Changed script_error_message/1's fallback clause (executor.ex ~line 472) from the fixed placeholder to `Exception.message(exception)` (raw, unsanitized message) -- TEST-DESIGNER's finding #6.",
+        "result": "mix test -> 'Result: 45/46 passed', failing test: 'AC7 fallback case: an untyped wrapped exception yields the fixed placeholder message and empty stack_trace, never the raw exception detail'. Confirms zero prior coverage of this path and that the new test closes it.",
+        "revert": "git checkout -- lib/letflow/engine/lua/executor.ex; git diff --stat empty; mix test -> 'Result: 46 passed'."
+      },
+      "mutation_3_tag_collision": {
+        "applied": "Changed the SCRIPT_ERROR tag in run_script/3's rescue clause (executor.ex ~line 417) from `{:error, {:script_error, ...}}` to `{:error, {:script_failed, ...}}`, colliding with REQ-161's exit-reason tag.",
+        "result": "mix test -> 'Result: 41/46 passed', 5 tests failed (matches TEST-DESIGNER's claimed 5 failures for this mutation: AC1, AC4, AC5, AC7, and the design section-7 regression guard, all of which pattern-match on {:script_error, _}). Confirms existing tests genuinely catch this tag collision without any new test.",
+        "revert": "git checkout -- lib/letflow/engine/lua/executor.ex; git diff --stat empty; mix test -> 'Result: 46 passed'."
+      },
+      "final_clean_state": "git status --porcelain lib/ test/ -> empty (confirmed after all 3 mutations reverted). git diff --stat lib/letflow/engine/lua/executor.ex -> empty."
+    },
+    "skip_pending_exclude_check": "grep for 'skip|pending|exclude|TODO' in test/letflow/engine/lua/executor_test.exs found none in the REQ-162 describe block (or anywhere in the file) -- only describe-block headers containing the substring 'REQ-162' matched, no @tag :skip/:pending/:exclude and no 'TODO: implement test' anywhere.",
+    "findings_table_accuracy_check": "test/specs/REQ-162.md's mutation-testing findings table (rows 1-6) matches what was observed: row 2 (typed-case leak, 44/44 passed before the fix, real gap) and row 6 (fallback message leak, 45/45 passed before the fix, real gap) are consistent with this validator's own reproduction (both mutations bypass all then-existing tests and are caught only by the 2 new tests). Row 4 (tag collision, 40/45 failed before the 2 new tests existed) is consistent in kind with this validator's own reproduction against the final 46-test suite (41/46 failed, 5 failing) -- the count differs only because this validator ran the mutation after both new tests already existed (46 tests total) rather than at TEST-DESIGNER's intermediate 45-test snapshot; the same 5 assertions (AC1, AC4, AC5, AC7, section-7 regression guard) are the ones that fail in both runs. Conclusion paragraph's claim of 'AC8 confirmed as byproduct: mix compile --warnings-as-errors clean, mix test: 46 passed' is independently reconfirmed below.",
+    "final_independent_run": {
+      "mix_compile": "mix compile --warnings-as-errors -> clean, no output, exit clean (re-run independently by this validator after all mutations reverted).",
+      "mix_test": "mix test test/letflow/engine/lua/executor_test.exs -> 'Finished in 4.3 seconds (4.3s async, 0.00s sync)' / 'Result: 46 passed' (re-run independently by this validator on the untouched shipped code)."
+    },
+    "working_tree_clean": true,
+    "lint_handoffs": "mix letflow.lint_handoffs -> 'letflow.lint_handoffs: OK -- 0 new violations across 1189 handoff files (25 pre-existing grandfathered, traced to ISS-0190).'",
+    "notes": "No permanent edits made to executor.ex or executor_test.exs -- all 3 mutations applied and reverted via git checkout --, each revert confirmed by empty git diff --stat and a clean 46-passed re-run before proceeding to the next mutation. This satisfies the WF-02 handoff's requirement to re-run at least 2 of the 6 claimed mutations independently (3 were run: the 2 gap-closing mutations plus the recommended tag-collision mutation)."
+  }
+}

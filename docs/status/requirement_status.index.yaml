@@ -686,8 +686,19 @@ volumes:
     path: docs/status/requirement_status.v5.yaml
     status: current
     opened: 2026-08-26
-    entries: 25
+    entries: 26
     note: >
+      Incremented to 26 by WF02-REQ162-20260827 (DOC-UPDATER)'s own REQ-162
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 26 on-disk entries, no rebase
+      conflict on this file. This closes out the S5 REQ-153..REQ-162 Lua
+      host-function chain: all 8 platform.* capability-matrix rows are now
+      real, and the uncaught-error/deliberate-failure/kill taxonomy
+      (SCRIPT_FAILED, SCRIPT_ERROR, budget, timeout, memory-limit) is
+      complete. Every gate on this run passed clean on the first attempt,
+      and RELEASE-VALIDATOR verified empirically (ran a real 1//0 script and
+      observed the actual instruction_count field).
+
       Incremented to 25 by ORCH's own REQ-162 started-event append (Step 00,
       WF02-REQ162-20260827) -- `grep -c "^  - req:"
       docs/status/requirement_status.v5.yaml` = 25 on-disk entries.

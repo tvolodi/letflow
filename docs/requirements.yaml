@@ -8143,7 +8143,7 @@ requirements:
   - id: REQ-162
     title: Uncaught Lua errors captured as structured SCRIPT_ERROR events, with the instruction-count field resolved empirically (LUA-16 restated)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 314  # letflow-queue task id
     description: >

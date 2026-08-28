@@ -1,0 +1,57 @@
+{
+  "handoff_id": "step03-WF02-REQ162-20260827",
+  "run_id": "WF02-REQ162-20260827",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ162-20260827/step-03-test-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-162"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ162-20260827/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ162-20260827/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ162-20260827/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req162-lua-script-error-capture.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/specs/REQ-162.md"
+    ],
+    "branch_name": "feature/WF02-REQ162-20260827",
+    "commit": "9ef20df"
+  },
+  "task": {
+    "description": "TEST-DESIGNER (WF-02 Step 3) for REQ-162. ELIXIR-DEV already wrote 9 new tests in test/letflow/engine/lua/executor_test.exs covering all 8 ACs, and both SECURITY-REVIEWER and REVIEWER passed the implementation. Your job is to actively find real coverage gaps using MUTATION TESTING: deliberately break the real code in executor.ex, run the existing suite, and see if it fails. If it doesn't, that's a real gap -- add a test, then revert. This session's track record: mutation testing has repeatedly found real gaps. Specific mutation targets: (1) swap the instruction_count_report/2 clause order or change {:consumed, count} to always report {:configured_budget, budget} regardless of whether state is populated, confirm AC2/AC3's tests catch it; (2) mutate the typed-case stack trace to use Exception.message(exception) directly instead of the sanitized to_map/2 call_stack, confirm AC7's test catches an Elixir-detail leak; (3) mutate the capabilities threading to pass a hardcoded non-empty set instead of the real grant_set() parameter, confirm AC6's test catches it; (4) mutate the SCRIPT_ERROR tag from :script_error to something colliding with an existing tag (e.g. reuse :script_failed), confirm AC5's distinguishability test catches the collision; (5) mutate the budget-exceeded string-match branch to run AFTER the script_error branch instead of before, confirm a real budget-exceeded scenario would be misclassified and that some test catches it.",
+    "acceptance_criteria": [
+      "Mutation-test AC2/AC3: swap the instruction_count_report/2 clause priority or force always-budget-fallback, confirm existing tests catch it, then revert.",
+      "Mutation-test AC7: use the raw exception message instead of the sanitized call_stack in the typed case, confirm a test catches an Elixir-internal leak, then revert.",
+      "Mutation-test AC6: hardcode the capabilities field instead of threading the real parameter, confirm a test catches it, then revert.",
+      "Mutation-test AC5: collide the :script_error tag with :script_failed or another existing tag, confirm the distinguishability test catches it, then revert.",
+      "Mutation-test the budget-exceeded-must-run-first ordering: reorder the two branches, confirm a real budget-exhaustion scenario is caught by an existing test as misclassified, then revert.",
+      "Confirm every one of REQ-162's 8 real acceptance criteria (docs/requirements.yaml) has at least one test that would fail if that specific behavior regressed -- verified by actually breaking it.",
+      "Update test/specs/REQ-162.md with the mutation-testing findings table."
+    ]
+  },
+  "result": {
+    "status": "Genuine mutation testing performed against lib/letflow/engine/lua/executor.ex per all 5 specified targets. Mutations #1 (instruction_count_report clause order), #3 (hardcoded capabilities), #4 (:script_error/:script_failed tag collision), #5 (budget-exceeded branch ordering) were all already caught by ELIXIR-DEV's existing 44 tests -- no gap. Mutation #2 (typed-case stack_trace built from inspect(original.__struct__) + raw Exception.message/1 instead of the sanitized Lua.RuntimeException.to_map/1 call_stack) was a REAL GAP: all 44 existing tests passed with the mutant in place, because the pre-existing AC7 test only refutes '/' and 'Elixir.' substrings, and inspect(Lua.VM.RuntimeError) renders as 'Lua.VM.RuntimeError' with neither substring. Closed by adding 'AC7 regression: typed-case stack_trace is exactly Lua.RuntimeException.to_map/1's own call_stack', which pins stack_trace to the library's sanitized output -- verified this new test fails against the mutant (1/45 failed) and passes against the reverted code. A sixth mutation outside the 5 specified targets (untyped/fallback script_error_message/1 changed to leak Exception.message/1 instead of the fixed placeholder) found a second real gap -- no test exercised that clause at all. Closed by adding 'AC7 fallback case: an untyped wrapped exception yields the fixed placeholder message and empty stack_trace, never the raw exception detail' -- verified it fails against that mutant (1/46 failed) and passes against the reverted code. lib/letflow/engine/lua/executor.ex is fully reverted to ELIXIR-DEV's shipped implementation (git diff --stat shows no changes to that file); only test/letflow/engine/lua/executor_test.exs was extended (44 -> 46 tests). Final: mix test test/letflow/engine/lua/executor_test.exs -> 46 passed; mix compile --warnings-as-errors clean. test/specs/REQ-162.md updated with a full mutation-testing findings table (6 rows) matching REQ-159/160/161's format. All 8 real acceptance criteria in docs/requirements.yaml now have at least one test verified-by-breaking. Routing to TEST-DESIGN-VALIDATOR next.",
+    "tests_added": [
+      "AC7 regression: typed-case stack_trace is exactly Lua.RuntimeException.to_map/1's own call_stack",
+      "AC7 fallback case: an untyped wrapped exception yields the fixed placeholder message and empty stack_trace, never the raw exception detail"
+    ],
+    "files_changed": [
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/specs/REQ-162.md"
+    ],
+    "test_counts": {
+      "before": 44,
+      "after": 46,
+      "final_run": "46 passed"
+    }
+  }
+}

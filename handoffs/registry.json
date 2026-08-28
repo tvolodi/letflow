@@ -2865,20 +2865,20 @@
             "requirement_ids": ["REQ-164"],
             "issue_ids": [],
             "stage": "S5",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "owned_modules": [
                 "lib/letflow/design/req164-wasm-compilation-hosting.md",
                 "docs/migration/decisions/",
                 "docs/requirements.yaml"
             ],
             "lock_acquired_at": "2026-08-28T00:39:00Z",
-            "lock_released_at": null,
-            "released_lock": false,
-            "last_known_step": "Step 00 PASS -- branch feature/WF02-REQ164-20260828 created; Step 1 dispatched to CODE-DESIGNER",
+            "lock_released_at": "2026-08-28T01:11:30Z",
+            "released_lock": true,
+            "last_known_step": "Step Final COMPLETED PASS -- PR #685 squash-merged (d6e5eed); queue task 316 released done cleanly",
             "backfilled": false,
             "queue_task_id": 316,
             "queue_agent_id": "orch-ai-dala",
-            "note": "WF-02 for REQ-164 (queue task 316, GH#616, stage S5). Decision-only requirement, no code: settle OQ-3 -- whether Letflow hosts WASM guest compilation at all (WASM-03/04/05). Decision 0014's own evidence leans NO: R-Co/src/wasm/ is stubs end to end and a search for '*.wasm' across the entire R-Co tree returns zero files. If NO, WASM-03/04/05 are DECLINED (not deferred) and REQ-175 must be CANCELLED with a status-history event, not left pending -- this run's DOC-UPDATER step may need to touch docs/requirements.yaml's REQ-175 entry in addition to REQ-164's own. If YES, the artefact must supply REQ-175's language-agnostic restatement (artifact-hash-keyed caching, not source-hash, since Letflow has no Zig toolchain). Also must name which S6 operational inputs (artifact storage, retention, job execution) the decision required and state whether available or assumed. Lighter pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> REVIEWER -> RELEASE-VALIDATOR -> DOC-UPDATER; no ELIXIR-DEV/SECURITY-REVIEWER/TEST-* since no code exists. Queue claimed via get_next_task 2026-08-28T00:38:40Z."
+            "note": "WF-02 for REQ-164 (queue task 316, GH#616, stage S5). Decision-only requirement, no code: settled OQ-3 as NO -- Letflow does not host WASM guest compilation (WASM-03/04/05). Grounded in decision 0014's already-verified evidence: R-Co/src/wasm/ is stubs end to end and a search for '*.wasm' across the entire R-Co tree returns zero files -- no working pipeline to port, no artifact corpus to remain compatible with, plus Letflow has no Zig toolchain and no reason to acquire one, and hosting a compiler is an unjustified build-farm security surface. Consequence: WASM-03/04/05 DECLINED (not deferred); REQ-175 -- the conditional requirement gated on a YES decision -- flipped to CANCELLED (not left pending) in this same run, with its own status-history event, since REQ-175's own text explicitly anticipated exactly this outcome. REVIEWER gave particular scrutiny to the REQ-175 cancellation trigger specifically (the one consequential, real downstream action this run sets up) and RELEASE-VALIDATOR independently re-opened REQ-175's own entry rather than trusting REVIEWER's finding -- both confirmed no existing caller or stakeholder commitment makes the cancellation premature. S6 operational inputs (artifact storage, retention, job execution) honestly disclosed as assumed, not available, since S6 hasn't been reached yet. Lighter pipeline (CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> REVIEWER -> RELEASE-VALIDATOR -> DOC-UPDATER; no ELIXIR-DEV/SECURITY-REVIEWER/TEST-* since no code exists) passed every gate clean on first attempt. One CI-only flake on PR open: a timing-comparison test in REQ-156's memory-limit suite (unrelated Lua work, this PR touches zero code files) failed on one of two parallel CI runs while the other passed cleanly at 2285/2285 -- diff-excluded per structural attribution, confirmed by a clean rerun. This completes both WASM-unblocking decisions (with REQ-163's core-modules choice) -- REQ-165 onward can now proceed with a concrete ABI and a settled compilation-hosting scope boundary. Queue task 316 released done cleanly."
         }
     ]
 }

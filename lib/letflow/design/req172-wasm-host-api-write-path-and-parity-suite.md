@@ -15,7 +15,10 @@ additively here), `Letflow.Engine.Wasm.MemoryGuard` (REQ-168),
 **Extends:** `Letflow.Engine.Wasm.HostApi` (adds `do_write_variable/6`,
 `do_call_service/8`, `do_fail/5`), `Letflow.Engine.Wasm.CapabilityGate` (adds
 `write_variable`/`fail` rows to `@known_imports`, widens `platform_call_service`'s
-declared signature from placeholder to real)
+declared signature from placeholder to real), `Letflow.Engine.Wasm.PluginHandler`
+(REQ-165, existing/shipped — `call_export/3` gains a pre-stop fail-signal check, §2.2;
+this is a small, additive change to an already-shipped function, required by this
+requirement's own live-verified findings, not a re-scoping of REQ-165)
 **Introduces:** the shared parity harness (`test/support/host_api_parity.ex`, test-only,
 not `lib/`)
 
@@ -82,51 +85,205 @@ verbatim, exactly as REQ-171 §2 already established for the read quarter).
 
 ---
 
-## 2 — Live-verification finding this design depends on (binding on ELIXIR-DEV): host-function callbacks run in the Wasmex instance's OWN process, not the caller's
+## 2 — Live-verification findings this design depends on (binding on ELIXIR-DEV)
 
-Read directly, not assumed: `deps/wasmex/lib/wasmex.ex` lines 542–580.
+### 2.1 — Host-function callbacks run in the Wasmex instance's OWN process, not the caller's; `exit/1` inside a callback does NOT crash that process
+
+Read directly, not assumed: `deps/wasmex/lib/wasmex.ex` lines 542–582, and
+`deps/wasmex/native/wasmex/src/environment.rs` lines ~140–250 and
+`deps/wasmex/native/wasmex/src/instance.rs` lines ~390–430 (the Rust side of the same
+call path — read *below* where CODE-DESIGN-VALIDATOR's rework request stopped, because
+the Elixir source alone does not show what happens to a caught `exit/1`'s payload once
+it crosses back into the WASM engine).
+
 `Wasmex.call_function/4` is `GenServer.call(pid, {:call_function, ...}, timeout)`
 (line 420) against the `pid` returned by `Wasmex.start_link/1`. When the guest calls an
 imported host function, the NIF sends `{:invoke_callback, namespace, name, context,
 params, token}` (line 543) to that **same `pid`** as a message, handled by
 `handle_info/2` (line 542), which does `apply(callback, [context | params])` (line 564)
-— i.e. **the callback body runs inside the Wasmex GenServer's own process**, not inside
-whatever process called `Wasmex.call_function/4`. `Letflow.Engine.Wasm.PluginHandler`'s
-own `run_guest/3` (lines 121–128) confirms the consequence structurally: it starts a
-**fresh** `Wasmex.start_link/1` per invocation and calls `GenServer.stop(pid)`
-unconditionally after `call_export/3` returns — on every path where `call_export/3`
-*returns* at all (guest trap, `ResourceLimits` fuel exhaustion — both surface as an
-ordinary `{:error, reason}` return, not a crash of the caller). The one path where it
-does **not** return is `CallTimeout`'s own documented finding (`call_timeout.ex` lines
-10–34): a wall-clock timeout crashes the **caller** via an ordinary `GenServer.call`
-timeout `exit`, before `Wasmex.call_function/4` ever returns — so the `GenServer.stop/1`
-line is never reached and the Wasmex instance process **leaks**, exactly as
-`call_timeout.ex`'s moduledoc already discloses ("this leaks wasmex's node-global...
-worker-thread pool one hung invocation at a time").
+inside a `try/rescue/catch` (lines 557–578) whose `catch kind, reason ->` clause
+(line 577) is **unbound on `kind`** — standard Elixir, and it catches `exit/1` exactly
+like `:throw`/`:error`, producing `{false, [Exception.format_banner(kind, reason)]}`,
+never re-raising. `handle_info/2` then calls
+`Wasmex.Native.instance_receive_callback_result(token, false, results)` (line 580) and
+returns `{:noreply, state}` (line 581) — **the Wasmex instance process does not crash,
+does not terminate, and is not marked for termination in any way.** This part of
+CODE-DESIGN-VALIDATOR's finding (commit bbc9af9's rework request) is independently
+confirmed, both by re-reading the source and by a real repro (below).
 
-**This is why `write_variable` can reuse the identical process-dictionary staging
-mechanism `platform.ex` already uses, with an identical discard argument, but the
-argument's mechanics differ and must be stated honestly (§9.1):**
+**What actually happens to a caught `(false, results)` pair — traced into the Rust NIF,
+not previously checked by this design or its own SS5.3 (which stopped at the Elixir
+boundary):** `environment.rs`'s `link_imported_function/5` builds each host import as an
+async Wasmtime host function. It sends the `:invoke_callback` message, then awaits a
+`oneshot::channel` that `instance_receive_callback_result/3` (`instance.rs` line ~598)
+resolves with the `(success, results)` pair `handle_info/2` computed. On `(false, _)`
+(`environment.rs`, the host-function future's final `match`):
 
-- Guest trap / fuel exhaustion / a `memory`-cap-triggered guest-side failure (§3.4):
-  `call_export/3` returns `{:error, _}`; `GenServer.stop(pid)` immediately follows,
-  destroying the process (and its staged-writes process dictionary) before any future
-  caller could read it.
-- Wall-clock timeout: the Wasmex instance process is never explicitly stopped, but it is
-  also never handed to any caller that could read its process dictionary — the
-  process leaks, abandoned, exactly as `call_timeout.ex` already discloses; the staged
-  write is unreachable, not destroyed. The **observable guarantee is identical**
-  (no caller ever commits it) even though the **mechanism differs** from Lua's
-  (destruction vs. abandonment) and from WASM's own other three arms (explicit
-  `GenServer.stop/1` vs. leak). ELIXIR-DEV must not claim "the process is killed" for
-  this arm — say "abandoned, unreachable" instead, and the test for this arm (§8, AC2)
-  must assert unreachability (no future call ever observes the write), not process
-  death (`Process.alive?/1` on a leaked-by-design process is not a claim this design
-  makes either way).
-- `fail`: `do_fail/5` (§5) calls `exit({:script_failed, ...})` from inside the callback,
-  which crashes the Wasmex instance process directly (§5.2) — the process (and its
-  staged writes) is destroyed the same way a Lua process is, by `exit/1`, not by a
-  caller's `GenServer.stop/1`.
+```
+(false, _) => Err(WasmtimeError::msg("the elixir callback threw an exception"))
+```
+
+**The caught `reason`/`results` are discarded entirely** — replaced with this one fixed,
+generic message, identical regardless of whether the callback exited, raised, or threw,
+and regardless of what payload it carried. This `Err` is returned from the host
+function's own Wasmtime call, which Wasmtime treats as the host function's call
+**failing** — the surrounding `function.call_async/3` (`instance.rs` line ~416) sees this
+as `Err(err)`; since it is a plain `wasmtime::Error` (not a `wasmtime::Trap`),
+`err.downcast::<Trap>()` (`instance.rs` line 425) **fails**, so the caller-facing message
+takes the *non*-trap branch: `"Error during function excecution: {reason}"` — no
+`(<trap-kind>)` parenthetical. A genuine **guest trap** (e.g. an `unreachable`
+instruction executed directly by guest bytecode, no host callback involved at all) *does*
+downcast to `Trap`, taking the other branch: `"Error during function excecution
+(<trap-kind>): {reason}"`.
+
+**Real repro, run against the actual installed `wasmex` 0.15.1** (`mix.lock`; asdf-pinned
+Elixir 1.20.3/OTP 29 toolchain, `MIX_ENV=test`, isolated per-workspace test DB — a WASM
+module importing one host function, called three ways: the callback does `exit({:script_failed, ...})`, the callback does an ordinary `raise "bug"`, and — a separate call — the
+guest itself executes `unreachable` with no callback involved):
+
+```
+call_exit (do_fail's own mechanism):
+  {:error, "Error during function excecution: error while executing at wasm backtrace:\n    0:     0x67 - <unknown>!call_exit"}
+  Process.alive?(pid) => true
+
+call_raise (an ORDINARY bug inside some other callback):
+  {:error, "Error during function excecution: error while executing at wasm backtrace:\n    0:     0x6e - <unknown>!call_raise"}
+  Process.alive?(pid) => true
+
+guest_trap (real `unreachable`, no callback):
+  {:error, "Error during function excecution (wasm trap: wasm `unreachable` instruction executed): error while executing at wasm backtrace:\n    0:     0x7a - <unknown>!guest_trap"}
+  Process.alive?(pid) => true
+```
+
+Two conclusions, both load-bearing and both replacing this design's prior claims:
+
+1. **`fail` (via `exit/1`) IS distinguishable from a genuine guest trap** by message
+   shape alone (absence vs. presence of the `(<trap-kind>)` parenthetical) — but this is
+   a fragile, dependency-internal string format, not something this design relies on as
+   the *primary* AC5 mechanism (§2.2 gives the real one).
+2. **`fail` is BYTE-IDENTICAL, at the `Wasmex.call_function/4` boundary, to an ordinary
+   accidental exception inside any other callback** (`do_write_variable`,
+   `do_call_service`, or a future host function) — both produce the exact same generic
+   string, and `do_fail/5`'s own `reason`/`details` payload is **completely discarded**
+   by wasmex before it ever reaches the caller. This is the defect the handoff warned
+   was possible ("indistinguishable... exactly the ambiguity AC5 requires you to rule
+   out") and it is real: relying on the `Wasmex.call_function/4` return value alone
+   cannot satisfy AC5. §2.2 is the mechanism this design uses instead.
+
+### 2.2 — The real uninterceptable-AND-distinguishable mechanism: a process-dictionary signal, read before the instance is stopped
+
+Because §2.1 establishes the Wasmex instance process **survives** a caught `exit/1`,
+and because any process may read *another* living process's dictionary via
+`Process.info(pid, :dictionary)` (a standard BEAM primitive — no special permission,
+scoped to local processes), `do_fail/5` can leave a **positive, deliberate** signal in
+its own process's dictionary, under a key nothing else in this module ever writes,
+**before** calling `exit/1`. Nothing else can produce this signal by accident (an
+ordinary bug in `do_write_variable`/`do_call_service` never touches this key), so its
+mere presence — not any parsing of `reason` — is what distinguishes `fail` from both a
+guest trap and an accidental callback exception.
+
+```
+# module attribute, Letflow.Engine.Wasm.HostApi -- namespaced identically to
+# @staged_writes_pdict_key (§3.2), for the same "no ambiguity about which module
+# owns this key" reason; a SEPARATE key, never conflated with staged writes.
+@fail_signal_pdict_key {Letflow.Engine.Wasm.HostApi, :fail_signal}
+
+@type fail_signal :: %{reason: String.t(), details: term()}
+```
+
+`do_fail/5`'s algorithm (§5.1's decoding unchanged) becomes: decode `reason`/`details`
+exactly as §5.1 already describes, `Process.put(@fail_signal_pdict_key, %{reason:
+reason_string, details: details})`, **then** `exit({:script_failed, %{reason:
+reason_string, details: details}})` (the `exit/1` call itself is kept — not because it
+crashes anything (§2.1: it doesn't), but because it is what triggers `handle_info/2`'s
+`catch` clause, which is what makes Wasmtime treat the host call as failed and abort the
+**guest's own `execute` call** uninterceptably (§5.2) — the mechanism's job is aborting
+the call, not killing the process).
+
+**Real repro, same toolchain, confirming the signal survives the round trip and reads
+back correctly, and that an ordinary bug never produces it:**
+
+```
+=== fail path: stash pdict key then exit/1 ===
+call_function result: {:error, "Error during function excecution: ..."}
+pid alive after call: true
+Process.info(pid, :dictionary) BEFORE stop:
+  {:dictionary,
+   [{{Letflow.Engine.Wasm.HostApi, :fail_signal}, %{reason: "boom", details: %{x: 1}}},
+    {:"$initial_call", {Wasmex, :init, 1}}, {:"$ancestors", [...]}]}
+fail_key entry found?: {{Letflow.Engine.Wasm.HostApi, :fail_signal}, %{reason: "boom", details: %{x: 1}}}
+pid alive after GenServer.stop: false
+
+=== ordinary bug path: callback raises, never stashes the key ===
+call_function result: {:error, "Error during function excecution: ..."}   # same shape as above
+fail_key entry found? (expect nil): nil
+
+=== reading pdict AFTER stop ===
+post-stop Process.info: nil
+```
+
+This confirms the signal is present if and only if `do_fail/5` actually ran, is absent
+for both a guest trap and an accidental callback bug, and — critically — **disappears
+the instant the instance is stopped**: `Process.info(pid, :dictionary)` on an
+already-`GenServer.stop`ped `pid` returns `nil`. This is a **hard ordering
+requirement**: whatever code observes `Wasmex.call_function/4`'s `{:error, _}` return
+must call `Process.info(pid, :dictionary)` **before** any code path stops or otherwise
+tears down that `pid` — not after.
+
+**This creates a NEW risk exactly where the handoff flagged it:**
+`Letflow.Engine.Wasm.PluginHandler.run_guest/3` (existing, shipped REQ-165 code,
+`plugin_handler.ex` lines 121–127) calls `GenServer.stop(pid)`
+**unconditionally, immediately after `call_export(pid, export, timeout_ms)` returns**,
+on every path where `call_export/3` returns at all. Per §2.1, `fail`'s path now *does*
+return normally from `call_export/3` (an ordinary `{:error, _}`, not a crash) —
+exactly like a guest trap or `ResourceLimits` fuel exhaustion. Unless the fail-signal
+check happens **inside** `call_export/3`, strictly before it returns to `run_guest/3`,
+`run_guest/3`'s own `GenServer.stop(pid)` call destroys the process (and the pdict
+signal with it) before anything downstream could ever observe it — reproducing, one
+layer up, the exact indistinguishability AC5 forbids. **Resolution, required of
+ELIXIR-DEV as part of this requirement:** `call_export/3` (`plugin_handler.ex` lines
+154–162) gains one additional step on its `{:error, reason}` branch, *before*
+returning to `run_guest/3`: read `Process.info(pid, :dictionary)`, look for
+`@fail_signal_pdict_key`; if present, return a distinctly-tagged outcome (e.g.
+`{:failed, reason, details}`, taken from the stash, not from the parsed message string)
+instead of the current generic `{:error, "wasm guest call failed: ..."}`; if absent,
+the existing generic-`{:error, _}` behavior is unchanged (covers a guest trap,
+`ResourceLimits` fuel exhaustion, and — honestly — an undetected accidental callback
+bug alike, since none of those set the key). `run_guest/3`'s own `GenServer.stop(pid)`
+call (line 125) is unchanged and still runs on every path — it now simply always runs
+*after* the check, never before, because the check is inside the function that returns
+before `run_guest/3`'s stop call is reached. No change to `run_guest/3`'s own control
+flow is required, only to `call_export/3`'s body.
+
+The parity harness (§8) applies the identical ordering rule directly against a raw
+`Wasmex.call_function/4` call it drives itself (§8.2), independent of `PluginHandler` —
+this is the one place `PluginHandler` is exercised as production code the mechanism
+must not silently break, not the only place the mechanism is tested.
+
+### 2.3 — Discard mechanism per arm, restated now that `fail`'s real mechanism is known
+
+**This simplifies relative to this design's prior (incorrect) claim** — `fail` no
+longer has its own unique "process crashes via `exit/1`" story; it now shares the
+identical destruction mechanism the guest-trap and fuel-exhaustion arms already have:
+
+- Guest trap / fuel exhaustion / a `memory`-cap-triggered guest-side reactive `fail`
+  (§3.4) / `fail` itself: `call_export/3` returns (an ordinary `{:error, _}` or, for
+  `fail`, the newly-distinguished `{:failed, _, _}`, §2.2); `GenServer.stop(pid)`
+  immediately follows (in `run_guest/3`, or the harness's own equivalent), destroying
+  the process (and its staged-writes process dictionary, and — for `fail` specifically —
+  the already-read fail-signal entry) before any future caller could read it. **Four**
+  arms now share this one mechanism, not three-plus-a-separate-`fail`-story.
+- Wall-clock timeout: unchanged from this design's original finding — the Wasmex
+  instance process is never explicitly stopped, but it is also never handed to any
+  caller that could read its process dictionary — the process leaks, abandoned, exactly
+  as `call_timeout.ex` already discloses; the staged write is unreachable, not
+  destroyed. The **observable guarantee is identical** (no caller ever commits it) even
+  though the **mechanism differs** from the other four arms (explicit `GenServer.stop/1`
+  vs. leak). ELIXIR-DEV must not claim "the process is killed" for this arm — say
+  "abandoned, unreachable" instead, and the test for this arm (§8, AC2) must assert
+  unreachability (no future call ever observes the write), not process death
+  (`Process.alive?/1` on a leaked-by-design process is not a claim this design makes
+  either way).
 
 No dedicated rollback/undo mechanism is introduced for any of the five arms, exactly
 mirroring `platform.ex`'s own "no special discard mechanism needed" conclusion — but
@@ -392,75 +549,89 @@ regardless of whether its own inputs are well-formed.** Decoded details cross
 `LuaNumberMarshalling.from_lua/1` one level deep on any resulting map's values,
 mirroring `platform.ex`'s own `decode_fail_details/2`.
 
-### 5.2 — The uninterceptable-termination mechanism
+### 5.2 — The uninterceptable-termination mechanism (revised: aborts the call, not the process — live-verified §2.1/§2.2)
 
 ```
+Process.put(@fail_signal_pdict_key, %{reason: reason_string, details: details})
 exit({:script_failed, %{reason: reason_string, details: details}})
 ```
 
-called from inside the callback body — which, per §2's live-verification finding, runs
-inside the Wasmex instance's own GenServer process via `handle_info/2`. An `exit/1`
-call from inside a process's own code terminates that process immediately and is not
-something the process's own code can trap by calling `Process.flag(:trap_exit, true)`
-first (that flag only affects EXIT *signals arriving from linked processes*, never a
-process's own `exit/1` call terminating itself) — the identical primitive and identical
-non-catchability argument `platform.ex`'s own moduledoc already makes for the Lua side,
-applied to the process that is actually running the call here.
+both called from inside the callback body — which, per §2.1's live-verification
+finding, runs inside the Wasmex instance's own GenServer process via `handle_info/2`.
+**Corrected claim (this design's prior text was wrong, per CODE-DESIGN-VALIDATOR's
+rework request and the live repro in §2.1): the `exit/1` call does NOT terminate that
+process.** `handle_info/2`'s own `try/rescue/catch` (`wasmex.ex` line 577, `catch kind,
+reason ->`, unbound on `kind`) catches `exit/1` exactly like `:throw`/`:error` — the
+process survives, confirmed live (`Process.alive?(pid) == true` immediately after a
+`call_exit` round trip, §2.1's repro).
+
+**What `exit/1` actually accomplishes here, correctly stated:** being caught produces
+`{false, results}`, which `instance_receive_callback_result/3` forwards into the
+Wasmtime host-function future (`environment.rs`), which turns *any* `(false, _)` into
+`Err(WasmtimeError::msg("the elixir callback threw an exception"))` — an ordinary
+Wasmtime host-function failure, which aborts the **entire guest `execute` call**
+(the surrounding `function.call_async/3` returns `Err`, propagated to
+`Wasmex.call_function/4`'s caller as `{:error, _}`). This is real and still gives AC5
+its uninterceptability: the guest's own `execute` code never resumes past the `fail`
+call site — there is no return value for it to receive, inspect, or discard, and core
+WebAssembly (the ABI this platform targets per `req163-wasm-abi-choice.md`'s Decision)
+has no `pcall`/`catch` construct that could intervene even if there were. What `exit/1`
+does **not** accomplish (contrary to this design's prior text) is killing the Wasmex
+instance process — that claim is retracted; §2.1/§2.2 state what actually happens and
+why it is still sufficient.
 
 **Why the guest cannot "catch or ignore" this and continue (this requirement's own
-AC5, the WASM analogue of REQ-161's AC1):** core WebAssembly (the ABI this platform
-targets per `req163-wasm-abi-choice.md`'s Decision — no exception-handling proposal in
-play) has no `pcall`/`catch` construct at all; a guest cannot wrap a call in a
-try/catch the way a Lua script wraps one in `pcall`. But the sharper reason this
-mechanism specifically closes the hazard — not merely "WASM has no catch keyword," which
-alone would not rule out a guest simply **ignoring an ordinary return value** the way a
-script could ignore `call_service`'s structured error and keep running — is that
-`do_fail/5` **never returns a value to the guest at all**: the process computing that
-return crashes before the NIF's `instance_receive_callback_result/3` call (`wasmex.ex`
-line 580) can ever run, so there is no return value for the guest's own `execute` code
-to receive, inspect, or discard. The guest's `execute` call itself never resumes;
-`Wasmex.call_function/4`'s caller (a distinct process, per §2) observes the failure via
-the ordinary `GenServer.call`-crash-detection path documented in §5.3, not because the
-guest "chose" to propagate it.
+AC5, the WASM analogue of REQ-161's AC1):** the guest's `execute` call itself never
+resumes, for the reason above — not because a process died, but because Wasmtime
+treats the host call as failed and aborts the in-flight guest execution before control
+would ever return to guest code. `Wasmex.call_function/4`'s caller observes this as an
+ordinary `{:error, _}` return (§2.1) — indistinguishable from a guest trap or an
+accidental callback bug **by that return value alone**. §2.2 is what makes it
+distinguishable: `do_fail/5`'s `Process.put/2` call above, read back via
+`Process.info(pid, :dictionary)` strictly before the instance is stopped (§2.2's hard
+ordering requirement). §5.3 restates the caller-facing contract this design now
+depends on.
 
-**Flagged for ELIXIR-DEV: live-verify the exact crash-observation shape against the
-real installed `wasmex` v0.15.1**, following the same discipline REQ-169/170 already
-applied to `ResourceLimits`/`CallTimeout` rather than trusting documentation. §5.3
-below states the shape this design expects from reading `GenServer.call/3`'s own
-documented crash-propagation behavior (a process dying mid-`handle_info` while a
-`GenServer.call` is pending against it surfaces to the caller as an `exit` wrapping the
-server's own exit reason) — if the live probe finds a different shape (e.g. the NIF
-itself intercepts the process death before it reaches the caller as an ordinary
-`GenServer.call` crash, or wraps it differently), correct this design's §5.3/§8 pattern
-match explicitly, per the same "live-verified, not worked around silently" rule
-decision 0014 established for WASM-10/WASM-11 — do not silently adjust the test to fit
-without updating this section.
+### 5.3 — What the calling code must do (live-verified, §2.1/§2.2 — supersedes the retracted `GenServer.call`-crash-wrapping claim)
 
-### 5.3 — Observed shape at the calling process (expected, pending ELIXIR-DEV's live confirmation)
+This design's prior text expected `Wasmex.call_function/4`'s underlying
+`GenServer.call/3` to crash and surface a wrapped `{{:script_failed, _}, {GenServer,
+:call, _}}` reason via `Task.yield/2`'s `{:exit, reason}` clause. **That expectation was
+false** (§2.1: no crash occurs at all; `GenServer.call` returns normally, `{:error, _}`,
+same shape whether the underlying cause was `fail`, a guest trap, or an accidental
+callback bug). The live-verified contract is instead:
 
-`Wasmex.call_function/4`'s underlying `GenServer.call(pid, {:call_function, ...},
-timeout)` — when `pid`'s process dies mid-call via its own `exit/1` inside
-`handle_info/2` — is expected to surface to whatever process called
-`Wasmex.call_function/4` as an ordinary (catchable via `Task.yield/2`'s `{:exit,
-reason}` clause, exactly like every other crash shape this module set already handles)
-process exit, with `reason` wrapping the server's own exit term in `GenServer.call/3`'s
-own documented crash-report shape:
+1. `Wasmex.call_function/4` returns `{:error, msg}` for **all three** of: a guest trap,
+   an accidental callback exception, and `fail` — `msg`'s text alone does not reliably
+   distinguish `fail` from an accidental callback bug (§2.1's repro: byte-identical for
+   those two; only a guest trap's message differs, by the presence of a
+   `(<trap-kind>)` segment — a real but fragile, dependency-internal distinction this
+   design does not rely on as the primary mechanism).
+2. Whatever process called `Wasmex.call_function/4` (still holding `pid`, per §2.1 the
+   Wasmex instance did not die) must, on `{:error, _}`, call `Process.info(pid,
+   :dictionary)` **before** stopping or discarding that `pid`, and look for
+   `@fail_signal_pdict_key` (§2.2). Present → this was `fail`; take `reason`/`details`
+   from the stashed map (not from `msg`, which never carried them — §2.1). Absent →
+   an ordinary `{:error, msg}` (guest trap or accidental bug; this design does not
+   further distinguish those two, since AC5 only requires `fail` vs. trap
+   distinguishability, and INV-HOSTAPI-2 already forbids any other `do_*` function from
+   raising, so an "accidental bug" arm is not expected to occur in practice — only
+   `fail`'s own path deliberately produces the signal).
+3. `GenServer.stop(pid)` (or any process teardown) must happen strictly **after** step
+   2 — reading the pdict of an already-stopped `pid` returns `nil` (§2.2's repro),
+   which would silently collapse back into the exact indistinguishability AC5 forbids.
 
-```
-{{:script_failed, %{reason: String.t(), details: term()}}, {GenServer, :call, [pid(), term(), timeout()]}}
-```
+This is a **caller-side contract**, not a `Wasmex`-internal one — every piece of code
+that calls `Wasmex.call_function/4` and needs `fail` to be distinguishable (§8's
+harness; `PluginHandler.call_export/3`, §2.2) must implement steps 2–3 in this order.
+§8.2 states the harness's own application of this contract; §2.2 states
+`PluginHandler`'s.
 
-This is a **return-shape** difference from Lua's own directly-observed
-`{:script_failed, _}` (Lua's `Lua.eval!/2` runs inline in the calling process — no
-`GenServer.call` boundary sits between the script and its caller, so `Task.yield/2`
-observes the bare tuple). Both are `{:exit, reason}` from `Task.yield/2`'s point of
-view; only the shape of `reason` differs, by one layer of wrapping, purely because of
-each runtime's own call-boundary mechanics — not a difference WASM-12 needs to close,
-since neither runtime's caller-facing contract promises a bare, unwrapped reason term
-(`Executor`'s own `format_exit_reason/1`, cited in `platform.ex`'s moduledoc, already
-stringifies Lua's shape too, per REQ-161's own "honest gap" section). §8's harness
-normalizes both shapes into one canonical `{:failed, reason, details}` outcome (§8.2) —
-callers of the harness itself never see the raw wrapping difference.
+Lua's own `{:script_failed, _}` observation (`platform_test.exs`'s REQ-161 harness,
+`Task.yield/2`'s `{:exit, reason}` clause, bare and unwrapped, since `Lua.eval!/2` runs
+inline in the calling process with no `GenServer.call` boundary) is a **structurally
+different mechanism** from WASM's — not a return-shape variant of the same one, as this
+design previously claimed. §9.5 restates this difference precisely.
 
 ### 5.4 — `@known_imports` row
 
@@ -529,6 +700,15 @@ alias Letflow.Engine.Lua.Platform  # already aliased, REQ-171 -- reused for Plat
 @staged_writes_pdict_key {Letflow.Engine.Wasm.HostApi, :staged_writes}
 @type staged_writes :: %{optional(String.t()) => term()}
 
+@fail_signal_pdict_key {Letflow.Engine.Wasm.HostApi, :fail_signal}  # §2.2/§5.2 -- the
+                                                                     # out-of-band
+                                                                     # distinguishability
+                                                                     # signal, a SEPARATE
+                                                                     # key from staged
+                                                                     # writes, written
+                                                                     # only by do_fail/5.
+@type fail_signal :: %{reason: String.t(), details: term()}
+
 @spec do_write_variable(wasmex_callback_context(), integer(), integer(), integer(), integer(), execution_context()) :: integer()
 
 @spec take_staged_writes() :: staged_writes()
@@ -544,7 +724,10 @@ Private helpers mirroring REQ-171's own established shape (`stage_write/2`,
 anywhere in this module per INV-HOSTAPI-2), `build_response_envelope/1`
 (`§4.2`'s `{"ok": ..., ...}` construction), `coerce_fail_reason/1`/
 `decode_fail_details/1` (mirroring `platform.ex`'s own two eponymous private
-functions, §1).
+functions, §1), and — new, §2.2/§5.2, not present in REQ-171's own helper set —
+`stash_fail_signal/2` (`Process.put(@fail_signal_pdict_key, %{reason: ..., details:
+...})`, called immediately before `do_fail/5`'s own `exit/1`, private, never called by
+any other function in this module).
 
 **Invariants restated (extend REQ-171's four, unchanged in substance):**
 
@@ -556,12 +739,19 @@ functions, §1).
   does).
 - INV-HOSTAPI-2 ("no function this module defines raises, ever") is restated with **one
   explicit, permanent exception: `do_fail/5`.** `do_fail/5` is the one function in this
-  entire module whose entire purpose is to terminate the process via `exit/1` — this is
-  not a violation of INV-HOSTAPI-2's *intent* (INV-HOSTAPI-2 exists so a callback's
-  accidental crash isn't mistaken for a deliberate one); `do_fail/5`'s crash is the
-  deliberate mechanism itself, named and tested as such (§5), the direct parallel to how
-  `platform.ex`'s own `do_fail/2` is the one function on the Lua side that is expected,
-  by design, to never return.
+  entire module whose entire purpose is to call `exit/1` on purpose — **corrected from
+  this design's prior text (§2.1/§5.2): this does not terminate the Wasmex instance
+  process** (`handle_info/2`'s own `catch` clause catches it, live-verified); it aborts
+  the guest's in-flight `execute` call via Wasmtime's own host-function-failure
+  propagation instead. This is still not a violation of INV-HOSTAPI-2's *intent*
+  (INV-HOSTAPI-2 exists so a callback's accidental crash/abort isn't mistaken for a
+  deliberate one) — `do_fail/5`'s deliberate `exit/1`, paired with its own
+  `stash_fail_signal/2` call (above), is the mechanism that is both named and made
+  distinguishable, tested as such (§5, §8), the direct parallel to how `platform.ex`'s
+  own `do_fail/2` is the one function on the Lua side that is expected, by design, to
+  never return — the parallel now holds at the level of "the one function whose
+  `exit/1` is deliberate and load-bearing," not at the level of "the one function that
+  crashes its own process," which was never true on the WASM side.
 
 ---
 
@@ -647,9 +837,18 @@ own body — the harness enforces the *shape*, not each function's own mapping):
   arm, or `write_variable`'s/`read_variable`'s numeric error codes mapped back to a
   reason string → `{:error, reason}`; `CapabilityGate.start_instance/2`'s
   `{:error, {:instantiation_denied, {:unresolved_import, _, capability}}}` →
-  `{:denied, capability}`; the wrapped `{:exit, {{:script_failed, %{reason: r, details:
-  d}}, {GenServer, :call, _}}}` shape (§5.3, pending ELIXIR-DEV's live confirmation) →
-  `{:failed, r, d}`.
+  `{:denied, capability}`; for `fail` specifically — **not** a crash shape (§5.2/§5.3
+  retract that claim; live-verified, §2.1) — the scenario's own `run_wasm/0` closure
+  must itself hold the raw `pid` it started, observe `Wasmex.call_function/4`'s
+  ordinary `{:error, _}` return, call `Process.info(pid, :dictionary)` **before**
+  stopping that `pid` (§5.3's caller-side contract), and check for
+  `@fail_signal_pdict_key`: present → `{:failed, r, d}` using the stashed `reason`/
+  `details`, never the discarded `msg` text; this is the one scenario whose `run_wasm/0`
+  closure cannot be a bare `Wasmex.call_function/4` wrapper the way every other
+  scenario's can — it must manage its own `pid` lifecycle to honor the ordering
+  requirement, and the harness's own moduledoc/§8.1 should note this asymmetry so a
+  future scenario author does not copy the simpler pattern for a mechanism that needs
+  it.
 
 ### 8.3 — What "identical observable outcomes" means here, precisely
 
@@ -737,14 +936,26 @@ to be assertable distinctly) — both routes make the requirement's own text *ha
 satisfy, not easier. §8.3 states how the parity harness handles this scenario's
 resulting asymmetry rather than silently asserting a false equality.
 
-**9.5 — `fail`'s crash-observation shape differs by one layer of `GenServer.call`
-wrapping** (§5.3). Both runtimes surface via `Task.yield/2`'s `{:exit, reason}` clause;
-WASM's `reason` additionally wraps `{GenServer, :call, [...]}` around the
-`{:script_failed, _}` payload because a `GenServer.call` boundary sits between the
-guest and the caller on the WASM side and does not on the Lua side (§2's live
--verification finding). §8.2's normalization step is where this difference is resolved
-before comparison — the harness's own `outcome()` type has no wrapping-depth field, by
-design.
+**9.5 — `fail`'s discard/observation mechanism is structurally different on WASM than on
+Lua, not merely differently wrapped** (§2.1, §2.2, §5.2, §5.3 — this design's prior
+text here was wrong and is retracted). On Lua, `exit/1` crashes the process actually
+running the script — the same process `Task.yield/2` observes dying, directly, with a
+bare `{:script_failed, _}` reason; no other mechanism is needed to distinguish `fail`
+from any other Lua-side crash because Lua has no comparable "caught and discarded"
+layer between the script and its caller. On WASM, `exit/1` inside `do_fail/5` is
+**caught internally by `wasmex`'s own `handle_info/2`** (live-verified, §2.1) — the
+Wasmex instance process does not crash at all, and `Wasmex.call_function/4` returns an
+ordinary `{:error, _}` whose message text is **byte-identical** to what an accidental
+exception in any other callback, or in some respects a guest trap, would produce.
+WASM's `fail` is distinguishable from a guest trap and from an accidental callback bug
+**only** because `do_fail/5` deliberately leaves a positive signal in its own process's
+dictionary before calling `exit/1`, read by the caller via `Process.info/2` strictly
+before the instance is stopped (§2.2) — a mechanism with no Lua-side analogue at all,
+not a wrapping-depth difference in an otherwise-shared mechanism. §8.2's normalization
+step is where this is resolved into one shared `outcome()` shape for comparison, but
+the underlying mechanisms are genuinely different in kind, not just in return-value
+depth, and this section says so plainly rather than understating it as a formatting
+difference.
 
 No other semantic difference beyond ABI (string encoding, return-envelope shape) is
 known to this design. Any difference ELIXIR-DEV's implementation discovers that is not
@@ -764,14 +975,18 @@ guest call (§3.2), strictly after a `{:complete, _}`-shaped outcome, mirroring
 `platform.ex`'s own deferred wiring exactly. Not resolved here; flagged so the future
 caller does not have to rediscover the constraint.
 
-**OQ-2:** §5.3's exact crash-observation shape is this design's best-available
-expectation from `GenServer.call/3`'s documented crash-propagation contract — it is not
-yet live-verified against real `wasmex` v0.15.1, unlike every other crash-shape claim
-elsewhere in this module set. ELIXIR-DEV must live-verify it before writing `do_fail/5`
-and correct §5.3/§8.2's pattern match if the real shape differs, per §5.2's own
-instruction. This is the one place in this design where a live probe is deferred to
-implementation rather than performed in the design step — flagged explicitly, not
-silently assumed correct.
+**OQ-2 (resolved during this rework, no longer open):** §5.2/§5.3's mechanism is now
+live-verified against the actual installed `wasmex` 0.15.1 (asdf-pinned Elixir
+1.20.3/OTP 29 toolchain, `MIX_ENV=test`, isolated per-workspace test DB — the sandbox
+this design was reworked in does have a usable toolchain via `asdf`, contrary to this
+design's own prior assumption that only implementation-time had one). The original
+`GenServer.call`-crash-wrapping expectation was false; §2.1/§2.2 state the real,
+repro-confirmed mechanism (no process crash; a process-dictionary signal read before
+teardown). Left as a note for ELIXIR-DEV, not an open question: re-run an equivalent
+probe against whatever `wasmex` version is actually resolved at implementation time if
+`mix.lock`'s pin has moved, since this mechanism depends on `wasmex`'s own internal
+`catch`/discard behavior (§2.1), which is not part of its public API contract and could
+change across versions without a semver-visible break.
 
 **OQ-3:** whether a future 8th/9th WASM host function (`get_instance_state`,
 `emit_event`) is ever added is out of this requirement's scope entirely (decision 0014
@@ -818,9 +1033,14 @@ TEST-DESIGNER (not new design content, a traceability index into §§3–5):
    equivalent adversarial fixture is one whose `execute` export's own control flow
    would, if `fail` returned normally, proceed to a distinguishable second host call or
    a distinguishable return value; the test asserts that second call/value is never
-   observed); pattern-match-distinguishability from an ordinary guest trap and from a
-   `Task.shutdown(:brutal_kill)`-style forced kill (mirrors `platform_test.exs`'s own
-   AC3 three-way distinguishability test).
+   observed); a test that drives a genuine guest trap (e.g. an `unreachable` fixture,
+   no `fail` involved) through the exact same `run_wasm/0`-style pdict-check path (§2.2,
+   §5.3) and asserts it normalizes to `{:error, _}`, never `{:failed, _, _}` — proving
+   the two are distinguished by the presence/absence of `@fail_signal_pdict_key`, not
+   merely by asserting `fail`'s own path in isolation (mirrors `platform_test.exs`'s own
+   AC3 distinguishability discipline, adapted to the mechanism §2.2 actually uses rather
+   than a process-crash comparison, which does not apply here — §2.1/§5.2 — since
+   neither a guest trap nor `fail` crashes the Wasmex instance process on WASM).
 5. `capability_gate_test.exs`/`host_api_write_test.exs` regression coverage for §6's
    `@known_imports` changes (new rows present/absent per grant; widened
    `platform_call_service` signature; the updated `req167_platform_call_only.wat`
@@ -840,6 +1060,13 @@ TEST-DESIGNER (not new design content, a traceability index into §§3–5):
 - `priv/wasm_fixtures/req167_platform_call_only.wat` — updated import signature (§6.2),
   plus new fixtures this requirement's own tests need (guest fixtures exercising
   write/call_service/fail — named per TEST-DESIGNER's own convention, not fixed here).
+- `lib/letflow/engine/wasm/plugin_handler.ex` — extended additively: `call_export/3`
+  (lines 154–162) gains a pre-return, pre-`GenServer.stop/1` check of
+  `Process.info(pid, :dictionary)` for `@fail_signal_pdict_key`, producing a distinct
+  `{:failed, reason, details}`-shaped outcome instead of the current generic
+  `{:error, "wasm guest call failed: ..."}` when the key is present (§2.2). No change
+  to `run_guest/3`'s own control flow or its existing unconditional `GenServer.stop/1`
+  call.
 - `test/support/host_api_parity.ex` — **new**, the shared parity harness (§8).
 - `test/letflow/engine/wasm/host_api_write_test.exs` (or equivalent) — new test file
   using the harness, per §11's scenario checklist.

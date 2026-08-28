@@ -1,0 +1,78 @@
+{
+  "handoff_id": "step03b-WF02-REQ166-20260828",
+  "run_id": "WF02-REQ166-20260828",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ166-20260828/step-03b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-166"],
+    "issue_ids": ["ISS-0351"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ166-20260828/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ166-20260828/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/wasm/module_registry.ex",
+      "test/letflow/engine/wasm/module_registry_test.exs",
+      "test/specs/REQ-166.md"
+    ],
+    "branch_name": "feature/WF02-REQ166-20260828",
+    "commit": "4328d3f"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate (WF-02 Step 3b) on REQ-166's test suite after TEST-DESIGNER's mutation-driven strengthening pass (commit 4328d3f, 15->20 tests). Read handoffs/WF02-REQ166-20260828/step-03-test-designer.json's full result first -- it documents 6 mutation findings including one deliberately-NOT-committed test (AC4/timeout: a proxy test was added instead of a real hang-based test, because the real one leaves a permanently CPU-spinning orphaned native thread; this gap was filed as docs/issues/ISS-0351.yaml, not silently dropped). Verify this scope decision was reasonable rather than re-litigating it as a coverage gap, but confirm ISS-0351 accurately reflects what was found.",
+    "acceptance_criteria": [
+      "Every one of REQ-166's 6 real acceptance criteria (see docs/requirements.yaml REQ-166 entry) has a runnable, passing test mapped to it -- confirm via the traceability table in test/specs/REQ-166.md, cross-checked against actual test names in module_registry_test.exs.",
+      "No skipped/pending (@tag :skip, ExUnit.Case excluded) tests in module_registry_test.exs.",
+      "Fixtures under priv/wasm_fixtures/ are self-sufficient and isolated -- no test depends on external state or execution order.",
+      "Independently spot-check at least 2 of TEST-DESIGNER's 6 reported mutation findings yourself (re-apply the mutation, confirm the reported pass/fail behavior) rather than trusting the report -- pick the ones with the most consequential claims (AC1 swapped-signature and AC3 gate-removal are good candidates).",
+      "Confirm the crash-propagation-containment test's new trap_exit precondition assertion (AC5) is real and not tautological -- spot check by flipping Process.flag(:trap_exit, true) yourself and confirming the assertion catches it.",
+      "Confirm ISS-0351 (the timeout-path CPU-spin finding) is filed accurately and the decision not to commit a real hang-test is a defensible test-design tradeoff, not a silently-dropped acceptance criterion -- REQ-166's own 6 ACs must still all be independently, safely testable without ISS-0351's gap; confirm none of the 6 actually require the missing coverage.",
+      "mix test test/letflow/engine/wasm/ passes in full, real output quoted.",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "started_at": "2026-08-28T04:44:00Z",
+    "completed_at": "2026-08-28T04:49:00Z",
+    "summary": "Independently re-verified TEST-DESIGNER's mutation-driven strengthening pass (commit 4328d3f, 15->20 tests) on test/letflow/engine/wasm/module_registry_test.exs. Re-applied 2 of the 6 reported mutations myself (AC1 swapped-signature, AC3 gate-removal), confirmed the exact reported pass/fail behavior, reverted both, and confirmed a clean tree. Confirmed the AC5 trap_exit assertion is real (non-tautological). Confirmed ISS-0351 accurately reflects the AC4/timeout finding and that none of REQ-166's 6 real acceptance criteria require the missing coverage. Full suite passes.",
+    "acceptance_criteria_results": [
+      {
+        "criterion": "All 6 of REQ-166's real ACs (docs/requirements.yaml) have a runnable, passing test",
+        "finding": "AC1 (missing execute) -> 'AC1: a module missing the execute export is rejected' test, module_registry_test.exs:44. AC2 (each other export) -> 'AC2: each other required export is rejected individually' describe block (init/deinit/get_capabilities/alloc/memory/multiple/wrong-signature/transposed), :58-136. AC3 (rejection at registration, never invocable) -> 'AC3: rejection is structural...' describe block, :147-181, plus the opaque-type/single-constructor structural argument in the moduledoc/design (not re-provable at runtime, correctly treated as a structural check per the design's own T3 assertion 3). AC4 (conforming module registers and is invocable) -> 'AC4: a conforming module registers successfully with no leaked instance' describe block, :190-203. Checked whether 'invocable' needed a separate explicit Wasmex.start_link/1-on-returned-bytes assertion per test/specs/REQ-166.md's original T4 prose -- it does not: the design doc's gate-approved §6 traceability table (lib/letflow/design/req166-wasm-module-abi-validation.md:561) explicitly supersedes that with a structural argument (register/1 returns {:ok, _} only after stage 2's real Wasmex.start_link/1 already succeeded internally), so {:ok, registered_module()} IS transitive proof of invocability given the shipped algorithm -- this was already settled at the design gate (CODE-DESIGN-VALIDATOR PASS, commit fa9cb17), not re-litigated here. AC5 (moduledoc) -> 'AC5: names the export contract and cites req163-wasm-abi-choice.md's sections', :338-353. AC6 (mix test / mix compile --warnings-as-errors) -> both run live by me, see test_run below."
+      },
+      {
+        "criterion": "No skipped/pending tests",
+        "finding": "grep for '@tag :skip'/'@moduletag'/'exclude' in module_registry_test.exs found zero matches other than prose comments using the word 'skip'/'skipped' in English sentences. All 20 tests run and pass."
+      },
+      {
+        "criterion": "Fixtures self-sufficient and isolated",
+        "finding": "Each test reads its own named .wat file via fixture/1 (Application.app_dir + File.read!) -- no shared mutable state, no setup_all building cross-test state. Verified order-independence by running with two different --seed values (999, 12345): both gave 'Result: 20 passed'. The AC4 leak-detection test computes a before/after Process.list() delta rather than an absolute count, so it is not sensitive to leaked processes from other tests/runs. No hardcoded secrets/connection strings found (grepped for password/secret/postgres:\\/\\/ /localhost/token across the test file and all req166_*.wat fixtures -- zero matches)."
+      },
+      {
+        "criterion": "Independent spot-check of >= 2 mutation findings (AC1 swapped-signature, AC3 gate-removal)",
+        "finding": "AC1: edited defect_for/2 to add an extra clause '{:ok, {:fn, ^results, ^params}} -> nil' (the exact transpose-acceptance mutant TEST-DESIGNER reported). Ran `mix test test/letflow/engine/wasm/module_registry_test.exs`: got 'Result: 19/20 passed', with the sole failure being exactly the new mutation-guard test ('an execute export whose params/results are exactly TRANSPOSED...'). Reverted via `git checkout --`; reran: 'Result: 20 passed'. Matches TEST-DESIGNER's claimed 15/16 (now 19/20) pass/fail behavior exactly. AC3: edited register/1's `with` chain from ':ok <- check_exports(module)' to '_ <- check_exports(module)' (gate removed). Ran the suite: 'Result: 9/20 passed', 11 failures. Inspected the new stage-gating-guard test's failure specifically: `left: {:error, {:invalid_abi, defects}}` vs `right: {:error, {:instantiation_failed, {:unresolved_import, \"wasi_snapshot_preview1\", \"path_open\"}}}` -- the exact wrong-path defect TEST-DESIGNER's report names. Reverted via `git checkout --`; reran: 'Result: 20 passed'. `git status --porcelain lib/ test/` empty after each revert and again at the end (confirmed twice)."
+      },
+      {
+        "criterion": "AC5 trap_exit precondition assertion is real, not tautological",
+        "finding": "Ran `elixir -e 'IO.inspect(Process.info(self(), :trap_exit)); Process.flag(:trap_exit, true); IO.inspect(Process.info(self(), :trap_exit))'` independently of the test suite: got {:trap_exit, false} then {:trap_exit, true} -- confirms Process.info/2's return value genuinely changes when the flag is flipped, so `assert Process.info(test_pid, :trap_exit) == {:trap_exit, false}` in the crash-propagation-containment test (module_registry_test.exs:231) is a real, discriminating check, not a tautology."
+      },
+      {
+        "criterion": "ISS-0351 filed accurately; decision not to commit a real hang-test is a defensible tradeoff; none of REQ-166's 6 ACs require the missing coverage",
+        "finding": "Read docs/issues/ISS-0351.yaml in full and compared against step-03-test-designer.json's AC4 finding and the in-test comment block (module_registry_test.exs:245-309) -- description, measured evidence (timeout timing ~5043-5061ms, /proc/<pid>/stat utime+stime delta of ~305 ticks over 3s idle), severity (MINOR), and scope boundary (out of TEST-DESIGNER's scope, belongs to whichever requirement first exposes a tenant-facing WASM registration path) all match consistently across both documents -- no overclaim found. Cross-checked against REQ-166's actual 6 ACs (docs/requirements.yaml): none of them mention timeout handling, resource cleanup, or CPU-spin behavior on a hanging module -- REQ-166's scope is export/signature validation and registration-vs-invocation ordering, not resource bounding of a pathological hang (that is Task.shutdown's own robustness, a design/implementation concern the moduledoc doesn't promise total native-thread reclamation for). The added AC4-timeout-branch-proxy test correctly demonstrates the Task.Supervisor.async_nolink/2 + Task.yield/2 + Task.shutdown(:brutal_kill) mechanism works for an ordinary BEAM process, and the test file's own comment (lines 296-308) explicitly and correctly states this proxy does NOT prove instantiate/2's own line still contains that call, with the mutation-deletion check backing that claim. This is an honest, correctly-scoped tradeoff, not a silently-dropped AC."
+      },
+      {
+        "criterion": "mix test test/letflow/engine/wasm/ passes in full, real output quoted",
+        "finding": "`export PATH=\"$HOME/.asdf/shims:$HOME/.cargo/bin:$PATH\"; WASMEX_BUILD=true mix test test/letflow/engine/wasm/` -> 'Finished in 0.4 seconds (0.00s async, 0.4s sync)' / 'Result: 30 passed' (0 failed). Also ran `mix compile --warnings-as-errors` standalone: exit code 0, no output (clean)."
+      }
+    ],
+    "test_run": "mix test test/letflow/engine/wasm/ (WASMEX_BUILD=true, asdf/cargo PATH): Result: 30 passed, 0 failed. mix test test/letflow/engine/wasm/module_registry_test.exs alone: Result: 20 passed. mix compile --warnings-as-errors: exit 0, clean.",
+    "issues": []
+  }
+}

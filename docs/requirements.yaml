@@ -8407,7 +8407,7 @@ requirements:
   - id: REQ-166
     title: WASM module ABI validation and rejection of non-conforming modules at registration (WASM-02)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 318  # letflow-queue task id
     description: >

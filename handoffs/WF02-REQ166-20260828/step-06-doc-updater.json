@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step06-WF02-REQ166-20260828",
+  "run_id": "WF02-REQ166-20260828",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ166-20260828/step-06-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S5",
+    "requirement_ids": ["REQ-166"],
+    "issue_ids": ["ISS-0351"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ166-20260828/step-05-release-validator.json"
+    ],
+    "branch_name": "feature/WF02-REQ166-20260828",
+    "commit": "637f631"
+  },
+  "task": {
+    "description": "DOC-UPDATER pass (WF-02 Step 6) for REQ-166 (queue task 318, GH#618). RELEASE-VALIDATOR independently passed Step 5 -- see handoffs/WF02-REQ166-20260828/step-05-release-validator.json for full detail. Flip REQ-166's status to done in docs/requirements.yaml, and append the required status-history event.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml: REQ-166's status field flipped from pending to done.",
+      "Append a 'done' event to the current run-history volume (find it via docs/status/requirement_status.index.yaml) with a real UTC timestamp from the clock (not memory) -- REQ-166, run WF02-REQ166-20260828.",
+      "Keep docs/status/requirement_status.index.yaml's volume count in lockstep with the append.",
+      "If any other doc explicitly needs updating as a result of this requirement's completion (e.g. a migration-stage doc's requirement checklist, if REQ-166 is referenced there) update it -- check docs/migration/ for any REQ-166 reference first.",
+      "Commit the doc updates to the feature branch (do not push yet -- ORCH handles Step Final).",
+      "CRITICAL: the handoff's top-level status field (line 9) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  },
+  "result": {
+    "status": "DONE",
+    "summary": "Flipped REQ-166's status pending -> done in docs/requirements.yaml. Appended a 'done' event for REQ-166 to the current run-history volume (docs/status/requirement_status.v5.yaml, found via docs/status/requirement_status.index.yaml's status: current marker), timestamped 2026-08-28T05:01:13Z read live from `date -u`. Verified via `git diff --numstat docs/status/requirement_status.v5.yaml` = 35 insertions / 0 deletions (append, not rewrite) and re-read the tail of the file to confirm the note text landed intact (no swallowed backtick spans). Volume was 38 on-disk `- req:` entries before the append, 39 after (grep -c confirmed); file is now 967 lines / 53,240 bytes, well inside the 1,200-line / 120,000-byte roll ceiling, so no volume roll was needed this step. Updated docs/status/requirement_status.index.yaml's volume-5 entries: field from 38 to 39 and prepended a note recording this increment, in the same commit. Checked docs/migration/ for any REQ-166 reference (`grep -rn REQ-166 docs/migration/`) -- none found, so no migration-stage doc needed updating. Ran `mix letflow.lint_handoffs`: 0 new violations across 1228 handoff files (25 pre-existing grandfathered, unrelated to this run). Committed all doc changes to feature/WF02-REQ166-20260828; not pushed, per instructions -- ORCH handles Step Final.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ166-20260828/step-06-doc-updater.json"
+    ]
+  }
+}

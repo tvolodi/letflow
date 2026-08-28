@@ -930,3 +930,38 @@ history:
       branch feature/WF02-REQ166-20260828 created from main (53ce710)
       and pushed. Dispatching Step 1 to CODE-DESIGNER next. 37 on-disk
       entries before this append; 38 after.
+
+  - req: REQ-166
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-28T05:01:13Z"
+    note: >
+      WF02-REQ166-20260828 complete (RELEASE-VALIDATOR Step 5 PASS, commit
+      637f631). WASM module ABI validation implemented in
+      lib/letflow/engine/wasm/module_registry.ex: a module missing execute
+      (or any of init/deinit/get_capabilities/alloc/memory) is rejected at
+      REGISTRATION with a structured {:error, {:invalid_abi, defects}} error
+      naming the missing export, never at first invocation -- registration is
+      a distinct two-stage gate (export-shape check, then a real
+      Wasmex.start_link/1 instantiation attempt) so a rejected module can
+      never produce a registered_module() value and is never invocable. A
+      conforming module registers successfully and is proven actually
+      invocable, not merely export-shaped. Moduledoc cites REQ-163's
+      core-modules artefact (req163-wasm-abi-choice.md sections 3.1/3.2/4) by
+      name and states the WASM-02 restatement plus scope boundary (no
+      capability sandboxing/resource limits/host API/versioning -- those are
+      REQ-167/169/170/171/172/173). mix test test/letflow/engine/wasm/: 30
+      passed, 0 failures. mix compile --force --warnings-as-errors: 0
+      warnings, exit 0. Full parallel suite: 2318/2318 passed. ISS-0351 (a
+      Task.shutdown(:brutal_kill) native-thread-cleanup edge case) filed as
+      narrow/MINOR/out-of-scope and confirmed non-blocking by
+      RELEASE-VALIDATOR -- deferred to whichever future requirement first
+      wires a tenant-facing registration path. No scope creep: touches only
+      module_registry.ex (new) plus a 14-line sibling Task.Supervisor child
+      in lib/letflow/application.ex. Passed design, CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER (hard gate), REVIEWER, TEST-DESIGNER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER, and RELEASE-VALIDATOR (Step 5
+      independent re-verification). Status flipped pending -> done in
+      docs/requirements.yaml. `grep -c "^  - req:"
+      docs/status/requirement_status.v5.yaml` = 38 on-disk entries before
+      this append; 39 after.

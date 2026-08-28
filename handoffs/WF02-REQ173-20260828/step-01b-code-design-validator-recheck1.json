@@ -1,0 +1,24 @@
+{
+  "handoff_id": "WF02-REQ173-20260828-step01b-recheck1",
+  "run_id": "WF02-REQ173-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 1b (re-check, iteration 1)",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req173-wasm-module-hot-reload.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 325, GH#625, stage S5. CODE-DESIGNER reworked the design (commit c7d10ea) after your FAIL verdict on e7cb21a. Changes: SS3 now specifies invoke/4 itself calls Task.yield/2 on its own spawned task; timeout_ms stays the INNER bound threaded into Wasmex.call_function/4; a new outer bound timeout_ms + @outer_yield_margin_ms (module attribute) governs Task.yield/2. SS4 now spells out invoke/4's own body (spawn -> Task.yield -> branch) with explicit classification of all 3 Task.yield/2 outcomes: {:ok, result} passes through; {:exit, reason} (inner GenServer.call timeout crashing the task) classified via a private classifier into {:error, {:timeout, timeout_ms}} for the documented {:timeout, {GenServer, :call, _}} shape, else {:error, {:call_failed, reason}}; nil (outer bound elapsed) triggers Task.shutdown(task, :brutal_kill) then also returns {:error, {:timeout, timeout_ms}}. SS6 rewritten to argue Process.monitor/:DOWN fires for ANY termination reason (uncaught exit, :killed, or normal return) so the ref-count-release argument holds for both paths without needing to distinguish which fired. This is NOT a narrow-scope fix -- it restructures the core concurrency mechanism (SS3/SS4/SS6) -- so treat this as a full fresh pass covering all 8 of your original verification items, not just the specific gap you found."},
+  "task": {
+    "description": "Full fresh re-validation of the revised design against every REQ-173 acceptance criterion, since the fix touched invoke/4's core dispatch mechanism (SS3/SS4/SS6), not merely a narrow patch. Independently verify: (1) the classifier's claim that Wasmex.call_function/4's own GenServer.call timeout crashes with the specific shape {:timeout, {GenServer, :call, _}} -- live-check this against CallTimeout's moduledoc and/or the actual wasmex source rather than trusting the design's restatement; (2) that timeout_ms + @outer_yield_margin_ms is genuinely always strictly larger than timeout_ms (obvious algebraically, but confirm no edge case like a zero/negative margin default undermines it); (3) that Process.monitor/:DOWN genuinely fires unconditionally for all three termination modes claimed (uncaught exit, :killed via brutal_kill, normal return) -- this is a real Erlang/OTP semantics question, verify it's actually true, not just plausible; (4) that the two classification branches ({:exit, reason} vs nil) are exhaustive and don't leave a third Task.yield/2 outcome unhandled; (5) that this mechanism doesn't quietly diverge from decision 0014's mandate that WASM reuse PluginInterface.invoke/2,3's own pattern -- confirm 'mirrors but does not reuse' is an acceptable characterization or whether the decision actually requires literal reuse of PluginInterface.invoke/2,3 itself rather than a structurally similar new implementation; (6) re-confirm the 6 previously-passed checks are genuinely untouched (git diff e7cb21a..c7d10ea should show changes confined to SS3/SS4/SS6); (7) the do_call_service/8 test-double seam and checkout-before-mutation immunity claims, if any wording near them changed; (8) no implementation code was introduced by this rework.",
+    "acceptance_criteria": [
+      "a test holds an invocation open (a guest blocked in a controllable host call), activates a new module version DURING it, and asserts the held invocation completes normally against the OLD version's observable behaviour -- WASM-14's own acceptance criterion, with the overlap real rather than sequential",
+      "the same test asserts an invocation started AFTER the activation observes the NEW version's behaviour, so both halves of WASM-14 are proven in one overlapping scenario",
+      "the two module versions used are observably different in output, so the test can distinguish which version served an invocation rather than merely completing",
+      "a test asserts the prior version's resources are released only after its last in-flight invocation completes, not at activation time",
+      "a test asserts that when the new version's manifest declares a DIFFERENT capability set, an in-flight invocation of the prior version keeps the prior version's capability set, and the new invocation gets the new one -- so activation cannot silently widen or narrow a running invocation's authority",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

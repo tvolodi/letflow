@@ -800,8 +800,22 @@ volumes:
     path: docs/status/requirement_status.v6.yaml
     status: current
     opened: 2026-08-28
-    entries: 4
+    entries: 6
     note: >
+      Incremented to 6 by WF02-REQ173-20260828 (DOC-UPDATER)'s own REQ-173
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v6.yaml` = 6 on-disk entries, no rebase
+      conflict on this file. Well under the 1200-line/120000-byte roll
+      ceiling (291 lines / 17123 bytes), so no roll triggered.
+
+      Incremented to 5 by ORCH's REQ-173 started-event append (Step 00,
+      WF02-REQ173-20260828) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v6.yaml` = 5 on-disk entries. This
+      increment was missed in the same commit as the append (5d32726) and
+      is corrected here once found, during REQ-173's own Step 2a, rather
+      than silently going unnoticed further -- ISS-0199's own concern
+      about a declared count nobody updates.
+
       Incremented to 4 by WF02-REQ172-20260828 (DOC-UPDATER)'s own REQ-172
       done-event append (Step 6) -- `grep -c "^  - req:"
       docs/status/requirement_status.v6.yaml` = 4 on-disk entries, no rebase

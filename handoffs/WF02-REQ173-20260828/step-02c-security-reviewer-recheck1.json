@@ -1,0 +1,20 @@
+{
+  "handoff_id": "WF02-REQ173-20260828-step02c-recheck1",
+  "run_id": "WF02-REQ173-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 2c (re-check, iteration 1)",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/engine/wasm/module_version_registry.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 325, GH#625, stage S5. Your prior review PASSED commit 8d4157a. Since then: the design was reworked (register_version/3 could never register a capability-requiring module -- a real defect found by TEST-DESIGNER's own test run), and ELIXIR-DEV updated the implementation to commit 77c1d1e to match: register_version/3 now does a two-step validation (ModuleRegistry.register(bytes) first, then a NEW capability-aware instantiation proof -- CapabilityGate.build_import_table(manifest) + a bounded Task.Supervisor.async_nolink/2 attempt under the existing ModuleVersionRegistryTaskSupervisor -- only when the first call fails specifically with {:error, {:instantiation_failed, _}}), and the data model now stores bytes :: binary() directly instead of ModuleRegistry.registered_module(). CODE-DESIGN-VALIDATOR re-approved the design (commit 721930a) with a full fresh pass. Treat this as a full fresh security re-check, not a narrow patch check, since the new capability-aware proof is a genuinely new code path that touches capability/import-table logic directly."},
+  "task": {
+    "description": "Full fresh security review of commit 77c1d1e against docs/agents/instructions/security-invariants.md INV-1..INV-8. In addition to re-confirming your prior findings still hold (per-version capability isolation, checkout immutability, ref-count manipulation resistance, Process.monitor/:DOWN correctness, no guest input reaching Letflow.Repo, supervision wiring), specifically verify the NEW registration-time capability-aware proof: (1) confirm the proof instance is GenServer.stop'd on EVERY path where a pid was produced, with no leak; (2) confirm the proof's import table is built from the CALLER-SUPPLIED manifest passed to register_version/3, never from any other module's or version's manifest, so a proof for module A's registration cannot accidentally validate against module B's capability grant; (3) confirm this new proof mechanism cannot be used to probe/fingerprint whether a given capability would be granted without actually registering a version (i.e. it's not exploitable as an oracle) -- if it can be, assess whether that's a real risk or an accepted, non-guest-reachable internal API surface; (4) confirm switching the data model to raw bytes doesn't introduce any new place where guest-supplied or otherwise untrusted bytes flow into a Repo call or similar tenant-scoped resource.",
+    "acceptance_criteria": [
+      "a test asserts that when the new version's manifest declares a DIFFERENT capability set, an in-flight invocation of the prior version keeps the prior version's capability set, and the new invocation gets the new one -- so activation cannot silently widen or narrow a running invocation's authority",
+      "a module requiring at least one host capability can be successfully registered via register_version/3 -- verified by the actual test passing, not merely asserted"
+    ]
+  },
+  "result": null
+}

@@ -260,3 +260,32 @@ history:
       confusion is an authorization hazard. NOT IN THIS REQUIREMENT:
       instance pooling is REQ-174's, which depends_on this one. Depends on
       REQ-172 (done).
+  - req: REQ-173
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-28T21:48:26Z"
+    note: >
+      WF02-REQ173-20260828 done (queue task 325, GH#625, stage S5). WASM-14
+      hot reload shipped as Letflow.Engine.Wasm.ModuleVersionRegistry:
+      versioned module registration, activate/2, and invoke/4 built on
+      checkout-based version-holding -- an in-flight invocation resolves and
+      holds its module version at invocation start, immune to a concurrent
+      activation swapping it mid-call -- with reference-counted release so a
+      prior version's resources are freed only after its last in-flight
+      invocation completes, and per-version capability isolation so an
+      in-flight invocation keeps its own version's capability set even when
+      the newly activated version's manifest declares a different one.
+      Bumpy path worth recording: 2 CODE-DESIGNER rework rounds (first, an
+      outer-timeout classification mechanism the design left unspecified,
+      live-verified and fixed; second, a real late-discovered defect where
+      register_version/3 could never register a module requiring ANY host
+      capability, because it delegated entirely to ModuleRegistry.register/1's
+      empty-import validation -- fixed with a new capability-aware
+      instantiation proof reusing CapabilityGate.build_import_table/1) plus
+      1 REVIEWER rework round (a missing decision-0014 citation). RELEASE-
+      VALIDATOR independently PASSED all 6 acceptance criteria (own
+      compile/test runs including scripts/test_parallel.sh, own git diff
+      verification, and its own live trace confirming the capability-
+      registration fix is genuinely solid). Unblocks REQ-174 (WASM instance
+      pooling, depends_on: [REQ-173]); REQ-173 was a dependency none of
+      REQ-172's siblings needed.

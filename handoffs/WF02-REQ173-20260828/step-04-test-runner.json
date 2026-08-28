@@ -1,0 +1,19 @@
+{
+  "handoff_id": "WF02-REQ173-20260828-step04",
+  "run_id": "WF02-REQ173-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 4",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "test/letflow/engine/wasm/module_version_registry_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 325, GH#625, stage S5. TEST-DESIGN-VALIDATOR PASSED (hard gate) with independent mutation re-verification of the new capability-aware proof path (mutated register_version/3's pattern match, confirmed 17/17 -> 14/17, reverted and confirmed md5sum matched baseline). mix test test/letflow/engine/wasm/ reported 163 passed, 7 excluded. This run has a known, prior full-suite baseline: 3 pre-existing/environmental failures unrelated to this branch have recurred across REQ-172's own Step 4 (RequirementStatusInvariantsTest A9 declared-count drift, 2x CheckToolchainTest rust-pin tests with no rustc in this sandbox). Also note: ORCH found and fixed a real declared-count drift in docs/status/requirement_status.index.yaml during this run's own Step 2a (commit d52aaa6, 4->5) after RequirementStatusInvariantsTest A9 flagged it -- if A9 fails again in your run, check whether it's the SAME already-fixed drift re-manifesting (a rebase/merge-order issue) or a NEW drift from other concurrent activity, and report which."},
+  "task": {
+    "description": "Run the full test suite exactly as CI will (mix letflow.check.test, or mix test followed by mix test --only wasm_hang as two separate invocations matching that task's two-stage contract) and diagnose any failure. Confirm which of the previously-observed pre-existing/environmental failures (if any) recur, and whether A9's declared-count drift is a fresh occurrence or a stale one already fixed upstream. Confirm nothing in lib/letflow/engine/wasm/ or this run's own test files is implicated in any failure. Report pass/fail with real output quoted.",
+    "acceptance_criteria": [
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

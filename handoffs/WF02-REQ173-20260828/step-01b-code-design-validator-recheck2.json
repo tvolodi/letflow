@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ173-20260828-step01b-recheck2",
+  "run_id": "WF02-REQ173-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 1b (full re-check, iteration 2)",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req173-wasm-module-hot-reload.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 325, GH#625, stage S5. CODE-DESIGNER fixed the register_version/3 capability-registration defect as commit 721930a (SS5 rewritten). Fix: register_version/3 first calls ModuleRegistry.register(bytes) unmodified (stage-1 ABI check reused verbatim); ONLY when that call's failure is specifically {:error, {:instantiation_failed, _}} (proving stage-1 already passed, since register/1's own `with` is sequential) does register_version/3 run its own capability-aware proof -- CapabilityGate.build_import_table(manifest) + a bounded Task.Supervisor.async_nolink/2 instantiation attempt under the existing ModuleVersionRegistryTaskSupervisor (no third supervisor), GenServer.stop'ping the proving instance unconditionally on success since it is a throwaway proof, not a real invoke/4 handoff. Also changed: version_entry()/version_snapshot() now store bytes :: binary() directly instead of ModuleRegistry.registered_module() (an @opaque struct whose .module field the design never actually read). This is NOT a narrow patch -- it rewrites SS5 from scratch and changes the core data model (SS2's version_entry/version_snapshot shapes) -- treat this as a full fresh pass covering all of REQ-173's acceptance criteria plus the specific new mechanism."},
+  "task": {
+    "description": "Full fresh re-validation. Independently live-verify: (1) that ModuleRegistry.register/1's failure for an unresolved-import case genuinely produces the specific {:error, {:instantiation_failed, _}} shape the new logic branches on -- read module_registry.ex yourself, confirm this is really how stage-1-passed-but-stage-2-failed is distinguished from a stage-1 ABI failure (which must NOT trigger the capability-aware retry, since a genuinely malformed module has no business being retried with imports); (2) that the capability-aware proof's second Task.Supervisor.async_nolink/2 call under the SAME ModuleVersionRegistryTaskSupervisor doesn't create a resource/scheduling problem or a fourth undocumented timeout path -- confirm its bounding timeout and crash handling are actually specified, not implicit; (3) that GenServer.stop on the successful capability-aware proof's instance is unconditional and doesn't leak a live Wasmex process on any path; (4) that switching version_entry()/version_snapshot() to store raw bytes :: binary() instead of ModuleRegistry.registered_module() doesn't break anything that legitimately needed the opaque struct elsewhere in the design (re-check SS4's invoke/4 algorithm, which builds an actual live instance from the snapshot at call time -- does it now correctly re-instantiate from bytes+import table rather than expecting a pre-built module reference?); (5) trace the worked example in the design's new SS5.4 yourself against real source rather than trusting the narrative, for both req173_v1_gated.wat (service:call) and req173_v2_gated.wat (write_variable); (6) confirm no other section (SS3/SS4's invoke/4 timeout classification, SS6's ref counting/crash-safety, SS7's capability isolation) was silently altered by this data-model change in a way that breaks their own previously-verified correctness; (7) confirm this doesn't introduce implementation code.",
+    "acceptance_criteria": [
+      "a test holds an invocation open (a guest blocked in a controllable host call), activates a new module version DURING it, and asserts the held invocation completes normally against the OLD version's observable behaviour -- WASM-14's own acceptance criterion, with the overlap real rather than sequential",
+      "the same test asserts an invocation started AFTER the activation observes the NEW version's behaviour, so both halves of WASM-14 are proven in one overlapping scenario",
+      "the two module versions used are observably different in output, so the test can distinguish which version served an invocation rather than merely completing",
+      "a test asserts the prior version's resources are released only after its last in-flight invocation completes, not at activation time",
+      "a test asserts that when the new version's manifest declares a DIFFERENT capability set, an in-flight invocation of the prior version keeps the prior version's capability set, and the new invocation gets the new one -- so activation cannot silently widen or narrow a running invocation's authority",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted",
+      "a module requiring at least one host capability can be successfully registered via register_version/3 -- verified by an actual passing test, not merely a design claim"
+    ]
+  },
+  "result": null
+}

@@ -1,0 +1,22 @@
+{
+  "handoff_id": "WF02-REQ173-20260828-step02a-fix1",
+  "run_id": "WF02-REQ173-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 2a (fix, post-REVIEWER gap)",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/engine/wasm/module_version_registry.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 325, GH#625, stage S5. REVIEWER FAILED commit 8d4157a on one narrow item: the design (SS3, ~lines 209-216) requires invoke/4 to explicitly cite that it mirrors -- without reusing the code of -- PluginInterface.invoke/2,3's own two-layer dispatch (async_nolink -> Task.yield/2 -> Task.shutdown(:brutal_kill)), per decision 0014 lines ~325-327. The shipped moduledoc/invoke/4 @doc never names PluginInterface.invoke/2,3 or decision 0014 at all, despite the moduledoc claiming to implement the design's SS4 mechanism verbatim. The actual BEHAVIOR is correct and unaffected (REVIEWER confirmed the timeout-classification logic is a literal transcription of the design's mechanism) -- this is purely a missing documentation citation. REVIEWER also flagged a minor, non-blocking style note: application.ex:79 passes {ModuleVersionRegistry, name: ModuleVersionRegistry} but start_link/1 hardcodes name: __MODULE__ and ignores opts entirely -- harmless today (they agree) but the name: opt is dead code/misleading versus lib/letflow/sandbox_pool.ex:203-204's own Keyword.get(opts, :name, __MODULE__) precedent. Fix both in the same pass since you're already in this file."},
+  "task": {
+    "description": "1. Add one sentence to invoke/4's @doc (or the moduledoc, whichever reads more naturally) explicitly naming Letflow.Engine.PluginInterface.invoke/2,3 and citing decision 0014, stating that invoke/4 mirrors (without reusing the code of) that function's own two-layer dispatch pattern (async_nolink -> Task.yield/2 -> Task.shutdown(:brutal_kill)) -- match the design's own SS3 language closely. 2. Fix start_link/1 to thread the name option through properly: Keyword.get(opts, :name, __MODULE__), matching lib/letflow/sandbox_pool.ex:203-204's established precedent, instead of hardcoding name: __MODULE__ and discarding opts. Do not change any other logic. Run mix compile --warnings-as-errors and mix test test/letflow/engine/wasm/ yourself and quote real output confirming nothing regressed.",
+    "acceptance_criteria": [
+      "invoke/4's documentation explicitly names PluginInterface.invoke/2,3 and decision 0014, describing the mirrored (not reused) dispatch pattern",
+      "start_link/1 threads a caller-supplied :name option through via Keyword.get(opts, :name, __MODULE__) instead of hardcoding __MODULE__",
+      "mix compile --warnings-as-errors passes with real output quoted",
+      "mix test test/letflow/engine/wasm/ passes with real output quoted, no regression"
+    ]
+  },
+  "result": null
+}

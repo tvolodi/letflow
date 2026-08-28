@@ -1,0 +1,22 @@
+{
+  "handoff_id": "WF02-REQ173-20260828-step06",
+  "run_id": "WF02-REQ173-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 6",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "docs/requirements.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 325, GH#625, stage S5. RELEASE-VALIDATOR PASSED all 6 acceptance criteria independently (own compile/test runs including scripts/test_parallel.sh, own git diff verification, own capability-registration fix trace). REQ-173 may be marked done. Current status-history volume is docs/status/requirement_status.v6.yaml (current per docs/status/requirement_status.index.yaml). IMPORTANT: this run had TWO real bookkeeping/data-integrity issues ORCH found and fixed directly mid-run: (1) a declared-count drift in requirement_status.index.yaml (commit d52aaa6, fixed 4->5), caught by RequirementStatusInvariantsTest A9 -- confirmed NOT recurring in TEST-RUNNER's Step 4 run, so your own append must increment the count correctly in the SAME commit to avoid re-introducing it; (2) unrelated to this run's docs but worth knowing about for future context: none needed here."},
+  "task": {
+    "description": "Flip REQ-173's status from pending to done in docs/requirements.yaml, and append a 'done' event to the current run-history volume (docs/status/requirement_status.v6.yaml) with a real UTC timestamp, summarizing: what was implemented (Letflow.Engine.Wasm.ModuleVersionRegistry -- versioned module registration, activate/2, invoke/4 with checkout-based version-holding immune to concurrent activation, reference-counted release, per-version capability isolation); the requirement's bumpy path worth recording for future readers -- 2 design rework rounds (an unspecified outer-timeout classification mechanism live-verified and fixed; then a real, late-discovered defect where register_version/3 could never register a module requiring any host capability, since it delegated entirely to ModuleRegistry.register/1's empty-import validation -- fixed with a new capability-aware instantiation proof reusing CapabilityGate.build_import_table/1) and 1 REVIEWER rework round (a missing decision-0014 citation); RELEASE-VALIDATOR's independent PASS on all 6 ACs including a live trace confirming the capability-registration fix is genuinely solid; and that this unblocks REQ-174 (WASM instance pooling, depends_on: [REQ-173]) and REQ-173 itself was a dependency none of REQ-172's siblings needed. When appending to v6.yaml, follow HOW-TO-APPEND step 6 exactly: increment docs/status/requirement_status.index.yaml's volume-6 entries count in THE SAME COMMIT as your append (grep -c '^  - req:' docs/status/requirement_status.v6.yaml to get the real count) -- this run already had one drift from a missed increment, do not repeat it.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-173 status is 'done'",
+      "a 'done' event is appended to the current run-history volume with a real UTC timestamp and an accurate summary",
+      "docs/status/requirement_status.index.yaml's volume-6 entries count is incremented correctly in the same commit, verified against grep -c '^  - req:' docs/status/requirement_status.v6.yaml",
+      "no other requirement's entry or historical run-history event is modified"
+    ]
+  },
+  "result": null
+}

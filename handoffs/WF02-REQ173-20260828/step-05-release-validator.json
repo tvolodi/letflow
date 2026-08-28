@@ -1,0 +1,24 @@
+{
+  "handoff_id": "WF02-REQ173-20260828-step05",
+  "run_id": "WF02-REQ173-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "docs/requirements.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 325, GH#625, stage S5. REQ-173 has passed CODE-DESIGN-VALIDATOR (2 rework rounds -- iteration 1 fixed an unspecified outer-timeout classification mechanism, iteration 2 fixed a register_version/3 defect that would have blocked any capability-requiring module from ever registering, both live-verified), SECURITY-REVIEWER (full re-check after the iteration-2 fix, PASS), REVIEWER (1 rework round for a doc/decision-citation gap, then full re-check after iteration-2, PASS), TEST-DESIGN-VALIDATOR (PASS, closed a real mutation-testing gap on the new capability-aware proof path with independent mutation evidence), and TEST-RUNNER (PASS, full suite 2452/2454, 2 pre-existing/environmental rust-toolchain failures, A9 drift did not recur). Implementation: commit 77c1d1e (final, after 8d4157a/4fd8183's earlier iteration). Tests: commit f8ec561 (TEST-DESIGNER) as updated within 77c1d1e (ELIXIR-DEV's narrow, REVIEWER-approved correction of 3 tests). Design: lib/letflow/design/req173-wasm-module-hot-reload.md (commit 721930a, final)."},
+  "task": {
+    "description": "Independently re-derive and verify all 6 REQ-173 acceptance criteria from docs/requirements.yaml against the actual shipped code and tests on this branch -- do not trust any prior agent's PASS claim, re-run and re-check yourself. Confirm: the SS8.4 overlapping-activation scenario genuinely holds an invocation open with a real synchronous gate (not sleep/timing-based) while activate/2 runs concurrently, and asserts both halves; the two module versions are observably different in output; the prior version's resources are released only after its last in-flight invocation completes (check ModuleVersionRegistry's own accessor, not by inference); capability isolation holds in both directions when manifests differ; a module requiring a host capability can actually register via register_version/3 (this was the requirement's own late-discovered, now-fixed defect -- confirm it's genuinely fixed, not just claimed); mix test and mix compile --warnings-as-errors pass with real output quoted (the 2 known pre-existing/environmental rust-toolchain failures are acceptable and should be named explicitly, not silently ignored).",
+    "acceptance_criteria": [
+      "a test holds an invocation open (a guest blocked in a controllable host call), activates a new module version DURING it, and asserts the held invocation completes normally against the OLD version's observable behaviour -- WASM-14's own acceptance criterion, with the overlap real rather than sequential",
+      "the same test asserts an invocation started AFTER the activation observes the NEW version's behaviour, so both halves of WASM-14 are proven in one overlapping scenario",
+      "the two module versions used are observably different in output, so the test can distinguish which version served an invocation rather than merely completing",
+      "a test asserts the prior version's resources are released only after its last in-flight invocation completes, not at activation time",
+      "a test asserts that when the new version's manifest declares a DIFFERENT capability set, an in-flight invocation of the prior version keeps the prior version's capability set, and the new invocation gets the new one -- so activation cannot silently widen or narrow a running invocation's authority",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

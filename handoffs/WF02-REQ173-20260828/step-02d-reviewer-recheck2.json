@@ -1,0 +1,22 @@
+{
+  "handoff_id": "WF02-REQ173-20260828-step02d-recheck2",
+  "run_id": "WF02-REQ173-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 2d (full re-check after capability-aware registration fix)",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "lib/letflow/engine/wasm/module_version_registry.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 325, GH#625, stage S5. SECURITY-REVIEWER PASSED commit 77c1d1e (full fresh check, no BLOCKER). ORCH independently ran mix test test/letflow/engine/wasm/module_version_registry_test.exs --trace directly (SECURITY-REVIEWER's environment lacked mix on PATH, so it honestly relied on ELIXIR-DEV's self-report -- ORCH closed that gap): confirmed 17/17 passed, including the previously-blocked core SS8.4 overlapping-activation scenario and the new capability-aware registration tests. Since your last review (8d4157a, PASS after 1 rework round on a doc/citation gap), the design was reworked (register_version/3 could never register a capability-requiring module) and ELIXIR-DEV updated the implementation to commit 77c1d1e: register_version/3 now does two-step validation (ModuleRegistry.register(bytes) first, then a new capability-aware proof only on {:error, {:instantiation_failed, _}}), and the data model now stores bytes :: binary() directly instead of ModuleRegistry.registered_module(). CODE-DESIGN-VALIDATOR re-approved the design (721930a) with a full fresh pass. This is a genuinely new code path -- treat as a full fresh review, not a narrow patch check."},
+  "task": {
+    "description": "Full fresh idiom/supervision/scope-creep/decision-record-consistency review of commit 77c1d1e. Check: (1) OTP idiom of the new prove_capability_instantiation/2 private function and its reuse of classify_crash/1 -- is it genuinely reusing existing logic or duplicating it with drift; (2) whether the new registration proof's Task.Supervisor.async_nolink/2 call under the shared ModuleVersionRegistryTaskSupervisor is idiomatically consistent with the module's own invoke/4 usage of the same supervisor; (3) confirm module_registry.ex/capability_gate.ex/plugin_handler.ex remain genuinely untouched (git diff --stat since 8d4157a); (4) confirm the data-model rename (registered_module -> bytes) was applied consistently everywhere (commit_version, checkout, status_for, apply_release_predicate, do_invoke) with no stale reference to the old type/field name anywhere, including in comments/docs; (5) TEST-DESIGNER's test file was modified by ELIXIR-DEV (the first describe block's 3 tests, which pre-dated the design rework and asserted the OLD, now-incorrect behavior) -- confirm this was a legitimate, narrowly-scoped correction (the tests were asserting a defect as if it were a spec) and not scope creep or a rewrite that quietly weakens coverage; (6) scope creep -- confirm the diff stays confined to what the fix required.",
+    "acceptance_criteria": [
+      "a test holds an invocation open (a guest blocked in a controllable host call), activates a new module version DURING it, and asserts the held invocation completes normally against the OLD version's observable behaviour -- WASM-14's own acceptance criterion, with the overlap real rather than sequential",
+      "the same test asserts an invocation started AFTER the activation observes the NEW version's behaviour, so both halves of WASM-14 are proven in one overlapping scenario",
+      "a test asserts the prior version's resources are released only after its last in-flight invocation completes, not at activation time",
+      "a module requiring at least one host capability can be successfully registered via register_version/3 -- verified by the actual test passing, not merely asserted"
+    ]
+  },
+  "result": null
+}

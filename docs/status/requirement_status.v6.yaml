@@ -407,3 +407,24 @@ history:
       "active" per the T-LIVE-ACTIVITY detector -- the test literal ORCH
       already updated in commit e72b5c4 anticipated exactly this
       transition.
+  - req: REQ-177
+    event: started
+    agent: ORCH
+    at: "2026-08-29T04:34:00Z"
+    note: >
+      WF02-REQ177-20260829 started (queue task 352, GH#697, stage S6).
+      Closes the two named hooks REQ-056 (EXT-01 AC4, SERVICE_TASK
+      retry-exhaustion) and REQ-061 (EE-10, instance ERROR) each explicitly
+      left for this stage rather than building a partial DLQ themselves.
+      Deliberately narrow scope: LANDING only, not re-execution. Two hook
+      call sites: (1) SERVICE_TASK retry-exhaustion -> REQ-176's enqueue/1,
+      entry_type "event", full_reason from the classified failure kind; (2)
+      instance ERROR transition -> same enqueue/1, full_reason read back
+      from the just-persisted EXECUTION_ERROR event (re-derive from source,
+      not recomputed), committed in the SAME transaction as REQ-061's own
+      status flip and event append. Explicitly does NOT make retry/2
+      actually re-execute the original dispatch or move an instance out of
+      ERROR -- must be stated as a named, deferred follow-up in the
+      moduledoc. Depends on REQ-176 (done), REQ-056 (done), REQ-061 (done).
+      No file outside the two hook call sites and their tests may be
+      modified.

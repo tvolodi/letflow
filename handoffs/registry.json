@@ -3146,6 +3146,25 @@
       "last_known_step": "Step Final",
       "queue_task_id": 351,
       "note": "PR #703 merged (squash commit 28befe0). REQ-176: Stage 6's first requirement -- Letflow.Dlq context module + Letflow.Dlq.Entry schema + tenant-scoped dlq_entries migration (enqueue/list/get/retry/discard, cursor-paginated list/2, row-lock-then-check state transitions). Bound field-for-field to the already-shipped S8 frontend contract (web/src/api/dlq.ts, web/src/types/api.ts) since R-Co is unreachable from this sandbox. 1 CODE-DESIGN-VALIDATOR rework round caught a fabricated Letflow.IdentityMigration precedent citation, corrected to honestly frame the new UUID-to-text-cast-for-ILIKE pattern as new. SECURITY-REVIEWER and REVIEWER both passed with no rework -- REVIEWER filed ISS-0353 for a real, correctly-deferred idiom gap. TEST-DESIGN-VALIDATOR independently re-verified with 3 of its own mutations applied directly to production code. RELEASE-VALIDATOR independently PASSED all 6 acceptance criteria. Along the way, found and fixed two stages of a real, foreseeable T-LIVE-ACTIVITY drift caused by this session's own WF-01 work (Stage 6 first present-but- inactive, then active once REQ-176 went done) -- both fixed directly, mirroring S5's own established precedent. One unrelated, pre-existing teardown-race flake (PromotionAssertionRerunTest) cleared on rerun. Queue task 351 released done. Unblocks REQ-177 and REQ-178."
+    },
+    {
+      "run_id": "WF02-REQ177-20260829",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-177"
+      ],
+      "stage": "S6",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/service_task.ex",
+        "lib/letflow/instance.ex or equivalent"
+      ],
+      "lock_acquired_at": "2026-08-29T04:34:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00",
+      "queue_task_id": 352,
+      "note": "Closes REQ-056/REQ-061's named DLQ hooks -- SERVICE_TASK retry-exhaustion and instance ERROR both land into REQ-176's DLQ core via enqueue/1. Landing only, not re-execution. Depends on REQ-176/056/061 (all done). Step 00 bookkeeping committed to main; feature branch about to be created."
     }
   ]
 }

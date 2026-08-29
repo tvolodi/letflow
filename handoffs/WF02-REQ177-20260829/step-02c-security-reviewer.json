@@ -1,0 +1,21 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step02c",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/engine/execution_error.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 352, GH#697, stage S6. Implementation committed as fdb096a on feature/WF02-REQ177-20260829, per the approved design lib/letflow/design/req177-dlq-hooks.md (commit 4070492, approved after 1 rework round fixing a false EventStore payload return-shape claim). This is a hard gate by project default -- it touches a tenant-scoped write path (Letflow.Dlq.enqueue/2, tenant-scoped) inside REQ-061's existing transaction, and modifies a shared, already-gate-approved Ecto.Multi chain. Changed files: lib/letflow/engine.ex (new land_service_task_exhaustion/2), lib/letflow/engine/execution_error.ex (new :execution_error_dlq_landing Multi step). Notable: ELIXIR-DEV found and fixed a real bug during implementation -- the 'reason' column is varchar(255) and a raised exception's stack-trace message overflowed it (caught by a pre-existing test); fixed by truncating 'reason' to 255 bytes while 'full_reason' (:text, unbounded) carries the untruncated value. Full mix test suite: 2471/2473 passed, only the 2 known rust-toolchain-absent failures."},
+  "task": {
+    "description": "Review this diff against docs/agents/instructions/security-invariants.md INV-1..INV-8. Specifically: (1) confirm Letflow.Dlq.enqueue/2 is called with the correct tenant :prefix in BOTH hook sites -- verify the tenant scoping context (prefix/tenant_id) flowing into the new DLQ landing calls is genuinely derived from the same tenant context as the surrounding operation (the instance/service_task being landed), never a different or caller-overridable tenant; (2) confirm the new :execution_error_dlq_landing Multi step genuinely participates in the SAME transaction as the pre-existing steps -- verify it's appended onto the same Ecto.Multi chain, not a separate Repo.transaction call; (3) confirm the reason/full_reason truncation fix doesn't silently drop or corrupt security-relevant information (e.g. does truncating to 255 bytes ever cut off in the middle of a UTF-8 multi-byte character, producing invalid data or a crash?); (4) confirm no guest/caller-supplied input flows into these new DLQ entries without going through Letflow.Dlq.enqueue/2's existing attrs whitelist (Map.take/2 sanitization) that REQ-176's own SECURITY-REVIEWER pass already verified; (5) confirm dlq_landed_externally opt threading can't be abused by a caller to skip DLQ landing when it shouldn't, or double-land when it shouldn't -- trace both hook sites' actual call sequences.",
+    "acceptance_criteria": [
+      "a SERVICE_TASK dispatch driven to retry-exhaustion (attempt_index == retry_limit) produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason naming the classified failure kind -- read back from the database, not asserted from the caller's own return value",
+      "an instance driven to ERROR via REQ-061's execution-error path produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason equal to the persisted EXECUTION_ERROR event's own reason field",
+      "the ERROR-path DLQ landing is in the same transaction as REQ-061's status flip and event append: forcing the DLQ insert to fail leaves the instance status, the EXECUTION_ERROR event, and the DLQ table all unchanged, verified by reading all three back"
+    ]
+  },
+  "result": null
+}

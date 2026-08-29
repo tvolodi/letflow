@@ -5,7 +5,7 @@
   "step": "Step 2c",
   "from_agent": "ORCH",
   "to_agent": "SECURITY-REVIEWER",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "normal",
   "context": {"note": "REQ-186's implementation is complete: lib/letflow/scheduler.ex (context module), lib/letflow/scheduler/timer.ex (schema), lib/letflow/scheduler/poller.ex (supervised GenServer ticker), priv/repo/migrations/20260829020001_create_timers.exs (tenant-scoped migration), plus registration diffs in lib/letflow/application.ex (Poller added to supervision tree) and lib/letflow/tenant_provisioning.ex (TIMER_FIRED added to @platform_event_type_seed_attrs). Two stale tests were fixed along the way (same class as REQ-181's precedent): test/support/tenant_fixture.ex's oracle list and test/letflow/tenant_provisioning_event_seed_test.exs's hardcoded seed counts, both updated for the new timers table / TIMER_FIRED event type. Full suite confirmed green modulo the 3 pre-existing rustc/wasmex-absent-from-sandbox environmental failures. Read lib/letflow/design/req186-scheduler-core.md and lib/letflow/design/req185-scheduler-firing-architecture.md for the intended architecture before reviewing."},
   "task": {
@@ -23,5 +23,24 @@
       "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "SECURITY-REVIEWER gate on REQ-186 (timers schema and scheduler core) -- PASS. Independently read lib/letflow/scheduler.ex, lib/letflow/scheduler/timer.ex, lib/letflow/scheduler/poller.ex, priv/repo/migrations/20260829020001_create_timers.exs, the application.ex/tenant_provisioning.ex diffs, and both design docs (req185-scheduler-firing-architecture.md, req186-scheduler-core.md) in full -- did not trust the implementation's own comments or moduledoc claims alone. Full findings recorded in handoffs/WF02-REQ186-20260829/security-review-req186.md.\n\nScope test: applies -- new migration touching a new tenant-scoped business table, a Poller/Scheduler context reading/writing tenant data across every provisioned tenant schema, and a DLQ-landing write path.\n\nINV-1 (tenant data isolation): APPLIES, PASS. Every query in Letflow.Scheduler (claim_due_timer_ids/2, fetch_and_lock_timer/2, the fire-transaction's Repo.update, record_fire_failure/2's Repo.update) threads prefix: tenant_schema explicitly -- verified by reading each call site, not the moduledoc's claim. Letflow.Scheduler.Poller.handle_info/2 iterates Registration rows filtered on non-nil migrations_applied_at and passes each schema_name straight through to poll_and_fire/1 with no cross-iteration state. Migration's if prefix() do guard wraps the entire create table/constraints/index. tenant_id is derived server-side via TenantProvisioning.tenant_id_for_schema_name(prefix) in build_arm_changeset/2 -- arm_attrs()'s own @type has no :tenant_id key and the Map.take/2 allowlist excludes it, so a caller-supplied value is structurally impossible to smuggle in. timers is registered in @tenant_scoped_migration_manifest.\n\nDLQ-landing: PASS. land_exhausted_timer/3 calls Dlq.enqueue(dlq_attrs, prefix: tenant_schema) with the same tenant_schema value threaded through the whole attempt_fire/2 -> record_fire_failure/2 -> land_exhausted_timer/3 call chain, inside the same Repo.transaction/1 as the fail_changeset update -- no cross-tenant DLQ write is possible.\n\nMigration tenant-scoping (Decision 0003 Decision B): PASS. chk_timers_status and chk_timers_recurrence_shape both correctly scoped inside if prefix() do, built via Ecto.Migration's constraint/3 builder (not raw execute/1 as the design doc anticipated -- a benign, more idiomatic deviation, not a defect) matching the more recent promotion_assertion_runs precedent. Partial index idx_timers_pending_fire_at present and prefix-scoped.\n\nNo raw/interpolated SQL (INV-7): APPLIES, PASS. grep -rn Repo.query across the new files: zero hits. The FOR UPDATE SKIP LOCKED claim query is built entirely via Ecto.Query composition (where/order_by/limit/select/lock), lock/2's argument is a literal string, never interpolated with tenant/user data.\n\nCrash isolation (INV-8): APPLIES, PASS. Verified the actual try/rescue boundaries, not the design's claim: fire_timer/2 runs inside Repo.transaction/1; attempt_fire/2 wraps the call to fire_timer/2 in an explicit try/rescue converting any escaping raise to {:error, {:raised, exception}}; any {:error, _} routes to safe_record_fire_failure/2, itself wrapped in its own rescue clause guarding record_fire_failure/2 (including Dlq.enqueue/2 itself raising). poll_and_fire/1 uses Enum.reduce/3 over the claimed id list with no short-circuit, and Poller.handle_info/2 uses a plain Enum.each/2 over tenant schemas calling poll_and_fire/1, which is verified never to raise. A raising fire attempt for one tenant/timer is trapped at two independent layers before it could reach either the per-tenant loop or the per-tick tenant-schema loop.\n\nNo data leakage: PASS. poll_and_fire/1 returns only a counts map, never row contents; TIMER_FIRED event payload and DLQ error_detail are both built solely from the one timer row already locked under that same tenant's own transaction/prefix. No route or controller file touched.\n\nINV-2/INV-3/INV-5: NOT-APPLICABLE -- no API response-shaping or lookup-by-ID endpoint in this diff (S4/S5 not reached). INV-6: satisfied by this handoff's own existence.\n\nOne non-blocking flag for REVIEWER (not a security defect): Letflow.Scheduler substitutes EventStore.platform_actor_id() for the design doc's literal actor_id: nil, because EventStore.append/2's fetch_uuid/3 helper rejects nil (verified directly against event_store.ex line 222) -- confirmed accurate, not a security concern, but ELIXIR-DEV explicitly flagged it for review so REVIEWER should decide whether the design doc itself needs a one-line correction.\n\nVerdict: PASS. No BLOCKER on any applicable invariant. Routing to REVIEWER.",
+    "artifacts_reviewed": [
+      "lib/letflow/design/req186-scheduler-core.md",
+      "lib/letflow/design/req185-scheduler-firing-architecture.md",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/scheduler/timer.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "priv/repo/migrations/20260829020001_create_timers.exs",
+      "lib/letflow/application.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/dlq.ex",
+      "lib/letflow/event_store.ex"
+    ],
+    "artifacts_out": [
+      "handoffs/WF02-REQ186-20260829/security-review-req186.md"
+    ],
+    "next_recommended": "REVIEWER"
+  }
 }

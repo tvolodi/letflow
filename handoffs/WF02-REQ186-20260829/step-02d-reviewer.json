@@ -1,0 +1,26 @@
+{
+  "handoff_id": "WF02-REQ186-20260829-step02d",
+  "run_id": "WF02-REQ186-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2d",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "SECURITY-REVIEWER has PASSed REQ-186's implementation (see handoffs/WF02-REQ186-20260829/step-02c-security-reviewer.json's result, and the full report at handoffs/WF02-REQ186-20260829/security-review-req186.md): INV-1 tenant isolation, DLQ-landing, migration tenant-scoping, no-raw-SQL, and crash isolation (INV-8) all independently verified against the actual code, not the implementation's own comments. Your scope: idiomatic OTP usage, supervision integrity, scope creep, and decision-record consistency against both lib/letflow/design/req186-scheduler-core.md and lib/letflow/design/req185-scheduler-firing-architecture.md (the architecture REQ-186 implements). One specific item flagged by SECURITY-REVIEWER for your attention (not a security defect): lib/letflow/scheduler.ex's own moduledoc documents that it substitutes EventStore.platform_actor_id() for the design doc's literal actor_id: nil for the TIMER_FIRED event append, because EventStore.append/2's fetch_uuid/3 helper rejects a literal nil actor_id -- verified accurate against lib/letflow/event_store.ex. Decide whether lib/letflow/design/req186-scheduler-core.md's own text (section 2.4 step 5 / section 6) needs a follow-up correction to match, similar to the REQ-168 precedent (handoffs/WF02-REQ168-20260828/step-02d-reviewer.json) where REVIEWER made an analogous design-doc correction directly as part of its own gate."
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-186's implementation. Confirm Letflow.Scheduler/Letflow.Scheduler.Timer/Letflow.Scheduler.Poller follow this codebase's existing conventions (compare against Letflow.Dlq/Letflow.Dlq.Entry for context-module/schema/changeset shape, and against the existing Task.Supervisor-per-concern idiom in lib/letflow/application.ex for the supervision addition). Confirm no scope creep beyond the file list REQ-186's design names (lib/letflow/scheduler.ex, lib/letflow/scheduler/timer.ex, lib/letflow/scheduler/poller.ex, priv/repo/migrations/20260829020001_create_timers.exs, the one Poller child-spec line in lib/letflow/application.ex, the one TIMER_FIRED entry in lib/letflow/tenant_provisioning.ex, plus test files and config/test.exs's start_scheduler gate). Confirm typespecs are complete and accurate. Confirm decision-record consistency: REQ-185's seven decisions (supervised GenServer ticker, no Oban, FOR UPDATE SKIP LOCKED claim, no startup-sweep lock, per-tenant-schema iteration, transaction/rescue-only isolation -- no new Task.Supervisor, exhausted timer -> dlq_entries with entry_type \"timer\") are not silently re-decided or contradicted anywhere in the shipped code.",
+    "acceptance_criteria": [
+      "Confirm Letflow.Scheduler/Timer/Poller match this codebase's existing conventions -- compare structure, typespec style, error-tuple/result shape, and moduledoc format against Letflow.Dlq/Letflow.Dlq.Entry.",
+      "Confirm no scope creep: git diff main...HEAD --stat matches the design's own file list (§0 of req186-scheduler-core.md) plus test files and the config/test.exs start_scheduler addition -- no route or controller file, no unrelated module touched.",
+      "Confirm lib/letflow/application.ex's config/test.exs-gated scheduler_children/0 addition (start_scheduler: false under test) is a reasonable, narrowly-scoped deviation from the design doc's literal text, not unauthorized scope creep -- the design doc itself does not mention this gate.",
+      "Confirm typespecs (@spec, @type) are complete and accurate for all public functions in the three new modules.",
+      "Confirm no new Task.Supervisor was added (REQ-185's and REQ-186's own explicit decision) and that the Poller's placement in application.ex's children list matches the design's stated ordering rationale.",
+      "Decide and state clearly whether the actor_id: nil-vs-platform_actor_id() deviation (see context note) needs a design-doc follow-up correction -- if yes, you may make that documentation-only edit yourself, mirroring the REQ-168 precedent, or explicitly recommend it as a follow-up; state which.",
+      "CRITICAL: the handoff's top-level status field must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run the handoff-lint check before finishing (H6 -- a report file must not start with \"step\" if not JSON; this file itself is JSON so is exempt, but any new non-JSON report you write must not start with \"step\")."
+    ]
+  },
+  "result": null
+}

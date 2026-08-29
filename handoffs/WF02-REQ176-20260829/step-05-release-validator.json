@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ176-20260829-step05",
+  "run_id": "WF02-REQ176-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "docs/requirements.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 351, GH#696, stage S6. REQ-176 has passed CODE-DESIGN-VALIDATOR (1 rework round -- a fabricated Letflow.IdentityMigration ILIKE precedent, corrected to honestly frame the pattern as new), SECURITY-REVIEWER (PASS, no rework, verified tenant_id derivation/ILIKE parameterization/concurrency safety by reading real code), REVIEWER (PASS, no rework requiring code change -- filed ISS-0353 for a real but correctly-deferred idiom gap), TEST-DESIGN-VALIDATOR (PASS, independent mutation re-verification -- 3 mutants applied directly to production code, each confirmed caught, reverted with md5sum verification), and TEST-RUNNER (PASS, full suite 2468/2470, only the 2 known pre-existing rust-toolchain-absent failures, T-LIVE-ACTIVITY S6-inactive fix confirmed holding). This is Stage 6's first requirement -- a greenfield Letflow.Dlq context module + Letflow.Dlq.Entry schema + tenant-scoped migration. Design: lib/letflow/design/req176-dlq-core.md (commit 1959adf, final). Implementation: commit b5a028d. Tests: commit 617f206."},
+  "task": {
+    "description": "Independently re-derive and verify all 6 REQ-176 acceptance criteria from docs/requirements.yaml against the actual shipped code and tests on this branch -- do not trust any prior agent's PASS claim, re-run and re-check yourself. Confirm: dlq_entries genuinely lives inside each tenant's schema (inspect the migration and the tenant_provisioning.ex registration yourself); enqueue/1's initial state and list/2's tenant-scoping hold via a real cross-tenant test; retry/2's four-state transition table and exact DlqRetryAttempt field names; discard/2's terminal-transition and conflict-on-already-terminal behavior; list/2's independent filtering plus cursor-pagination correctness (no repeated/skipped ids across pages); confirm no route/controller file exists anywhere in this requirement's commits. Run mix test and mix compile --warnings-as-errors yourself (a full mix test run is expected to show exactly 2 pre-existing/environmental failures -- CheckToolchainTest rust-pin tests with no rustc in this sandbox -- name them explicitly).",
+    "acceptance_criteria": [
+      "the dlq_entries table lives inside each tenant's Postgres schema with a tenant_id column retained, matching decision 0003 Decision B's pattern -- verified by inspecting the migration",
+      "enqueue/1 creates an entry with status \"pending\", retry_count 0, and a created_at timestamp; list/2 is tenant-scoped, demonstrated by an entry enqueued under tenant A being absent from a list/2 call scoped to tenant B",
+      "retry/2 on a \"pending\" or \"retrying\" entry transitions it to \"retrying\", appends a retry_history entry with attempt_no/attempted_at/outcome/error_message field names matching DlqRetryAttempt exactly, and increments retry_count; retry/2 on a \"resolved\" or \"discarded\" entry returns a conflict error and leaves status, retry_count and retry_history unchanged -- four tests, one per starting status",
+      "discard/2 on a \"pending\" or \"retrying\" entry transitions it to \"discarded\"; discard/2 on an already \"resolved\" or \"discarded\" entry returns a conflict error rather than silently succeeding",
+      "list/2 filters by entry_type and by status independently, each demonstrated narrowing a result set that contains rows of more than one value, and supports cursor pagination: given more rows than one page, the first page's next_cursor, passed back in, returns the next distinct page with no repeated or skipped ids",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

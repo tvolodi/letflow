@@ -3300,6 +3300,22 @@
       "released_lock": false,
       "last_known_step": "Step 6 (DOC-UPDATER) -- content-producing steps done, ORCH Step Final (rebase/push/PR/CI-wait/merge/queue-release) still pending",
       "note": "REQ-187: TIMER nodes wired into the engine -- transition.ex L294's catch-all now arms a REQ-186 timer on token arrival, same transaction as the state-transition event; task_activation.ex's cancel_pending_timers/2 no-op replaced with a real cancellation update at its unmoved call site; engine.ex L234-242's EE-08 deferral closed for the timer half via cancel_instance/3. Strict transition.ex purity preserved (no Repo call). Most architecturally complex requirement in this batch -- a nested SAVEPOINT transaction, a genuine AB-BA lock-ordering deadlock hazard found by CODE-DESIGN-VALIDATOR and fixed, and a multi-timer-in-one-hop-chain Ecto.Multi step-name collision hazard found and closed with a typed guard -- yet zero rework rounds through design/security/reviewer/test-design gates. RELEASE-VALIDATOR independently re-verified all 10 acceptance criteria, including the fragile lock-ordering fix -- PASS, no gap found (handoffs/WF02-REQ187-20260829/release-validation-req187.md). Closes REQ-186's engine-integration half; REQ-188 (recurrence + escalation) is now the last remaining piece of the scheduler half. queue_task_id 360 not yet released -- that is ORCH's Step Final job."
+    },
+    {
+      "run_id": "WF02-REQ188-20260829",
+      "requirement_id": "REQ-188",
+      "queue_task_id": 361,
+      "github_issue_number": 707,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/scheduler.ex",
+        "lib/letflow/scheduler/poller.ex"
+      ],
+      "started_at": "2026-08-29T23:09:11Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
+      "note": "Last requirement of S6's scheduler half: SCH-07 recurring timer re-arm atop REQ-186/187, plus a periodic retention runner on the existing scheduler process invoking the zero-caller EventStore.archive/1, disabled by default. Defers partition-based retention (ISS-0014) and SCH-04 escalation timers."
     }
   ]
 }

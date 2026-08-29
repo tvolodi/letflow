@@ -830,3 +830,15 @@ history:
       pre-existing grandfathered). This closes REQ-186's engine-integration
       half; REQ-188 (recurrence, SCH-07, plus escalation and the retention
       runner) is now the last remaining piece of S6's scheduler half.
+  - req: REQ-188
+    event: started
+    agent: ORCH
+    at: "2026-08-29T23:09:11Z"
+    note: >
+      Queue task 361, GH#707, stage S6. Third and last requirement of S6's
+      scheduler half: recurring timer re-arm (SCH-07) atop REQ-186/187's
+      poll loop, plus a periodic retention runner invoking the already-shipped
+      but zero-caller EventStore.archive/1, disabled by default. Explicitly
+      defers R-Co's partition-based retention (ISS-0014's adopted option (a))
+      and SCH-04 escalation timers (no escalation_timer_duration attribute
+      on Letflow's Graph yet).

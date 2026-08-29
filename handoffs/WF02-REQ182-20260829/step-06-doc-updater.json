@@ -1,0 +1,33 @@
+{
+  "handoff_id": "WF02-REQ182-20260829-step06",
+  "run_id": "WF02-REQ182-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 6",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "DOC-UPDATER",
+  "file": "docs/requirements.yaml#REQ-182",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-182"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ182-20260829/step-05-release-validator.json",
+      "handoffs/WF02-REQ182-20260829/req182-release-validation-report.md"
+    ],
+    "branch_name": "feature/WF02-REQ182-20260829"
+  },
+  "task": {
+    "description": "DOC-UPDATER pass (WF-02 Step 6) for REQ-182 (stage S6). RELEASE-VALIDATOR independently re-verified all 7 acceptance criteria and PASSed -- see handoffs/WF02-REQ182-20260829/step-05-release-validator.json and handoffs/WF02-REQ182-20260829/req182-release-validation-report.md for full detail. Flip REQ-182's status to done in docs/requirements.yaml, and append the required status-history event.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml: REQ-182's status field flipped from pending to done (entry around line 9244).",
+      "Append a 'done' event to the current run-history volume -- confirm the current volume via docs/status/requirement_status.index.yaml first (it was docs/status/requirement_status.v6.yaml, entries: 20, at the time this handoff was written; re-check rather than trusting that number if time has passed) -- with a real UTC timestamp from the clock (not memory), req REQ-182, run WF02-REQ182-20260829. Field order must be req, event, agent, at, note -- confirm by inspecting existing entries in the current volume before appending.",
+      "Keep docs/status/requirement_status.index.yaml's volume entry count in lockstep with the append.",
+      "Check docs/migration/ for any REQ-182 reference needing an update (`grep -rl REQ-182 docs/migration/`) -- update if found, otherwise note that none needed changing.",
+      "Commit the doc updates to the feature branch (do not push yet -- ORCH handles Step Final).",
+      "CRITICAL: the handoff's top-level status field must be exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- never DONE. Run mix letflow.lint_handoffs before finishing to confirm."
+    ]
+  },
+  "result": null
+}

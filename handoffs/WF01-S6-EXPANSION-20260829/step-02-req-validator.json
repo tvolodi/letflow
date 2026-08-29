@@ -8,16 +8,30 @@
   "file": "handoffs/WF01-S6-EXPANSION-20260829/step-02-req-validator.json",
   "created_at": "2026-08-29T04:30:00Z",
   "started_at": "2026-08-29T04:30:00Z",
-  "status": "DISPATCHED",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
     "requirement_ids": [
-      "REQ-185", "REQ-186", "REQ-187", "REQ-188", "REQ-189", "REQ-190",
-      "REQ-191", "REQ-192", "REQ-193", "REQ-194", "REQ-195", "REQ-196",
-      "REQ-197", "REQ-198", "REQ-199"
+      "REQ-185",
+      "REQ-186",
+      "REQ-187",
+      "REQ-188",
+      "REQ-189",
+      "REQ-190",
+      "REQ-191",
+      "REQ-192",
+      "REQ-193",
+      "REQ-194",
+      "REQ-195",
+      "REQ-196",
+      "REQ-197",
+      "REQ-198",
+      "REQ-199"
     ],
-    "related_handoff_ids": ["b6e2f100-0001-4c7a-9d33-s6expansionstep01"],
+    "related_handoff_ids": [
+      "b6e2f100-0001-4c7a-9d33-s6expansionstep01"
+    ],
     "artifacts_in": [
       "docs/requirements.yaml",
       "docs/migration/stage-6-operational-cross-cutting.md",
@@ -41,7 +55,106 @@
       "Report PASS or FAIL. On FAIL, list every issue by requirement id and check letter so ORCH can route a targeted rework. On PASS, next_action: 'requirements ready for WF-02'. Do not edit docs/requirements.yaml yourself -- validation only; rework is REQ-ANALYST's."
     ]
   },
-  "result": null,
+  "result": {
+    "status": "FAIL",
+    "summary": "Validated REQ-185..REQ-199 against WF-01 Step 2 checks (a)-(e), each actually run per requirement. SUBSTANCE IS STRONG: testability (a), stage fit (d) and size (e) PASS on all 15. The core/route splits are real -- REQ-186/187/188/190/191/195/199 each carry the literal 'no route or controller file is added or modified' AC, and REQ-192/196 add no schema or context work. High AC counts (REQ-199=15, REQ-190/191/195/197=12) reflect thoroughness, not smuggled deliverables. All THREE of REQ-ANALYST's corrections were spot-checked against real R-Co source and ALL THREE ARE CORRECT -- ORCH's dispatch brief was wrong on all three points. The webhook HMAC contradiction is CONFIRMED verbatim. FAIL is on three defects: one genuinely-required missing dependency (REQ-190), one unrecorded scope gap contradicting the stage doc (obs alerts.zig/timeline.zig), and one dangling cross-reference (REQ-193/194/195 -> a non-existent note in REQ-196). All three are narrow, targeted text fixes; no requirement needs redrafting or deletion.",
+    "artifacts_out": [
+      "handoffs/WF01-S6-EXPANSION-20260829/step-02-req-validator.json"
+    ],
+    "checks_run": {
+      "a_testability": "PASS (15/15) -- every AC is concretely falsifiable; DB-level vs changeset-level assertions distinguished; no vague qualifiers found.",
+      "b_consistency": "FAIL -- see ISSUE-2 and ISSUE-3. Decision-record handling itself is correct: both escalated placement questions genuinely flag REVIEWER sign-off, and REQ-188's ISS-0014 deferral matches the adjudication verbatim.",
+      "c_depends_on": "FAIL -- see ISSUE-1 (REQ-190 missing REQ-183).",
+      "d_stage_fit": "PASS (15/15) -- nothing belongs to S7/S8; every web/ reference is a read-only binding contract with an explicit no-web/-change AC.",
+      "e_size": "PASS (15/15) -- core/route splits verified real; the REQ-179/180 precedent was followed."
+    },
+    "spot_checks_verified": [
+      {
+        "claim": "SCH-02 per-timer PostgreSQL advisory lock was REMOVED by R-Co",
+        "verdict": "CONFIRMED -- ORCH's brief was wrong",
+        "evidence": "scheduler-concurrency-epic3.md:18,25 'Remove the pg_try_advisory_xact_lock call that is redundant with SKIP LOCKED'; scheduler.zig:44-46 SCHEDULER_STARTUP_LOCK_ID = 5863412975429063421 'distinct from any per-timer advisory lock key (removed by ISS-301)'; scheduler.zig:202,493 FOR UPDATE SKIP LOCKED; regression tests TC-SCH-301-01/02 at scheduler.zig:1310,1318 assert the source contains no pg_try_advisory_xact_lock and no advisoryLockKey helper. REQ-185 is right to carry the correction so a port does not reintroduce deleted code."
+      },
+      {
+        "claim": "R-Co src/expr is NOT CEL; exactly 11 builtins; no in/ternary/macros/collections",
+        "verdict": "CONFIRMED -- ORCH's brief listed CEL vocabulary neither system implements",
+        "evidence": "lexer.zig 'Builtin whitelist (11 entries -- DSL-07)' listing exactly length/lower/upper/trim/contains/startsWith/endsWith/coalesce/now/date_add/date_diff; ast.zig TokenKind L12-60 has arithmetic + - * / %, the 6 comparisons, and/or/not keywords, literals and dot -- and NO membership, ternary, bracket, list or map tokens; zero matches for 'cel' across src/expr/*.zig; expr-cutover-exp102.md is titled 'CEL -> src/expr Cutover', confirming the direction was FROM vendored CEL TO src/expr. now() impurity comment verified verbatim at evaluator.zig:366. REQ-197/198 are correctly scoped to what R-Co actually has."
+      },
+      {
+        "claim": "Three subsystems have committed SPA consumers; metrics is Prometheus TEXT at unversioned /metrics",
+        "verdict": "CONFIRMED",
+        "evidence": "web/src/api/metrics.ts:38 parsePrometheusText and :127 prometheusText: () => client.getText('/metrics') -- unversioned and top-level; services.ts:40-56 names all five routes with ServiceScope = 'global' | 'tenant'; audit.ts:21-22,33-34,51-52 declares before_state/after_state on RawAuditEntry. REQ-194 correctly treats this as binding on FORMAT (axis 3) ONLY and explicitly refuses to let it settle auth (1) and scope (2), requiring a stated position on all three -- the correct reconciliation of REQ-078's three divergences, not a silent pick."
+      },
+      {
+        "claim": "REQ-176 already reserves entry_type 'timer' as its intended extension point",
+        "verdict": "CONFIRMED",
+        "evidence": "REQ-176's entry_type CHECK domain is 'event' | 'timer' | ..., and its not-in-scope text names 'no scheduler/\"timer\" entries (scheduler is not drafted in [that batch])'. REQ-186/199 landing entries there is the extension point it was built for, not a conflict."
+      },
+      {
+        "claim": "REQ-188's partition-maintenance deferral matches what ISS-0014 adjudicated",
+        "verdict": "CONFIRMED -- restated accurately, not loosely",
+        "evidence": "docs/issues/ISS-0014.yaml status: resolved, resolved_at 2026-08-17T07:18:39Z, adopting option (a) keep row-level archive/1 and rejecting option (c) port partition retention now. Verified zero real PARTITION DDL in priv/repo/migrations/ -- all 6 grep hits are explanatory comments."
+      },
+      {
+        "claim": "Letflow.EventStore.archive/1 has zero production callers",
+        "verdict": "CONFIRMED",
+        "evidence": "def archive at event_store.ex:989; the only two lib/ hits (reconstruction.ex:375, retention_policy.ex:4) are both moduledoc references, not calls. REQ-188's premise holds."
+      },
+      {
+        "claim": "stage-6 doc per-subsystem file counts re-verified against R-Co",
+        "verdict": "CONFIRMED ACCURATE",
+        "evidence": "Counted in R-Co/src: scheduler 6, secrets 6 + integration/ 1, obs 5, repository 7, expr 7, ordering 5, webhook 3, dlq 1 -- every count in the doc matches exactly, and every requirement id the doc lists exists with the scope it describes. BUT see ISSUE-2: the src/obs line claims an ownership that does not fully exist."
+      },
+      {
+        "claim": "Other in-tree seams cited by the batch",
+        "verdict": "CONFIRMED",
+        "evidence": "transition.ex catch-all returning node_type_not_yet_implemented with :TIMER named in its comment; task_activation.ex:339 cancel_pending_timers/2 as a literal no-op returning :ok, called from engine.ex:1177; service_scope_validator.ex:59-60 naming the S6 catalog gap; solution_pack.ex:35 service_catalog_entries not supported; mix.exs deps exactly as listed with no Oban/Quantum/telemetry; zero :telemetry.execute call sites in lib/."
+      }
+    ],
+    "webhook_hmac_verdict": {
+      "confirmed": true,
+      "evidence": "REQ-181 (impl_order 354): 'secret (stored hashed -- see below, never returned once created)', with the AC 'stores only a hashed form in the database, and returns the plaintext exactly once as hmac_secret_once'. REQ-183 (impl_order 356): computes 'an HMAC-SHA256 signature of the JSON-encoded payload using the subscription's stored secret (REQ-181's schema)'. A cryptographic hash of the secret is not the secret; an HMAC keyed on the stored hash cannot be reproduced by a receiver holding the plaintext that was delivered once as hmac_secret_once. REQ-183's own AC compounds this: 'a test computes the expected HMAC-SHA256 signature from the same secret and payload and asserts it equals the value deliver/3 actually sent' -- that test is unsatisfiable as drafted, because signer and verifier cannot both hold the same key material. REQ-ANALYST's finding is correct and this batch surfaces rather than introduces the defect.",
+      "recommendation": "BLOCK REQ-183 (letflow-queue task 356) FROM CLAIM UNTIL REQ-189 LANDS. REQ-189/190 are the right treatment of the underlying design question, but they are NOT sufficient protection on their own: REQ-183 is already registered and claimable NOW, and nothing in REQ-183's own text warns an implementer, who would build a signing path that cannot pass its own verification AC. REQ-183 does not need deletion or full redrafting -- its retry/backoff, auto-pause and DLQ-landing halves are sound and unaffected. Concretely: (1) ORCH holds/locks task 356 in letflow-queue so no agent claims it before REQ-189's decision record exists; (2) REQ-183 gains REQ-189 in its depends_on -- it currently has only [REQ-181, REQ-176] -- which is the durable fix, because the queue's own dependency gating then enforces the ordering without relying on anyone reading prose; (3) REQ-183's signing clause and its signature-verification AC are amended to resolve the key through REQ-189's chosen mechanism rather than 'the stored secret'. Because REQ-183 is an EXISTING pending entry, this is an edit rather than an append, so it falls outside this batch's append-only constraint and must be routed to REQ-ANALYST as a scoped amendment -- the same treatment REQ-179/180 got -- rather than left implicit."
+    },
+    "placement_escalations_verdict": {
+      "req_191_service_catalog": "GENUINELY FLAGGED, not a silent divergence. The description carries a 'DECISION 0003 INTERACTION, TO BE STATED NOT ASSUMED' block giving the structural reason -- a scope='global' entry is by definition referenceable by every tenant and service_id is globally unique across tenants, so neither property is expressible in a per-tenant copy -- and an AC requires the migration and moduledoc to 'flag the divergence from decision 0003 Decision B for REVIEWER sign-off'. Verified against R-Co: migrations/049 creates public.service_catalog (global). The reason is structural and sound; accepted as a properly escalated divergence.",
+      "req_189_secrets": "GENUINELY FLAGGED. REQ-189 scope item 2 requires the record to decide placement against Decision B and, if diverging, to 'get REVIEWER sign-off in this record rather than deciding it quietly, per CLAUDE.md's don't-silently-re-decide rule', with a matching AC. REQ-190's schema defers to 'exactly as REQ-189's record decided' rather than pre-empting it. Verified R-Co creates its secrets table in a GBL- global-pass migration. Correctly escalated, not pre-decided.",
+      "note": "Decision 0003 Decision B is worded as the 'general rule for all business tables', which admits a reasoned, signed-off exception; neither requirement asserts the exception as already settled. Both satisfy CLAUDE.md's do-not-silently-re-decide rule."
+    },
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "requirement": "REQ-190",
+        "check": "c",
+        "title": "Missing genuinely-required dependency on REQ-183",
+        "detail": "REQ-190's depends_on is [REQ-189, REQ-072, REQ-181] -- REQ-183 is absent, yet REQ-190's scope item 6 says it 'makes REQ-183's signing resolve its key through resolve/2', and its AC requires 'a test shows REQ-183's signing key resolving through resolve/2'. REQ-190 cannot satisfy that AC before REQ-183's signing path exists; it modifies REQ-183's deliverable. Note that REQ-189 -- which only WRITES the decision -- correctly depends on both REQ-181 and REQ-183, so the implementing requirement carrying a weaker dependency set than the deciding one is plainly an oversight. FIX: add REQ-183 to REQ-190's depends_on."
+      },
+      {
+        "severity": "MAJOR",
+        "requirement": "REQ-193, REQ-194, REQ-195 (and docs/migration/stage-6-operational-cross-cutting.md)",
+        "check": "b",
+        "title": "src/obs/alerts.zig and src/obs/timeline.zig are silently unscoped",
+        "detail": "stage-6-operational-cross-cutting.md:51 states 'src/obs (5 files) -- observability/metrics -- REQ-193-196'. The five files are alerts.zig, audit.zig, logger.zig, metrics.zig and timeline.zig. REQ-193 covers logger, REQ-194 metrics, REQ-195/196 audit. alerts.zig and timeline.zig are covered by NOTHING. The doc's own 'deliberately not covered' section names only three omissions (partition_maintenance/partition_retention, benchmark.zig, process_module_catalog.zig) and does not name these two -- so the doc asserts a coverage that does not exist. This violates the batch's own stated discipline of naming every deferral with its blocker, and is exactly the class of silent gap that discipline exists to prevent. FIX: either draft requirements for them, or record them as explicit deferrals with blockers in both the batch header and the stage-6 doc's not-covered section, and correct the doc's 'REQ-193-196' ownership claim for src/obs."
+      },
+      {
+        "severity": "MINOR",
+        "requirement": "REQ-193, REQ-194, REQ-195",
+        "check": "b",
+        "title": "Dangling cross-reference to a note that does not exist",
+        "detail": "REQ-193's not-in-scope clause says 'no alerting (not drafted in this batch -- see REQ-196's note)'. REQ-196 contains no note on alerting -- a grep for alert/timeline across REQ-196's full text returns zero matches. REQ-194 and REQ-195 likewise exclude 'no alerting' with no owning explanation anywhere in the batch. An implementer following the pointer finds nothing. FIX: point at wherever ISSUE-2's deferral is actually recorded."
+      }
+    ],
+    "non_blocking_observations": [
+      "REQ-187 cites transition.ex 'L283' for the catch-all dispatch branch; the comment block begins at L283 but the clause returning {:error, {:node_type_not_yet_implemented, ...}} is at L294. The seam is real and unambiguously identified (the comment names :TIMER explicitly) -- line drift only, no rework needed.",
+      "REQ-187's depends_on [REQ-186, REQ-047, REQ-052, REQ-050] is correct. REQ-047 (task activation) and REQ-052 (cancel_instance, the engine.ex L234-242 deferral) are the two engine hooks it closes, both done. REQ-061 is NOT required here -- REQ-187 touches no execution-error path, and REQ-061's hook belongs to REQ-177. Its absence is correct, not a gap.",
+      "REQ-199's depends_on [REQ-186, REQ-023, REQ-025, REQ-072, REQ-176] is correct and minimal: REQ-186 for the scheduler cadence it runs on, REQ-176 for DLQ landing, REQ-023/025 for event append, REQ-072 for tenancy. Its 15 ACs map 1:1 onto distinct scope items with no second deliverable smuggled in.",
+      "REQ-192 on [REQ-191, REQ-069, REQ-072, REQ-066, REQ-067] and REQ-196 on [REQ-195, REQ-078, REQ-069, REQ-072] are both correct and minimal.",
+      "REQ-194's and REQ-195's dependency on REQ-193 is right -- JSON logging lands first and both reuse its trace correlation.",
+      "REQ-185 and REQ-189 are correctly filed as decision-and-design requirements in the REQ-148/149/150 shape rather than as prose blockers inside the requirements they gate; both carry an AC forbidding implementation artefacts, which keeps them genuinely one turn.",
+      "Deferrals each carry a real blocker, verified: partition maintenance (0003 Decision C + ISS-0014 resolved), benchmark.zig (no production behaviour), PLC-01 (greenfield, unscoped to any stage), SCH-04 escalation (no escalation_timer_duration attribute in Letflow's graph), now()/date_add/date_diff (purity contract + REQ-050 determinism), ORD-04 contention scaling (unimplemented in R-Co too, needs REQ-194's metrics). None is a convenience deferral."
+    ],
+    "next_action": "Rework REQ-ANALYST -- three targeted fixes: (1) add REQ-183 to REQ-190's depends_on; (2) record src/obs/alerts.zig and timeline.zig as scoped requirements or as explicit blocker-named deferrals, and correct stage-6 doc line 51's src/obs ownership claim; (3) repair the dangling 'see REQ-196's note' cross-reference in REQ-193/194/195. SEPARATELY AND MORE URGENTLY, independent of that rework: ORCH should hold letflow-queue task 356 (REQ-183) from claim and route a scoped amendment adding REQ-189 to REQ-183's depends_on and fixing its signing clause -- REQ-183 is claimable right now and is not implementable as drafted."
+  },
   "rework_count": 0,
-  "max_rework": 3
+  "max_rework": 3,
+  "completed_at": "2026-08-29T04:28:06Z"
 }

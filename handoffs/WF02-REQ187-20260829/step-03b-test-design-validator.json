@@ -1,0 +1,50 @@
+{
+  "handoff_id": "WF02-REQ187-20260829-step03b",
+  "run_id": "WF02-REQ187-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3b",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "test/letflow/engine/timer_wiring_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-187"],
+    "branch_name": "feature/WF02-REQ187-20260829",
+    "artifacts_in": [
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/task_activation.ex",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/engine/reconstruction.ex",
+      "lib/letflow/design/req187-timer-engine-wiring.md",
+      "handoffs/WF02-REQ187-20260829/step-03-test-designer.json",
+      "handoffs/WF02-REQ187-20260829/req187-reviewer-report.md"
+    ],
+    "artifacts_out": [
+      "test/letflow/engine/timer_wiring_test.exs",
+      "test/specs/REQ-187.md",
+      "handoffs/WF02-REQ187-20260829/req187-test-designer-notes.md"
+    ],
+    "requirement_text": "REQ-187 -- Wire TIMER nodes into the engine -- arm on token arrival, cancel on completion/cancellation (SCH-01/SCH-03, closes the cancel_pending_timers stub). See step-02c-security-reviewer.json's own context.requirement_text for the full unabridged text (unchanged, not re-copied here).",
+    "test_designer_result": {
+      "status": "PASS",
+      "summary": "18 new tests in test/letflow/engine/timer_wiring_test.exs cover AC1/AC7 (arming: date-part/time-part/P0D durations), AC2 (timer-arm + event in one transaction, forced :event failure), AC3 (poll_and_fire advances the token, including a :TIMER->:TIMER chain resolved in one advance_after_timer_fired/3 call), AC4 (finalize_instance_projection/5's unmoved cancel_pending_timers/5 call site -- direct-mechanism test + source-position structural test, since the design doc's own §5.2 scope note argues this call site is organically unreachable via any public Engine call, independently confirmed), AC5 (cancel_instance/3 cancellation + forced-:event-failure rollback + a dedicated structural lock-ordering test for :timer_cancellations' position), AC6/SCH-03 (fired timer untouched by later cancellation; cancelled timer never fired by a later poll), REVIEWER's own added multi-timer-in-one-hop-chain guard regression test, AC7's purity grep wired into a standing ExUnit check, AC8's route/controller structural scan, and a Reconstruction/TIMER_FIRED replay-parity test. Does not duplicate the 4 pre-existing REQ-187-touched test files' own coverage (read all 4 first; transition_test.exs already owns the pure-kernel :TIMER dispatch cases, task_activation_test.exs already owns cancel_pending_timers/5's @doc-content check). 4 mutations applied to the shipped implementation (task_activation.ex's status guard, engine.ex's persist/11 timer-arm Multi.merge step, engine.ex's run_cancel_instance/5 lock-ordering position, engine.ex's prepare_timer_arms/4 multi-timer guard) -- all 4 caught, all 4 reverted, git diff confirmed clean against the committed tree after each revert. mix test test/letflow/engine/timer_wiring_test.exs: 18 passed. Combined with the 4 pre-existing files: 81 passed (1 property, 80 tests), zero regressions. mix compile --warnings-as-errors: clean.",
+      "spec": "test/specs/REQ-187.md",
+      "notes": "handoffs/WF02-REQ187-20260829/req187-test-designer-notes.md"
+    }
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR: verify test/letflow/engine/timer_wiring_test.exs covers every acceptance criterion in step-03-test-designer.json (including REVIEWER's own added multi-timer-guard item), that no coverage is skipped/faked, and that fixtures are isolated and self-sufficient, per .claude/agents/test-design-validator.md. Re-derive the mutation-testing claims independently (at minimum re-apply the run_cancel_instance/5 lock-ordering mutation, since TEST-DESIGNER's own notes flag it as the one mutation only a single dedicated test catches) rather than trusting TEST-DESIGNER's report.",
+    "acceptance_criteria": [
+      "Every acceptance criterion in step-03-test-designer.json's task.acceptance_criteria list has at least one runnable, non-skipped test mapped to it in test/specs/REQ-187.md's traceability table.",
+      "Confirm test/letflow/engine/timer_wiring_test.exs does not duplicate coverage already owned by transition_test.exs/task_activation_test.exs/scheduler_test.exs/poller_test.exs.",
+      "Independently re-run at least one of the 4 reported mutations (apply, confirm the relevant test fails, revert, confirm git diff is clean) rather than trusting the reported counts verbatim.",
+      "Confirm fixtures are self-contained (own tenant provisioning, no shared/leaked state across tests) and no test depends on wall-clock timing beyond ordinary DB round-trip latency.",
+      "Verdict recorded (PASS or FAIL with named gaps); do not leave status as PENDING when done; do not set status to DONE (schema enum is PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED, per docs/anti-patterns.md's recurring handoff-lint bug)."
+    ]
+  },
+  "result": null
+}

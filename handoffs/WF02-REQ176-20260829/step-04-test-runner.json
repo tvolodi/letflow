@@ -1,0 +1,19 @@
+{
+  "handoff_id": "WF02-REQ176-20260829-step04",
+  "run_id": "WF02-REQ176-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 4",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "test/letflow/dlq_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 351, GH#696, stage S6. TEST-DESIGN-VALIDATOR PASSED (hard gate) with independent mutation re-verification: 3 mutants applied directly to lib/letflow/dlq.ex (tenant-scoping drop, cursor boundary duplication, retry/2 guard removal), each confirmed caught, reverted with md5sum verification. mix test test/letflow/dlq_test.exs reported 17 passed. ELIXIR-DEV's own earlier full-suite run showed 2453/2456 passed, 3 pre-existing/environmental failures -- 2 rust-toolchain-absent, plus a T-LIVE-ACTIVITY S6-inactive test literal ORCH has since fixed directly on main (commit e72b5c4, now included in this branch via rebase). Confirm that fix holds and the full suite is now genuinely clean modulo only the 2 rust-toolchain failures."},
+  "task": {
+    "description": "Run the full test suite exactly as CI will (mix letflow.check.test, or mix test followed by mix test --only wasm_hang as two separate invocations matching that task's two-stage contract) and diagnose any failure. Confirm the T-LIVE-ACTIVITY S6 fix (commit e72b5c4) holds and no longer fails. Confirm nothing in lib/letflow/dlq*/ or this run's own test files is implicated in any failure. Report pass/fail with real output quoted.",
+    "acceptance_criteria": [
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

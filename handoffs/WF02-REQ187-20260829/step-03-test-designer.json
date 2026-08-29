@@ -1,0 +1,56 @@
+{
+  "handoff_id": "WF02-REQ187-20260829-step03",
+  "run_id": "WF02-REQ187-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "lib/letflow/engine.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-187"],
+    "branch_name": "feature/WF02-REQ187-20260829",
+    "artifacts_in": [
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/task_activation.ex",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/engine/reconstruction.ex",
+      "lib/letflow/design/req187-timer-engine-wiring.md",
+      "handoffs/WF02-REQ187-20260829/req187-security-review-report.md",
+      "handoffs/WF02-REQ187-20260829/req187-reviewer-report.md",
+      "handoffs/WF02-REQ187-20260829/req187-elixir-dev-implementation-notes.md"
+    ],
+    "requirement_text": "REQ-187 -- Wire TIMER nodes into the engine -- arm on token arrival, cancel on completion/cancellation (SCH-01/SCH-03, closes the cancel_pending_timers stub). See step-02c-security-reviewer.json's own context.requirement_text for the full unabridged text (unchanged, not re-copied here).",
+    "reviewer_result": {
+      "status": "PASS",
+      "report": "handoffs/WF02-REQ187-20260829/req187-reviewer-report.md",
+      "summary": "Idiomatic dispatch shape confirmed consistent with the sibling :SUB_PROCESS/:HUMAN_TASK pending_event() family; no supervision changes; transition.ex purity independently re-grepped and confirmed clean; scope limited to the 6 files the design doc names (no route/controller/migration/web/, no dlq.ex, no REQ-056 change); design-doc open questions 1/2/4/5 reviewed and accepted, OQ-3 (Multi step-name collision) confirmed resolved via prepare_timer_arms/4's defensive >1 guard -- better than either option the design doc itself proposed; the 4 mechanically-updated test files confirmed genuinely mechanical (fixture graph swapped HUMAN_TASK->TIMER only where firing-mechanics tests require a real TIMER node to fire through, token_id wiring is load-bearing not decorative, catch-all test narrowing is offset by a new dedicated :TIMER describe block); mix compile --warnings-as-errors clean; mix test across transition_test.exs/task_activation_test.exs/reconstruction_test.exs (59 passed), scheduler_test.exs/poller_test.exs (18 passed), engine_test.exs (42 passed)."
+    },
+    "prior_gates": {
+      "security_reviewer": {
+        "status": "PASS",
+        "report": "handoffs/WF02-REQ187-20260829/req187-security-review-report.md"
+      }
+    }
+  },
+  "task": {
+    "description": "TEST-DESIGNER: write test specs and test code for REQ-187's timer-arm/timer-fire/cancellation wiring, per .claude/agents/test-designer.md. Both idiom (REVIEWER) and security (SECURITY-REVIEWER) gates have passed -- this step is mutation-driven coverage against the original acceptance criteria, not a re-litigation of design choices.",
+    "acceptance_criteria": [
+      "AC1/AC7: a token reaching a valid :TIMER node arms exactly one 'pending' timers row with fire_at = arrival + parsed duration_iso8601; cover at least one date-part and one time-part duration string, plus the P0D edge case.",
+      "AC2: the timer row and the state-transition event are written in the SAME transaction -- a test that forces the :event step (or equivalent) to fail after the timer-arm Multi.merge step must leave NO timers row behind.",
+      "AC3: firing a timer (Scheduler.poll_and_fire/1 or a direct do_fire/fire_timer path) advances the live token off the :TIMER node along its outgoing edge, including the case where that edge leads directly into another dispatch-needing node (:TIMER->:TIMER, :TIMER->:EXCLUSIVE_GATEWAY, :TIMER->:SUB_PROCESS) resolving fully in one advance_after_timer_fired/3 call.",
+      "AC4: completing an instance (the :completed path through finalize_instance_projection/5) cancels its 'pending' timers via cancel_pending_timers/5, called from the same, unmoved call site.",
+      "AC5: cancel_instance/3 cancels 'pending' timers in the same transaction as the cancellation event; a test forcing a later Multi step to fail (e.g. :event) must leave any timer seeded for that instance still 'pending' -- verifying run_cancel_instance/5's :timer_cancellations step (positioned between :open_tasks and :instance_projection) rolls back correctly.",
+      "AC6 (SCH-03): a 'fired' timer is never mutated by a later cancellation (status-guarded update_all, WHERE status = 'pending'); no 'pending' timer belonging to a terminal instance is ever fired by a later poll. Cover the concurrency-shaped edge case at the unit/integration level available to TEST-DESIGNER (does not need real concurrent Postgres transactions if a deterministic ordering can exercise both branches of the race).",
+      "The multi-timer-per-hop-chain guard: a :PARALLEL_GATEWAY split landing two branches on distinct :TIMER nodes in the same hop-chain must surface prepare_timer_arms/4's {:error, {:multiple_timers_in_one_hop_chain_not_supported, node_ids}} as a typed, non-raising failure -- add a regression test for this specific scenario since it is new, defensive logic beyond the design doc's original description (REVIEWER's own item, see req187-reviewer-report.md).",
+      "Purity regression: keep transition.ex's own grep-based purity check (see its moduledoc) exercised as part of this requirement's test suite if not already wired into a standing check.",
+      "Reconstruction: replaying a persisted TIMER_FIRED event (Reconstruction.replay/4) reproduces the same post-fire InstanceState the live advance_after_timer_fired/3 path produces, independently.",
+      "No route/controller/migration/web/ file should need touching to add this coverage (AC8) -- flag to REVIEWER if it turns out one does."
+    ]
+  },
+  "result": null
+}

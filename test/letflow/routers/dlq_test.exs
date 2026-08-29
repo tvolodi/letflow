@@ -50,7 +50,7 @@ defmodule Letflow.Routers.DlqTest do
 
   # ── Fixture helpers (matches test/letflow/dlq_test.exs's own precedent) ──
 
-  defp provisioned_tenant(slug_prefix \\ "req178-dlq") do
+  defp provisioned_tenant(slug_prefix) do
     TenantFixture.provisioned_tenant!(
       slug_prefix: slug_prefix,
       display_name: "REQ-178 DLQ Router Test Tenant"

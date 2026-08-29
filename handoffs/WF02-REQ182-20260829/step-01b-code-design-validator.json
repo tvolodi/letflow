@@ -6,7 +6,7 @@
   "from_agent": "CODE-DESIGNER",
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "lib/letflow/design/req182-webhooks-routes.md",
-  "status": "DONE",
+  "status": "COMPLETED",
   "priority": "normal",
   "context": {
     "note": "Queue task 355, GH#700, stage S6. Design produced on branch feature/WF02-REQ182-20260829 (already checked out). Design covers the route/controller layer only, atop REQ-181's already-shipped lib/letflow/webhooks.ex (create/2, list/1, update/3, delete/2 -- note the real function is update/3, not update/2 as REQ-182's own requirement text loosely says; the design uses the real signature throughout) and lib/letflow/webhooks/subscription.ex. lib/letflow/routers/dlq.ex (REQ-178) was used as the closest precedent for the AuthorizedRouter idiom, the cross-tenant-404 mechanism, and the hand-built JSON allowlist. lib/letflow/api/authorization.ex was read in full for the real WebhooksManage/WebhookSubscriptionsManage permission mapping: the design found that endpoint_policy_key/2 already has GET/POST '/webhooks/subscriptions' and DELETE '/webhooks/subscriptions/:id' clauses (both -> :WebhookSubscriptionsManage -> :WebhooksManage), but is MISSING a PATCH '/webhooks/subscriptions/:id' clause -- the design specifies adding exactly that one clause as in-scope for this requirement (design section 4.3). Verified role_allows?/2's real clauses: only PLATFORM_ADMIN (catch-all) and PROCESS_OPERATOR (explicit) hold :WebhooksManage; PROCESS_DESIGNER/TASK_WORKER/AGENT_RUNNER do not."

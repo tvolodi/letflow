@@ -6,7 +6,7 @@
   "from_agent": "ELIXIR-DEV",
   "to_agent": "SECURITY-REVIEWER",
   "file": "lib/letflow/routers/webhooks.ex",
-  "status": "DONE",
+  "status": "COMPLETED",
   "priority": "normal",
   "context": {
     "note": "Queue task 355, GH#700, stage S6. Implements the CODE-DESIGN-VALIDATOR-approved design at lib/letflow/design/req182-webhooks-routes.md. New router: lib/letflow/routers/webhooks.ex (GET/POST /api/v1/webhooks/subscriptions, PATCH/DELETE /api/v1/webhooks/subscriptions/:id). Diff also touches lib/letflow/api/authorization.ex (one new endpoint_policy_key clause) and lib/letflow/plugs/api_pipeline.ex (one new forward line). Delegates entirely to REQ-181's already-shipped lib/letflow/webhooks.ex and lib/letflow/webhooks/subscription.ex, neither of which was modified.",

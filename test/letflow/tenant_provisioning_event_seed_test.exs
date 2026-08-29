@@ -287,7 +287,7 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
   # ---------------------------------------------------------------------------------
 
   describe "OQ-1: replay_migrations/2 re-run against an already-seeded tenant stays idempotent" do
-    test "a second replay_migrations/2 call for the same tenant still returns :ok overall, and the 9 rows are not duplicated" do
+    test "a second replay_migrations/2 call for the same tenant still returns :ok overall, and the 10 rows are not duplicated" do
       %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
 
       assert {:ok, _} = TenantProvisioning.replay_migrations(tenant_id)
@@ -298,7 +298,7 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
           []
         )
 
-      assert count == 9
+      assert count == 10
 
       # And the seeded types are still all usable after the re-seed no-op.
       attrs = append_attrs("TASK_COMPLETED", minimal_payload_for("TASK_COMPLETED"))
@@ -316,12 +316,12 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
   # one test covers both halves"
   #
   # This tree cannot literally provision a tenant under the pre-REQ-140 code (the
-  # only @platform_event_type_seed_attrs this module has IS the 9-entry, REQ-140
+  # only @platform_event_type_seed_attrs this module has IS the 10-entry, REQ-140-plus-REQ-186
   # list), so "provisioned BEFORE this change" is reproduced structurally instead:
-  # provision a tenant normally (seeding all 9 rows, since replay_migrations/2 is
+  # provision a tenant normally (seeding all 10 rows, since replay_migrations/2 is
   # already generic over the list's length per REQ-140's design §5.1), then
   # directly delete the exact 3 rows REQ-140 added -- reproducing the
-  # only-6-rows-present state a pre-REQ-140 tenant would actually be in -- and
+  # only-7-rows-present state a pre-REQ-140 tenant would actually be in -- and
   # confirm a subsequent replay_migrations/2 call (the REAL, already-shipped
   # maybe_seed_platform_event_types/2, unmodified by this file) re-adds exactly
   # those 3 rows. A second replay_migrations/2 call after that must be a pure
@@ -350,7 +350,7 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
       count_before =
         Repo.aggregate(EventType, :count, prefix: schema_name)
 
-      assert count_before == 6
+      assert count_before == 7
 
       # First replay_migrations/2 call after the simulated pre-existing state --
       # backfills the 3 missing rows.
@@ -372,7 +372,8 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
                  "EXECUTION_ERROR",
                  "DEFINITION_PROMOTED",
                  "DEFINITION_VERSION_ROLLED_BACK",
-                 "PROMOTION_ASSERTION_TEARDOWN_FAILED"
+                 "PROMOTION_ASSERTION_TEARDOWN_FAILED",
+                 "TIMER_FIRED"
                ])
 
       # The 3 backfilled types are usable via append_platform_event/2 --
@@ -400,13 +401,13 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
       assert event.event_type == "DEFINITION_PROMOTED"
 
       # Second replay_migrations/2 call: a no-op, still returns success, and
-      # does NOT duplicate any of the 9 rows.
+      # does NOT duplicate any of the 10 rows.
       assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant_id)
 
       count_after_second_call =
         Repo.aggregate(EventType, :count, prefix: schema_name)
 
-      assert count_after_second_call == 9
+      assert count_after_second_call == 10
     end
   end
 end

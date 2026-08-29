@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ182-20260829-step01",
+  "run_id": "WF02-REQ182-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "docs/requirements.yaml#REQ-182",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 355, GH#700, stage S6. Feature branch feature/WF02-REQ182-20260829 created off main at 33cb7b4. Read the full requirement text from docs/requirements.yaml's REQ-182 entry (around line 9244). Read web/src/api/dlq.ts's webhooksApi object and web/src/types/api.ts's WebhookSubscription type in full -- the binding contract. Read lib/letflow/webhooks.ex (REQ-181's shipped context module: create/2, list/1, update/3, delete/2 -- note the real function is update/3, not update/2 as the requirement text loosely says; use the real signature) and lib/letflow/webhooks/subscription.ex. Read lib/letflow/routers/dlq.ex (REQ-178's precedent -- the most directly analogous route layer in this codebase: same AuthorizedRouter idiom, same cross-tenant-404-via-context-module-scoping pattern, same hand-built JSON allowlist) and reuse its idioms rather than inventing new ones. Read lib/letflow/api/authorization.ex for REQ-069's WebhooksManage permission and its policy-key mapping -- verify which roles actually hold it rather than assuming."},
+  "task": {
+    "description": "Produce the design artefact (lib/letflow/design/req182-webhooks-routes.md or similar) for REQ-182: a new lib/letflow/routers/webhooks.ex router exposing GET /api/v1/webhooks/subscriptions (list, response {items: [WebhookSubscription]}), POST /api/v1/webhooks/subscriptions (create, response body must include hmac_secret_once when present), PATCH /api/v1/webhooks/subscriptions/:id (update, accepting {status: ...} or {is_active: ...} per REQ-181's already-shipped reconciliation), DELETE /api/v1/webhooks/subscriptions/:id (delete). All four gated by the WebhooksManage permission (REQ-069's matrix -- verify the real policy-key/permission mapping in lib/letflow/api/authorization.ex, do not assume it mirrors DlqOperate's role set). Cross-tenant/nonexistent ids must both fold to 404 (never 403 beyond the initial permission check), matching REQ-178's precedent and REQ-072's INV-5 rule. WebhookSubscription JSON serialization must match web/src/types/api.ts field-for-field (target_url, event_types, status, created_at at minimum) and must NEVER include the hashed secret or any secret-shaped field except hmac_secret_once, and only on the create response. Design must specify: (1) exact route definitions and how each maps params to lib/letflow/webhooks.ex's real create/2, list/1, update/3, delete/2 signatures; (2) the JSON serialization allowlist; (3) the permission-check mechanism and confirmed role set; (4) the cross-tenant-404 mechanism (inherited from the context module's tenant-schema scoping, same as REQ-178); (5) the moduledoc's explicit disclosure that R-Co's webhooks.zig was not inspected and web/src/api/dlq.ts + web/src/types/api.ts were the binding contract instead. Design only -- no fenced code blocks reproducing real .ex content (this project's mechanical no-exceptions rule, violated and caught on REQ-157/174/176/177/181's own design in this exact pipeline -- REQ-181 got reworked for exactly this mistake one run ago).",
+    "acceptance_criteria": [
+      "POST /api/v1/webhooks/subscriptions with no secret supplied returns a 2xx response whose body includes hmac_secret_once carrying the plaintext secret exactly once; a subsequent GET/list of the same subscription never includes the plaintext secret or an hmac_secret_once field at all -- two explicit tests",
+      "PATCH /api/v1/webhooks/subscriptions/:id accepts {status: \"PAUSED\"} and, separately, {is_active: false}, and both result in a subscription that subsequently reads back as PAUSED via GET/list",
+      "every subscription route requires the WebhooksManage permission from REQ-069's matrix -- a caller lacking it receives 403, and a caller from a different tenant naming a real subscription id belonging to tenant A receives 404, never 403",
+      "GET /api/v1/webhooks/subscriptions returns {items: [...]} with each item's target_url, event_types, status and created_at present, matching webhooksApi.list's consumer shape",
+      "DELETE /api/v1/webhooks/subscriptions/:id removes the subscription such that a subsequent list no longer includes it, and a second DELETE of the same id returns 404 rather than a duplicate success",
+      "the route module's moduledoc states explicitly that R-Co's webhooks.zig was not inspected in this batch (unreachable from the drafting environment) and that web/src/api/dlq.ts / web/src/types/api.ts were the binding contract instead",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

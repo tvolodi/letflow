@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ176-20260829-step03b",
+  "run_id": "WF02-REQ176-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "test/letflow/dlq_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 351, GH#696, stage S6. TEST-DESIGNER's suite (commit 617f206) adds 17 tests in test/letflow/dlq_test.exs against Letflow.Dlq (commit b5a028d, passed both SECURITY-REVIEWER and REVIEWER). mix test test/letflow/dlq_test.exs reports 17 passed. TEST-DESIGNER documents 8 mutants in test/specs/REQ-176.md SS2, each against real shipped logic (not the 'code didn't exist' exception path), with claimed catch counts and md5sum-verified reverts: (1) enqueue/2 defaults flipped, (2) list/2 tenant-scoping prefix: dropped, (3) apply_retry/2 status guard removed, (4) apply_discard/2 status guard removed, (5) filter_by_entry_type/2 made a no-op, (6) cursor seek predicate < -> <= boundary duplication, (7) tenant_id column removed from migration, (8) dummy router file added for the structural AC6 check."},
+  "task": {
+    "description": "Hard gate: verify every REQ-176 acceptance criterion has a genuine, non-skipped test. Independently re-apply at least 2-3 of TEST-DESIGNER's most consequential mutants yourself (recommend: #2 tenant-scoping drop -- a real cross-tenant leak if broken; #6 cursor boundary duplication -- a subtle off-by-one that could silently corrupt pagination; #3 or #4 status-guard removal) and confirm the suite catches each, per this project's standard discipline of not merely trusting TEST-DESIGNER's own mutation report. Revert each mutation and verify the revert (git diff/md5sum) before finishing. Confirm the tests are self-sufficient and isolated (no shared mutable state, correct tenant fixtures per test). Run mix test and mix compile --warnings-as-errors yourself and quote real output.",
+    "acceptance_criteria": [
+      "the dlq_entries table lives inside each tenant's Postgres schema with a tenant_id column retained, matching decision 0003 Decision B's pattern -- verified by inspecting the migration",
+      "enqueue/1 creates an entry with status \"pending\", retry_count 0, and a created_at timestamp; list/2 is tenant-scoped, demonstrated by an entry enqueued under tenant A being absent from a list/2 call scoped to tenant B",
+      "retry/2 on a \"pending\" or \"retrying\" entry transitions it to \"retrying\", appends a retry_history entry with attempt_no/attempted_at/outcome/error_message field names matching DlqRetryAttempt exactly, and increments retry_count; retry/2 on a \"resolved\" or \"discarded\" entry returns a conflict error and leaves status, retry_count and retry_history unchanged -- four tests, one per starting status",
+      "discard/2 on a \"pending\" or \"retrying\" entry transitions it to \"discarded\"; discard/2 on an already \"resolved\" or \"discarded\" entry returns a conflict error rather than silently succeeding",
+      "list/2 filters by entry_type and by status independently, each demonstrated narrowing a result set that contains rows of more than one value, and supports cursor pagination: given more rows than one page, the first page's next_cursor, passed back in, returns the next distinct page with no repeated or skipped ids",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

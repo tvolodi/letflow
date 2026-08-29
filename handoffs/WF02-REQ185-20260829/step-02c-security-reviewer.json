@@ -1,0 +1,26 @@
+{
+  "handoff_id": "WF02-REQ185-20260829-step02c",
+  "run_id": "WF02-REQ185-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2c",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/design/req185-scheduler-firing-architecture.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "CODE-DESIGN-VALIDATOR PASSED lib/letflow/design/req185-scheduler-firing-architecture.md against all 8 REQ-185 acceptance criteria on branch feature/WF02-REQ185-20260829 (commit 44b1143, verified against current HEAD 5e1bdbe). This is a decision-and-design-only requirement -- git diff --stat main...HEAD confirmed only the design file plus this pipeline's own handoff JSONs are touched: no migration, no lib/letflow/engine/ file, no mix.exs change. There is therefore NO code diff to review in the usual sense -- your review here is about whether the DESIGN's decisions themselves carry any tenant-isolation or security-relevant risk, not a code review of an implementation (there is none yet; REQ-186 implements this artefact's decisions later).",
+    "requirement_ref": "docs/requirements.yaml#REQ-185 (line ~9509)",
+    "validator_findings": "All 8 acceptance criteria independently verified: (1) exactly one recommended mechanism (GenServer ticker, section 2b) with Oban and per-timer-process rejected with stated reasons; (2) explicit NO on Oban with substantive reasoning (section 3), REVIEWER sign-off correctly left as an explicit, unambiguous PENDING placeholder for Step 2d, not mistaken for an actual sign-off; (3) FOR UPDATE SKIP LOCKED named as claim mechanism, ISS-301 citation present and explicitly flagged in section 0 as unverified-but-plausible (R-Co source unreachable from this sandbox, confirmed by validator independently) rather than stated as confirmed fact; (4) startup-sweep lock decision is NO with stated reasoning (ordinary poll query is catch-up-safe by construction, SKIP LOCKED alone prevents double-sweep); (5) per-tenant-schema iteration strategy with quantified cost, arithmetic verified correct (500 tenants / 5s tick = 100 qps); (6) three-way locked/nothing-due/hard-error distinction present in section 7 with ISS-0618 citation (same unreachable-source caveat correctly applied) and explains why propagating every error is wrong; (7) YES decision that exhausted-retry timers land in dlq_entries with entry_type \"timer\" -- verified directly against priv/repo/migrations/20260829000001_create_dlq_entries.exs and lib/letflow/dlq/entry.ex: entry_type is a plain :string column, null: false, no Ecto.Enum, no DB CHECK constraint, so \"timer\" requires no schema change; (8) git diff --stat scoped to this requirement's commits touches only the design file and handoff JSONs, confirmed directly. No fenced code blocks reproducing real .ex content found (grep for triple-backtick fences returned nothing).",
+    "security_review_focus_suggestions": "Given this is design-only, consider specifically: (a) does the per-tenant-schema iteration strategy (section 6) risk any cross-tenant data leakage or query executed under the wrong :prefix; (b) does landing exhausted timers in dlq_entries with entry_type \"timer\" (section 8) risk exposing cross-tenant timer/instance data through Letflow.Dlq.list/2's existing filters; (c) does the FOR UPDATE SKIP LOCKED claim mechanism (section 4) have any tenant-isolation implication given it operates per-tenant-schema under that schema's own :prefix; (d) any concern with the rejected startup-sweep-lock decision (section 5) from a security rather than correctness angle. None of these appeared to the validator as defects, but SECURITY-REVIEWER is the hard gate of record for tenant-data-path implications."
+  },
+  "task": {
+    "description": "Perform the security hard gate for REQ-185's design artefact per docs/agents/instructions/security-invariants.md (INV-1..INV-8). Since there is no implementation diff (design-only requirement), assess whether any of the design's DECISIONS -- not code -- introduce a tenant-isolation or other security risk that should block progression to REVIEWER (Step 2d). Reference lib/letflow/design/req185-scheduler-firing-architecture.md sections 4, 6, and 8 in particular.",
+    "acceptance_criteria": [
+      "Each of INV-1..INV-8 is explicitly addressed (APPLICABLE with a verdict, or NOT-APPLICABLE with a one-line reason) against this design artefact's decisions",
+      "Any tenant-isolation implication of per-tenant-schema polling (section 6) and DLQ-landing (section 8) is explicitly considered",
+      "PASS or FAIL verdict recorded, with rework routed back to CODE-DESIGNER if FAIL"
+    ]
+  },
+  "result": null
+}

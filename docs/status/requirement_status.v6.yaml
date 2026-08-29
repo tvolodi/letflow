@@ -486,3 +486,34 @@ history:
       0 deferred / 0 unclassified, and mix letflow.check_deferral_staleness
       reports 0 stale. Requirements remain pending -- WF-01 does not flip
       status; WF-02 claims them via get_next_task.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-29T05:01:11Z"
+    note: >
+      Self-reported operator error and its immediate correction, recorded
+      rather than left silent. After WF01-S6-EXPANSION-20260829 pushed, ORCH
+      called get_next_task with a disposable agent_id ("probe-readonly-check")
+      purely to confirm the queue would hand out the expected next task. That
+      is precisely the misuse docs/agents/protocols/TASK_QUEUE.md's
+      "Reachability checks must not have side effects" section forbids:
+      get_next_task is NOT read-only -- it atomically claims and locks
+      whatever it returns. The call claimed and locked task 353 (REQ-178,
+      DLQ route layer), which a concurrent host could otherwise have taken.
+      Detected immediately from the response and released within seconds via
+      POST /tasks/353/release with NO status field, returning it to
+      status: open with locked_by: null -- a clean hand-back, not a
+      transition, so the task is fully claimable and its GitHub issue
+      untouched. No work was performed against it and no other queue state
+      changed. This is the same failure TASK_QUEUE.md already records
+      happening once before (2026-08-20, ISS-0086/GH#303's own resolution
+      run); the correct probe is GET /health, which requires no auth and
+      touches nothing, and which this session had in fact used correctly
+      earlier in the run. Noted here because the protocol's own warning
+      exists because this mistake recurs, and a second unrecorded occurrence
+      would make the warning look theoretical.
+      Unrelated to the error, and the reason the check was attempted at all:
+      the queue's next claimable task is task 353 / REQ-178, which is
+      correct -- REQ-176 is done, REQ-177 is in flight on a sibling session,
+      and this run's newly-registered tasks 358-376 sit behind them in
+      requirement-type FIFO order as intended.

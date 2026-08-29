@@ -6,8 +6,8 @@
   "from_agent": "SECURITY-REVIEWER",
   "to_agent": "REVIEWER",
   "file": "lib/letflow/webhooks.ex",
-  "status": "PENDING",
-  "completed_at": null,
+  "status": "DONE",
+  "completed_at": "2026-08-29T13:10:00Z",
   "priority": "normal",
   "context": {
     "note": "REQ-181's implementation (priv/repo/migrations/20260829010001_create_webhook_subscriptions.exs, lib/letflow/webhooks/subscription.ex, lib/letflow/webhooks.ex, and the registry-entry diff in lib/letflow/tenant_provisioning.ex, committed as fab270d on feature/WF02-REQ181-20260829, pushed) has PASSED the SECURITY-REVIEWER gate. Full review: handoffs/WF02-REQ181-20260829/req181-security-review-report.md. Design: lib/letflow/design/req181-webhooks-core.md. Implementation notes: handoffs/WF02-REQ181-20260829/req181-elixir-dev-implementation-notes.md. No route/controller/Plug file was added (REQ-182's scope, not this one)."
@@ -22,7 +22,11 @@
       "no unresolved open questions in lib/letflow/design/req181-webhooks-core.md that should have been flagged to REVIEWER but were not"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "report": "handoffs/WF02-REQ181-20260829/req181-reviewer-report.md",
+    "summary": "Letflow.Webhooks is a plain Ecto context module, no process, matching Letflow.Dlq/Letflow.Tasks/Letflow.Identity precedent. update/3's Ecto.Multi row-lock-then-check idiom is structurally identical to Letflow.Dlq.retry/2 and discard/2 (fetch_and_lock helper, unwrap_write_result/1 clause pair). Secret hashing (SHA-256 + Base.encode16(case: :lower), lf_whsec_ prefix via :crypto.strong_rand_bytes/1) matches Letflow.Identity's hash_token_value/1 idiom exactly. git diff main...HEAD --stat touches only the migration, schema, context module, tenant_provisioning.ex registry entry, and this run's own handoff/design/report artifacts -- no route/controller/Plug file, no changes to lib/letflow/dlq.ex, lib/letflow/identity.ex, or any REQ-176/177/178 file. Migration/schema retain an intra-schema tenant_id column with no @schema_prefix, consistent with decision 0003 Decision B. apply_status_update/3's four clauses reproduce design doc req181-webhooks-core.md section 3.3's reconciliation table exactly (ACTIVE->ACTIVE and PAUSED->ACTIVE clear paused_at, PAUSED->PAUSED is an idempotent no-op, ACTIVE->PAUSED stamps a fresh paused_at). No unresolved open question in section 5 was silently implemented without comment. No type-safety gap worth filing to docs/issues/ -- status is already a closed Ecto.Enum and reconcile_status/1 resolves to one target atom before the transaction starts. No defect found."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

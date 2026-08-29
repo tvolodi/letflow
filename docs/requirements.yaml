@@ -9244,7 +9244,7 @@ requirements:
   - id: REQ-182
     title: Port webhooks.zig's subscription CRUD route surface onto the webhook core (GET/POST/PATCH/DELETE /api/v1/webhooks/subscriptions, WebhooksManage-gated)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 355  # letflow-queue task id
     description: >

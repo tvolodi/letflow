@@ -1,0 +1,28 @@
+{
+  "handoff_id": "WF02-REQ182-20260829-step02a",
+  "run_id": "WF02-REQ182-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2a",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/design/req182-webhooks-routes.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Queue task 355, GH#700, stage S6. Design at lib/letflow/design/req182-webhooks-routes.md validated PASS by CODE-DESIGN-VALIDATOR (see handoffs/WF02-REQ182-20260829/step-01b-code-design-validator.json's result) -- independently re-verified against the real lib/letflow/api/authorization.ex, lib/letflow/webhooks.ex, and lib/letflow/webhooks/subscription.ex, not merely trusted from CODE-DESIGNER's own claims. Implement exactly what the design specifies: no deviation without a rework loop back through CODE-DESIGNER.",
+    "confirmed_real_gap": "lib/letflow/api/authorization.ex's endpoint_policy_key/2 is genuinely missing a PATCH '/webhooks/subscriptions/:id' clause today (confirmed by direct read, lines 289-297 of that file only cover GET/POST '/webhooks/subscriptions', GET '.../deliveries', and DELETE '/webhooks/subscriptions/:id'). Per design section 4.3, add exactly one new clause: endpoint_policy_key(\"PATCH\", \"/webhooks/subscriptions/:id\") -> :WebhookSubscriptionsManage, placed alongside the three existing '/webhooks/subscriptions...' clauses (immediately following the existing GET '.../deliveries' clause, per that file's own grouping-by-URL-prefix convention). No new permission atom, no new role_allows?/2 clause, no new required_permission/1 clause needed -- :WebhookSubscriptionsManage's existing mapping to :WebhooksManage already covers it."
+  },
+  "task": {
+    "description": "Implement lib/letflow/routers/webhooks.ex per the approved design at lib/letflow/design/req182-webhooks-routes.md (all 8 sections), plus the one confirmed authorization.ex fix described above, plus mounting the new router in Letflow.Plugs.ApiPipeline (design section 2: forward(\"/webhooks\", to: Letflow.Routers.Webhooks), added alongside the existing /dlq forward line, no existing forward line touched). Follow lib/letflow/routers/dlq.ex's idioms throughout as the design directs (AuthorizedRouter macros, cross-tenant-404-via-context-module-scoping, hand-built JSON allowlist, moduledoc structure). Do not modify lib/letflow/webhooks.ex, lib/letflow/webhooks/subscription.ex, or the webhook_subscriptions migration -- out of scope per the design's section 1. Run mix compile --warnings-as-errors and mix test and quote the real output.",
+    "acceptance_criteria": [
+      "POST /api/v1/webhooks/subscriptions with no secret supplied returns a 2xx response whose body includes hmac_secret_once carrying the plaintext secret exactly once; a subsequent GET/list of the same subscription never includes the plaintext secret or an hmac_secret_once field at all -- two explicit tests",
+      "PATCH /api/v1/webhooks/subscriptions/:id accepts {status: \"PAUSED\"} and, separately, {is_active: false}, and both result in a subscription that subsequently reads back as PAUSED via GET/list",
+      "every subscription route requires the WebhooksManage permission from REQ-069's matrix -- a caller lacking it receives 403, and a caller from a different tenant naming a real subscription id belonging to tenant A receives 404, never 403",
+      "GET /api/v1/webhooks/subscriptions returns {items: [...]} with each item's target_url, event_types, status and created_at present, matching webhooksApi.list's consumer shape",
+      "DELETE /api/v1/webhooks/subscriptions/:id removes the subscription such that a subsequent list no longer includes it, and a second DELETE of the same id returns 404 rather than a duplicate success",
+      "the route module's moduledoc states explicitly that R-Co's webhooks.zig was not inspected in this batch (unreachable from the drafting environment) and that web/src/api/dlq.ts / web/src/types/api.ts were the binding contract instead",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

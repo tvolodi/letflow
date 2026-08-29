@@ -659,3 +659,23 @@ history:
       route-layer half of REQ-179's split; REQ-181, the core-schema+context
       half, shipped and released). Mirrors REQ-176/REQ-178's DLQ core/route
       split for this exact shape.
+  - req: REQ-182
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-29T15:55:51Z"
+    note: >
+      WF02-REQ182-20260829 done (queue task 355, GH#700, stage S6).
+      RELEASE-VALIDATOR PASS: all 7 acceptance criteria independently
+      re-verified. Webhook subscription CRUD route layer shipped atop
+      REQ-181's core -- GET/POST/PATCH/DELETE /api/v1/webhooks/subscriptions
+      (WebhooksManage-gated), mirroring REQ-176/REQ-178's DLQ core/route
+      split for this exact shape. Path: zero rework rounds through
+      design/security/reviewer/test-design gates; one real gap found and
+      fixed proactively by CODE-DESIGNER/CODE-DESIGN-VALIDATOR -- a missing
+      PATCH authorization clause in lib/letflow/api/authorization.ex, caught
+      before implementation even started; one stale test fixed by REVIEWER
+      -- test/letflow/webhooks_test.exs's REQ-181-era structural assertion,
+      same class as REQ-176/178's precedent; two occurrences of the
+      recurring status:"DONE" handoff bug caught and fixed by ORCH before
+      reaching CI. Closes the webhooks half of this batch (REQ-181 +
+      REQ-182), mirroring the DLQ half's REQ-176/177/178 completion.

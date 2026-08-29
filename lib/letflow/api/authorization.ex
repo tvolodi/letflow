@@ -293,6 +293,16 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("GET", "/webhooks/subscriptions/:id/deliveries"),
     do: :WebhookSubscriptionsManage
 
+  # REQ-182 -- the PATCH route this requirement adds
+  # (Letflow.Routers.Webhooks) was, until now, the one confirmed real gap in
+  # this endpoint-policy-key table: no clause existed for
+  # PATCH "/webhooks/subscriptions/:id" even though GET/POST on the
+  # collection and DELETE on the member route were already mapped below and
+  # above. Same policy key as the other three /webhooks/subscriptions...
+  # clauses -- no new permission atom, no new required_permission/1 clause.
+  def endpoint_policy_key("PATCH", "/webhooks/subscriptions/:id"),
+    do: :WebhookSubscriptionsManage
+
   def endpoint_policy_key("DELETE", "/webhooks/subscriptions/:id"),
     do: :WebhookSubscriptionsManage
 

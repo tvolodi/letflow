@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF02-REQ182-20260829-step02d",
+  "run_id": "WF02-REQ182-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2d",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "lib/letflow/routers/webhooks.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "SECURITY-REVIEWER PASS on REQ-182 (queue task 355, GH#700, stage S6). Full report at handoffs/WF02-REQ182-20260829/security-review-req182.md. All of INV-1..INV-8 assessed against the real diff (lib/letflow/routers/webhooks.ex new, lib/letflow/api/authorization.ex one PATCH clause added, lib/letflow/plugs/api_pipeline.ex one forward line added) -- not trusted from the router's own moduledoc or the design doc's claims. Verified directly by reading lib/letflow/webhooks.ex (create/2, list/1, update/3, delete/2, get/2): every call is prefix-scoped, tenant_id is derived server-side from opts[:prefix] via TenantProvisioning.tenant_id_for_schema_name/1 and never caller-supplied, subscription_json/1 is a hand-built 10-key allowlist that never emits secret_hash/tenant_id/__meta__, hmac_secret_once is spliced onto the response body in exactly one place (the POST create-success branch) and is not a struct field so it cannot leak via list/update/delete, and both :not_found and :invalid_id fold into the same Response.not_found/1 call with no distinguishing detail for PATCH and DELETE. Confirmed the newly-added endpoint_policy_key(\"PATCH\", \"/webhooks/subscriptions/:id\") clause (lib/letflow/api/authorization.ex lines 296-304) maps to the same :WebhookSubscriptionsManage key as the other three /webhooks/subscriptions... clauses, required_permission(:WebhookSubscriptionsManage) still maps to :WebhooksManage unchanged (line 425), and role_allows?/2 (lines 450-486) grants :WebhooksManage only to PLATFORM_ADMIN (catch-all) and PROCESS_OPERATOR (explicit) -- PROCESS_DESIGNER/TASK_WORKER/AGENT_RUNNER do not have it.",
+    "invariants_disposition": {
+      "INV-1": "APPLIES -- PASS (tenant scoping via :prefix on every Repo call, tenant_id derived not caller-supplied, no migration touched in this diff)",
+      "INV-2": "treated as APPLIES despite stale 'S4 not started' doc text, given live multi-tenant API surface -- PASS (hand-built response allowlist, no secret/tenant fields)",
+      "INV-3": "NOT APPLICABLE (no S5/sandboxing code touched)",
+      "INV-4": "APPLIES -- PASS (secret_hash never in any response; hmac_secret_once only on POST create success)",
+      "INV-5": "treated as APPLIES despite stale 'S4 not started' doc text -- PASS (:not_found and :invalid_id both map to the identical Response.not_found/1 call for PATCH and DELETE, permission check independent of tenant identity)",
+      "INV-6": "APPLIES -- satisfied by this review itself",
+      "INV-7": "APPLIES -- PASS (no Repo.query/raw SQL anywhere in the diff)",
+      "INV-8": "APPLIES -- PASS (every external-input path handled via case/with against each Letflow.Webhooks function's real @spec; the one bare match, Webhooks.list/1, has no error branch on its own spec)"
+    },
+    "flagged_for_reviewer": [
+      "test/letflow/webhooks_test.exs retains a stale REQ-181-era structural assertion ('no router file for webhooks exists anywhere in lib/letflow/routers') that this requirement intentionally and correctly falsifies by adding lib/letflow/routers/webhooks.ex. Same class of issue as REQ-176's AC6 test breaking on REQ-178 (documented in docs/anti-patterns.md). Not a security concern -- does not block this PASS -- but needs the same structural fix TEST-DESIGN-VALIDATOR applied for REQ-176's AC6 test on REQ-178 before TEST-RUNNER's full-suite run.",
+      "docs/agents/instructions/security-invariants.md's INV-2 and INV-5 'Reference' sections still say 'None yet -- no multi-tenant API surface exists (S4 not started)', which is stale given the codebase's existing live multi-tenant routes (Dlq, Tasks, Instances, and now Webhooks). Mirrors the INV-1 staleness pattern already corrected 2026-08-17 (ISS-0026/GH#84). Recommend the same kind of correcting pass be applied to INV-2/INV-5's applicability language so a future reviewer isn't tempted to skip a live check on stale wording."
+    ]
+  },
+  "task": {
+    "description": "REVIEWER idiom/scope-creep/decision-record-consistency gate on REQ-182's webhook subscriptions route layer, per docs/agents/workflows/WF-02_requirement_implementation.md's normal Step 2d procedure. SECURITY-REVIEWER has already passed this diff on all applicable INV-1..INV-8 invariants (see handoffs/WF02-REQ182-20260829/security-review-req182.md). Please also weigh in on whether test/letflow/webhooks_test.exs's stale structural assertion (flagged above) should be fixed now as part of this requirement's own scope, or deferred to TEST-DESIGNER/TEST-RUNNER's stage, consistent with how REQ-178 handled the analogous REQ-176 AC6 staleness."
+  },
+  "result": null
+}

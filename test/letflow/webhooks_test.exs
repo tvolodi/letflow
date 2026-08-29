@@ -18,10 +18,12 @@ defmodule Letflow.WebhooksTest do
   codebase sets it (real schema creation/teardown against one shared
   Postgres instance).
 
-  There is no route/controller for `Letflow.Webhooks` yet (REQ-182's scope,
-  design §0/§4) -- every test below calls the context module's functions
-  directly, the same way `test/letflow/dlq_test.exs` exercises `Letflow.Dlq`
-  with no HTTP layer in front of it yet.
+  `lib/letflow/routers/webhooks.ex` (REQ-182) now fronts this context module
+  with the route/controller layer, but every test below still calls the
+  context module's functions directly -- the same way `test/letflow/dlq_test.exs`
+  exercises `Letflow.Dlq` directly even after `lib/letflow/routers/dlq.ex`
+  (REQ-178) was added. REQ-182's own HTTP-layer tests belong to that
+  requirement's test file, not here.
   """
 
   use Letflow.DataCase, async: false
@@ -261,11 +263,29 @@ defmodule Letflow.WebhooksTest do
   end
 
   # ---------------------------------------------------------------------------------
-  # AC6 -- Letflow.Webhooks has no route/controller of its own, and no
-  # route/controller file exists anywhere for webhooks in the working tree
+  # AC6 -- Letflow.Webhooks and Letflow.Webhooks.Subscription are pure
+  # context/schema modules, with no route or controller-shaped constructs of
+  # their own
   # ---------------------------------------------------------------------------------
 
-  describe "AC6: no route or controller file exists for webhooks (structural check, no git history)" do
+  describe "AC6: Letflow.Webhooks core itself has no route or controller-shaped constructs" do
+    # NOTE: an earlier revision of this test additionally asserted no router
+    # file existed anywhere for `webhooks` in `lib/letflow/routers` -- that
+    # premise is now obsolete: REQ-182 (a separate, later, gate-approved
+    # requirement) correctly and intentionally added
+    # `lib/letflow/routers/webhooks.ex` as the route layer atop this context
+    # module. Same class of staleness as REQ-176's AC6 test breaking on
+    # REQ-178's `lib/letflow/routers/dlq.ex` (see docs/anti-patterns.md and
+    # `test/letflow/dlq_test.exs`'s own AC6 describe block, fixed the same
+    # way). REQ-181's actual scope was never "no webhooks route ever exists"
+    # -- it was "this context/schema module itself contains no route or
+    # controller-shaped constructs" (design authority
+    # `lib/letflow/design/req181-webhooks-core.md`). This test is scoped to
+    # that narrower, still-true claim: `lib/letflow/webhooks.ex` and
+    # `lib/letflow/webhooks/subscription.ex` remain pure context/schema
+    # modules with no `use Plug.Router`, no controller `use`, and no route
+    # macro defined directly in either file. It says nothing about
+    # `lib/letflow/routers/`, which is REQ-182's territory.
     test "neither Letflow.Webhooks nor Letflow.Webhooks.Subscription references Plug/Router-shaped constructs" do
       for path <- ["lib/letflow/webhooks.ex", "lib/letflow/webhooks/subscription.ex"] do
         source = File.read!(Path.join(File.cwd!(), path))
@@ -273,18 +293,6 @@ defmodule Letflow.WebhooksTest do
         refute source =~ ~r/use\s+\w*Web,\s*:controller/, "#{path} unexpectedly is a controller"
         refute source =~ ~r/\bget\s+"\//, "#{path} unexpectedly defines a route"
       end
-    end
-
-    test "no router file for webhooks exists anywhere in lib/letflow/routers" do
-      routers_dir = Path.join(File.cwd!(), "lib/letflow/routers")
-
-      webhook_router_files =
-        routers_dir
-        |> File.ls!()
-        |> Enum.filter(&(&1 =~ ~r/webhook/i))
-
-      assert webhook_router_files == [],
-             "expected no webhook router file, found: #{inspect(webhook_router_files)}"
     end
   end
 end

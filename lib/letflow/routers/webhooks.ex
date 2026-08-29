@@ -1,0 +1,222 @@
+defmodule Letflow.Routers.Webhooks do
+  @moduledoc """
+  Webhook subscription sub-router (REQ-182, design
+  `lib/letflow/design/req182-webhooks-routes.md`). Mounted at `/webhooks` by
+  `Letflow.Plugs.ApiPipeline`, so the full paths under `/api/v1` are
+  `GET /api/v1/webhooks/subscriptions`, `POST /api/v1/webhooks/subscriptions`,
+  `PATCH /api/v1/webhooks/subscriptions/:id`, and
+  `DELETE /api/v1/webhooks/subscriptions/:id`. Route/controller layer only,
+  atop REQ-181's already-shipped `Letflow.Webhooks` context module — no
+  change to that module, `Letflow.Webhooks.Subscription`, or the
+  `webhook_subscriptions` migration.
+
+  ## Contract source
+
+  R-Co's `webhooks.zig` was **not inspected** while drafting this route
+  layer — R-Co is at a Windows path unreachable from this sandbox, verified
+  absent, not assumed covered. The binding contract instead is the
+  already-shipped SPA consumer: `web/src/api/dlq.ts`'s `webhooksApi` object
+  and `web/src/types/api.ts`'s `WebhookSubscription` type.
+
+  ## Authorization (REQ-069, REQ-131)
+
+  Every route below is declared via `authz_get`/`authz_post`/`authz_patch`/
+  `authz_delete` (`Letflow.Api.AuthorizedRouter`) with the policy key
+  `:WebhookSubscriptionsManage`. `Letflow.Api.Authorization.endpoint_policy_key/2`
+  already maps `GET`/`POST /webhooks/subscriptions` and
+  `DELETE /webhooks/subscriptions/:id` to this key (shipped pre-REQ-182);
+  this requirement adds the one missing
+  `endpoint_policy_key("PATCH", "/webhooks/subscriptions/:id")` clause,
+  mapping to the same key, so all four routes here resolve consistently.
+  `required_permission(:WebhookSubscriptionsManage)` already maps to
+  `:WebhooksManage` (unchanged). Per the real `role_allows?/2` matrix, only
+  `PLATFORM_ADMIN` (catch-all) and `PROCESS_OPERATOR` (explicit grant) hold
+  `:WebhooksManage` — `PROCESS_DESIGNER`, `TASK_WORKER`, `AGENT_RUNNER` do
+  not, so such a caller gets `403` before any handler below runs.
+
+  ## Cross-tenant-404 (AC3, INV-5)
+
+  No new mechanism — inherited verbatim from `Letflow.Webhooks.update/3`'s
+  and `delete/2`'s own existing, REQ-181-approved behavior: every handler's
+  only tenant input is `conn.assigns.scoped_opts`, itself derived solely from
+  `conn.assigns.auth_context.tenant_id` by `Letflow.Plugs.Authorize`, before
+  this router's code ever runs (schema-per-tenant). A subscription id that
+  exists only in a different tenant's schema is, at the `Repo` level,
+  indistinguishable from an id that does not exist anywhere — both resolve
+  to `{:error, :not_found}` inside `Letflow.Webhooks`, and this router maps
+  that one tuple to `Response.not_found/1` for both PATCH and DELETE.
+  `:invalid_id` (a malformed UUID) folds into the same branch rather than a
+  `400`, for the identical reason: subscription ids are cross-tenant-probeable
+  UUIDs reachable from the route path.
+
+  ## Response allowlist (INV-2)
+
+  `subscription_json/1` is a hand-built allowlist over
+  `Letflow.Webhooks.Subscription` struct fields — never a raw `Jason.Encoder`
+  derivation over the Ecto struct, which would leak `__meta__`/`tenant_id`/
+  `secret_hash`. `secret_hash` and `hmac_secret_once` are never emitted by
+  `subscription_json/1` under any circumstance — the **only** place
+  `hmac_secret_once` is ever added to a response body is the one `POST
+  /subscriptions` success branch below, which splices it onto the map
+  `subscription_json/1` already produced. The list body is an
+  exactly-one-key map, `%{"items" => [...]}` — no pagination fields,
+  matching `webhooksApi.list()`'s actual (non-paginated) consumer usage.
+  """
+
+  use Letflow.Api.AuthorizedRouter
+
+  alias Letflow.Api.Response
+  alias Letflow.Webhooks
+  alias Letflow.Webhooks.Subscription
+
+  authz_get "/subscriptions", :WebhookSubscriptionsManage do
+    handle_list(conn)
+  end
+
+  authz_post "/subscriptions", :WebhookSubscriptionsManage do
+    handle_create(conn)
+  end
+
+  authz_patch "/subscriptions/:id", :WebhookSubscriptionsManage do
+    handle_update(conn, conn.params["id"])
+  end
+
+  authz_delete "/subscriptions/:id", :WebhookSubscriptionsManage do
+    handle_delete(conn, conn.params["id"])
+  end
+
+  match _ do
+    Response.not_found(conn)
+  end
+
+  # ── GET /webhooks/subscriptions (design §3.1) ─────────────────────────────
+
+  defp handle_list(conn) do
+    {:ok, subscriptions} = Webhooks.list(conn.assigns.scoped_opts)
+    Response.ok(conn, %{"items" => Enum.map(subscriptions, &subscription_json/1)})
+  end
+
+  # ── POST /webhooks/subscriptions (design §3.2) ────────────────────────────
+
+  defp handle_create(conn) do
+    with {:ok, body} <- object_body(conn),
+         {:ok, target_url} <- fetch_target_url(body) do
+      attrs =
+        %{target_url: target_url}
+        |> maybe_put(body, "secret", :secret)
+        |> maybe_put(body, "description", :description)
+        |> maybe_put(body, "event_types", :event_types)
+
+      case Webhooks.create(attrs, conn.assigns.scoped_opts) do
+        {:ok, %{subscription: subscription, hmac_secret_once: plaintext}} ->
+          body = subscription |> subscription_json() |> Map.put("hmac_secret_once", plaintext)
+          Response.created(conn, body)
+
+        {:error, %Ecto.Changeset{}} ->
+          Response.unprocessable(conn, "unable to create webhook subscription")
+      end
+    else
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
+
+      {:error, :missing_target_url} ->
+        Response.bad_request(conn, "target_url is required")
+    end
+  end
+
+  # ── PATCH /webhooks/subscriptions/:id (design §3.3) ───────────────────────
+
+  defp handle_update(conn, id) do
+    with {:ok, body} <- object_body(conn) do
+      attrs =
+        %{}
+        |> maybe_put(body, "status", :status)
+        |> maybe_put(body, "is_active", :is_active)
+
+      case Webhooks.update(id, attrs, conn.assigns.scoped_opts) do
+        {:ok, subscription} ->
+          Response.ok(conn, subscription_json(subscription))
+
+        {:error, :not_found} ->
+          Response.not_found(conn)
+
+        {:error, :invalid_id} ->
+          Response.not_found(conn)
+
+        {:error, :invalid_status} ->
+          Response.bad_request(conn, "status/is_active is missing or invalid")
+
+        {:error, %Ecto.Changeset{}} ->
+          Response.unprocessable(conn, "unable to update webhook subscription")
+      end
+    else
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
+    end
+  end
+
+  # ── DELETE /webhooks/subscriptions/:id (design §3.4) ──────────────────────
+
+  defp handle_delete(conn, id) do
+    case Webhooks.delete(id, conn.assigns.scoped_opts) do
+      {:ok, _subscription} ->
+        Response.no_content(conn)
+
+      {:error, :not_found} ->
+        Response.not_found(conn)
+
+      {:error, :invalid_id} ->
+        Response.not_found(conn)
+    end
+  end
+
+  # ── Request-body helpers ───────────────────────────────────────────────────
+
+  defp object_body(conn) do
+    case conn.body_params do
+      %{"_json" => _non_object} -> {:error, :malformed_json}
+      body when is_map(body) -> {:ok, body}
+      _other -> {:error, :malformed_json}
+    end
+  end
+
+  defp fetch_target_url(body) do
+    case Map.get(body, "target_url") do
+      value when is_binary(value) and value != "" -> {:ok, value}
+      _other -> {:error, :missing_target_url}
+    end
+  end
+
+  defp maybe_put(attrs, body, body_key, attrs_key) do
+    case Map.fetch(body, body_key) do
+      {:ok, value} -> Map.put(attrs, attrs_key, value)
+      :error -> attrs
+    end
+  end
+
+  # ── Response allowlist (INV-2, design §5) ─────────────────────────────────
+
+  # Hand-built, matching Letflow.Routers.Dlq's dlq_entry_json/1 precedent --
+  # never a Jason.Encoder derivation over %Subscription{}, which would leak
+  # `__meta__`/`tenant_id`/`secret_hash`. `hmac_secret_once` is never emitted
+  # here -- it is not a struct field and is spliced on only by the one
+  # POST /subscriptions success branch above.
+  @spec subscription_json(Subscription.t()) :: map()
+  defp subscription_json(%Subscription{} = subscription) do
+    %{
+      "id" => subscription.id,
+      "target_url" => subscription.target_url,
+      "description" => subscription.description,
+      "event_types" => subscription.event_types,
+      "status" => Atom.to_string(subscription.status),
+      "consecutive_failures" => subscription.consecutive_failures,
+      "last_attempt_at" => iso8601(subscription.last_attempt_at),
+      "last_failure_at" => iso8601(subscription.last_failure_at),
+      "paused_at" => iso8601(subscription.paused_at),
+      "created_at" => iso8601(subscription.created_at)
+    }
+  end
+
+  defp iso8601(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
+  defp iso8601(nil), do: nil
+end

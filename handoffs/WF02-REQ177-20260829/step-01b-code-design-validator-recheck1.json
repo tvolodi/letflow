@@ -1,0 +1,20 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step01b-recheck1",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1b (re-check, iteration 1)",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req177-dlq-hooks.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 352, GH#697, stage S6. CODE-DESIGNER fixed the false EventStore payload return-shape claim as commit 4070492: SS0's precedent bullet now accurately states event.payload is already a decoded map (citing event.ex:84 and event_store.ex:607-641,697-707), and SS4.3 now reads changes.execution_error_event.event.payload['reason'] directly with no Jason.decode!/1 call. This is a narrow re-check -- your prior verification of the other 6 checks (no orchestrator exists, Ecto.Multi rollback semantics, append_multi/3's real step ordering, opts threading, no literal implementation code, deferred-follow-up moduledoc language) all stand."},
+  "task": {
+    "description": "Narrow re-check: confirm SS0's precedent bullet and SS4.3's mechanism now accurately describe event.payload as an already-decoded map (re-verify the two cited file:line locations yourself), confirm no Jason.decode!/1 call remains anywhere in the ERROR-path DLQ landing mechanism, and confirm via git diff that nothing else in the document changed.",
+    "acceptance_criteria": [
+      "an instance driven to ERROR via REQ-061's execution-error path produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason equal to the persisted EXECUTION_ERROR event's own reason field",
+      "the ERROR-path DLQ landing is in the same transaction as REQ-061's status flip and event append: forcing the DLQ insert to fail leaves the instance status, the EXECUTION_ERROR event, and the DLQ table all unchanged, verified by reading all three back"
+    ]
+  },
+  "result": null
+}

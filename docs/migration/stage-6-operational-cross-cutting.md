@@ -34,7 +34,20 @@ with before/after capture and tamper-evident chaining, OBS-03/XC-02);
 REQ-196 (Serve `GET /api/v1/audit` from the audit store); REQ-197
 (Extend `expr.ex` with arithmetic and a structured error surface);
 REQ-198 (`expr.ex`'s 8 pure builtin functions); REQ-199 (Correlated
-effect re-entry ordering, ORD-01/02/03/04).
+effect re-entry ordering, ORD-01/02/03/04); REQ-200 (Instance timeline
+rendering — actor display names and descriptions, OBS-04); REQ-201
+(Alerting hooks with edge-triggered firing, OBS-06).
+
+REQ-200 and REQ-201 were added in the batch's **rework 1**
+(REQ-VALIDATOR gate, 2026-08-29): `src/obs/timeline.zig` and
+`src/obs/alerts.zig` had been left unscoped while this doc asserted
+`src/obs` was covered. Both were investigated rather than deferred —
+`timeline.zig` turned out to close a live broken contract with the
+already-shipped SPA (`TimelineFeedItem.tsx` renders `description`,
+`actor_display_name`, `timestamp` and `sequence_num`, none of which
+the REQ-080 route emits), and `alerts.zig` had no external blocker
+because all four of its triggers are produced by this stage's own
+requirements.
 
 ## Scope
 
@@ -48,7 +61,11 @@ predated R-Co being reachable from a drafting session.
 
 - `src/scheduler` (6 files) — owned by REQ-185–188
 - `src/secrets` (6 files) + `src/secrets/integration` (1) — REQ-189–190
-- `src/obs` (5 files) — observability/metrics — REQ-193–196
+- `src/obs` (5 files) — observability/metrics — named per file,
+  because a range alone previously asserted coverage two of them did
+  not have (REQ-VALIDATOR, rework 1): `logger.zig` → REQ-193;
+  `metrics.zig` → REQ-194; `audit.zig` → REQ-195 + REQ-196;
+  `timeline.zig` → REQ-200; `alerts.zig` → REQ-201.
   (`obs/dlq` equivalent, OBS-05, is REQ-176–178)
 - `src/webhook` (3 files) — REQ-181–184
 - `src/dlq` (1 file) — dead-letter queue — REQ-176–178
@@ -63,7 +80,12 @@ their relationship to the rest of the system, not that they're
 interchangeable or low-effort individually.
 
 Three parts of the above are deliberately **not** covered by the two
-batches, each with its blocker recorded in the owning requirement:
+batches, each with its blocker recorded in the owning requirement.
+This list is exhaustive: every other file in the subsystems above has
+a named owning requirement in the per-subsystem list, and any future
+omission belongs here rather than being left implicit — rework 1 added
+REQ-200 and REQ-201 precisely because `timeline.zig` and `alerts.zig`
+had been left out of both the coverage list and this one.
 `src/scheduler/partition_maintenance.zig` and `partition_retention.zig`
 (partitioning deferral — see Decisions); `src/expr/benchmark.zig` (a
 latency harness with no production behaviour, imported by nothing); and

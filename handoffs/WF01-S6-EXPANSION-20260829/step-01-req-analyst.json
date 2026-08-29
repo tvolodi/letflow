@@ -8,7 +8,7 @@
   "file": "handoffs/WF01-S6-EXPANSION-20260829/step-01-req-analyst.json",
   "created_at": "2026-08-29T04:02:43Z",
   "started_at": "2026-08-29T04:02:43Z",
-  "status": "DISPATCHED",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -53,7 +53,7 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "Expanded Stage 6 second batch: 15 new entries REQ-185..REQ-199 appended to docs/requirements.yaml, covering all six remaining S6 subsystems (scheduler, secrets, obs minus OBS-05, repository, expr, ordering). R-Co WAS reachable and was freshly inspected throughout; every cited path, line number, SQL column and env-var name was read directly from c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\ this session. The batch header records that, correcting the first batch's R-Co-unreachable framing for this batch's scope only, without editing that block. Append-only verified: head -9381 of the file is byte-identical to the pre-run backup; git diff --stat shows 1504 insertions, 0 deletions. Programmatic validation: file parses as YAML (173 entries), zero duplicate ids, zero orphaned depends_on, zero dependency cycles, all 15 carry the full schema with status pending / stage S6 and at least 8 acceptance criteria each, and none carries impl_order. The core/route split was followed for every subsystem needing both (REQ-191 then REQ-192, REQ-195 then REQ-196), each core entry carrying the 'no route or controller file is added' clause. docs/migration/stage-6-operational-cross-cutting.md now lists all 22 S6 requirement ids across both batches, its Decisions section names both decision requirements and the partitioning deferral, and its Scope file counts were corrected against the real R-Co tree.",
+    "summary": "Expanded Stage 6 second batch: 15 new entries REQ-185..REQ-199 appended to docs/requirements.yaml, covering all six remaining S6 subsystems (scheduler, secrets, obs minus OBS-05, repository, expr, ordering). R-Co WAS reachable and was freshly inspected throughout; every cited path, line number, SQL column and env-var name was read directly from c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\ this session. The batch header records that, correcting the first batch's R-Co-unreachable framing for this batch's scope only, without editing that block. Append-only verified: head -9381 of the file is byte-identical to the pre-run backup; git diff --stat shows 1504 insertions, 0 deletions. Programmatic validation: file parses as YAML (173 entries), zero duplicate ids, zero orphaned depends_on, zero dependency cycles, all 15 carry the full schema with status pending / stage S6 and at least 8 acceptance criteria each, and none carries impl_order. The core/route split was followed for every subsystem needing both (REQ-191 then REQ-192, REQ-195 then REQ-196), each core entry carrying the 'no route or controller file is added' clause. docs/migration/stage-6-operational-cross-cutting.md now lists all 22 S6 requirement ids across both batches, its Decisions section names both decision requirements and the partitioning deferral, and its Scope file counts were corrected against the real R-Co tree.\n\n--- REWORK 1 (2026-08-29T04:37:46Z, REQ-VALIDATOR FAIL, rework_count 1 of 3) ---\nAll six findings addressed; the two the validator confirmed correct were left alone. (1) BLOCKER, REQ-190 check (c): added REQ-183 to depends_on, which is now [REQ-189, REQ-072, REQ-181, REQ-183] -- the implementing requirement had a weaker dependency set than the decision requirement that merely writes the record, exactly as the validator described. (2) MAJOR, silently-unscoped src/obs files: investigated both rather than deferring, per the finding's own instruction to check before assuming. Both turned out to be genuinely draftable, so TWO NEW REQUIREMENTS were added -- REQ-200 (OBS-04 instance timeline rendering) and REQ-201 (OBS-06 alerting hooks). REQ-080's already-shipped timeline route does NOT close OBS-04: verified that web/src/components/instances/TimelineFeedItem.tsx renders entry.description (L41), entry.actor_display_name (L15/L23), entry.timestamp (L18/L42/L43) and entry.sequence_num (L48), while Letflow's timeline_item/1 (instances.ex L185-196) emits none of the first two and names the other two created_at / sequence_number -- a live broken contract with a shipped SPA component, not a formatting detail. REQ-201 had no external blocker because all four of R-Co's AlertType triggers (alerts.zig L6-11) are produced by this stage's own requirements. The stage doc's src/obs line was replaced with a PER-FILE mapping rather than a reworded range, and its not-covered section now states it is exhaustive and records why these two were added. (3) MINOR: the three dangling 'see REQ-196's note' pointers in REQ-193/194/195 now point at REQ-200 and REQ-201, each with the real relationship stated (REQ-201 consumes REQ-193's logger and REQ-194's metrics; REQ-200 is instance-scoped and explicitly not the REQ-195 audit trail). (4) SCOPED AMENDMENT to REQ-183, ORCH-authorised outside append-only: exactly two changes as instructed -- REQ-189 added to depends_on, and the signing clause plus the HMAC-verification acceptance criterion now resolve the key through REQ-189's mechanism -- plus a provenance note recording why, so a later reader does not mistake it for drift. Verified programmatically against git HEAD that REQ-183 is the ONLY pre-existing entry modified, that exactly 1 of its 7 acceptance criteria changed, and that REQ-181, REQ-176, REQ-177, REQ-178, REQ-182 and REQ-184 are all byte-identical. (5) NON-BLOCKING: transition.ex L283 corrected to L294 in all three places (confirmed: the node_type_not_yet_implemented clause is at L294). REQ-061 was deliberately NOT added to REQ-187's depends_on, per the validator's explicit instruction that its absence is correct. (6) Nothing that passed was restructured.\nONE DEFECT FOUND BY MY OWN RE-VALIDATION AND FIXED: adding REQ-189 to REQ-183's depends_on created a REQ-183 -> REQ-189 -> REQ-183 CYCLE, because REQ-189 had listed REQ-183 as a dependency. Resolved by removing REQ-183 from REQ-189's depends_on, which is the incorrect edge: REQ-189 reads REQ-183's already-written TEXT as a drafting input but does not need it BUILT -- it is the decision that unblocks REQ-183, not the reverse. REQ-183's new dependency on REQ-189 is the real build-order constraint and is the one the queue should gate on. The rationale is recorded inside REQ-189's own description so the removal is not later read as an oversight. Re-verified: zero cycles, and topological order confirms REQ-189 precedes both REQ-183 and REQ-190.\nRe-validation after rework: YAML parses (175 entries), zero duplicate ids, zero orphaned depends_on across the whole file, zero dependency cycles, all 17 new entries (REQ-185..201) carry the full schema with status pending / stage S6 and at least 7 acceptance criteria each, and none carries impl_order.",
     "artifacts_out": [
       "docs/requirements.yaml",
       "docs/migration/stage-6-operational-cross-cutting.md"
@@ -148,6 +148,20 @@
         "owner": "ELIXIR-DEV",
         "maps_to": "ORD-01, ORD-02, ORD-03, ORD-04",
         "title": "Correlated effect re-entry ordering"
+      },
+      {
+        "id": "REQ-200",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "OBS-04 (src/obs/timeline.zig)",
+        "title": "Instance timeline rendering: actor display names and human-readable descriptions",
+        "added_in": "rework 1"
+      },
+      {
+        "id": "REQ-201",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "OBS-06 (src/obs/alerts.zig)",
+        "title": "Alerting hooks: threshold detection with edge-triggered firing and retry/backoff delivery",
+        "added_in": "rework 1"
       }
     ],
     "deliberate_deferrals": [
@@ -222,20 +236,72 @@
       }
     ],
     "validation_performed": {
+      "run": "post-rework-1",
       "yaml_parses": true,
-      "total_entries": 173,
+      "total_entries": 175,
       "duplicate_ids": 0,
       "orphaned_depends_on": 0,
       "dependency_cycles": 0,
-      "new_entries_full_schema": 15,
+      "new_entries_full_schema": 17,
+      "new_entry_id_range": "REQ-185..REQ-201",
       "impl_order_fields_added": 0,
-      "append_only_confirmed": "head -9381 docs/requirements.yaml is byte-identical to the pre-run backup; git diff --stat reports 1504 insertions and 0 deletions"
+      "min_acceptance_criteria_on_new_entries": 7,
+      "pre_existing_entries_modified": [
+        "REQ-183"
+      ],
+      "pre_existing_modification_authorised_by": "ORCH scoped amendment, WF-01 rework 1, queue task 356 locked",
+      "req_181_untouched": true,
+      "build_order_check": "REQ-189 precedes both REQ-183 and REQ-190 (topological)"
     },
-    "next_action": "Route to REQ-VALIDATOR"
+    "next_action": "Route to REQ-VALIDATOR",
+    "rework_1_resolution": [
+      {
+        "issue": 1,
+        "severity": "BLOCKER",
+        "status": "FIXED",
+        "action": "REQ-190 depends_on is now [REQ-189, REQ-072, REQ-181, REQ-183]. The implementing requirement no longer has a weaker dependency set than REQ-189, which merely writes the decision record."
+      },
+      {
+        "issue": 2,
+        "severity": "MAJOR",
+        "status": "FIXED BY DRAFTING, NOT DEFERRING",
+        "action": "Investigated both unscoped files before deciding, per the finding's instruction. REQ-200 drafted for OBS-04: REQ-080's route/ordering/pagination/auth/404 are already met and are NOT rebuilt, but the item CONTENT is a live broken contract -- TimelineFeedItem.tsx renders description, actor_display_name, timestamp and sequence_num; the backend emits none of the first two and names the others created_at / sequence_number. Scope is the four-level actor fallback chain (timeline.zig L287-317), per-event-type description rendering (L320+), the field names, and N+1 avoidance (R-Co does one queryRow per entry at L296). REQ-201 drafted for OBS-06: all four AlertType triggers (alerts.zig L6-11) are sourced by this stage's own requirements, so no external blocker existed; scope centres on the edge-triggered firing the two state tables in migration 022 exist for. Stage doc now maps src/obs PER FILE (logger->193, metrics->194, audit->195+196, timeline->200, alerts->201) instead of asserting a range, and its not-covered section declares itself exhaustive and records this addition."
+      },
+      {
+        "issue": 3,
+        "severity": "MINOR",
+        "status": "FIXED",
+        "action": "The three dangling 'see REQ-196's note' pointers in REQ-193/194/195 now name REQ-200 and REQ-201, each stating the real relationship rather than just redirecting: REQ-201 consumes REQ-193's logger for OBS-06's delivery-failure logging and REQ-194's metrics for its lag/depth thresholds, and REQ-200 is an instance-scoped narrative explicitly distinguished from REQ-195's general audit trail."
+      },
+      {
+        "issue": 4,
+        "severity": "SCOPED AMENDMENT (ORCH-authorised)",
+        "status": "DONE, EXACTLY TWO EDITS",
+        "action": "REQ-183: (1) depends_on [REQ-181, REQ-176] -> [REQ-181, REQ-176, REQ-189]; (2) scope item 1's signing clause and the HMAC-verification acceptance criterion now resolve the signing key through REQ-189's decided mechanism, with the AC additionally stating that test and signer obtain the key the same way, which is what makes the criterion satisfiable at all. A provenance note was added to the description recording the finding, the two edits, that everything else was judged sound and unchanged, and R-Co's own precedent (GBL-128 + correctives 1134/1138). Verified against git HEAD: REQ-183 is the ONLY pre-existing entry modified, exactly 1 of its 7 acceptance criteria differs, its AC count is unchanged at 7, and REQ-181/176/177/178/182/184 are all byte-identical."
+      },
+      {
+        "issue": 5,
+        "severity": "NON-BLOCKING",
+        "status": "FIXED / CORRECTLY LEFT ALONE",
+        "action": "transition.ex L283 -> L294 in all three occurrences; confirmed the node_type_not_yet_implemented clause is at L294. REQ-061 was NOT added to REQ-187's depends_on, per the explicit instruction that its absence is correct and belongs to REQ-177."
+      },
+      {
+        "issue": 6,
+        "severity": "CONFIRMED CORRECT",
+        "status": "NOT REVISITED",
+        "action": "No change made to the three R-Co corrections, the two table-placement REVIEWER escalations, REQ-188's ISS-0014 deferral, or any core/route split. Nothing that passed checks (a), (d) or (e) was restructured."
+      },
+      {
+        "issue": "self-found",
+        "severity": "BLOCKER INTRODUCED BY THE FIX, CAUGHT AND RESOLVED",
+        "status": "FIXED",
+        "action": "Adding REQ-189 to REQ-183's depends_on created a REQ-183 -> REQ-189 -> REQ-183 cycle, caught by re-running my own cycle check. Removed REQ-183 from REQ-189's depends_on (now [REQ-181, REQ-072]) as the incorrect edge: REQ-189 reads REQ-183's written text as a drafting input but does not need it built, whereas REQ-183 genuinely cannot be built before REQ-189's decision exists. Rationale recorded inside REQ-189's own description. Topological check confirms REQ-189 now precedes both REQ-183 and REQ-190."
+      }
+    ]
   },
   "rework_count": 1,
   "max_rework": 3,
-  "completed_at": "2026-08-29T04:21:38Z",
+  "completed_at": "2026-08-29T04:37:46Z",
   "reworked_at": "2026-08-29T04:45:00Z",
   "rework_1_issues": [
     "BLOCKER -- REQ-190, check (c) depends_on: missing REQ-183. Scope item 6 says it makes REQ-183's signing resolve its key through resolve/2, and an acceptance criterion requires testing exactly that, but depends_on is [REQ-189, REQ-072, REQ-181]. REQ-189 (which merely WRITES the decision) correctly depends on both REQ-181 and REQ-183; the implementing requirement having the weaker set is an oversight. Add REQ-183.",

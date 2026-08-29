@@ -9305,8 +9305,10 @@ requirements:
       SCOPE:
       1. A deliver/3(subscription, event_type, payload) function: computes
       an HMAC-SHA256 signature of the JSON-encoded payload using the
-      subscription's stored secret (REQ-181's schema), sends it as a
-      request header (the moduledoc must name the exact header and
+      subscription's signing key, RESOLVED THROUGH REQ-189's decided
+      secrets mechanism (REQ-VALIDATOR amendment, WF01-S6-EXPANSION-20260829
+      rework 1 -- see the note at the end of this description), sends it
+      as a request header (the moduledoc must name the exact header and
       encoding chosen -- e.g. `X-Letflow-Signature: sha256=<hex>` -- and
       say plainly this is Letflow's own choice), POSTs to target_url, and
       classifies the result as "SUCCESS" (any 2xx) or "FAILED" (anything
@@ -9338,15 +9340,38 @@ requirements:
       webhook delivery. deliver/3 is built, tested, and directly callable;
       wiring its automatic trigger is a named, deferred follow-up, not
       silently implemented and not silently forgotten.
+      SCOPED AMENDMENT (WF01-S6-EXPANSION-20260829 rework 1, REQ-VALIDATOR
+      finding, ORCH-authorised as an explicit exception to that batch's
+      append-only rule; queue task 356 was locked for the duration). As
+      originally drafted this requirement was UNIMPLEMENTABLE. It signed
+      with "the subscription's stored secret (REQ-181's schema)", but
+      REQ-181 stores that secret HASHED and returns the plaintext exactly
+      once as hmac_secret_once. A hash is not the key, so signer and
+      verifier could never hold the same key material and this
+      requirement's own HMAC-verification acceptance criterion could not
+      be satisfied by any implementation. Exactly two things changed:
+      scope item 1's signing clause and the HMAC-verification criterion
+      now resolve the key through REQ-189's decided secrets mechanism,
+      and REQ-189 was added to depends_on so the queue gates the ordering
+      rather than relying on prose being read. Everything else here --
+      the retry/backoff, the auto-pause threshold, the DLQ landing, the
+      delivery-attempt persistence -- is unchanged and was judged sound.
+      REQ-181 was NOT modified. R-Co hit this same problem and fixed it
+      the same way: migrations/GBL-128_exp501_secrets.sql adds
+      webhook_subscriptions.secret_ref and .secret_key_id, backfills
+      them, then blanks the plaintext column, with correctives at
+      1134_iss0112_add_secret_ref_to_tenant_schemas.sql and
+      1138_iss0635_webhook_secret_ref_corrective.sql. REQ-190 implements
+      whichever resolution REQ-189 chooses.
     acceptance_criteria:
       - "deliver/3 against a target_url returning 200 persists one webhook_delivery_attempts row with status \"SUCCESS\", http_status_code 200, and does not increment the subscription's consecutive_failures"
       - "deliver/3 against a target_url returning 500, and separately against one that refuses the connection outright, both persist a row with status \"FAILED\" and last_error populated (http_status_code 500 for the first, null for the connection-refused case) -- two explicit tests"
-      - "deliver/3's signature is independently verifiable: a test computes the expected HMAC-SHA256 signature from the same secret and payload and asserts it equals the value deliver/3 actually sent in the documented header"
+      - "deliver/3's signature is independently verifiable: a test resolves the subscription's signing key through REQ-189's decided mechanism, computes the expected HMAC-SHA256 signature from that key and the same payload, and asserts it equals the value deliver/3 actually sent in the documented header -- the test and the signer obtain the key the same way, which is what makes this criterion satisfiable at all"
       - "a subscription's consecutive_failures reaching the documented threshold flips its status to \"PAUSED\" and sets paused_at -- driven by repeated failed attempts and read back afterward"
       - "a delivery exhausting max_attempts lands exactly one entry in REQ-176's DLQ core with entry_type \"webhook\" and reference_id equal to the delivery's own delivery_id, read back from the DLQ table"
       - "the moduledoc names the HMAC header/format and the PAUSED-threshold number as Letflow's own choices, explicitly not ported from R-Co's src/webhook/ (unreachable from this drafting session), and names automatic post-event triggering as an explicitly deferred follow-up rather than silently implemented or silently omitted"
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
-    depends_on: [REQ-181, REQ-176]
+    depends_on: [REQ-181, REQ-176, REQ-189]
 
   - id: REQ-184
     title: Port webhooks.zig's deliveries route onto the delivery-dispatch core (GET /api/v1/webhooks/subscriptions/:id/deliveries, WebhooksManage-gated)
@@ -9610,7 +9635,7 @@ requirements:
       Letflow.Definitions.Graph's node_type enum with one definition-time
       validator (check_timer_duration/1, graph.ex L738, CHK-12, requiring
       a parseable duration_iso8601 attribute), but
-      lib/letflow/engine/transition.ex L283's catch-all dispatch branch
+      lib/letflow/engine/transition.ex L294's catch-all dispatch branch
       routes :TIMER to {:error, {:node_type_not_yet_implemented, ...}} --
       so a definition containing a TIMER node validates and then cannot
       execute. Nothing schedules anything anywhere in the codebase.
@@ -9717,7 +9742,7 @@ requirements:
       the engine's transition and lifecycle paths, and the two touch
       disjoint files.
       THE THREE STUBS THIS CLOSES, all verified in the tree this batch:
-      (a) lib/letflow/engine/transition.ex L283's catch-all dispatch
+      (a) lib/letflow/engine/transition.ex L294's catch-all dispatch
       branch, which today returns {:error, {:node_type_not_yet_implemented,
       :TIMER, node_id}} for every TIMER node -- the branch's own comment
       names :TIMER as one of the two node types it is standing in for.
@@ -9776,7 +9801,7 @@ requirements:
       (REQ-188); no escalation timers (REQ-188); no change to REQ-056's
       SERVICE_TASK dispatch or its own deferred HTTP-abort duty.
     acceptance_criteria:
-      - "a definition containing a TIMER node with a valid duration_iso8601 starts an instance whose token reaches that node and arms exactly one timers row with status 'pending' and fire_at equal to the arrival timestamp plus the parsed duration -- replacing the {:error, {:node_type_not_yet_implemented, :TIMER, _}} that transition.ex L283 returns today, asserted by a test that would have failed before this requirement"
+      - "a definition containing a TIMER node with a valid duration_iso8601 starts an instance whose token reaches that node and arms exactly one timers row with status 'pending' and fire_at equal to the arrival timestamp plus the parsed duration -- replacing the {:error, {:node_type_not_yet_implemented, :TIMER, _}} that transition.ex L294 returns today, asserted by a test that would have failed before this requirement"
       - "the timer row and the state-transition event are written in ONE transaction: a test that forces the event append to fail leaves NO timers row behind"
       - "when the timer fires, the instance advances along the TIMER node's outgoing edge and the token is no longer at the TIMER node"
       - "completing an instance sets every one of its PENDING timers to 'cancelled' with cancelled_at set, via the existing TaskActivation.cancel_pending_timers/2 call site in engine.ex -- which is still called from the same position inside the completion transaction (confirmed by git diff showing the call site itself unmoved)"
@@ -9974,8 +9999,17 @@ requirements:
       stated answer to how REQ-183 then signs -- and must name REQ-190 as
       the requirement that implements whichever is chosen. It must not
       leave two homes for the same key material in one stage.
-      NOT IN THIS REQUIREMENT: no migration, no table, no crypto code, no
-      change to REQ-181/183's entries (this batch is append-only).
+      NOT IN THIS REQUIREMENT: no migration, no table, no crypto code.
+      A NOTE ON depends_on, added in rework 1: this requirement reads
+      REQ-181's and REQ-183's already-written TEXT as a drafting input,
+      but does not need either to be BUILT first -- it is the decision
+      that unblocks them, not the other way round. REQ-183 was
+      accordingly given a depends_on REQ-189 (the durable, queue-enforced
+      ordering), and REQ-183 was deliberately NOT kept in this
+      requirement's own depends_on: doing both would have created a
+      REQ-183 -> REQ-189 -> REQ-183 dependency cycle, which this batch's
+      own cycle check caught. The build order is REQ-189 first, then
+      REQ-183 and REQ-190.
     acceptance_criteria:
       - "docs/migration/decisions/0016-secrets-storage-backend.md exists, follows the format of the existing records in that directory (Question / Decision / Evidence / consequences), and names one chosen storage backend with the alternatives it rejected"
       - "the record names the exact environment variable Letflow's master key comes from, its required format, and states that startup FAILS when it is absent or malformed -- explicitly rejecting R-Co's hardcoded all-zeros key and citing the four call sites (src/api/routes/webhooks.zig:375, src/webhook/dispatcher.zig:537, src/webhook/subscription_store.zig:224, src/effects/worker.zig:42) plus the zero-match grep for MASTER_KEY/WRAPPING_KEY across R-Co's src/"
@@ -9985,7 +10019,7 @@ requirements:
       - "the record contains a section resolving the webhook HMAC key ownership question, quoting REQ-181's hashed-secret storage and REQ-183's HMAC-signing requirement, stating plainly that a hash is not usable as an HMAC key, and naming which requirement implements the chosen resolution"
       - "if the chosen resolution changes anything REQ-181 or REQ-183 specified, the record says so explicitly and REVIEWER has signed off; if it deliberately leaves them unchanged, it states how REQ-183 obtains a signing key"
       - "no migration, no file under lib/letflow/, and no edit to any existing docs/requirements.yaml entry is made by this requirement, confirmed by git diff --stat scoped to its commits"
-    depends_on: [REQ-181, REQ-183, REQ-072]
+    depends_on: [REQ-181, REQ-072]
 
   - id: REQ-190
     title: Secrets core -- envelope-encrypted per-tenant secret storage and resolution by reference (EXP-501), and the webhook HMAC key reconciliation
@@ -10080,7 +10114,7 @@ requirements:
       - "the moduledoc states that redaction keys on field NAMES and therefore does not catch a secret placed under an unrecognised key, rather than claiming a complete guarantee"
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
-    depends_on: [REQ-189, REQ-072, REQ-181]
+    depends_on: [REQ-189, REQ-072, REQ-181, REQ-183]
 
   - id: REQ-191
     title: Service catalog core -- the DB-backed registry three existing seams already depend on (REPO-07, SVC-01/03)
@@ -10320,9 +10354,11 @@ requirements:
       caught. R-Co has the same limitation. Say so in the moduledoc
       rather than claiming a guarantee the mechanism does not provide.
       NOT IN THIS REQUIREMENT: no metrics (REQ-194); no audit table
-      (REQ-195); no alerting (not drafted in this batch -- see REQ-196's
-      note); no change to lib/letflow/api/context.ex's existing trace-id
-      assignment.
+      (REQ-195); no alerting hooks (REQ-201, which consumes this
+      requirement's logger for its own delivery-failure logging per
+      OBS-06's fourth acceptance criterion); no instance-timeline
+      rendering (REQ-200); no change to lib/letflow/api/context.ex's
+      existing trace-id assignment.
     acceptance_criteria:
       - "a log call emits exactly ONE line that parses as a single JSON object containing all of timestamp, level, trace_id, component and message, asserted by decoding the captured output rather than by matching a substring"
       - "the timestamp field parses as an ISO 8601 UTC datetime with microsecond precision"
@@ -10420,8 +10456,10 @@ requirements:
       either is defensible, but it must be decided and the SPA's
       MetricsPage must end up calling something that exists.
       NOT IN THIS REQUIREMENT: no audit table (REQ-195); no alerting
-      subsystem; no change to web/ (S8 owns it, and the client already
-      exists).
+      subsystem (REQ-201 -- note it is a CONSUMER of this requirement's
+      metrics for its scheduler-lag and DLQ-depth thresholds, so this
+      requirement lands first); no instance-timeline rendering (REQ-200);
+      no change to web/ (S8 owns it, and the client already exists).
     acceptance_criteria:
       - "this requirement states an explicit decision on each of REQ-078's three recorded divergences -- auth, scope and format -- with a reason for each, in the module moduledoc; it does not silently pick one or leave any of the three unstated"
       - "the format decision cites web/src/api/metrics.ts's parsePrometheusText and metricsApi.prometheusText()'s call to client.getText('/metrics') as an already-committed consumer contract, and the endpoint Letflow serves is one that web/src/pages/admin/MetricsPage.tsx actually reaches -- asserted by a test hitting that exact path"
@@ -10519,8 +10557,11 @@ requirements:
       passes its check, which defeats the purpose. Letflow's verification
       must recompute each entry's hash from its stored content and
       compare.
-      NOT IN THIS REQUIREMENT: no route change (REQ-196); no alerting; no
-      conflation with lib/letflow/engine/lua_script_audit.ex or the
+      NOT IN THIS REQUIREMENT: no route change (REQ-196); no alerting
+      hooks (REQ-201); no instance-timeline rendering (REQ-200, which is
+      a separate, instance-scoped narrative surface and NOT this
+      general audit trail); no conflation with
+      lib/letflow/engine/lua_script_audit.ex or the
       lua_script_execution_audit table (REQ-058/153/158) -- that is a
       NARROW, separate trail for script executions and stays separate.
     acceptance_criteria:
@@ -10883,3 +10924,188 @@ requirements:
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-186, REQ-023, REQ-025, REQ-072, REQ-176]
+
+  - id: REQ-200
+    title: Instance timeline rendering -- actor display names and human-readable descriptions (OBS-04), closing the shipped SPA's broken TimelineFeed contract
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Added in this batch's rework 1 (REQ-VALIDATOR finding: src/obs/timeline.zig
+      was silently unscoped while the stage doc asserted src/obs was covered).
+      Investigated rather than assumed, per that finding's own instruction, and
+      the gap turned out to be real and larger than "a formatting detail" -- so
+      it is drafted rather than deferred.
+      WHAT REQ-080 ALREADY SHIPPED (done, S4): GET
+      /api/v1/instances/:id/timeline exists at
+      lib/letflow/routers/instances.ex L196, gated on :InstancesRead,
+      cursor-paginated per REQ-067, 404 on a missing instance, backed by
+      Letflow.Instances.timeline/3 (lib/letflow/instances.ex L163). So OBS-04's
+      route, ordering, pagination, auth and 404 criteria are already met and are
+      NOT rebuilt here.
+      WHAT IS MISSING, and it is a LIVE BROKEN CONTRACT rather than a cosmetic
+      gap. Letflow's timeline_item/1 (instances.ex L185-196) emits a raw event
+      dump: event_id, event_type, sequence_number, instance_id, created_at,
+      node_id, task_id, metadata. The already-shipped SPA expects something
+      different. Verified in the tree this batch: web/src/types/api.ts's
+      TimelineEntry (L177-188) declares event_type, timestamp,
+      actor_display_name, description, instance_id, event_id, sequence_num,
+      task_id, node_id, metadata -- and
+      web/src/components/instances/TimelineFeedItem.tsx renders
+      entry.description as the headline (L41), entry.actor_display_name through
+      ActorAvatar (L23) and getTimelineActorDisplayName (L15), entry.timestamp
+      for both the absolute and relative time (L18, L42, L43), and
+      entry.sequence_num (L48). FOUR of those the backend never sends:
+      description and actor_display_name do not exist at all, and timestamp /
+      sequence_num are named created_at / sequence_number.
+      web/src/pages/instances/InstanceDetailPage.tsx mounts this feed today. So
+      this is a shipped consumer reading undefined fields, in the same class of
+      already-committed SPA contract REQ-181/182 and REQ-191/192 build to.
+      SCOPE:
+      1. ACTOR DISPLAY NAME RESOLUTION, porting the fallback chain in R-Co's
+      src/obs/timeline.zig resolveActorDisplayName (L287-317), in this exact
+      order: (i) if the event carries an actor id, look up that user's
+      display_name -- Letflow's users table already has the column
+      (lib/letflow/identity/user.ex L38); (ii) else the event metadata's
+      "token_description", covering OBS-04's stated edge case of an instance
+      created by an automated API token with no associated user; (iii) else the
+      metadata's "actor_label"; (iv) else the literal string "system". The chain
+      must be TOTAL -- every event yields a name, never null and never a blank
+      string, because the SPA renders it into an avatar unconditionally.
+      2. DESCRIPTION RENDERING, porting renderDescription (timeline.zig L320+):
+      a short human-readable sentence per event type, naming the actor and the
+      relevant node or task, e.g. "Instance started by {actor}", "Instance
+      cancelled by {actor}", "Task {node_label} completed by {actor}". Every
+      event type Letflow can actually append must have a rendering, and an event
+      type with no specific rendering must fall back to a defined generic form
+      rather than producing an empty description -- a blank headline in the feed
+      is the failure mode to avoid.
+      3. FIELD NAMES: emit timestamp and sequence_num as the SPA's TimelineEntry
+      declares them. Whether that is done by renaming or by emitting both is
+      this requirement's call, but
+      web/src/components/instances/TimelineFeedItem.tsx must render with NO
+      change under web/ -- S8 owns that directory and the component is already
+      written.
+      4. N+1 AVOIDANCE: a page of N events must not issue N separate user
+      lookups. Resolve the distinct actor ids for the page in one query. R-Co
+      does the per-row lookup (timeline.zig L296, one queryRow per entry) and
+      Letflow should not copy that shape at page granularity.
+      PRESERVE what REQ-080 already got right: the route path, the
+      :InstancesRead permission, the ascending sequence ordering, the cursor
+      contract, the 404, and REQ-072's cross-tenant behaviour. This requirement
+      changes what each item CONTAINS, not how the endpoint is reached or paged.
+      NOT IN THIS REQUIREMENT: no new route; no change to
+      lib/letflow/api/authorization.ex; no change to the general audit trail
+      (REQ-195/196 -- that is tenant-wide and resource-typed, this is one
+      instance's narrative, and they must not be conflated); no alerting
+      (REQ-201); no file under web/.
+    acceptance_criteria:
+      - "every timeline item carries a non-empty actor_display_name and a non-empty description -- asserted over a timeline containing at least four different event types, with no item having a blank or null value for either"
+      - "the actor fallback chain is exercised at all four levels by four explicit tests: an event with an actor id resolves to that user's display_name; one with no actor id but a token_description in metadata resolves to that; one with only an actor_label resolves to that; and one with none of the three resolves to the literal \"system\""
+      - "an event whose actor id refers to a user row that no longer exists still yields a name via the remaining fallback chain rather than erroring or returning null"
+      - "descriptions are event-type specific: an INSTANCE_STARTED item and a task-completion item produce different, human-readable sentences each naming the resolved actor, asserted on the actual strings"
+      - "an event type with no specific rendering produces a defined non-empty generic description rather than an empty string, asserted by appending an event type the renderer does not special-case"
+      - "the response item field names match web/src/types/api.ts's TimelineEntry exactly -- specifically timestamp and sequence_num are present, asserted field by field against that type's declared members"
+      - "a page of N timeline events issues a bounded number of user-lookup queries rather than one per event, asserted by counting queries (or by asserting a single lookup for a page whose events share one actor, and at most one lookup per DISTINCT actor otherwise)"
+      - "everything REQ-080 established still holds: the route is still GET /api/v1/instances/:id/timeline, still requires :InstancesRead, still returns items in ascending sequence order, still paginates by REQ-067's cursor, and still returns 404 for an instance in another tenant -- five assertions, so the rewrite of item CONTENT does not regress the endpoint"
+      - "no file under web/ is added or modified, confirmed by git diff --stat scoped to this requirement's commits -- the SPA component already exists and must render against the new payload unchanged"
+      - "lib/letflow/api/authorization.ex is not modified, confirmed by git diff --stat"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-080, REQ-072, REQ-067]
+
+  - id: REQ-201
+    title: Alerting hooks -- threshold detection with edge-triggered firing and retry/backoff delivery (OBS-06)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Added in this batch's rework 1 (REQ-VALIDATOR finding: src/obs/alerts.zig,
+      972 lines, was silently unscoped). Drafted rather than deferred because
+      every input it needs is built by this stage or the first S6 batch, so it
+      has no external blocker -- it is simply the last piece of src/obs.
+      LAST of S6's observability half; it depends on the other three because its
+      thresholds are measured against what they produce. R-Co's AlertType enum
+      (src/obs/alerts.zig L6-11) names exactly four triggers:
+      instance_error_stuck, dlq_depth_threshold, scheduler_lag_threshold,
+      webhook_subscription_paused. Letflow can source all four -- REQ-061's
+      ERROR instances, REQ-176's dlq_entries, REQ-186's poller, and REQ-183's
+      auto-pause -- which is why this lands at the end of the stage rather than
+      being deferred out of it.
+      SCHEMA, ported from R-Co migrations/022_obs06_alerting_state.sql, which
+      exists for one reason: making firing EDGE-TRIGGERED rather than
+      level-triggered.
+      * `alert_trigger_state`: trigger_key (string, primary key), is_armed
+      (boolean, not null, default true), last_sample_value (bigint, not null,
+      default 0), last_fired_at (nullable), last_correlation_id (nullable),
+      updated_at.
+      * `alert_hook_emission_state`: hook_id and trigger_key (composite primary
+      key), last_emitted_key (string, not null), updated_at.
+      Placement follows decision 0003 Decision B -- per-tenant schema with
+      tenant_id retained -- UNLESS this requirement states an R-Co-grounded
+      reason to go global. Note R-Co makes these tables global (the migration's
+      header says "scope: public ... this migration creates a global-registry
+      table"), but its own thresholds are platform-wide while Letflow's DLQ and
+      instances are per-tenant, so the honest placement is likely per-tenant.
+      Decide and state it; do not inherit R-Co's placement by default.
+      SCOPE:
+      1. Configuration: per-hook config matching R-Co's AlertHookConfig
+      (L20-27) -- hook_id, enabled, destination_url, timeout_ms,
+      auth_secret_ref, and a retry policy of max_attempts (default 3),
+      base_backoff_ms (default 1000), max_backoff_ms (default 30000) and
+      multiplier (default 2.0) -- plus thresholds matching AlertThresholds
+      (L29-33): error_stuck_minutes, dlq_depth_threshold, scheduler_lag_ms. Note
+      auth_secret_ref is a SECRET REFERENCE, so if a hook is configured with one
+      it resolves through REQ-190's resolve/2 rather than storing a credential
+      inline -- state this explicitly.
+      2. Detection for all four triggers, evaluated on REQ-186's existing
+      scheduler cadence rather than a new periodic process, the same rule
+      REQ-188 and REQ-199 follow.
+      3. EDGE-TRIGGERED FIRING, which is OBS-06's second acceptance criterion
+      and the whole point of the state tables: when DLQ depth crosses the
+      threshold the hook fires ONCE and does not re-fire on every subsequent
+      poll while depth remains above it. is_armed is cleared on fire and
+      re-armed only when the sample falls back below the threshold -- so
+      OBS-06's stated edge case holds: depth dropping below and rising again
+      fires a second time.
+      4. PER-INSTANCE, NOT AGGREGATE, for instance_error_stuck: OBS-06's first
+      edge case requires one alert per stuck instance, not one aggregate alert
+      covering several. The trigger_key must therefore be per-instance for that
+      trigger.
+      5. DELIVERY: POST a JSON body identifying the subject -- for the
+      stuck-instance trigger, the instance id, the error reason and the duration
+      in ERROR. Failed deliveries retry up to max_attempts with exponential
+      backoff; after the final failure the failure is LOGGED via REQ-193's
+      structured logger and nothing further happens (OBS-06 is explicit that
+      there is no further action -- in particular an exhausted alert delivery
+      does NOT land in REQ-176's DLQ, unlike REQ-183's webhook deliveries, and
+      the moduledoc must say so, since the two are otherwise similar-looking
+      retrying HTTP senders).
+      A DISTINCTION TO STATE EXPLICITLY, because two subsystems in this one
+      stage both POST JSON to a configured URL with retry and backoff: alerting
+      hooks (this requirement) are PLATFORM-OPERATOR diagnostics about the
+      health of the system, with a fixed set of four triggers and no DLQ;
+      webhook subscriptions (REQ-181/183) are TENANT-FACING event delivery,
+      tenant-configured, HMAC-signed, auto-pausing and DLQ-landing. They are not
+      the same mechanism and must not be merged into one. Say so in the
+      moduledoc.
+      NOT IN THIS REQUIREMENT: no route or controller -- alert hooks are
+      configured through application config, not an API, since R-Co has no
+      alerts route and the SPA has no alerting client (verified: no web/src/api
+      entry for alerts and no alert type in web/src/types/api.ts); no change to
+      REQ-183's webhook dispatch; no new periodic process.
+    acceptance_criteria:
+      - "the DLQ-depth hook fires exactly ONCE when depth crosses the configured threshold and does NOT fire again on subsequent evaluations while depth stays above it -- asserted by counting deliveries across at least three evaluation cycles"
+      - "after depth falls below the threshold and rises above it again, the hook fires a SECOND time -- OBS-06's stated edge case, asserted as a distinct test from the one above"
+      - "two instances simultaneously stuck in ERROR beyond the configured minutes produce TWO separate alert deliveries, one per instance, not one aggregate -- OBS-06's first edge case"
+      - "an instance in ERROR for less than the configured error_stuck_minutes produces no alert, and the same instance produces one once the threshold is passed"
+      - "the scheduler-lag hook fires when the observed poll interval exceeds the configured threshold, driven by a real delayed cycle rather than by calling the detector directly"
+      - "a webhook subscription transitioning to PAUSED by REQ-183's auto-pause produces exactly one alert delivery"
+      - "the alert POST body for the stuck-instance trigger contains the instance id, the error reason and the duration in ERROR, asserted field by field on the captured request body"
+      - "a failing delivery is retried up to the configured max_attempts with increasing backoff, and after the final failure exactly one error is logged through REQ-193's structured logger and NO dlq_entries row is created -- asserting both the log and the absence of the DLQ entry"
+      - "a hook configured with an auth_secret_ref resolves that credential through REQ-190's resolve/2, and no credential value is stored inline in configuration or persisted in either state table"
+      - "the two state tables' placement (per-tenant schema versus global) is stated in the migration with its reason, and if global, the divergence from decision 0003 Decision B is flagged for REVIEWER sign-off"
+      - "detection runs on REQ-186's existing scheduler rather than a new periodic child in lib/letflow/application.ex, confirmed by git diff of application.ex"
+      - "the moduledoc states how alerting hooks differ from REQ-181/183's webhook subscriptions -- operator-facing with four fixed triggers and no DLQ, versus tenant-facing, HMAC-signed, auto-pausing and DLQ-landing -- so the two are not later merged"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-186, REQ-193, REQ-176, REQ-183, REQ-190, REQ-061]

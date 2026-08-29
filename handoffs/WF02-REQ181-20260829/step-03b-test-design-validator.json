@@ -1,0 +1,28 @@
+{
+  "handoff_id": "WF02-REQ181-20260829-step03b",
+  "run_id": "WF02-REQ181-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3b",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "test/letflow/webhooks_test.exs",
+  "status": "PENDING",
+  "completed_at": null,
+  "priority": "normal",
+  "context": {
+    "note": "Resumed from a mid-coverage stop: while writing AC2 coverage, a real implementation bug was found -- Letflow.Webhooks.Subscription.insert_changeset/2's cast/3 whitelist omitted :created_at, causing create/2's insert to fail with a Postgres not_null_violation. This was fixed by ELIXIR-DEV (commit 3046e44, adds :created_at to insert_changeset/2's cast/2 and validate_required/2, plus the matching lib/letflow/design/req181-webhooks-core.md §2.4 correction) and re-approved by REVIEWER at commit 5337911 before this step resumed. Full detail in handoffs/WF02-REQ181-20260829/req181-test-designer-notes.md and test/specs/REQ-181.md's 'A real implementation bug found and fixed during this step' section. `mix test test/letflow/webhooks_test.exs` now runs green: `Result: 14 passed`, 0 failures. Mutation testing performed against lib/letflow/webhooks.ex (each applied, run, reverted individually, revert confirmed via `git diff 5337911 -- lib/letflow/webhooks.ex lib/letflow/webhooks/subscription.ex` returning empty): (1) skip-hash-store-plaintext mutation caught, 12/14 passed; (2) flip the ACTIVE->PAUSED apply_status_update/3 branch to no-op caught, 11/14 passed; (3) make delete/2 fabricate success on a second delete caught, 13/14 passed. A fourth mutation -- removing lock(\"FOR UPDATE\") from fetch_and_lock_subscription/3 -- was tried and NOT caught (14/14 still passed); this is disclosed as a known coverage gap (no concurrent-update/3 test exists) in test/specs/REQ-181.md's 'Mutation testing' section rather than hidden, and noted that Letflow.Dlq's own test file appears to have the same gap for the same lock-then-check idiom. Test file also asserts AC6 (no route/controller file) via source-text and directory-listing checks. Do not touch lib/letflow/webhooks.ex, lib/letflow/webhooks/subscription.ex, lib/letflow/dlq.ex, or lib/letflow/identity.ex -- those are outside this step's scope.",
+    "test_file": "test/letflow/webhooks_test.exs",
+    "spec_file": "test/specs/REQ-181.md",
+    "notes_file": "handoffs/WF02-REQ181-20260829/req181-test-designer-notes.md",
+    "commit": "acb9177",
+    "branch": "feature/WF02-REQ181-20260829",
+    "final_mix_test_result": "Finished in 9.5 seconds (0.00s async, 9.5s sync)\nResult: 14 passed",
+    "known_gap": "update/3's row-lock (lock(\"FOR UPDATE\") in fetch_and_lock_subscription/3) has no concurrent-access test and its removal-mutation was not caught by this suite -- flagged for TEST-DESIGN-VALIDATOR to weigh as accept-as-follow-up vs. require-closed."
+  },
+  "task": {
+    "description": "Validate that test/letflow/webhooks_test.exs provides a runnable test for every REQ-181 acceptance criterion (AC1-AC6, see test/specs/REQ-181.md), that fixtures are isolated and self-sufficient, that no coverage is skipped, and weigh in on the disclosed row-lock concurrency gap before this proceeds to TEST-RUNNER."
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

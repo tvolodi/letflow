@@ -1,0 +1,125 @@
+# Test run report — WF-02 Step 4
+# Written by TEST-RUNNER. RELEASE-VALIDATOR independently re-runs the suite
+# rather than trusting this report alone (core-directives.md).
+
+req_id: REQ-177
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ177-20260829
+date_utc: 2026-08-29
+git:
+  branch: feature/WF02-REQ177-20260829
+  commit: d51e41395f99ada3d4691fdaaba37abd23414d2d
+
+environment:
+  toolchain: local (asdf shims — Elixir 1.20.3 / Erlang 29 / OTP 29, per `.tool-versions`)
+  toolchain_check: >
+    `mix letflow.check_toolchain` (asdf shims on PATH) reported Elixir 1.20.3
+    matches pin, OTP 29 matches pin. Only Rust mismatched: pin 1.97.1,
+    running rustc "not found or not runnable" (WARNING only, never fails
+    the build). This is the same known rustc-absent gap as prior runs.
+  postgres_container: >
+    letflow-1-postgres-1 and letflow-1-keycloak-1, brought up via
+    `sudo docker compose up -d` (invoking user's own docker socket access
+    was permission-denied; sudo was passwordless and available). Both
+    already Running when checked.
+  environment_issue_fixed: >
+    First `mix letflow.check.test` attempt hit a hard failure unrelated to
+    this branch's code: `_build/` and `deps/` contained files owned by
+    root (uid 0) from a prior process, causing
+    "(File.Error) could not write to file
+    .../Elixir.Letflow.Oidc.TokenVerifier.beam: permission denied" during
+    compilation. Fixed via `sudo chown -R tvolodi:tvolodi _build deps`,
+    then reran cleanly. Noting this so it isn't mistaken for an
+    application defect if seen again.
+
+checks:
+  compile_warnings_as_errors:
+    result: PASS
+    exit_code: 0
+    output: "(no output — mix compile --warnings-as-errors printed nothing, meaning a clean compile with zero warnings)"
+
+  test_suite:
+    command: "mix letflow.check.test  (stage 1: plain `mix test`, via the project's own CI-mirroring task)"
+    result: PASS (3 pre-existing/environmental failures, all rustc-absence-rooted, not disqualifying)
+    exit_code_of_task: 1
+    summary_line_verbatim: "Result: 2476/2479 passed (5/5 properties, 2471/2474 tests), 10 excluded"
+    failed_line_verbatim: "Failed: 3 tests"
+    finished_line_verbatim: "Finished in 740.6 seconds (11.3s async, 729.2s sync)"
+    failures:
+      - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+        error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...) at lib/system.ex:1141, via running_rust_raw/0 (test/mix/tasks/letflow_check_toolchain_test.exs:69)"
+        diagnosis: "PRE-EXISTING/ENVIRONMENTAL. This sandbox has no `rustc` binary on PATH (asdf lists rust 1.97.1 as pinned, but no working rustc is actually installed/reachable). One of the 2 known rust-toolchain-absent failures named in this run's handoff. Not routed to ELIXIR-DEV. Unrelated to lib/letflow/engine.ex, lib/letflow/engine/execution_error.ex, or this run's own test files."
+      - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+        error: "** (ErlangError) Erlang error: :enoent -- same root cause as above"
+        diagnosis: "Same as above — second assertion in the same test module, same missing-rustc-on-PATH cause."
+      - test: "test AC7: the wasmex NIF is a loaded shared library, not an external process Wasmex.Native resolves to a compiled .beam built from Rust NIF sources (Letflow.Engine.Wasm.PluginHandlerTest)"
+        location: "test/letflow/engine/wasm/plugin_handler_test.exs:189"
+        error: "assert Enum.any?(external_resources, &String.contains?(&1, \"native/wasmex/src/\")) failed — expected Wasmex.Native's external_resource attributes to name its Rust NIF sources"
+        diagnosis: >
+          ADDITIONAL environmental failure beyond the 2 named in this run's
+          handoff, but same root cause class: with no local rustc, the
+          wasmex dependency's native library was not compiled from Rust
+          source in this environment, so Wasmex.Native's compiled .beam
+          carries no external_resource pointing at native/wasmex/src/.
+          Confirmed pre-existing on main (git log shows this test
+          introduced in commit 4115255 / PR #695, well before this
+          REQ-177 branch existed) via `git show
+          main:test/letflow/engine/wasm/plugin_handler_test.exs`, and
+          this branch's diff (`git diff --stat main...HEAD`) touches only
+          docs/anti-patterns.md, handoffs/, lib/letflow/design/,
+          lib/letflow/engine.ex, lib/letflow/engine/execution_error.ex,
+          test/letflow/engine_dlq_landing_test.exs,
+          test/letflow/engine_execution_error_test.exs, and
+          test/specs/REQ-177.md — nothing under
+          test/letflow/engine/wasm/ or lib touching wasmex. Not routed to
+          ELIXIR-DEV; flagging to ORCH/RELEASE-VALIDATOR that this
+          sandbox's known-failure count for the wasm suite is 3, not 2,
+          purely due to rustc's total absence rather than a version
+          mismatch.
+    this_run_files_check: >
+      test/letflow/engine_dlq_landing_test.exs and
+      test/letflow/engine_execution_error_test.exs do not appear in any
+      failure block above (grep for both filenames across the full
+      captured output returned 0 matches in failure context). Ran both
+      files standalone as direct confirmation:
+      `mix test test/letflow/engine_dlq_landing_test.exs
+      test/letflow/engine_execution_error_test.exs` ->
+      "Result: 14 passed", Finished in 9.6 seconds, exit 0, no Failed:
+      section. lib/letflow/engine.ex and
+      lib/letflow/engine/execution_error.ex are confirmed uninvolved in
+      any of the 3 known failures (all 3 are CheckToolchainTest /
+      PluginHandlerTest, unrelated modules).
+
+  wasm_hang_isolated_stage:
+    command: "mix test --only wasm_hang"
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "Result: 7 passed, 2482 excluded"
+    finished_line_verbatim: "Finished in 16.8 seconds (6.3s async, 10.5s sync)"
+    note: >
+      Matches mix letflow.check.test's second, isolated subprocess stage.
+      The deliberate GenServer.call timeouts logged during this run
+      (call_function "hang" ...) are expected/by-design per REQ-170 and
+      this task's own moduledoc (ISS-0352) — they are the tests proving
+      the wasmex NIF thread genuinely cannot be reclaimed, not failures.
+
+verdict: PASS
+verdict_detail: >
+  mix compile --warnings-as-errors: clean, 0 warnings, exit 0.
+  mix letflow.check.test stage 1 (plain `mix test`): 2476/2479 passed
+  (2471/2474 example tests + 5/5 properties), 3 failures, all confirmed
+  pre-existing/environmental and rooted in this sandbox's total absence of
+  a working rustc binary (2 are the CheckToolchainTest rust-pin checks
+  named in this run's own handoff; the 3rd is a wasmex Rust-NIF-source
+  introspection test, confirmed pre-existing on main and outside this
+  branch's diff). Isolated `mix test --only wasm_hang` stage: 7/7 passed,
+  exit 0. This run's own new/changed test files
+  (test/letflow/engine_dlq_landing_test.exs,
+  test/letflow/engine_execution_error_test.exs) confirmed passing 14/14
+  both in the full suite and standalone. lib/letflow/engine.ex and
+  lib/letflow/engine/execution_error.ex are not implicated in any
+  failure.

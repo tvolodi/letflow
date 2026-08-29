@@ -842,3 +842,32 @@ history:
       defers R-Co's partition-based retention (ISS-0014's adopted option (a))
       and SCH-04 escalation timers (no escalation_timer_duration attribute
       on Letflow's Graph yet).
+  - req: REQ-189
+    event: started
+    agent: ORCH
+    at: "2026-08-30T00:00:00Z"
+    note: >
+      Queue task 362, GH#708, stage S6. Dispatched while routing GitHub
+      issue #701 (REQ-183, webhook delivery dispatch core): #701's issue
+      text is stale and REQ-183 is correctly blocked pending this
+      requirement's decision record per WF01-S6-EXPANSION-20260829 rework 1
+      (REQ-183's depends_on gained REQ-189 because REQ-183 as drafted signed
+      HMAC with REQ-181's HASHED stored secret, which is not usable as a
+      key). This local checkout was found 15 commits behind origin/main
+      (REQ-181/182/185/186/187 already merged upstream by other sessions/
+      hosts); fast-forwarded cleanly before this dispatch so REQ-189's
+      depends_on (REQ-181 done, REQ-072 done) is genuinely satisfied, not
+      stale-mirror satisfied. Queue's own get_next_task independently
+      confirmed task 362 eligible; a first get_next_task call (disposable
+      probe agent_id, before this session held any real intent) claimed it
+      by surprise and was released immediately per the anti-pattern
+      warning against using get_next_task as a reachability probe. A
+      second get_next_task call (real agent_id, meant to claim real work)
+      instead claimed task 364 (REQ-191) -- task 362 had been momentarily
+      claimed by a concurrent sibling session in between (its GH#708 issue
+      is still open, not done, ruling out "already completed"); released
+      364 back to open immediately since it wasn't the intended target,
+      then set_lock'd task 362 directly by its now-known id. Routed to
+      CODE-DESIGNER for the WF-01/WF-02 design step (REQ-189's own scope is
+      a decision record, not code). REQ-190 and REQ-183 both remain
+      pending behind this.

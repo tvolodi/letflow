@@ -9895,7 +9895,7 @@ requirements:
   - id: REQ-189
     title: Settle the secrets storage backend and write the missing decision record (docs/migration/decisions/0016, gates S6's secrets half)
     owner: CODE-DESIGNER
-    status: pending
+    status: in_progress
     stage: S6
     impl_order: 362  # letflow-queue task id
     description: >

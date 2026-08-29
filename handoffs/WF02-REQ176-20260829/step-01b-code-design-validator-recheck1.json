@@ -1,0 +1,21 @@
+{
+  "handoff_id": "WF02-REQ176-20260829-step01b-recheck1",
+  "run_id": "WF02-REQ176-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1b (re-check, iteration 1)",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req176-dlq-core.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 351, GH#696, stage S6. CODE-DESIGNER fixed the fabricated-precedent defect as commit 1959adf: SS3.2's search filter now honestly states the UUID-to-text-cast-for-ILIKE pattern is NEW, introduced by this requirement (not a false reuse claim), keeping only the real, verified filter_by_search/filter_tenants_by_search wrapping idiom citation. New SS2.4 addresses DlqEntry's 4 previously-unaddressed fields: item_type/original_payload/processor_metadata claimed as legacy aliases (verified against web/src/pages/dlq/DlqPage.tsx's real fallback-chain usage, e.g. e.entry_type ?? e.item_type), max_retries claimed as genuinely unused by the DLQ page (reads retry_limit directly) with no other DLQ consumer found. This is a narrow re-check -- your prior verification of the migration/Decision B pattern, keyset-cursor pattern, and row-lock-then-check idiom all stand."},
+  "task": {
+    "description": "Narrow re-check: (1) confirm SS3.2 no longer claims a false Letflow.IdentityMigration precedent and instead honestly frames the UUID-to-text-cast-for-ILIKE pattern as new; (2) independently verify the new SS2.4 claims by reading web/src/pages/dlq/DlqPage.tsx yourself -- confirm the four fallback-chain usages (item_type, original_payload, processor_metadata as legacy aliases; max_retries as genuinely unused by this page) are accurately described, not just plausible-sounding; (3) confirm via git diff 1959adf's predecessor that no other section changed. This is not a full fresh pass -- your prior verification of the migration pattern, keyset-cursor pattern, and row-lock-then-check idiom stands.",
+    "acceptance_criteria": [
+      "the dlq_entries table lives inside each tenant's Postgres schema with a tenant_id column retained, matching decision 0003 Decision B's pattern -- verified by inspecting the migration",
+      "list/2 filters by entry_type and by status independently, each demonstrated narrowing a result set that contains rows of more than one value, and supports cursor pagination: given more rows than one page, the first page's next_cursor, passed back in, returns the next distinct page with no repeated or skipped ids",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

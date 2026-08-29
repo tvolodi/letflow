@@ -1,0 +1,41 @@
+{
+  "handoff_id": "WF02-REQ185-20260829-step05",
+  "run_id": "WF02-REQ185-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "lib/letflow/design/req185-scheduler-firing-architecture.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "REQ-185 is decision-and-design-only. No ExUnit tests were written at Step 3 -- there is no implementation yet (REQ-186/187/188 build the real code against these decisions). TEST-DESIGNER instead independently re-verified the design artefact's own checkable empirical claims: the entry_type column (sections 1 and 8), the qps arithmetic (section 6), the application.ex supervision-tree claim and mix.exs dependency-list claim (section 1), and the presence/genuineness of REVIEWER's sign-off in section 3. All 5 claims were CONFIRMED against the actual files (not taken on the design doc's own word) -- see handoffs/WF02-REQ185-20260829/verification-notes.md for full findings with file/line references and direct quotes. No discrepancy found; nothing routed back to CODE-DESIGNER.",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ185-20260829/step-01-code-designer.json",
+      "handoffs/WF02-REQ185-20260829/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ185-20260829/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ185-20260829/step-02d-reviewer.json",
+      "handoffs/WF02-REQ185-20260829/step-03-test-designer.json",
+      "handoffs/WF02-REQ185-20260829/verification-notes.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req185-scheduler-firing-architecture.md",
+      "handoffs/WF02-REQ185-20260829/verification-notes.md"
+    ],
+    "branch_name": "feature/WF02-REQ185-20260829"
+  },
+  "task": {
+    "description": "Independently re-verify REQ-185's acceptance criteria before this decision-and-design requirement is marked done. Original acceptance criteria (from handoffs/WF02-REQ185-20260829/step-01-code-designer.json) reproduced below unmodified.",
+    "acceptance_criteria": [
+      "lib/letflow/design/req185-scheduler-firing-architecture.md exists and names exactly ONE recommended firing mechanism, with the alternatives it rejected and the reason for each -- evaluating at minimum Oban, a supervised GenServer ticker, and a per-timer process",
+      "the artefact states an explicit YES or NO on adopting Oban as a mix.exs dependency, with REVIEWER sign-off recorded in the artefact; it does not leave the choice open or defer it to the implementing requirement",
+      "the artefact names FOR UPDATE SKIP LOCKED (or its chosen alternative) as the claim mechanism and states in its own text that R-Co REMOVED the per-timer advisory lock SCH-02's literal text mandates, citing src/design/scheduler-concurrency-epic3.md's ISS-301 section, so a later reader does not reintroduce it",
+      "the artefact decides whether an equivalent of R-Co's ISS-302 session-level startup-sweep lock is needed in Letflow, and if not, states what prevents two nodes both sweeping overdue timers on simultaneous restart",
+      "the artefact states how the poller relates to Letflow's per-tenant schemas -- whether it iterates tenant schemas per tick or polls one global queue -- and quantifies the cost of the chosen strategy at a stated tenant count, rather than describing it qualitatively",
+      "the artefact states, in one section, how the recommended design distinguishes 'timer locked by another node', 'no timer due' and 'hard non-retryable error' from each other, citing src/design/iss0618-scheduler-lock-and-error-signaling.md, and states why simply propagating every error out of the fire path is the WRONG fix (it stops the poll loop before fire_error_count can reach its limit)",
+      "the artefact decides whether an exhausted-retry timer lands in REQ-176's dlq_entries with entry_type \"timer\", answering yes or no rather than leaving it to REQ-186",
+      "no migration, no file under lib/letflow/engine/, and no mix.exs change is made by this requirement, confirmed by git diff --stat scoped to this requirement's commits"
+    ]
+  },
+  "result": null
+}

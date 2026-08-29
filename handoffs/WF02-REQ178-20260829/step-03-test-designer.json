@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF02-REQ178-20260829-step03",
+  "run_id": "WF02-REQ178-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "lib/letflow/routers/dlq.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Queue task 353, GH#698, stage S6, branch feature/WF02-REQ178-20260829. REVIEWER gate PASSED (Step 2d) for lib/letflow/routers/dlq.ex and the forward(\"/dlq\", ...) line in lib/letflow/plugs/api_pipeline.ex. SECURITY-REVIEWER (Step 2c) already passed the tenant-isolation/INV-1..8 gate. This handoff is the required TEST-DESIGNER entry point per WF-02 Step 2d -> Step 3 -- no ExUnit test file exists yet for this router (ELIXIR-DEV correctly deferred test-writing to this step rather than skipping it silently).",
+    "reviewer_summary": {
+      "verdict": "PASS",
+      "idiom": "Router follows the exact Letflow.Routers.Audit/Tasks idiom: use Letflow.Api.AuthorizedRouter, authz_get/authz_post macros over a single existing :DlqReadRetryDiscard policy key (no new endpoint_policy_key/required_permission/permission-atom added -- verified against the real Letflow.Api.Authorization clauses, not assumed). handle_list/handle_get/handle_retry/handle_discard/handle_*_result private-function split matches audit.ex/tasks.ex's own shape. non_empty/1 and iso8601/1 are private per-router copies matching Audit's own precedent of no shared helper module. dlq_entry_json/1 is a hand-built allowlist (never a raw Jason.Encoder over the Ecto struct), matching Letflow.Routers.Audit's audit_item/1 precedent -- verified no __meta__/tenant_id leakage.",
+      "supervision": "No process/supervision surface in this diff at all -- pure stateless Plug.Router handlers delegating to the already-supervised Letflow.Dlq context module. Not applicable, not a concern.",
+      "type_safety": "No new class of representable-invalid-state found. status is serialized via Atom.to_string/1 off Letflow.Dlq.Entry's own Ecto.Enum-backed field (already typed at the schema layer, unchanged by this diff) -- no new stringly-typed state introduced by this router.",
+      "scope": "git diff main...HEAD --stat confirmed: only lib/letflow/routers/dlq.ex (new), one added forward line in lib/letflow/plugs/api_pipeline.ex, the design doc, and this run's own handoff/report files changed. No touch to lib/letflow/dlq.ex, lib/letflow/dlq/entry.ex, or any REQ-176/177 test file. No abstraction/behaviour/macro introduced ahead of what this requirement needs -- reuses Letflow.Api.AuthorizedRouter/Pagination/Response verbatim.",
+      "decision_records": "No conflict with docs/migration/decisions/ -- 0003-ecto-schema-strategy.md's schema-per-tenant pattern is inherited unchanged via Letflow.Dlq's opts[:prefix] threading (this router adds no Repo/Ecto.Query call of its own). REQ-069's authorization matrix and REQ-131's AuthorizedRouter are reused as-is, no new policy key or permission atom invented.",
+      "design_fidelity": "Verified field-by-field: dlq_entry_json/1's 18 keys, the two-key {items, next_cursor} list body (deliberately no has_more, per design doc's OQ-1), the source_type->entry_type param rename, the :invalid_id->404-not-400 divergence from tasks.ex (OQ-3, called out explicitly as considered, not accidental), and the exhaustive case coverage against Letflow.Dlq's real @specs (list/2's {:invalid_cursor|:wrong_endpoint|:expired|:invalid_filter}, get/2's {:invalid_id|:not_found}, retry/2 and discard/2's {:invalid_id|:not_found|{:invalid_state,_}}) all match lib/letflow/design/req178-dlq-routes.md exactly -- no drift between design and shipped code found."
+    },
+    "open_item_for_test_designer": "No ExUnit test file exists yet for this router. AC1/AC2/AC3/AC4 (per the original acceptance criteria below) all still need real coverage -- write mutation-resistant tests, not just happy-path smoke tests: exercise each list filter (status, source_type, search, cursor, page_size, instance_id) independently narrowing a result set that contains rows of more than one value; the 403-vs-404 distinction for retry/discard (no-permission-role vs cross-tenant-real-id, both from actual different callers, never inferred from code reading); the 409-vs-404 distinction for retry/discard (already-terminal entry vs genuinely-absent id); and the exact response body shapes (two-key list body, 18-key entry allowlist, fixed non-interpolated conflict/not_found detail strings)."
+  },
+  "task": {
+    "description": "Write ExUnit (and StreamData where applicable) tests for lib/letflow/routers/dlq.ex covering REQ-178's full acceptance criteria. Implementation has passed both SECURITY-REVIEWER (Step 2c) and REVIEWER (Step 2d) gates.",
+    "artifacts_in": [
+      "lib/letflow/routers/dlq.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/design/req178-dlq-routes.md",
+      "docs/requirements.yaml#REQ-178"
+    ],
+    "acceptance_criteria": [
+      "GET /api/v1/dlq returns a body shaped exactly {items: [...], next_cursor: string|null}, and each item's field names (id, entry_type, instance_id, reason, full_reason, retry_count, status, created_at at minimum) match DlqEntry's, verified against web/src/types/api.ts rather than a hand-invented shape",
+      "GET /api/v1/dlq honors status, source_type, search, cursor and page_size independently, each with its own test demonstrating the filter narrows the result set",
+      "POST /api/v1/dlq/:id/retry and .../discard both require the DlqOperate permission from REQ-069's matrix -- a caller holding no role with that permission receives 403, and a caller from a different tenant naming a real id belonging to tenant A receives 404, never 403 -- three explicit tests",
+      "POST /api/v1/dlq/:id/retry and .../discard against a non-existent id return 404, and against an id already \"resolved\" or \"discarded\" return a 409-shaped conflict rather than a generic 500 -- covering the not-found and terminal-state cases each with their own test",
+      "the route module's moduledoc states explicitly that R-Co's dlq.zig was not inspected in this batch (unreachable from the drafting environment) and that web/src/api/dlq.ts / web/src/types/api.ts were the binding contract instead, so a future reader does not assume R-Co parity was verified when it wasn't"
+    ],
+    "next_action": "TEST-DESIGNER writes test code -> TEST-DESIGN-VALIDATOR hard gate -> TEST-RUNNER -> RELEASE-VALIDATOR."
+  },
+  "result": null
+}

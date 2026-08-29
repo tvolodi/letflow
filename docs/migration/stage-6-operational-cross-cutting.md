@@ -36,7 +36,9 @@ REQ-196 (Serve `GET /api/v1/audit` from the audit store); REQ-197
 REQ-198 (`expr.ex`'s 8 pure builtin functions); REQ-199 (Correlated
 effect re-entry ordering, ORD-01/02/03/04); REQ-200 (Instance timeline
 rendering — actor display names and descriptions, OBS-04); REQ-201
-(Alerting hooks with edge-triggered firing, OBS-06).
+(Alerting hooks with edge-triggered firing, OBS-06); REQ-202
+(Content-addressed artifact store and the REPO-04 canonicaliser); REQ-203
+(Per-tenant artifact activation with atomic groups and history).
 
 REQ-200 and REQ-201 were added in the batch's **rework 1**
 (REQ-VALIDATOR gate, 2026-08-29): `src/obs/timeline.zig` and
@@ -49,6 +51,17 @@ the REQ-080 route emits), and `alerts.zig` had no external blocker
 because all four of its triggers are produced by this stage's own
 requirements.
 
+REQ-202 and REQ-203 were added in **rework 2** (same gate, same defect
+class one subsystem over): the rework-1 exhaustiveness assertion was
+false for `src/repository`, where `artifacts.zig`, `canonicaliser.zig`,
+`activation.zig` and `schemas.zig` had neither an owning requirement nor
+a deferral behind a bare `REQ-191–192` range. The first three are one
+content-addressed artifact subsystem with no blocker (verified:
+`artifacts.zig` imports `canonicaliser.zig`, `activation.zig` imports
+`artifacts.zig`, all three cite `src/design/repository.md`), so they
+were drafted; `schemas.zig` is keyed to the `artifact_versions` table
+REQ-202 creates, so it became deferral item 4 below.
+
 ## Scope
 
 Port the remaining cross-cutting subsystems not covered by earlier
@@ -60,7 +73,12 @@ second batch; a few differ from this doc's original estimates, which
 predated R-Co being reachable from a drafting session.
 
 - `src/scheduler` (6 files) — owned by REQ-185–188
-- `src/secrets` (6 files) + `src/secrets/integration` (1) — REQ-189–190
+- `src/secrets` (6 files) + `src/secrets/integration` (1) — all seven
+  under REQ-189 (the decision) and REQ-190 (the implementation):
+  `store.zig`, `crypto.zig`, `reference.zig`, `resolver.zig`,
+  `redaction.zig` and `mod.zig`, plus
+  `integration/webhook_keys.zig`, whose behaviour is REQ-190's webhook
+  HMAC key reconciliation
 - `src/obs` (5 files) — observability/metrics — named per file,
   because a range alone previously asserted coverage two of them did
   not have (REQ-VALIDATOR, rework 1): `logger.zig` → REQ-193;
@@ -69,9 +87,18 @@ predated R-Co being reachable from a drafting session.
   (`obs/dlq` equivalent, OBS-05, is REQ-176–178)
 - `src/webhook` (3 files) — REQ-181–184
 - `src/dlq` (1 file) — dead-letter queue — REQ-176–178
-- `src/repository` (7 files) — REQ-191–192
+- `src/repository` (7 files) — named per file, for the same reason
+  `src/obs` is (a bare range here concealed four unowned files until
+  REQ-VALIDATOR caught it in rework 2): `service_catalog.zig` →
+  REQ-191 + REQ-192; `artifacts.zig` + `canonicaliser.zig` → REQ-202;
+  `activation.zig` → REQ-203; `mod.zig` is a re-export barrel with no
+  behaviour of its own; `schemas.zig` and `process_module_catalog.zig`
+  are deferrals, both listed below.
 - `src/expr` (7 files) — expression evaluation — REQ-197–198
-- `src/ordering` (5 files) — REQ-199
+- `src/ordering` (5 files) — all five under REQ-199: `consumer.zig`,
+  `cursor.zig`, `sweeper.zig`, `observability.zig` (ORD-04's lag
+  measurement; its contention-driven consumer reduction is deferred
+  inside that requirement) and `mod.zig`
 
 These are grouped together because each is relatively self-contained
 and none blocks S3/S4's critical path, but each still needs its own
@@ -79,19 +106,53 @@ requirement(s) once this stage starts — "cross-cutting" describes
 their relationship to the rest of the system, not that they're
 interchangeable or low-effort individually.
 
-Three parts of the above are deliberately **not** covered by the two
-batches, each with its blocker recorded in the owning requirement.
-This list is exhaustive: every other file in the subsystems above has
-a named owning requirement in the per-subsystem list, and any future
-omission belongs here rather than being left implicit — rework 1 added
-REQ-200 and REQ-201 precisely because `timeline.zig` and `alerts.zig`
-had been left out of both the coverage list and this one.
-`src/scheduler/partition_maintenance.zig` and `partition_retention.zig`
-(partitioning deferral — see Decisions); `src/expr/benchmark.zig` (a
-latency harness with no production behaviour, imported by nothing); and
-`src/repository/process_module_catalog.zig` (PLC-01, greenfield and
-unscoped to any Letflow stage — `SUB_PROCESS` `module_ref` resolution
-would need a definitions-side change first).
+### Deliberately not covered
+
+Five items, each with a named blocker:
+
+1. **`src/scheduler/partition_maintenance.zig` and
+   `partition_retention.zig`** — both operate on a partitioned `events`
+   table Letflow does not have. Blocked by decision 0003 Decision C's
+   partitioning deferral, reaffirmed by ISS-0014's adopted option (a).
+   See Decisions. Stated in REQ-188.
+2. **`src/expr/benchmark.zig`** — a DSL-13 latency harness (1,000
+   warm-up + 10,000 measured iterations against a 10 us target), output
+   via debug print, imported by nothing. No production behaviour to
+   port. Stated in REQ-197.
+3. **`src/repository/process_module_catalog.zig`** (PLC-01/PLC-02) —
+   greenfield and unscoped to any Letflow stage; `SUB_PROCESS`
+   `module_ref` resolution would need a definitions-side change first.
+   Stated in REQ-191.
+4. **`src/repository/schemas.zig`** (REPO-05, form-schema indexing) —
+   blocked on REQ-202. It is a field-level search/discovery index over
+   form artifacts **keyed to `artifact_versions`**, which is exactly the
+   table REQ-202 creates, so it is not draftable until the artifact
+   store exists. REQ-109 (done, S3) already names it out of scope and
+   warns that grepping "form schema" lands here first and "would build
+   the wrong mechanism" — that warning stands, and is why this is a
+   deferral rather than an oversight.
+5. **The repository HTTP surface** (R-Co REPO-11–14,
+   `POST /repository/artifacts` and friends) — no consumer contract
+   exists to build to, and there is nothing upstream to port: verified
+   that despite REPO-11–14 being marked RELEASED, the routes were never
+   built in R-Co (no `repository/artifacts` handler anywhere under
+   `src/api/`, no repository policy key in its `authorization.zig`, and
+   REPO-11's own `implemented_in` points at `services.zig`, which holds
+   only service-catalog handlers). Letflow has no SPA consumer either.
+   Stated in REQ-202.
+
+This list is exhaustive, and deliberately falsifiable — that
+falsifiability is the only reason the gaps in items 4–5 were ever
+found. Every other `.zig` file in the subsystems above has a named
+owning requirement in the per-subsystem list. Re-verified file by file
+against the real R-Co tree at rework 2 across all six second-batch
+subsystems (scheduler 6 files, secrets 6 + 1 under `integration/`, obs
+5, repository 7, expr 7, ordering 5). Rework 1 added REQ-200/201
+because `timeline.zig` and `alerts.zig` were missing from both lists;
+rework 2 added REQ-202/203 and items 4–5 because `artifacts.zig`,
+`canonicaliser.zig`, `activation.zig` and `schemas.zig` were missing
+from both. Any future omission belongs here rather than being left
+implicit.
 
 ## Decisions
 

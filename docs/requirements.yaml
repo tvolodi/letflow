@@ -10889,6 +10889,20 @@ requirements:
       6. RUN IT ON REQ-186's SCHEDULER, not a new ticker. R-Co runs the
       sweeper on its existing scheduler cadence rather than a separate
       thread, and Letflow should do the same for the same reason.
+      7. THE ORD-04 LAG SURFACE (src/ordering/observability.zig, added to
+      this requirement's scope in rework 2 -- an exhaustiveness re-check
+      found this file covered by neither a requirement nor a deferral).
+      Two read-only figures, both computable directly off the two tables
+      above with no additional schema: per-correlation LAG, defined by
+      R-Co as max(sequence_no) from effect_completions minus applied_seq
+      from correlation_cursors for that correlation (ORD-04 AC1/AC2), and
+      the AGE OF THE OLDEST PENDING row for that correlation. Emit both
+      through REQ-194's metrics registry rather than inventing a second
+      counter mechanism, and emit the lag-threshold-exceeded event
+      REQ-025 registers, naming the correlation, the lag and the oldest-
+      pending age. This is deliberately the MEASUREMENT half only; ORD-04's
+      third criterion (reducing the consumer count when contention is
+      high) stays deferred below, so the two halves are not conflated.
       TWO R-Co DEFECTS NOT TO PORT, both recorded in its own source:
       (a) src/ordering/consumer.zig L12-18 and L281-285 record that
       holding a pooled connection across the poll sleep starved a small
@@ -10920,10 +10934,13 @@ requirements:
       - "the consumer does not hold a database connection across its poll interval, asserted by a test that runs the cycle against a pool smaller than the consumer count without exhausting it -- the failure R-Co recorded as GH-654/ISS-0649"
       - "the subsystem is actually WIRED: a running cycle applies a completion end to end without a test manually invoking the internal apply function -- correcting R-Co's own unwired state, and it runs on REQ-186's scheduler rather than adding a new periodic child to lib/letflow/application.ex (confirmed by git diff of application.ex)"
       - "the effect-applied event type is registered in the per-tenant event_type_registry, so REQ-025's ES-05 registry check accepts it"
-      - "the moduledoc states that ORD-04's dynamic consumer-count reduction under contention is deliberately deferred, that R-Co left it unimplemented too, and that it depends on REQ-194's metrics"
+      - "per-correlation lag is computed as max(sequence_no) minus applied_seq and is exposed through REQ-194's metrics registry: a correlation with completions at sequences 1..5 and applied_seq 2 reports a lag of 3, and a fully-applied correlation reports 0 -- two explicit tests (ORD-04 AC1/AC2)"
+      - "the age of the oldest PENDING row is reported per correlation, and a correlation with no PENDING rows reports no age rather than a zero that is indistinguishable from a fresh row"
+      - "crossing the configured lag threshold emits the lag event with the correlation id, the lag and the oldest-pending age in its payload, asserted on the appended event"
+      - "the moduledoc states that ORD-04's dynamic consumer-count reduction under contention is deliberately deferred while its lag MEASUREMENT half is implemented here, that R-Co left the reduction unimplemented too, and that the deferred half depends on REQ-194's metrics"
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
-    depends_on: [REQ-186, REQ-023, REQ-025, REQ-072, REQ-176]
+    depends_on: [REQ-186, REQ-023, REQ-025, REQ-072, REQ-176, REQ-194]
 
   - id: REQ-200
     title: Instance timeline rendering -- actor display names and human-readable descriptions (OBS-04), closing the shipped SPA's broken TimelineFeed contract
@@ -11109,3 +11126,237 @@ requirements:
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-186, REQ-193, REQ-176, REQ-183, REQ-190, REQ-061]
+
+  - id: REQ-202
+    title: Content-addressed artifact store and the REPO-04 canonicaliser (REPO-01/02/03/04) -- deliberately NOT an extension of REQ-036's promotion digest
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Added in this batch's rework 2 (REQ-VALIDATOR finding: the rework-1
+      "this list is exhaustive" assertion was FALSE for src/repository --
+      artifacts.zig, canonicaliser.zig, activation.zig and schemas.zig had
+      no owning requirement and no deferral, while the Scope line still
+      read as a bare range). Verified against the real source before
+      drafting: artifacts.zig imports canonicaliser.zig (artifacts.zig L10)
+      and activation.zig imports artifacts.zig (activation.zig L10), all
+      three cite the same design artefact (R-Co src/design/repository.md),
+      and schemas.zig imports neither -- so the first three are one
+      subsystem and schemas.zig is separable. This requirement is the store
+      plus the canonicaliser; REQ-203 is activation.
+      FIRST of the artifact-repository pair. No blocker exists, which is
+      why this is drafted rather than deferred.
+      SCHEMA, ported from R-Co migrations/045_repository_artifacts.sql. The
+      TWO-TABLE split is the whole dedup mechanism and must be preserved:
+      * `repository_artifacts` -- the content-addressed blob store.
+      content_hash (binary, PRIMARY KEY -- the SHA-256 of the canonical
+      content, so identical content is one row by construction, which is
+      REPO-01's deduplication), content_type (string, e.g.
+      "application/json", "application/wasm"), byte_size (bigint),
+      created_at.
+      * `artifact_versions` -- named, ordered versions pointing INTO that
+      store. version_id (uuid pk), artifact_id (uuid), artifact_kind
+      (string -- R-Co's values are "definition", "form", "schema",
+      "service_catalog", "script", "module", "scenario"), artifact_name
+      (string, <=255), version_number (bigint), content_hash (binary,
+      FK to repository_artifacts ON DELETE RESTRICT), parent_version_id
+      (uuid, nullable, self-FK ON DELETE SET NULL -- REPO-03's lineage),
+      created_by (uuid), created_at, description (text, nullable), with
+      UNIQUE (artifact_kind, artifact_name, version_number).
+      PLACEMENT: follow decision 0003-ecto-schema-strategy.md Decision B
+      (per-tenant schema, tenant_id retained) UNLESS this requirement
+      states an R-Co-grounded reason to go global. Note the tension to
+      resolve explicitly rather than inherit: the CONTENT store dedups by
+      hash, and content-level dedup only spans tenants if the table is
+      global -- but a global content store means one tenant's uploaded
+      bytes are physically shared with another's, which is a tenant-data
+      question, not a storage-efficiency one. R-Co's own activation table
+      carries tenant_id as a column while the artifact tables do not, so
+      R-Co effectively made the store global. Decide, state the reason, and
+      if going global flag it for REVIEWER sign-off per CLAUDE.md's
+      do-not-silently-re-decide rule -- the same treatment REQ-191 gives
+      service_catalog and REQ-189 gives secrets.
+      A REAL R-Co DEFECT NOT TO PORT: migration
+      058_repo_artifacts_tenant_activation.sql re-creates
+      `repository_artifacts` with a COMPLETELY DIFFERENT shape from
+      migration 045 -- version_id as the primary key, content_hash as TEXT
+      rather than BYTEA, an inline content_json column, and no
+      byte_size/content_type. Both migrations use CREATE TABLE IF NOT
+      EXISTS, so which shape a given database ends up with depends on
+      migration order and prior state. Letflow ships ONE definition of each
+      table. The moduledoc must record that this divergence was found and
+      which shape was chosen (migration 045's, the one artifacts.zig
+      actually codes against).
+      SCOPE:
+      1. Both tables and their migration.
+      2. THE CANONICALISER (REPO-04), and the decision this requirement
+      must make explicitly rather than leave to its implementer. Letflow
+      ALREADY has canonicalisation:
+      lib/letflow/definitions/promotion_digest.ex (REQ-036, done S2)
+      recursively sorts object keys, rebuilds them as Jason.OrderedObject,
+      SHA-256s the result, and compares with :crypto.hash_equals/2. It is
+      even structurally typed ("any %{entries: [...]}-shaped map is
+      accepted"), so extending it looks superficially attractive.
+      DO NOT EXTEND IT, and the moduledoc must say why in these terms: the
+      two algorithms are NOT the same. REPO-04 requires "normalised number
+      forms" and R-Co's canonicaliser.zig implements that (L32 and
+      L121-123: integer-valued floats are serialised without a decimal
+      point, no exponent form), whereas promotion_digest.ex's
+      canonicalize/1 (L88-104) sorts keys, stringifies atoms and passes
+      every number through UNCHANGED. Making promotion_digest.ex normalise
+      numbers would silently change the digest of every existing promotion
+      plan and break REQ-036's INV-PRM-5 verification against any digest
+      already stored. So: build a SEPARATE canonicaliser module for
+      artifacts, and have BOTH moduledocs cross-reference each other
+      stating that two canonicalisers exist deliberately, which is for
+      which, and that they must not be merged without re-deriving every
+      stored promotion digest. Two canonicalisers landing by accident is
+      the failure mode; two landing by a recorded decision is correct.
+      3. Canonical rules, stated normatively so a test can pin them: object
+      keys sorted; no insignificant whitespace; numbers normalised per
+      above; and BINARY artifacts (content_type not JSON) hashed by BYTE
+      IDENTITY with no canonicalisation at all -- R-Co's canonicaliser.zig
+      header states this and REPO-04 cross-references WASM-05 for it.
+      4. create/2: canonicalise (or take bytes verbatim for binary),
+      SHA-256, upsert the content row, and create the next
+      version_number for (artifact_kind, artifact_name). Submitting
+      IDENTICAL content twice must reference the same stored bytes --
+      REPO-01's acceptance criterion -- and the returned descriptor
+      carries the hash.
+      5. IMMUTABILITY (REPO-02): there is no update path. Changing content
+      creates a new version with a new hash. An attempt to modify a stored
+      artifact is an error, and the content row must be un-updatable at the
+      DATABASE level, not merely absent from the API -- the same
+      enforcement standard REQ-195 applies to audit_entries.
+      6. Version history (REPO-03): ordered, with parent linkage, paginated
+      per REQ-067's cursor contract.
+      A NAME COLLISION TO DISAMBIGUATE, checked before drafting: REQ-041
+      (done, S2) created `solution_pack_artefact_bases`. That is an
+      install-tracking table for solution-pack three-way diffs, GLOBAL by
+      REQ-041's own explicit classification ("install records are
+      cross-tenant infrastructure"), and records which artefact a given
+      pack install started from. It is NOT a content-addressed artifact
+      store and this requirement neither reads nor modifies it. State this
+      in the moduledoc so the two are not later conflated on the strength
+      of the shared word "artefact".
+      NOT IN THIS REQUIREMENT: no activation (REQ-203); no form-schema
+      indexing (REPO-05, deferred -- see the stage doc's not-covered list);
+      no route or controller. On that last point, note something verified
+      rather than assumed: R-Co's REPO-11..14 describe a
+      /repository/artifacts HTTP API and are marked RELEASED, but the
+      routes were NEVER BUILT -- grep for "repository/artifacts",
+      handleCreateArtifact or handleListVersions across R-Co's src/api/
+      returns nothing, its authorization.zig has no repository policy key,
+      and REPO-11's own implemented_in points at services.zig, which
+      contains only service-catalog handlers. Letflow has no SPA consumer
+      for artifacts either (no web/src/api entry, and the only "artifact"
+      hit under web/ is promotions.ts's unrelated package-assertion field).
+      So there is no consumer contract to build to and no upstream route to
+      port; the repository HTTP surface is deliberately out of scope for
+      this batch and is named in the stage doc's not-covered list rather
+      than silently omitted.
+    acceptance_criteria:
+      - "creating two artifacts with byte-identical JSON content produces ONE repository_artifacts row and two artifact_versions rows referencing the same content_hash -- REPO-01's deduplication, asserted by row counts against both tables"
+      - "the same logical JSON content submitted with different key ORDER and different insignificant WHITESPACE produces the SAME content_hash -- REPO-04's acceptance criterion, asserted as one test with at least two differing serialisations of one document"
+      - "number normalisation is exercised: a document containing an integer-valued float and one containing the corresponding integer produce the documented outcome, and the canonical form of an integer carries no decimal point -- asserted on the canonical bytes, not only on the hash"
+      - "a binary artifact (content_type not JSON) is hashed by byte identity with no canonicalisation applied, asserted by showing its hash equals a plain SHA-256 of the submitted bytes"
+      - "the artifact canonicaliser is a SEPARATE module from lib/letflow/definitions/promotion_digest.ex, that module is NOT modified (confirmed by git diff --stat), and BOTH moduledocs cross-reference each other stating why two canonicalisers exist and that merging them would change every stored promotion digest"
+      - "an existing promotion plan's digest computed by REQ-036's PromotionDigest is unchanged by this requirement, asserted by a test computing a digest over a fixed fixture and comparing against the value REQ-036 produces"
+      - "an attempt to UPDATE a persisted repository_artifacts row is rejected by the DATABASE, not merely absent from the context API -- REPO-02, asserted by a statement issued around the Ecto schema"
+      - "submitting changed content for an existing artifact_name creates a NEW version with a new hash and an incremented version_number, leaving the previous version's row and content untouched"
+      - "version history returns versions in order with parent_version_id linkage populated for a version created from a parent, and paginates via REQ-067's cursor contract -- REPO-03"
+      - "the two tables' placement (per-tenant schema versus global) is stated in the migration with its reason, and if global, the divergence from decision 0003 Decision B is flagged for REVIEWER sign-off, with the cross-tenant content-sharing consequence stated explicitly"
+      - "the moduledoc records that R-Co's migration 058 re-creates repository_artifacts with a conflicting shape (version_id primary key, TEXT content_hash, inline content_json) and states that Letflow ships migration 045's shape only"
+      - "the moduledoc states that REQ-041's solution_pack_artefact_bases is a different, install-tracking table that this requirement neither reads nor writes"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-036, REQ-072, REQ-067]
+
+  - id: REQ-203
+    title: Per-tenant artifact activation -- atomic multi-artifact groups and activation history (REPO-08/09/10)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Added in this batch's rework 2, the second half of the
+      artifact-repository pair REQ-202 opens. Split from REQ-202 because
+      REQ-202 builds a content store and a canonicaliser while this builds
+      a per-tenant activation pointer with atomic group semantics and an
+      audit trail -- two different shapes of change, each about one agent
+      turn, and R-Co splits them the same way (REPO-01/02/03/04 versus
+      REPO-08/09/10, artifacts.zig versus activation.zig).
+      SCHEMA, ported from R-Co migrations/046_repository_activations.sql:
+      * `artifact_activations` -- the current pointer, one row per active
+      artifact per tenant. activation_id (uuid pk), tenant_id, artifact_kind,
+      artifact_name, active_version_id (FK to REQ-202's artifact_versions
+      ON DELETE RESTRICT), activated_at, activator_user_id, with UNIQUE
+      (tenant_id, artifact_kind, artifact_name) -- the constraint that
+      makes "exactly one active version per artifact per tenant" a database
+      invariant rather than an application convention, and therefore
+      REPO-09's real enforcement.
+      * `artifact_activation_history` -- the append-only trail. history_id
+      (uuid pk), tenant_id, artifact_kind, artifact_name,
+      previous_version_id (nullable -- null on first activation),
+      new_version_id (FK, ON DELETE RESTRICT), new_version_number,
+      activator_user_id, activated_at, and rationale (text, NOT NULL --
+      REPO-10 requires a free-text reason from the activator, so an
+      activation with no rationale must be rejected rather than stored with
+      an empty string).
+      * `artifact_activation_groups` -- group_id (uuid pk), tenant_id,
+      activated_at, activator_user_id, rationale -- the envelope that makes
+      a multi-artifact activation one observable unit.
+      Placement follows REQ-202's decided placement for consistency; if
+      REQ-202 went global for the content store, these three still carry
+      tenant_id as the scoping column and this requirement must state
+      whether they are per-tenant-schema or global, with the reason.
+      SCOPE:
+      1. The three tables and their migration.
+      2. ATOMIC MULTI-ARTIFACT ACTIVATION (REPO-08): activating a group of
+      artifacts happens in ONE transaction. REPO-08's acceptance criterion
+      is specifically about OBSERVABILITY -- "concurrent reads during
+      activation see either the old version everywhere or the new version
+      everywhere; no mixed state is observable" -- so the test must be a
+      concurrent read against a partially-applied activation, not merely a
+      rollback check. A failure part-way through leaves every artifact in
+      the group at its previous version.
+      3. PER-TENANT ISOLATION (REPO-09): activating an artifact version in
+      tenant A does not change what tenant B sees, and the same version may
+      be active in one tenant and not another. This is the property the
+      UNIQUE constraint is scoped by tenant_id for.
+      4. ACTIVATION HISTORY (REPO-10): every activation appends one history
+      row carrying tenant, artifact version, activator identity, timestamp
+      and rationale. History is chronological and queryable, paginated per
+      REQ-067.
+      5. A resolution function: given a tenant, kind and name, return the
+      currently active version -- the read path everything else would
+      consume.
+      RELATIONSHIP TO REQ-195's AUDIT TRAIL, to be stated rather than left
+      ambiguous: R-Co's REPO-10 cross-references OBS-03 with "activations
+      are also audited", so an activation produces BOTH a domain history
+      row here AND a general audit entry there. These are not duplicates
+      serving the same purpose: activation history is the artifact
+      subsystem's own queryable lineage with a mandatory rationale, while
+      REQ-195's audit_entries is the tenant-wide, resource-typed,
+      hash-chained compliance trail. The moduledoc must say which is which
+      so a later reader does not delete one as redundant.
+      NOT IN THIS REQUIREMENT: no change to REQ-202's tables or
+      canonicaliser; no form-schema indexing (REPO-05, deferred); no route
+      or controller -- REQ-202's own description records that R-Co's
+      REPO-11..14 routes were never actually built upstream and that
+      Letflow has no SPA consumer, so the repository HTTP surface is
+      deferred for the whole pair and named in the stage doc's not-covered
+      list.
+    acceptance_criteria:
+      - "activating a group of three artifacts in one call leaves all three pointing at their new versions, and a forced failure part-way through leaves ALL THREE at their previous versions with no history rows written -- two explicit tests"
+      - "REPO-08's observability criterion is tested directly: a concurrent read issued while a multi-artifact activation is in flight observes either every artifact at its old version or every artifact at its new version, never a mix"
+      - "activating an artifact in tenant A leaves tenant B's active version for the same artifact_kind and artifact_name unchanged, and the SAME version can be active in tenant A while inactive in tenant B -- REPO-09, two explicit tests"
+      - "the UNIQUE (tenant_id, artifact_kind, artifact_name) constraint is enforced by the DATABASE: an attempt to insert a second active row for the same tenant, kind and name is rejected at the database level rather than by application logic"
+      - "every activation appends exactly one artifact_activation_history row carrying tenant, new version id and number, activator identity, timestamp and rationale, with previous_version_id null on the first activation and populated with the prior version thereafter -- asserted field by field across two successive activations"
+      - "an activation submitted with no rationale is REJECTED rather than stored with an empty rationale -- REPO-10 requires the free-text reason"
+      - "activation history is returned in chronological order and paginates via REQ-067's cursor contract"
+      - "the resolution function returns the currently active version for a (tenant, kind, name) triple, and returns a not-found result rather than an arbitrary version when the artifact has never been activated in that tenant"
+      - "activating a version deleted from artifact_versions is impossible: the ON DELETE RESTRICT foreign key prevents deleting a version that is currently active, asserted at the database level"
+      - "the moduledoc states how activation history differs from REQ-195's audit_entries -- subsystem-specific queryable lineage with a mandatory rationale, versus the tenant-wide hash-chained compliance trail -- so neither is later removed as redundant"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-202, REQ-072, REQ-067]

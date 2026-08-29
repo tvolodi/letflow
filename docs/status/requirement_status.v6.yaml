@@ -750,3 +750,34 @@ history:
       specifies (GenServer ticker, FOR UPDATE SKIP LOCKED, per-tenant-schema
       iteration, dlq_entries entry_type "timer"). Core only -- no route/
       controller, mirroring REQ-176/178 and REQ-181/182's core/route split.
+  - req: REQ-186
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-29T19:30:59Z"
+    note: >
+      WF02-REQ186-20260829 done (queue task 359, GH#705, stage S6). Timers
+      schema and scheduler core shipped per REQ-185's design artefact:
+      tenant-scoped timers migration (decision 0003 Decision B) with the
+      status/recurrence CHECK constraints and the partial index on
+      (fire_at) WHERE status = 'pending', plus a scheduler core doing
+      FOR UPDATE SKIP LOCKED claim-and-fire, missed-timer recovery
+      (fired_late: true with both fire_at and the actual firing time),
+      and failure accounting (fire_error_count increments in a separate
+      transaction, remaining due timers in the cycle still attempted,
+      terminal "failed" landing in REQ-176's dlq_entries with entry_type
+      "timer" once fire_error_count reaches the configured max). Core
+      only -- no route/controller, per this requirement's own scope.
+      Path: zero rework rounds through design/security/reviewer/
+      test-design gates; ORCH directly ran the full suite twice mid-
+      pipeline and fixed two stale tests after the original ELIXIR-DEV
+      dispatch left a background verification run unfinished --
+      tenant_fixture.ex's table oracle and
+      tenant_provisioning_event_seed_test.exs's hardcoded seed counts;
+      REVIEWER corrected one design-doc inconsistency (actor_id)
+      post-implementation; TEST-DESIGN-VALIDATOR accepted one disclosed
+      row-lock-concurrency coverage gap as non-blocking, consistent with
+      REQ-181's own precedent for the identical idiom. RELEASE-VALIDATOR
+      independently re-verified all 10 acceptance criteria -- PASS, no
+      gap found (handoffs/WF02-REQ186-20260829/release-validation-req186.md).
+      Unblocks REQ-187 (transition.ex wiring + cancellation) and
+      REQ-188 (recurrence + escalation), both depends_on: [REQ-186].

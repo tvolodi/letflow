@@ -11,6 +11,18 @@ import Config
 # lib/letflow/application.ex's http_child/0.
 config :letflow, start_http: false
 
+# REQ-186: don't start Letflow.Scheduler.Poller under test at all -- its
+# very first tick runs with zero delay and queries Letflow.Repo from a
+# process no test process is an ancestor of, which under
+# Ecto.Adapters.SQL.Sandbox's default :manual mode raises
+# DBConnection.OwnershipError repeatedly until Letflow.Supervisor's own
+# restart intensity is exceeded and the whole application (Letflow.Repo
+# included) shuts down. See lib/letflow/application.ex's
+# scheduler_children/0. Letflow.Scheduler's own tests call
+# poll_and_fire/1 directly; a test of the Poller GenServer itself starts
+# its own instance explicitly.
+config :letflow, start_scheduler: false
+
 # Same per-workspace host port as config/dev.exs (this repo's config files
 # don't cascade — each env file loads independently). See config/db_port.exs.
 {db_port, _bindings} = Code.eval_file(Path.expand("db_port.exs", __DIR__))

@@ -438,7 +438,8 @@ defmodule Letflow.TenantProvisioning do
     {20_260_829_000_001, Letflow.Repo.Migrations.CreateDlqEntries,
      "20260829000001_create_dlq_entries.exs"},
     {20_260_829_010_001, Letflow.Repo.Migrations.CreateWebhookSubscriptions,
-     "20260829010001_create_webhook_subscriptions.exs"}
+     "20260829010001_create_webhook_subscriptions.exs"},
+    {20_260_829_020_001, Letflow.Repo.Migrations.CreateTimers, "20260829020001_create_timers.exs"}
   ]
 
   @doc """
@@ -466,9 +467,10 @@ defmodule Letflow.TenantProvisioning do
   `groups` (`lib/letflow/design/req064-drop-tenant-id.md` §2), and REQ-054 one
   more: `instance_state_snapshots`
   (`lib/letflow/design/req054-instance-state-snapshots.md` §3), REQ-176 one
-  more: `dlq_entries` (`lib/letflow/design/req176-dlq-core.md` §4), and
-  REQ-181 one more: `webhook_subscriptions`
-  (`lib/letflow/design/req181-webhooks-core.md` §1) —
+  more: `dlq_entries` (`lib/letflow/design/req176-dlq-core.md` §4), REQ-181
+  one more: `webhook_subscriptions`
+  (`lib/letflow/design/req181-webhooks-core.md` §1), and REQ-186 one more:
+  `timers` (`lib/letflow/design/req186-scheduler-core.md` §1) —
   entries in total (see `@tenant_scoped_migration_manifest` itself for the
   authoritative, up-to-date count), ordered by version. Every future tenant-scoped migration must append its
   own entry to `@tenant_scoped_migration_manifest`, in addition to following the
@@ -847,6 +849,32 @@ defmodule Letflow.TenantProvisioning do
           "error" => %{"type" => "string"}
         },
         "required" => ["run_id", "sandbox_id", "tenant_id", "error"]
+      }
+    },
+    %{
+      name: "TIMER_FIRED",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Scheduler.fire_timer/2 (SCH-01/05) when a pending timer's " <>
+          "poll-and-fire transaction commits.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "timer_id" => %{"type" => "string"},
+          "node_id" => %{"type" => "string"},
+          "timer_type" => %{"type" => "string"},
+          "fired_late" => %{"type" => "boolean"},
+          "scheduled_fire_at" => %{"type" => "string"},
+          "actual_fired_at" => %{"type" => "string"}
+        },
+        "required" => [
+          "timer_id",
+          "node_id",
+          "timer_type",
+          "fired_late",
+          "scheduled_fire_at",
+          "actual_fired_at"
+        ]
       }
     }
   ]

@@ -6,8 +6,13 @@ are all done as of 2026-08-29 -- the first batch's DLQ half is now
 fully complete. REQ-181 (Webhook subscription schema and core) and
 REQ-182 (the webhook route layer atop it) are both done as of
 2026-08-29 -- the first batch's webhooks half is now fully complete,
-mirroring the DLQ half's REQ-176/177/178 completion. Requirements,
-expanded in two batches:
+mirroring the DLQ half's REQ-176/177/178 completion. REQ-185 (scheduler
+timer-firing architecture, decision-and-design-only) and REQ-186
+(timers schema + scheduler core: poll-and-fire, missed-timer recovery,
+failure accounting) are both done as of 2026-08-29 -- REQ-187 (wiring
+TIMER nodes into transition.ex, SCH-01/03, plus cancellation) and
+REQ-188 (recurrence, SCH-07, plus escalation and the retention runner)
+are now unblocked. Requirements, expanded in two batches:
 
 **First batch (DLQ and webhooks):** REQ-176 (Dead-letter queue schema
 and core entry lifecycle, OBS-05 foundation); REQ-177 (Wire REQ-056's
@@ -205,7 +210,21 @@ ISS-302-equivalent session-level startup-sweep lock is adopted; the
 poller iterates tenant schemas per tick, with a quantified cost stated
 at 500 tenants; an exhausted-retry timer lands in REQ-176's
 `dlq_entries` with `entry_type` `"timer"`. REQ-186, REQ-187 and REQ-188
-are now unblocked.
+were unblocked by this requirement.
+
+**REQ-186, SETTLED (done, 2026-08-29).** Timers schema and scheduler
+core built on REQ-185's artefact: the tenant-scoped `timers` migration
+(status/recurrence CHECK constraints, partial index on `(fire_at)
+WHERE status = 'pending'`) plus a scheduler core implementing the
+`FOR UPDATE SKIP LOCKED` claim-and-fire loop, missed-timer recovery
+(`fired_late: true`), and failure accounting (a failed fire attempt
+increments `fire_error_count` in a separate transaction without
+stopping the poll cycle; a timer exhausting its configured retries
+moves to `failed` and lands in `dlq_entries` with `entry_type`
+`"timer"`). Core only -- no route/controller. RELEASE-VALIDATOR
+independently re-verified all 10 acceptance criteria -- PASS. REQ-187
+(`transition.ex` wiring + cancellation) and REQ-188 (recurrence +
+escalation) are now unblocked.
 
 Note one correction it must carry: SCH-02's literal text mandates a
 per-timer PostgreSQL advisory lock, but R-Co **removed** that

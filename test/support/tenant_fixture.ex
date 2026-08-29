@@ -140,6 +140,7 @@ defmodule Letflow.TenantFixture do
     "promotion_reviews",
     "tasks",
     "tenant_role",
+    "timers",
     "tokens",
     "users",
     "variable_schemas",

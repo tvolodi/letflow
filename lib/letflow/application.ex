@@ -82,7 +82,7 @@ defmodule Letflow.Application do
         {Letflow.Engine.Wasm.ModuleVersionRegistry,
          name: Letflow.Engine.Wasm.ModuleVersionRegistry},
         {Task.Supervisor, name: Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor}
-      ] ++ http_child()
+      ] ++ scheduler_children() ++ http_child()
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
@@ -102,6 +102,33 @@ defmodule Letflow.Application do
   # (config/dev.exs compile-time 4000; config/runtime.exs's PORT env var for
   # prod, matching config/prod.exs's own comment that runtime-dependent
   # values belong there).
+  # REQ-186 (design req186-scheduler-core.md §3.3): the scheduler's supervised
+  # GenServer ticker. Gated the same way http_child/0 gates Bandit below
+  # (ISS-0015's own precedent) -- config/test.exs sets start_scheduler: false,
+  # a deliberate, flagged addition beyond what the design doc itself specifies:
+  # the Poller's own first tick runs with ZERO delay and queries
+  # Letflow.Repo from a process no test process is an ancestor of, which
+  # under Ecto.Adapters.SQL.Sandbox's default :manual mode raises
+  # DBConnection.OwnershipError on every tick, repeatedly, until this
+  # supervisor's restart intensity is exceeded and the whole application
+  # (including Letflow.Repo) shuts down -- verified live via a full `mix
+  # test` run before this gate was added. No acceptance criterion requires
+  # the Poller to run automatically inside the test suite; Letflow.Scheduler's
+  # own tests call `poll_and_fire/1` directly, and any test of the Poller
+  # GenServer itself starts its own instance explicitly (mirroring
+  # http_child/0's own "exercised directly, not through the supervised
+  # child" precedent for Bandit/Plug.Test). No ordering dependency on any
+  # Task.Supervisor above (unlike SandboxPool's own ordering constraint).
+  # No new Task.Supervisor -- design §0's opening decision (transaction/
+  # rescue boundary only).
+  defp scheduler_children do
+    if Application.get_env(:letflow, :start_scheduler, true) do
+      [{Letflow.Scheduler.Poller, []}]
+    else
+      []
+    end
+  end
+
   defp http_child do
     if Application.get_env(:letflow, :start_http, true) do
       [{Bandit, plug: Letflow.Router, port: Application.fetch_env!(:letflow, :http_port)}]

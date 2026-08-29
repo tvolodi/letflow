@@ -6,7 +6,7 @@
   "from_agent": "CODE-DESIGNER",
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "lib/letflow/design/req178-dlq-routes.md",
-  "status": "PENDING",
+  "status": "DONE",
   "priority": "normal",
   "context": {
     "note": "Queue task 353, GH#698, stage S6, branch feature/WF02-REQ178-20260829 (pushed, commit fd0716a). CODE-DESIGNER produced lib/letflow/design/req178-dlq-routes.md for REQ-178 -- the route/controller layer atop REQ-176's already-shipped Letflow.Dlq context module and REQ-069's already-shipped Letflow.Api.Authorization matrix. Read docs/requirements.yaml's REQ-178 entry (the requirement_text below is copied from it), web/src/api/dlq.ts, web/src/types/api.ts's DlqEntry/CursorPage<T>, lib/letflow/dlq.ex, lib/letflow/dlq/entry.ex, lib/letflow/api/authorization.ex, lib/letflow/api/authorized_router.ex, lib/letflow/plugs/authorize.ex, lib/letflow/api/response.ex, and lib/letflow/routers/audit.ex (+lib/letflow/routers/tasks.ex for its :id-route/409-conflict/page_size_too_large precedents) before writing this design -- re-read those same files independently rather than trusting this summary. Verify in particular: (1) the design's claim that Letflow.Api.Authorization already has an endpoint_policy_key(method, \"/dlq\" <> _rest) -> :DlqReadRetryDiscard clause and a required_permission(:DlqReadRetryDiscard) -> :DlqOperate clause, so no new permission/policy-key atom is invented; (2) the design's claim, re-derived from role_allows?/2, that only PLATFORM_ADMIN and PROCESS_OPERATOR hold :DlqOperate; (3) that the design contains zero fenced code blocks and zero literal .ex-reproducing snippets (this exact design doc went through two rework rounds on REQ-157 in this same pipeline for that violation -- CODE-DESIGNER converted every earlier code-fence in this file to prose/tables before this handoff, but check it fresh, do not take that claim on trust); (4) that every acceptance criterion below maps to a concrete design section, not a TBD.",
@@ -25,5 +25,9 @@
     "artifacts_in": ["lib/letflow/design/req178-dlq-routes.md"],
     "next_action": "PASS -> route to ELIXIR-DEV (Step 2a: implement lib/letflow/routers/dlq.ex, the forward(\"/dlq\", ...) line in lib/letflow/plugs/api_pipeline.ex, and any tests needed to satisfy AC6 -- note AC6 (mix test / mix compile --warnings-as-errors passing) is a Step 2a/Step 4 concern, not something this design step itself runs). FAIL -> rework CODE-DESIGNER, listing every failed check by acceptance-criterion id, max_rework 3."
   },
-  "result": null
+  "result": {
+    "verdict": "PASS",
+    "report_file": "handoffs/WF02-REQ178-20260829/step-01b-validation-report.md",
+    "summary": "Independently re-verified against lib/letflow/api/authorization.ex, lib/letflow/dlq.ex, lib/letflow/dlq/entry.ex, web/src/types/api.ts, web/src/api/dlq.ts, lib/letflow/api/response.ex, lib/letflow/api/authorized_router.ex, and lib/letflow/routers/tasks.ex -- all claims in lib/letflow/design/req178-dlq-routes.md hold: the :DlqReadRetryDiscard->:DlqOperate policy mapping exists exactly as claimed and is held only by PLATFORM_ADMIN/PROCESS_OPERATOR; Letflow.Dlq's list/2, get/2, retry/2, discard/2 signatures and error/return shapes match; DlqEntry JSON serialization matches web/src/types/api.ts field-for-field with the four schema-less TS fields correctly left as an open question rather than fabricated; zero fenced code blocks in the design (grep confirmed). Routed to ELIXIR-DEV for implementation."
+  }
 }

@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ188-20260829-step01b",
+  "run_id": "WF02-REQ188-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req188-recurring-timers-and-retention.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Queue task 361, GH#707, stage S6. Design artefact for REQ-188 (SCH-07 recurring timers + periodic retention runner) produced on feature/WF02-REQ188-20260829, committed and pushed at commit 6836386. Read the design artefact independently -- do not take CODE-DESIGNER's summary as a substitute. It extends already-shipped REQ-186 (lib/letflow/scheduler.ex, lib/letflow/scheduler/poller.ex, lib/letflow/scheduler/timer.ex) and REQ-187 (fire_timer/2 one-transaction fire path) rather than introducing new modules. Two source facts the design cites and that were independently verified before writing: (1) Letflow.EventStore.archive/1 (event_store.ex L989) has zero production callers today -- verified via grep across lib/ (the only other 'archive(' hits are Letflow.Definitions.archive/2, an unrelated function on a different schema). (2) docs/issues/ISS-0014.yaml is resolved, adopted option (a) (port row-level archive/1 as-is) and rejected option (c) (port PAR-03 whole-partition retention now) with the exact reasoning quoted in the design's section 0."
+  },
+  "task": {
+    "description": "Validate lib/letflow/design/req188-recurring-timers-and-retention.md against REQ-188's acceptance criteria (docs/requirements.yaml REQ-188 entry, reproduced in full below). Confirm: every acceptance criterion maps to a concrete design element (see the design's own section 6 acceptance-criteria map, but re-derive the mapping independently rather than trusting that table); no fenced code blocks reproducing real .ex implementation content are present (signatures/type-shapes/tables only); function signatures are fully specified with input/output types and error shapes; cross-module dependencies and DB impact are stated; open questions are listed explicitly rather than silently resolved (design section 7). Also confirm the moduledoc-mandated deferral statements in section 0 actually name decision 0003 Decision C point 2, ISS-0014's adopted option (a) and rejected option (c), and the CHK-12/escalation_timer_duration gap for SCH-04, per AC 8.",
+    "acceptance_criteria": [
+      "a timer with repeat_expression \"R/PT1H\" that fires creates exactly one NEW pending timer with fire_at equal to the fired timer's fire_at plus one hour, in the same transaction as the firing -- demonstrated by a test that forces the firing transaction to roll back and asserts NEITHER the status change NOR the new timer persisted",
+      "a timer with repeat_expression \"R3/PT1H\" stops re-arming after its third firing: fired_count reaches 3 and the fourth poll creates no new timer, asserted by counting timers rows",
+      "a recurring timer whose instance is cancelled does not re-arm -- the chain terminates, asserted after a cancellation followed by a poll",
+      "a recurring timer whose repeat interval is SHORTER than the poll interval fires at most once per poll cycle rather than catching up multiple occurrences in one tick, asserted by an explicit test with the interval set below the configured poll interval",
+      "the retention runner is DISABLED by default: with no configuration set, a full poll cycle invokes Letflow.EventStore.archive/1 zero times, asserted rather than assumed",
+      "with the retention runner explicitly enabled in config, a poll cycle invokes archive/1 and rows older than the tenant's configured retention are moved to events_archive -- closing the zero-caller gap, asserted by row counts before and after",
+      "the retention runner runs on REQ-186's existing scheduler process rather than adding a second independent periodic process to lib/letflow/application.ex, confirmed by git diff of application.ex showing no new ticker child",
+      "the moduledoc states that partition_maintenance.zig and partition_retention.zig are deliberately not ported, naming decision 0003 Decision C's partitioning deferral and ISS-0014's adopted option (a) as the blocker, and that SCH-04 escalation timers are deferred because :HUMAN_TASK has no escalation_timer_duration attribute in Letflow's graph schema",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

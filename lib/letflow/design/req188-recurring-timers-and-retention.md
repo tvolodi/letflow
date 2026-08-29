@@ -229,14 +229,13 @@ the function AC 6's test calls directly to assert row-count movement into
 
 ```
 @spec retention_due?(last_run_at :: DateTime.t() | nil) :: boolean()
-def retention_due?(nil), do: true
-def retention_due?(%DateTime{} = last_run_at) do
-  DateTime.diff(DateTime.utc_now(), last_run_at, :millisecond) >= retention_interval_ms()
-end
 ```
 
-Pure, directly testable (no DB access) — `nil` means "never run, due immediately,"
-mirroring `Poller.init/1`'s own zero-delay-first-tick philosophy for `:tick`.
+Pure, directly testable (no DB access), with two cases: a `nil` `last_run_at` means
+"never run before," so it is due immediately — mirroring `Poller.init/1`'s own
+zero-delay-first-tick philosophy for `:tick`. A non-`nil` `last_run_at` is due once the
+elapsed wall-clock time since it (in milliseconds) reaches or exceeds
+`retention_interval_ms()`; otherwise it is not yet due.
 
 ### 2.4 `Letflow.Scheduler.Poller` — same process, extended state, no new child
 
@@ -253,18 +252,15 @@ cadence bookkeeping, nothing else).
 step, AFTER its existing `Enum.each(tenant_schemas(), &Scheduler.poll_and_fire/1)` line
 and BEFORE `schedule_next_tick/0`:
 
-```
-new_state =
-  if Scheduler.retention_enabled?() and Scheduler.retention_due?(state.last_retention_run_at) do
-    Enum.each(schemas, &Scheduler.run_retention_sweep/1)
-    %{state | last_retention_run_at: DateTime.utc_now()}
-  else
-    state
-  end
-```
+The added step's behavior, described by four properties (no fenced code — it is a
+description of the change, not the change itself):
 
-(`schemas` is the same list `tenant_schemas()` already produced for the timer-poll loop
-this tick — computed once, reused, not queried twice.)
+| Property | Behavior |
+|---|---|
+| Guard | Runs only when both `Scheduler.retention_enabled?()` and `Scheduler.retention_due?(state.last_retention_run_at)` are true; otherwise `state` is left completely unchanged. |
+| Schema source | Iterates the same `schemas` list `tenant_schemas()` already produced for this tick's timer-poll loop — computed once, reused, not queried a second time. |
+| Sweep call | When the guard passes, calls `Scheduler.run_retention_sweep/1` once per schema in that list. |
+| State update | When the guard passes, the resulting state's `last_retention_run_at` becomes `DateTime.utc_now()`; when the guard fails, the state carried into `schedule_next_tick/0` is byte-for-byte the same `state` the callback received. |
 
 **No new supervised child, no new process.** `lib/letflow/application.ex`'s
 `scheduler_children/0` is untouched — it still starts exactly

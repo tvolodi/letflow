@@ -1,0 +1,20 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step02c-recheck1",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2c (narrow re-check after codepoint-truncation fix)",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/engine/execution_error.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 352, GH#697, stage S6. Your prior review FAILED on INV-8: reason: String.slice(error_args.reason, 0, 255) truncated by grapheme count, not Postgres's codepoint count, risking an unhandled DB exception. ORCH independently, empirically confirmed the defect with real Elixir (255 graphemes = 510 codepoints for a combining-mark string). ELIXIR-DEV fixed it as commit 8206de9: reason is now truncated via error_args.reason |> String.codepoints() |> Enum.take(255) |> Enum.join(), guaranteeing the result never exceeds 255 codepoints. Audited engine.ex's Hook A for the same pattern -- none found (it only sets the unbounded full_reason field, no truncation). Added a regression test in test/letflow/engine_execution_error_test.exs using a 300-repetition combining-mark string (600 codepoints), asserting the DLQ insert succeeds and reason is truncated to exactly 255 codepoints. mix compile --warnings-as-errors clean; mix test test/letflow/engine_execution_error_test.exs 9 passed; full suite 2467/2469 tests passed, only the 2 known rust-toolchain-absent failures."},
+  "task": {
+    "description": "Narrow re-check: confirm the codepoint-based truncation genuinely guarantees the reason value never exceeds Postgres's varchar(255) codepoint limit (re-verify the logic yourself, ideally by running the same or an equivalent real Elixir snippet you'd want to reproduce this with, if you have toolchain access this time -- if not, verify the logic is sound by inspection: String.codepoints/1 |> Enum.take(255) |> Enum.join() cannot produce more than 255 codepoints by construction). Confirm the regression test genuinely exercises the fixed code path (routes through Hook B's real DLQ landing, not a mocked/bypassed insert). Confirm your other 4 previously-passed checks (tenant-scoping, same-transaction participation, no attrs-allowlist bypass, no dlq_landed_externally abuse) are unaffected by this narrow fix -- no need to redo them, just confirm nothing else changed via git diff.",
+    "acceptance_criteria": [
+      "an instance driven to ERROR via REQ-061's execution-error path produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason equal to the persisted EXECUTION_ERROR event's own reason field",
+      "the ERROR-path DLQ landing is in the same transaction as REQ-061's status flip and event append: forcing the DLQ insert to fail leaves the instance status, the EXECUTION_ERROR event, and the DLQ table all unchanged, verified by reading all three back"
+    ]
+  },
+  "result": null
+}

@@ -1597,6 +1597,21 @@ is written or edited by any agent (not just ORCH), run `mix letflow.lint_handoff
 before considering that step done — the nested `result.status`/`result.verdict` field is
 free text and does not need this check; only the sibling top-level field does.
 
+**Recurrence (4th+5th occurrence, WF02-REQ181-20260829).** SECURITY-REVIEWER's and
+REVIEWER's own step-02c/step-02d handoffs both used top-level `status: "DONE"` again,
+undetected by ORCH inline and caught only when PR #725's CI ran `mix letflow.lint_handoffs`
+(both backend-gate jobs failed in under a minute — a useful tell that this is a fast
+static-lint failure, not a real test failure, distinguishing it from a full ~5-6 minute
+suite run). Fixed directly by ORCH (`b11688f`) and reverified locally with
+`mix letflow.lint_handoffs` before re-pushing. Despite three documented recurrences and an
+explicit mitigation write-up above, this keeps recurring because the mitigation is not
+enforced anywhere upstream of CI (no pre-commit hook, no dispatch-time reminder baked into
+every review-role prompt) — writing it down a fourth time has not fixed it either;
+whoever addresses this class next should treat "document it again" as exhausted and
+instead make it structurally impossible (e.g. ORCH greps every handoff it did not itself
+author for a valid top-level `status` before dispatching the next step, or a git
+pre-push hook runs `mix letflow.lint_handoffs` locally).
+
 ## A test embeds `git diff main...HEAD` directly, assuming a local `main` branch always exists
 
 **What happened.** REQ-165's `plugin_handler_test.exs` had a test asserting

@@ -897,11 +897,19 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # itself surfacing `left: ["S6"], right: []` on this exact assertion.
       # S6 joins `active` the moment any of REQ-176/177/178/181/182/183/184
       # goes in_progress/done/blocked.
+      #
+      # UPDATE (REQ-176 done, 2026-08-29): the predicted event happened
+      # immediately -- REQ-176 (stage S6, status done) landed in this same
+      # WF02-REQ176-20260829 run. Per the detector rule, S6 moves from
+      # inactive to active, same transition S5 made for REQ-148. Re-derived,
+      # not guessed: confirmed live via CI surfacing
+      # `left: [...,"S6",...], right: [...]` (S6 missing from `active`) on
+      # this exact assertion. `active` gains "S6"; `inactive` returns to [].
       active = for s <- result.stages, s.activity == :active, do: s.stage
       inactive = for s <- result.stages, s.activity == :inactive, do: s.stage
 
-      assert active == ["S0", "S1", "S2", "S3", "S4", "S5", "S8", "S9"]
-      assert inactive == ["S6"]
+      assert active == ["S0", "S1", "S2", "S3", "S4", "S5", "S6", "S8", "S9"]
+      assert inactive == []
     end
 
     test "T-LIVE-DEFERRED-COUNT-IS-ZERO -- documents today's vacuous green", %{result: result} do

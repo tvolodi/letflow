@@ -1,8 +1,7 @@
 # 0016 — Secrets storage backend, master key, reference syntax, crypto, rotation, and webhook HMAC key ownership
 
-Status: decided, pending REVIEWER sign-off on the Decision-B divergence (§B below —
-this record diverges from decision 0003 Decision B and is not final until that
-sign-off lands; see "Open questions / gating"). Owner: CODE-DESIGNER (REQ-189).
+Status: decided. REVIEWER sign-off on the §B/§F divergences GRANTED 2026-08-30 (see
+"REVIEWER sign-off" at the end of this file). Owner: CODE-DESIGNER (REQ-189).
 
 ## Question
 
@@ -336,4 +335,62 @@ Step 1b design-validator gate plus this project's don't-silently-re-decide rule
 below as its own dated subsection — do not edit the Decision text above to retrofit
 the appearance of prior approval.
 
-<!-- REVIEWER sign-off pending. Append below once given, dated, do not edit above. -->
+## REVIEWER sign-off
+
+**2026-08-30, WF02-REQ189-20260830 (ad-hoc gate, AGENT_ID REVIEWER).** Read this
+record in full, independently, plus 0003 in full and REQ-181's requirements.yaml entry
+(lines 9182-9242). Verdict: **SIGN-OFF GRANTED, both §B and §F**, no conditions.
+
+**§B (global `secrets` table vs. Decision B's per-tenant-schema rule).** GRANTED.
+0003 Dimension B's stated goal is explicit in its own text (line ~207): "a bug that
+forgets a `tenant_id` predicate in a query fails loudly ... instead of silently
+leaking rows." §B's argument is that for this one table, the schema boundary would
+have to resolve *before* the reference's own tenant segment can even be checked
+against the caller — collapsing `sec://tenant/<t>/...`'s self-describing tenant
+segment into decoration, since a per-tenant-schema table would already have scoped
+(or silently empty-result-failed) before any application check ran. Keeping `secrets`
+global with `resolveSecret` checking `caller_tenant == reference_tenant` as its
+*first* operation, before decryption, preserves the loud-failure property the general
+rule exists for (an explicit `{:error, :tenant_mismatch}`, not a differently-shaped
+loud failure, but not a silent leak either) while fitting the actual access pattern
+(reference-based resolution across namespaces/consumers that don't already carry a
+tenant-scoped connection). This is the same "explicit predicate, not inferred"
+preference INV-1 already applies elsewhere — not a taste-based override of Decision B,
+but an argued exception grounded in Decision B's own rationale, with R-Co's identical
+choice as corroborating (not sole) evidence, exactly as CLAUDE.md's don't-silently-
+diverge rule requires. Consequences correctly names this a "stated, sign-off-gated
+exception," not a silent drop of the general rule for future tables — that scoping
+is essential and is what makes this GRANTED rather than a weakening of the general
+rule itself, which remains schema-per-tenant.
+
+**§F (superseding REQ-181's hashed `secret` column with `secret_ref`/`secret_key_id`).**
+GRANTED. The structural claim holds: HMAC-SHA256 requires the verifier/signer to hold
+the actual key bytes to compute a reproducible MAC; a one-way hash is cryptographically
+irreversible by design, so a signer holding only `hash(secret)` cannot produce
+`HMAC(secret, payload)` — there is no routing-around this within REQ-181's schema as
+drafted; any construction that kept only a hash durably stored and still produced a
+valid HMAC would itself be a crypto defect, not a design alternative. REQ-181's
+requirements.yaml entry (line 9226) confirms `hmac_secret_once` was always meant as a
+one-time reveal of the plaintext, so the resolution honors — does not weaken — that
+existing contract; only the durable-storage destination changes. §F correctly scopes
+the blast radius: `create/2`/`update/2`/`list/1`/`delete/2`, tenant-scoping, and
+ACTIVE/PAUSED reconciliation are unaffected and REQ-190 is correctly named as owning
+the migration that retires the now-dead hashed column, rather than this record
+attempting to write that migration itself.
+
+**Other charter checks.** Idiomatic-vs-crutch and supervision: N/A, no code exists yet
+(decision-record-only artefact, no `lib/`/`priv/repo/migrations/` diff). Type-safety
+gap worth flagging for whoever implements REQ-190: `status` (active/disabled/deleted)
+and the `algorithm`/`wrapped_key_algorithm` metadata are specified here as plain
+strings/enum values on a Postgres table — an `Ecto.Enum` for `status` (as 0003
+Dimension A already establishes as the project's convention for status-like columns)
+and a constrained enum for `wrapped_key_algorithm` would make the "claims a cipher
+mode it doesn't run" class of bug (defect (b), this record's own Evidence) structurally
+harder to reintroduce later when AES-KW support is genuinely added. Not blocking —
+REQ-190's design should account for it. Scope creep: none found — §A-F stay within
+what REQ-189/190/183 actually need now (envelope encryption, one table, one reference
+syntax); the deferred grace-window dual-read (§E) and the OIDC/plugin-secrets
+forward-pointer (Consequences) are correctly left as future work, not built ahead of
+need.
+
+<!-- End of REVIEWER sign-off, 2026-08-30. -->

@@ -9133,7 +9133,7 @@ requirements:
   - id: REQ-178
     title: Port dlq.zig's S4 route surface onto the DLQ core (GET/POST /api/v1/dlq, DlqOperate-gated)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 353  # letflow-queue task id
     description: >

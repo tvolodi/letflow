@@ -100,7 +100,9 @@ defmodule Letflow.Routers.WebhooksTest do
 
       {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
 
-      list_conn = build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+      list_conn =
+        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+
       list_body = Jason.decode!(list_conn.resp_body)
 
       assert [item] = list_body["items"]
@@ -124,16 +126,24 @@ defmodule Letflow.Routers.WebhooksTest do
       {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
 
       patch_conn =
-        json_conn(:patch, "/subscriptions/#{created["id"]}", tenant, [roles: ["PLATFORM_ADMIN"]], %{
-          "status" => "PAUSED"
-        })
+        json_conn(
+          :patch,
+          "/subscriptions/#{created["id"]}",
+          tenant,
+          [roles: ["PLATFORM_ADMIN"]],
+          %{
+            "status" => "PAUSED"
+          }
+        )
         |> dispatch()
 
       assert patch_conn.status == 200
       patched = Jason.decode!(patch_conn.resp_body)
       assert patched["status"] == "PAUSED"
 
-      list_conn = build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+      list_conn =
+        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+
       list_body = Jason.decode!(list_conn.resp_body)
       assert [item] = list_body["items"]
       assert item["status"] == "PAUSED"
@@ -144,16 +154,24 @@ defmodule Letflow.Routers.WebhooksTest do
       {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
 
       patch_conn =
-        json_conn(:patch, "/subscriptions/#{created["id"]}", tenant, [roles: ["PLATFORM_ADMIN"]], %{
-          "is_active" => false
-        })
+        json_conn(
+          :patch,
+          "/subscriptions/#{created["id"]}",
+          tenant,
+          [roles: ["PLATFORM_ADMIN"]],
+          %{
+            "is_active" => false
+          }
+        )
         |> dispatch()
 
       assert patch_conn.status == 200
       patched = Jason.decode!(patch_conn.resp_body)
       assert patched["status"] == "PAUSED"
 
-      list_conn = build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+      list_conn =
+        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+
       list_body = Jason.decode!(list_conn.resp_body)
       assert [item] = list_body["items"]
       assert item["status"] == "PAUSED"
@@ -199,7 +217,9 @@ defmodule Letflow.Routers.WebhooksTest do
       assert conn.status == 403
 
       # No state change on 403.
-      list_conn = build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+      list_conn =
+        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+
       [item] = Jason.decode!(list_conn.resp_body)["items"]
       assert item["status"] == "ACTIVE"
     end
@@ -215,7 +235,9 @@ defmodule Letflow.Routers.WebhooksTest do
       assert conn.status == 403
 
       # Still present afterward.
-      list_conn = build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+      list_conn =
+        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+
       assert length(Jason.decode!(list_conn.resp_body)["items"]) == 1
     end
 
@@ -226,13 +248,21 @@ defmodule Letflow.Routers.WebhooksTest do
       {_conn, created_in_b} = create_subscription(tenant_b, ["PLATFORM_ADMIN"])
 
       patch_conn =
-        json_conn(:patch, "/subscriptions/#{created_in_b["id"]}", tenant_a, [roles: ["PLATFORM_ADMIN"]], %{
-          "status" => "PAUSED"
-        })
+        json_conn(
+          :patch,
+          "/subscriptions/#{created_in_b["id"]}",
+          tenant_a,
+          [roles: ["PLATFORM_ADMIN"]],
+          %{
+            "status" => "PAUSED"
+          }
+        )
         |> dispatch()
 
       delete_conn =
-        build_conn(:delete, "/subscriptions/#{created_in_b["id"]}", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:delete, "/subscriptions/#{created_in_b["id"]}", tenant_a,
+          roles: ["PLATFORM_ADMIN"]
+        )
         |> dispatch()
 
       assert patch_conn.status == 404
@@ -240,16 +270,24 @@ defmodule Letflow.Routers.WebhooksTest do
 
       # Cross-tenant-404 identical to a genuinely-absent id (INV-5).
       never_existed_conn =
-        json_conn(:patch, "/subscriptions/#{Ecto.UUID.generate()}", tenant_a, [roles: ["PLATFORM_ADMIN"]], %{
-          "status" => "PAUSED"
-        })
+        json_conn(
+          :patch,
+          "/subscriptions/#{Ecto.UUID.generate()}",
+          tenant_a,
+          [roles: ["PLATFORM_ADMIN"]],
+          %{
+            "status" => "PAUSED"
+          }
+        )
         |> dispatch()
 
       assert never_existed_conn.status == 404
       assert never_existed_conn.resp_body == patch_conn.resp_body
 
       # Tenant B's row is untouched.
-      list_b_conn = build_conn(:get, "/subscriptions", tenant_b, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+      list_b_conn =
+        build_conn(:get, "/subscriptions", tenant_b, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+
       [item_b] = Jason.decode!(list_b_conn.resp_body)["items"]
       assert item_b["status"] == "ACTIVE"
     end
@@ -269,7 +307,8 @@ defmodule Letflow.Routers.WebhooksTest do
           "event_types" => ["instance.completed"]
         })
 
-      list_conn = build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+      list_conn =
+        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
 
       assert list_conn.status == 200
       body = Jason.decode!(list_conn.resp_body)
@@ -299,7 +338,9 @@ defmodule Letflow.Routers.WebhooksTest do
 
       assert delete_conn.status == 204
 
-      list_conn = build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+      list_conn =
+        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+
       assert Jason.decode!(list_conn.resp_body)["items"] == []
     end
 

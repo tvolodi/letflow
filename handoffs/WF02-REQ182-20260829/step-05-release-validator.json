@@ -1,0 +1,49 @@
+{
+  "handoff_id": "WF02-REQ182-20260829-step05",
+  "run_id": "WF02-REQ182-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "test/reports/report-2026-08-29-WF02-REQ182-20260829.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "TEST-RUNNER ran the full suite twice via scripts/test_parallel.sh (8 partitions): combined: 2512 tests, 5 properties, 3 failures (2514/2517 passed), identical both runs. All 3 failures are pre-existing/environmental, rooted in rustc/cargo being absent from this sandbox's PATH (2x Mix.Tasks.Letflow.CheckToolchainTest rust-pin checks raising :enoent on System.cmd(\"rustc\", ...), 1x Letflow.Engine.Wasm.PluginHandlerTest AC7 test asserting Wasmex.Native's external_resource names Rust NIF sources) -- same failure set already documented as environmental in prior REQ-177/REQ-178/REQ-181 TEST-RUNNER reports. Neither failure touches any REQ-182 file. mix compile --warnings-as-errors: clean, exit 0. mix format --check-formatted: found one real violation in test/letflow/routers/webhooks_test.exs (long call-chain lines needing multi-line wrap), fixed mechanically via `mix format test/letflow/routers/webhooks_test.exs` (no assertion/fixture logic changed, no test IDs renamed) and committed; re-ran --check-formatted clean afterward, and re-ran both webhooks test files standalone post-fix (26/26 passed, matching TEST-DESIGN-VALIDATOR's Step 3b counts exactly). mix letflow.lint_handoffs: 0 new violations across 1400 handoff files (pre-existing grandfathered items unrelated to this run). Full report: test/reports/report-2026-08-29-WF02-REQ182-20260829.yaml.",
+    "test_report": "test/reports/report-2026-08-29-WF02-REQ182-20260829.yaml",
+    "design_doc": "lib/letflow/design/req182-webhooks-routes.md",
+    "spec_doc": "test/specs/REQ-182.md",
+    "files_under_test": [
+      "test/letflow/routers/webhooks_test.exs",
+      "test/letflow/webhooks_test.exs"
+    ],
+    "implementation_files": [
+      "lib/letflow/routers/webhooks.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/plugs/api_pipeline.ex"
+    ],
+    "prior_handoffs": [
+      "handoffs/WF02-REQ182-20260829/step-01-code-designer.json",
+      "handoffs/WF02-REQ182-20260829/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ182-20260829/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ182-20260829/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ182-20260829/step-02d-reviewer.json",
+      "handoffs/WF02-REQ182-20260829/step-03-test-designer.json",
+      "handoffs/WF02-REQ182-20260829/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ182-20260829/step-04-test-runner.json"
+    ]
+  },
+  "task": {
+    "description": "Independently re-verify REQ-182's acceptance criteria before this requirement is marked done. Re-run the full suite yourself rather than trusting this report alone (core-directives.md's 'Every producing step has a validating step'). Original acceptance criteria (from handoffs/WF02-REQ182-20260829/step-01-code-designer.json):",
+    "acceptance_criteria": [
+      "POST /api/v1/webhooks/subscriptions with no secret supplied returns a 2xx response whose body includes hmac_secret_once carrying the plaintext secret exactly once; a subsequent GET/list of the same subscription never includes the plaintext secret or an hmac_secret_once field at all -- two explicit tests",
+      "PATCH /api/v1/webhooks/subscriptions/:id accepts {status: \"PAUSED\"} and, separately, {is_active: false}, and both result in a subscription that subsequently reads back as PAUSED via GET/list",
+      "every subscription route requires the WebhooksManage permission from REQ-069's matrix -- a caller lacking it receives 403, and a caller from a different tenant naming a real subscription id belonging to tenant A receives 404, never 403",
+      "GET /api/v1/webhooks/subscriptions returns {items: [...]} with each item's target_url, event_types, status and created_at present, matching webhooksApi.list's consumer shape",
+      "DELETE /api/v1/webhooks/subscriptions/:id removes the subscription such that a subsequent list no longer includes it, and a second DELETE of the same id returns 404 rather than a duplicate success",
+      "the route module's moduledoc states explicitly that R-Co's webhooks.zig was not inspected in this batch (unreachable from the drafting environment) and that web/src/api/dlq.ts / web/src/types/api.ts were the binding contract instead",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

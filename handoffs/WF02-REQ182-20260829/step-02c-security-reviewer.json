@@ -1,0 +1,34 @@
+{
+  "handoff_id": "WF02-REQ182-20260829-step02c",
+  "run_id": "WF02-REQ182-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2c",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/routers/webhooks.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Queue task 355, GH#700, stage S6. Implements the CODE-DESIGN-VALIDATOR-approved design at lib/letflow/design/req182-webhooks-routes.md. New router: lib/letflow/routers/webhooks.ex (GET/POST /api/v1/webhooks/subscriptions, PATCH/DELETE /api/v1/webhooks/subscriptions/:id). Diff also touches lib/letflow/api/authorization.ex (one new endpoint_policy_key clause) and lib/letflow/plugs/api_pipeline.ex (one new forward line). Delegates entirely to REQ-181's already-shipped lib/letflow/webhooks.ex and lib/letflow/webhooks/subscription.ex, neither of which was modified.",
+    "files_changed": [
+      "lib/letflow/routers/webhooks.ex (new)",
+      "lib/letflow/api/authorization.ex (one clause added)",
+      "lib/letflow/plugs/api_pipeline.ex (one forward line added)"
+    ],
+    "authorization_diff_summary": "Added endpoint_policy_key(\"PATCH\", \"/webhooks/subscriptions/:id\") -> :WebhookSubscriptionsManage, placed immediately after the existing GET '.../deliveries' clause and before the existing DELETE '/webhooks/subscriptions/:id' clause, in the same /webhooks/subscriptions grouping. This was a confirmed real gap (GET/POST on the collection and DELETE on the member route were already mapped; PATCH was not). No new permission atom, no new required_permission/1 clause, no new role_allows?/2 clause -- reuses the existing :WebhookSubscriptionsManage -> :WebhooksManage mapping, which PLATFORM_ADMIN and PROCESS_OPERATOR alone hold.",
+    "known_test_gap": "test/letflow/webhooks_test.exs's REQ-181-era structural test 'no router file for webhooks exists anywhere in lib/letflow/routers' now fails as an expected, designed-for consequence of this router landing -- not touched here per the Step 2a task's explicit instruction not to modify any REQ-176/177/178/181 test file. See handoffs/WF02-REQ182-20260829/elixir-dev-notes.md for the full mix test run breakdown (2504/2508 passed; the other 3 failures are pre-existing, environment-dependent, unrelated to this diff: rust-pin-mismatch and wasmex-NIF toolchain tests)."
+  },
+  "task": {
+    "description": "Security review of the new webhook-subscriptions route layer against security-invariants.md INV-1 through INV-8, focused on: (1) permission gating on all four routes including the newly-added PATCH clause, (2) cross-tenant-404 behavior (never 403) for PATCH/DELETE against another tenant's real subscription id, (3) the plaintext secret (hmac_secret_once) is emitted only once, on POST's own success response, and never via GET/list or any other response path, (4) secret_hash/tenant_id/__meta__ are never emitted by subscription_json/1.",
+    "acceptance_criteria": [
+      "POST /api/v1/webhooks/subscriptions with no secret supplied returns a 2xx response whose body includes hmac_secret_once carrying the plaintext secret exactly once; a subsequent GET/list of the same subscription never includes the plaintext secret or an hmac_secret_once field at all",
+      "PATCH /api/v1/webhooks/subscriptions/:id accepts {status: \"PAUSED\"} and, separately, {is_active: false}, and both result in a subscription that subsequently reads back as PAUSED via GET/list",
+      "every subscription route requires the WebhooksManage permission from REQ-069's matrix -- a caller lacking it receives 403, and a caller from a different tenant naming a real subscription id belonging to tenant A receives 404, never 403",
+      "GET /api/v1/webhooks/subscriptions returns {items: [...]} with each item's target_url, event_types, status and created_at present, matching webhooksApi.list's consumer shape",
+      "DELETE /api/v1/webhooks/subscriptions/:id removes the subscription such that a subsequent list no longer includes it, and a second DELETE of the same id returns 404 rather than a duplicate success",
+      "the route module's moduledoc states explicitly that R-Co's webhooks.zig was not inspected in this batch and that web/src/api/dlq.ts / web/src/types/api.ts were the binding contract instead",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

@@ -91,19 +91,30 @@ defmodule Letflow.Webhooks.Subscription do
 
   @doc """
   Structural changeset for `Letflow.Webhooks.create/2`. Casts
-  `:target_url, :secret_hash, :description, :event_types, :tenant_id` — all
-  caller/context-module-supplied at insert time (`secret_hash` is computed
-  by the context module before this changeset ever sees `attrs`, per design
-  §3.1). `status` is **not** cast here — it is fixed at `:ACTIVE` via
-  `put_change/3`, never accepted from `attrs`. `consecutive_failures`
-  defaults to `0` via the schema's own column default and this changeset's
-  `put_change/3` — not caller-settable at creation either.
+  `:target_url, :secret_hash, :description, :event_types, :tenant_id,
+  :created_at` — all caller/context-module-supplied at insert time
+  (`secret_hash` is computed by the context module before this changeset
+  ever sees `attrs`, per design §3.1; `created_at` is computed by
+  `create/2` via `current_timestamp()` and must be cast here or `cast/3`
+  silently drops it, leaving the NOT NULL `created_at` column unset and
+  the insert failing with a `not_null_violation`). `status` is **not**
+  cast here — it is fixed at `:ACTIVE` via `put_change/3`, never accepted
+  from `attrs`. `consecutive_failures` defaults to `0` via the schema's
+  own column default and this changeset's `put_change/3` — not
+  caller-settable at creation either.
   """
   @spec insert_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def insert_changeset(subscription, attrs) do
     subscription
-    |> cast(attrs, [:target_url, :secret_hash, :description, :event_types, :tenant_id])
-    |> validate_required([:target_url, :secret_hash, :tenant_id])
+    |> cast(attrs, [
+      :target_url,
+      :secret_hash,
+      :description,
+      :event_types,
+      :tenant_id,
+      :created_at
+    ])
+    |> validate_required([:target_url, :secret_hash, :tenant_id, :created_at])
     |> put_change(:status, :ACTIVE)
     |> put_change(:consecutive_failures, 0)
   end

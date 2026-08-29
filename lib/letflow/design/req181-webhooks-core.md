@@ -213,10 +213,14 @@ serialization-layer filter that could be forgotten at the route layer later.
 ```
 @spec insert_changeset(t(), map()) :: Ecto.Changeset.t()
 ```
-Casts `:target_url, :secret_hash, :description, :event_types, :tenant_id`
-(all caller/context-module-supplied at insert time — `secret_hash` is
-computed by the context module before this changeset ever sees `attrs`, per
-§3.1). `validate_required/2` on `:target_url, :secret_hash, :tenant_id`.
+Casts `:target_url, :secret_hash, :description, :event_types, :tenant_id,
+:created_at` (all caller/context-module-supplied at insert time —
+`secret_hash` is computed by the context module before this changeset ever
+sees `attrs`, per §3.1; `created_at` is computed by `create/2` via
+`current_timestamp()` and must be in this whitelist or `cast/3` silently
+drops it, leaving the NOT NULL `created_at` column unset and the insert
+failing with a `not_null_violation`). `validate_required/2` on
+`:target_url, :secret_hash, :tenant_id, :created_at`.
 `status` is **not** cast here — it is fixed at `:ACTIVE` via
 `put_change/3` inside the changeset function itself, never accepted from
 `attrs`, matching `create/2`'s own "always ACTIVE on creation" rule (§1).

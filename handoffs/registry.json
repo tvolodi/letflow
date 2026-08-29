@@ -3283,6 +3283,23 @@
       "released_lock": false,
       "last_known_step": "Step 6 (DOC-UPDATER) -- content-producing steps done, ORCH Step Final (rebase/push/PR/CI-wait/merge/queue-release) still pending",
       "note": "REQ-186: timers schema + scheduler core (poll-and-fire via FOR UPDATE SKIP LOCKED, missed-timer recovery, failure accounting) per REQ-185's design artefact. Core only -- no route/controller (REQ-187/188 build on this). RELEASE-VALIDATOR PASS: all 10 acceptance criteria independently re-verified against real code and a self-run test suite (handoffs/WF02-REQ186-20260829/release-validation-req186.md). Path: zero rework rounds through design/security/reviewer/test-design gates; ORCH directly ran the full suite twice mid-pipeline and fixed two stale tests (tenant_fixture.ex's table oracle, tenant_provisioning_event_seed_test.exs's hardcoded seed counts) after the original ELIXIR-DEV dispatch left a background verification run unfinished; REVIEWER corrected one design-doc inconsistency (actor_id) post-implementation; TEST-DESIGN-VALIDATOR accepted one disclosed row-lock-concurrency coverage gap as non-blocking, consistent with REQ-181's own precedent for the identical idiom. Unblocks REQ-187 (transition.ex wiring + cancellation) and REQ-188 (recurrence + escalation). queue_task_id 359 not yet released -- that is ORCH's Step Final job."
+    },
+    {
+      "run_id": "WF02-REQ187-20260829",
+      "requirement_id": "REQ-187",
+      "queue_task_id": 360,
+      "github_issue_number": 706,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/engine/transition.ex",
+        "lib/letflow/engine/task_activation.ex",
+        "lib/letflow/engine.ex"
+      ],
+      "started_at": "2026-08-29T19:54:54Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
+      "note": "Wires REQ-186's timers core into the engine's transition/lifecycle paths. Strict purity constraint on transition.ex (no Repo call). Closes 3 named stubs (transition.ex L294, task_activation.ex cancel_pending_timers/2, engine.ex L234-242 EE-08 deferral, timer half only)."
     }
   ]
 }

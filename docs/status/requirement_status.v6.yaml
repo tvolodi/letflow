@@ -781,3 +781,14 @@ history:
       gap found (handoffs/WF02-REQ186-20260829/release-validation-req186.md).
       Unblocks REQ-187 (transition.ex wiring + cancellation) and
       REQ-188 (recurrence + escalation), both depends_on: [REQ-186].
+  - req: REQ-187
+    event: started
+    agent: ORCH
+    at: "2026-08-29T19:54:54Z"
+    note: >
+      Queue task 360, GH#706, stage S6. Wires REQ-186's timers core into the
+      engine (arm on TIMER-node token arrival, advance on fire, cancel on
+      completion/cancellation) -- closes transition.ex L294's TIMER
+      not-yet-implemented stub, task_activation.ex's cancel_pending_timers/2
+      no-op, and engine.ex's L234-242 recorded EE-08 deferral (timer half
+      only). Strict purity constraint: transition.ex must gain no Repo call.

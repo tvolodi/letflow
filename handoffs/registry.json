@@ -3201,6 +3201,24 @@
       "released_lock": true,
       "last_known_step": "Step 03 (register_task) PASS",
       "note": "WF-01 second S6 batch COMPLETE. 19 requirements REQ-185..203 drafted, passed REQ-VALIDATOR after 2 rework rounds, and registered as letflow-queue tasks 358-376. Both rework rounds found the same defect class -- a bare file-count range asserting coverage that did not exist -- now fixed at the root by per-file mapping plus a machine-verified exhaustiveness check. Also amended REQ-183 (first batch, task 356), which REQ-VALIDATOR confirmed was unimplementable as drafted; that task is deliberately LEFT LOCKED to this host as a guard and is the only queue state this run leaves held. WF-01 writes only docs/, so no collision with WF02-REQ176-20260829's priv/repo/migrations/ lock."
+    },
+    {
+      "run_id": "WF02-REQ178-20260829",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-178"
+      ],
+      "stage": "S6",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/routers/dlq.ex"
+      ],
+      "lock_acquired_at": "2026-08-29T08:27:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00",
+      "queue_task_id": 353,
+      "note": "DLQ route layer atop REQ-176's core -- GET/POST /api/v1/dlq, DlqOperate-gated, REQ-072 cross-tenant-404 mechanism. Bound to web/src/api/dlq.ts's already-shipped contract. Depends on REQ-176/069/072 (all done). Step 00 bookkeeping committed to main; feature branch about to be created."
     }
   ]
 }

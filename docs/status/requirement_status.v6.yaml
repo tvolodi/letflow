@@ -551,3 +551,28 @@ history:
       docs/requirements.yaml for depends_on: [REQ-177] -- none found;
       REQ-178 (the DLQ route layer) depends only on REQ-176/REQ-069/REQ-072,
       not REQ-177, so nothing is newly unblocked by this requirement.
+  - req: REQ-178
+    event: started
+    agent: ORCH
+    at: "2026-08-29T08:27:00Z"
+    note: >
+      WF02-REQ178-20260829 started (queue task 353, GH#698, stage S6).
+      Third and last requirement of this batch's DLQ half -- the route
+      layer atop REQ-176's core and REQ-177's landing sites (does NOT
+      depend on REQ-177 per its own depends_on list -- the route layer
+      builds and tests identically whether or not REQ-177's hooks have
+      landed). GET /api/v1/dlq (list, filterable by status/source_type/
+      search/cursor/page_size), GET /api/v1/dlq/:id, POST .../retry,
+      POST .../discard. Bound to the already-shipped S8 frontend contract
+      (web/src/api/dlq.ts, web/src/types/api.ts's DlqEntry/CursorPage<T>)
+      since R-Co's dlq.zig is unreachable from this sandbox. Every route
+      requires DlqOperate (REQ-069's matrix, currently unreachable
+      pending exactly this route). Tenant scoping follows REQ-072's
+      cross-tenant-404 mechanism (never 403). Terminal-state retry/
+      discard calls must return a 409-shaped conflict, not 500. No
+      change to REQ-176/177's context module -- route/controller layer
+      only. Depends on REQ-176 (done), REQ-069 (done), REQ-072 (done).
+      Note: task 353 was briefly claimed and immediately released by a
+      sibling session's own get_next_task-probe-misuse self-correction
+      (recorded in this same volume, 2026-08-29T05:01:11Z) -- genuinely
+      open when ORCH claimed it here, no concurrent work in flight.

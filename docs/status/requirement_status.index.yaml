@@ -800,8 +800,13 @@ volumes:
     path: docs/status/requirement_status.v6.yaml
     status: current
     opened: 2026-08-28
-    entries: 15
+    entries: 16
     note: >
+      Incremented to 16 by ORCH's REQ-178 started-event append (Step 00,
+      WF02-REQ178-20260829) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v6.yaml` = 16 on-disk entries, same
+      commit as the append.
+
       Incremented to 15 by ORCH's Step Final rebase of
       WF02-REQ177-20260829 onto main, which composed this branch's own
       REQ-177 done-event append (bringing this branch's own count to 13)

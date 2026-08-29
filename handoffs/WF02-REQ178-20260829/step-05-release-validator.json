@@ -6,7 +6,7 @@
   "from_agent": "TEST-RUNNER",
   "to_agent": "RELEASE-VALIDATOR",
   "file": "test/reports/report-2026-08-29-WF02-REQ178-20260829.yaml",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "normal",
   "context": {
     "note": "Queue task 353, GH#698, stage S6, branch feature/WF02-REQ178-20260829. TEST-RUNNER (Step 4) ran the full suite plus mix compile --warnings-as-errors and mix format --check-formatted, all real output quoted in test/reports/report-2026-08-29-WF02-REQ178-20260829.yaml.",
@@ -39,5 +39,9 @@
     ],
     "next_action": "RELEASE-VALIDATOR re-verifies -> DOC-UPDATER (or rework handoff if a real gap is found)."
   },
-  "result": null
+  "result": {
+    "verdict": "PASS",
+    "report": "handoffs/WF02-REQ178-20260829/req178-release-validation-report.md",
+    "next_handoff": "handoffs/WF02-REQ178-20260829/step-06-doc-updater.json"
+  }
 }

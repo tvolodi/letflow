@@ -6,7 +6,7 @@
   "from_agent": "ELIXIR-DEV",
   "to_agent": "SECURITY-REVIEWER",
   "file": "lib/letflow/routers/dlq.ex",
-  "status": "DONE",
+  "status": "COMPLETED",
   "priority": "normal",
   "context": {
     "note": "Queue task 353, GH#698, stage S6, branch feature/WF02-REQ178-20260829 (pushed, commit f36672a). Implemented lib/letflow/design/req178-dlq-routes.md exactly, per handoffs/WF02-REQ178-20260829/step-02a-elixir-dev.json. This is a tenant-data-path API route change (new GET/POST endpoints reading and mutating dlq_entries), so it is routed to SECURITY-REVIEWER before REVIEWER per WF-02 Step 2b/2c.",

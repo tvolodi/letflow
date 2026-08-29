@@ -1,0 +1,23 @@
+{
+  "handoff_id": "WF02-REQ185-20260829-step02d",
+  "run_id": "WF02-REQ185-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2d",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "lib/letflow/design/req185-scheduler-firing-architecture.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "SECURITY-REVIEWER PASSED lib/letflow/design/req185-scheduler-firing-architecture.md at Step 2c. This is a design-only requirement (no migration, no lib/letflow/engine/ file, no mix.exs change -- confirmed by git diff --stat main...HEAD showing only the design file plus this pipeline's own handoff JSONs). Full findings in handoffs/WF02-REQ185-20260829/security-review-report.md. Each of INV-1..INV-8 was assessed against the design's decisions: INV-1 (tenant isolation) and INV-8 (crash isolation) APPLY and PASS -- verified directly against lib/letflow/dlq/entry.ex and priv/repo/migrations/20260829000001_create_dlq_entries.exs (dlq_entries is genuinely tenant-scoped, no @schema_prefix, 'if prefix() do' migration guard, entry_type is an unconstrained extensible string with 'timer' reserved for exactly this use by REQ-176); INV-6 APPLIES and is satisfied by this report itself; INV-7 is NOT-APPLICABLE at this stage (no Repo.query call exists yet -- flagged forward for REQ-186's own Step 2c to confirm the claim query is parameterised via Ecto, not string-interpolated); INV-2/3/5 NOT-APPLICABLE (S4/S5 not started); INV-4 NOT-APPLICABLE (no secret material touched by either the Oban or GenServer-ticker option). No cross-tenant exposure or blast-radius concern found in the per-tenant-schema polling strategy (section 6), the DLQ-landing decision (section 8), or the FOR UPDATE SKIP LOCKED claim mechanism (section 4) -- each query/transaction is confined to one tenant schema, and the design's own section 7 already builds in per-timer-transaction crash isolation. The Oban rejection (section 3) does not forgo any security-relevant capability: the recommended GenServer-ticker design independently reproduces Oban's job-isolation property via per-timer transactions, and introduces no new credential-handling need either option would require.",
+    "important_for_reviewer": "Section 3 of the design file contains an EXPLICIT, UNAMBIGUOUS PENDING placeholder: 'REVIEWER SIGN-OFF: PENDING -- to be recorded by REVIEWER at Step 2d of run WF02-REQ185-20260829.' This is not a formality to note only in your own handoff JSON -- the design artefact itself is the document of record that REQ-186 will read later, and the placeholder text explicitly warns that a later reader who finds it unfilled must 'treat the Oban question as still open and escalate rather than assuming NO stands unreviewed.' REVIEWER must therefore edit lib/letflow/design/req185-scheduler-firing-architecture.md section 3 directly, replacing the placeholder line with an actual sign-off statement (agree/disagree with the NO-on-Oban decision and its four stated grounds in section 3, plus any additional idiom/OTP-integrity concerns from your own gate), commit that edit, and only then record PASS/FAIL in your own Step 2d handoff. Recording sign-off only in the handoff JSON and leaving the design file's placeholder untouched would not satisfy this requirement's own stated gate discipline."
+  },
+  "task": {
+    "description": "Perform REVIEWER's hard gate on REQ-185's design artefact per .claude/agents/reviewer.md -- OTP idiom, supervision integrity, scope creep, decision-record consistency. In particular: (1) resolve section 3's explicit PENDING placeholder for REVIEWER sign-off on the Oban NO decision by editing the design file itself, not just this handoff; (2) confirm the recommended GenServer-ticker design (section 2b) is consistent with this project's existing Task.Supervisor-per-concern idiom in lib/letflow/application.ex; (3) confirm no decision here silently reopens or contradicts docs/migration/decisions/0003-ecto-schema-strategy.md Decision B.",
+    "acceptance_criteria": [
+      "Section 3's REVIEWER sign-off placeholder is replaced with an actual sign-off statement, committed to the design file",
+      "PASS or FAIL verdict recorded in REVIEWER's own Step 2d handoff, with rework routed back to CODE-DESIGNER if FAIL"
+    ]
+  },
+  "result": null
+}

@@ -6,8 +6,8 @@
   "from_agent": "TEST-RUNNER",
   "to_agent": "RELEASE-VALIDATOR",
   "file": "docs/requirements.yaml#REQ-181",
-  "status": "PENDING",
-  "completed_at": null,
+  "status": "COMPLETED",
+  "completed_at": "2026-08-29T13:35:00Z",
   "priority": "normal",
   "context": {
     "note": "Final TEST-RUNNER confirmation run on branch feature/WF02-REQ181-20260829 at commit 1707451 (after e5a03e7's direct field-order fix to docs/status/requirement_status.v6.yaml's REQ-181 started-event, applied by ORCH rather than routed to DOC-UPDATER, and recorded in handoffs/WF02-REQ181-20260829/step-04c-doc-updater.json). scripts/test_parallel.sh (N=8 partitions) -> combined: 2500 tests, 5 properties, 3 failures (2502/2505 passed). All 3 remaining failures independently re-diagnosed this run and confirmed to be the same pre-existing/environmental class seen on every prior REQ-176/177/178/181 run: 2 in Mix.Tasks.Letflow.CheckToolchainTest (rustc absent from this sandbox's PATH -- System.cmd('rustc', ['--version'], ...) raises :enoent; confirmed via `asdf list rust` -> 'No such plugin: rust') and 1 in Letflow.Engine.Wasm.PluginHandlerTest (wasmex's NIF requires a Rust toolchain to build a compiled .beam, same root cause). None of the 3 appear in git diff --stat main...HEAD for this branch. mix compile --warnings-as-errors: clean, exit 0, 'Compiling 155 files (.ex)\\nGenerated letflow app'. mix format --check-formatted: clean, exit 0, no output. Additionally independently re-ran `mix test test/docs/requirement_status_invariants_test.exs` standalone this step and confirmed 20/20 passed -- the field-order fix at e5a03e7 is verified resolved, not just trusted from ORCH's report. Full report: test/reports/report-2026-08-29-WF02-REQ181-20260829-rerun3.yaml. No file was deleted and no test was loosened to reach this result.",
@@ -42,7 +42,11 @@
       "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "All 7 acceptance criteria independently re-verified against real code/migration/tests (not TEST-RUNNER's report). mix test test/letflow/webhooks_test.exs -> 14/14 passed. mix compile --warnings-as-errors --force -> clean, exit 0. bash scripts/test_parallel.sh -> combined 2500 tests, 5 properties, 3 failures (2502/2505); all 3 independently re-diagnosed in the raw partition logs and confirmed rustc/wasmex-NIF environmental, none touching webhooks. No route/controller file added (git diff --stat confirmed). Full report: handoffs/WF02-REQ181-20260829/req181-release-validation-report.md.",
+    "report": "handoffs/WF02-REQ181-20260829/req181-release-validation-report.md"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

@@ -5,11 +5,19 @@ defmodule Letflow.Scheduler.Poller do
   schemas per tick). See `lib/letflow/design/req186-scheduler-core.md` §3
   for the full design this module implements.
 
-  No meaningful state is carried between ticks — a pure scheduling loop,
-  matching REQ-185 §2b's own "no in-memory state to recover" property.
   `init/1` schedules its **first** `:tick` message with **zero** delay, so
   a restart catches up on missed timers with no special-cased recovery
   logic.
+
+  ## State (REQ-188 addition — no longer "no meaningful state")
+
+  Prior to REQ-188 this GenServer carried no meaningful state between
+  ticks — a pure scheduling loop. REQ-188 widens `state` from `%{}` to
+  `%{last_retention_run_at: DateTime.t() | nil}`, the ONE field this
+  process now carries, solely to track retention-sweep cadence (see
+  `Letflow.Scheduler.retention_due?/1`). It is initialized to `nil` in
+  `init/1` and updated only when a retention sweep actually runs. No other
+  state is introduced; the timer-poll loop itself remains stateless.
 
   Config (`config :letflow, :scheduler, [...]`, `Letflow.Scheduler`'s own
   accessors) is read fresh on every tick, so a runtime override (e.g. a
@@ -36,9 +44,11 @@ defmodule Letflow.Scheduler.Poller do
 
   alias Letflow.Repo
 
+  @type state :: %{last_retention_run_at: DateTime.t() | nil}
+
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(_opts) do
-    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+    GenServer.start_link(__MODULE__, %{last_retention_run_at: nil}, name: __MODULE__)
   end
 
   @impl true
@@ -49,12 +59,27 @@ defmodule Letflow.Scheduler.Poller do
 
   @impl true
   def handle_info(:tick, state) do
-    tenant_schemas()
-    |> Enum.each(fn schema_name -> Scheduler.poll_and_fire(schema_name) end)
+    schemas = tenant_schemas()
+
+    Enum.each(schemas, fn schema_name -> Scheduler.poll_and_fire(schema_name) end)
+
+    new_state = maybe_run_retention_sweep(schemas, state)
 
     schedule_next_tick()
 
-    {:noreply, state}
+    {:noreply, new_state}
+  end
+
+  # REQ-188 design §2.4 -- runs on this same supervised process, no new
+  # child, no new ticker. Reuses the `schemas` list already computed for
+  # this tick's timer-poll loop above -- not queried a second time.
+  defp maybe_run_retention_sweep(schemas, state) do
+    if Scheduler.retention_enabled?() and Scheduler.retention_due?(state.last_retention_run_at) do
+      Enum.each(schemas, fn schema_name -> Scheduler.run_retention_sweep(schema_name) end)
+      %{state | last_retention_run_at: DateTime.utc_now()}
+    else
+      state
+    end
   end
 
   defp tenant_schemas do

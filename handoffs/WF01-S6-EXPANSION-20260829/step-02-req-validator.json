@@ -1,0 +1,47 @@
+{
+  "handoff_id": "b6e2f100-0002-4c7a-9d33-s6expansionstep02",
+  "run_id": "WF01-S6-EXPANSION-20260829",
+  "workflow_id": "WF-01",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "REQ-VALIDATOR",
+  "file": "handoffs/WF01-S6-EXPANSION-20260829/step-02-req-validator.json",
+  "created_at": "2026-08-29T04:30:00Z",
+  "started_at": "2026-08-29T04:30:00Z",
+  "status": "DISPATCHED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [
+      "REQ-185", "REQ-186", "REQ-187", "REQ-188", "REQ-189", "REQ-190",
+      "REQ-191", "REQ-192", "REQ-193", "REQ-194", "REQ-195", "REQ-196",
+      "REQ-197", "REQ-198", "REQ-199"
+    ],
+    "related_handoff_ids": ["b6e2f100-0001-4c7a-9d33-s6expansionstep01"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/migration/stage-6-operational-cross-cutting.md",
+      "docs/migration/decisions/",
+      "handoffs/WF01-S6-EXPANSION-20260829/step-01-req-analyst.json",
+      "c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-01 Step 2 HARD GATE: validate the 15 new Stage 6 requirements REQ-185..REQ-199 that REQ-ANALYST drafted (commit 632323b7). Run checks (a) TESTABILITY, (b) CONSISTENCY, (c) DEPENDS_ON CORRECTNESS, (d) STAGE FIT, (e) SIZE against each one, per WF-01 Step 2. Read REQ-ANALYST's own result summary in step-01-req-analyst.json first -- it makes several specific factual claims about R-Co that you should spot-check rather than accept, since R-Co IS reachable this session at c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\ and every claim is therefore verifiable.",
+    "acceptance_criteria": [
+      "Every check (a)-(e) is actually run against each of the 15 new requirements, not assumed. Any FAIL cites the specific REQ id and which check letter failed.",
+      "SIZE (check e) deserves particular attention on this batch. You FAILed the first S6 batch's REQ-179/REQ-180 for bundling schema + context + routes into single oversized entries, and they were deleted and replaced by the core/route split (REQ-181->182, REQ-183->184). REQ-ANALYST was told to follow that precedent. Verify it actually did: REQ-191/192 and REQ-195/196 claim to be core/route splits -- confirm the core halves genuinely carry the 'no route or controller file is added or modified' clause and that the route halves add no schema or context work. Also scrutinise the entries with the largest acceptance-criteria counts (REQ-199 has 15, REQ-190/191/195/197 have 12) -- a high AC count can indicate either thoroughness or a smuggled second deliverable.",
+      "CONSISTENCY (check b) against docs/migration/decisions/0001..0015 in full. Two specific placement questions were deliberately escalated rather than decided and MUST NOT be silently waved through: REQ-191's service_catalog table and REQ-189/190's secrets table both need an explicit placement decision against decision 0003 Decision B (schema-per-tenant with tenant_id retained), because R-Co makes both GLOBAL. REQ-ANALYST states the catalog has a structural reason (a global-scope entry is referenceable by every tenant; service_id is unique across tenants). Judge whether each requirement's text actually flags this for REVIEWER sign-off as required by CLAUDE.md's 'Don't silently re-decide what a decision record already settled' rule, or whether it quietly diverges. Also verify REQ-188's partition-maintenance deferral genuinely matches what ISS-0014 adjudicated rather than restating it loosely.",
+      "SPOT-CHECK REQ-ANALYST's three corrections against real R-Co source, because all three CONTRADICT the dispatch brief ORCH wrote and each one changes what gets built: (1) that SCH-02's per-timer PostgreSQL advisory lock was REMOVED by R-Co as redundant against FOR UPDATE SKIP LOCKED, with only a session-level lock for the startup sweep surviving -- check src/design/scheduler-concurrency-epic3.md's ISS-301 section and src/scheduler/scheduler.zig itself, since ORCH's brief told REQ-ANALYST to port the advisory lock per SCH-02's literal text and being wrong in EITHER direction is a real defect; (2) that R-Co's src/expr is NOT CEL (EXP-102 cut over away from vendored CEL) and its real surface is arithmetic, 6 non-chainable comparisons, word-keyword boolean ops, dotted paths and exactly 11 builtins -- with no `in`, ternary, macros, collections or type conversions -- which if true means ORCH's brief listed CEL vocabulary neither system implements; verify against src/expr/ and src/design/expr.md / expr-types.md / expr-cutover-exp102.md, and confirm REQ-197/198 are scoped to what R-Co ACTUALLY has; (3) that three of these six subsystems already have committed SPA consumers (web/src/api/services.ts, metrics.ts, audit.ts) and that the SPA parses Prometheus TEXT at an unversioned /metrics rather than JSON at /api/v1/metrics -- verify in this repo's web/ tree, and check REQ-194 correctly reconciles that against REQ-078's three documented divergences instead of silently picking one.",
+      "Verify the WEBHOOK HMAC CONTRADICTION finding, which is the most consequential claim in the batch: REQ-ANALYST reports that REQ-181 (already pending, queue task 354) stores webhook_subscriptions.secret HASHED while REQ-183 (pending, task 356) specifies HMAC-SHA256 signing using 'the subscription's stored secret' -- and that a hash cannot serve as an HMAC key, making REQ-183 not implementable as drafted. Read both entries yourself and confirm or refute. If confirmed, judge whether REQ-189/190 resolving it is the right treatment, or whether REQ-183 additionally needs to be flagged for rework/supersession -- note REQ-183 is ALREADY REGISTERED in letflow-queue and claimable, so if it is genuinely unimplementable as written, say so explicitly and state what should happen, since an agent could pick it up before the fix lands. This is a judgement call ORCH needs from you, not something to leave implicit.",
+      "DEPENDS_ON CORRECTNESS (check c) -- the check you FAILed the first batch's REQ-178 on. ORCH already verified mechanically that there are zero orphaned references and zero cycles across all 173 entries, so do NOT re-run that; judge instead whether each cited dependency is GENUINELY REQUIRED before the requirement can start, and whether any genuinely-required dependency is MISSING. Pay attention to: REQ-186/199 both landing entries in REQ-176's DLQ (REQ-ANALYST says REQ-176 already reserves entry_type 'timer' as its intended extension point -- verify that claim against REQ-176's text); REQ-187's dependency on the REQ-047/052/061 engine hooks it must close; REQ-190's dependency on both REQ-181 and REQ-183 for the HMAC reconciliation; REQ-196 on REQ-195; REQ-192 on REQ-191/069/072.",
+      "STAGE FIT (check d): confirm nothing here belongs to S7 (simulation/UAT) or S8 (web/). Where a requirement cites an already-committed SPA consumer as a binding contract that is correct and follows REQ-181/182's precedent -- but building or changing web/ itself is not S6 work. Also confirm the deferrals REQ-ANALYST named each carry a real blocker rather than a convenience: partition maintenance (0003 Decision C + ISS-0014), benchmark.zig, PLC-01 process module catalog, SCH-04 escalation timers, the now()/date_add/date_diff purity exclusion, and ORD-04 contention scaling.",
+      "Verify docs/migration/stage-6-operational-cross-cutting.md's rewritten header and Decisions section are accurate against the requirements as actually drafted -- in particular that its per-subsystem file counts (re-verified against R-Co on 2026-08-29) are right, and that every requirement id it lists exists with the scope it describes.",
+      "Report PASS or FAIL. On FAIL, list every issue by requirement id and check letter so ORCH can route a targeted rework. On PASS, next_action: 'requirements ready for WF-02'. Do not edit docs/requirements.yaml yourself -- validation only; rework is REQ-ANALYST's."
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

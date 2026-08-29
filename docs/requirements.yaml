@@ -9001,6 +9001,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 351  # letflow-queue task id
     description: >
       FIRST requirement of S6's DLQ half. Builds the generic, origin-agnostic
       dead-letter core that REQ-177 (wiring existing hooks) and REQ-178 (the
@@ -9080,6 +9081,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 352  # letflow-queue task id
     description: >
       Closes the two named hooks REQ-056 and REQ-061 each left explicitly
       for this stage rather than building a partial DLQ themselves. REQ-056
@@ -9133,6 +9135,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 353  # letflow-queue task id
     description: >
       Third and last requirement of this batch's DLQ half -- the route layer
       atop REQ-176's core and REQ-177's landing sites. dlq.zig (337 lines)
@@ -9181,6 +9184,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 354  # letflow-queue task id
     description: >
       REQ-VALIDATOR rework: REQ-179 as originally drafted bundled a schema
       migration, a context module, AND four HTTP routes into one oversized
@@ -9242,6 +9246,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 355  # letflow-queue task id
     description: >
       REQ-VALIDATOR rework: the route-layer half of REQ-179's split (see
       REQ-181's description for the full rework rationale), atop REQ-181's
@@ -9280,6 +9285,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 356  # letflow-queue task id
     description: >
       REQ-VALIDATOR rework: REQ-180 as originally drafted bundled a full
       context-module deliverable (HMAC signing, retry/backoff, auto-pause
@@ -9347,6 +9353,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 357  # letflow-queue task id
     description: >
       REQ-VALIDATOR rework: the route-layer half of REQ-180's split (see
       REQ-183's description for the full rework rationale), atop REQ-183's

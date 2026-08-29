@@ -377,3 +377,33 @@ history:
       CursorPage<T>) since R-Co is unreachable from this sandbox. No route/
       controller in this requirement -- that is REQ-178's. Depends on
       REQ-072 (done).
+  - req: REQ-176
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-29T03:46:44Z"
+    note: >
+      WF02-REQ176-20260829 done (queue task 351, GH#696, stage S6). DLQ
+      schema and core entry lifecycle shipped: Letflow.Dlq context module +
+      Letflow.Dlq.Entry schema + tenant-scoped dlq_entries migration (per
+      decision 0003 Decision B) -- enqueue/list/get/retry/discard, cursor-
+      paginated list/2, row-lock-then-check state transitions so retry/2 and
+      discard/2 correctly reject a "resolved"/"discarded" entry with a
+      conflict error rather than racing another writer. Path: 1
+      CODE-DESIGN-VALIDATOR rework round caught a fabricated
+      Letflow.IdentityMigration precedent citation for the new
+      UUID-to-text-cast-for-ILIKE search pattern -- corrected to honestly
+      frame that cast as new rather than a false reuse claim.
+      SECURITY-REVIEWER and REVIEWER both passed with no rework; REVIEWER
+      filed ISS-0353 for a real, correctly-deferred idiom gap in the
+      changeset's cast list. TEST-DESIGN-VALIDATOR independently
+      re-verified with 3 of its own mutations applied directly to
+      production code, confirming the tests genuinely discriminate real
+      defects. RELEASE-VALIDATOR independently PASSED all 6 acceptance
+      criteria (own full-suite run, own git diff verification, own
+      field-by-field cross-check against web/src/types/api.ts). Unblocks
+      REQ-177 (wiring REQ-056/REQ-061's existing hooks into this DLQ core)
+      and REQ-178 (the route layer), both depends_on: [REQ-176]. Stage 6's
+      FIRST done requirement: S6 moves from "present but inactive" to
+      "active" per the T-LIVE-ACTIVITY detector -- the test literal ORCH
+      already updated in commit e72b5c4 anticipated exactly this
+      transition.

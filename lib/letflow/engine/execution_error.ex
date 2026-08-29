@@ -35,6 +35,30 @@ defmodule Letflow.Engine.ExecutionError do
   query — no additional table is needed for S6 to find every `ERROR`-halted
   instance once it exists.
 
+  ## DLQ landing, as of REQ-177 (landing only, still not the OBS-05 API above)
+
+  As of REQ-177, `append_multi/3` also lands one `dlq_entries` row per
+  `ERROR` transition (its `:execution_error_dlq_landing` step, below) —
+  unless the caller already landed one externally via
+  `opts[:dlq_landed_externally]` (`Letflow.Engine.land_service_task_exhaustion/2`'s
+  own case, REQ-177's Hook A, when it lands a row itself before delegating
+  here so this module does not also land a second one for the same
+  transition). This does not shrink the scope boundary above — it is
+  **landing only**: calling `Letflow.Dlq.retry/2` against that row
+  transitions the row's own `status` to `:retrying` and appends to its
+  `retry_history` — it does not re-invoke whatever failed, and it does not
+  move the instance itself out of `ERROR`. Two things are still missing
+  before it could: (a) a wired SERVICE_TASK transport for the subset of
+  `ERROR` transitions that originated from a SERVICE_TASK give-up but did
+  **not** go through Hook A (the non-exhaustion, immediately-non-retriable
+  case, which lands via this module's own step instead — see
+  `Letflow.Engine.land_service_task_exhaustion/2`'s own moduledoc for the
+  exhaustion case), and (b) an operator-driven `ERROR`-recovery path (the
+  still-unbuilt route/controller layer, REQ-178, that would let a human call
+  `retry/2`/`discard/2` and separately decide whether/how to actually
+  un-stick the instance from `ERROR`) — i.e. the same OBS-05/S4 gap named
+  above.
+
   ## `ERROR` is explicitly NOT terminal, unlike `CANCELLED` and `COMPLETED`
 
   `Letflow.EventStore.InstanceProjection.terminal?/1` (already shipped,
@@ -55,6 +79,7 @@ defmodule Letflow.Engine.ExecutionError do
   import Ecto.Query
 
   alias Ecto.Multi
+  alias Letflow.Dlq
   alias Letflow.EventStore
   alias Letflow.EventStore.InstanceProjection
 
@@ -119,6 +144,15 @@ defmodule Letflow.Engine.ExecutionError do
       `EXECUTION_ERROR` event built from `error_args`. Runs **before** the
       projection update, matching `req052`'s own M6-before-M7 ordering
       rationale.
+    * `:execution_error_dlq_landing` (REQ-177; skipped entirely when
+      `opts[:dlq_landed_externally]` is `true`) — `Letflow.Dlq.enqueue/2`,
+      one `dlq_entries` row built from `error_args` and the just-persisted
+      `:execution_error_event` step's own event payload. Runs **after** the
+      event (so its `full_reason` can be read back from the persisted
+      event's own `payload["reason"]`, not re-derived from `error_args`) and
+      **before** the projection update, so a DLQ-enqueue failure also
+      prevents the projection from ever flipping to `:error` — see
+      `lib/letflow/design/req177-dlq-hooks.md` §4.2.
     * `:execution_error_projection_update` — `InstanceProjection.update_changeset/2`
       (reused unchanged) with `%{status: :error, error_detail: <compact
       detail map>}`.
@@ -129,18 +163,29 @@ defmodule Letflow.Engine.ExecutionError do
   redundant lock/fetch. When absent (the default), this function performs its
   own lock+fetch as its first appended step.
 
+  `opts[:dlq_landed_externally]` (REQ-177, defaults to `false`): set by a
+  caller (`Letflow.Engine.land_service_task_exhaustion/2`) that already
+  landed a `dlq_entries` row itself before calling into this function, so
+  this function's own `:execution_error_dlq_landing` step is skipped rather
+  than landing a second row for the same transition.
+
   Every write happens inside the *caller's* already-open `Ecto.Multi` — this
   function calls `Repo.transaction/1` nowhere in its own body (INV-EE61-7).
   """
   @spec append_multi(
           Multi.t(),
           error_args :: error_args(),
-          opts :: [prefix: String.t(), locked_projection: InstanceProjection.t() | nil]
+          opts :: [
+            prefix: String.t(),
+            locked_projection: InstanceProjection.t() | nil,
+            dlq_landed_externally: boolean()
+          ]
         ) :: Multi.t()
   def append_multi(%Multi{} = multi, error_args, opts)
       when is_map(error_args) and is_list(opts) do
     prefix = Keyword.get(opts, :prefix)
     locked_projection = Keyword.get(opts, :locked_projection)
+    dlq_landed_externally = Keyword.get(opts, :dlq_landed_externally, false)
 
     multi
     |> maybe_lock_projection(error_args.instance_id, prefix, locked_projection)
@@ -152,9 +197,56 @@ defmodule Letflow.Engine.ExecutionError do
     |> Multi.run(:execution_error_event, fn _repo, _changes ->
       append_execution_error_event(error_args, prefix)
     end)
+    |> maybe_land_dlq_entry(error_args, prefix, dlq_landed_externally)
     |> Multi.run(:execution_error_projection_update, fn repo, changes ->
       update_projection_to_error(repo, changes.execution_error_eligibility, error_args, prefix)
     end)
+  end
+
+  defp maybe_land_dlq_entry(%Multi{} = multi, _error_args, _prefix, true), do: multi
+
+  defp maybe_land_dlq_entry(%Multi{} = multi, error_args, prefix, false) do
+    Multi.run(multi, :execution_error_dlq_landing, fn _repo, changes ->
+      land_execution_error_dlq_entry(changes.execution_error_event, error_args, prefix)
+    end)
+  end
+
+  # AC2: full_reason is read back directly off the just-persisted
+  # EXECUTION_ERROR event's own decoded payload map -- Event.t()'s
+  # payload field is already a string-keyed map by the time it comes back
+  # from EventStore.append/2 (event.ex:84, event_store.ex:607-641,697-707),
+  # so no Jason.decode!/1 call belongs here (design doc §0, §4.3).
+  defp land_execution_error_dlq_entry(%{event: event}, error_args, prefix) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    dlq_attrs = %{
+      entry_type: "event",
+      instance_id: error_args.instance_id,
+      # `reason` is the short-form varchar(255) column (design doc §4.3) --
+      # `error_args.reason` is caller-supplied and not itself length-bounded
+      # (e.g. a raised exception's message), so it is truncated to fit here;
+      # `full_reason` (:text, unbounded) below carries the untruncated value.
+      # Truncation must be by CODEPOINT count, not grapheme count:
+      # Postgres's varchar(255) limit counts codepoints, while
+      # String.slice/3 operates on grapheme clusters -- a string with
+      # combining marks (e.g. NFD-decomposed Unicode) can have grapheme
+      # length 255 but a codepoint count far above 255, which would raise
+      # an unhandled DB length-violation exception inside this Multi.run
+      # step. Ecto's own validate_length/3 also counts graphemes by
+      # default, so it would not catch this either -- codepoint-based
+      # truncation is the precise match for Postgres's varchar(n)
+      # semantics.
+      reason: error_args.reason |> String.codepoints() |> Enum.take(255) |> Enum.join(),
+      full_reason: Map.fetch!(event.payload, "reason"),
+      error_detail: Map.get(error_args, :details, %{}),
+      first_failed_at: now,
+      last_failed_at: now
+    }
+
+    case Dlq.enqueue(dlq_attrs, prefix: prefix) do
+      {:ok, entry} -> {:ok, entry}
+      {:error, changeset} -> {:error, {:dlq_enqueue_failed, changeset}}
+    end
   end
 
   defp maybe_lock_projection(%Multi{} = multi, _instance_id, _prefix, %InstanceProjection{}) do

@@ -9079,7 +9079,7 @@ requirements:
   - id: REQ-177
     title: Land SERVICE_TASK retry exhaustion and instance ERROR transitions in the dead-letter queue (EXT-01 AC4, EE-10 hooks closed)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 352  # letflow-queue task id
     description: >

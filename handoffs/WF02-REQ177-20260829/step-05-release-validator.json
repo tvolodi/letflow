@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step05",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "docs/requirements.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 352, GH#697, stage S6. REQ-177 has passed CODE-DESIGN-VALIDATOR (1 rework round -- a false EventStore payload return-shape claim, corrected and re-verified against real source), SECURITY-REVIEWER (1 rework round -- a real grapheme-vs-codepoint truncation bug, empirically confirmed by ORCH with real Elixir and fixed with a codepoint-based approach plus a regression test), REVIEWER (PASS, no rework -- verified the SCOPE BOUNDARY moduledoc paragraph was restored byte-identical against a pre-existing test's exact-substring assertions), and TEST-DESIGN-VALIDATOR (PASS, independent mutation re-verification -- 2 mutants applied directly to production code, each confirmed caught, reverted with md5sum verification). TEST-RUNNER found a THIRD failure beyond the 2 known rust-toolchain-absent ones: Letflow.Engine.Wasm.PluginHandlerTest's AC7 Wasmex.Native native-lib-provenance check, also caused by no local rustc (wasmex's native lib wasn't compiled from Rust source in this sandbox) -- confirmed pre-existing on main (introduced in commit 4115255, PR #695, this session's own earlier REQ-174 work), not touched by this branch's diff. Design: lib/letflow/design/req177-dlq-hooks.md (commit 4070492, final). Implementation: commits fdb096a, 8206de9. Tests: commit 410a242 plus ELIXIR-DEV's own regression test in engine_execution_error_test.exs."},
+  "task": {
+    "description": "Independently re-derive and verify all 6 REQ-177 acceptance criteria from docs/requirements.yaml against the actual shipped code and tests on this branch -- do not trust any prior agent's PASS claim, re-run and re-check yourself. Confirm: Hook A's exhaustion landing and non-exhaustion non-landing; Hook B's ERROR-path landing with full_reason read back from the persisted event; the ERROR-path same-transaction atomicity guarantee; the AC4 non-effects test (retry/2 against a landed entry transitions it but does not re-invoke dispatch or change instance status); both hook sites' moduledoc deferred-follow-up language; no file outside the two named hook sites and their tests modified. Run mix compile --warnings-as-errors and mix test yourself (confirm you're on the pinned toolchain first -- an off-pin toolchain caused spurious unrelated compile failures earlier in this run's own history, per docs/anti-patterns.md's new entry). A full mix test run is expected to show exactly 3 pre-existing/environmental failures unrelated to this branch -- 2 CheckToolchainTest rust-pin tests plus 1 Wasm PluginHandlerTest native-lib-provenance check, all three caused by no rustc in this sandbox -- name them explicitly.",
+    "acceptance_criteria": [
+      "a SERVICE_TASK dispatch driven to retry-exhaustion (attempt_index == retry_limit) produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason naming the classified failure kind -- read back from the database, not asserted from the caller's own return value",
+      "an instance driven to ERROR via REQ-061's execution-error path produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason equal to the persisted EXECUTION_ERROR event's own reason field",
+      "the ERROR-path DLQ landing is in the same transaction as REQ-061's status flip and event append: forcing the DLQ insert to fail leaves the instance status, the EXECUTION_ERROR event, and the DLQ table all unchanged, verified by reading all three back",
+      "a test explicitly asserts that calling REQ-176's retry/2 against one of these two entries transitions the DLQ entry to \"retrying\" but does NOT re-invoke the original SERVICE_TASK dispatch and does NOT change the instance's own status away from ERROR -- naming both non-effects, not just the one effect that does happen",
+      "the moduledoc for both hook sites names REQ-176's retry/2 no-op-beyond-the-DLQ-entry behavior as a deferred follow-up (naming what would need to exist for it to do more: a wired SERVICE_TASK transport, an operator-driven ERROR-recovery path) rather than leaving it unremarked",
+      "no file outside the two named hook call sites and their tests is modified, confirmed by git diff --stat",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

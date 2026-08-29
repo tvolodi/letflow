@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step02a",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/design/req177-dlq-hooks.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 352, GH#697, stage S6. Design APPROVED by CODE-DESIGN-VALIDATOR (commit 4070492) after one rework round -- a false EventStore payload return-shape claim, corrected and re-verified against real source (event.ex:84, event_store.ex:607-641,697-707: event.payload is already a decoded map, no Jason.decode!/1 needed). Read the full design doc before writing any code -- it is the authority for exact function names, Multi step positioning, and the opt-threading mechanism. This requirement touches two existing, already-shipped, gate-approved files (lib/letflow/engine/service_task.ex stays untouched per design -- the new function goes in engine.ex; lib/letflow/engine/execution_error.ex gets a new Multi step) -- do not modify anything beyond what the design specifies. IMPORTANT: run mix format on every file you touch before declaring this step done -- this project's CI backend gate has failed the format check repeatedly this run's own sibling requirements."},
+  "task": {
+    "description": "Implement REQ-177 per the approved design: (1) add Letflow.Engine.land_service_task_exhaustion/2 to lib/letflow/engine.ex, re-deriving the exhaustion/non-exhaustion split (is_retriable_failure(kind) and attempt_index >= retry_limit) since ServiceTask.decide_failure/3's return value doesn't carry that distinction, calling Letflow.Dlq.enqueue/2 on genuine exhaustion (entry_type \"event\", instance_id, full_reason naming the failure kind, source_payload = attempted request, last_failed_at = first_failed_at at landing time per the design's resolution), then delegating to set_instance_error/2 with a new dlq_landed_externally: true opt; (2) extend lib/letflow/engine/execution_error.ex's append_multi/3 with a new :execution_error_dlq_landing Multi step positioned after :execution_error_event and before :execution_error_projection_update, calling Letflow.Dlq.enqueue/2 (entry_type \"event\", instance_id, full_reason read directly from changes.execution_error_event.event.payload['reason'] -- NO Jason.decode!/1 call), skipped when opts[:dlq_landed_externally] is true; (3) update both hook sites' moduledocs per the design's exact language naming retry/2's no-op-beyond-the-DLQ-entry behavior as a deferred follow-up. Do not modify service_task.ex. Do not write test files yet (TEST-DESIGNER's step) beyond what the design assigns to this step. Run mix format on touched files, then mix compile --warnings-as-errors and mix test yourself and quote real output.",
+    "acceptance_criteria": [
+      "a SERVICE_TASK dispatch driven to retry-exhaustion (attempt_index == retry_limit) produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason naming the classified failure kind -- read back from the database, not asserted from the caller's own return value",
+      "an instance driven to ERROR via REQ-061's execution-error path produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason equal to the persisted EXECUTION_ERROR event's own reason field",
+      "the ERROR-path DLQ landing is in the same transaction as REQ-061's status flip and event append: forcing the DLQ insert to fail leaves the instance status, the EXECUTION_ERROR event, and the DLQ table all unchanged, verified by reading all three back",
+      "the moduledoc for both hook sites names REQ-176's retry/2 no-op-beyond-the-DLQ-entry behavior as a deferred follow-up (naming what would need to exist for it to do more: a wired SERVICE_TASK transport, an operator-driven ERROR-recovery path) rather than leaving it unremarked",
+      "no file outside the two named hook call sites and their tests is modified, confirmed by git diff --stat",
+      "mix compile --warnings-as-errors passes with real output quoted",
+      "mix test passes with real output quoted (existing suite; new tests are TEST-DESIGNER's step)"
+    ]
+  },
+  "result": null
+}

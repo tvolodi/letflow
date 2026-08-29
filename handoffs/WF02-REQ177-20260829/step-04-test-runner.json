@@ -1,0 +1,19 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step04",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 4",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "test/letflow/engine_dlq_landing_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 352, GH#697, stage S6. TEST-DESIGN-VALIDATOR PASSED (hard gate) with independent mutation re-verification: 2 mutants applied directly to production code (engine.ex's exhaustion boundary, dlq.ex's retry/2 coupling simulation), each confirmed caught, reverted with md5sum verification. IMPORTANT: use the pinned toolchain (check .tool-versions or run mix letflow.check_toolchain first) -- TEST-DESIGN-VALIDATOR's first attempt on an off-pin Elixir 1.18.3/OTP27 container produced widespread unrelated SystemLimitError compile failures that vanished on the correctly-pinned 1.20.3/OTP29 toolchain (now documented in docs/anti-patterns.md). On the pinned toolchain, full suite showed 2471/2474 tests passed, only the 2 known rust-toolchain-absent CheckToolchainTest failures."},
+  "task": {
+    "description": "Confirm you are using the pinned Elixir/OTP toolchain (per .tool-versions / mix letflow.check_toolchain) before running anything. Run the full test suite exactly as CI will (mix letflow.check.test, or mix test followed by mix test --only wasm_hang as two separate invocations matching that task's two-stage contract) and diagnose any failure. Confirm nothing in lib/letflow/engine.ex, lib/letflow/engine/execution_error.ex, or this run's own test files is implicated in any failure. Report pass/fail with real output quoted.",
+    "acceptance_criteria": [
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

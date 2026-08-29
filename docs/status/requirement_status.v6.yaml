@@ -517,3 +517,37 @@ history:
       correct -- REQ-176 is done, REQ-177 is in flight on a sibling session,
       and this run's newly-registered tasks 358-376 sit behind them in
       requirement-type FIFO order as intended.
+  - req: REQ-177
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-29T07:30:29Z"
+    note: >
+      WF02-REQ177-20260829 done (queue task 352, GH#697, stage S6). Both
+      named hooks REQ-056 and REQ-061 explicitly left for this stage are
+      now closed: Hook A, SERVICE_TASK retry-exhaustion (attempt_index ==
+      retry_limit) calls REQ-176's enqueue/1 with entry_type "event",
+      instance_id set, full_reason naming the classified failure kind;
+      Hook B, instance ERROR transition, adds a new
+      :execution_error_dlq_landing Ecto.Multi step to
+      Letflow.Engine.ExecutionError.append_multi/3, landing in the SAME
+      transaction as REQ-061's own status flip and EXECUTION_ERROR append,
+      with full_reason read back from the just-persisted event rather than
+      recomputed. Both hooks are landing-only, per design -- retry/2 does
+      not re-invoke the original SERVICE_TASK dispatch and does not move an
+      instance out of ERROR, stated as a named, deferred follow-up in both
+      hook sites' moduledocs, because no SERVICE_TASK dispatch orchestrator
+      exists yet in this codebase (confirmed by CODE-DESIGNER's own grep).
+      Path: 1 CODE-DESIGN-VALIDATOR rework round caught a false EventStore
+      payload return-shape claim in the design; 1 SECURITY-REVIEWER rework
+      round caught a real grapheme-vs-codepoint truncation bug in
+      full_reason handling, empirically confirmed by ORCH with real Elixir
+      before routing back; REVIEWER passed clean; and a genuine Step 5
+      rework cycle where RELEASE-VALIDATOR's own re-derivation found AC3
+      (same-transaction atomicity) lacked real test coverage despite the
+      code already being correct -- closed by TEST-DESIGNER adding a real
+      fault-injection test (commit cc59d8d), independently re-verified by
+      TEST-DESIGN-VALIDATOR with its own mutation, and RELEASE-VALIDATOR's
+      re-check gave the final PASS on all 6 acceptance criteria. Checked
+      docs/requirements.yaml for depends_on: [REQ-177] -- none found;
+      REQ-178 (the DLQ route layer) depends only on REQ-176/REQ-069/REQ-072,
+      not REQ-177, so nothing is newly unblocked by this requirement.

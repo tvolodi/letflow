@@ -1,0 +1,20 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step05-recheck1",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 5 (re-check, AC3 gap closed)",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "docs/requirements.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 352, GH#697, stage S6. Your prior pass found 5 of 6 acceptance criteria PASS and AC3 FAIL -- not because the code was wrong (you yourself empirically confirmed the atomicity guarantee holds via a throwaway scratch test) but because no real test forced the DLQ insert specifically to fail. TEST-DESIGNER added a real fault-injection test (commit cc59d8d) using exactly the technique you suggested (renaming the tenant's dlq_entries table before calling set_instance_error/2, restored in an after block), asserting the full rollback (instance status unchanged, event not persisted, no DLQ row). TEST-DESIGN-VALIDATOR independently re-verified: confirmed the fault isolates the DLQ-insert step specifically (traced the real Multi pipeline order), applied its own mutation (collapsing maybe_land_dlq_entry/4 to a no-op) and confirmed the new test catches the regression, reverted with md5sum verification."},
+  "task": {
+    "description": "Re-verify AC3 specifically (your other 5 verdicts stand, no need to redo them): confirm the new test (test/letflow/engine_execution_error_test.exs, commit cc59d8d) is a genuine, correct fault-injection test that forces the DLQ insert specifically to fail and asserts the full transaction rollback. Read the test yourself. Run mix test test/letflow/engine_execution_error_test.exs and mix compile --warnings-as-errors yourself and quote real output. If satisfied, give a final PASS verdict on all 6 acceptance criteria for REQ-177.",
+    "acceptance_criteria": [
+      "the ERROR-path DLQ landing is in the same transaction as REQ-061's status flip and event append: forcing the DLQ insert to fail leaves the instance status, the EXECUTION_ERROR event, and the DLQ table all unchanged, verified by reading all three back",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

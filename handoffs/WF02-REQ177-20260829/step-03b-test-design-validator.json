@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step03b",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "test/letflow/engine_dlq_landing_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 352, GH#697, stage S6. TEST-DESIGNER's suite (commit 410a242) adds 5 tests in test/letflow/engine_dlq_landing_test.exs against Letflow.Engine.land_service_task_exhaustion/2 (Hook A) and the AC4 non-effects requirement. ELIXIR-DEV's own earlier regression test (9 tests in test/letflow/engine_execution_error_test.exs, including the codepoint-truncation combining-mark test) already passed SECURITY-REVIEWER/REVIEWER. TEST-DESIGNER documents 3 mutants in test/specs/REQ-177.md: (1) AC1 boundary flip (>= to >), (2) AC1 non-exhaustion guard bypass, (3) AC4 coupling simulation (retry/2 flipping instance status). All claimed caught and reverted with md5sum verification."},
+  "task": {
+    "description": "Hard gate: verify every REQ-177 acceptance criterion has a genuine, non-skipped test across both test files (engine_dlq_landing_test.exs and engine_execution_error_test.exs). Independently re-apply at least 2 of TEST-DESIGNER's mutants yourself -- recommend the AC1 boundary flip (>= to >, a classic off-by-one that could silently misclassify exhaustion) and the AC4 coupling simulation (the most security/correctness-relevant one -- confirms retry/2 genuinely stays isolated from the original dispatch/instance status) -- confirm the suite catches each. Revert and verify via git diff/md5sum. Confirm tests are self-sufficient and isolated. Run mix test and mix compile --warnings-as-errors yourself and quote real output.",
+    "acceptance_criteria": [
+      "a SERVICE_TASK dispatch driven to retry-exhaustion (attempt_index == retry_limit) produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason naming the classified failure kind -- read back from the database, not asserted from the caller's own return value",
+      "an instance driven to ERROR via REQ-061's execution-error path produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason equal to the persisted EXECUTION_ERROR event's own reason field",
+      "the ERROR-path DLQ landing is in the same transaction as REQ-061's status flip and event append: forcing the DLQ insert to fail leaves the instance status, the EXECUTION_ERROR event, and the DLQ table all unchanged, verified by reading all three back",
+      "a test explicitly asserts that calling REQ-176's retry/2 against one of these two entries transitions the DLQ entry to \"retrying\" but does NOT re-invoke the original SERVICE_TASK dispatch and does NOT change the instance's own status away from ERROR -- naming both non-effects, not just the one effect that does happen",
+      "the moduledoc for both hook sites names REQ-176's retry/2 no-op-beyond-the-DLQ-entry behavior as a deferred follow-up (naming what would need to exist for it to do more: a wired SERVICE_TASK transport, an operator-driven ERROR-recovery path) rather than leaving it unremarked",
+      "no file outside the two named hook call sites and their tests is modified, confirmed by git diff --stat",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

@@ -800,8 +800,28 @@ volumes:
     path: docs/status/requirement_status.v6.yaml
     status: current
     opened: 2026-08-28
-    entries: 12
+    entries: 15
     note: >
+      Incremented to 15 by ORCH's Step Final rebase of
+      WF02-REQ177-20260829 onto main, which composed this branch's own
+      REQ-177 done-event append (bringing this branch's own count to 13)
+      with two concurrently-landed SCOPE-CHANGE entries from a sibling
+      session's WF01-S6-EXPANSION-20260829 run (the second S6 batch
+      registration, and its own probe-misuse self-correction) that had
+      landed on main in the interim -- append-only composition, both
+      sides kept, neither rewritten, per this project's own established
+      rebase-conflict resolution pattern. `grep -c "^  - req:"
+      docs/status/requirement_status.v6.yaml` = 15 on-disk entries after
+      composition. Well under the 1200-line/120000-byte roll ceiling
+      (553 lines), so no roll triggered.
+
+      Incremented to 13 by WF02-REQ177-20260829 (DOC-UPDATER)'s own REQ-177
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v6.yaml` = 13 on-disk entries, no
+      rebase conflict on this file at the time it was written. Well
+      under the 1200-line/120000-byte roll ceiling (464 lines / 27562
+      bytes), so no roll triggered.
+
       Incremented to 12 by ORCH's REQ-177 started-event append (Step 00,
       WF02-REQ177-20260829) -- `grep -c "^  - req:"
       docs/status/requirement_status.v6.yaml` = 12 on-disk entries, same

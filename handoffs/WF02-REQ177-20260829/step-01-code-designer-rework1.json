@@ -1,0 +1,21 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step01-rework1",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1 (rework iteration 1)",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "lib/letflow/design/req177-dlq-hooks.md",
+  "status": "PENDING",
+  "priority": "high",
+  "context": {"note": "Queue task 352, GH#697, stage S6. CODE-DESIGN-VALIDATOR FAILED this design (commit d1c26c0) on one specific, load-bearing defect -- 6 of 7 checks passed cleanly (no orchestrator exists, Ecto.Multi rollback semantics, append_multi/3's real step ordering and safe insertion point, opts threading through set_instance_error/2, no literal implementation code, deferred-follow-up moduledoc language). Do not re-litigate those; this is a narrow, targeted fix."},
+  "task": {
+    "description": "REWORK REQUIRED. SS0's 'Verified precedents' section and SS4.3's mechanism both make a false claim about Letflow.EventStore.append/2's return shape: they state the persisted event's payload comes back as a JSON STRING that must be Jason.decode!/1'd to get a map. The validator traced this against real source and found it's wrong: Letflow.EventStore.Event's schema declares field(:payload, :map) (lib/letflow/event_store/event.ex:84, not :string), and EventStore.append/2's own insert_event/3 (lib/letflow/event_store.ex:607-641) sets the persisted row's payload to the ALREADY-DECODED map (Jason.decode!/1 already ran inside append/2 itself, at event_store.ex:239, for any inline-sized payload -- which an EXECUTION_ERROR event always is). interpret_transaction_result/1 (event_store.ex:697-707) returns {:ok, %{event: event, ...}} where event.payload is already a string-keyed map. Calling Jason.decode!/1 on it AGAIN (as SS4.3 currently instructs) is calling Jason.decode!/1 on a map(), which crashes at runtime -- Jason.decode/2 pattern-matches on a binary. Fix: (1) correct SS0's precedent bullet to accurately state event.payload is already a decoded map when read back from the Multi's changes (cite lib/letflow/event_store/event.ex:84 and lib/letflow/event_store.ex:607-641,697-707); (2) correct SS4.3's mechanism to read changes.execution_error_event.event.payload[\"reason\"] directly off the map, with NO Jason.decode!/1 call anywhere in this path. Do not change anything else -- the orchestrator-absence finding, the land_service_task_exhaustion/2 design, the :execution_error_dlq_landing Multi step's positioning, the dlq_landed_externally opt threading, the last_failed_at/exhaustion-trigger resolutions, and both moduledoc deferred-follow-up sections all stand as validated.",
+    "acceptance_criteria": [
+      "an instance driven to ERROR via REQ-061's execution-error path produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason equal to the persisted EXECUTION_ERROR event's own reason field",
+      "the ERROR-path DLQ landing is in the same transaction as REQ-061's status flip and event append: forcing the DLQ insert to fail leaves the instance status, the EXECUTION_ERROR event, and the DLQ table all unchanged, verified by reading all three back",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

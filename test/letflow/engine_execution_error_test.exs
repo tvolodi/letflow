@@ -358,6 +358,88 @@ defmodule Letflow.EngineExecutionErrorTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # REQ-177 AC3 -- the ERROR-path DLQ landing (`:execution_error_dlq_landing`, Hook
+  # B) is in the SAME transaction as REQ-061's status flip and event append. Forcing
+  # the DLQ INSERT itself to fail (not the event append -- that is this file's own
+  # pre-existing REQ-061 AC2 above, which never reaches the DLQ step at all) must
+  # roll back the whole Multi: instance status unchanged, EXECUTION_ERROR event NOT
+  # persisted, no dlq_entries row.
+  #
+  # Fault-injection technique: rename the tenant's own "dlq_entries" table out from
+  # under Multi.run(:execution_error_dlq_landing, ...) immediately before calling
+  # set_instance_error/2, restored in an `after` block so the test leaks no schema
+  # state (on_exit still drops the whole tenant schema regardless, but restoring
+  # inline keeps this test self-contained and lets a later assertion in the same
+  # test still query the table under its real name if needed). This isolates the
+  # failure to the DLQ insert specifically: the EXECUTION_ERROR event step runs
+  # BEFORE the DLQ-landing step (execution_error.ex's own step order, `:
+  # execution_error_event` then `:execution_error_dlq_landing`), so a table-rename
+  # fault here lets the event INSERT succeed and only makes `Letflow.Dlq.enqueue/2`
+  # raise -- confirmed below by asserting the event step failed to persist (rolled
+  # back), not that it never ran.
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-177 AC3 -- forcing the DLQ insert to fail rolls back the whole transaction" do
+    test "instance status, EXECUTION_ERROR event, and dlq_entries all stay unchanged" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = start_instance!(schema_name, graph_human_task_end())
+
+      events_before = event_count(schema_name)
+
+      Repo.query!(
+        ~s(ALTER TABLE "#{schema_name}"."dlq_entries" RENAME TO "dlq_entries_ac3_renamed")
+      )
+
+      # The Multi.run(:execution_error_dlq_landing, ...) step raises (Postgres
+      # "relation does not exist" -- Letflow.Dlq.enqueue/2's own Repo.insert
+      # can't find the renamed-out table). Ecto's Repo.transaction/1 rescues
+      # exceptions raised inside a Multi step just long enough to roll back the
+      # SQL transaction, then re-raises -- so set_instance_error/2 itself raises
+      # rather than returning a clean {:error, step, reason, changes} tuple.
+      # Caught generically here (not pinned to one exception module) so this
+      # test does not depend on exactly which Ecto/Postgrex wrapper surfaces
+      # the underlying "relation does not exist" error -- what matters is that
+      # something raises and names the renamed-out table.
+      exception =
+        try do
+          result = Engine.set_instance_error(error_attrs(instance_id), prefix: schema_name)
+
+          flunk(
+            "expected set_instance_error/2 to raise when dlq_entries is renamed out from " <>
+              "under it; got: #{inspect(result)}"
+          )
+        rescue
+          e -> e
+        after
+          Repo.query!(
+            ~s(ALTER TABLE "#{schema_name}"."dlq_entries_ac3_renamed" RENAME TO "dlq_entries")
+          )
+        end
+
+      assert Exception.message(exception) =~ ~r/dlq_entries/
+
+      # Everything the transaction would have written stays unchanged --
+      # read back independently, not inferred from the return value.
+      projection = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
+      assert projection.status == :active
+      assert projection.error_detail == nil
+
+      # The EXECUTION_ERROR event step runs BEFORE the DLQ-landing step, but
+      # Postgres rolled the whole transaction back -- it did NOT persist,
+      # proving this is real same-transaction atomicity, not merely "the DLQ
+      # step never ran".
+      assert event_count(schema_name) == events_before
+      assert execution_error_events(schema_name, instance_id) == []
+
+      # No dlq_entries row landed either, under the table's real (restored)
+      # name.
+      assert Letflow.Dlq.Entry
+             |> where([d], d.instance_id == ^instance_id)
+             |> Repo.all(prefix: schema_name) == []
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # AC3 -- an instance in ERROR rejects task completion with a distinct conflict.
   # Already-shipped REQ-048 M2 behavior (design doc §6) -- exercised here via
   # set_instance_error/2 to reach :error directly (independent of AC4a's
@@ -538,6 +620,62 @@ defmodule Letflow.EngineExecutionErrorTest do
       # Exactly one EXECUTION_ERROR event was ever appended -- the loser wrote
       # nothing (INV-EE61-3).
       assert [_one_event] = execution_error_events(schema_name, instance_id)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # Regression -- REQ-177 SECURITY-REVIEWER finding (INV-8): dlq_entries.reason is
+  # a Postgres varchar(255), which limits by CODEPOINT count, not grapheme count.
+  # ExecutionError's Hook B used to truncate error_args.reason with
+  # String.slice/3, which operates on grapheme clusters -- a combining-mark
+  # string (base char + combining diacritic, one grapheme, two codepoints) with
+  # grapheme length 255 has a codepoint count around double that, which used to
+  # raise an unhandled DB length-violation exception inside the
+  # :execution_error_dlq_landing Multi.run/3 step instead of landing the DLQ
+  # entry. Confirmed fixed by truncating on String.codepoints/1 instead.
+  # ---------------------------------------------------------------------------------
+
+  describe "regression -- combining-mark reason exceeding 255 codepoints under grapheme truncation" do
+    test "the DLQ entry lands with a reason that fits varchar(255) by codepoint count" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = start_instance!(schema_name, graph_human_task_end())
+
+      # 300 graphemes ("e" + U+0301 COMBINING ACUTE ACCENT each), i.e. 300
+      # grapheme clusters but 600 codepoints -- under the old grapheme-based
+      # String.slice(reason, 0, 255) this would have produced a 255-grapheme
+      # (510-codepoint) string, double the column's real 255-codepoint limit.
+      combining_mark_reason = String.duplicate("e" <> <<0x0301::utf8>>, 300)
+      assert String.length(combining_mark_reason) == 300
+      assert length(String.codepoints(combining_mark_reason)) == 600
+
+      attrs =
+        error_attrs(instance_id, %{
+          error_type: :variable_schema_rejected,
+          affected: {:field, "approved_amount"},
+          reason: combining_mark_reason
+        })
+
+      # dlq_landed_externally defaults to false, so set_instance_error/2 routes
+      # through ExecutionError.append_multi/3's Hook B DLQ landing step -- this
+      # is where the old grapheme-based truncation would raise inside
+      # Multi.run(:execution_error_dlq_landing, ...) instead of returning.
+      assert {:ok, result} = Engine.set_instance_error(attrs, prefix: schema_name)
+      assert result.status == :error
+
+      assert [dlq_entry] =
+               Letflow.Dlq.Entry
+               |> where([d], d.instance_id == ^instance_id)
+               |> Repo.all(prefix: schema_name)
+
+      # Truncated to exactly 255 codepoints (not grapheme clusters), well
+      # within the varchar(255) column's real codepoint-counted limit.
+      assert length(String.codepoints(dlq_entry.reason)) == 255
+
+      assert dlq_entry.reason ==
+               combining_mark_reason |> String.codepoints() |> Enum.take(255) |> Enum.join()
+
+      # full_reason (:text, unbounded) still carries the untruncated value.
+      assert dlq_entry.full_reason == combining_mark_reason
     end
   end
 

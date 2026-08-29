@@ -6,7 +6,7 @@
   "from_agent": "ELIXIR-DEV",
   "to_agent": "SECURITY-REVIEWER",
   "file": "lib/letflow/routers/webhooks.ex",
-  "status": "PENDING",
+  "status": "DONE",
   "priority": "normal",
   "context": {
     "note": "Queue task 355, GH#700, stage S6. Implements the CODE-DESIGN-VALIDATOR-approved design at lib/letflow/design/req182-webhooks-routes.md. New router: lib/letflow/routers/webhooks.ex (GET/POST /api/v1/webhooks/subscriptions, PATCH/DELETE /api/v1/webhooks/subscriptions/:id). Diff also touches lib/letflow/api/authorization.ex (one new endpoint_policy_key clause) and lib/letflow/plugs/api_pipeline.ex (one new forward line). Delegates entirely to REQ-181's already-shipped lib/letflow/webhooks.ex and lib/letflow/webhooks/subscription.ex, neither of which was modified.",
@@ -30,5 +30,10 @@
       "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "report": "handoffs/WF02-REQ182-20260829/security-review-req182.md",
+    "summary": "All applicable invariants (INV-1, INV-2, INV-4, INV-5, INV-6, INV-7, INV-8) verified directly against the real diff and the real Letflow.Webhooks context module -- not trusted from the router's own moduledoc or the design doc's claims. INV-3 not applicable. PATCH clause in authorization.ex confirmed to map to the same :WebhookSubscriptionsManage -> :WebhooksManage permission as the other three routes, granted only to PLATFORM_ADMIN/PROCESS_OPERATOR. Cross-tenant probes on PATCH/DELETE fold :invalid_id and :not_found into one identical Response.not_found/1 call. secret_hash/tenant_id/__meta__ never emitted by subscription_json/1; hmac_secret_once appears only on the POST create-success branch. Routed to REVIEWER via handoffs/WF02-REQ182-20260829/step-02d-reviewer.json, flagging the known stale webhooks_test.exs structural assertion (expected, not a security issue) and stale S4-gating language in security-invariants.md's INV-2/INV-5 sections for follow-up.",
+    "next_handoff": "handoffs/WF02-REQ182-20260829/step-02d-reviewer.json"
+  }
 }

@@ -126,3 +126,40 @@ No other defect found. Everything else in scope for this validation pass — the
 mechanism, the "once per cycle" structural claim, the CHECK-constraint alignment, the
 Poller state widening's compatibility, the ISS-0014/CHK-12 citations, and the
 zero-callers claim — is accurate and verified against real code.
+
+## Re-check (iteration 1 rework) — 2026-08-29 — Verdict: PASS
+
+Rework commit `21d60d4` (fix(REQ-188): rework 1 -- remove literal code fences from design
+doc) was diffed directly (`git diff 6836386 21d60d4 -- lib/letflow/design/req188-recurring-timers-and-retention.md`)
+against the pre-rework version already reviewed above.
+
+**§2.3 fixed.** The fenced block now contains only
+`@spec retention_due?(last_run_at :: DateTime.t() | nil) :: boolean()`. The two-clause
+`def retention_due?(nil), do: true` / `DateTime.diff(...)` body was deleted and replaced
+with prose describing both cases (nil → due immediately; non-nil → due once
+`retention_interval_ms()` has elapsed since `last_run_at`).
+
+**§2.4 fixed.** The fenced `new_state = if ... end` block — the real if/else, the real
+`Enum.each(schemas, &Scheduler.run_retention_sweep/1)` call, and the real state-update
+expression — was deleted entirely. Replaced with a prose intro plus a four-row property
+table (Guard / Schema source / Sweep call / State update) covering exactly the same
+semantics with no composed executable expression.
+
+**Full re-grep of every fence in the file** (`grep -n '```'` — 8 fence markers, 4 blocks:
+lines 63-69, 201-205, 212-216, 230-232): all four remaining blocks contain only bare
+`@spec` lines and, in §2.2 (lines 212-216), a bare function head with a guard
+(`def run_retention_sweep(tenant_schema) when is_binary(tenant_schema)`) — no `do...end`,
+no control flow, no composed call chain. This matches the project's existing accepted
+precedent (this design's own §1.2/§2.1, and commits 3680243/290c6b2 on a separate
+requirement).
+
+**Nothing else changed.** The diff between `6836386` and `21d60d4` touches only the two
+named blocks (deletions) plus their surrounding prose replacements — no other line in the
+file differs. The re-arm mechanism, the "at most once per cycle" structural claim, the
+`repeat_total`/`fired_count` bounds, the Poller state widening, `retention_enabled?()`
+defaulting `false`, and both the ISS-0014 and `escalation_timer_duration` citations are
+therefore unchanged from the version already verified correct above — not re-derived, only
+diff-confirmed untouched.
+
+**Verdict: PASS.** No implementation code remains in any fenced block. Routing to
+ELIXIR-DEV via `handoffs/WF02-REQ188-20260829/step-02a-elixir-dev.json`.

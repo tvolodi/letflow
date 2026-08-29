@@ -800,8 +800,13 @@ volumes:
     path: docs/status/requirement_status.v6.yaml
     status: current
     opened: 2026-08-28
-    entries: 9
+    entries: 10
     note: >
+      Incremented to 10 by ORCH's REQ-176 started-event append (Step 00,
+      WF02-REQ176-20260829) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v6.yaml` = 10 on-disk entries, same
+      commit as the append.
+
       Incremented to 9 by ORCH's SCOPE-CHANGE append reconciling stale
       letflow-queue task 327 (REQ-175, already cancelled on disk since
       REQ-164's own Step 6) -- `grep -c "^  - req:"

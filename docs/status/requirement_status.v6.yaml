@@ -358,3 +358,22 @@ history:
       POST /tasks/327/release with status: done (per
       docs/agents/protocols/TASK_QUEUE.md's stale-task reconciliation path)
       to bring the queue back in sync with the already-settled outcome.
+  - req: REQ-176
+    event: started
+    agent: ORCH
+    at: "2026-08-29T01:45:00Z"
+    note: >
+      WF02-REQ176-20260829 started (queue task 351, GH#696, stage S6).
+      First requirement of Stage 6 (operational cross-cutting), drafted this
+      session via WF-01 (REQ-ANALYST draft, REQ-VALIDATOR hard gate -- 1
+      rework round fixing REQ-178's depends_on and splitting the original
+      oversized REQ-179/180 into REQ-181..184, then registered as queue
+      tasks 351-357). REQ-176: dead-letter queue schema (dlq_entries,
+      tenant-scoped per decision 0003 Decision B) and core entry lifecycle
+      (enqueue/list/get/retry/discard) -- the generic origin-agnostic DLQ
+      core that REQ-056/REQ-061's own "do NOT build a partial DLQ" hooks
+      were left for. Bound to the already-shipped S8 frontend contract
+      (web/src/api/dlq.ts, web/src/types/api.ts's DlqEntry/DlqRetryAttempt/
+      CursorPage<T>) since R-Co is unreachable from this sandbox. No route/
+      controller in this requirement -- that is REQ-178's. Depends on
+      REQ-072 (done).

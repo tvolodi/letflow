@@ -3127,6 +3127,25 @@
       "last_known_step": "Step Final",
       "queue_task_id": 326,
       "note": "PR #695 merged (squash commit 4115255). REQ-174: WASM instance pooling (WASM-13 restated) -- DECLINED, live-verified: no pooling API exists anywhere in the installed wasmex dependency, and both existing instantiation call sites (ModuleVersionRegistry.instantiate/2, PluginHandler.start_instance/1) already allocate a fresh Wasmex.Store per invocation, giving isolation-by-construction with no residue risk. Documentation-only implementation (moduledoc decision-recording in both modules, citing decision 0014 (e)) plus a new fixture and two isolation tests proving the property through both real call paths. Bumpy but narrow rework path: 1 CODE-DESIGN-VALIDATOR round (two mechanical fixes -- literal .ex code fences, wrong function name -- substance confirmed sound both times), 1 SECURITY-REVIEWER round and 1 REVIEWER round both correcting the SAME overstated 'unconditional teardown' claim (first pass missed one stray comment) -- corrected to accurately describe two known pre-existing skip paths and attribute isolation to never-sharing-a-Store instead. TEST-DESIGN-VALIDATOR's independent verification was unusually strong: applied real, reversible mutations directly to BOTH production call paths, confirmed both isolation tests genuinely fail under a real defect, reverted with md5sum verification. RELEASE-VALIDATOR independently PASSED all 7 acceptance criteria (4 correctly confirmed inapplicable given the DECLINE decision). CI needed 3 benign reruns: 2 known :wasm_hang isolated-subprocess timing flakes plus one pre-existing, unrelated Lua REQ-156 timing-comparison flake (untouched by this branch) -- main suite passed clean, 2456/2456, on every run. Queue task 326 released done. Nothing yet depends on REQ-174."
+    },
+    {
+      "run_id": "WF02-REQ176-20260829",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-176"
+      ],
+      "stage": "S6",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/dlq/",
+        "priv/repo/migrations/"
+      ],
+      "lock_acquired_at": "2026-08-29T01:45:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00",
+      "queue_task_id": 351,
+      "note": "First requirement of Stage 6 (operational cross-cutting). Dead-letter queue schema (dlq_entries) and core entry lifecycle (enqueue/list/get/retry/discard). Depends on REQ-072 (done). Step 00 bookkeeping committed to main; feature branch about to be created."
     }
   ]
 }

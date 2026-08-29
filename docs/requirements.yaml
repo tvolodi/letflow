@@ -9624,7 +9624,7 @@ requirements:
   - id: REQ-186
     title: Timers schema and scheduler core -- durable timer persistence, poll-and-fire loop, missed-timer recovery (SCH-01/02/05/06)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 359  # letflow-queue task id
     description: >

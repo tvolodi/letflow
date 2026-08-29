@@ -3219,6 +3219,23 @@
       "last_known_step": "Step 6 (DOC-UPDATER) -- content-producing steps done, ORCH Step Final (rebase/push/PR/CI-wait/merge/queue-release) still pending",
       "queue_task_id": 353,
       "note": "REQ-178: DLQ route layer (lib/letflow/routers/dlq.ex) atop REQ-176's core and REQ-177's landing sites -- GET /api/v1/dlq (list, filterable by status/source_type/search/cursor/page_size/instance_id, body {items: [DlqEntry], next_cursor}), GET /api/v1/dlq/:id, POST .../retry, POST .../discard. Every route DlqOperate-gated (REQ-069's matrix, now reachable for the first time); REQ-072 cross-tenant-404 mechanism (never 403); terminal-state retry/discard returns 409, not 500. Moduledoc discloses R-Co's dlq.zig was not inspected and names web/src/api/dlq.ts + web/src/types/api.ts as the binding contract. Zero rework rounds at CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, and TEST-DESIGN-VALIDATOR -- the cleanest of the three DLQ requirements. Two mechanical bookkeeping defects were found and fixed along the way, neither touching REQ-178's substance: an H6 handoff-lint validator-report naming trap (fixed in db29e45, now documented in docs/anti-patterns.md) and a status-vocab defect (\"DONE\" is not a valid top-level handoff status) in step-01b/step-02c/step-05 (fixed in fbe5f42). RELEASE-VALIDATOR independently PASSED all 6 acceptance criteria (own compile/test runs including scripts/test_parallel.sh -- 2488/2491, same 3 pre-existing rustc-absent environmental failures, none touching this branch's diff). This closes Stage 6's first batch DLQ half: REQ-176 (core), REQ-177 (hooks), and REQ-178 (routes) are all done. queue_task_id 353 not yet released -- that is ORCH's Step Final job."
+    },
+    {
+      "run_id": "WF02-REQ181-20260829",
+      "requirement_id": "REQ-181",
+      "queue_task_id": 354,
+      "github_issue_number": 699,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/webhooks.ex",
+        "lib/letflow/webhooks/subscription.ex",
+        "priv/repo/migrations/"
+      ],
+      "started_at": "2026-08-29T12:19:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
+      "note": "Webhook subscription schema and core CRUD context module (webhook_subscriptions, no route) -- core half of the REQ-179 rework split; REQ-182 is the route-layer half."
     }
   ]
 }

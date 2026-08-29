@@ -800,8 +800,13 @@ volumes:
     path: docs/status/requirement_status.v6.yaml
     status: current
     opened: 2026-08-28
-    entries: 17
+    entries: 18
     note: >
+      Incremented to 18 by ORCH's REQ-181 started-event append (Step 00,
+      WF02-REQ181-20260829) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v6.yaml` = 18 on-disk entries, no
+      rebase conflict on this file at the time it was written.
+
       Incremented to 17 by WF02-REQ178-20260829 (DOC-UPDATER)'s own REQ-178
       done-event append (Step 6) -- `grep -c "^  - req:"
       docs/status/requirement_status.v6.yaml` = 17 on-disk entries, no

@@ -608,3 +608,13 @@ history:
       diff) and PASSED. This closes Stage 6's first batch DLQ half: all
       three of REQ-176 (core), REQ-177 (hooks), and REQ-178 (routes) are
       now done.
+  - req: REQ-181
+    event: started
+    at: "2026-08-29T12:19:00Z"
+    by: ORCH
+    note: >
+      Queue task 354, GH#699, stage S6. REQ-VALIDATOR-rework requirement (the
+      core-schema+context half of REQ-179's split; REQ-182 is the route-layer
+      half). REQ-179 itself was never written to disk in this batch's final
+      form (superseded during WF-01 drafting before validation, per the prior
+      run's rework), so no separate cancellation entry is needed here.

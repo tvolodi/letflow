@@ -8947,3 +8947,355 @@ requirements:
       - "if REQ-164 recorded any S6 operational input (artifact storage, retention, job execution) as ASSUMED rather than available, this requirement flags that assumption explicitly rather than building on it silently"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-164, REQ-166]
+
+  # ---------------------------------------------------------------------
+  # Stage 6 -- Operational cross-cutting (first batch)
+  #
+  # docs/migration/stage-6-operational-cross-cutting.md lists eight R-Co
+  # subsystems: src/scheduler, src/secrets (+ integration), src/obs,
+  # src/webhook, src/dlq, src/repository, src/expr, src/ordering. This
+  # first batch covers two of them, DLQ and webhook dispatch, chosen
+  # because each has an already-shipped, fully-specified consumer
+  # contract sitting in this repository: web/src/api/dlq.ts,
+  # web/src/types/api.ts (DlqEntry, DlqRetryAttempt, WebhookSubscription,
+  # WebhookDeliveryAttempt), and web/src/pages/dlq/*.tsx +
+  # web/src/components/webhooks/*.tsx, all committed under S8 and
+  # currently calling routes that do not exist yet. Every requirement
+  # below builds to that SPA contract as its source of truth.
+  #
+  # IMPORTANT LIMITATION, STATED HONESTLY RATHER THAN PAPERED OVER: R-Co
+  # lives at c:\Users\tvolo\dev\ai-dala\R-Co\, a Windows path, and this
+  # batch was drafted from a Linux sandbox where that path does not exist
+  # (confirmed: no R-Co/ai-dala tree anywhere on this host's filesystem).
+  # Every citation below to dlq.zig (337 lines) and webhooks.zig (497
+  # lines) is inherited from earlier, already-verified citations already
+  # committed in this repo (docs/migration/stage-4-api-surface.md's
+  # fronting-subsystem table, docs/requirements.yaml's own REQ-056/061
+  # moduledoc notes) -- not re-verified against R-Co directly by this
+  # draft. No new R-Co line-number or source-code claim is made here that
+  # wasn't already on record. Each requirement below says so again in its
+  # own acceptance criteria, so an agent picking it up on a host that DOES
+  # have R-Co access knows verifying against the real src/dlq/ and
+  # src/webhook/ trees is additive, not a gap this batch silently assumed
+  # was covered.
+  #
+  # Scheduler (src/scheduler/, SCH-03) and ordering (src/ordering/) are
+  # deliberately NOT drafted in this batch. Scheduler is entangled with a
+  # genuinely undecided architecture question (what fires a deferred
+  # timer -- Oban, a supervised per-timer process, a polling GenServer --
+  # no docs/migration/decisions/*.md record settles it) and its
+  # partition_retention.zig file is additionally blocked on decision
+  # 0003's deliberately-deferred partitioning choice (see ISS-0014: R-Co's
+  # own archive() was retired in favor of partition-level
+  # DETACH/ATTACH/DROP, which requires a partitioned events table Letflow
+  # does not have). Ordering has zero grounding anywhere in this repo
+  # beyond the stage doc's one-line "src/ordering (4 files)" listing, with
+  # no cross-references from any done requirement to draft against. Both
+  # are left for the next batch, once (for scheduler) a decision record
+  # exists or R-Co access allows drafting one, and (for ordering) enough
+  # is known to size real requirements rather than guessing.
+  # ---------------------------------------------------------------------
+
+  - id: REQ-176
+    title: Dead-letter queue schema and core entry lifecycle (dlq_entries, OBS-05 foundation)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      FIRST requirement of S6's DLQ half. Builds the generic, origin-agnostic
+      dead-letter core that REQ-177 (wiring existing hooks) and REQ-178 (the
+      route layer) build on. R-Co's dlq.zig route (337 lines) was already
+      catalogued as a fronting-subsystem-without-a-backing-store in
+      docs/migration/stage-4-api-surface.md's table ("dlq.zig | 337 | src/dlq/
+      OBS-05 dead-letter queue | S6") and left unbuilt there; REQ-056 (EXT-01,
+      service-task dispatch) and REQ-061 (EE-10, execution-error handling)
+      both independently named the same gap and left explicit, documented
+      hooks rather than building a partial DLQ themselves ("Do NOT build a
+      partial DLQ here"). This requirement is what those hooks were left for.
+      Since R-Co's actual src/dlq/ implementation is not inspectable from
+      this drafting session (R-Co is at a Windows path unreachable from this
+      sandbox -- verified absent, not assumed), this requirement's binding
+      contract is instead the ALREADY-COMMITTED SPA consumer:
+      web/src/api/dlq.ts's `dlqApi` functions and web/src/types/api.ts's
+      `DlqEntry` / `DlqRetryAttempt` / `CursorPage<T>` types, both shipped
+      under S8 and currently calling a backend that does not exist. Build to
+      that contract, not a guess at R-Co's shape.
+      SCHEMA: `dlq_entries`, living inside each tenant's Postgres schema with
+      a `tenant_id` column retained, per decision
+      0003-ecto-schema-strategy.md's Decision B (schema-per-tenant plus
+      intra-schema tenant_id, the general rule for all business tables, not
+      only identity). Fields, matching `DlqEntry` exactly where it specifies
+      a name: id (uuid pk), entry_type (string -- "event" | "timer" |
+      "webhook" today, per web/src/pages/dlq/DlqPage.tsx's source-type
+      filter dropdown; extensible, not a closed Ecto enum, since REQ-177 adds
+      "event" usages this requirement doesn't yet populate), instance_id
+      (nullable -- set when the entry originates from engine execution),
+      reference_id (nullable -- an opaque reference to a non-instance
+      originating record, e.g. a future webhook delivery id; this
+      requirement only reserves the column), reason (short string),
+      full_reason (text), error_detail (jsonb), error_chain (jsonb array),
+      source_payload (jsonb -- the payload needed to eventually retry),
+      context_json (jsonb), retry_history (jsonb array of maps shaped
+      exactly like `DlqRetryAttempt`: attempt_no, attempted_at, outcome
+      ("success" | "failed"), error_message), retry_count (integer, default
+      0), retry_limit (integer, nullable), next_retry_at (utc_datetime,
+      nullable), status (string -- "pending" | "retrying" | "resolved" |
+      "discarded", exactly `DlqStatus`'s lowercase values -- do not reuse the
+      engine's uppercase COMPLETED/CANCELLED/ERROR convention here, they are
+      a different enum for a different table), created_at, first_failed_at,
+      last_failed_at.
+      CONTEXT MODULE: enqueue/1 (creates a "pending" entry, retry_count 0);
+      list/2 (tenant-scoped, filters by status and entry_type, free-text
+      `search` across reason/instance_id/id, cursor-based pagination
+      returning {items, next_cursor} matching `CursorPage<DlqEntry>`); get/2
+      (tenant-scoped fetch by id); retry/2 (only valid from "pending" or
+      "retrying" -- transitions to "retrying", appends one `DlqRetryAttempt`
+      to retry_history, increments retry_count; called against a "resolved"
+      or "discarded" entry returns a conflict error and leaves the entry
+      unchanged); discard/2 (only valid from "pending" or "retrying" --
+      transitions to "discarded", terminal; called against an already
+      terminal entry returns a conflict error).
+      WHAT retry/2 DOES NOT DO: this core module only manages the DLQ
+      entry's own state machine. It does not know how to actually re-execute
+      a SERVICE_TASK dispatch or resume an ERRORed instance -- that
+      origin-specific re-execution is an injectable callback REQ-177 (and,
+      for webhooks, REQ-180) supplies at the boundary this requirement
+      leaves generic, exactly the injectable-transport discipline
+      REQ-031/REQ-056 already established for other cross-stage gaps.
+      NOT IN THIS REQUIREMENT: no route/controller (REQ-178), no wiring from
+      REQ-056/REQ-061's existing hooks (REQ-177), no webhook-origin entries
+      (REQ-180), no scheduler/"timer" entries (scheduler is not drafted in
+      this batch, see the batch-level note above).
+    acceptance_criteria:
+      - "the dlq_entries table lives inside each tenant's Postgres schema with a tenant_id column retained, matching decision 0003 Decision B's pattern -- verified by inspecting the migration"
+      - "enqueue/1 creates an entry with status \"pending\", retry_count 0, and a created_at timestamp; list/2 is tenant-scoped, demonstrated by an entry enqueued under tenant A being absent from a list/2 call scoped to tenant B"
+      - "retry/2 on a \"pending\" or \"retrying\" entry transitions it to \"retrying\", appends a retry_history entry with attempt_no/attempted_at/outcome/error_message field names matching DlqRetryAttempt exactly, and increments retry_count; retry/2 on a \"resolved\" or \"discarded\" entry returns a conflict error and leaves status, retry_count and retry_history unchanged -- four tests, one per starting status"
+      - "discard/2 on a \"pending\" or \"retrying\" entry transitions it to \"discarded\"; discard/2 on an already \"resolved\" or \"discarded\" entry returns a conflict error rather than silently succeeding"
+      - "list/2 filters by entry_type and by status independently, each demonstrated narrowing a result set that contains rows of more than one value, and supports cursor pagination: given more rows than one page, the first page's next_cursor, passed back in, returns the next distinct page with no repeated or skipped ids"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+    depends_on: [REQ-072]
+
+  - id: REQ-177
+    title: Land SERVICE_TASK retry exhaustion and instance ERROR transitions in the dead-letter queue (EXT-01 AC4, EE-10 hooks closed)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Closes the two named hooks REQ-056 and REQ-061 each left explicitly
+      for this stage rather than building a partial DLQ themselves. REQ-056
+      (EXT-01, service_task.zig): "OBS-05's dead-letter queue (src/dlq/, S6
+      ... EXT-01 AC4 requires an exhausted-retry invocation to land in the
+      DLQ) ... Port the classification/config/backoff logic against an
+      injectable transport and injectable catalog lookup ... Do NOT build a
+      partial DLQ here." REQ-061 (EE-10, instance.zig setInstanceError):
+      "That operator retry/discard path is R-Co's OBS-05 dead-letter API
+      (src/dlq/, S6 ... ) -- explicitly out of this stage's scope. Leave a
+      named hook and state the boundary; do NOT build a partial DLQ."
+      SCOPE, DELIBERATELY NARROW -- landing, not re-execution:
+      1. When a SERVICE_TASK dispatch reaches REQ-056's exhausted-retry
+      condition (attempt_index == retry_limit, per its own
+      decide_failure/is_retriable_failure classification), call REQ-176's
+      enqueue/1 with entry_type "event", instance_id set, source_payload
+      carrying the attempted request, and full_reason naming the classified
+      failure kind.
+      2. When an instance transitions to ERROR via REQ-061's execution-error
+      path, call the same enqueue/1 with entry_type "event", instance_id
+      set, and full_reason drawn from the just-persisted EXECUTION_ERROR
+      event's reason field -- read it back from the committed event, per
+      this project's "re-derive from the source, don't inherit a claim"
+      discipline (docs/anti-patterns.md), not recomputed independently.
+      3. The ERROR-path landing commits in the SAME transaction as REQ-061's
+      own status flip and EXECUTION_ERROR append (extending REQ-061's
+      existing atomicity guarantee rather than adding a second, separate
+      commit that could land one without the other).
+      4. What this requirement explicitly does NOT do: it does not make
+      REQ-176's retry/2 actually re-execute the original SERVICE_TASK
+      dispatch, nor move an instance back out of ERROR. Both require
+      machinery this stage doesn't build yet (REQ-056's transport is still
+      injectable and unwired to a concrete client; there is no
+      operator-driven ERROR-recovery mechanism). Calling retry/2 against one
+      of these two landed entries today only transitions the DLQ entry's own
+      state (per REQ-176) -- it must not silently pretend to also redo the
+      original operation. State this explicitly in the moduledoc as a named,
+      deferred follow-up, exactly as REQ-176/056/061 each already state their
+      own boundaries rather than paper over them.
+    acceptance_criteria:
+      - "a SERVICE_TASK dispatch driven to retry-exhaustion (attempt_index == retry_limit) produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason naming the classified failure kind -- read back from the database, not asserted from the caller's own return value"
+      - "an instance driven to ERROR via REQ-061's execution-error path produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason equal to the persisted EXECUTION_ERROR event's own reason field"
+      - "the ERROR-path DLQ landing is in the same transaction as REQ-061's status flip and event append: forcing the DLQ insert to fail leaves the instance status, the EXECUTION_ERROR event, and the DLQ table all unchanged, verified by reading all three back"
+      - "a test explicitly asserts that calling REQ-176's retry/2 against one of these two entries transitions the DLQ entry to \"retrying\" but does NOT re-invoke the original SERVICE_TASK dispatch and does NOT change the instance's own status away from ERROR -- naming both non-effects, not just the one effect that does happen"
+      - "the moduledoc for both hook sites names REQ-176's retry/2 no-op-beyond-the-DLQ-entry behavior as a deferred follow-up (naming what would need to exist for it to do more: a wired SERVICE_TASK transport, an operator-driven ERROR-recovery path) rather than leaving it unremarked"
+      - "no file outside the two named hook call sites and their tests is modified, confirmed by git diff --stat"
+    depends_on: [REQ-176, REQ-056, REQ-061]
+
+  - id: REQ-178
+    title: Port dlq.zig's S4 route surface onto the DLQ core (GET/POST /api/v1/dlq, DlqOperate-gated)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Third and last requirement of this batch's DLQ half -- the route layer
+      atop REQ-176's core and REQ-177's landing sites. dlq.zig (337 lines)
+      was catalogued in docs/migration/stage-4-api-surface.md's
+      fronting-subsystem table as deferred to S6 rather than built in S4;
+      this requirement is that deferral being paid off.
+      CONTRACT SOURCE: since R-Co's dlq.zig itself is not inspectable from
+      this drafting session (R-Co unreachable, stated once at this batch's
+      top and restated here rather than silently assumed covered), this
+      requirement's binding contract is the ALREADY-SHIPPED SPA consumer:
+      web/src/api/dlq.ts's `dlqApi` object and web/src/types/api.ts's
+      `DlqEntry` / `CursorPage<T>` types (S8, committed, currently calling
+      routes that 404). Build exactly to that, not a guess:
+      - GET /api/v1/dlq -- query params status, source_type (maps to
+      entry_type), search, cursor, page_size, instance_id (dlqApi.list);
+      response `{items: [DlqEntry], next_cursor}`.
+      - GET /api/v1/dlq/:id -- a single DlqEntry.
+      - POST /api/v1/dlq/:id/retry -- calls REQ-176's retry/2, returns the
+      updated DlqEntry.
+      - POST /api/v1/dlq/:id/discard -- calls REQ-176's discard/2, returns
+      the updated DlqEntry.
+      AUTHORIZATION: every route requires the DlqOperate permission.
+      REQ-069's Letflow.Api.Authorization matrix already ported DlqOperate as
+      "currently unreachable" precisely because no S4 route consumed it yet
+      -- this route is what makes it reachable; do not invent a new
+      permission name. Tenant scoping follows REQ-072's cross-tenant-404
+      mechanism: a real id belonging to another tenant returns 404, never
+      403 (REQ-069's own INV-5 rule, restated for this route).
+      web/src/pages/dlq/DlqPage.tsx's client-side OPERATE_ROLES
+      (PROCESS_OPERATOR, PLATFORM_ADMIN) is what currently gates the
+      retry/discard buttons in the UI -- verify which roles actually hold
+      DlqOperate against REQ-069's real matrix rather than assuming these two
+      are the complete server-side answer.
+      NOT IN THIS REQUIREMENT: no change to REQ-176/177's context module;
+      this is the route/controller layer only.
+    acceptance_criteria:
+      - "GET /api/v1/dlq returns a body shaped exactly {items: [...], next_cursor: string|null}, and each item's field names (id, entry_type, instance_id, reason, full_reason, retry_count, status, created_at at minimum) match DlqEntry's, verified against web/src/types/api.ts rather than a hand-invented shape"
+      - "GET /api/v1/dlq honors status, source_type, search, cursor and page_size independently, each with its own test demonstrating the filter narrows the result set"
+      - "POST /api/v1/dlq/:id/retry and .../discard both require the DlqOperate permission from REQ-069's matrix -- a caller holding no role with that permission receives 403, and a caller from a different tenant naming a real id belonging to tenant A receives 404, never 403 -- three explicit tests"
+      - "POST /api/v1/dlq/:id/retry and .../discard against a non-existent id return 404, and against an id already \"resolved\" or \"discarded\" return a 409-shaped conflict rather than a generic 500 -- covering the not-found and terminal-state cases each with their own test"
+      - "the route module's moduledoc states explicitly that R-Co's dlq.zig was not inspected in this batch (unreachable from the drafting environment) and that web/src/api/dlq.ts / web/src/types/api.ts were the binding contract instead, so a future reader does not assume R-Co parity was verified when it wasn't"
+    depends_on: [REQ-177, REQ-069, REQ-072]
+
+  - id: REQ-179
+    title: Webhook subscription schema and CRUD (webhook_subscriptions, WebhooksManage-gated)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      FIRST requirement of S6's webhook half. webhooks.zig (497 lines) was
+      catalogued in docs/migration/stage-4-api-surface.md's fronting-
+      subsystem table as needing a "webhook dispatch subsystem" not yet
+      built, deferred to S6; REQ-069's authorization matrix already ported
+      the WebhooksManage permission as "currently unreachable" for the same
+      reason. This requirement builds subscription management; REQ-180
+      builds the actual delivery/dispatch mechanism on top of it.
+      CONTRACT SOURCE: as with the DLQ requirements in this same batch,
+      R-Co's own src/webhook/ (3 files) and webhooks.zig are not inspectable
+      from this drafting session (R-Co unreachable, stated at this batch's
+      top). The binding contract is instead the ALREADY-SHIPPED SPA
+      consumer: web/src/api/dlq.ts's `webhooksApi` object,
+      web/src/types/api.ts's `WebhookSubscription` type, and
+      web/src/components/webhooks/WebhookSubscriptionDetailPanel.tsx's
+      rendering of it (target_url, status, event_types, created_at) -- all
+      committed under S8, currently calling routes that 404.
+      SCHEMA: `webhook_subscriptions`, per-tenant schema with tenant_id
+      retained (decision 0003 Decision B, same pattern as REQ-176's
+      dlq_entries). Fields matching `WebhookSubscription`: id, target_url
+      (string, required), secret (stored hashed -- see below, never
+      returned once created), description (string, optional), event_types
+      (array of strings), status ("ACTIVE" | "PAUSED" -- exact uppercase
+      strings; this is a DIFFERENT enum convention from DlqEntry's lowercase
+      status, do not unify them), consecutive_failures (integer, default
+      0), last_attempt_at / last_failure_at / paused_at (nullable
+      timestamps), created_at.
+      CONTEXT MODULE: create/2 (webhooksApi.create's body: target_url,
+      optional secret, optional description, optional event_types -- if no
+      secret is supplied, generate one; store only a hashed form; return the
+      PLAINTEXT secret exactly once, as `hmac_secret_once`, matching the
+      type's "_once" naming -- never retrievable again after the create
+      response); list/1 (tenant-scoped); update/2 (webhooksApi.update's
+      Partial<{status, is_active}> body -- both are ways of expressing the
+      same ACTIVE/PAUSED transition and must reconcile to the same stored
+      state); delete/2.
+      ROUTES: GET /api/v1/webhooks/subscriptions, POST
+      /api/v1/webhooks/subscriptions, PATCH
+      /api/v1/webhooks/subscriptions/:id, DELETE
+      /api/v1/webhooks/subscriptions/:id -- all requiring the WebhooksManage
+      permission (REQ-069's matrix) and REQ-072's tenant-scoped
+      cross-tenant-404 mechanism.
+      NOT IN THIS REQUIREMENT: delivery attempts, dispatch, the
+      GET .../deliveries route, or HMAC signing (all REQ-180).
+    acceptance_criteria:
+      - "POST /api/v1/webhooks/subscriptions with no secret supplied creates a subscription, stores the secret hashed (never plaintext) in the database, and the create response's hmac_secret_once carries the plaintext exactly once; a subsequent GET/list of the same subscription never includes the plaintext secret or an hmac_secret_once field at all -- two explicit tests"
+      - "PATCH /api/v1/webhooks/subscriptions/:id accepts {status: \"PAUSED\"} and, separately, {is_active: false}, and both result in a subscription that subsequently reads back as PAUSED -- reconciling WebhookSubscription's dual status/is_active representation to one stored state"
+      - "every subscription route requires the WebhooksManage permission from REQ-069's matrix -- a caller lacking it receives 403, and a caller from a different tenant naming a real subscription id belonging to tenant A receives 404, never 403"
+      - "GET /api/v1/webhooks/subscriptions returns {items: [...]} with each item's target_url, event_types, status and created_at present, matching webhooksApi.list's consumer shape"
+      - "DELETE /api/v1/webhooks/subscriptions/:id removes the subscription such that a subsequent list no longer includes it, and a second DELETE of the same id returns 404 rather than a duplicate success"
+      - "the moduledoc states explicitly that R-Co's src/webhook/ and webhooks.zig were not inspected in this batch (unreachable from the drafting environment), and that the SPA's already-committed contract was the binding source of truth instead"
+    depends_on: [REQ-069, REQ-072]
+
+  - id: REQ-180
+    title: Webhook delivery dispatch, retry, auto-pause, and dead-letter landing (WebhookDeliveryAttempt, entry_type "webhook")
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Second and last requirement of this batch's webhook half. REQ-179
+      built subscription management; this requirement builds the delivery
+      mechanism the SPA already renders:
+      web/src/components/webhooks/WebhookDeliveryAttemptsTable.tsx displays
+      `WebhookDeliveryAttempt` rows (delivery_id, subscription_id,
+      event_type, status "SUCCESS"|"FAILED", http_status_code, attempted_at,
+      attempt_count, max_attempts, last_error), fetched via
+      webhooksApi.getDeliveries -> GET
+      /api/v1/webhooks/subscriptions/:id/deliveries. As with REQ-179, R-Co's
+      own src/webhook/ dispatch implementation is not inspectable from this
+      drafting session -- this requirement's HMAC header format and its
+      auto-pause failure threshold are stated explicitly below as LETFLOW'S
+      OWN CHOICES, not a port, because no R-Co source is available to be
+      faithful to.
+      SCOPE:
+      1. A deliver/3(subscription, event_type, payload) function: computes
+      an HMAC-SHA256 signature of the JSON-encoded payload using the
+      subscription's stored secret, sends it as a request header (the
+      moduledoc must name the exact header and encoding chosen -- e.g.
+      `X-Letflow-Signature: sha256=<hex>` -- and say plainly this is
+      Letflow's own choice), POSTs to target_url, and classifies the result
+      as "SUCCESS" (any 2xx) or "FAILED" (anything else, including a
+      transport-level error with no HTTP status at all). Persists exactly
+      one `webhook_delivery_attempts` row per attempt with
+      WebhookDeliveryAttempt's exact fields.
+      2. On a "FAILED" attempt: increments the subscription's
+      consecutive_failures (REQ-179's schema) and retries with backoff up to
+      a configured max_attempts. On exhausting max_attempts, lands the
+      delivery in REQ-176's DLQ core via enqueue/1 with entry_type "webhook"
+      and reference_id set to the delivery's own delivery_id (DlqEntry's
+      reference_id column exists for exactly this non-instance-originated
+      case, distinct from instance_id).
+      3. When consecutive_failures reaches a named threshold -- the
+      moduledoc must state the chosen number explicitly and that it is
+      Letflow's own choice, not an R-Co value -- the subscription
+      transitions to "PAUSED" and paused_at is set (REQ-179's schema),
+      matching the SPA's PAUSED-status rendering
+      (WebhookSubscriptionDetailPanel.tsx's resolveStatus()).
+      4. GET /api/v1/webhooks/subscriptions/:id/deliveries (webhooksApi's
+      {limit} param) returns `{items: [WebhookDeliveryAttempt]}`,
+      WebhooksManage-gated and tenant-scoped exactly as REQ-179's routes.
+      NOT IN THIS REQUIREMENT, AND WHY: automatically triggering deliver/3
+      after every matching domain event append. That requires deciding how
+      Letflow hooks a post-commit side effect into the event-store append
+      path generically -- a cross-cutting mechanism plausibly shared with
+      other future consumers, not something this requirement should decide
+      unilaterally as a side effect of building webhook delivery. deliver/3
+      is built, tested, and directly callable; wiring its automatic trigger
+      is a named, deferred follow-up, not silently implemented and not
+      silently forgotten.
+    acceptance_criteria:
+      - "deliver/3 against a target_url returning 200 persists one webhook_delivery_attempts row with status \"SUCCESS\", http_status_code 200, and does not increment the subscription's consecutive_failures"
+      - "deliver/3 against a target_url returning 500, and separately against one that refuses the connection outright, both persist a row with status \"FAILED\" and last_error populated (http_status_code 500 for the first, null for the connection-refused case) -- two explicit tests"
+      - "deliver/3's signature is independently verifiable: a test computes the expected HMAC-SHA256 signature from the same secret and payload and asserts it equals the value deliver/3 actually sent in the documented header"
+      - "a subscription's consecutive_failures reaching the documented threshold flips its status to \"PAUSED\" and sets paused_at -- driven by repeated failed attempts and read back afterward"
+      - "a delivery exhausting max_attempts lands exactly one entry in REQ-176's DLQ core with entry_type \"webhook\" and reference_id equal to the delivery's own delivery_id, read back from the DLQ table"
+      - "GET /api/v1/webhooks/subscriptions/:id/deliveries returns {items: [...]} with each item's fields matching WebhookDeliveryAttempt exactly, honors the limit param, and requires WebhooksManage plus the same tenant-scoping 403/404 split as REQ-179's routes"
+      - "the moduledoc names the HMAC header/format and the PAUSED-threshold number as Letflow's own choices, explicitly not ported from R-Co's src/webhook/ (unreachable from this drafting session), and names automatic post-event triggering as an explicitly deferred follow-up rather than silently implemented or silently omitted"
+    depends_on: [REQ-179, REQ-176]

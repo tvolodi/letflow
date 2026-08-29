@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF02-REQ182-20260829-step03b",
+  "run_id": "WF02-REQ182-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3b",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "test/letflow/routers/webhooks_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "TEST-DESIGNER finished REQ-182's route-layer test coverage. New files: test/letflow/routers/webhooks_test.exs (13 tests) and test/specs/REQ-182.md (criterion -> test-case mapping and mutation-testing log). Both committed and pushed to feature/WF02-REQ182-20260829 at commit ad3d8c1.",
+    "design_doc": "lib/letflow/design/req182-webhooks-routes.md",
+    "spec_doc": "test/specs/REQ-182.md",
+    "precedent_test": "test/letflow/routers/dlq_test.exs (REQ-178) -- same conn-test dispatch idiom, tenant fixtures, auth-header conventions",
+    "test_run_output": "mix test test/letflow/routers/webhooks_test.exs -> Finished in 10.2 seconds, Result: 13 passed",
+    "mutation_testing": "Four mutants applied to lib/letflow/routers/webhooks.ex, one at a time, each reverted via `git checkout -- lib/letflow/routers/webhooks.ex` before the next: (1) PATCH's {:error, :not_found} branch flipped from Response.not_found(conn) to Response.ok(conn, %{}) -- caught, 12/13 passed; (2) GET list's policy key literal changed from :WebhookSubscriptionsManage to :DefinitionsRead (a permission TASK_WORKER genuinely holds per role_allows?/2) -- caught, 12/13 passed; (3) handle_list/1 spliced a fabricated hmac_secret_once value onto every list item -- caught, 12/13 passed; (4) PATCH's is_active key dropped from the narrowed attrs map (only status threaded through) -- caught, 12/13 passed. All four reverted; `git diff lib/letflow/routers/webhooks.ex` confirmed clean (no output) after the last revert, and the full suite was re-run green (13/13) against the unmutated file before committing. lib/letflow/webhooks.ex, lib/letflow/webhooks/subscription.ex, lib/letflow/api/authorization.ex, and lib/letflow/dlq.ex were never touched.",
+    "acceptance_criteria_coverage": {
+      "AC1_hmac_secret_once": "2 tests -- create returns it once (2xx, non-empty string, no secret_hash); list never includes it (no key, no raw-plaintext substring in the response body)",
+      "AC2_patch_status_is_active": "2 tests -- {status: PAUSED} and {is_active: false}, each read back as PAUSED via PATCH response and a subsequent list",
+      "AC3_webhooks_manage_and_cross_tenant_404": "5 tests -- 403 for TASK_WORKER on GET/POST/PATCH/DELETE (4 tests, PATCH/DELETE also assert no state change), plus 1 cross-tenant test proving 404-never-403 with byte-identical response to a genuinely-absent id and the other tenant's row left untouched",
+      "AC4_list_shape": "1 test -- {items: [...]} exactly, target_url/event_types/status/created_at all present with real asserted values",
+      "AC5_delete": "2 tests -- delete removes from subsequent list; second delete of the same id returns 404 not a duplicate 204",
+      "AC6_moduledoc_disclosure": "1 test -- Code.fetch_docs/1 asserts moduledoc mentions webhooks.zig, 'not inspected', web/src/api/dlq.ts, web/src/types/api.ts"
+    }
+  },
+  "task": {
+    "description": "Verify test/letflow/routers/webhooks_test.exs covers every REQ-182 acceptance criterion with no skipped coverage, uses isolated self-sufficient fixtures (Letflow.TenantFixture.provisioned_tenant!/1, no shared/global state), and that the reported mutation-testing evidence is sound -- re-apply at least one of the four reported mutants yourself and confirm it is caught, per the TEST-DESIGN-VALIDATOR mandate for mutation-driven coverage."
+  },
+  "result": null
+}

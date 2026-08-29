@@ -1,0 +1,29 @@
+{
+  "handoff_id": "WF02-REQ181-20260829-step03",
+  "run_id": "WF02-REQ181-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "lib/letflow/webhooks.ex",
+  "status": "PENDING",
+  "completed_at": null,
+  "priority": "normal",
+  "context": {
+    "note": "REQ-181's implementation (priv/repo/migrations/20260829010001_create_webhook_subscriptions.exs, lib/letflow/webhooks/subscription.ex, lib/letflow/webhooks.ex, and the registry-entry diff in lib/letflow/tenant_provisioning.ex, committed as fab270d on feature/WF02-REQ181-20260829, pushed) has PASSED both the SECURITY-REVIEWER gate (handoffs/WF02-REQ181-20260829/req181-security-review-report.md) and the REVIEWER gate (handoffs/WF02-REQ181-20260829/req181-reviewer-report.md) -- idiomatic Ecto/OTP usage confirmed consistent with Letflow.Dlq's own row-lock-then-check Ecto.Multi idiom, no scope creep beyond create/2/list/1/update/3/delete/2/private get/2, and decision 0003 Decision B consistency confirmed. Design: lib/letflow/design/req181-webhooks-core.md. Implementation notes: handoffs/WF02-REQ181-20260829/req181-elixir-dev-implementation-notes.md. No route/controller/Plug file was added (REQ-182's scope, not this one). RECHECK 2026-08-29 (commit 3046e44): ELIXIR-DEV's post-approval fix adding :created_at to insert_changeset/2's cast/validate_required whitelist (found while TEST-DESIGNER was writing coverage -- cast/3 was silently dropping the timestamp, causing a real not_null_violation) has been reviewed and RE-APPROVED. `git diff b676d08 3046e44 -- lib/letflow/webhooks/subscription.ex lib/letflow/design/req181-webhooks-core.md` shows only the :created_at addition and the matching design-doc correction, no scope creep. No tenant_id/secret-handling/permission logic touched, so SECURITY-REVIEWER's original PASS stands. `mix compile --warnings-as-errors` clean. This handoff remains PENDING/valid -- TEST-DESIGNER may resume."
+  },
+  "task": {
+    "description": "Write ExUnit (and StreamData where mutation-relevant) test coverage for Letflow.Webhooks per REQ-181's original acceptance criteria in docs/requirements.yaml, mutation-driven: tests should be strong enough to fail if any of the reviewed idioms/behaviors were subtly broken (e.g. a mutation that skips clearing paused_at, a mutation that returns hmac_secret_once from list/1, a mutation that drops the row lock in update/3, a mutation that swaps the ACTIVE/PAUSED reconciliation branches). Cover create/2, list/1, update/3, delete/2, and the tenant-isolation/not-found/invalid-id paths. Do not run the tests yourself -- that is TEST-RUNNER's job after TEST-DESIGN-VALIDATOR passes this.",
+    "acceptance_criteria": [
+      "the webhook_subscriptions table lives inside each tenant's Postgres schema with a tenant_id column retained, matching decision 0003 Decision B's pattern -- verified by inspecting the migration",
+      "create/2 with no secret supplied generates one, stores only a hashed form in the database, and returns the plaintext exactly once as hmac_secret_once in its return value; a subsequent list/1 or get of the same subscription never includes the plaintext secret or an hmac_secret_once key at all -- two explicit tests",
+      "update/3 accepts %{status: \"PAUSED\"} and, separately, %{is_active: false}, and both result in a subscription that subsequently reads back as status \"PAUSED\" -- reconciling WebhookSubscription's dual status/is_active representation to one stored state",
+      "list/1 is tenant-scoped, demonstrated by a subscription created under tenant A being absent from a list/1 call scoped to tenant B",
+      "delete/2 removes the subscription such that a subsequent list/1 no longer includes it, and a second delete/2 of the same id returns a not-found error rather than a duplicate success",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

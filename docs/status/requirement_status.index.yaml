@@ -800,8 +800,15 @@ volumes:
     path: docs/status/requirement_status.v6.yaml
     status: current
     opened: 2026-08-28
-    entries: 18
+    entries: 19
     note: >
+      Incremented to 19 by WF02-REQ181-20260829 (DOC-UPDATER)'s own REQ-181
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v6.yaml` = 19 on-disk entries, no
+      rebase conflict on this file at the time it was written. 652 lines /
+      39369 bytes, well under the 1200-line/120000-byte roll ceiling, so no
+      roll triggered.
+
       Incremented to 18 by ORCH's REQ-181 started-event append (Step 00,
       WF02-REQ181-20260829) -- `grep -c "^  - req:"
       docs/status/requirement_status.v6.yaml` = 18 on-disk entries, no

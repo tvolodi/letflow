@@ -1,0 +1,105 @@
+# Test run report — WF-02 Step 4 (re-run 3, after e5a03e7 -- final confirmation)
+# Written by TEST-RUNNER. RELEASE-VALIDATOR independently re-runs the suite
+# rather than trusting this report alone (core-directives.md).
+
+req_id: REQ-181
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ181-20260829
+date_utc: 2026-08-29
+git:
+  branch: feature/WF02-REQ181-20260829
+  commit: 1707451ded1086470f27d7f78e1fe6d26df17a6c
+
+environment:
+  toolchain: local (asdf shims — Elixir 1.20.3 / Erlang 29 / OTP 29)
+  toolchain_note: >
+    asdf again not sourced by default in this non-interactive shell
+    (`mix`/`elixir` not on PATH until `source ~/.asdf/asdf.sh`) — shell-init
+    quirk of this sandbox, not a repo issue.
+  rust_toolchain: >
+    rustc/cargo confirmed still absent from PATH in this sandbox (`asdf
+    list rust` -> "No such plugin: rust"). Same known gap as every prior
+    REQ-176/177/178/181 run.
+  postgres_container: >
+    letflow-1-postgres-1 and letflow-1-keycloak-1 confirmed Running via
+    `sudo docker compose up -d` (this user's own docker socket access is
+    permission-denied, sudo is passwordless).
+
+checks:
+  compile_warnings_as_errors:
+    command: "MIX_ENV=test mix compile --warnings-as-errors --force"
+    result: PASS
+    exit_code: 0
+    output: "Compiling 155 files (.ex)\nGenerated letflow app"
+
+  format_check:
+    command: "mix format --check-formatted"
+    result: PASS
+    exit_code: 0
+    output: "(no output — all files already formatted)"
+
+  test_suite:
+    command: "scripts/test_parallel.sh (N=8 partitions, aggregated)"
+    result: FAIL (only pre-existing/environmental failures remain)
+    summary_line_verbatim: "combined: 2500 tests, 5 properties, 3 failures (2502/2505 passed)"
+    per_partition:
+      - "partition 1: 408 tests, 2 properties, 0 failures, exit 0"
+      - "partition 2: 304 tests, 0 properties, 0 failures, exit 0"
+      - "partition 3: 377 tests, 1 property, 2 failures, exit 2"
+      - "partition 4: 165 tests, 0 properties, 0 failures, exit 0"
+      - "partition 5: 223 tests, 2 properties, 1 failures, exit 2"
+      - "partition 6: 353 tests, 0 properties, 0 failures, exit 0"
+      - "partition 7: 306 tests, 0 properties, 0 failures, exit 0"
+      - "partition 8: 364 tests, 0 properties, 0 failures, exit 0"
+    resolved_since_prior_run:
+      - item: "A4b field_order defect on REQ-181's started-event (docs/status/requirement_status.v6.yaml, entry_line 611) — `at:` was ordered before `agent:` instead of after"
+        resolution: >
+          Fixed by ORCH directly, commit e5a03e7 (field reordered to the
+          required [:req, :event, :agent, :at, :note] shape; not routed to
+          DOC-UPDATER — recorded as a mechanical own-bookkeeping-file fix in
+          handoffs/WF02-REQ181-20260829/step-04c-doc-updater.json).
+          Independently re-verified this step, standalone:
+          `mix test test/docs/requirement_status_invariants_test.exs` ->
+          "Result: 20 passed" (20/20, 0 failures). Confirmed absent from
+          this run's full-suite failure list.
+    failures:
+      - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs"
+        diagnosis: >
+          PRE-EXISTING/ENVIRONMENTAL — rustc absent from PATH
+          (System.cmd("rustc", ["--version"], ...) raises :enoent).
+          Confirmed no rust asdf plugin installed in this sandbox
+          (`asdf list rust` -> "No such plugin: rust"). Not in git diff
+          --stat main...HEAD for this branch. Same class as every prior
+          REQ-176/177/178/181 run. Not routed anywhere.
+      - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs"
+        diagnosis: "Same root cause as above."
+      - test: "test AC7: the wasmex NIF is a loaded shared library, not an external process Wasmex.Native resolves to a compiled .beam built from Rust NIF sources (Letflow.Engine.Wasm.PluginHandlerTest)"
+        location: "test/letflow/engine/wasm/plugin_handler_test.exs"
+        diagnosis: >
+          PRE-EXISTING/ENVIRONMENTAL, same rustc-absent root cause (wasmex's
+          NIF requires a Rust toolchain to build). Not in diff. Not routed
+          anywhere.
+
+verdict: PASS (with disclosed, pre-existing environmental gaps)
+verdict_detail: >
+  mix compile --warnings-as-errors: clean, 0 warnings, exit 0.
+  mix format --check-formatted: clean, exit 0.
+  Full suite: 2502/2505 passed, 3 failures — all 3 confirmed as the same
+  already-known pre-existing/environmental class documented in every prior
+  REQ-176/177/178/181 run (rustc/cargo absent from this sandbox's toolchain:
+  2 CheckToolchainTest rust-pin failures + 1 wasmex PluginHandlerTest NIF
+  build failure). Nothing new and nothing unexplained.
+  The one item that WAS new/unresolved in the immediately-prior run — the
+  A4b field_order defect on REQ-181's started-event in
+  docs/status/requirement_status.v6.yaml — is now confirmed fixed: ORCH's
+  commit e5a03e7 reordered the entry to [:req, :event, :agent, :at, :note],
+  and this step independently re-ran
+  `mix test test/docs/requirement_status_invariants_test.exs` standalone,
+  getting 20/20 passed, in addition to confirming its absence from the
+  full-suite run.
+  No file was deleted or a test loosened to reach this result. Routing to
+  RELEASE-VALIDATOR (Step 5) per handoffs/WF02-REQ181-20260829/step-05-release-validator.json.

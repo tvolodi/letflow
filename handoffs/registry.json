@@ -3225,7 +3225,7 @@
       "requirement_id": "REQ-181",
       "queue_task_id": 354,
       "github_issue_number": 699,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/webhooks.ex",
         "lib/letflow/webhooks/subscription.ex",
@@ -3234,8 +3234,8 @@
       "started_at": "2026-08-29T12:19:00Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
-      "note": "Webhook subscription schema and core CRUD context module (webhook_subscriptions, no route) -- core half of the REQ-179 rework split; REQ-182 is the route-layer half."
+      "last_known_step": "Step 6 (DOC-UPDATER) -- content-producing steps done, ORCH Step Final (rebase/push/PR/CI-wait/merge/queue-release) still pending",
+      "note": "REQ-181: webhook subscription schema and core CRUD context module (webhook_subscriptions, no route) -- Letflow.Webhooks context + Letflow.Webhooks.Subscription schema + tenant-scoped migration, registered in tenant_provisioning.ex's manifest -- core half of the REQ-179 rework split; REQ-182 is the still-pending route-layer half. Path: 1 CODE-DESIGN-VALIDATOR rework round (a literal Elixir code fence in the design doc, needing two passes to fully remove); 2 real bugs found and fixed mid-pipeline -- TEST-DESIGNER caught a missing :created_at cast in the changeset, and TEST-RUNNER caught a tenant_fixture oracle-list gap that was masking a real tenant-scoping defect in list/1's test coverage; plus 2 direct ORCH bookkeeping fixes to this same run's REQ-181 started-event in docs/status/requirement_status.v6.yaml (field name \"by:\" corrected to \"agent:\", then field order corrected), recorded here rather than left silent. SECURITY-REVIEWER and REVIEWER both passed with no rework. RELEASE-VALIDATOR independently re-verified all 7 acceptance criteria on commit 53f6c06: mix test test/letflow/webhooks_test.exs -> 14/14 passed; mix compile --warnings-as-errors --force -> clean, exit 0; scripts/test_parallel.sh (N=8) -> 2502/2505, the same 3 pre-existing rustc-absent/wasmex-NIF environmental failures seen on every prior REQ-176/177/178 run, none touching this branch's diff. queue_task_id 354 not yet released -- that is ORCH's Step Final job."
     }
   ]
 }

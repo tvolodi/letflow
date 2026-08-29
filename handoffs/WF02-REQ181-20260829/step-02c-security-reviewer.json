@@ -1,0 +1,44 @@
+{
+  "handoff_id": "WF02-REQ181-20260829-step02c",
+  "run_id": "WF02-REQ181-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2c",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/webhooks.ex",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-29T12:35:48Z",
+  "priority": "normal",
+  "context": {
+    "note": "Implementation of REQ-181 (webhook_subscriptions migration + Letflow.Webhooks.Subscription schema + Letflow.Webhooks context module) per the validated design lib/letflow/design/req181-webhooks-core.md, committed as fab270d on feature/WF02-REQ181-20260829 (pushed). Full implementation notes: handoffs/WF02-REQ181-20260829/req181-elixir-dev-implementation-notes.md. This is a tenant-data-path change (new tenant-scoped table + a secret-hashing mechanism), so it is gated here per docs/agents/instructions/security-invariants.md before REVIEWER. Files to review: priv/repo/migrations/20260829010001_create_webhook_subscriptions.exs, lib/letflow/webhooks/subscription.ex, lib/letflow/webhooks.ex, and the registry-entry diff in lib/letflow/tenant_provisioning.ex. No route/controller file was added (that is REQ-182, explicitly out of scope here) -- verified by git diff --stat on commit fab270d. mix compile --force --warnings-as-errors passed clean (\"Compiling 142 files (.ex)\" / \"Generated letflow app\", no warnings)."
+  },
+  "task": {
+    "description": "Security-review REQ-181's implementation against INV-1 (tenant scoping), INV-4 (secret/hash column discipline), INV-7 and INV-8 as applicable. Confirm: (1) the plaintext webhook secret is never persisted, logged, or returned from any function other than create/2's own hmac_secret_once, and that Letflow.Webhooks.Subscription's struct/@type has no field that could carry it; (2) every Letflow.Webhooks function derives tenant_id from opts[:prefix] only, never from caller-supplied attrs, and list/1's tenant isolation relies on the schema-per-tenant boundary, not a filter that could be bypassed; (3) the migration's if prefix() do ... end guard and its Letflow.TenantProvisioning.tenant_scoped_migrations/0 registry entry are both present and correctly paired; (4) the SHA-256 hashing mechanism (:crypto.strong_rand_bytes/1 + :crypto.hash(:sha256, _), both hex-encoded) matches the established lib/letflow/identity.ex precedent with no weakening; (5) no route/controller/Plug file was added in this change.",
+    "acceptance_criteria": [
+      "create/2 with no secret supplied generates one, stores only a hashed form in the database, and returns the plaintext exactly once as hmac_secret_once in its return value; a subsequent list/1 or get of the same subscription never includes the plaintext secret or an hmac_secret_once key at all",
+      "update/3 accepts %{status: \"PAUSED\"} and, separately, %{is_active: false}, and both result in a subscription that subsequently reads back as status \"PAUSED\"",
+      "list/1 is tenant-scoped, demonstrated structurally by schema-per-tenant isolation (a subscription created under tenant A is absent from a list/1 call scoped to tenant B)",
+      "delete/2 removes the subscription such that a subsequent list/1 no longer includes it, and a second delete/2 of the same id returns a not-found error rather than a duplicate success",
+      "the webhook_subscriptions table lives inside each tenant's Postgres schema with a tenant_id column retained, matching decision 0003 Decision B's pattern",
+      "no route or controller file is added or modified",
+      "secret_hash is the only persisted form of the secret; no changeset in this module accepts a raw secret/plaintext key"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "invariants_assessed": {
+      "INV-1": "APPLIES - PASS",
+      "INV-2": "NOT-APPLICABLE (no API surface, S4 not started)",
+      "INV-3": "NOT-APPLICABLE (S5 not started)",
+      "INV-4": "APPLIES - PASS",
+      "INV-5": "NOT-APPLICABLE (no lookup-by-ID endpoint, S4 not started)",
+      "INV-6": "satisfied by this handoff",
+      "INV-7": "APPLIES - PASS",
+      "INV-8": "APPLIES - PASS"
+    },
+    "report": "handoffs/WF02-REQ181-20260829/req181-security-review-report.md",
+    "summary": "Plaintext webhook secret is never persisted, logged, or returned outside create/2's hmac_secret_once; Subscription struct has no field that could carry it. Every Letflow.Webhooks function is genuinely prefix-scoped (verified by reading each Repo call, not by moduledoc claim). Migration guard and tenant_scoped_migrations/0 registry entry are both present and correctly paired. Hashing mechanism (:crypto.strong_rand_bytes/1 + :crypto.hash(:sha256, _), hex-encoded) verified byte-for-byte identical in approach to lib/letflow/identity.ex's real generate_token_plaintext/0 + hash_token_value/1. update/3's Ecto.Multi row-locks via lock(\"FOR UPDATE\") before any status check/write, matching Letflow.Dlq.retry/2 and discard/2's idiom with no TOCTOU window. No route/controller/Plug file added. No defect found."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

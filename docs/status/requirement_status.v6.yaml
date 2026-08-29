@@ -610,11 +610,43 @@ history:
       now done.
   - req: REQ-181
     event: started
+    agent: ORCH
     at: "2026-08-29T12:19:00Z"
-    by: ORCH
     note: >
       Queue task 354, GH#699, stage S6. REQ-VALIDATOR-rework requirement (the
       core-schema+context half of REQ-179's split; REQ-182 is the route-layer
       half). REQ-179 itself was never written to disk in this batch's final
       form (superseded during WF-01 drafting before validation, per the prior
       run's rework), so no separate cancellation entry is needed here.
+  - req: REQ-181
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-29T13:36:37Z"
+    note: >
+      WF02-REQ181-20260829 done (queue task 354, GH#699, stage S6). Webhook
+      subscription core shipped: Letflow.Webhooks context module +
+      Letflow.Webhooks.Subscription schema + tenant-scoped
+      webhook_subscriptions migration (per decision 0003 Decision B),
+      registered in tenant_provisioning.ex's manifest -- create/2 (generates
+      and hashes the HMAC secret when none is supplied, returning the
+      plaintext exactly once as hmac_secret_once, never retrievable again),
+      list/1 (tenant-scoped), update/2 (reconciles WebhookSubscription's dual
+      status/is_active representation to one stored ACTIVE/PAUSED state),
+      delete/2. No route/controller file added, per this requirement's own
+      scope -- that is REQ-182's. Path: 1 CODE-DESIGN-VALIDATOR rework round
+      (a literal Elixir code fence in the design doc, removed twice before it
+      was fully gone); 2 real bugs found and fixed mid-pipeline -- TEST-
+      DESIGNER caught a missing :created_at cast in the changeset, and
+      TEST-RUNNER caught a tenant_fixture oracle-list gap that was masking a
+      real tenant-scoping defect in list/1's test coverage; plus 2 direct
+      ORCH bookkeeping fixes to this same volume's REQ-181 started-event
+      (field name "by:" corrected to "agent:", then field order corrected),
+      recorded here rather than left silent. SECURITY-REVIEWER and REVIEWER
+      both passed. RELEASE-VALIDATOR independently re-verified all 7
+      acceptance criteria on commit 53f6c06: mix test
+      test/letflow/webhooks_test.exs -> 14/14 passed; mix compile
+      --warnings-as-errors --force -> clean, exit 0; scripts/test_parallel.sh
+      (N=8) -> 2502/2505, the same 3 pre-existing rustc-absent/wasmex-NIF
+      environmental failures seen on every prior REQ-176/177/178 run, none
+      touching this branch's diff. Unblocks REQ-182 (webhook route layer,
+      depends_on: [REQ-181, REQ-069, REQ-072]), still pending.

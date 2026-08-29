@@ -1,0 +1,34 @@
+{
+  "handoff_id": "WF02-REQ181-20260829-step01b",
+  "run_id": "WF02-REQ181-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req181-webhooks-core.md",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-29T12:28:37Z",
+  "priority": "normal",
+  "context": {
+    "note": "Recheck after rework_count 1. Original FAIL (see handoffs/WF02-REQ181-20260829/req181-design-validation-report.md) found exactly one defect: section 2.2 contained a fenced code block reproducing the real composed expressions of lib/letflow/identity.ex's generate_token_plaintext/0 (line 897) and hash_token_value/1 (line 901) almost verbatim, only the literal prefix string differing. The fenced block has been removed and replaced with prose describing the same mechanism (:crypto.strong_rand_bytes/1, Base.encode16/2 with case: :lower, :crypto.hash/2 for SHA-256) without composing them into a literal expression -- commit 1e0029e on this branch. No other section was touched: the validator's first pass already confirmed the secret-hashing precedent citation (genuine against lib/letflow/identity.ex), the tenant-scoped migration pattern (genuine against priv/repo/migrations/20260829000001_create_dlq_entries.exs and lib/letflow/tenant_provisioning.ex), and the update/2 status/is_active reconciliation table in section 3.3 (complete and consistent) -- please re-verify AC7 (no implementation code / no fenced block reproducing real .ex content) specifically, and re-scan the rest of the document for any other such block, but the other three checks should not need re-deriving from scratch unless something looks off."
+  },
+  "task": {
+    "description": "Re-validate lib/letflow/design/req181-webhooks-core.md against REQ-181's full acceptance criteria after the rework-1 fix to section 2.2. Confirm section 2.2 no longer contains a fenced code block whose content is a real or near-real composed .ex expression (prose/naming of functions like :crypto.strong_rand_bytes/1, :crypto.hash/2, Base.encode16/2 is fine; composing them into the literal right-hand-side expression is not). Confirm every other fenced block in the document remains a @spec/@type declaration or a plain data table, not function-body logic. Re-confirm the design still covers every acceptance criterion for REQ-181.",
+    "acceptance_criteria": [
+      "the webhook_subscriptions table lives inside each tenant's Postgres schema with a tenant_id column retained, matching decision 0003 Decision B's pattern -- verified by inspecting the migration",
+      "create/2 with no secret supplied generates one, stores only a hashed form in the database, and returns the plaintext exactly once as hmac_secret_once in its return value; a subsequent list/1 or get of the same subscription never includes the plaintext secret or an hmac_secret_once key at all -- two explicit tests",
+      "update/2 accepts %{status: \"PAUSED\"} and, separately, %{is_active: false}, and both result in a subscription that subsequently reads back as status \"PAUSED\" -- reconciling WebhookSubscription's dual status/is_active representation to one stored state",
+      "list/1 is tenant-scoped, demonstrated by a subscription created under tenant A being absent from a list/1 call scoped to tenant B",
+      "delete/2 removes the subscription such that a subsequent list/1 no longer includes it, and a second delete/2 of the same id returns a not-found error rather than a duplicate success",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "the design contains no fenced code block reproducing real or near-real .ex file content (function bodies/composed expressions) -- signatures, @spec/@type declarations, and plain data tables only"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "summary": "Re-check confirms the rework-1 fix to section 2.2 is genuine and complete: the fenced block that composed lib/letflow/identity.ex's generate_token_plaintext/0 and hash_token_value/1 expressions verbatim (only the literal prefix differing) has been removed and replaced with prose naming the same functions (:crypto.strong_rand_bytes/1, Base.encode16/2 with case: :lower, :crypto.hash/2) without composing them into a literal expression. git diff 3e60615 1e0029e confirms this is the ONLY change in the document -- the secret-hashing precedent citation, the tenant-scoped migration pattern, and the update/2 status/is_active reconciliation table in section 3.3 are all byte-for-byte unchanged from the prior review, which had already confirmed them correct. Grepped every fenced block in the document (11 blocks) and confirmed each is an @spec/@type declaration, the wire-contract restatement, or a plain data table -- no other instance of the composed-real-expression defect exists. All 7 acceptance criteria for the design remain covered per section 6's checklist. Report: handoffs/WF02-REQ181-20260829/req181-design-validation-report.md.",
+    "report_file": "handoffs/WF02-REQ181-20260829/req181-design-validation-report.md"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

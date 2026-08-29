@@ -1,0 +1,136 @@
+defmodule Letflow.Webhooks.Subscription do
+  @moduledoc """
+  Ecto schema for the `webhook_subscriptions` table. See
+  `lib/letflow/design/req181-webhooks-core.md` §2. Ordinary `Ecto.Schema`, no
+  process — matches `Letflow.Dlq.Entry`/`Letflow.Identity.ApiToken`'s
+  plain-CRUD-table precedent.
+
+  ## `status` — closed `Ecto.Enum`, uppercase (design §0.3/§2.1)
+
+  Stored as the two literal uppercase strings `"ACTIVE"`/`"PAUSED"` —
+  deliberately a DIFFERENT convention from `Letflow.Dlq.Entry.status`'s
+  lowercase values. This is a different table with its own contract
+  (`web/src/types/api.ts`'s `WebhookSubscription.status`), not a re-use of
+  the DLQ enum's casing.
+
+  ## `secret_hash` — hashed storage only (design §0.1/§2.2)
+
+  The DB column is `secret_hash`, never `secret` — mirrors
+  `Letflow.Identity.ApiToken`'s own `token_hash` column, specifically so a
+  column name never implies a plaintext value lives there. **The plaintext
+  secret is never assigned to any field on this schema, never passed to
+  `Ecto.Changeset.cast/3`, and no changeset function defined below accepts a
+  `"secret"`/`"plaintext"` key even if a caller supplied one** — the same
+  invariant `Letflow.Identity.ApiToken`'s own moduledoc states for
+  `token_hash` (INV-4), restated here for `secret_hash`.
+
+  There is deliberately **no `hmac_secret_once` field on this struct at
+  all** — it is not persisted anywhere, it exists only as a key in
+  `Letflow.Webhooks.create/2`'s own return map. A `Subscription` struct,
+  wherever it appears, never carries a plaintext or an `hmac_secret_once`
+  key — this is what makes "list/1 or get never includes the plaintext
+  secret" true by construction, not by a serialization-layer filter that
+  could be forgotten at a future route layer.
+
+  ## `event_types` — plain `{:array, :string}` (design §0.2)
+
+  An open, extensible set — no closed vocabulary is named anywhere reachable
+  from this requirement.
+
+  ## No `@schema_prefix`
+
+  Like every other tenant-scoped table in this schema, `webhook_subscriptions`
+  lives in many Postgres schemas — one per tenant — so every read and write
+  must pass `prefix: schema_name` explicitly at call time.
+
+  ## `created_at`, not `timestamps/1` (design §1)
+
+  `WebhookSubscription`'s contract names `created_at`, and no acceptance
+  criterion requires this module to populate an `updated_at` column, so this
+  schema declares `created_at` explicitly rather than reaching for the
+  `timestamps/1` macro.
+  """
+
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+  schema "webhook_subscriptions" do
+    field(:tenant_id, Ecto.UUID)
+    field(:target_url, :string)
+    field(:secret_hash, :string)
+    field(:description, :string)
+    field(:event_types, {:array, :string}, default: [])
+
+    field(:status, Ecto.Enum,
+      values: [:ACTIVE, :PAUSED],
+      default: :ACTIVE
+    )
+
+    field(:consecutive_failures, :integer, default: 0)
+    field(:last_attempt_at, :utc_datetime)
+    field(:last_failure_at, :utc_datetime)
+    field(:paused_at, :utc_datetime)
+    field(:created_at, :utc_datetime)
+  end
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          tenant_id: Ecto.UUID.t(),
+          target_url: String.t(),
+          secret_hash: String.t(),
+          description: String.t() | nil,
+          event_types: [String.t()],
+          status: :ACTIVE | :PAUSED,
+          consecutive_failures: non_neg_integer(),
+          last_attempt_at: DateTime.t() | nil,
+          last_failure_at: DateTime.t() | nil,
+          paused_at: DateTime.t() | nil,
+          created_at: DateTime.t()
+        }
+
+  @doc """
+  Structural changeset for `Letflow.Webhooks.create/2`. Casts
+  `:target_url, :secret_hash, :description, :event_types, :tenant_id,
+  :created_at` — all caller/context-module-supplied at insert time
+  (`secret_hash` is computed by the context module before this changeset
+  ever sees `attrs`, per design §3.1; `created_at` is computed by
+  `create/2` via `current_timestamp()` and must be cast here or `cast/3`
+  silently drops it, leaving the NOT NULL `created_at` column unset and
+  the insert failing with a `not_null_violation`). `status` is **not**
+  cast here — it is fixed at `:ACTIVE` via `put_change/3`, never accepted
+  from `attrs`. `consecutive_failures` defaults to `0` via the schema's
+  own column default and this changeset's `put_change/3` — not
+  caller-settable at creation either.
+  """
+  @spec insert_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
+  def insert_changeset(subscription, attrs) do
+    subscription
+    |> cast(attrs, [
+      :target_url,
+      :secret_hash,
+      :description,
+      :event_types,
+      :tenant_id,
+      :created_at
+    ])
+    |> validate_required([:target_url, :secret_hash, :tenant_id, :created_at])
+    |> put_change(:status, :ACTIVE)
+    |> put_change(:consecutive_failures, 0)
+  end
+
+  @doc """
+  Structural changeset for `Letflow.Webhooks.update/3`'s status/is_active
+  reconciliation (design §3.3). Casts exactly `:status, :paused_at` — the
+  two columns that reconciliation ever writes together. Does not touch
+  `:target_url, :description, :event_types` — a future requirement that lets
+  a caller PATCH those would add its own changeset function, not extend this
+  one silently.
+  """
+  @spec status_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
+  def status_changeset(subscription, attrs) do
+    subscription
+    |> cast(attrs, [:status, :paused_at])
+    |> validate_required([:status])
+  end
+end

@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF02-REQ181-20260829-step04b",
+  "run_id": "WF02-REQ181-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 4b",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ELIXIR-DEV",
+  "file": "test/support/tenant_fixture.ex",
+  "status": "PENDING",
+  "completed_at": null,
+  "priority": "normal",
+  "context": {
+    "note": "Full-suite run (scripts/test_parallel.sh, N=8) found 5 failures; 4 are confirmed pre-existing/environmental (see test/reports/report-2026-08-29-WF02-REQ181-20260829.yaml for full attribution) and are NOT rework for this branch. The 5th is a genuine defect caused by this branch's own migration and needs fixing here: `test C6 -- oracle-rot guard observed tables equal expected_tenant_tables/0 in both directions (Letflow.Support.TenantFixtureTest)` at test/letflow/support/tenant_fixture_test.exs:379 fails with `a manifest migration created a table the oracle does not list: [\"webhook_subscriptions\"]`. Root cause: priv/repo/migrations/20260829010001_create_webhook_subscriptions.exs (this branch's REQ-181 migration) creates a new tenant-scoped table, but test/support/tenant_fixture.ex's hand-maintained `@expected_tenant_tables` list (around line 122) was never updated to include \"webhook_subscriptions\", and test/letflow/support/tenant_fixture_test.exs's companion assertion `assert length(TenantFixture.expected_tenant_tables()) == 23` (around line 302, in the describe block whose comment already tracks REQ-076/REQ-125/REQ-176's prior bumps 20->21->22->23) was never bumped to 24. This is an established, previously-followed convention this branch's implementation missed -- REQ-176's own commit (28befe0) updated this exact list when it added dlq_entries. Reproduced standalone: `mix test test/letflow/support/tenant_fixture_test.exs` -> 13/14 passed, 1 failure, this same assertion.",
+    "full_test_report": "test/reports/report-2026-08-29-WF02-REQ181-20260829.yaml",
+    "branch": "feature/WF02-REQ181-20260829",
+    "unrelated_pre_existing_failures_not_rework": [
+      "2x rust-pin CheckToolchainTest failures (rustc absent from this sandbox's PATH -- environmental, matches REQ-177/REQ-178 precedent)",
+      "1x wasmex PluginHandlerTest external_resource failure (same rustc-absence root cause)",
+      "1x requirement_status_invariants_test.exs A4b failure caused by this branch's own merge-base commit 8bfe96d (docs/status/requirement_status.v6.yaml's REQ-181 started-event uses `by:` instead of the required `agent:` field) -- structurally outside this branch's diff, same bug class as the already-resolved ISS-0330, flagged for ORCH to file as a new issue, not for ELIXIR-DEV to fix on this branch"
+    ]
+  },
+  "task": {
+    "description": "Add \"webhook_subscriptions\" to test/support/tenant_fixture.ex's @expected_tenant_tables list (keep alphabetical ordering, matching the existing list's convention) and bump test/letflow/support/tenant_fixture_test.exs's count assertion from 23 to 24 (update the accompanying comment to note REQ-181 added webhook_subscriptions, following the same style as the REQ-076/REQ-125/REQ-176 entries already there). Re-run mix test test/letflow/support/tenant_fixture_test.exs and mix compile --warnings-as-errors, quote real output, then re-flip this handoff to COMPLETED and route back to TEST-RUNNER (Step 4) for a fresh full-suite confirmation.",
+    "acceptance_criteria": [
+      "test/support/tenant_fixture.ex's @expected_tenant_tables includes \"webhook_subscriptions\"",
+      "test/letflow/support/tenant_fixture_test.exs's oracle-count assertion reads 24, not 23, with its comment updated to mention REQ-181",
+      "mix test test/letflow/support/tenant_fixture_test.exs passes 14/14 with real output quoted",
+      "mix compile --warnings-as-errors passes with real output quoted",
+      "no other file is touched by this fix (scope limited to the oracle-list omission)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

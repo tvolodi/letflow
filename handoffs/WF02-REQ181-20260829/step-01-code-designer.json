@@ -7,6 +7,7 @@
   "to_agent": "CODE-DESIGNER",
   "file": "docs/requirements.yaml#REQ-181",
   "status": "PENDING",
+  "completed_at": null,
   "priority": "normal",
   "context": {"note": "Queue task 354, GH#699, stage S6. Feature branch feature/WF02-REQ181-20260829 created off main at 8bfe96d. Read the full requirement text from docs/requirements.yaml's REQ-181 entry (around line 9182) -- it names the exact schema fields, context-module functions, and secret-handling rules. Read web/src/api/dlq.ts's webhooksApi object and web/src/types/api.ts's WebhookSubscription type in full -- the binding contract, field-for-field (R-Co's webhooks.zig/src/webhook/ are unreachable from this session, do not assume parity with them). Read lib/letflow/dlq.ex and priv/repo/migrations/20260829000001_create_dlq_entries.exs (REQ-176's precedent) for this project's tenant-scoped-schema idiom (decision 0003 Decision B: if prefix() do guard), the row-lock-then-check Ecto.Multi idiom for update/2-shaped operations, and cursor-paginated list/2 conventions -- reuse the same idioms, don't invent new ones. Read how this codebase hashes/stores secrets elsewhere (grep for existing bcrypt/Argon2/:crypto usage, e.g. in identity/user-related code) for the hashed-secret-storage precedent -- do not invent a new hashing scheme if one is already established."},
   "task": {
@@ -18,8 +19,11 @@
       "list/1 is tenant-scoped, demonstrated by a subscription created under tenant A being absent from a list/1 call scoped to tenant B",
       "delete/2 removes the subscription such that a subsequent list/1 no longer includes it, and a second delete/2 of the same id returns a not-found error rather than a duplicate success",
       "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
-      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted",
+      "REWORK ITERATION 1: CODE-DESIGN-VALIDATOR (step-01b, see handoffs/WF02-REQ181-20260829/step-01b-code-design-validator.json and handoffs/WF02-REQ181-20260829/req181-design-validation-report.md) returned FAIL. Everything else in the design stands (secret-hashing precedent verified genuine against lib/letflow/identity.ex, tenant-scoped migration pattern verified genuine against priv/repo/migrations/20260829000001_create_dlq_entries.exs and lib/letflow/tenant_provisioning.ex, the update/2 status/is_active reconciliation table in section 3.3 verified complete and consistent) -- the ONLY defect is section 2.2's fenced block: `generate_webhook_secret_plaintext() -> \"whsec_\" <> (:crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower))` and `hash_webhook_secret(plaintext) -> :crypto.hash(:sha256, plaintext) |> Base.encode16(case: :lower)` reproduce the real function bodies of lib/letflow/identity.ex's generate_token_plaintext/0 (line 897) and hash_token_value/1 (line 901) almost verbatim -- only the literal prefix differs, and flattening `do...end` to `->` does not make a real function body into a signature/type shape. Replace this block with a prose/table description naming the functions used (:crypto.strong_rand_bytes/1, :crypto.hash/2, Base.encode16/2, their arguments and options) without composing them into the literal expression. Re-check the rest of the document for any other fenced block whose content is an actual composed expression rather than an @spec/@type/table before resubmitting. On finishing, flip this handoff's status to COMPLETED with a real result, same as your first attempt."
     ]
   },
-  "result": null
+  "result": null,
+  "rework_count": 1,
+  "max_rework": 3
 }

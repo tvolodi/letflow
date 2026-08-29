@@ -6,7 +6,8 @@
   "from_agent": "CODE-DESIGNER",
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "lib/letflow/design/req181-webhooks-core.md",
-  "status": "PENDING",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-29T00:00:00Z",
   "priority": "normal",
   "context": {
     "note": "Queue task 354, GH#699, stage S6. Design artefact for REQ-181 (webhook_subscriptions schema + Letflow.Webhooks context module, no route) committed at lib/letflow/design/req181-webhooks-core.md on feature/WF02-REQ181-20260829 (commit 3e60615, pushed). Binding contract was web/src/api/dlq.ts's webhooksApi object and web/src/types/api.ts's WebhookSubscription type -- R-Co's webhooks.zig/src/webhook/ were not inspected (unreachable from this session), per the handoff's own instruction. The secret-hashing mechanism reuses Letflow.Identity's existing API-token precedent (:crypto.strong_rand_bytes/1 + :crypto.hash(:sha256, _), both hex-encoded, mirroring token_hash on Letflow.Identity.ApiToken) rather than inventing a new scheme -- grepped mix.lock/mix.exs and lib/letflow/ first and found no bcrypt/argon2 dependency and no other established hashing precedent. The design deliberately renames the wire concept 'secret' to a DB column named secret_hash (Sec 0.1) mirroring token_hash, and deliberately does NOT cursor-paginate list/1 (Sec 3.2) because webhooksApi.list() takes no query parameters and WebhookSubscription has no CursorPage-shaped counterpart -- both deviations from REQ-176's own DLQ precedent are explained inline in the design rather than silently diverging.",
@@ -24,5 +25,20 @@
       "the design contains no fenced code blocks reproducing real .ex file content (this project's mechanical, no-exceptions rule) -- signatures and type shapes only, no function bodies"
     ]
   },
-  "result": null
+  "result": {
+    "status": "FAIL",
+    "report_file": "handoffs/WF02-REQ181-20260829/req181-design-validation-report.md",
+    "checks_performed": {
+      "secret_hashing_precedent_ac2": "PASS -- verified genuine by reading lib/letflow/identity.ex directly (insert_token/3, generate_token_plaintext/0 line 897, hash_token_value/1 line 901) and lib/letflow/identity/api_token.ex's token_hash column. Not fabricated.",
+      "tenant_scoped_migration_pattern_ac1": "PASS -- verified against the real priv/repo/migrations/20260829000001_create_dlq_entries.exs and lib/letflow/tenant_provisioning.ex's @tenant_scoped_migration_manifest (CreateDlqEntries already registered there).",
+      "update_2_reconciliation_table_ac3": "PASS -- all 7 input combinations (single-key status, single-key is_active, agreeing pair, disagreeing pair, invalid status string, empty attrs) are covered with no contradictions.",
+      "no_implementation_code_present_ac7": "FAIL -- section 2.2's fenced block (`generate_webhook_secret_plaintext() -> ...` / `hash_webhook_secret(plaintext) -> ...`) reproduces the real function bodies of lib/letflow/identity.ex's generate_token_plaintext/0 and hash_token_value/1 (lines 897-902) almost verbatim -- same expressions, only the literal prefix differs. This is a function body, not a signature/type shape, despite pseudocode `->` syntax."
+    },
+    "issues": [
+      "lib/letflow/design/req181-webhooks-core.md section 2.2: replace the fenced generate_webhook_secret_plaintext/hash_webhook_secret block with a prose/table description naming the functions used (:crypto.strong_rand_bytes/1, :crypto.hash/2, Base.encode16/2) and their arguments, without composing them into the literal expression that mirrors lib/letflow/identity.ex's real function bodies."
+    ],
+    "next_action": "Route back to CODE-DESIGNER for rework (see handoffs/WF02-REQ181-20260829/step-01-code-designer.json)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
 }

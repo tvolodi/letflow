@@ -162,7 +162,7 @@ defmodule Letflow.SchedulerTest do
     DateTime.utc_now() |> DateTime.add(seconds_ahead, :second) |> DateTime.truncate(:microsecond)
   end
 
-  defp arm_timer!(schema_name, instance_id, overrides \\ %{}) do
+  defp arm_timer!(schema_name, instance_id, overrides) do
     attrs =
       Map.merge(
         %{

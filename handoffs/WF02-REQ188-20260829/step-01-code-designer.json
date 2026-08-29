@@ -1,0 +1,28 @@
+{
+  "handoff_id": "WF02-REQ188-20260829-step01",
+  "run_id": "WF02-REQ188-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "docs/requirements.yaml#REQ-188",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 361, GH#707, stage S6. Feature branch feature/WF02-REQ188-20260829 created off main at 30ea59c. Last requirement of S6's scheduler half. Read the full REQ-188 entry in docs/requirements.yaml (around line 9818) in full. Read lib/letflow/scheduler.ex and lib/letflow/scheduler/poller.ex (REQ-186, REQ-187 -- already shipped) in full for the existing poll loop, config pattern, and how a timer's firing already commits in one transaction. Read lib/letflow/event_store.ex around L989's archive/1 (REQ-026, already shipped, currently zero callers -- verify this yourself with a grep) and the event_retention_policies table's migration (priv/repo/migrations/20260817181240_create_event_retention_policies.exs). Read docs/migration/decisions/0003-ecto-schema-strategy.md's Decision C point 2 (partitioning deferral) and find ISS-0014's resolution (grep docs/issues/ or handoffs/ for ISS-0014) to confirm its adopted option (a) and rejected option (c) reasoning before citing it. Read lib/letflow/definitions/graph.ex's CHK-12 check_timer_duration/1 to confirm :HUMAN_TASK genuinely has no escalation_timer_duration attribute today (for the SCH-04 deferral statement)."},
+  "task": {
+    "description": "Produce the design artefact (lib/letflow/design/req188-recurring-timers-and-retention.md or similar) for REQ-188's two deliverables, built together since both extend REQ-186's poll loop: PART 1 (SCH-07 recurring timers) -- when a recurring timer fires (repeat_expression/repeat_interval_us/repeat_total/fired_count all non-null per REQ-186's already-shipped all-or-nothing CHECK), compute the next fire_at (previous fire_at + interval) and create a NEW pending timer row in the SAME transaction as the firing (extending REQ-187's already-shipped fire-transaction machinery, not a new transaction), unless fired_count has reached repeat_total (series ends, no new timer). State explicitly: an interval shorter than the poll interval fires at most once per cycle (never catches up N times in one tick); a missed-occurrence-during-restart scenario fires the single overdue occurrence as SCH-05 already specifies, not multiple backlogged ones. A cancelled instance's recurring timer does not re-arm (reuses REQ-187's cancellation-guard machinery). PART 2 (periodic retention runner) -- a periodic invocation of the already-shipped, zero-caller Letflow.EventStore.archive/1, running ON REQ-186's existing scheduler/poller process (not a second independent ticker), config-driven with an enable/disable switch DEFAULTING TO DISABLED, and a configurable interval. The design's moduledoc must explicitly name: (a) R-Co's partition_maintenance.zig/partition_retention.zig are NOT ported, citing decision 0003 Decision C's partitioning deferral and ISS-0014's adopted option (a)/rejected option (c); (b) SCH-04 escalation timers are deferred because :HUMAN_TASK has no escalation_timer_duration attribute in Letflow's Graph schema yet. Design only -- no fenced code blocks reproducing real .ex content (this project's mechanical no-exceptions rule, hit repeatedly in this pipeline).",
+    "acceptance_criteria": [
+      "a timer with repeat_expression \"R/PT1H\" that fires creates exactly one NEW pending timer with fire_at equal to the fired timer's fire_at plus one hour, in the same transaction as the firing -- demonstrated by a test that forces the firing transaction to roll back and asserts NEITHER the status change NOR the new timer persisted",
+      "a timer with repeat_expression \"R3/PT1H\" stops re-arming after its third firing: fired_count reaches 3 and the fourth poll creates no new timer, asserted by counting timers rows",
+      "a recurring timer whose instance is cancelled does not re-arm -- the chain terminates, asserted after a cancellation followed by a poll",
+      "a recurring timer whose repeat interval is SHORTER than the poll interval fires at most once per poll cycle rather than catching up multiple occurrences in one tick, asserted by an explicit test with the interval set below the configured poll interval",
+      "the retention runner is DISABLED by default: with no configuration set, a full poll cycle invokes Letflow.EventStore.archive/1 zero times, asserted rather than assumed",
+      "with the retention runner explicitly enabled in config, a poll cycle invokes archive/1 and rows older than the tenant's configured retention are moved to events_archive -- closing the zero-caller gap, asserted by row counts before and after",
+      "the retention runner runs on REQ-186's existing scheduler process rather than adding a second independent periodic process to lib/letflow/application.ex, confirmed by git diff of application.ex showing no new ticker child",
+      "the moduledoc states that partition_maintenance.zig and partition_retention.zig are deliberately not ported, naming decision 0003 Decision C's partitioning deferral and ISS-0014's adopted option (a) as the blocker, and that SCH-04 escalation timers are deferred because :HUMAN_TASK has no escalation_timer_duration attribute in Letflow's graph schema",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

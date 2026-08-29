@@ -70,7 +70,8 @@ defmodule Letflow.Scheduler.PollerTest do
                prefix: schema_name
              )
 
-    assert {:ok, %{definition: activated}} = Definitions.activate(definition.id, prefix: schema_name)
+    assert {:ok, %{definition: activated}} =
+             Definitions.activate(definition.id, prefix: schema_name)
 
     assert {:ok, result} =
              Engine.create(
@@ -100,7 +101,12 @@ defmodule Letflow.Scheduler.PollerTest do
 
   describe "AC8: Poller.handle_info(:tick, _) reads config fresh and uses the overridden poll_interval_ms" do
     test "a timer armed after the Poller's own first tick is still fired well within the overridden interval, far faster than the 5000ms default would allow" do
-      put_scheduler_config(poll_interval_ms: 30, jitter_ms: 0, max_timers_per_cycle: 64, max_fire_retries: 3)
+      put_scheduler_config(
+        poll_interval_ms: 30,
+        jitter_ms: 0,
+        max_timers_per_cycle: 64,
+        max_fire_retries: 3
+      )
 
       %{schema_name: schema_name} = provisioned_tenant()
       instance_id = start_instance!(schema_name)
@@ -111,12 +117,18 @@ defmodule Letflow.Scheduler.PollerTest do
       # complete -- at this point no due timer exists yet, so it's a no-op.
       Process.sleep(20)
 
-      fire_at = DateTime.utc_now() |> DateTime.add(-60, :second) |> DateTime.truncate(:microsecond)
+      fire_at =
+        DateTime.utc_now() |> DateTime.add(-60, :second) |> DateTime.truncate(:microsecond)
 
       assert {:ok, timer} =
                Scheduler.create(
                  Letflow.Repo,
-                 %{instance_id: instance_id, timer_type: "deadline", node_id: "poller-ac8", fire_at: fire_at},
+                 %{
+                   instance_id: instance_id,
+                   timer_type: "deadline",
+                   node_id: "poller-ac8",
+                   fire_at: fire_at
+                 },
                  prefix: schema_name
                )
 

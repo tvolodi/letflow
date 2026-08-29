@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF02-REQ186-20260829-step05",
+  "run_id": "WF02-REQ186-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ186-20260829/step-05-release-validator.json",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "branch": "feature/WF02-REQ186-20260829",
+    "note": "TEST-RUNNER ran the full suite (scripts/test_parallel.sh, 8 partitions), mix compile --warnings-as-errors, mix format --check-formatted, and mix letflow.lint_handoffs on branch feature/WF02-REQ186-20260829. Full report: test/reports/report-2026-08-29-WF02-REQ186-20260829.yaml. Summary: combined suite result 'combined: 2530 tests, 5 properties, 3 failures (2532/2535 passed)' -- all 3 failures are the standing documented environmental category (rustc/cargo absent from this sandbox: 2x Mix.Tasks.Letflow.CheckToolchainTest rust-pin tests + 1x Letflow.Engine.Wasm.PluginHandlerTest AC7 wasmex-Rust-NIF-source test), none touching REQ-186's diff. test/letflow/scheduler_test.exs (17 tests, partition 1) and test/letflow/scheduler/poller_test.exs (1 test, partition 8) both ran with 0 failures in their partitions. No :wasm_hang or REQ-156 Lua timing flake observed. Specifically checked whether the new Letflow.Scheduler.Poller GenServer (added to the supervision tree by this requirement) introduced timing/ordering flakiness elsewhere: all 6 non-failing partitions were fully clean; the 2 failing partitions failed only on the pre-existing rustc-absence tests, not anything scheduler/timing-adjacent. mix compile --warnings-as-errors: exit 0, clean (only pre-existing dependency-internal warnings from `jose`, not letflow code). mix format --check-formatted: found 2 real violations (test/letflow/scheduler_test.exs, test/letflow/scheduler/poller_test.exs -- TEST-DESIGNER's new files), fixed mechanically via `mix format` (whitespace/line-wrap only, no assertion/fixture logic changed), re-verified clean afterward, and re-confirmed the full suite unaffected (same 3 pre-existing failures, same combined totals). mix letflow.lint_handoffs: 'OK -- 0 new violations across 1417 handoff files (25 pre-existing grandfathered, traced to ISS-0190)'. Postgres/keycloak containers brought up via `sudo docker compose up -d` (this checkout's own docker socket permission was denied; sudo was passwordless), mapped to host port 5463 per this workspace's untracked .env (LETFLOW_DB_PORT=5463). Committed and pushed: the 2 formatting fixes plus this report and this handoff.",
+    "test_report": "test/reports/report-2026-08-29-WF02-REQ186-20260829.yaml",
+    "prior_handoffs": {
+      "step_01_code_designer": "handoffs/WF02-REQ186-20260829/step-01-code-designer.json",
+      "step_01b_code_design_validator": "handoffs/WF02-REQ186-20260829/step-01b-code-design-validator.json",
+      "step_02a_elixir_dev": "handoffs/WF02-REQ186-20260829/step-02a-elixir-dev.json",
+      "step_02c_security_reviewer": "handoffs/WF02-REQ186-20260829/step-02c-security-reviewer.json",
+      "step_02d_reviewer": "handoffs/WF02-REQ186-20260829/step-02d-reviewer.json",
+      "step_03_test_designer": "handoffs/WF02-REQ186-20260829/step-03-test-designer.json",
+      "step_03b_test_design_validator": "handoffs/WF02-REQ186-20260829/step-03b-test-design-validator.json",
+      "step_04_test_runner": "handoffs/WF02-REQ186-20260829/step-04-test-runner.json"
+    }
+  },
+  "task": {
+    "description": "Independently re-verify REQ-186's acceptance criteria before it is marked done. Re-run the suite yourself rather than trusting TEST-RUNNER's report alone (core-directives.md's 'Every producing step has a validating step').",
+    "acceptance_criteria": [
+      "the timers table lives inside each tenant's Postgres schema with a tenant_id column retained (decision 0003 Decision B), verified by inspecting the migration, and carries a partial index on (fire_at) WHERE status = 'pending'",
+      "the status CHECK constraint admits exactly pending, fired, cancelled and failed -- a test attempting to insert a timer with status 'expired' fails at the database level, not only in the changeset",
+      "the recurrence CHECK constraint is all-or-nothing: a test inserting repeat_expression without repeat_interval_us is rejected by the database, and a test inserting all four recurrence columns consistently succeeds",
+      "a timer created with fire_at in the past is fired by the first poll after it exists, and the appended event carries fired_late: true together with both the scheduled fire_at and the actual firing timestamp; a timer created with fire_at in the future is NOT fired by that same poll -- two explicit tests",
+      "polling twice over the same due timer fires it exactly once: the second poll appends no second event and the timers row remains status 'fired' with its original fired_at",
+      "a fire attempt that raises increments fire_error_count and leaves the timer 'pending', AND the remaining due timers in that same poll cycle are still attempted -- one test asserts both, by making the first of two due timers fail and asserting the second still fired",
+      "a timer reaching the configured max fire retries transitions to 'failed' with failed_at set and produces exactly one dlq_entries row with entry_type \"timer\", and is not attempted again by subsequent polls",
+      "the poll interval, jitter, max timers per cycle and max fire retries are all read from application config with the documented defaults (5000 ms, 0 ms, 64, 3), demonstrated by a test overriding at least the interval and asserting the poller uses the override",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

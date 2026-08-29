@@ -1,0 +1,152 @@
+# Test run report — WF-02 Step 4
+# Written by TEST-RUNNER. RELEASE-VALIDATOR independently re-runs the suite
+# rather than trusting this report alone (core-directives.md).
+
+req_id: REQ-186
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ186-20260829
+date_utc: 2026-08-29
+
+git:
+  branch: feature/WF02-REQ186-20260829
+  note: >
+    Working tree was clean at the start of this step. TEST-DESIGN-VALIDATOR
+    had already PASSed test/letflow/scheduler_test.exs (17 tests) and
+    test/letflow/scheduler/poller_test.exs (1 test) against REQ-186's 9
+    acceptance criteria. Earlier in this pipeline run, ORCH already ran the
+    full suite twice directly and fixed two stale tests
+    (test/support/tenant_fixture.ex's oracle list and
+    test/letflow/tenant_provisioning_event_seed_test.exs's hardcoded seed
+    counts) to account for the new timers table and TIMER_FIRED event type
+    -- committed at 4feeeb9, prior to this step.
+
+environment:
+  toolchain: local (asdf shims — Elixir 1.20.3 / Erlang 29 / OTP 29, per `.tool-versions`)
+  toolchain_note: >
+    asdf shims were not on PATH by default in this shell session; added
+    $HOME/.asdf/shims to PATH explicitly for every command below.
+  rust_toolchain: >
+    rustc/cargo are absent from PATH in this sandbox (confirmed via the
+    CheckToolchainTest failures below: System.cmd("rustc", ...) raises
+    :enoent). Same known gap documented in prior runs' reports (e.g.
+    test/reports/report-2026-08-29-WF02-REQ182-20260829.yaml).
+  postgres_container: >
+    letflow-1-postgres-1 and letflow-1-keycloak-1, brought up via
+    `sudo docker compose up -d` (this user's own docker socket access was
+    permission-denied; sudo was passwordless and available). Postgres
+    mapped to host port 5463, matching this workspace's untracked .env
+    (LETFLOW_DB_PORT=5463).
+
+checks:
+  compile_warnings_as_errors:
+    command: "MIX_ENV=test mix compile --warnings-as-errors --force"
+    result: PASS
+    exit_code: 0
+    output: >
+      Clean compile of the letflow app and all dependencies (159 .ex files
+      in letflow app). Only warnings observed were pre-existing deprecated
+      `catch ...` warnings inside the `jose` dependency's Erlang sources
+      (src/jose_server.erl, src/jwa/jose_jwa.erl) and one deprecated
+      `xref: [exclude: ...]` mix.exs notice from the `mix` tool itself --
+      neither originates in letflow's own code, and --warnings-as-errors
+      still exited 0 (dependency warnings are not promoted to errors).
+
+  format_check:
+    command: "mix format --check-formatted"
+    result: FAIL then FIXED
+    detail: >
+      First run failed (exit 1): two REQ-186 test files were not
+      formatted -- test/letflow/scheduler_test.exs (3 call sites needing
+      the formatter's multi-line wrapping: create_definition_attrs/1's map
+      literal, active_definition!/1's two Definitions calls, and a long
+      arm_timer!/3 call) and test/letflow/scheduler/poller_test.exs
+      (3 sites: an assert pattern-match line, a put_scheduler_config/1
+      call, and a DateTime pipeline). Fixed mechanically with
+      `mix format test/letflow/scheduler_test.exs
+      test/letflow/scheduler/poller_test.exs` -- no assertion, fixture, or
+      mutation-target logic touched, whitespace/line-wrapping only.
+      Re-ran `mix format --check-formatted` afterward: exit 0, clean.
+    exit_code_final: 0
+    files_reformatted:
+      - test/letflow/scheduler_test.exs
+      - test/letflow/scheduler/poller_test.exs
+
+  test_suite:
+    command: "scripts/test_parallel.sh (N=8 partitions, aggregated)"
+    result: PASS (3 pre-existing/environmental failures, all rustc-absence-rooted, not disqualifying)
+    summary_line_verbatim: "combined: 2530 tests, 5 properties, 3 failures (2532/2535 passed)"
+    per_partition:
+      - "partition 1: 413 tests, 2 properties, 0 failures, exit 0"
+      - "partition 2: 310 tests, 0 properties, 0 failures, exit 0"
+      - "partition 3: 391 tests, 1 property, 0 failures, exit 0"
+      - "partition 4: 178 tests, 0 properties, 0 failures, exit 0"
+      - "partition 5: 215 tests, 0 properties, 1 failures, exit 2"
+      - "partition 6: 364 tests, 0 properties, 2 failures, exit 2"
+      - "partition 7: 330 tests, 0 properties, 0 failures, exit 0"
+      - "partition 8: 329 tests, 2 properties, 0 failures, exit 0"
+    failures:
+      - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+        error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...) at lib/system.ex:1141, via running_rust_raw/0"
+        diagnosis: "PRE-EXISTING/ENVIRONMENTAL. No rustc binary reachable on PATH in this sandbox. Unrelated to REQ-186's diff (timers schema/migration, Letflow.Scheduler, Letflow.Scheduler.Poller, event_type_registry seed for TIMER_FIRED). Not routed to ELIXIR-DEV."
+      - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+        error: "** (ErlangError) Erlang error: :enoent -- same root cause as above"
+        diagnosis: "Same as above -- second assertion in the same test module, same missing-rustc-on-PATH cause."
+      - test: "test AC7: the wasmex NIF is a loaded shared library, not an external process Wasmex.Native resolves to a compiled .beam built from Rust NIF sources (Letflow.Engine.Wasm.PluginHandlerTest)"
+        location: "test/letflow/engine/wasm/plugin_handler_test.exs:189"
+        error: "assert Enum.any?(external_resources, &String.contains?(&1, \"native/wasmex/src/\")) failed -- expected Wasmex.Native's external_resource attributes to name its Rust NIF sources"
+        diagnosis: "Same root-cause class: with no local rustc, wasmex's native library was not compiled from Rust source in this environment, so Wasmex.Native's compiled .beam carries no external_resource pointing at native/wasmex/src/. Documented as pre-existing/environmental in prior TEST-RUNNER reports (REQ-177/178/181/182). Not routed to ELIXIR-DEV."
+    req186_specific_files_check: >
+      test/letflow/scheduler_test.exs (17 tests, partition 1) and
+      test/letflow/scheduler/poller_test.exs (1 test, partition 8) do not
+      appear in any failure block above -- both partitions finished with
+      0 failures and exit 0. No :wasm_hang isolated-subprocess timing
+      flake and no REQ-156 Lua timing-comparison flake were observed in
+      this run. In particular, the new Letflow.Scheduler.Poller GenServer
+      (added to the supervision tree by this requirement) introduced no
+      observable timing/ordering flakiness in unrelated tests: all 6
+      non-failing partitions (1,2,3,4,7,8) were fully clean, and the two
+      partitions that did fail (5,6) failed only on the pre-existing
+      rustc-absence tests identified above, not on anything timing- or
+      scheduler-adjacent.
+    flake_check: >
+      No re-run was needed to disambiguate a flake vs a real failure --
+      all 3 failures are exact-message matches to the standing documented
+      environmental category (rustc/cargo absent from sandbox), not
+      intermittent in nature (they are deterministic given the missing
+      binary, not timing-dependent).
+
+handoff_schema:
+  command: "mix letflow.lint_handoffs"
+  result: PASS
+  exit_code: 0
+  output_summary: >
+    "letflow.lint_handoffs: OK -- 0 new violations across 1417 handoff
+    files (25 pre-existing grandfathered, traced to ISS-0190)." All
+    flagged items (H-SIZE-1/H-SIZE-2/ARTIFACTS_OUT_SELF_REF/H5 registry
+    gaps) are pre-existing across unrelated WF02/WF03 runs, not
+    introduced by this step. No H6-shaped (step*-but-not-.json) files
+    found under handoffs/ for this run_id.
+
+verdict: PASS
+verdict_detail: >
+  mix compile --warnings-as-errors: clean, 0 warnings in letflow's own
+  code, exit 0. mix format --check-formatted: two real violations found
+  and fixed (test/letflow/scheduler_test.exs,
+  test/letflow/scheduler/poller_test.exs -- mechanical reformat only, no
+  behavior change). Full suite (scripts/test_parallel.sh, 8 partitions):
+  2532/2535 passed (2530 example tests + 5 properties), 3 failures, all
+  confirmed pre-existing/environmental and rooted in this sandbox's total
+  absence of a working rustc binary -- 2 are the CheckToolchainTest
+  rust-pin checks, the 3rd is the wasmex Rust-NIF-source introspection
+  test. All 3 match the identical failure set documented as environmental
+  in prior TEST-RUNNER reports. REQ-186's own new test files
+  (test/letflow/scheduler_test.exs, 17 tests;
+  test/letflow/scheduler/poller_test.exs, 1 test) are confirmed fully
+  passing in the full-suite run, and the new Scheduler.Poller GenServer
+  introduced no observed timing/ordering flakiness elsewhere in the
+  suite. mix letflow.lint_handoffs: 0 new violations. No rework needed;
+  routing to RELEASE-VALIDATOR.

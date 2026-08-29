@@ -71,7 +71,12 @@ defmodule Letflow.SchedulerTest do
     do: prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
 
   defp create_definition_attrs(graph) do
-    %{name: unique_name("req186-def"), version: "1.0.0", graph: graph, created_by: Ecto.UUID.generate()}
+    %{
+      name: unique_name("req186-def"),
+      version: "1.0.0",
+      graph: graph,
+      created_by: Ecto.UUID.generate()
+    }
   end
 
   # START -> task(HUMAN_TASK) -> END -- only needed to reach a real, :active
@@ -94,9 +99,12 @@ defmodule Letflow.SchedulerTest do
 
   defp active_definition!(schema_name) do
     assert {:ok, definition} =
-             Definitions.create(create_definition_attrs(graph_human_task_end()), prefix: schema_name)
+             Definitions.create(create_definition_attrs(graph_human_task_end()),
+               prefix: schema_name
+             )
 
-    assert {:ok, %{definition: activated}} = Definitions.activate(definition.id, prefix: schema_name)
+    assert {:ok, %{definition: activated}} =
+             Definitions.activate(definition.id, prefix: schema_name)
 
     activated
   end
@@ -409,10 +417,15 @@ defmodule Letflow.SchedulerTest do
       failing_instance_id = Ecto.UUID.generate()
 
       failing_timer =
-        arm_timer!(schema_name, failing_instance_id, %{fire_at: past_fire_at(120), node_id: "fails"})
+        arm_timer!(schema_name, failing_instance_id, %{
+          fire_at: past_fire_at(120),
+          node_id: "fails"
+        })
 
       ok_instance_id = start_instance!(schema_name)
-      ok_timer = arm_timer!(schema_name, ok_instance_id, %{fire_at: past_fire_at(60), node_id: "ok"})
+
+      ok_timer =
+        arm_timer!(schema_name, ok_instance_id, %{fire_at: past_fire_at(60), node_id: "ok"})
 
       result = Scheduler.poll_and_fire(schema_name)
 

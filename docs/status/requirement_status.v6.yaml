@@ -650,3 +650,12 @@ history:
       environmental failures seen on every prior REQ-176/177/178 run, none
       touching this branch's diff. Unblocks REQ-182 (webhook route layer,
       depends_on: [REQ-181, REQ-069, REQ-072]), still pending.
+  - req: REQ-182
+    event: started
+    agent: ORCH
+    at: "2026-08-29T14:25:55Z"
+    note: >
+      Queue task 355, GH#700, stage S6. REQ-VALIDATOR-rework requirement (the
+      route-layer half of REQ-179's split; REQ-181, the core-schema+context
+      half, shipped and released). Mirrors REQ-176/REQ-178's DLQ core/route
+      split for this exact shape.

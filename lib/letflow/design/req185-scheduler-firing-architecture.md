@@ -241,24 +241,74 @@ record independent of the mechanism comparison):
    sufficient for a `FOR UPDATE SKIP LOCKED` claim query and a `GenServer`
    ticker to implement SCH-02 fully.
 
-**REVIEWER sign-off:** ⏳ **PENDING.** Per this pipeline's precedent
-(REQ-148/149/150, and the S6 pipeline shape this run's handoff names — Step
-1 CODE-DESIGNER → Step 1b CODE-DESIGN-VALIDATOR → SECURITY-REVIEWER →
-REVIEWER → TEST-DESIGNER → RELEASE-VALIDATOR → DOC-UPDATER), REVIEWER
-sign-off on this dependency-adoption decision is recorded during **Step 2d**
-of this same pipeline run (`WF02-REQ185-20260829`), not by CODE-DESIGNER.
-This artefact records CODE-DESIGNER's own recommendation and full reasoning
-above; the line below is the explicit slot REVIEWER fills in during Step 2d
-— **do not treat this decision as final until that line is filled in with an
-actual sign-off, not this placeholder text**:
+**REVIEWER sign-off:** ✅ **RECORDED, 2026-08-29, WF02-REQ185-20260829 Step
+2d.**
 
-> **REVIEWER SIGN-OFF: PENDING — to be recorded by REVIEWER at Step 2d of
-> run WF02-REQ185-20260829.** (Placeholder — CODE-DESIGN-VALIDATOR and any
-> later reader: this line must read differently before REQ-186 starts if the
-> pipeline's own gate discipline is being followed; if you find this
-> placeholder still present when REQ-186 is picked up, treat the Oban
-> question as still open and escalate rather than assuming NO stands
-> unreviewed.)
+> **REVIEWER SIGN-OFF: AGREE with NO — Oban is not adopted.** Grounds 1, 3
+> and 4 above are independently sufficient and I concur with each on their
+> own terms, not as a rubber stamp: (1) SCH-02's specified behaviour is
+> materially narrower than what Oban is built for, and this project's own
+> standing precedent (decision 0003's dependency-adoption reasoning, the
+> REQ-148 tv-labs/lua precedent this artefact cites) already commits to
+> "a new top-level dependency earns its place only when the existing
+> toolchain cannot close the gap natively at comparable cost" — that bar is
+> not met here, since `ecto_sql`/`postgrex` alone implement a `FOR UPDATE
+> SKIP LOCKED` claim query and a supervised ticker with no gap left over;
+> (3) is the strongest single ground on its own: Oban's own
+> attempt/backoff counter would either have to be neutered
+> (`max_attempts: 1`, the entire point of adopting a job-queue library for
+> its retry semantics thrown away) or run in parallel with REQ-186's
+> domain-specified `fire_error_count`/`failed`/DLQ state machine — ported
+> deliberately, bit-for-bit, from R-Co's own ISS-303 fix, not a mechanism
+> this project is free to redesign — producing two overlapping,
+> hard-to-reconcile sources of truth for the same "how many times has this
+> failed" question; (4) is not new reasoning invented for this decision,
+> it is this project's own existing dependency-adoption norm applied
+> consistently. Ground (2), the tenant-scoping impedance, I find real but
+> only partially dispositive on its own — Oban could in principle be used
+> purely as a cluster-wide "run this tick once" driver (Oban Cron) while
+> the actual per-tenant-schema `FOR UPDATE SKIP LOCKED` claim query stays
+> custom against `timers` directly, which would blunt the args-smuggling
+> objection considerably; I note this so a future reader doesn't treat
+> ground 2 as air-tight in isolation. It does not change the verdict,
+> because grounds 1/3/4 do not depend on it and are sufficient alone. I
+> also independently confirm the design's own claim that Oban is rejected
+> on cost/duplication grounds, not because it fails any of the three
+> survival properties (node restart, multi-node, per-timer isolation) —
+> the artefact is honest about this distinction (§2a, §3 point 1) rather
+> than overstating the case against Oban, which is itself a point in this
+> artefact's favour as a decision record.
+>
+> **Supervision-idiom check (task acceptance criterion 2):** the
+> recommended 2b design (a supervised `GenServer` ticker added to
+> `lib/letflow/application.ex`'s tree, with a sixth `Task.Supervisor` for
+> per-tick fire attempts) is consistent with this project's existing
+> `Task.Supervisor`-per-concern idiom, confirmed directly against
+> `lib/letflow/application.ex`'s current five `Task.Supervisor`s
+> (`SandboxPool`, Engine plugin, Lua, Wasm module registry, Wasm capability
+> gate, Wasm module version registry) — a sixth for scheduler fire attempts
+> follows the same established pattern, not a new one. One
+> non-blocking note for REQ-186 to resolve concretely, not a defect in
+> this artefact: §2b's "sixth Task.Supervisor" line and §7's "each timer
+> fires in its own transaction, caught locally via `Repo.transaction/1`"
+> line describe two different isolation mechanisms (a process boundary vs.
+> a transaction/rescue boundary) without stating whether REQ-186 uses one,
+> the other, or both together — this is appropriately left to REQ-186 (this
+> artefact decides the claim/error-taxonomy/DLQ questions, not fire-loop
+> implementation shape), but REQ-186's own design should state explicitly
+> which isolation mechanism(s) it uses and why, rather than silently
+> picking one.
+>
+> **Decision-record consistency confirmed:** §1, §6 and §8 correctly treat
+> `docs/migration/decisions/0003-ecto-schema-strategy.md` Decision B as
+> binding table placement (schema-per-tenant, `tenant_id` retained
+> intra-schema) without silently reopening it — §6 explicitly rejects the
+> global-queue alternative *because* it would conflict with Decision B,
+> and §8's DLQ write path is correctly tenant-scoped via
+> `Letflow.Dlq.enqueue/2`'s `opts[:prefix]`, matching Decision 0003's
+> addendum on `tenant_id` derivation from the resolved schema rather than a
+> caller-supplied field. No decision in this artefact contradicts or
+> quietly re-decides 0003 or any other `docs/migration/decisions/` record.
 
 ## 4. Decision 3 — claim mechanism, and the ISS-301 correction
 
@@ -521,7 +571,7 @@ than leaving it to REQ-186").
 | # | Question | Decision |
 |---|---|---|
 | 1 | Firing mechanism | Supervised `GenServer` ticker (§2), not Oban, not per-timer processes |
-| 2 | Adopt Oban? | **NO** — reasoning recorded §3; REVIEWER sign-off **PENDING**, to be recorded at Step 2d |
+| 2 | Adopt Oban? | **NO** — reasoning recorded §3; REVIEWER sign-off **RECORDED** (2026-08-29, agree) |
 | 3 | Claim mechanism | `FOR UPDATE SKIP LOCKED`; R-Co's per-timer advisory lock is deliberately NOT restored (ISS-301) |
 | 4 | Startup-sweep lock (ISS-302 equivalent) | **NO** — ordinary poll query is catch-up-safe by construction; `SKIP LOCKED` alone prevents double-sweep on simultaneous restart |
 | 5 | Poller vs. multi-tenancy | Iterates tenant schemas per tick via the `tenant_schemas` registry; ~100 qps at 500 tenants (5000 ms interval, one indexed query per tenant per tick) |

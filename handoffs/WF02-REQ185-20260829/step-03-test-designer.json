@@ -1,0 +1,40 @@
+{
+  "handoff_id": "WF02-REQ185-20260829-step03",
+  "run_id": "WF02-REQ185-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "lib/letflow/design/req185-scheduler-firing-architecture.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "REQ-185 is a decision-and-design-only requirement -- REVIEWER PASSED it at Step 2d (see handoffs/WF02-REQ185-20260829/step-02d-reviewer.json and reviewer-report.md). There is no lib/letflow/engine/ file, no migration, no mix.exs change: git diff --stat main...HEAD touches only lib/letflow/design/req185-scheduler-firing-architecture.md plus this run's own handoff/security-report bookkeeping. Consequently there is no application code to write ExUnit/StreamData tests against at this step -- REQ-186/187/188 (which build the actual timers schema, poller GenServer, and engine wiring against the decisions this artefact records) are where real test-writing happens.",
+    "your_task_here_is_different_from_usual": "Do NOT write ExUnit tests for this handoff. Instead, verify the design artefact's own empirical/quantitative claims are checkable, and record a short verification note (a markdown file under handoffs/WF02-REQ185-20260829/, name not starting with 'step') stating which claims you checked and what you found. At minimum: (1) the entry_type column claim in section 1 and section 8 -- confirm directly against priv/repo/migrations/20260829000001_create_dlq_entries.exs and lib/letflow/dlq.ex (or lib/letflow/dlq/entry.ex) that entry_type is genuinely an unconstrained :string column with no DB CHECK/Ecto.Enum restricting it, and that Letflow.Dlq.enqueue/2 accepts an arbitrary entry_type string with no allow-list gate -- re-derive this from the actual files, don't just trust the design doc's own citation; (2) the qps arithmetic in section 6 -- re-derive '500 tenants / 5000ms poll interval = 100 queries/second' arithmetically (500 queries per tick / 5 seconds per tick = 100 qps) and confirm it is stated correctly, and sanity-check the linear-scaling claim (1000 tenants => ~200 qps) is arithmetically consistent; (3) the lib/letflow/application.ex supervision-tree claim in section 1 (no periodic process of any kind exists yet) and the mix.exs dependency claim (no Oban/Quantum, deps are ecto_sql/postgrex/plug/bandit/jason/stream_data/ueberauth_oidcc/lua/wasmex) -- both are independently re-checkable by reading those two files directly.",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ185-20260829/step-01-code-designer.json",
+      "handoffs/WF02-REQ185-20260829/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ185-20260829/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ185-20260829/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req185-scheduler-firing-architecture.md",
+      "priv/repo/migrations/20260829000001_create_dlq_entries.exs",
+      "lib/letflow/dlq.ex",
+      "lib/letflow/application.ex",
+      "mix.exs"
+    ],
+    "branch_name": "feature/WF02-REQ185-20260829"
+  },
+  "task": {
+    "description": "Verify REQ-185's design artefact's own checkable empirical claims (not write ExUnit tests -- there is no implementation yet). Produce a short verification note recording what was checked and the result for each claim.",
+    "acceptance_criteria": [
+      "entry_type column claim (sections 1 and 8) independently re-verified against the actual migration and Letflow.Dlq module, not taken on the design doc's word",
+      "qps arithmetic in section 6 independently re-derived and confirmed correct (or a discrepancy flagged if found)",
+      "application.ex supervision-tree claim and mix.exs dependency-list claim in section 1 independently re-checked by reading those files directly",
+      "a verification note is written under handoffs/WF02-REQ185-20260829/ (filename not starting with 'step') stating findings for each claim, committed and pushed",
+      "if any claim does not hold up, route back to CODE-DESIGNER with the specific discrepancy rather than silently correcting the design file yourself"
+    ]
+  },
+  "result": null
+}

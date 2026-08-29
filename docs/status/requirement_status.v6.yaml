@@ -610,8 +610,8 @@ history:
       now done.
   - req: REQ-181
     event: started
-    at: "2026-08-29T12:19:00Z"
     agent: ORCH
+    at: "2026-08-29T12:19:00Z"
     note: >
       Queue task 354, GH#699, stage S6. REQ-VALIDATOR-rework requirement (the
       core-schema+context half of REQ-179's split; REQ-182 is the route-layer

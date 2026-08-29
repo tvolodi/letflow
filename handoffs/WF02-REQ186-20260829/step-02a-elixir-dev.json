@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ186-20260829-step02a",
+  "run_id": "WF02-REQ186-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2a",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/design/req186-scheduler-core.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "CODE-DESIGN-VALIDATOR has PASSed lib/letflow/design/req186-scheduler-core.md (see handoffs/WF02-REQ186-20260829/step-01b-code-design-validator.json's result for the full verification detail: schema/CHECK constraints/index transcribed verbatim from docs/requirements.yaml's REQ-186 entry, cross-checked directly against lib/letflow/design/req185-scheduler-firing-architecture.md's own text for the claim mechanism and failure-accounting flow, config defaults verified, TIMER_FIRED registration verified structurally consistent with lib/letflow/tenant_provisioning.ex's actual @platform_event_type_seed_attrs list, and every fenced block in the design confirmed to be a @type/@spec/SQL signature only -- no real .ex code). Implement REQ-186 exactly as this approved design specifies: it is the architecture to build, not a suggestion. In particular, do not re-derive the isolation mechanism -- the design's opening section already decides transaction/rescue boundary only (no new Task.Supervisor), and REQ-185's own seven decisions (supervised GenServer ticker, no Oban, FOR UPDATE SKIP LOCKED claim, no startup-sweep lock, per-tenant-schema iteration, per-timer transaction isolation, exhausted-timer -> dlq_entries with entry_type \"timer\") are not open for re-litigation."
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req186-scheduler-core.md in full: (1) priv/repo/migrations/<timestamp>_create_timers.exs -- tenant-scoped migration for the timers table per the design's section 1 (exact columns, chk_timers_status, chk_timers_recurrence_shape, idx_timers_pending_fire_at partial index), registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0 alongside dlq_entries and tasks; (2) lib/letflow/scheduler/timer.ex -- the Letflow.Scheduler.Timer Ecto schema and its five changesets (arm_changeset/2, fire_changeset/2, retry_increment_changeset/2, fail_changeset/2, rearm_changeset/2 reserved) per section 1.5; (3) lib/letflow/scheduler.ex -- the Letflow.Scheduler context module: create/2 (section 2.1), poll_and_fire/1 (2.2), claim_due_timer_ids/2 (2.3), fire_timer/2 (2.4), attempt_fire/2 (2.5) including the separate failure-accounting transaction and DLQ landing (2.6) via Letflow.Dlq.enqueue/2; (4) lib/letflow/scheduler/poller.ex -- the Letflow.Scheduler.Poller GenServer ticker per section 3 (zero-delay first tick, config read fresh each tick, tenant-schema enumeration via Letflow.TenantProvisioning.Registration filtered on non-nil migrations_applied_at, jitter applied only to the scheduling delay); (5) lib/letflow/application.ex -- add the one Poller child spec, no new Task.Supervisor; (6) lib/letflow/tenant_provisioning.ex -- append the TIMER_FIRED entry to @platform_event_type_seed_attrs per section 6's field-by-field spec; (7) config defaults (5000ms/0ms/64/3) via Application.get_env/3 with no static config file entry required, per section 7. Write tests covering every acceptance criterion below. No route or controller file. Run mix compile --warnings-as-errors and mix test and quote the real output.",
+    "acceptance_criteria": [
+      "the timers table lives inside each tenant's Postgres schema with a tenant_id column retained (decision 0003 Decision B), verified by inspecting the migration, and carries a partial index on (fire_at) WHERE status = 'pending'",
+      "the status CHECK constraint admits exactly pending, fired, cancelled and failed -- a test attempting to insert a timer with status 'expired' fails at the database level, not only in the changeset",
+      "the recurrence CHECK constraint is all-or-nothing: a test inserting repeat_expression without repeat_interval_us is rejected by the database, and a test inserting all four recurrence columns consistently succeeds",
+      "a timer created with fire_at in the past is fired by the first poll after it exists, and the appended event carries fired_late: true together with both the scheduled fire_at and the actual firing timestamp; a timer created with fire_at in the future is NOT fired by that same poll -- two explicit tests",
+      "polling twice over the same due timer fires it exactly once: the second poll appends no second event and the timers row remains status 'fired' with its original fired_at",
+      "a fire attempt that raises increments fire_error_count and leaves the timer 'pending', AND the remaining due timers in that same poll cycle are still attempted -- one test asserts both, by making the first of two due timers fail and asserting the second still fired",
+      "a timer reaching the configured max fire retries transitions to 'failed' with failed_at set and produces exactly one dlq_entries row with entry_type \"timer\" (or whatever REQ-185's artefact decided, quoted in the moduledoc), and is not attempted again by subsequent polls",
+      "the poll interval, jitter, max timers per cycle and max fire retries are all read from application config with the documented defaults (5000 ms, 0 ms, 64, 3), demonstrated by a test overriding at least the interval and asserting the poller uses the override",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

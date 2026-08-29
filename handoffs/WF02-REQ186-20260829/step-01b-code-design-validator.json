@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ186-20260829-step01b",
+  "run_id": "WF02-REQ186-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req186-scheduler-core.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "CODE-DESIGNER's design artefact for REQ-186 is committed and pushed to feature/WF02-REQ186-20260829 (commit ebcf0d5). Validate lib/letflow/design/req186-scheduler-core.md against docs/requirements.yaml's REQ-186 entry (around line 9624) and its own task.acceptance_criteria below. This design implements the architecture already decided and REVIEWER-signed-off in lib/letflow/design/req185-scheduler-firing-architecture.md (supervised GenServer ticker, no Oban, FOR UPDATE SKIP LOCKED claim, no startup-sweep lock, per-tenant-schema iteration, per-timer transaction isolation, exhausted-timer -> dlq_entries with entry_type \"timer\") -- do not re-litigate those seven decisions, only check that REQ-186's design is consistent with them and covers REQ-186's own scope. Pay particular attention to: (1) whether the timers schema section (col-by-col table, both CHECK constraints transcribed from the requirement text) is precise rather than approximated; (2) whether every fenced code block is a @type/@spec signature or SQL DDL text, never a real Elixir function body/raise/anonymous-function expression -- this exact mistake (literal, copy-paste-ready Elixir code in a design doc) has forced rework on REQ-157/174/176/177/181's own designs in this pipeline already, so scrutinize this specifically; (3) whether the isolation-mechanism open item REQ-185 explicitly left to REQ-186 (process boundary vs. transaction/rescue boundary for the fire loop) was actually decided and justified, not left silently ambiguous; (4) whether the failure-accounting flow (separate transaction for fire_error_count increment, DLQ landing atomic with the failed transition) matches ISS-303/ISS-0618 as described in REQ-186's own requirement text."
+  },
+  "task": {
+    "description": "Validate lib/letflow/design/req186-scheduler-core.md as the design artefact for REQ-186 (timers schema and scheduler core). Confirm every acceptance criterion below maps to a concrete section of the design (no TBD, no silently-resolved open question), confirm the design contains no implementation code (no real .ex file content, function bodies, or literal raise/fn/try expressions -- signatures, type shapes, and prose/table descriptions only), and confirm the design does not silently contradict or re-decide REQ-185's own seven recorded decisions.",
+    "acceptance_criteria": [
+      "the timers table lives inside each tenant's Postgres schema with a tenant_id column retained (decision 0003 Decision B), verified by inspecting the migration, and carries a partial index on (fire_at) WHERE status = 'pending'",
+      "the status CHECK constraint admits exactly pending, fired, cancelled and failed -- a test attempting to insert a timer with status 'expired' fails at the database level, not only in the changeset",
+      "the recurrence CHECK constraint is all-or-nothing: a test inserting repeat_expression without repeat_interval_us is rejected by the database, and a test inserting all four recurrence columns consistently succeeds",
+      "a timer created with fire_at in the past is fired by the first poll after it exists, and the appended event carries fired_late: true together with both the scheduled fire_at and the actual firing timestamp; a timer created with fire_at in the future is NOT fired by that same poll -- two explicit tests",
+      "polling twice over the same due timer fires it exactly once: the second poll appends no second event and the timers row remains status 'fired' with its original fired_at",
+      "a fire attempt that raises increments fire_error_count and leaves the timer 'pending', AND the remaining due timers in that same poll cycle are still attempted -- one test asserts both, by making the first of two due timers fail and asserting the second still fired",
+      "a timer reaching the configured max fire retries transitions to 'failed' with failed_at set and produces exactly one dlq_entries row with entry_type \"timer\" (or whatever REQ-185's artefact decided, quoted in the moduledoc), and is not attempted again by subsequent polls",
+      "the poll interval, jitter, max timers per cycle and max fire retries are all read from application config with the documented defaults (5000 ms, 0 ms, 64, 3), demonstrated by a test overriding at least the interval and asserting the poller uses the override",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

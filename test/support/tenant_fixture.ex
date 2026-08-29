@@ -142,7 +142,8 @@ defmodule Letflow.TenantFixture do
     "tenant_role",
     "tokens",
     "users",
-    "variable_schemas"
+    "variable_schemas",
+    "webhook_subscriptions"
   ]
 
   @doc """

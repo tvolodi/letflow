@@ -73,11 +73,16 @@ consumed as-is, unchanged.
   trigger condition. §5 resolves both — see §5 below.
 - `Letflow.EventStore.append/2` (`lib/letflow/event_store.ex:214-249`)
   returns `{:ok, %{event: Event.t(), is_duplicate: boolean(),
-  sequence_number: pos_integer(), global_seq: pos_integer()}}`. The
-  `event.payload` field is the same JSON string
-  `ExecutionError.append_execution_error_event/2` built via `Jason.encode!`
-  (`execution_error.ex:198-206`) — it round-trips through `Jason.decode!/1`
-  back to a string-keyed map with a `"reason"` key. This is the mechanism
+  sequence_number: pos_integer(), global_seq: pos_integer()}}`. `Event.t()`
+  declares `field(:payload, :map)` (`lib/letflow/event_store/event.ex:84`)
+  — not a string. `append/2`'s own `insert_event/3`
+  (`lib/letflow/event_store.ex:607-641`) inserts the row with
+  `payload: decoded_payload` (the already-`Jason.decode!/1`-ed map, decoded
+  earlier inside `append/2` itself), and `interpret_transaction_result/1`
+  (`lib/letflow/event_store.ex:697-707`) hands that same struct straight
+  back as `event`. So `event.payload` in the `{:ok, result}` returned to
+  the caller is already a string-keyed map with a `"reason"` key — no
+  further JSON decoding step exists or is needed. This is the mechanism
   §4 below uses to read the persisted reason back rather than re-using the
   caller's original string.
 
@@ -316,14 +321,14 @@ behavior, not by any new bespoke rollback logic this design has to invent.
 
 ### 4.3 What the new step does
 
-Reads `changes.execution_error_event.event.payload` (the JSON string just
-persisted by the preceding step, `execution_error.ex:216-219`'s own
-`{:ok, result}` shape means `result.event.payload` is that string),
-decodes it with `Jason.decode!/1` (safe unconditionally — this module's
-own `append_execution_error_event/2` built it with `Jason.encode!/1`
-immediately above in the same function, `execution_error.ex:198-206`, so
-it is always valid JSON), and reads the `"reason"` key back out — this is
-the "read back from the just-persisted EXECUTION_ERROR event's own reason
+Reads `changes.execution_error_event.event.payload["reason"]` directly.
+Per §0's precedent, `changes.execution_error_event.event.payload` is
+already the decoded, string-keyed map `EventStore.append/2` persisted (see
+`lib/letflow/event_store/event.ex:84` and
+`lib/letflow/event_store.ex:607-641,697-707`) — no `Jason.decode!/1` call
+is needed or present anywhere in this path (calling it on an already-`map`
+value would crash, since `Jason.decode/2` requires a binary). This is the
+"read back from the just-persisted EXECUTION_ERROR event's own reason
 field" the requirement text mandates, rather than forwarding
 `error_args.reason` (the caller's original string) a second time.
 

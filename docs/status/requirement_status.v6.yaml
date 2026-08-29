@@ -428,3 +428,61 @@ history:
       moduledoc. Depends on REQ-176 (done), REQ-056 (done), REQ-061 (done).
       No file outside the two hook call sites and their tests may be
       modified.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-29T04:57:23Z"
+    note: >
+      WF01-S6-EXPANSION-20260829 complete -- Stage 6's SECOND batch expanded
+      and registered: REQ-185..REQ-203 (19 requirements), letflow-queue tasks
+      358-376. This closes the expansion of S6, which the first batch
+      (REQ-176..184, DLQ + webhooks, tasks 351-357) had deliberately left
+      half-done: its own header comment deferred src/scheduler and
+      src/ordering to "the next batch" pending R-Co access and a timer-firing
+      decision record. R-Co WAS reachable this session, so both blockers were
+      addressable and every citation in this batch is freshly verified rather
+      than inherited. Coverage: scheduler (REQ-185 firing-architecture
+      decision, 186 core, 187 engine wiring, 188 recurrence+retention),
+      secrets (REQ-189 backend decision -> decisions/0016, 190 core),
+      repository (REQ-191/192 service catalog core+routes, REQ-202/203
+      artifact store+activation), observability (REQ-193 logging, 194
+      metrics, 195/196 audit store+route, 200 timeline, 201 alerting), expr
+      (REQ-197 arithmetic+errors, 198 builtins), ordering (REQ-199).
+      REQ-VALIDATOR hard gate took 2 rework rounds, both finding the SAME
+      defect class -- a bare file-count range asserting coverage that did not
+      exist (first src/obs's alerts.zig/timeline.zig, then src/repository's
+      artifacts/canonicaliser/activation/schemas.zig). Fixed at the root: the
+      stage doc now maps every subsystem PER FILE and its exhaustiveness
+      claim is machine-verified across all 37 .zig files, independently
+      re-run by ORCH over 41 including the first batch's trees.
+      Three of ORCH's own dispatch-brief claims were WRONG and were corrected
+      by REQ-ANALYST against real R-Co source, then confirmed by
+      REQ-VALIDATOR: (1) SCH-02's per-timer advisory lock was REMOVED by R-Co
+      (ISS-301, regression tests at scheduler.zig:1310/1318 assert its
+      absence); porting SCH-02's literal text would have reintroduced deleted
+      code. (2) R-Co's src/expr is NOT CEL -- EXP-102 cut over away from
+      vendored CEL, so the CEL vocabulary ORCH listed exists in neither
+      system. (3) The SPA already parses Prometheus TEXT at an unversioned
+      /metrics, settling one of REQ-078's three documented divergences with
+      evidence.
+      ALSO SURFACED, and acted on: REQ-183 (first batch, already registered
+      as task 356) is UNIMPLEMENTABLE AS DRAFTED -- REQ-181 stores the
+      webhook secret hashed, and a hash cannot serve as an HMAC key, making
+      REQ-183's own verification acceptance criterion unsatisfiable. ORCH
+      locked task 356 to this host so no concurrent host could claim it, and
+      REQ-183 was amended in place (depends_on gains REQ-189; the signing
+      clause and verification AC now resolve the key through REQ-189's
+      mechanism) rather than deleted -- its retry/backoff, auto-pause and
+      DLQ-landing halves are sound. That edit created a
+      REQ-183 -> REQ-189 -> REQ-183 cycle, caught by REQ-ANALYST's own
+      re-validation and resolved by dropping REQ-183 from REQ-189's
+      depends_on: depends_on encodes build order, not reading order, and
+      REQ-189's deliverable is a document whose input is REQ-183's already-
+      written text. REQ-181 was never touched.
+      Verified before and after registration: 177 entries, zero duplicate
+      ids, zero orphaned depends_on, zero cycles; every impl_order written
+      back from register_task's real response, never guessed;
+      mix letflow.check_requirements_registration reports 177 registered /
+      0 deferred / 0 unclassified, and mix letflow.check_deferral_staleness
+      reports 0 stale. Requirements remain pending -- WF-01 does not flip
+      status; WF-02 claims them via get_next_task.

@@ -3169,18 +3169,38 @@
     {
       "run_id": "WF01-S6-EXPANSION-20260829",
       "workflow_id": "WF-01",
-      "requirement_ids": [],
+      "requirement_ids": [
+        "REQ-185",
+        "REQ-186",
+        "REQ-187",
+        "REQ-188",
+        "REQ-189",
+        "REQ-190",
+        "REQ-191",
+        "REQ-192",
+        "REQ-193",
+        "REQ-194",
+        "REQ-195",
+        "REQ-196",
+        "REQ-197",
+        "REQ-198",
+        "REQ-199",
+        "REQ-200",
+        "REQ-201",
+        "REQ-202",
+        "REQ-203"
+      ],
       "stage": "S6",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "docs/requirements.yaml",
         "docs/migration/stage-6-operational-cross-cutting.md"
       ],
       "lock_acquired_at": "2026-08-29T04:02:43Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 01 (REQ-ANALYST dispatched)",
-      "note": "WF-01 second S6 batch: the six subsystems the first batch (REQ-176..184) did not cover -- scheduler, secrets, obs (minus OBS-05), repository, expr, ordering. WF-01 writes only docs/, so no collision with WF02-REQ176-20260829's priv/repo/migrations/ lock."
+      "lock_released_at": "2026-08-29T04:57:23Z",
+      "released_lock": true,
+      "last_known_step": "Step 03 (register_task) PASS",
+      "note": "WF-01 second S6 batch COMPLETE. 19 requirements REQ-185..203 drafted, passed REQ-VALIDATOR after 2 rework rounds, and registered as letflow-queue tasks 358-376. Both rework rounds found the same defect class -- a bare file-count range asserting coverage that did not exist -- now fixed at the root by per-file mapping plus a machine-verified exhaustiveness check. Also amended REQ-183 (first batch, task 356), which REQ-VALIDATOR confirmed was unimplementable as drafted; that task is deliberately LEFT LOCKED to this host as a guard and is the only queue state this run leaves held. WF-01 writes only docs/, so no collision with WF02-REQ176-20260829's priv/repo/migrations/ lock."
     }
   ]
 }

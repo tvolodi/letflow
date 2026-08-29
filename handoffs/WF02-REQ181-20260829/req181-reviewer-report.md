@@ -100,3 +100,30 @@ Checked field-by-field against `req181-webhooks-core.md`:
 ## Verdict: PASS
 
 No rework required. Forwarding to TEST-DESIGNER (Step 3).
+
+## Addendum — post-approval fix recheck (2026-08-29, commit 3046e44)
+
+TEST-DESIGNER found a real bug while writing coverage: `insert_changeset/2`'s
+`cast/3` whitelist did not include `:created_at`, so `Ecto.cast/3` silently
+dropped the timestamp `create/2` computes, and every real `create/2` call
+failed with a Postgres `not_null_violation` on `created_at`. ELIXIR-DEV fixed
+it in commit 3046e44 (added `:created_at` to both `cast/3` and
+`validate_required/2` in `lib/letflow/webhooks/subscription.ex`, and corrected
+the matching gap in `lib/letflow/design/req181-webhooks-core.md` §2.4), and
+verified empirically against a real tenant schema (throwaway test, deleted,
+never committed).
+
+Recheck performed:
+
+1. `git diff b676d08 3046e44 -- lib/letflow/webhooks/subscription.ex lib/letflow/design/req181-webhooks-core.md`
+   shows only the `:created_at` addition to the `cast/3` and
+   `validate_required/2` lists plus the matching docstring/design-doc
+   correction. No other line changed. No scope creep.
+2. No `tenant_id`, secret-handling, or permission logic touched — this is a
+   timestamp-only field addition to an existing whitelist. SECURITY-REVIEWER's
+   original PASS (tenant-scoping/secret-handling, unaffected by this diff)
+   remains valid; no re-run needed.
+3. `mix compile --force --warnings-as-errors` — clean, exit 0.
+
+**Verdict: PASS (recheck).** `handoffs/WF02-REQ181-20260829/step-03-test-designer.json`
+remains valid/PENDING — TEST-DESIGNER may resume.

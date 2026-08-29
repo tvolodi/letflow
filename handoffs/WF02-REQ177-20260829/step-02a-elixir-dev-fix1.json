@@ -1,0 +1,22 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step02a-fix1",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2a (fix, post-SECURITY-REVIEWER finding)",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/engine/execution_error.ex",
+  "status": "PENDING",
+  "priority": "high",
+  "context": {"note": "Queue task 352, GH#697, stage S6. SECURITY-REVIEWER FAILED commit fdb096a on INV-8: lib/letflow/engine/execution_error.ex:229's `reason: String.slice(error_args.reason, 0, 255)` does not guarantee the result fits the dlq_entries.reason column (Postgres varchar(255), which counts CODEPOINTS, not graphemes). String.slice/3 operates on grapheme clusters. ORCH independently, empirically confirmed this is real (not theoretical) by running real Elixir: `String.slice(String.duplicate('e' <> <<0x0301::utf8>>, 300), 0, 255)` produces a string with grapheme length 255 but CODEPOINT COUNT 510 -- double the column's actual limit. error_args.reason is caller-built text (exception messages, external SERVICE_TASK responses) that can plausibly contain decomposed-form (NFD) Unicode with combining marks. There is no validate_length/3 in Letflow.Dlq.Entry.insert_changeset/2 -- the 255 limit is enforced only by the DB column, and an unhandled DB length-violation exception inside Multi.run(:execution_error_dlq_landing, ...) would propagate uncaught out of the transaction. SECURITY-REVIEWER's other 4 checks (tenant-scoping via unchanged opts/prefix threading, genuine same-transaction Multi participation, no caller-supplied attrs bypassing Dlq.enqueue/2's existing allowlist, no dlq_landed_externally abuse path) all PASSED cleanly -- do not re-litigate those."},
+  "task": {
+    "description": "Fix the reason-truncation to match Postgres's actual codepoint-based length semantics, not grapheme-based. Recommended approach: truncate by codepoint count (e.g. `error_args.reason |> String.codepoints() |> Enum.take(255) |> Enum.join()`), since Ecto's own validate_length/3 also counts graphemes by default and would not catch this either -- codepoint-based truncation is the precise match for Postgres's varchar(n) semantics. Apply this fix at lib/letflow/engine/execution_error.ex:229 (and check whether the equivalent risk exists anywhere else this run introduced a truncated string into a bounded column, e.g. Hook A's dlq_attrs building in engine.ex -- audit for the same pattern). Add a regression test using a combining-mark string (e.g. 300 repetitions of a base character plus a combining diacritic) that would have exceeded the column limit under the old grapheme-based truncation, asserting the DLQ insert succeeds and the reason column's actual byte/codepoint length is within bounds. Run mix format on touched files, then mix compile --warnings-as-errors and mix test yourself and quote real output.",
+    "acceptance_criteria": [
+      "reason truncation is codepoint-count-based, not grapheme-count-based, guaranteeing the result never exceeds the dlq_entries.reason column's actual Postgres varchar(255) limit regardless of combining-mark content",
+      "a regression test demonstrates a combining-mark string that would have exceeded 255 codepoints under grapheme-based truncation now inserts successfully",
+      "mix compile --warnings-as-errors passes with real output quoted",
+      "mix test passes with real output quoted, no regression"
+    ]
+  },
+  "result": null
+}

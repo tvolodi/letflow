@@ -63,6 +63,88 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
   `Process.demonitor/2`s (`[:flush]`) first, so an ordinary release and the
   `:DOWN` handler are mutually exclusive for a given `monitor_ref` — `ref_count`
   can never be double-decremented.
+
+  ## REQ-174 (WASM-13, SHOULD) — instance pooling: DECLINED
+
+  WASM-13's original text asks the host to "pool Wasm instances per module to
+  amortise instantiation cost, while ensuring per-invocation isolation (memory
+  reset between invocations)." Decision `0014-scripting-plugin-runtime-strategy.md`
+  point (e) restates this: **it adds a constraint absent from WASM-13's own
+  text** — *if* pooling is ever adopted, per-invocation memory reset is a
+  **correctness** requirement (cross-invocation, potentially cross-tenant data
+  leak under decision 0006's schema-per-tenant model), not a performance
+  detail, because `wasmex` pooling (where it exists) would deliberately reuse a
+  `Store`. This restatement is recorded here regardless of the adopt/decline
+  call below (invariant INV-174-2).
+
+  **Decision: pooling is DECLINED.** WASM-13 is a SHOULD, and decision 0014 (e)
+  names declining as legitimate provided the reason is recorded, not left
+  silent. Reasons (full detail and live verification in
+  `lib/letflow/design/req174-wasm-instance-pooling-or-decline.md`, gate-approved):
+
+  1. The installed `wasmex` (v0.15.1) exposes no instance-pooling API at all —
+     `grep -rln "pool" deps/wasmex/lib/` returns nothing. Adopting WASM-13
+     would mean designing an entirely new Letflow-owned pool subsystem, not
+     wiring up an existing library feature.
+  2. Both existing instantiation call sites — this module's `invoke/4` (via
+     `Wasmex.start_link/1` with no `:store` key) and
+     `Letflow.Engine.Wasm.PluginHandler.run_guest/3` — already allocate a
+     brand-new `Wasmex.Store` per invocation, so there is no shared `Store`
+     for residue to survive in and therefore nothing to reset. Teardown
+     (`GenServer.stop/1`) runs on the success path and on a rescued guest
+     exception, but is *not* unconditional: the crash-safety net documented
+     below exists precisely because a `GenServer.call` timeout `exit` from
+     `Wasmex.call_function/4` (§6 point 1) and the outer
+     `Task.shutdown(task, :brutal_kill)` path (§6 point 2) can both skip it,
+     leaving that one instance's process orphaned rather than stopped. This
+     is pre-existing, disclosed behavior (REQ-165/170/173), not a change
+     introduced here. Isolation does not depend on that teardown running —
+     an orphaned instance is never reused by a later invocation (no pooling
+     exists to reuse it), so it is never observed by one either. Isolation
+     comes from **never sharing a Store**, not from teardown discipline.
+  3. The amortised-instantiation-cost benefit WASM-13's own acceptance
+     criterion targets (a p50-latency comparison) is unmeasured for
+     Letflow's actual module sizes/invocation cadence. Building a stateful
+     pool, and the reset-correctness proof it would require, ahead of that
+     measurement inverts decision 0014 (e)'s implied order.
+
+  **Invariant INV-174-1 (per-invocation isolation, by construction, not by
+  reset):** for any two invocations of the same registered module — via this
+  module's `invoke/4` or via `PluginHandler.run_guest/3` — invocation N+1 never
+  observes linear-memory state written by invocation N, because each
+  invocation runs a `Wasmex.Instance` created from a `Wasmex.start_link/1` call
+  that supplied no `:store` option (so `wasmex` allocates a brand-new `Store`,
+  and therefore brand-new linear memory, for that call alone). The instance is
+  stopped before control returns to the invoking process on the success path
+  and on a rescued exception, but — as the crash-safety net above documents —
+  that teardown is skipped on an uncaught `GenServer.call`-timeout `exit` and
+  can also be skipped by the outer `Task.shutdown(:brutal_kill)` path; a
+  skipped teardown orphans that instance rather than leaving it available to
+  be reused, so it still can never be observed by a later invocation. The
+  isolation guarantee therefore rests on never sharing a `Store` between
+  invocations, not on teardown running unconditionally. This requirement adds
+  no new production code to
+  satisfy this invariant — it already holds in the shipped code above; REQ-174
+  adds only the fixture and tests (`priv/wasm_fixtures/req174_memory_write.wat`,
+  `test/letflow/engine/wasm/module_version_registry_test.exs`,
+  `test/letflow/engine/wasm/plugin_handler_test.exs`) that prove it holds and
+  will keep holding.
+
+  **Invariant INV-174-2 (restatement, recorded independent of the decision):**
+  if pooling is ever adopted by a future requirement, memory reset between
+  invocations must be enforced unconditionally (including on a
+  failed/trapped invocation) and treated as that design's correctness
+  property from the start, not a later performance optimisation. No reset
+  mechanism is designed here because no pooling is adopted here; this
+  invariant exists so a future ADOPT decision inherits the constraint rather
+  than rediscovering it.
+
+  This decision can be revisited if a future requirement demonstrates, with a
+  real benchmark, that cold-instantiation cost is an actual bottleneck for a
+  real Letflow workload — at which point that requirement must re-verify
+  `wasmex`'s pooling/Store-reuse behaviour live against whatever version is
+  current then, rather than trusting this note's v0.15.1 findings to still
+  hold.
   """
 
   use GenServer
@@ -360,10 +442,11 @@ defmodule Letflow.Engine.Wasm.ModuleVersionRegistry do
     end
   end
 
-  # Step 4/5/6 -- calls the guest export, stops the instance unconditionally
-  # (step 5), and releases the checkout (step 6) on every path except the
+  # Step 4/5/6 -- calls the guest export, then stops the instance (step 5)
+  # and releases the checkout (step 6) on the success and rescued-exception
+  # paths. GenServer.stop/1 is NOT unconditional here: it is skipped on the
   # ONE path design §6 deliberately leaves to the Process.monitor/:DOWN
-  # crash-safety net: an ordinary Elixir exception here IS caught (rescue),
+  # crash-safety net. An ordinary Elixir exception here IS caught (rescue),
   # cleaned up, and re-raised; a GenServer.call timeout `exit` from
   # Wasmex.call_function/4 itself is never intercepted by `rescue` at all
   # (Elixir's `rescue` never observes an `exit`), so it is deliberately left

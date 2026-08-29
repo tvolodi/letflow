@@ -1,0 +1,21 @@
+{
+  "handoff_id": "WF02-REQ174-20260828-step03b",
+  "run_id": "WF02-REQ174-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 3b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "test/letflow/engine/wasm/module_version_registry_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 326, GH#626, stage S5. TEST-DESIGNER's suite (commit 890b4e1) adds two isolation tests: module_version_registry_test.exs:472 (via ModuleVersionRegistry.invoke/4) and plugin_handler_test.exs:430 (via PluginHandler.run_guest/3), both using priv/wasm_fixtures/req174_memory_write.wat's write_marker/read_marker exports. mix test test/letflow/engine/wasm/ reports 165 passed, 7 excluded. TEST-DESIGNER documented a discriminating-power check in test/specs/REQ-174.md: a throwaway, uncommitted script drove real wasmex directly -- separate Store/instances did NOT leak (read_marker returned 0), but reusing the SAME instance/pid across both calls DID leak (write_marker 0, read_marker 1) -- confirming the [0]-not-[1] assertion shape would catch a real instance-reuse defect. This check was NOT run against the actual committed test code paths (ModuleVersionRegistry.invoke/4, PluginHandler.run_guest/3) -- it was a separate, lower-level wasmex repro. Your job includes independently confirming the COMMITTED tests themselves have real discriminating power, not just the underlying wasmex mechanism."},
+  "task": {
+    "description": "Hard gate: verify REQ-174's acceptance criteria have genuine, non-skipped tests. Independently confirm the two committed tests (module_version_registry_test.exs's and plugin_handler_test.exs's REQ-174 INV-174-1 tests) would actually catch a real isolation violation THROUGH THEIR OWN CALL PATHS -- not just via the lower-level wasmex repro TEST-DESIGNER ran separately. Consider: could you force ModuleVersionRegistry.invoke/4 or PluginHandler.run_guest/3 to reuse a single instance across two calls (e.g. via a targeted, reversible code change or a test-only monkey-patch) and confirm the actual committed test fails when isolation is genuinely broken through the real call path, not just in principle? If a direct mutation of invoke/4/run_guest/3 isn't practical, at minimum re-derive convincingly why the committed test's assertion shape is equivalent to the lower-level repro's proven-discriminating shape. Also confirm both tests are non-skipped, self-sufficient, and isolated from other tests (unique module names, no shared mutable state leaking between test cases). Run mix test and mix compile --warnings-as-errors yourself and quote real output.",
+    "acceptance_criteria": [
+      "a test asserts per-invocation isolation regardless of which way the decision went: data written to guest memory in invocation N is NOT observable in invocation N+1 of the same module",
+      "the moduledoc states that this requirement restates WASM-13 by ADDING the per-invocation memory-reset correctness constraint, which is absent from WASM-13's original text, and cites decision 0014 (e) and the wasmex Store-reuse behaviour that motivates it",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

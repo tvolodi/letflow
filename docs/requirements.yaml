@@ -8828,7 +8828,7 @@ requirements:
   - id: REQ-174
     title: WASM instance pooling with per-invocation memory reset as a correctness requirement (WASM-13 restated, SHOULD)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S5
     impl_order: 326  # letflow-queue task id
     description: >

@@ -1,0 +1,22 @@
+{
+  "handoff_id": "WF02-REQ174-20260828-step02a-fix2",
+  "run_id": "WF02-REQ174-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 2a (fix, post-REVIEWER finding)",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/engine/wasm/module_version_registry.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 326, GH#626, stage S5. REVIEWER FAILED on one leftover stray comment your prior teardown-claim sweep (commit 6bc9ea4) missed: lib/letflow/engine/wasm/module_version_registry.ex line ~445, a comment on run_call/6 itself still saying 'stops the instance unconditionally (step 5) ... on every path except the ONE path design SS6 deliberately leaves...'. This is the exact same overstatement class SECURITY-REVIEWER already flagged and this commit was supposed to eliminate everywhere -- the sweep corrected the moduledoc and plugin_handler.ex's comments but missed this one inline comment in the same file. REVIEWER confirmed via grep -n 'unconditional' that this is the ONLY remaining stale hit (line 295's use of 'unconditionally' is a different, legitimately-accurate code path -- do not touch that one)."},
+  "task": {
+    "description": "Fix exactly the one stray comment at module_version_registry.ex line ~445 (the run_call/6 step 4/5/6 comment) to align with the already-corrected moduledoc: state that GenServer.stop/1 runs on the success and rescued-exception paths, but is NOT unconditional -- it is skipped on the uncaught GenServer.call-timeout exit path, left to the Process.monitor/:DOWN crash-safety net (design SS6). Do not touch line 295's use of 'unconditionally' (a different, legitimately-accurate code path per REVIEWER's confirmation). Do not change any other line or any production logic. Run mix format on the touched file, then mix compile --warnings-as-errors and mix test test/letflow/engine/wasm/ yourself and quote real output.",
+    "acceptance_criteria": [
+      "no comment in module_version_registry.ex claims teardown is unconditional except the one legitimately-accurate use at line 295 (a different code path)",
+      "the corrected comment matches the moduledoc's already-corrected language",
+      "mix compile --warnings-as-errors passes with real output quoted",
+      "mix test test/letflow/engine/wasm/ passes with real output quoted, no regression"
+    ]
+  },
+  "result": null
+}

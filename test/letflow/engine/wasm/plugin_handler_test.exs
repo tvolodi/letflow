@@ -410,4 +410,52 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
       assert pid == self()
     end
   end
+
+  # ---------------------------------------------------------------------
+  # REQ-174 (WASM-13 restated) -- per-invocation isolation via
+  # PluginHandler's private run_guest/3 call path (reached only through
+  # handle_node/1, since run_guest/3 itself is private). See
+  # lib/letflow/design/req174-wasm-instance-pooling-or-decline.md §4.3.
+  # This is a DISTINCT instantiation call site from
+  # ModuleVersionRegistry.invoke/4 (module_version_registry_test.exs's own
+  # REQ-174 test) -- start_instance/1 here calls Wasmex.start_link/1 with
+  # no :store option (moduledoc, "REQ-174" section), so this call path also
+  # gets a brand-new Store/linear memory on every invocation, independent
+  # of ModuleVersionRegistry's own checkout/release machinery. Pooling is
+  # DECLINED (no pooling module exists); this test proves INV-174-1 holds
+  # for this call site too.
+  # ---------------------------------------------------------------------
+
+  describe "REQ-174 INV-174-1: per-invocation isolation via PluginHandler's run_guest/3 call path" do
+    test "invocation N's write_marker is NOT observable in invocation N+1's read_marker, same fixture, two separate handle_node/1 calls" do
+      write_context =
+        context(%{
+          node_config: %{
+            "wasm_fixture" => "wasm_fixtures/req174_memory_write.wat",
+            "export" => "write_marker"
+          }
+        })
+
+      read_context =
+        context(%{
+          node_config: %{
+            "wasm_fixture" => "wasm_fixtures/req174_memory_write.wat",
+            "export" => "read_marker"
+          }
+        })
+
+      # Invocation N: writes byte 1 at offset 0 of THIS call's own fresh
+      # linear memory, and returns 0 (its own, unrelated return value).
+      assert {:complete, %{"answer" => 0}} = PluginHandler.handle_node(write_context)
+
+      # Invocation N+1: a wholly separate handle_node/1 call -- no state is
+      # passed between the two other than the fixture path string, which
+      # is not a live Wasm instance. If run_guest/3 ever started sharing a
+      # Store/instance across invocations, this would read back 1. It must
+      # read 0 -- zero-initialized memory invocation N's write never
+      # touched, because start_instance/1 never shares a Store between
+      # invocations (moduledoc "REQ-174" section, INV-174-1).
+      assert {:complete, %{"answer" => 0}} = PluginHandler.handle_node(read_context)
+    end
+  end
 end

@@ -1,0 +1,20 @@
+{
+  "handoff_id": "WF02-REQ174-20260828-step01b-recheck1",
+  "run_id": "WF02-REQ174-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 1b (re-check, iteration 1)",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req174-wasm-instance-pooling-or-decline.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 326, GH#626, stage S5. CODE-DESIGNER fixed both defects as commit 2ff6205: SS1.2/SS1.3's literal .ex code fences replaced with prose+citation, and the wrong 'PluginHandler.run_guest/3's instantiate/1' name corrected to start_instance/1 throughout. Design's substance (DECLINE decision, wasmex-has-no-pooling live-verification, the isolation test's discriminating power, INV-174-1/174-2, acceptance-criteria scoping) was already fully independently confirmed by you last round -- this is a narrow re-check."},
+  "task": {
+    "description": "Narrow re-check: confirm no fenced code block anywhere in the design reproduces real .ex/.exs content (the only remaining ``` block should be SS1.1's shell grep command/output, not file content) -- scan the full document yourself. Confirm every reference to the PluginHandler call site now correctly says start_instance/1, not instantiate/1, and confirm the ModuleVersionRegistry.instantiate/2 reference (a different, correctly-named function) was correctly left alone. Confirm via git diff that nothing else in the document changed since 99a1a14. This is not a full fresh pass -- your prior substantive verification stands.",
+    "acceptance_criteria": [
+      "no fenced code block reproduces a real .ex/.exs file's literal content anywhere in the design",
+      "every reference to the PluginHandler call site correctly names start_instance/1, not instantiate/1"
+    ]
+  },
+  "result": null
+}

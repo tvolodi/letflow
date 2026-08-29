@@ -1,0 +1,20 @@
+{
+  "handoff_id": "WF02-REQ174-20260828-step02c",
+  "run_id": "WF02-REQ174-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 2c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/engine/wasm/module_version_registry.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 326, GH#626, stage S5. REQ-174 explicitly names SECURITY-REVIEWER as a hard gate -- this is an isolation boundary. Implementation committed as f09a9d7 on feature/WF02-REQ174-20260828, per the approved design lib/letflow/design/req174-wasm-instance-pooling-or-decline.md (commit 2ff6205). This is a DOCUMENTATION-ONLY change: moduledoc additions to module_version_registry.ex and plugin_handler.ex recording an explicit DECLINE decision on WASM-13's instance-pooling SHOULD, plus a new WASM fixture priv/wasm_fixtures/req174_memory_write.wat (write_marker/read_marker exports over byte 0, for TEST-DESIGNER's later isolation test). No production logic was changed -- the design's own finding is that per-invocation isolation already holds by construction today (a fresh Wasmex.Store is allocated on every invocation at both existing call sites, with unconditional teardown), so declining pooling requires no code change beyond recording the decision and its reasoning."},
+  "task": {
+    "description": "Review this diff against docs/agents/instructions/security-invariants.md INV-1..INV-8. Since this is documentation-only with no logic change, focus your review on: (1) whether the moduledoc's claim that isolation ALREADY holds by construction is something you can independently confirm is accurate (re-read the actual instantiation call sites in both files -- do NOT just trust the moduledoc's own restatement of the design's claim, confirm live against the real code that a fresh Store is genuinely allocated per invocation and torn down unconditionally on every path, including a guest trap/exception); (2) whether the new req174_memory_write.wat fixture is safe/correctly scoped (it will be used in a future test asserting cross-invocation isolation -- confirm it doesn't itself introduce any capability/import requirement that would need gating, and that it's a minimal, single-purpose fixture matching the design's own SS4.1 spec); (3) confirm this diff doesn't quietly weaken or contradict any previously-approved isolation guarantee from REQ-165/170/171/172/173.",
+    "acceptance_criteria": [
+      "a test asserts per-invocation isolation regardless of which way the decision went: data written to guest memory in invocation N is NOT observable in invocation N+1 of the same module",
+      "the moduledoc states that this requirement restates WASM-13 by ADDING the per-invocation memory-reset correctness constraint, which is absent from WASM-13's original text, and cites decision 0014 (e) and the wasmex Store-reuse behaviour that motivates it"
+    ]
+  },
+  "result": null
+}

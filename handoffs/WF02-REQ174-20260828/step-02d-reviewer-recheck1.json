@@ -1,0 +1,20 @@
+{
+  "handoff_id": "WF02-REQ174-20260828-step02d-recheck1",
+  "run_id": "WF02-REQ174-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 2d (narrow re-check after stray comment fix)",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "lib/letflow/engine/wasm/module_version_registry.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 326, GH#626, stage S5. Your prior review PASSED everything except one stray leftover comment at module_version_registry.ex line ~445 (run_call/6) still claiming unconditional teardown. ELIXIR-DEV fixed it as commit cc3c65e, confirmed via grep -n 'unconditional' that only the already-correct moduledoc lines and the one legitimately-accurate line 295 remain. mix compile --warnings-as-errors clean; mix test test/letflow/engine/wasm/ 163 passed, 7 excluded, no regression."},
+  "task": {
+    "description": "Narrow re-check: confirm the comment at module_version_registry.ex's run_call/6 (~line 445-454) now matches the corrected moduledoc language, confirm line 295's legitimate use of 'unconditionally' is untouched, and confirm via git diff that nothing else changed. This is not a full fresh pass -- your prior findings (scope, fixture, decision-record consistency) all stand.",
+    "acceptance_criteria": [
+      "the moduledoc records an explicit decision: pooling adopted, or pooling declined with its reason -- WASM-13 is a SHOULD and declining is legitimate, but silence is not",
+      "the moduledoc states that this requirement restates WASM-13 by ADDING the per-invocation memory-reset correctness constraint, which is absent from WASM-13's original text, and cites decision 0014 (e) and the wasmex Store-reuse behaviour that motivates it"
+    ]
+  },
+  "result": null
+}

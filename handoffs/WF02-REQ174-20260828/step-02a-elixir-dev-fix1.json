@@ -1,0 +1,22 @@
+{
+  "handoff_id": "WF02-REQ174-20260828-step02a-fix1",
+  "run_id": "WF02-REQ174-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 2a (fix, post-SECURITY-REVIEWER finding)",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/engine/wasm/module_version_registry.ex",
+  "status": "PENDING",
+  "priority": "high",
+  "context": {"note": "Queue task 326, GH#626, stage S5. SECURITY-REVIEWER FAILED commit f09a9d7 on one specific, precise finding: the new INV-174-1 moduledoc text claims GenServer.stop/teardown of the wasmex instance is UNCONDITIONAL on every path (success, exception, timeout) -- this is FALSE against the actual, pre-existing (unmodified by this diff) code. Traced live: (1) module_version_registry.ex's run_call/6 (lines ~431-460) has a pre-existing comment (from REQ-173, not touched by this diff) explicitly documenting that a Wasmex.call_function/4 GenServer.call-timeout exit is deliberately left uncaught by rescue and propagates uncaught -- on that path GenServer.stop(pid) never runs, and the Process.monitor/:DOWN handler (line 641) monitors the TASK pid for ref-counting, not the wasmex instance pid, so it doesn't stop the instance either -- the instance leaks. (2) invoke/4's outer Task.shutdown(task, :brutal_kill) on a Task.yield timeout can also kill the task while it's blocked inside Wasmex.call_function/4, before GenServer.stop(pid) ever runs -- same leak. (3) PluginHandler.run_guest/3 sits under the identical two-layer async_nolink -> Task.yield -> Task.shutdown(:brutal_kill) pattern, so the same gap applies there despite this diff's new comment claiming it 'stops the instance unconditionally on every path'. CRITICALLY: SECURITY-REVIEWER confirmed the SUBSTANTIVE isolation property (invocation N+1 never observes invocation N's memory) still genuinely holds -- because a leaked, un-torn-down instance is orphaned and never reused by a later invocation. Isolation comes from 'never sharing a Store' (fresh Store per call, confirmed true), not from 'always torn down' (false as claimed). This is a documentation-accuracy fix only -- no production logic is being changed, since the leak-on-timeout behavior is pre-existing, disclosed (REQ-165/170's own comments already document it), and not a regression this diff introduces."},
+  "task": {
+    "description": "Correct the INV-174-1 (or equivalent) moduledoc language in BOTH lib/letflow/engine/wasm/module_version_registry.ex and lib/letflow/engine/wasm/plugin_handler.ex, and lib/letflow/design/req174-wasm-instance-pooling-or-decline.md if it makes the same overreaching claim, to: (1) state plainly that GenServer.stop/teardown is NOT unconditional -- it runs on success and on the rescued-exception path, but is deliberately skipped on the GenServer.call-timeout-exit path and can also be skipped by the outer Task.shutdown(:brutal_kill) path, both pre-existing, already-disclosed behaviors from REQ-165/170/173 (do not present this as a new finding -- it's a correction to an inaccurate restatement of already-known, already-accepted behavior); (2) state separately and correctly WHY isolation still holds despite that: a leaked instance is orphaned, never reused, and therefore never observed by any subsequent invocation -- isolation flows from 'never sharing a Store' (fresh Store per call), not from 'always torn down'. Do not change any production logic -- this is a documentation-accuracy-only fix. Run mix format on touched files, then mix compile --warnings-as-errors and mix test test/letflow/engine/wasm/ yourself and quote real output.",
+    "acceptance_criteria": [
+      "the moduledoc no longer claims teardown is unconditional on every path; it accurately states teardown is skipped on the uncaught GenServer.call-timeout path and the outer brutal-kill path, citing this as pre-existing REQ-165/170/173 behavior, not a new defect",
+      "the moduledoc correctly attributes the isolation guarantee to 'never sharing a Store between invocations' rather than to teardown discipline",
+      "mix compile --warnings-as-errors passes with real output quoted",
+      "mix test test/letflow/engine/wasm/ passes with real output quoted, no regression"
+    ]
+  },
+  "result": null
+}

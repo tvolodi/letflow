@@ -310,3 +310,32 @@ history:
       instance of a version REQ-173's activate/2 superseded must never be
       handed to a new invocation. SECURITY-REVIEWER hard gate -- this is
       an isolation boundary. Depends on REQ-173 (done).
+  - req: REQ-174
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-29T00:21:52Z"
+    note: >
+      WF02-REQ174-20260828 done (queue task 326, GH#626, stage S5). WASM-13
+      restated (Instance Pooling, SHOULD) resolved as DECLINE: live
+      verification found no pooling API in the installed wasmex dependency,
+      and both existing instantiation call sites already give
+      isolation-by-construction via a fresh Store per invocation -- so
+      declining is the legitimate SHOULD outcome per decision 0014 (e), not a
+      shortfall, and the moduledoc records the decision and reason plus
+      asserts per-invocation isolation regardless, as required. Path: 1
+      CODE-DESIGN-VALIDATOR rework round for two mechanical fixes (literal
+      code fences copying real .ex content, and a wrong function name --
+      substance confirmed sound both times); 1 SECURITY-REVIEWER rework round
+      correcting an overstated "unconditional teardown" claim to accurately
+      name the two known skip paths and attribute isolation to
+      never-sharing-a-Store, not to teardown; 1 REVIEWER rework round
+      catching one leftover stray instance of that same overstatement the
+      first sweep missed; TEST-DESIGN-VALIDATOR independently applied real,
+      reversible mutations to BOTH production call paths to confirm the
+      isolation tests genuinely discriminate a real defect, not passing
+      vacuously. RELEASE-VALIDATOR independently PASSED all 7 acceptance
+      criteria (own full-suite run via scripts/test_parallel.sh, own re-read
+      of design/decision text, confirmed the 4 adopt-only ACs are correctly
+      reasoned as inapplicable given the DECLINE, not silently skipped).
+      Nothing in docs/requirements.yaml declares depends_on: [REQ-174] --
+      confirmed by grep; nothing is unblocked by this requirement yet.

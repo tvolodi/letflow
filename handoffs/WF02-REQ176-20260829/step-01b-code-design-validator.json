@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ176-20260829-step01b",
+  "run_id": "WF02-REQ176-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req176-dlq-core.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 351, GH#696, stage S6. CODE-DESIGNER committed the design as the latest commit on feature/WF02-REQ176-20260829. This is the FIRST requirement of a new stage (S6) -- greenfield, no existing code to compare against beyond the pagination/query idioms it claims to reuse (Letflow.Api.Pagination, Letflow.Tasks.list_tasks/2's keyset cursor pattern, Letflow.Tasks.claim_task/3's row-lock-then-check idiom, Letflow.IdentityMigration's text-cast ILIKE pattern). Hard gate -- verify these cited precedents actually exist and actually work the way the design claims, don't trust the restatement. This project's discipline (sharpest on REQ-172/REQ-173/REQ-174, and explicitly on REQ-157 for literal-code-in-design): live-verify claims, and confirm no fenced code block reproduces real .ex content or invents implementation-shaped syntax."},
+  "task": {
+    "description": "Independently validate lib/letflow/design/req176-dlq-core.md against every REQ-176 acceptance criterion. Specifically: (1) read Letflow.Tasks.list_tasks/2's actual keyset-cursor implementation (or whatever module the design cites) and confirm the design's claimed cursor prefix/encoding/ordering scheme genuinely mirrors an existing, working pattern rather than a plausible-sounding invention; (2) read Letflow.Tasks.claim_task/3 (or cited equivalent) and confirm the row-lock-then-check-then-conditionally-write idiom is real and applies cleanly to retry/2 and discard/2's two-arm state checks; (3) read Letflow.IdentityMigration's cited text-cast ILIKE pattern and confirm it's real; (4) confirm the schema design (status as a closed Ecto.Enum with lowercase values, entry_type as a plain :string not enum, retry_history as a plain jsonb array not embeds_many) is internally consistent and matches DlqEntry/DlqRetryAttempt field-for-field, cross-checking web/src/types/api.ts yourself; (5) confirm no fenced code block anywhere in the document reproduces real .ex content or writes out actual Ecto schema/migration/query syntax as fact rather than prose description; (6) confirm the three flagged open questions (tenant_id sourcing into enqueue/1, whether retry/2 consults retry_limit, whether retry/2 advances last_failed_at) don't hide an acceptance-criterion gap -- none of REQ-176's 6 ACs actually require resolving them, but double check; (7) confirm no route/controller design is present anywhere (that's REQ-178's scope).",
+    "acceptance_criteria": [
+      "the dlq_entries table lives inside each tenant's Postgres schema with a tenant_id column retained, matching decision 0003 Decision B's pattern -- verified by inspecting the migration",
+      "enqueue/1 creates an entry with status \"pending\", retry_count 0, and a created_at timestamp; list/2 is tenant-scoped, demonstrated by an entry enqueued under tenant A being absent from a list/2 call scoped to tenant B",
+      "retry/2 on a \"pending\" or \"retrying\" entry transitions it to \"retrying\", appends a retry_history entry with attempt_no/attempted_at/outcome/error_message field names matching DlqRetryAttempt exactly, and increments retry_count; retry/2 on a \"resolved\" or \"discarded\" entry returns a conflict error and leaves status, retry_count and retry_history unchanged -- four tests, one per starting status",
+      "discard/2 on a \"pending\" or \"retrying\" entry transitions it to \"discarded\"; discard/2 on an already \"resolved\" or \"discarded\" entry returns a conflict error rather than silently succeeding",
+      "list/2 filters by entry_type and by status independently, each demonstrated narrowing a result set that contains rows of more than one value, and supports cursor pagination: given more rows than one page, the first page's next_cursor, passed back in, returns the next distinct page with no repeated or skipped ids",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

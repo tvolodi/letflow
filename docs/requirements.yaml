@@ -9735,7 +9735,7 @@ requirements:
   - id: REQ-187
     title: Wire TIMER nodes into the engine -- arm on token arrival, cancel on completion/cancellation (SCH-01/SCH-03, closes the cancel_pending_timers stub)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 360  # letflow-queue task id
     description: >

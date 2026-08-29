@@ -792,3 +792,41 @@ history:
       not-yet-implemented stub, task_activation.ex's cancel_pending_timers/2
       no-op, and engine.ex's L234-242 recorded EE-08 deferral (timer half
       only). Strict purity constraint: transition.ex must gain no Repo call.
+  - req: REQ-187
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-29T22:18:17Z"
+    note: >
+      WF02-REQ187-20260829 done (queue task 360, GH#706, stage S6). TIMER
+      nodes wired into the engine: transition.ex L294's catch-all now arms
+      a REQ-186 timer on token arrival (fire_at = arrival + the node's
+      duration_iso8601, persisted in the SAME transaction as the
+      state-transition event), task_activation.ex's cancel_pending_timers/2
+      no-op replaced with a real update cancelling every PENDING timer for
+      the instance (unmoved call site, still inside engine.ex's completion
+      transaction), and engine.ex L234-242's EE-08 deferral closed for the
+      timer half via an equivalent cancellation call inside
+      cancel_instance/3's own transaction. Strict transition.ex purity
+      preserved throughout: no Repo call, timer-arming carried as a data
+      description in an existing return shape extended for this purpose,
+      independently re-verified at every stage by ORCH/SECURITY-REVIEWER/
+      REVIEWER/RELEASE-VALIDATOR. Most architecturally complex requirement
+      in this batch: a nested SAVEPOINT transaction, a genuine AB-BA
+      lock-ordering deadlock hazard found by CODE-DESIGN-VALIDATOR and
+      fixed, and a multi-timer-in-one-hop-chain Ecto.Multi step-name
+      collision hazard found and closed with a typed guard -- yet the
+      pipeline ran with zero rework rounds through design/security/
+      reviewer/test-design gates. RELEASE-VALIDATOR independently
+      re-verified all 10 acceptance criteria, including the fragile
+      lock-ordering fix -- PASS, no gap found
+      (handoffs/WF02-REQ187-20260829/release-validation-req187.md).
+      Full suite re-run via scripts/test_parallel.sh (8 partitions):
+      2552/2555 passed, 3 failures all pre-existing/environmental (2x
+      Mix.Tasks.Letflow.CheckToolchainTest rust-pin tests, rustc absent
+      from this sandbox; 1x Letflow.Engine.Wasm.PluginHandlerTest AC7
+      wasmex-Rust-NIF-source test), none touching REQ-187's diff. mix
+      compile --warnings-as-errors clean; mix format --check-formatted
+      clean; mix letflow.lint_handoffs OK (0 new violations, 25
+      pre-existing grandfathered). This closes REQ-186's engine-integration
+      half; REQ-188 (recurrence, SCH-07, plus escalation and the retention
+      runner) is now the last remaining piece of S6's scheduler half.

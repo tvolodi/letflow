@@ -7,12 +7,13 @@ fully complete. REQ-181 (Webhook subscription schema and core) and
 REQ-182 (the webhook route layer atop it) are both done as of
 2026-08-29 -- the first batch's webhooks half is now fully complete,
 mirroring the DLQ half's REQ-176/177/178 completion. REQ-185 (scheduler
-timer-firing architecture, decision-and-design-only) and REQ-186
-(timers schema + scheduler core: poll-and-fire, missed-timer recovery,
-failure accounting) are both done as of 2026-08-29 -- REQ-187 (wiring
-TIMER nodes into transition.ex, SCH-01/03, plus cancellation) and
-REQ-188 (recurrence, SCH-07, plus escalation and the retention runner)
-are now unblocked. Requirements, expanded in two batches:
+timer-firing architecture, decision-and-design-only), REQ-186 (timers
+schema + scheduler core: poll-and-fire, missed-timer recovery, failure
+accounting) and REQ-187 (wiring TIMER nodes into transition.ex,
+SCH-01/03, plus cancellation) are all done as of 2026-08-29 -- REQ-188
+(recurrence, SCH-07, plus escalation and the retention runner) is now
+the last remaining piece of the scheduler half. Requirements, expanded
+in two batches:
 
 **First batch (DLQ and webhooks):** REQ-176 (Dead-letter queue schema
 and core entry lifecycle, OBS-05 foundation); REQ-177 (Wire REQ-056's
@@ -232,6 +233,32 @@ mechanism — `src/design/scheduler-concurrency-epic3.md`'s ISS-301
 section deletes it as redundant against `FOR UPDATE SKIP LOCKED`. Only
 a *session*-level advisory lock guarding the startup sweep survives. A
 port written to SCH-02's literal text would reintroduce deleted code.
+
+**REQ-187, SETTLED (done, 2026-08-29).** TIMER nodes wired into the
+engine: `transition.ex` L294's catch-all now arms a REQ-186 timer on
+token arrival (`fire_at` = arrival time + the node's parsed
+`duration_iso8601`), persisted in the SAME transaction as the
+state-transition event; `task_activation.ex`'s
+`cancel_pending_timers/2` no-op is replaced with a real update that
+cancels every PENDING timer for the instance, still called from its
+original, unmoved call site inside `engine.ex`'s completion
+transaction; and `engine.ex` L234-242's recorded EE-08 deferral is
+closed for the timer half via an equivalent cancellation call inside
+`cancel_instance/3`'s own transaction (REQ-056's SERVICE_TASK
+HTTP-abort half stays deferred). `transition.ex`'s purity is preserved
+throughout -- no `Repo` call was added; the timer-arming description is
+carried through an existing return shape extended for this purpose.
+This was the most architecturally complex requirement in this batch (a
+nested SAVEPOINT transaction, a genuine AB-BA lock-ordering deadlock
+hazard found by CODE-DESIGN-VALIDATOR and fixed, and a
+multi-timer-in-one-hop-chain `Ecto.Multi` step-name collision hazard
+closed with a typed guard), yet it ran with zero rework rounds through
+the design/security/reviewer/test-design gates. RELEASE-VALIDATOR
+independently re-verified all 10 acceptance criteria, including the
+fragile lock-ordering fix -- PASS, no gap found. This closes REQ-186's
+engine-integration half; REQ-188 (recurrence, SCH-07, plus escalation
+and the retention runner) is now the last remaining piece of the
+scheduler half.
 
 **Deliberately deferred, blocker named:** `partition_maintenance.zig`
 and `partition_retention.zig` are **not** ported. Both need a

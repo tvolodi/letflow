@@ -3154,17 +3154,17 @@
         "REQ-177"
       ],
       "stage": "S6",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/service_task.ex",
         "lib/letflow/instance.ex or equivalent"
       ],
       "lock_acquired_at": "2026-08-29T04:34:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00",
+      "lock_released_at": "2026-08-29T08:25:30Z",
+      "released_lock": true,
+      "last_known_step": "Step Final",
       "queue_task_id": 352,
-      "note": "Closes REQ-056/REQ-061's named DLQ hooks -- SERVICE_TASK retry-exhaustion and instance ERROR both land into REQ-176's DLQ core via enqueue/1. Landing only, not re-execution. Depends on REQ-176/056/061 (all done). Step 00 bookkeeping committed to main; feature branch about to be created."
+      "note": "PR #723 merged (squash commit eee5614). REQ-177: two DLQ landing hooks closing REQ-056/REQ-061's named boundaries -- Hook A (Letflow.Engine.land_service_task_exhaustion/2, SERVICE_TASK retry-exhaustion) and Hook B (a new :execution_error_dlq_landing Ecto.Multi step in Letflow.Engine.ExecutionError.append_multi/3, instance ERROR transition, same-transaction). Landing only, not re-execution -- no SERVICE_TASK dispatch orchestrator exists yet, stated as a deferred follow-up in both moduledocs. Genuinely thorough pipeline catching THREE real defects before merge: (1) CODE-DESIGN-VALIDATOR caught a false EventStore payload return-shape claim (event.payload is already a decoded map, not a JSON string); (2) SECURITY-REVIEWER caught a real grapheme-vs-codepoint truncation bug in the reason column write -- ORCH independently, empirically confirmed it with real Elixir (255 graphemes = 510 codepoints for a combining-mark string) before routing back, fixed with codepoint-based truncation; (3) RELEASE-VALIDATOR's own re-derivation found AC3 (same-transaction atomicity) had no real test despite correct code (empirically verified via a scratch test) -- closed by a genuine fault-injection test, independently re-verified by TEST-DESIGN-VALIDATOR's own mutation. Also found and fixed, mid-PR, a real structural CI bug in REQ-176's own AC6 test: it hardcoded a commit SHA that squash-merging permanently erased from history -- replaced with a git-history-free structural check, documented as a new anti-pattern. Required a rebase onto a concurrent sibling session's WF01-S6-EXPANSION-20260829 work (19 more requirements registered) with an append-only composition conflict resolution on requirement_status.v6.yaml. Queue task 352 released done. Nothing currently depends_on REQ-177."
     },
     {
       "run_id": "WF01-S6-EXPANSION-20260829",

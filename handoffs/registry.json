@@ -3165,6 +3165,22 @@
       "last_known_step": "Step 00",
       "queue_task_id": 352,
       "note": "Closes REQ-056/REQ-061's named DLQ hooks -- SERVICE_TASK retry-exhaustion and instance ERROR both land into REQ-176's DLQ core via enqueue/1. Landing only, not re-execution. Depends on REQ-176/056/061 (all done). Step 00 bookkeeping committed to main; feature branch about to be created."
+    },
+    {
+      "run_id": "WF01-S6-EXPANSION-20260829",
+      "workflow_id": "WF-01",
+      "requirement_ids": [],
+      "stage": "S6",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "docs/requirements.yaml",
+        "docs/migration/stage-6-operational-cross-cutting.md"
+      ],
+      "lock_acquired_at": "2026-08-29T04:02:43Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 01 (REQ-ANALYST dispatched)",
+      "note": "WF-01 second S6 batch: the six subsystems the first batch (REQ-176..184) did not cover -- scheduler, secrets, obs (minus OBS-05), repository, expr, ordering. WF-01 writes only docs/, so no collision with WF02-REQ176-20260829's priv/repo/migrations/ lock."
     }
   ]
 }

@@ -339,3 +339,22 @@ history:
       reasoned as inapplicable given the DECLINE, not silently skipped).
       Nothing in docs/requirements.yaml declares depends_on: [REQ-174] --
       confirmed by grep; nothing is unblocked by this requirement yet.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-29T01:18:01Z"
+    note: >
+      Queue reconciliation for letflow-queue task 327 (REQ-175, GH#627).
+      get_next_task returned this task as open/lockable, but
+      docs/requirements.yaml already had REQ-175's status as cancelled, and
+      docs/status/requirement_status.v5.yaml already records the cancellation
+      (event: cancelled, agent: DOC-UPDATER, at: 2026-08-28T00:50:32Z, as
+      REQ-164's own Step 6 consequence -- REQ-164 decided NO on OQ-3, so
+      REQ-175, conditional on a YES, was correctly cancelled at that time,
+      not left pending). The queue's own mirror of that outcome was never
+      updated, leaving task 327 open. No new design/code work was performed
+      -- ORCH re-confirmed REQ-164's NO decision and REQ-175's already-
+      cancelled status directly from disk, then released task 327 via
+      POST /tasks/327/release with status: done (per
+      docs/agents/protocols/TASK_QUEUE.md's stale-task reconciliation path)
+      to bring the queue back in sync with the already-settled outcome.

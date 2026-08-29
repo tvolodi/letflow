@@ -436,7 +436,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_823_000_004, Letflow.Repo.Migrations.CreateDefinitionSequence,
      "20260823000004_create_definition_sequence.exs"},
     {20_260_829_000_001, Letflow.Repo.Migrations.CreateDlqEntries,
-     "20260829000001_create_dlq_entries.exs"}
+     "20260829000001_create_dlq_entries.exs"},
+    {20_260_829_010_001, Letflow.Repo.Migrations.CreateWebhookSubscriptions,
+     "20260829010001_create_webhook_subscriptions.exs"}
   ]
 
   @doc """
@@ -463,8 +465,12 @@ defmodule Letflow.TenantProvisioning do
   `tasks`, `promotion_reviews`, `promotion_assertion_runs`, `users`, and
   `groups` (`lib/letflow/design/req064-drop-tenant-id.md` §2), and REQ-054 one
   more: `instance_state_snapshots`
-  (`lib/letflow/design/req054-instance-state-snapshots.md` §3) —
-  twenty-eight entries in total, ordered by version. Every future tenant-scoped migration must append its
+  (`lib/letflow/design/req054-instance-state-snapshots.md` §3), REQ-176 one
+  more: `dlq_entries` (`lib/letflow/design/req176-dlq-core.md` §4), and
+  REQ-181 one more: `webhook_subscriptions`
+  (`lib/letflow/design/req181-webhooks-core.md` §1) —
+  entries in total (see `@tenant_scoped_migration_manifest` itself for the
+  authoritative, up-to-date count), ordered by version. Every future tenant-scoped migration must append its
   own entry to `@tenant_scoped_migration_manifest`, in addition to following the
   required guard pattern in its own migration file (see this module's design doc
   §4) — a migration file that does one without the other is either inert

@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF02-REQ187-20260829-step01b",
+  "run_id": "WF02-REQ187-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req187-timer-engine-wiring.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Design artefact for REQ-187 (docs/requirements.yaml, ~L9735) produced on feature/WF02-REQ187-20260829, commit c3731b5. Read the full REQ-187 entry in docs/requirements.yaml in full before validating. The design extends lib/letflow/engine/transition.ex's existing pending_event() tagged-union return shape (already used for :SUB_PROCESS's {:sub_process_start, ...} effect-description pattern) with a new {:timer_armed, token_id, node_id} variant, and adds a new {:timer_fired, token_id} transition_event() constructor mirroring {:complete_task, token_id}. Firing re-entry is designed as one new call, Letflow.Engine.advance_after_timer_fired/3, added at the end of lib/letflow/scheduler.ex's do_fire/2 (inside the SAME Repo.transaction fire_timer/2 already opens), plus one new case clause in attempt_fire/2 to avoid miscounting a legitimate SCH-03 race as a firing failure. The design also identifies and fixes a lock-ordering hazard: cancel_instance/3's new :timer_cancellations Multi step must run before :instance_projection (not after :eligibility, which would be the topically-obvious placement) to keep lock acquisition order (timers before instance_projections) consistent with fire_timer/2's own order and avoid a Postgres deadlock -- validate this reasoning carefully, it is the design's most load-bearing claim. Five open questions are flagged explicitly in the design's own §13 (duration-to-seconds calendar convention, timer_type string choice, a possible Ecto.Multi step-name collision if two :TIMER nodes are armed in one hop-chain, reconcile_projection/5's own scope boundary, and :TIMER out-degree being structurally unenforced) -- confirm none of these is actually a silently-resolved gap that should instead block the design.",
+    "artefact_path": "lib/letflow/design/req187-timer-engine-wiring.md",
+    "requirement_ref": "docs/requirements.yaml#REQ-187"
+  },
+  "task": {
+    "description": "Validate lib/letflow/design/req187-timer-engine-wiring.md against every acceptance criterion in REQ-187's docs/requirements.yaml entry and against the task description in handoffs/WF02-REQ187-20260829/step-01-code-designer.json. Confirm: (1) every acceptance criterion maps to a concrete design element (see the design doc's own §12 map) with no TBD; (2) the design contains no fenced code blocks reproducing real .ex/.exs implementation content -- signatures/types/shapes are stated as prose, tables, or single-line inline-code @spec strings only; (3) the transition.ex purity constraint is genuinely preserved by the design as written (no Repo call, no clock read, described extension of pending_event() is real and precise, not hand-waved); (4) the poller's fire-path re-entry mechanism (§7-§8) is concrete and unambiguous enough for ELIXIR-DEV to implement without further judgment calls; (5) the SCH-03 concurrency/lock-ordering argument (§6.2, §10) is sound; (6) open questions are genuinely flagged rather than silently guessed. PASS or FAIL with specific line-referenced findings.",
+    "acceptance_criteria": [
+      "a definition containing a TIMER node with a valid duration_iso8601 starts an instance whose token reaches that node and arms exactly one timers row with status 'pending' and fire_at equal to the arrival timestamp plus the parsed duration -- replacing the {:error, {:node_type_not_yet_implemented, :TIMER, _}} that transition.ex L294 returns today, asserted by a test that would have failed before this requirement",
+      "the timer row and the state-transition event are written in ONE transaction: a test that forces the event append to fail leaves NO timers row behind",
+      "when the timer fires, the instance advances along the TIMER node's outgoing edge and the token is no longer at the TIMER node",
+      "completing an instance sets every one of its PENDING timers to 'cancelled' with cancelled_at set, via the existing TaskActivation.cancel_pending_timers/2 call site in engine.ex -- which is still called from the same position inside the completion transaction (confirmed by git diff showing the call site itself unmoved)",
+      "cancelling an instance via Letflow.Engine.cancel_instance/3 likewise cancels its PENDING timers in the same transaction, and a test forcing that transaction to roll back leaves the timers still 'pending'",
+      "a timer whose status is already 'fired' is NOT changed by a subsequent instance cancellation (SCH-03's stated edge case), and no PENDING timer belonging to a CANCELLED or COMPLETED instance is ever fired by a later poll -- two explicit tests",
+      "lib/letflow/engine/transition.ex contains no Letflow.Repo call after this change, confirmed by the same grep its moduledoc already documents for purity, and the moduledoc names which return shape was extended to carry the timer-arming description instead",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

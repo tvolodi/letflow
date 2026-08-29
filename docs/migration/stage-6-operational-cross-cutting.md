@@ -189,12 +189,23 @@ columns and blanking the plaintext (`GBL-128_exp501_secrets.sql`, with
 correctives `1134_iss0112_*` and `1138_iss0635_*`). REQ-189 chooses
 Letflow's resolution; REQ-190 implements it.
 
-**2. Scheduler timer-firing architecture — REQ-185**, an artefact under
-`lib/letflow/design/`, not a `decisions/` record, because it selects a
-BEAM realisation of behaviour R-Co's SCH-02 already specifies rather
-than settling a new cross-cutting policy. It must decide whether Oban
-becomes a dependency (with REVIEWER sign-off either way), the claim
-mechanism, and how the poller relates to per-tenant schemas.
+**2. Scheduler timer-firing architecture — REQ-185, SETTLED (done,
+2026-08-29).** `lib/letflow/design/req185-scheduler-firing-architecture.md`
+is the artefact of record — not a `decisions/` record, because it
+selects a BEAM realisation of behaviour R-Co's SCH-02 already specifies
+rather than settling a new cross-cutting policy, following REQ-148/149/
+150's own S5 precedent that this class of decision lives in the design
+artefact rather than a separate `decisions/*.md` file. Settled: the
+firing mechanism is a supervised `GenServer` ticker
+(`Process.send_after/3`, added to `lib/letflow/application.ex`'s tree);
+Oban is **NOT** adopted as a `mix.exs` dependency, with REVIEWER
+sign-off on that NO recorded directly in the artefact's §3; the claim
+mechanism is `FOR UPDATE SKIP LOCKED`, per the correction below; no
+ISS-302-equivalent session-level startup-sweep lock is adopted; the
+poller iterates tenant schemas per tick, with a quantified cost stated
+at 500 tenants; an exhausted-retry timer lands in REQ-176's
+`dlq_entries` with `entry_type` `"timer"`. REQ-186, REQ-187 and REQ-188
+are now unblocked.
 
 Note one correction it must carry: SCH-02's literal text mandates a
 per-timer PostgreSQL advisory lock, but R-Co **removed** that

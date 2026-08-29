@@ -1,0 +1,38 @@
+{
+  "handoff_id": "WF02-REQ185-20260829-step06",
+  "run_id": "WF02-REQ185-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 6",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "DOC-UPDATER",
+  "file": "lib/letflow/design/req185-scheduler-firing-architecture.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "RELEASE-VALIDATOR independently re-verified all 8 of REQ-185's acceptance criteria against the actual design artefact and the actual referenced code (application.ex, mix.exs, priv/repo/migrations/20260829000001_create_dlq_entries.exs, lib/letflow/dlq.ex, docs/migration/decisions/0003-ecto-schema-strategy.md, and git diff --stat main...HEAD) -- not copied from TEST-DESIGNER's, REVIEWER's, or SECURITY-REVIEWER's prior reports. Verdict: PASS, no gap found. Full criterion-by-criterion findings in handoffs/WF02-REQ185-20260829/release-validation-report.md. In particular: (2) confirmed REVIEWER's Oban sign-off in section 3 is a genuine artefact edit by inspecting `git show 3faef00` directly, not just a handoff claim; (7) confirmed dlq_entries.entry_type is a bare unconstrained :string column by reading the migration and lib/letflow/dlq.ex directly; (8) confirmed via `git diff --stat main...HEAD` that only the design file, handoff JSONs, and report markdown files are touched -- no migration, no lib/letflow/engine/ file, no mix.exs change.",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ185-20260829/step-01-code-designer.json",
+      "handoffs/WF02-REQ185-20260829/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ185-20260829/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ185-20260829/step-02d-reviewer.json",
+      "handoffs/WF02-REQ185-20260829/step-03-test-designer.json",
+      "handoffs/WF02-REQ185-20260829/step-05-release-validator.json",
+      "handoffs/WF02-REQ185-20260829/release-validation-report.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req185-scheduler-firing-architecture.md",
+      "handoffs/WF02-REQ185-20260829/release-validation-report.md"
+    ],
+    "branch_name": "feature/WF02-REQ185-20260829",
+    "status_history_volume": "docs/status/requirement_status.v6.yaml"
+  },
+  "task": {
+    "description": "Flip REQ-185's status to done in docs/requirements.yaml, and append one 'done' event to the current run-history volume (docs/status/requirement_status.v6.yaml, per docs/status/requirement_status.index.yaml) with fields in the order req, event, agent, at, note, using a real UTC timestamp from the clock. Then commit and push this run's remaining changes on branch feature/WF02-REQ185-20260829.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml's REQ-185 entry has status: done",
+      "docs/status/requirement_status.v6.yaml has one new appended entry for REQ-185 with event: done, agent: DOC-UPDATER, a real UTC timestamp, and fields ordered req/event/agent/at/note -- no entry above it edited, reordered, or deleted",
+      "no handoff JSON in this run ever has a top-level status of DONE (must remain PENDING/COMPLETED per this pipeline's schema -- see docs/anti-patterns.md's recurring bug entry)"
+    ]
+  },
+  "result": null
+}

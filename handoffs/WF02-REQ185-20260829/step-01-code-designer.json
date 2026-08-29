@@ -1,0 +1,26 @@
+{
+  "handoff_id": "WF02-REQ185-20260829-step01",
+  "run_id": "WF02-REQ185-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "docs/requirements.yaml#REQ-185",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 358, GH#704, stage S6. Feature branch feature/WF02-REQ185-20260829 created off main at 83accbe. This is a decision-and-design-only requirement -- no migration, no lib/letflow/engine/ code, no mix.exs change (that is an explicit acceptance criterion, verified by git diff --stat scoped to this requirement's commits). Mirrors REQ-148/149/150's S5 open-question shape (see handoffs/WF02-REQ148-20260824/ for the precedent pipeline: Step 1 CODE-DESIGNER -> Step 1b CODE-DESIGN-VALIDATOR -> SECURITY-REVIEWER -> REVIEWER (explicit sign-off on the dependency-adoption decision) -> TEST-DESIGNER -> RELEASE-VALIDATOR -> DOC-UPDATER, no ELIXIR-DEV/TEST-RUNNER). Read docs/requirements.yaml's full REQ-185 entry (around line 9509) -- it is unusually long and carries the complete decision context, corrections, and citations; read it in full before starting, do not skim. Read lib/letflow/application.ex's supervision tree in full (verify no periodic process exists, as the requirement claims). Read mix.exs (verify no Oban/Quantum dependency exists, as the requirement claims). Read lib/letflow/dlq.ex and its migration for the entry_type enum (to answer whether a timer belongs there). Read docs/migration/decisions/0003-ecto-schema-strategy.md Decision B (table placement is already decided; only the poller's iteration strategy is open here). If R-Co source (c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\) is reachable from this sandbox, read src/design/scheduler-concurrency-epic3.md's ISS-301 section and src/design/iss0618-scheduler-lock-and-error-signaling.md directly to verify the citations in the requirement text are accurate before restating them as fact; if R-Co is genuinely unreachable, say so explicitly in the design artefact rather than silently assuming the requirement's own citations are correct."},
+  "task": {
+    "description": "Write lib/letflow/design/req185-scheduler-firing-architecture.md exactly per docs/requirements.yaml's REQ-185 entry's SCOPE section (six numbered points) and acceptance_criteria list. This is a decision document, not an implementation -- reach and record actual decisions, do not leave options open for a future requirement to decide. Every acceptance criterion below maps directly to a scope point in the requirement text; treat them as a checklist. Design only -- no fenced code blocks reproducing real .ex file content (this project's mechanical no-exceptions rule).",
+    "acceptance_criteria": [
+      "lib/letflow/design/req185-scheduler-firing-architecture.md exists and names exactly ONE recommended firing mechanism, with the alternatives it rejected and the reason for each -- evaluating at minimum Oban, a supervised GenServer ticker, and a per-timer process",
+      "the artefact states an explicit YES or NO on adopting Oban as a mix.exs dependency, with REVIEWER sign-off recorded in the artefact; it does not leave the choice open or defer it to the implementing requirement",
+      "the artefact names FOR UPDATE SKIP LOCKED (or its chosen alternative) as the claim mechanism and states in its own text that R-Co REMOVED the per-timer advisory lock SCH-02's literal text mandates, citing src/design/scheduler-concurrency-epic3.md's ISS-301 section, so a later reader does not reintroduce it",
+      "the artefact decides whether an equivalent of R-Co's ISS-302 session-level startup-sweep lock is needed in Letflow, and if not, states what prevents two nodes both sweeping overdue timers on simultaneous restart",
+      "the artefact states how the poller relates to Letflow's per-tenant schemas -- whether it iterates tenant schemas per tick or polls one global queue -- and quantifies the cost of the chosen strategy at a stated tenant count, rather than describing it qualitatively",
+      "the artefact states, in one section, how the recommended design distinguishes 'timer locked by another node', 'no timer due' and 'hard non-retryable error' from each other, citing src/design/iss0618-scheduler-lock-and-error-signaling.md, and states why simply propagating every error out of the fire path is the WRONG fix (it stops the poll loop before fire_error_count can reach its limit)",
+      "the artefact decides whether an exhausted-retry timer lands in REQ-176's dlq_entries with entry_type \"timer\", answering yes or no rather than leaving it to REQ-186",
+      "no migration, no file under lib/letflow/engine/, and no mix.exs change is made by this requirement, confirmed by git diff --stat scoped to this requirement's commits"
+    ]
+  },
+  "result": null
+}

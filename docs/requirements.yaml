@@ -9509,7 +9509,7 @@ requirements:
   - id: REQ-185
     title: Settle the scheduler timer-firing architecture for the BEAM (decision + design artefact, gates all of S6's scheduler half)
     owner: CODE-DESIGNER
-    status: pending
+    status: done
     stage: S6
     impl_order: 358  # letflow-queue task id
     description: >

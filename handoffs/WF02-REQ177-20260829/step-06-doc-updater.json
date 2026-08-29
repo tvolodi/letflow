@@ -1,0 +1,22 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step06",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 6",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "docs/requirements.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 352, GH#697, stage S6. RELEASE-VALIDATOR gave a FINAL PASS on all 6 REQ-177 acceptance criteria, after one real rework cycle mid-Step-5: RELEASE-VALIDATOR's first pass found AC3 lacked genuine test coverage (the code was already correct, empirically confirmed via a throwaway scratch test) -- TEST-DESIGNER added a real fault-injection test (commit cc59d8d), TEST-DESIGN-VALIDATOR independently re-verified it with its own mutation, and RELEASE-VALIDATOR's re-check gave the final PASS. REQ-177 may be marked done. Current status-history volume is docs/status/requirement_status.v6.yaml, currently at 12 entries (index count correct)."},
+  "task": {
+    "description": "Flip REQ-177's status from pending to done in docs/requirements.yaml, and append a 'done' event to docs/status/requirement_status.v6.yaml with a real UTC timestamp, summarizing: what was implemented (two DLQ landing hooks -- Letflow.Engine.land_service_task_exhaustion/2 for SERVICE_TASK retry-exhaustion, and a new :execution_error_dlq_landing Ecto.Multi step in Letflow.Engine.ExecutionError.append_multi/3 for instance ERROR transitions, both landing-only per design, no re-execution); the requirement's path (1 CODE-DESIGN-VALIDATOR rework round catching a false EventStore payload return-shape claim; 1 SECURITY-REVIEWER rework round catching a real grapheme-vs-codepoint truncation bug that ORCH empirically confirmed with real Elixir before routing back; REVIEWER passed clean; and a genuine Step 5 rework cycle where RELEASE-VALIDATOR's own re-derivation found AC3 lacked real test coverage despite the code being correct, closed by TEST-DESIGNER adding a real fault-injection test independently re-verified by TEST-DESIGN-VALIDATOR); note that no SERVICE_TASK dispatch orchestrator exists yet in this codebase (confirmed by CODE-DESIGNER's own grep) so retry/2's re-execution remains a named, deferred follow-up in both hook sites' moduledocs; and that this unblocks REQ-178 (the DLQ route layer) if it lists REQ-177 or REQ-176 as a dependency -- check docs/requirements.yaml and name what actually depends on REQ-177, if anything. Increment docs/status/requirement_status.index.yaml's volume-6 entries count in THE SAME COMMIT as your append.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-177 status is 'done'",
+      "a 'done' event is appended to the current run-history volume with a real UTC timestamp and an accurate summary",
+      "docs/status/requirement_status.index.yaml's volume-6 entries count is incremented correctly in the same commit, verified against grep -c '^  - req:' docs/status/requirement_status.v6.yaml",
+      "no other requirement's entry or historical run-history event is modified"
+    ]
+  },
+  "result": null
+}

@@ -27,7 +27,7 @@
   },
   "result": {
     "verdict": "PASS",
-    "report_file": "handoffs/WF02-REQ178-20260829/step-01b-validation-report.md",
+    "report_file": "handoffs/WF02-REQ178-20260829/req178-design-validation-report.md",
     "summary": "Independently re-verified against lib/letflow/api/authorization.ex, lib/letflow/dlq.ex, lib/letflow/dlq/entry.ex, web/src/types/api.ts, web/src/api/dlq.ts, lib/letflow/api/response.ex, lib/letflow/api/authorized_router.ex, and lib/letflow/routers/tasks.ex -- all claims in lib/letflow/design/req178-dlq-routes.md hold: the :DlqReadRetryDiscard->:DlqOperate policy mapping exists exactly as claimed and is held only by PLATFORM_ADMIN/PROCESS_OPERATOR; Letflow.Dlq's list/2, get/2, retry/2, discard/2 signatures and error/return shapes match; DlqEntry JSON serialization matches web/src/types/api.ts field-for-field with the four schema-less TS fields correctly left as an open question rather than fabricated; zero fenced code blocks in the design (grep confirmed). Routed to ELIXIR-DEV for implementation."
   }
 }

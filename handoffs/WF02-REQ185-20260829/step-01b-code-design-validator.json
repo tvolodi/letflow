@@ -1,0 +1,29 @@
+{
+  "handoff_id": "WF02-REQ185-20260829-step01b",
+  "run_id": "WF02-REQ185-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req185-scheduler-firing-architecture.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "CODE-DESIGNER finished Step 1 for REQ-185 (a decision-and-design-only requirement -- no migration, no lib/letflow/engine/ code, no mix.exs change). The design artefact is lib/letflow/design/req185-scheduler-firing-architecture.md, committed and pushed on feature/WF02-REQ185-20260829 (commit 44b1143). Verify every acceptance criterion below is met by that file. Note: one acceptance criterion requires REVIEWER sign-off on the Oban-adoption decision -- CODE-DESIGNER recorded its own recommendation (NO) with full reasoning in section 3 and left an explicit PENDING placeholder there, since REVIEWER sign-off is recorded later, at Step 2d of this same pipeline run, not by CODE-DESIGNER or CODE-DESIGN-VALIDATOR. Do not fail the artefact solely for that placeholder being unfilled -- check instead that the placeholder is explicit, unambiguous, and cannot be mistaken for an actual sign-off. Also verify: R-Co source (c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\) was unreachable from this sandbox this session (confirmed via ls against both the literal Windows path and a /mnt/c/ WSL-style mount, both 'No such file or directory'); the artefact's section 0 states this explicitly and treats its ISS-301/ISS-0618 citations as unverified-but-plausible source material rather than restating them as independently-confirmed fact -- confirm this framing is honest and not silently upgraded to certainty elsewhere in the document.",
+    "requirement_ref": "docs/requirements.yaml#REQ-185 (line ~9509)"
+  },
+  "task": {
+    "description": "Validate lib/letflow/design/req185-scheduler-firing-architecture.md against docs/requirements.yaml's REQ-185 acceptance_criteria list in full. Confirm no implementation code (no fenced code blocks reproducing real .ex content) appears anywhere in the artefact -- verified by CODE-DESIGNER via grep for triple-backtick fences (none found), but re-check independently. Confirm git diff --stat scoped to this requirement's commits on feature/WF02-REQ185-20260829 shows only the design file (no migration, no lib/letflow/engine/ file, no mix.exs change).",
+    "acceptance_criteria": [
+      "lib/letflow/design/req185-scheduler-firing-architecture.md exists and names exactly ONE recommended firing mechanism, with the alternatives it rejected and the reason for each -- evaluating at minimum Oban, a supervised GenServer ticker, and a per-timer process",
+      "the artefact states an explicit YES or NO on adopting Oban as a mix.exs dependency, with REVIEWER sign-off recorded in the artefact; it does not leave the choice open or defer it to the implementing requirement",
+      "the artefact names FOR UPDATE SKIP LOCKED (or its chosen alternative) as the claim mechanism and states in its own text that R-Co REMOVED the per-timer advisory lock SCH-02's literal text mandates, citing src/design/scheduler-concurrency-epic3.md's ISS-301 section, so a later reader does not reintroduce it",
+      "the artefact decides whether an equivalent of R-Co's ISS-302 session-level startup-sweep lock is needed in Letflow, and if not, states what prevents two nodes both sweeping overdue timers on simultaneous restart",
+      "the artefact states how the poller relates to Letflow's per-tenant schemas -- whether it iterates tenant schemas per tick or polls one global queue -- and quantifies the cost of the chosen strategy at a stated tenant count, rather than describing it qualitatively",
+      "the artefact states, in one section, how the recommended design distinguishes 'timer locked by another node', 'no timer due' and 'hard non-retryable error' from each other, citing src/design/iss0618-scheduler-lock-and-error-signaling.md, and states why simply propagating every error out of the fire path is the WRONG fix (it stops the poll loop before fire_error_count can reach its limit)",
+      "the artefact decides whether an exhausted-retry timer lands in REQ-176's dlq_entries with entry_type \"timer\", answering yes or no rather than leaving it to REQ-186",
+      "no migration, no file under lib/letflow/engine/, and no mix.exs change is made by this requirement, confirmed by git diff --stat scoped to this requirement's commits"
+    ]
+  },
+  "result": null
+}

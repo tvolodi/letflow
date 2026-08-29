@@ -542,6 +542,62 @@ defmodule Letflow.EngineExecutionErrorTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # Regression -- REQ-177 SECURITY-REVIEWER finding (INV-8): dlq_entries.reason is
+  # a Postgres varchar(255), which limits by CODEPOINT count, not grapheme count.
+  # ExecutionError's Hook B used to truncate error_args.reason with
+  # String.slice/3, which operates on grapheme clusters -- a combining-mark
+  # string (base char + combining diacritic, one grapheme, two codepoints) with
+  # grapheme length 255 has a codepoint count around double that, which used to
+  # raise an unhandled DB length-violation exception inside the
+  # :execution_error_dlq_landing Multi.run/3 step instead of landing the DLQ
+  # entry. Confirmed fixed by truncating on String.codepoints/1 instead.
+  # ---------------------------------------------------------------------------------
+
+  describe "regression -- combining-mark reason exceeding 255 codepoints under grapheme truncation" do
+    test "the DLQ entry lands with a reason that fits varchar(255) by codepoint count" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = start_instance!(schema_name, graph_human_task_end())
+
+      # 300 graphemes ("e" + U+0301 COMBINING ACUTE ACCENT each), i.e. 300
+      # grapheme clusters but 600 codepoints -- under the old grapheme-based
+      # String.slice(reason, 0, 255) this would have produced a 255-grapheme
+      # (510-codepoint) string, double the column's real 255-codepoint limit.
+      combining_mark_reason = String.duplicate("e" <> <<0x0301::utf8>>, 300)
+      assert String.length(combining_mark_reason) == 300
+      assert length(String.codepoints(combining_mark_reason)) == 600
+
+      attrs =
+        error_attrs(instance_id, %{
+          error_type: :variable_schema_rejected,
+          affected: {:field, "approved_amount"},
+          reason: combining_mark_reason
+        })
+
+      # dlq_landed_externally defaults to false, so set_instance_error/2 routes
+      # through ExecutionError.append_multi/3's Hook B DLQ landing step -- this
+      # is where the old grapheme-based truncation would raise inside
+      # Multi.run(:execution_error_dlq_landing, ...) instead of returning.
+      assert {:ok, result} = Engine.set_instance_error(attrs, prefix: schema_name)
+      assert result.status == :error
+
+      assert [dlq_entry] =
+               Letflow.Dlq.Entry
+               |> where([d], d.instance_id == ^instance_id)
+               |> Repo.all(prefix: schema_name)
+
+      # Truncated to exactly 255 codepoints (not grapheme clusters), well
+      # within the varchar(255) column's real codepoint-counted limit.
+      assert length(String.codepoints(dlq_entry.reason)) == 255
+
+      assert dlq_entry.reason ==
+               combining_mark_reason |> String.codepoints() |> Enum.take(255) |> Enum.join()
+
+      # full_reason (:text, unbounded) still carries the untruncated value.
+      assert dlq_entry.full_reason == combining_mark_reason
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # AC6 -- moduledoc content: OBS-05/S6/S4 out of scope, no partial DLQ, ERROR
   # explicitly non-terminal unlike CANCELLED/COMPLETED. Pure, no DB.
   # ---------------------------------------------------------------------------------

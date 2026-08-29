@@ -226,7 +226,17 @@ defmodule Letflow.Engine.ExecutionError do
       # `error_args.reason` is caller-supplied and not itself length-bounded
       # (e.g. a raised exception's message), so it is truncated to fit here;
       # `full_reason` (:text, unbounded) below carries the untruncated value.
-      reason: String.slice(error_args.reason, 0, 255),
+      # Truncation must be by CODEPOINT count, not grapheme count:
+      # Postgres's varchar(255) limit counts codepoints, while
+      # String.slice/3 operates on grapheme clusters -- a string with
+      # combining marks (e.g. NFD-decomposed Unicode) can have grapheme
+      # length 255 but a codepoint count far above 255, which would raise
+      # an unhandled DB length-violation exception inside this Multi.run
+      # step. Ecto's own validate_length/3 also counts graphemes by
+      # default, so it would not catch this either -- codepoint-based
+      # truncation is the precise match for Postgres's varchar(n)
+      # semantics.
+      reason: error_args.reason |> String.codepoints() |> Enum.take(255) |> Enum.join(),
       full_reason: Map.fetch!(event.payload, "reason"),
       error_detail: Map.get(error_args, :details, %{}),
       first_failed_at: now,

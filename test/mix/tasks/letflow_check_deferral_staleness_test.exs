@@ -884,11 +884,24 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # done/in_progress/blocked. S5 moves from inactive to active.
       # Re-derived: active == ["S0","S1","S2","S3","S4","S5","S8","S9"],
       # inactive == []. Test-data-only update; detector logic unchanged.
+      #
+      # UPDATE (S6 expansion, 2026-08-29): OQ-5's predicted event happened a
+      # third time -- S6 was expanded via WF-01 into REQ-176..178, REQ-181..184
+      # (7 requirements, all `pending`) against
+      # docs/migration/stage-6-operational-cross-cutting.md. Same rule as S5's
+      # own expansion: `pending` does not confer activity (F-PENDING-NOT-ACTIVE),
+      # so S6 is present but :inactive, same state S5 passed through before
+      # REQ-148 went done. `active` is unchanged; `inactive` moves from [] to
+      # ["S6"]. Re-derived, not guessed: confirmed live via
+      # `mix test test/mix/tasks/letflow_check_deferral_staleness_test.exs`
+      # itself surfacing `left: ["S6"], right: []` on this exact assertion.
+      # S6 joins `active` the moment any of REQ-176/177/178/181/182/183/184
+      # goes in_progress/done/blocked.
       active = for s <- result.stages, s.activity == :active, do: s.stage
       inactive = for s <- result.stages, s.activity == :inactive, do: s.stage
 
       assert active == ["S0", "S1", "S2", "S3", "S4", "S5", "S8", "S9"]
-      assert inactive == []
+      assert inactive == ["S6"]
     end
 
     test "T-LIVE-DEFERRED-COUNT-IS-ZERO -- documents today's vacuous green", %{result: result} do

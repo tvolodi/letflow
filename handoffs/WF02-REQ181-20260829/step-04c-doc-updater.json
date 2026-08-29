@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF02-REQ181-20260829-step04c",
+  "run_id": "WF02-REQ181-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 4 (rework)",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "DOC-UPDATER",
+  "file": "docs/status/requirement_status.v6.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Second TEST-RUNNER re-run on this branch (after commits 8ea40ba fixing the C6 tenant_fixture oracle-rot defect, and 8ba02f3 -- ORCH's direct fix renaming the REQ-181 started-event's `by:` field to `agent:`). Full suite now 2501/2505 (4 failures, down from 5). Both items the dispatching ORCH turn believed resolved are confirmed resolved: the C6 defect (reproduced standalone, 14/14 passing) and the A4b field-NAME symptom (no more missing_field/extra_field violation on this entry). However 8ba02f3's fix was incomplete: it renamed the field in place without moving it, so the entry's field ORDER is still non-conformant, and requirement_status_invariants_test.exs's A4b check now fails on a DIFFERENT violation kind (field_order) against the exact same record.",
+    "test_file": "test/docs/requirement_status_invariants_test.exs",
+    "failing_test": "test A4b: the on-disk shape-violation set equals known_shape_anomalies:, and every record cites a closed, pinned volume (Letflow.Docs.RequirementStatusInvariantsTest), test/docs/requirement_status_invariants_test.exs:192",
+    "scoped_repro": "mix test test/docs/requirement_status_invariants_test.exs -> 19/20 passed, 1 failure",
+    "error_verbatim": "on disk but not declared (1) — NEW DRIFT: path=docs/status/requirement_status.v6.yaml entry_line=611 req=\"REQ-181\" kind=\"field_order\" field=\"at\"",
+    "root_cause": "docs/status/requirement_status.v6.yaml lines 611-615 (the REQ-181 'started' event) currently read, in order: req, event, at, agent, note. Every other entry in the file (e.g. lines 169-173, 206-210) uses the required order req, event, agent, at, note -- agent: always precedes at:. Commit 8ba02f3 fixed the field NAME (by: -> agent:) but left it in its original position, so the entry is still shape-non-conformant, just under a different A4b violation kind.",
+    "fix_required": "In docs/status/requirement_status.v6.yaml, reorder the REQ-181 started-event (currently entry_line 611) so `agent: ORCH` appears immediately after `event: started` and before `at: \"2026-08-29T12:19:00Z\"` -- i.e. swap the current `at:` and `agent:` lines. Do not touch note: or any other entry. This is an append-only-history file per design doc section 13.x cited in the test failure message -- reorder the CURRENT (not-yet-on-main, this-branch-only) entry in place; do not add a known_shape_anomalies: exception for it (the test module explicitly forbids declaring away a shape defect in the current volume).",
+    "branch": "feature/WF02-REQ181-20260829",
+    "prior_handoffs": [
+      "handoffs/WF02-REQ181-20260829/step-04-test-runner.json",
+      "handoffs/WF02-REQ181-20260829/step-04b-elixir-dev.json"
+    ],
+    "report_file": "test/reports/report-2026-08-29-WF02-REQ181-20260829-rerun2.yaml"
+  },
+  "task": {
+    "description": "Fix the field ORDER (not name -- that part is already fixed) of the REQ-181 started-event in docs/status/requirement_status.v6.yaml so it conforms to the required [:req, :event, :agent, :at, :note] shape, then return to TEST-RUNNER for a fresh full-suite confirmation."
+  },
+  "result": {
+    "verdict": "FAIL",
+    "test_suite_combined": "combined: 2500 tests, 5 properties, 4 failures (2501/2505 passed) -- scripts/test_parallel.sh, N=8 partitions",
+    "next_action": "DOC-UPDATER reorders the two fields in place, then routes back to TEST-RUNNER (Step 4) for a fresh full-suite confirmation before step-05 to RELEASE-VALIDATOR."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

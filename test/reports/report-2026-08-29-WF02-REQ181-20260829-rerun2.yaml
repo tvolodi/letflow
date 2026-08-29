@@ -1,0 +1,117 @@
+# Test run report — WF-02 Step 4 (re-run 2, after 8ea40ba + 8ba02f3)
+# Written by TEST-RUNNER. RELEASE-VALIDATOR independently re-runs the suite
+# rather than trusting this report alone (core-directives.md).
+
+req_id: REQ-181
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ181-20260829
+date_utc: 2026-08-29
+git:
+  branch: feature/WF02-REQ181-20260829
+  commit: 8ea40ba
+
+environment:
+  toolchain: local (asdf shims — Elixir 1.20.3 / Erlang 29 / OTP 29)
+  toolchain_note: >
+    asdf was again not sourced by default in this non-interactive shell
+    (`mix`/`elixir` not on PATH until `source ~/.asdf/asdf.sh`) — shell-init
+    quirk of this sandbox, not a repo issue.
+  rust_toolchain: >
+    rustc/cargo still absent from PATH in this sandbox. Same known gap as
+    every prior REQ-176/177/178/181 run.
+  postgres_container: >
+    letflow-1-postgres-1 and letflow-1-keycloak-1, already Running (brought
+    up previously via `sudo docker compose up -d`; this user's own docker
+    socket access is permission-denied, sudo is passwordless).
+
+checks:
+  compile_warnings_as_errors:
+    command: "mix compile --warnings-as-errors"
+    result: PASS
+    exit_code: 0
+    output: "(no output — clean recompile, zero warnings)"
+
+  format_check:
+    command: "mix format --check-formatted"
+    result: PASS
+    exit_code: 0
+    output: "(no output — all files already formatted)"
+
+  test_suite:
+    command: "scripts/test_parallel.sh (N=8 partitions, aggregated)"
+    result: FAIL
+    summary_line_verbatim: "combined: 2500 tests, 5 properties, 4 failures (2501/2505 passed)"
+    per_partition:
+      - "partition 1: 408 tests, 2 properties, 1 failures, exit 2"
+      - "partition 2: 304 tests, 0 properties, 0 failures, exit 0"
+      - "partition 3: 377 tests, 1 property, 2 failures, exit 2"
+      - "partition 4: 165 tests, 0 properties, 0 failures, exit 0"
+      - "partition 5: 223 tests, 2 properties, 1 failures, exit 2"
+      - "partition 6: 353 tests, 0 properties, 0 failures, exit 0"
+      - "partition 7: 306 tests, 0 properties, 0 failures, exit 0"
+      - "partition 8: 364 tests, 0 properties, 0 failures, exit 0"
+    resolved_since_prior_run:
+      - item: "C6 oracle-rot guard (Letflow.Support.TenantFixtureTest) — webhook_subscriptions missing from @expected_tenant_tables"
+        resolution: "Fixed by commit 8ea40ba. Reproduced standalone: `mix test test/letflow/support/tenant_fixture_test.exs` -> 14/14 passed. Confirmed absent from this run's failure list."
+      - item: "A4b field-name defect on REQ-181's started-event (docs/status/requirement_status.v6.yaml:611) — used `by:` instead of `agent:`"
+        resolution: "Field renamed by ORCH's commit 8ba02f3. That specific symptom (missing_field/extra_field) is gone. However see NEW finding below — the rename did not fix the entry's field ORDER, so A4b still fails against this same entry, now with a different violation kind."
+    failures:
+      - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+        diagnosis: "PRE-EXISTING/ENVIRONMENTAL — rustc absent from PATH. Not in git diff --stat main...HEAD. Same class as REQ-177/178/181's prior runs. Not routed anywhere."
+      - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+        diagnosis: "Same root cause as above."
+      - test: "test AC7: the wasmex NIF is a loaded shared library, not an external process Wasmex.Native resolves to a compiled .beam built from Rust NIF sources (Letflow.Engine.Wasm.PluginHandlerTest)"
+        location: "test/letflow/engine/wasm/plugin_handler_test.exs:189"
+        diagnosis: "PRE-EXISTING/ENVIRONMENTAL, same rustc-absent root cause. Not in diff. Not routed anywhere."
+      - test: "test A4b: the on-disk shape-violation set equals known_shape_anomalies:, and every record cites a closed, pinned volume (Letflow.Docs.RequirementStatusInvariantsTest)"
+        location: "test/docs/requirement_status_invariants_test.exs:192"
+        error: >
+          on disk but not declared (1) — NEW DRIFT: path=docs/status/
+          requirement_status.v6.yaml entry_line=611 req="REQ-181"
+          kind="field_order" field="at"
+        diagnosis: >
+          NOT YET RESOLVED — different symptom of the same underlying record
+          as the prior run's finding. ORCH's commit 8ba02f3 renamed the
+          field (`by:` -> `agent:`) in place but did not move it: the
+          required shape is [:req, :event, :agent, :at, :note] in that exact
+          order (confirmed against every other entry in this file, e.g.
+          lines 169-172 and 206-209: `agent:` always precedes `at:`), but the
+          REQ-181 started-event at entry_line=611 still reads
+          req/event/at/agent/note — `at:` and `agent:` are swapped.
+          Reproduced standalone: `mix test
+          test/docs/requirement_status_invariants_test.exs` -> 19/20 passed,
+          1 failure, identical A4b field_order message. Fix is a two-line
+          reorder of docs/status/requirement_status.v6.yaml lines 612-614
+          (move the `agent: ORCH` line above `at: "2026-08-29T12:19:00Z"`).
+          NOT fixed by TEST-RUNNER: docs/status/requirement_status*.yaml is
+          owned by DOC-UPDATER per docs/agents/AGENT_SYSTEM.md's ownership
+          table (ORCH also touches it directly for bookkeeping, as seen in
+          8ba02f3, but that is not TEST-RUNNER's file). Routed as rework —
+          see handoffs/WF02-REQ181-20260829/step-04c-doc-updater.json.
+
+verdict: FAIL
+verdict_detail: >
+  mix compile --warnings-as-errors: clean, 0 warnings, exit 0.
+  mix format --check-formatted: clean, exit 0.
+  Full suite: 2501/2505 passed, 4 failures (down from the prior run's 5).
+  Both items reported as resolved in the task brief are confirmed resolved:
+  (1) the C6 oracle-rot genuine defect (webhook_subscriptions missing from
+  tenant_fixture.ex's oracle) — commit 8ea40ba, reproduced standalone
+  14/14 passing, and (2) the A4b field-NAME bookkeeping issue (`by:` vs
+  `agent:`) — commit 8ba02f3, that specific symptom no longer appears.
+  3 of the 4 remaining failures are the same confirmed pre-existing
+  rustc-absent environmental failures documented in every REQ-176/177/178/181
+  run to date (2 CheckToolchainTest rust-pin + 1 wasmex PluginHandlerTest).
+  The 4th is a NEW-SHAPED (not new-cause) finding: the same REQ-181
+  started-event record at requirement_status.v6.yaml:611 that 8ba02f3
+  partially fixed is still shape-non-conformant — the rename fixed the
+  field NAME but left it in the WRONG POSITION (at: before agent:, should
+  be agent: before at:). This is not one of "the same 3 already-confirmed
+  environmental failures" from the task brief, so per instructions this
+  step does NOT hand off to RELEASE-VALIDATOR yet. Routed as rework to
+  DOC-UPDATER (owner of docs/status/requirement_status*.yaml) via
+  handoffs/WF02-REQ181-20260829/step-04c-doc-updater.json.

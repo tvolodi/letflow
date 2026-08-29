@@ -150,6 +150,51 @@ changeset boilerplate for a shape this module is the only writer of.
 }
 ```
 
+### 2.4 `DlqEntry` (frontend) fields this schema does not carry a same-named column for
+
+`web/src/types/api.ts`'s `DlqEntry` interface has four optional fields with
+no matching column above: `item_type`, `original_payload`,
+`processor_metadata`, `max_retries`. Checked directly against
+`web/src/pages/dlq/DlqPage.tsx`, the only consumer of `DlqEntry` in this
+codebase, rather than guessed:
+
+- `item_type` — a **legacy alias for `entry_type`**. `DlqPage.tsx` reads
+  `e.entry_type ?? e.item_type` (lines 290, 422): `entry_type` is tried
+  first, `item_type` is the fallback for older payload shapes. This
+  design's `entry_type` column (§1) is the field this requirement's
+  `enqueue/1`/`list/2` populate and filter on; `item_type` is not written
+  or read by any function in `Letflow.Dlq` as specified here — it is a
+  route/serialization-layer concern (REQ-178, if it needs to keep emitting
+  the legacy key for old frontend builds), not a schema column.
+- `original_payload` — a **legacy alias for `source_payload`**.
+  `DlqPage.tsx` reads `selected.source_payload ?? selected.original_payload`
+  (line 473) the same way. `source_payload` (§1) is this design's column;
+  `original_payload` is out of scope here for the same reason as above.
+- `processor_metadata` — a **legacy alias for `context_json`**.
+  `DlqPage.tsx` reads `selected.context_json ?? selected.processor_metadata`
+  (line 468) and also reads `entry.processor_metadata` directly in
+  `normalizeStatus/2` and `extractRetryHistory/1` (lines 44, 79) as a
+  fallback data source when `context_json`-shaped data isn't present.
+  `context_json` (§1) is this design's column; `processor_metadata` is out
+  of scope here for the same reason.
+- `max_retries` — **not a `Letflow.Dlq` concern at all, genuinely out of
+  scope.** Grepped across `web/src/`: `DlqPage.tsx` never reads
+  `entry.max_retries` — its retry-exhaustion check (line 48) reads
+  `entry.retry_limit` directly, which is this design's own `retry_limit`
+  column (§1) with no alias needed. Every other `max_retries` usage in the
+  frontend (`web/src/api/services.ts`, `web/src/pages/admin/services/ServicesPage.tsx`)
+  belongs to an unrelated `ServiceConfig`-shaped type that happens to reuse
+  the field name — not the DLQ feature. `DlqEntry.max_retries` therefore has
+  no known consumer and no backing column in this design; if a future
+  requirement needs it, that is a new column decision made at that time, not
+  an oversight in this one.
+
+None of these four fields change any acceptance criterion for REQ-176: the
+frontend already prefers this design's own field names first in every
+fallback expression above, so a correctly-populated `entry_type` /
+`source_payload` / `context_json` / `retry_limit` response satisfies
+`DlqPage.tsx` without any of the four legacy keys being present at all.
+
 ## 3. Context module — `Letflow.Dlq`
 
 `lib/letflow/dlq.ex`. Plain Ecto context module, no process — same shape
@@ -291,13 +336,37 @@ without interacting:
   precedent).
 - `search`: free text, matched case-insensitively (`ILIKE`, wrapped
   `"%...%"`, matching `Letflow.Identity`'s own
-  `filter_by_search/2`/`filter_tenants_by_search/2` wrapping idiom) across
-  three columns, OR'd together: `reason` directly; `instance_id` and `id`
-  each cast to text first, since `ILIKE` cannot compare a UUID-typed column
-  directly — the same UUID-vs-text casting idiom `Letflow.IdentityMigration`
-  already uses elsewhere in this codebase via `Ecto.Query`'s `fragment/1`
-  and `type/2`. Empty string and `nil` are both no-ops, same as those two
-  existing functions.
+  `filter_by_search/2`/`filter_tenants_by_search/2` wrapping idiom — that
+  part of this section IS a real, verified precedent) across three columns,
+  OR'd together: `reason` directly; `instance_id` and `id` each cast to text
+  first, since `ILIKE` cannot compare a UUID-typed column directly.
+
+  **Correction from the previous revision:** this design previously claimed
+  `Letflow.IdentityMigration` already uses a UUID-column-cast-to-text-for-`ILIKE`
+  idiom elsewhere in the codebase. That claim was checked against the actual
+  source and is false — `identity_migration.ex`'s only `fragment/1` + `type/2`
+  usages (lines 145, 156, 185) cast a *bound parameter* to `Ecto.UUID` for an
+  *equality* comparison against an already-UUID-typed column; none of them
+  involve `ILIKE`, and a repo-wide search of `lib/letflow/` found no existing
+  occurrence of a UUID column cast to text for pattern matching under any
+  module name. There is no precedent for this specific idiom anywhere in this
+  codebase. This design therefore introduces it as a **new pattern**, specified
+  here as its own decision rather than a reuse of something established:
+
+  - For each of `instance_id` and `id`, the column is cast to `:string` via
+    `Ecto.Query`'s `type/2` (e.g. `type(dlq_entries.instance_id, :string)`)
+    inside a `fragment/1` call that applies `ILIKE` against the wrapped
+    `"%...%"` bound search parameter — the same shape as:
+    `fragment("? ILIKE ?", type(d.instance_id, :string), ^pattern)`.
+  - `id` is cast the same way for the same reason (both columns are
+    `:binary_id`/`Ecto.UUID`-typed, not `:string`, so neither can be an
+    `ILIKE` operand without an explicit cast).
+  - This is the only place in `Letflow.Dlq` a UUID column is compared via
+    string pattern matching rather than exact equality (`get/2` and the
+    `instance_id` *filter* in this same function both use `Ecto.UUID.cast/1`
+    equality instead, per §3.2's filter list and §3.3).
+  - Empty string and `nil` search params are both no-ops, matching
+    `Letflow.Identity`'s two existing functions' own behavior.
 
 Tenant scoping: this function issues exactly one query against the caller's
 `prefix`, the same "prefix is the only tenant input" structure

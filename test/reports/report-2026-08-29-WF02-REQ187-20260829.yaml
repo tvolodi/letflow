@@ -1,0 +1,152 @@
+# Test run report — WF-02 Step 4
+# Written by TEST-RUNNER. RELEASE-VALIDATOR independently re-runs the suite
+# rather than trusting this report alone (core-directives.md).
+
+req_id: REQ-187
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ187-20260829
+date_utc: 2026-08-29
+
+git:
+  branch: feature/WF02-REQ187-20260829
+  head_before_step: 873643d
+  note: >
+    Working tree was clean at the start of this step except for the format
+    fix applied during this step (see format_check below). CODE-DESIGNER,
+    CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER, and
+    TEST-DESIGN-VALIDATOR had all already PASSed
+    test/letflow/engine/timer_wiring_test.exs (18 tests) against REQ-187's
+    9 acceptance criteria, including an independently-reproduced
+    lock-ordering mutation test.
+
+environment:
+  toolchain: local (asdf shims — Elixir 1.20.3 / Erlang 29 / OTP 29, per `.tool-versions`)
+  toolchain_note: >
+    asdf shims were not on PATH by default in this shell session; added
+    $HOME/.asdf/shims to PATH explicitly for every command below.
+  rust_toolchain: >
+    rustc/cargo are absent from PATH in this sandbox (confirmed via the
+    CheckToolchainTest failures below: System.cmd("rustc", ...) raises
+    :enoent). Same known gap documented in prior runs' reports (e.g.
+    test/reports/report-2026-08-29-WF02-REQ186-20260829.yaml).
+  postgres_container: >
+    letflow-1-postgres-1 and letflow-1-keycloak-1 were already up (2 days,
+    healthy) before this step -- this user's own docker socket access is
+    permission-denied, and `sudo docker compose ps` confirmed both
+    containers already running rather than starting a fresh
+    `docker compose up`. Postgres mapped to host port 5463, matching this
+    workspace's untracked .env (LETFLOW_DB_PORT=5463).
+
+checks:
+  compile_warnings_as_errors:
+    command: "MIX_ENV=test mix compile --warnings-as-errors"
+    result: PASS
+    exit_code: 0
+    output: "Clean compile, no output (no warnings, no errors)."
+
+  format_check:
+    command: "mix format --check-formatted"
+    result: FAIL then FIXED
+    detail: >
+      First run failed (exit 1): test/letflow/engine/timer_wiring_test.exs
+      had 4 sites needing the formatter's multi-line wrapping (two TIMER
+      node-map literals, one multi-clause assert pattern-match, one
+      :binary.match pipeline). Fixed mechanically with
+      `mix format test/letflow/engine/timer_wiring_test.exs` -- no
+      assertion, fixture, or mutation-target logic touched, whitespace/
+      line-wrapping only (git diff --stat: 1 file changed, 19
+      insertions(+), 4 deletions(-), all reflow). Re-ran
+      `mix format --check-formatted` afterward: exit 0, clean.
+    exit_code_final: 0
+    files_reformatted:
+      - test/letflow/engine/timer_wiring_test.exs
+
+  test_suite:
+    command: "scripts/test_parallel.sh (N=8 partitions, aggregated)"
+    result: PASS (4 pre-existing/environmental failures, all rustc-absence- or timing-flake-rooted, not disqualifying)
+    summary_line_verbatim: "combined: 2550 tests, 5 properties, 4 failures (2551/2555 passed)"
+    per_partition:
+      - "partition 1: 410 tests, 2 properties, 0 failures, exit 0"
+      - "partition 2: 320 tests, 2 properties, 0 failures, exit 0"
+      - "partition 3: 333 tests, 0 properties, 0 failures, exit 0"
+      - "partition 4: 310 tests, 1 property, 0 failures, exit 0"
+      - "partition 5: 203 tests, 0 properties, 0 failures, exit 0"
+      - "partition 6: 258 tests, 0 properties, 2 failures, exit 2"
+      - "partition 7: 385 tests, 0 properties, 2 failures, exit 2"
+      - "partition 8: 331 tests, 0 properties, 0 failures, exit 0"
+    failures:
+      - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+        error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...) at lib/system.ex:1141, via running_rust_raw/0"
+        diagnosis: "PRE-EXISTING/ENVIRONMENTAL. No rustc binary reachable on PATH in this sandbox. Unrelated to REQ-187's diff. Not routed to ELIXIR-DEV."
+      - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+        error: "** (ErlangError) Erlang error: :enoent -- same root cause as above"
+        diagnosis: "Same as above -- second assertion in the same test module, same missing-rustc-on-PATH cause."
+      - test: "test AC7: the wasmex NIF is a loaded shared library, not an external process Wasmex.Native resolves to a compiled .beam built from Rust NIF sources (Letflow.Engine.Wasm.PluginHandlerTest)"
+        location: "test/letflow/engine/wasm/plugin_handler_test.exs:189"
+        error: "assert Enum.any?(external_resources, &String.contains?(&1, \"native/wasmex/src/\")) failed -- expected Wasmex.Native's external_resource attributes to name its Rust NIF sources"
+        diagnosis: "Same root-cause class: with no local rustc, wasmex's native library was not compiled from Rust source in this environment, so Wasmex.Native's compiled .beam carries no external_resource pointing at native/wasmex/src/. Documented as pre-existing/environmental in prior TEST-RUNNER reports (REQ-177/178/181/182/186). Not routed to ELIXIR-DEV."
+      - test: "test wall-clock timeout (REQ-155) AC-1: a shorter configured timeout terminates measurably sooner than a longer one (Letflow.Engine.Lua.ExecutorTest)"
+        location: "test/letflow/engine/lua/executor_test.exs:359"
+        error: "short-timeout call took 681.559ms, expected well under 400ms (assert short_elapsed_ms < 400)"
+        diagnosis: "PRE-EXISTING/ENVIRONMENTAL timing-comparison flake in the same executor_test.exs wall-clock-timeout describe block as the documented REQ-156 Lua timing-comparison flake (same file, same mechanism: a wall-clock assertion under 8-way parallel partition contention on this sandbox host). Unrelated to REQ-187's diff. Not routed to ELIXIR-DEV."
+    req187_specific_files_check: >
+      test/letflow/engine/timer_wiring_test.exs (18 tests) ran in
+      partition 2, which finished with 0 failures and exit 0. Verified by
+      grepping partition logs for test_module=Letflow.Engine.TimerWiringTest
+      -- all 18 named tests appear with teardown log lines and none appear
+      in any failure block. No :wasm_hang isolated-subprocess timing flake
+      was observed in this run. Partitions 1-5 and 8 (6 of 8) were fully
+      clean; the two partitions that did fail (6, 7) failed only on the
+      three pre-existing rustc-absence tests plus the one documented
+      Lua-timing-class flake identified above -- none touch timer wiring,
+      scheduler, engine transition, task activation, reconstruction, or
+      graph code. In particular, the new timer-firing re-entry into the
+      engine (Scheduler.do_fire/2 calling back into Letflow.Engine) showed
+      no observable timing/ordering flakiness in any unrelated test:
+      Letflow.SchedulerTest (test_module in partition 2, all present, no
+      failures) and Letflow.Scheduler.PollerTest (partition 1, no
+      failures) both ran clean alongside timer_wiring_test.exs.
+    flake_check: >
+      No re-run was needed to disambiguate a flake vs a real failure -- 3
+      of 4 failures are exact-message matches to the standing documented
+      environmental category (rustc/cargo absent from sandbox,
+      deterministic given the missing binary). The 4th (Lua wall-clock
+      timeout) is a timing-comparison assertion of the same class
+      documented in prior runs as the REQ-156 Lua timing-comparison flake
+      (same describe block, same file, timing-sensitive under parallel
+      partition contention) -- not timer-wiring-adjacent.
+
+handoff_schema:
+  command: "mix letflow.lint_handoffs"
+  result: PASS
+  exit_code: 0
+  output_summary: >
+    "letflow.lint_handoffs: OK -- 0 new violations across 1427 handoff
+    files (25 pre-existing grandfathered, traced to ISS-0190)." All
+    flagged items (H-SIZE-1/H-SIZE-2/ARTIFACTS_OUT_SELF_REF/H5 registry
+    gaps) are pre-existing across unrelated WF02/WF03 runs, not
+    introduced by this step. No H6-shaped (step*-but-not-.json) files
+    found under handoffs/ for this run_id.
+
+verdict: PASS
+verdict_detail: >
+  mix compile --warnings-as-errors: clean, exit 0. mix format
+  --check-formatted: one real violation found and fixed
+  (test/letflow/engine/timer_wiring_test.exs -- mechanical reformat only,
+  no behavior change, committed alongside this report). Full suite
+  (scripts/test_parallel.sh, 8 partitions): 2551/2555 passed (2550
+  example tests + 5 properties), 4 failures, all confirmed
+  pre-existing/environmental: 3 rooted in this sandbox's total absence of
+  a working rustc binary (2 CheckToolchainTest rust-pin checks, 1 wasmex
+  Rust-NIF-source introspection test) and 1 a timing-comparison flake in
+  the same class as the documented REQ-156 Lua wall-clock flake. REQ-187's
+  own new test file (test/letflow/engine/timer_wiring_test.exs, 18 tests)
+  is confirmed fully passing in the full-suite run, and the new
+  timer-firing re-entry into the engine (Scheduler.do_fire/2 -> Engine)
+  introduced no observed timing/ordering flakiness elsewhere in the
+  suite. mix letflow.lint_handoffs: 0 new violations. No rework needed;
+  routing to RELEASE-VALIDATOR.

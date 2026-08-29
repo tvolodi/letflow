@@ -1,0 +1,82 @@
+{
+  "handoff_id": "WF02-REQ187-20260829-step02c",
+  "run_id": "WF02-REQ187-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2c",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/engine.ex",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-187"],
+    "branch_name": "feature/WF02-REQ187-20260829",
+    "commit": "04bb846",
+    "artifacts_in": [
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/task_activation.ex",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/engine/reconstruction.ex",
+      "lib/letflow/design/req187-timer-engine-wiring.md",
+      "handoffs/WF02-REQ187-20260829/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ187-20260829/req187-elixir-dev-implementation-notes.md"
+    ],
+    "requirement_text": "REQ-187 -- Wire TIMER nodes into the engine -- arm on token arrival, cancel on completion/cancellation (SCH-01/SCH-03, closes the cancel_pending_timers stub). Connects REQ-186's timers core to the instance engine, closing three named, already-documented stubs: (a) transition.ex L294's catch-all dispatch branch, which today returns {:error, {:node_type_not_yet_implemented, :TIMER, node_id}} for every TIMER node; (b) task_activation.ex L338-339's cancel_pending_timers/2, an explicit no-op; (c) engine.ex L234-242's recorded cancel_instance/3 deferral (timer half only -- REQ-056's SERVICE_TASK HTTP-abort half stays deferred). SCOPE: (1) a token arriving at a :TIMER node arms a timer via REQ-186's create/2 with fire_at = arrival time + the node's duration_iso8601 attribute (already validated at definition time by CHK-12), persisted in the SAME transaction as the state-transition event; the token waits at the node rather than advancing. (2) when the poller fires a timer, the instance advances from the TIMER node along its outgoing edge; a timer armed with fire_at already <= now is due immediately on the next poll and must NOT be special-cased into firing inline inside the arming transaction. (3) cancellation: replace cancel_pending_timers/2's no-op with a real status-guarded update setting every PENDING timer for that instance to cancelled (cancelled_at + cancel_reason), on the caller-supplied repo/prefix; add the equivalent call inside cancel_instance/3's own transaction. (4) PURITY: transition/3 must RETURN a description of the timer to be armed (extending its existing pending_event() return shape) and never call Repo itself; the impure caller persists it. SCH-03's concurrency edge case must hold: a fired timer is never touched by a later cancellation, and no pending timer of a terminal instance is ever fired by a later poll. NOT IN THIS REQUIREMENT: no route/controller; no recurrence or escalation timers (REQ-188); no change to REQ-056's SERVICE_TASK dispatch.",
+    "acceptance_criteria": [
+      "a definition containing a TIMER node with a valid duration_iso8601 starts an instance whose token reaches that node and arms exactly one timers row with status 'pending' and fire_at equal to the arrival timestamp plus the parsed duration -- replacing the {:error, {:node_type_not_yet_implemented, :TIMER, _}} that transition.ex L294 returns today, asserted by a test that would have failed before this requirement",
+      "the timer row and the state-transition event are written in ONE transaction: a test that forces the event append to fail leaves NO timers row behind",
+      "when the timer fires, the instance advances along the TIMER node's outgoing edge and the token is no longer at the TIMER node",
+      "completing an instance sets every one of its PENDING timers to 'cancelled' with cancelled_at set, via the existing TaskActivation.cancel_pending_timers/2 call site in engine.ex -- which is still called from the same position inside the completion transaction (confirmed by git diff showing the call site itself unmoved)",
+      "cancelling an instance via Letflow.Engine.cancel_instance/3 likewise cancels its PENDING timers in the same transaction, and a test forcing that transaction to roll back leaves the timers still 'pending'",
+      "a timer whose status is already 'fired' is NOT changed by a subsequent instance cancellation (SCH-03's stated edge case), and no PENDING timer belonging to a CANCELLED or COMPLETED instance is ever fired by a later poll -- two explicit tests",
+      "lib/letflow/engine/transition.ex contains no Letflow.Repo call after this change, confirmed by the same grep its moduledoc already documents for purity, and the moduledoc names which return shape was extended to carry the timer-arming description instead",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ],
+    "security_review_focus": [
+      "Tenant isolation of the new timer-cancellation paths: TaskActivation.cancel_pending_timers/5's Timer.update_all is scoped by both instance_id AND status == \"pending\", always run on the caller-supplied repo/prefix (never Letflow.Repo directly) -- confirm no cross-tenant leak is possible via this query, and that both call sites (finalize_instance_projection/5, run_cancel_instance/5) always pass the correct tenant prefix through from their own already-validated call chain.",
+      "Tenant isolation of the new firing path: Letflow.Engine.advance_after_timer_fired/3 is called from Letflow.Scheduler.do_fire/2 with `tenant_schema` threaded through as `prefix` on every query (fetch_and_lock_instance_projection, fetch_graph, load_active_tokens, load_pending_task_tokens, the nested Multi's own repo.transaction) -- confirm no query in the new advance_after_timer_fired/3 call graph is missing a prefix or could read/write another tenant's schema.",
+      "Nested-transaction correctness: advance_after_timer_fired/3's own Ecto.Multi is run via repo.transaction(multi) from inside Scheduler.fire_timer/2's already-open Repo.transaction/1 call -- confirm this genuinely nests as a Postgres SAVEPOINT (not a separate connection/transaction that could partially commit independently of the outer timer-fire transaction), and that a failure inside it correctly rolls back only up to the savepoint boundary while still causing the outer transaction's own rollback via the {:error, _} propagation in do_fire/2's `with` chain.",
+      "Lock-ordering fix (run_cancel_instance/5's new :timer_cancellations step, placed between :open_tasks and :instance_projection): confirm this genuinely avoids the AB-BA deadlock against Scheduler.fire_timer/2's own timers-then-instance_projections lock order, and that running the timer-cancellation UPDATE before :eligibility (M3) confirms the instance isn't already terminal is safe (Ecto.Multi's all-or-nothing rollback is relied on to undo an ineligible cancel attempt's timer-cancellation effects).",
+      "The defensive multiple-timers-per-hop-chain guard in prepare_timer_arms/4 (CODE-DESIGN-VALIDATOR's own required addition, resolving design doc §13 OQ-3): confirm it actually prevents the Ecto.Multi step-name collision (Scheduler.create/2's hardcoded :scheduler_timer Multi.insert/4 step name) from ever reaching Multi.merge/2 and raising, for a :PARALLEL_GATEWAY split feeding two :TIMER nodes in one hop-chain.",
+      "SCH-03 concurrency edge case: confirm a 'fired' timer is genuinely never mutated by a later cancellation (status-guarded UPDATE), and that no PENDING timer belonging to a CANCELLED/COMPLETED instance can be fired by a later poll (both finalize_instance_projection/5's :completed clause and run_cancel_instance/5 cancel all PENDING timers inside the same transaction as the terminal status flip)."
+    ],
+    "note": "Implementation is complete and pushed to feature/WF02-REQ187-20260829 (commit 04bb846). mix compile --warnings-as-errors passes clean, mix format --check-formatted passes clean, and the full test suite passes (three failures observed are pre-existing/environment-specific and unrelated to this change: a Wasm NIF resolution test and two rustc-toolchain-pin tests that fail identically on the pre-REQ-187 baseline in this sandbox -- confirmed via git stash). transition.ex's purity was verified via the moduledoc's own documented grep command: zero Letflow.Repo/Logger/DateTime/etc. calls in transition.ex's actual code (the only grep matches are inside the moduledoc's own prose quoting that grep command). No route/controller file was added or modified (git diff --stat confirms only lib/letflow/{definitions/graph.ex,engine.ex,engine/{transition,task_activation,reconstruction}.ex,scheduler.ex} plus 4 pre-existing test files whose fixtures/assertions depended on behavior this requirement intentionally changed). See req187-elixir-dev-implementation-notes.md (this handoff's sibling file, not step-prefixed per the H6 handoff-lint rule) for the full file-by-file summary and rationale for each pre-existing-test update."
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER: review this REQ-187 implementation against docs/agents/instructions/security-invariants.md (INV-1..INV-8), focused on the tenant-data paths named in context.security_review_focus above. This is a hard gate before REVIEWER (Step 2d) and TEST-DESIGNER (Step 3) can proceed -- do not let this be skipped or self-approved by ELIXIR-DEV.",
+    "acceptance_criteria": [
+      "Every new/changed query in TaskActivation.cancel_pending_timers/5 and Letflow.Engine.advance_after_timer_fired/3's own call graph is confirmed tenant-scoped (correct prefix, no cross-tenant read/write possible).",
+      "The nested-transaction (SAVEPOINT) mechanism in advance_after_timer_fired/3 is confirmed to preserve atomicity with Scheduler.fire_timer/2's outer transaction -- no partial-commit possibility.",
+      "The run_cancel_instance/5 lock-ordering fix is confirmed to actually close the AB-BA deadlock hazard against Scheduler.fire_timer/2, with no new hazard introduced.",
+      "The prepare_timer_arms/4 multiple-timers-per-hop-chain guard is confirmed to prevent the Ecto.Multi step-name collision it targets.",
+      "Verdict recorded (PASS or FAIL with named issues) and this handoff's `result` field populated -- do not leave status as PENDING when done; do not set status to DONE either, per the recurring handoff-lint bug in docs/anti-patterns.md -- follow this repo's actual handoff status vocabulary."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "reviewer": "SECURITY-REVIEWER",
+    "report": "handoffs/WF02-REQ187-20260829/req187-security-review-report.md",
+    "invariants": {
+      "INV-1": "APPLIES -- PASS (cancel_pending_timers/5's update_all and advance_after_timer_fired/3's full call graph all thread repo/prefix through correctly; tenant_id derived from resolved prefix via TenantProvisioning, never caller-supplied)",
+      "INV-2": "NOT-APPLICABLE (S4 not started)",
+      "INV-3": "NOT-APPLICABLE (S5 not started)",
+      "INV-4": "NOT-APPLICABLE (no secret-resolving code touched)",
+      "INV-5": "NOT-APPLICABLE (S4 not started)",
+      "INV-6": "APPLIES -- PASS (this review is the proof)",
+      "INV-7": "APPLIES -- PASS (grep for Repo.query shows no hit in touched files)",
+      "INV-8": "APPLIES -- PASS (no unsafe bare match introduced; all new I/O boundaries use typed with-chains)"
+    },
+    "focused_checks": {
+      "nested_transaction_savepoint": "PASS -- confirmed real Postgres SAVEPOINT nesting; inner Multi failure propagates as {:error, reason} through do_fire/2's with/else to fire_timer/2's outer case, which calls Repo.rollback/1, undoing the whole outer attempt too. No partial-commit path.",
+      "lock_ordering_fix": "PASS -- :timer_cancellations confirmed positioned between :open_tasks and :instance_projection, before :eligibility, in run_cancel_instance/5. Matches Scheduler.fire_timer/2's timers-then-instance_projections lock order.",
+      "status_guarded_cancellation_update": "PASS -- update_all scoped WHERE instance_id = ^instance_id AND status = 'pending'; a fired row fails the predicate and is never touched.",
+      "multi_timer_guard": "PASS -- prepare_timer_arms/4 returns a typed error for >1 timer_armed pending_event in one hop-chain, routed through `with` at all three call sites, never reaching the Multi step-name collision.",
+      "data_leakage": "PASS -- no route/controller/serialization path added; TIMER_FIRED event payload is server-internal, unchanged shape from REQ-186."
+    },
+    "verdict": "PASS -- no BLOCKER found. Forwarding to REVIEWER (Step 2d)."
+  }
+}

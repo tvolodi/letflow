@@ -187,28 +187,34 @@ defmodule Letflow.Engine.TaskActivationTest do
   end
 
   # ---------------------------------------------------------------------------------
-  # Test spec case 6 -- cancel_pending_timers/2 (AC5, SCH-03 hook)
+  # cancel_pending_timers/5 -- REQ-187's real implementation, replacing the
+  # former cancel_pending_timers/2 no-op this describe block used to cover.
+  # This module's own DB-touching functions (append_multi/6,
+  # append_multi_from_existing_records/6) already have their real behavior
+  # proven end to end through Letflow.Engine.create/2 / complete_task/3's
+  # own Ecto.Multi in test/letflow/engine_test.exs, not in this pure/async
+  # file (see moduledoc above) -- cancel_pending_timers/5's own real
+  # status-guarded UPDATE, SCH-03 concurrency edge cases, and both call
+  # sites (finalize_instance_projection/5, run_cancel_instance/5) get the
+  # same DB-level integration coverage there.
   # ---------------------------------------------------------------------------------
 
-  describe "cancel_pending_timers/2" do
-    test "returns :ok unconditionally -- no scheduler exists yet (S6)" do
-      assert TaskActivation.cancel_pending_timers("inst-1", "tenant_schema") == :ok
-    end
-
-    test "its own @doc names the SCH-03 hook and identifies S6 as the owning stage" do
+  describe "cancel_pending_timers/5" do
+    test "its own @doc names the SCH-03 status-guarded UPDATE and both known call sites" do
       {:docs_v1, _anno, _lang, _format, _module_doc, _meta, docs} =
         Code.fetch_docs(TaskActivation)
 
       {_key, _anno, _sig, %{"en" => doc}, _meta} =
         Enum.find(docs, fn
-          {{:function, :cancel_pending_timers, 2}, _anno, _sig, _doc, _meta} -> true
+          {{:function, :cancel_pending_timers, 5}, _anno, _sig, _doc, _meta} -> true
           _other -> false
         end)
 
       normalized = String.replace(doc, ~r/\s+/, " ")
 
       assert normalized =~ "SCH-03"
-      assert normalized =~ "owned by Stage S6"
+      assert normalized =~ "instance_completed"
+      assert normalized =~ "instance_cancelled"
     end
   end
 

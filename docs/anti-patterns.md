@@ -1794,3 +1794,22 @@ like `<reqid>-design-validation-report.md` instead. If a test failure looks like
 "fixed" by deleting a file that isn't yours to delete (an artifact another step produced), that is
 always a sign to diagnose the actual rule being violated, not a shortcut to take -- rename or
 otherwise correct the artifact, never delete it to silence the check.
+
+## A test helper's default argument goes dead the moment every call site starts passing it explicitly
+
+**What happened (2nd occurrence, REQ-178 then REQ-187).** `defp fn_name(a, b, c \\ default)` only
+compiles warning-free under `--warnings-as-errors` if at least one call site actually omits `c`
+and relies on the default. TEST-DESIGNER wrote a private test helper with a default argument
+(`provisioned_tenant/1`'s `slug_prefix \\ "..."` on REQ-178; `arm_timer!/3`'s `overrides \\ %{}`
+on REQ-187), then every single call site in the same file supplied that argument explicitly
+anyway -- as tests accumulated across a large file, "just pass it every time for clarity" wins
+out, and nothing runs the zero-arg clause. The compiler's "default values ... are never used"
+warning failed CI both times, though the full local suite (which does not force
+`--warnings-as-errors` on every path the same way) passed cleanly first, so it was caught only
+when the PR's CI ran `mix letflow.check`.
+
+**Mitigation.** Before shipping a test helper with a default argument, grep the same file for its
+call sites and confirm at least one really omits that argument; if none do, drop the default
+entirely (`defp fn_name(a, b, c)`) -- the argument becomes required, matching how it is actually
+used, and the warning disappears. This is cheap to check and cheaper than waiting for CI to catch
+it a second time.

@@ -225,7 +225,17 @@ defmodule Letflow.Scheduler do
            |> Timer.fire_changeset(%{status: "fired", fired_at: now})
            |> Repo.update(prefix: tenant_schema),
          {:ok, _append_result} <-
-           append_timer_fired_event(timer, now, fired_late, tenant_schema) do
+           append_timer_fired_event(timer, now, fired_late, tenant_schema),
+         # REQ-187 design doc §7.1 -- the poller's fire path re-entering the
+         # engine to advance the token off the :TIMER node, still inside
+         # this same Repo.transaction/1 fire_timer/2 already opened (Ecto
+         # nests advance_after_timer_fired/3's own internal Multi as a real
+         # Postgres SAVEPOINT here). `Repo` is Letflow.Repo itself -- the
+         # literal repo module, not an Ecto.Multi-injected one, since this
+         # call is an ordinary sequential call inside an already-open
+         # transaction function, not a Multi.run/3 callback.
+         {:ok, :advanced} <-
+           Letflow.Engine.advance_after_timer_fired(timer, Repo, tenant_schema) do
       {:ok, :fired}
     else
       {:error, reason} -> {:error, reason}
@@ -278,6 +288,14 @@ defmodule Letflow.Scheduler do
     case result do
       {:ok, :fired} -> :fired
       {:ok, :already_final} -> :already_final
+      # REQ-187 design doc §7.2 -- a real SCH-03 race (the instance became
+      # terminal via a concurrent cancel_instance/3/completion between this
+      # timer's own claim and advance_after_timer_fired/3's own
+      # instance_projections lock+check) is not a firing failure -- matched
+      # BEFORE the generic {:error, _reason} catch-all below so it never
+      # wrongly increments fire_error_count / eventually lands the timer in
+      # dlq_entries.
+      {:error, {:instance_not_active, _status}} -> :already_final
       {:error, _reason} -> safe_record_fire_failure(timer_id, tenant_schema)
     end
   end

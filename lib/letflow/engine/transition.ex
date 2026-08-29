@@ -35,6 +35,12 @@ defmodule Letflow.Engine.Transition do
   or equivalent). No `File.*`/`HTTPoison`/`Req.*`/`:httpc`/process-mailbox call
   (`GenServer.call`, `send`, `receive`) anywhere in `transition/3`'s call
   graph, including every private `dispatch_*` function it calls into.
+  REQ-187 extends `pending_event()` with a fourth variant,
+  `{:timer_armed, token_id, node_id}` — SCH-01's timer-arming description
+  travels through this same shape, exactly like `{:sub_process_start, ...}`
+  before it; `dispatch_timer_arrival/3` reads only its own already-supplied
+  `token`/`node.id` arguments and never resolves `node.attributes["duration_iso8601"]`
+  or reads a clock, so this extension adds no new `Repo`/clock call.
 
   Verification (grep/`mix xref`-checkable, matching the precedent
   `Letflow.Definitions.Graph`'s own design already established):
@@ -89,8 +95,13 @@ defmodule Letflow.Engine.Transition do
   (`dispatch_human_task/3`'s own contract), so `{:advance_token, token_id}`
   cannot move it off that node; this constructor is the caller's explicit
   "this token's human task just completed, evaluate its outgoing edges"
-  signal. Deliberately not a closed enumeration beyond these three — every
-  later EE-* requirement that needs its own event shape adds its own
+  signal. `{:timer_fired, token_id}` is REQ-187's own addition
+  (`lib/letflow/design/req187-timer-engine-wiring.md` §1.2) — mirrors
+  `{:complete_task, token_id}` exactly: a token parked on a `:TIMER` node
+  (no automatic outgoing traversal either) is moved off it only by this
+  caller's explicit "this token's timer just fired, evaluate its outgoing
+  edge" signal. Deliberately not a closed enumeration beyond these four —
+  every later EE-* requirement that needs its own event shape adds its own
   tagged-tuple constructor to this same union (design doc §4, §12.5).
   """
   @type transition_event ::
@@ -98,16 +109,25 @@ defmodule Letflow.Engine.Transition do
           | {:cancel_branch, branch_id :: String.t()}
           | {:complete_task, token_id :: String.t()}
           | {:sub_process_completed, token_id :: String.t()}
+          | {:timer_fired, token_id :: String.t()}
 
   @typedoc """
   The tagged union `transition.zig` declares for EE-06/EE-07 split/join
   payloads — narrowed here (design doc §5) from REQ-044's `term()`
-  placeholder to a real closed union of the 3 pending-event shapes this
-  requirement's dispatch clauses construct: `{:parallel_split, ...}` (design
+  placeholder to a real closed union of the pending-event shapes various
+  requirements' dispatch clauses construct: `{:parallel_split, ...}` (design
   doc §5.1), `{:parallel_join_fired, ...}` (§5.2), and
-  `{:parallel_join_cancelled, ...}` (§5.3). No other dispatch clause in this
-  module (`:START`/`:END`/`:HUMAN_TASK`/the catch-all) ever constructs any of
-  these 3 variants.
+  `{:parallel_join_cancelled, ...}` (§5.3). `{:sub_process_start, token_id,
+  node_id}` is req062's own addition — `dispatch_sub_process_entry/4` leaves
+  the token in place and returns this instead of writing anything itself,
+  the impure caller turning it into real child-instance rows.
+  `{:timer_armed, token_id, node_id}` is REQ-187's own addition
+  (`lib/letflow/design/req187-timer-engine-wiring.md` §1.1) — the same
+  pattern's fourth variant: `dispatch_timer_arrival/3` leaves the token in
+  place and returns this instead of resolving `duration_iso8601`/reading a
+  clock itself; the impure caller re-resolves `node_id` against its own
+  `Graph.t()` to compute `fire_at` and calls `Letflow.Scheduler.create/2`.
+  It deliberately carries no duration and no timestamp.
   """
   @type pending_event ::
           {:parallel_split, origin_token_id :: String.t(), gateway_node_id :: String.t(),
@@ -116,6 +136,7 @@ defmodule Letflow.Engine.Transition do
              new_token_id :: String.t(), merge_events :: [VariableMerge.merge_event()]}
           | {:parallel_join_cancelled, join_node_id :: String.t(), origin_token_id :: String.t()}
           | {:sub_process_start, token_id :: String.t(), node_id :: String.t()}
+          | {:timer_armed, token_id :: String.t(), node_id :: String.t()}
 
   @typedoc """
   Every failure `transition/3` can return. `:unknown_event_type` and
@@ -132,6 +153,9 @@ defmodule Letflow.Engine.Transition do
   (design doc §7). `:token_not_at_human_task` is REQ-048's own defensive
   addition — `{:complete_task, token_id}` dispatched against a token not
   currently sitting on a `:HUMAN_TASK` node (req048 design doc §5 point 1).
+  `{:token_not_at_timer, node_type, node_id}` is REQ-187's own defensive
+  addition, the same role for `{:timer_fired, token_id}` dispatched against
+  a token not currently sitting on a `:TIMER` node (design doc §1.3).
   """
   @type transition_error ::
           {:unknown_event_type, event :: term()}
@@ -146,6 +170,7 @@ defmodule Letflow.Engine.Transition do
           | {:combined_split_join_not_supported, node_id :: String.t()}
           | {:token_not_at_human_task, node_type :: atom(), node_id :: String.t()}
           | {:token_not_waiting_on_child, node_type :: atom(), node_id :: String.t()}
+          | {:token_not_at_timer, node_type :: atom(), node_id :: String.t()}
 
   @typedoc """
   One entry per non-default outgoing edge of an `:EXCLUSIVE_GATEWAY` whose
@@ -222,6 +247,21 @@ defmodule Letflow.Engine.Transition do
             end
         end
 
+      {:timer_fired, token_id} ->
+        case find_token(instance_state.tokens, token_id) do
+          nil ->
+            {:error, {:unknown_token_id, token_id}}
+
+          token ->
+            case find_node(definition_snapshot.nodes, token.node_id) do
+              nil ->
+                {:error, {:unknown_node_id, token.node_id}}
+
+              node ->
+                dispatch_timer_fired(definition_snapshot, instance_state, token, node)
+            end
+        end
+
       other ->
         {:error, {:unknown_event_type, other}}
     end
@@ -280,7 +320,11 @@ defmodule Letflow.Engine.Transition do
     dispatch_sub_process_entry(definition_snapshot, instance_state, token, node)
   end
 
-  # Catch-all: :SERVICE_TASK, :TIMER (the 2 remaining variants of
+  defp dispatch_node(_definition_snapshot, instance_state, token, %Node{node_type: :TIMER} = node) do
+    dispatch_timer_arrival(instance_state, token, node)
+  end
+
+  # Catch-all: :SERVICE_TASK (the 1 remaining variant of
   # Letflow.Definitions.Graph.node_type()'s 8-variant union not part of this
   # module's own dispatch), and any node whose node_type is not one of the 8
   # known atoms at all. Necessary for transition/3 to be total over every
@@ -519,6 +563,54 @@ defmodule Letflow.Engine.Transition do
         outgoing_edges
       )
     end
+  end
+
+  # --- :TIMER (REQ-187 design doc §1.4) ---------------------------------------
+
+  # Entry: a token landing on a :TIMER node. The token's position is not
+  # changed -- a :TIMER node has no automatic outgoing traversal, exactly
+  # like :HUMAN_TASK. Zero I/O, zero clock read here -- this module's own
+  # "Purity" moduledoc section; resolving node.attributes["duration_iso8601"]
+  # into a fire_at timestamp is entirely the impure caller's job
+  # (Letflow.Engine's prepare_timer_arms/4), triggered by the
+  # {:timer_armed, ...} pending_event() this clause emits. Unlike
+  # dispatch_human_task/3, does not touch pending_task_nodes -- that list is
+  # :HUMAN_TASK-specific bookkeeping for TaskActivation's own tasks-row
+  # materialization; a :TIMER node needs no tasks row.
+  @spec dispatch_timer_arrival(InstanceState.t(), Token.t(), Node.t()) ::
+          {:ok, InstanceState.t(), [pending_event()]}
+  defp dispatch_timer_arrival(%InstanceState{} = instance_state, %Token{} = token, %Node{} = node) do
+    {:ok, instance_state, [{:timer_armed, token.token_id, node.id}]}
+  end
+
+  # {:timer_fired, token_id} (design doc §1.4) -- the caller's explicit
+  # "this token's timer just fired, evaluate its outgoing edge" signal,
+  # mirroring dispatch_task_completion/4's own shape and contract exactly.
+  @spec dispatch_timer_fired(Graph.t(), InstanceState.t(), Token.t(), Node.t()) ::
+          {:ok, InstanceState.t(), [pending_event()]}
+          | {:error, {:token_not_at_timer, node_type :: atom(), node_id :: String.t()}}
+          | {:error,
+             {:no_matching_edge, node_id :: String.t(),
+              evaluated_conditions :: [evaluated_condition()]}}
+  defp dispatch_timer_fired(
+         definition_snapshot,
+         %InstanceState{} = instance_state,
+         %Token{} = token,
+         %Node{node_type: :TIMER} = node
+       ) do
+    outgoing_edges = Enum.filter(definition_snapshot.edges, &(&1.source == node.id))
+    advance_off_completed_node(definition_snapshot, instance_state, token, outgoing_edges)
+  end
+
+  # Defensive guard, mirroring dispatch_task_completion/4's own second
+  # clause -- should be unreachable given Letflow.Engine's own reconstruction
+  # invariant, kept for this codebase's "never raise" totality discipline
+  # (design doc §1.4).
+  defp dispatch_timer_fired(_definition_snapshot, _instance_state, _token, %Node{
+         node_type: node_type,
+         id: node_id
+       }) do
+    {:error, {:token_not_at_timer, node_type, node_id}}
   end
 
   # --- :EXCLUSIVE_GATEWAY (REQ-050 design doc §5, EE-05) ----------------------

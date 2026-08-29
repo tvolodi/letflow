@@ -1,0 +1,22 @@
+{
+  "handoff_id": "WF02-REQ176-20260829-step02c",
+  "run_id": "WF02-REQ176-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/dlq.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 351, GH#696, stage S6. This is a new tenant-scoped Ecto schema/migration and context module -- a hard gate per this project's default (any tenant-data-path change), even though REQ-176's own text doesn't explicitly call out SECURITY-REVIEWER (unlike the WASM requirements). Implementation committed as b5a028d (rebased onto main at e72b5c4) on feature/WF02-REQ176-20260829, per the approved design lib/letflow/design/req176-dlq-core.md (commit 1959adf, approved after 1 rework round fixing a fabricated precedent citation). New files: priv/repo/migrations/20260829000001_create_dlq_entries.exs, lib/letflow/dlq/entry.ex, lib/letflow/dlq.ex. Modified: lib/letflow/tenant_provisioning.ex (registered the new migration in @tenant_scoped_migration_manifest), test/support/tenant_fixture.ex + its own test (added dlq_entries to the oracle table list). Full suite verified: 2453/2456 passed, 3 pre-existing/environmental failures (2 rust-toolchain-absent, plus the T-LIVE-ACTIVITY S6-inactive literal which ORCH has since fixed directly on main, commit e72b5c4, and is now included via rebase)."},
+  "task": {
+    "description": "Review this diff against docs/agents/instructions/security-invariants.md INV-1..INV-8. Specifically: (1) confirm dlq_entries is genuinely created inside the tenant schema (the migration's if prefix() do guard), matching decision 0003 Decision B, and that tenant_id is retained as a column but is NOT the isolation boundary (schema-per-tenant is); (2) confirm every query in Letflow.Dlq.list/2, get/2, retry/2, discard/2 is scoped by the caller's Ecto :prefix option -- no cross-tenant read/write path exists; (3) closely examine how tenant_id is derived for enqueue/2 -- the implementation report claims it derives tenant_id from opts[:prefix] via TenantProvisioning.tenant_id_for_schema_name/1, 'never accepted' from a caller-supplied value directly -- verify this is actually true by reading the code, since a caller-supplied tenant_id would be a direct cross-tenant injection vector; (4) examine the NEW UUID-to-text-cast-for-ILIKE fragment introduced for the search filter -- confirm it uses proper Ecto query composition (fragment/2 with bound parameters) and does not concatenate any user-supplied search string into SQL directly (INV-7); (5) confirm retry/2 and discard/2's row-lock-then-check idiom (Ecto.Multi) cannot be raced into a double-transition or a lost-update by two concurrent callers; (6) confirm no unhandled crash path exists for a realistic failure (e.g. get/2 on a nonexistent id, retry/2 on an already-terminal entry) -- these should return structured errors, not raise.",
+    "acceptance_criteria": [
+      "the dlq_entries table lives inside each tenant's Postgres schema with a tenant_id column retained, matching decision 0003 Decision B's pattern -- verified by inspecting the migration",
+      "enqueue/1 creates an entry with status \"pending\", retry_count 0, and a created_at timestamp; list/2 is tenant-scoped, demonstrated by an entry enqueued under tenant A being absent from a list/2 call scoped to tenant B",
+      "retry/2 on a \"pending\" or \"retrying\" entry transitions it to \"retrying\", appends a retry_history entry with attempt_no/attempted_at/outcome/error_message field names matching DlqRetryAttempt exactly, and increments retry_count; retry/2 on a \"resolved\" or \"discarded\" entry returns a conflict error and leaves status, retry_count and retry_history unchanged -- four tests, one per starting status",
+      "discard/2 on a \"pending\" or \"retrying\" entry transitions it to \"discarded\"; discard/2 on an already \"resolved\" or \"discarded\" entry returns a conflict error rather than silently succeeding"
+    ]
+  },
+  "result": null
+}

@@ -1708,3 +1708,27 @@ durations), choose values that simultaneously prove multiple properties in one f
 rather than one call per property. This does not eliminate the underlying shared-pool-exhaustion
 risk (see ISS-0352 for the still-open, deeper fix), but keeps the CI-observable footprint small
 enough that a single feature branch's own tests don't tip a busy runner into cascading failure.
+
+## An off-pin Elixir toolchain can produce outright compile failures, not just formatting/warning drift
+
+**What happened.** TEST-DESIGN-VALIDATOR, verifying REQ-177 (WF02-REQ177-20260829), ran the full
+suite on an Elixir 1.18.3/OTP 27 container (off the project's `.tool-versions` pin of
+1.20.3/OTP 29) as its first attempt. That run produced widespread `SystemLimitError` compile
+failures -- a test-name-length validation -- across many files unrelated to REQ-177's own diff
+(`host_api_write_test.exs`, `onboarding_test.exs`, `platform_events_test.exs`, `host_api_test.exs`,
+`resource_limits_test.exs`, `routers/tasks_test.exs`, and likely more). Re-running the identical
+suite on the correctly-pinned 1.20.3/OTP 29 image produced none of these failures at all --
+confirming the off-pin toolchain, not the code, was the cause.
+
+**Why this matters.** The project's existing toolchain guidance (this file's other entries, the
+README) frames a wrong Elixir/OTP version as a source of formatting or warning drift -- annoying
+but locally diagnosable. This incident shows an off-pin toolchain can instead produce outright,
+widespread compile failures in files a given branch never touched, which looks exactly like a
+real regression until someone checks the toolchain version. A validator or reviewer without
+ready access to the pinned version could easily misattribute this to the branch under review.
+
+**Mitigation.** Before treating a batch of unrelated compile failures as a real regression,
+check `.tool-versions` (or run `mix letflow.check_toolchain`) and confirm the actual Elixir/OTP
+version in use matches the pin -- especially in a throwaway/containerized verification
+environment that doesn't inherit the repo's own asdf-managed toolchain automatically. Re-run on
+the correctly pinned version before concluding anything about the code itself.

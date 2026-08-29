@@ -509,25 +509,26 @@ defmodule Letflow.Engine.TransitionTest do
   end
 
   # ---------------------------------------------------------------------
-  # Beyond REQ-044's 6 bare acceptance criteria -- the catch-all for the 2
-  # remaining node_type() variants outside the 6-way dispatch (REQ-062 gave
-  # :SUB_PROCESS its own real dispatch clause -- design doc §2.3/§2.4 --
-  # narrowing the catch-all from 3 types down to 2; see the
-  # "-- :SUB_PROCESS entry/completion (REQ-062)" describe blocks below for
-  # :SUB_PROCESS's own real coverage, and test/letflow/engine/sub_process_test.exs
-  # for the fuller REQ-062 dispatch/regression suite), plus a bogus atom. Not
-  # separately named by an AC (only the 5-way dispatch is), but necessary for
-  # transition/3's own "never raises" totality bar (design doc §6.6) and
-  # cheap to lock in as a regression test, matching the
-  # test/letflow/definitions/graph_test.exs precedent of testing beyond the
-  # bare AC list where the design doc flags a real, deliberate behavior.
+  # Beyond REQ-044's 6 bare acceptance criteria -- the catch-all for the 1
+  # remaining node_type() variant outside the 7-way dispatch (REQ-062 gave
+  # :SUB_PROCESS its own real dispatch clause -- design doc §2.3/§2.4 -- and
+  # REQ-187 gave :TIMER its own real dispatch clause -- design doc §1.4 --
+  # narrowing the catch-all down to 1; see the "-- :SUB_PROCESS
+  # entry/completion (REQ-062)" describe blocks below and
+  # test/letflow/engine/sub_process_test.exs for :SUB_PROCESS's own
+  # coverage, and the "-- :TIMER" describe block below for :TIMER's own
+  # coverage), plus a bogus atom. Not separately named by an AC (only the
+  # 5-way dispatch is), but necessary for transition/3's own "never raises"
+  # totality bar (design doc §6.6) and cheap to lock in as a regression
+  # test, matching the test/letflow/definitions/graph_test.exs precedent of
+  # testing beyond the bare AC list where the design doc flags a real,
+  # deliberate behavior.
   # ---------------------------------------------------------------------
 
-  describe "transition/3 -- catch-all for node types outside the 6-way dispatch (design doc §6.6, beyond the bare AC list)" do
-    test "SERVICE_TASK, TIMER, and an unrecognized node_type atom all return a named error, never raise" do
+  describe "transition/3 -- catch-all for node types outside the 7-way dispatch (design doc §6.6, beyond the bare AC list)" do
+    test "SERVICE_TASK and an unrecognized node_type atom both return a named error, never raise" do
       for {node_type, node_id} <- [
             {:SERVICE_TASK, "svc"},
-            {:TIMER, "tmr"},
             {:NOT_A_REAL_TYPE, "bogus"}
           ] do
         g = graph([node(node_id, node_type)], [])
@@ -536,6 +537,46 @@ defmodule Letflow.Engine.TransitionTest do
         assert Transition.transition(g, state, {:advance_token, "t1"}) ==
                  {:error, {:node_type_not_yet_implemented, node_type, node_id}}
       end
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-187 -- :TIMER is no longer part of the catch-all above; it has its
+  # own real dispatch clauses (design doc §1.4). Full coverage lives in
+  # ELIXIR-DEV's own REQ-187 implementation/test suite -- this one test
+  # here exists only to lock in, at this file's own "beyond the bare AC
+  # list" catch-all boundary, that :TIMER genuinely left the catch-all (a
+  # regression here would otherwise only be caught in a different file).
+  # ---------------------------------------------------------------------
+
+  describe "transition/3 -- :TIMER entry/fired (REQ-187, design doc §1.4)" do
+    test "a token freshly arriving at a TIMER node is NOT caught by the node_type_not_yet_implemented catch-all" do
+      g = graph([node("tmr", :TIMER)], [])
+      state = instance_state([token("tmr", "t1")])
+
+      assert {:ok, ^state, [{:timer_armed, "t1", "tmr"}]} =
+               Transition.transition(g, state, {:advance_token, "t1"})
+    end
+
+    test "{:timer_fired, token_id} advances the token off the TIMER node along its outgoing edge" do
+      g =
+        graph(
+          [node("tmr", :TIMER), node("nxt", :HUMAN_TASK)],
+          [edge("e1", "tmr", "nxt")]
+        )
+
+      state = instance_state([token("tmr", "t1")])
+
+      assert {:ok, new_state, []} = Transition.transition(g, state, {:timer_fired, "t1"})
+      assert [%{token_id: "t1", node_id: "nxt"}] = new_state.tokens
+    end
+
+    test "{:timer_fired, token_id} against a token not sitting on a TIMER node is a typed error, never a raise" do
+      g = graph([node("tmr", :TIMER)], [])
+      state = instance_state([token("tmr", "t1")])
+
+      assert Transition.transition(g, state, {:timer_fired, "unknown"}) ==
+               {:error, {:unknown_token_id, "unknown"}}
     end
   end
 

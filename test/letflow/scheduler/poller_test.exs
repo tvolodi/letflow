@@ -27,8 +27,11 @@ defmodule Letflow.Scheduler.PollerTest do
 
   use Letflow.DataCase, async: false
 
+  import Ecto.Query
+
   alias Letflow.Definitions
   alias Letflow.Engine
+  alias Letflow.Engine.TokenRecord
   alias Letflow.Scheduler
   alias Letflow.Scheduler.Poller
   alias Letflow.Scheduler.Timer
@@ -44,11 +47,23 @@ defmodule Letflow.Scheduler.PollerTest do
   defp unique_name(prefix),
     do: prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
 
+  # REQ-187: task's own node_type is TIMER (not HUMAN_TASK) -- firing a
+  # timer now re-enters Letflow.Engine to advance the token off the :TIMER
+  # node it's found sitting on via the timer's own token_id, so a timer
+  # this file expects to actually *fire* successfully must be armed with
+  # `token_id: live_token_id!/2`, matching this graph's own real live
+  # token. `duration_iso8601` is far in the future (`P1D`) so
+  # start_instance!/1's own automatic REQ-187 timer-arm never becomes due
+  # during this test.
   defp graph_human_task_end do
     %{
       "nodes" => [
         %{"id" => "start", "node_type" => "START"},
-        %{"id" => "task", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "approver"}},
+        %{
+          "id" => "task",
+          "node_type" => "TIMER",
+          "attributes" => %{"duration_iso8601" => "P1D"}
+        },
         %{"id" => "end", "node_type" => "END"}
       ],
       "edges" => [
@@ -56,6 +71,14 @@ defmodule Letflow.Scheduler.PollerTest do
         %{"id" => "e2", "source" => "task", "target" => "end"}
       ]
     }
+  end
+
+  defp live_token_id!(schema_name, instance_id) do
+    TokenRecord
+    |> where([t], t.instance_id == ^instance_id and t.status == :active)
+    |> select([t], t.id)
+    |> Repo.one!(prefix: schema_name)
+    |> to_string()
   end
 
   defp start_instance!(schema_name) do
@@ -127,7 +150,8 @@ defmodule Letflow.Scheduler.PollerTest do
                    instance_id: instance_id,
                    timer_type: "deadline",
                    node_id: "poller-ac8",
-                   fire_at: fire_at
+                   fire_at: fire_at,
+                   token_id: live_token_id!(schema_name, instance_id)
                  },
                  prefix: schema_name
                )

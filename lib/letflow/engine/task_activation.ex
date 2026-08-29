@@ -43,6 +43,8 @@ defmodule Letflow.Engine.TaskActivation do
   and `Letflow.Definitions.SnapshotStore.create/3` already establish.
   """
 
+  import Ecto.Query
+
   alias Ecto.Multi
   alias Letflow.Definitions.Graph
   alias Letflow.Engine.InstanceState
@@ -328,13 +330,43 @@ defmodule Letflow.Engine.TaskActivation do
   defp find_node(nodes, node_id), do: Enum.find(nodes, &(&1.id == node_id))
 
   @doc """
-  This is the SCH-03 timer-cancellation hook (`src/scheduler/`, owned by
-  Stage S6 — not yet built in Letflow). An instance reaching `COMPLETED`
-  should cancel any outstanding TIMER-node waits associated with it; this
-  function is the single, named call site S6's own CODE-DESIGNER should wire
-  real cancellation logic into, without touching `Letflow.Engine`'s or
-  `Letflow.Engine.TaskActivation`'s other call sites.
+  REQ-187's SCH-03 timer-cancellation implementation (design doc §5.1) —
+  replaces the former `cancel_pending_timers/2` no-op. A single,
+  status-guarded `UPDATE ... WHERE status = 'pending'` statement, run on the
+  caller-supplied `repo`/`prefix` (never `Letflow.Repo` directly — every
+  write this module drives happens inside the caller's already-open
+  `Ecto.Multi`/transaction, matching this module's own "Zero `Repo` calls of
+  its own" moduledoc invariant literally: `repo` here is the caller's own
+  transaction-scoped repo).
+
+  Postgres re-evaluates the `WHERE` predicate against each row's current
+  committed state as it acquires that row's lock, so a row a concurrent
+  `Letflow.Scheduler.fire_timer/2` has already flipped to `"fired"` (and
+  committed) is simply not touched by this statement — no separate
+  `SELECT ... FOR UPDATE` pass, no extra lock beyond the one `update_all/3`
+  itself takes (design doc §5.1, SCH-03).
+
+  Two known call sites, two `cancel_reason` values: `"instance_completed"`
+  (from `Letflow.Engine`'s `finalize_instance_projection/5`) and
+  `"instance_cancelled"` (from `Letflow.Engine.cancel_instance/3`'s own
+  `run_cancel_instance/5`).
   """
-  @spec cancel_pending_timers(instance_id :: Ecto.UUID.t(), prefix :: String.t()) :: :ok
-  def cancel_pending_timers(_instance_id, _prefix), do: :ok
+  @spec cancel_pending_timers(
+          repo :: Ecto.Repo.t(),
+          instance_id :: Ecto.UUID.t(),
+          cancelled_at :: DateTime.t(),
+          cancel_reason :: String.t(),
+          prefix :: String.t()
+        ) :: {:ok, non_neg_integer()}
+  def cancel_pending_timers(repo, instance_id, cancelled_at, cancel_reason, prefix) do
+    {count, _updated} =
+      Letflow.Scheduler.Timer
+      |> where([t], t.instance_id == ^instance_id and t.status == "pending")
+      |> repo.update_all(
+        [set: [status: "cancelled", cancelled_at: cancelled_at, cancel_reason: cancel_reason]],
+        prefix: prefix
+      )
+
+    {:ok, count}
+  end
 end

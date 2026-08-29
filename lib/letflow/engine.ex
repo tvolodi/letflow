@@ -360,6 +360,8 @@ defmodule Letflow.Engine do
   alias Letflow.EventStore
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Repo
+  alias Letflow.Scheduler
+  alias Letflow.Scheduler.Timer
   alias Letflow.TenantProvisioning
 
   @type create_attrs :: %{
@@ -508,6 +510,10 @@ defmodule Letflow.Engine do
   # building the same graph twice).
   defp start_instance(definition, initial_variables, correlation_key, attrs, prefix) do
     instance_id = Ecto.UUID.generate()
+    # REQ-187 design doc §3.1 -- "the arrival timestamp" (AC1) is one fixed
+    # instant per hop-chain, read once here, before prepare_timer_arms/4
+    # runs -- not a fresh clock read per timer.
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
     with {:ok, graph} <- build_graph(definition.graph),
          {:ok, own_pins, variable_json_schema} <-
@@ -530,7 +536,9 @@ defmodule Letflow.Engine do
              graph,
              pending_events,
              prefix
-           ) do
+           ),
+         {:ok, prepared_timers} <-
+           prepare_timer_arms(pending_events, graph, instance_id, now) do
       persist(
         instance_id,
         definition,
@@ -539,6 +547,7 @@ defmodule Letflow.Engine do
         graph,
         new_instance_state,
         prepared_children,
+        prepared_timers,
         pins,
         conflicts,
         attrs,
@@ -592,6 +601,104 @@ defmodule Letflow.Engine do
       {:ok, acc} -> {:ok, Enum.reverse(acc)}
       {:error, reason} -> {:error, reason}
     end
+  end
+
+  # REQ-187 design doc §3.1 -- resolves every {:timer_armed, token_id,
+  # node_id} pending_event() surfaced by this hop-chain (matching
+  # prepare_sub_process_children/5's own Enum.filter precedent exactly)
+  # into arm_attrs ready for Letflow.Scheduler.create/2, shared unchanged by
+  # both start_instance/5's and complete_task/3's own call sites, and by
+  # advance_after_timer_fired/3 (§8.4) for a :TIMER->:TIMER outgoing edge.
+  # `token_id` is deliberately left out of arm_attrs -- filled in once the
+  # real TokenRecord id is known (build_timer_arms_multi/4, below).
+  @spec prepare_timer_arms(
+          [Transition.pending_event()],
+          Graph.t(),
+          instance_id :: Ecto.UUID.t(),
+          now :: DateTime.t()
+        ) ::
+          {:ok, [{token_id :: String.t(), arm_attrs :: map()}]}
+          | {:error, {:graph_structure_invalid, {:unknown_node_id, String.t()}}}
+          | {:error, {:invalid_timer_duration, node_id :: String.t(), value :: term()}}
+          | {:error, {:multiple_timers_in_one_hop_chain_not_supported, node_ids :: [String.t()]}}
+  defp prepare_timer_arms(pending_events, graph, instance_id, now) do
+    timer_arms = Enum.filter(pending_events, &match?({:timer_armed, _token_id, _node_id}, &1))
+
+    # CODE-DESIGN-VALIDATOR's own resolution of design doc §13 OQ-3
+    # (handoff task description item "REQUIRED ADDITION"): Letflow.Scheduler.create/2's
+    # Multi branch hardcodes the literal step name :scheduler_timer
+    # (scheduler.ex:94) -- arming more than one :TIMER node in the same
+    # hop-chain (reachable today via :PARALLEL_GATEWAY, transition.ex's own
+    # real dispatch clause) would collide inside one Ecto.Multi and RAISE a
+    # bare RuntimeError, which this codebase's totality discipline does not
+    # tolerate. Turned into a graceful, typed failure here instead of
+    # widening Scheduler.create/2's Multi API to accept a caller-supplied
+    # step name (explicitly out of scope for this requirement).
+    if length(timer_arms) > 1 do
+      node_ids = Enum.map(timer_arms, fn {:timer_armed, _token_id, node_id} -> node_id end)
+      {:error, {:multiple_timers_in_one_hop_chain_not_supported, node_ids}}
+    else
+      timer_arms
+      |> Enum.reduce_while({:ok, []}, fn {:timer_armed, token_id, node_id}, {:ok, acc} ->
+        case Enum.find(graph.nodes, &(&1.id == node_id)) do
+          nil ->
+            {:halt, {:error, {:graph_structure_invalid, {:unknown_node_id, node_id}}}}
+
+          node ->
+            case resolve_timer_arm_attrs(node, node_id, instance_id, now) do
+              {:ok, arm_attrs} -> {:cont, {:ok, [{token_id, arm_attrs} | acc]}}
+              {:error, reason} -> {:halt, {:error, reason}}
+            end
+        end
+      end)
+      |> case do
+        {:ok, acc} -> {:ok, Enum.reverse(acc)}
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
+
+  # `:invalid_timer_duration` is defensive-only -- CHK-12 already rejects an
+  # invalid duration_iso8601 at definition-approval time, so a :TIMER node
+  # reaching here with one should be unreachable (design doc §3.1).
+  defp resolve_timer_arm_attrs(%Graph.Node{attributes: attributes}, node_id, instance_id, now) do
+    case Map.get(attributes || %{}, "duration_iso8601") do
+      value when is_binary(value) ->
+        case Graph.parse_iso8601_duration(value) do
+          {:ok, seconds} ->
+            {:ok,
+             %{
+               instance_id: instance_id,
+               timer_type: "deadline",
+               node_id: node_id,
+               fire_at: DateTime.add(now, seconds, :second)
+             }}
+
+          :error ->
+            {:error, {:invalid_timer_duration, node_id, value}}
+        end
+
+      other ->
+        {:error, {:invalid_timer_duration, node_id, other}}
+    end
+  end
+
+  # REQ-187 design doc §3.2 -- wires prepare_timer_arms/4's own output into
+  # the caller's already-open Multi, reusing Letflow.Scheduler.create/2's
+  # own documented Multi.t()-accepting branch (one Multi.insert/4 step per
+  # timer, named :scheduler_timer -- prepare_timer_arms/4's own defensive
+  # guard above ensures this is called with at most one entry per Multi).
+  @spec build_timer_arms_multi(
+          Multi.t(),
+          [{token_id :: String.t(), arm_attrs :: map()}],
+          id_map :: %{String.t() => String.t()},
+          prefix :: String.t()
+        ) :: Multi.t()
+  defp build_timer_arms_multi(multi, prepared_timers, id_map, prefix) do
+    Enum.reduce(prepared_timers, multi, fn {token_id, arm_attrs}, acc_multi ->
+      token_record_id = Map.fetch!(id_map, token_id)
+      Scheduler.create(acc_multi, Map.put(arm_attrs, :token_id, token_record_id), prefix: prefix)
+    end)
   end
 
   # design doc §8 -- attrs[:pin_lookup] surface: a caller-supplied
@@ -836,6 +943,7 @@ defmodule Letflow.Engine do
          graph,
          new_instance_state,
          prepared_children,
+         prepared_timers,
          pins,
          conflicts,
          attrs,
@@ -881,6 +989,18 @@ defmodule Letflow.Engine do
         attrs,
         prefix
       )
+    end)
+    |> Multi.merge(fn changes ->
+      # REQ-187 design doc §3.2 -- positioned immediately after :token_record
+      # (the step that resolves real TokenRecord ids) and before :event,
+      # matching exactly where build_sub_process_children_multi/5 sits.
+      id_map =
+        TaskActivation.token_id_to_record_id(
+          new_instance_state.tokens,
+          Map.fetch!(changes, :token_record)
+        )
+
+      build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
     end)
     |> TaskActivation.append_multi(
       instance_id,
@@ -1171,12 +1291,23 @@ defmodule Letflow.Engine do
     |> repo.update(prefix: prefix)
     |> case do
       {:ok, %InstanceProjection{} = updated} ->
-        # req047 design §8 -- the named SCH-03 timer-cancellation hook,
-        # called here (still inside this open transaction) immediately
-        # after the instance_projections row's status is confirmed flipped
-        # to :completed, so a future S6 implementation that performs a real
-        # DB write participates in this same atomic commit/rollback.
-        :ok = TaskActivation.cancel_pending_timers(instance_id, prefix)
+        # req047 design §8 / REQ-187 design doc §5.2 -- the SCH-03
+        # timer-cancellation hook, called here (still inside this open
+        # transaction) immediately after the instance_projections row's
+        # status is confirmed flipped to :completed, so this real DB write
+        # participates in this same atomic commit/rollback. Reuses the same
+        # `completed_at` this clause already computed above (`attrs`) for
+        # `cancelled_at` too -- no second clock read. Call site position
+        # deliberately unmoved (AC4).
+        {:ok, _count} =
+          TaskActivation.cancel_pending_timers(
+            repo,
+            instance_id,
+            attrs.completed_at,
+            "instance_completed",
+            prefix
+          )
+
         {:ok, updated}
 
       {:error, %Ecto.Changeset{} = changeset} ->
@@ -1417,6 +1548,7 @@ defmodule Letflow.Engine do
         actor_id,
         idempotency_key,
         merge_outcome,
+        completed_at,
         prefix
       )
     end)
@@ -1623,6 +1755,205 @@ defmodule Letflow.Engine do
     }
   end
 
+  # =========================================================================
+  # advance_after_timer_fired/3 (REQ-187, design doc §8) -- the poller's
+  # fire path re-entering the engine's own transition/completion machinery
+  # to advance a token off the :TIMER node whose timer just fired. Called
+  # from Letflow.Scheduler.do_fire/2, still inside fire_timer/2's own
+  # already-open Repo.transaction/1 -- this function's own persistence step
+  # (§8.4) nests as a real Postgres SAVEPOINT inside it.
+  # =========================================================================
+
+  # `@doc false`, matching advance_until_stable/4's and build_graph/1's own
+  # existing precedent for a function that is technically public
+  # (cross-module callable -- here, from Letflow.Scheduler) but not part of
+  # Letflow.Engine's documented client API.
+  @doc false
+  @spec advance_after_timer_fired(Timer.t(), Ecto.Repo.t(), prefix :: String.t()) ::
+          {:ok, :advanced} | {:error, {:instance_not_active, atom()}} | {:error, term()}
+  def advance_after_timer_fired(%Timer{} = timer, repo, prefix) do
+    with {:ok, projection} <- fetch_and_lock_instance_projection(repo, timer.instance_id, prefix),
+         {:ok, snapshot_and_state} <-
+           build_snapshot_and_state_for_timer(repo, timer, projection, prefix),
+         {:ok, advanced_state, pending_events} <-
+           dispatch_timer_fired_hop_chain(snapshot_and_state),
+         {:ok, _changes} <-
+           persist_timer_fired_advance(
+             repo,
+             timer,
+             projection,
+             snapshot_and_state,
+             advanced_state,
+             pending_events,
+             prefix
+           ) do
+      {:ok, :advanced}
+    end
+  end
+
+  # design doc §8.2 -- mirrors build_snapshot_and_state/4 exactly, keyed by
+  # timer.token_id instead of a task: a direct match against the live
+  # token set's own token_id (the live path has the exact persisted id
+  # available), not a node_id search (unlike Reconstruction's pure
+  # event-log replay, which has no such column to read).
+  defp build_snapshot_and_state_for_timer(
+         repo,
+         %Timer{} = timer,
+         %InstanceProjection{} = projection,
+         prefix
+       ) do
+    with {:ok, graph} <- fetch_graph(timer.instance_id, prefix) do
+      active_token_records = load_active_tokens(repo, timer.instance_id, prefix)
+      active_tokens = Enum.map(active_token_records, &to_pure_token/1)
+
+      with {:ok, own_token} <- find_token_for_timer(timer, active_tokens) do
+        pending_task_tokens = load_pending_task_tokens(repo, timer.instance_id, prefix)
+        seed_instance_state = build_instance_state(projection, active_tokens, pending_task_tokens)
+
+        {:ok,
+         %{
+           graph: graph,
+           seed_instance_state: seed_instance_state,
+           original_active_tokens: active_token_records,
+           own_token_id: own_token.token_id
+         }}
+      end
+    end
+  end
+
+  # Defensive -- should be unreachable (a TokenRecord is never deleted, only
+  # status-flipped, and a "pending" timer's own token is never removed by
+  # any code path that leaves the timer "pending"), kept for totality
+  # (design doc §8.2).
+  defp find_token_for_timer(%Timer{} = timer, tokens) do
+    case Enum.find(tokens, &(&1.token_id == timer.token_id)) do
+      nil -> {:error, {:unknown_token_id, timer.token_id}}
+      token -> {:ok, token}
+    end
+  end
+
+  # design doc §8.3 -- dispatches the {:timer_fired, token_id} hop directly,
+  # then the same advance_until_stable/4/tokens_needing_dispatch/3 worklist
+  # loop every other call site already uses, so a :TIMER node whose outgoing
+  # edge leads straight into another dispatch-needing node resolves fully in
+  # this one call. No Letflow.Engine.ExecutionError wiring is added for this
+  # path (out of this requirement's named scope) -- every failure surfaces
+  # as {:error, {:transition_failed, reason}}, rolled back the same way any
+  # other advance_after_timer_fired/3 failure is.
+  defp dispatch_timer_fired_hop_chain(%{
+         graph: graph,
+         seed_instance_state: %InstanceState{} = seed_state,
+         own_token_id: own_token_id
+       }) do
+    hop_limit = length(graph.nodes) * 4 + 10
+
+    case Transition.transition(graph, seed_state, {:timer_fired, own_token_id}) do
+      {:ok, new_instance_state, _pending_events} ->
+        newly_pending =
+          tokens_needing_dispatch(seed_state.tokens, new_instance_state.tokens, own_token_id)
+
+        case advance_until_stable(graph, new_instance_state, newly_pending, hop_limit - 1) do
+          {:ok, advanced_state, pending_events} -> {:ok, advanced_state, pending_events}
+          {:error, reason} -> {:error, {:transition_failed, reason}}
+        end
+
+      {:error, reason} ->
+        {:error, {:transition_failed, reason}}
+    end
+  end
+
+  # design doc §8.4 -- persists via a small, nested Ecto.Multi (a real
+  # Postgres SAVEPOINT, nested inside fire_timer/2's already-open
+  # transaction), reusing unmodified the same building blocks the other two
+  # call sites use: do_reconcile_token_records/4 (via reconcile_token_records/5),
+  # TaskActivation.append_multi_from_existing_records/6,
+  # prepare_timer_arms/4 + build_timer_arms_multi/4 (a :TIMER outgoing edge
+  # can lead directly into another :TIMER node), prepare_sub_process_children_for_completion/7's
+  # own node-lookup/SubProcess.prepare_child_activation/4 step +
+  # append_sub_process_children_creation_multi/6, and reconcile_projection/5.
+  # No new event is appended here -- TIMER_FIRED (already appended by
+  # Scheduler.append_timer_fired_event/4, before this function ever runs)
+  # is the one domain event that captures this whole state change. No
+  # cancel_pending_timers/5 call is added here either, for the same
+  # structural reason as finalize_instance_projection/5's own scope note
+  # (§5.2): reaching :completed via a :TIMER node's own outgoing edge
+  # requires every other token already gone, so no sibling pending timer
+  # can coexist with this completion.
+  defp persist_timer_fired_advance(
+         repo,
+         %Timer{} = timer,
+         %InstanceProjection{} = projection,
+         %{
+           graph: graph,
+           seed_instance_state: seed_state,
+           original_active_tokens: original_active_tokens
+         },
+         %InstanceState{} = advanced_state,
+         pending_events,
+         prefix
+       ) do
+    actor_id = EventStore.platform_actor_id()
+    idempotency_key = "timer_fired:#{timer.id}"
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    with {:ok, prepared_timers} <-
+           prepare_timer_arms(pending_events, graph, timer.instance_id, now),
+         {:ok, sub_process_outcome} <-
+           prepare_sub_process_children_for_completion(
+             advanced_state,
+             original_active_tokens,
+             graph,
+             pending_events,
+             projection,
+             actor_id,
+             idempotency_key,
+             prefix
+           ) do
+      case sub_process_outcome do
+        {:advanced, final_instance_state, prepared_children} ->
+          multi =
+            Multi.new()
+            |> TaskActivation.append_multi_from_existing_records(
+              timer.instance_id,
+              graph,
+              seed_state.pending_task_nodes,
+              final_instance_state,
+              prefix
+            )
+            |> reconcile_token_records(original_active_tokens, final_instance_state, now, prefix)
+            |> Multi.merge(fn _changes ->
+              id_map =
+                Map.new(prepared_timers, fn {token_id, _arm_attrs} -> {token_id, token_id} end)
+
+              build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
+            end)
+            |> append_sub_process_children_creation_multi(
+              prepared_children,
+              timer.instance_id,
+              actor_id,
+              idempotency_key,
+              prefix
+            )
+            |> Multi.run(:projection, fn inner_repo, _changes ->
+              reconcile_projection(inner_repo, projection, final_instance_state, now, prefix)
+            end)
+
+          case repo.transaction(multi) do
+            {:ok, changes} -> {:ok, changes}
+            {:error, _failed_step, reason, _changes} -> {:error, reason}
+          end
+
+        {:execution_error, error_args} ->
+          # No Letflow.Engine.ExecutionError wiring added for the timer-fire
+          # path (design doc §8.3/§8.4 -- out of this requirement's named
+          # scope): a SubProcess prepare failure here simply rolls back this
+          # whole attempt, same as any other advance_after_timer_fired/3
+          # failure.
+          {:error, {:execution_error_not_supported_for_timer_fire, error_args}}
+      end
+    end
+  end
+
   # M4 -- EE-09 variable merge (design doc §7 / req061 §5.1). A
   # VariableMerge.merge/3 rejection is routed into an
   # ExecutionError.error_args() tagged {:execution_error, _} instead of
@@ -1764,6 +2095,7 @@ defmodule Letflow.Engine do
          _actor_id,
          _idempotency_key,
          {:execution_error, error_args},
+         _completed_at,
          _prefix
        ) do
     # M4 already fired (REQ-049's own rejection) -- pass-through, no
@@ -1782,6 +2114,7 @@ defmodule Letflow.Engine do
          actor_id,
          idempotency_key,
          {:merged, %{new_variables: merged_variables}},
+         completed_at,
          prefix
        ) do
     state_with_merged_variables = %InstanceState{seed_state | variables: merged_variables}
@@ -1798,16 +2131,35 @@ defmodule Letflow.Engine do
 
         case advance_until_stable(graph, new_instance_state, newly_pending, hop_limit - 1) do
           {:ok, advanced_state, pending_events} ->
-            prepare_sub_process_children_for_completion(
-              advanced_state,
-              original_active_tokens,
-              graph,
-              pending_events,
-              projection,
-              actor_id,
-              idempotency_key,
-              prefix
-            )
+            # REQ-187 design doc §3 -- the symmetric {:timer_armed, ...}
+            # preparation step, run alongside prepare_sub_process_children_for_completion/7
+            # (both consume this same hop-chain's own pending_events).
+            # completed_at doubles as "the arrival timestamp" here (AC1) --
+            # the same instant this hop-chain landed at rest, matching
+            # finalize_instance_projection/5's own completed_at/cancelled_at
+            # reuse precedent -- no second clock read.
+            with {:ok, prepared_timers} <-
+                   prepare_timer_arms(pending_events, graph, projection.instance_id, completed_at) do
+              case prepare_sub_process_children_for_completion(
+                     advanced_state,
+                     original_active_tokens,
+                     graph,
+                     pending_events,
+                     projection,
+                     actor_id,
+                     idempotency_key,
+                     prefix
+                   ) do
+                {:ok, {:advanced, advanced_state2, prepared_children}} ->
+                  {:ok, {:advanced, advanced_state2, prepared_children, prepared_timers}}
+
+                {:ok, {:execution_error, error_args}} ->
+                  {:ok, {:execution_error, error_args}}
+
+                {:error, reason} ->
+                  {:error, reason}
+              end
+            end
 
           {:error, {:activation_failed, {:no_matching_edge, node_id, evaluated_conditions}}} ->
             error_args = %{
@@ -1974,7 +2326,7 @@ defmodule Letflow.Engine do
   defp build_complete_task_tail_multi(
          %{
            merge: {:merged, merge_outcome},
-           transition: {:advanced, final_instance_state, prepared_children}
+           transition: {:advanced, final_instance_state, prepared_children, prepared_timers}
          } = changes,
          actor_id,
          output_variables,
@@ -1991,6 +2343,20 @@ defmodule Letflow.Engine do
 
     normalized_changes
     |> build_task_activation_and_reconciliation_multi(completed_at, prefix)
+    |> Multi.merge(fn _changes ->
+      # REQ-187 design doc §3.2 -- positioned immediately after
+      # :token_reconciliation (the step that resolves real TokenRecord ids
+      # here -- every token_id in final_instance_state is already a real,
+      # persisted TokenRecord id by construction, do_reconcile_token_records/4's
+      # own {:new_token_during_resume_not_supported, _} guard forecloses
+      # anything else) and before :event. Citation correction (CODE-DESIGN-VALIDATOR,
+      # design doc §13 item 3): append_sub_process_children_creation_multi/6
+      # actually sits AFTER :event/:projection below, not before -- this
+      # step's own placement here follows the design's explicit instruction,
+      # not that (incorrect) precedent claim.
+      id_map = Map.new(prepared_timers, fn {token_id, _arm_attrs} -> {token_id, token_id} end)
+      build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
+    end)
     |> Multi.run(:task_complete, fn repo, _changes ->
       complete_task_row(
         repo,
@@ -2332,7 +2698,9 @@ defmodule Letflow.Engine do
           %{
             complete_task_outcome: :completed,
             task: %Task{} = task,
-            transition: {:advanced, %InstanceState{} = final_instance_state, _prepared_children},
+            transition:
+              {:advanced, %InstanceState{} = final_instance_state, _prepared_children,
+               _prepared_timers},
             task_complete: %Task{} = completed_task
           }}
        ) do
@@ -2471,6 +2839,31 @@ defmodule Letflow.Engine do
     Multi.new()
     |> Multi.run(:open_tasks, fn repo, _changes ->
       fetch_and_lock_open_tasks(repo, instance_id, prefix)
+    end)
+    |> Multi.run(:timer_cancellations, fn repo, _changes ->
+      # REQ-187 design doc §6.1-§6.2 -- positioned here, between :open_tasks
+      # and :instance_projection, NOT grouped with :task_cancellations/
+      # :token_cancellations after :eligibility as its topical grouping
+      # might suggest. This ordering is load-bearing, not cosmetic: it
+      # makes cancel_instance/3 acquire the `timers` lock before the
+      # `instance_projections` lock, uniformly matching
+      # Letflow.Scheduler.fire_timer/2's own (`timers` then
+      # `instance_projections`, via advance_after_timer_fired/3) lock
+      # order -- avoiding the AB-BA Postgres deadlock two code paths
+      # locking the same two tables in opposite order would otherwise
+      # produce. Running before :eligibility (M3) has confirmed the
+      # instance isn't already terminal is intentional: an ineligible
+      # cancel_instance/3 call still executes this update_all, but
+      # Ecto.Multi rolls back the entire transaction the moment
+      # :eligibility later returns {:error, _}, so no row is left changed
+      # by an ineligible attempt.
+      TaskActivation.cancel_pending_timers(
+        repo,
+        instance_id,
+        cancelled_at,
+        "instance_cancelled",
+        prefix
+      )
     end)
     |> Multi.run(:instance_projection, fn repo, _changes ->
       fetch_and_lock_instance_projection_for_cancel(repo, instance_id, prefix)

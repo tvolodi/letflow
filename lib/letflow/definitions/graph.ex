@@ -868,6 +868,105 @@ defmodule Letflow.Definitions.Graph do
     date_ok? and time_ok?
   end
 
+  # --- REQ-187 design doc §2 -- parse_iso8601_duration/1 --------------------
+
+  # Fixed-length calendar approximation (flagged assumption, REQ-187 design
+  # doc §2): no real calendar-month/leap-year arithmetic -- Y=365d,
+  # M(date part)=30d, W=7d, D=1d, H=3600s, M(time part)=60s, S=1s. Blast
+  # radius of getting this wrong is contained entirely to this one function
+  # (its @spec and every call site stay identical either way).
+  @duration_date_unit_seconds %{
+    "Y" => 365 * 86_400,
+    "M" => 30 * 86_400,
+    "W" => 7 * 86_400,
+    "D" => 86_400
+  }
+  @duration_time_unit_seconds %{"H" => 3600, "M" => 60, "S" => 1}
+
+  @doc """
+  Converts a valid ISO-8601 duration string (as already validated by
+  `valid_iso8601_duration?/1`'s own grammar, CHK-12) into a total number of
+  seconds, using the fixed-length calendar convention documented above.
+  Pure -- no clock, no I/O. Returns `:error` for any string
+  `valid_iso8601_duration?/1` itself would reject (defensive-only: CHK-12
+  already rejects an invalid `duration_iso8601` at definition-approval time,
+  so a `:TIMER` node reaching this function with one should be
+  unreachable). Only ever called by `Letflow.Engine` (the impure caller),
+  never by `Letflow.Engine.Transition` (design doc §2).
+  """
+  @spec parse_iso8601_duration(String.t()) :: {:ok, seconds :: non_neg_integer()} | :error
+  def parse_iso8601_duration(str) when is_binary(str) do
+    if valid_iso8601_duration?(str) do
+      remainder = String.slice(str, 1, String.length(str) - 1)
+
+      case String.split(remainder, "T", parts: 2) do
+        [date_part] ->
+          date_part
+          |> scan_duration_seconds(@duration_date_units, @duration_date_unit_seconds)
+          |> wrap_seconds()
+
+        [date_part, time_part] ->
+          with {:ok, date_seconds} <-
+                 date_part
+                 |> scan_duration_seconds(@duration_date_units, @duration_date_unit_seconds)
+                 |> wrap_seconds(),
+               {:ok, time_seconds} <-
+                 time_part
+                 |> scan_duration_seconds(@duration_time_units, @duration_time_unit_seconds)
+                 |> wrap_seconds() do
+            {:ok, date_seconds + time_seconds}
+          end
+      end
+    else
+      :error
+    end
+  end
+
+  def parse_iso8601_duration(_str), do: :error
+
+  @spec wrap_seconds(non_neg_integer() | :error) :: {:ok, non_neg_integer()} | :error
+  defp wrap_seconds(:error), do: :error
+  defp wrap_seconds(seconds) when is_integer(seconds), do: {:ok, seconds}
+
+  # Same scan-forward shape as scan_duration_tokens/3 below, accumulating
+  # seconds (via unit_seconds) instead of a bare token count -- kept as a
+  # parallel pass over the same already-validated grammar rather than
+  # threading a second accumulator through scan_duration_tokens/3 itself,
+  # so that function's own @spec (a bare token count for validation) stays
+  # unchanged for its one existing caller, valid_duration_remainder?/1.
+  @spec scan_duration_seconds(String.t(), [String.t()], %{String.t() => non_neg_integer()}) ::
+          non_neg_integer() | :error
+  defp scan_duration_seconds(str, remaining_units, unit_seconds),
+    do: scan_duration_seconds(str, remaining_units, unit_seconds, 0)
+
+  @spec scan_duration_seconds(
+          String.t(),
+          [String.t()],
+          %{String.t() => non_neg_integer()},
+          non_neg_integer()
+        ) :: non_neg_integer() | :error
+  defp scan_duration_seconds("", _remaining_units, _unit_seconds, acc), do: acc
+
+  defp scan_duration_seconds(str, remaining_units, unit_seconds, acc) do
+    case Regex.run(~r/^([0-9]+)([A-Za-z])/, str) do
+      [match, digits, unit] ->
+        case Enum.split_while(remaining_units, &(&1 != unit)) do
+          {_before, [^unit | rest_units]} ->
+            rest_str =
+              String.slice(str, String.length(match), String.length(str) - String.length(match))
+
+            seconds = String.to_integer(digits) * Map.fetch!(unit_seconds, unit)
+            scan_duration_seconds(rest_str, rest_units, unit_seconds, acc + seconds)
+
+          {_before, []} ->
+            :error
+        end
+
+      nil ->
+        :error
+    end
+  end
+
   # Scans `str` left to right for zero or more <digits><unit> tokens against
   # `remaining_units` (an ordered list of single-character unit strings, e.g.
   # `["Y", "M", "W", "D"]`), where units present must appear in that relative

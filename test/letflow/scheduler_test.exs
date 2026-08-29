@@ -51,6 +51,7 @@ defmodule Letflow.SchedulerTest do
   alias Letflow.Definitions
   alias Letflow.Dlq
   alias Letflow.Engine
+  alias Letflow.Engine.TokenRecord
   alias Letflow.EventStore.Event
   alias Letflow.Scheduler
   alias Letflow.Scheduler.Timer
@@ -79,15 +80,29 @@ defmodule Letflow.SchedulerTest do
     }
   end
 
-  # START -> task(HUMAN_TASK) -> END -- only needed to reach a real, :active
-  # instance_projections row (same minimal graph
-  # `engine_dlq_landing_test.exs`'s own `graph_human_task_end/0` uses) --
-  # nothing in this file's scope touches the graph itself.
+  # START -> task(TIMER) -> END -- reaches a real, :active instance_projections
+  # row with a real live token parked on a real :TIMER node (REQ-187: firing
+  # a timer now re-enters Letflow.Engine to advance the token off the
+  # :TIMER node it's found sitting on via the timer's own token_id, so a
+  # timer this file expects to actually *fire* successfully must be armed
+  # with `token_id: live_token_id!(schema_name, instance_id)`, matching this
+  # graph's own real live token -- `node_id` on the Timer row itself stays
+  # free-form/informational (only used for the TIMER_FIRED event payload),
+  # not cross-checked against the live token's own real node_id anywhere).
+  # `duration_iso8601` is set far in the future (`P1D`) so `start_instance!/1`'s
+  # own automatic REQ-187 timer-arm (armed by Letflow.Engine.create/2 itself,
+  # the moment the root token lands on this node) never becomes due during
+  # any test in this file -- this file's own manually-`arm_timer!`-ed rows
+  # are always the ones that end up claimed.
   defp graph_human_task_end do
     %{
       "nodes" => [
         %{"id" => "start", "node_type" => "START"},
-        %{"id" => "task", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "approver"}},
+        %{
+          "id" => "task",
+          "node_type" => "TIMER",
+          "attributes" => %{"duration_iso8601" => "P1D"}
+        },
         %{"id" => "end", "node_type" => "END"}
       ],
       "edges" => [
@@ -95,6 +110,19 @@ defmodule Letflow.SchedulerTest do
         %{"id" => "e2", "source" => "task", "target" => "end"}
       ]
     }
+  end
+
+  # The real, live TokenRecord.id (stringified) for `instance_id`'s one
+  # live token -- the id Letflow.Scheduler.create/2's own `:token_id`
+  # attribute must carry for Letflow.Engine.advance_after_timer_fired/3 to
+  # find it (REQ-187 design doc §8.2 -- a direct match against the live
+  # token set's own token_id, not a node_id search).
+  defp live_token_id!(schema_name, instance_id) do
+    TokenRecord
+    |> where([t], t.instance_id == ^instance_id and t.status == :active)
+    |> select([t], t.id)
+    |> Repo.one!(prefix: schema_name)
+    |> to_string()
   end
 
   defp active_definition!(schema_name) do
@@ -325,7 +353,12 @@ defmodule Letflow.SchedulerTest do
     test "the timer transitions to fired and the TIMER_FIRED event carries fired_late: true plus both timestamps" do
       %{schema_name: schema_name} = provisioned_tenant()
       instance_id = start_instance!(schema_name)
-      timer = arm_timer!(schema_name, instance_id, %{fire_at: past_fire_at(120)})
+
+      timer =
+        arm_timer!(schema_name, instance_id, %{
+          fire_at: past_fire_at(120),
+          token_id: live_token_id!(schema_name, instance_id)
+        })
 
       result = Scheduler.poll_and_fire(schema_name)
 
@@ -373,7 +406,11 @@ defmodule Letflow.SchedulerTest do
     test "the second poll appends no second event and fired_at is unchanged" do
       %{schema_name: schema_name} = provisioned_tenant()
       instance_id = start_instance!(schema_name)
-      timer = arm_timer!(schema_name, instance_id)
+
+      timer =
+        arm_timer!(schema_name, instance_id, %{
+          token_id: live_token_id!(schema_name, instance_id)
+        })
 
       first = Scheduler.poll_and_fire(schema_name)
       assert first.fired == 1
@@ -425,7 +462,11 @@ defmodule Letflow.SchedulerTest do
       ok_instance_id = start_instance!(schema_name)
 
       ok_timer =
-        arm_timer!(schema_name, ok_instance_id, %{fire_at: past_fire_at(60), node_id: "ok"})
+        arm_timer!(schema_name, ok_instance_id, %{
+          fire_at: past_fire_at(60),
+          node_id: "ok",
+          token_id: live_token_id!(schema_name, ok_instance_id)
+        })
 
       result = Scheduler.poll_and_fire(schema_name)
 

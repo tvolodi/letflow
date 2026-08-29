@@ -14,10 +14,15 @@ defmodule Letflow.Engine.Reconstruction do
     new, separate query, merging `events` and `events_archive` by
     `sequence_number` (the one total order preserved across an `archive/1`
     move — REQ-026's own design §7.3, INV-AR-1/AR-2).
-  * Five `event_type` values are known to be appended for an instance as of
-    this module's own req062 rework: `INSTANCE_STARTED`, `TASK_COMPLETED`,
-    `INSTANCE_CANCELLED`, `EXECUTION_ERROR`, and (req062, SPC-01)
-    `SUB_PROCESS_COMPLETED`. No `PARALLEL_SPLIT`/`PARALLEL_JOIN_*` event type
+  * Six `event_type` values are known to be appended for an instance as of
+    REQ-187's own rework: `INSTANCE_STARTED`, `TASK_COMPLETED`,
+    `INSTANCE_CANCELLED`, `EXECUTION_ERROR`, (req062, SPC-01)
+    `SUB_PROCESS_COMPLETED`, and (REQ-187) `TIMER_FIRED`. `TIMER_FIRED`'s own
+    persisted payload (`Letflow.Scheduler`'s `append_timer_fired_event/4`)
+    carries `node_id`, no `token_id` — its replay clause mirrors
+    `TASK_COMPLETED`'s own position-match shape, not `SUB_PROCESS_COMPLETED`'s
+    marker-based one, and needs no variable-merge step (a `TIMER_FIRED`
+    payload carries no `output_variables`). No `PARALLEL_SPLIT`/`PARALLEL_JOIN_*` event type
     is ever persisted (REQ-051's `pending_event()` union stays entirely
     in-memory). A later persisted event type needs its own replay clause
     added to `apply_event/3` below by whichever requirement adds it — any
@@ -690,6 +695,29 @@ defmodule Letflow.Engine.Reconstruction do
     end
   end
 
+  # REQ-187 design doc §9 -- mirrors TASK_COMPLETED's own clause shape
+  # (position match by node_id, not SUB_PROCESS_COMPLETED's marker-based
+  # match): the persisted TIMER_FIRED payload
+  # (Scheduler.append_timer_fired_event/4, unchanged) carries node_id, no
+  # token_id, so the completing token is found the same way
+  # find_task_completion_token/2 already does. No variable-merge step is
+  # needed here -- a TIMER_FIRED payload carries no output_variables to
+  # merge, unlike TASK_COMPLETED/SUB_PROCESS_COMPLETED. Independent of
+  # Engine.advance_after_timer_fired/3 -- the two never call each other,
+  # they are two independent derivations of the same post-TIMER_FIRED
+  # InstanceState.
+  defp apply_event(
+         graph,
+         %InstanceState{} = state,
+         %{event_type: "TIMER_FIRED"} = event,
+         _prefix
+       ) do
+    with {:ok, node_id} <- fetch_string_field(event, "node_id"),
+         {:ok, token} <- find_task_completion_token(state.tokens, node_id) do
+      dispatch_timer_fired(graph, state, token.token_id)
+    end
+  end
+
   defp apply_event(_graph, _state, %{event_type: event_type, event_id: event_id}, _prefix) do
     {:error, {:unrecognized_event_type, event_type, event_id}}
   end
@@ -776,6 +804,25 @@ defmodule Letflow.Engine.Reconstruction do
   # clause drives every subsequent {:advance_token, _} hop.
   defp dispatch_task_completion(graph, state, token_id) do
     case Transition.transition(graph, state, {:complete_task, token_id}) do
+      {:ok, new_state, _pending_events} ->
+        newly_pending = Engine.tokens_needing_dispatch(state.tokens, new_state.tokens, token_id)
+
+        resolve_pending_events(
+          Engine.advance_until_stable(graph, new_state, newly_pending, hop_limit(graph))
+        )
+
+      {:error, reason} ->
+        {:error, {:transition_error, reason}}
+    end
+  end
+
+  # REQ-187 counterpart to dispatch_task_completion/3 above, same shape:
+  # dispatches the single {:timer_fired, token_id} hop directly (advances
+  # the token off the :TIMER node along its outgoing edge, same
+  # advance_off_completed_node/4 algorithm TASK_COMPLETED's :HUMAN_TASK
+  # completion uses -- design doc §1.4), then drains the same worklist loop.
+  defp dispatch_timer_fired(graph, state, token_id) do
+    case Transition.transition(graph, state, {:timer_fired, token_id}) do
       {:ok, new_state, _pending_events} ->
         newly_pending = Engine.tokens_needing_dispatch(state.tokens, new_state.tokens, token_id)
 

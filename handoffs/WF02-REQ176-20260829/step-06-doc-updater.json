@@ -1,0 +1,22 @@
+{
+  "handoff_id": "WF02-REQ176-20260829-step06",
+  "run_id": "WF02-REQ176-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 6",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "docs/requirements.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 351, GH#696, stage S6. RELEASE-VALIDATOR PASSED all 6 acceptance criteria independently (own full-suite run, own git diff verification, own field-by-field cross-check against web/src/types/api.ts). REQ-176 may be marked done -- Stage 6's first completed requirement. Current status-history volume is docs/status/requirement_status.v6.yaml, currently at 10 entries (index count correct, no drift)."},
+  "task": {
+    "description": "Flip REQ-176's status from pending to done in docs/requirements.yaml, and append a 'done' event to docs/status/requirement_status.v6.yaml with a real UTC timestamp, summarizing: what was implemented (Letflow.Dlq context module + Letflow.Dlq.Entry schema + tenant-scoped dlq_entries migration -- enqueue/list/get/retry/discard, cursor-paginated list/2, row-lock-then-check state transitions); the requirement's path (1 CODE-DESIGN-VALIDATOR rework round catching a fabricated Letflow.IdentityMigration precedent citation, corrected to honestly frame the new UUID-to-text-cast-for-ILIKE pattern as new rather than a false reuse claim; SECURITY-REVIEWER and REVIEWER both passed with no rework -- REVIEWER filed ISS-0353 for a real, correctly-deferred idiom gap in the changeset's cast list; TEST-DESIGN-VALIDATOR independently re-verified with 3 of its own mutations applied directly to production code); RELEASE-VALIDATOR's independent PASS on all 6 ACs; and that this unblocks REQ-177 (landing REQ-056/061's hooks into this DLQ core) and REQ-178 (the route layer), both of which depends_on REQ-176. Also note this is Stage 6's FIRST done requirement -- once this lands, S6 moves from 'present but inactive' to 'active' per the T-LIVE-ACTIVITY detector (the test literal ORCH already updated in commit e72b5c4 anticipates exactly this transition happening next). Increment docs/status/requirement_status.index.yaml's volume-6 entries count in THE SAME COMMIT as your append, per HOW-TO-APPEND step 6.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-176 status is 'done'",
+      "a 'done' event is appended to the current run-history volume with a real UTC timestamp and an accurate summary",
+      "docs/status/requirement_status.index.yaml's volume-6 entries count is incremented correctly in the same commit, verified against grep -c '^  - req:' docs/status/requirement_status.v6.yaml",
+      "no other requirement's entry or historical run-history event is modified"
+    ]
+  },
+  "result": null
+}

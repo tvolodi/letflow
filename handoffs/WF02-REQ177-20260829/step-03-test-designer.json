@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step03",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "lib/letflow/engine.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 352, GH#697, stage S6. SECURITY-REVIEWER and REVIEWER both PASSED commits fdb096a/8206de9 with no blocking findings (SECURITY-REVIEWER's 1 rework round -- a real grapheme-vs-codepoint truncation bug ORCH empirically confirmed and ELIXIR-DEV fixed with a real regression test already committed). Design: lib/letflow/design/req177-dlq-hooks.md (commit 4070492). ELIXIR-DEV already added one regression test in test/letflow/engine_execution_error_test.exs (the combining-mark truncation test) and mix test test/letflow/engine_execution_error_test.exs shows 9 passed -- your job is the REMAINING acceptance criteria this run hasn't covered yet: Hook A's own tests (SERVICE_TASK exhaustion -> DLQ landing) don't exist yet anywhere, and the AC4 non-effects test (retry/2 against a landed entry does NOT re-invoke dispatch or change instance status) doesn't exist yet either."},
+  "task": {
+    "description": "Write ExUnit tests covering the acceptance criteria not yet covered by ELIXIR-DEV's own regression test. Specifically: (1) a test asserting Letflow.Engine.land_service_task_exhaustion/2 (Hook A), called with attempt_index == retry_limit and a retriable failure kind, produces exactly one dlq_entries row via read-back from the database (not the caller's own return value), with entry_type \"event\", instance_id set, and full_reason naming the classified failure kind -- plus a companion test asserting a NON-exhaustion case (attempt_index < retry_limit, or a non-retriable kind) does NOT land a DLQ entry; (2) the AC4 non-effects test: call REQ-176's Letflow.Dlq.retry/2 against one of the two landed entry types (either Hook A's or Hook B's), assert the DLQ entry transitions to \"retrying\", AND explicitly assert BOTH non-effects named in the acceptance criterion -- the original SERVICE_TASK dispatch is NOT re-invoked (no new attempt/side effect observable) and the instance's own status does NOT change away from \"error\"/whatever its landed status was. Apply this project's mutation-testing discipline: for each acceptance criterion your new tests cover, mutate the real implementation locally, confirm the pre-existing suite fails to catch it, add a closing test, then revert the mutation and verify the revert (git diff/md5sum) before finishing. Do not modify lib/letflow/engine/service_task.ex or lib/letflow/dlq.ex. Run mix compile --warnings-as-errors and mix test yourself, quote real output.",
+    "acceptance_criteria": [
+      "a SERVICE_TASK dispatch driven to retry-exhaustion (attempt_index == retry_limit) produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason naming the classified failure kind -- read back from the database, not asserted from the caller's own return value",
+      "an instance driven to ERROR via REQ-061's execution-error path produces exactly one dlq_entries row via enqueue/1, with entry_type \"event\", instance_id set, and full_reason equal to the persisted EXECUTION_ERROR event's own reason field",
+      "the ERROR-path DLQ landing is in the same transaction as REQ-061's status flip and event append: forcing the DLQ insert to fail leaves the instance status, the EXECUTION_ERROR event, and the DLQ table all unchanged, verified by reading all three back",
+      "a test explicitly asserts that calling REQ-176's retry/2 against one of these two entries transitions the DLQ entry to \"retrying\" but does NOT re-invoke the original SERVICE_TASK dispatch and does NOT change the instance's own status away from ERROR -- naming both non-effects, not just the one effect that does happen",
+      "the moduledoc for both hook sites names REQ-176's retry/2 no-op-beyond-the-DLQ-entry behavior as a deferred follow-up (naming what would need to exist for it to do more: a wired SERVICE_TASK transport, an operator-driven ERROR-recovery path) rather than leaving it unremarked",
+      "no file outside the two named hook call sites and their tests is modified, confirmed by git diff --stat",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

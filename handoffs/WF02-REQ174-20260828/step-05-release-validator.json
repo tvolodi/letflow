@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ174-20260828-step05",
+  "run_id": "WF02-REQ174-20260828",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "docs/requirements.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 326, GH#626, stage S5. REQ-174 has passed CODE-DESIGN-VALIDATOR (1 rework round -- literal code fences + wrong function name, both mechanical, substance confirmed sound both times), SECURITY-REVIEWER (1 rework round -- an overreaching 'unconditional teardown' claim, corrected to accurately describe the two known skip paths and attribute isolation to never-sharing-a-Store), REVIEWER (1 rework round -- one stray leftover instance of the same overstatement, missed by the first sweep), TEST-DESIGN-VALIDATOR (PASS, with strong independent evidence: real, reversible mutations applied to BOTH actual production call paths -- PluginHandler.start_instance/1 and ModuleVersionRegistry.instantiate/2 -- confirmed both committed tests genuinely fail under real instance-reuse defects, then reverted and verified via md5sum), and TEST-RUNNER (PASS, full suite 2454/2456, only the 2 known pre-existing rust-toolchain-absent failures, :wasm_hang isolated stage clean). Decision: DECLINE instance pooling -- live-verified no pooling API exists in installed wasmex, and isolation already holds by construction (fresh Store per invocation). No production logic was written or changed; the whole requirement is moduledoc decision-recording plus a new fixture plus 2 isolation tests. Design: lib/letflow/design/req174-wasm-instance-pooling-or-decline.md."},
+  "task": {
+    "description": "Independently re-derive and verify all 7 REQ-174 acceptance criteria from docs/requirements.yaml against the actual shipped code and tests on this branch -- do not trust any prior agent's PASS claim, re-run and re-check yourself. Confirm: the moduledoc genuinely records an explicit DECLINE decision with its reason (not silence); the two isolation tests genuinely assert data written in invocation N is not observable in invocation N+1, and (given this is a DECLINE) confirm the design correctly scopes out the 4 adopt-only acceptance criteria (memory-reset-by-construction test, superseded-version-exclusion test, p50 benchmark, CI-gated-latency-threshold prohibition) as inapplicable rather than silently dropping them; the moduledoc states this restates WASM-13 by adding the memory-reset correctness constraint and cites decision 0014 (e); mix test and mix compile --warnings-as-errors pass with real output quoted (the 2 known pre-existing/environmental rust-toolchain failures are acceptable and should be named explicitly).",
+    "acceptance_criteria": [
+      "the moduledoc records an explicit decision: pooling adopted, or pooling declined with its reason -- WASM-13 is a SHOULD and declining is legitimate, but silence is not",
+      "a test asserts per-invocation isolation regardless of which way the decision went: data written to guest memory in invocation N is NOT observable in invocation N+1 of the same module",
+      "if pooling is adopted, a test asserts memory reset happens between invocations by construction -- e.g. an invocation that fails or traps mid-write still leaves no residue for the next invocation -- and the moduledoc states this is a correctness requirement per decision 0014's restatement, not a performance detail",
+      "if pooling is adopted, a test asserts a pooled instance of a module version superseded by REQ-173's activation is never handed to a new invocation",
+      "if pooling is adopted, WASM-13's p50 latency comparison is recorded as a benchmark with real measured numbers quoted in the moduledoc or a design artefact; no CI test asserts a latency threshold",
+      "the moduledoc states that this requirement restates WASM-13 by ADDING the per-invocation memory-reset correctness constraint, which is absent from WASM-13's original text, and cites decision 0014 (e) and the wasmex Store-reuse behaviour that motivates it",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

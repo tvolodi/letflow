@@ -1,0 +1,21 @@
+{
+  "handoff_id": "WF02-REQ176-20260829-step02d",
+  "run_id": "WF02-REQ176-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "lib/letflow/dlq.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 351, GH#696, stage S6. SECURITY-REVIEWER PASSED commit b5a028d cleanly -- verified tenant_id derivation, ILIKE fragment parameterization, and concurrency safety all by reading the actual code. One non-blocking observation flagged for a future follow-up (not this gate): Entry.insert_changeset/2's own cast/3 list includes tenant_id/status/retry_count/retry_history/created_at, contradicting its docstring which says those are 'deliberately not castable here' -- harmless today since enqueue/2 is the sole caller and pre-sanitizes attrs via Map.take/2 before ever reaching the changeset, but the changeset itself would trust a raw caller-supplied tenant_id if some future code called it directly with unfiltered attrs. Implementation per approved design lib/letflow/design/req176-dlq-core.md (commit 1959adf, approved after 1 rework round fixing a fabricated precedent citation)."},
+  "task": {
+    "description": "Idiom/scope-creep/decision-record-consistency review of commit b5a028d. Check: (1) OTP/Ecto idiom in the new Letflow.Dlq context module and Letflow.Dlq.Entry schema -- consistent style with cited precedents (Letflow.Tasks.list_tasks/2's cursor pattern, Letflow.Tasks.claim_task/3's row-lock idiom); (2) SECURITY-REVIEWER's flagged changeset/docstring inconsistency (Entry.insert_changeset/2's cast list includes fields its own docstring claims aren't castable) -- decide whether this needs fixing now (tighten the cast list to match the docstring, cheap and low-risk) or is genuinely deferrable, and if deferrable, confirm it's at least documented as a known gap rather than silently left contradictory; (3) confirm the migration and tenant_provisioning.ex registration follow this project's established Decision-B pattern exactly, no deviation; (4) confirm no route/controller file exists anywhere in the diff (REQ-178's scope); (5) confirm test/support/tenant_fixture.ex's oracle-list update (dlq_entries added, count 22->23) is the correct, minimal fix for the regression it was addressing, not scope creep; (6) scope creep more broadly -- confirm the diff stays within REQ-176's stated boundary (schema + context module only).",
+    "acceptance_criteria": [
+      "the dlq_entries table lives inside each tenant's Postgres schema with a tenant_id column retained, matching decision 0003 Decision B's pattern -- verified by inspecting the migration",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

@@ -1,0 +1,70 @@
+id: ISS-0353
+title: >
+  Letflow.Dlq.Entry.insert_changeset/2's cast list contradicts its own
+  docstring -- tenant_id/status/retry_count/retry_history/created_at are all
+  castable despite the docstring calling them "deliberately not castable"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ176-20260829
+discovered_at: "2026-08-29T00:00:00Z"
+severity: MINOR
+status: open
+tags:
+  - idiom-gap
+description: >
+  lib/letflow/dlq/entry.ex's insert_changeset/2 docstring reads: "`status`,
+  `retry_count`, `retry_history`, `tenant_id`, and `created_at` are
+  deliberately not castable here -- `Letflow.Dlq.enqueue/2` sets all five
+  itself, never from caller-supplied `attrs`." The actual cast/3 call lists
+  all five fields as castable. Today this is harmless: `Letflow.Dlq.enqueue/2`
+  (the sole caller) pre-sanitizes `attrs` via `Map.take/2` before ever
+  reaching the changeset, then `Map.merge/2`s its own trusted
+  tenant_id/status/retry_count/retry_history/created_at values on top -- no
+  caller-supplied value for any of these five fields can currently reach
+  `insert_changeset/2`.
+
+  This is a real deviation from an established pattern in this exact
+  codebase, not a hypothetical concern: lib/letflow/definitions/
+  solution_pack_install.ex's insert_changeset/2 makes the identical claim
+  ("`status` and `uninstalled_at` are deliberately NOT castable here") and
+  its cast list genuinely excludes them; lib/letflow/definitions/
+  promotion_review.ex's insert_changeset/2 does the same for `status`,
+  `approved_by`, `approved_at`, `superseded_by`, `row_version`. Both rely on
+  the changeset itself enforcing the claim, not caller discipline.
+  Letflow.Dlq.Entry is the outlier: its changeset is not actually the
+  safety boundary its own docstring describes -- caller discipline
+  (enqueue/2's Map.take/2) is doing the enforcement instead.
+
+  Fixing this correctly is not a one-line deletion: `status` and
+  `retry_count`/`retry_history` have schema-level defaults
+  (`:pending`/`0`/`[]`) so removing them from the cast list is safe and
+  free (Ecto.Schema's own struct defaults apply). `tenant_id` and
+  `created_at` have NO schema-level default, so removing them from the cast
+  list without another mechanism (e.g. `put_change/3` on the changeset
+  inside `insert_changeset/2`, reading them out of `attrs` explicitly)
+  would make every `enqueue/2` call fail `validate_required/2` for
+  `tenant_id` and `created_at`. This is real, small implementation work
+  (~10-15 line change to `insert_changeset/2`), appropriately routed to
+  ELIXIR-DEV rather than hand-waved as a trivial fix.
+affected_files:
+  - lib/letflow/dlq/entry.ex
+  - lib/letflow/dlq.ex
+related:
+  - REQ-176
+source: >
+  handoffs/WF02-REQ176-20260829/step-02d-reviewer.json (SECURITY-REVIEWER's
+  original non-blocking observation on commit b5a028d, escalated to
+  REVIEWER for a fix-now-vs-defer decision); lib/letflow/definitions/
+  solution_pack_install.ex and lib/letflow/definitions/promotion_review.ex
+  (the two existing in-repo precedents this module deviates from).
+candidate_scope_for_whoever_picks_this_up: >
+  In `insert_changeset/2`: narrow the `cast/3` list to drop `:status`,
+  `:retry_count`, `:retry_history` (their schema defaults already produce
+  the correct values once excluded) and replace `:tenant_id`/`:created_at`'s
+  cast-list membership with explicit `put_change/3` calls reading those two
+  keys out of `attrs` (they remain required inputs from `enqueue/2`'s own
+  merged `insert_attrs` map -- only the mechanism changes from cast to
+  put_change, not the caller contract). Add a changeset-level test
+  confirming a raw/unfiltered `attrs` map with a caller-supplied `tenant_id`
+  cannot override the value passed via `put_change/3`, to lock in the fix
+  against regression if a future caller ever calls `insert_changeset/2`
+  directly with unsanitized attrs.

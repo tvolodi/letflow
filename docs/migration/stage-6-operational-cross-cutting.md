@@ -1,6 +1,11 @@
 # Stage 6 — Operational cross-cutting
 
-Status: not started. Depends on: S4. Requirements: none expanded yet.
+Status: active. Depends on: S4. Requirements: REQ-176, REQ-177, REQ-178,
+REQ-181, REQ-182, REQ-183, REQ-184 expanded (see `docs/requirements.yaml`;
+REQ-179/REQ-180 were split into REQ-181..184 during REQ-VALIDATOR
+sizing rework and do not exist as separate ids). REQ-176 (DLQ schema and
+core entry lifecycle) done as of 2026-08-29 -- the stage's first
+completed requirement.
 
 ## Scope
 

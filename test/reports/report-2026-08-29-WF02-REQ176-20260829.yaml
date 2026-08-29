@@ -1,0 +1,110 @@
+# Test run report — WF-02 Step 4
+# Written by TEST-RUNNER. RELEASE-VALIDATOR independently re-runs the suite
+# rather than trusting this report alone (core-directives.md).
+
+req_id: REQ-176
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ176-20260829
+date_utc: 2026-08-29
+git:
+  branch: feature/WF02-REQ176-20260829
+  commit: 37506e4c3c612bb00343473dcda580a52043c390
+
+environment:
+  toolchain: local (asdf shims — Elixir 1.20.3 / Erlang 29 / OTP 29, per `.tool-versions`)
+  elixir_version_output: "Erlang/OTP 29 [erts-17.0.5] [source] [64-bit] [smp:8:8] [ds:8:8:10] [async-threads:1] [jit:ns] / Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-1-postgres-1 (already running via `sudo docker compose up`, healthy, host port 5463 per this workspace's untracked .env LETFLOW_DB_PORT=5463)
+  note: >
+    Docker socket required sudo in this environment (permission denied for
+    the invoking user's own `docker compose` otherwise); containers
+    (postgres + keycloak) were already up and healthy from a prior session,
+    confirmed via `sudo docker compose ps` rather than restarted.
+    `mix letflow.check.test` (the exact CI-mirroring task) was attempted
+    first but exceeded this tool's 10-minute foreground command limit
+    running as a single non-partitioned `mix test` process; the full suite
+    was instead run via `scripts/test_parallel.sh` (8 partitions, same
+    underlying `mix test --partitions 8` invocation the CI-equivalent task
+    ultimately shells out to, just parallelized) which completed well
+    within the limit and aggregates each partition's real Result:/Failed:
+    counts. `mix compile --warnings-as-errors` and the isolated
+    `mix test --only wasm_hang` stage were each run standalone afterward,
+    matching mix letflow.check.test's own two-stage contract exactly.
+
+checks:
+  compile_warnings_as_errors:
+    result: PASS
+    exit_code: 0
+    output: "(no output — mix compile --warnings-as-errors printed nothing, meaning a clean compile with zero warnings)"
+
+  test_suite:
+    command: "scripts/test_parallel.sh  (8 partitions, nproc-derived)"
+    result: PASS (2 pre-existing/environmental failures, not disqualifying)
+    exit_code_of_script: 1
+    combined_summary_verbatim: "combined: 2465 tests, 5 properties, 2 failures (2468/2470 passed)"
+    per_partition_verbatim:
+      - "partition 1: 385 tests, 0 properties, 0 failures, exit 0"
+      - "partition 2: 277 tests, 2 properties, 0 failures, exit 0"
+      - "partition 3: 249 tests, 1 property, 0 failures, exit 0"
+      - "partition 4: 205 tests, 0 properties, 0 failures, exit 0"
+      - "partition 5: 369 tests, 0 properties, 0 failures, exit 0"
+      - "partition 6: 287 tests, 0 properties, 0 failures, exit 0"
+      - "partition 7: 342 tests, 0 properties, 0 failures, exit 0"
+      - "partition 8: 351 tests, 2 properties, 2 failures, exit 2"
+    failures:
+      - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+        error: "** (ErlangError) Erlang error: :enoent  -- System.cmd(\"rustc\", [\"--version\"], ...) at lib/system.ex:1141, via running_rust_raw/0 (test/mix/tasks/letflow_check_toolchain_test.exs:69)"
+        diagnosis: "PRE-EXISTING/ENVIRONMENTAL, not disqualifying. This sandbox has no `rustc` on PATH (only asdf-managed elixir/erlang/rust are installed, and this test shells out to the literal `rustc` binary rather than through asdf's rust shim/PATH setup used elsewhere). Named explicitly in this run's handoff as one of the 2 known rust-toolchain-absent failures. Not routed to ELIXIR-DEV — it is an environment gap, not an application bug, and is unrelated to lib/letflow/dlq*/ or this run's own new test file."
+      - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+        error: "** (ErlangError) Erlang error: :enoent -- same root cause as above (running_rust_version/0 -> running_rust_raw/0 -> System.cmd(\"rustc\", ...))"
+        diagnosis: "Same as above — same underlying missing-rustc-on-PATH cause, second assertion in the same test module."
+    dlq_test_check: >
+      All 17 Letflow.DlqTest tests (test/letflow/dlq_test.exs, this run's own
+      new test file) ran inside partition 2, which reported 0 failures
+      ("partition 2: 277 tests, 2 properties, 0 failures, exit 0"). Verified
+      by grepping partition-2.log for every DlqTest teardown line (17 found,
+      one per test, e.g. AC1 migration schema-per-tenant check, AC2 enqueue
+      initial state + tenant scoping, AC3 retry/2 transitions and conflict
+      cases, AC4 discard/2 transitions and conflict cases, AC5 list/2
+      filtering and cursor pagination) — none appear in any partition's
+      failure section. Nothing in lib/letflow/dlq*/ is implicated in either
+      of the 2 failures above (both are CheckToolchainTest / rustc-absence,
+      unrelated module).
+    t_live_activity_s6_fix_check: >
+      Commit e72b5c4 (test/mix/tasks/letflow_check_deferral_staleness_test.exs)
+      confirmed holding. Ran this file standalone as an extra confirmation
+      beyond the parallel run (mix test
+      test/mix/tasks/letflow_check_deferral_staleness_test.exs):
+      "Result: 57 passed", exit 0, no Failed: section. The file did not
+      appear in any partition's failure output during the full parallel run
+      either.
+
+  wasm_hang_isolated_stage:
+    command: "mix test --only wasm_hang"
+    result: PASS
+    exit_code: 0
+    summary_line_verbatim: "Result: 7 passed, 2476 excluded"
+    finished_line_verbatim: "Finished in 16.6 seconds (6.1s async, 10.5s sync)"
+    note: >
+      Matches mix letflow.check.test's second, isolated subprocess stage.
+      The deliberate GenServer.call timeouts logged during this run
+      (call_function "hang" ...) are expected/by-design per REQ-170 and this
+      task's own moduledoc (ISS-0352) — they are the tests proving the
+      wasmex NIF thread genuinely cannot be reclaimed, not failures.
+
+verdict: PASS
+verdict_detail: >
+  mix compile --warnings-as-errors: clean, 0 warnings.
+  Full suite (2470 tests + 5 properties across 8 partitions): 2468/2470
+  passed. The only 2 failures are Mix.Tasks.Letflow.CheckToolchainTest's
+  rust-pin checks, failing solely because this sandbox has no `rustc`
+  binary on PATH -- the same 2 pre-existing/environmental failures named in
+  this run's own handoff context, not a regression and not caused by
+  anything in this branch's diff. Isolated `mix test --only wasm_hang`
+  stage: 7/7 passed. T-LIVE-ACTIVITY S6-inactive fix (e72b5c4) confirmed
+  holding (57/57 passed standalone). All 17 Letflow.DlqTest tests (this
+  run's own new coverage) confirmed passing with 0 failures, uninvolved in
+  either of the 2 known failures.

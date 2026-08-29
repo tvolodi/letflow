@@ -8999,7 +8999,7 @@ requirements:
   - id: REQ-176
     title: Dead-letter queue schema and core entry lifecycle (dlq_entries, OBS-05 foundation)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 351  # letflow-queue task id
     description: >

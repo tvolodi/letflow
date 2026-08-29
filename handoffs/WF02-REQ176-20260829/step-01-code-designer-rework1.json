@@ -1,0 +1,21 @@
+{
+  "handoff_id": "WF02-REQ176-20260829-step01-rework1",
+  "run_id": "WF02-REQ176-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1 (rework iteration 1)",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "lib/letflow/design/req176-dlq-core.md",
+  "status": "PENDING",
+  "priority": "high",
+  "context": {"note": "Queue task 351, GH#696, stage S6. CODE-DESIGN-VALIDATOR FAILED this design (commit e7b931e) on one specific defect: SS3.2's list/2 search-filter section cites a nonexistent precedent, claiming lib/letflow/identity_migration.ex already uses a 'UUID-column-cast-to-text-for-ILIKE' idiom. The validator read identity_migration.ex in full: its only fragment/type usages (3 occurrences, lines 145/156/185) all cast a BOUND PARAMETER to Ecto.UUID for an equality comparison against an already-UUID-typed column -- no ILIKE anywhere in that file, and no column-cast-to-text-for-pattern-matching idiom anywhere in lib/letflow/ under any module name (grep-confirmed). This is a fabricated precedent, not a restatement of something real -- exactly the class of design defect this project's gate exists to catch. Everything else in the design was independently verified sound: the migration/Decision B pattern (verified against a real migration), the keyset-cursor pattern (verified against Letflow.Tasks.list_tasks/2's real source), the row-lock-then-check idiom (verified against Letflow.Tasks.claim_task/3's real source), no implementation code present, no route/controller present, and the three open questions correctly don't hide an AC gap. One additional non-fatal but flagged item: DlqEntry (web/src/types/api.ts) has 4 fields the design never addresses -- item_type, original_payload, processor_metadata, max_retries -- worth an explicit legacy/out-of-scope note rather than silent omission."},
+  "task": {
+    "description": "REWORK REQUIRED, narrow scope. Fix 1: strike the false 'Letflow.IdentityMigration already uses this' claim in SS3.2's search-filter section entirely. Either (a) find a REAL existing UUID-to-text-cast-for-ILIKE precedent elsewhere in lib/letflow/ and cite that instead (verify it yourself by reading the actual source before citing it -- do not repeat this mistake), or (b) more likely, since the validator's grep found none anywhere in the codebase, state plainly and honestly that this is a NEW pattern being introduced by this requirement -- spec its exact fragment/type shape as your own designed decision, not a reuse of an existing idiom. The filter_by_search/filter_tenants_by_search wrapping idiom (%...% wrap, nil/empty no-op) in Letflow.Identity IS real and verified -- you may keep citing that part, just not the false ILIKE-on-cast-UUID-column claim. Fix 2: explicitly address web/src/types/api.ts's DlqEntry fields that this design's schema doesn't cover (item_type, original_payload, processor_metadata, max_retries) -- state whether they are legacy/superseded field names (e.g. does 'item_type' map to your 'entry_type', does 'original_payload' map to 'source_payload'?) or genuinely out of scope, rather than leaving them unaddressed. Do not change anything else -- the migration pattern, keyset-cursor pattern, row-lock-then-check idiom, and the rest of the schema field list all stand as independently verified.",
+    "acceptance_criteria": [
+      "the dlq_entries table lives inside each tenant's Postgres schema with a tenant_id column retained, matching decision 0003 Decision B's pattern -- verified by inspecting the migration",
+      "list/2 filters by entry_type and by status independently, each demonstrated narrowing a result set that contains rows of more than one value, and supports cursor pagination: given more rows than one page, the first page's next_cursor, passed back in, returns the next distinct page with no repeated or skipped ids",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

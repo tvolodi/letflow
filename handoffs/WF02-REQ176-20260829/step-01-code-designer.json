@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ176-20260829-step01",
+  "run_id": "WF02-REQ176-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "docs/requirements.yaml#REQ-176",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 351, GH#696, stage S6. Feature branch feature/WF02-REQ176-20260829 created off main at dddf4b6. This is the FIRST requirement of an entirely new stage (S6, operational cross-cutting) -- there is no existing lib/letflow/dlq/ or similar module to extend, this is greenfield. Read the full requirement text from docs/requirements.yaml's REQ-176 entry (queue task 351's description above is a verbatim copy) -- it is unusually detailed and IS the binding contract (field names, state machine, injectable-callback boundary). Read web/src/api/dlq.ts and web/src/types/api.ts (DlqEntry, DlqRetryAttempt, CursorPage<T>) in full -- these are the already-shipped S8 frontend types this schema/API must match exactly, field name for field name. Read docs/migration/decisions/0003-ecto-schema-strategy.md's Decision B (schema-per-tenant plus intra-schema tenant_id) for the schema pattern to follow -- look at an existing tenant-scoped context module (e.g. lib/letflow/routers/audit.ex's own backing context, or any similarly-shaped S3/S4 context module) for this project's established Ecto/cursor-pagination idioms, since CursorPage<T>'s {items, next_cursor} shape needs a real implementation pattern, not an invented one."},
+  "task": {
+    "description": "Produce the design artefact (lib/letflow/design/req176-dlq-core.md or similar) for REQ-176: a new dlq_entries Ecto schema/migration (tenant-scoped per decision 0003 Decision B) and a context module implementing enqueue/1, list/2, get/2, retry/2, discard/2 exactly per the requirement's own field-by-field and state-machine specification. Design must specify: (1) the exact Ecto schema/migration field list and types (id uuid pk, entry_type string, instance_id nullable, reference_id nullable, reason, full_reason, error_detail jsonb, error_chain jsonb array, source_payload jsonb, context_json jsonb, retry_history jsonb array shaped like DlqRetryAttempt, retry_count integer default 0, retry_limit nullable, next_retry_at nullable, status string with values pending|retrying|resolved|discarded, created_at, first_failed_at, last_failed_at); (2) list/2's cursor-pagination mechanism -- specify the actual cursor encoding/decoding approach and ordering column(s) used, matching CursorPage<DlqEntry>'s {items, next_cursor} shape, and confirm it composes correctly with independent entry_type and status filters plus free-text search across reason/instance_id/id; (3) retry/2 and discard/2's exact state-machine transitions and conflict-error shape for invalid-state calls (four distinct starting-status cases for retry/2 per the acceptance criteria: pending, retrying, resolved, discarded); (4) that no route/controller is included in this requirement's own scope (REQ-178's job) -- the design should not describe any Plug route. Design only -- no implementation code.",
+    "acceptance_criteria": [
+      "the dlq_entries table lives inside each tenant's Postgres schema with a tenant_id column retained, matching decision 0003 Decision B's pattern -- verified by inspecting the migration",
+      "enqueue/1 creates an entry with status \"pending\", retry_count 0, and a created_at timestamp; list/2 is tenant-scoped, demonstrated by an entry enqueued under tenant A being absent from a list/2 call scoped to tenant B",
+      "retry/2 on a \"pending\" or \"retrying\" entry transitions it to \"retrying\", appends a retry_history entry with attempt_no/attempted_at/outcome/error_message field names matching DlqRetryAttempt exactly, and increments retry_count; retry/2 on a \"resolved\" or \"discarded\" entry returns a conflict error and leaves status, retry_count and retry_history unchanged -- four tests, one per starting status",
+      "discard/2 on a \"pending\" or \"retrying\" entry transitions it to \"discarded\"; discard/2 on an already \"resolved\" or \"discarded\" entry returns a conflict error rather than silently succeeding",
+      "list/2 filters by entry_type and by status independently, each demonstrated narrowing a result set that contains rows of more than one value, and supports cursor pagination: given more rows than one page, the first page's next_cursor, passed back in, returns the next distinct page with no repeated or skipped ids",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

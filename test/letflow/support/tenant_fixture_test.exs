@@ -293,12 +293,13 @@ defmodule Letflow.Support.TenantFixtureTest do
       assert state.versions_missing == []
 
       # Proof the two would differ if the derivation were naive: the oracle and the
-      # manifest are both non-empty, so "expected -- []" would have been 22 and 33.
+      # manifest are both non-empty, so "expected -- []" would have been 23 and 37.
       # (REQ-076 added the api_tokens table to the tenant-scoped migration manifest,
       # bumping this oracle from 20 to 21; REQ-125 added definition_sequence, bumping
-      # it from 21 to 22 -- test/support/tenant_fixture.ex's own
-      # @expected_tenant_tables list already carries both.)
-      assert length(TenantFixture.expected_tenant_tables()) == 22
+      # it from 21 to 22; REQ-176 added dlq_entries, bumping it from 22 to 23 --
+      # test/support/tenant_fixture.ex's own @expected_tenant_tables list already
+      # carries all three.)
+      assert length(TenantFixture.expected_tenant_tables()) == 23
       assert length(state.manifest_versions) > 0
     end
 

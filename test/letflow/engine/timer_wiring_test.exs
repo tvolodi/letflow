@@ -111,7 +111,11 @@ defmodule Letflow.Engine.TimerWiringTest do
     %{
       "nodes" => [
         %{"id" => "start", "node_type" => "START"},
-        %{"id" => "tmr", "node_type" => "TIMER", "attributes" => %{"duration_iso8601" => duration}},
+        %{
+          "id" => "tmr",
+          "node_type" => "TIMER",
+          "attributes" => %{"duration_iso8601" => duration}
+        },
         %{"id" => "end", "node_type" => "END"}
       ],
       "edges" => [
@@ -156,7 +160,11 @@ defmodule Letflow.Engine.TimerWiringTest do
     %{
       "nodes" => [
         %{"id" => "start", "node_type" => "START"},
-        %{"id" => "tmr", "node_type" => "TIMER", "attributes" => %{"duration_iso8601" => duration}},
+        %{
+          "id" => "tmr",
+          "node_type" => "TIMER",
+          "attributes" => %{"duration_iso8601" => duration}
+        },
         %{"id" => "task", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "approver"}},
         %{"id" => "end", "node_type" => "END"}
       ],
@@ -339,7 +347,11 @@ defmodule Letflow.Engine.TimerWiringTest do
       assert %{fired: 1} = Scheduler.poll_and_fire(schema_name)
 
       timers = timers_for(schema_name, instance_id) |> Enum.sort_by(& &1.node_id)
-      assert [%Timer{node_id: "tmr_a", status: "fired"} = fired_a, %Timer{node_id: "tmr_b", status: "pending"} = pending_b] =
+
+      assert [
+               %Timer{node_id: "tmr_a", status: "fired"} = fired_a,
+               %Timer{node_id: "tmr_b", status: "pending"} = pending_b
+             ] =
                timers
 
       # AC1's own fire_at = arrival + duration contract holds for the
@@ -420,7 +432,10 @@ defmodule Letflow.Engine.TimerWiringTest do
       # Ordering: the update call textually precedes the cancellation call
       # (call site "unmoved" -- immediately after the projection flips).
       update_index = :binary.match(clause_body, "repo.update(prefix: prefix)") |> elem(0)
-      cancel_index = :binary.match(clause_body, "TaskActivation.cancel_pending_timers(") |> elem(0)
+
+      cancel_index =
+        :binary.match(clause_body, "TaskActivation.cancel_pending_timers(") |> elem(0)
+
       assert update_index < cancel_index
     end
   end

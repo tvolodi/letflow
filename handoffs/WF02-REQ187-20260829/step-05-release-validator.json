@@ -1,0 +1,46 @@
+{
+  "handoff_id": "WF02-REQ187-20260829-step05",
+  "run_id": "WF02-REQ187-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ187-20260829/step-05-release-validator.json",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "branch": "feature/WF02-REQ187-20260829",
+    "note": "TEST-RUNNER ran the full suite (scripts/test_parallel.sh, 8 partitions), mix compile --warnings-as-errors, mix format --check-formatted, and mix letflow.lint_handoffs on branch feature/WF02-REQ187-20260829. Full report: test/reports/report-2026-08-29-WF02-REQ187-20260829.yaml. Summary: combined suite result 'combined: 2550 tests, 5 properties, 4 failures (2551/2555 passed)' -- all 4 failures are pre-existing/environmental: 3 are the standing documented category (rustc/cargo absent from this sandbox: 2x Mix.Tasks.Letflow.CheckToolchainTest rust-pin tests + 1x Letflow.Engine.Wasm.PluginHandlerTest AC7 wasmex-Rust-NIF-source test), and the 4th is a timing-comparison flake in test/letflow/engine/lua/executor_test.exs's wall-clock-timeout describe block (REQ-155 AC-1: 'short-timeout call took 681.559ms, expected well under 400ms'), the same class/file as the documented REQ-156 Lua timing-comparison flake -- none touching REQ-187's diff. test/letflow/engine/timer_wiring_test.exs (18 tests, partition 2) ran with 0 failures in its partition; Letflow.SchedulerTest and Letflow.Scheduler.PollerTest also ran clean in their partitions. Specifically checked whether the new timer-firing re-entry into the engine (Scheduler.do_fire/2 calling back into Letflow.Engine) introduced timing/ordering flakiness elsewhere: 6 of 8 partitions were fully clean, and the 2 failing partitions failed only on the 4 pre-existing tests identified above, none scheduler/engine-transition/timer-adjacent. mix compile --warnings-as-errors: exit 0, clean, no output. mix format --check-formatted: found 1 real violation (test/letflow/engine/timer_wiring_test.exs -- TEST-DESIGNER's new file, 4 sites), fixed mechanically via `mix format test/letflow/engine/timer_wiring_test.exs` (whitespace/line-wrap only, no assertion/fixture/mutation-target logic changed -- git diff --stat: 1 file changed, 19 insertions(+), 4 deletions(-)), re-verified clean afterward, and re-confirmed the full suite unaffected (same 4 pre-existing failures, same combined totals). mix letflow.lint_handoffs: 'OK -- 0 new violations across 1427 handoff files (25 pre-existing grandfathered, traced to ISS-0190)'. Postgres/keycloak containers (letflow-1-postgres-1, letflow-1-keycloak-1) were already up and healthy (2 days) before this step -- confirmed via `sudo docker compose ps` rather than issuing a fresh `docker compose up` into a checkout that already had running containers; mapped to host port 5463 per this workspace's untracked .env (LETFLOW_DB_PORT=5463). Committed and pushed: the 1 formatting fix plus this report and this handoff.",
+    "test_report": "test/reports/report-2026-08-29-WF02-REQ187-20260829.yaml",
+    "original_acceptance_criteria": [
+      "a definition containing a TIMER node with a valid duration_iso8601 starts an instance whose token reaches that node and arms exactly one timers row with status 'pending' and fire_at equal to the arrival timestamp plus the parsed duration -- replacing the {:error, {:node_type_not_yet_implemented, :TIMER, _}} that transition.ex L294 returns today, asserted by a test that would have failed before this requirement",
+      "the timer row and the state-transition event are written in ONE transaction: a test that forces the event append to fail leaves NO timers row behind",
+      "when the timer fires, the instance advances along the TIMER node's outgoing edge and the token is no longer at the TIMER node",
+      "completing an instance sets every one of its PENDING timers to 'cancelled' with cancelled_at set, via the existing TaskActivation.cancel_pending_timers/2 call site in engine.ex -- which is still called from the same position inside the completion transaction (confirmed by git diff showing the call site itself unmoved)",
+      "cancelling an instance via Letflow.Engine.cancel_instance/3 likewise cancels its PENDING timers in the same transaction, and a test forcing that transaction to roll back leaves the timers still 'pending'",
+      "a timer whose status is already 'fired' is NOT changed by a subsequent instance cancellation (SCH-03's stated edge case), and no PENDING timer belonging to a CANCELLED or COMPLETED instance is ever fired by a later poll -- two explicit tests",
+      "lib/letflow/engine/transition.ex contains no Letflow.Repo call after this change, confirmed by the same grep its moduledoc already documents for purity, and the moduledoc names which return shape was extended to carry the timer-arming description instead",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ],
+    "prior_handoffs": {
+      "step_01_code_designer": "handoffs/WF02-REQ187-20260829/step-01-code-designer.json",
+      "step_04_test_runner": "handoffs/WF02-REQ187-20260829/step-04-test-runner.json"
+    }
+  },
+  "task": {
+    "description": "Independently re-verify REQ-187's acceptance criteria before it is marked done. Re-run the suite yourself rather than trusting TEST-RUNNER's report alone (core-directives.md's 'Every producing step has a validating step').",
+    "acceptance_criteria": [
+      "a definition containing a TIMER node with a valid duration_iso8601 starts an instance whose token reaches that node and arms exactly one timers row with status 'pending' and fire_at equal to the arrival timestamp plus the parsed duration -- replacing the {:error, {:node_type_not_yet_implemented, :TIMER, _}} that transition.ex L294 returns today, asserted by a test that would have failed before this requirement",
+      "the timer row and the state-transition event are written in ONE transaction: a test that forces the event append to fail leaves NO timers row behind",
+      "when the timer fires, the instance advances along the TIMER node's outgoing edge and the token is no longer at the TIMER node",
+      "completing an instance sets every one of its PENDING timers to 'cancelled' with cancelled_at set, via the existing TaskActivation.cancel_pending_timers/2 call site in engine.ex -- which is still called from the same position inside the completion transaction (confirmed by git diff showing the call site itself unmoved)",
+      "cancelling an instance via Letflow.Engine.cancel_instance/3 likewise cancels its PENDING timers in the same transaction, and a test forcing that transaction to roll back leaves the timers still 'pending'",
+      "a timer whose status is already 'fired' is NOT changed by a subsequent instance cancellation (SCH-03's stated edge case), and no PENDING timer belonging to a CANCELLED or COMPLETED instance is ever fired by a later poll -- two explicit tests",
+      "lib/letflow/engine/transition.ex contains no Letflow.Repo call after this change, confirmed by the same grep its moduledoc already documents for purity, and the moduledoc names which return shape was extended to carry the timer-arming description instead",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

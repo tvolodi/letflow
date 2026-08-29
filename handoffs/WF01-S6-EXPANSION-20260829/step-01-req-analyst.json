@@ -8,7 +8,7 @@
   "file": "handoffs/WF01-S6-EXPANSION-20260829/step-01-req-analyst.json",
   "created_at": "2026-08-29T04:02:43Z",
   "started_at": "2026-08-29T04:02:43Z",
-  "status": "DISPATCHED",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -51,7 +51,189 @@
       "Report in your handoff result: the full list of new REQ ids with one-line titles, which R-Co requirement id(s) each maps to, every deliberate deferral with its named blocker (partition maintenance being the expected one), and any place where this batch's scope touches REQ-176..184's already-pending scope (the webhook-secret/HMAC-key overlap at minimum). Verify programmatically before reporting: file parses as YAML, zero duplicate ids, zero orphaned depends_on, zero dependency cycles, every new entry has the full schema."
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Expanded Stage 6 second batch: 15 new entries REQ-185..REQ-199 appended to docs/requirements.yaml, covering all six remaining S6 subsystems (scheduler, secrets, obs minus OBS-05, repository, expr, ordering). R-Co WAS reachable and was freshly inspected throughout; every cited path, line number, SQL column and env-var name was read directly from c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\ this session. The batch header records that, correcting the first batch's R-Co-unreachable framing for this batch's scope only, without editing that block. Append-only verified: head -9381 of the file is byte-identical to the pre-run backup; git diff --stat shows 1504 insertions, 0 deletions. Programmatic validation: file parses as YAML (173 entries), zero duplicate ids, zero orphaned depends_on, zero dependency cycles, all 15 carry the full schema with status pending / stage S6 and at least 8 acceptance criteria each, and none carries impl_order. The core/route split was followed for every subsystem needing both (REQ-191 then REQ-192, REQ-195 then REQ-196), each core entry carrying the 'no route or controller file is added' clause. docs/migration/stage-6-operational-cross-cutting.md now lists all 22 S6 requirement ids across both batches, its Decisions section names both decision requirements and the partitioning deferral, and its Scope file counts were corrected against the real R-Co tree.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/migration/stage-6-operational-cross-cutting.md"
+    ],
+    "new_requirements": [
+      {
+        "id": "REQ-185",
+        "owner": "CODE-DESIGNER",
+        "maps_to": "SCH-02/05/06 BEAM realisation choice",
+        "title": "Settle the scheduler timer-firing architecture for the BEAM (decision + design artefact)"
+      },
+      {
+        "id": "REQ-186",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "SCH-01, SCH-02, SCH-05, SCH-06",
+        "title": "Timers schema and scheduler core"
+      },
+      {
+        "id": "REQ-187",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "SCH-01, SCH-03",
+        "title": "Wire TIMER nodes into the engine: arm on arrival, cancel on completion"
+      },
+      {
+        "id": "REQ-188",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "SCH-07, artifact_retention.zig",
+        "title": "Recurring timers and periodic retention runner"
+      },
+      {
+        "id": "REQ-189",
+        "owner": "CODE-DESIGNER",
+        "maps_to": "EXP-501",
+        "title": "Settle the secrets storage backend; write decisions/0016-secrets-storage-backend.md"
+      },
+      {
+        "id": "REQ-190",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "EXP-501",
+        "title": "Secrets core: envelope encryption, resolution by reference, webhook HMAC reconciliation"
+      },
+      {
+        "id": "REQ-191",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "REPO-07, SVC-01, SVC-03",
+        "title": "Service catalog core"
+      },
+      {
+        "id": "REQ-192",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "SVC-04",
+        "title": "Service catalog route surface (services.zig)"
+      },
+      {
+        "id": "REQ-193",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "OBS-01, XC-01",
+        "title": "Structured JSON logging with trace-id propagation"
+      },
+      {
+        "id": "REQ-194",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "OBS-02",
+        "title": "Prometheus metrics subsystem and the GET /metrics exposition"
+      },
+      {
+        "id": "REQ-195",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "OBS-03, XC-02",
+        "title": "Audit-entry storage with before/after capture and tamper-evident chaining"
+      },
+      {
+        "id": "REQ-196",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "OBS-03 route half",
+        "title": "Serve GET /api/v1/audit from the audit_entries store"
+      },
+      {
+        "id": "REQ-197",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "EXP-102 / DSL surface (ast.zig, error.zig)",
+        "title": "Extend expr.ex with arithmetic, unary negation and a structured parse-error surface"
+      },
+      {
+        "id": "REQ-198",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "DSL-07 builtin whitelist (8 of its 11)",
+        "title": "expr.ex's 8 pure builtin functions"
+      },
+      {
+        "id": "REQ-199",
+        "owner": "ELIXIR-DEV",
+        "maps_to": "ORD-01, ORD-02, ORD-03, ORD-04",
+        "title": "Correlated effect re-entry ordering"
+      }
+    ],
+    "deliberate_deferrals": [
+      {
+        "item": "src/scheduler/partition_maintenance.zig + partition_retention.zig",
+        "blocker": "Decision 0003 Decision C point 2 defers partitioning, and ISS-0014 (status resolved, 2026-08-17) already adjudicated exactly this question: it adopted option (a), keeping REQ-026's row-level archive/1, and expressly REJECTED option (c) (porting partition retention now) because it 'would force partitioning early, contradicting 0003 Decision C's deliberate deferral, and would need REVIEWER sign-off / a new decision record'. Verified: zero PARTITION statements in priv/repo/migrations/. Recorded in the batch header and REQ-188."
+      },
+      {
+        "item": "src/expr/benchmark.zig",
+        "blocker": "Not a blocker but a deliberate non-port, stated rather than silently dropped: DSL-13 latency harness (1000 warm-up + 10000 measured iterations against a 10us target), output via debug print only, imported by nothing. Batch header + REQ-197."
+      },
+      {
+        "item": "src/repository/process_module_catalog.zig (PLC-01/PLC-02)",
+        "blocker": "Greenfield and unscoped to any Letflow stage; SUB_PROCESS module_ref resolution would need a definitions-side change first. Named in REQ-191."
+      },
+      {
+        "item": "SCH-04 escalation timers (the reassignment half)",
+        "blocker": "Letflow's Definitions.Graph has no escalation_timer_duration attribute on :HUMAN_TASK; CHK-12 (graph.ex L738) validates duration_iso8601 on :TIMER nodes only. The definition-side input does not exist. Named in REQ-188."
+      },
+      {
+        "item": "expr now(), date_add, date_diff (3 of R-Co's 11 builtins)",
+        "blocker": "R-Co's own evaluator comments that now() is inherently impure while every other builtin is pure. expr.ex has a hard grep-verified purity contract and REQ-050's determinism guarantee. REQ-197 must decide the disposition explicitly; REQ-198 adds only the 8 pure ones."
+      },
+      {
+        "item": "ORD-04 dynamic consumer-count reduction under contention",
+        "blocker": "R-Co left it unimplemented too; it depends on REQ-194's metrics. Named in REQ-199."
+      },
+      {
+        "item": "CEL macros / collections / in / ternary / list-map literals",
+        "blocker": "Not a gap versus R-Co at all: R-Co's src/expr implements none of them, and EXP-102 cut over FROM vendored CEL TO src/expr, retiring CEL. Adding them would reopen a decision R-Co closed deliberately and needs its own evidence about Letflow's real condition corpus. Batch header finding (2) + REQ-197."
+      }
+    ],
+    "overlap_with_first_batch": [
+      {
+        "kind": "LIVE CONTRADICTION between two already-pending entries, resolved by REQ-189/REQ-190",
+        "detail": "REQ-181 stores webhook_subscriptions.secret HASHED ('never returned once created'); REQ-183 then specifies HMAC-SHA256 signing 'using the subscription's stored secret (REQ-181's schema)'. A hash cannot be used as an HMAC key, so REQ-183 as drafted is not implementable against what REQ-181 stores. This defect is already latent in the pending first batch; this batch surfaces rather than introduces it. EXP-501 assigns webhook HMAC keys to the secrets module, and R-Co resolved the identical problem in GBL-128_exp501_secrets.sql (add secret_ref + secret_key_id, backfill, blank the plaintext), with correctives 1134_iss0112_add_secret_ref_to_tenant_schemas.sql and 1138_iss0635_webhook_secret_ref_corrective.sql. REQ-189 chooses Letflow's resolution and depends_on both REQ-181 and REQ-183; REQ-190 implements it. Neither REQ-181 nor REQ-183 was edited (append-only)."
+      },
+      {
+        "kind": "DLQ consumption (intended extension point, not a conflict)",
+        "detail": "REQ-186 (exhausted-retry timers) and REQ-199 (swept dead correlations) both land entries in REQ-176's dlq_entries. REQ-176 already reserves entry_type 'timer' and explicitly names scheduler/timer entries as not-yet-populated, so this is the extension point it was built for. Both depend_on REQ-176."
+      },
+      {
+        "kind": "No other overlap",
+        "detail": "REQ-177, REQ-178, REQ-182 and REQ-184 are untouched by this batch's scope."
+      }
+    ],
+    "issues": [
+      {
+        "severity": "INFO",
+        "id": "FRESH-FINDING-1-SCHEDULER-LOCK",
+        "detail": "SCH-02's literal text mandates a per-timer PostgreSQL advisory lock, but R-Co REMOVED that mechanism. src/design/scheduler-concurrency-epic3.md's ISS-301 section deletes the pg_try_advisory_xact_lock block (scheduler.zig L207-242) as redundant against FOR UPDATE SKIP LOCKED, on four stated grounds. Only a SESSION-level lock (fixed constant 5863412975429063421) guarding the ISS-302 startup sweep survives. ORCH's brief assumed the advisory lock was the shipped mechanism; it is not. REQ-185 carries the correction so a port does not reintroduce deleted code."
+      },
+      {
+        "severity": "INFO",
+        "id": "FRESH-FINDING-2-EXPR-IS-NOT-CEL",
+        "detail": "R-Co's src/expr is NOT a CEL implementation. EXP-102's cutover went FROM vendor/cel TO src/expr, retiring CEL. Its real surface (ast.zig L12-60 and L83-150, lexer.zig L17-32) is: arithmetic + - * / % and unary negation, the 6 comparison operators (non-chainable), and/or/not as word keywords, int/float/string/bool/null literals, dotted variable paths, and exactly 11 whitelisted builtins (length, lower, upper, trim, contains, startsWith, endsWith, coalesce, now, date_add, date_diff). It has no 'in', no ternary, no list/map literals, no indexing, and none of the CEL macros, type-conversion functions or collection functions. ORCH's brief framed those as the genuine gap versus R-Co; they are CEL vocabulary neither system implements. expr.ex's @unsupported_call_markers therefore stays correct as-is, and REQ-197/198 are scoped to what R-Co actually has."
+      },
+      {
+        "severity": "INFO",
+        "id": "FRESH-FINDING-3-SPA-CONTRACTS-EXIST",
+        "detail": "The brief asked whether any of these six subsystems has an already-committed SPA consumer. THREE do. web/src/api/services.ts defines ServiceRecord plus all five routes and is consumed by pages/admin/services/ServicesPage.tsx. web/src/api/metrics.ts defines parsePrometheusText and calls client.getText('/metrics'), consumed by pages/admin/MetricsPage.tsx. web/src/api/audit.ts declares RawAuditEntry with before_state/after_state, consumed by pages/admin/AuditLogPage.tsx. The metrics one is decisive on one of REQ-078's three recorded divergences: the SPA already parses Prometheus TEXT at an unversioned /metrics, not JSON at /api/v1/metrics. Cited as the binding contract in REQ-191/192, REQ-194 and REQ-196 respectively, the same way REQ-181/182 did."
+      },
+      {
+        "severity": "INFO",
+        "id": "FRESH-FINDING-4-RCO-SECRETS-DEFECTS",
+        "detail": "Three R-Co secrets defects verified directly and explicitly scoped against in REQ-189/190 rather than inherited: (a) the master key is a hardcoded 64-zero hex literal at four call sites (api/routes/webhooks.zig:375, webhook/dispatcher.zig:537, webhook/subscription_store.zig:224, effects/worker.zig:42) and a grep for MASTER_KEY or WRAPPING_KEY across R-Co's whole src/ returns ZERO matches, so the env wiring EXP-501 describes was never built; (b) rows are written with wrapped_key_algorithm 'aes_kw_256' while crypto.zig's own comment states it performs a second AES-GCM pass instead, so the stored metadata is false; (c) the unpinned lookup takes the newest row rather than the newest ACTIVE version, so disabling the newest version breaks resolution instead of falling back."
+      },
+      {
+        "severity": "NOTE_FOR_REVIEWER",
+        "id": "DECISION-0003-DIVERGENCE-FLAGGED",
+        "detail": "REQ-191 proposes service_catalog as a GLOBAL table, departing from decision 0003 Decision B's general per-tenant-schema rule. The R-Co-grounded reason is structural, not incidental: a scope='global' entry is by definition referenceable by every tenant, and service_id is globally unique across tenants, so neither property is expressible in a per-tenant copy. The requirement states the reason and requires REVIEWER sign-off rather than diverging quietly. REQ-189 likewise requires an explicit placement decision for the secrets table, which R-Co also makes global. Both flagged per CLAUDE.md's do-not-silently-re-decide rule."
+      }
+    ],
+    "validation_performed": {
+      "yaml_parses": true,
+      "total_entries": 173,
+      "duplicate_ids": 0,
+      "orphaned_depends_on": 0,
+      "dependency_cycles": 0,
+      "new_entries_full_schema": 15,
+      "impl_order_fields_added": 0,
+      "append_only_confirmed": "head -9381 docs/requirements.yaml is byte-identical to the pre-run backup; git diff --stat reports 1504 insertions and 0 deletions"
+    },
+    "next_action": "Route to REQ-VALIDATOR"
+  },
   "rework_count": 0,
-  "max_rework": 3
+  "max_rework": 3,
+  "completed_at": "2026-08-29T04:21:38Z"
 }

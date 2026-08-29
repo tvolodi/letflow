@@ -9379,3 +9379,1507 @@ requirements:
       - "a request against a non-existent subscription id returns 404"
       - "the route module's moduledoc states explicitly that R-Co's webhooks.zig was not inspected in this batch (unreachable from the drafting environment) and that the SPA's already-committed contract was the binding source of truth instead"
     depends_on: [REQ-183, REQ-181, REQ-069, REQ-072]
+
+  # ---------------------------------------------------------------------
+  # Stage 6 -- Operational cross-cutting (SECOND batch)
+  #
+  # Covers the six subsystems docs/migration/stage-6-operational-cross-cutting.md
+  # lists that the first batch did not touch: src/scheduler (6 files),
+  # src/secrets (7 files + integration/), src/obs (5 files, minus OBS-05
+  # which REQ-176/177/178 already own), src/repository (7 files),
+  # src/expr (7 files), src/ordering (5 files).
+  #
+  # R-Co WAS REACHABLE AND WAS FRESHLY INSPECTED FOR THIS BATCH. This
+  # corrects, for this batch's scope only, the first batch's header note
+  # above (which honestly recorded that R-Co was NOT inspectable from that
+  # drafting sandbox, and on that basis deferred scheduler and ordering to
+  # "the next batch" -- this one -- pending exactly that access). That note
+  # is left unedited: it was true of that batch. Every R-Co citation below
+  # -- file path, line number, SQL column, env-var name, requirement text --
+  # was read directly from c:\Users\tvolo\dev\ai-dala\R-Co\ while drafting
+  # this block, not inherited.
+  #
+  # THREE FRESH FINDINGS THAT CORRECT ASSUMPTIONS CARRIED INTO THIS BATCH,
+  # each recorded here because a requirement below depends on it:
+  #
+  # (1) SCH-02's literal text ("the scheduler MUST acquire a PostgreSQL
+  #     advisory lock on the timer's ID") describes a mechanism R-Co has
+  #     since REMOVED. src/design/scheduler-concurrency-epic3.md's ISS-301
+  #     section deletes the per-timer pg_try_advisory_xact_lock block
+  #     (scheduler.zig L207-242) as redundant, because FOR UPDATE SKIP
+  #     LOCKED already holds the row exclusively for the claiming
+  #     transaction at the same per-timer granularity and the same
+  #     lifetime. R-Co's shipped claim mechanism is SKIP LOCKED. The only
+  #     advisory lock that survives is a SESSION-level one
+  #     (pg_try_advisory_lock, constant id 5863412975429063421) guarding
+  #     the ISS-302 startup sweep so only one HA node sweeps overdue
+  #     timers. A port written to SCH-02's literal text would reintroduce
+  #     deleted code.
+  #
+  # (2) R-Co's src/expr is NOT a CEL implementation. EXP-102's cutover was
+  #     FROM a vendored CEL (vendor/cel) TO src/expr, retiring CEL. Its
+  #     surface (src/expr/ast.zig L12-60, L83-150; src/expr/lexer.zig
+  #     L17-32) is: arithmetic (+ - * / % and unary negation), the 6
+  #     comparison operators, and/or/not, int/float/string/bool/null
+  #     literals, dotted variable paths, and exactly ELEVEN whitelisted
+  #     builtin functions -- length, lower, upper, trim, contains,
+  #     startsWith, endsWith, coalesce, now, date_add, date_diff. There
+  #     are no CEL macros (has/matches/all/exists/exists_one), no
+  #     type-conversion functions (int/uint/double/...), no collection
+  #     functions (size/map/filter), no list/map literals, no indexing and
+  #     no ternary anywhere in R-Co's expr. Letflow's expr.ex rejects that
+  #     CEL vocabulary via @unsupported_call_markers, which remains
+  #     correct -- but the vocabulary is not R-Co's, so "port the rest of
+  #     R-Co's expr" means arithmetic + the 11 builtins + a timestamp
+  #     type, NOT the CEL surface. REQ-197/198 below are scoped to what
+  #     R-Co actually has.
+  #
+  # (3) A LATENT CONTRADICTION ALREADY EXISTS BETWEEN TWO PENDING FIRST-
+  #     BATCH ENTRIES, and REQ-190 below is the requirement that resolves
+  #     it. REQ-181 specifies webhook_subscriptions.secret "stored hashed
+  #     ... never returned once created". REQ-183 then specifies computing
+  #     "an HMAC-SHA256 signature of the JSON-encoded payload using the
+  #     subscription's stored secret (REQ-181's schema)". A hash is not a
+  #     usable HMAC key -- REQ-183 cannot be implemented against what
+  #     REQ-181 stores. R-Co hit and fixed exactly this: migrations/
+  #     GBL-128_exp501_secrets.sql adds webhook_subscriptions.secret_ref
+  #     and .secret_key_id, backfills them, then blanks the plaintext
+  #     secret column ("EXP-501 hard requirement: plaintext secret value
+  #     must not persist"), with correctives at 1134_iss0112_* and
+  #     1138_iss0635_*. REQ-190 carries that migration path into Letflow.
+  #     Neither REQ-181 nor REQ-183 is edited by this batch (append-only);
+  #     REQ-190 depends_on both and states the reconciliation explicitly.
+  #
+  # DELIBERATE DEFERRALS, each with its blocker named rather than silently
+  # dropped:
+  #   * src/scheduler/partition_maintenance.zig (581 lines) and
+  #     partition_retention.zig (587) are NOT drafted. Blocker: decision
+  #     0003-ecto-schema-strategy.md Decision C point 2 deliberately
+  #     defers partitioning, and ISS-0014 (status: resolved, 2026-08-17)
+  #     already adjudicated exactly this, adopting option (a) -- keep
+  #     REQ-026's row-level archive/1, explicitly REJECTING option (c)
+  #     ("port PAR-03's whole-partition retention now") because it "would
+  #     force partitioning early, contradicting 0003 Decision C's
+  #     deliberate deferral, and would need REVIEWER sign-off / a new
+  #     decision record". Letflow's events table is not partitioned
+  #     (verified: zero PARTITION statements in priv/repo/migrations/).
+  #     Reopening this needs a new decision record, not a requirement in
+  #     this batch. REQ-186 below therefore schedules the archive/1 that
+  #     DOES exist, and says so.
+  #   * src/expr/benchmark.zig (537 lines) gets no Elixir equivalent. It
+  #     is a DSL-13 latency harness (1,000 warm-up + 10,000 measured
+  #     iterations against a 10us target) with no production behaviour.
+  #     expr.ex's moduledoc already records this; REQ-197 restates it so
+  #     the omission stays deliberate rather than becoming an unnoticed
+  #     gap.
+  #   * SCH-04's escalation half (HUMAN_TASK escalation_timer_duration ->
+  #     reassignment) is scoped to REQ-188 only as far as firing an
+  #     ESCALATION event. Blocker: Letflow's Graph validates
+  #     duration_iso8601 on :TIMER nodes (CHK-12, graph.ex
+  #     check_timer_duration/1 L738) but has no escalation_timer_duration
+  #     attribute on :HUMAN_TASK at all, so the definition-side input
+  #     REQ-188 would need does not exist. Named in REQ-188's own text.
+  # ---------------------------------------------------------------------
+
+  - id: REQ-185
+    title: Settle the scheduler timer-firing architecture for the BEAM (decision + design artefact, gates all of S6's scheduler half)
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S6
+    description: >
+      FIRST requirement of S6's scheduler half; REQ-186, REQ-187 and
+      REQ-188 all depend on it. Filed as its own decision-and-design
+      requirement, in the shape REQ-148/149/150 established for S5's open
+      questions, because no docs/migration/decisions/*.md record settles
+      what fires a deferred timer in Letflow, mix.exs carries neither Oban
+      nor Quantum (verified: deps are ecto_sql, postgrex, plug, bandit,
+      jason, stream_data, ueberauth_oidcc, lua, wasmex), and
+      lib/letflow/application.ex's supervision tree has no periodic
+      process of any kind (verified by reading it in full -- Repo,
+      Ecto.Migrator, the Oidcc worker, Registry, InstanceSupervisor,
+      SandboxPool and five Task.Supervisors, none of them a ticker). A
+      blocker described only inside the requirement it blocks gets no
+      owner, no gate and no completion signal, which is why this is a
+      requirement rather than a paragraph in REQ-186.
+      WHAT IS ALREADY DECIDED AND IS NOT REOPENED HERE. R-Co's SCH-02
+      (docs/requirements.yaml, RELEASED 2026-05-23) specifies the
+      BEHAVIOUR concretely and this requirement does not relitigate it: a
+      background poller at a configurable interval (default 5 seconds),
+      selecting status = PENDING AND fire_at <= NOW(), firing each due
+      timer in a SINGLE transaction that marks it FIRED and appends the
+      instance event; DB unavailable during firing rolls back and the
+      timer stays PENDING for the next poll; a timer that comes due
+      between polls fires on the next poll, so maximum latency is one
+      interval plus jitter. SCH-06 adds configurable jitter (default 0,
+      randomised per node, applied to the POLL INTERVAL and never to
+      fire_at). SCH-05 requires that overdue timers all fire, none
+      skipped, none double-fired, each carrying fired_late: true plus
+      scheduled-vs-actual timestamps. The question this requirement
+      answers is only Letflow's BEAM-IDIOMATIC REALISATION of that
+      specified behaviour.
+      CORRECTION THIS ARTEFACT MUST CARRY, verified fresh against R-Co
+      this batch: SCH-02's literal "the scheduler MUST acquire a
+      PostgreSQL advisory lock on the timer's ID" describes a mechanism
+      R-Co REMOVED. src/design/scheduler-concurrency-epic3.md's ISS-301
+      section deletes that per-timer pg_try_advisory_xact_lock block
+      (scheduler.zig L207-242) as redundant on four stated grounds -- the
+      row is already exclusively locked by FOR UPDATE SKIP LOCKED in the
+      same transaction, the advisory key was UUID-derived and so had
+      identical per-timer granularity, the transaction-scoped advisory
+      lock had identical lifetime, and its failure path returned a
+      contention outcome that SKIP LOCKED already eliminates. R-Co's
+      shipped claim mechanism is FOR UPDATE SKIP LOCKED. The one advisory
+      lock that survives is SESSION-level (pg_try_advisory_lock, fixed
+      constant 5863412975429063421, deliberately not runtime-derived),
+      held on a dedicated connection for the whole ISS-302 startup sweep
+      so that exactly one node in an HA deployment sweeps overdue timers.
+      SCOPE: write lib/letflow/design/req185-scheduler-firing-architecture.md
+      that
+      1. Names ONE recommended mechanism for running the poll loop, having
+      evaluated at minimum: adding Oban as a dependency; a supervised
+      GenServer ticker using Process.send_after/3 in
+      lib/letflow/application.ex's tree; and a per-timer process holding
+      its own timer. For each, state what it does about the three things
+      the poller must survive -- node restart, multi-node deployment, and
+      a single timer whose firing raises -- rather than comparing them
+      abstractly.
+      2. States explicitly whether Oban is adopted. Adding it is a new
+      top-level dependency and, like REQ-148's tv-labs/lua adoption,
+      needs REVIEWER sign-off in this artefact; a decided NO with reasons
+      is an equally valid outcome and must be recorded as one rather
+      than left open.
+      3. Decides the claim mechanism, and if it departs from SCH-02's
+      literal advisory-lock text (it is expected to, per the correction
+      above) says so in those words, citing ISS-301, so a later reader
+      does not "restore" the deleted lock.
+      4. Specifies where the poller sits relative to MULTI-TENANCY. This
+      is the one question R-Co does not answer for Letflow: R-Co's
+      timers table lives in per-tenant schemas (migration 081's own note:
+      "timers lives in per-tenant schemas only") and its scheduler polls
+      with a search_path per schema, whereas Letflow's poller must decide
+      whether it iterates tenant schemas per tick or uses one global
+      queue. Decision 0003 Decision B binds the TABLE placement; it does
+      not decide the POLLER's iteration strategy, so this artefact must,
+      and must state the cost of the chosen one at, say, 500 tenants.
+      5. Reaches a decided answer on where a timer whose firing fails
+      repeatedly goes -- see REQ-186's fire_error_count/FAILED/DLQ
+      requirement -- specifically whether it lands in REQ-176's
+      dlq_entries with entry_type "timer" (REQ-176 already reserves that
+      exact value, and REQ-176's own text names "scheduler/timer entries"
+      as not-yet-populated).
+      6. Records the two operational failures R-Co's own implementation
+      hit, because a port that repeats them is a bad port:
+      src/design/iss0618-scheduler-lock-and-error-signaling.md documents
+      that a due-but-locked timer and "no due timer exists" both collapsed
+      to the same PollOutcome, and that a genuine non-retryable DB error
+      inside the fire transaction (e.g. a unique-constraint violation on
+      the event idempotency key) was unconditionally swallowed and
+      reported as "nothing to do"; and the same doc records why the naive
+      fix is wrong -- propagating every error out of the fire path stops
+      the poll loop on the first bad timer, so fire_error_count never
+      climbs and the timer never reaches FAILED or the DLQ, which is the
+      bug ISS-303 originally fixed. The artefact must state how the
+      recommended design distinguishes "locked", "nothing due" and "hard
+      error" from one another while still letting the loop continue.
+      NOT IN THIS REQUIREMENT: no migration, no schema, no poller
+      implementation, no change to lib/letflow/engine/ -- REQ-186 builds
+      what this artefact specifies.
+    acceptance_criteria:
+      - "lib/letflow/design/req185-scheduler-firing-architecture.md exists and names exactly ONE recommended firing mechanism, with the alternatives it rejected and the reason for each -- evaluating at minimum Oban, a supervised GenServer ticker, and a per-timer process"
+      - "the artefact states an explicit YES or NO on adopting Oban as a mix.exs dependency, with REVIEWER sign-off recorded in the artefact; it does not leave the choice open or defer it to the implementing requirement"
+      - "the artefact names FOR UPDATE SKIP LOCKED (or its chosen alternative) as the claim mechanism and states in its own text that R-Co REMOVED the per-timer advisory lock SCH-02's literal text mandates, citing src/design/scheduler-concurrency-epic3.md's ISS-301 section, so a later reader does not reintroduce it"
+      - "the artefact decides whether an equivalent of R-Co's ISS-302 session-level startup-sweep lock is needed in Letflow, and if not, states what prevents two nodes both sweeping overdue timers on simultaneous restart"
+      - "the artefact states how the poller relates to Letflow's per-tenant schemas -- whether it iterates tenant schemas per tick or polls one global queue -- and quantifies the cost of the chosen strategy at a stated tenant count, rather than describing it qualitatively"
+      - "the artefact states, in one section, how the recommended design distinguishes 'timer locked by another node', 'no timer due' and 'hard non-retryable error' from each other, citing src/design/iss0618-scheduler-lock-and-error-signaling.md, and states why simply propagating every error out of the fire path is the WRONG fix (it stops the poll loop before fire_error_count can reach its limit)"
+      - "the artefact decides whether an exhausted-retry timer lands in REQ-176's dlq_entries with entry_type \"timer\", answering yes or no rather than leaving it to REQ-186"
+      - "no migration, no file under lib/letflow/engine/, and no mix.exs change is made by this requirement, confirmed by git diff --stat scoped to this requirement's commits"
+    depends_on: [REQ-047, REQ-052, REQ-176]
+
+  - id: REQ-186
+    title: Timers schema and scheduler core -- durable timer persistence, poll-and-fire loop, missed-timer recovery (SCH-01/02/05/06)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Builds the scheduler core REQ-185's artefact specifies. Core only --
+      no route, no controller, following the core/route split this stage
+      established (REQ-176 then REQ-178; REQ-181 then REQ-182; REQ-183
+      then REQ-184) and that REQ-VALIDATOR enforced when it rejected
+      REQ-179/180 for bundling schema, context and routes into one entry.
+      WHY THIS IS THE GAP: Letflow has :TIMER in
+      Letflow.Definitions.Graph's node_type enum with one definition-time
+      validator (check_timer_duration/1, graph.ex L738, CHK-12, requiring
+      a parseable duration_iso8601 attribute), but
+      lib/letflow/engine/transition.ex L283's catch-all dispatch branch
+      routes :TIMER to {:error, {:node_type_not_yet_implemented, ...}} --
+      so a definition containing a TIMER node validates and then cannot
+      execute. Nothing schedules anything anywhere in the codebase.
+      SCHEMA: `timers`, inside each tenant's Postgres schema with a
+      tenant_id column retained, per decision 0003-ecto-schema-strategy.md
+      Decision B -- matching R-Co, whose migration 081 states outright
+      that "timers lives in per-tenant schemas only (the public-schema
+      copy was dropped by GBL-073)". Columns, ported from R-Co
+      migrations/007_timers.sql plus the three later migrations that
+      corrected it (015, 016, 081, 092), all four folded into ONE Letflow
+      migration rather than replaying R-Co's history: id (uuid pk),
+      instance_id (uuid, references the instance, not null), token_id
+      (uuid, nullable), timer_type (string -- R-Co's four values are
+      "deadline", "reminder", "escalation", "scheduled_transition"),
+      node_id (string -- Letflow's TIMER node id; R-Co calls this
+      step_name), fire_at (utc_datetime_usec, not null -- R-Co's
+      fires_at; SCH-01 requires an ABSOLUTE UTC timestamp derived from
+      the node's duration at the moment of token arrival, never a
+      relative offset), status (string, default "pending", CHECK
+      constrained to exactly "pending" | "fired" | "cancelled" |
+      "failed"), fired_at / cancelled_at / failed_at (nullable),
+      cancel_reason (nullable text), fire_error_count (integer, not null,
+      default 0), repeat_expression / repeat_interval_us / repeat_total /
+      fired_count (all nullable, SCH-07 recurrence state, with R-Co's
+      chk_timers_recurrence_shape all-or-nothing CHECK: either all four
+      are null, or repeat_expression and repeat_interval_us and
+      fired_count are non-null with fired_count >= 0 and, when
+      repeat_total is non-null, repeat_total >= 1 and fired_count <=
+      repeat_total), created_at.
+      NOTE ON THE STATUS DOMAIN, and why it ships complete on day one:
+      R-Co shipped "pending | fired | cancelled" in migration 015 and had
+      to widen it later -- migration 081 (ISS-101) adds "failed" and
+      migration 092 (ISS-303) adds fire_error_count and failed_at --
+      because a timer whose firing errored retried forever with no
+      terminal state. Letflow ports the CORRECTED shape directly. Do not
+      ship the three-value domain "to match migration 015".
+      Also port R-Co's hot partial index: on (fire_at) WHERE status =
+      'pending' -- the poller's only hot query.
+      SCOPE:
+      1. The Ecto schema and migration above.
+      2. A context module with create/2 (persists a PENDING timer;
+      SCH-01 requires this to happen in the SAME transaction as the state
+      transition that armed it, so it must accept a caller-supplied
+      Ecto.Multi or repo so REQ-187 can enlist it), and a poll-and-fire
+      function implementing REQ-185's chosen mechanism: claim due timers
+      (status pending AND fire_at <= now) using REQ-185's decided claim
+      mechanism, and for each, in ONE transaction, mark it "fired", set
+      fired_at, and append the timer's event via REQ-025's append path.
+      3. Missed-timer recovery (SCH-05): every overdue timer fires, none
+      skipped, none twice; the appended event carries fired_late: true
+      plus both the scheduled fire_at and the actual firing timestamp
+      whenever the actual firing time is later than fire_at.
+      4. Failure accounting, the lesson of ISS-303/ISS-0618: a fire
+      attempt that raises rolls back that timer's transaction only,
+      increments fire_error_count in a SEPARATE transaction, and does NOT
+      stop the poll cycle -- the remaining due timers in the same cycle
+      are still attempted. On fire_error_count reaching a configured
+      maximum (R-Co's max_timer_fire_retries default is 3), the timer
+      moves to "failed" with failed_at set, and lands wherever REQ-185
+      decided (expected: REQ-176's dlq_entries with entry_type "timer",
+      a value REQ-176 already reserves).
+      5. Configuration matching R-Co's SchedulerConfig
+      (scheduler-concurrency-epic3.md L316-330, verified against
+      scheduler.zig L19-20): poll interval default 5000 ms, jitter default
+      0 ms, max timers per cycle default 64, max fire retries default 3 --
+      all overridable via application config. Jitter is applied to the
+      POLL INTERVAL only and never to fire_at (SCH-06), and is randomised
+      independently per node with no shared seed.
+      6. Register the timer-fired event type in Letflow's existing
+      per-tenant event_type_registry (REQ-023/025's ES-05 registry check
+      rejects unregistered types), following the pattern REQ-025 already
+      established.
+      NOT IN THIS REQUIREMENT: no route or controller (an admin timer
+      surface is not drafted in this batch at all -- R-Co has no
+      timers.zig route and the SPA has no timers client, verified: no
+      web/src/api/timers.ts and no timer type in web/src/types/api.ts);
+      no transition.ex change (REQ-187); no cancellation wiring (REQ-187);
+      no recurrence re-arm computation (REQ-188); no escalation timers
+      (REQ-188); and explicitly no partition maintenance or
+      partition-based retention -- see this batch's header for the
+      0003/ISS-0014 blocker.
+    acceptance_criteria:
+      - "the timers table lives inside each tenant's Postgres schema with a tenant_id column retained (decision 0003 Decision B), verified by inspecting the migration, and carries a partial index on (fire_at) WHERE status = 'pending'"
+      - "the status CHECK constraint admits exactly pending, fired, cancelled and failed -- a test attempting to insert a timer with status 'expired' fails at the database level, not only in the changeset"
+      - "the recurrence CHECK constraint is all-or-nothing: a test inserting repeat_expression without repeat_interval_us is rejected by the database, and a test inserting all four recurrence columns consistently succeeds"
+      - "a timer created with fire_at in the past is fired by the first poll after it exists, and the appended event carries fired_late: true together with both the scheduled fire_at and the actual firing timestamp; a timer created with fire_at in the future is NOT fired by that same poll -- two explicit tests"
+      - "polling twice over the same due timer fires it exactly once: the second poll appends no second event and the timers row remains status 'fired' with its original fired_at"
+      - "a fire attempt that raises increments fire_error_count and leaves the timer 'pending', AND the remaining due timers in that same poll cycle are still attempted -- one test asserts both, by making the first of two due timers fail and asserting the second still fired"
+      - "a timer reaching the configured max fire retries transitions to 'failed' with failed_at set and produces exactly one dlq_entries row with entry_type \"timer\" (or whatever REQ-185's artefact decided, quoted in the moduledoc), and is not attempted again by subsequent polls"
+      - "the poll interval, jitter, max timers per cycle and max fire retries are all read from application config with the documented defaults (5000 ms, 0 ms, 64, 3), demonstrated by a test overriding at least the interval and asserting the poller uses the override"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-185, REQ-023, REQ-025, REQ-072, REQ-176]
+
+  - id: REQ-187
+    title: Wire TIMER nodes into the engine -- arm on token arrival, cancel on completion/cancellation (SCH-01/SCH-03, closes the cancel_pending_timers stub)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Connects REQ-186's timers core to the instance engine, closing three
+      named, already-documented stubs. This is deliberately a separate
+      requirement from REQ-186: REQ-186 builds a subsystem, this changes
+      the engine's transition and lifecycle paths, and the two touch
+      disjoint files.
+      THE THREE STUBS THIS CLOSES, all verified in the tree this batch:
+      (a) lib/letflow/engine/transition.ex L283's catch-all dispatch
+      branch, which today returns {:error, {:node_type_not_yet_implemented,
+      :TIMER, node_id}} for every TIMER node -- the branch's own comment
+      names :TIMER as one of the two node types it is standing in for.
+      (b) lib/letflow/engine/task_activation.ex L338-339's
+      cancel_pending_timers/2, an explicit no-op returning :ok, whose
+      @doc says verbatim that it "is the SCH-03 timer-cancellation hook
+      (src/scheduler/, owned by Stage S6 -- not yet built in Letflow)"
+      and "is the single, named call site S6's own CODE-DESIGNER should
+      wire real cancellation logic into". It is already called from
+      lib/letflow/engine.ex L1177, INSIDE the open completion transaction
+      and immediately after the instance_projections status flip, exactly
+      so that a real DB write added here participates in that same atomic
+      commit. Preserve that call site and that position; do not relocate
+      it.
+      (c) lib/letflow/engine.ex L234-242's recorded deferral, which states
+      that cancel_instance/3 "performs neither" of EE-08's two extra
+      duties and that "a future S6 timer-scheduling requirement is
+      expected to add its own timer-cancellation call alongside this
+      function's own transaction". This requirement is that one, for the
+      timer half only -- REQ-056's SERVICE_TASK HTTP-abort half stays
+      deferred and this requirement must not silently absorb it.
+      SCOPE:
+      1. Transition: a token arriving at a :TIMER node arms a timer via
+      REQ-186's create/2 with fire_at = arrival time + the node's
+      duration_iso8601 attribute (already validated at definition time by
+      graph.ex's CHK-12 check_timer_duration/1), persisted in the SAME
+      transaction as the state-transition event, per SCH-01 and DB-03.
+      The token waits at the node rather than advancing.
+      2. Firing: when REQ-186's poller fires a timer, the instance
+      advances from the TIMER node along its outgoing edge. SCH-01's edge
+      case -- a timer armed with fire_at already <= now -- is due
+      immediately on the next poll and must not be special-cased into
+      firing inline inside the arming transaction.
+      3. Cancellation (SCH-03): replace cancel_pending_timers/2's no-op
+      body with a real update setting every PENDING timer for that
+      instance to "cancelled" with cancelled_at and a cancel_reason,
+      running on the caller-supplied repo/prefix so it commits atomically
+      with the completion transaction it is already called inside. Add
+      the equivalent call to Letflow.Engine.cancel_instance/3's own
+      transaction, per the L234-242 deferral.
+      4. Preserve PURITY at the transition boundary. Letflow.Engine.
+      Transition's contract (its moduledoc, and expr.ex's) is that
+      transition/3 is a pure function that never raises and touches no
+      Repo. Arming a timer is a database write. This requirement must
+      therefore have transition/3 RETURN a description of the timer to be
+      armed and have the impure caller persist it, in the same shape the
+      module already uses for other effects -- it must not introduce a
+      Repo call inside transition.ex. State which existing return shape
+      is extended in the moduledoc.
+      SCH-03's stated concurrency edge case must hold: if the poller has
+      already claimed a timer and is mid-fire when the instance is
+      cancelled, the first transaction to commit wins and the other rolls
+      back; both outcomes are valid, and neither leaves a fired timer on
+      a cancelled instance nor a cancelled timer that also fired.
+      NOT IN THIS REQUIREMENT: no route or controller; no recurrence
+      (REQ-188); no escalation timers (REQ-188); no change to REQ-056's
+      SERVICE_TASK dispatch or its own deferred HTTP-abort duty.
+    acceptance_criteria:
+      - "a definition containing a TIMER node with a valid duration_iso8601 starts an instance whose token reaches that node and arms exactly one timers row with status 'pending' and fire_at equal to the arrival timestamp plus the parsed duration -- replacing the {:error, {:node_type_not_yet_implemented, :TIMER, _}} that transition.ex L283 returns today, asserted by a test that would have failed before this requirement"
+      - "the timer row and the state-transition event are written in ONE transaction: a test that forces the event append to fail leaves NO timers row behind"
+      - "when the timer fires, the instance advances along the TIMER node's outgoing edge and the token is no longer at the TIMER node"
+      - "completing an instance sets every one of its PENDING timers to 'cancelled' with cancelled_at set, via the existing TaskActivation.cancel_pending_timers/2 call site in engine.ex -- which is still called from the same position inside the completion transaction (confirmed by git diff showing the call site itself unmoved)"
+      - "cancelling an instance via Letflow.Engine.cancel_instance/3 likewise cancels its PENDING timers in the same transaction, and a test forcing that transaction to roll back leaves the timers still 'pending'"
+      - "a timer whose status is already 'fired' is NOT changed by a subsequent instance cancellation (SCH-03's stated edge case), and no PENDING timer belonging to a CANCELLED or COMPLETED instance is ever fired by a later poll -- two explicit tests"
+      - "lib/letflow/engine/transition.ex contains no Letflow.Repo call after this change, confirmed by the same grep its moduledoc already documents for purity, and the moduledoc names which return shape was extended to carry the timer-arming description instead"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-186, REQ-047, REQ-052, REQ-050]
+
+  - id: REQ-188
+    title: Recurring timers and periodic retention runner (SCH-07 re-arm, plus the archive/1 and artifact-retention sweeps nothing currently invokes)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Third and last of S6's scheduler half. Two deliverables that share
+      one mechanism -- REQ-186's poll loop -- and are therefore built
+      together rather than split into a requirement each.
+      PART 1, SCH-07 RECURRING TIMERS. R-Co's src/scheduler/recurrence.zig
+      (221 lines) computes the next fire time for an ISO 8601 repeat
+      expression. When a recurring timer fires, a NEW pending timer is
+      created with fire_at = previous fire_at + interval IN THE SAME
+      TRANSACTION as the firing, so a crash between the two is impossible.
+      The repeat expression is ISO 8601 repeat syntax: R/PT1H means repeat
+      indefinitely every hour; R3/PT1H means repeat 3 times. When
+      repeat_total is reached (fired_count = repeat_total) the series
+      ends and no new timer is created. REQ-186 already ships the four
+      columns and their all-or-nothing CHECK constraint; this requirement
+      supplies the computation and the re-arm. Note the interaction SCH-07
+      records with SCH-05: a platform restart that missed several
+      occurrences fires the missed ones as overdue, and an interval
+      shorter than the poll interval fires at most once per poll cycle
+      rather than catching up N times in one tick -- both must be stated
+      behaviours, not accidents.
+      PART 2, THE PERIODIC RETENTION RUNNER. Letflow already has
+      Letflow.EventStore.archive/1 (REQ-026, event_store.ex L989) and the
+      event_retention_policies table (migration
+      20260817181240_create_event_retention_policies.exs), but archive/1
+      has ZERO production callers -- verified: every grep hit for it in
+      lib/ is a moduledoc reference, never a call. It is a working
+      function nothing invokes, which is exactly the gap R-Co closes with
+      src/scheduler/artifact_retention.zig (147 lines). This requirement
+      adds a periodic runner, on REQ-186's supervised scheduler rather
+      than a second independent ticker, that invokes archive/1 per tenant
+      on a configurable interval with a configurable enable/disable
+      switch defaulting to DISABLED (a retention sweep that deletes rows
+      must be opt-in, and no Letflow deployment has ever run one).
+      EXPLICITLY OUT OF SCOPE, WITH THE BLOCKER NAMED: R-Co's
+      src/scheduler/partition_maintenance.zig (581 lines) and
+      partition_retention.zig (587 lines) are NOT ported. Both operate on
+      a PARTITIONED events table via DETACH/ATTACH/DROP. Letflow's events
+      table is not partitioned (verified: no PARTITION statement anywhere
+      in priv/repo/migrations/), decision 0003-ecto-schema-strategy.md
+      Decision C point 2 deliberately defers partitioning, and ISS-0014
+      (resolved 2026-08-17) already adjudicated this exact question,
+      adopting option (a) -- keep row-level archive/1 -- and expressly
+      REJECTING option (c), porting partition retention now, because it
+      "would force partitioning early, contradicting 0003 Decision C's
+      deliberate deferral, and would need REVIEWER sign-off / a new
+      decision record". This requirement therefore schedules the archive/1
+      that exists, and its moduledoc must say that partition-based
+      retention is deferred pending a partitioning decision record,
+      naming ISS-0014 -- so the omission is a recorded boundary rather
+      than a silent gap.
+      ALSO OUT OF SCOPE, BLOCKER NAMED: SCH-04's escalation timers.
+      SCH-04 requires a HUMAN_TASK node carrying an
+      escalation_timer_duration attribute, and Letflow's
+      Letflow.Definitions.Graph has no such attribute and no validator for
+      one -- CHK-12 (graph.ex L738) validates duration_iso8601 on :TIMER
+      nodes only. The definition-side input does not exist, so escalation
+      timers need a definitions-side requirement first. Named here rather
+      than silently dropped.
+    acceptance_criteria:
+      - "a timer with repeat_expression \"R/PT1H\" that fires creates exactly one NEW pending timer with fire_at equal to the fired timer's fire_at plus one hour, in the same transaction as the firing -- demonstrated by a test that forces the firing transaction to roll back and asserts NEITHER the status change NOR the new timer persisted"
+      - "a timer with repeat_expression \"R3/PT1H\" stops re-arming after its third firing: fired_count reaches 3 and the fourth poll creates no new timer, asserted by counting timers rows"
+      - "a recurring timer whose instance is cancelled does not re-arm -- the chain terminates, asserted after a cancellation followed by a poll"
+      - "a recurring timer whose repeat interval is SHORTER than the poll interval fires at most once per poll cycle rather than catching up multiple occurrences in one tick, asserted by an explicit test with the interval set below the configured poll interval"
+      - "the retention runner is DISABLED by default: with no configuration set, a full poll cycle invokes Letflow.EventStore.archive/1 zero times, asserted rather than assumed"
+      - "with the retention runner explicitly enabled in config, a poll cycle invokes archive/1 and rows older than the tenant's configured retention are moved to events_archive -- closing the zero-caller gap, asserted by row counts before and after"
+      - "the retention runner runs on REQ-186's existing scheduler process rather than adding a second independent periodic process to lib/letflow/application.ex, confirmed by git diff of application.ex showing no new ticker child"
+      - "the moduledoc states that partition_maintenance.zig and partition_retention.zig are deliberately not ported, naming decision 0003 Decision C's partitioning deferral and ISS-0014's adopted option (a) as the blocker, and that SCH-04 escalation timers are deferred because :HUMAN_TASK has no escalation_timer_duration attribute in Letflow's graph schema"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-186, REQ-187, REQ-026]
+
+  - id: REQ-189
+    title: Settle the secrets storage backend and write the missing decision record (docs/migration/decisions/0016, gates S6's secrets half)
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S6
+    description: >
+      FIRST requirement of S6's secrets half; REQ-190 and REQ-191 depend
+      on it. It exists because
+      docs/migration/stage-6-operational-cross-cutting.md's own Decisions
+      section says, verbatim, "Likely needs a decision file for
+      src/secrets specifically (secret storage/retrieval backend choice)
+      -- defer until this stage starts." The stage is starting, so the
+      file must now be written, by its own requirement, in the shape
+      REQ-148/149/150 established.
+      TARGET SHAPE, from R-Co's EXP-501 (docs/requirements.yaml,
+      backlog_tier P1): per-tenant secrets under ENVELOPE ENCRYPTION, data
+      keys wrapped by a host KMS or env master key; resolution BY
+      REFERENCE at execution; values never appearing in definitions, logs
+      or traces; and the module OWNS WEBHOOK HMAC KEYS.
+      WHAT R-CO ACTUALLY BUILT, inspected fresh this batch -- the artefact
+      must start from this, not from EXP-501's prose:
+      * migrations/GBL-128_exp501_secrets.sql creates a GLOBAL `secrets`
+      table (in public, with tenant_id as a column, NOT a per-tenant
+      schema table) with columns secret_id, tenant_id, namespace, name,
+      key_id, purpose, status (active|disabled|deleted), algorithm,
+      wrapped_key_algorithm, ciphertext, wrapped_data_key, nonce,
+      auth_tag, aad, wrapping_key_ref, wrapping_key_version, created_at,
+      created_by, disabled_at, deleted_at, UNIQUE (tenant_id, namespace,
+      name, key_id).
+      * src/secrets/crypto.zig: a fresh random 32-byte data key per
+      write, AES-256-GCM over the plaintext with the AAD bound to
+      "{tenant_id}:{namespace}:{name}:{purpose}", and the data key wrapped
+      by a SECOND AES-256-GCM pass under the master key.
+      * src/secrets/reference.zig: the reference syntax is literally
+      `sec://tenant/<tenant>/<namespace>/<name>#<key_id>`, with the
+      `#<key_id>` optional (omitted means latest). Segments are
+      lowercase [a-z0-9_-] only.
+      * src/secrets/store.zig resolveSecret cross-checks that the tenant
+      in the reference equals the caller's tenant before doing anything
+      else, enforces a purpose/consumer matrix (a webhook_dispatcher
+      consumer may only unwrap webhook_hmac or generic secrets), and
+      zeroes the plaintext buffer after use.
+      THREE R-Co DEFECTS THE ARTEFACT MUST DECIDE AGAINST EXPLICITLY,
+      each verified in R-Co source this batch rather than assumed:
+      (a) THE MASTER KEY IS HARDCODED. Every call site passes the literal
+      64-zero hex string -- src/api/routes/webhooks.zig:375,
+      src/webhook/dispatcher.zig:537,
+      src/webhook/subscription_store.zig:224 and
+      src/effects/worker.zig:42's struct default. A grep for MASTER_KEY
+      or WRAPPING_KEY across R-Co's whole src/ returns ZERO matches:
+      the env wiring EXP-501 describes was never built. Letflow must
+      decide where its master key actually comes from and must fail
+      startup rather than silently accept a default.
+      (b) THE STORED ALGORITHM METADATA IS WRONG. Rows are written with
+      wrapped_key_algorithm = "aes_kw_256" while crypto.zig's own comment
+      states Zig has no AES-KW primitive and it therefore does a second
+      AEAD pass instead. Copying the schema copies a false claim about
+      the cryptography. Decide the honest value.
+      (c) THE UNPINNED LOOKUP DOES NOT FILTER ON STATUS. resolveSecret's
+      unpinned query takes the newest row by created_at and only then
+      rejects it if disabled or deleted, rather than selecting the newest
+      ACTIVE version -- so disabling the newest version breaks resolution
+      instead of falling back. Decide the correct behaviour.
+      SCOPE: write docs/migration/decisions/0016-secrets-storage-backend.md
+      (a real decision record in the directory's existing format, not a
+      design note under lib/letflow/design/, because the stage doc asked
+      for a decision FILE and because REQ-190/191 both build on it), that
+      1. Decides the storage backend: a Letflow-owned Postgres table
+      versus an external KMS/vault. If Postgres, decide the master-key
+      source concretely (which env var, what format, what happens at
+      startup when it is absent or malformed) and state that a default
+      or all-zeros key is rejected, citing (a) above.
+      2. Decides the table's placement against decision
+      0003-ecto-schema-strategy.md Decision B. Decision B is the general
+      rule (per-tenant schema, tenant_id retained); R-Co made `secrets`
+      GLOBAL instead. Either follow Decision B or state the R-Co-grounded
+      reason to diverge -- and if diverging, get REVIEWER sign-off in
+      this record rather than deciding it quietly, per CLAUDE.md's
+      don't-silently-re-decide rule.
+      3. Fixes the reference syntax Letflow will use. Adopting R-Co's
+      `sec://tenant/...` verbatim is the expected answer and needs only
+      to be stated; any change must say what breaks.
+      4. Decides the crypto: algorithm, key sizes, nonce handling, what
+      the AAD binds, and what the stored algorithm metadata says --
+      answering (b) rather than inheriting it.
+      5. Decides the rotation model, at least to the depth of: every
+      version carries a key_id; a reference may pin `#key_id` or omit it;
+      what an omitted key_id resolves to (answering (c)); and whether a
+      grace-window dual-read is in scope now or deferred with the
+      constraint that the reference syntax must not change when it lands.
+      6. RESOLVES THE WEBHOOK HMAC KEY COLLISION, which is the reason
+      this record is load-bearing rather than merely tidy, and which the
+      artefact must state as a live contradiction rather than a
+      hypothetical. REQ-181 (pending, this same stage) specifies
+      webhook_subscriptions.secret "stored hashed ... never returned once
+      created". REQ-183 (pending, this same stage) then specifies HMAC-
+      SHA256 signing "using the subscription's stored secret (REQ-181's
+      schema)". A hash cannot be used as an HMAC key, so as drafted
+      REQ-183 is not implementable against REQ-181's storage. EXP-501
+      says the secrets module owns webhook HMAC keys, and R-Co resolved
+      exactly this by adding webhook_subscriptions.secret_ref and
+      .secret_key_id, backfilling them, and blanking the plaintext column
+      (GBL-128_exp501_secrets.sql, with correctives
+      1134_iss0112_add_secret_ref_to_tenant_schemas.sql and
+      1138_iss0635_webhook_secret_ref_corrective.sql). The record must
+      choose Letflow's resolution -- secret_ref columns superseding
+      REQ-181's hashed secret with a stated migration path, or
+      deliberately leaving REQ-181 alone with a stated reason and a
+      stated answer to how REQ-183 then signs -- and must name REQ-190 as
+      the requirement that implements whichever is chosen. It must not
+      leave two homes for the same key material in one stage.
+      NOT IN THIS REQUIREMENT: no migration, no table, no crypto code, no
+      change to REQ-181/183's entries (this batch is append-only).
+    acceptance_criteria:
+      - "docs/migration/decisions/0016-secrets-storage-backend.md exists, follows the format of the existing records in that directory (Question / Decision / Evidence / consequences), and names one chosen storage backend with the alternatives it rejected"
+      - "the record names the exact environment variable Letflow's master key comes from, its required format, and states that startup FAILS when it is absent or malformed -- explicitly rejecting R-Co's hardcoded all-zeros key and citing the four call sites (src/api/routes/webhooks.zig:375, src/webhook/dispatcher.zig:537, src/webhook/subscription_store.zig:224, src/effects/worker.zig:42) plus the zero-match grep for MASTER_KEY/WRAPPING_KEY across R-Co's src/"
+      - "the record states whether the secrets table is per-tenant-schema (decision 0003 Decision B) or global, and if global, records REVIEWER sign-off on that divergence together with the R-Co-grounded reason -- it does not diverge from 0003 silently"
+      - "the record fixes the literal secret-reference syntax as a quoted string with an example, and states whether the key-id suffix is optional and what an omitted key id resolves to"
+      - "the record states the encryption algorithm, key size, nonce handling and what the AAD binds, and states what value the stored algorithm metadata column carries -- explicitly addressing that R-Co stores \"aes_kw_256\" while performing a second AES-GCM pass"
+      - "the record contains a section resolving the webhook HMAC key ownership question, quoting REQ-181's hashed-secret storage and REQ-183's HMAC-signing requirement, stating plainly that a hash is not usable as an HMAC key, and naming which requirement implements the chosen resolution"
+      - "if the chosen resolution changes anything REQ-181 or REQ-183 specified, the record says so explicitly and REVIEWER has signed off; if it deliberately leaves them unchanged, it states how REQ-183 obtains a signing key"
+      - "no migration, no file under lib/letflow/, and no edit to any existing docs/requirements.yaml entry is made by this requirement, confirmed by git diff --stat scoped to its commits"
+    depends_on: [REQ-181, REQ-183, REQ-072]
+
+  - id: REQ-190
+    title: Secrets core -- envelope-encrypted per-tenant secret storage and resolution by reference (EXP-501), and the webhook HMAC key reconciliation
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Builds what REQ-189's decision record specifies. Core only -- no
+      route, no controller, per this stage's core/route split precedent
+      (REQ-176 then REQ-178; REQ-181 then REQ-182; REQ-183 then REQ-184).
+      Letflow has NOTHING here today: no secrets table, no encryption at
+      rest for any credential, no redaction subsystem, no reference
+      resolution.
+      SCHEMA: a `secrets` table placed exactly as REQ-189's record
+      decided (per-tenant schema per decision 0003 Decision B, or global
+      with the record's stated reason), carrying at minimum tenant_id,
+      namespace, name, key_id, purpose, status (active | disabled |
+      deleted), algorithm, wrapped_key_algorithm, ciphertext,
+      wrapped_data_key, nonce, auth_tag, aad, wrapping_key_ref,
+      wrapping_key_version, created_at, created_by, disabled_at,
+      deleted_at, with UNIQUE (tenant_id, namespace, name, key_id) --
+      ported from migrations/GBL-128_exp501_secrets.sql, adjusted per
+      REQ-189.
+      SCOPE:
+      1. Envelope encryption, per REQ-189's decided algorithm: a fresh
+      random data key per secret, the plaintext encrypted under it with
+      the AAD binding tenant/namespace/name/purpose, and the data key
+      wrapped under the master key. The master key is read from the
+      environment variable REQ-189 named; a missing or malformed value
+      raises at startup rather than falling back to any default. This is
+      the single most important divergence from R-Co, which hardcodes an
+      all-zeros key at four call sites -- the moduledoc must say so.
+      2. put/2: writes a secret, returns ONLY the reference, the key_id
+      and the timestamp -- never the plaintext, never the ciphertext.
+      3. resolve/2: parses the reference; REJECTS it if the tenant named
+      in the reference is not the caller's tenant, before any query;
+      applies the purpose/consumer matrix (a webhook consumer may only
+      resolve a webhook-purpose or generic secret); rejects disabled and
+      deleted versions; and returns the plaintext value with its key_id
+      and purpose. An unpinned reference resolves per REQ-189's decided
+      rule -- specifically the newest ACTIVE version, not merely the
+      newest row, correcting the R-Co behaviour REQ-189 flagged.
+      4. disable/2: sets status disabled with disabled_at, leaving the
+      row and its original created_by intact (R-Co's disableSecretVersion
+      overwrites created_by with the disabling actor, losing the original
+      creator -- do not port that).
+      5. REDACTION: a function that renders a reference for logging with
+      the key id masked, and configuration of Elixir's Logger so that a
+      value stored under a sensitive key never reaches a log line. R-Co
+      does this in src/obs/logger.zig with an exact-key list
+      (authorization, password, password_hash, token, access_token,
+      refresh_token, bootstrap_token, api_token, secret, client_secret,
+      credential, credentials, set-cookie, cookie) plus the suffixes
+      _token, _secret, _password, _credential, replacing the VALUE with
+      "[REDACTED]" while keeping the key. Note the honest limitation R-Co
+      has and Letflow inherits: redaction keys on the field NAME, so a
+      secret placed under an innocuous key is not caught -- the moduledoc
+      must state this rather than claiming a guarantee it does not have.
+      6. THE WEBHOOK HMAC RECONCILIATION REQ-189 decided. If that record
+      chose the secret_ref path, this requirement adds secret_ref and
+      secret_key_id to webhook_subscriptions and makes REQ-183's signing
+      resolve its key through resolve/2. Follow R-Co's own migration
+      shape (GBL-128 adds both columns, backfills, then BLANKS the
+      plaintext column rather than dropping it), but avoid the two
+      failures R-Co hit and had to correct twice: its migration was
+      scoped to the public schema while webhook_subscriptions lives in
+      per-tenant schemas (ISS-0112), and its corrective ran before the
+      tenant schemas existed (ISS-0635). Letflow's migration must apply
+      to every tenant schema and be idempotent and re-runnable. Also
+      avoid the substantive gap R-Co left: its backfilled references are
+      synthetic placeholders pointing at secrets rows that were never
+      created, because the old plaintext was blanked rather than
+      re-encrypted. Letflow must either genuinely migrate existing
+      secrets into the secrets table or state that there are none to
+      migrate -- and since REQ-181 is still pending and no
+      webhook_subscriptions row exists in any Letflow deployment, "there
+      are none" is likely the honest and correct answer; assert it rather
+      than assuming it.
+      NOT IN THIS REQUIREMENT: no route or controller (REQ-191); no
+      secrets admin UI; no OIDC client-secret rotation (R-Co's OIDC-21 is
+      a separate mechanism that does not use the secrets table at all).
+    acceptance_criteria:
+      - "a secret written with put/2 and read back with resolve/2 returns the identical plaintext, and the row's ciphertext column does NOT contain the plaintext bytes -- asserted directly against the stored binary, not inferred"
+      - "put/2's return value contains the reference, key_id and timestamp and contains neither the plaintext nor the ciphertext, asserted by matching over the whole returned structure"
+      - "resolve/2 called with a reference naming tenant A, by a caller scoped to tenant B, is rejected before any database query -- and the error does not disclose whether that secret exists"
+      - "resolve/2 refuses a secret whose purpose is not permitted for the calling consumer, demonstrated by resolving a webhook-purpose secret as a webhook consumer (succeeds) and a non-webhook-purpose secret as the same consumer (fails)"
+      - "a secret with two versions where the NEWEST is disabled resolves, via an unpinned reference, to the newest ACTIVE version rather than failing -- the explicit correction of the R-Co behaviour REQ-189 flagged"
+      - "with the master-key environment variable unset, and separately with it set to a malformed value, application startup FAILS with a clear error in both cases -- two tests; no all-zeros or other default key is ever used"
+      - "a log call passing a value under each of the keys secret, password, token and client_secret, and under one key ending in _secret, emits \"[REDACTED]\" in place of every one of those values while keeping the key names, asserted against captured log output"
+      - "the reference-redaction function renders a reference with its key id masked, asserted on a reference that has a key id and on one that does not"
+      - "the webhook HMAC reconciliation REQ-189 decided is implemented and its outcome asserted: if secret_ref columns were chosen, a test shows REQ-183's signing key resolving through resolve/2 and shows no plaintext secret persisting in webhook_subscriptions; if REQ-189 chose otherwise, a test asserts that decision's stated outcome instead. The moduledoc quotes REQ-189's chosen resolution either way."
+      - "the moduledoc states that redaction keys on field NAMES and therefore does not catch a secret placed under an unrecognised key, rather than claiming a complete guarantee"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-189, REQ-072, REQ-181]
+
+  - id: REQ-191
+    title: Service catalog core -- the DB-backed registry three existing seams already depend on (REPO-07, SVC-01/03)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Core only, no routes -- REQ-192 adds the HTTP surface. This is the
+      most-referenced unbuilt subsystem in the codebase: THREE separate
+      already-shipped sites name it as a stage-S6 gap, and a fourth
+      already ships its permissions.
+      THE FOUR SEAMS, all verified in the tree this batch:
+      (a) lib/letflow/definitions/service_scope_validator.ex L55-65
+      (REQ-031, SVC-03) implements the graph-walk-and-scope-comparison
+      algorithm against an INJECTABLE Lookup struct of two function
+      values, and its own moduledoc says a "tenant-scoped, DB-backed
+      service registry (R-Co: src/repository/service_catalog.zig) belongs
+      to stage S6, not yet ported as of this module".
+      (b) lib/letflow/definitions/solution_pack.ex L35 and L512:
+      service_catalog_entries is "not supported" and install/3's step 1
+      HARD-FAILS a non-empty array with {:error,
+      :unsupported_pack_section} -- deliberately rejecting tenant-supplied
+      content rather than discarding it, pending exactly this subsystem.
+      (c) lib/letflow/engine/pin_resolver.ex L27's "SCOPE GAP --
+      service_catalog (S6) and PLC-01 (unscoped) are not built": PIN-01
+      AC1's catalog_entry version resolution resolves only against an
+      injectable Lookup, never a real catalog.
+      (d) lib/letflow/api/authorization.ex ALREADY ships the complete
+      SVC-04 policy surface with no backing subsystem: :ServicesRead,
+      :AdminServicesRead and :AdminServicesManage at L100-102, mapped at
+      L299-304 from GET /services, GET /admin/services and
+      POST/PATCH/DELETE /admin/services -- byte-identical to R-Co's own
+      src/api/authorization.zig:107-109.
+      docs/migration/stage-4-api-surface.md:101 assigns services.zig (417
+      lines) to S6 explicitly.
+      BINDING CONTRACT -- an already-committed SPA consumer exists for
+      this subsystem, exactly as REQ-181/182 had for webhooks:
+      web/src/api/services.ts defines ServiceRecord (service_id,
+      endpoint_url, request_schema, response_schema, required_auth,
+      timeout_ms, max_retries, scope, owner_tenant_id, created_at,
+      updated_at), ServiceScope = 'global' | 'tenant',
+      RegisterServiceBody and UpdateServiceScopeBody, and
+      web/src/pages/admin/services/ServicesPage.tsx consumes them today
+      against routes that 404. Build to that contract.
+      SCHEMA: a `service_catalog` table, ported from R-Co
+      migrations/049_repository_service_catalog.sql plus
+      GBL-117_svc01_service_catalog_scope.sql: service_id (string, ≤255,
+      primary key -- GLOBALLY unique across all tenants regardless of
+      scope, which is R-Co's explicit SVC-01 rule), endpoint_url (string,
+      ≤2048), request_schema (text), response_schema (text),
+      required_auth (string, CHECK constrained to NONE | API_KEY | OAUTH2
+      | MUTUAL_TLS), timeout_ms (integer, CHECK between 1 and 3600000),
+      retry_policy (text, nullable, JSON), scope (string, not null,
+      default "global", CHECK in global | tenant), owner_tenant_id (uuid,
+      nullable, referencing the tenant), created_at, updated_at, plus
+      R-Co's table-level consistency CHECK: scope = 'global' implies
+      owner_tenant_id IS NULL, and scope = 'tenant' implies
+      owner_tenant_id IS NOT NULL.
+      DECISION 0003 INTERACTION, TO BE STATED NOT ASSUMED: this table is
+      GLOBAL in R-Co (public.service_catalog), which departs from decision
+      0003 Decision B's general per-tenant-schema rule. The R-Co-grounded
+      reason is structural rather than incidental: a scope = 'global'
+      entry is by definition referenceable by every tenant, and
+      service_id is globally unique across tenants, so a per-tenant-schema
+      copy could not express either property. The migration and the
+      moduledoc must state this reason explicitly, and this requirement
+      must flag it for REVIEWER sign-off as a deliberate, reasoned
+      divergence from 0003 rather than an oversight.
+      SCOPE:
+      1. Schema and migration above.
+      2. A context module with: register/2 (validates the scope/owner
+      pairing, service_id non-empty and within length, timeout_ms in
+      range; a tenant-scoped registration naming a non-existent tenant is
+      rejected; a duplicate service_id is a conflict, not a silent
+      overwrite); get_for_tenant/2 -- the SVC-01 resolution: a service is
+      visible to tenant T when scope is global OR owner_tenant_id is T,
+      and a tenant-scoped service owned by someone else returns NOT FOUND,
+      indistinguishable from non-existent, so the catalog never discloses
+      another tenant's entries; list_for_tenant/2 with REQ-067's cursor
+      pagination; update_scope/2; delete/2.
+      3. REFERENTIAL GUARDS. R-Co refuses to delete a service that any
+      ACTIVE definition references, and refuses to narrow a service from
+      global to tenant while other tenants' ACTIVE definitions reference
+      it, returning the conflicting ids so the caller can act. Port both
+      behaviours. Do NOT port R-Co's implementation: its
+      bpm_active_defs_for_service does LIKE '%' || service_id || '%'
+      against the serialized graph text, which over-matches any service_id
+      appearing anywhere in the JSON. Letflow must check actual
+      SERVICE_TASK service_id attributes structurally, and the moduledoc
+      must say why it diverges.
+      4. Satisfy seam (a): supply a real Lookup that
+      ServiceScopeValidator.validate/3 can be given, WITHOUT changing that
+      module's injectable-Lookup design -- REQ-031 chose a struct of
+      function values deliberately so a caller can vary the lookup per
+      call, and that stays.
+      5. Resolve seam (b) EXPLICITLY, either way, so it stops dangling:
+      make solution_pack.ex's service_catalog_entries path functional now
+      that a catalog exists, OR leave the hard-fail in place and state in
+      this requirement's own moduledoc which later requirement owns it
+      and why deferring is right. Do not leave it unaddressed.
+      NOT IN THIS REQUIREMENT: no route or controller (REQ-192); no
+      process module catalog (PLC-01 -- greenfield, unscoped to any stage
+      in Letflow, and not drafted in this batch: its blocker is that no
+      Letflow stage owns it and SUB_PROCESS module_ref resolution would
+      need a definitions-side change first); no change to
+      service_scope_validator.ex's algorithm or to pin_resolver.ex.
+    acceptance_criteria:
+      - "the service_catalog table carries the scope/owner consistency CHECK: an insert with scope 'global' and a non-null owner_tenant_id is rejected by the DATABASE, and so is one with scope 'tenant' and a null owner_tenant_id -- two explicit tests, not changeset-level validation"
+      - "required_auth and timeout_ms are CHECK constrained at the database level: an insert with required_auth 'BASIC' is rejected, and so is one with timeout_ms 0 and one with timeout_ms 3600001"
+      - "get_for_tenant/2 returns a global service to any tenant; returns a tenant-scoped service to its owner; and returns NOT FOUND -- not a forbidden error -- for a tenant-scoped service owned by a different tenant, so the two cases are indistinguishable to the caller (three explicit tests)"
+      - "service_id is globally unique: registering the same service_id for a second, different tenant fails, even when the first is tenant-scoped"
+      - "register/2 with scope 'tenant' naming a tenant that does not exist is rejected without creating a row"
+      - "delete/2 of a service referenced by an ACTIVE definition is refused and the error names the referencing definition ids; delete/2 of an unreferenced service succeeds -- and a test confirms the reference check matches an actual SERVICE_TASK service_id attribute rather than a substring of the serialized graph, by registering a service whose id appears only inside an unrelated string in some definition's graph and asserting that definition does NOT block the delete"
+      - "update_scope/2 narrowing a global service to tenant-scoped is refused, naming the conflicting tenant ids, when another tenant's ACTIVE definition references it; widening a tenant-scoped service to global is always allowed"
+      - "Letflow.Definitions.ServiceScopeValidator.validate/3 works unchanged when handed a Lookup backed by this catalog: a definition referencing a service not visible to its tenant is rejected at activation, and one referencing a visible service activates -- with no change to service_scope_validator.ex itself, confirmed by git diff"
+      - "the migration and the module moduledoc both state that this table is GLOBAL rather than per-tenant-schema, give the R-Co-grounded reason (a global-scope entry is referenceable by every tenant and service_id is unique across tenants), and flag the divergence from decision 0003 Decision B for REVIEWER sign-off"
+      - "solution_pack.ex's service_catalog_entries hard-fail is either made reachable-and-functional or is explicitly retained with the owning follow-up named in this requirement's moduledoc -- it is not left unaddressed, asserted by a test covering whichever outcome was chosen"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-031, REQ-069, REQ-072, REQ-067]
+
+  - id: REQ-192
+    title: Port services.zig's route surface onto the service catalog (GET /services, GET/POST/PATCH/DELETE /admin/services, SVC-04)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      The route half of the service-catalog split, atop REQ-191's core --
+      the same shape REQ-178 has to REQ-176 and REQ-182 has to REQ-181.
+      docs/migration/stage-4-api-surface.md:101 deferred services.zig
+      (417 lines) to S6 for exactly this reason: the route existed
+      upstream with no backing store in Letflow.
+      BINDING CONTRACT: web/src/api/services.ts's servicesApi already
+      names all five routes and their exact shapes, and
+      web/src/pages/admin/services/ServicesPage.tsx calls them today.
+      R-Co's src/api/routes/services.zig has exactly the same five
+      handlers (handleListServices L27, handleAdminListServices L62,
+      handleAdminRegisterService L93, handleAdminUpdateService L175,
+      handleAdminDeleteService L233), so the SPA contract and the R-Co
+      contract agree and neither is guesswork.
+      ROUTES:
+      * GET /api/v1/services -- tenant-scoped list, any authenticated
+      caller, :ServicesRead. Returns global entries plus the caller's own
+      tenant-scoped entries only. Cursor-paginated per REQ-067, matching
+      CursorPage<ServiceRecord>.
+      * GET /api/v1/admin/services -- ALL entries regardless of scope or
+      owner, :AdminServicesRead.
+      * POST /api/v1/admin/services -- register, :AdminServicesManage,
+      body per RegisterServiceBody, 201 with the created record.
+      * PATCH /api/v1/admin/services/:service_id -- update scope,
+      :AdminServicesManage, body per UpdateServiceScopeBody.
+      * DELETE /api/v1/admin/services/:service_id --
+      :AdminServicesManage.
+      ALL FIVE POLICY KEYS AND THEIR PERMISSION MAPPINGS ALREADY EXIST in
+      lib/letflow/api/authorization.ex (L100-102, L299-304, L417-419).
+      This requirement CONSUMES that matrix; it must not add to or change
+      it. If a mapping turns out to be wrong, that is a finding to
+      report, not something to silently amend here.
+      CONFLICT RESPONSES: REQ-191's two referential guards surface as 409
+      with the conflicting ids in the problem-details body per REQ-066 --
+      a delete blocked by referencing ACTIVE definitions names those
+      definition ids; a global-to-tenant narrowing blocked by other
+      tenants' ACTIVE definitions names those tenant ids. A duplicate
+      service_id on register is also 409.
+      NOT IN THIS REQUIREMENT: no change to REQ-191's schema or context;
+      no change to authorization.ex; no SPA change (S8 owns web/, and the
+      client already exists -- this requirement makes the routes it calls
+      return 200 instead of 404); no process-module routes.
+    acceptance_criteria:
+      - "GET /api/v1/services returns global entries plus the calling tenant's own scoped entries, and a tenant-scoped entry owned by a different tenant is absent from the response -- asserted with entries of all three kinds present in the database"
+      - "GET /api/v1/admin/services returns entries the caller's own tenant does not own, demonstrating it is not tenant-filtered, and requires :AdminServicesRead -- a caller holding only :ServicesRead receives 403"
+      - "POST /api/v1/admin/services with a RegisterServiceBody creates the entry and returns 201 with a body whose field names match web/src/api/services.ts's ServiceRecord exactly, asserted field by field"
+      - "POST, PATCH and DELETE under /api/v1/admin/services each return 403 for a caller lacking :AdminServicesManage, using the mapping already present in lib/letflow/api/authorization.ex -- three explicit tests"
+      - "DELETE of a service referenced by an ACTIVE definition returns 409 whose problem-details body lists the referencing definition ids; PATCH narrowing a service other tenants' ACTIVE definitions reference returns 409 listing those tenant ids -- two explicit tests"
+      - "POST with an already-registered service_id returns 409 and does not modify the existing entry"
+      - "a request naming a tenant-scoped service belonging to another tenant on the non-admin path returns 404, never 403 (REQ-072's cross-tenant rule)"
+      - "lib/letflow/api/authorization.ex is NOT modified by this requirement, confirmed by git diff --stat scoped to its commits -- the SVC-04 policy keys it already ships are consumed as-is"
+      - "no file under web/ is added or modified, confirmed by git diff --stat -- the SPA client already exists and S8 owns it"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-191, REQ-069, REQ-072, REQ-066, REQ-067]
+
+  - id: REQ-193
+    title: Structured JSON logging with trace-id propagation (OBS-01, XC-01's non-HTTP half)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      First of S6's observability half. Letflow has NO logger
+      configuration at all -- verified: config/config.exs, dev.exs,
+      test.exs, prod.exs and runtime.exs contain zero `config :logger`
+      entries, so log output is the BEAM default human-readable format,
+      unstructured and unparseable.
+      WHAT ALREADY EXISTS AND IS NOT REBUILT: the trace id itself.
+      REQ-072 (done, ports tenant_context.zig AND trace_context.zig)
+      already ships Letflow.Api.Context.assign_trace_id/1 --
+      lib/letflow/api/context.ex L155-162 reads the incoming x-trace-id
+      header (@trace_id_header L107, bounded at 256 bytes L108), falls
+      back to generate_trace_id/0, assigns conn.assigns[:trace_id], and
+      mirrors it into Logger.metadata(trace_id: trace_id). So the
+      request-side half of XC-01 is done. This requirement makes that
+      metadata actually appear in the output and extends propagation to
+      the places that have no conn.
+      SCOPE:
+      1. A Logger formatter emitting ONE single-line JSON object per
+      entry containing at minimum, per OBS-01: timestamp (ISO 8601 UTC,
+      microsecond precision), level (one of debug | info | warn | error),
+      trace_id, component (the emitting module or subsystem), message,
+      plus any additional metadata as key/value pairs. R-Co's
+      src/obs/logger.zig treats those five as RESERVED -- a caller
+      passing one of them as a custom field is an error rather than
+      silently shadowing the real value. Port that rule.
+      2. trace_id is ALWAYS present in the object. When there is no
+      active trace it is the empty string, never omitted -- so the output
+      shape is stable for a log consumer. R-Co asserts exactly this.
+      3. Level configurable via an environment variable, per OBS-01, with
+      an INVALID value causing a fatal startup error rather than a silent
+      fallback to a default.
+      4. BACKGROUND TRACE ORIGINATION, which is OBS-01's stated edge case
+      and the half of XC-01 that has no HTTP request to inherit from: a
+      background operation -- REQ-186's scheduler poll cycle is the
+      concrete first consumer -- mints its own trace id for that
+      operation, so every line it emits correlates. Provide the function
+      that does this; REQ-186's poller is expected to call it.
+      5. SENSITIVE-VALUE REDACTION, which OBS-01 requires ("MUST NOT
+      include ... no token values, no plaintext credentials, no password
+      fields", and the edge case "the value MUST be replaced with
+      [REDACTED]"). This is the same mechanism REQ-190 needs; whichever
+      of the two lands first implements it and the other consumes it, and
+      this requirement's moduledoc must name which. R-Co's list
+      (src/obs/logger.zig L81-97) is exact keys authorization, password,
+      password_hash, token, access_token, refresh_token, bootstrap_token,
+      api_token, secret, client_secret, credential, credentials,
+      set-cookie, cookie, plus suffixes _token, _secret, _password,
+      _credential; the VALUE is replaced and the key is kept.
+      HONEST LIMITATION TO STATE, NOT TO PAPER OVER: this redacts by
+      field NAME. A secret placed under an unrecognised key is not
+      caught. R-Co has the same limitation. Say so in the moduledoc
+      rather than claiming a guarantee the mechanism does not provide.
+      NOT IN THIS REQUIREMENT: no metrics (REQ-194); no audit table
+      (REQ-195); no alerting (not drafted in this batch -- see REQ-196's
+      note); no change to lib/letflow/api/context.ex's existing trace-id
+      assignment.
+    acceptance_criteria:
+      - "a log call emits exactly ONE line that parses as a single JSON object containing all of timestamp, level, trace_id, component and message, asserted by decoding the captured output rather than by matching a substring"
+      - "the timestamp field parses as an ISO 8601 UTC datetime with microsecond precision"
+      - "a log emitted during a request carries the SAME trace_id that Letflow.Api.Context.assign_trace_id/1 put in Logger metadata for that request, asserted end to end through a real request rather than by setting metadata directly"
+      - "a log emitted with no active trace carries trace_id as the empty string -- the key is present, not omitted"
+      - "starting the application with the log-level variable set to an invalid value fails startup with a clear error; setting it to a valid non-default level changes which entries are emitted -- two explicit tests"
+      - "a background operation that calls the trace-origination function emits multiple log lines all carrying the same, freshly generated trace_id, and that id differs between two separate background operations"
+      - "a log call passing a value under each of secret, password, token, client_secret and one key ending in _token emits \"[REDACTED]\" for every one of those values while keeping the key names, asserted against decoded JSON output"
+      - "a log call attempting to pass one of the five reserved field names as custom metadata is rejected or the reserved value wins -- the real value is never shadowed by caller-supplied metadata, asserted explicitly"
+      - "the moduledoc states that redaction matches on field NAMES and therefore does not catch a secret placed under an unrecognised key"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-072]
+
+  - id: REQ-194
+    title: Prometheus metrics subsystem and the GET /metrics exposition the SPA already parses (OBS-02) -- resolving REQ-078's three recorded divergences
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      S6 is the owning stage for Letflow's metrics subsystem, and
+      lib/letflow/routers/metrics.ex says so itself: its moduledoc states
+      "S6 observability is the owning stage for Letflow's metrics
+      subsystem", that REQ-078 built "no registry, no collector, no
+      gauge, no histogram, no scrape target and no in-memory counter
+      state", and that when S6 lands "this endpoint is expected to be
+      superseded or rewritten; it is a placeholder shape, not the
+      design." This requirement is that rewrite.
+      Letflow today has ZERO :telemetry.execute call sites in the entire
+      codebase (verified: grep returns 0) and no telemetry, telemetry_metrics
+      or prometheus dependency in mix.exs (verified: deps are ecto_sql,
+      postgrex, plug, bandit, jason, stream_data, ueberauth_oidcc, lua,
+      wasmex). Adding a metrics dependency is therefore a new top-level
+      dependency and needs REVIEWER sign-off in this requirement, on the
+      same footing as REQ-148's tv-labs/lua adoption -- or a decided NO
+      with a hand-rolled registry.
+      REQ-078 DELIBERATELY DIVERGED FROM R-Co ON THREE AXES and recorded
+      each with a reason, telling later readers "Do not 'correct' any of
+      the three back toward R-Co." This requirement must decide each
+      EXPLICITLY, and the evidence now available resolves them rather
+      than leaving them to taste:
+      (1) AUTH -- R-Co is unauthenticated (metrics.zig:20 says so
+      verbatim, OBS-02's AC says "No authentication required"); REQ-078
+      made it authenticated under /api/v1/metrics.
+      (2) SCOPE -- R-Co is platform-global with an in-memory registry;
+      REQ-078 made every figure per-tenant.
+      (3) FORMAT -- R-Co emits Prometheus exposition text with
+      Content-Type "text/plain; version=0.0.4"; REQ-078 emits JSON.
+      THE DECIDING EVIDENCE, found fresh this batch and binding on axis
+      (3) at minimum: an already-committed SPA consumer exists and it
+      expects PROMETHEUS TEXT, not JSON. web/src/api/metrics.ts exports
+      parsePrometheusText, a full parser for "# HELP" / "# TYPE" / sample
+      lines with label sets, and metricsApi.prometheusText() calls
+      client.getText('/metrics') -- note the path, unversioned and
+      top-level, not /api/v1/metrics. web/src/pages/admin/MetricsPage.tsx
+      consumes it today. So the SPA is already written against R-Co's
+      shape and against a route Letflow does not serve. This is the same
+      class of binding contract REQ-181/182 built to, and it must be
+      cited as such.
+      That evidence does NOT by itself settle axes (1) and (2), and this
+      requirement must not pretend it does. REQ-078's tenant-exposure
+      reasoning was substantive: every Letflow figure comes from inside a
+      tenant schema, and an unauthenticated global endpoint could only be
+      empty or cross-tenant. R-Co's own registry is process-global,
+      in-memory, and carries NO tenant label on any metric family, so
+      porting it verbatim is not automatically safe in a multi-tenant
+      deployment. The requirement must therefore reach a stated position
+      on all three, and specifically must state how it avoids
+      cross-tenant disclosure through metric labels or cardinality --
+      naming, for example, whether a definition_id label can leak one
+      tenant's definition ids to another tenant's scrape.
+      SCOPE:
+      1. A metrics registry and the instrumentation to feed it. R-Co's
+      OBS-02 core families, from src/obs/metrics.zig: an active-instances
+      gauge; a task-completions counter labelled by definition; an
+      event-append latency histogram; a DB-query latency histogram
+      labelled by query type; an HTTP-requests counter labelled by
+      method, path and status; and an HTTP-errors counter labelled by
+      path. Instrument via :telemetry so the emission points are
+      decoupled from the registry.
+      2. HTTP-request metrics must label by ROUTE TEMPLATE, not raw path.
+      R-Co's own metrics.zig has an explicit cardinality guard on the
+      definition label; a raw path containing instance uuids would make
+      cardinality unbounded. State the normalisation rule.
+      3. The exposition endpoint, at the path and in the format this
+      requirement decides, with the Content-Type that format requires.
+      4. Metrics collection must not block request processing (OBS-02's
+      AC), and the endpoint must still respond when the database is
+      unavailable -- R-Co returns the last in-memory value in that case.
+      Note the honest gap R-Co left and Letflow should not: R-Co tracks a
+      staleness flag but never renders it, so a consumer cannot tell a
+      stale gauge from a fresh one. Decide whether to expose staleness.
+      5. Say what happens to lib/letflow/routers/metrics.ex's existing
+      authenticated JSON endpoint: superseded and removed, or retained
+      alongside. Its own moduledoc anticipates being superseded, so
+      either is defensible, but it must be decided and the SPA's
+      MetricsPage must end up calling something that exists.
+      NOT IN THIS REQUIREMENT: no audit table (REQ-195); no alerting
+      subsystem; no change to web/ (S8 owns it, and the client already
+      exists).
+    acceptance_criteria:
+      - "this requirement states an explicit decision on each of REQ-078's three recorded divergences -- auth, scope and format -- with a reason for each, in the module moduledoc; it does not silently pick one or leave any of the three unstated"
+      - "the format decision cites web/src/api/metrics.ts's parsePrometheusText and metricsApi.prometheusText()'s call to client.getText('/metrics') as an already-committed consumer contract, and the endpoint Letflow serves is one that web/src/pages/admin/MetricsPage.tsx actually reaches -- asserted by a test hitting that exact path"
+      - "if a metrics dependency is added to mix.exs, REVIEWER sign-off is recorded for it in this requirement's PR; if instead a registry is hand-rolled, the moduledoc states that as the decision -- one or the other, not silence"
+      - "all six OBS-02 core metric families are present in the exposition output after exercising the corresponding behaviour, asserted by parsing the response body -- not by asserting the emission call was made"
+      - "the HTTP-request metric labels by route template and not by raw path: two requests to the same route with different path parameters produce ONE label combination, not two, asserted by counting distinct label sets in the output"
+      - "the auth and scope decisions are enforced and tested: whichever position was taken, a test asserts that one tenant's scrape cannot observe another tenant's figures or identifiers (including through label values), or -- if the endpoint is deliberately global and unauthenticated -- that no metric label carries any tenant-identifying value at all"
+      - "the exposition endpoint returns a successful response with the last known values when the database is unavailable, rather than erroring, asserted with the database made unreachable"
+      - "instrumentation is emitted via :telemetry events and the registry attaches to them, so the emitting call sites do not reference the registry module directly, confirmed by grep over the instrumented modules"
+      - "the disposition of lib/letflow/routers/metrics.ex is explicit -- removed, or retained with its role stated in its own moduledoc -- and no route the SPA calls returns 404 afterwards"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-078, REQ-069, REQ-072, REQ-193]
+
+  - id: REQ-195
+    title: Audit-entry storage with before/after state capture and tamper-evident chaining (OBS-03, XC-02) -- closing routers/audit.ex's recorded null-state gap
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Core only, no route change -- REQ-196 adapts the existing route
+      onto this store.
+      THE GAP, recorded in Letflow's own code rather than inferred:
+      lib/letflow/routers/audit.ex (REQ-078, done) serves GET
+      /api/v1/audit from Letflow.EventStore.read_global/1 and its
+      moduledoc states plainly that "Letflow has no such table" as R-Co's
+      audit_entries (src/obs/audit.zig), and lists the consequences a
+      caller sees: resource_type is the constant string "instance"
+      because every Letflow event is instance-scoped, and before_state
+      and after_state are ALWAYS null because "Letflow's event model has
+      no before/after capture. Emitting a fabricated value would be worse
+      than null." This requirement closes exactly that gap.
+      The already-committed SPA consumer confirms the shape matters:
+      web/src/api/audit.ts's RawAuditEntry declares audit_id, actor_id,
+      action, resource_type, resource_id, timestamp, before_state and
+      after_state, and maps them into an AuditEntry the admin page
+      renders -- so before_state/after_state are fields the UI is already
+      built to display and currently always receives as null.
+      SCHEMA: an `audit_entries` table, ported from R-Co
+      migrations/020_obs03_audit_entries.sql plus its later additions
+      (050 trace_id, 051 chain columns): audit_id (uuid pk), actor_id
+      (uuid, nullable), action (string, not null), resource_type (string,
+      not null), resource_id (not null), timestamp (utc_datetime_usec,
+      not null), before_state (jsonb, nullable), after_state (jsonb,
+      nullable), trace_id (string, nullable -- XC-01's database half),
+      chain_hash and prev_chain_hash (strings, nullable -- XC-02), and
+      tenant_id retained per decision 0003 Decision B, living in each
+      tenant's schema. Port R-Co's three indexes: (timestamp desc,
+      audit_id desc), (actor_id, timestamp desc, audit_id desc), and
+      (resource_type, resource_id, timestamp desc, audit_id desc) -- the
+      route's three filter shapes.
+      A TYPE HAZARD TO DECIDE UP FRONT, not to inherit: R-Co declared
+      resource_id as UUID and later had to widen it to TEXT in some
+      schemas but not others (its own src/obs/audit.zig L123-127 records
+      the resulting production failure -- a leftover ::uuid cast made
+      every filtered /audit call fail). Letflow must pick ONE type for
+      resource_id and state why. Non-instance resources may not all have
+      uuid ids.
+      SCOPE:
+      1. Schema and migration above.
+      2. IMMUTABILITY, enforced in the DATABASE, not by convention.
+      R-Co installs BEFORE UPDATE and BEFORE DELETE row triggers raising
+      "audit_entries is immutable". Port that: an audit row must be
+      un-updatable and un-deletable even by code that tries.
+      3. WRITING audit entries in the SAME transaction as the state
+      change they describe, so an audit-write failure rolls the whole
+      mutation back (OBS-03's stated design goal). Cover, at minimum, the
+      state-changing operations Letflow already has and that R-Co
+      audits: definition create/activate/deprecate/archive, instance
+      create/cancel, task create/complete/assign, and user/group/token
+      changes. Capture before_state and after_state as the actual prior
+      and resulting row representations -- this is the whole point, and
+      the SPA already renders both.
+      A DESIGN CHOICE TO MAKE AND STATE: R-Co captures via POSTGRES
+      TRIGGERS (bpm_audit_on_mutation on eight tables, deriving the
+      action name from status transitions and reading the actor from a
+      session variable). That is one option; capturing in Elixir at the
+      context-function boundary is another. Decide, and state the
+      trade-off -- the trigger approach cannot miss a write but puts
+      business logic in SQL and needs a session variable for the actor;
+      the Elixir approach is testable and typed but silently misses any
+      write that bypasses the context.
+      4. TAMPER-EVIDENT CHAINING (XC-02): each entry carries a
+      chain_hash over its own canonical content plus the previous entry's
+      chain_hash, per tenant. The canonical form must be fixed and
+      documented -- field order, how a missing optional is encoded, and
+      the timestamp representation -- because the hash is worthless if
+      two implementations disagree on it. R-Co uses a fixed positional
+      key=value form with a sentinel for missing values and integer
+      microseconds for the timestamp.
+      A WEAKNESS NOT TO PORT: R-Co's own validateAuditChain
+      (src/obs/audit.zig L312-373) only verifies that each entry's
+      prev_chain_hash equals its predecessor's chain_hash -- it selects
+      every content column and then ignores them, never RECOMPUTING the
+      digest. So editing after_state while leaving the hashes intact
+      passes its check, which defeats the purpose. Letflow's verification
+      must recompute each entry's hash from its stored content and
+      compare.
+      NOT IN THIS REQUIREMENT: no route change (REQ-196); no alerting; no
+      conflation with lib/letflow/engine/lua_script_audit.ex or the
+      lua_script_execution_audit table (REQ-058/153/158) -- that is a
+      NARROW, separate trail for script executions and stays separate.
+    acceptance_criteria:
+      - "an UPDATE against a persisted audit_entries row is rejected by the DATABASE, and so is a DELETE -- two explicit tests going around the Ecto schema, not relying on changeset validation"
+      - "a definition activation, an instance cancellation and a task completion each write exactly one audit_entries row with a non-null before_state and after_state reflecting the actual prior and resulting values -- three explicit tests asserting the captured content, not merely the row count"
+      - "an audit-write failure rolls back the business mutation it accompanies: a test that forces the audit insert to fail leaves the definition/instance/task unchanged"
+      - "audit rows are tenant-scoped: a row written under tenant A is not visible to a query scoped to tenant B"
+      - "each new entry's prev_chain_hash equals the previous entry's chain_hash within the same tenant, and the first entry in a tenant's chain has a null prev_chain_hash"
+      - "chain verification RECOMPUTES each entry's hash from its stored content: a test that modifies a persisted after_state directly in the database (bypassing the immutability trigger via a superuser or by disabling it for the test) causes verification to FAIL -- explicitly covering the case R-Co's own linkage-only check misses"
+      - "the canonical hashed form is documented in the moduledoc with its exact field order, its encoding for a missing optional value, and its timestamp representation"
+      - "the moduledoc states which capture mechanism was chosen -- database trigger or Elixir context boundary -- and the trade-off of the one not chosen"
+      - "resource_id's chosen column type is stated in the migration with the reason, and a test writes an audit entry for a resource whose identifier is not a uuid, or the moduledoc states that no such resource type exists in Letflow"
+      - "the moduledoc states that lua_script_execution_audit (REQ-058/153/158) is a separate, narrower trail that this table does not replace or absorb"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-023, REQ-025, REQ-072, REQ-193]
+
+  - id: REQ-196
+    title: Serve GET /api/v1/audit from the audit_entries store and retire routers/audit.ex's null-state and constant-resource_type caveats
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      The route half of the audit split, atop REQ-195's store -- the same
+      shape REQ-178/182/184 have to their cores. Deliberately small: the
+      route, its permission and its filters already exist and are already
+      correct.
+      WHAT EXISTS: lib/letflow/routers/audit.ex (REQ-078, done) already
+      serves GET /api/v1/audit with the :AuditRead permission from
+      REQ-069's matrix, already supports the eight R-Co ListAuditParams
+      filters (cursor, page_size, from, to, actor_id, resource_id and the
+      rest) via REQ-067's pagination, and is already consumed by
+      web/src/api/audit.ts's auditApi.list and
+      web/src/pages/admin/AuditLogPage.tsx. Only its data SOURCE changes.
+      SCOPE:
+      1. Repoint the handler from Letflow.EventStore.read_global/1 to
+      REQ-195's audit_entries store, preserving the response envelope
+      the SPA maps ({items, next_cursor, count}, with each item carrying
+      audit_id, actor_id, action, resource_type, resource_id, timestamp,
+      before_state, after_state -- web/src/api/audit.ts's RawAuditEntry).
+      2. Retire the three caveats audit.ex's moduledoc currently records
+      as things "visible to a caller [that] must not be mistaken for
+      bugs": resource_type stops being the constant "instance" and
+      carries the real resource kind; before_state and after_state stop
+      being always-null and carry real captured state. Update the
+      moduledoc to describe what the route now does -- a stale moduledoc
+      asserting always-null on a route that no longer returns null is
+      worse than no moduledoc.
+      3. Make the resource_type filter actually filter. It is a declared
+      query parameter in web/src/api/audit.ts's AuditLogFilters, and
+      against a store where every row had resource_type "instance" it
+      could not usefully discriminate. Against REQ-195's store it can.
+      4. Decide and state what happens to the `payload` field audit.ex
+      currently adds as "a Letflow addition, not R-Co's after_state" --
+      it existed because without it the response carried no information
+      about what changed, which after_state now supplies. Removing it is
+      a response-shape change the SPA must tolerate; the SPA's own
+      RawAuditEntry does not declare it, so removing it is expected to be
+      safe, but assert that rather than assuming it.
+      NOT IN THIS REQUIREMENT: no change to REQ-195's schema or capture
+      logic; no change to lib/letflow/api/authorization.ex (:AuditRead
+      already exists); no change to web/ (S8 owns it); no new routes.
+    acceptance_criteria:
+      - "GET /api/v1/audit returns entries sourced from audit_entries, with before_state and after_state carrying real non-null values for an operation that changed state -- the direct inverse of the always-null behaviour audit.ex's moduledoc records today, asserted by a test that would have failed before this requirement"
+      - "resource_type in the response varies by resource kind rather than being the constant \"instance\", demonstrated by a response containing at least two different resource_type values"
+      - "the resource_type query parameter filters: a request filtering to one resource kind returns only entries of that kind, and omitting it returns all kinds"
+      - "the response envelope still matches web/src/api/audit.ts's RawAuditPage and RawAuditEntry field-for-field, so web/src/pages/admin/AuditLogPage.tsx continues to render without a change under web/ -- asserted field by field"
+      - "the route still requires :AuditRead and still returns 403 without it, using REQ-069's existing matrix with no change to lib/letflow/api/authorization.ex (confirmed by git diff)"
+      - "a caller from one tenant does not receive another tenant's audit entries"
+      - "lib/letflow/routers/audit.ex's moduledoc no longer states that before_state and after_state are always null or that resource_type is a constant, and instead describes the store it now reads from"
+      - "no file under web/ is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-195, REQ-078, REQ-069, REQ-072]
+
+  - id: REQ-197
+    title: Extend expr.ex with arithmetic, unary negation and a structured parse-error surface -- without breaking EE-05's catch-false gateway contract
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Extends lib/letflow/engine/expr.ex. It does not replace it: that
+      module's own moduledoc states "A fuller expression surface, if a
+      later stage needs one, EXTENDS this module rather than replacing
+      it." REQ-050 built it (done, S3) and REQ-111 audited its CEL
+      translation rules against R-Co's transition.zig (done, S3).
+      A CORRECTION THIS REQUIREMENT IS SCOPED AROUND, verified fresh
+      against R-Co this batch: R-Co's src/expr is NOT a CEL
+      implementation. R-Co's EXP-102 cut over FROM a vendored CEL
+      (vendor/cel) TO src/expr, retiring CEL. The actual surface of
+      R-Co's expr, read from src/expr/ast.zig L12-60 (TokenKind) and
+      L83-150 (Node) and src/expr/lexer.zig L17-32 (the builtin
+      whitelist), is: arithmetic + - * / % and unary negation; the 6
+      comparison operators, non-chainable (the grammar admits at most one
+      per expression); and / or / not as WORD keywords; int, float,
+      string, bool and null literals; dotted variable paths; and exactly
+      ELEVEN whitelisted builtin functions -- length, lower, upper, trim,
+      contains, startsWith, endsWith, coalesce, now, date_add, date_diff.
+      R-Co's expr has NO membership `in`, NO ternary, NO list or map
+      literals, NO indexing, and NONE of the CEL macros
+      (has/matches/all/exists/exists_one), type-conversion functions
+      (int/uint/double/string/bool/bytes/duration/timestamp) or
+      collection functions (size/map/filter).
+      So expr.ex's @unsupported_call_markers list (L59-77) remains
+      CORRECT -- those constructs really are unsupported and really
+      should be rejected -- but they are not features R-Co has that
+      Letflow lacks. They are CEL vocabulary neither system implements.
+      This requirement therefore ports what R-Co ACTUALLY has and is
+      missing from expr.ex, and this batch does NOT draft a requirement
+      to add CEL macros or collections: doing so would reopen a question
+      R-Co closed deliberately in EXP-102, and would need its own
+      evidence about Letflow's real condition corpus.
+      SCOPE:
+      1. Arithmetic: binary + - * / %, and unary negation, with R-Co's
+      precedence (loosest to tightest: or, and, not, comparison, + -,
+      * / %, unary -, primary). Extend the ast() type and the evaluator.
+      2. R-Co's arithmetic semantics, which are deliberate and must be
+      matched rather than reinvented: an integer and a float mix by
+      promoting the integer to float; integer division by zero and
+      integer modulo by zero are errors; float division by zero yields
+      the IEEE infinity; float modulo is an error. Note the deliberate
+      asymmetry Letflow must preserve: null in a COMPARISON propagates
+      (yields null), but null in ARITHMETIC is an error.
+      3. A STRUCTURED PARSE-ERROR SURFACE, ported from R-Co's
+      src/expr/error.zig: a parse failure carries line, column, the
+      offending token text, and a message -- rather than collapsing to a
+      bare error atom. R-Co's own EvalError declares line and column but
+      every construction site passes zero, so runtime errors carry no
+      usable location; Letflow should either populate them or not declare
+      them, rather than shipping fields that are structurally always
+      zero.
+      4. THE CONSTRAINT THAT MAKES THIS DELICATE, and the reason the
+      error surface is scoped as it is: REQ-050's EE-05 AC4 REQUIRES that
+      a gateway condition which fails to evaluate yields FALSE, not an
+      error -- transition.ex depends on that catch-false rule, and R-Co's
+      own transition.zig does the same (`cel.evaluate(...) catch false`).
+      A structured error surface must therefore be available to CALLERS
+      THAT WANT IT (validation, authoring, a future editor) while the
+      gateway path continues to collapse every failure to false. Provide
+      both: a strict entry point returning the structured error, and the
+      existing evaluate_condition/2 behaviour unchanged. Do not change
+      what transition.ex sees.
+      5. PRESERVE PURITY. expr.ex has a hard, grep-verified purity
+      contract in its moduledoc: zero Repo, Logger, DateTime, System
+      time, :rand, :crypto, File or HTTP references, and its own
+      documented grep must keep returning zero matches. This has a sharp
+      consequence for the builtins: R-Co's now() reads the system clock,
+      and R-Co's evaluator says so in its own comment -- "now() is
+      inherently impure; all other built-ins are pure". now(), and
+      date_add/date_diff insofar as they depend on it, therefore CANNOT
+      be added to expr.ex without breaking its purity contract and
+      REQ-050's determinism guarantee (two calls with equal arguments
+      return equal results). This requirement must NOT add now(). It
+      must state this explicitly, and either defer the clock-dependent
+      builtins with the constraint named, or specify passing an injected
+      evaluation timestamp through the context rather than reading a
+      clock -- deciding, not leaving it open.
+      NOT IN THIS REQUIREMENT: the 8 pure string/coalesce builtins
+      (REQ-198); no CEL macros, collections, list/map literals, indexing,
+      ternary or `in` -- none of which R-Co has; and explicitly no port
+      of src/expr/benchmark.zig, which is a DSL-13 latency harness (1,000
+      warm-up plus 10,000 measured iterations against a 10 microsecond
+      target, output via debug printing only, imported by nothing) with
+      no production behaviour. expr.ex's moduledoc already records that
+      benchmark.zig is not ported; this requirement restates it so the
+      omission stays deliberate.
+    acceptance_criteria:
+      - "each of + - * / % and unary negation evaluates correctly in a condition, asserted by one test per operator with a concrete expected value"
+      - "operator precedence matches R-Co's: a test asserts that an expression mixing + and * groups the * first, and one mixing a comparison with arithmetic evaluates the arithmetic first, with the expected values stated"
+      - "an integer mixed with a float in one arithmetic expression promotes to float, asserted on a case where integer arithmetic would give a different answer"
+      - "integer division by zero and integer modulo by zero each produce an error rather than a crash or a wrong value; float division by zero produces infinity -- three explicit tests"
+      - "null in a comparison still yields null and null in arithmetic yields an error -- the deliberate asymmetry, asserted as two explicit tests"
+      - "the strict entry point returns a structured parse failure carrying line, column, the offending token text and a message, asserted field by field on a deliberately malformed expression"
+      - "EE-05's contract is intact: evaluate_condition/2 given the same malformed expression still returns false rather than raising or returning an error tuple, and a test asserts transition.ex's exclusive-gateway behaviour for a bad condition is unchanged from before this requirement"
+      - "expr.ex's own documented purity grep (Repo, Logger, DateTime, System.os_time, System.system_time, HTTPoison, Req, File, :rand, :crypto) still returns ZERO matches after this change, quoted in the PR"
+      - "now() is NOT added, and the moduledoc states why -- that R-Co's own evaluator documents now() as inherently impure while every other builtin is pure, and that adding it would break expr.ex's purity and REQ-050's determinism guarantee -- and states the decided disposition for the clock-dependent builtins rather than leaving it open"
+      - "the moduledoc states that src/expr/benchmark.zig is deliberately not ported, naming it as a benchmarking harness with no production behaviour"
+      - "the moduledoc records that R-Co's expr is not a CEL implementation and that EXP-102 cut over from vendored CEL to it, so the @unsupported_call_markers list rejects CEL vocabulary that R-Co does not implement either"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-050, REQ-111]
+
+  - id: REQ-198
+    title: Add expr.ex's 8 pure builtin functions (length, lower, upper, trim, contains, startsWith, endsWith, coalesce) with call syntax and arity checking
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Second and last of S6's expr half, atop REQ-197's extended grammar.
+      Split from REQ-197 because REQ-197 changes the grammar, the
+      precedence table and the error surface, while this adds a function
+      call form and eight function implementations -- two different
+      shapes of change, each about one agent turn.
+      R-Co's expr enforces its builtin list AT LEX TIME
+      (src/expr/lexer.zig L17-39): a name in the whitelist becomes a
+      builtin-function token, anything else is an identifier, and an
+      identifier followed by an opening parenthesis is a hard parse
+      error. There is no user-defined function mechanism and no
+      registration hook. Port that closed-whitelist design; it is what
+      keeps the evaluator total.
+      THE EIGHT, all pure, with R-Co's exact semantics from
+      src/expr/evaluator.zig:
+      * length(s) -- string byte length as an integer; null propagates to
+      null; a non-string argument is an error.
+      * lower(s), upper(s) -- ASCII-only case conversion in R-Co. Letflow
+      must decide explicitly whether to match ASCII-only or use full
+      Unicode casing, and state which; silently differing from R-Co on
+      non-ASCII input is the failure mode to avoid.
+      * trim(s) -- strips leading and trailing ASCII whitespace.
+      * contains(haystack, needle), startsWith(haystack, prefix),
+      endsWith(haystack, suffix) -- boolean; either argument null yields
+      null.
+      * coalesce(a, ...) -- variadic with at least one argument; returns
+      the first non-null argument, else null.
+      EXCLUDED, AND WHY: now(), date_add and date_diff -- the three
+      clock-dependent members of R-Co's eleven. REQ-197 records the
+      reason: R-Co's own evaluator comments that now() is inherently
+      impure while every other builtin is pure, and expr.ex has a hard
+      grep-verified purity contract plus REQ-050's determinism guarantee.
+      This requirement adds only the eight that are pure. Whatever REQ-197
+      decided about the clock-dependent three governs; this requirement
+      must not quietly add them.
+      ARITY AND TYPE ERRORS surface through REQ-197's structured error
+      surface for callers that want it, and still collapse to false on
+      the gateway path per EE-05 AC4 -- the same dual behaviour REQ-197
+      established, not a second mechanism.
+      A NOTE ON expr.ex's EXISTING REJECTION LIST: @unsupported_call_markers
+      (L59-77) currently rejects any expression containing "map(",
+      "filter(", "size(" and the CEL type-conversion and macro names.
+      None of the eight added here appears in that list, so adding them
+      does not require weakening it. Confirm that rather than assuming
+      it -- in particular "contains(" and "startsWith(" must not
+      accidentally match an existing marker prefix, and the list must
+      keep rejecting everything it rejects today.
+      NOT IN THIS REQUIREMENT: no clock-dependent builtins; no CEL
+      macros, collection functions, type-conversion functions, list/map
+      literals, indexing, ternary or `in` -- R-Co implements none of
+      them; no user-defined function mechanism.
+    acceptance_criteria:
+      - "each of the eight builtins evaluates correctly, asserted by at least one test per function with a concrete expected value -- eight tests minimum"
+      - "a call to a name outside the whitelist, such as frobnicate(1), is rejected as a parse error rather than evaluating or raising, and the rejection carries REQ-197's structured error"
+      - "wrong arity is rejected for a fixed-arity function: length() with zero arguments and length(a, b) with two are both errors, and coalesce() with zero arguments is an error while coalesce(a) with one is valid"
+      - "null propagation matches R-Co: length(null) yields null, contains(null, \"x\") yields null, and coalesce(null, null, 3) yields 3 -- three explicit tests"
+      - "a non-string argument to a string function, such as length(42), is an error rather than a coerced result"
+      - "the case-conversion decision is stated in the moduledoc -- ASCII-only matching R-Co, or full Unicode -- and a test asserts the chosen behaviour on a non-ASCII input"
+      - "none of now(), date_add or date_diff is added, and a test asserts an expression calling now() is rejected rather than evaluated"
+      - "expr.ex's documented purity grep still returns ZERO matches after this change, quoted in the PR"
+      - "every construct @unsupported_call_markers rejected before this requirement is still rejected after it, asserted by a test iterating the marker list -- adding the eight builtins did not weaken the CEL rejection"
+      - "EE-05's catch-false contract holds: a gateway condition calling a builtin with wrong arity still yields false from evaluate_condition/2 rather than raising"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-197]
+
+  - id: REQ-199
+    title: Correlated effect re-entry ordering -- completion claim, per-correlation execute guard, and in-order cursor apply (ORD-01/02/03/04)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      The last of this batch's six subsystems, and the one the first
+      batch deferred for having "zero grounding anywhere in this repo".
+      With R-Co reachable it is now fully grounded, and it turns out to
+      be a self-contained, well-specified subsystem.
+      WHAT PROBLEM IT SOLVES: when a long-running external effect
+      completes out-of-band, its completion must be re-entered into the
+      engine IN THE ORDER the effects were emitted, per correlation,
+      across a pool of independent consumers, without any consumer
+      blocking another. R-Co stacks three guards
+      (src/ordering/mod.zig L7-24): ORD-01's claim guard (FOR UPDATE SKIP
+      LOCKED, so no two consumers hold the same row), ORD-02's execute
+      guard (a per-correlation transaction advisory lock, so two rows of
+      the SAME correlation are not applied concurrently), and ORD-03's
+      order guard (a per-correlation cursor, so a completion applies only
+      when its sequence number is exactly one past the last applied).
+      Different correlations proceed fully in parallel (ORD-04).
+      BEWARE TWO FALSE POSITIVES in Letflow, both verified: lib/letflow/
+      api/pagination.ex's "cursor" is HTTP list pagination (REQ-067), and
+      lib/letflow/event_store/instance_sequence.ex plus the global_seq
+      column (REQ-023/025/026) are the event store's own sequencing.
+      Neither is this subsystem, and neither is changed here.
+      SCHEMA, ported from R-Co migrations/1145_ord01_plat_effect_completion.sql
+      and 1146_ord04_plat_correlation_cursor.sql -- both are PER-TENANT
+      in R-Co (each migration explicitly skips the public pass), which
+      matches decision 0003 Decision B, so both live in each tenant's
+      schema with tenant_id retained:
+      * `effect_completions`: completion_id (uuid pk), correlation_id
+      (string, not null), sequence_no (bigint, not null), status (string,
+      not null, default "PENDING", CHECK in PENDING | APPLIED | DEAD),
+      payload (jsonb, not null, default empty), received_at, applied_at
+      (nullable), created_at, with UNIQUE (correlation_id, sequence_no)
+      so a retried insert is absorbed rather than duplicated, plus a
+      partial claim index on (correlation_id, sequence_no) WHERE status =
+      'PENDING' matching the claim query's exact shape.
+      * `correlation_cursors`: correlation_id (string, primary key),
+      applied_seq (bigint, not null, default 0, CHECK >= 0), updated_at,
+      created_at.
+      SCOPE:
+      1. Both tables and their migrations.
+      2. Insert of a completion, idempotent on (correlation_id,
+      sequence_no) -- a duplicate insert is absorbed, never a second
+      apply.
+      3. One claim-and-apply cycle: claim the lowest-sequence PENDING row
+      with FOR UPDATE SKIP LOCKED ordered by (correlation_id,
+      sequence_no); take the per-correlation advisory lock with the TRY
+      variant so a losing consumer never blocks; read the cursor; and
+      apply only when sequence_no equals applied_seq + 1. A completion
+      that is not next rolls back SILENTLY -- no error, no retry-count
+      increment, the row stays PENDING for a later cycle. Applying marks
+      the row APPLIED, appends an effect-applied event via REQ-025, and
+      advances the cursor with the CONDITIONAL update (set applied_seq =
+      N where applied_seq = N - 1) -- all in ONE transaction. A zero-row
+      result from that conditional update means another consumer won the
+      race: roll back and re-claim. That condition is what makes a
+      double-apply structurally impossible even if both other guards
+      were bypassed.
+      4. A cursor row that does not exist yet is initialised at
+      applied_seq 0 rather than failing.
+      5. THE GAP SWEEPER (ORD-03's last acceptance criterion): when a
+      correlation's lowest PENDING sequence is more than one past its
+      applied_seq -- i.e. the predecessor is genuinely ABSENT, not merely
+      slow -- and that orphaned successor is older than a configured gap
+      timeout (R-Co's default is 300 seconds), every PENDING row of that
+      correlation moves to DEAD as ONE unit, never half, and lands in
+      REQ-176's DLQ naming the correlation and every unapplied sequence
+      number so the missing emit is identifiable without re-querying.
+      The strict-greater-than test matters: a row sitting at exactly
+      applied_seq + 1 is merely slow and must NOT be swept.
+      6. RUN IT ON REQ-186's SCHEDULER, not a new ticker. R-Co runs the
+      sweeper on its existing scheduler cadence rather than a separate
+      thread, and Letflow should do the same for the same reason.
+      TWO R-Co DEFECTS NOT TO PORT, both recorded in its own source:
+      (a) src/ordering/consumer.zig L12-18 and L281-285 record that
+      holding a pooled connection across the poll sleep starved a small
+      pool in production (GH-654 / ISS-0649); hold a connection only for
+      the duration of one cycle.
+      (b) The entire R-Co ordering subsystem has NO production driver --
+      nothing spawns its consumers, nothing calls the sweeper on a
+      cadence. It is complete, tested and unwired. Letflow must actually
+      wire it, and the acceptance criteria below require a running cycle,
+      not merely a callable function.
+      NOT IN THIS REQUIREMENT: no route or controller (R-Co has no
+      ordering route and the SPA has no ordering client -- verified: no
+      web/src/api entry and no matching type in web/src/types/api.ts); no
+      dynamic consumer-count reduction under contention (ORD-04's third
+      criterion), which R-Co itself left unimplemented and which needs
+      the metrics of REQ-194 to drive it -- named here as a deliberate
+      deferral rather than dropped; no change to REQ-067's pagination
+      cursor or to the event store's own sequencing.
+    acceptance_criteria:
+      - "both tables live inside each tenant's Postgres schema with tenant_id retained (decision 0003 Decision B, matching R-Co's own per-tenant placement), verified by inspecting the migrations"
+      - "inserting the same (correlation_id, sequence_no) twice results in ONE row and, after processing, exactly ONE applied effect -- no double apply"
+      - "completions for one correlation apply strictly in sequence order: inserting sequence 6 before sequence 5 leaves 6 PENDING with its retry state unchanged, and after 5 is inserted and applied, 6 applies -- asserted by the order of the appended events, not merely by final row status"
+      - "a completion whose sequence is not applied_seq + 1 rolls back silently: the row stays PENDING, no error is raised to the caller, and no event is appended"
+      - "the cursor advance is conditional: a test simulating two concurrent applies of the same sequence results in exactly one success and one rolled-back re-claim, with applied_seq advancing by exactly one"
+      - "a correlation with no cursor row applies its first completion successfully, initialising the cursor rather than failing"
+      - "two different correlations, each with a next-in-sequence completion, both apply -- neither is serialised behind the other, asserted by both being APPLIED after concurrent processing"
+      - "the gap sweeper moves EVERY PENDING row of an affected correlation to DEAD as one unit and creates exactly one DLQ entry naming the correlation and listing every unapplied sequence number; a correlation whose lowest PENDING row sits at exactly applied_seq + 1 is NOT swept regardless of age -- two explicit tests covering both the sweep and the non-sweep"
+      - "the sweeper's gap timeout is configurable and a correlation younger than it is not swept even when its predecessor is absent"
+      - "the consumer does not hold a database connection across its poll interval, asserted by a test that runs the cycle against a pool smaller than the consumer count without exhausting it -- the failure R-Co recorded as GH-654/ISS-0649"
+      - "the subsystem is actually WIRED: a running cycle applies a completion end to end without a test manually invoking the internal apply function -- correcting R-Co's own unwired state, and it runs on REQ-186's scheduler rather than adding a new periodic child to lib/letflow/application.ex (confirmed by git diff of application.ex)"
+      - "the effect-applied event type is registered in the per-tenant event_type_registry, so REQ-025's ES-05 registry check accepts it"
+      - "the moduledoc states that ORD-04's dynamic consumer-count reduction under contention is deliberately deferred, that R-Co left it unimplemented too, and that it depends on REQ-194's metrics"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-186, REQ-023, REQ-025, REQ-072, REQ-176]

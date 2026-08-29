@@ -1,0 +1,175 @@
+# Test run report — WF-02 Step 4
+# Written by TEST-RUNNER. RELEASE-VALIDATOR independently re-runs the suite
+# rather than trusting this report alone (core-directives.md).
+
+req_id: REQ-181
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ181-20260829
+date_utc: 2026-08-29
+git:
+  branch: feature/WF02-REQ181-20260829
+  commit: da03179f7b7d5356a53bd01400bf0bfefb1c83cc
+
+environment:
+  toolchain: local (asdf shims — Elixir 1.20.3 / Erlang 29 / OTP 29, per `.tool-versions`)
+  toolchain_note: >
+    asdf was not sourced by default in this shell session (`mix`/`elixir` were
+    not on PATH until `source ~/.asdf/asdf.sh` was run) — a shell-init quirk of
+    this sandbox invocation, not a repo issue. `mix deps.get` succeeded (network
+    reachable this run).
+  rust_toolchain: >
+    `rustc`/`cargo` are absent from PATH in this sandbox (confirmed: `which
+    rustc cargo` returns nothing under both the plain shell and the
+    asdf-sourced shell). Same known rustc-absent gap documented in the
+    immediately-prior REQ-177/REQ-178 runs' reports.
+  postgres_container: >
+    letflow-1-postgres-1 and letflow-1-keycloak-1, brought up via
+    `sudo docker compose up -d` (this user's own docker socket access was
+    permission-denied; sudo was passwordless and available). Both already
+    Running when checked.
+
+checks:
+  compile_warnings_as_errors:
+    command: "mix compile --warnings-as-errors"
+    result: PASS
+    exit_code: 0
+    output: "(no output — clean recompile, zero warnings)"
+
+  format_check:
+    command: "mix format --check-formatted"
+    result: PASS
+    exit_code: 0
+    output: "(no output — all files already formatted)"
+
+  test_suite:
+    command: "scripts/test_parallel.sh (N=8 partitions, aggregated)"
+    result: FAIL
+    summary_line_verbatim: "combined: 2500 tests, 5 properties, 5 failures (2500/2505 passed)"
+    per_partition:
+      - "partition 1: 408 tests, 2 properties, 1 failures, exit 2"
+      - "partition 2: 304 tests, 0 properties, 0 failures, exit 0"
+      - "partition 3: 377 tests, 1 property, 2 failures, exit 2"
+      - "partition 4: 165 tests, 0 properties, 0 failures, exit 0"
+      - "partition 5: 223 tests, 2 properties, 1 failures, exit 2"
+      - "partition 6: 353 tests, 0 properties, 0 failures, exit 0"
+      - "partition 7: 306 tests, 0 properties, 1 failures, exit 2"
+      - "partition 8: 364 tests, 0 properties, 0 failures, exit 0"
+    failures:
+      - test: "test C6 -- oracle-rot guard observed tables equal expected_tenant_tables/0 in both directions (Letflow.Support.TenantFixtureTest)"
+        location: "test/letflow/support/tenant_fixture_test.exs:379"
+        error: "assert observed -- expected == [] failed -- a manifest migration created a table the oracle does not list: [\"webhook_subscriptions\"]"
+        diagnosis: >
+          GENUINE DEFECT IN THIS BRANCH. Attribution: route 4 (failing test not
+          itself in the diff, but causally connected to a file that IS in the
+          diff) -- git diff --stat main...HEAD shows this branch adds
+          priv/repo/migrations/20260829010001_create_webhook_subscriptions.exs,
+          a tenant-scoped migration creating the webhook_subscriptions table
+          (confirmed: `if prefix() do ... end` guard, matching decision 0003
+          Decision B). test/support/tenant_fixture.ex's @expected_tenant_tables
+          list (lines 122-143ish) is a hand-maintained oracle of every table a
+          fully-migrated tenant schema should contain; it was NOT updated to
+          add "webhook_subscriptions", and
+          test/letflow/support/tenant_fixture_test.exs's C7 assertion
+          (`assert length(TenantFixture.expected_tenant_tables()) == 23`) was
+          not bumped to 24 either -- both REQ-176 and REQ-125 bumped this same
+          count when they added a tenant-scoped table (see the comment at
+          tenant_fixture_test.exs:296-301), so this is an established,
+          previously-followed convention that this branch's implementation
+          missed. Reproduced standalone:
+          `mix test test/letflow/support/tenant_fixture_test.exs` -> 13/14
+          passed, 1 failure, same assertion. Routed back to ELIXIR-DEV (git
+          blame on test/support/tenant_fixture.ex shows this oracle list is
+          updated by the same commit that adds the migration, i.e. ELIXIR-DEV's
+          own implementation step, not TEST-DESIGNER's).
+      - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+        error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...) at lib/system.ex:1141, via running_rust_raw/0 (test/mix/tasks/letflow_check_toolchain_test.exs:69)"
+        diagnosis: >
+          PRE-EXISTING/ENVIRONMENTAL. Attribution: route 1 (test/mix/tasks/
+          letflow_check_toolchain_test.exs does not appear in
+          `git diff --stat main...HEAD`, which touches only docs/, handoffs/,
+          lib/letflow/design/req181-webhooks-core.md,
+          lib/letflow/tenant_provisioning.ex, lib/letflow/webhooks.ex,
+          lib/letflow/webhooks/subscription.ex, the new migration,
+          test/letflow/webhooks_test.exs, test/specs/REQ-181.md) AND route 3
+          (measured mechanism: `which rustc cargo` returns nothing on PATH in
+          this sandbox, confirmed both before and after sourcing asdf).
+          Identical failure class to REQ-177/REQ-178's prior runs. Not routed
+          to ELIXIR-DEV.
+      - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+        error: "** (ErlangError) Erlang error: :enoent -- same root cause as above"
+        diagnosis: "Same as above -- second assertion in the same test module, same missing-rustc-on-PATH cause."
+      - test: "test AC7: the wasmex NIF is a loaded shared library, not an external process Wasmex.Native resolves to a compiled .beam built from Rust NIF sources (Letflow.Engine.Wasm.PluginHandlerTest)"
+        location: "test/letflow/engine/wasm/plugin_handler_test.exs:189"
+        error: "assert Enum.any?(external_resources, &String.contains?(&1, \"native/wasmex/src/\")) failed"
+        diagnosis: >
+          PRE-EXISTING/ENVIRONMENTAL, same root-cause class as the two rust-pin
+          failures above (route 1 + route 3): with no rustc on PATH, wasmex's
+          native library was not compiled from Rust source in this sandbox, so
+          Wasmex.Native's compiled .beam carries no external_resource pointing
+          at native/wasmex/src/. test/letflow/engine/wasm/plugin_handler_test.exs
+          and lib/letflow/engine/wasm/ do not appear in
+          `git diff --stat main...HEAD`. Same failure previously documented as
+          environmental in the REQ-177/REQ-178 TEST-RUNNER reports. Not routed
+          to ELIXIR-DEV.
+      - test: "test A4b: the on-disk shape-violation set equals known_shape_anomalies:, and every record cites a closed, pinned volume (Letflow.Docs.RequirementStatusInvariantsTest)"
+        location: "test/docs/requirement_status_invariants_test.exs:192"
+        error: >
+          on disk but not declared (2) — NEW DRIFT: path=docs/status/
+          requirement_status.v6.yaml entry_line=611 req="REQ-181"
+          kind="missing_field" field="agent"; same entry_line, kind="extra_field"
+          field="by" found_line=614
+        diagnosis: >
+          PRE-EXISTING, UNRELATED TO THIS BRANCH'S ACCEPTANCE CRITERIA.
+          Attribution: route 1 -- `git diff --stat main...HEAD` shows neither
+          docs/status/requirement_status.v6.yaml nor
+          test/docs/requirement_status_invariants_test.exs in this branch's
+          diff. The offending REQ-181 "started" event (entry_line 611) was
+          written by commit 8bfe96d ("chore(ORCH): WF02-REQ181-20260829
+          step-00 -- started-event bookkeeping to main"), which is this
+          branch's own merge-base with main (`git merge-base main HEAD` =
+          8bfe96d) -- i.e. it was already on main before this branch's first
+          commit, not introduced by anything TEST-RUNNER, ELIXIR-DEV, or any
+          other REQ-181-pipeline agent touched. The entry uses `by: ORCH`
+          instead of the required `agent: ORCH` field name (five-field
+          req/event/agent/at/note shape). Reproduced standalone:
+          `mix test test/docs/requirement_status_invariants_test.exs` ->
+          19/20 passed, 1 failure, identical A4b message. This is the same
+          bug CLASS previously fixed once already for a different volume/entry
+          under ISS-0330 ("REQ-122 done event missing agent: field introduced
+          by direct main push") -- a fresh recurrence against REQ-181's own
+          started-event in v6, not yet filed as its own issue. Not fixable by
+          TEST-RUNNER (append-only status-history rule forbids editing a
+          committed entry in place from this branch), not in scope for
+          REQ-181's acceptance criteria, and not routed to ELIXIR-DEV. Flagged
+          for ORCH to file as a new issue (ORCH allocates issue ids per
+          ISSUE_QUEUE.md; TEST-RUNNER does not file directly).
+
+verdict: FAIL
+verdict_detail: >
+  mix compile --warnings-as-errors: clean, 0 warnings, exit 0.
+  mix format --check-formatted: clean, exit 0.
+  Full suite (scripts/test_parallel.sh, 8 partitions): 2500/2505 passed,
+  5 failures. Of the 5: ONE is a genuine defect introduced by this branch
+  (test/letflow/support/tenant_fixture_test.exs's C6 oracle-rot guard --
+  the new webhook_subscriptions tenant table was not added to
+  test/support/tenant_fixture.ex's @expected_tenant_tables list, nor was
+  the count assertion bumped from 23 to 24), blocking this step. THREE are
+  confirmed pre-existing/environmental (rustc entirely absent from this
+  sandbox's PATH, same class as REQ-177/REQ-178's prior runs -- 2 rust-pin
+  CheckToolchainTest failures + 1 wasmex Rust-NIF-source PluginHandlerTest
+  failure). ONE is confirmed pre-existing and structurally outside this
+  branch's diff (requirement_status_invariants_test.exs's A4b, caused by
+  this branch's own merge-base commit 8bfe96d writing a status-history
+  entry with `by:` instead of the required `agent:` field -- same bug
+  class as the already-resolved ISS-0330, a fresh recurrence not yet
+  filed). test/letflow/webhooks_test.exs (this requirement's own 14 new
+  tests) does NOT appear in any failure block above -- reconfirmed clean
+  in the full-suite run.
+  Rework handoff written to ELIXIR-DEV for the one genuine defect
+  (handoffs/WF02-REQ181-20260829/step-04b-elixir-dev.json). The A4b
+  pre-existing defect and the 3 rustc-environmental failures are reported
+  here for ORCH to file/track, not routed as rework on this branch.

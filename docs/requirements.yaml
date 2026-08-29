@@ -9511,6 +9511,7 @@ requirements:
     owner: CODE-DESIGNER
     status: pending
     stage: S6
+    impl_order: 358  # letflow-queue task id
     description: >
       FIRST requirement of S6's scheduler half; REQ-186, REQ-187 and
       REQ-188 all depend on it. Filed as its own decision-and-design
@@ -9625,6 +9626,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 359  # letflow-queue task id
     description: >
       Builds the scheduler core REQ-185's artefact specifies. Core only --
       no route, no controller, following the core/route split this stage
@@ -9735,6 +9737,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 360  # letflow-queue task id
     description: >
       Connects REQ-186's timers core to the instance engine, closing three
       named, already-documented stubs. This is deliberately a separate
@@ -9817,6 +9820,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 361  # letflow-queue task id
     description: >
       Third and last of S6's scheduler half. Two deliverables that share
       one mechanism -- REQ-186's poll loop -- and are therefore built
@@ -9893,6 +9897,7 @@ requirements:
     owner: CODE-DESIGNER
     status: pending
     stage: S6
+    impl_order: 362  # letflow-queue task id
     description: >
       FIRST requirement of S6's secrets half; REQ-190 and REQ-191 depend
       on it. It exists because
@@ -10026,6 +10031,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 363  # letflow-queue task id
     description: >
       Builds what REQ-189's decision record specifies. Core only -- no
       route, no controller, per this stage's core/route split precedent
@@ -10121,6 +10127,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 364  # letflow-queue task id
     description: >
       Core only, no routes -- REQ-192 adds the HTTP surface. This is the
       most-referenced unbuilt subsystem in the codebase: THREE separate
@@ -10241,6 +10248,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 365  # letflow-queue task id
     description: >
       The route half of the service-catalog split, atop REQ-191's core --
       the same shape REQ-178 has to REQ-176 and REQ-182 has to REQ-181.
@@ -10301,6 +10309,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 366  # letflow-queue task id
     description: >
       First of S6's observability half. Letflow has NO logger
       configuration at all -- verified: config/config.exs, dev.exs,
@@ -10377,6 +10386,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 367  # letflow-queue task id
     description: >
       S6 is the owning stage for Letflow's metrics subsystem, and
       lib/letflow/routers/metrics.ex says so itself: its moduledoc states
@@ -10478,6 +10488,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 368  # letflow-queue task id
     description: >
       Core only, no route change -- REQ-196 adapts the existing route
       onto this store.
@@ -10584,6 +10595,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 369  # letflow-queue task id
     description: >
       The route half of the audit split, atop REQ-195's store -- the same
       shape REQ-178/182/184 have to their cores. Deliberately small: the
@@ -10641,6 +10653,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 370  # letflow-queue task id
     description: >
       Extends lib/letflow/engine/expr.ex. It does not replace it: that
       module's own moduledoc states "A fuller expression surface, if a
@@ -10747,6 +10760,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 371  # letflow-queue task id
     description: >
       Second and last of S6's expr half, atop REQ-197's extended grammar.
       Split from REQ-197 because REQ-197 changes the grammar, the
@@ -10817,6 +10831,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 372  # letflow-queue task id
     description: >
       The last of this batch's six subsystems, and the one the first
       batch deferred for having "zero grounding anywhere in this repo".
@@ -10947,6 +10962,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 373  # letflow-queue task id
     description: >
       Added in this batch's rework 1 (REQ-VALIDATOR finding: src/obs/timeline.zig
       was silently unscoped while the stage doc asserted src/obs was covered).
@@ -11035,6 +11051,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 374  # letflow-queue task id
     description: >
       Added in this batch's rework 1 (REQ-VALIDATOR finding: src/obs/alerts.zig,
       972 lines, was silently unscoped). Drafted rather than deferred because
@@ -11132,6 +11149,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 375  # letflow-queue task id
     description: >
       Added in this batch's rework 2 (REQ-VALIDATOR finding: the rework-1
       "this list is exhaustive" assertion was FALSE for src/repository --
@@ -11277,6 +11295,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 376  # letflow-queue task id
     description: >
       Added in this batch's rework 2, the second half of the
       artifact-repository pair REQ-202 opens. Split from REQ-202 because

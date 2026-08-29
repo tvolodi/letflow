@@ -3,9 +3,11 @@
 Status: active. Depends on: S4. REQ-176 (DLQ schema and core entry
 lifecycle), REQ-177 (DLQ landing hooks) and REQ-178 (DLQ route layer)
 are all done as of 2026-08-29 -- the first batch's DLQ half is now
-fully complete. REQ-181 (Webhook subscription schema and core) is also
-done as of 2026-08-29; REQ-182 (the webhook route layer atop it) is
-still pending. Requirements, expanded in two batches:
+fully complete. REQ-181 (Webhook subscription schema and core) and
+REQ-182 (the webhook route layer atop it) are both done as of
+2026-08-29 -- the first batch's webhooks half is now fully complete,
+mirroring the DLQ half's REQ-176/177/178 completion. Requirements,
+expanded in two batches:
 
 **First batch (DLQ and webhooks):** REQ-176 (Dead-letter queue schema
 and core entry lifecycle, OBS-05 foundation); REQ-177 (Wire REQ-056's

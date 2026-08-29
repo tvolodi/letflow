@@ -1,0 +1,27 @@
+{
+  "handoff_id": "WF02-REQ186-20260829-step02c",
+  "run_id": "WF02-REQ186-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "REQ-186's implementation is complete: lib/letflow/scheduler.ex (context module), lib/letflow/scheduler/timer.ex (schema), lib/letflow/scheduler/poller.ex (supervised GenServer ticker), priv/repo/migrations/20260829020001_create_timers.exs (tenant-scoped migration), plus registration diffs in lib/letflow/application.ex (Poller added to supervision tree) and lib/letflow/tenant_provisioning.ex (TIMER_FIRED added to @platform_event_type_seed_attrs). Two stale tests were fixed along the way (same class as REQ-181's precedent): test/support/tenant_fixture.ex's oracle list and test/letflow/tenant_provisioning_event_seed_test.exs's hardcoded seed counts, both updated for the new timers table / TIMER_FIRED event type. Full suite confirmed green modulo the 3 pre-existing rustc/wasmex-absent-from-sandbox environmental failures. Read lib/letflow/design/req186-scheduler-core.md and lib/letflow/design/req185-scheduler-firing-architecture.md for the intended architecture before reviewing."},
+  "task": {
+    "description": "Gate REQ-186's implementation against docs/agents/instructions/security-invariants.md's INV-1..INV-8. Particular focus: (1) tenant isolation of the Poller's per-tenant-schema iteration -- confirm each tenant's poll/claim/fire query is genuinely scoped via that tenant's own schema prefix, with no possibility of one tenant's timer being fired/read/written under another tenant's context; (2) the DLQ-landing path (Letflow.Dlq.enqueue/2 call at max fire retries) -- confirm it lands in the SAME tenant's dlq_entries, not a global/wrong-tenant table; (3) the migration's CHECK constraints and partial index are correctly tenant-scoped per decision 0003 Decision B (if prefix() do guard); (4) no raw/interpolated SQL in the claim query (FOR UPDATE SKIP LOCKED) -- confirm it's built via Ecto.Query, not string concatenation; (5) crash isolation -- confirm a raising fire attempt in one tenant's poll cycle cannot crash or block another tenant's processing (read the Poller's per-tenant iteration and per-timer transaction boundaries).",
+    "acceptance_criteria": [
+      "the timers table lives inside each tenant's Postgres schema with a tenant_id column retained (decision 0003 Decision B), verified by inspecting the migration, and carries a partial index on (fire_at) WHERE status = 'pending'",
+      "the status CHECK constraint admits exactly pending, fired, cancelled and failed -- a test attempting to insert a timer with status 'expired' fails at the database level, not only in the changeset",
+      "the recurrence CHECK constraint is all-or-nothing: a test inserting repeat_expression without repeat_interval_us is rejected by the database, and a test inserting all four recurrence columns consistently succeeds",
+      "a timer created with fire_at in the past is fired by the first poll after it exists, and the appended event carries fired_late: true together with both the scheduled fire_at and the actual firing timestamp; a timer created with fire_at in the future is NOT fired by that same poll -- two explicit tests",
+      "polling twice over the same due timer fires it exactly once: the second poll appends no second event and the timers row remains status 'fired' with its original fired_at",
+      "a fire attempt that raises increments fire_error_count and leaves the timer 'pending', AND the remaining due timers in that same poll cycle are still attempted -- one test asserts both, by making the first of two due timers fail and asserting the second still fired",
+      "a timer reaching the configured max fire retries transitions to 'failed' with failed_at set and produces exactly one dlq_entries row with entry_type \"timer\", and is not attempted again by subsequent polls",
+      "the poll interval, jitter, max timers per cycle and max fire retries are all read from application config with the documented defaults (5000 ms, 0 ms, 64, 3), demonstrated by a test overriding at least the interval and asserting the poller uses the override",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

@@ -679,3 +679,15 @@ history:
       recurring status:"DONE" handoff bug caught and fixed by ORCH before
       reaching CI. Closes the webhooks half of this batch (REQ-181 +
       REQ-182), mirroring the DLQ half's REQ-176/177/178 completion.
+  - req: REQ-185
+    event: started
+    agent: ORCH
+    at: "2026-08-29T17:09:29Z"
+    note: >
+      Queue task 358, GH#704, stage S6. First requirement of S6's scheduler
+      half -- decision + design artefact only (no migration, no engine
+      code, no mix.exs change), gating REQ-186/187/188. Mirrors
+      REQ-148/149/150's S5 open-question shape: Step 1 CODE-DESIGNER ->
+      Step 1b CODE-DESIGN-VALIDATOR -> SECURITY-REVIEWER -> REVIEWER
+      (explicit sign-off on the Oban adoption decision) -> TEST-DESIGNER
+      -> RELEASE-VALIDATOR -> DOC-UPDATER, no ELIXIR-DEV/TEST-RUNNER steps.

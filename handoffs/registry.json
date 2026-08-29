@@ -3251,6 +3251,21 @@
       "released_lock": false,
       "last_known_step": "Step 6 (DOC-UPDATER) -- content-producing steps done, ORCH Step Final (rebase/push/PR/CI-wait/merge/queue-release) still pending",
       "note": "REQ-182: webhook subscription CRUD route layer atop REQ-181's core -- GET/POST/PATCH/DELETE /api/v1/webhooks/subscriptions, WebhooksManage-gated. Mirrors REQ-178's DLQ route-layer shape; closes the webhooks half of this batch (REQ-181 + REQ-182), mirroring the DLQ half's REQ-176/177/178 completion. RELEASE-VALIDATOR independently re-verified all 7 acceptance criteria -- PASS. Path: zero rework rounds through design/security/reviewer/test-design gates; one real gap found and fixed proactively by CODE-DESIGNER/CODE-DESIGN-VALIDATOR -- a missing PATCH authorization clause in lib/letflow/api/authorization.ex, caught before implementation even started; one stale test fixed by REVIEWER -- test/letflow/webhooks_test.exs's REQ-181-era structural assertion, same class as REQ-176/178's precedent; two occurrences of the recurring status:\"DONE\" handoff bug caught and fixed by ORCH before reaching CI. queue_task_id 355 not yet released -- that is ORCH's Step Final job."
+    },
+    {
+      "run_id": "WF02-REQ185-20260829",
+      "requirement_id": "REQ-185",
+      "queue_task_id": 358,
+      "github_issue_number": 704,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/design/req185-scheduler-firing-architecture.md"
+      ],
+      "started_at": "2026-08-29T17:09:29Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
+      "note": "Decision + design artefact only, gates all of S6's scheduler half (REQ-186/187/188). Mirrors REQ-148/149/150's S5 open-question shape: no ELIXIR-DEV/TEST-RUNNER steps."
     }
   ]
 }

@@ -385,26 +385,39 @@ defmodule Letflow.DlqTest do
   # AC6 -- no route or controller file added or modified for REQ-176
   # ---------------------------------------------------------------------------------
 
-  describe "AC6: no route or controller file was added by REQ-176 (commit b5a028d)" do
-    test "git diff --stat scoped to the implementation commit touches only lib/letflow/dlq*, the migration, and test/support fixtures" do
-      {output, 0} =
-        System.cmd("git", ["show", "--stat", "--format=", "b5a028d"], cd: File.cwd!())
-
-      changed_files =
-        output
-        |> String.split("\n", trim: true)
-        |> Enum.filter(&String.contains?(&1, "|"))
-        |> Enum.map(fn line -> line |> String.split("|") |> List.first() |> String.trim() end)
-        |> Enum.reject(&(&1 == ""))
-
-      refute Enum.empty?(changed_files)
-      refute Enum.any?(changed_files, &String.contains?(&1, "routers/"))
-      refute Enum.any?(changed_files, &String.contains?(&1, "controller"))
-    end
-
-    test "no lib/letflow/routers/dlq.ex file exists in the working tree" do
+  describe "AC6: no route or controller file exists for REQ-176's DLQ core" do
+    # NOTE: an earlier revision of this test scoped a `git show --stat` to
+    # REQ-176's own implementation commit (b5a028d) -- that hardcoded SHA
+    # stopped resolving once REQ-176's PR (#703) was squash-merged, which
+    # rewrites history and drops the original commit entirely. A test that
+    # depends on a specific commit surviving squash-merge is the same class
+    # of local-branch-layout assumption this project's own anti-patterns doc
+    # already warns against (see "A test that shells out to git with a
+    # hardcoded ref name..."). Replaced with a structural, git-history-free
+    # check: no router/controller file exists for `dlq` anywhere in the
+    # working tree, and neither of the two shipped modules references any
+    # Plug/Router-shaped construct.
+    test "no lib/letflow/routers/dlq*.ex file exists in the working tree" do
       refute File.exists?(Path.join(File.cwd!(), "lib/letflow/routers/dlq.ex"))
       assert match?({:error, :nofile}, Code.ensure_loaded(Letflow.Routers.Dlq))
+
+      routers_dir = Path.join(File.cwd!(), "lib/letflow/routers")
+
+      dlq_router_files =
+        routers_dir
+        |> File.ls!()
+        |> Enum.filter(&String.contains?(String.downcase(&1), "dlq"))
+
+      assert dlq_router_files == []
+    end
+
+    test "neither Letflow.Dlq nor Letflow.Dlq.Entry references Plug/Router-shaped constructs" do
+      for path <- ["lib/letflow/dlq.ex", "lib/letflow/dlq/entry.ex"] do
+        source = File.read!(Path.join(File.cwd!(), path))
+        refute source =~ ~r/use\s+Plug\.Router/, "#{path} unexpectedly uses Plug.Router"
+        refute source =~ ~r/use\s+\w*Web,\s*:controller/, "#{path} unexpectedly is a controller"
+        refute source =~ ~r/\bget\s+"\//, "#{path} unexpectedly defines a route"
+      end
     end
   end
 end

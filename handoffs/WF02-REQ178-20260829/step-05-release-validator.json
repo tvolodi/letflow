@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF02-REQ178-20260829-step05",
+  "run_id": "WF02-REQ178-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "test/reports/report-2026-08-29-WF02-REQ178-20260829.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Queue task 353, GH#698, stage S6, branch feature/WF02-REQ178-20260829. TEST-RUNNER (Step 4) ran the full suite plus mix compile --warnings-as-errors and mix format --check-formatted, all real output quoted in test/reports/report-2026-08-29-WF02-REQ178-20260829.yaml.",
+    "environment_setup": "asdf shims sourced (`source ~/.asdf/asdf.sh`) for Elixir 1.20.3/OTP 29 per .tool-versions; docker compose (postgres on port 5463 per this workspace's untracked .env LETFLOW_DB_PORT) already running, brought up via `sudo docker compose up -d` after the invoking user's own docker socket access was permission-denied.",
+    "compile_result": "MIX_ENV=test mix compile --warnings-as-errors --force -> exit 0, zero warnings, output: 'Compiling 153 files (.ex) / Generated letflow app'.",
+    "format_result": "mix format --check-formatted -> exit 0, no output (all files already formatted).",
+    "test_suite_result": "scripts/test_parallel.sh (8 partitions) -> combined: 2486 tests, 5 properties, 3 failures (2488/2491 passed).",
+    "failures_diagnosis": "All 3 failures are pre-existing/environmental, confirmed by standalone reruns of each: 2 in test/mix/tasks/letflow_check_toolchain_test.exs (rust-pin checks, System.cmd(\"rustc\", ...) -> :enoent because this sandbox has no rustc/cargo on PATH at all) and 1 in test/letflow/engine/wasm/plugin_handler_test.exs (AC7 Wasmex.Native external_resource check, same root cause -- wasmex's native lib wasn't compiled from Rust source here). This exact failure set was already documented as environmental in the immediately-prior REQ-177 TEST-RUNNER report (test/reports/report-2026-08-29-WF02-REQ177-20260829.yaml). None of the 3 touch any file this branch's diff modifies (git diff main...HEAD --stat: docs/, handoffs/, lib/letflow/design/, lib/letflow/plugs/api_pipeline.ex, lib/letflow/routers/dlq.ex, test/letflow/dlq_test.exs, test/letflow/routers/dlq_test.exs, test/specs/REQ-178.md).",
+    "req178_files_confirmed": "MIX_ENV=test mix test test/letflow/routers/dlq_test.exs test/letflow/dlq_test.exs -> 'Result: 31 passed' (15 + 16, matching TEST-DESIGN-VALIDATOR's Step 3b figures), exit 0, no Failed: section.",
+    "no_files_deleted_or_skipped": "No test file was deleted, skipped, or modified to force a pass. All 3 failures were diagnosed to real root cause (absent rustc toolchain in this sandbox) and left in place, matching this run's explicit directive after the prior misstep on this same branch (H6 handoff-lint file, already corrected in commits db29e45/3875462).",
+    "acceptance_criteria_to_reverify": [
+      "GET /api/v1/dlq returns a body shaped exactly {items: [...], next_cursor: string|null}, and each item's field names (id, entry_type, instance_id, reason, full_reason, retry_count, status, created_at at minimum) match DlqEntry's, verified against web/src/types/api.ts rather than a hand-invented shape",
+      "GET /api/v1/dlq honors status, source_type, search, cursor and page_size independently, each with its own test demonstrating the filter narrows the result set",
+      "POST /api/v1/dlq/:id/retry and .../discard both require the DlqOperate permission from REQ-069's matrix -- a caller holding no role with that permission receives 403, and a caller from a different tenant naming a real id belonging to tenant A receives 404, never 403 -- three explicit tests",
+      "POST /api/v1/dlq/:id/retry and .../discard against a non-existent id return 404, and against an id already \"resolved\" or \"discarded\" return a 409-shaped conflict rather than a generic 500 -- covering the not-found and terminal-state cases each with their own test",
+      "the route module's moduledoc states explicitly that R-Co's dlq.zig was not inspected in this batch (unreachable from the drafting environment) and that web/src/api/dlq.ts / web/src/types/api.ts were the binding contract instead, so a future reader does not assume R-Co parity was verified when it wasn't",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "task": {
+    "description": "Independently re-verify REQ-178's acceptance criteria (originally from Step 1, quoted above) before this requirement is marked done -- re-run the suite yourself rather than trusting this report alone, per core-directives.md's 'Every producing step has a validating step'.",
+    "artifacts_in": [
+      "test/reports/report-2026-08-29-WF02-REQ178-20260829.yaml",
+      "lib/letflow/routers/dlq.ex",
+      "lib/letflow/design/req178-dlq-routes.md",
+      "test/letflow/routers/dlq_test.exs",
+      "test/letflow/dlq_test.exs",
+      "test/specs/REQ-178.md",
+      "handoffs/WF02-REQ178-20260829/step-01-code-designer.json"
+    ],
+    "next_action": "RELEASE-VALIDATOR re-verifies -> DOC-UPDATER (or rework handoff if a real gap is found)."
+  },
+  "result": null
+}

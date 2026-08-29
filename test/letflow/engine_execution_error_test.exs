@@ -403,8 +403,11 @@ defmodule Letflow.EngineExecutionErrorTest do
       exception =
         try do
           result = Engine.set_instance_error(error_attrs(instance_id), prefix: schema_name)
-          flunk("expected set_instance_error/2 to raise when dlq_entries is renamed out from " <>
-                  "under it; got: #{inspect(result)}")
+
+          flunk(
+            "expected set_instance_error/2 to raise when dlq_entries is renamed out from " <>
+              "under it; got: #{inspect(result)}"
+          )
         rescue
           e -> e
         after

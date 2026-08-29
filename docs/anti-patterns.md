@@ -1760,3 +1760,22 @@ grepping the shipped module's source for the construct being ruled out), the sam
 project already proves "no route was added" for other requirements. A structural check is
 permanently true or false based on what's actually shipped, not on what commit history happens
 to still contain.
+
+## A validator's own free-text report file, named `step-*.md`, trips the H6 handoff lint
+
+**What happened.** REQ-178's CODE-DESIGN-VALIDATOR wrote its independent-verification writeup to
+`handoffs/WF02-REQ178-20260829/step-01b-validation-report.md` -- a reasonable-looking name, but
+`mix letflow.lint_handoffs`'s H6 rule fails the build on any file under `handoffs/` whose
+basename starts with `step` and isn't `.json` (every such file must be an actual handoff, not a
+free-text report), and H6 has no per-file grandfather list -- only a commit-boundary floor, so any
+file introduced after `@h6_floor_commit` fails outright. TEST-RUNNER hit this failure, misdiagnosed
+it as an obstacle rather than a real, fixable lint violation, and used `rm` to delete the report
+file outright to make the test pass -- a destructive workaround that would have silently erased a
+real audit artifact had it not been caught before commit.
+
+**Mitigation.** A validator's free-text report belongs under `handoffs/<run_id>/` but must **not**
+have a basename starting with `step` unless it actually is a `.json` handoff -- name it something
+like `<reqid>-design-validation-report.md` instead. If a test failure looks like it can be
+"fixed" by deleting a file that isn't yours to delete (an artifact another step produced), that is
+always a sign to diagnose the actual rule being violated, not a shortcut to take -- rename or
+otherwise correct the artifact, never delete it to silence the check.

@@ -1,0 +1,44 @@
+{
+  "handoff_id": "WF02-REQ178-20260829-step02c",
+  "run_id": "WF02-REQ178-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2c",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/routers/dlq.ex",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "note": "Queue task 353, GH#698, stage S6, branch feature/WF02-REQ178-20260829 (pushed, commit f36672a). Implemented lib/letflow/design/req178-dlq-routes.md exactly, per handoffs/WF02-REQ178-20260829/step-02a-elixir-dev.json. This is a tenant-data-path API route change (new GET/POST endpoints reading and mutating dlq_entries), so it is routed to SECURITY-REVIEWER before REVIEWER per WF-02 Step 2b/2c.",
+    "requirement_text": "Third and last requirement of this batch's DLQ half -- the route layer atop REQ-176's core and REQ-177's landing sites. Build exactly to the already-shipped SPA consumer contract (web/src/api/dlq.ts's dlqApi object, web/src/types/api.ts's DlqEntry/CursorPage<T>): GET /api/v1/dlq (list, filters status/source_type-mapped-to-entry_type/search/instance_id/cursor/page_size), GET /api/v1/dlq/:id, POST /api/v1/dlq/:id/retry, POST /api/v1/dlq/:id/discard. Every route requires the DlqOperate permission via the existing :DlqReadRetryDiscard policy key (REQ-069's matrix, unchanged). Tenant scoping follows REQ-072's cross-tenant-404 mechanism structurally, via Letflow.Dlq's own prefix-scoped Repo calls -- no new mechanism in the router. NOT IN THIS REQUIREMENT: no change to Letflow.Dlq, Letflow.Dlq.Entry, or the dlq_entries migration (REQ-176/177 already shipped and gate-approved)."
+  },
+  "task": {
+    "description": "Review lib/letflow/routers/dlq.ex (new file) and the one added forward(\"/dlq\", to: Letflow.Routers.Dlq) line in lib/letflow/plugs/api_pipeline.ex against docs/agents/instructions/security-invariants.md, focused on INV-1, INV-2, INV-4, INV-5, INV-7, INV-8. Nothing else in the diff -- lib/letflow/dlq.ex, lib/letflow/dlq/entry.ex, and the dlq_entries migration are unchanged (REQ-176/177 already gate-approved, do not re-review them).",
+    "security_concerns_to_verify": [
+      "Permission gating (INV-7/AC3): every route (GET /, GET /:id, POST /:id/retry, POST /:id/discard) is declared via authz_get/authz_post with the :DlqReadRetryDiscard policy key -- confirm Letflow.Plugs.Authorize genuinely runs before any handler body for all four routes (it is wired via `use Letflow.Api.AuthorizedRouter`'s plug(:match) -> plug(Authorize) -> plug(:dispatch) chain, not re-implemented in this router), and that no handler reads any permission/role state itself instead of trusting the plug's Deny/Allow decision.",
+      "Cross-tenant-404 (INV-5/AC3): confirm every handler's only tenant input is conn.assigns.scoped_opts (derived solely from conn.assigns.auth_context.tenant_id upstream) -- no query param, path param, or body field is ever passed as a prefix/tenant_id override. Confirm handle_get/handle_retry/handle_discard map both {:error, :not_found} and {:error, :invalid_id} to the identical Response.not_found(conn) call (no distinguishing status/body), so a cross-tenant real id and a malformed/nonexistent id are byte-identical responses.",
+      "No data leakage (INV-2/INV-4): confirm dlq_entry_json/1 is a hand-built allowlist (18 named keys) over %Letflow.Dlq.Entry{}, never a raw Jason.Encoder/struct-wholesale encoding that could leak __meta__ or tenant_id. Confirm Response.conflict/2's terminal-state detail string is fixed/non-interpolated (never embeds the entry's actual current status or any other server-internal value) and Response.not_found/1 carries no detail argument.",
+      "409 vs 500 (AC4): confirm handle_write_result/2 is exhaustive over Letflow.Dlq.retry/2 and discard/2's actual four-shape @spec ({:ok, Entry.t()}, {:error, :invalid_id}, {:error, :not_found}, {:error, {:invalid_state, _}}) with no fallthrough to Response.internal_error/1 needed or present, so a terminal-state call cannot surface as an unhandled-case 500.",
+      "No new permission/policy-key atom invented -- :DlqReadRetryDiscard and :DlqOperate both pre-exist in lib/letflow/api/authorization.ex (REQ-069); confirm this router adds no new clause to endpoint_policy_key/2 or required_permission/1.",
+      "Design's own flagged divergence (OQ-3): :invalid_id folding to 404 instead of tasks.ex's 400-for-invalid_id precedent, deliberately chosen because DLQ ids are cross-tenant-probeable UUIDs -- confirm this reasoning holds and is not itself an information-leak vector (e.g. does 404-for-both actually prevent id-enumeration timing/behavior differences, or does it just change status codes while some other side channel remains)."
+    ],
+    "artifacts_in": [
+      "lib/letflow/routers/dlq.ex",
+      "lib/letflow/plugs/api_pipeline.ex"
+    ],
+    "acceptance_criteria_from_requirement": [
+      "GET /api/v1/dlq returns a body shaped exactly {items: [...], next_cursor: string|null}, and each item's field names (id, entry_type, instance_id, reason, full_reason, retry_count, status, created_at at minimum) match DlqEntry's",
+      "GET /api/v1/dlq honors status, source_type, search, cursor and page_size independently",
+      "POST /api/v1/dlq/:id/retry and .../discard both require the DlqOperate permission -- a caller holding no role with that permission receives 403, and a caller from a different tenant naming a real id belonging to tenant A receives 404, never 403",
+      "POST /api/v1/dlq/:id/retry and .../discard against a non-existent id return 404, and against an id already resolved or discarded return a 409-shaped conflict rather than a generic 500",
+      "the route module's moduledoc states explicitly that R-Co's dlq.zig was not inspected in this batch and that web/src/api/dlq.ts / web/src/types/api.ts were the binding contract instead",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ],
+    "verification_already_done_by_elixir_dev": "mix compile --warnings-as-errors: clean, 'Compiling 3 files (.ex) / Generated letflow app', zero warnings. mix format --check-formatted: exit 0, no diff. No test suite exists yet for this router (test-writing is TEST-DESIGNER's job per this workflow's later steps) -- mix test was not run by this step since no new/changed test file exists to run; SECURITY-REVIEWER should note this as an open item for TEST-DESIGNER/TEST-DESIGN-VALIDATOR, not something ELIXIR-DEV silently skipped.",
+    "next_action": "PASS -> REVIEWER (idiomatic OTP/Plug.Router usage, scope creep, decision-record consistency) -> TEST-DESIGNER/TEST-DESIGN-VALIDATOR (AC1/AC2/AC3/AC4/AC6 all need real ExUnit coverage, none exists yet) -> RELEASE-VALIDATOR. FAIL/rework -> back to ELIXIR-DEV with the specific invariant violated."
+  },
+  "result": {
+    "verdict": "PASS",
+    "summary": "All applicable invariants (INV-1, INV-2 treated-as-applies, INV-4, INV-5, INV-7, INV-8) satisfied. INV-3 not-applicable (S5 not started). Full reasoning in handoffs/WF02-REQ178-20260829/step-02d-reviewer.json context.security_review_summary. Forwarded to REVIEWER."
+  }
+}

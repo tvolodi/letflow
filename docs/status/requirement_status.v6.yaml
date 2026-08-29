@@ -576,3 +576,35 @@ history:
       sibling session's own get_next_task-probe-misuse self-correction
       (recorded in this same volume, 2026-08-29T05:01:11Z) -- genuinely
       open when ORCH claimed it here, no concurrent work in flight.
+  - req: REQ-178
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-29T11:28:53Z"
+    note: >
+      WF02-REQ178-20260829 done (queue task 353, GH#698, stage S6). DLQ
+      route layer shipped in lib/letflow/routers/dlq.ex atop REQ-176's
+      core and REQ-177's landing sites: GET /api/v1/dlq (list, filterable
+      by status/source_type/search/cursor/page_size/instance_id) with
+      body shape {items: [DlqEntry], next_cursor} verified field-by-field
+      against web/src/types/api.ts; GET /api/v1/dlq/:id; POST .../retry
+      and .../discard. Every route requires DlqOperate (REQ-069's matrix,
+      now reachable for the first time); tenant scoping follows REQ-072's
+      cross-tenant-404 mechanism (a real id in another tenant returns 404,
+      never 403, confirmed by test); terminal-state retry/discard returns
+      a 409-shaped conflict rather than 500. Moduledoc discloses R-Co's
+      dlq.zig was not inspected (unreachable from this sandbox) and names
+      web/src/api/dlq.ts + web/src/types/api.ts as the binding contract
+      instead. Clean pipeline -- CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER,
+      REVIEWER, TEST-DESIGN-VALIDATOR all passed with zero rework rounds.
+      Two mechanical bookkeeping defects were found and fixed along the
+      way, neither touching REQ-178's substance: an H6 handoff-lint
+      validator-report naming trap (db29e45, now documented in
+      docs/anti-patterns.md) and a status-vocab defect ("DONE" is not a
+      valid top-level handoff status) in step-01b/step-02c/step-05
+      (fbe5f42). RELEASE-VALIDATOR independently re-verified all 6
+      acceptance criteria (own compile/test runs including
+      scripts/test_parallel.sh -- 2488/2491, same 3 pre-existing
+      rustc-absent environmental failures, none touching this branch's
+      diff) and PASSED. This closes Stage 6's first batch DLQ half: all
+      three of REQ-176 (core), REQ-177 (hooks), and REQ-178 (routes) are
+      now done.

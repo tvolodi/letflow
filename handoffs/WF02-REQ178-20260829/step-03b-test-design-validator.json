@@ -1,0 +1,77 @@
+{
+  "handoff_id": "WF02-REQ178-20260829-step03b",
+  "run_id": "WF02-REQ178-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3b",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "test/letflow/routers/dlq_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Queue task 353, GH#698, stage S6, branch feature/WF02-REQ178-20260829. Commit ccbd4e9 adds test/letflow/routers/dlq_test.exs (15 tests) and test/specs/REQ-178.md covering every acceptance criterion from step-03-test-designer.json.",
+    "test_run": {
+      "command": "mix test test/letflow/routers/dlq_test.exs",
+      "result": "Result: 15 passed",
+      "note": "Real Postgres via Letflow.DataCase/Letflow.TenantFixture, async: false, matching test/letflow/routers/tasks_test.exs's own idiom."
+    },
+    "coverage_map": {
+      "AC1": "describe \"AC1: GET /dlq returns {items, next_cursor} with DlqEntry-shaped items\" -- exact two-key body, exact 18-key item allowlist, real values checked against web/src/types/api.ts's DlqEntry field names.",
+      "AC2": "describe \"AC2: GET /dlq filters\" -- 5 tests: status, source_type (renamed to entry_type at the router boundary), search, instance_id, page_size (cursor exercised as part of the page_size test).",
+      "AC3": "describe \"AC3: retry/discard require DlqOperate\" -- 3 tests: retry-403 (TASK_WORKER, a real role lacking DlqOperate), discard-403 (same), and one cross-tenant-real-id test asserting 404 (never 403) identically for retry and discard, byte-identical to a genuinely-nonexistent id's response.",
+      "AC4": "describe \"AC4: retry/discard against a nonexistent id\" (2 tests) + describe \"AC4: retry/discard against an already-terminal entry\" (2 tests) -- not-found and terminal-state, both operations, each with unchanged-state assertions.",
+      "AC5": "describe \"AC5: GET /dlq is tenant-scoped\" -- fixture entry in tenant B absent from tenant A's list. Plus describe \"moduledoc states R-Co's dlq.zig was not inspected...\" -- structural Code.fetch_docs/1 check for the required disclosure."
+    },
+    "mutation_testing": {
+      "performed": true,
+      "mutations": [
+        {
+          "line_mutated": "lib/letflow/routers/dlq.ex handle_list/1: `entry_type: non_empty(Map.get(query, \"source_type\"))` -> `entry_type: nil`",
+          "test_that_caught_it": "AC2 ... source_type narrows the result set",
+          "result_with_mutant": "14/15 passed",
+          "reverted_and_confirmed_clean": true
+        },
+        {
+          "line_mutated": "lib/letflow/routers/dlq.ex handle_write_result/2: `{:error, :not_found}` clause `Response.not_found(conn)` -> `Response.ok(conn, %{})`",
+          "tests_that_caught_it": [
+            "AC4 ... POST /dlq/:id/retry -> 404 for a genuinely nonexistent id",
+            "AC4 ... POST /dlq/:id/discard -> 404 for a genuinely nonexistent id",
+            "AC3 ... a real id belonging to a different tenant returns 404, never 403, for both retry and discard"
+          ],
+          "result_with_mutant": "12/15 passed",
+          "reverted_and_confirmed_clean": true
+        },
+        {
+          "line_mutated": "lib/letflow/routers/dlq.ex handle_write_result/2: `{:error, {:invalid_state, _}}` clause `Response.conflict(conn, ...)` -> `Response.ok(conn, %{})`",
+          "tests_that_caught_it": [
+            "AC4 ... POST /dlq/:id/retry -> 409 against an already-resolved entry",
+            "AC4 ... POST /dlq/:id/discard -> 409 against an already-discarded entry"
+          ],
+          "result_with_mutant": "13/15 passed",
+          "reverted_and_confirmed_clean": true
+        },
+        {
+          "line_mutated": "lib/letflow/routers/dlq.ex route declaration: `authz_post \"/:id/retry\", :DlqReadRetryDiscard` -> `authz_post \"/:id/retry\", :TasksList` (existing unrelated policy key whose required permission TASK_WORKER holds)",
+          "test_that_caught_it": "AC3 ... POST /dlq/:id/retry -> 403 for a caller with no role holding DlqOperate",
+          "result_with_mutant": "14/15 passed",
+          "reverted_and_confirmed_clean": true
+        }
+      ],
+      "revert_verification": "cp of pre-mutation file diffed byte-identical after each revert; `git status --short` after all four mutation cycles shows lib/letflow/routers/dlq.ex with no modification (only test/letflow/routers/dlq_test.exs and test/specs/REQ-178.md as tracked additions from this step's own commit)."
+    },
+    "forbidden_files_untouched": "lib/letflow/dlq.ex, lib/letflow/dlq/entry.ex, and every existing REQ-176/177 test file were not modified by this step (git diff main...HEAD --stat for this commit shows only the two new files).",
+    "known_pre_existing_conflict_flagged_not_fixed": "test/letflow/dlq_test.exs (REQ-176)'s own 'AC6: no route or controller file exists for REQ-176's DLQ core' describe block's first test now fails (mix test test/letflow/dlq_test.exs -> 16/17 passed) because REQ-178 has, by design, added lib/letflow/routers/dlq.ex -- exactly the file that REQ-176 test asserted did not exist yet. This is a real, pre-existing test/reality conflict created the moment REQ-178's router landed (in an earlier ELIXIR-DEV step, before this TEST-DESIGNER step ran), not introduced by this handoff. Per this step's explicit instruction not to modify any REQ-176/177 test file, it was left as-is. TEST-DESIGN-VALIDATOR / RELEASE-VALIDATOR should route a follow-up (likely to ELIXIR-DEV or DOC-UPDATER) to update that now-stale REQ-176 AC6 assertion; full detail in test/specs/REQ-178.md's 'Known pre-existing conflict' section."
+  },
+  "task": {
+    "description": "Validate test/letflow/routers/dlq_test.exs against REQ-178's full acceptance criteria: every AC has a runnable test, no skipped coverage, isolated self-sufficient fixtures, and the mutation-testing evidence above is sufficient (not merely asserted).",
+    "artifacts_in": [
+      "test/letflow/routers/dlq_test.exs",
+      "test/specs/REQ-178.md",
+      "lib/letflow/routers/dlq.ex",
+      "lib/letflow/design/req178-dlq-routes.md",
+      "handoffs/WF02-REQ178-20260829/step-03-test-designer.json"
+    ],
+    "next_action": "TEST-DESIGN-VALIDATOR verifies coverage -> TEST-RUNNER -> RELEASE-VALIDATOR."
+  },
+  "result": null
+}

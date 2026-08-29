@@ -382,10 +382,11 @@ defmodule Letflow.DlqTest do
   end
 
   # ---------------------------------------------------------------------------------
-  # AC6 -- no route or controller file added or modified for REQ-176
+  # AC6 -- Letflow.Dlq and Letflow.Dlq.Entry are pure context/schema modules,
+  # with no route or controller-shaped constructs of their own
   # ---------------------------------------------------------------------------------
 
-  describe "AC6: no route or controller file exists for REQ-176's DLQ core" do
+  describe "AC6: Letflow.Dlq core itself has no route or controller-shaped constructs" do
     # NOTE: an earlier revision of this test scoped a `git show --stat` to
     # REQ-176's own implementation commit (b5a028d) -- that hardcoded SHA
     # stopped resolving once REQ-176's PR (#703) was squash-merged, which
@@ -393,24 +394,20 @@ defmodule Letflow.DlqTest do
     # depends on a specific commit surviving squash-merge is the same class
     # of local-branch-layout assumption this project's own anti-patterns doc
     # already warns against (see "A test that shells out to git with a
-    # hardcoded ref name..."). Replaced with a structural, git-history-free
-    # check: no router/controller file exists for `dlq` anywhere in the
-    # working tree, and neither of the two shipped modules references any
-    # Plug/Router-shaped construct.
-    test "no lib/letflow/routers/dlq*.ex file exists in the working tree" do
-      refute File.exists?(Path.join(File.cwd!(), "lib/letflow/routers/dlq.ex"))
-      assert match?({:error, :nofile}, Code.ensure_loaded(Letflow.Routers.Dlq))
-
-      routers_dir = Path.join(File.cwd!(), "lib/letflow/routers")
-
-      dlq_router_files =
-        routers_dir
-        |> File.ls!()
-        |> Enum.filter(&String.contains?(String.downcase(&1), "dlq"))
-
-      assert dlq_router_files == []
-    end
-
+    # hardcoded ref name..."). It was then replaced with a check asserting no
+    # router/controller file existed anywhere for `dlq` in the working tree --
+    # but that premise is now obsolete too: REQ-178 (a separate, later,
+    # gate-approved requirement) correctly and intentionally added
+    # `lib/letflow/routers/dlq.ex` as the route layer atop this context
+    # module. REQ-176's actual scope was never "no DLQ route ever exists" --
+    # it was "this context/schema module itself contains no route or
+    # controller-shaped constructs" (design authority
+    # `lib/letflow/design/req176-dlq-core.md`). This test is scoped to that
+    # narrower, still-true claim: `lib/letflow/dlq.ex` and
+    # `lib/letflow/dlq/entry.ex` remain pure context/schema modules with no
+    # `use Plug.Router`, no controller `use`, and no route macro defined
+    # directly in either file. It says nothing about `lib/letflow/routers/`,
+    # which is REQ-178's territory.
     test "neither Letflow.Dlq nor Letflow.Dlq.Entry references Plug/Router-shaped constructs" do
       for path <- ["lib/letflow/dlq.ex", "lib/letflow/dlq/entry.ex"] do
         source = File.read!(Path.join(File.cwd!(), path))

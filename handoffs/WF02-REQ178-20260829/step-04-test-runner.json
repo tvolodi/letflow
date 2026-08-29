@@ -1,0 +1,41 @@
+{
+  "handoff_id": "WF02-REQ178-20260829-step04",
+  "run_id": "WF02-REQ178-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 4",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "test/letflow/routers/dlq_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Queue task 353, GH#698, stage S6, branch feature/WF02-REQ178-20260829. TEST-DESIGN-VALIDATOR (Step 3b) PASSed test/letflow/routers/dlq_test.exs (15 tests) against REQ-178's full acceptance criteria -- all 5 ACs have real, non-duplicative coverage; no @tag :skip; no TODO-left-in-spec; every fixture provisions its own tenant via Letflow.TenantFixture.provisioned_tenant!/1 with a unique slug prefix (self-sufficient, no cross-test ordering dependency); no hardcoded secrets/connection strings.",
+    "ac6_conflict_resolved": "Confirmed the flagged conflict in test/letflow/dlq_test.exs (REQ-176) 'AC6: no route or controller file exists for REQ-176's DLQ core' describe block was exactly as reported by TEST-DESIGNER (an obsolete premise, not a real regression): REQ-178 correctly and intentionally added lib/letflow/routers/dlq.ex as a separate, later, gate-approved requirement's route layer, which the old test's File.exists?/Code.ensure_loaded/File.ls! assertions wrongly treated as a violation. Rewrote that describe block (renamed to 'AC6: Letflow.Dlq core itself has no route or controller-shaped constructs') to drop the obsolete 'routers/ dir stays empty forever' assertions and keep only the correctly-scoped, still-real structural check already present in the same block: neither lib/letflow/dlq.ex nor lib/letflow/dlq/entry.ex itself uses Plug.Router, a controller use, or defines a route macro. This is not a no-op -- it is the same regex-based structural grep that was already catching a real class of regression, now correctly scoped to REQ-176's actual claim instead of an obsolete broader one. Also updated test/specs/REQ-178.md's 'Known pre-existing conflict' section to record the fix.",
+    "test_runs_performed_by_validator": {
+      "routers_dlq_test": {
+        "command": "MIX_ENV=test mix test test/letflow/routers/dlq_test.exs",
+        "result": "Result: 15 passed",
+        "note": "Fresh run by TEST-DESIGN-VALIDATOR, not copied from TEST-DESIGNER's report."
+      },
+      "dlq_test_req176": {
+        "command": "MIX_ENV=test mix test test/letflow/dlq_test.exs",
+        "result": "Result: 16 passed",
+        "note": "Was 16/17 passed (1 failing) before the AC6 fix; now 16/16 passed (one obsolete test removed, its correctly-scoped sibling kept)."
+      }
+    },
+    "mutation_testing_reviewed_not_rerun": "This is a normal WF-02 gate, not a WF-03 regression test where the pre-fix failure was 'the code under test did not exist' -- REQ-178's router code already existed and was reviewed/tested against real behavior, so the mandatory validator-must-reapply-a-mutant rule (WF-03-specific) does not apply here. TEST-DESIGN-VALIDATOR reviewed TEST-DESIGNER's reported mutation-testing evidence (4 mutants: filter-removal, 404-status-flip, 409-status-flip, permission-check-bypass; each confirmed to drop the pass count and each reverted to byte-identical) against the actual test file and design doc and found it consistent and sufficient; did not independently re-apply the mutants.",
+    "forbidden_files_untouched_confirmed": "git diff for this step touches only test/letflow/dlq_test.exs (AC6 describe block rewrite) and test/specs/REQ-178.md (conflict-section update). lib/letflow/dlq.ex, lib/letflow/dlq/entry.ex, lib/letflow/routers/dlq.ex, and test/letflow/routers/dlq_test.exs were not modified by this step."
+  },
+  "task": {
+    "description": "Run the full mix test suite on branch feature/WF02-REQ178-20260829 and confirm no regressions -- report pass/fail with real output.",
+    "artifacts_in": [
+      "test/letflow/routers/dlq_test.exs",
+      "test/letflow/dlq_test.exs",
+      "test/specs/REQ-178.md",
+      "lib/letflow/routers/dlq.ex",
+      "handoffs/WF02-REQ178-20260829/step-03b-test-design-validator.json"
+    ],
+    "next_action": "TEST-RUNNER runs full suite -> RELEASE-VALIDATOR."
+  },
+  "result": "PASS"
+}

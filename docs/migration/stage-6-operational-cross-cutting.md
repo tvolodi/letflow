@@ -1,8 +1,9 @@
 # Stage 6 — Operational cross-cutting
 
 Status: active. Depends on: S4. REQ-176 (DLQ schema and core entry
-lifecycle) done as of 2026-08-29 -- the stage's first completed
-requirement. Requirements, expanded in two batches:
+lifecycle), REQ-177 (DLQ landing hooks) and REQ-178 (DLQ route layer)
+are all done as of 2026-08-29 -- the first batch's DLQ half is now
+fully complete. Requirements, expanded in two batches:
 
 **First batch (DLQ and webhooks):** REQ-176 (Dead-letter queue schema
 and core entry lifecycle, OBS-05 foundation); REQ-177 (Wire REQ-056's

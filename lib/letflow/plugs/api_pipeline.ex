@@ -64,6 +64,7 @@ defmodule Letflow.Plugs.ApiPipeline do
   forward("/solution-packs", to: Letflow.Routers.SolutionPacks)
   forward("/audit", to: Letflow.Routers.Audit)
   forward("/metrics", to: Letflow.Routers.Metrics)
+  forward("/dlq", to: Letflow.Routers.Dlq)
 
   match _ do
     Letflow.Api.Response.not_found(conn)

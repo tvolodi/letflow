@@ -1,0 +1,39 @@
+{
+  "handoff_id": "WF02-REQ178-20260829-step02d",
+  "run_id": "WF02-REQ178-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2d",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "lib/letflow/routers/dlq.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Queue task 353, GH#698, stage S6, branch feature/WF02-REQ178-20260829. SECURITY-REVIEWER gate PASSED for lib/letflow/routers/dlq.ex and the forward(\"/dlq\", ...) line in lib/letflow/plugs/api_pipeline.ex. Forwarding to REVIEWER for the idiomatic Plug.Router usage / scope-creep / decision-record-consistency gate per WF-02 Step 2c -> 2d.",
+    "security_review_summary": {
+      "verdict": "PASS",
+      "invariants_assessed": {
+        "INV-1": "APPLIES (S1/S2 done, dlq_entries is a tenant-scoped table). SATISFIED: every handler's only tenant input is conn.assigns.scoped_opts, itself produced solely by Letflow.Plugs.Authorize from conn.assigns.auth_context.tenant_id -- verified no query/path/body value is ever passed as prefix or tenant_id override in dlq.ex. Migration/schema unchanged in this diff (already gate-approved under REQ-176/177) -- (a)/(c) reconfirmed by reading the actual Letflow.Dlq.get/2, retry/2, discard/2 (unchanged, lib/letflow/dlq.ex): all three thread opts[:prefix] into Repo.get/Repo.one calls; tenant_id is never caller-supplied, derived via TenantProvisioning.tenant_id_for_schema_name/1 inside Dlq.enqueue/2 (not touched by this router at all -- this router never writes tenant_id).",
+        "INV-2": "Treated as APPLIES despite the doc's stale 'S4 not started' framing (this codebase already has a live multi-tenant API surface at S6) -- same staleness pattern as INV-1's own correction. SATISFIED: dlq_entry_json/1 is a hand-built 18-key allowlist over %Letflow.Dlq.Entry{}, verified in the actual file (lib/letflow/routers/dlq.ex:210-232) -- never Jason.Encoder-derived, no __meta__/tenant_id emitted. Confirmed DlqEntry's TS-only optional fields (item_type, original_payload, processor_metadata, max_retries) have no schema column and are correctly omitted rather than fabricated.",
+        "INV-3": "NOT-APPLICABLE -- S5 (scripting/plugins) not started, no Lua/WASM path touched.",
+        "INV-4": "APPLIES. SATISFIED: grep for Repo.query/System.get_env/hardcoded-secret patterns in the new file returns nothing; Response.not_found/1 takes no argument (fixed detail, verified in lib/letflow/api/response.ex + error.ex), Response.conflict/2 is called with a fixed literal string \"dlq entry is already terminal\", never the entry's actual current_status -- verified by reading the real call site (dlq.ex:196), not just the design doc's claim.",
+        "INV-5": "APPLIES. SATISFIED, verified against the real Letflow.Dlq code (not just design-doc assertion): get/2 does Repo.get(Entry, id, prefix: prefix); retry/2 and discard/2's shared fetch_and_lock_entry/3 does Entry |> where(id: ^id) |> lock(\"FOR UPDATE\") |> repo.one(prefix: prefix) -- schema-per-tenant means a cross-tenant row is not merely filtered out by a predicate but physically unreachable from another schema's connection, so a genuinely-nonexistent id and a real-but-other-tenant id take the identical one-round-trip DB path and both resolve to {:error, :not_found}. Router-side: handle_get maps both {:error,:not_found} and {:error,:invalid_id} to the identical Response.not_found(conn) call (dlq.ex:161-166); handle_write_result does the same for retry/discard (dlq.ex:187-193). No distinguishing status/body. Timing: malformed-UUID short-circuits before any DB call, but that only distinguishes 'malformed input' from 'well-formed UUID', never 'cross-tenant real id' from 'genuinely absent id' (both of those take the identical query path) -- so INV-5's actual concern (cross-tenant vs never-existed indistinguishability) holds structurally, not just by status-code coincidence.",
+        "INV-6": "Satisfied by this review itself -- explicit per-invariant statement recorded here.",
+        "INV-7": "APPLIES. SATISFIED: dlq.ex issues no Ecto.Query/fragment/Repo.query calls of its own -- confirmed by reading the full file; all DB access stays inside the unchanged Letflow.Dlq module.",
+        "INV-8": "APPLIES. SATISFIED: handle_list_result, handle_get, and handle_write_result are each exhaustive over the real @specs of Letflow.Dlq.list/2, get/2, retry/2, discard/2 (verified by reading those @specs directly in lib/letflow/dlq.ex, not assumed from the design doc) -- no fallthrough to Response.internal_error/1 exists or is needed; a terminal-state conflict ({:error, {:invalid_state, _}}) is an explicitly matched clause mapping to Response.conflict/2 (409), never an unhandled case. Grep for bare `{:ok, ...} = ` pattern matches in the new file: zero hits."
+      },
+      "scope_test": "Tenant-data-path change (new API route reading/mutating dlq_entries, a tenant-scoped table) -- SECURITY-REVIEWER gate correctly applied, not skipped.",
+      "not_reviewed_by_design": "lib/letflow/dlq.ex, lib/letflow/dlq/entry.ex, and the dlq_entries migration are unchanged in this diff (REQ-176/177 already gate-approved) -- read in full here only to verify this router's claims about their behavior, not re-reviewed as their own change.",
+      "open_item_for_later_steps": "No ExUnit test file exists yet for this router (test-writing is TEST-DESIGNER's job later in this workflow) -- mix test was not run by ELIXIR-DEV for this reason, not skipped silently. Flagging so TEST-DESIGNER/TEST-DESIGN-VALIDATOR know AC1/AC2/AC3/AC4/AC6 all still need real coverage."
+    }
+  },
+  "task": {
+    "description": "Review lib/letflow/routers/dlq.ex and the forward(\"/dlq\", ...) line in lib/letflow/plugs/api_pipeline.ex for idiomatic Plug.Router/OTP usage, scope creep against REQ-178's stated boundaries, and consistency with decision records (0003-ecto-schema-strategy.md, REQ-069's authorization matrix, REQ-131's AuthorizedRouter). Security gate already passed -- this step is the idiom/scope-creep gate, not a re-check of tenant isolation.",
+    "artifacts_in": ["lib/letflow/routers/dlq.ex", "lib/letflow/plugs/api_pipeline.ex", "lib/letflow/design/req178-dlq-routes.md"],
+    "next_action": "PASS -> TEST-DESIGNER/TEST-DESIGN-VALIDATOR -> RELEASE-VALIDATOR. FAIL/rework -> back to ELIXIR-DEV with the specific idiom/scope issue."
+  },
+  "result": {
+    "verdict": "PASS",
+    "summary": "Idiomatic Plug.Router usage matching Letflow.Routers.Audit/Tasks exactly (AuthorizedRouter macros over the existing :DlqReadRetryDiscard/:DlqOperate pair, no new policy key or permission atom, private per-router non_empty/1 and iso8601/1 helpers, hand-built dlq_entry_json/1 allowlist never a raw Jason.Encoder derivation). No supervision surface (stateless router delegating to the already-supervised Letflow.Dlq context). No new representable-invalid-state gap worth a type-safety issue filing. git diff main...HEAD --stat confirms scope is limited to the new router file, the one forward() line in api_pipeline.ex, the design doc, and this run's own handoff files -- no touch to lib/letflow/dlq.ex, lib/letflow/dlq/entry.ex, or REQ-176/177 tests. No conflict with any docs/migration/decisions/ record. Design-vs-implementation fidelity verified field-by-field: the 18-key allowlist, the two-key {items, next_cursor} body, the source_type->entry_type rename, the deliberate :invalid_id->404 divergence from tasks.ex, and exhaustive case coverage against Letflow.Dlq's real @specs all match lib/letflow/design/req178-dlq-routes.md exactly."
+  }
+}

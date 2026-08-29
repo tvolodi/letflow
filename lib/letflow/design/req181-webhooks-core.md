@@ -155,14 +155,18 @@ this run's handoff instruction) — `Letflow.Identity.User.password_hash` is a
 values (`"__OIDC_ONLY__"`, `"__NO_PASSWORD_SET__"`) and no actual hashing
 call site in this codebase yet either, so it sets no precedent to follow.
 This design therefore reuses `Letflow.Identity`'s own token mechanism
-verbatim, not a new invention:
+in substance, not a new invention: a private plaintext-generation helper
+produces a cryptographically random byte string via
+`:crypto.strong_rand_bytes/1` (same 32-byte length as `Letflow.Identity`'s
+own token generator), hex-encodes it lowercase via `Base.encode16/2` with
+`case: :lower`, and prepends a literal string prefix so the value is
+recognizable as a webhook secret at a glance. A separate private hashing
+helper takes that plaintext and produces its SHA-256 digest via
+`:crypto.hash/2`, hex-encoded lowercase the same way via `Base.encode16/2`
+— the digest, never the plaintext, is what `insert_changeset/2` receives as
+`secret_hash`.
 
-```
-generate_webhook_secret_plaintext() -> "whsec_" <> (:crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower))
-hash_webhook_secret(plaintext) -> :crypto.hash(:sha256, plaintext) |> Base.encode16(case: :lower)
-```
-
-The `"whsec_"` literal prefix is this design's own choice (distinguishing a
+The literal prefix is this design's own choice (distinguishing a
 webhook secret from `Letflow.Identity`'s `"lf_tok_"`-prefixed API tokens at a
 glance in logs/UI, the same reasoning that gave API tokens their own
 prefix) — not otherwise load-bearing; REVIEWER/ELIXIR-DEV may substitute

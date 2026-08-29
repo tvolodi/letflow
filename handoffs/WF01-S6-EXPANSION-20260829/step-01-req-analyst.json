@@ -8,7 +8,7 @@
   "file": "handoffs/WF01-S6-EXPANSION-20260829/step-01-req-analyst.json",
   "created_at": "2026-08-29T04:02:43Z",
   "started_at": "2026-08-29T04:02:43Z",
-  "status": "COMPLETED",
+  "status": "DISPATCHED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -233,7 +233,16 @@
     },
     "next_action": "Route to REQ-VALIDATOR"
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3,
-  "completed_at": "2026-08-29T04:21:38Z"
+  "completed_at": "2026-08-29T04:21:38Z",
+  "reworked_at": "2026-08-29T04:45:00Z",
+  "rework_1_issues": [
+    "BLOCKER -- REQ-190, check (c) depends_on: missing REQ-183. Scope item 6 says it makes REQ-183's signing resolve its key through resolve/2, and an acceptance criterion requires testing exactly that, but depends_on is [REQ-189, REQ-072, REQ-181]. REQ-189 (which merely WRITES the decision) correctly depends on both REQ-181 and REQ-183; the implementing requirement having the weaker set is an oversight. Add REQ-183.",
+    "MAJOR -- REQ-193/194/195 and docs/migration/stage-6-operational-cross-cutting.md, check (b) consistency: src/obs/alerts.zig (972 lines, R-Co OBS-06 alerting hooks) and src/obs/timeline.zig (545 lines, R-Co OBS-04) are SILENTLY UNSCOPED. The stage doc's line 51 asserts 'src/obs (5 files) -- REQ-193-196', but the five files are alerts/audit/logger/metrics/timeline and only three are covered. The doc's own not-covered section names three omissions (partition maintenance, benchmark.zig, PLC-01) and does NOT name these two. This asserts coverage that does not exist and violates the batch's own deferral discipline. Fix by EITHER drafting the missing requirement(s) (note REQ-080 already shipped GET /instances/:id/timeline as a read route in S4, so OBS-04's remaining gap may be small -- check before assuming it needs a full requirement) OR recording each as an explicit named deferral with a real blocker, in BOTH the stage doc's not-covered section and the affected requirements' text. Do not paper over it by rewording line 51 alone.",
+    "MINOR -- REQ-193/194/195, check (b): dangling pointer. They say 'no alerting (not drafted in this batch -- see REQ-196's note)' but REQ-196 has no such note; grep for alert/timeline over REQ-196 returns zero. Repoint to wherever the deferral actually ends up being recorded when you fix the MAJOR above.",
+    "SEPARATE SCOPED AMENDMENT, outside this batch's append-only constraint -- REQ-183 (existing pending entry, letflow-queue task 356, which ORCH has now LOCKED to this host so no other host can claim it meanwhile). REQ-VALIDATOR confirmed it is UNIMPLEMENTABLE AS DRAFTED: REQ-181 stores webhook_subscriptions.secret HASHED and returns the plaintext once as hmac_secret_once, while REQ-183 specifies HMAC-SHA256 signing using 'the subscription's stored secret'. A hash is not the secret, so REQ-183's own acceptance criterion -- a test recomputing the expected HMAC 'from the same secret' -- is unsatisfiable, because signer and verifier cannot hold the same key material. Its retry/backoff, auto-pause and DLQ-landing halves are sound; do NOT delete or supersede the entry. Make exactly two edits to REQ-183: (1) add REQ-189 to its depends_on (currently [REQ-181, REQ-176]) so the queue's dependency gating enforces ordering without relying on anyone reading prose -- this is the durable fix; (2) amend its signing clause and its HMAC-verification acceptance criterion to resolve the key through REQ-189's mechanism rather than through REQ-181's stored hash. Leave the rest of REQ-183 byte-identical, and leave REQ-181 untouched.",
+    "NON-BLOCKING, fix if convenient: REQ-187 cites transition.ex 'L283' where the actual :TIMER clause is L294 -- line drift only, the seam is unambiguous. REQ-061's absence from REQ-187's depends_on is CORRECT and must NOT be 'fixed': that hook belongs to REQ-177.",
+    "CONFIRMED CORRECT, do not revisit or soften: all three of your corrections to ORCH's dispatch brief were verified against real R-Co source and ORCH's brief was wrong on all three. (1) SCH-02's per-timer advisory lock really was removed by ISS-301, with regression tests at scheduler.zig:1310/1318 asserting its absence; only the session-level startup-sweep lock 5863412975429063421 survives. (2) src/expr really is not CEL -- 11 builtins, TokenKind has no membership/ternary/list/map tokens, and the cutover ran FROM vendor/cel. (3) The SPA really does parse Prometheus text at an unversioned /metrics. Both table-placement escalations (service_catalog, secrets) genuinely flag REVIEWER sign-off rather than diverging quietly, and REQ-188's ISS-0014 deferral is restated accurately. Checks (a) testability, (d) stage fit and (e) size PASSed 15/15, and the core/route splits were verified real -- do not restructure anything that passed."
+  ]
 }

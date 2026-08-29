@@ -9182,7 +9182,7 @@ requirements:
   - id: REQ-181
     title: Webhook subscription schema and core CRUD context module (webhook_subscriptions, no route)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 354  # letflow-queue task id
     description: >

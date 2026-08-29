@@ -434,7 +434,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_823_000_003, Letflow.Repo.Migrations.AddSequenceNumberToProcessDefinitions,
      "20260823000003_add_sequence_number_to_process_definitions.exs"},
     {20_260_823_000_004, Letflow.Repo.Migrations.CreateDefinitionSequence,
-     "20260823000004_create_definition_sequence.exs"}
+     "20260823000004_create_definition_sequence.exs"},
+    {20_260_829_000_001, Letflow.Repo.Migrations.CreateDlqEntries,
+     "20260829000001_create_dlq_entries.exs"}
   ]
 
   @doc """

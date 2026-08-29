@@ -1,0 +1,26 @@
+{
+  "handoff_id": "WF02-REQ176-20260829-step02a",
+  "run_id": "WF02-REQ176-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/design/req176-dlq-core.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 351, GH#696, stage S6. Design APPROVED by CODE-DESIGN-VALIDATOR (commit 1959adf) after one rework round -- a fabricated precedent citation was found and corrected; the migration/Decision B pattern, keyset-cursor pattern, and row-lock-then-check idiom were all independently live-verified against real source (Letflow.Tasks.list_tasks/2, Letflow.Tasks.claim_task/3, a real Decision-B migration). Read the full design doc before writing any code -- it is the authority for exact field names, the cursor encoding scheme, and the state-machine transitions. This is a NEW module (Letflow.Dlq) and a NEW migration -- greenfield, no existing lib/letflow/dlq/ to extend. IMPORTANT: run mix format on every file you touch before declaring this step done -- this project's CI backend gate has failed the format check on 3 of the last 4 requirements (REQ-167 PR #688, REQ-172 PR #693, REQ-173 PR #694) because mix compile/mix test do not check formatting."},
+  "task": {
+    "description": "Implement REQ-176 exactly as designed in lib/letflow/design/req176-dlq-core.md: a priv/repo/migrations/ migration creating dlq_entries (tenant-scoped per decision 0003 Decision B, matching an existing Decision-B migration's structure), and a Letflow.Dlq context module implementing enqueue/1, list/2 (cursor-paginated per the design's exact keyset scheme, filterable independently by entry_type/status/instance_id, free-text search across reason plus the NEW UUID-to-text-cast-for-ILIKE pattern the design specifies for instance_id/id), get/2, retry/2, discard/2 (both using the row-lock-then-check idiom, exact conflict-error shape per the design). Do not add any route or controller file -- that is REQ-178's scope. Run mix format on every touched file, then mix compile --warnings-as-errors and mix test yourself and quote real output.",
+    "acceptance_criteria": [
+      "the dlq_entries table lives inside each tenant's Postgres schema with a tenant_id column retained, matching decision 0003 Decision B's pattern -- verified by inspecting the migration",
+      "enqueue/1 creates an entry with status \"pending\", retry_count 0, and a created_at timestamp; list/2 is tenant-scoped, demonstrated by an entry enqueued under tenant A being absent from a list/2 call scoped to tenant B",
+      "retry/2 on a \"pending\" or \"retrying\" entry transitions it to \"retrying\", appends a retry_history entry with attempt_no/attempted_at/outcome/error_message field names matching DlqRetryAttempt exactly, and increments retry_count; retry/2 on a \"resolved\" or \"discarded\" entry returns a conflict error and leaves status, retry_count and retry_history unchanged -- four tests, one per starting status",
+      "discard/2 on a \"pending\" or \"retrying\" entry transitions it to \"discarded\"; discard/2 on an already \"resolved\" or \"discarded\" entry returns a conflict error rather than silently succeeding",
+      "list/2 filters by entry_type and by status independently, each demonstrated narrowing a result set that contains rows of more than one value, and supports cursor pagination: given more rows than one page, the first page's next_cursor, passed back in, returns the next distinct page with no repeated or skipped ids",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix compile --warnings-as-errors passes with real output quoted",
+      "mix test passes with real output quoted (existing suite; new tests are TEST-DESIGNER's step)"
+    ]
+  },
+  "result": null
+}

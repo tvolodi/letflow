@@ -3316,6 +3316,21 @@
       "released_lock": false,
       "last_known_step": "Step 00 (ORCH bookkeeping to main)",
       "note": "Last requirement of S6's scheduler half: SCH-07 recurring timer re-arm atop REQ-186/187, plus a periodic retention runner on the existing scheduler process invoking the zero-caller EventStore.archive/1, disabled by default. Defers partition-based retention (ISS-0014) and SCH-04 escalation timers."
+    },
+    {
+      "run_id": "WF02-REQ189-20260830",
+      "requirement_id": "REQ-189",
+      "queue_task_id": 362,
+      "github_issue_number": null,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "docs/migration/decisions/0016-secrets-storage-backend.md"
+      ],
+      "started_at": "2026-08-30T04:35:43Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 1 (CODE-DESIGNER) COMPLETED -- docs/migration/decisions/0016-secrets-storage-backend.md committed (feb2a5f0). Dispatching Step 1b (CODE-DESIGN-VALIDATOR) and an ad-hoc REVIEWER gate in parallel.",
+      "note": "Design-only requirement, no lib/ or priv/repo/migrations/ code -- decision + design artefact, mirroring REQ-148/149/150/185's shape, except this one DOES produce a docs/migration/decisions/*.md record per its own title. CODE-DESIGNER's artefact settles 7 sub-questions (storage backend, master key, table placement, reference syntax, crypto, rotation, webhook HMAC key ownership) but explicitly flagged, in its own 'Open questions / gating' section, TWO divergences needing REVIEWER sign-off before the record is settled: (SS B) global secrets table vs. decision 0003 Decision B's per-tenant-schema general rule, and (SS F) superseding REQ-181's hashed-secret-only webhook_subscriptions.secret column with secret_ref/secret_key_id. CODE-DESIGNER did not fabricate a sign-off, per CLAUDE.md's don't-silently-re-decide rule. ORCHESTRATOR.md has no named step for 'design-decision divergence from a prior decision record' -- applying the closest matching rule: REVIEWER's own charter (.claude/agents/reviewer.md) already names 'internal consistency with docs/migration/decisions/ records' as in scope, so REVIEWER is dispatched for this specific adjudication, running in parallel with (not gated by) the normal Step 1b CODE-DESIGN-VALIDATOR gate since the two checks are disjoint (completeness/no-code/unambiguous vs. decision-consistency/divergence sign-off). REQ-190 and REQ-183 remain blocked until BOTH return PASS and, if REVIEWER requires changes, until the sign-off (or a revised decision) is recorded in 0016 itself."
     }
   ]
 }

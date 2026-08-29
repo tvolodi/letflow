@@ -740,3 +740,13 @@ history:
       new-decision-file path. Unblocks REQ-186 (timers schema + scheduler
       core), REQ-187 (engine wiring) and REQ-188 (recurrence + retention),
       all of which depend on this requirement.
+  - req: REQ-186
+    event: started
+    agent: ORCH
+    at: "2026-08-29T17:53:02Z"
+    note: >
+      Queue task 359, GH#705, stage S6. First implementation requirement of
+      S6's scheduler half, building the core REQ-185's design artefact
+      specifies (GenServer ticker, FOR UPDATE SKIP LOCKED, per-tenant-schema
+      iteration, dlq_entries entry_type "timer"). Core only -- no route/
+      controller, mirroring REQ-176/178 and REQ-181/182's core/route split.

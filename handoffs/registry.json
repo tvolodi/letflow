@@ -3266,6 +3266,23 @@
       "released_lock": false,
       "last_known_step": "Step 6 (DOC-UPDATER) -- content-producing steps done, ORCH Step Final (rebase/push/PR/CI-wait/merge/queue-release) still pending",
       "note": "REQ-185: decision + design artefact only, no code shipped -- gates all of S6's scheduler half (REQ-186/187/188, now unblocked). Mirrors REQ-148/149/150's S5 open-question shape: no ELIXIR-DEV/TEST-RUNNER steps; TEST-DESIGNER's role here was empirical-claim verification against real R-Co source and the live Letflow tree, not ExUnit tests. Zero rework rounds through design/security/reviewer gates. REVIEWER's sign-off on the Oban-rejection decision (NO, not adopted as a mix.exs dependency) is a genuine, non-rubber-stamped artefact edit recorded directly in the design doc's own section 3, independently confirmed by RELEASE-VALIDATOR via `git show 3faef00`. RELEASE-VALIDATOR independently re-verified all 8 acceptance criteria against the actual artefact and referenced code (application.ex, mix.exs, the dlq_entries migration, lib/letflow/dlq.ex, decision 0003, git diff --stat main...HEAD) -- PASS. No docs/migration/decisions/*.md record created, following REQ-148/149/150's own precedent that this class of decision lives in the design artefact. queue_task_id 358 not yet released -- that is ORCH's Step Final job."
+    },
+    {
+      "run_id": "WF02-REQ186-20260829",
+      "requirement_id": "REQ-186",
+      "queue_task_id": 359,
+      "github_issue_number": 705,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/scheduler.ex",
+        "lib/letflow/scheduler/timer.ex",
+        "priv/repo/migrations/"
+      ],
+      "started_at": "2026-08-29T17:53:02Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
+      "note": "Timers schema + scheduler core (poll-and-fire, missed-timer recovery, failure accounting) per REQ-185's design artefact. Core only -- no route/controller (REQ-187/188 build on this)."
     }
   ]
 }

@@ -657,10 +657,22 @@ firing (e.g. `"timer_fired:#{timer.id}"` — stable across a hypothetical
 retried call for the *same* commit attempt, distinguishing it from the
 poll-level idempotency §5 already establishes at the `status` level; ES-05's
 own idempotency-key uniqueness constraint is a second, independent
-safety net here, not the primary double-fire guard), `actor_id: nil` (no
-human/API actor initiates a timer firing — matches this codebase's existing
-precedent for system-initiated events having a `nil` actor where one
-exists), and `payload` built from the fields in §2.4 step 5.
+safety net here, not the primary double-fire guard), `actor_id:
+Letflow.EventStore.platform_actor_id()` — **corrected post-implementation**
+from this section's original text, which stated a literal `actor_id: nil`
+on the (incorrect) assumption that this codebase has a precedent for
+system-initiated events carrying a `nil` actor. `Letflow.EventStore.append/2`
+itself requires `attrs[:actor_id]` to cast via `Ecto.UUID.cast/1` (its own
+`fetch_uuid/3` helper returns `{:error, :missing_actor_id}` for `nil`,
+verified directly in `event_store.ex`), so a literal `nil` here would make
+every `fire_timer/2` call fail and never fire a single timer.
+`Letflow.EventStore.platform_actor_id/0` is this codebase's own
+already-established sentinel for exactly the "no human/API actor" case
+(`Letflow.EventStore.PlatformEvents`'s own moduledoc, point 4), and is what
+`lib/letflow/scheduler.ex`'s shipped implementation uses instead — flagged
+by ELIXIR-DEV, verified by SECURITY-REVIEWER and REVIEWER
+(WF02-REQ186-20260829 Step 2c/2d), no other part of this design changes.
+`payload` is built from the fields in §2.4 step 5.
 
 ## 7. Configuration (scope item 5)
 

@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ186-20260829-step03",
+  "run_id": "WF02-REQ186-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "REQ-186's implementation (lib/letflow/scheduler.ex, lib/letflow/scheduler/timer.ex, lib/letflow/scheduler/poller.ex, priv/repo/migrations/20260829020001_create_timers.exs, plus the application.ex/tenant_provisioning.ex diffs) has PASSed both SECURITY-REVIEWER (handoffs/WF02-REQ186-20260829/step-02c-security-reviewer.json, security-review-req186.md) and REVIEWER (handoffs/WF02-REQ186-20260829/step-02d-reviewer.json, reviewer-report-req186.md). REVIEWER also made one documentation-only correction: lib/letflow/design/req186-scheduler-core.md section 6 was updated to state actor_id: EventStore.platform_actor_id() (the code's actual, verified-correct behavior) in place of the design's original, non-functional actor_id: nil text -- this does not change any acceptance criterion or any implementation file, only the design doc's own text. Read lib/letflow/design/req186-scheduler-core.md and lib/letflow/design/req185-scheduler-firing-architecture.md for the full architecture before writing tests, and lib/letflow/dlq.ex / test/letflow/dlq_test.exs (if present) for this codebase's existing test-idiom precedent on a sibling context module.",
+    "gate_history": "Step 2c SECURITY-REVIEWER: PASS (INV-1 tenant isolation, DLQ-landing, migration tenant-scoping, no-raw-SQL, crash isolation all independently verified). Step 2d REVIEWER: PASS (idiomatic Ecto/OTP usage vs. Letflow.Dlq/Letflow.Dlq.Entry precedent, supervision integrity -- no new Task.Supervisor, no scope creep, full decision-record consistency against REQ-185's seven decisions and decision 0003 Decision B)."
+  },
+  "task": {
+    "description": "Write ExUnit (and StreamData where warranted) test specs and test code for REQ-186's implementation, targeting mutation-driven coverage of every acceptance criterion below. Do not run the tests yourself -- that is TEST-RUNNER's job after TEST-DESIGN-VALIDATOR gates this work. Exercise Letflow.Scheduler.poll_and_fire/1 and Letflow.Scheduler.claim_due_timer_ids/2 directly (per config/test.exs's start_scheduler: false gate and lib/letflow/application.ex's own comment, the Poller GenServer is not started under the ordinary test supervision tree -- a test of Poller.handle_info/2 itself must start its own instance explicitly, e.g. via start_supervised/1 in that specific test's own setup).",
+    "acceptance_criteria": [
+      "the timers table lives inside each tenant's Postgres schema with a tenant_id column retained (decision 0003 Decision B), verified by inspecting the migration, and carries a partial index on (fire_at) WHERE status = 'pending'",
+      "the status CHECK constraint admits exactly pending, fired, cancelled and failed -- a test attempting to insert a timer with status 'expired' fails at the database level, not only in the changeset",
+      "the recurrence CHECK constraint is all-or-nothing: a test inserting repeat_expression without repeat_interval_us is rejected by the database, and a test inserting all four recurrence columns consistently succeeds",
+      "a timer created with fire_at in the past is fired by the first poll after it exists, and the appended event carries fired_late: true together with both the scheduled fire_at and the actual firing timestamp; a timer created with fire_at in the future is NOT fired by that same poll -- two explicit tests",
+      "polling twice over the same due timer fires it exactly once: the second poll appends no second event and the timers row remains status 'fired' with its original fired_at",
+      "a fire attempt that raises increments fire_error_count and leaves the timer 'pending', AND the remaining due timers in that same poll cycle are still attempted -- one test asserts both, by making the first of two due timers fail and asserting the second still fired",
+      "a timer reaching the configured max fire retries transitions to 'failed' with failed_at set and produces exactly one dlq_entries row with entry_type \"timer\", and is not attempted again by subsequent polls",
+      "the poll interval, jitter, max timers per cycle and max fire retries are all read from application config with the documented defaults (5000 ms, 0 ms, 64, 3), demonstrated by a test overriding at least the interval and asserting the poller uses the override",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

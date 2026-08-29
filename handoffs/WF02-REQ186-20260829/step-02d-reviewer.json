@@ -5,7 +5,7 @@
   "step": "Step 2d",
   "from_agent": "SECURITY-REVIEWER",
   "to_agent": "REVIEWER",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "normal",
   "context": {
     "note": "SECURITY-REVIEWER has PASSed REQ-186's implementation (see handoffs/WF02-REQ186-20260829/step-02c-security-reviewer.json's result, and the full report at handoffs/WF02-REQ186-20260829/security-review-req186.md): INV-1 tenant isolation, DLQ-landing, migration tenant-scoping, no-raw-SQL, and crash isolation (INV-8) all independently verified against the actual code, not the implementation's own comments. Your scope: idiomatic OTP usage, supervision integrity, scope creep, and decision-record consistency against both lib/letflow/design/req186-scheduler-core.md and lib/letflow/design/req185-scheduler-firing-architecture.md (the architecture REQ-186 implements). One specific item flagged by SECURITY-REVIEWER for your attention (not a security defect): lib/letflow/scheduler.ex's own moduledoc documents that it substitutes EventStore.platform_actor_id() for the design doc's literal actor_id: nil for the TIMER_FIRED event append, because EventStore.append/2's fetch_uuid/3 helper rejects a literal nil actor_id -- verified accurate against lib/letflow/event_store.ex. Decide whether lib/letflow/design/req186-scheduler-core.md's own text (section 2.4 step 5 / section 6) needs a follow-up correction to match, similar to the REQ-168 precedent (handoffs/WF02-REQ168-20260828/step-02d-reviewer.json) where REVIEWER made an analogous design-doc correction directly as part of its own gate."
@@ -22,5 +22,30 @@
       "CRITICAL: the handoff's top-level status field must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run the handoff-lint check before finishing (H6 -- a report file must not start with \"step\" if not JSON; this file itself is JSON so is exempt, but any new non-JSON report you write must not start with \"step\")."
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "REVIEWER gate on REQ-186 -- PASS. Independently read lib/letflow/scheduler.ex, lib/letflow/scheduler/timer.ex, lib/letflow/scheduler/poller.ex, priv/repo/migrations/20260829020001_create_timers.exs, the application.ex/tenant_provisioning.ex diffs, both design docs, docs/requirements.yaml's REQ-186 entry, and lib/letflow/dlq.ex for comparison. Full findings in handoffs/WF02-REQ186-20260829/reviewer-report-req186.md.\n\nIdiom (Q1): PASS. Letflow.Scheduler is a plain Ecto context module matching Letflow.Dlq's shape (opts :: [prefix: ...] threaded through every call, tenant_id server-derived, never caller-supplied). fetch_and_lock_timer/2's FOR UPDATE idiom mirrors Dlq's fetch_and_lock_entry/3. Letflow.Scheduler.Timer mirrors Dlq.Entry's multi-changeset-per-write-path shape exactly. Letflow.Scheduler.Poller is a real supervised GenServer ticker, config read fresh every tick, not a case-based hand-rolled state machine standing in for gen_statem -- this table is CRUD-lifecycle, no gen_statem indicated.\n\nSupervision (Q2): PASS. Poller is one new, ordinarily-supervised GenServer child of Letflow.Application's tree. No new Task.Supervisor added -- verified by grep across application.ex/scheduler.ex/poller.ex, consistent with REQ-185's own explicit decision and REVIEWER sign-off record. config/test.exs's start_scheduler: false gate is a narrowly-scoped, well-justified deviation (documented DBConnection.OwnershipError failure mode under Sandbox :manual mode), same shape as the existing http_child/0 start_http gate -- not unauthorized scope creep.\n\nScope creep (Q3): PASS. git diff main...HEAD --stat touches exactly REQ-186's design §0 file list plus test-support accounting updates (table/event-type counts) and handoff bookkeeping. No route/controller file, no lib/letflow/engine/transition.ex change (REQ-187's territory, confirmed absent), no lib/letflow/dlq.ex modification (only Dlq.enqueue/2 is called, per REQ-185 §8), no mix.exs change (no Oban). rearm_changeset/2 is defined-but-unused, explicitly flagged in both design and schema moduledoc as reserved for REQ-188 -- a named atom only, no smuggled-in logic or schema surface; not scope creep.\n\nDecision-record consistency (Q4): PASS. Decision 0003 Decision B (schema-per-tenant, tenant_id retained intra-schema) matches. All seven of REQ-185's decisions checked individually against the shipped code -- supervised GenServer ticker, no Oban, FOR UPDATE SKIP LOCKED claim, no startup-sweep lock, per-tenant-schema iteration, per-timer transaction-only isolation (no new process boundary), exhausted timer to dlq_entries entry_type \"timer\" -- none silently re-decided. Config defaults (5000/0/64/3) match exactly, read fresh via Application.get_env/3, no compile-time caching.\n\nDesign-vs-implementation fidelity: PASS. Schema columns/types, both CHECK constraints (verbatim SQL), partial index, changeset-per-write-path shape, poll-and-fire never-raises contract, two-transaction failure-accounting structure, TIMER_FIRED payload shape, and DLQ enqueue_attrs() field mapping all match the design doc line for line.\n\nactor_id deviation: RESOLVED via a design-doc correction, made directly (REQ-168/REQ-181 precedent). Verified against lib/letflow/event_store.ex (fetch_uuid/3 at lines 221-222/337 rejects nil actor_id; platform_actor_id/0 at lines 771/791 is the established sentinel) that the design doc's literal actor_id: nil is non-functional -- following it would make every fire_timer/2 call fail with :missing_actor_id and never fire a timer. Edited lib/letflow/design/req186-scheduler-core.md section 6 to state the corrected actor_id: EventStore.platform_actor_id() value with full reasoning, marked explicitly as a post-implementation correction. Committed alongside this review.\n\nVerdict: PASS. Routing to TEST-DESIGNER.",
+    "artifacts_reviewed": [
+      "lib/letflow/design/req186-scheduler-core.md",
+      "lib/letflow/design/req185-scheduler-firing-architecture.md",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/scheduler/timer.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "priv/repo/migrations/20260829020001_create_timers.exs",
+      "lib/letflow/application.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/dlq.ex",
+      "lib/letflow/event_store.ex",
+      "docs/requirements.yaml",
+      "config/test.exs",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/support/tenant_fixture_test.exs",
+      "test/letflow/tenant_provisioning_event_seed_test.exs"
+    ],
+    "artifacts_out": [
+      "handoffs/WF02-REQ186-20260829/reviewer-report-req186.md",
+      "lib/letflow/design/req186-scheduler-core.md"
+    ],
+    "next_recommended": "TEST-DESIGNER"
+  }
 }

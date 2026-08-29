@@ -1,8 +1,65 @@
 # REQ-181 design validation report — CODE-DESIGN-VALIDATOR
 
-**Verdict: FAIL**
+**Verdict: PASS (re-check after rework_count 1)**
 
-Design reviewed: `lib/letflow/design/req181-webhooks-core.md` (commit 3e60615,
+Design reviewed: `lib/letflow/design/req181-webhooks-core.md`, commit
+1e0029e, branch `feature/WF02-REQ181-20260829`.
+
+## Re-check result (rework_count 1 -> re-verification)
+
+`git diff 3e60615 1e0029e -- lib/letflow/design/req181-webhooks-core.md`
+shows the *only* change in the entire document is the replacement of
+section 2.2's fenced block with prose. The fenced block that previously
+read:
+
+```
+generate_webhook_secret_plaintext() -> "whsec_" <> (:crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower))
+hash_webhook_secret(plaintext) -> :crypto.hash(:sha256, plaintext) |> Base.encode16(case: :lower)
+```
+
+is gone. Section 2.2 (lines 143–181 of the current file) now contains zero
+fenced code blocks — only prose naming `:crypto.strong_rand_bytes/1`,
+`Base.encode16/2` (`case: :lower`), and `:crypto.hash/2` and describing
+their role, without composing them into a literal right-hand-side
+expression. This satisfies AC7.
+
+Grepped the whole file for every ` ``` ` fence (22 markers / 11 blocks) and
+inspected each: lines 12–36 (wire-contract restatement, plain text), 185–200
+(`@type t ::` struct shape), 213–215 and 226–228 (`@spec insert_changeset/2`,
+`@spec status_changeset/2`), 253–270 (`@type opts`, `@type create_attrs`,
+`@spec create/2`), 314–316 (`@spec list/1`), 345–366 (`@type update_attrs`,
+`@spec update/3` x2), 410–415 (`@spec delete/2`), 437–439 (`@spec get/2`).
+All eleven blocks are `@spec`/`@type` declarations or the one wire-contract
+restatement table — none is a composed function-body expression. No other
+instance of the defect class exists in the document.
+
+Per this run's handoff note, the other three previously-confirmed items were
+re-confirmed via the diff rather than re-derived from scratch, since the
+diff proves they are byte-for-byte unchanged from the prior PASS-eligible
+state:
+
+1. **Secret-hashing precedent citation (§2.2, AC2)** — unchanged text,
+   still genuine against `lib/letflow/identity.ex`'s `generate_token_plaintext/0`
+   / `hash_token_value/1` (confirmed present, same mechanism, on this
+   re-check via `grep -n` on `lib/letflow/identity.ex`).
+2. **Tenant-scoped migration pattern (§1, AC1)** — unchanged text, no lines
+   in this diff.
+3. **`update/2` status/is_active reconciliation table (§3.3, AC3)** —
+   unchanged text, no lines in this diff.
+
+No new defect found. All prior findings below (from the first-pass review)
+still hold as PASS.
+
+## Verdict
+
+PASS. Routed to ELIXIR-DEV via
+`handoffs/WF02-REQ181-20260829/step-02a-elixir-dev.json`.
+
+---
+
+# Original (rework_count 0) review — historical record below
+
+Design reviewed at that time: `lib/letflow/design/req181-webhooks-core.md` (commit 3e60615,
 branch `feature/WF02-REQ181-20260829`).
 
 ## Checks independently verified as correct

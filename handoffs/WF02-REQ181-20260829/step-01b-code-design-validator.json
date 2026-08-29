@@ -6,8 +6,8 @@
   "from_agent": "CODE-DESIGNER",
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "lib/letflow/design/req181-webhooks-core.md",
-  "status": "PENDING",
-  "completed_at": null,
+  "status": "COMPLETED",
+  "completed_at": "2026-08-29T12:28:37Z",
   "priority": "normal",
   "context": {
     "note": "Recheck after rework_count 1. Original FAIL (see handoffs/WF02-REQ181-20260829/req181-design-validation-report.md) found exactly one defect: section 2.2 contained a fenced code block reproducing the real composed expressions of lib/letflow/identity.ex's generate_token_plaintext/0 (line 897) and hash_token_value/1 (line 901) almost verbatim, only the literal prefix string differing. The fenced block has been removed and replaced with prose describing the same mechanism (:crypto.strong_rand_bytes/1, Base.encode16/2 with case: :lower, :crypto.hash/2 for SHA-256) without composing them into a literal expression -- commit 1e0029e on this branch. No other section was touched: the validator's first pass already confirmed the secret-hashing precedent citation (genuine against lib/letflow/identity.ex), the tenant-scoped migration pattern (genuine against priv/repo/migrations/20260829000001_create_dlq_entries.exs and lib/letflow/tenant_provisioning.ex), and the update/2 status/is_active reconciliation table in section 3.3 (complete and consistent) -- please re-verify AC7 (no implementation code / no fenced block reproducing real .ex content) specifically, and re-scan the rest of the document for any other such block, but the other three checks should not need re-deriving from scratch unless something looks off."
@@ -24,7 +24,11 @@
       "the design contains no fenced code block reproducing real or near-real .ex file content (function bodies/composed expressions) -- signatures, @spec/@type declarations, and plain data tables only"
     ]
   },
-  "result": null,
+  "result": {
+    "verdict": "PASS",
+    "summary": "Re-check confirms the rework-1 fix to section 2.2 is genuine and complete: the fenced block that composed lib/letflow/identity.ex's generate_token_plaintext/0 and hash_token_value/1 expressions verbatim (only the literal prefix differing) has been removed and replaced with prose naming the same functions (:crypto.strong_rand_bytes/1, Base.encode16/2 with case: :lower, :crypto.hash/2) without composing them into a literal expression. git diff 3e60615 1e0029e confirms this is the ONLY change in the document -- the secret-hashing precedent citation, the tenant-scoped migration pattern, and the update/2 status/is_active reconciliation table in section 3.3 are all byte-for-byte unchanged from the prior review, which had already confirmed them correct. Grepped every fenced block in the document (11 blocks) and confirmed each is an @spec/@type declaration, the wire-contract restatement, or a plain data table -- no other instance of the composed-real-expression defect exists. All 7 acceptance criteria for the design remain covered per section 6's checklist. Report: handoffs/WF02-REQ181-20260829/req181-design-validation-report.md.",
+    "report_file": "handoffs/WF02-REQ181-20260829/req181-design-validation-report.md"
+  },
   "rework_count": 1,
   "max_rework": 3
 }

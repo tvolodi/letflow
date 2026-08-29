@@ -1,0 +1,20 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step03-rework1",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3 (rework iteration 1, post-RELEASE-VALIDATOR finding)",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "test/letflow/engine_execution_error_test.exs",
+  "status": "PENDING",
+  "priority": "high",
+  "context": {"note": "Queue task 352, GH#697, stage S6. RELEASE-VALIDATOR found a real gap in AC3's coverage: test/specs/REQ-177.md claims AC3 (ERROR-path same-transaction atomicity when the DLQ insert specifically fails) is 'already covered' by engine_execution_error_test.exs's pre-existing 'AC2 -- forcing the EXECUTION_ERROR append to fail' test -- but that test forces the EVENT APPEND itself to fail (an unregistered event type), meaning the new :execution_error_dlq_landing Multi step is never even reached. No test in the shipped suite forces the DLQ INSERT specifically to fail. RELEASE-VALIDATOR independently confirmed the underlying atomicity guarantee IS actually correct (built and ran a throwaway scratch test renaming the tenant's dlq_entries table out from under the Multi step to force a genuine SQL-level failure isolated to the DLQ insert -- transaction rolled back correctly: event count unchanged, instance stayed :active, no DLQ row -- then reverted the scratch test). This is a real, specific, and well-scoped gap: the code is right, the test coverage is missing. TEST-DESIGN-VALIDATOR's prior PASS on this criterion relied on the mischaracterized 'already covered' claim -- this is not a re-litigation of anything else it checked."},
+  "task": {
+    "description": "Add a real test to test/letflow/engine_execution_error_test.exs (or a new file if cleaner) that forces the DLQ INSERT specifically to fail (not the event append) inside the :execution_error_dlq_landing Multi step, and asserts the full transaction rolls back: the instance's status stays unchanged (not :error), the EXECUTION_ERROR event is NOT persisted, and no dlq_entries row exists. RELEASE-VALIDATOR's own suggested fault-injection technique: rename the tenant's dlq_entries table out from under the Multi step before calling Engine.set_instance_error/2 (or an equivalent reliable technique -- e.g. dropping/renaming a required column, or another mechanism that causes ONLY the DLQ insert to fail without touching the event-append step), then restore the table/schema in an after/on_exit block so the test doesn't leak state. Verify the test genuinely isolates the DLQ-insert failure (does NOT also prevent the event append from succeeding) -- read back and confirm what specifically failed. Apply this project's mutation-testing discipline: temporarily make the :execution_error_dlq_landing Multi step a no-op that always returns {:ok, ...} without actually failing on the induced fault, confirm your new test catches that (fails), then revert and confirm the real code still passes. Run mix compile --warnings-as-errors and mix test yourself, quote real output.",
+    "acceptance_criteria": [
+      "the ERROR-path DLQ landing is in the same transaction as REQ-061's status flip and event append: forcing the DLQ insert to fail leaves the instance status, the EXECUTION_ERROR event, and the DLQ table all unchanged, verified by reading all three back",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

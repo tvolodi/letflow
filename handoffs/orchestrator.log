@@ -1435,3 +1435,4 @@
 2026-08-26T21:30:08Z ORCH: registered ISS-0347 (queue task 347, GH#668), dispatched WF03-ISS0347-20260826 step-00 to ELIXIR-DEV
 2026-08-26T22:38:00Z ORCH: WF03-ISS0347-20260826 DONE -- ISS-0347 resolved, GH#668 closed, PR #670 merged (8c941bf), queue task 347 released status:done; separate flake filed as ISS-0348/GH#669
 2026-08-26T22:33:39Z ORCH: registered ISS-0348 (queue task 348, GH#669), dispatched WF03-ISS0348-20260826 step-00 to ELIXIR-DEV
+2026-08-29T03:55:31Z | DEFER_RUN | WF-02 | WF02-REQ181-20260829 | ORCH → DEFERRED | BLOCKED -- priv/repo/migrations/ owned by active run WF02-REQ176-20260829 (IN_PROGRESS, queue task 351). Released queue task 354 back to open. Retry once WF02-REQ176 reaches Step Final PASS.

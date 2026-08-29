@@ -6,7 +6,7 @@
   "from_agent": "SECURITY-REVIEWER",
   "to_agent": "REVIEWER",
   "file": "lib/letflow/webhooks.ex",
-  "status": "DONE",
+  "status": "COMPLETED",
   "completed_at": "2026-08-29T13:10:00Z",
   "priority": "normal",
   "context": {

@@ -6,7 +6,7 @@
   "from_agent": "ELIXIR-DEV",
   "to_agent": "SECURITY-REVIEWER",
   "file": "lib/letflow/webhooks.ex",
-  "status": "DONE",
+  "status": "COMPLETED",
   "completed_at": "2026-08-29T12:35:48Z",
   "priority": "normal",
   "context": {

@@ -1,0 +1,20 @@
+{
+  "handoff_id": "WF02-REQ177-20260829-step03b-recheck1",
+  "run_id": "WF02-REQ177-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3b (narrow re-check, AC3 gap closed)",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "test/letflow/engine_execution_error_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 352, GH#697, stage S6. RELEASE-VALIDATOR found AC3 had no real test (the test claimed to cover it forces the event append to fail, never reaching the new Multi step). TEST-DESIGNER added a real fault-injection test (commit cc59d8d) that renames the tenant's dlq_entries table before calling Engine.set_instance_error/2 (restored in an after block), asserting the full transaction rolls back: instance status unchanged, event not persisted, no DLQ row. TEST-DESIGNER's own mutation test (making maybe_land_dlq_entry/4 a no-op) confirmed the new test catches a real defect, reverted with md5sum verification. Scoped run: mix test test/letflow/engine_execution_error_test.exs 10/10 passed."},
+  "task": {
+    "description": "Narrow re-check: confirm the new AC3 test genuinely isolates the DLQ-insert failure (does not also prevent/interfere with the event append succeeding on a non-faulted path) -- read the test yourself. Independently re-apply the same mutation TEST-DESIGNER used (or an equivalent one) to confirm the test catches a real regression, then revert and verify via git diff/md5sum. Confirm via git diff --stat that only this one test file changed. Run mix compile --warnings-as-errors and mix test test/letflow/engine_execution_error_test.exs yourself, quote real output.",
+    "acceptance_criteria": [
+      "the ERROR-path DLQ landing is in the same transaction as REQ-061's status flip and event append: forcing the DLQ insert to fail leaves the instance status, the EXECUTION_ERROR event, and the DLQ table all unchanged, verified by reading all three back",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

@@ -691,3 +691,52 @@ history:
       Step 1b CODE-DESIGN-VALIDATOR -> SECURITY-REVIEWER -> REVIEWER
       (explicit sign-off on the Oban adoption decision) -> TEST-DESIGNER
       -> RELEASE-VALIDATOR -> DOC-UPDATER, no ELIXIR-DEV/TEST-RUNNER steps.
+  - req: REQ-185
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-29T17:27:30Z"
+    note: >
+      WF02-REQ185-20260829 done (queue task 358, GH#704, stage S6).
+      Decision-and-design-only requirement -- no migration, no engine
+      code, no mix.exs change -- gating REQ-186/187/188 (S6's scheduler
+      half). lib/letflow/design/req185-scheduler-firing-architecture.md
+      settles: (1) firing mechanism -- a supervised GenServer ticker
+      (Process.send_after/3 in lib/letflow/application.ex's tree), Oban
+      and a per-timer process both evaluated and rejected on stated
+      grounds; (2) Oban adoption decided NO, with REVIEWER's genuine
+      sign-off recorded directly in the artefact's own text (section 3),
+      not rubber-stamped -- following REQ-148's own precedent that a
+      new-dependency decision lives in the design artefact rather than
+      spawning a separate docs/migration/decisions/*.md record; (3) claim
+      mechanism is FOR UPDATE SKIP LOCKED, with the artefact stating in
+      its own words that R-Co REMOVED the per-timer advisory lock SCH-02's
+      literal text mandates (ISS-301); (4) no ISS-302-equivalent
+      session-level startup-sweep lock is adopted -- the artefact states
+      what prevents double-sweeping on simultaneous multi-node restart
+      instead; (5) poller iterates tenant schemas per tick, with a
+      quantified cost at a stated tenant count rather than a qualitative
+      claim; (6) locked/nothing-due/hard-error are distinguished from one
+      another per section 7, with an explicit statement of why
+      propagating every error out of the fire path is the wrong fix
+      (ISS-303); (7) an exhausted-retry timer lands in REQ-176's
+      dlq_entries with entry_type "timer", answered yes rather than left
+      to REQ-186. TEST-DESIGNER's role here was empirical-claim
+      verification (confirming the artefact's factual claims against real
+      R-Co source and the live Letflow tree) rather than ExUnit tests,
+      since no code shipped. Clean pipeline -- zero rework rounds through
+      design/security/reviewer gates. RELEASE-VALIDATOR independently
+      re-verified all 8 acceptance criteria against the actual design
+      artefact and the actual referenced code (application.ex, mix.exs,
+      the dlq_entries migration, lib/letflow/dlq.ex, decision
+      0003-ecto-schema-strategy.md, and git diff --stat main...HEAD
+      confirming only the design file and handoff/report files are
+      touched) and PASSED. No docs/migration/decisions/*.md record was
+      created for this requirement -- checked REQ-148/149/150's own S5
+      precedent (decision 0014-scripting-plugin-runtime-strategy.md):
+      REQ-149/150's own open-question resolutions were folded into 0014's
+      "Open questions" section as "SETTLED BY REQ-149/150" pointers to
+      their design docs, not given their own decision files, and this
+      artefact follows that same established pattern rather than the
+      new-decision-file path. Unblocks REQ-186 (timers schema + scheduler
+      core), REQ-187 (engine wiring) and REQ-188 (recurrence + retention),
+      all of which depend on this requirement.

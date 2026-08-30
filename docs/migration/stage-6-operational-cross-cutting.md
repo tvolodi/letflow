@@ -21,7 +21,14 @@ subsystems the second batch also registered. **S6's expr subsystem is
 now fully complete:** REQ-197 (arithmetic, unary negation, structured
 parse-error surface) and REQ-198 (the 8 pure builtin functions) are
 both done as of 2026-08-30, mirroring how REQ-192's completion closed
-the service-catalog route-layer half. The ordering subsystem remains
+the service-catalog route-layer half. REQ-200 (Instance timeline
+rendering -- actor display names and human-readable descriptions,
+OBS-04) is also done as of 2026-08-30, closing the real broken-contract
+gap left by REQ-080: the already-shipped SPA's
+`TimelineFeedItem.tsx` was reading `actor_display_name`, `description`,
+`timestamp` and `sequence_num`, none of which the REQ-080 route ever
+emitted. REQ-201 (alerting, the other OBS-04-adjacent rework-1 addition)
+remains open. The ordering subsystem remains
 pending. A
 future WF-04 stage-gate check of the scheduler half specifically (not
 of S6 as a whole) is a named candidate, per RELEASE-VALIDATOR's own

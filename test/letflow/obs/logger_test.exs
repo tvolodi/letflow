@@ -168,11 +168,21 @@ defmodule Letflow.Obs.LoggerTest do
     # Exercise the exact same case expression that runtime.exs uses.
     assert_raise RuntimeError, ~r/Invalid LOG_LEVEL.*not-a-valid-level/, fn ->
       case "not-a-valid-level" do
-        "debug" -> :debug
-        "info" -> :info
-        "warn" -> :warning
-        "warning" -> :warning
-        "error" -> :error
+        "debug" ->
+          :debug
+
+        "info" ->
+          :info
+
+        "warn" ->
+          :warning
+
+        "warning" ->
+          :warning
+
+        "error" ->
+          :error
+
         invalid ->
           raise "Invalid LOG_LEVEL=#{inspect(invalid)}. Must be one of: debug, info, warn, warning, error."
       end

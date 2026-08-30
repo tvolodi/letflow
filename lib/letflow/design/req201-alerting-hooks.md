@@ -272,6 +272,11 @@ ARMED + (sample > threshold):
   → set is_armed = false
   → set last_fired_at = now()
   → set last_sample_value = sample
+  → set last_correlation_id = subject ID extracted from the trigger_key, or null for aggregate triggers:
+      · "instance_error_stuck:{instance_id}"        → instance_id (UUID string)
+      · "webhook_subscription_paused:{subscription_id}" → subscription_id (UUID string)
+      · "dlq_depth_threshold"                        → null (aggregate metric, no single subject)
+      · "scheduler_lag_threshold"                    → null (platform-wide metric, no subject)
   → upsert row (INSERT ... ON CONFLICT DO UPDATE)
 
 ARMED + (sample ≤ threshold):

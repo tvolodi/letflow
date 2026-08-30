@@ -97,6 +97,8 @@ defmodule Letflow.Repository do
   @spec create(create_attrs(), prefix :: String.t()) ::
           {:ok, ArtifactVersion.t()}
           | {:error, :invalid_json}
+          | {:error, :invalid_schema_name}
+          | {:error, :version_number_conflict}
           | {:error, Ecto.Changeset.t()}
   def create(attrs, prefix) when is_map(attrs) and is_binary(prefix) do
     content_type = Map.fetch!(attrs, :content_type)
@@ -237,7 +239,8 @@ defmodule Letflow.Repository do
           opts :: list_versions_opts()
         ) ::
           {:ok, Pagination.Page.t(ArtifactVersion.t())}
-          | {:error, :invalid_page_size}
+          | {:error, :invalid_schema_name}
+          | {:error, :page_size_too_large}
           | {:error, :wrong_endpoint}
           | {:error, :expired}
           | {:error, :invalid_cursor}

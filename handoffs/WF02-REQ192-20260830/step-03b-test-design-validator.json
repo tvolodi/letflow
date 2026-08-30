@@ -1,0 +1,39 @@
+{
+  "handoff_id": "WF02-REQ192-20260830-step03b-test-design-validator",
+  "run_id": "WF02-REQ192-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 3b",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "test/letflow/routers/admin_services_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "scope_note": "This TEST-DESIGNER pass was explicitly re-scoped by the dispatching agent to four items only, narrower than the full step-03-test-designer.json handoff: (1) Letflow.ServiceCatalog.list_all/1 cross-tenant visibility, (2) SCA:/SC: cursor cross-endpoint isolation (INV-9), (3) admin_services.ex's GET / (list-all) router authorization enforcement specifically, (4) standard pagination correctness for list_all/1. Letflow.Routers.Services (GET /services) and AdminServices's POST/PATCH/DELETE routes (register/update-scope/delete, the two new Error 409 constructors, auth_method translation, 404/422 mappings) are explicitly OUT of scope for this pass and remain uncovered by any test file -- not an oversight.",
+    "files_written": [
+      "test/letflow/service_catalog_test.exs (three new describe blocks appended: cross-tenant visibility, SCA:/SC: cursor isolation, pagination correctness -- all for list_all/1)",
+      "test/letflow/routers/admin_services_test.exs (new file: GET /admin/services authorization enforcement, cross-tenant visibility through HTTP, INV-9 cursor isolation through HTTP)",
+      "test/specs/REQ-192.md (new file: criterion -> test-case mapping and per-case rationale for the four scoped items)",
+      "handoffs/WF02-REQ192-20260830/test-design-rationale-req192-list-all.md (full rationale, key design-doc facts confirmed before writing tests, and the note on list_for_tenant/2 having zero pre-existing pagination coverage in this codebase -- contrary to the original handoff's assumption)"
+    ],
+    "key_facts_confirmed_before_writing_tests": [
+      "lib/letflow/api/pagination.ex's check_prefix/2 returns {:error, :wrong_endpoint} on a prefix mismatch -- the exact tuple asserted, not guessed.",
+      "lib/letflow/plugs/authorize.ex has no 401 branch (only 403/500/allow) -- the 'unauthenticated' test case uses roles: [], matching tenants_test.exs's/dlq_test.exs's own established convention for the same situation.",
+      "grep across test/letflow/service_catalog_test.exs for 'list_for_tenant' before writing anything returned zero hits -- list_for_tenant/2 has no existing direct pagination test in this codebase, so the new list_all/1 pagination tests follow this file's general conventions rather than a nonexistent 'matching style' precedent."
+    ],
+    "not_run": "mix/elixir/erl are not on PATH in this environment (confirmed via `which elixir erl`) -- no test in this pass was executed, per TEST-DESIGNER's mandate not to run tests. TEST-RUNNER should run `mix test test/letflow/service_catalog_test.exs test/letflow/routers/admin_services_test.exs` and `mix compile --warnings-as-errors` next."
+  },
+  "task": {
+    "description": "Verify every one of the four scoped acceptance items (list_all/1 cross-tenant visibility, SCA:/SC: cursor isolation, admin_services.ex GET-all authorization enforcement, list_all/1 pagination correctness) has a runnable, self-sufficient test with no skipped coverage within that scope, and confirm the explicit scope-narrowing to these four items (vs. the full original step-03 handoff's AC list) is an acceptable disposition for this pass rather than a coverage gap.",
+    "acceptance_criteria": [
+      "test/letflow/service_catalog_test.exs's three new describe blocks for list_all/1 (cross-tenant visibility, SCA:/SC: isolation, pagination) each have at least one test that would fail against a plausible regression, not merely restate the criterion",
+      "test/letflow/routers/admin_services_test.exs exists and covers: non-PLATFORM_ADMIN 403 (full-body assertion, no data leak), PLATFORM_ADMIN 200 with cross-tenant data in the body, and both directions of the SCA:/SC: cross-endpoint cursor rejection at the router level",
+      "every test creates and cleans up its own fixtures (tenants/service_catalog entries) via on_exit/1, no shared mutable fixture across tests",
+      "test/specs/REQ-192.md's per-case rationale explains why each test exists, not just what it asserts",
+      "confirm the scope-narrowing itself (four items only) is a legitimate disposition given the dispatching instructions, not a gap TEST-DESIGN-VALIDATOR should fail the pass over"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

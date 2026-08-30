@@ -58,10 +58,20 @@ defmodule Letflow.SchedulerReq188Test do
   # conditioned edge gw -> end (CHK-02 needs an END node; CHK-04 needs it
   # reachable). See test/specs/REQ-188.md's "Fixture strategy" section for why
   # this shape (a cycle through a gateway), not a bare TIMER self-loop, is
-  # required (CHK-06 rejects an unguarded cycle) and why it does NOT also
-  # trigger REQ-187's own separate TIMER->TIMER auto-rearm mechanism (the
-  # token's node id, compared against its position before this whole
-  # hop-chain started, is unchanged: "loop" before, "loop" after).
+  # required (CHK-06 rejects an unguarded cycle).
+  #
+  # This fixture DOES also trigger REQ-187's own separate TIMER->TIMER
+  # auto-rearm mechanism once per gw -> loop loop-back hop (each hop's
+  # previous_node_id, per tokens_needing_dispatch/3, is local to that hop --
+  # "gw" then, not the chain's original "loop" -- so the node id genuinely
+  # changes and prepare_timer_arms/4 fires again). Verified empirically: 4
+  # repeat_expression-nil Timer rows after AC2's 3 firings (1 creation-time
+  # arm + 3 per-firing arms), not 1. This is harmless here: those arms never
+  # set repeat_expression (excluded by every row-counting filter in this
+  # file), their fire_at is always a day out (never due in any poll these
+  # tests run), and they cannot collide with maybe_rearm_timer/3's own
+  # :scheduler_timer Multi step since advance_after_timer_fired/3 commits its
+  # own nested Multi before maybe_rearm_timer/3 runs its separate insert.
   defp graph_gateway_loop(duration \\ "P1D") do
     %{
       "nodes" => [

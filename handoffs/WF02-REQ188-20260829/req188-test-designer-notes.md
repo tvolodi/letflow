@@ -22,9 +22,22 @@ token to return to a `:TIMER` node after every firing (`Engine.Transition`'s
 bare `:TIMER` self-loop is rejected by `Letflow.Definitions.Graph`'s CHK-06
 cycle check (`:cycle_without_gateway`). `graph_gateway_loop/1` in both test
 files uses a 2-node cycle through an `EXCLUSIVE_GATEWAY` instead, which CHK-06
-permits, and which does NOT trigger REQ-187's own separate TIMER->TIMER
-auto-rearm mechanism (verified empirically, not just reasoned about -- see
-below).
+permits.
+
+Correction (found by TEST-DESIGN-VALIDATOR, verified empirically): this
+fixture DOES also trigger REQ-187's own separate TIMER->TIMER auto-rearm
+mechanism, once per `gw -> loop` loop-back hop -- `tokens_needing_dispatch/3`'s
+`previous_node_id` comparison is local to the current hop (re-derived from the
+immediately-preceding `instance_state`, not the chain's original seed state),
+so each loop-back is a fresh arrival to `prepare_timer_arms/4`. This is
+harmless to every assertion in both test files because: (1) every row-counting
+query filters `not is_nil(t.repeat_expression)`, which these auto-rearm arms
+never set; (2) each such arm's `fire_at` is a day out and never due within any
+poll cycle these tests run; and (3) it cannot collide with
+`maybe_rearm_timer/3`'s own `:scheduler_timer` `Ecto.Multi` step, since
+`advance_after_timer_fired/3` commits its own nested `Multi` to completion
+before `maybe_rearm_timer/3` runs its separate insert. See
+`test/specs/REQ-188.md`'s "Fixture strategy" section for the full writeup.
 
 ## Mutation testing -- real output
 

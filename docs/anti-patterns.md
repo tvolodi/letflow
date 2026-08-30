@@ -1837,6 +1837,15 @@ entirely (`defp fn_name(a, b, c)`) -- the argument becomes required, matching ho
 used, and the warning disappears. This is cheap to check and cheaper than waiting for CI to catch
 it a second time.
 
+**Recurrence (4th occurrence: REQ-195).** `test/letflow/audit_dispositions_test.exs`'s
+`base_entry_attrs/1` declared `overrides \\ []`; all four of its call sites passed `overrides`
+explicitly. Slipped past a real local `mix compile --warnings-as-errors --force` run (both plain
+and `MIX_ENV=test`) because plain compilation of `lib/` does not recompile `test/` files -- the
+warning only surfaces when the test file itself is actually compiled, e.g. by `mix test` or
+`mix letflow.check.test` (the same narrow ISS-0069-focused task CI's backend gate runs). Caught
+by CI, not by local pre-push verification, exactly as REQ-178/187/191 were. The standing
+local-grep/lint this entry already asked for is still not implemented four occurrences in.
+
 ## Fixing a citation's content without re-verifying its source location (REQ-ANALYST rework)
 
 **Occurred twice in a row on the same paragraph, REQ-204's draft, WF01/WF02-REQ204-20260830.**

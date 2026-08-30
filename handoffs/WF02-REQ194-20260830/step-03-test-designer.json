@@ -1,0 +1,70 @@
+{
+  "handoff_id": "step03-WF02-REQ194-20260830",
+  "run_id": "WF02-REQ194-20260830",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ194-20260830/step-03-test-designer.json",
+  "created_at": "2026-08-30T15:34:38Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-194"],
+    "issue_ids": ["GH#713"],
+    "queue_task_id": 367,
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ194-20260830/step-01-code-designer.json",
+      "handoffs/WF02-REQ194-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ194-20260830/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ194-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ194-20260830/security-review-req194.md",
+      "handoffs/WF02-REQ194-20260830/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req194-prometheus-metrics.md",
+      "mix.exs",
+      "lib/letflow/metrics/registry.ex",
+      "lib/letflow/metrics/exposition.ex",
+      "lib/letflow/plugs/http_metrics.ex",
+      "lib/letflow/routers/metrics_exposition.ex",
+      "lib/letflow/router.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/application.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "test/letflow/metrics/registry_test.exs",
+      "test/letflow/metrics/exposition_test.exs",
+      "test/letflow/plugs/http_metrics_test.exs",
+      "test/letflow/routers/metrics_exposition_test.exs",
+      "test/letflow/api/authorization_enforcement_test.exs",
+      "test/letflow/routers/req078_supporting_routes_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ194-20260830",
+    "note": "SECURITY-REVIEWER (step-02c) PASSED and granted dependency sign-off. REVIEWER (step-02d) PASSED: dependency sign-off on {:telemetry, \"~> 1.4\"} explicitly granted (promotion of an already-transitively-present dependency, zero new risk surface, decision-record precedent 0014-scripting-plugin-runtime-strategy.md checked and confirmed not applicable here); supervision placement of Letflow.Metrics.Registry in application.ex confirmed idiomatic with no startup-order hazard; ETS table ownership confirmed correct (GenServer owns and creates the table in its own init/1, callers write directly from their own processes so a caller crash cannot corrupt/destroy the table, :telemetry.attach_many/4 is properly detached in terminate/2); the label-allowlist invariant, the conn.private[:plug_route] correction, and the Poller DB-unavailable deviation were all independently re-checked and confirmed safe and idiomatic (schedule_next_tick/0 runs unconditionally with the SAME configured delay regardless of success/failure -- no tight failure-loop risk under sustained DB outage); no scope creep (confirmed no REQ-195/REQ-201/web/ changes in the diff); lib/letflow/routers/metrics.ex's removal confirmed complete and clean (router.ex/api_pipeline.ex forwards removed, test references updated consistently, :MetricsRead left in place unused per design's own explicit open-question disposition). Three MINOR, non-blocking findings recorded in step-02d-reviewer.json's result -- none require rework before TEST-DESIGNER: (1) two stale comments in definitions.ex/engine.ex still reference the deleted Letflow.Routers.Metrics module (doc-only, functions still live/reused); (2) design doc §6's literal 'proceeds normally' wording should eventually be amended to match the shipped (safe) behavior; (3) Engine.emit_task_completed_telemetry/2 does a real DB read (Definitions.get_by_id/2) per task completion rather than the 'microseconds of ETS overhead' design §3 implied -- disclosed, within ELIXIR-DEV's granted discretion, just worth watching if it becomes a hot path. ELIXIR-DEV's own initial pass already wrote 53 passing tests across 5 files (test/letflow/metrics/registry_test.exs, test/letflow/metrics/exposition_test.exs, test/letflow/plugs/http_metrics_test.exs, test/letflow/routers/metrics_exposition_test.exs, plus updates to test/letflow/api/authorization_enforcement_test.exs and test/letflow/routers/req078_supporting_routes_test.exs) -- TEST-DESIGNER's job here is the full 10-AC gap-check against docs/requirements.yaml's REQ-194 acceptance criteria (see design doc §11's traceability table for a starting map of AC-to-design-element), not a rewrite of what already passes."
+  },
+  "task": {
+    "description": "TEST-DESIGNER (WF-02 Step 3): perform the definitive 10-AC coverage gap-check for REQ-194 against docs/requirements.yaml, following REVIEWER's PASS at Step 2d. ELIXIR-DEV's initial pass already has 53 passing tests across the 5 files listed in context.artifacts_in/context.note -- do not treat that as sufficient by itself; independently trace each of REQ-194's 10 acceptance criteria to a specific runnable test (or confirm one already exists) using the design doc's own §11 traceability table as a starting map, then close any real gap.",
+    "acceptance_criteria": [
+      "AC1: an explicit auth/scope/format decision with reasons is stated in the relevant moduledoc(s) -- confirm by reading, not just by test, but ensure no test asserts contradictory behavior",
+      "AC2: a test hits the exact SPA-facing path (unversioned GET /metrics, not /api/v1/metrics) and confirms Prometheus text, citing web/src/api/metrics.ts's parsePrometheusText/metricsApi.prometheusText() contract",
+      "AC3: dependency sign-off is recorded (already done -- SECURITY-REVIEWER + REVIEWER both signed off in this run's step-02c/step-02d handoffs); confirm no test is needed here beyond this being a process check",
+      "AC4: a test exercises behavior producing all six OBS-02 families and parses them out of the real HTTP response body",
+      "AC5: a test proves two requests differing only by a path parameter produce exactly ONE route_template label combination (not two), specifically for letflow_http_requests_total",
+      "AC6: a test proves no label emitted by any family, across at least two distinct tenants' fixtures, ever intersects with either tenant's real identifiers (tenant_id/definition_id/instance_id/task_id/actor_id) -- this is the load-bearing cross-tenant-safety test for the whole unauthenticated endpoint, treat it as non-negotiable coverage",
+      "AC7: a test makes the DB genuinely unreachable and confirms GET /metrics still returns 200 with last-known values (not an error), matching the graceful-degradation contract in design §6",
+      "AC8: a grep-based or code-level check confirms lib/letflow/plugs/http_metrics.ex, lib/letflow/engine.ex, lib/letflow/event_store.ex never reference Letflow.Metrics.Registry directly (only :telemetry calls) -- automate this as a real test, not just manual confirmation",
+      "AC9: a test (or confirmed-removed test) shows no SPA-called route 404s after lib/letflow/routers/metrics.ex's removal, and that Letflow.Routers.Metrics itself is gone (Code.ensure_loaded?/1 refute, already present in metrics_exposition_test.exs -- confirm it's real and passing)",
+      "AC10: mix test and mix compile --warnings-as-errors both run for real by TEST-RUNNER at the next step -- confirm nothing in this pass introduces a new warning or a skipped/pending test",
+      "No test weakens or removes an existing assertion from the 53 already-passing tests without a stated reason",
+      "PASS/FAIL (i.e., completed gap-check with any new tests written) routes to TEST-DESIGN-VALIDATOR next per WF-02"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

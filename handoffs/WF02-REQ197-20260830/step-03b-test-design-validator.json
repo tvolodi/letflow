@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step03b-WF02-REQ197-20260830",
+  "run_id": "WF02-REQ197-20260830",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ197-20260830/step-03b-test-design-validator.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-197"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ197-20260830/step-03-test-designer.json",
+      "handoffs/WF02-REQ197-20260830/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req197-expr-arithmetic-and-errors.md",
+      "lib/letflow/engine/expr.ex",
+      "test/letflow/engine/expr_test.exs",
+      "test/letflow/engine/transition_test.exs",
+      "test/specs/REQ-197.md",
+      "handoffs/WF02-REQ197-20260830/test-coverage-gap-analysis.md"
+    ],
+    "branch_name": "feature/WF02-REQ197-20260830"
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate (WF-02 Step 3b) on REQ-197's test suite. Per step-03-test-designer.json's own task, ELIXIR-DEV's implementation and rework (REVIEWER PASS, rework iteration 2) already carried real coverage for the signed-infinity/NaN sign-flip regression (test/letflow/engine/expr_test.exs, the 'REQ-197 §4.3/§4.6 -- signed-infinity/NaN 3-way split' describe block -- untouched by this step, not duplicated). This step cross-checked all 12 of REQ-197's acceptance criteria (docs/requirements.yaml) against the test suite as it stood before this step and found 7 of the 12 had a genuine coverage gap: AC1 (each arithmetic operator, one test per, concrete value), AC2 (precedence), AC3 (int/float promotion), AC4 (int div/mod-by-zero -- the float-by-zero case was already covered), AC5 (null-in-comparison-vs-arithmetic asymmetry), AC6 (parse_strict/1's structured failure, entirely untested before this step despite being fully implemented), and AC7 (a malformed-arithmetic-specific test at both the evaluate_condition/2 level and the transition.ex dispatch_exclusive_gateway level). Read handoffs/WF02-REQ197-20260830/test-coverage-gap-analysis.md in full for the complete AC-by-AC rationale (why each gap existed, what was added, and why AC8-AC12 needed no test action) -- do not rely on this summary alone. Every new assertion's expected value was independently verified by loading lib/letflow/engine/expr.ex directly with `elixir -e` and inspecting its real return value before being written into a test, not derived from the design doc's prose alone (the design doc's own §6 traces parse_strict/1's algorithm but does not hand-compute the exact line/column numbers AC6's test now asserts). No implementation gap was found in expr.ex; only test files were touched (test/letflow/engine/expr_test.exs, test/letflow/engine/transition_test.exs) plus the new test/specs/REQ-197.md spec and this gap-analysis file. mix test / mix compile were NOT run by this role (out of TEST-DESIGNER's remit) -- TEST-RUNNER must run both fresh after these additions.",
+    "acceptance_criteria": [
+      "Every one of REQ-197's 12 acceptance criteria (docs/requirements.yaml) maps to at least one runnable ExUnit test (or, for AC8-AC12, a documented and justified reason no test applies) -- verify this mapping independently against test/specs/REQ-197.md's own traceability table rather than accepting it as given.",
+      "Independently spot-check the AC6 parse_strict/1 test's asserted values (line: 1, column: 10, token_text: \"\", message: \"unexpected end of input\" for Expr.parse_strict(\"amount + \")) by tracing expr.ex's tokenize_positioned/advance_pos logic yourself, or by loading expr.ex directly and inspecting the real return value -- do not accept the claimed values on inspection alone, since an off-by-one here would defeat AC6's entire point.",
+      "Confirm the AC5 null-asymmetry tests actually exercise two DIFFERENT eval/2-level outcomes ({:ok, nil} vs. {:error, {:eval_error, {:null_in_arithmetic, ...}}}) -- re-verify this is a real, observable asymmetry and not two paths that both collapse to the same shape.",
+      "Confirm the signed-infinity/NaN regression describe block ELIXIR-DEV's rework already added (test/letflow/engine/expr_test.exs) is byte-identical to before this step -- not duplicated, not removed, not edited.",
+      "No @tag :skip, no TODO, no pending test anywhere in the touched files.",
+      "Fixtures/tests are self-sufficient, no cross-test pollution, no dependency on wall-clock time or unseeded randomness.",
+      "No scope creep: confirm only test files (plus test/specs/REQ-197.md and this run's own handoff artifacts) were touched -- no edit to lib/letflow/engine/expr.ex or lib/letflow/engine/transition.ex.",
+      "mix test test/letflow/engine/expr_test.exs test/letflow/engine/transition_test.exs passes in full after these additions -- run it yourself, quote real output.",
+      "mix compile --warnings-as-errors passes clean -- run it yourself, quote real output.",
+      "CRITICAL: the handoff's top-level status field (this file, top level, not nested under result) must be exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish your pass -- grep the file yourself before finishing, and run mix letflow.lint_handoffs if available, per this project's own recurring anti-pattern entry on this exact mistake."
+    ]
+  }
+}

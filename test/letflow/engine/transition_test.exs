@@ -409,6 +409,34 @@ defmodule Letflow.Engine.TransitionTest do
     end
   end
 
+  describe "dispatch_exclusive_gateway -- REQ-197 arithmetic error falls through via catch-false (REQ-197 AC7)" do
+    # REQ-197 AC7: "a test asserts transition.ex's exclusive-gateway
+    # behaviour for a bad condition is unchanged from before this
+    # requirement" -- transition.ex's own source is untouched by REQ-197
+    # (design doc §5/§10), so this test proves that claim concretely for a
+    # failure class that did not exist before REQ-197 (an arithmetic
+    # eval-error, here integer division by zero): it must fall through the
+    # same unconditional catch-false composition the pre-existing
+    # undefined-variable/type-mismatch tests above already exercise, not a
+    # new or different code path.
+    test "an integer-division-by-zero condition is treated as false, evaluation continues to the next edge" do
+      g =
+        graph(
+          [node("gw", :EXCLUSIVE_GATEWAY), node("a", :END), node("b", :END)],
+          [
+            edge("e1", "gw", "a", condition: "variables.amount / variables.divisor > 1"),
+            edge("e2", "gw", "b", condition: "variables.x == 2")
+          ]
+        )
+
+      state =
+        instance_state([token("gw", "t1")], variables: %{"amount" => 5, "divisor" => 0, "x" => 2})
+
+      assert {:ok, new_state, []} = Transition.transition(g, state, {:advance_token, "t1"})
+      assert new_state.tokens == [%Token{node_id: "b", token_id: "t1"}]
+    end
+  end
+
   describe "dispatch_exclusive_gateway -- unsupported CEL feature falls through via catch-false (REQ-050 AC6)" do
     test "a macro-call condition (has(...)) evaluates to false, does not raise" do
       g =

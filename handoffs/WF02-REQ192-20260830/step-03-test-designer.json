@@ -9,6 +9,7 @@
   "status": "PENDING",
   "priority": "normal",
   "context": {
+    "rework_1_note": "TEST-DESIGN-VALIDATOR FAILed the four-item-scoped pass (see handoffs/WF02-REQ192-20260830/step-03b-test-design-validator.json for the full disposition -- scope-narrowing, router-idiom-check, and mutation check all PASSED). The single blocking defect: test/letflow/service_catalog_test.exs's \"SCA: is not merely a longer match of SC:\" test (line ~724) registers only one service_catalog row via `register!(%{scope: :global})` then calls `ServiceCatalog.list_for_tenant(%{page_size: 1}, tenant.id)` expecting a non-nil cursor to decode -- with only one row and page_size: 1, that row is the entire result set, so next_cursor is nil and `Base.url_decode64!(nil, padding: false)` raises FunctionClauseError. Confirmed deterministic via `mix test test/letflow/service_catalog_test.exs:724` in isolation (mix/elixir/erl are available via `source ~/.asdf/asdf.sh` in this environment, contrary to the prior pass's assumption). Fix: register a second row (matching the two sibling tests in the same describe block, which already register 2 rows before minting a cursor) so `list_for_tenant/2` returns a non-nil `sc_cursor`. Re-run `mix test test/letflow/service_catalog_test.exs test/letflow/routers/admin_services_test.exs` and quote the real passing result before resubmitting -- all other 38 tests in both files already pass for real.",
     "note": "REVIEWER gate PASSES on lib/letflow/routers/admin_services.ex (full rewrite) and lib/letflow/service_catalog.ex's new list_all/1 plus the split_list_page/build_list_next_cursor arity refactor. Full disposition in handoffs/WF02-REQ192-20260830/reviewer-report-req192-iteration2.md. SECURITY-REVIEWER already PASSed (handoffs/WF02-REQ192-20260830/req192-security-review-iteration2.md).",
     "scope_expansion_disposition": "AGREE. list_all/1's addition to the already-merged REQ-191 context module is a defensible, minimal, additive exception to REQ-192's own 'no context-module change' note -- necessitated by a real, unavoidable conflict with INV-RT-1 (REQ-078's repo-wide 'no Repo. call under lib/letflow/routers/' invariant) discovered during implementation of the original router-local-query design. list_for_tenant/2's own name/arity/where-clause/behavior are confirmed byte-for-byte unchanged. Not treated as grounds to reopen REQ-191 -- no migration, schema, or existing-function-signature change occurred, and the global-table decision (decision 0003 divergence) already signed off under REQ-191 is not re-litigated.",
     "signature_change_disposition": "AGREE. split_list_page/2->/3 and build_list_next_cursor/1->/2 are a private-helper-only refactor confirmed safe: grep across lib/ and test/ shows the only other split_list_page/build_list_next_cursor definitions live in lib/letflow/dlq.ex, lib/letflow/tasks.ex, and lib/letflow/instances.ex -- separate private functions in separate modules, no cross-module visibility possible, no other caller affected.",
@@ -33,6 +34,6 @@
     ]
   },
   "result": null,
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

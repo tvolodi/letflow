@@ -1,0 +1,28 @@
+{
+  "handoff_id": "WF02-REQ192-20260830-step01",
+  "run_id": "WF02-REQ192-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "docs/requirements.yaml#REQ-192",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 365, GH#711, stage S6. Feature branch feature/WF02-REQ192-20260830 created off main at 7b560b72. Read the full REQ-192 entry in docs/requirements.yaml (around line 10257) in full. Read lib/letflow/service_catalog.ex (REQ-191, already shipped) in full for the real register/1, get_for_tenant/2, list_for_tenant/2, update_scope/2, delete/1 signatures and their real error tuples (including the 409-shaped conflict errors this route layer must map). Read lib/letflow/api/authorization.ex L100-102/L299-304/L417-419 for the already-shipped :ServicesRead/:AdminServicesRead/:AdminServicesManage policy keys and mappings -- this requirement CONSUMES them as-is, do not propose any change there. Read lib/letflow/routers/dlq.ex or lib/letflow/routers/webhooks.ex (REQ-178/182, closest precedent for this route-layer shape -- AuthorizedRouter idiom, cross-tenant-404, JSON allowlist) and reuse the idiom. Read REQ-066's problem-details/409 conflict-response convention (find it via an existing router that returns a 409 with conflicting ids, e.g. check lib/letflow/routers/webhooks.ex or grep for Response.conflict/2's real call sites) for the exact body shape a 409 must carry. Read web/src/api/services.ts and web/src/types/api.ts for ServiceRecord/RegisterServiceBody/UpdateServiceScopeBody -- the binding contract, field-for-field. Read REQ-067's cursor pagination convention (e.g. Letflow.Dlq.list/2 or Letflow.ServiceCatalog.list_for_tenant/2's own cursor shape, already shipped) to reuse for GET /services."},
+  "task": {
+    "description": "Produce the design artefact (lib/letflow/design/req192-service-catalog-routes.md or similar) for a new lib/letflow/routers/services.ex router exposing: GET /api/v1/services (tenant-scoped list: global + caller's own tenant-scoped entries, cursor-paginated, :ServicesRead), GET /api/v1/admin/services (ALL entries regardless of scope/owner, :AdminServicesRead), POST /api/v1/admin/services (register, :AdminServicesManage, 201 + created record), PATCH /api/v1/admin/services/:service_id (update scope, :AdminServicesManage), DELETE /api/v1/admin/services/:service_id (:AdminServicesManage). Map REQ-191's real context-module error tuples to HTTP: the two referential-guard conflicts (delete blocked by referencing ACTIVE definitions; global-to-tenant narrowing blocked by other tenants' ACTIVE definitions) and a duplicate service_id on register all become 409 with a problem-details body naming the conflicting ids, per REQ-066's convention. A tenant-scoped service belonging to another tenant on the non-admin GET path returns 404, never 403 (REQ-072). ServiceRecord JSON serialization must match web/src/types/api.ts field-for-field. Do NOT modify lib/letflow/api/authorization.ex, lib/letflow/service_catalog.ex, or anything under web/ -- consume the existing policy keys and context module as-is; if a mapping looks wrong, name it as a finding in the design, don't silently fix it there. Design only -- no fenced code blocks reproducing real .ex content (this project's mechanical no-exceptions rule, hit repeatedly in this pipeline including on the two immediately preceding requirements' designs).",
+    "acceptance_criteria": [
+      "GET /api/v1/services returns global entries plus the calling tenant's own scoped entries, and a tenant-scoped entry owned by a different tenant is absent from the response -- asserted with entries of all three kinds present in the database",
+      "GET /api/v1/admin/services returns entries the caller's own tenant does not own, demonstrating it is not tenant-filtered, and requires :AdminServicesRead -- a caller holding only :ServicesRead receives 403",
+      "POST /api/v1/admin/services with a RegisterServiceBody creates the entry and returns 201 with a body whose field names match web/src/api/services.ts's ServiceRecord exactly, asserted field by field",
+      "POST, PATCH and DELETE under /api/v1/admin/services each return 403 for a caller lacking :AdminServicesManage, using the mapping already present in lib/letflow/api/authorization.ex -- three explicit tests",
+      "DELETE of a service referenced by an ACTIVE definition returns 409 whose problem-details body lists the referencing definition ids; PATCH narrowing a service other tenants' ACTIVE definitions reference returns 409 listing those tenant ids -- two explicit tests",
+      "POST with an already-registered service_id returns 409 and does not modify the existing entry",
+      "a request naming a tenant-scoped service belonging to another tenant on the non-admin path returns 404, never 403 (REQ-072's cross-tenant rule)",
+      "lib/letflow/api/authorization.ex is NOT modified by this requirement, confirmed by git diff --stat scoped to its commits -- the SVC-04 policy keys it already ships are consumed as-is",
+      "no file under web/ is added or modified, confirmed by git diff --stat -- the SPA client already exists and S8 owns it",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

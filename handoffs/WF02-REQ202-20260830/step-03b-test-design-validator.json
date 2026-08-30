@@ -1,0 +1,68 @@
+{
+  "handoff_id": "step03b-WF02-REQ202-20260830",
+  "run_id": "WF02-REQ202-20260830",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ202-20260830/step-03b-test-design-validator.json",
+  "status": "FAILED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-202"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ202-20260830/step-03-test-designer.json",
+      "handoffs/WF02-REQ202-20260830/step-02a-elixir-dev-rework2.json",
+      "handoffs/WF02-REQ202-20260830/step-02d-reviewer-recheck2.json"
+    ],
+    "artifacts_in": [
+      "test/specs/REQ-202.md",
+      "test/letflow/repository/canonicaliser_test.exs",
+      "test/letflow/repository_test.exs",
+      "lib/letflow/repository.ex",
+      "lib/letflow/repository/artifact.ex",
+      "lib/letflow/repository/artifact_version.ex",
+      "lib/letflow/repository/canonicaliser.ex",
+      "priv/repo/migrations/20260830030001_create_repository_artifacts.exs"
+    ],
+    "branch_name": "feature/WF02-REQ202-20260830"
+  },
+  "task": {
+    "description": "WF-02 Step 3b hard-gate on TEST-DESIGNER's REQ-202 test suite: verify every one of REQ-202's 14 acceptance criteria has a genuinely runnable, mutation-catching test, and check for coverage gaps beyond the numbered ACs.",
+    "acceptance_criteria": [
+      "Every AC has >=1 real test that would fail on a broken implementation",
+      "AC5/AC6, AC9, cross-tenant isolation, and the concurrency test are genuine, not formality-only",
+      "AC10/AC11/AC13 judgment calls assessed against the REQ-195-validator standard",
+      "No coverage gap in DB-immutability, upsert-not-re-validated behavior (design §4.2 step 3), or real concurrency"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Read requirements.yaml's REQ-202 entry (14 ACs), the design doc, test/specs/REQ-202.md, both test files in full, all four implementation modules, the migration, and the relevant handoffs (step-03-test-designer, step-02a-elixir-dev-rework2, step-02d-reviewer-recheck2). Ran the real committed suite against real Postgres myself: `mix test test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs` -> `Finished in 14.7 seconds` / `Result: 38 passed`, 0 failures -- independently reproducing ELIXIR-DEV's and REVIEWER's post-rework2 result exactly. All 14 ACs have at least one real, specific test; the moduledoc-content assertions for AC5/AC6 check for the EXACT required cross-reference phrases ('does NOT normalize numbers', 'must never be merged', 'REQ-036' / 'DOES normalize numbers', 'must not be merged', 'REQ-202'), not merely the word 'canonicaliser'. AC9's wrong_endpoint/expired/invalid_cursor/page_size_too_large/invalid_schema_name paths are all genuinely, individually exercised, not just happy-path listing. The cross-tenant isolation test creates a row in tenant A's schema and proves it is unreachable via Repo.get/Repo.all/list_versions scoped to tenant B, mirroring audit_test.exs's precedent. The concurrent create/2 test uses real Task.async/Task.await_many racing two writers against a genuinely fresh (artifact_kind, artifact_name) pair -- this is real concurrency, not simulated. AC10 (migration-file grep for the placement comment), AC11 (Code.fetch_docs content assertion on Artifact's moduledoc), and AC13 (structural absence-check over router files) are legitimate, sufficient judgment calls under the REQ-195-validator standard: each is the strongest check actually available for its claim (a static fact about committed file content, or a structural absence that cannot be unit-tested more strongly), and none substitutes for ORCH's own git diff --stat review, which the spec itself says explicitly. The DB-level immutability triggers are tested completely as scoped: repository_artifacts UPDATE and DELETE are both tested (design §5.1 requires both), artifact_versions UPDATE is tested, and artifact_versions DELETE is correctly NOT tested because the design (§5.2) deliberately does not block it at the DB level (governed by the parent_version_id self-FK's on_delete: :nilify_all instead) -- there is no promised behavior there to test.\n\nHOWEVER: one genuine, mutation-confirmed coverage gap was found, not a formality nitpick. Design §4.2 step 3 states explicitly: upserting repository_artifacts on a content_hash collision does NOT re-validate content_type/byte_size against the existing row ('a hash collision implies identical content by construction, so there is nothing to reconcile'). No test in the committed suite exercises this. I proved this is a real gap, not a hypothetical one, by mutation: I edited lib/letflow/repository.ex's upsert_content/5 (in a throwaway local edit, never committed) to spuriously re-validate content_type/byte_size on a hash collision and raise when they differ -- exactly the behavior the design forbids -- then re-ran the full committed suite (`mix test test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs`) against that mutant: `Result: 38 passed`, 0 failures -- the mutant was completely undetected by the existing suite. I also independently confirmed the mutation scenario is real and reachable (not merely theoretical): submitting the JSON content `{\"a\":1}` under content_type 'application/json' and then the identical raw bytes under content_type 'application/wasm' produces the SAME content_hash (JSON canonicalization of an already-compact/sorted document is a no-op, and non-JSON content is hashed byte-identical), with DIFFERING content_type -- exactly the collision-with-differing-metadata case design §4.2 step 3 addresses. I verified via a separate throwaway probe test that the current (correct, unmutated) implementation handles this correctly (hashes collide, no error, the first row's content_type is retained, exactly one repository_artifacts row exists) -- so the implementation itself is NOT broken here, but the SUITE has zero coverage of this design-mandated, explicitly-called-out behavior, and a regression here (e.g. someone 'helpfully' adding a content_type/byte_size consistency check on the upsert path, which is exactly the kind of well-intentioned but wrong change this design text pre-empts) would ship silently. I reverted the mutant via `git checkout -- lib/letflow/repository.ex`, confirmed via `git status --porcelain lib/ test/` showing no diff, and re-ran the real suite once more to confirm it is still green (`Result: 38 passed`, `Finished in 14.7 seconds`). No throwaway probe test file was left in the tree.",
+    "gap_detail": {
+      "missing_coverage": "No test submits two different artifact_names/kinds whose canonical bytes collide under DIFFERENT content_type/byte_size-implying inputs and asserts the upsert (a) does not error, (b) does not overwrite the existing row's content_type/byte_size, and (c) still results in exactly one repository_artifacts row -- design §4.2 step 3's 'not re-validated ... nothing to reconcile' rule.",
+      "reproduction_recipe_for_test_designer": "content_type 'application/json' + content ~s({\"a\":1}) (already canonical -- sorted keys, no whitespace, no non-integer floats) produces the identical canonical bytes, and therefore the identical content_hash, as content_type 'application/wasm' + the same raw bytes ~s({\"a\":1}) (non-JSON content types are hashed byte-identical with no canonicalisation). Create the JSON one first (asserts content_type stored as 'application/json'), then create the wasm one under a different artifact_name (asserts create/2 still returns {:ok, _}, the stored row's content_type is UNCHANGED at 'application/json' -- not overwritten to 'application/wasm' -- and Repo.aggregate(Artifact, :count, ...) is still 1).",
+      "mutation_evidence": "Mutant applied to lib/letflow/repository.ex's upsert_content/5 (spurious re-validation raising on content_type/byte_size mismatch on a hash collision): full suite still reports `Result: 38 passed`, 0 failures -- confirms this is a real, not hypothetical, blind spot.",
+      "verification_of_revert": "git status --porcelain lib/ test/ -> empty (no output). mix test test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs re-run after revert -> `Result: 38 passed`, `Finished in 14.7 seconds`."
+    },
+    "checks_passed": [
+      "All 14 ACs have >=1 real test",
+      "AC5/AC6 moduledoc assertions check exact required cross-reference phrases, not just a keyword",
+      "AC9's wrong_endpoint/expired/invalid_cursor/page_size_too_large/invalid_schema_name all individually exercised",
+      "Cross-tenant isolation test is genuine (Repo.get/Repo.all/list_versions scoped queries across two real provisioned schemas)",
+      "Concurrent create/2 test is genuine Task.async/Task.await_many concurrency against a fresh (kind, name) pair, not simulated",
+      "AC10/AC11/AC13 judgment calls are legitimate and sufficient given what is structurally checkable",
+      "repository_artifacts UPDATE+DELETE and artifact_versions UPDATE immutability triggers all tested; artifact_versions DELETE correctly left untested per design §5.2",
+      "Real mix test run against real Postgres reproduced independently: 38 passed, 0 failures"
+    ],
+    "issues": [
+      "Missing test for design §4.2 step 3's 'upsert on hash collision does not re-validate content_type/byte_size' rule -- confirmed as a real, mutation-catchable gap, not a formality. See gap_detail above for the exact scenario and reproduction recipe to add."
+    ],
+    "artifacts_out": [],
+    "next_action": "Route back to TEST-DESIGNER (rework) to add the missing test per gap_detail.reproduction_recipe_for_test_designer to test/letflow/repository_test.exs's 'AC1' describe block (or a new describe block), then re-submit to TEST-DESIGN-VALIDATOR for re-check. No other rework needed -- all other coverage is solid."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

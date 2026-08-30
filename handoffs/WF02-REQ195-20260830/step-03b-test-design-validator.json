@@ -1,0 +1,51 @@
+{
+  "handoff_id": "step03b-WF02-REQ195-20260830",
+  "run_id": "WF02-REQ195-20260830",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ195-20260830/step-03b-test-design-validator.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-195"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ195-20260830/step-03-test-designer.json",
+      "handoffs/WF02-REQ195-20260830/step-02d-reviewer.json",
+      "handoffs/WF02-REQ195-20260830/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req195-audit-entry-storage.md",
+      "lib/letflow/audit.ex",
+      "lib/letflow/audit/entry.ex",
+      "priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/tasks.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/task_activation.ex",
+      "test/letflow/audit_test.exs",
+      "test/letflow/audit_capture_test.exs",
+      "test/letflow/audit_dispositions_test.exs",
+      "handoffs/WF02-REQ195-20260830/test-designer-gap-analysis.md"
+    ],
+    "branch_name": "feature/WF02-REQ195-20260830",
+    "rework_pass": 0,
+    "gap_analysis_summary": "Independently re-derived coverage against all 12 ACs (design §0 traceability matrix) plus the step-03 handoff's own additional actor_id-nil-disposition item, by reading test/letflow/audit_test.exs and test/letflow/audit_capture_test.exs in full (not trusting their own moduledoc claims). Full reasoning in handoffs/WF02-REQ195-20260830/test-designer-gap-analysis.md. Summary: AC1/AC2/AC3/AC4/AC5/AC6/AC8/AC9/AC10/AC11 already had genuinely complete, correctly-targeted coverage in the two existing test files -- no duplication added for these. Two genuine gaps found and filled in a new file, test/letflow/audit_dispositions_test.exs (10 new tests, all passing): (1) AC7's 'independent-computation cross-check' clause -- neither existing file contained any hand-computed chain_hash test; every AC5/AC6 assertion only compared the implementation's own output against itself. Added a from-scratch reimplementation of the netstring+sorted-JSON+SHA-256 encoding (calling no private function of Letflow.Audit) and asserted it matches two persisted entries' stored chain_hash, including the null-prev_chain_hash first-entry case. (2) The handoff's explicit 'additionally cover actor_id: nil dispositions' item -- Definitions.create/2/deprecate/2/archive/2, all six Letflow.Identity functions (create_user/2, update_user_profile/3, update_user_status/3, create_group/2, create_token/3, revoke_token/2), Tasks.assign_task/3, and TaskActivation's task.create capture site had ZERO test coverage in the existing two files. Each now has at least one test asserting a genuinely nil actor_id alongside real (field-checked) before_state/after_state content, with password_hash/token_hash confirmed excluded where applicable (INV-2/INV-4). AC6 (the requirement's most important test) was independently re-verified as already correctly present and correctly targeting content-tamper specifically (not just linkage-tamper) -- both hash_mismatch and chain_broken have dedicated, correctly-distinguished tests already.",
+    "toolchain_verification": "Ran locally via `source ~/.asdf/asdf.sh`, MIX_ENV=test, MIX_TEST_PARTITION=99 (this workspace's own scratch partition), against the already-running letflow-1-postgres-1 docker container (host port 5463 per .env). `MIX_ENV=test mix compile --warnings-as-errors` -- clean, zero warnings. `mix test test/letflow/audit_test.exs test/letflow/audit_capture_test.exs test/letflow/audit_dispositions_test.exs` -- 24 passed, 0 failed. Full-repo `mix test` additionally run to check for regressions from the new file; see this run's follow-up commit or TEST-DESIGN-VALIDATOR/TEST-RUNNER's own re-run for its result if not yet reflected here at commit time.",
+    "self_correction_note": "Two bugs caught in my own first draft while writing the new tests (not in the shipped implementation): (1) Definitions.deprecate/2 and archive/2 return {:ok, %ProcessDefinition{}} directly, unlike activate/2's {:ok, %{definition: _}} -- my first pattern match was wrong. (2) A HUMAN_TASK node's 'role' attribute is mandatory (graph validation CHK-09), so an engine-created task's assignee_ref is never nil straight off dispatch -- Tasks.assign_task/3's own first-assignment precondition (%Task{assignee_ref: nil}) is unreachable via the ordinary create path. Fixed by forcing the row to that state via a direct Repo.update_all/2 before calling assign_task/3 for real, the same class of adversarial-state technique audit_test.exs's own AC6 tests already use (bypassing the immutability trigger via raw SQL) to exercise a state the normal write path cannot produce."
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR: verify every one of REQ-195's 12 acceptance criteria has a runnable, non-duplicative, correctly-targeted test (or documented doc-content check), that the new file's fixtures are self-contained (DIRECTIVE T-4), and that the AC7 hand-computed-hash test and the actor_id-disposition tests in test/letflow/audit_dispositions_test.exs are genuine independent checks and not disguised round-trips through the same code path they're supposed to be cross-checking.",
+    "acceptance_criteria": [
+      "Confirm AC1-AC6/AC8-AC11's coverage in test/letflow/audit_test.exs and test/letflow/audit_capture_test.exs is genuinely complete and correctly targeted, per this handoff's gap-analysis summary -- spot-check at least AC6's hash_mismatch/chain_broken distinction directly against the test file.",
+      "Confirm AC7's new hand-computed hash test in test/letflow/audit_dispositions_test.exs is a genuine from-scratch reimplementation (does not call any Letflow.Audit private function) and that it is asserted against a persisted entry's stored chain_hash, not merely internally self-consistent.",
+      "Confirm every actor_id: nil disposition test (Definitions' 3 lifecycle fns beyond activate, Identity's 6 fns, Tasks.assign_task/3, TaskActivation's task.create) asserts a genuinely nil actor_id AND real (field-checked) before/after content, not merely {:ok, _}.",
+      "Confirm mix test and mix compile --warnings-as-errors both pass with real output (AC12) -- re-run yourself rather than trusting this handoff's quoted numbers.",
+      "Confirm no test file duplicates coverage already present elsewhere in this requirement's test suite."
+    ]
+  }
+}

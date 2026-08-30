@@ -3523,7 +3523,7 @@
       "started_at": "2026-08-30T16:21:27Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
+      "last_known_step": "Step 03 (TEST-DESIGNER, routing to TEST-DESIGN-VALIDATOR)",
       "note": "Audit-entry storage (OBS-03, XC-02), closing routers/audit.ex's recorded null-state gap. New tenant-scoped audit_entries table, DB-enforced immutability triggers, same-transaction writes, tamper-evident chain_hash with genuine recompute-based verification (fixing a documented R-Co weakness where verification only checks linkage, not content). No route change."
     }
   ]

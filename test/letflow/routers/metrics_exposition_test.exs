@@ -101,17 +101,23 @@ defmodule Letflow.Routers.MetricsExpositionTest do
   # Starts an instance and completes its one pending HUMAN_TASK -- exercises the real
   # Letflow.Engine.complete_task/3 call site (design §7), proving the
   # [:letflow, :task, :completed] wiring end to end, not just the Registry's own
-  # handler in isolation. Returns the definition/instance ids used, so AC6 can assert
-  # neither ever appears as a label value anywhere in the scrape.
+  # handler in isolation. Returns EVERY per-entity identifier this call graph touches
+  # (definition_id, instance_id, task_id, and both actor_ids used for create/complete)
+  # so AC6 can assert NONE of them ever appears as a label value anywhere in the
+  # scrape -- design §1's tenant-safety invariant names tenant_id/definition_id/
+  # instance_id/task_id/actor_id explicitly, so the adversarial check must seed and
+  # scan for all five, not just the two/three most obvious ones.
   defp complete_one_task!(schema_name) do
     definition = active_definition!(schema_name)
+    create_actor_id = Ecto.UUID.generate()
+    complete_actor_id = Ecto.UUID.generate()
 
     assert {:ok, result} =
              Engine.create(
                %{
                  definition_id: definition.id,
                  initial_variables: %{},
-                 actor_id: Ecto.UUID.generate(),
+                 actor_id: create_actor_id,
                  idempotency_key: unique_name("req194-start")
                },
                prefix: schema_name
@@ -124,13 +130,19 @@ defmodule Letflow.Routers.MetricsExpositionTest do
                task.id,
                %{
                  output_variables: %{},
-                 actor_id: Ecto.UUID.generate(),
+                 actor_id: complete_actor_id,
                  idempotency_key: unique_name("req194-complete")
                },
                prefix: schema_name
              )
 
-    %{definition_id: definition.id, instance_id: result.instance_id}
+    %{
+      definition_id: definition.id,
+      instance_id: result.instance_id,
+      task_id: task.id,
+      create_actor_id: create_actor_id,
+      complete_actor_id: complete_actor_id
+    }
   end
 
   # ═══════════════════════════════════════════════════════════════════════════
@@ -258,8 +270,21 @@ defmodule Letflow.Routers.MetricsExpositionTest do
       %{schema_name: schema_b, tenant_id: tenant_b} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req194-ac6-b")
 
-      %{definition_id: definition_a, instance_id: instance_a} = complete_one_task!(schema_a)
-      %{definition_id: definition_b, instance_id: instance_b} = complete_one_task!(schema_b)
+      %{
+        definition_id: definition_a,
+        instance_id: instance_a,
+        task_id: task_a,
+        create_actor_id: create_actor_a,
+        complete_actor_id: complete_actor_a
+      } = complete_one_task!(schema_a)
+
+      %{
+        definition_id: definition_b,
+        instance_id: instance_b,
+        task_id: task_b,
+        create_actor_id: create_actor_b,
+        complete_actor_id: complete_actor_b
+      } = complete_one_task!(schema_b)
 
       # Also exercise the http path with a real UUID in it, to prove route-template
       # normalization (not just the label allow-list) keeps ids out of the body.
@@ -269,6 +294,11 @@ defmodule Letflow.Routers.MetricsExpositionTest do
 
       body = Exposition.render()
 
+      # Every per-entity/per-tenant identifier design §1 names explicitly
+      # (tenant_id, definition_id, instance_id, task_id, actor_id) -- for BOTH
+      # tenants, and BOTH actor_ids used per tenant (the create-instance actor and
+      # the complete-task actor are deliberately different values so neither could
+      # accidentally pass this check by aliasing the other).
       for id <- [
             tenant_a,
             tenant_b,
@@ -277,7 +307,13 @@ defmodule Letflow.Routers.MetricsExpositionTest do
             instance_a,
             instance_b,
             schema_a,
-            schema_b
+            schema_b,
+            task_a,
+            task_b,
+            create_actor_a,
+            create_actor_b,
+            complete_actor_a,
+            complete_actor_b
           ] do
         refute body =~ to_string(id),
                "expected no label to leak #{inspect(id)}, but it appeared in the scrape"
@@ -387,6 +423,40 @@ defmodule Letflow.Routers.MetricsExpositionTest do
 
     test "GET /health and GET /api/tenant-config still resolve (unaffected by the removal)" do
       assert %{status: 200} = conn(:get, "/health") |> call_router()
+    end
+
+    test "the OLD REQ-078 path, GET /api/v1/metrics, no longer serves the retired per-tenant JSON body" do
+      # REQ-078's actual (now-removed) endpoint lived at /api/v1/metrics, authenticated,
+      # forwarded from Letflow.Plugs.ApiPipeline (design §9's disposition). With
+      # Letflow.Routers.Metrics deleted and its forward/2 entry removed, a request
+      # reaching this path is rejected by Letflow.Plugs.AuthPipeline (which runs
+      # before :match/:dispatch in ApiPipeline, per that module's own plug order)
+      # BEFORE it could ever reach a dispatch table that no longer has a /metrics
+      # entry to match anyway -- either way, this proves the old JSON endpoint is
+      # genuinely gone, not silently still serving stale per-tenant figures.
+      resp = conn(:get, "/api/v1/metrics") |> call_router()
+
+      # Measured directly (not assumed): an unauthenticated request is rejected by
+      # Letflow.Plugs.AuthPipeline's step-1 short-circuit (401, "missing or malformed
+      # Authorization header") before it can ever reach a dispatch table that no
+      # longer has a /metrics entry to match anyway. Either 401 (this path) or 404
+      # (an authenticated-but-unmatched request) proves the old JSON endpoint is
+      # genuinely gone; 401 is what a real unauthenticated caller (a Prometheus
+      # scraper, or the SPA's own no-auth-header `/metrics` call landing on the
+      # OLD versioned path by mistake) actually observes today.
+      assert resp.status in [401, 404],
+             "expected the retired /api/v1/metrics path to be rejected (401 unauthenticated " <>
+               "or 404 unmatched), got #{resp.status}"
+
+      refute resp.status == 200
+      # The retired endpoint's own response shape (metrics.ex's metrics_map/3, per
+      # git history at the commit that deleted it) was a JSON object with top-level
+      # "instances"/"tasks"/"definitions" counter-group keys -- confirm no such body
+      # leaks through (a generic 401/404 JSON error body legitimately also carries
+      # `application/json` Content-Type, so the meaningful check is the BODY SHAPE,
+      # not the content type).
+      refute resp.resp_body =~ ~s("instances")
+      refute resp.resp_body =~ ~s("definitions")
     end
   end
 end

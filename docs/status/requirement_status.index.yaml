@@ -800,8 +800,18 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 11
+    entries: 12
     note: >
+      Recounted to 12 by ORCH's Step Final rebase composition for
+      WF02-REQ184-20260830, composing this branch's own REQ-184 done-event
+      append (Step 6) against origin/main's concurrently-advanced state --
+      `grep -c "^  - req:" docs/status/requirement_status.v7.yaml` = 12
+      on-disk entries after composition, recounted directly from the
+      composed file per this note's own recount-every-time rule. This
+      closes S6's webhooks subsystem in full: REQ-181 (core), REQ-182
+      (subscription routes), REQ-183 (delivery dispatch) and REQ-184
+      (deliveries route) are all done.
+
       Recounted to 11 by ORCH's Step Final rebase composition for
       WF02-REQ184-20260830, composing this branch's own REQ-184
       started-event append against origin/main's concurrently-appended
@@ -809,6 +819,14 @@ volumes:
       docs/status/requirement_status.v7.yaml` = 11 on-disk entries after
       composition, recounted directly from the composed file per this
       note's own recount-every-time rule.
+
+      Incremented to 11 by WF02-REQ184-20260830 (DOC-UPDATER)'s own REQ-184
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 11 on-disk entries, no
+      rebase conflict on this file at the time it was written. This
+      closes S6's webhooks subsystem in full: REQ-181 (core), REQ-182
+      (subscription routes), REQ-183 (delivery dispatch) and REQ-184
+      (deliveries route) are all done.
 
       Incremented to 10 by ORCH's REQ-184 started-event append (Step 00,
       WF02-REQ184-20260830) -- `grep -c "^  - req:"

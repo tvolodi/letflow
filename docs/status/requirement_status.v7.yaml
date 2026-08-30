@@ -406,3 +406,33 @@ history:
       lib/letflow/ returns zero redact/REDACTED matches -- so REQ-193
       implements it and its moduledoc will name that fact. Step 01
       dispatched to CODE-DESIGNER.
+
+  - req: REQ-184
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T12:12:23Z"
+    note: >
+      WF02-REQ184-20260830 done (queue task 357, GH#702, stage S6). Route
+      layer atop REQ-183's delivery-dispatch core: GET /api/v1/webhooks/
+      subscriptions/:id/deliveries, WebhooksManage-gated, REQ-072
+      cross-tenant-404 mechanism (same private get/2 path as PATCH/DELETE,
+      confirmed genuinely indistinguishable for non-existent vs.
+      other-tenant ids, not a weaker proxy), limit-param fallback/truncation,
+      9-field response allowlist diffed by hand against
+      web/src/types/api.ts's WebhookDeliveryAttempt (exact match). Path:
+      design + CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER PASS, REVIEWER PASS
+      (caught and fixed a real bug via ELIXIR-DEV's own failing test: the
+      design assumed conn.params carried query-string values, but this
+      router's pipeline never called fetch_query_params/1 -- fixed to
+      fetch_query_params(conn) explicitly, matching the dlq.ex/tasks.ex/
+      definitions.ex idiom; REVIEWER also signed off on the ordering choice
+      against the real SPA component), TEST-DESIGNER (2 coverage gaps
+      found/filled), TEST-DESIGN-VALIDATOR (3 real mutations confirmed
+      caught), TEST-RUNNER (43/43 targeted, full suite clean modulo the
+      pre-existing rustc-absent baseline), RELEASE-VALIDATOR (independently
+      re-verified all 6 acceptance criteria against the real code and its
+      own re-run of the target tests -- PASS, see
+      handoffs/WF02-REQ184-20260830/req184-release-validation-report.md).
+      This completes the webhooks vertical in full: REQ-181 (core),
+      REQ-182 (subscription routes), REQ-183 (delivery dispatch), REQ-184
+      (deliveries route) are all done.

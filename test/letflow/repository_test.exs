@@ -156,6 +156,87 @@ defmodule Letflow.RepositoryTest do
       assert v1.content_hash == v2.content_hash
       assert Repo.aggregate(Artifact, :count, prefix: schema) == 1
     end
+
+    # Design §4.2 step 3: on a content_hash collision, the upsert must NOT
+    # re-validate content_type/byte_size against the existing row -- "a hash
+    # collision implies identical content by construction, so there is
+    # nothing to reconcile." The first writer's content_type/byte_size are
+    # retained verbatim; the second writer's content_type is discarded for
+    # the shared repository_artifacts row (its own artifact_versions row is
+    # still created, referencing the pre-existing content_hash).
+    #
+    # Collision construction: content_type "application/json" canonicalizes
+    # ~s({"a":1}) to the byte-identical string (already-sorted single key, no
+    # whitespace, no non-integer floats) -- a no-op through
+    # Canonicaliser.canonicalize_content/2. content_type "application/wasm"
+    # is NOT "application/json", so per §3.5/OQ-3 it is hashed by byte
+    # identity with zero transformation. Submitting the identical raw bytes
+    # ~s({"a":1}) under "application/wasm" therefore produces the exact same
+    # canonical form, and hence the same content_hash, as the JSON
+    # submission above -- while carrying a genuinely different content_type.
+    # A mutant that re-validates content_type/byte_size on this upsert path
+    # and raises on mismatch would fail this test; the real implementation
+    # (`upsert_content/5`'s `on_conflict: :nothing, conflict_target:
+    # :content_hash`) does not, and this test proves that silently-correct
+    # behavior stays covered.
+    test "upsert on a content_hash collision does not re-validate content_type/byte_size against the existing row (design §4.2 step 3)" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      json_content = ~s({"a":1})
+      wasm_content = ~s({"a":1})
+
+      # Sanity-check the collision construction against real source before
+      # relying on it: both content_type/content pairs must canonicalize to
+      # the identical byte string.
+      assert {:ok, canonical_json} =
+               Canonicaliser.canonicalize_content("application/json", json_content)
+
+      assert {:ok, canonical_wasm} =
+               Canonicaliser.canonicalize_content("application/wasm", wasm_content)
+
+      assert canonical_json == canonical_wasm
+      assert Canonicaliser.content_hash(canonical_json) == Canonicaliser.content_hash(canonical_wasm)
+
+      assert {:ok, %ArtifactVersion{content_hash: hash_1}} =
+               Repository.create(
+                 base_attrs(
+                   artifact_name: "collision-json-first",
+                   content_type: "application/json",
+                   content: json_content
+                 ),
+                 schema
+               )
+
+      first_row = Repo.get!(Artifact, hash_1, prefix: schema)
+      assert first_row.content_type == "application/json"
+      assert first_row.byte_size == byte_size(canonical_json)
+
+      # Second writer: different content_type, colliding content_hash. Must
+      # succeed without error, must NOT overwrite the first row's
+      # content_type/byte_size, and must still create its own
+      # artifact_versions row.
+      assert {:ok, %ArtifactVersion{content_hash: hash_2} = v2} =
+               Repository.create(
+                 base_attrs(
+                   artifact_name: "collision-wasm-second",
+                   content_type: "application/wasm",
+                   content: wasm_content
+                 ),
+                 schema
+               )
+
+      assert hash_2 == hash_1
+
+      assert Repo.aggregate(Artifact, :count, prefix: schema) == 1
+
+      unchanged_row = Repo.get!(Artifact, hash_1, prefix: schema)
+      assert unchanged_row.content_type == "application/json"
+      assert unchanged_row.byte_size == byte_size(canonical_json)
+
+      assert v2.artifact_name == "collision-wasm-second"
+      assert v2.version_number == 1
+      refute is_nil(v2.version_id)
+    end
   end
 
   # ---------------------------------------------------------------------------------

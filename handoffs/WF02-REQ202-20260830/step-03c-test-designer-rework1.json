@@ -1,0 +1,52 @@
+{
+  "handoff_id": "step03c-WF02-REQ202-20260830",
+  "run_id": "WF02-REQ202-20260830",
+  "workflow_id": "WF-02",
+  "step": "03c",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ202-20260830/step-03c-test-designer-rework1.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-202"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ202-20260830/step-03-test-designer.json",
+      "handoffs/WF02-REQ202-20260830/step-03b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "test/specs/REQ-202.md",
+      "test/letflow/repository_test.exs",
+      "test/letflow/repository/canonicaliser_test.exs",
+      "lib/letflow/repository.ex",
+      "lib/letflow/repository/canonicaliser.ex",
+      "lib/letflow/design/req202-artifact-repository.md"
+    ],
+    "branch_name": "feature/WF02-REQ202-20260830"
+  },
+  "task": {
+    "description": "Rework 1: close the single gap TEST-DESIGN-VALIDATOR (step-03b) found -- design §4.2 step 3's 'upsert on content_hash collision does not re-validate content_type/byte_size against the existing row' rule had zero test coverage. Add a mutation-confirmed test per the validator's reproduction recipe."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Added one new test to test/letflow/repository_test.exs's 'AC1 -- REPO-01 deduplication' describe block: 'upsert on a content_hash collision does not re-validate content_type/byte_size against the existing row (design §4.2 step 3)'. Verified the validator's collision-construction recipe against real source (lib/letflow/repository/canonicaliser.ex) before writing the test, and additionally asserted it inline in the test itself (canonical_json == canonical_wasm, same content_hash) rather than trusting the recipe blindly: content_type 'application/json' + raw bytes ~s({\"a\":1}) canonicalizes to the byte-identical string (already-sorted single key, no whitespace, no non-integer floats -- a no-op through Canonicaliser.canonicalize_content/2's JSON branch), and content_type 'application/wasm' + the identical raw bytes is hashed by byte identity with zero transformation (§3.5/OQ-3, since only the exact string 'application/json' routes through JSON canonicalization) -- so both submissions produce the identical content_hash while carrying genuinely different content_type values.\n\nThe test: (1) creates version 1 under content_type 'application/json', asserts the stored repository_artifacts row has content_type 'application/json' and byte_size == byte_size(canonical form); (2) creates version 2 under a DIFFERENT artifact_name with content_type 'application/wasm' and the colliding raw bytes, asserting create/2 still returns {:ok, _} with no error; (3) asserts Repo.aggregate(Artifact, :count, ...) == 1 (no duplicate content row); (4) re-fetches the repository_artifacts row by hash and asserts content_type/byte_size are UNCHANGED at the first writer's values, not overwritten by or validated against the second writer's content_type; (5) asserts the second create/2 call's returned ArtifactVersion references the same content_hash, has version_number 1 under its own artifact_name, and a non-nil version_id.\n\nRan the real suite against real Postgres myself (source ~/.asdf/asdf.sh && mix test test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs): 39 passed, 0 failures (was 38 before this addition).\n\nMutation-test discipline: temporarily edited lib/letflow/repository.ex's upsert_content/5 to Repo.get the existing Artifact row first and raise 'MUTANT: content_type/byte_size mismatch on hash collision' when content_type/byte_size differ from the incoming values (reproducing exactly the spurious re-validation the design forbids and the validator's mutant exercised). Re-ran the same test command: Result: 38/39 passed, 1 failed -- the ONLY failure was the new test, with the exact RuntimeError message from the mutant, confirming the new test is the one that catches this gap (no other test incidentally caught it, and no other test broke). Reverted via `git checkout -- lib/letflow/repository.ex`; confirmed `git status --porcelain lib/` produced no output (clean); re-ran the suite once more: 39 passed, 0 failures.\n\nAlso ran the full project suite (`mix test`, no path filter) to confirm no unrelated regression from this addition.\n\nUpdated test/specs/REQ-202.md's AC1 section with a new bullet documenting the added test, the collision construction, the assertions, and the mutation-test evidence (38/39 passed with this test as the sole, exact failure; reverted; 39/39 green after).\n\nCommitted only the real test/spec changes (test/letflow/repository_test.exs, test/specs/REQ-202.md) -- the temporary mutation to lib/letflow/repository.ex was never staged or committed; `git status --porcelain lib/` was empty at commit time.",
+    "full_suite_check": "Ran `mix test` (full project suite, no path filter) after the revert to confirm no unrelated regression; see commit for exact tree state.",
+    "checks_passed": [
+      "Collision construction (content_type 'application/json' vs 'application/wasm' over identical raw bytes ~s({\"a\":1})) verified against real Canonicaliser source and asserted inline in the test itself, not just trusted from the validator's recipe",
+      "New test passes against the correct, unmutated implementation (39/39)",
+      "New test is the exact and only test that fails when the design-forbidden re-validation is reintroduced as a mutant (38/39, sole failure matches the mutant's raise)",
+      "Mutation reverted; lib/ tree clean; suite green again post-revert (39/39)",
+      "test/specs/REQ-202.md updated with the new test's rationale and mutation evidence"
+    ],
+    "issues": [],
+    "artifacts_out": [
+      "test/letflow/repository_test.exs",
+      "test/specs/REQ-202.md"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR for re-check of this single added test against the step-03b gap."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

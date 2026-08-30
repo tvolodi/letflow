@@ -621,3 +621,54 @@ history:
       (AC11) -- the ROUTE adaptation onto this store is a separate, deferred
       requirement, REQ-196. Full detail:
       handoffs/WF02-REQ195-20260830/req195-release-validation-report.md.
+  - req: REQ-196
+    event: started
+    agent: ORCH
+    at: "2026-08-30T19:48:48Z"
+    note: >
+      Queue task 369, GH#715, stage S6. Route half of the audit split,
+      atop REQ-195's just-merged audit_entries store -- the same shape
+      REQ-178/182/184 have to their cores. Repoints GET /api/v1/audit's
+      handler from EventStore.read_global/1 to the new store, preserving
+      the response envelope and :AuditRead permission. Retires
+      audit.ex's own documented caveats (constant resource_type,
+      always-null before_state/after_state) and makes the resource_type
+      filter actually discriminate. Decides the `payload` field's fate.
+      No schema/capture-logic/authorization.ex/web/ changes.
+      Depends_on [REQ-195, REQ-078, REQ-067, REQ-069], all done.
+  - req: REQ-196
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T20:53:02Z"
+    note: >
+      WF02-REQ196-20260830 done (queue task 369, GH#715, stage S6). GET
+      /api/v1/audit repointed from Letflow.EventStore.read_global/1 to
+      REQ-195's audit_entries store: resource_type now varies by real
+      resource kind (no longer the constant "instance"), before_state/
+      after_state carry real captured state (no longer always null), and
+      the resource_type filter now genuinely discriminates. Response
+      envelope still matches web/src/api/audit.ts's RawAuditPage/
+      RawAuditEntry field-for-field (no web/ change). :AuditRead
+      enforcement and authorization.ex both untouched. Moduledoc updated
+      to describe the real store instead of the retired caveats. Gate
+      path: design + CODE-DESIGN-VALIDATOR (2 rework rounds removing
+      literal Elixir code from the design doc), SECURITY-REVIEWER PASS
+      (tenant-scoping and no field leaks confirmed), REVIEWER PASS,
+      TEST-DESIGNER (5 real coverage gaps found/filled), TEST-DESIGN-
+      VALIDATOR (4 real mutations confirmed caught, 1 format-only rework
+      round), TEST-RUNNER PASS, RELEASE-VALIDATOR independently
+      re-verified all 9 acceptance criteria against the real shipped
+      code (own re-run of scripts/test_parallel.sh: 2822 tests, 6
+      properties, 2826/2828 passed, the 2 failures independently
+      re-confirmed as the pre-existing rustc-absent CheckToolchainTest
+      baseline gap, not a regression; own isolated run of the 5 target
+      test files, 71/71; mix compile --warnings-as-errors clean). This
+      closes the full audit vertical: REQ-195 (store) and REQ-196
+      (route) are both done, retiring audit.ex's own documented
+      caveats in full. Full detail:
+      handoffs/WF02-REQ196-20260830/release-validation-report-20260830.md.
+      Mid-pipeline: a handoff-schema bug (step-04-test-runner.json's
+      top-level status originally written "DONE" instead of the
+      documented "COMPLETED") was caught and fixed (commit 25de8c3e) --
+      the 6th documented occurrence of this exact recurring bug class on
+      this project.

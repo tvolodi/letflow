@@ -1,0 +1,45 @@
+{
+  "handoff_id": "step05-WF02-REQ196-20260830",
+  "run_id": "WF02-REQ196-20260830",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ196-20260830/step-05-release-validator.json",
+  "created_at": "2026-08-30T20:55:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-196"],
+    "issue_ids": [],
+    "queue_task_id": 369,
+    "github_issue": "GH#715",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ196-20260830/step-04-test-runner.json",
+      "handoffs/WF02-REQ196-20260830/test-run-report-20260830.md",
+      "handoffs/WF02-REQ196-20260830/req196-test-design-validation-report.md",
+      "handoffs/WF02-REQ196-20260830/security-review-req196.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/audit.ex",
+      "lib/letflow/routers/audit.ex",
+      "test/letflow/routers/req196_audit_route_test.exs",
+      "test/letflow/routers/req078_supporting_routes_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ196-20260830"
+  },
+  "task": {
+    "description": "TEST-RUNNER ran the full suite for real via scripts/test_parallel.sh (N=8 partitions, real Postgres via docker compose, real asdf-managed Elixir/OTP toolchain). Combined result: 2822 tests, 6 properties, 2 failures (2826/2828 passed). The 2 failures are both in Mix.Tasks.Letflow.CheckToolchainTest's 'rust pin (REQ-165)' describe block (test/mix/tasks/letflow_check_toolchain_test.exs lines 274 and 289), both raising `** (ErlangError) Erlang error: :enoent` from `System.cmd(\"rustc\", [\"--version\"], ...)` before any assertion runs -- confirmed directly that `rustc` is not on PATH in this sandbox (`which rustc` exits 1) even though `.tool-versions` pins `rust 1.97.1`, unlike elixir/erlang which did resolve to real asdf shims for this run. This is a documented rustc-absent CheckToolchainTest environment-baseline gap, not a regression: the failing test file is not in REQ-196's diff at all (`git diff main...HEAD --stat` shows 19 files changed -- lib/letflow/audit.ex, lib/letflow/routers/audit.ex, test/letflow/routers/req196_audit_route_test.exs, test/letflow/routers/req078_supporting_routes_test.exs, plus design/handoff/status docs -- test/mix/tasks/letflow_check_toolchain_test.exs and lib/mix/tasks/letflow.check_toolchain.ex are untouched). All prior gates already passed with real toolchain verification: design, security review (tenant-scoping and no field leaks confirmed), code review, test design (5 real gaps found/filled), test-design validation (4 real mutations confirmed caught, including a before/after-state-swap catch and a structural tenant-scoping proof). Full test-runner report with exact combined counts and per-failure diagnosis at handoffs/WF02-REQ196-20260830/test-run-report-20260830.md.",
+    "acceptance_criteria": [
+      "Independently re-run the full suite yourself (scripts/test_parallel.sh) rather than trusting this handoff's quoted counts",
+      "Independently confirm the 2 rust-pin CheckToolchainTest failures are environment-baseline (rustc absent) and not a real regression -- re-derive from the actual error output and `which rustc`, don't just accept this report's characterization",
+      "Independently re-verify REQ-196's 9 acceptance criteria against docs/requirements.yaml and the shipped lib/letflow/audit.ex / lib/letflow/routers/audit.ex",
+      "Confirm GET /api/v1/audit reads from REQ-195's audit_entries store (not EventStore.read_global/1) and that tenant-scoping holds",
+      "If satisfied, proceed with marking REQ-196 done (route to DOC-UPDATER per WF-02); if not satisfied, route back with the specific defect"
+    ]
+  },
+  "result": null
+}

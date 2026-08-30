@@ -1612,6 +1612,19 @@ instead make it structurally impossible (e.g. ORCH greps every handoff it did no
 author for a valid top-level `status` before dispatching the next step, or a git
 pre-push hook runs `mix letflow.lint_handoffs` locally).
 
+**Recurrence (6th occurrence, WF02-REQ196-20260830).** TEST-RUNNER's own summary of its
+step-04 handoff work used the phrase "status `DONE`" -- and its step-04-test-runner.json
+did in fact carry top-level `status: "DONE"`. This time ORCH caught it from the wording of
+the subagent's own completion report (before dispatching the next step, and before any CI
+run), fixed it directly to `"COMPLETED"`, and reran `mix letflow.lint_handoffs` locally to
+confirm 0 new violations before proceeding -- catching it earlier in the pipeline than any
+of the five prior occurrences, but still via manual vigilance, not a structural check. The
+suggested mitigation (ORCH greps every handoff's top-level `status` before dispatching the
+next step) is doable per-instance but still not automated; a git pre-push hook or a
+dedicated `mix letflow.lint_handoffs` call inserted into every review-role agent's own
+dispatch template remains the only fix that would catch this without relying on a human or
+ORCH noticing the wording.
+
 ## A test embeds `git diff main...HEAD` directly, assuming a local `main` branch always exists
 
 **What happened.** REQ-165's `plugin_handler_test.exs` had a test asserting

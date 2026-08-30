@@ -10604,7 +10604,7 @@ requirements:
   - id: REQ-196
     title: Serve GET /api/v1/audit from the audit_entries store and retire routers/audit.ex's null-state and constant-resource_type caveats
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 369  # letflow-queue task id
     description: >

@@ -125,6 +125,33 @@ defmodule Letflow.Audit do
           optional(:trace_id) => String.t() | nil
         }
 
+  @typedoc """
+  Input to `list_entries/1` (REQ-196, design `req196-audit-route.md` §1.1).
+
+  `:prefix` is not listed in the design's own `list_params()` type sketch,
+  but §1.3 is explicit that `prefix` reaches this function "the same way
+  `insert_entry/3` accepts `prefix` today (an explicit argument, not read
+  from process/application config)" -- and this function has a single map
+  argument, so the only way to satisfy both statements is for `:prefix` to
+  be a required key of that map. Making it required (not `optional/1`)
+  keeps tenant scoping structural: there is no code path through this
+  function that queries `Entry` without an explicit schema prefix.
+
+  `:cursor` is an already-decoded `{timestamp, id}` seek pair -- decoding
+  the opaque cursor string itself stays a router-owned concern (design §1.1,
+  OQ-2), matching `Letflow.Routers.Audit`'s existing division of labor.
+  """
+  @type list_params :: %{
+          required(:prefix) => String.t(),
+          required(:page_size) => pos_integer(),
+          optional(:cursor) => {DateTime.t(), Ecto.UUID.t()} | nil,
+          optional(:from) => DateTime.t() | nil,
+          optional(:to) => DateTime.t() | nil,
+          optional(:actor_id) => Ecto.UUID.t() | nil,
+          optional(:resource_id) => String.t() | nil,
+          optional(:resource_type) => String.t() | nil
+        }
+
   @doc """
   Converts an Ecto struct into a plain map suitable for a `before_state`/
   `after_state` value -- drops `:__meta__` (never JSON-representable) and
@@ -210,6 +237,112 @@ defmodule Letflow.Audit do
       %Entry{}
       |> Entry.changeset(insert_attrs)
       |> repo.insert(prefix: prefix)
+    end
+  end
+
+  @doc """
+  Filtered, cursor-paginated read of `audit_entries` for the tenant schema
+  named by `params.prefix` (REQ-196, design `req196-audit-route.md` §1).
+  Backs `Letflow.Routers.Audit`'s `GET /audit` handler -- the only reader of
+  this function; nothing else in this codebase lists `Entry` rows.
+
+  Each filter in `params` (`:from`, `:to`, `:actor_id`, `:resource_id`,
+  `:resource_type`, `:cursor`) contributes a predicate only when present;
+  an absent filter narrows nothing (design §1.3's table). Ordered
+  `timestamp DESC, id DESC` -- REQ-195's own index #1
+  (`lib/letflow/design/req195-audit-entry-storage.md` §1.3) already backs
+  this ordering with no new migration; index #2 (`actor_id, timestamp,
+  id`) and index #3 (`resource_type, resource_id, timestamp, id`) back the
+  filtered paths.
+
+  `has_more` uses the same `page_size + 1`-fetch/drop-the-extra-row idiom
+  `Letflow.ServiceCatalog.list_all/1` and the former
+  `Letflow.EventStore.read_global/1` both use: `limit: page_size + 1`, and
+  if more than `page_size` rows come back, the extra row is dropped and
+  `has_more` is `true`.
+
+  `actor_id`, being `Entry.actor_id`'s `:binary_id` column, would raise an
+  `Ecto.Query.CastError` if handed a non-UUID string directly in an
+  equality predicate -- this function catches that ahead of the query via
+  `Ecto.UUID.cast/1` and returns `{:error, :invalid_actor_id}` instead
+  (design §1.2). `resource_id` is a plain `:string` column with no
+  analogous cast risk (REQ-195 design §1.2), so no `:invalid_resource_id`
+  clause exists here -- design §8 OQ-1 flags this as dead code if kept, and
+  it is omitted rather than kept unreachable.
+  """
+  @spec list_entries(list_params()) ::
+          {:ok, %{items: [Entry.t()], has_more: boolean()}}
+          | {:error, :invalid_actor_id}
+  def list_entries(params) when is_map(params) do
+    prefix = Map.fetch!(params, :prefix)
+    page_size = Map.fetch!(params, :page_size)
+
+    with {:ok, actor_id} <- validate_actor_id(Map.get(params, :actor_id)) do
+      rows =
+        Entry
+        |> where_from(Map.get(params, :from))
+        |> where_to(Map.get(params, :to))
+        |> where_actor_id(actor_id)
+        |> where_resource_id(Map.get(params, :resource_id))
+        |> where_resource_type(Map.get(params, :resource_type))
+        |> where_cursor_seek(Map.get(params, :cursor))
+        |> order_by([e], desc: e.timestamp, desc: e.id)
+        |> limit(^(page_size + 1))
+        |> Repo.all(prefix: prefix)
+
+      {items, has_more} = split_list_page(rows, page_size)
+
+      {:ok, %{items: items, has_more: has_more}}
+    end
+  end
+
+  defp validate_actor_id(nil), do: {:ok, nil}
+  defp validate_actor_id(""), do: {:ok, nil}
+
+  defp validate_actor_id(actor_id) when is_binary(actor_id) do
+    case Ecto.UUID.cast(actor_id) do
+      {:ok, _} -> {:ok, actor_id}
+      :error -> {:error, :invalid_actor_id}
+    end
+  end
+
+  defp where_from(query, nil), do: query
+  defp where_from(query, %DateTime{} = from), do: where(query, [e], e.timestamp >= ^from)
+
+  defp where_to(query, nil), do: query
+  defp where_to(query, %DateTime{} = to), do: where(query, [e], e.timestamp <= ^to)
+
+  defp where_actor_id(query, nil), do: query
+  defp where_actor_id(query, actor_id), do: where(query, [e], e.actor_id == ^actor_id)
+
+  defp where_resource_id(query, nil), do: query
+  defp where_resource_id(query, ""), do: query
+  defp where_resource_id(query, resource_id), do: where(query, [e], e.resource_id == ^resource_id)
+
+  defp where_resource_type(query, nil), do: query
+  defp where_resource_type(query, ""), do: query
+
+  defp where_resource_type(query, resource_type),
+    do: where(query, [e], e.resource_type == ^resource_type)
+
+  defp where_cursor_seek(query, nil), do: query
+
+  defp where_cursor_seek(query, {%DateTime{} = cursor_ts, cursor_id}) do
+    where(
+      query,
+      [e],
+      e.timestamp < ^cursor_ts or (e.timestamp == ^cursor_ts and e.id < ^cursor_id)
+    )
+  end
+
+  # Same idiom as `Letflow.ServiceCatalog.list_all/1`'s `split_list_page/2`
+  # and the former `Letflow.EventStore.read_global/1`: fetch `page_size + 1`
+  # rows, and if the extra row came back, drop it and report `has_more`.
+  defp split_list_page(rows, page_size) do
+    if length(rows) > page_size do
+      {Enum.take(rows, page_size), true}
+    else
+      {rows, false}
     end
   end
 

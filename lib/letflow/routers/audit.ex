@@ -8,33 +8,43 @@ defmodule Letflow.Routers.Audit do
   `web/src/api/audit.ts` already calls.
 
   | Handler | Method/path         | Delegate                            | Permission   | Response                          |
-  |---------|---------------------|-------------------------------------|--------------|-----------------------------------|
-  | list    | `GET /audit`        | `Letflow.EventStore.read_global/1`  | `:AuditRead` | 200, `{items, next_cursor, count}` |
+  |---------|---------------------|--------------------------------------|--------------|-----------------------------------|
+  | list    | `GET /audit`        | `Letflow.Audit.list_entries/1`       | `:AuditRead` | 200, `{items, next_cursor, count}` |
 
-  ## Served from the event store, not an audit-entry table
+  ## Served from `audit_entries` (REQ-196), not the event store
 
-  R-Co reads a dedicated `audit_entries` table (`src/obs/audit.zig:107`).
-  **Letflow has no such table** — `grep -rn "audit_entries\|audit_log" priv/repo/ lib/`
-  finds only a comment in one migration. REQ-078's own description redirects
-  this route onto REQ-026's event read paths, so the audit list is served from
-  the tenant-scoped `events` table via `Letflow.EventStore.read_global/1`.
+  `GET /audit` reads from REQ-195's `audit_entries` table
+  (`Letflow.Audit.Entry`) via `Letflow.Audit.list_entries/1` — see
+  `lib/letflow/design/req195-audit-entry-storage.md` for the table's schema
+  and hash-chain design, and `lib/letflow/design/req196-audit-route.md` for
+  this route's own design. Before REQ-196, this route read the tenant-scoped
+  `events` table via `Letflow.EventStore.read_global/1`, because Letflow had
+  no dedicated audit-entry table yet; REQ-195 built one and REQ-196 repointed
+  this route onto it.
 
-  Consequences for the response body, all of which are visible to a caller and
-  must not be mistaken for bugs:
+  Consequences for the response body, now the inverse of what this moduledoc
+  used to say:
 
-    * `resource_type` is the constant string `"instance"`. Every Letflow event
-      is instance-scoped; `events` has no second resource kind.
-    * `before_state` and `after_state` are **always `null`**. Letflow's event
-      model has no before/after capture. Emitting a fabricated value would be
-      worse than `null`.
-    * `pipeline_run_id` is `event.metadata["pipeline_run_id"]`, else `null`.
-      `Letflow.Api.Context` reserves `:pipeline_run_id` as a
-      documented-but-unwritten key, so nothing writes it today; the key is
-      emitted as `null` rather than omitted, so the response shape is stable.
-    * **`payload` is a Letflow addition**, not R-Co's `after_state`. It is the
-      tenant's own event payload, returned to a caller inside that tenant
-      holding `:AuditRead`. Without it the response carries no information
-      about *what* changed, which would make the endpoint useless.
+    * `resource_type` carries the real, per-row resource kind (e.g.
+      `"definition"`, `"instance"`, `"task"`, `"user"`) — no longer the
+      constant `"instance"` a caller could get from the old event-store-backed
+      implementation.
+    * `before_state` and `after_state` carry the real prior/resulting state
+      REQ-195's capture mechanism recorded for the mutation, when the covered
+      operation has one — no longer always `null`.
+    * `pipeline_run_id` has no equivalent column on `Entry` at all (REQ-195's
+      schema has no such concept — it was `event.metadata["pipeline_run_id"]`,
+      an `events`-table-specific idea). The query parameter is still
+      422-rejected if supplied non-empty (see the filter table below) — there
+      is no writer to wait on this time, because there is no column to write
+      to.
+    * **`payload` is removed entirely.** It existed only because
+      `before_state`/`after_state` were always `null` and the response
+      otherwise carried no information about *what* changed — `after_state`
+      now supplies that, more structurally, on every row. Confirmed safe
+      against `web/src/api/audit.ts`'s `RawAuditEntry` (no `payload` field)
+      and `web/src/pages/admin/AuditLogPage.tsx` (no reference to `.payload`)
+      before removing it (design §4).
 
   ## Filter disposition — what has backing, and what does not
 
@@ -43,13 +53,13 @@ defmodule Letflow.Routers.Audit do
 
   | Param | Letflow | How |
   |---|---|---|
-  | `cursor` | supported | opaque cursor over `global_seq` |
-  | `page_size` | supported | `Letflow.Api.Pagination`, then `read_global/1`'s `:limit` |
-  | `from` / `to` | supported | `read_global/1`'s `:from`/`:to`, inclusive bounds on `events.created_at` |
-  | `actor_id` | supported | `read_global/1`'s `:actor_id` |
-  | `resource_id` | supported | `read_global/1`'s `:instance_id` — R-Co's `resource_id` **is** this column |
-  | `resource_type` | **not supported — accepted, and honoured truthfully** | Letflow's `events` table has exactly one resource type. A value other than `"instance"` returns an **empty page** (`items: []`, `next_cursor: null`, `count: 0`) with no query issued — a truthful answer, not a silently dropped filter. A missing param, or `"instance"`, is unfiltered. |
-  | `pipeline_run_id` | **not supported — 422 if supplied non-empty** | Nothing writes `metadata["pipeline_run_id"]` yet, so filtering on it could only ever return an empty page *while looking like it worked*. An explicit 422 is honest; a silent empty page is not. Unsupported **until something populates the key** — when a writer exists, this becomes a real filter and the 422 goes away. |
+  | `cursor` | supported | opaque cursor over `(timestamp, id)` |
+  | `page_size` | supported | `Letflow.Api.Pagination`, then `list_entries/1`'s `:page_size` |
+  | `from` / `to` | supported | `list_entries/1`'s `:from`/`:to`, inclusive bounds on `audit_entries.timestamp` |
+  | `actor_id` | supported | `list_entries/1`'s `:actor_id` |
+  | `resource_id` | supported | `list_entries/1`'s `:resource_id` — the `audit_entries.resource_id` column directly |
+  | `resource_type` | **supported — a real, index-backed equality filter** | `list_entries/1`'s `:resource_type`, `WHERE resource_type = $1` when present, unfiltered when absent — backed by REQ-195's index #3 (`resource_type, resource_id, timestamp DESC, id DESC`). Before REQ-196, `events` had exactly one resource type and this filter was a no-op (a truthful empty page for anything but `"instance"`, no query issued); against `audit_entries` it genuinely discriminates. |
+  | `pipeline_run_id` | **not supported — 422 if supplied non-empty** | `audit_entries` has no such column at all (see above) — an explicit 422 is honest; a silent empty page is not. |
 
   `from > to` is checked **in this route**, before any query, returning 422 —
   matching R-Co's own handler-level `invalid_time_range` check
@@ -73,9 +83,9 @@ defmodule Letflow.Routers.Audit do
       tuple, so there is no tuple to match and the clause would be a branch
       nothing can reach.
 
-  `read_global/1`'s own `has_more` is documented there as a heuristic, not a
-  proof: if exactly `limit` more rows exist and no others, `has_more` reports
-  `true` and the very next page returns zero new rows. That ordinary
+  `list_entries/1`'s own `has_more` is documented there as a heuristic, not a
+  proof: if exactly `page_size` more rows exist and no others, `has_more`
+  reports `true` and the very next page returns zero new rows. That ordinary
   cursor-pagination boundary case is inherited here unchanged.
 
   ## Authorization (REQ-131)
@@ -102,27 +112,30 @@ defmodule Letflow.Routers.Audit do
   scoped prefix and before `evaluate_access/2` has returned a
   non-`:Deny403` decision. A denied caller reaches no query at all. Here this
   is additionally structural: **this module performs no `Repo` call**; the one
-  read is inside `Letflow.EventStore.read_global/1`, which cannot be reached
-  without the prefix, because the prefix is its `opts` argument.
+  read is inside `Letflow.Audit.list_entries/1`, which cannot be reached
+  without the prefix, because the prefix is a required key of its `params`
+  argument.
 
   ## INV-1 — the sharpest case in REQ-078
 
   The **only** tenant input is `Letflow.Api.Context.scoped_repo_opts/1`'s
   prefix, derived solely from `conn.assigns[:auth_context][:tenant_id]`. There
   is no query parameter, header, or body field through which another tenant's
-  events could be selected: `read_global/1` is "global" only *within one
-  tenant's schema*, and every filter this route passes narrows that set
-  further, never widens it. An audit list that escaped scoping would disclose
-  another tenant's **entire activity history in one response** — this is the
-  sharpest INV-1 case in this requirement, and the reason the tenant is not
-  merely filtered but physically unreachable.
+  audit entries could be selected: every filter this route passes narrows the
+  query further, never widens it, and `list_entries/1`'s `prefix` is always
+  this route's own resolved value, never anything request-derived. An audit
+  list that escaped scoping would disclose another tenant's **entire activity
+  history in one response** — this is the sharpest INV-1 case in this
+  requirement, and the reason the tenant is not merely filtered but physically
+  unreachable.
   """
 
   use Letflow.Api.AuthorizedRouter
 
+  alias Letflow.Audit
+  alias Letflow.Audit.Entry
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
-  alias Letflow.EventStore
 
   # A new endpoint prefix, distinct from "T:" (tenants) and "U:" (identity);
   # `decode_cursor/4`'s {:error, :wrong_endpoint} is what makes a cursor
@@ -146,27 +159,23 @@ defmodule Letflow.Routers.Audit do
     with :ok <- reject_pipeline_run_id(Map.get(query, "pipeline_run_id")),
          {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
          {:ok, page_size} <- Pagination.validate_page_size(raw_page_size),
-         {:ok, after_global_seq} <- parse_cursor_param(Map.get(query, "cursor")),
+         {:ok, cursor_seek} <- parse_cursor_param(Map.get(query, "cursor")),
          {:ok, from} <- parse_timestamp_param(Map.get(query, "from")),
          {:ok, to} <- parse_timestamp_param(Map.get(query, "to")),
          :ok <- check_time_range(from, to),
          {:ok, scope} <- {:ok, conn.assigns.scoped_opts} do
-      if unsupported_resource_type?(Map.get(query, "resource_type")) do
-        # A truthful empty page, with no query issued -- see the filter table.
-        Response.ok(conn, page_body([], nil))
-      else
-        opts =
-          Keyword.merge(scope,
-            after_global_seq: after_global_seq,
-            limit: page_size,
-            actor_id: non_empty(Map.get(query, "actor_id")),
-            instance_id: non_empty(Map.get(query, "resource_id")),
-            from: from,
-            to: to
-          )
+      params = %{
+        prefix: Keyword.fetch!(scope, :prefix),
+        page_size: page_size,
+        cursor: cursor_seek,
+        actor_id: non_empty(Map.get(query, "actor_id")),
+        resource_id: non_empty(Map.get(query, "resource_id")),
+        resource_type: non_empty(Map.get(query, "resource_type")),
+        from: from,
+        to: to
+      }
 
-        render_page(conn, EventStore.read_global(opts))
-      end
+      render_page(conn, Audit.list_entries(params))
     else
       {:error, :invalid_page_size} ->
         Response.bad_request(conn, "invalid page_size")
@@ -185,20 +194,20 @@ defmodule Letflow.Routers.Audit do
     end
   end
 
-  defp render_page(conn, {:ok, %{events: events, has_more: has_more}}) do
-    Response.ok(conn, page_body(events, next_cursor(events, has_more)))
+  defp render_page(conn, {:ok, %{items: items, has_more: has_more}}) do
+    Response.ok(conn, page_body(items, next_cursor(items, has_more)))
   end
 
-  defp render_page(conn, {:error, reason})
-       when reason in [:invalid_actor_id, :invalid_instance_id] do
+  # `Letflow.Audit.list_entries/1`'s only error return is `{:error,
+  # :invalid_actor_id}` (its @spec) -- unlike the former
+  # `EventStore.read_global/1`, there is no `:invalid_instance_id` (resource_id
+  # is a plain :string column, no cast-error risk, design §1.2/§8 OQ-1) and no
+  # other `{:error, _}` shape reaches this function, so there is no remaining
+  # catch-all `render_page/2` clause (INV-4's "no Postgrex/internal detail
+  # leaks to the body" concern doesn't arise here because no such shape exists
+  # to leak).
+  defp render_page(conn, {:error, :invalid_actor_id}) do
     Response.unprocessable(conn, "invalid filter")
-  end
-
-  # INV-4 -- Response.internal_error/1 has no detail slot, so no Postgrex or
-  # payload-resolution detail can reach the body. No 503 branch: see the
-  # moduledoc.
-  defp render_page(conn, {:error, _schema_name_or_payload_or_other}) do
-    Response.internal_error(conn)
   end
 
   # ── Parameter parsing ─────────────────────────────────────────────────────
@@ -206,12 +215,6 @@ defmodule Letflow.Routers.Audit do
   defp reject_pipeline_run_id(nil), do: :ok
   defp reject_pipeline_run_id(""), do: :ok
   defp reject_pipeline_run_id(_supplied), do: {:error, :invalid_filter}
-
-  # "instance" (or absent/empty) is the only resource type `events` has.
-  defp unsupported_resource_type?(nil), do: false
-  defp unsupported_resource_type?(""), do: false
-  defp unsupported_resource_type?("instance"), do: false
-  defp unsupported_resource_type?(_other), do: true
 
   # Step 1 -- the COLLAPSE. Every decode_cursor/4 failure (:invalid_base64,
   # :wrong_endpoint, :expired, :invalid_cursor) folds into one route-level
@@ -223,24 +226,34 @@ defmodule Letflow.Routers.Audit do
   defp parse_cursor_param(raw) when is_binary(raw) do
     with {:ok, %Pagination.Cursor{inner: inner}} <-
            Pagination.decode_cursor(raw, @audit_cursor_prefix, byte_size(@audit_cursor_prefix)),
-         {:ok, global_seq} <- global_seq_from_cursor(inner) do
-      {:ok, global_seq}
+         {:ok, seek} <- cursor_seek_from_cursor(inner) do
+      {:ok, seek}
     else
       _invalid_base64_or_wrong_endpoint_or_expired_or_invalid_cursor ->
         {:error, :invalid_cursor}
     end
   end
 
-  # The raw payload is "A:<mint_time_us>:<global_seq>". This is the ONLY place
-  # the cursor's internal layout is interpreted; no other module in REQ-078
-  # parses it.
-  defp global_seq_from_cursor(inner) do
-    case Pagination.find_nth_colon(inner, 2) do
-      nil ->
+  # The raw payload is "A:<mint_time_us>:<entry_timestamp_us>:<entry_id>"
+  # (REQ-196 -- was "A:<mint_time_us>:<global_seq>" before this requirement).
+  # This is the ONLY place the cursor's internal layout is interpreted; no
+  # other module in REQ-078/REQ-196 parses it.
+  defp cursor_seek_from_cursor(inner) do
+    with mint_colon when not is_nil(mint_colon) <- Pagination.find_nth_colon(inner, 2),
+         entry_ts_colon when not is_nil(entry_ts_colon) <- Pagination.find_nth_colon(inner, 3),
+         {:ok, entry_ts_us} <-
+           Pagination.parse_int_from_cursor(
+             inner,
+             mint_colon + 1,
+             entry_ts_colon - mint_colon - 1
+           ),
+         entry_id <-
+           binary_part(inner, entry_ts_colon + 1, byte_size(inner) - entry_ts_colon - 1),
+         {:ok, _} <- Ecto.UUID.cast(entry_id) do
+      {:ok, {DateTime.from_unix!(entry_ts_us, :microsecond), entry_id}}
+    else
+      _invalid ->
         {:error, :invalid_cursor}
-
-      position ->
-        Pagination.parse_int_from_cursor(inner, position + 1, byte_size(inner) - position - 1)
     end
   end
 
@@ -271,21 +284,23 @@ defmodule Letflow.Routers.Audit do
   # ── Cursor minting ────────────────────────────────────────────────────────
 
   defp next_cursor([], _has_more), do: nil
-  defp next_cursor(_events, false), do: nil
+  defp next_cursor(_items, false), do: nil
 
-  defp next_cursor(events, true) do
-    last = List.last(events)
+  defp next_cursor(items, true) do
+    last = List.last(items)
     mint_time_us = System.system_time(:microsecond)
+    entry_ts_us = DateTime.to_unix(last.timestamp, :microsecond)
+    seek_key = "#{entry_ts_us}:#{last.id}"
 
     @audit_cursor_prefix
-    |> Pagination.build_raw_cursor(mint_time_us, Integer.to_string(last.global_seq))
+    |> Pagination.build_raw_cursor(mint_time_us, seek_key)
     |> Pagination.encode_cursor()
   end
 
   # ── Response allowlist (INV-2) ────────────────────────────────────────────
 
-  defp page_body(events, next_cursor) do
-    items = Enum.map(events, &audit_item/1)
+  defp page_body(entries, next_cursor) do
+    items = Enum.map(entries, &audit_item/1)
 
     %{
       "items" => items,
@@ -296,29 +311,25 @@ defmodule Letflow.Routers.Audit do
     }
   end
 
-  # Hand-built, exactly ten keys -- never a Jason.Encoder derivation over
-  # %Letflow.EventStore.Event{}, which would leak `sequence_number`,
-  # `idempotency_key`, `global_seq` and the whole `metadata` map.
-  @spec audit_item(EventStore.Event.t()) :: map()
-  defp audit_item(event) do
+  # Hand-built, exactly eight keys, per design §2.1 -- never a Jason.Encoder
+  # derivation over %Letflow.Audit.Entry{}, which would leak `tenant_id`,
+  # `chain_hash`, `prev_chain_hash`, `trace_id` and the schema's own
+  # `inserted_at` timestamp.
+  @spec audit_item(Entry.t()) :: map()
+  defp audit_item(%Entry{} = entry) do
     %{
-      "audit_id" => event.event_id,
-      "actor_id" => event.actor_id,
-      "action" => event.event_type,
-      "resource_type" => "instance",
-      "resource_id" => event.instance_id,
-      "pipeline_run_id" => pipeline_run_id(event.metadata),
-      "timestamp" => iso8601(event.created_at),
-      "before_state" => nil,
-      "after_state" => nil,
-      "payload" => event.payload
+      "audit_id" => entry.id,
+      "actor_id" => entry.actor_id,
+      "action" => entry.action,
+      "resource_type" => entry.resource_type,
+      "resource_id" => entry.resource_id,
+      "timestamp" => iso8601(entry.timestamp),
+      "before_state" => entry.before_state,
+      "after_state" => entry.after_state
     }
   end
 
-  defp pipeline_run_id(metadata) when is_map(metadata), do: Map.get(metadata, "pipeline_run_id")
-  defp pipeline_run_id(_absent), do: nil
-
-  # `events.created_at` is :utc_datetime_usec, so this is the %DateTime{}
+  # `Entry.timestamp` is :utc_datetime_usec, so this is the %DateTime{}
   # clause of the same iso8601/1 convention Letflow.Routers.Tenants
   # establishes for NaiveDateTime columns.
   defp iso8601(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)

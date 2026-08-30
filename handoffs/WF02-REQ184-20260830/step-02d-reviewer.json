@@ -1,0 +1,51 @@
+{
+  "handoff_id": "step02d-WF02-REQ184-20260830",
+  "run_id": "WF02-REQ184-20260830",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ184-20260830/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-184"],
+    "issue_ids": [],
+    "queue_task_id": 357,
+    "github_issue": "702",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ184-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ184-20260830/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ184-20260830/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req184-webhook-deliveries-route.md",
+      "lib/letflow/webhooks.ex",
+      "lib/letflow/routers/webhooks.ex",
+      "test/letflow/webhooks_test.exs",
+      "test/letflow/routers/webhooks_test.exs",
+      "handoffs/WF02-REQ184-20260830/req184-security-review-findings.md"
+    ],
+    "branch_name": "feature/WF02-REQ184-20260830",
+    "note": "SECURITY-REVIEWER hard gate (WF-02 Step 2c) result: PASS. Full findings in handoffs/WF02-REQ184-20260830/req184-security-review-findings.md (not restated here in full, per anti-duplication rule -- read that file). Summary: INV-1/INV-2/INV-4/INV-5/INV-6/INV-7/INV-8 assessed as APPLIES and PASS; INV-3 NOT-APPLICABLE (S5 not started). Diff scope confirmed via git diff main...HEAD --name-only: only lib/letflow/webhooks.ex, lib/letflow/routers/webhooks.ex, the two test files, the design doc, and handoff/status bookkeeping -- no authorization.ex change, no migration, no schema change. Independently re-ran (not trusted from ELIXIR-DEV's report): mix compile --warnings-as-errors clean, mix format --check-formatted clean, grep for Repo./Ecto.Query in the router returned zero matches (INV-RT-1), MIX_ENV=test mix test on both changed test files passed 39/39, mix letflow.lint_handoffs reported 0 new violations. Also independently confirmed via the real test run's SQL debug log that the delivery query executes schema-qualified (tenant_<uuid> prefix) with a parameterized, database-level LIMIT.\n\nTWO ITEMS FLAGGED FOR YOUR ATTENTION (both carried forward from ELIXIR-DEV's step-02a handoff, both already judged security-neutral by this review -- your call to make on idiom/scope grounds):\n\n1. fetch_query_params/1 fix: the CODE-DESIGN-VALIDATOR-approved design's own §4 text incorrectly assumed conn.params[\"limit\"] was already populated by Plug's query-string parsing for this router's pipeline (Letflow.Api.AuthorizedRouter, use Plug.Router -- which never calls fetch_query_params/1 itself). ELIXIR-DEV found this via a failing test (limit was always defaulting to 20 regardless of the real query param) and fixed it by calling fetch_query_params(conn) then reading conn.query_params[\"limit\"], matching the established idiom every other query-param reader in lib/letflow/routers/ already uses (dlq.ex, tasks.ex, definitions.ex, tenants.ex). Documented in the router's moduledoc as an explicit deviation from the design's literal text. Please confirm this is a faithful, non-scope-creeping mechanical fix to reach the design's own intended behavior (which SECURITY-REVIEWER has no reason to doubt on inspection, but idiom-consistency judgment is your territory, not SECURITY-REVIEWER's).\n\n2. Ordering choice (design's own OQ-2, carried forward per CODE-DESIGN-VALIDATOR's routing): [desc: attempted_at, desc: attempt_count] for the deliveries listing -- attempted_at is :utc_datetime (second precision, so same-second ties are possible), attempt_count is a populated positive-integer tiebreaker, id (UUIDv4) deliberately excluded as non-chronological. No acceptance criterion states an ordering; this is the design's own choice for determinism under a limit cutoff. Flagged again here since REVIEWER, not SECURITY-REVIEWER, is the intended audience for design-choice sign-off per the design doc's own §9 OQ list.\n\nMinor stylistic note (not a BLOCKER, not a security defect -- see findings doc INV-8 section): resolve_limit/1 has no upper clamp on a caller-supplied limit value (e.g. ?limit=99999999999 parses fine as a native Elixir integer and is passed straight to Ecto.Query.limit/2). Not an injection surface (parsed to an integer, never interpolated into SQL text) and not a crash surface (Integer.parse/1 never raises) and not a cross-tenant reach concern (bounded to one subscription's own row set) -- purely a defensive-programming/idiom-consistency observation for your discretion."
+  },
+  "task": {
+    "description": "REVIEWER hard gate (WF-02 Step 2d) on REQ-184's implementation, following SECURITY-REVIEWER's PASS at Step 2c. Check idiomatic OTP/Elixir usage, supervision integrity (not applicable here -- no process involved, plain Ecto context module per the design), scope creep against the CODE-DESIGN-VALIDATOR-approved design (lib/letflow/design/req184-webhook-deliveries-route.md), and decision-record consistency (0003-ecto-schema-strategy.md's schema-per-tenant mechanism, already confirmed followed by SECURITY-REVIEWER). Pay particular attention to the two flagged items above: the fetch_query_params/conn.query_params deviation from the design's literal text, and the OQ-1/OQ-2 open questions the design explicitly routed to you (limit default/malformed-fallback behavior, and the attempted_at/attempt_count ordering choice). PASS/FAIL to TEST-DESIGNER next per WF-02.",
+    "acceptance_criteria": [
+      "the fetch_query_params/conn.query_params fix is confirmed idiomatic and consistent with dlq.ex/tasks.ex/definitions.ex's existing pattern, not a novel one-off",
+      "no scope creep beyond the design's own §6 scope confirmation (one new context function, one new route, two new private handler functions, moduledoc extension only)",
+      "OQ-1 (limit default 20, malformed-limit-falls-back-silently rather than 400) and OQ-2 (desc attempted_at, desc attempt_count ordering) are either affirmed as REVIEWER-acceptable or routed back with a specific required change",
+      "no decision-record conflict (0003-ecto-schema-strategy.md's schema-per-tenant mechanism is followed, already confirmed by SECURITY-REVIEWER but REVIEWER re-derives independently per core-directives.md's validator-independence rule)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REVIEWER PASS. (1) fetch_query_params/1 fix confirmed idiomatic and non-scope-creeping: read dlq.ex:112, tasks.ex:146/209, definitions.ex:399/460/505 directly -- every one calls fetch_query_params(conn) then reads conn.query_params[...], the identical shape handle_deliveries/2 uses. Process note (non-blocking): the design's own §4 asserted an unverified claim about conn.params being pre-populated by this router's pipeline, which a design validator could plausibly have caught by checking whether fetch_query_params/1 is called anywhere in this router's supervision chain -- not filed as a docs/issues defect since the actual fix is correct and test-verified. (2) Ordering choice (OQ-2) affirmed: read web/src/components/webhooks/WebhookDeliveryAttemptsTable.tsx in full, confirmed it renders `attempts` in server-received order with no client-side sort, so [desc: attempted_at, desc: attempt_count] (most-recent-first) is the correct default for this dashboard consumer -- no pushback. (3) git diff main...HEAD --stat matches design §6 exactly: list_delivery_attempts/3, one authz_get clause, handle_deliveries/2 + resolve_limit/1 + delivery_json/1, moduledoc extension only -- no authorization.ex/schema/migration touch. (4) delivery_json/1 consistent with subscription_json/1's hand-built-allowlist convention, correctly reuses the existing private iso8601/1 helper; flagged as a pattern to watch (now 2 allowlist functions, 3 routes in this vertical) but not yet worth abstracting given differing field sets at only two call sites. (5) SECURITY-REVIEWER's missing-upper-clamp note accepted as a future improvement, not required: no AC demands it, query is DB-bounded to one subscription's own rows, no existing codebase idiom (dlq.ex/tasks.ex use page_size validation for cursor pagination, a different shape) mandates a clamp here. (6) 0003-ecto-schema-strategy.md schema-per-tenant consistency re-derived independently via Repo.all(query, prefix: prefix) and get/2 reuse; no other decision record implicated; nothing in docs/migration/decisions/ needs touching.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ184-20260830/step-03-test-designer.json"
+    ],
+    "issues": [],
+    "next_action": "Route to TEST-DESIGNER"
+  }
+}

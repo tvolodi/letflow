@@ -1,0 +1,38 @@
+{
+  "handoff_id": "step03b-WF02-REQ184-20260830",
+  "run_id": "WF02-REQ184-20260830",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ184-20260830/step-03b-test-design-validator.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-184"],
+    "issue_ids": [],
+    "queue_task_id": 357,
+    "github_issue": "702",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ184-20260830/step-03-test-designer.json",
+      "handoffs/WF02-REQ184-20260830/step-02d-reviewer.json",
+      "handoffs/WF02-REQ184-20260830/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req184-webhook-deliveries-route.md",
+      "lib/letflow/webhooks.ex",
+      "lib/letflow/routers/webhooks.ex",
+      "test/letflow/webhooks_test.exs",
+      "test/letflow/routers/webhooks_test.exs",
+      "test/specs/REQ-184.md",
+      "handoffs/WF02-REQ184-20260830/req184-test-design-gap-analysis.md"
+    ],
+    "branch_name": "feature/WF02-REQ184-20260830",
+    "note": "TEST-DESIGNER (WF-02 Step 3) full 6-AC gap-check on REQ-184's implementation, following REVIEWER's PASS at Step 2d. Read both existing test files (test/letflow/webhooks_test.exs, test/letflow/routers/webhooks_test.exs) in full, plus the design doc and docs/requirements.yaml's REQ-184 entry, before adding anything.\n\nPER-AC VERDICT (full detail in handoffs/WF02-REQ184-20260830/req184-test-design-gap-analysis.md, not restated here per anti-duplication rule):\n\n- AC1 (response shape, 9-field allowlist): already complete -- exact key-set assertion plus every field checked against a concrete seeded value, not just key presence. No change.\n- AC2 (limit honored): two real gaps found and filled, both in test/letflow/routers/webhooks_test.exs's 'REQ-184 AC2' describe block: (1) the exact-limit-cutoff test previously asserted only item count under limit=2 -- enhanced in place to assert which two delivery_ids survived and in what order (attempted_at DESC, attempt_count DESC, REVIEWER-affirmed ordering), catching an HTTP-layer reorder/reverse that a context-level ordering test would not catch since that test never goes through delivery_json/1's mapping; (2) resolve_limit/1 (lib/letflow/routers/webhooks.ex:241-248) had zero coverage of its non-positive/non-numeric/partial-parse fallback branch (?limit=abc, ?limit=0, ?limit=-1, ?limit=5abc all silently defaulting to 20 per design OQ-1) -- added four parameterized tests.\n- AC3 (403 without WebhooksManage): already complete -- TASK_WORKER verified directly against lib/letflow/api/authorization.ex:482-483's real role_allows?/2 clause, not an ad-hoc fake permission. No change.\n- AC4 (cross-tenant real id -> 404 regardless of attempts): already complete, including the 'permission alone doesn't bypass tenant scoping' case the Step-3 task asked to check for specifically -- the existing test's caller already holds PLATFORM_ADMIN (real WebhooksManage) and still gets 404 naming tenant B's id from tenant A's context. Not a separate missing case; the existing AC4 test already is that companion case. No change.\n- AC5 (non-existent id -> 404, distinct from AC4): already complete -- both a well-formed-but-absent UUID and a syntactically invalid non-UUID string ('not-a-uuid') are tested, both correctly folding to 404 per get/2's {:error, :invalid_id} / {:error, :not_found} distinction. No change.\n- AC6 (moduledoc disclosure): confirmed by direct read of lib/letflow/routers/webhooks.ex:17-25 -- states verbatim that webhooks.zig was not inspected and names web/src/api/dlq.ts / web/src/types/api.ts as the binding contract. Doc-content check, not a runtime test, per the task's own framing; already additionally covered by REQ-182's pre-existing Code.fetch_docs/1-based runtime test on the same moduledoc. No new test forced.\n\nAlso added test/specs/REQ-184.md (did not previously exist), the full AC -> test-case mapping and rationale, mirroring test/specs/REQ-182.md's established format.\n\nNo existing passing test was duplicated, weakened, or removed. TEST-DESIGNER did not run the suite (not this role's job) -- routing to TEST-DESIGN-VALIDATOR to verify coverage completeness and isolation, then to TEST-RUNNER to execute."
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR (WF-02 Step 3 hard gate): verify every one of REQ-184's 6 acceptance criteria has a runnable, non-superficial test; verify the two gap-fill changes in test/letflow/routers/webhooks_test.exs (ordering assertion on the limit-cutoff test; four new resolve_limit/1 fallback-branch tests) are correct and isolated; verify test/specs/REQ-184.md accurately maps ACs to test cases; then route to TEST-RUNNER."
+  },
+  "result": null
+}

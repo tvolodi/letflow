@@ -29,6 +29,7 @@ defmodule Letflow.WebhooksTest do
   use Letflow.DataCase, async: false
 
   alias Letflow.Webhooks
+  alias Letflow.Webhooks.Delivery
   alias Letflow.Webhooks.Subscription
 
   # ---------------------------------------------------------------------------------
@@ -46,6 +47,31 @@ defmodule Letflow.WebhooksTest do
     base = %{target_url: "https://example.test/hook"}
     {:ok, result} = Webhooks.create(Map.merge(base, attrs), prefix: schema_name)
     result
+  end
+
+  # REQ-184 -- inserts a `webhook_delivery_attempts` row directly (bypassing
+  # `deliver/3`, which is REQ-183's territory and untouched by this
+  # requirement), mirroring the exact insert shape `attempt_loop/7` uses.
+  defp insert_delivery!(schema_name, tenant_id, subscription_id, attrs \\ %{}) do
+    base = %{
+      tenant_id: tenant_id,
+      delivery_id: Ecto.UUID.generate(),
+      subscription_id: subscription_id,
+      event_type: "instance.completed",
+      status: :SUCCESS,
+      http_status_code: 200,
+      attempted_at: DateTime.utc_now() |> DateTime.truncate(:second),
+      attempt_count: 1,
+      max_attempts: 4,
+      last_error: nil
+    }
+
+    {:ok, delivery} =
+      %Delivery{}
+      |> Delivery.insert_changeset(Map.merge(base, attrs))
+      |> Repo.insert(prefix: schema_name)
+
+    delivery
   end
 
   # ---------------------------------------------------------------------------------
@@ -293,6 +319,86 @@ defmodule Letflow.WebhooksTest do
       assert items == []
 
       assert {:error, :not_found} = Webhooks.delete(subscription.id, prefix: schema_name)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-184 -- list_delivery_attempts/3 (design §1.1)
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-184: list_delivery_attempts/3 orders desc attempted_at, desc attempt_count, and enforces limit" do
+    test "returns exactly `limit` rows, most-recent (and highest attempt_count on tie) first" do
+      %{schema_name: schema_name, tenant_id: tenant_id} = provisioned_tenant("req184-order")
+      %{subscription: subscription} = create!(schema_name)
+
+      base_time = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      # Two attempts share the same attempted_at second (tie broken by
+      # attempt_count desc); a third and fourth are strictly older.
+      d1 =
+        insert_delivery!(schema_name, tenant_id, subscription.id, %{
+          attempted_at: base_time,
+          attempt_count: 1
+        })
+
+      d2 =
+        insert_delivery!(schema_name, tenant_id, subscription.id, %{
+          attempted_at: base_time,
+          attempt_count: 2
+        })
+
+      _d3 =
+        insert_delivery!(schema_name, tenant_id, subscription.id, %{
+          attempted_at: DateTime.add(base_time, -60, :second),
+          attempt_count: 1
+        })
+
+      _d4 =
+        insert_delivery!(schema_name, tenant_id, subscription.id, %{
+          attempted_at: DateTime.add(base_time, -120, :second),
+          attempt_count: 1
+        })
+
+      assert {:ok, [first, second]} =
+               Webhooks.list_delivery_attempts(subscription.id, 2, prefix: schema_name)
+
+      # d2 (attempt_count 2) sorts before d1 (attempt_count 1) since both
+      # share the same attempted_at second -- the limit-2 cutoff excludes
+      # the two strictly-older rows.
+      assert first.id == d2.id
+      assert second.id == d1.id
+    end
+
+    test "a real, in-tenant subscription with zero delivery attempts returns {:ok, []}, not an error" do
+      %{schema_name: schema_name} = provisioned_tenant("req184-empty")
+      %{subscription: subscription} = create!(schema_name)
+
+      assert {:ok, []} = Webhooks.list_delivery_attempts(subscription.id, 20, prefix: schema_name)
+    end
+
+    test "a non-existent subscription id returns {:error, :not_found}" do
+      %{schema_name: schema_name} = provisioned_tenant("req184-missing")
+
+      assert {:error, :not_found} =
+               Webhooks.list_delivery_attempts(Ecto.UUID.generate(), 20, prefix: schema_name)
+    end
+
+    test "a malformed subscription id returns {:error, :invalid_id}, no DB round-trip" do
+      %{schema_name: schema_name} = provisioned_tenant("req184-invalid")
+
+      assert {:error, :invalid_id} =
+               Webhooks.list_delivery_attempts("not-a-uuid", 20, prefix: schema_name)
+    end
+
+    test "a real subscription id belonging to another tenant returns {:error, :not_found}, regardless of that tenant's delivery attempts" do
+      %{schema_name: schema_a, tenant_id: tenant_id_a} = provisioned_tenant("req184-cross-a")
+      %{schema_name: schema_b} = provisioned_tenant("req184-cross-b")
+
+      %{subscription: subscription_a} = create!(schema_a)
+      insert_delivery!(schema_a, tenant_id_a, subscription_a.id)
+
+      assert {:error, :not_found} =
+               Webhooks.list_delivery_attempts(subscription_a.id, 20, prefix: schema_b)
     end
   end
 

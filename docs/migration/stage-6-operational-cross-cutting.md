@@ -3,10 +3,11 @@
 Status: active. Depends on: S4. REQ-176 (DLQ schema and core entry
 lifecycle), REQ-177 (DLQ landing hooks) and REQ-178 (DLQ route layer)
 are all done as of 2026-08-29 -- the first batch's DLQ half is now
-fully complete. REQ-181 (Webhook subscription schema and core) and
-REQ-182 (the webhook route layer atop it) are both done as of
-2026-08-29 -- the first batch's webhooks half is now fully complete,
-mirroring the DLQ half's REQ-176/177/178 completion. REQ-185 (scheduler
+fully complete. **S6's webhooks subsystem is now fully complete:**
+REQ-181 (subscription schema and core), REQ-182 (subscription CRUD
+routes), REQ-183 (delivery dispatch, HMAC signing and auto-pause) and
+REQ-184 (deliveries route) are all done as of 2026-08-30, mirroring the
+DLQ half's REQ-176/177/178 completion. REQ-185 (scheduler
 timer-firing architecture, decision-and-design-only), REQ-186 (timers
 schema + scheduler core: poll-and-fire, missed-timer recovery, failure
 accounting), REQ-187 (wiring TIMER nodes into transition.ex, SCH-01/03,

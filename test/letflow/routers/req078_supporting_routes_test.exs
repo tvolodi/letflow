@@ -161,7 +161,7 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
     |> Repo.insert!(prefix: schema_name)
   end
 
-  defp unique_idempotency_key(prefix \\ "REQ078IDK"), do: unique(prefix)
+  defp unique_idempotency_key(prefix), do: unique(prefix)
 
   # REQ-196: GET /audit now reads Letflow.Audit.Entry (REQ-195's
   # audit_entries table), not the events table -- this fixture seeds a real

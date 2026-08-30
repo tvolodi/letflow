@@ -49,7 +49,7 @@ defmodule Letflow.Routers.Req196AuditRouteTest do
 
   # ── Shared helpers ─────────────────────────────────────────────────────────
 
-  defp build_conn(tenant_fixture, fields \\ []) do
+  defp build_conn(tenant_fixture, fields) do
     roles = Keyword.get(fields, :roles, ["PLATFORM_ADMIN"])
     query_string = Keyword.get(fields, :query_string, "")
 

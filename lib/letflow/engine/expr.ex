@@ -54,6 +54,24 @@ defmodule Letflow.Engine.Expr do
   builtins does not exist yet at all (REQ-198 adds it for the 8 pure
   string/coalesce builtins); nothing here partially builds toward `now()`.
 
+  ## REQ-198: 8 pure builtin functions, ASCII-only case conversion (AC6)
+
+  `length`, `lower`, `upper`, `trim`, `contains`, `startsWith`, `endsWith`,
+  `coalesce` are R-Co's other 8 builtin-whitelist entries (of its real
+  11 — `now`/`date_add`/`date_diff` excluded, see above) — all pure, added
+  by REQ-198 (`lib/letflow/design/req198-expr-builtin-functions.md`) as a
+  new lex-time closed whitelist (`@builtin_function_names`) plus call
+  syntax (`{:call, name, args}`). **`lower/1`/`upper/1` are ASCII-only case
+  conversion, matching R-Co exactly — DECIDED, not full Unicode casing.**
+  `String.downcase(s, :ascii)`/`String.upcase(s, :ascii)` are used
+  deliberately instead of the Unicode-default `String.downcase/1`/
+  `String.upcase/1`, which would silently diverge from R-Co on non-ASCII
+  input (e.g. R-Co's `lower("CAFÉ")` leaves `É` unchanged, yielding
+  `"cafÉ"`, not the Unicode-aware `"café"`) — see the design doc §3.2.1 for
+  the full reasoning. `trim/1` strips only the same 4-byte ASCII
+  whitespace set `do_tokenize/2` already treats as whitespace (space, tab,
+  `\\n`, `\\r`), not `String.trim/1`'s broader Unicode-whitespace default.
+
   ## Purity and determinism (AC8)
 
   Every function here is a pure function of its typed arguments alone — no
@@ -108,6 +126,31 @@ defmodule Letflow.Engine.Expr do
   @type arith_op :: :add | :sub | :mul | :div | :mod
 
   @typedoc """
+  Every name REQ-198's closed lex-time whitelist recognizes as a
+  builtin-function call. Exactly these 8 -- `now`, `date_add`, `date_diff`
+  (R-Co's 3 clock-dependent builtins) are deliberately excluded, see the
+  moduledoc's "`now()` / `date_add()` / `date_diff()` are deliberately not
+  added" section.
+  """
+  @type builtin_name ::
+          :length | :lower | :upper | :trim | :contains | :startsWith | :endsWith | :coalesce
+
+  # REQ-198 §1.3: a plain, closed, compile-time list of exactly 8 atoms --
+  # no registration hook, no runtime mutation. Consulted only by
+  # identifier_token/1 and identifier_token_kv/1's builtin-name mapping
+  # clauses below, which convert a scanned identifier string to one of
+  # these atoms via a fixed, exhaustive, closed 8-clause literal mapping
+  # (never String.to_atom/1 on attacker-controlled input).
+  @builtin_function_names ~w(length lower upper trim contains startsWith endsWith coalesce)a
+
+  @doc false
+  # Exposes @builtin_function_names (§1.3) -- kept in sync with
+  # identifier_token/1's/identifier_token_kv/1's literal 8-clause mapping
+  # above by construction (both are hand-written from the same closed list).
+  @spec builtin_function_names() :: [builtin_name()]
+  def builtin_function_names, do: @builtin_function_names
+
+  @typedoc """
   Internal expr-syntax AST. `{:var, path}` holds a dotted-field path with
   the leading `variables.` token already stripped by `translate_cel_to_expr/1`
   — `path` is a non-empty list of `String.t()` field segments.
@@ -121,6 +164,7 @@ defmodule Letflow.Engine.Expr do
           | {:cmp, cmp_op(), ast(), ast()}
           | {:arith, arith_op(), ast(), ast()}
           | {:neg, ast()}
+          | {:call, builtin_name(), args :: [ast()]}
 
   # Function-call-syntax markers that identify CEL macros, type-conversion
   # functions, and collection functions in one pass (design doc §4.4) --
@@ -295,6 +339,8 @@ defmodule Letflow.Engine.Expr do
 
   defp do_tokenize(<<"(", rest::binary>>, acc), do: do_tokenize(rest, [{:lparen} | acc])
   defp do_tokenize(<<")", rest::binary>>, acc), do: do_tokenize(rest, [{:rparen} | acc])
+  # REQ-198 §2.1: the comma separating builtin-call arguments.
+  defp do_tokenize(<<",", rest::binary>>, acc), do: do_tokenize(rest, [{:comma} | acc])
 
   defp do_tokenize(<<"==", rest::binary>>, acc), do: do_tokenize(rest, [{:cmp_op, :eq} | acc])
   defp do_tokenize(<<"!=", rest::binary>>, acc), do: do_tokenize(rest, [{:cmp_op, :neq} | acc])
@@ -364,6 +410,17 @@ defmodule Letflow.Engine.Expr do
   defp identifier_token("true"), do: {:lit, true}
   defp identifier_token("false"), do: {:lit, false}
   defp identifier_token("null"), do: {:lit, nil}
+  # REQ-198 §1.1/§1.3: the 8-name closed builtin-function whitelist, a
+  # fixed literal mapping (never String.to_atom/1 on arbitrary input),
+  # inserted ahead of the final catch-all {:var, ...} clause below.
+  defp identifier_token("length"), do: {:builtin_call, :length}
+  defp identifier_token("lower"), do: {:builtin_call, :lower}
+  defp identifier_token("upper"), do: {:builtin_call, :upper}
+  defp identifier_token("trim"), do: {:builtin_call, :trim}
+  defp identifier_token("contains"), do: {:builtin_call, :contains}
+  defp identifier_token("startsWith"), do: {:builtin_call, :startsWith}
+  defp identifier_token("endsWith"), do: {:builtin_call, :endsWith}
+  defp identifier_token("coalesce"), do: {:builtin_call, :coalesce}
   defp identifier_token(ident), do: {:var, String.split(ident, ".")}
 
   @spec tokenize_string(String.t(), byte(), [term()]) :: {:ok, [term()]} | {:error, term()}
@@ -428,7 +485,18 @@ defmodule Letflow.Engine.Expr do
         }
 
   @typedoc "Every distinct token shape this grammar's lexer produces (§6.2)."
-  @type token_kind :: :lparen | :rparen | :cmp_op | :arith_op | :and | :or | :not | :lit | :var
+  @type token_kind ::
+          :lparen
+          | :rparen
+          | :cmp_op
+          | :arith_op
+          | :and
+          | :or
+          | :not
+          | :lit
+          | :var
+          | :builtin_call
+          | :comma
 
   @typedoc "The one internal error shape every tokenizer/grammar failure site produces (§6.3)."
   @type internal_parse_error :: %{
@@ -554,6 +622,11 @@ defmodule Letflow.Engine.Expr do
     do_tokenize_positioned(rest, line, column + 1, [ptok(:rparen, nil, ")", line, column) | acc])
   end
 
+  # REQ-198 §2.1: the comma separating builtin-call arguments.
+  defp do_tokenize_positioned(<<",", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 1, [ptok(:comma, nil, ",", line, column) | acc])
+  end
+
   defp do_tokenize_positioned(<<"==", rest::binary>>, line, column, acc) do
     do_tokenize_positioned(rest, line, column + 2, [
       ptok(:cmp_op, :eq, "==", line, column) | acc
@@ -671,6 +744,15 @@ defmodule Letflow.Engine.Expr do
   defp identifier_token_kv("true"), do: {:lit, true}
   defp identifier_token_kv("false"), do: {:lit, false}
   defp identifier_token_kv("null"), do: {:lit, nil}
+  # REQ-198 §1.1/§1.3: mirrors identifier_token/1's closed 8-name mapping.
+  defp identifier_token_kv("length"), do: {:builtin_call, :length}
+  defp identifier_token_kv("lower"), do: {:builtin_call, :lower}
+  defp identifier_token_kv("upper"), do: {:builtin_call, :upper}
+  defp identifier_token_kv("trim"), do: {:builtin_call, :trim}
+  defp identifier_token_kv("contains"), do: {:builtin_call, :contains}
+  defp identifier_token_kv("startsWith"), do: {:builtin_call, :startsWith}
+  defp identifier_token_kv("endsWith"), do: {:builtin_call, :endsWith}
+  defp identifier_token_kv("coalesce"), do: {:builtin_call, :coalesce}
   defp identifier_token_kv(ident), do: {:var, String.split(ident, ".")}
 
   @spec tokenize_string_positioned(String.t(), byte(), pos_integer(), pos_integer(), [
@@ -802,6 +884,13 @@ defmodule Letflow.Engine.Expr do
 
   @spec parse_primary_p([positioned_token()], map()) ::
           {:ok, ast(), [positioned_token()]} | {:error, internal_parse_error()}
+  # REQ-198 §2.1: mirrors parse_primary/1's builtin-call clause above.
+  defp parse_primary_p([%{kind: :builtin_call, value: name}, %{kind: :lparen} | rest], eof_pos) do
+    with {:ok, args, rest2} <- parse_call_args_p(rest, eof_pos) do
+      {:ok, {:call, name, args}, rest2}
+    end
+  end
+
   defp parse_primary_p([%{kind: :lparen} | rest], eof_pos) do
     with {:ok, inner, rest2} <- parse_or_p(rest, eof_pos) do
       case rest2 do
@@ -828,6 +917,38 @@ defmodule Letflow.Engine.Expr do
 
   defp parse_primary_p([tok | _rest], _eof_pos) do
     {:error, mk_err({:unexpected_token, tok}, tok.line, tok.column, tok.text)}
+  end
+
+  # REQ-198 §2.1: mirrors parse_call_args/1 / parse_call_args_rest/2 above,
+  # over positioned_token() maps.
+  @spec parse_call_args_p([positioned_token()], map()) ::
+          {:ok, [ast()], [positioned_token()]} | {:error, internal_parse_error()}
+  defp parse_call_args_p([%{kind: :rparen} | rest], _eof_pos), do: {:ok, [], rest}
+
+  defp parse_call_args_p(tokens, eof_pos) do
+    with {:ok, arg, rest} <- parse_or_p(tokens, eof_pos) do
+      parse_call_args_rest_p([arg], rest, eof_pos)
+    end
+  end
+
+  @spec parse_call_args_rest_p([ast()], [positioned_token()], map()) ::
+          {:ok, [ast()], [positioned_token()]} | {:error, internal_parse_error()}
+  defp parse_call_args_rest_p(acc, [%{kind: :comma} | rest], eof_pos) do
+    with {:ok, arg, rest2} <- parse_or_p(rest, eof_pos) do
+      parse_call_args_rest_p([arg | acc], rest2, eof_pos)
+    end
+  end
+
+  defp parse_call_args_rest_p(acc, [%{kind: :rparen} | rest], _eof_pos) do
+    {:ok, Enum.reverse(acc), rest}
+  end
+
+  defp parse_call_args_rest_p(_acc, [tok | _] = other, _eof_pos) do
+    {:error, mk_err({:expected_rparen, other}, tok.line, tok.column, tok.text)}
+  end
+
+  defp parse_call_args_rest_p(_acc, [], eof_pos) do
+    {:error, mk_err({:expected_rparen, []}, eof_pos.line, eof_pos.column, "")}
   end
 
   # --- recursive-descent parser (used by parse/1, unchanged by REQ-197) --
@@ -935,6 +1056,16 @@ defmodule Letflow.Engine.Expr do
   defp parse_unary(tokens), do: parse_primary(tokens)
 
   @spec parse_primary([term()]) :: {:ok, ast(), [term()]} | {:error, term()}
+  # REQ-198 §2.1: a {:builtin_call, name} token immediately followed by
+  # {:lparen} is a builtin-function call. A bare {:builtin_call, _} with no
+  # following {:lparen} does NOT match this clause and falls through to the
+  # unmatched-token error clause below (§2.2 -- deliberate).
+  defp parse_primary([{:builtin_call, name}, {:lparen} | rest]) do
+    with {:ok, args, rest2} <- parse_call_args(rest) do
+      {:ok, {:call, name, args}, rest2}
+    end
+  end
+
   defp parse_primary([{:lparen} | rest]) do
     with {:ok, inner, rest2} <- parse_or(rest) do
       case rest2 do
@@ -948,6 +1079,28 @@ defmodule Letflow.Engine.Expr do
   defp parse_primary([{:var, path} | rest]), do: {:ok, {:var, path}, rest}
   defp parse_primary([]), do: {:error, :unexpected_end_of_input}
   defp parse_primary([tok | _rest]), do: {:error, {:unexpected_token, tok}}
+
+  # REQ-198 §2.1: comma-separated arg_list?, terminated by {:rparen}. An
+  # immediate {:rparen} means zero arguments (arity is not a grammar-level
+  # restriction -- §4/design doc §2 note -- checked later at eval time).
+  @spec parse_call_args([term()]) :: {:ok, [ast()], [term()]} | {:error, term()}
+  defp parse_call_args([{:rparen} | rest]), do: {:ok, [], rest}
+
+  defp parse_call_args(tokens) do
+    with {:ok, arg, rest} <- parse_or(tokens) do
+      parse_call_args_rest([arg], rest)
+    end
+  end
+
+  @spec parse_call_args_rest([ast()], [term()]) :: {:ok, [ast()], [term()]} | {:error, term()}
+  defp parse_call_args_rest(acc, [{:comma} | rest]) do
+    with {:ok, arg, rest2} <- parse_or(rest) do
+      parse_call_args_rest([arg | acc], rest2)
+    end
+  end
+
+  defp parse_call_args_rest(acc, [{:rparen} | rest]), do: {:ok, Enum.reverse(acc), rest}
+  defp parse_call_args_rest(_acc, other), do: {:error, {:expected_rparen, other}}
 
   @doc """
   Evaluates `ast` against `variables`, resolving `{:var, path}` nodes via
@@ -1058,6 +1211,140 @@ defmodule Letflow.Engine.Expr do
   def eval({:neg, sub}, variables) do
     with {:ok, v} <- eval(sub, variables) do
       apply_neg(v)
+    end
+  end
+
+  # REQ-198 §3/§4: evaluates every argument left-to-right first (short-
+  # circuiting on the first argument that itself errors, before arity or
+  # type checking of the call ever runs), THEN checks arity against
+  # length(args), THEN dispatches to the named builtin's semantics.
+  def eval({:call, name, args}, variables) do
+    with {:ok, values} <- eval_args(args, variables, []),
+         :ok <- check_arity(name, length(values)) do
+      apply_builtin(name, values)
+    end
+  end
+
+  @spec eval_args([ast()], variables :: map(), [value()]) ::
+          {:ok, [value()]} | {:error, {:eval_error, reason :: term()}}
+  defp eval_args([], _variables, acc), do: {:ok, Enum.reverse(acc)}
+
+  defp eval_args([arg | rest], variables, acc) do
+    with {:ok, v} <- eval(arg, variables) do
+      eval_args(rest, variables, [v | acc])
+    end
+  end
+
+  @typedoc "Per-builtin arity requirement (§4)."
+  @type arity_requirement :: {:exactly, non_neg_integer()} | {:at_least, non_neg_integer()}
+
+  @spec required_arity(builtin_name()) :: arity_requirement()
+  defp required_arity(name) when name in [:length, :lower, :upper, :trim], do: {:exactly, 1}
+  defp required_arity(name) when name in [:contains, :startsWith, :endsWith], do: {:exactly, 2}
+  defp required_arity(:coalesce), do: {:at_least, 1}
+
+  @spec check_arity(builtin_name(), non_neg_integer()) ::
+          :ok
+          | {:error,
+             {:eval_error, {:wrong_arity, builtin_name(), arity_requirement(), non_neg_integer()}}}
+  defp check_arity(name, got) do
+    requirement = required_arity(name)
+
+    ok? =
+      case requirement do
+        {:exactly, n} -> got == n
+        {:at_least, n} -> got >= n
+      end
+
+    if ok? do
+      :ok
+    else
+      {:error, {:eval_error, {:wrong_arity, name, requirement, got}}}
+    end
+  end
+
+  # REQ-198 §3.1: string byte length. nil propagates; non-string is a
+  # type-mismatch error.
+  @spec apply_builtin(builtin_name(), [value()]) ::
+          {:ok, value()} | {:error, {:eval_error, reason :: term()}}
+  defp apply_builtin(:length, [nil]), do: {:ok, nil}
+  defp apply_builtin(:length, [s]) when is_binary(s), do: {:ok, byte_size(s)}
+  defp apply_builtin(:length, [s]), do: {:error, {:eval_error, {:type_mismatch, :length, s}}}
+
+  # REQ-198 §3.2/§3.2.1: ASCII-only case conversion, matching R-Co exactly
+  # -- String.downcase/2 and String.upcase/2 with the :ascii mode, NOT the
+  # Unicode-default String.downcase/1 / String.upcase/1 (moduledoc).
+  defp apply_builtin(:lower, [nil]), do: {:ok, nil}
+  defp apply_builtin(:lower, [s]) when is_binary(s), do: {:ok, String.downcase(s, :ascii)}
+  defp apply_builtin(:lower, [s]), do: {:error, {:eval_error, {:type_mismatch, :lower, s}}}
+
+  defp apply_builtin(:upper, [nil]), do: {:ok, nil}
+  defp apply_builtin(:upper, [s]) when is_binary(s), do: {:ok, String.upcase(s, :ascii)}
+  defp apply_builtin(:upper, [s]), do: {:error, {:eval_error, {:type_mismatch, :upper, s}}}
+
+  # REQ-198 §3.3: strips only the same 4-byte ASCII whitespace set
+  # do_tokenize/2 already treats as whitespace, not Unicode whitespace.
+  defp apply_builtin(:trim, [nil]), do: {:ok, nil}
+  defp apply_builtin(:trim, [s]) when is_binary(s), do: {:ok, ascii_trim(s)}
+  defp apply_builtin(:trim, [s]), do: {:error, {:eval_error, {:type_mismatch, :trim, s}}}
+
+  # REQ-198 §3.4: boolean, byte-substring semantics; either-argument-nil
+  # yields nil, checked BEFORE the type check.
+  defp apply_builtin(:contains, [a, b]),
+    do: string_predicate(:contains, a, b, &String.contains?/2)
+
+  defp apply_builtin(:startsWith, [a, b]),
+    do: string_predicate(:startsWith, a, b, &String.starts_with?/2)
+
+  defp apply_builtin(:endsWith, [a, b]),
+    do: string_predicate(:endsWith, a, b, &String.ends_with?/2)
+
+  # REQ-198 §3.5: variadic, >=1 arg (enforced by check_arity/2 above --
+  # coalesce() never reaches this clause). First non-nil value, else nil.
+  # No type restriction on the arguments at all.
+  defp apply_builtin(:coalesce, values), do: {:ok, Enum.find(values, nil, &(&1 != nil))}
+
+  @spec string_predicate(
+          builtin_name(),
+          value(),
+          value(),
+          (String.t(), String.t() -> boolean())
+        ) :: {:ok, boolean() | nil} | {:error, {:eval_error, reason :: term()}}
+  defp string_predicate(_name, nil, _b, _fun), do: {:ok, nil}
+  defp string_predicate(_name, _a, nil, _fun), do: {:ok, nil}
+
+  defp string_predicate(_name, a, b, fun) when is_binary(a) and is_binary(b) do
+    {:ok, fun.(a, b)}
+  end
+
+  defp string_predicate(name, a, b, _fun) do
+    {:error, {:eval_error, {:type_mismatch, name, a, b}}}
+  end
+
+  # REQ-198 §3.3: byte-level ASCII-whitespace trim, mirroring
+  # do_tokenize/2's own `c in [?\s, ?\t, ?\n, ?\r]` guard -- deliberately
+  # NOT String.trim/1, which trims a broader Unicode-whitespace set.
+  @spec ascii_trim(String.t()) :: String.t()
+  defp ascii_trim(binary) do
+    binary
+    |> ascii_trim_leading()
+    |> ascii_trim_trailing()
+  end
+
+  @spec ascii_trim_leading(String.t()) :: String.t()
+  defp ascii_trim_leading(<<c, rest::binary>>) when c in [?\s, ?\t, ?\n, ?\r],
+    do: ascii_trim_leading(rest)
+
+  defp ascii_trim_leading(binary), do: binary
+
+  @spec ascii_trim_trailing(String.t()) :: String.t()
+  defp ascii_trim_trailing(binary) do
+    size = byte_size(binary)
+
+    if size > 0 and :binary.at(binary, size - 1) in [?\s, ?\t, ?\n, ?\r] do
+      ascii_trim_trailing(binary_part(binary, 0, size - 1))
+    else
+      binary
     end
   end
 

@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step02c-WF02-REQ198-20260830",
+  "run_id": "WF02-REQ198-20260830",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ198-20260830/step-02c-security-reviewer.json",
+  "created_at": "2026-08-30T10:38:03Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-198"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ198-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ198-20260830/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req198-expr-builtin-functions.md",
+      "lib/letflow/engine/expr.ex",
+      "test/letflow/engine/expr_test.exs"
+    ],
+    "owned_modules": ["lib/letflow/engine/expr.ex"],
+    "branch_name": "feature/WF02-REQ198-20260830"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER gate (WF-02 Step 2c) on REQ-198's implementation: 8 new pure builtin functions (length, lower, upper, trim, contains, startsWith, endsWith, coalesce), a new closed lex-time whitelist mechanism, and call-syntax grammar support added to lib/letflow/engine/expr.ex, per the approved design lib/letflow/design/req198-expr-builtin-functions.md. This module is a pure CEL-subset expression evaluator with a hard grep-verified purity contract (moduledoc) that REQ-050's determinism guarantee depends on -- the central thing to independently re-verify is that none of the 8 new builtins, the new {:call, name, args} eval/2 clause, the new tokenizer classification clauses, or the new call-syntax parser clauses introduce any impurity (clock read, Repo, Logger, :rand, :crypto, File, HTTP), and that now()/date_add()/date_diff() were genuinely NOT added to the whitelist (excluded per REQ-197's already-recorded, permanent decision).",
+    "acceptance_criteria": [
+      "Re-run the purity grep yourself against the real file: grep -n \"Repo\\.\\|Logger\\.\\|DateTime\\.\\|System\\.os_time\\|System\\.system_time\\|HTTPoison\\.\\|Req\\.\\|File\\.\\|:rand\\.\\|:crypto\\.\" lib/letflow/engine/expr.ex -- confirm zero matches yourself, do not trust the self-report alone.",
+      "Confirm @builtin_function_names (and the literal identifier_token/1 / identifier_token_kv/1 mapping clauses) contains exactly the 8 names length/lower/upper/trim/contains/startsWith/endsWith/coalesce and does NOT contain now/date_add/date_diff -- read the code directly.",
+      "Confirm no new String.to_atom/1 or String.to_existing_atom/1 call was introduced anywhere in this diff for converting a scanned identifier to an atom (atom-table exhaustion concern from attacker-controlled strings) -- the mapping must be the closed literal 8-clause form.",
+      "Confirm eval/2's new {:call, name, args} clause and apply_builtin/2's 8 per-function bodies use only String.*/byte_size/1/pattern-matching primitives (no I/O, no clock, no randomness) -- cross-check against the grep result rather than trusting the design doc's claim alone.",
+      "Cross-check against docs/agents/instructions/security-invariants.md INV-1..INV-8 explicitly, per this project's SECURITY-REVIEWER convention -- state which apply/don't apply and why (this diff touches no migration, no API route, no tenant-scoped table, so INV-1/2/5/6 are expected NOT-APPLICABLE, but verify by diff inspection rather than assuming).",
+      "Confirm the ASCII-only case-conversion decision (String.downcase/upcase(s, :ascii)) does not introduce any behavioral security concern (e.g. no injection/normalization-bypass surface, given this module's output only ever feeds a boolean gateway-routing decision, never a rendered/stored value) -- a brief statement is sufficient, this is a low-stakes check for this module's specific use.",
+      "Independently run mix compile --warnings-as-errors and mix test test/letflow/engine/expr_test.exs test/letflow/engine/transition_test.exs yourself -- quote real output, do not trust ELIXIR-DEV's self-report alone.",
+      "CRITICAL: the handoff's top-level status field must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing and confirm 0 new violations."
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

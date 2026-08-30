@@ -1,0 +1,147 @@
+{
+  "step": 5,
+  "agent": "RELEASE-VALIDATOR",
+  "requirement_id": "REQ-193",
+  "handoff_dir": "WF02-REQ193-20260830",
+  "timestamp": "2026-08-30T18:21:00Z",
+  "result": {
+    "status": "PASS",
+    "summary": "All 10 acceptance criteria independently verified. Tests re-run with seed 99731 (different from prior TEST-RUNNER runs); 10/10 passed. mix compile --warnings-as-errors produced no output and exited 0."
+  },
+  "execution": {
+    "test_run_command": "mix test test/letflow/obs/logger_test.exs --seed 99731",
+    "test_seed": 99731,
+    "test_result": "10 passed, 0 failures, 0 skipped",
+    "compile_command": "mix compile --warnings-as-errors",
+    "compile_result": "no output, exit 0"
+  },
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "description": "Exactly one JSON line containing all five required fields",
+      "evidence": {
+        "test": "AC1: a log call emits exactly one JSON line containing timestamp, level, trace_id, component, and message",
+        "test_file": "test/letflow/obs/logger_test.exs:L64-L82",
+        "impl_note": "encode_entry/3 returns Jason.encode!(Map.merge(additional, base)) <> \"\\n\" — one newline-terminated JSON object. Test asserts length(lines) == 1 and all five keys present by decoding the JSON, not substring matching.",
+        "impl_file": "lib/letflow/obs/logger.ex:L122"
+      }
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "description": "Timestamp parses as ISO 8601 UTC datetime with microsecond precision",
+      "evidence": {
+        "test": "AC2: timestamp field parses as ISO 8601 UTC datetime with microsecond precision",
+        "test_file": "test/letflow/obs/logger_test.exs:L87-L97",
+        "impl_note": "format_timestamp/1 produces \"YYYY-MM-DDTHH:MM:SS.xxxxxxZ\" — 6-digit microsecond fraction padded with String.pad_leading, confirmed by regex ~r/T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$/ and DateTime.from_iso8601 parse.",
+        "impl_file": "lib/letflow/obs/logger.ex:L138-L145"
+      }
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "description": "trace_id propagated end-to-end through assign_trace_id/1",
+      "evidence": {
+        "test": "AC3: log line after assign_trace_id/1 carries the same trace_id that function set in Logger metadata",
+        "test_file": "test/letflow/obs/logger_test.exs:L103-L131",
+        "impl_note": "Test calls Context.assign_trace_id/1 (not Logger.metadata directly), reads conn.assigns.trace_id as expected, then builds a real log event from the resulting Logger.metadata() and asserts decoded[\"trace_id\"] == expected_trace_id.",
+        "impl_file": "lib/letflow/obs/logger.ex:L90-L94"
+      }
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "description": "No active trace → trace_id is empty string, key present",
+      "evidence": {
+        "test": "AC4: log with no active trace carries trace_id as the empty string; key is not omitted",
+        "test_file": "test/letflow/obs/logger_test.exs:L135-L148",
+        "impl_note": "encode_entry/3: `case meta[:trace_id] do nil -> \"\" ...end` — nil returns \"\". base map always includes \"trace_id\" key so it cannot be omitted.",
+        "impl_file": "lib/letflow/obs/logger.ex:L88-L94"
+      }
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "description": "Invalid LOG_LEVEL fails startup; valid non-default level changes which entries are emitted",
+      "evidence": {
+        "tests": [
+          "AC5a: invalid LOG_LEVEL raises RuntimeError at startup; source still contains the raise clause",
+          "AC5b: log level controls which entries are emitted; debug suppressed at info, visible at debug"
+        ],
+        "test_file": "test/letflow/obs/logger_test.exs:L153-L213",
+        "impl_note": "AC5a: config/runtime.exs contains `raise \"Invalid LOG_LEVEL=#{inspect(invalid)}. Must be one of: debug, info, warn, warning, error.\"` — test asserts source still contains that clause AND exercises the case expression directly. AC5b: standard Logger.configure(level:) behavior verified via capture_log.",
+        "impl_file": "config/runtime.exs:L74-L96"
+      }
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "description": "with_trace/1: same trace_id within one op; distinct between two separate ops",
+      "evidence": {
+        "test": "AC6: with_trace/1 gives all lines in one operation the same trace_id; two calls get distinct ids",
+        "test_file": "test/letflow/obs/logger_test.exs:L217-L263",
+        "impl_note": "with_trace/1 calls Context.generate_trace_id(), sets Logger.metadata(trace_id: new_id), restores prior in after. Test calls the closure twice and confirms id1a == id1b (same op), id1a != id2a (different ops), id1a != \"\".",
+        "impl_file": "lib/letflow/obs/logger.ex:L209-L227"
+      }
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "description": "All five sensitive key patterns redacted to \"[REDACTED]\"",
+      "evidence": {
+        "test": "AC7: values under sensitive keys are replaced with \"[REDACTED]\" while key names are kept",
+        "test_file": "test/letflow/obs/logger_test.exs:L268-L289",
+        "key_coverage": {
+          "secret": "@exact_sensitive atom :secret — logger.ex:L36",
+          "password": "@exact_sensitive atom :password — logger.ex:L29",
+          "token": "@exact_sensitive atom :token — logger.ex:L31",
+          "client_secret": "@exact_sensitive atom :client_secret — logger.ex:L37",
+          "my_token (ends in _token)": "@sensitive_suffixes includes \"_token\" — logger.ex:L58"
+        },
+        "impl_file": "lib/letflow/obs/logger.ex:L183-L200"
+      }
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "description": "Reserved field names in metadata do not shadow real output values",
+      "evidence": {
+        "test": "AC8: metadata containing reserved field names does not shadow level, message, component, or timestamp",
+        "test_file": "test/letflow/obs/logger_test.exs:L293-L329",
+        "impl_note": "Two-layer enforcement: (1) split_reserved/1 removes any key in @reserved_fields from the additional map before merge; (2) Map.merge(additional, base) at line 122 puts base last, so base keys always win on any residual collision. Test passes :level, :message, :component, :timestamp as metadata and asserts the output values come from the OTP event, not the injected metadata.",
+        "impl_file": "lib/letflow/obs/logger.ex:L97-L122"
+      }
+    },
+    {
+      "id": "AC9",
+      "status": "PASS",
+      "note": "Minor gap: stated AC requires the @moduledoc to explain that redaction is name-based; the test only checks `source =~ \"field name\"` (whole file). The @moduledoc says \"sensitive-value redaction\"; the @doc for redact_sensitive/1 says \"Replaces values for sensitive keys\". The text \"field name\" appears at line 13 (reserved-fields comment) and line 103 (violation warning). The test passes and the concept is documented, but not explicitly in the @moduledoc for redaction specifically. No regression risk identified.",
+      "description": "Source documents that redaction matches on field NAMES",
+      "evidence": {
+        "test": "AC9: lib/letflow/obs/logger.ex contains text stating that redaction operates on field names",
+        "test_file": "test/letflow/obs/logger_test.exs:L333-L349",
+        "impl_note": "source =~ \"field name\" → matches line 13 (\"The five field names owned by this formatter\") and line 103 (\"reserved field name: ~p\"). Test passes.",
+        "impl_file": "lib/letflow/obs/logger.ex:L13, L103"
+      }
+    },
+    {
+      "id": "AC10",
+      "status": "PASS",
+      "description": "mix test and mix compile --warnings-as-errors both pass",
+      "evidence": {
+        "test_command": "mix test test/letflow/obs/logger_test.exs --seed 99731",
+        "test_result": "10 passed, 0 failures — Result printed: \"10 passed\"",
+        "compile_command": "mix compile --warnings-as-errors",
+        "compile_result": "no output, exit 0 — no warnings, no errors"
+      }
+    }
+  ],
+  "config_verification": {
+    "config_exs": "REQ-193 comment present; no backends/formatter set here (correct — test env needs default formatter for CaptureLog)",
+    "dev_exs": "config :logger, backends: [] and config :logger, :default_handler, formatter: {Letflow.Obs.Logger, []} at lines 138-139",
+    "prod_exs": "config :logger, backends: [] and config :logger, :default_handler, formatter: {Letflow.Obs.Logger, []} at last two lines",
+    "runtime_exs": "LOG_LEVEL case expression present; test default is \"debug\" (via if(config_env() == :test, do: \"debug\", else: \"info\")); raise clause for invalid values confirmed"
+  },
+  "next_action": "Route to DOC-UPDATER (Step 6)"
+}

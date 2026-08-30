@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step03-WF02-REQ200-20260830",
+  "run_id": "WF02-REQ200-20260830",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ200-20260830/step-03-test-designer.json",
+  "created_at": "2026-08-30T13:00:11Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-200"],
+    "issue_ids": [],
+    "queue_task_id": 373,
+    "github_issue": "GH#719",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ200-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ200-20260830/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ200-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ200-20260830/security-review-req200-findings.md",
+      "handoffs/WF02-REQ200-20260830/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req200-instance-timeline-rendering.md",
+      "lib/letflow/instances.ex",
+      "lib/letflow/routers/instances.ex",
+      "test/letflow/routers/instances_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ200-20260830"
+  },
+  "task": {
+    "description": "REVIEWER gate (WF-02 Step 2d) PASSED -- no idiom/scope/decision-record defect found. Read the real git diff directly (not the design doc's paraphrase): lib/letflow/instances.ex's resolve_actor_display_name/3 (4-level cond fallback), render_description/3 (7 multi-clause function-head matches on event_type plus a mandatory trailing catch-all fallback clause), fetch_display_names_by_actor_id/2 (one batched Repo.all(query, prefix: prefix) per page, zero-actor-ids short-circuit), and timeline_item/1->2's field rename (sequence_number->sequence_num, created_at->timestamp) all match lib/letflow/design/req200-instance-timeline-rendering.md's SS2-SS5 exactly, no unexplained deviation. lib/letflow/routers/instances.ex's timeline_item_map/1 renamed in lockstep, plus two new passthrough keys (actor_display_name, description). Confirmed the field rename is genuinely complete: grepped item.created_at/item.sequence_number and the string-keyed JSON equivalents across lib/ and web/src -- the only remaining hits belong to the separate, untouched /:id/history route (history_item_map/1, EventHistoryPanel.tsx) and unrelated modules (dlq.ex, definitions.ex, audit.ex, webhooks.ex, event_store.ex, reconstruction.ex, tasks.ts) -- nothing reads the old timeline-item field names anywhere. Idiom: render_description/3's multi-clause function-head dispatch (not a case/cond) is idiomatic Elixir and matches this module's existing style; fetch_display_names_by_actor_id/2's batched-lookup shape is directly precedented by lib/letflow/event_store.ex:1113's resolve_payloads/2 (explicitly documented 'Never N+1: one batched query per call' pattern) -- same shape (collect ids, one Repo.all(prefix: prefix), reduce to a map), consistent with this codebase's established N+1-avoidance idiom. Spot-checked the 7 description clauses (INSTANCE_STARTED, TASK_COMPLETED, SUB_PROCESS_COMPLETED, EXECUTION_ERROR, TIMER_FIRED among them) -- each reads distinct payload keys and produces a genuinely distinct, meaningful sentence, not template-identical filler. Read the full test diff: the only change to a pre-existing assertion is the AC-required flip from 'refute Map.has_key?(item, actor_display_name)' to asserting its non-blank presence (correct, since the field now genuinely exists) plus the shared cursor-walk helper's seq_key parameterization (sequence_number for /history, sequence_num for /timeline) -- no assertion was weakened. Supervision/process-isolation check trivially satisfied: this is a plain Ecto context module, no GenServer/gen_statem involved. Scope confirmed via git diff main...HEAD --stat myself: only lib/letflow/instances.ex, lib/letflow/routers/instances.ex, test/letflow/routers/instances_test.exs, the design doc, and handoff/registry/status-index bookkeeping changed -- no new route, no authorization.ex change, no web/ change, no migration. Decision-record consistency: consumes Decision 0006's schema-per-tenant identity design (users has no tenant_id column, prefix-scoped query) without diverging from it; no decision record needs touching. Note: could not independently re-run mix compile/test/format myself in this session (no Elixir toolchain on PATH) -- relying on SECURITY-REVIEWER's own independently-run results (mix compile clean, mix format --check-formatted clean, mix test test/letflow/routers/instances_test.exs 40/40, mix letflow.lint_handoffs 0 new violations) per handoffs/WF02-REQ200-20260830/security-review-req200-findings.md, combined with my own direct reading of the diff. Now handing to TEST-DESIGNER for the full 11-AC gap-check against docs/requirements.yaml's REQ-200 entry -- ELIXIR-DEV already wrote an initial test pass covering AC1-AC8 (test/letflow/routers/instances_test.exs's 'REQ-200 -- actor display name and description rendering' describe block); this is a gap-check against all 11 ACs, not a rewrite of what already exists.",
+    "acceptance_criteria": [
+      "Cross-check docs/requirements.yaml's REQ-200 entry's full acceptance_criteria list (AC1-AC11) against the existing describe block in test/letflow/routers/instances_test.exs; identify and fill any AC not already covered by ELIXIR-DEV's AC1-AC8 pass rather than rewriting existing passing tests.",
+      "Do not weaken or remove any existing assertion in test/letflow/routers/instances_test.exs while adding coverage.",
+      "Follow this project's isolated/self-sufficient fixture convention (TenantFixture.provisioned_tenant!/1 per test, no shared/global state) already used throughout the existing describe block.",
+      "CRITICAL: this handoff's top-level status field is exactly PENDING (grepped and confirmed before commit, per this project's own recurring anti-pattern on this exact mistake)."
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

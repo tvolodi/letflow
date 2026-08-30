@@ -3491,8 +3491,8 @@
       "started_at": "2026-08-30T12:38:22Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 2d (SECURITY-REVIEWER PASS -> REVIEWER)",
-      "note": "Fixes a real broken SPA contract: TimelineFeedItem.tsx reads actor_display_name/description/timestamp/sequence_num but timeline_item/1 never emits the first two and names the latter two differently. Ports R-Co's actor-fallback chain and per-event-type description rendering, N+1-safe. Route/pagination/auth/404 from REQ-080 unchanged. SECURITY-REVIEWER PASSED (handoffs/WF02-REQ200-20260830/security-review-req200-findings.md) -- routed to REVIEWER."
+      "last_known_step": "Step 03 (REVIEWER PASS -> TEST-DESIGNER)",
+      "note": "Fixes a real broken SPA contract: TimelineFeedItem.tsx reads actor_display_name/description/timestamp/sequence_num but timeline_item/1 never emits the first two and names the latter two differently. Ports R-Co's actor-fallback chain and per-event-type description rendering, N+1-safe. Route/pagination/auth/404 from REQ-080 unchanged. SECURITY-REVIEWER PASSED (handoffs/WF02-REQ200-20260830/security-review-req200-findings.md). REVIEWER (step-02d) PASS: implementation matches design SS2-SS5 exactly, field rename confirmed complete via direct grep (no stale readers outside the untouched /history route), render_description/3's multi-clause dispatch and fetch_display_names_by_actor_id/2's batched-lookup shape confirmed idiomatic and precedented by event_store.ex's resolve_payloads/2, description clauses spot-checked as genuinely distinct, test diff has no weakened assertions, scope confirmed clean (no route/authz/web/migration change), consistent with Decision 0006. Routed to TEST-DESIGNER at step-03 for the full 11-AC gap-check (ELIXIR-DEV's existing AC1-AC8 pass is not a rewrite target)."
     }
   ]
 }

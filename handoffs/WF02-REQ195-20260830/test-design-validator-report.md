@@ -128,3 +128,81 @@ Everything else checked in this pass -- AC1-AC5, AC8-AC11's coverage, AC7's
 doc half and its independent-computation test half, and the actor_id-nil
 disposition tests -- is genuinely complete and correctly targeted, confirmed by
 direct reading and by mutations 2-4 all being caught.
+
+---
+
+## Rework iteration 1 recheck (this pass)
+
+## Verdict: PASS
+
+Scope: re-verify only the two items routed back above (the check-order gap and
+the format failure); AC1-AC5/AC7-AC11/actor_id-nil coverage was already PASS in
+the section above and unchanged in this pass (only `test/letflow/audit_dispositions_test.exs`
+and this rework's own handoff file differ between commit `170a161c` and
+`ec9cd57f`, confirmed with `git diff --stat 170a161c ec9cd57f`).
+
+### 1. Re-derived the core claim independently against the real code
+
+Read `lib/letflow/audit.ex` lines 273-335 myself. `fields_from_entry/1`
+(line 300) includes `prev_chain_hash: entry.prev_chain_hash` as its 11th
+field, and `canonical_string/1` (line 332) hashes it via
+`netstring_optional(fields.prev_chain_hash)` as the 11th (last) netstring
+segment. Confirmed: `prev_chain_hash` genuinely is one of the 11 hashed
+fields, so a raw-SQL tamper of only that column changes `fields_from_entry/1`'s
+output for that entry and therefore its recomputed hash -- making both
+`do_verify_chain/2` cond clauses true for the same entry. TEST-DESIGNER's
+claim is correct, independently re-derived.
+
+### 2. Read the new test itself
+
+`test/letflow/audit_dispositions_test.exs` lines 260-316, describe block
+"AC6 -- check order: a prev_chain_hash-only tamper is hash_mismatch, not
+chain_broken". Confirmed it does exactly what is claimed: inserts two chained
+entries, disables the immutability trigger, runs
+`UPDATE "<schema>".audit_entries SET prev_chain_hash = $1 WHERE id = $2` on
+entry 2 only (leaving `chain_hash` untouched), re-enables the trigger, and
+asserts `{:error, {:hash_mismatch, ^id_2}}` from `Audit.verify_chain/2` (plus
+a `refute` against the `chain_broken` shape for good measure).
+
+### 3. Ran the target suite for real
+
+`source ~/.asdf/asdf.sh && mix test test/letflow/audit_test.exs
+test/letflow/audit_capture_test.exs test/letflow/audit_dispositions_test.exs`
+-> **Result: 25 passed.**
+
+### 4. Independently re-applied the mutation myself
+
+Edited `lib/letflow/audit.ex`'s `do_verify_chain/2` myself, swapping the two
+`cond` clauses so linkage (`entry.prev_chain_hash != prev_recomputed_hash`) is
+checked before recompute (`recomputed != entry.chain_hash`). Ran `mix test
+test/letflow/audit_dispositions_test.exs`:
+
+```
+Result: 10/11 passed
+Failed: 1 test
+
+1) test AC6 -- check order: ... reported as hash_mismatch (Letflow.AuditDispositionsTest)
+   code:  assert {:error, {:hash_mismatch, ^id_2}} = Audit.verify_chain(schema_name)
+   left:  {:error, {:hash_mismatch, ^id_2}}
+   right: {:error, {:chain_broken, "a9ce90e0-c13e-4389-ac58-78a51e300ea0"}}
+```
+
+This confirms the new test genuinely discriminates check order, reproduced
+independently rather than trusted from TEST-DESIGNER's report. Reverted via
+`git checkout -- lib/letflow/audit.ex`; `git status --porcelain lib/` empty
+afterward; re-ran the target suite -- `Result: 25 passed` again.
+
+### 5. Format, compile, lint
+
+- `mix format --check-formatted`: exit 0, no output. Clean repo-wide.
+- `mix compile --warnings-as-errors`: exit 0, no output.
+- `mix letflow.lint_handoffs`: `OK -- 0 new violations across 1557 handoff
+  files (25 pre-existing grandfathered, traced to ISS-0190)`.
+
+### Disposition
+
+PASS. Both rework items are genuinely fixed: the check-order gap now has a
+test that fails under the reversed order and passes under the shipped order
+(both independently reproduced by this validator, not just read from
+TEST-DESIGNER's claim), and the format gate is clean. Routed to TEST-RUNNER
+via `handoffs/WF02-REQ195-20260830/step-04-test-runner.json`.

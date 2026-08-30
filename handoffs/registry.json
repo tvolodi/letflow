@@ -3523,8 +3523,8 @@
       "started_at": "2026-08-30T16:21:27Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 03 (TEST-DESIGNER, routing to TEST-DESIGN-VALIDATOR)",
-      "note": "Audit-entry storage (OBS-03, XC-02), closing routers/audit.ex's recorded null-state gap. New tenant-scoped audit_entries table, DB-enforced immutability triggers, same-transaction writes, tamper-evident chain_hash with genuine recompute-based verification (fixing a documented R-Co weakness where verification only checks linkage, not content). No route change."
+      "last_known_step": "Step 04 (TEST-DESIGN-VALIDATOR PASSED rework-1 recheck, routing to TEST-RUNNER)",
+      "note": "Audit-entry storage (OBS-03, XC-02), closing routers/audit.ex's recorded null-state gap. New tenant-scoped audit_entries table, DB-enforced immutability triggers, same-transaction writes, tamper-evident chain_hash with genuine recompute-based verification (fixing a documented R-Co weakness where verification only checks linkage, not content). No route change. TEST-DESIGN-VALIDATOR rework-1 recheck PASSED: check-order gap (do_verify_chain/2) now covered by a test independently confirmed to distinguish cond-clause order; format gate clean."
     }
   ]
 }

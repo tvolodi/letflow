@@ -11396,8 +11396,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
-    # impl_order: assigned by ORCH's register_task call (WF-01 Step 3),
-    # not by REQ-ANALYST -- REQ-ANALYST has no letflow-queue access.
+    impl_order: 379  # letflow-queue task id
     description: >
       SECURITY-REVIEWER finding, WF02-REQ183-20260830 Step 2c (ad-hoc gate on
       REQ-183's design/implementation). `target_url` on `webhook_subscriptions`

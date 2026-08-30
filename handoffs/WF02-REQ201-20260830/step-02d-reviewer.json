@@ -1,0 +1,92 @@
+{
+  "handoff_id": "step02d-WF02-REQ201-20260830",
+  "run_id": "WF02-REQ201-20260830",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ201-20260830/step-02d-reviewer.json",
+  "created_at": "2026-08-30T20:00:00Z",
+  "status": "COMPLETED",
+  "result": {
+    "verdict": "PASS",
+    "summary": "All four REVIEWER checks clear. No blocking findings. Two non-blocking type-safety observations filed as issues for ORCH to register (docs/issues/ISS-REQ201-A.yaml, ISS-REQ201-B.yaml). TEST-DESIGNER may proceed.",
+
+    "check_1_idiomatic_otp": {
+      "verdict": "PASS",
+      "notes": [
+        "Letflow.Obs.Alerts has no process, no start_link, no child_spec. Pure context module with DB-backed state — idiomatic for this pattern in this codebase.",
+        "No GenServer with a 'case state do' state machine crutch. The edge-triggered ARMED/FIRED logic is a plain function (evaluate_trigger/7) with DB persistence via upsert — correct pattern given the state must survive Poller restarts.",
+        "Inner defmodules (RetryPolicy, AlertHookConfig, AlertThresholds) are config structs, not generic framework machinery — directly required by this requirement, not premature abstraction.",
+        "OBSERVATION (filed as ISS-REQ201-A, type-safety): deliver_with_retry/4 calls Process.sleep/1 on the Scheduler.Poller's process for exponential backoff. At 1-3 platform-configured hooks the worst-case blocking is ~3s per firing event — acceptable at expected scale but becomes a correctness concern if hook count grows. Contrast with webhooks.ex where Process.sleep is in a non-Poller context. Not a blocker for this requirement."
+      ]
+    },
+
+    "check_2_supervision_integrity": {
+      "verdict": "PASS",
+      "notes": [
+        "maybe_run_alert_detection/3 in the Poller wraps each schema in try/rescue — one schema's failure doesn't crash others or the Poller.",
+        "Alerts.run_detection/2 has its own top-level rescue that returns :ok on any error — belt-and-suspenders isolation.",
+        "safe_dlq_count/1, safe_stuck_instances/2, safe_recently_paused_subs/2 each rescue to safe defaults (0, [], []) — degraded-mode operation doesn't propagate failures.",
+        "No new process spawned, no application.ex change, no supervision tree modification. Confirmed: git diff main...HEAD -- lib/letflow/application.ex is empty."
+      ]
+    },
+
+    "check_3_no_new_application_child": {
+      "verdict": "CONFIRMED",
+      "evidence": "git diff main...HEAD -- lib/letflow/application.ex: empty diff. No child added."
+    },
+
+    "check_4_scope_creep": {
+      "verdict": "PASS",
+      "notes": [
+        "No route, controller, Plug, or web/src file touched. git diff --name-only confirms only: lib/letflow/{obs/alerts.ex, obs/alert_trigger_state.ex, obs/alert_hook_emission_state.ex, dlq.ex, scheduler/poller.ex, tenant_provisioning.ex, design/req201-alerting-hooks.md}, priv/repo/migrations/2026083002000{1,2}_*.exs, test/*, docs/* — all within scope.",
+        "Dlq.count_entries/1 is 5 lines, a direct read-only aggregate needed for the DLQ depth threshold. No abstraction.",
+        "No dlq_entries writes anywhere in the diff — the no-DLQ-landing property is preserved."
+      ]
+    },
+
+    "check_5_decision_record_consistency": {
+      "verdict": "PASS",
+      "notes": [
+        "Decision 0003 Decision B (per-tenant schema): both new tables (alert_trigger_state, alert_hook_emission_state) are per-tenant with if-prefix() guard. Migration header states the rationale against R-Co's global placement. No divergence.",
+        ":httpc.request is the existing outgoing HTTP client choice — used identically in lib/letflow/webhooks.ex:377. No new library dependency introduced. No HTTP client decision record exists; this is consistent with the existing codebase choice.",
+        "No other decision record is touched or contradicted by this change."
+      ]
+    },
+
+    "check_6_cdv_n02_emission_state_algorithm": {
+      "verdict": "SELF-CONSISTENT for stated ACs; one latent edge case filed",
+      "notes": [
+        "check_and_record_emission/4 reads alert_hook_emission_state by (hook_id, trigger_key), compares last_emitted_key. If matching: :already_emitted (skip). Otherwise: upsert new emitted_key and return :ok (deliver). This is the write-before-deliver idempotency pattern — consistent with the table's stated purpose (deduplication across Poller's own retry logic, design §3.3).",
+        "For all 14 ACs, the algorithm is correct: AC-2's DLQ re-arm test uses depth:150 → re-arm at 80 → fires at, say, 160 → emitted_key='depth:160' ≠ 'depth:150' → proceeds. AC-1, AC-6, AC-7, AC-8 all pass under this scheme.",
+        "OBSERVATION (filed as ISS-REQ201-B, type-safety): The re-arm transition in evaluate_trigger updates alert_trigger_state.is_armed=true but does NOT clear alert_hook_emission_state rows for that trigger_key. For instance_error_stuck triggers, emitted_key = '{instance_id}:{md5(error_reason)}'. After: (1) stuck → fire → delivery exhausted (row written), (2) recovery → re-arm, (3) same instance sticks again with same error_reason → same emitted_key → :already_emitted → second alert silently dropped. Fix: delete/reset emission rows on re-arm. Not blocking (no AC covers this case), but a real functional gap in production."
+      ]
+    },
+
+    "minor_doc_inconsistency": {
+      "severity": "TRIVIAL",
+      "description": "Obs.Alerts moduledoc's OQ-2 resolution paragraph says 'Letflow.Dlq.count_entries/2 was added' (arity 2), but the actual function signature is count_entries/1. No runtime impact. Not worth filing as an issue.",
+      "affected_file": "lib/letflow/obs/alerts.ex"
+    },
+
+    "issues_to_file": [
+      {
+        "temp_ref": "ISS-REQ201-A",
+        "local_file": "docs/issues/ISS-REQ201-A.yaml",
+        "title": "REQ-201 alerts.ex: deliver_with_retry calls Process.sleep on Scheduler.Poller's process, blocking message queue during HTTP retries",
+        "severity": "MINOR",
+        "tags": ["type-safety", "otp-idiom"],
+        "action_for_orch": "register_task via letflow-queue, assign permanent ISS-NNNN id, rename file"
+      },
+      {
+        "temp_ref": "ISS-REQ201-B",
+        "local_file": "docs/issues/ISS-REQ201-B.yaml",
+        "title": "REQ-201 alerts.ex: emission dedup row not cleared on trigger re-arm, silently blocks re-fire for instance_error_stuck with repeated error_reason",
+        "severity": "MINOR",
+        "tags": ["type-safety", "alerting"],
+        "action_for_orch": "register_task via letflow-queue, assign permanent ISS-NNNN id, rename file"
+      }
+    ]
+  }
+}

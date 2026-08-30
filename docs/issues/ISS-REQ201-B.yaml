@@ -1,0 +1,39 @@
+id: PENDING
+title: "REQ-201 alerts.ex: emission dedup row not cleared on trigger re-arm, silently blocks re-fire for instance_error_stuck with repeated error_reason"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ201-20260830
+discovered_at: 2026-08-30T00:00:00Z
+severity: MINOR
+tags: [type-safety, alerting]
+description: >
+  `Letflow.Obs.Alerts.check_and_record_emission/4` writes `last_emitted_key` to
+  `alert_hook_emission_state` BEFORE delivery is attempted (write-before-deliver
+  idempotency pattern). When a delivery is exhausted (all retries fail), the row
+  is already written.
+
+  For the `instance_error_stuck` trigger, `emitted_key = "{instance_id}:{md5(error_reason)}"`.
+
+  Race / recovery scenario:
+    1. Instance sticks → trigger fires → emission row written (`last_emitted_key =
+       "{id}:{hash}"`) → delivery exhausted, alert dropped.
+    2. Instance recovers → `evaluate_trigger`'s FIRED→ARMED re-arm branch updates
+       `alert_trigger_state.is_armed = true`. The `alert_hook_emission_state` row
+       for this (hook_id, trigger_key) is NOT cleared.
+    3. Instance sticks again with the same error_reason → same `emitted_key` →
+       `check_and_record_emission` finds matching row → returns `:already_emitted` →
+       delivery silently skipped.
+
+  The second stuck-cycle's alert is never delivered. All subsequent cycles with the
+  same error_reason are also silently dropped until a different error_reason is seen.
+
+  The acceptance criteria for REQ-201 do not include this recovery-cycle case
+  (AC-2 covers DLQ depth re-arm, where the emitted_key naturally differs on the
+  second crossing). Tests pass. But the latent bug will manifest in production for
+  any instance that repeatedly crashes with the same error message.
+
+  Fix: when `evaluate_trigger` executes the FIRED→ARMED re-arm transition, also
+  delete (or reset) the `alert_hook_emission_state` rows for this trigger_key across
+  all configured hooks, so the next firing cycle generates a fresh emission.
+affected_files:
+  - lib/letflow/obs/alerts.ex
+  - lib/letflow/obs/alert_hook_emission_state.ex

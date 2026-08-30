@@ -120,6 +120,8 @@ defmodule Letflow.TenantFixture do
   # `applied_versions`. Guarded against rot by this module's own oracle test (design
   # §3.3, INV-F-7) — removing that test invalidates this hard-coded list.
   @expected_tenant_tables [
+    "alert_hook_emission_state",
+    "alert_trigger_state",
     "api_tokens",
     "definition_sequence",
     "dlq_entries",

@@ -302,7 +302,7 @@ defmodule Letflow.Support.TenantFixtureTest do
       # from 25 to 26 --
       # test/support/tenant_fixture.ex's own @expected_tenant_tables list already
       # carries all six.)
-      assert length(TenantFixture.expected_tenant_tables()) == 26
+      assert length(TenantFixture.expected_tenant_tables()) == 28
       assert length(state.manifest_versions) > 0
     end
 

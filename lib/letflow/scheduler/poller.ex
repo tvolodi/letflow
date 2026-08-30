@@ -68,6 +68,7 @@ defmodule Letflow.Scheduler.Poller do
 
   alias Letflow.Engine
   alias Letflow.Metrics.Registry, as: MetricsRegistry
+  alias Letflow.Obs.Alerts
   alias Letflow.Scheduler
   alias Letflow.TenantProvisioning.Registration
 
@@ -75,11 +76,18 @@ defmodule Letflow.Scheduler.Poller do
 
   alias Letflow.Repo
 
-  @type state :: %{last_retention_run_at: DateTime.t() | nil}
+  @type state :: %{
+          last_retention_run_at: DateTime.t() | nil,
+          last_tick_started_at: DateTime.t() | nil
+        }
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(_opts) do
-    GenServer.start_link(__MODULE__, %{last_retention_run_at: nil}, name: __MODULE__)
+    GenServer.start_link(
+      __MODULE__,
+      %{last_retention_run_at: nil, last_tick_started_at: nil},
+      name: __MODULE__
+    )
   end
 
   @impl true
@@ -90,21 +98,33 @@ defmodule Letflow.Scheduler.Poller do
 
   @impl true
   def handle_info(:tick, state) do
+    now = DateTime.utc_now()
+    observed_lag_ms = compute_lag(get_last_tick_started_at(state), now)
+
     new_state =
       case fetch_tenant_schemas() do
         {:ok, schemas} ->
           Enum.each(schemas, fn schema_name -> Scheduler.poll_and_fire(schema_name) end)
           maybe_refresh_active_instances(schemas)
-          maybe_run_retention_sweep(schemas, state)
+          retention_state = maybe_run_retention_sweep(schemas, state)
+          maybe_run_alert_detection(schemas, observed_lag_ms, get_last_tick_started_at(state))
+          Map.put(retention_state, :last_tick_started_at, now)
 
         :error ->
           MetricsRegistry.mark_active_instances_refresh_failed()
-          state
+          Map.put(state, :last_tick_started_at, now)
       end
 
     schedule_next_tick()
 
     {:noreply, new_state}
+  end
+
+  defp compute_lag(nil, _now), do: nil
+  defp compute_lag(last, now), do: DateTime.diff(now, last, :millisecond)
+
+  defp get_last_tick_started_at(state) do
+    Map.get(state, :last_tick_started_at)
   end
 
   # REQ-188 design §2.4 -- runs on this same supervised process, no new
@@ -116,6 +136,23 @@ defmodule Letflow.Scheduler.Poller do
       %{state | last_retention_run_at: DateTime.utc_now()}
     else
       state
+    end
+  end
+
+  # REQ-201: alert detection piggybacking on this existing tick, no new child,
+  # no application.ex change (design §9.1). Reads alert_hooks config fresh on
+  # every call; noop if :alert_hooks is not configured or enabled: false.
+  defp maybe_run_alert_detection(schemas, observed_lag_ms, last_tick_started_at) do
+    cfg = Application.get_env(:letflow, :alert_hooks, [])
+
+    if Keyword.get(cfg, :enabled, false) do
+      Enum.each(schemas, fn schema_name ->
+        try do
+          Alerts.build_context_and_detect(schema_name, observed_lag_ms, last_tick_started_at)
+        rescue
+          _ -> :ok
+        end
+      end)
     end
   end
 

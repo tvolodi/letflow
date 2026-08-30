@@ -98,9 +98,7 @@ defmodule Letflow.Repo.Migrations.CreateServiceCatalog do
 
     # Backs the tenant-owned half of the same predicate, and the
     # FK-referencing-side convention this codebase already follows.
-    create index(:service_catalog, [:owner_tenant_id],
-             name: :idx_service_catalog_owner_tenant_id
-           )
+    create index(:service_catalog, [:owner_tenant_id], name: :idx_service_catalog_owner_tenant_id)
 
     # Backs list_for_tenant/2's keyset pagination order (design section 3.3).
     create index(:service_catalog, [:created_at, :service_id],

@@ -121,6 +121,7 @@ defmodule Letflow.TenantFixture do
   # §3.3, INV-F-7) — removing that test invalidates this hard-coded list.
   @expected_tenant_tables [
     "api_tokens",
+    "artifact_versions",
     "audit_entries",
     "definition_sequence",
     "dlq_entries",
@@ -139,6 +140,7 @@ defmodule Letflow.TenantFixture do
     "process_definitions",
     "promotion_assertion_runs",
     "promotion_reviews",
+    "repository_artifacts",
     "tasks",
     "tenant_role",
     "timers",

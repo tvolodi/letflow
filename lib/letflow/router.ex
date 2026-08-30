@@ -10,6 +10,7 @@ defmodule Letflow.Router do
   | GET    | /health             | inline 200 `{"status":"ok"}`       | none      | none      |
   | GET    | /api/tenant-config  | `Letflow.Routers.TenantConfig`     | **none**  | global `tenants` |
   | GET    | /api/mobile/tenant-config | `Letflow.Routers.MobileTenantConfig` | **none** | global `tenants` |
+  | GET    | /metrics            | `Letflow.Routers.MetricsExposition`| **none**  | none (ETS only)  |
   | *      | /api/v1/…           | `Letflow.Plugs.ApiPipeline`        | delegated | delegated |
   | *      | _                   | `Letflow.Api.Response.not_found/1` | none      | none      |
 
@@ -50,6 +51,21 @@ defmodule Letflow.Router do
   requires S6 observability subsystem probes that do not yet exist. Only the liveness
   endpoint (GET /health) is preserved here.
 
+  `GET /metrics` (REQ-194) is the real Prometheus metrics subsystem superseding
+  REQ-078's retired `Letflow.Routers.Metrics` placeholder — see
+  `Letflow.Routers.MetricsExposition`'s moduledoc for the full auth/scope/format
+  decision (global, unauthenticated, Prometheus exposition text) and the
+  tenant-safety invariant that makes an unauthenticated, global scope safe. Declared
+  before the `/api/v1` forward for the same reason `/api/tenant-config` is: there is
+  no tenant context to resolve and no session to check.
+
+  `Letflow.Plugs.HttpMetrics` (REQ-194) is mounted here, ahead of `plug(:match)`, so
+  it observes every route this router serves except `GET /metrics` itself (excluded
+  to avoid a self-observation feedback loop in the metrics it is producing). It
+  never changes response status/body/headers — only records
+  `letflow_http_requests_total`/`letflow_http_errors_total` via a
+  `register_before_send/2` callback.
+
   ## Deferred routes (not yet mounted — added by owning stage)
 
   | Letflow module (pending)            | R-Co source               | Owning stage                          |
@@ -70,6 +86,7 @@ defmodule Letflow.Router do
   use Plug.Router
 
   plug(Letflow.Plugs.Cors)
+  plug(Letflow.Plugs.HttpMetrics)
   plug(:match)
   plug(:dispatch)
 
@@ -88,6 +105,12 @@ defmodule Letflow.Router do
   # /api/v1 forward so it never enters Letflow.Plugs.AuthPipeline. See
   # Letflow.Routers.MobileTenantConfig's moduledoc.
   forward("/api/mobile/tenant-config", to: Letflow.Routers.MobileTenantConfig)
+
+  # Public and global by design (REQ-194) -- declared BEFORE the /api/v1 forward so
+  # it never enters Letflow.Plugs.AuthPipeline, same reasoning as the two routes
+  # above. See Letflow.Routers.MetricsExposition's moduledoc for the full auth/scope
+  # reasoning and the tenant-safety invariant this relies on.
+  forward("/metrics", to: Letflow.Routers.MetricsExposition)
 
   forward("/api/v1", to: Letflow.Plugs.ApiPipeline)
 

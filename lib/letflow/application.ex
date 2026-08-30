@@ -48,6 +48,13 @@ defmodule Letflow.Application do
            }
          }},
         {Registry, keys: :unique, name: Letflow.Registry},
+        # REQ-194 (design req194-prometheus-metrics.md §5): the ETS-backed metrics
+        # collector behind GET /metrics. A leaf, independently-startable component
+        # with no startup-order dependents (nothing needs to look it up during its
+        # own init/1) -- placed directly after the generic Elixir Registry above,
+        # mirroring the Wasm.ModuleVersionRegistry placement precedent below ("order
+        # between these two is not load-bearing").
+        Letflow.Metrics.Registry,
         Letflow.InstanceSupervisor,
         # ISS-0224: every SandboxPool DB operation runs under this supervisor via
         # Task.Supervisor.async_nolink/3. It MUST precede {Letflow.SandboxPool, []} --

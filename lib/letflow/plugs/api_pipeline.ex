@@ -63,7 +63,6 @@ defmodule Letflow.Plugs.ApiPipeline do
   forward("/onboarding", to: Letflow.Routers.Onboarding)
   forward("/solution-packs", to: Letflow.Routers.SolutionPacks)
   forward("/audit", to: Letflow.Routers.Audit)
-  forward("/metrics", to: Letflow.Routers.Metrics)
   forward("/dlq", to: Letflow.Routers.Dlq)
   forward("/webhooks", to: Letflow.Routers.Webhooks)
   forward("/services", to: Letflow.Routers.Services)

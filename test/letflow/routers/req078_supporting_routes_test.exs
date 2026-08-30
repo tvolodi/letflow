@@ -1,9 +1,16 @@
 defmodule Letflow.Routers.Req078SupportingRoutesTest do
   @moduledoc """
-  Tests for REQ-078 (`lib/letflow/design/req078-supporting-routes.md`) — the six
+  Tests for REQ-078 (`lib/letflow/design/req078-supporting-routes.md`) — the
   supporting route modules: audit, definition validation, tenant config, solution
-  packs (export/install), pin rebind, metrics. See `test/specs/REQ-078.md` for the
-  full acceptance-criterion-to-test-case rationale.
+  packs (export/install), pin rebind. See `test/specs/REQ-078.md` for the full
+  acceptance-criterion-to-test-case rationale.
+
+  REQ-078's sixth module, `Letflow.Routers.Metrics` (per-tenant JSON metrics), was
+  REMOVED by REQ-194 (design `req194-prometheus-metrics.md` §9), which built the real
+  Prometheus metrics subsystem this module's own moduledoc always said would
+  supersede it. That module's AC1/AC5/AC7 coverage below is retired accordingly; see
+  `test/letflow/routers/metrics_exposition_test.exs` for the replacement subsystem's
+  own tests.
 
   Uses `Letflow.DataCase` (real Postgres, per `docs/guides/test_developer_guide.md`
   DIRECTIVE T-1) and `Letflow.TenantFixture` for real provisioned tenant schemas.
@@ -48,7 +55,6 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
   @definitions_opts Letflow.Routers.Definitions.init([])
   @instances_opts Letflow.Routers.Instances.init([])
   @solution_packs_opts Letflow.Routers.SolutionPacks.init([])
-  @metrics_opts Letflow.Routers.Metrics.init([])
 
   @pack_schema_version "bpm/definition/v1"
 
@@ -401,22 +407,6 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
 
       assert [%{"status" => "installed"}] = body["installed_definitions"]
     end
-
-    test "GET /metrics -- 200, scope/generated_at/instances/tasks/definitions shape" do
-      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req078-ac1-metrics")
-
-      resp =
-        build_conn(:get, "/", tenant, [])
-        |> Letflow.Routers.Metrics.call(@metrics_opts)
-
-      assert resp.status == 200
-      body = Jason.decode!(resp.resp_body)
-      assert body["scope"] == "tenant"
-      assert is_binary(body["generated_at"])
-      assert Map.has_key?(body["instances"], "active")
-      assert Map.has_key?(body["tasks"], "pending")
-      assert Map.has_key?(body["definitions"], "draft")
-    end
   end
 
   # ═══════════════════════════════════════════════════════════════════════════
@@ -579,46 +569,14 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
   end
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # AC5 -- metrics tenant-exposure rule
+  # AC5 -- metrics tenant-exposure rule: RETIRED. REQ-194 (design
+  # req194-prometheus-metrics.md §9) removed Letflow.Routers.Metrics entirely and
+  # replaced it with Letflow.Routers.MetricsExposition (GET /metrics, global,
+  # unauthenticated, Prometheus text) -- see
+  # test/letflow/routers/metrics_exposition_test.exs for that subsystem's own
+  # tenant-safety coverage (the label-allowlist invariant, not per-tenant scoping,
+  # is the mechanism now).
   # ═══════════════════════════════════════════════════════════════════════════
-
-  describe "AC5: metrics is per-tenant-scoped" do
-    test "tenant A (1 active instance) sees no tenant B figure (7 active instances)" do
-      tenant_a = TenantFixture.provisioned_tenant!(slug_prefix: "req078-ac5-a")
-      tenant_b = TenantFixture.provisioned_tenant!(slug_prefix: "req078-ac5-b")
-
-      seed_projection!(tenant_a.schema_name, Ecto.UUID.generate(), :active)
-
-      for _ <- 1..7 do
-        seed_projection!(tenant_b.schema_name, Ecto.UUID.generate(), :active)
-      end
-
-      resp =
-        build_conn(:get, "/", tenant_a, [])
-        |> Letflow.Routers.Metrics.call(@metrics_opts)
-
-      assert resp.status == 200
-      body = Jason.decode!(resp.resp_body)
-      assert body["instances"]["active"] == 1
-
-      # No value anywhere in the body equals B's own figure (7) or a
-      # platform-wide total across both tenants (8).
-      all_values =
-        for group <- ["instances", "tasks", "definitions"],
-            {_status, value} <- body[group],
-            do: value
-
-      refute 7 in all_values
-      refute 8 in all_values
-    end
-
-    test "moduledoc states the tenant-exposure rule verbatim (PER-TENANT-SCOPED)" do
-      {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} =
-        Code.fetch_docs(Letflow.Routers.Metrics)
-
-      assert moduledoc =~ "PER-TENANT-SCOPED"
-    end
-  end
 
   # ═══════════════════════════════════════════════════════════════════════════
   # AC6 -- the validation.zig distinction is documented
@@ -636,18 +594,10 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
   end
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # AC7 -- metrics moduledoc states no subsystem is built
+  # AC7 -- metrics moduledoc states no subsystem is built: RETIRED (see AC5 above --
+  # REQ-194 built the real subsystem this moduledoc anticipated; the module it
+  # documented is gone).
   # ═══════════════════════════════════════════════════════════════════════════
-
-  describe "AC7: metrics moduledoc states no metrics subsystem is built and names S6 as owner" do
-    test "Letflow.Routers.Metrics moduledoc contains both required phrases" do
-      {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} =
-        Code.fetch_docs(Letflow.Routers.Metrics)
-
-      assert moduledoc =~ "No metrics subsystem is built here"
-      assert moduledoc =~ "S6 observability"
-    end
-  end
 
   # ═══════════════════════════════════════════════════════════════════════════
   # AC8 -- variable_schemas write path (T-17, T-18, T-19)

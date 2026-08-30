@@ -41,6 +41,18 @@ defmodule Letflow.MixProject do
       {:plug, "~> 1.15"},
       {:bandit, "~> 1.5"},
       {:jason, "~> 1.4"},
+      # REQ-194 (design req194-prometheus-metrics.md §10): promotes an ALREADY-PRESENT
+      # transitive dependency (mix.lock already resolves telemetry v1.4.2 via bandit,
+      # db_connection, ecto, ecto_sql, plug) to a direct one -- zero new bytes, zero new
+      # transitive tree, zero new license surface. Needed because lib/letflow/metrics/,
+      # lib/letflow/plugs/http_metrics.ex, engine.ex and event_store.ex now call
+      # :telemetry.execute/3 / :telemetry.attach_many/4 / :telemetry.span/3 directly for
+      # the first time -- standard Elixir hygiene pins a directly-called library rather
+      # than borrowing it off another dependency's transitive graph. Flagged for
+      # REVIEWER sign-off per this requirement's own AC3 (see the design's §10 and the
+      # CODE-DESIGN-VALIDATOR's dependency_promotion_flag_for_reviewer note on the
+      # step-02a handoff) -- REVIEWER sign-off must be recorded before this merges.
+      {:telemetry, "~> 1.4"},
       {:stream_data, "~> 0.6", only: :test},
       {:ueberauth_oidcc, "~> 0.4"},
       {:lua, "~> 1.0"},

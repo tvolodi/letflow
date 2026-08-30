@@ -7,9 +7,9 @@
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ200-20260830/step-03b-test-design-validator.json",
   "created_at": "2026-08-30T13:30:00Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-08-30T13:10:00Z",
+  "completed_at": "2026-08-30T13:13:04Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -46,7 +46,19 @@
       "CRITICAL: this handoff's top-level status field is exactly PENDING (grepped and confirmed before commit, per this project's own recurring anti-pattern on this exact mistake)."
     ]
   },
-  "result": null,
+  "result": {
+    "status": "FAIL",
+    "summary": "Ran `mix test test/letflow/routers/instances_test.exs` for real (source ~/.asdf/asdf.sh; toolchain present): 41/44 passed, 3 failed. All 3 failures are in TEST-DESIGNER's own newly-split AC2 tests: 'AC2 level 2' (line 930), 'AC2 level 3' (line 948), 'AC2 level 4' (line 966). Each fails inside the insert_raw_event!/2 helper with `assert {:ok, event} = Repo.insert(changeset, ...)` matching `{:error, changeset}` -- the changeset carries `actor_id: {\"can't be blank\", [validation: :required]}`. Root cause: lib/letflow/event_store/event.ex declares :actor_id in @required_fields (line 112) and the events table's actor_id column is `null: false` at the DB level (priv/repo/migrations/20260816120001_create_events.exs:80) -- so `actor_id: nil` can never be persisted as a real event row in this schema. TEST-DESIGNER's gap-analysis explicitly states the restructuring deliberately changed levels 2-4 to pass `actor_id: nil` 'rather than an actor_id that merely fails to resolve' -- but that input is not constructible against the real schema, so 3 of the 5 restructured tests error out during fixture setup and never reach their assertion. Confirmed by diffing against the pre-restructuring version (git show b90a69b6:test/letflow/routers/instances_test.exs): the original combined test used `actor_id: Ecto.UUID.generate()` (a real, syntactically valid but unresolvable UUID) for levels 2-4, which is why it passed (SECURITY-REVIEWER's recorded 40/40). The application logic itself (lib/letflow/instances.ex resolve_actor_display_name/3) is unaffected and correctly total for a nil actor_id -- this is purely a test-fixture defect introduced in this pass, not a regression in shipped code. Did not proceed to mutation testing since the baseline suite for the file under review does not pass -- mutation testing over a broken baseline would not produce a meaningful signal. Also checked and confirmed independently, all PASS: AC1's seed data has 4 genuinely distinct event_type values (INSTANCE_STARTED, INSTANCE_CANCELLED, INSTANCE_PINS_REBOUND, TIMER_FIRED); AC6's test explicitly refutes both old field names (created_at, sequence_number) as well as asserting presence of the new ones; no @tag :skip/:pending or 'TODO: implement test' anywhere in the file (grepped); every test uses its own TenantFixture.provisioned_tenant!/1 with a unique slug_prefix, no shared state; test/specs/REQ-200.md documents criterion/test-case/rationale for all 11 ACs correctly. These do not offset the blocking failure above -- FAIL immediately and completely per this role's own mandate.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "AC2 levels 2, 3 and 4 (test/letflow/routers/instances_test.exs lines 930, 948, 966) pass `actor_id: nil` to insert_raw_event!/2. The events table's actor_id column is NOT NULL (priv/repo/migrations/20260816120001_create_events.exs:80) and Letflow.EventStore.Event.insert_changeset/2 lists :actor_id in @required_fields -- the insert changeset fails validation and `Repo.insert` returns `{:error, changeset}`, which the helper's `assert {:ok, event} = ...` then fails on. All 3 tests error at fixture setup, before their actor_display_name assertion ever runs. Fix: use `actor_id: Ecto.UUID.generate()` (a real, non-nil, unresolvable id) for these three levels, matching what the pre-restructuring combined test did and what a genuine 'no attributable actor' event actually looks like on this schema -- never a literal `nil`.",
+        "affected_requirement": "REQ-200"
+      }
+    ],
+    "next_action": "Rework TEST-DESIGNER -- 1 BLOCKER above, rework iteration 1 of 3. Re-run `mix test test/letflow/routers/instances_test.exs` after the fix and quote a real 44/44 (or updated count) pass before re-handing to TEST-DESIGN-VALIDATOR."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

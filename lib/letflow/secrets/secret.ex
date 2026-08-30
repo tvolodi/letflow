@@ -102,7 +102,6 @@ defmodule Letflow.Secrets.Secret do
       :status,
       :algorithm,
       :wrapped_key_algorithm,
-      :ciphertext,
       :wrapped_data_key,
       :nonce,
       :wrap_nonce,
@@ -114,6 +113,13 @@ defmodule Letflow.Secrets.Secret do
       :created_at,
       :created_by
     ])
+    # `:ciphertext` is cast separately with `empty_values: []` so a 0-byte
+    # value actually reaches `changes` instead of being cast-time-filtered
+    # to "not present" (Ecto's `cast/4` treats any value matching
+    # `changeset.empty_values`, default `[""]`, as absent -- and `""`/`<<>>`
+    # are the same term in Elixir, so a 0-byte `:binary` is
+    # indistinguishable from an empty string at that filter).
+    |> cast(attrs, [:ciphertext], empty_values: [])
     |> validate_required([
       :tenant_id,
       :namespace,
@@ -123,7 +129,6 @@ defmodule Letflow.Secrets.Secret do
       :status,
       :algorithm,
       :wrapped_key_algorithm,
-      :ciphertext,
       :wrapped_data_key,
       :nonce,
       :wrap_nonce,
@@ -135,11 +140,29 @@ defmodule Letflow.Secrets.Secret do
       :created_at,
       :created_by
     ])
+    |> validate_ciphertext_present()
     |> validate_format(:namespace, @name_format)
     |> validate_format(:name, @name_format)
     |> unique_constraint([:tenant_id, :namespace, :name, :key_id],
       name: :secrets_tenant_namespace_name_key_id_index
     )
+  end
+
+  # `validate_required/2` itself independently re-checks each field against
+  # `changeset.empty_values` (default `[""]`), regardless of how the value
+  # reached `changes` -- so even after the `empty_values: []` cast above
+  # puts a literal `""` into `changes.ciphertext`, `validate_required/2`
+  # would still call it blank (`"" in [""]` is `true`). A 0-byte ciphertext
+  # is a valid ciphertext for a 0-byte plaintext (AES-256-GCM ciphertext
+  # length always equals plaintext length), not a missing value, so this
+  # checks only genuine absence (`nil`, or never cast at all) and bypasses
+  # `changeset.empty_values` entirely.
+  @spec validate_ciphertext_present(Ecto.Changeset.t()) :: Ecto.Changeset.t()
+  defp validate_ciphertext_present(changeset) do
+    case Map.get(changeset.changes, :ciphertext, changeset.data.ciphertext) do
+      nil -> add_error(changeset, :ciphertext, "can't be blank", validation: :required)
+      _binary -> changeset
+    end
   end
 
   @doc """

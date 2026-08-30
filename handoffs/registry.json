@@ -3499,15 +3499,15 @@
       "requirement_id": "REQ-194",
       "queue_task_id": 367,
       "github_issue_number": 713,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/routers/metrics.ex",
         "lib/letflow/obs/metrics.ex"
       ],
       "started_at": "2026-08-30T14:14:33Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 5 (RELEASE-VALIDATOR PASS -- independently re-verified all 10 ACs, re-traced AC6's label-allowlist invariant through happy/error/DB-unavailable paths, re-ran target suite 54/54 and mix compile --warnings-as-errors clean -- routed to DOC-UPDATER Step 6)",
+      "lock_released_at": "2026-08-30T16:06:18Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: pushing/merging PR to main, queue task 367 to be released done)",
       "note": "Prometheus metrics subsystem (OBS-02), resolving REQ-078's three recorded divergences (auth, scope, format) against a fresh finding: web/src/api/metrics.ts already expects Prometheus text from an unversioned GET /metrics, not the JSON REQ-078 shipped. Six metric families via :telemetry, route-template HTTP labels, DB-unavailable graceful degradation. New direct mix.exs dependency {:telemetry, \"~> 1.4\"} (promotion of an already-transitive dep, mix.lock diff empty) -- SECURITY-REVIEWER (step-02c) PASSED and granted its own sign-off (see handoffs/WF02-REQ194-20260830/security-review-req194.md). Label-allowlist invariant (the entire safety mechanism for the new global unauthenticated GET /metrics endpoint) independently verified line-by-line across every handle_* function in lib/letflow/metrics/registry.ex -- no metric family can ever emit a tenant_id/instance_id/definition_id/task_id/actor_id label. Poller's DB-unavailable deviation from design section 6's literal wording assessed safe (design wording was internally incoherent on that exact failure path). REVIEWER (step-02d) PASSED: dependency sign-off on {:telemetry, \"~> 1.4\"} explicitly granted (checked decision-record precedent 0014-scripting-plugin-runtime-strategy.md -- not applicable, a lighter-weight handoff sign-off is the right mechanism for a zero-risk transitive promotion); Metrics.Registry's supervision placement, ETS table ownership (GenServer-owned, callers write directly from their own processes, :telemetry.attach_many/4 detached in terminate/2), and the Poller's schedule_next_tick/0 (unconditional, same delay regardless of success/failure -- no tight failure-loop risk) all confirmed idiomatic; no scope creep found. Three MINOR non-blocking findings filed in step-02d-reviewer.json (two stale comments referencing the deleted Letflow.Routers.Metrics module, design §6 wording not yet amended to match shipped behavior, and Engine.emit_task_completed_telemetry/2's real DB read being heavier than design §3's stated overhead framing) -- none require rework. Routed to TEST-DESIGNER at step-03 for the full 10-AC gap-check (ELIXIR-DEV's existing 53 passing tests are not a rewrite target)."
     }
   ]

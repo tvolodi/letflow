@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF02-REQ191-20260830-step02d-reviewer",
+  "run_id": "WF02-REQ191-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 2d",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "lib/letflow/service_catalog.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "SECURITY-REVIEWER gate now PASSES on lib/letflow/service_catalog.ex after rework 1 fixed the sole INV-8 BLOCKER (bare-matching Repo.delete/1's result in delete/1, which could not catch a concurrent-delete race raising Ecto.StaleEntryError). Full disposition in handoffs/WF02-REQ191-20260830/security-review-req191.md (original Step 2c pass plus the rework-1 re-check addendum appended 2026-08-30) and handoffs/WF02-REQ191-20260830/step-02c-rework1-security-reviewer.json (this re-check's own record).",
+    "invariant_disposition": {
+      "INV-1": "APPLIES, PASS -- includes the deliberate global-table divergence from decision 0003 Decision B (service_catalog is unprefixed/unregistered, matching the accepted solution_pack_installs precedent), cross-tenant visibility correctness in get_for_tenant/2 and list_for_tenant/2, and the cross-schema referential guard's use of Ecto :prefix (never string-built schema names).",
+      "INV-2": "NOT-APPLICABLE -- no API response-shaping code in this diff (no route, S4/S5 not started).",
+      "INV-3": "NOT-APPLICABLE -- no plugin/script sandboxing in this diff.",
+      "INV-4": "APPLIES, PASS -- no secret material read, logged, or threaded through any return value.",
+      "INV-5": "NOT-APPLICABLE -- no lookup-by-ID HTTP endpoint exists in this diff.",
+      "INV-6": "APPLIES, satisfied by the security-review-req191.md report itself as proof artifact.",
+      "INV-7": "APPLIES, PASS -- zero Repo.query/raw-SQL string interpolation; the referential guard's fragment/2 use is fully parameterized.",
+      "INV-8": "APPLIES, PASS after rework 1 -- delete/1's delete_entry/1 helper now case-matches Repo.delete/1's real {:ok,_}|{:error,changeset} result and explicitly rescues Ecto.StaleEntryError, both mapped to {:error, :not_found} consistent with get_for_tenant/2's convention. Verified via git diff 8b9edc2 d06cf21 -- lib/letflow/service_catalog.ex: exactly 16 insertions/2 deletions, confined to delete/1's success branch and the new private helper; every other function in the file confirmed byte-for-byte unchanged from the already-PASSed version."
+    },
+    "flagged_for_reviewer_sign_off": "The moduledoc's own 'GLOBAL table -- divergence from decision 0003 Decision B' section requires REVIEWER sign-off per this project's rule that a stage requirement diverging from an already-decided decision record must get explicit REVIEWER approval rather than quietly proceeding. SECURITY-REVIEWER's own review found the divergence structurally justified (see security-review-req191.md's INV-1 section) but sign-off authority rests with REVIEWER, not SECURITY-REVIEWER.",
+    "not_yet_covered": "No test file exists yet for ServiceCatalog -- TEST-DESIGNER has not run for REQ-191. This is expected at Step 2d; TEST-DESIGNER follows REVIEWER per the WF-02 pipeline order."
+  },
+  "task": {
+    "description": "Run the REVIEWER gate (OTP idiom, supervision integrity, scope creep, decision-record consistency) on lib/letflow/service_catalog.ex, priv/repo/migrations/20260830000001_create_service_catalog.exs, lib/letflow/service_catalog/entry.ex, and the new Letflow.TenantProvisioning accessor. In particular, rule on the decision-0003 Decision B divergence (service_catalog as an unprefixed global table) that this module's own moduledoc flags for REVIEWER sign-off.",
+    "acceptance_criteria": [
+      "REVIEWER either signs off on the decision-0003 divergence or routes back with a specific objection",
+      "no OTP-idiom or supervision-integrity defect found, or routed back with specifics",
+      "no scope creep beyond REQ-191's declared boundary (design §0) found, or routed back with specifics",
+      "if REVIEWER passes, forward to TEST-DESIGNER for Step 3 (this module currently has no tests)"
+    ]
+  },
+  "result": null
+}

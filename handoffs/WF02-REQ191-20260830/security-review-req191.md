@@ -167,3 +167,46 @@ concurrent delete as a benign outcome rather than a changeset error, catch
 `Ecto.StaleEntryError` explicitly and translate it to `{:error, :not_found}`, consistent
 with `get_for_tenant/2`'s and `update_scope/2`'s own not-found handling) instead of
 asserting `{:ok, _deleted} = Repo.delete(entry)`.
+
+## Re-check, rework 1 (2026-08-30) — Step 2c re-check
+
+**Verdict: PASS.**
+
+Diff re-verified directly (`git diff 8b9edc2 d06cf21 -- lib/letflow/service_catalog.ex`):
+the fix touches only `delete/1`'s success branch (now calls a new private
+`delete_entry/1` in place of the bare `{:ok, _deleted} = Repo.delete(entry); :ok`) and
+adds `delete_entry/1` itself:
+
+```elixir
+defp delete_entry(entry) do
+  case Repo.delete(entry) do
+    {:ok, _deleted} -> :ok
+    {:error, _changeset} -> {:error, :not_found}
+  end
+rescue
+  Ecto.StaleEntryError -> {:error, :not_found}
+end
+```
+
+This resolves the INV-8 BLOCKER: `Repo.delete/1`'s real `{:ok, _} | {:error, changeset}`
+return is now handled by an actual `case` (no bare/irrefutable match survives), and the
+raised-not-returned failure mode (`Ecto.StaleEntryError`, since `Entry` has no
+optimistic-lock field and `Repo.delete/1` matches on primary key alone) is caught by an
+explicit `rescue` clause. Both the changeset-error branch and the rescued-exception
+branch map to `{:error, :not_found}`, consistent with `get_for_tenant/2`'s and
+`update_scope/2`'s own not-found convention. `delete/1`'s `@spec` already declared
+`{:error, :not_found}` as a valid return (unchanged), so no `@spec`/`@doc` edit was
+needed and none was made.
+
+Confirmed nothing else changed: the diff is exactly 16 insertions / 2 deletions, all
+inside `delete/1`'s success branch and the new `delete_entry/1` helper.
+`get_for_tenant/2`, `list_for_tenant/2`, `register/1`, `update_scope/2`,
+`referencing_active_definitions/2`, `query_referencing_definitions/2`, and the `Lookup`
+implementation are byte-for-byte unchanged from the version already verified correct
+above (INV-1 including cross-tenant visibility, the global-table divergence, the
+cross-schema referential guard; INV-4; INV-7).
+
+**Overall verdict: PASS.** All applicable invariants (INV-1, INV-4, INV-6, INV-7, INV-8)
+now pass; INV-2/INV-3/INV-5 remain not-applicable. Forwarded to REVIEWER (Step 2d) for
+the idiom/scope-creep gate and the already-flagged decision-0003 global-table divergence
+sign-off.

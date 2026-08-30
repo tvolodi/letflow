@@ -3538,7 +3538,7 @@
       "started_at": "2026-08-30T19:48:48Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 4 (TEST-RUNNER) ran the full suite via scripts/test_parallel.sh (real Postgres, real asdf toolchain): 2822 tests, 6 properties, 2 failures (2826/2828 passed). Both failures are Mix.Tasks.Letflow.CheckToolchainTest's rust-pin tests, a documented rustc-absent environment-baseline flake (rustc not on PATH in this sandbox) -- same flake class RELEASE-VALIDATOR already documented on REQ-195. Failing file is untouched by REQ-196's diff. Routed to RELEASE-VALIDATOR (step-05).",
+      "last_known_step": "Step 5 (RELEASE-VALIDATOR) independently re-ran scripts/test_parallel.sh and reproduced the identical combined result (2822 tests, 6 properties, 2 failures, 2826/2828 passed), independently re-confirmed the 2 failures are the documented rustc-absent CheckToolchainTest baseline gap (unrelated to this diff, via a fresh `which rustc` and git diff on the failing test file), independently re-verified all 9 REQ-196 acceptance criteria against the real shipped lib/letflow/audit.ex and lib/letflow/routers/audit.ex, and independently re-grepped step-04-test-runner.json to confirm its status field genuinely reads COMPLETED. PASS -- routed to DOC-UPDATER (step-06).",
       "note": "Route half of the audit split atop REQ-195's audit_entries store. Repoints GET /api/v1/audit's handler from EventStore.read_global/1 to the new store, preserving response envelope and :AuditRead permission. Retires audit.ex's own documented caveats (constant resource_type, always-null before/after state). No schema/authorization.ex/web/ changes."
     }
   ]

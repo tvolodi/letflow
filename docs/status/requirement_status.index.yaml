@@ -800,10 +800,23 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 2
+    entries: 3
     note: >
+      Incremented to 3 by ORCH's Step Final rebase composition for
+      WF03-ISS0378-20260830, composing this branch's own SCOPE-CHANGE
+      started-event append against origin/main's concurrently-appended
+      REQ-183 resumed-started event -- `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 3 on-disk entries after
+      composition, entries chronologically ordered by `at:` (ISS-0378
+      06:51:14Z before REQ-183's 07:24:20Z), neither dropped nor reordered.
+
       Incremented to 2 by ORCH's REQ-183 resumed started-event append
       (WF02-REQ183-20260830 resume) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 2 on-disk entries, no
+      rebase conflict on this file at the time it was written.
+
+      Incremented to 2 by ORCH's SCOPE-CHANGE started-event append (Step 00,
+      WF03-ISS0378-20260830) -- `grep -c "^  - req:"
       docs/status/requirement_status.v7.yaml` = 2 on-disk entries, no
       rebase conflict on this file at the time it was written.
 

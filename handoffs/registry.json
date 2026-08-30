@@ -3395,6 +3395,21 @@
       "released_lock": true,
       "last_known_step": "Step Final (ORCH: merged PR #736 to main, queue task 365 released done)",
       "note": "Route layer atop REQ-191's shipped service catalog core -- GET /services, GET/POST/PATCH/DELETE /admin/services, SVC-04-gated. Added Letflow.ServiceCatalog.list_all/1 (REVIEWER-signed-off scope adjustment) to resolve an INV-RT-1 conflict discovered mid-implementation. 2 design rework rounds, 1 test-design rework round (mutation-testing caught a fixture-sizing bug). PR #736 merged."
+    },
+    {
+      "run_id": "WF03-ISS0378-20260830",
+      "requirement_id": null,
+      "queue_task_id": 378,
+      "github_issue_number": 734,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "test/letflow/scheduler/poller_test.exs"
+      ],
+      "started_at": "2026-08-30T06:51:14Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
+      "note": "REQ-186's own AC7 test (poller_test.exs:340) hardcodes a zero-diff assertion against lib/letflow/application.ex as a repo-wide invariant, breaking on any legitimate future change to that file (first hit by REQ-190's own approved :logger filter registration). Not a REQ-190 regression -- a pre-existing test-design defect from commit 77637268."
     }
   ]
 }

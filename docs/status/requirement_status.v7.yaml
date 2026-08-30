@@ -194,6 +194,21 @@ history:
       Step Final before this branch rebased -- no entry in volume 6 was
       moved, edited or deleted, this REQ-192 done-event simply never
       landed there and lands here instead.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-08-30T06:51:14Z"
+    note: >
+      WF03-ISS0378-20260830 started (queue task 378, GH#734, stage S6).
+      ISS-0378: REQ-186's own poller_test.exs:340 (AC7) hardcodes a
+      zero-diff assertion against lib/letflow/application.ex as if it were
+      a repo-wide invariant, when it's really just an artifact of when
+      REQ-186 happened to be written -- trips on any legitimate future
+      application.ex change (first hit by REQ-190's own already-approved
+      :logger primary filter registration). git blame confirms the test
+      originates from commit 77637268 (REQ-186, already on main), not a
+      REQ-190 regression. Fix: scope/remove the zero-diff assertion to
+      check only what REQ-186 actually needs.
   - req: REQ-183
     event: started
     agent: ORCH

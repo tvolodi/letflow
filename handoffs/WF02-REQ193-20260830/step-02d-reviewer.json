@@ -7,6 +7,7 @@
   "to_agent": "TEST-DESIGNER",
   "file": "handoffs/WF02-REQ193-20260830/step-02d-reviewer.json",
   "created_at": "2026-08-30T06:00:00Z",
+  "status": "COMPLETED",
   "context": {
     "branch": "feature/WF02-REQ193-20260830",
     "requirement_ids": ["REQ-193"],

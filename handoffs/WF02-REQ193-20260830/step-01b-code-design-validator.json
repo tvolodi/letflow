@@ -13,78 +13,82 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
-    "requirement_ids": ["REQ-193"],
+    "requirement_ids": [
+      "REQ-193"
+    ],
     "branch_name": "feature/WF02-REQ193-20260830",
     "design_artefact": "lib/letflow/design/req193-structured-logging.md",
-    "producer_handoff": "handoffs/WF02-REQ193-20260830/step-01-code-designer.json"
+    "producer_handoff": "handoffs/WF02-REQ193-20260830/step-01-code-designer.json",
+    "gate_checks": [
+      {
+        "id": "GC-a",
+        "description": "Every acceptance criterion maps to a concrete design element; no TBD deferrals on any AC",
+        "verdict": "PASS",
+        "evidence": "Section 7 provides a complete AC-to-design-element mapping table. Section 7.1 maps all OBS-01 criteria. Section 7.2 maps XC-01 criteria. Open questions OQ-1 through OQ-5 are explicitly scoped OUT of REQ-193 (deferred to future requirements or resolved with a stated answer) — none leaves an acceptance criterion unaddressed. No 'TBD' language found."
+      },
+      {
+        "id": "GC-b",
+        "description": "Public function signatures fully specified with @spec (format/2, redact_sensitive/1, with_trace/1)",
+        "verdict": "PASS",
+        "evidence": "§1.2: @spec format(log_event :: %{level: :debug|:info|:warning|:error, msg: term(), meta: map()}, config :: map()) :: iodata(). §2: @spec redact_sensitive(map()) :: map(). §3: @spec with_trace((() -> result)) :: result when result: var. All three public functions have @spec with input and output types."
+      },
+      {
+        "id": "GC-c",
+        "description": "Error handling shape stated for each function",
+        "verdict": "PASS",
+        "evidence": "format/2: §1.2 specifies a fallback JSON line on Jason.encode!/1 raise — the only valid error-handling mechanism for an OTP :logger_formatter callback (which must return iodata(), not {:error,_}). redact_sensitive/1: pure map transformation with no failure mode — no error return needed. with_trace/1: §3 step 6 explicitly states 'propagate exceptions normally — do not catch them', achieved via try/after. All error paths are stated and architecturally correct for each function's role."
+      },
+      {
+        "id": "GC-d",
+        "description": "Cross-module dependencies listed (Jason, Letflow.Api.Context.generate_trace_id/0)",
+        "verdict": "PASS",
+        "evidence": "Section 0 (Cross-module dependency map) lists: Jason (JSON encoding), Letflow.Api.Context.generate_trace_id/0 (UUID v4 for with_trace/1), Logger stdlib (metadata access). Also clarifies that assign_trace_id/1 is NOT called from Letflow.Obs.Logger — the interaction is one-way (it writes Logger.metadata; the formatter reads it)."
+      },
+      {
+        "id": "GC-e",
+        "description": "No implementation code (no .ex/.exs function bodies — signatures and type shapes only)",
+        "verdict": "PASS",
+        "evidence": "All code blocks in the design contain only: @spec declarations, @behaviour declarations, config key/value entries (for the config.exs/runtime.exs additions), and JSON field tables. No def/defp function bodies are present anywhere in the document."
+      },
+      {
+        "id": "GC-f",
+        "description": "Config changes fully described (config.exs entries, runtime.exs LOG_LEVEL env var, startup error mechanism)",
+        "verdict": "PASS",
+        "evidence": "§4.1: two config :logger entries for config.exs (backends: [] and :default_handler formatter). §4.2: runtime.exs LOG_LEVEL validation with full mapping table (debug/info/warn/warning/error/absent/invalid) and explicit raise mechanism for invalid values, following the existing LETFLOW_SECRETS_MASTER_KEY pattern. Fatal startup error on unrecognised value is specified."
+      },
+      {
+        "id": "GC-g",
+        "description": "Reserved field enforcement specified (how a caller supplying timestamp/level/trace_id/component/message is handled)",
+        "verdict": "PASS",
+        "evidence": "§1.4 specifies three-step enforcement: (1) real computed value is used — caller's value does NOT shadow it; (2) a :warning-level log is emitted naming the offending key, with anti-re-entry guard via formatter_violation: true metadata check; (3) the offending key/value pair is dropped from additional-metadata. Both atom and string forms of the five reserved keys are listed."
+      },
+      {
+        "id": "GC-h",
+        "description": "Sensitive-value redaction key list present and matches R-Co's exact list from the requirement",
+        "verdict": "PASS",
+        "evidence": "§2.1 lists all 14 always-redacted keys (atom + string forms): authorization, password, password_hash, token, access_token, refresh_token, bootstrap_token, api_token, secret, client_secret, credential, credentials, set-cookie, cookie. §2.2 lists all 4 suffixes: _token, _secret, _password, _credential. This matches the requirement's exact list verbatim (from task.description in step-01-code-designer.json)."
+      },
+      {
+        "id": "GC-i",
+        "description": "with_trace/1 lifecycle fully specified (generate, set metadata, call function, cleanup, return value)",
+        "verdict": "PASS",
+        "evidence": "§3 specifies all 6 lifecycle steps: (1) generate trace id via generate_trace_id/0; (2) save existing :trace_id from Logger.metadata(); (3) put new trace id into Logger metadata; (4) call the zero-arity function; (5) after block — conditional restore (if prior value existed) or Logger.delete_metadata([:trace_id]) (if absent); (6) return function's return value, propagating exceptions. 'Even on raise/throw' achieved via try/after — stated explicitly."
+      },
+      {
+        "id": "GC-j",
+        "description": "DB tables/columns: none (no migration for this requirement)",
+        "verdict": "PASS",
+        "evidence": "§0 explicitly states: 'No DB tables, migrations, or Ecto schemas.' §6.3 confirms: 'This requirement has no Ecto schemas, migrations, or Repo calls.' AC mapping table in §7 maps this criterion to '§0: no migration'."
+      }
+    ]
   },
-  "gate_checks": [
-    {
-      "id": "GC-a",
-      "description": "Every acceptance criterion maps to a concrete design element; no TBD deferrals on any AC",
-      "verdict": "PASS",
-      "evidence": "Section 7 provides a complete AC-to-design-element mapping table. Section 7.1 maps all OBS-01 criteria. Section 7.2 maps XC-01 criteria. Open questions OQ-1 through OQ-5 are explicitly scoped OUT of REQ-193 (deferred to future requirements or resolved with a stated answer) — none leaves an acceptance criterion unaddressed. No 'TBD' language found."
-    },
-    {
-      "id": "GC-b",
-      "description": "Public function signatures fully specified with @spec (format/2, redact_sensitive/1, with_trace/1)",
-      "verdict": "PASS",
-      "evidence": "§1.2: @spec format(log_event :: %{level: :debug|:info|:warning|:error, msg: term(), meta: map()}, config :: map()) :: iodata(). §2: @spec redact_sensitive(map()) :: map(). §3: @spec with_trace((() -> result)) :: result when result: var. All three public functions have @spec with input and output types."
-    },
-    {
-      "id": "GC-c",
-      "description": "Error handling shape stated for each function",
-      "verdict": "PASS",
-      "evidence": "format/2: §1.2 specifies a fallback JSON line on Jason.encode!/1 raise — the only valid error-handling mechanism for an OTP :logger_formatter callback (which must return iodata(), not {:error,_}). redact_sensitive/1: pure map transformation with no failure mode — no error return needed. with_trace/1: §3 step 6 explicitly states 'propagate exceptions normally — do not catch them', achieved via try/after. All error paths are stated and architecturally correct for each function's role."
-    },
-    {
-      "id": "GC-d",
-      "description": "Cross-module dependencies listed (Jason, Letflow.Api.Context.generate_trace_id/0)",
-      "verdict": "PASS",
-      "evidence": "Section 0 (Cross-module dependency map) lists: Jason (JSON encoding), Letflow.Api.Context.generate_trace_id/0 (UUID v4 for with_trace/1), Logger stdlib (metadata access). Also clarifies that assign_trace_id/1 is NOT called from Letflow.Obs.Logger — the interaction is one-way (it writes Logger.metadata; the formatter reads it)."
-    },
-    {
-      "id": "GC-e",
-      "description": "No implementation code (no .ex/.exs function bodies — signatures and type shapes only)",
-      "verdict": "PASS",
-      "evidence": "All code blocks in the design contain only: @spec declarations, @behaviour declarations, config key/value entries (for the config.exs/runtime.exs additions), and JSON field tables. No def/defp function bodies are present anywhere in the document."
-    },
-    {
-      "id": "GC-f",
-      "description": "Config changes fully described (config.exs entries, runtime.exs LOG_LEVEL env var, startup error mechanism)",
-      "verdict": "PASS",
-      "evidence": "§4.1: two config :logger entries for config.exs (backends: [] and :default_handler formatter). §4.2: runtime.exs LOG_LEVEL validation with full mapping table (debug/info/warn/warning/error/absent/invalid) and explicit raise mechanism for invalid values, following the existing LETFLOW_SECRETS_MASTER_KEY pattern. Fatal startup error on unrecognised value is specified."
-    },
-    {
-      "id": "GC-g",
-      "description": "Reserved field enforcement specified (how a caller supplying timestamp/level/trace_id/component/message is handled)",
-      "verdict": "PASS",
-      "evidence": "§1.4 specifies three-step enforcement: (1) real computed value is used — caller's value does NOT shadow it; (2) a :warning-level log is emitted naming the offending key, with anti-re-entry guard via formatter_violation: true metadata check; (3) the offending key/value pair is dropped from additional-metadata. Both atom and string forms of the five reserved keys are listed."
-    },
-    {
-      "id": "GC-h",
-      "description": "Sensitive-value redaction key list present and matches R-Co's exact list from the requirement",
-      "verdict": "PASS",
-      "evidence": "§2.1 lists all 14 always-redacted keys (atom + string forms): authorization, password, password_hash, token, access_token, refresh_token, bootstrap_token, api_token, secret, client_secret, credential, credentials, set-cookie, cookie. §2.2 lists all 4 suffixes: _token, _secret, _password, _credential. This matches the requirement's exact list verbatim (from task.description in step-01-code-designer.json)."
-    },
-    {
-      "id": "GC-i",
-      "description": "with_trace/1 lifecycle fully specified (generate, set metadata, call function, cleanup, return value)",
-      "verdict": "PASS",
-      "evidence": "§3 specifies all 6 lifecycle steps: (1) generate trace id via generate_trace_id/0; (2) save existing :trace_id from Logger.metadata(); (3) put new trace id into Logger metadata; (4) call the zero-arity function; (5) after block — conditional restore (if prior value existed) or Logger.delete_metadata([:trace_id]) (if absent); (6) return function's return value, propagating exceptions. 'Even on raise/throw' achieved via try/after — stated explicitly."
-    },
-    {
-      "id": "GC-j",
-      "description": "DB tables/columns: none (no migration for this requirement)",
-      "verdict": "PASS",
-      "evidence": "§0 explicitly states: 'No DB tables, migrations, or Ecto schemas.' §6.3 confirms: 'This requirement has no Ecto schemas, migrations, or Repo calls.' AC mapping table in §7 maps this criterion to '§0: no migration'."
-    }
-  ],
   "result": {
     "status": "PASS",
     "summary": "All 10 gate checks pass. Design at lib/letflow/design/req193-structured-logging.md fully covers all 8 acceptance criteria for REQ-193. Public @specs present for format/2, redact_sensitive/1, and with_trace/1. Cross-module dependencies listed in §0. Config changes fully specified in §4.1 and §4.2 including fatal startup validation. Reserved-field enforcement described in §1.4 with anti-re-entry guard. Redaction key list in §2.1/§2.2 matches R-Co's exact list verbatim. with_trace/1 lifecycle complete in §3. No implementation code found. No DB migration (correct). Open questions OQ-1 through OQ-5 are all explicitly scoped to future requirements or resolved — none leaves an AC unaddressed.",
     "issues": [],
-    "artifacts_reviewed": ["lib/letflow/design/req193-structured-logging.md"],
+    "artifacts_reviewed": [
+      "lib/letflow/design/req193-structured-logging.md"
+    ],
     "next_action": "Route to ELIXIR-DEV (Step 2a)"
   },
   "rework_count": 0,

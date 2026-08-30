@@ -1,5 +1,26 @@
 import Config
 
+# REQ-190 (docs/migration/decisions/0016-secrets-storage-backend.md §B):
+# config/runtime.exs's LETFLOW_SECRETS_MASTER_KEY startup check runs in
+# EVERY environment, including test/CI -- it must never be weakened to make
+# tests pass. config/test.exs runs (as part of config/config.exs's
+# import_config chain) before config/runtime.exs at boot, so System.put_env/2
+# here is what supplies a real, valid, test-only 64-hex-char value ahead of
+# that check -- one of the two mechanisms the design doc leaves open
+# (config/test.exs vs. a System.put_env/2 call in test/test_helper.exs);
+# config/test.exs is chosen since it runs strictly before runtime.exs is
+# evaluated, which test_helper.exs (loaded only after the application has
+# already started) cannot guarantee. Only set if not already present in the
+# real environment, so a host that deliberately exports its own value (e.g.
+# CI secrets) is not silently overridden. Non-all-zeros, non-all-f's (an
+# arbitrary real 32-byte value, hex-encoded) so it also passes the
+# literal-value rejection check.
+System.get_env("LETFLOW_SECRETS_MASTER_KEY") ||
+  System.put_env(
+    "LETFLOW_SECRETS_MASTER_KEY",
+    "3f1c9a2e7b4d6081f5a3c8e2b7d4f6091a3c5e7b9d2f4a6c8e1b3d5f7a9c2e4b"
+  )
+
 # ISS-0015 (GH#71): don't start the HTTP listener under test at all -- no
 # test drives Letflow.Router over a real socket (it's exercised via
 # Plug.Test conn structs throughout this suite), so there is nothing to

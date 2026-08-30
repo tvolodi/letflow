@@ -25,20 +25,31 @@ defmodule Letflow.Webhooks do
   `Letflow.TenantProvisioning.tenant_id_for_schema_name/1`, the same
   "derived, never accepted" discipline `Letflow.Dlq.enqueue/2` establishes.
 
-  ## Secret handling (design §2.2)
+  ## Secret handling (REQ-190, design §5.4 — supersedes the original
+  ## SHA-256-hash-only design §2.2)
 
-  `create/2` generates (or accepts a caller-supplied) plaintext secret,
-  hashes it via SHA-256, and stores only the hash. The plaintext is
-  returned exactly once, as `hmac_secret_once` in `create/2`'s own return
-  value — no other function in this module ever returns it again, and no
-  `Subscription` struct field carries it (structurally impossible, see
-  `Letflow.Webhooks.Subscription`'s own moduledoc).
+  `create/2` generates (or accepts a caller-supplied) plaintext secret and
+  writes it into the global `secrets` table via `Letflow.Secrets.put/2`
+  (namespace `"webhook"`, purpose `:webhook_hmac`) instead of hashing it —
+  a one-way hash cannot supply the key material HMAC-SHA256 signing needs
+  (`docs/migration/decisions/0016-secrets-storage-backend.md` §F). The
+  `Subscription` row stores only `secret_ref`/`secret_key_id` (the
+  reference, not the plaintext). The plaintext is still returned exactly
+  once, as `hmac_secret_once` in `create/2`'s own return value — no other
+  function in this module ever returns it again, and no `Subscription`
+  struct field carries it (structurally impossible, see
+  `Letflow.Webhooks.Subscription`'s own moduledoc). Both the `secrets` insert
+  (global, no prefix) and the `webhook_subscriptions` insert (tenant-scoped,
+  `prefix: prefix`) happen inside one `Ecto.Multi`/transaction, so a
+  `Subscription` row is never left referencing a `secret_ref` that failed to
+  write.
   """
 
   import Ecto.Query
 
   alias Ecto.Multi
   alias Letflow.Repo
+  alias Letflow.Secrets
   alias Letflow.TenantProvisioning
   alias Letflow.Webhooks.Subscription
 
@@ -65,40 +76,70 @@ defmodule Letflow.Webhooks do
 
   Resolves the plaintext secret: if `attrs[:secret]` is a non-nil, non-empty
   string, uses it verbatim (a caller may bring their own secret); otherwise
-  generates one via `:crypto.strong_rand_bytes/1` + `Base.encode16/2`. Hashes
-  the plaintext via SHA-256 (`:crypto.hash/2` + `Base.encode16/2`) before it
-  ever reaches `insert_changeset/2` — only the hash is persisted.
+  generates one via `:crypto.strong_rand_bytes/1` + `Base.encode16/2`.
+  Generates the subscription's own id explicitly (`Ecto.UUID.generate/0`,
+  REQ-190 design §5.4 step 2) so it can be used as `Letflow.Secrets.put/2`'s
+  `name` before the `Subscription` row itself exists, writes the plaintext
+  into the global `secrets` table (namespace `"webhook"`, purpose
+  `:webhook_hmac`), then inserts the `Subscription` row referencing the
+  returned `secret_ref`/`secret_key_id` — both writes in one
+  `Ecto.Multi`/transaction, so a `Subscription` row is never left
+  referencing a `secret_ref` that failed to write.
 
   On success, returns `{:ok, %{subscription: subscription, hmac_secret_once:
   plaintext}}` — the plaintext appears **only** in this one return value,
-  this one time.
+  this one time. On `Letflow.Secrets.put/2` failure, returns
+  `{:error, {:secret_write_failed, reason}}` and no `Subscription` row is
+  inserted.
   """
   @spec create(create_attrs(), opts()) ::
           {:ok, %{subscription: Subscription.t(), hmac_secret_once: String.t()}}
+          | {:error, {:secret_write_failed, term()}}
           | {:error, Ecto.Changeset.t()}
   def create(attrs, opts) when is_map(attrs) and is_list(opts) do
     prefix = Keyword.fetch!(opts, :prefix)
 
     with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
       plaintext = resolve_secret_plaintext(attrs)
-      secret_hash = hash_webhook_secret(plaintext)
+      subscription_id = Ecto.UUID.generate()
+      created_at = current_timestamp()
 
-      insert_attrs = %{
-        tenant_id: tenant_id,
-        target_url: Map.get(attrs, :target_url),
-        secret_hash: secret_hash,
-        description: Map.get(attrs, :description),
-        event_types: Map.get(attrs, :event_types) || []
-      }
+      Multi.new()
+      |> Multi.run(:secret, fn _repo, _changes ->
+        Secrets.put(%{
+          tenant_id: tenant_id,
+          namespace: "webhook",
+          name: subscription_id,
+          purpose: :webhook_hmac,
+          plaintext: plaintext,
+          created_by: "system:webhooks.create"
+        })
+      end)
+      |> Multi.run(:subscription, fn repo, %{secret: secret} ->
+        insert_attrs = %{
+          id: subscription_id,
+          tenant_id: tenant_id,
+          target_url: Map.get(attrs, :target_url),
+          secret_ref: secret.reference,
+          secret_key_id: secret.key_id,
+          description: Map.get(attrs, :description),
+          event_types: Map.get(attrs, :event_types) || [],
+          created_at: created_at
+        }
 
-      %Subscription{}
-      |> Subscription.insert_changeset(Map.put(insert_attrs, :created_at, current_timestamp()))
-      |> Repo.insert(prefix: prefix)
+        %Subscription{}
+        |> Subscription.insert_changeset(insert_attrs)
+        |> repo.insert(prefix: prefix)
+      end)
+      |> Repo.transaction()
       |> case do
-        {:ok, subscription} ->
+        {:ok, %{subscription: subscription}} ->
           {:ok, %{subscription: subscription, hmac_secret_once: plaintext}}
 
-        {:error, changeset} ->
+        {:error, :secret, reason, _changes} ->
+          {:error, {:secret_write_failed, reason}}
+
+        {:error, :subscription, %Ecto.Changeset{} = changeset, _changes} ->
           {:error, changeset}
       end
     end
@@ -112,10 +153,6 @@ defmodule Letflow.Webhooks do
 
   defp generate_webhook_secret_plaintext do
     @webhook_secret_prefix <> (:crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower))
-  end
-
-  defp hash_webhook_secret(plaintext) do
-    :crypto.hash(:sha256, plaintext) |> Base.encode16(case: :lower)
   end
 
   # ===========================================================================

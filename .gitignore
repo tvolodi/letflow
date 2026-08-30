@@ -32,6 +32,11 @@ letflow-*.tar
 # so `deploy/.env` has something to be copied from) — same convention as
 # the sibling letflow-queue repo's deploy/.env.example.
 !deploy/.env.example
+# ...and the repo-root env template (REQ-190 — documents
+# LETFLOW_SECRETS_MASTER_KEY's name/format with no working value, same
+# tracked-template convention as deploy/.env.example and web/.env.example
+# below).
+!/.env.example
 
 # Scratch space for one-off scripts, debug dumps, logs — see
 # docs/agents/instructions/core-directives.md's file-placement rules

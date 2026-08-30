@@ -459,7 +459,10 @@ defmodule Letflow.TenantProvisioning do
      "20260829000001_create_dlq_entries.exs"},
     {20_260_829_010_001, Letflow.Repo.Migrations.CreateWebhookSubscriptions,
      "20260829010001_create_webhook_subscriptions.exs"},
-    {20_260_829_020_001, Letflow.Repo.Migrations.CreateTimers, "20260829020001_create_timers.exs"}
+    {20_260_829_020_001, Letflow.Repo.Migrations.CreateTimers,
+     "20260829020001_create_timers.exs"},
+    {20_260_830_000_002, Letflow.Repo.Migrations.AddSecretRefToWebhookSubscriptions,
+     "20260830000002_add_secret_ref_to_webhook_subscriptions.exs"}
   ]
 
   @doc """

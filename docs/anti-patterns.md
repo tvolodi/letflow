@@ -1896,3 +1896,41 @@ a framing unit. If two failed fix attempts targeting a plausible-sounding theory
 close race") produce *zero change* in the failure's behavior or timing, that itself is evidence to
 stop iterating on that theory and get a byte-level trace of what is actually on the wire before
 trying a third variant of the same fix.
+
+## handoffs/registry.json silently reformatted wholesale by a Windows/PowerShell-tooled session, causing every subsequent rebase on it to conflict on the entire file
+
+**What happened (REQ-184's Step Final rebase, 2026-08-30).** `handoffs/registry.json`'s own header
+comment says "Append-only ... never shrink, never regenerate wholesale." Despite that, at some point
+between the REQ-198 registry update and this rebase, the file was re-serialized wholesale in a
+distinctive PowerShell `ConvertTo-Json`-style format -- UTF-8 BOM, 4-space indent, a double space
+after every `:`, `'`/`<`/`>` escapes for characters a Bash/Elixir-side JSON writer
+would emit literally or with standard `\uXXXX` single-codepoint escapes. This happened independently
+on *both* sides of the rebase (this branch's own tip, and origin/main's REQ-193 commit) from the
+same clean, 2-space, no-BOM merge-base -- meaning at least one, likely both, of the ORCH sessions
+doing Step 00/Step Final registry bookkeeping ran on a Windows host and used a PowerShell-based
+JSON write path (`ConvertTo-Json | Out-File`) rather than an in-place text append or a JSON library
+call that preserves the existing serialization style. The practical result: `git rebase` saw the
+*entire* file as one giant conflicting hunk on every single commit in the branch that touched
+`registry.json` (5 separate conflicts across a 12-commit rebase), even though the actual *content*
+divergence on each side was exactly one new run entry with no data loss (independently verified: a
+diff of all pre-existing `run_id` entries between the two reformatted versions showed zero content
+mismatches -- only the new entries and the byte-level serialization differed).
+
+**Correct alternative.** Detect this class early: if a rebase conflict on `registry.json` (or
+`requirement_status.*.yaml`) produces a conflict spanning the *entire file* rather than a small hunk
+near the append point, do not resolve it by picking one side's raw text -- parse both sides as JSON
+(`python3 -c "json.loads(open(...).read().decode('utf-8-sig'))"`, handling the BOM), diff the
+`run_id`/entry sets to confirm no content was actually lost on either side (it usually isn't; the
+divergence is almost always exactly the two sides' own new entries), then re-serialize once with a
+single clean, canonical format (2-space indent, no BOM, `ensure_ascii=False` to keep the `§`
+characters literal rather than escaped) containing the union of both sides' entries. Do this once at
+the rebase's first conflicting commit; every subsequent commit's registry.json conflict can then be
+resolved by simply keeping the already-fixed file (`git checkout --ours handoffs/registry.json` mid
+non-interactive rebase, since HEAD at that point is the already-composed-and-fixed prior commit) --
+each later commit's own registry.json diff is just re-deriving the same single-entry update already
+present. The deeper fix this doesn't address: whichever agent role or host environment last ran a
+PowerShell-style `ConvertTo-Json` write against this file should be made to append via a
+format-preserving method instead (a plain text-mode append of one new array element before the
+closing bracket, or a JSON write that copies the source's existing `indent`/`separators`/`ensure_ascii`
+settings) -- this is a recurring risk on any file this project's agents update from a mixed
+Bash/PowerShell fleet, not unique to `registry.json`.

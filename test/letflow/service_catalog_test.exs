@@ -751,7 +751,9 @@ defmodule Letflow.ServiceCatalogTest do
       entries = for _ <- 1..3, do: register!(%{scope: :global})
       expected_ids = entries |> Enum.map(& &1.service_id) |> Enum.sort()
 
-      assert {:ok, %{items: page1, next_cursor: cursor1}} = ServiceCatalog.list_all(%{page_size: 2})
+      assert {:ok, %{items: page1, next_cursor: cursor1}} =
+               ServiceCatalog.list_all(%{page_size: 2})
+
       assert length(page1) == 2
       assert is_binary(cursor1)
 

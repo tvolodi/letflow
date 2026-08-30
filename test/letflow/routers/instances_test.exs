@@ -901,13 +901,19 @@ defmodule Letflow.Routers.InstancesTest do
       end
     end
 
-    test "AC2/AC3: all four actor fallback levels resolve, including a deleted user row" do
-      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req200-ac2")
-      {instance_id, _def} = start_instance!(tenant.schema_name)
+    # AC2 requires the four fallback levels to be "exercised ... by four
+    # explicit tests" (docs/requirements.yaml REQ-200 AC2 wording) -- not one
+    # combined test proving the chain end-to-end. Each test below isolates
+    # exactly one level: it sets up ONLY the inputs relevant to that level
+    # (never a higher-priority input that would mask a lower level, and never
+    # a lower-priority fallback value that a passing assertion could be
+    # coincidentally satisfied by).
 
+    test "AC2 level 1: an event with a resolvable actor_id resolves to that user's display_name" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req200-ac2-l1")
+      {instance_id, _def} = start_instance!(tenant.schema_name)
       user = create_named_user!(tenant.schema_name, "Ada Lovelace")
 
-      # Level 1: real, resolvable actor_id.
       insert_raw_event!(tenant.schema_name, %{
         instance_id: instance_id,
         event_type: "TASK_COMPLETED",
@@ -916,36 +922,74 @@ defmodule Letflow.Routers.InstancesTest do
         sequence_number: 10
       })
 
-      # Level 2: actor_id unresolvable, but metadata token_description present.
+      items = fetch_timeline_items(tenant, instance_id, "?page_size=50")
+      item = Enum.find(items, &(&1["task_id"] == "task-1"))
+      assert item["actor_display_name"] == "Ada Lovelace"
+    end
+
+    test "AC2 level 2: no actor id, metadata token_description resolves to that" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req200-ac2-l2")
+      {instance_id, _def} = start_instance!(tenant.schema_name)
+
       insert_raw_event!(tenant.schema_name, %{
         instance_id: instance_id,
         event_type: "TASK_COMPLETED",
         payload: %{"task_id" => "task-2", "node_id" => "node-2"},
-        actor_id: Ecto.UUID.generate(),
+        actor_id: nil,
         metadata: %{"token_description" => "CI deploy token"},
         sequence_number: 11
       })
 
-      # Level 3: no token_description, only actor_label.
+      items = fetch_timeline_items(tenant, instance_id, "?page_size=50")
+      item = Enum.find(items, &(&1["task_id"] == "task-2"))
+      assert item["actor_display_name"] == "CI deploy token"
+    end
+
+    test "AC2 level 3: no actor id and no token_description, metadata actor_label resolves to that" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req200-ac2-l3")
+      {instance_id, _def} = start_instance!(tenant.schema_name)
+
       insert_raw_event!(tenant.schema_name, %{
         instance_id: instance_id,
         event_type: "TASK_COMPLETED",
         payload: %{"task_id" => "task-3", "node_id" => "node-3"},
-        actor_id: Ecto.UUID.generate(),
+        actor_id: nil,
         metadata: %{"actor_label" => "External Webhook"},
         sequence_number: 12
       })
 
-      # Level 4: none of the three -- literal "system".
+      items = fetch_timeline_items(tenant, instance_id, "?page_size=50")
+      item = Enum.find(items, &(&1["task_id"] == "task-3"))
+      assert item["actor_display_name"] == "External Webhook"
+    end
+
+    test "AC2 level 4: none of actor id, token_description, or actor_label -- falls to the literal \"system\"" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req200-ac2-l4")
+      {instance_id, _def} = start_instance!(tenant.schema_name)
+
       insert_raw_event!(tenant.schema_name, %{
         instance_id: instance_id,
         event_type: "TASK_COMPLETED",
         payload: %{"task_id" => "task-4", "node_id" => "node-4"},
-        actor_id: Ecto.UUID.generate(),
+        actor_id: nil,
         sequence_number: 13
       })
 
-      # AC3: actor id refers to a user row that no longer exists.
+      items = fetch_timeline_items(tenant, instance_id, "?page_size=50")
+      item = Enum.find(items, &(&1["task_id"] == "task-4"))
+      assert item["actor_display_name"] == "system"
+    end
+
+    test "AC3: an event whose actor_id refers to a user row that no longer exists still falls through, never nil/error" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req200-ac3")
+      {instance_id, _def} = start_instance!(tenant.schema_name)
+
+      # Genuinely a "row deleted" scenario, distinct from "no actor_id at
+      # all" (AC2 level 4 above): deleted_user.id is a real, once-existent
+      # user id that no longer has a matching row in `users` by the time the
+      # timeline is fetched, exercising fetch_display_names_by_actor_id/2's
+      # miss path rather than resolve_actor_display_name/3's nil-actor_id
+      # branch.
       deleted_user = create_named_user!(tenant.schema_name, "Soon Deleted")
       Repo.delete!(deleted_user, prefix: tenant.schema_name)
 
@@ -958,14 +1002,10 @@ defmodule Letflow.Routers.InstancesTest do
       })
 
       items = fetch_timeline_items(tenant, instance_id, "?page_size=50")
-      by_task = Map.new(items, &{&1["task_id"], &1["actor_display_name"]})
+      item = Enum.find(items, &(&1["task_id"] == "task-5"))
 
-      assert by_task["task-1"] == "Ada Lovelace"
-      assert by_task["task-2"] == "CI deploy token"
-      assert by_task["task-3"] == "External Webhook"
-      assert by_task["task-4"] == "system"
-      # AC3 -- deleted user row still falls through to "system", never nil/error.
-      assert by_task["task-5"] == "system"
+      refute is_nil(item["actor_display_name"])
+      assert item["actor_display_name"] == "system"
     end
 
     test "AC4: INSTANCE_STARTED and a task-completion item render different, actor-naming sentences" do
@@ -1073,8 +1113,14 @@ defmodule Letflow.Routers.InstancesTest do
         |> Enum.take_while(&(&1 == :hit))
         |> length()
 
-      assert user_query_count <= 1,
-             "expected at most one `users` lookup query for a page sharing one actor, got #{user_query_count}"
+      # Exactly one, not merely "at most one": with a real actor_id present
+      # on every event, fetch_display_names_by_actor_id/2 (design SS4) always
+      # issues its single batched query -- asserting == 1 (not <= 1) also
+      # rules out a vacuous pass from a broken resolver that silently skips
+      # the lookup altogether. A naive per-row implementation would issue 6
+      # (one per event), which this assertion also catches.
+      assert user_query_count == 1,
+             "expected exactly one `users` lookup query for a page sharing one actor, got #{user_query_count}"
     end
   end
 

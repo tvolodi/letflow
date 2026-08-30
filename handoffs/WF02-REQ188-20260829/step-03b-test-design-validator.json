@@ -6,32 +6,22 @@
   "from_agent": "TEST-DESIGNER",
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "file": "test/letflow/scheduler_req188_test.exs",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "completed_at": "2026-08-30T00:25:00Z",
   "priority": "normal",
   "context": {
-    "note": "Recheck after documentation-only rework. TEST-DESIGN-VALIDATOR's prior FAIL (see handoffs/WF02-REQ188-20260829/step-03b-test-design-validator.json@a1dcdea and req188-test-design-validator-findings.md) found the test coverage and fixture design sound (32/32 passing, all mutations independently reproduced) but flagged one BLOCKER: the gateway-loop fixture's rationale falsely claimed it was 'verified empirically not to trigger REQ-187's own auto-rearm mechanism' when the validator's own trace of engine.ex's advance_until_stable/4 / tokens_needing_dispatch/3 and transition.ex's dispatch_timer_arrival/3 showed the auto-rearm DOES fire once per gw->loop loop-back hop. No test/fixture/assertion code was changed -- this handoff corrects only the documentation text.",
+    "note": "Recheck after documentation-only rework. TEST-DESIGNER's correction (9c37798) replaced the false 'does NOT trigger' / 'ORIGINAL seed_state' claim in test/specs/REQ-188.md, handoffs/WF02-REQ188-20260829/req188-test-designer-notes.md, and the graph_gateway_loop/1 comment block in test/letflow/scheduler_req188_test.exs with an accurate statement that the REQ-187 auto-rearm DOES fire once per gw->loop loop-back hop, plus the three harmlessness reasons (repeat_expression filter, never-due fire_at, no Ecto.Multi step-name collision) TEST-DESIGN-VALIDATOR independently verified in the prior pass. No test logic/assertions changed in any file.",
     "prior_handoff": "handoffs/WF02-REQ188-20260829/step-03-test-designer.json",
     "prior_validator_findings": "handoffs/WF02-REQ188-20260829/req188-test-design-validator-findings.md",
     "test_spec": "test/specs/REQ-188.md",
     "test_designer_notes": "handoffs/WF02-REQ188-20260829/req188-test-designer-notes.md",
-    "files_changed_this_recheck": [
-      "test/specs/REQ-188.md",
-      "handoffs/WF02-REQ188-20260829/req188-test-designer-notes.md",
-      "test/letflow/scheduler_req188_test.exs"
-    ],
-    "correction_summary": [
-      "test/specs/REQ-188.md 'Fixture strategy' section: replaced the false 'not triggered for this hop' / 'keyed off the ORIGINAL seed_state' claim with an accurate statement that the REQ-187 auto-rearm DOES fire once per gw -> loop loop-back hop (previous_node_id in tokens_needing_dispatch/3 is local to the current hop, re-derived from the immediately preceding instance_state, not the chain's original seed state), with the empirical count (1 creation-time arm + 3 per-firing arms = 4 nil-repeat_expression rows across AC2's 3 firings), plus the three independently-verified reasons this is harmless (repeat_expression filter every counting query already uses, side-arms' always-1-day-out fire_at, no Ecto.Multi :scheduler_timer step-name collision across two separate Multis).",
-      "handoffs/WF02-REQ188-20260829/req188-test-designer-notes.md 'Fixture note': same correction, with an explicit 'Correction (found by TEST-DESIGN-VALIDATOR, verified empirically)' marker and a pointer to test/specs/REQ-188.md for the full writeup.",
-      "test/letflow/scheduler_req188_test.exs's graph_gateway_loop/1 comment block: replaced the 'why it does NOT also trigger ... auto-rearm' claim with the same accurate statement and the three harmlessness reasons, inline above the fixture definition.",
-      "No test logic, assertions, or fixture shape changed in any file -- git diff --stat confirms only comment/prose lines changed in the test file."
-    ],
-    "verification_this_recheck": [
-      "mix compile: clean (no output), run inside a fresh elixir:1.18.3-otp-27 container (--network host) against this checkout's already-running letflow-1-postgres-1 (port 5463), same approach TEST-DESIGN-VALIDATOR used previously.",
-      "mix test test/letflow/scheduler_req188_test.exs test/letflow/scheduler/poller_test.exs test/letflow/scheduler_test.exs --seed 0: 32 tests, 0 failures (git safe.directory needed to be configured in the fresh container for the two git-diff-based structural checks -- AC7's application.ex-untouched check and the transition.ex-untouched check -- to resolve the base ref; once set, both pass cleanly, confirming this is a container-freshness artifact and not a regression from the documentation edit).",
-      "mix format --check-formatted test/letflow/scheduler_req188_test.exs: clean (no output).",
-      "git status --porcelain / git diff --stat after the edits: only the three intended files touched (test/specs/REQ-188.md, handoffs/WF02-REQ188-20260829/req188-test-designer-notes.md, test/letflow/scheduler_req188_test.exs); no other lib/ or test/ files modified.",
-      "Committed 9c37798 on feature/WF02-REQ188-20260829 and pushed to origin."
+    "recheck_performed_by": "TEST-DESIGN-VALIDATOR",
+    "recheck_verification": [
+      "Read the corrected prose in all three files: all state the auto-rearm DOES fire, with the same three harmlessness reasons independently verified in the prior pass. Matches exactly what was traced through engine.ex/transition.ex and confirmed empirically before (4 nil-repeat_expression rows across AC2's 3 firings).",
+      "git diff a1dcdea..9c37798 -- test/specs/REQ-188.md handoffs/WF02-REQ188-20260829/req188-test-designer-notes.md test/letflow/scheduler_req188_test.exs: only comment/prose lines changed in the test file (the moduledoc-style block above graph_gateway_loop/1); no test body, assertion, or fixture-shape line touched. The two .md files are documentation only.",
+      "mix compile --warnings-as-errors: clean, in a fresh elixir:1.18.3-otp-27 container (--network host) against this checkout's running letflow-1-postgres-1 (port 5463, resolved via .env).",
+      "mix test test/letflow/scheduler_req188_test.exs test/letflow/scheduler/poller_test.exs test/letflow/scheduler_test.exs --seed 0: 32 tests, 0 failures -- unchanged from the pre-correction run.",
+      "git status --porcelain clean before and after."
     ]
   },
   "task": {
@@ -48,5 +38,11 @@
       "mix format --check-formatted test/letflow/scheduler_req188_test.exs test/letflow/scheduler/poller_test.exs",
       "git diff a1dcdea..9c37798 -- test/specs/REQ-188.md handoffs/WF02-REQ188-20260829/req188-test-designer-notes.md test/letflow/scheduler_req188_test.exs"
     ]
+  },
+  "result": {
+    "status": "PASS",
+    "findings": "handoffs/WF02-REQ188-20260829/req188-test-design-validator-findings.md",
+    "next_action": "Proceed to TEST-RUNNER (Step 4)",
+    "next_handoff": "handoffs/WF02-REQ188-20260829/step-04-test-runner.json"
   }
 }

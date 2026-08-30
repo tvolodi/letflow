@@ -1,8 +1,54 @@
 # REQ-188 TEST-DESIGN-VALIDATOR findings (Step 3b)
 
-Verdict: **FAIL** — one BLOCKER, documentation-accuracy only. No test code, fixture
-shape, or coverage defect found. Rework routes to TEST-DESIGNER to correct a factual
-claim in the permanent rationale documents; the tests themselves need no change.
+Verdict (original pass): **FAIL** — one BLOCKER, documentation-accuracy only. No test
+code, fixture shape, or coverage defect found. Rework routed to TEST-DESIGNER to
+correct a factual claim in the permanent rationale documents; the tests themselves
+needed no change.
+
+## Recheck (commit 9c37798) — Verdict: PASS
+
+TEST-DESIGNER's correction (`test/specs/REQ-188.md`, `handoffs/WF02-REQ188-20260829/
+req188-test-designer-notes.md`, and the `graph_gateway_loop/1` comment block in
+`test/letflow/scheduler_req188_test.exs`) was independently re-checked:
+
+1. **Content accuracy.** All three locations now state the REQ-187 auto-rearm **DOES**
+   fire once per `gw -> loop` loop-back hop (`previous_node_id` in
+   `tokens_needing_dispatch/3` is local to the current hop, re-derived from the
+   immediately preceding `instance_state`, not the chain's original seed state) — this
+   matches exactly what I traced through `engine.ex`/`transition.ex` and confirmed
+   empirically in the original pass (4 nil-`repeat_expression` rows: 1 creation-time +
+   3 per-firing, across AC2's 3 firings). All three copies also carry the same three
+   harmlessness reasons I had independently verified: (1) every counting query filters
+   `not is_nil(t.repeat_expression)`, which these side-arms never set
+   (`resolve_timer_arm_attrs/4` builds only `instance_id/timer_type/node_id/fire_at`);
+   (2) each side-arm's `fire_at` is always a day out (`duration_iso8601: "P1D"`), never
+   due within any poll these tests run; (3) no `Ecto.Multi` `:scheduler_timer`
+   step-name collision, since `advance_after_timer_fired/3` commits its own nested
+   `Multi` to completion before `maybe_rearm_timer/3` runs its own, separate insert.
+   No weakening, hedging, or new inaccuracy introduced in the rewrite.
+2. **No test-logic change.** `git diff a1dcdea..9c37798 -- test/specs/REQ-188.md
+   handoffs/WF02-REQ188-20260829/req188-test-designer-notes.md
+   test/letflow/scheduler_req188_test.exs` shows only prose/comment lines touched in
+   `scheduler_req188_test.exs` (the moduledoc-style comment block above
+   `graph_gateway_loop/1`); no line inside the function body, any test body, or any
+   assertion changed. The two `.md` files are documentation only.
+3. **Fresh `mix test` re-run**, this session, in a new `elixir:1.18.3-otp-27` container
+   (`--network host`, `.env`-resolved DB port 5463 against this checkout's own running
+   `letflow-1-postgres-1`), on the current committed tree (clean `git status
+   --porcelain` before and after):
+   ```
+   $ mix compile --warnings-as-errors
+   Compiling 159 files (.ex)
+   Generated letflow app
+   $ mix test test/letflow/scheduler_req188_test.exs test/letflow/scheduler/poller_test.exs test/letflow/scheduler_test.exs --seed 0
+   Finished in 17.9 seconds (0.00s async, 17.9s sync)
+   32 tests, 0 failures
+   ```
+   Matches the pre-correction run exactly (32/32, same as reported by TEST-DESIGNER and
+   by my own prior pass) — the documentation-only edit caused no regression.
+
+**Result: PASS.** The BLOCKER is fully resolved. Step 4 handoff to TEST-RUNNER written:
+`handoffs/WF02-REQ188-20260829/step-04-test-runner.json`.
 
 ## What was independently re-verified
 

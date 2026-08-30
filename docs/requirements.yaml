@@ -11412,10 +11412,13 @@ requirements:
       rejection of loopback/private/link-local/cloud-metadata ranges. This
       is a genuine SSRF-as-a-service primitive: any tenant can point a
       webhook subscription at an internal service or the cloud metadata
-      endpoint, and REQ-183's `deliver/3` (in flight as of this drafting --
-      `Letflow.Webhooks.deliver/3` does not exist in `lib/letflow/` yet,
-      confirmed by grep of this session) will sign and POST a request
-      there. Compounding this: `deliver/3` persists up to 500 chars of the
+      endpoint, and REQ-183's `deliver/3` (implemented at
+      `lib/letflow/webhooks.ex:242` on feature branch
+      `feature/WF02-REQ183-20260830`, commit `82e8d2a7` -- REQ-183's Step
+      2a/2c/2d gates have already passed, but that branch is NOT YET
+      merged to `main`; REQ-183 itself remains `status: in_progress` in
+      this file) will sign and POST a request there once merged.
+      Compounding this: `deliver/3` persists up to 500 chars of the
       response into `webhook_delivery_attempts.last_error` on a FAILED
       attempt, and REQ-184 (pending, not yet built) is a GET
       .../deliveries route the SAME tenant can call to read that column
@@ -11442,7 +11445,8 @@ requirements:
       WHERE VALIDATION LANDS -- decide and implement BOTH, stated with
       reasoning (defense in depth, not redundancy): (1) `create/2` in
       `lib/letflow/webhooks.ex` is the ONLY write path for `target_url` --
-      confirmed by reading the shipped code: `update/3` reconciles only
+      confirmed by reading the shipped code: `update/2`
+      (`lib/letflow/webhooks.ex:514`) reconciles only
       `status`/`is_active` and never touches `target_url` at all (see its
       own moduledoc, "Does not touch :target_url, :description,
       :event_types"). Add the validation as a rejection path in `create/2`
@@ -11453,16 +11457,16 @@ requirements:
       immediately before every outbound `:httpc.request/4` call --
       REQUIRED, not optional, because a `create/2`-only gate cannot catch
       DNS rebinding (a hostname that resolved to a public IP at creation
-      time and resolves to 169.254.169.254 at delivery time) and cannot
-      catch a redirect (deliver/3 must either disable redirect-following
-      entirely or re-run this same validation against the redirect target
-      before following it -- state which). If REQ-183 has already merged
-      by the time this requirement is implemented, this half is a change
-      to `lib/letflow/webhooks.ex`'s `deliver/3`; if REQ-183 has not yet
-      merged, coordinate so `deliver/3` ships with this validation already
-      in place rather than merging first and adding it after (either
-      ordering is acceptable -- depends_on below only encodes the hard
-      prerequisite, not a same-PR requirement).
+      time and resolves to 169.254.169.254 at delivery time). Redirects
+      are NOT an open design choice here: `dispatch_http/3`'s actual
+      `:httpc.request(:post, request, [{:timeout, @http_timeout_ms}], [])`
+      call (`lib/letflow/webhooks.ex`, feature branch
+      `feature/WF02-REQ183-20260830` commit `82e8d2a7`) passes no
+      `{autoredirect, true}` in its HTTPOptions, so `:httpc` already does
+      NOT auto-follow redirects -- this is already the safe default, not
+      something to be added. This half is a change to
+      `lib/letflow/webhooks.ex`'s `deliver/3` once REQ-183 merges to
+      `main` (depends_on below encodes this as a hard prerequisite).
       PROPOSED INV-9 (small, explicit sub-scope -- do not expand beyond
       this): add a new numbered invariant to
       `docs/agents/instructions/security-invariants.md`, following the
@@ -11497,9 +11501,9 @@ requirements:
       - "Webhooks.create/2 with target_url resolving (by literal IP or by a test-controlled DNS stub) to 127.0.0.1, 169.254.169.254, 10.0.0.5, 172.16.0.5, and 192.168.0.5 is rejected for each -- five explicit tests, one per address"
       - "Webhooks.create/2 with target_url \"https://example.com/hook\" resolving to a public, non-reserved address succeeds and stores the subscription, demonstrating the validation does not reject legitimate targets"
       - "deliver/3 independently re-validates target_url immediately before issuing its outbound request: a test that creates a subscription with a target_url valid at creation time, then simulates that hostname resolving to 169.254.169.254 at delivery time (DNS rebinding), asserts deliver/3 refuses to send the request and records the refusal as a FAILED attempt rather than performing the POST"
-      - "deliver/3 either disables HTTP redirect-following entirely (asserted: a target_url returning a 3xx to a private-range Location is never followed) or re-applies the same validation to the redirect target before following it -- whichever is chosen, one explicit test proves a redirect to a private/loopback address is blocked"
+      - "deliver/3's dispatch_http/3 does not auto-follow HTTP redirects (already true today: its :httpc.request/4 call passes no {autoredirect, true} in HTTPOptions) -- one explicit test asserts that a target_url returning a 3xx with a private-range Location header is never followed, proving this status-quo behavior stays safe rather than regressing to auto-follow"
       - "docs/agents/instructions/security-invariants.md gains a new INV-9 entry following the existing Rule/Reference/How to verify/Severity format, stating the outbound-URL validation rule and citing this requirement's delivered module(s) as the enforcing mechanism"
       - "the moduledoc for the validation function(s) states the exact rejected ranges (127.0.0.0/8, ::1/128, 169.254.0.0/16 including 169.254.169.254 explicitly, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7, and IPv4-mapped-IPv6 forms of these) and states plainly these are Letflow's own choice, not ported from R-Co (src/webhook/ unreachable from this drafting session)"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
       - "no unrelated change to REQ-181's or REQ-183's other scope (HMAC signing, retry/backoff, auto-pause, DLQ landing, CRUD routes) or to REQ-184, confirmed by git diff --stat scoped to this requirement's commits"
-    depends_on: [REQ-181]
+    depends_on: [REQ-181, REQ-183]

@@ -1,0 +1,33 @@
+{
+  "handoff_id": "WF03-ISS0377-20260830-step02",
+  "run_id": "WF03-ISS0377-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 2",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "CODE-DESIGNER",
+  "file": "docs/issues/ISS-0377.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "ISSUE-FIXER's diagnosis (full detail in handoffs/WF03-ISS0377-20260830/step-01-issue-fixer.json result.summary) confirmed two independent, unrelated portability bugs via source-level reading -- no literal Windows repro was possible in this Linux sandbox, but both root causes are confirmed hardcoded literals in the current source, not guesses from the bug report's prose.",
+    "registry_lookup": "No prior resolved docs/issues/*.yaml entry matches (checked wasmex/MIX_OS_CONCURRENCY_LOCK/Windows/hard-link keywords) -- closest related class (ISS-0065/0066/0107/0171/0261/0278) is a different mechanism (System.cmd mix subprocess invocation), not a recurrence.",
+    "diagnosis_symptom_1": {
+      "file": "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "lines": "180-198, describe 'AC7: the wasmex NIF is a loaded shared library, not an external process'",
+      "root_cause": "Line 189 hardcodes the substring 'native/wasmex/src/' when checking Wasmex.Native's :external_resource attributes -- a build-tool-internal directory-shape assumption, not something AC7 (no external runtime process) actually requires. Line 197 hardcodes Path.join(priv_dir, 'native/wasmex.so') and asserts File.exists?/1 on it -- wasmex ships as a rustler_precompiled NIF whose actual bundled artifact is platform- and version-qualified (e.g. wasmex-v0.15.1-nif-2.15-x86_64-pc-windows-msvc.dll on Windows; a differently-named .so on Linux/macOS), never literally 'native/wasmex.so'. Fails outright on Windows; not verified to even match reliably on this Linux sandbox's actual installed wasmex version."
+    },
+    "diagnosis_symptom_2": {
+      "file": "scripts/test_parallel.sh",
+      "lines": "176-204 (Step 2: launch N background partitions); see also Step 1, lines 96-104",
+      "root_cause": "Step 1 does one single MIX_ENV=test mix compile up front specifically so N partitions never race compiling the same _build/test artifacts -- but Step 2 then launches all N `MIX_TEST_PARTITION=<i> mix test --partitions N ...` processes with no MIX_BUILD_PATH (or equivalent) override, so every partition still points at the exact same shared _build/test directory for the full run, not just the pre-compile. Each `mix test` process independently touches that shared build path's manifest/lock/consolidation-cache artifacts on startup even when nothing needs recompiling -- a real race on the shared path on any OS, but Windows/NTFS's stricter hard-link creation semantics (vs. POSIX link()) turn the race into an outright '(Mix) could not create hard link ... permission denied' abort instead of the graceful EEXIST-retry behavior POSIX filesystems more often tolerate."
+    },
+    "fix_requirements": {
+      "symptom_1": "Make both AC7 assertions derive their expectation from the platform/from wasmex's actual introspectable state at test time rather than a hardcoded literal path or substring. E.g.: enumerate files under the wasmex priv 'native' directory and assert at least one matches a platform-appropriate compiled-library extension keyed off :os.type() (.so for {:unix, :linux}/{:unix, :freebsd}, .dylib for {:unix, :darwin}, .dll for {:win32, _}); for the external_resource check, either assert non-emptiness plus a source-extension match (e.g. ends in '.rs') instead of the literal 'native/wasmex/src/' substring, or otherwise decouple from the specific directory layout. Do NOT simply wrap the existing Unix-only assertion in an :os.type() unix-only guard that skips the check on Windows -- that suppresses rather than fixes the assertion, and is explicitly out of scope.",
+      "symptom_2": "Give each of the N parallel partitions in scripts/test_parallel.sh its own isolated build path (e.g. MIX_BUILD_PATH=_build/test-partition-$i set per-partition immediately before each backgrounded `mix test` launch in the Step 2 loop) so no two concurrently-running mix test OS processes ever touch the same on-disk build directory -- removing the race at its source instead of special-casing Windows' stricter hard-link error surface. Must also decide how each partition's now-distinct build path gets warmed given Step 1's existing single shared pre-compile (options: precompile once per target path, copy/hardlink the warmed _build/test tree into each partition path before backgrounding, or accept a slower first per-partition compile) -- pick based on req113-parallel-test-runner.md's existing AC4/AC5 constraints (lib/letflow/design/req113-parallel-test-runner.md) so as not to reintroduce the exact race Step 1 was written to avoid. A fix that merely detects Windows and serializes/retries hard-link errors instead of removing the shared-path race is out of scope."
+    }
+  },
+  "task": {
+    "description": "Design a fix for ISS-0377's two symptoms per the diagnosis and fix_requirements above: (1) test/letflow/engine/wasm/plugin_handler_test.exs's AC7 describe block assertions (lines 189, 197) need to become genuinely cross-platform instead of hardcoding a Unix .so path/substring; (2) scripts/test_parallel.sh's parallel partition launch (Step 2, lines 176-204) needs per-partition build-path isolation to remove the shared _build/test race that surfaces as a Windows hard-link permission-denied abort. Produce a design artefact per CODE-DESIGNER's normal process (interfaces/approach, no implementation code) covering both fixes, then route to CODE-DESIGN-VALIDATOR per WF-03."
+  },
+  "result": null
+}

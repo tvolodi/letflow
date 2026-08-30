@@ -1934,3 +1934,52 @@ format-preserving method instead (a plain text-mode append of one new array elem
 closing bracket, or a JSON write that copies the source's existing `indent`/`separators`/`ensure_ascii`
 settings) -- this is a recurring risk on any file this project's agents update from a mixed
 Bash/PowerShell fleet, not unique to `registry.json`.
+
+## Claiming a function "already carries" a value without reading its real parameter list -- three instances in one requirement's design
+
+**REQ-195 (audit-entry storage), three separate occurrences before REVIEWER's gate, each caught
+one function-call later than the last.** The design's original text asserted, as supporting
+reasoning for using real actor ids in several audit rows, that a set of context functions
+"already receives `actor_id` as an explicit Elixir-level argument." Each assertion turned out to
+be checking the wrong thing -- a plausible inference from the *shape* of similar functions
+elsewhere in the same module, not a read of the specific function's own `@type`/signature:
+
+1. **Rework 1** -- `Letflow.Definitions.activate/2`/`deprecate/2`/`archive/2` were claimed to carry
+   `actor_id` via `activate_opts()`. CODE-DESIGN-VALIDATOR read `activate_opts() :: [prefix:
+   String.t(), service_scope_validator: ...]` directly and found no `actor_id` field anywhere.
+2. **Rework 2** -- the same design, having just fixed instance 1, made an *adjacent* unverified
+   claim to patch over the gap: that `activate/2` is "also called from system/scheduler-initiated
+   paths with no human actor," citing two test-fixture-helper call sites as evidence. Verified
+   directly this session: `grep -rn "Definitions.activate(" lib/` (excluding the design doc) finds
+   exactly one production caller -- the router -- and the cited tests are fixture setup, not a
+   real production system-driven path. The correction to instance 1 had introduced a second,
+   equally unverified claim.
+3. **Implementation** -- SECURITY-REVIEWER, re-checking the *shipped code* rather than the by-then-twice-corrected
+   design doc, found the design's own §3.2 table still asserted `Letflow.Tasks.assign_task/3`
+   "already has `actor_id` as an explicit, required field of `assign_attrs`." Reading
+   `lib/letflow/tasks.ex` directly showed `@type assign_attrs :: %{required(:user_id) =>
+   String.t()}` -- no `actor_id` field at all; only the *sibling* function `claim_task/3`'s
+   `claim_attrs` carries it. ELIXIR-DEV caught this one itself before it shipped uncorrected and
+   disclosed it in the handoff rather than papering over it, which is why it surfaced as a
+   disclosed disposition rather than a fourth CODE-DESIGN-VALIDATOR rework cycle.
+
+**Why this kept recurring despite being caught each time:** each claim was locally plausible --
+`activate_opts()`, `assign_attrs`, and `claim_attrs` are all option/attrs types on sibling
+functions inside the same module, and several *do* carry `actor_id` (`cancel_instance/3`'s
+`attrs[:actor_id]`, `complete_task/3`'s `attrs[:actor_id]`, `claim_attrs.actor_id`). A design
+author who has just confirmed the pattern holds for three or four functions in a family has a real
+incentive to assume it generalizes to the rest of the family without re-checking each one
+individually -- the claim reads as "obviously true by analogy" right up until the one function
+that breaks the pattern is actually opened.
+
+**Correct alternative:** when a design (or an implementation building on a design) asserts that a
+specific named function "already carries," "already receives," or "already has" a value its
+downstream logic depends on, that claim must be checked against *that exact function's own
+`@type`/signature and body* -- not inferred from a sibling function in the same module, not
+inferred from the module's general shape, and not treated as re-confirmed by fixing a
+*different*, adjacent unverified claim. `grep -rn "<the exact function call>(" lib/` for real
+callers, and reading the specific `@type` line, both cost one tool call and would have caught all
+three instances on the first pass. When a design depends on several sibling functions having the
+same shape, verify each one individually and say so explicitly (as REQ-195's final design does in
+§3.1a/§3.1b) rather than asserting the family-wide generalization once and trusting it to hold for
+every member.

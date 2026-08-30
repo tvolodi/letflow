@@ -1,0 +1,73 @@
+run_id: WF02-REQ195-20260830
+requirement_id: REQ-195
+step: "Step 5 (TEST-RUNNER rework-1 recheck)"
+performed_by: TEST-RUNNER
+note: >
+  Recheck following ELIXIR-DEV's rework-1 fix (handoffs/WF02-REQ195-20260830/
+  step-05-elixir-dev-rework1.json) for the regression TEST-RUNNER found in the prior
+  pass (step-04-test-runner.json): the new audit_entries tenant-scoped table (this
+  branch's priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs)
+  was missing from test/support/tenant_fixture.ex's @expected_tenant_tables oracle,
+  leaving test/letflow/support/tenant_fixture_test.exs's C6 oracle-rot guard stale
+  (same bug class as REQ-181's webhook_subscriptions gap). ELIXIR-DEV's fix touched
+  only those two test-support files (confirmed via git diff --stat against main). This
+  report re-derives the full-suite result independently rather than trusting
+  ELIXIR-DEV's reported 14/14 and 25/25 partial runs.
+checks:
+  diff_scope:
+    result: PASS
+    output: >
+      git diff main...HEAD --stat (35 files) shows only test/support/tenant_fixture.ex
+      (+1 line) and test/letflow/support/tenant_fixture_test.exs (+/-6 lines) changed
+      among test-support files by the rework; remainder of the diff is this branch's
+      pre-existing REQ-195 work (lib/letflow/audit.ex, lib/letflow/audit/entry.ex, the
+      migration, and audit_test.exs/audit_capture_test.exs/audit_dispositions_test.exs).
+      No unintended side-effect changes.
+  full_suite:
+    runner: scripts/test_parallel.sh
+    N: 8
+    N_source: nproc
+    result: "3 failures, all pre-existing/environmental (documented flake classes)"
+    combined: "combined: 2796 tests, 6 properties, 3 failures (2799/2802 passed)"
+    partitions:
+      - "partition 1: 309 tests, 3 properties, 1 failures, exit 2"
+      - "partition 2: 416 tests, 2 properties, 0 failures, exit 0"
+      - "partition 3: 446 tests, 0 properties, 0 failures, exit 0"
+      - "partition 4: 403 tests, 0 properties, 0 failures, exit 0"
+      - "partition 5: 393 tests, 0 properties, 0 failures, exit 0"
+      - "partition 6: 342 tests, 0 properties, 0 failures, exit 0"
+      - "partition 7: 222 tests, 1 property, 0 failures, exit 0"
+      - "partition 8: 265 tests, 0 properties, 2 failures, exit 2"
+    failures:
+      - test: "configurable memory limit (REQ-156) AC-1: a smaller configured max_heap_words halts sooner than a larger one on the same allocating script (Letflow.Engine.Lua.ExecutorTest)"
+        partition: 1
+        error: "assert small_elapsed_ms < large_elapsed_ms failed (3959.24ms vs 465.727ms) at test/letflow/engine/lua/executor_test.exs:605/630"
+        diagnosis: >
+          Documented REQ-156 Lua wall-clock timing flake class -- compares measured
+          wall-clock durations of two separate process runs, sensitive to host
+          scheduling noise under N=8 parallel load. test/letflow/engine/lua/
+          executor_test.exs is untouched by this branch's diff.
+      - test: "rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        partition: 8
+        error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...) at lib/system.ex:1141, via test/mix/tasks/letflow_check_toolchain_test.exs:69/76"
+        diagnosis: "Documented rustc-absent CheckToolchainTest baseline flake -- no rustc on this host's PATH."
+      - test: "rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        partition: 8
+        error: "** (ErlangError) Erlang error: :enoent -- same root cause"
+        diagnosis: "Documented rustc-absent CheckToolchainTest baseline flake -- same root cause as above."
+    diff_exclusion: >
+      Neither test/letflow/engine/lua/executor_test.exs nor
+      test/mix/tasks/letflow_check_toolchain_test.exs appear in
+      `git diff main...HEAD --stat` -- structural evidence these failures are
+      unrelated to REQ-195's changes, per core-directives.md's Failure Attribution
+      Is Structural, Never By Count-Matching.
+  c6_oracle_rot_guard: >
+    Letflow.Support.TenantFixtureTest ran in partition 3, which finished
+    "Result: 446 passed" with 0 failures. The C6 test
+    ("test C6 -- oracle-rot guard observed tables equal expected_tenant_tables/0 in
+    both directions") was observed executing and tearing down cleanly in partition
+    3's log with no corresponding failure entry anywhere. Confirms ELIXIR-DEV's
+    rework-1 fix (audit_entries added to @expected_tenant_tables; count assertion
+    bumped 26 -> 27) resolved the regression. No new regression introduced.
+verdict: PASS
+next_step: "Step 5 -- RELEASE-VALIDATOR"

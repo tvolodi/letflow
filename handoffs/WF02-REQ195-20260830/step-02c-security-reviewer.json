@@ -1,0 +1,51 @@
+{
+  "handoff_id": "step02c-WF02-REQ195-20260830",
+  "run_id": "WF02-REQ195-20260830",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ195-20260830/step-02c-security-reviewer.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-195"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ195-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ195-20260830/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req195-audit-entry-storage.md",
+      "lib/letflow/audit.ex",
+      "lib/letflow/audit/entry.ex",
+      "priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/task_activation.ex",
+      "lib/letflow/tasks.ex",
+      "lib/letflow/identity.ex",
+      "test/letflow/audit_test.exs",
+      "test/letflow/audit_capture_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ195-20260830",
+    "rework_pass": 0,
+    "implementation_summary": "Implemented REQ-195 per the CODE-DESIGN-VALIDATOR-approved design (lib/letflow/design/req195-audit-entry-storage.md), which went through 2 rework rounds correcting actor_id-source claims (§3.1a for Letflow.Definitions' four lifecycle functions, §3.1b for six Letflow.Identity functions). New: priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs (tenant-scoped audit_entries table, three indexes, and a BEFORE UPDATE/BEFORE DELETE trigger per tenant schema raising 'audit_entries is immutable' -- the DB-level immutability AC1 requires), registered in Letflow.TenantProvisioning's @tenant_scoped_migration_manifest. lib/letflow/audit/entry.ex (plain Ecto schema) and lib/letflow/audit.ex (Letflow.Audit context module: append_multi/4 for Ecto.Multi call sites, insert_entry/3 for raw Repo.transaction/1 call sites -- both funnel into the same canonical-hash/chain-append logic so there is no second, independently-drifting implementation; verify_chain/2 recomputes each entry's own hash from its currently-stored content BEFORE checking prev_chain_hash linkage against the previous entry's own just-recomputed hash, per design §6 -- this is the fix for R-Co's documented linkage-only weakness). Wired the :audit step into: Letflow.Definitions.create/2, activate/2 (via activate_draft_row/4), deprecate/2 and archive/2 (via run_transition/5) -- all four actor_id: nil per design §3.1a, inside each function's existing Repo.transaction/1 anonymous function. Letflow.Engine.create/2 (instance create, Multi.merge after :finalize, actor_id real from attrs), cancel_instance/3 (Multi.merge after :projection, actor_id real), complete_task/3 (Multi.merge after :task_complete, actor_id real). Letflow.Engine.TaskActivation's private do_insert/3 (the single shared Task-row-creation call site behind both append_multi/6 and append_multi_from_existing_records/6, resolving OQ-1 -- actor_id: nil, no actor context reaches this call site today). Letflow.Tasks.assign_task/3 (Multi.merge after :apply -- see the explicit discrepancy flag below). Letflow.Identity.create_user/2, update_user_profile/3, update_user_status/3, create_group/2, create_token/3 (via insert_token/3), revoke_token/2 -- all six actor_id: nil per design §3.1b; NONE of these six had any transaction before this requirement, so each was wrapped in a new Ecto.Multi specifically to get the same-transaction guarantee (AC3) -- this is a real, disclosed change to each function's error-shape (Multi's {:error, failed_step, reason, changes} envelope, unwrapped back to each function's own original {:error, reason}/{:error, changeset} contract in the case-clause immediately after Repo.transaction()). Every before_state/after_state is Letflow.Audit.struct_state/2 over the real Ecto struct (Map.from_struct minus :__meta__ and any caller-named excludes), never a placeholder -- password_hash excluded for users, token_hash excluded for api_tokens (INV-4). git diff --stat confirms zero files under lib/letflow/routers/ touched (AC11). mix compile --warnings-as-errors and mix format --check-formatted both clean; new tests (test/letflow/audit_test.exs, test/letflow/audit_capture_test.exs) plus a regression pass over test/letflow/{tasks,identity,definitions}_test.exs (92 tests total) all pass against real Postgres.",
+    "security_attention_flag": "Two things worth independent, skeptical verification rather than trusting this summary: (a) this design's own rework history (2 rounds) exists because earlier drafts made false claims about which functions already receive a real actor_id -- please spot-check at least a few of my actor_id assignments directly against lib/letflow/definitions.ex, lib/letflow/identity.ex, lib/letflow/engine.ex, and lib/letflow/tasks.ex's own current signatures/bodies (not just against the design doc's table), the same way CODE-DESIGN-VALIDATOR caught the prior errors by re-deriving from source. One discrepancy I found myself and did NOT paper over: the design's §3.2 table claims Letflow.Tasks.assign_task/3's `attrs.actor_id` is 'already an explicit, required field of assign_attrs' -- verified against lib/letflow/tasks.ex this session, that is false (only claim_attrs, used by claim_task/3, carries actor_id; assign_attrs is `%{required(:user_id) => String.t()}` with no actor_id field at all). I implemented task.assign's audit row with actor_id: nil and left an inline comment at Letflow.Tasks.record_task_assign_audit/2 documenting exactly this; please confirm you agree nil is the correct, AC11-respecting disposition (same reasoning as §3.1a/§3.1b: the only fix would require editing lib/letflow/routers/tasks.ex, which this requirement's own AC11 forbids) rather than a gap I should have closed differently. (b) Letflow.Audit.verify_chain/2 is this requirement's single load-bearing tamper-evidence property (design §6, AC6) -- please independently trace it (not just read my moduledoc's claim) and confirm it truly recomputes the digest from an entry's own stored column values and compares that BEFORE checking prev_chain_hash linkage against the PREVIOUS entry's own recomputed hash (not that previous entry's stored prev_chain_hash) -- test/letflow/audit_test.exs's 'modifying a persisted after_state directly... is caught as a hash_mismatch' test is the adversarial proof I built for this; please re-run it and also try your own tamper variant if you have one in mind."
+  },
+  "task": {
+    "description": "Security review REQ-195's implementation against docs/agents/instructions/security-invariants.md. This change adds a new tenant-scoped table (audit_entries) and touches four existing context modules' write paths (Letflow.Definitions, Letflow.Engine, Letflow.Tasks, Letflow.Identity) to add an accompanying audit-row write inside each one's existing (or newly-added, for six Identity functions) transaction. INV-1 (tenant isolation), INV-4 (secrets by reference only -- password_hash/token_hash exclusion from before_state/after_state), INV-6 (new data-access path proves its scoping), INV-7 (no SQL string interpolation -- the migration's own trigger-creation SQL interpolates a schema name, confirm that value's provenance is trusted/non-attacker-controlled), and INV-8 (no unhandled crashes on realistic failure paths) all apply. Also confirm AC11 (no lib/letflow/routers/ file touched) directly via git diff --stat rather than trusting the summary.",
+    "acceptance_criteria": [
+      "audit_entries is confirmed tenant-scoped: created only inside the `if prefix() do` guard, registered in Letflow.TenantProvisioning's manifest, every query/insert against it in lib/letflow/audit.ex passes prefix: explicitly -- no bare unscoped Repo call",
+      "tenant_id on every inserted row is derived from the resolved prefix via Letflow.TenantProvisioning.tenant_id_for_schema_name/1, never accepted as a caller-supplied field on entry_attrs()",
+      "before_state/after_state never carry password_hash (users) or token_hash (api_tokens) -- confirmed by reading Letflow.Audit.struct_state/2's call sites in lib/letflow/identity.ex, not just this handoff's claim",
+      "the migration's raw SQL (execute/1, trigger function + two triggers) interpolates only the migration-resolved schema name (prefix()), never any tenant- or user-controlled runtime value -- confirmed this is a migration-time constant, not a runtime query built from request data",
+      "every new/changed write path (six Identity functions gaining their first-ever transaction, four Definitions functions, three Engine functions, one Tasks function) is traced and its {:error, _} propagation confirmed total -- no bare {:ok, _} = pattern introduced on a path reachable from external input",
+      "git diff --stat (or an equivalent independent check) confirms zero files under lib/letflow/routers/ are added or modified",
+      "an independent opinion on the actor_id-nil dispositions flagged in security_attention_flag above (Definitions' four functions, Identity's six functions, and the newly-found Tasks.assign_task/3 discrepancy) -- confirm each is a genuine AC11 scope boundary, not a shortcut",
+      "an independent trace of Letflow.Audit.verify_chain/2 confirming it recomputes-then-compares before checking linkage (not linkage-only, matching R-Co's documented defect)"
+    ]
+  }
+}

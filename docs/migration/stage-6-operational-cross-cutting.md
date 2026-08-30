@@ -40,7 +40,21 @@ DB-unavailable degradation paths, with no path found by which a
 tenant/instance/definition/task/actor id can reach a metric label.
 `lib/letflow/routers/metrics.ex` (REQ-078's authenticated JSON
 endpoint) is removed outright, superseded by
-`lib/letflow/routers/metrics_exposition.ex`. REQ-201 (alerting, the
+`lib/letflow/routers/metrics_exposition.ex`. REQ-195 (Audit-entry
+storage with before/after state capture and tamper-evident chaining,
+OBS-03/XC-02) is also done as of 2026-08-30, closing
+`lib/letflow/routers/audit.ex`'s own documented gap (REQ-078):
+`resource_type` was hardcoded to the constant `"instance"` and
+`before_state`/`after_state` were always null because Letflow's event
+model had no before/after capture -- both are now real, written in the
+same transaction as the state change they describe, into a new
+DB-immutable, tenant-scoped `audit_entries` table. The chain
+verification also fixes a genuine R-Co weakness rather than just
+porting it: `do_verify_chain/2` recomputes each entry's hash from its
+stored content before checking `prev_chain_hash` linkage, where R-Co's
+own `validateAuditChain` only checked linkage. REQ-195 is core-only,
+no route change; serving `GET /api/v1/audit` from this new store is
+REQ-196, which remains open. REQ-201 (alerting, the
 other OBS-04-adjacent rework-1 addition) remains open. The ordering
 subsystem remains
 pending. A

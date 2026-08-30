@@ -1,0 +1,62 @@
+{
+  "handoff_id": "step05-WF02-REQ195-20260830-to-release-validator",
+  "run_id": "WF02-REQ195-20260830",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ195-20260830/step-05-release-validator.json",
+  "created_at": "2026-08-30T18:35:00Z",
+  "started_at": "2026-08-30T18:28:00Z",
+  "completed_at": "2026-08-30T18:35:00Z",
+  "status": "PENDING",
+  "priority": "high",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-195"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ195-20260830/step-04-test-runner.json",
+      "handoffs/WF02-REQ195-20260830/step-05-elixir-dev-rework1.json",
+      "handoffs/WF02-REQ195-20260830/step-05-test-runner.json",
+      "handoffs/WF02-REQ195-20260830/test-runner-report.md",
+      "handoffs/WF02-REQ195-20260830/test-runner-report-2.md",
+      "test/reports/report-2026-08-30-WF02-REQ195-20260830-rework1.yaml"
+    ],
+    "artifacts_in": [
+      "lib/letflow/audit.ex",
+      "lib/letflow/audit/entry.ex",
+      "priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs",
+      "test/letflow/audit_test.exs",
+      "test/letflow/audit_capture_test.exs",
+      "test/letflow/audit_dispositions_test.exs",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/support/tenant_fixture_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ195-20260830",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "This is the rework-1 recheck of TEST-RUNNER's WF-02 Step 4 gate. Prior FAIL (handoffs/WF02-REQ195-20260830/step-04-test-runner.json result / test-runner-report.md item 5): the audit_entries tenant-scoped table added by this branch's migration (priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs) was missing from test/support/tenant_fixture.ex's hand-maintained @expected_tenant_tables oracle, leaving test/letflow/support/tenant_fixture_test.exs's C6 oracle-rot guard stale in both directions -- the identical bug class previously hit on REQ-181 (webhook_subscriptions). ELIXIR-DEV applied a narrow, mechanical fix (rework-1, handoffs/WF02-REQ195-20260830/step-05-elixir-dev-rework1.json): added \"audit_entries\" to the oracle list and bumped the count assertion from 26 to 27, touching only those two test-support files -- no application code. I (TEST-RUNNER) independently re-ran the full suite rather than trusting ELIXIR-DEV's partial 14/14 and 25/25 reports: `git diff main...HEAD --stat` confirms only test/support/tenant_fixture.ex (+1 line) and test/letflow/support/tenant_fixture_test.exs (+/-6 lines) changed among test-support files by the rework, with the rest of the diff being this branch's pre-existing REQ-195 work. Ran `docker compose up -d` (containers were already running; LETFLOW_DB_PORT=5463 per this checkout's .env), then `scripts/test_parallel.sh` as a blocking foreground run (N=8, from nproc): combined result 2799/2802 passed, 3 failures. Diagnosed each failure individually per Failure Attribution Is Structural, Never By Count-Matching: (1) Letflow.Engine.Lua.ExecutorTest's REQ-156 AC-1 memory-limit timing test (partition 1) -- documented REQ-156 Lua wall-clock timing flake, comparing two measured wall-clock durations across process runs under N=8 parallel CPU contention; test/letflow/engine/lua/executor_test.exs is untouched by this branch's diff. (2) and (3) Mix.Tasks.Letflow.CheckToolchainTest's two rust-pin tests (partition 8) -- documented rustc-absent CheckToolchainTest baseline flake (`:enoent` from `System.cmd(\"rustc\", [\"--version\"])`); this host genuinely has no rustc on PATH; test/mix/tasks/letflow_check_toolchain_test.exs is untouched by this branch's diff. All three failures are pre-existing/environmental, not present in this branch's diff, and match named documented flake classes. Directly confirmed the C6 oracle-rot guard: Letflow.Support.TenantFixtureTest ran in partition 3, which finished 'Result: 446 passed' with 0 failures; the specific C6 test (\"test C6 -- oracle-rot guard observed tables equal expected_tenant_tables/0 in both directions\") was observed executing and tearing down cleanly with no corresponding failure entry anywhere in that partition's log. No new regression appeared anywhere in the suite. Full detail in handoffs/WF02-REQ195-20260830/test-runner-report-2.md and test/reports/report-2026-08-30-WF02-REQ195-20260830-rework1.yaml. Routing forward to RELEASE-VALIDATOR per WF-02 Step 4->5.",
+    "acceptance_criteria": [
+      "Independently re-run scripts/test_parallel.sh yourself rather than trusting this report's counts, per RELEASE-VALIDATOR's own mandate to re-derive rather than accept.",
+      "Confirm the tenant_fixture_test.exs C6 oracle-rot guard passes in your own run.",
+      "Confirm no regression beyond the two named documented flake classes (rustc-absent CheckToolchainTest, REQ-156 Lua wall-clock timing) -- apply Failure Attribution Is Structural before excluding anything as pre-existing.",
+      "Verify REQ-195's acceptance criteria in docs/requirements.yaml against the shipped implementation (lib/letflow/audit.ex, lib/letflow/audit/entry.ex, the migration) independently.",
+      "If clean, proceed per WF-02 to DOC-UPDATER / merge; if not, route back to ELIXIR-DEV with a fresh rework handoff.",
+      "CRITICAL: this handoff's top-level status field is exactly PENDING (grepped and confirmed before commit, per this project's documented recurring mistake on this exact field)."
+    ]
+  },
+  "result": {
+    "status": "PASS_ROUTING_TO_RELEASE_VALIDATOR",
+    "summary": "Rework-1 recheck: full suite combined 2799/2802 passed, 3 failures, all independently diagnosed as documented pre-existing flake classes (REQ-156 Lua wall-clock timing x1, rustc-absent CheckToolchainTest x2) unrelated to this branch's diff. tenant_fixture_test.exs's C6 oracle-rot guard confirmed passing (its partition: 446 passed, 0 failures). No new regression. git diff main...HEAD --stat confirms the rework touched only test/support/tenant_fixture.ex and test/letflow/support/tenant_fixture_test.exs among test-support files. Full detail in handoffs/WF02-REQ195-20260830/test-runner-report-2.md and test/reports/report-2026-08-30-WF02-REQ195-20260830-rework1.yaml.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ195-20260830/test-runner-report-2.md",
+      "test/reports/report-2026-08-30-WF02-REQ195-20260830-rework1.yaml"
+    ],
+    "issues": [],
+    "next_action": "RELEASE-VALIDATOR to independently re-verify acceptance criteria and the full suite before REQ-195 is marked done."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

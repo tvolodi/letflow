@@ -464,7 +464,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_830_000_004, Letflow.Repo.Migrations.AddSecretRefToWebhookSubscriptions,
      "20260830000004_add_secret_ref_to_webhook_subscriptions.exs"},
     {20_260_830_010_001, Letflow.Repo.Migrations.CreateWebhookDeliveryAttempts,
-     "20260830010001_create_webhook_delivery_attempts.exs"}
+     "20260830010001_create_webhook_delivery_attempts.exs"},
+    {20_260_830_020_001, Letflow.Repo.Migrations.CreateAuditEntriesTenantScoped,
+     "20260830020001_create_audit_entries_tenant_scoped.exs"}
   ]
 
   @doc """

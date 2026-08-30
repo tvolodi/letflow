@@ -46,6 +46,7 @@ defmodule Letflow.Engine.TaskActivation do
   import Ecto.Query
 
   alias Ecto.Multi
+  alias Letflow.Audit
   alias Letflow.Definitions.Graph
   alias Letflow.Engine.InstanceState
   alias Letflow.Engine.Task
@@ -319,8 +320,36 @@ defmodule Letflow.Engine.TaskActivation do
     |> Task.insert_changeset(attrs)
     |> repo.insert(prefix: prefix)
     |> case do
-      {:ok, %Task{} = task} -> {:ok, task}
+      {:ok, %Task{} = task} -> record_task_create_audit(repo, task, prefix)
       {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
+    end
+  end
+
+  # REQ-195 (OQ-1) -- do_insert/3 is the single call site, shared by
+  # append_multi/6 and append_multi_from_existing_records/6 above, that
+  # creates a `tasks` row anywhere in this codebase (`Letflow.Tasks` itself
+  # has no create entrypoint -- see this module's moduledoc). No actor
+  # context reaches this function today: neither public function threads one
+  # in, and this design does not invent a new plumbing path to manufacture
+  # one that isn't already in scope here (design §3.2/OQ-1) -- actor_id:
+  # nil. Runs on the same `repo`/transaction the just-committed insert used,
+  # so a failed audit write rolls back this Task row with it (AC3).
+  defp record_task_create_audit(repo, %Task{} = task, prefix) do
+    case Audit.insert_entry(
+           repo,
+           %{
+             actor_id: nil,
+             action: "task.create",
+             resource_type: "task",
+             resource_id: task.id,
+             before_state: nil,
+             after_state: Audit.struct_state(task),
+             trace_id: nil
+           },
+           prefix
+         ) do
+      {:ok, _entry} -> {:ok, task}
+      {:error, reason} -> {:error, reason}
     end
   end
 

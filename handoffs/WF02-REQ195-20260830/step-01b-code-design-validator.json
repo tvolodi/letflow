@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step01b-rework2-WF02-REQ195-20260830",
+  "run_id": "WF02-REQ195-20260830",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ195-20260830/step-01b-code-design-validator.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-195"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ195-20260830/step-01-code-designer-rework2.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req195-audit-entry-storage.md",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/routers/definitions.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/tasks.ex"
+    ],
+    "branch_name": "feature/WF02-REQ195-20260830",
+    "rework_pass": 2,
+    "commit": "a7e99d6988d6ba57502a5eed5a975acc24e68ada"
+  },
+  "task": {
+    "description": "Rework iteration 2, scoped to exactly the two defects CODE-DESIGN-VALIDATOR found in its second FAIL pass (handoff step-01-code-designer-rework2.json). All other sections of the design -- §1, §1.2, §1.3, §2, §3.1 point 1/2 (Postgres-trigger trade-off) and point 3's already-corrected Definitions gap statement, §3.1a point 1 (AC11 scope reasoning for Definitions), §4, §5, §6, §7, §8, §0 traceability matrix, OQ-1, OQ-2, OQ-3 -- are UNCHANGED from the version already twice-verified (byte-identical, confirmed via `git diff` scoping below) and do not need re-derivation. Please diff-check the commit rather than re-reading the whole file end to end.\n\n1. FIXED -- §3.1a Decision (b)'s justification point 2 (the overstated scheduler-invocation claim). The false claim that `Definitions.activate/2` is called from a production 'system/scheduler-initiated path with no HTTP request and no human actor,' citing test/letflow/scheduler_test.exs:135 and test/letflow/scheduler/poller_test.exs:100, has been removed and replaced with an explicit correction: `grep -rn \"Definitions.activate(\" lib/` (excluding the design doc) shows exactly one production call site (lib/letflow/routers/definitions.ex:926, inside handle_activate/1); the two test citations are fixture-setup helpers, not evidence of a production system-driven caller. Point 2 is now stated as dropped/non-load-bearing -- Decision (b) rests solely on point 1's AC11 scope-boundary argument, which CODE-DESIGN-VALIDATOR already independently re-verified as sound in this same rework-2 pass.\n\n2. FIXED -- the six Identity-module actor_id rows in §3.2 no longer say 'not verified this session.' A new §3.1b subsection states the resolved disposition: `create_user/2`, `update_user_profile/3`, `update_user_status/3`, `create_group/2`, `create_token/3`, `revoke_token/2` all take only prefix-only opts (verified against lib/letflow/identity.ex), are all called exclusively from lib/letflow/routers/identity.ex (verified via grep -- create_user/2 line 250, update_user_profile/3 line 361, update_user_status/3 line 394, create_group/2 line 436, create_token/3 line 592, revoke_token/2 line 636), and that router does not currently read any auth_context assign at all (grep -n \"auth_context\" lib/letflow/routers/identity.ex returns no match). Decision: actor_id: nil for all six, same AC11-scope-boundary reasoning as §3.1a, explicitly confirmed as not conflicting with AC2 (AC2 names only definition activation, instance cancellation, task completion -- no Identity operation). §3.2's six table rows now each state 'nil -- §3.1b Decision (b)' rather than repeating the reasoning. Tracked as new OQ-5 (§9), parallel to OQ-4.\n\n3. UNCHANGED, per the rework handoff's own instruction -- Task-create's actor_id row keeps its 'not independently verified this session' language, still tied to OQ-1 (no single unambiguous engine.ex insertion site pinned, re-checked again this session, genuinely still open).\n\nPlease re-verify: (a) the two fixes above against the actual code paths cited, (b) that no new implementation code fences were introduced (git diff shows zero '```' lines touched), (c) that the diff's hunks are scoped only to §3.1a point 2, the new §3.1b, §3.2's six Identity rows + trailing note, and the new OQ-5 -- nothing else changed.",
+    "acceptance_criteria": [
+      "§3.1a Decision (b)'s justification no longer asserts Definitions.activate/2 has a production scheduler/system-initiated caller as established fact; the AC11 point-1 argument alone is stated as sufficient.",
+      "grep -rn \"Definitions.activate(\" lib/ (excluding lib/letflow/design/) shows exactly the one router call site, matching the design's corrected text.",
+      "§3.2's table rows for Letflow.Identity.create_user/2, update_user_profile/3, update_user_status/3, create_group/2, create_token/3, revoke_token/2 all state an explicit actor_id: nil disposition referencing §3.1b, not 'not verified this session' or any other deferral phrasing.",
+      "§3.1b explicitly states the new Identity actor_id disposition does not conflict with AC2.",
+      "The Task-create row's actor_id note is unchanged, still tied to OQ-1.",
+      "All sections not named above are byte-identical to the twice-previously-passed version -- verify via diff, do not re-derive.",
+      "Zero literal Elixir/SQL implementation code in the design doc -- confirmed no new code fences introduced.",
+      "This handoff's top-level status field is exactly PENDING and context is a top-level OBJECT -- grep-confirmed before commit."
+    ]
+  }
+}

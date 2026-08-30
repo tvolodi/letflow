@@ -24,7 +24,6 @@ defmodule Letflow.WebhooksDeliveryTest do
 
   use Letflow.DataCase, async: false
 
-  alias Letflow.Dlq
   alias Letflow.Dlq.Entry, as: DlqEntry
   alias Letflow.Secrets
   alias Letflow.Webhooks
@@ -35,7 +34,7 @@ defmodule Letflow.WebhooksDeliveryTest do
   # Fixtures / helpers
   # ---------------------------------------------------------------------------------
 
-  defp provisioned_tenant(slug_prefix \\ "req183-webhooks-delivery") do
+  defp provisioned_tenant(slug_prefix) do
     Letflow.TenantFixture.provisioned_tenant!(
       slug_prefix: slug_prefix,
       display_name: "REQ-183 Webhooks Delivery Test Tenant"

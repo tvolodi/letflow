@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF03-ISS0377-20260830-step02b-rework1",
+  "run_id": "WF03-ISS0377-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 2 (design gate) -- rework 1",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0377-20260830/step-02b-code-design-validator-rework1.json",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "note": "Validated lib/letflow/design/iss0377-cross-platform-test-fixes.md against the real vendored dependency and real scripts, not the design's narrative. Full findings in handoffs/WF03-ISS0377-20260830/design-validation-findings.md (not a handoff -- named to avoid the H6 lint per docs/anti-patterns.md). Part B (build-path isolation) and items 4/5 (no code blocks, no OS-skip shortcuts) all check out. Part A has one confirmed, concrete defect that must be fixed before re-submission.",
+    "design_file": "lib/letflow/design/iss0377-cross-platform-test-fixes.md",
+    "findings_file": "handoffs/WF03-ISS0377-20260830/design-validation-findings.md"
+  },
+  "task": {
+    "description": "Fix the confirmed defect in Part A.5 step 2 (non-empty :external_resource branch) and resubmit for CODE-DESIGN-VALIDATOR re-check.",
+    "defect": "A.5 step 2's non-empty-branch assertion ('every :external_resource entry ends in .rs') is empirically false against the real vendored dependency under this project's own mandated build configuration. WASMEX_BUILD=true is set for every mix invocation in this project (.github/workflows/ci.yml:128, and test/reports/report-2026-08-28-WF02-REQ165-20260828.yaml's wasmex_build_flag note), which forces Wasmex.Native through `use Rustler` (the from-source compile path: deps/rustler_precompiled/lib/rustler_precompiled.ex lines 159-195). `use Rustler` (deps/rustler/lib/rustler.ex lines 94-101) sets @external_resource from Rustler.Compiler.Config.external_resources/3 (deps/rustler/lib/rustler/compiler/config.ex lines 85-93), which globs `Path.join(path, \"**/*\") |> Path.wildcard()` under the crate directory with NO extension filter -- it only rejects files under `.../target/` and directories. The real crate directory deps/wasmex/native/wasmex/ (verified by listing) contains README.md, Cargo.toml, Cargo.lock, and .cargo/config.toml alongside the .rs files under src/ -- none of the four non-.rs files end in .rs. So on this project's actual, always-on build configuration, external_resources will be non-empty AND contain multiple non-.rs entries, and A.5 step 2's 'assert every entry ends in .rs' will raise a real ExUnit.AssertionError.",
+    "required_fix": "Change A.5 step 2's non-empty-branch assertion to something true of the real dependency: either (a) assert the list is merely non-empty (matching AC7's real invariant per the design's own A.3 -- 'these are real build inputs tracked by the compiler', not 'the tracked inputs are exclusively source files'), or (b) assert that at least one entry ends in .rs (proving real Rust sources are among the tracked inputs) rather than requiring every entry to. Re-verify the chosen fix against the same real file listing (deps/wasmex/native/wasmex/) cited above before resubmitting -- do not re-derive from prose alone.",
+    "non_blocking_note": "A.2's narrative attributes the fixed load-name copy (wasmex.so) to RustlerPrecompiled itself; it is actually produced by Rustler.Compiler's from-source force-build path (active because WASMEX_BUILD=true), not by RustlerPrecompiled (which loads the target-qualified name directly per rustler_precompiled.ex:742). This does not block the extension-mapping table or A.4's fallback design, both of which are correct and robust either way, but the mechanism attribution in A.2 should be corrected for accuracy. Also consider naming Elixir's MIX_OS_CONCURRENCY_LOCK explicitly in B.2's tradeoff table since docs/issues/ISS-0377.yaml's own title names it as the contended mechanism -- optional, not required for PASS.",
+    "must_not_change": "Part B (build-path isolation, Step 1.6/B.3/B.4) and the rest of Part A (A.2's extension-derivation table, A.4's fixed-name-plus-fallback design, A.5 step 1 and step 3, A.6, A.7) were independently verified sound against real code and must not be altered beyond what the required_fix above needs -- keep the diff scoped to A.5 step 2's assertion (and, if addressed, A.2's mechanism attribution)."
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "See handoffs/WF03-ISS0377-20260830/design-validation-findings.md for full verification detail. One confirmed, code-verified defect (A.5 step 2's '.rs-only' assertion is false against the real dependency under this project's own always-on WASMEX_BUILD=true build path) is sufficient for a full FAIL per this gate's no-partial-credit rule. Part B's hardlink/MIX_BUILD_PATH staleness claim -- flagged as the riskiest claim to scrutinize -- was checked in detail and found sound: Mix's staleness checking keys off source-file mtimes untouched by the _build copy, docs/issues/ISS-0377.yaml's own title confirms the contended mechanism is Mix's own hardlink-based MIX_OS_CONCURRENCY_LOCK (exactly what per-partition build-path isolation removes contention on), and no OS-specific skip shortcut is proposed for either symptom.",
+    "next_action": "Route back to CODE-DESIGNER for rework per the defect and required_fix above; re-submit to CODE-DESIGN-VALIDATOR when done."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

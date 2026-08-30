@@ -958,3 +958,16 @@ history:
       pending. Candidate for a future WF-04 stage-gate check of the
       scheduler half specifically, per RELEASE-VALIDATOR's own handoff
       note -- not performed here since this is a WF-02 run, not WF-04.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-08-30T01:20:54Z"
+    note: >
+      Queue task 377, WF03-ISS0377-20260830, GH#730. Issue filed by a sibling
+      session's RELEASE-VALIDATOR (WF02-REQ189-20260830 Step 5): a Windows
+      test-run environment defect -- test/letflow/engine/wasm/plugin_handler_test.exs
+      hardcodes a Unix .so/.rs assertion that fails on Windows'
+      .dll-shaped wasmex NIF artifact, plus a MIX_OS_CONCURRENCY_LOCK hard-link
+      contention between two scripts/test_parallel.sh partitions on Windows.
+      This session's sandbox is Linux; diagnosis proceeds via source reading
+      per core-directives.md's no-speculation rule, not a literal Windows repro.

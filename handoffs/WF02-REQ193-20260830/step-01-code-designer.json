@@ -1,0 +1,62 @@
+{
+  "handoff_id": "a7c3e812-9f54-4b21-8d6e-f1c0a2b3d4e5",
+  "run_id": "WF02-REQ193-20260830",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ193-20260830/step-01-code-designer.json",
+  "created_at": "2026-08-30T11:46:43Z",
+  "started_at": "2026-08-30T11:46:43Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-193"],
+    "issue_ids": [],
+    "branch_name": "feature/WF02-REQ193-20260830",
+    "requirement_text": {
+      "REQ-193": "First of S6's observability half. Letflow has NO logger configuration at all -- verified: config/config.exs, dev.exs, test.exs, prod.exs and runtime.exs contain zero `config :logger` entries, so log output is the BEAM default human-readable format, unstructured and unparseable. WHAT ALREADY EXISTS AND IS NOT REBUILT: the trace id itself. REQ-072 (done, ports tenant_context.zig AND trace_context.zig) already ships Letflow.Api.Context.assign_trace_id/1 -- lib/letflow/api/context.ex L155-162 reads the incoming x-trace-id header (@trace_id_header L107, bounded at 256 bytes L108), falls back to generate_trace_id/0, assigns conn.assigns[:trace_id], and mirrors it into Logger.metadata(trace_id: trace_id). So the request-side half of XC-01 is done. This requirement makes that metadata actually appear in the output and extends propagation to the places that have no conn. SCOPE: 1. A Logger formatter emitting ONE single-line JSON object per entry containing at minimum, per OBS-01: timestamp (ISO 8601 UTC, microsecond precision), level (one of debug | info | warn | error), trace_id, component (the emitting module or subsystem), message, plus any additional metadata as key/value pairs. R-Co's src/obs/logger.zig treats those five as RESERVED -- a caller passing one of them as a custom field is an error rather than silently shadowing the real value. Port that rule. 2. trace_id is ALWAYS present in the object. When there is no active trace it is the empty string, never omitted -- so the output shape is stable for a log consumer. R-Co asserts exactly this. 3. Level configurable via an environment variable, per OBS-01, with an INVALID value causing a fatal startup error rather than a silent fallback to a default. 4. BACKGROUND TRACE ORIGINATION, which is OBS-01's stated edge case and the half of XC-01 that has no HTTP request to inherit from: a background operation -- REQ-186's scheduler poll cycle is the concrete first consumer -- mints its own trace id for that operation, so every line it emits correlates. Provide the function that does this; REQ-186's poller is expected to call it. 5. SENSITIVE-VALUE REDACTION, which OBS-01 requires (MUST NOT include ... no token values, no plaintext credentials, no password fields, and the edge case the value MUST be replaced with [REDACTED]). This is the same mechanism REQ-190 needs; whichever of the two lands first implements it and the other consumes it, and this requirement's moduledoc must name which. R-Co's list (src/obs/logger.zig L81-97) is exact keys authorization, password, password_hash, token, access_token, refresh_token, bootstrap_token, api_token, secret, client_secret, credential, credentials, set-cookie, cookie, plus suffixes _token, _secret, _password, _credential; the VALUE is replaced and the key is kept. HONEST LIMITATION TO STATE, NOT TO PAPER OVER: this redacts by field NAME. A secret placed under an unrecognised key is not caught. R-Co has the same limitation. Say so in the moduledoc rather than claiming a guarantee the mechanism does not provide. NOT IN THIS REQUIREMENT: no metrics (REQ-194); no audit table (REQ-195); no alerting hooks (REQ-201, which consumes this requirement's logger for its own delivery-failure logging per OBS-06's fourth acceptance criterion); no instance-timeline rendering (REQ-200); no change to lib/letflow/api/context.ex's existing trace-id assignment."
+    },
+    "artifacts_in": [
+      "lib/letflow/api/context.ex",
+      "config/config.exs",
+      "config/dev.exs",
+      "config/test.exs",
+      "config/prod.exs",
+      "config/runtime.exs",
+      "docs/migration/stage-6-operational-cross-cutting.md",
+      "docs/guides/backend_developer_guide.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/obs/",
+      "config/",
+      "lib/letflow/design/req193-structured-logging.md"
+    ],
+    "related_handoff_ids": ["step00-WF02-REQ193-20260830"]
+  },
+  "task": {
+    "description": "Design REQ-193: Structured JSON logging with trace-id propagation.\n\nRead the requirement from context.requirement_text[\"REQ-193\"] and the artifacts listed in context.artifacts_in. Do NOT open docs/requirements.yaml.\n\nKEY FACTS ALREADY VERIFIED BY ORCH:\n- lib/letflow/api/context.ex already has assign_trace_id/1 (L155-162) and generate_trace_id/0 that mirrors trace_id into Logger.metadata. Do NOT redesign or modify this -- the design must build on it.\n- config/ files have ZERO :logger entries (confirmed). The design adds them.\n- REQ-190 (secrets core) is done but did NOT implement sensitive-value redaction. grep lib/letflow/ for redact/REDACTED returns zero matches. REQ-193 implements the redaction mechanism first. The moduledoc MUST state: 'REQ-193 implements the shared sensitive-value redaction mechanism first (REQ-190 did not); REQ-190 does not need to consume it since REQ-190 is already done, but the mechanism is available for any future caller.'\n\nDesign outputs required:\n1. lib/letflow/design/req193-structured-logging.md with:\n   a. Letflow.Obs.Logger module -- a :logger formatter (behaviour :logger_formatter, format/2 callback) emitting one single-line JSON object per entry with fields: timestamp (ISO 8601 UTC microsecond), level (debug|info|warn|error), trace_id (string, empty string when not set), component (module name from metadata[:mfa] or caller), message (string), plus any remaining metadata key/value pairs\n   b. Reserved field names (timestamp, level, trace_id, component, message) -- caller supplying one is an error, the reserved value MUST NOT be shadowed\n   c. Letflow.Obs.Logger.redact_sensitive/1 -- takes a metadata map, replaces values for keys in the exact list from R-Co (authorization, password, password_hash, token, access_token, refresh_token, bootstrap_token, api_token, secret, client_secret, credential, credentials, set-cookie, cookie, plus any key with suffix _token, _secret, _password, _credential) with the atom :[REDACTED]; the key is kept\n   d. Letflow.Obs.Logger.with_trace/1 -- takes a zero-arity function, generates a trace_id via Letflow.Api.Context.generate_trace_id/0, inserts it into Logger.metadata for the duration of the function call, then clears it; this is the 'background trace origination' function REQ-186's poller will call\n   e. Config: config :logger, backends: [] (no legacy backends); config :logger, :default_handler, ... formatter: {Letflow.Obs.Logger, []}, level read from LOG_LEVEL env var at runtime, invalid value causes a startup error (a validate!/0 called from Letflow.Application.start/2)\n   f. Function signatures with @spec, error cases, cross-module dependencies, open questions\n2. Validate every acceptance criterion maps to a concrete design element\n\nComplete the handoff: set status COMPLETED/FAILED, artifacts_out: [\"lib/letflow/design/req193-structured-logging.md\"], next_action: \"Route to CODE-DESIGN-VALIDATOR\".",
+    "acceptance_criteria": [
+      "Every acceptance criterion from context.requirement_text maps to a concrete design element -- no criterion left unaddressed",
+      "Public function signatures specified with @spec input/output types",
+      "DB tables/columns: none (no migration for this requirement)",
+      "Config changes fully described (config/*.exs entries, runtime.exs LOG_LEVEL env var, startup validation)",
+      "Reserved field enforcement specified -- how a caller supplying a reserved key causes an error",
+      "Sensitive-value redaction list matches R-Co's exact key list from the requirement description",
+      "with_trace/1 signature and lifecycle specified (generate, set metadata, call function, clear metadata)",
+      "No implementation code (no actual .ex/.exs code bodies -- signatures and type shapes only)"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": null,
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

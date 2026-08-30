@@ -377,3 +377,20 @@ history:
       not a regression). This closes S6's expr subsystem in full: REQ-197
       (arithmetic/parse-error surface) and REQ-198 (builtins) are both done.
       Full detail: handoffs/WF02-REQ198-20260830/release-validation-report-req198.md.
+
+  - req: REQ-193
+    event: started
+    agent: ORCH
+    at: "2026-08-30T11:46:43Z"
+    note: >
+      WF02-REQ193-20260830 started (queue task 366, GH#712, stage S6).
+      Structured JSON logging with trace-id propagation (OBS-01,
+      XC-01 non-HTTP half). Stale lock force-released (no branch, no
+      handoff files, no registry entry -- confirmed dead session).
+      REQ-072 (depends_on) is done. No owned_modules conflicts with
+      active runs. Feature branch feature/WF02-REQ193-20260830 created
+      from origin/main at 3a16095f. REQ-190 (secrets core, done) did
+      NOT implement the sensitive-value redaction mechanism -- grep of
+      lib/letflow/ returns zero redact/REDACTED matches -- so REQ-193
+      implements it and its moduledoc will name that fact. Step 01
+      dispatched to CODE-DESIGNER.

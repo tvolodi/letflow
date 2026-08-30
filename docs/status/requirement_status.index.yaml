@@ -800,7 +800,7 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 9
+    entries: 10
     note: >
       Recounted to 9 by ORCH's Step Final rebase composition for
       WF02-REQ198-20260830, composing this branch's own REQ-198 done-event

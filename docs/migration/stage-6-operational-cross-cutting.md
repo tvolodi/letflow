@@ -53,8 +53,17 @@ verification also fixes a genuine R-Co weakness rather than just
 porting it: `do_verify_chain/2` recomputes each entry's hash from its
 stored content before checking `prev_chain_hash` linkage, where R-Co's
 own `validateAuditChain` only checked linkage. REQ-195 is core-only,
-no route change; serving `GET /api/v1/audit` from this new store is
-REQ-196, which remains open. REQ-201 (alerting, the
+no route change. REQ-196 (Serve `GET /api/v1/audit` from the audit
+store) is also done as of 2026-08-30: the route's handler is repointed
+from `Letflow.EventStore.read_global/1` to REQ-195's `audit_entries`
+store, retiring `routers/audit.ex`'s own documented caveats in full --
+`resource_type` now varies by real resource kind instead of the
+constant `"instance"`, `before_state`/`after_state` carry real
+captured state instead of always null, and the `resource_type` filter
+now genuinely discriminates -- with the response envelope unchanged
+against `web/src/api/audit.ts`'s `RawAuditPage`/`RawAuditEntry` and no
+`web/` file touched. This closes the full audit vertical (REQ-195 +
+REQ-196) in full. REQ-201 (alerting, the
 other OBS-04-adjacent rework-1 addition) remains open. The ordering
 subsystem remains
 pending. A

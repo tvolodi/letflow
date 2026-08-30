@@ -169,3 +169,72 @@ gap, not a defect in the recommended approach.
   explicitly forbids it for symptom 1, and B.3 explicitly rejects
   Approach 1 (Windows-detect-and-retry) for symptom 2. Both non-goals
   called out by the Step 1 diagnosis are honored.
+
+---
+
+# CODE-DESIGN-VALIDATOR findings — ISS-0377 design (iteration 2, re-check after rework 1) — PASS
+
+Design reviewed: `lib/letflow/design/iss0377-cross-platform-test-fixes.md` at commit `697987b`.
+
+## Scope of this re-check
+
+Per `handoffs/WF03-ISS0377-20260830/step-02b-code-design-validator.json`, re-checked
+only: (1) A.5 step 2's corrected non-empty-`:external_resource`-branch assertion, and
+(2) that nothing else in the design regressed.
+
+## (1) A.5 step 2 assertion — verified correct
+
+The design now asserts, for the non-empty branch, that **at least one**
+`:external_resource` entry ends in `.rs` (`Enum.any?/2` + `String.ends_with?/2`),
+replacing the prior (empirically false) "every entry ends in `.rs`" assertion.
+
+Re-verified independently against the real vendored tree and Rustler's own source,
+not re-derived from the design's prose:
+
+- `find deps/wasmex/native/wasmex -type f` (this session) confirms the crate
+  directory contains a mix of `.rs` files under `src/` (component.rs, engine.rs,
+  lib.rs, memory.rs, etc.) together with non-`.rs` files at the crate root and in
+  `.cargo/`: `README.md`, `Cargo.toml`, `Cargo.lock`, `.cargo/config.toml`.
+- Read `deps/rustler/lib/rustler/compiler/config.ex` lines 85-98 (`external_resources/3`
+  → `expand_paths/1`) directly: it globs `Path.join(path, "**/*") |> Path.wildcard()`
+  and rejects only entries under `#{path}/target/` and directories — no extension
+  filter of any kind. This confirms the design's citation of this function and its
+  behavior is accurate.
+- Consequence: against this real tree, "at least one entry ends in `.rs`" evaluates
+  **true** (many `.rs` entries present) — the assertion passes. "Every entry ends in
+  `.rs`" would evaluate **false** (README.md, Cargo.toml, Cargo.lock, .cargo/config.toml
+  are swept in and don't end in `.rs`) — confirming the prior FAIL was correct and the
+  new assertion fixes it.
+
+Verdict: the corrected assertion is empirically true against the real, currently
+vendored dependency under this project's own mandated `WASMEX_BUILD=true` build path.
+No defect found.
+
+## (2) Regression check — nothing else changed
+
+`git diff 10e490a 697987b -- lib/letflow/design/iss0377-cross-platform-test-fixes.md`
+shows a diff scoped exactly to A.5 step 2's non-empty-branch assertion text (the
+bullet replacing "assert every entry..." with "assert at least one entry..." plus its
+justifying prose). Working tree is clean (no further uncommitted edits on top of
+`697987b`). This confirms, byte-for-byte:
+
+- A.2's ground-truth section (extension-derivation facts) — unchanged.
+- A.4's extension-mapping table and fixed-name-plus-fallback design (steps 1-3) —
+  unchanged.
+- A.5 step 1 (fetch mechanism) and step 3 (failure-message requirement) — unchanged.
+- A.5's empty-`:external_resource` fallback branch — unchanged.
+- A.6 (explicit non-goal: no OS-skip) and A.7 (open question OQ-A1) — unchanged.
+- All of Part B (build-path isolation, Step 1.6/B.3/B.4, hardlink/MIX_BUILD_PATH
+  reasoning) — unchanged.
+
+A.2's mechanism-attribution note flagged non-blocking in iteration 1 was correctly
+left untouched, as the rework1 handoff did not require it and explicitly marked it
+non-blocking.
+
+No fenced code blocks present (`` ``` `` grep still empty); no `:os.type()`-guarded
+skip reintroduced.
+
+## Verdict: PASS
+
+Routing to ELIXIR-DEV for WF-03 Step 3 implementation per
+`handoffs/WF03-ISS0377-20260830/step-03-elixir-dev.json`.

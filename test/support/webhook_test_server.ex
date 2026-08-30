@@ -71,7 +71,9 @@ defmodule Letflow.WebhookTestServer do
           ref: pid()
         }
   def start_with_responder(responder) when is_function(responder, 1) do
-    {:ok, listen_socket} = :gen_tcp.listen(0, [:binary, packet: :raw, active: false, reuseaddr: true])
+    {:ok, listen_socket} =
+      :gen_tcp.listen(0, [:binary, packet: :raw, active: false, reuseaddr: true])
+
     {:ok, port} = :inet.port(listen_socket)
 
     owner = self()
@@ -121,25 +123,36 @@ defmodule Letflow.WebhookTestServer do
     with {:ok, request} <- read_request(socket) do
       send(owner, {:webhook_test_server_request, request})
       {status, body} = responder.(request)
-      :gen_tcp.send(socket, response_bytes(status, body))
+      :ok = :gen_tcp.send(socket, response_bytes(status, body))
     end
 
     :gen_tcp.close(socket)
   end
 
   defp read_request(socket) do
-    with {:ok, head} <- read_until_headers_end(socket, ""),
+    with {:ok, head, leftover} <- read_until_headers_end(socket, ""),
          {request_line, header_lines} <- split_head(head),
          {method, path} <- parse_request_line(request_line),
          headers <- parse_headers(header_lines),
-         {:ok, body} <- read_body(socket, headers) do
+         {:ok, body} <- read_body(socket, headers, leftover) do
       {:ok, %{method: method, path: path, headers: headers, body: body}}
     end
   end
 
+  # Reads until the blank-line header terminator is seen. `:gen_tcp.recv(socket, 0, _)`
+  # returns whatever bytes are currently available, NOT exactly one HTTP line at a
+  # time -- for a small request, `:httpc` frequently writes headers and body together
+  # in one `gen_tcp:send`, which the OS then delivers as a single chunk on this end. So
+  # the chunk that satisfies "headers are complete" commonly already contains some (or
+  # all) of the body too. That leftover must be threaded through to `read_body/3`
+  # rather than discarded -- discarding it (the original bug here) makes `read_body`
+  # block on `:gen_tcp.recv` for bytes that already arrived and were thrown away,
+  # which times out and surfaces to `:httpc` as `socket_closed_remotely` once this
+  # server gives up and closes the connection.
   defp read_until_headers_end(socket, acc) do
     if String.contains?(acc, "\r\n\r\n") do
-      {:ok, acc}
+      [head, leftover] = String.split(acc, "\r\n\r\n", parts: 2)
+      {:ok, head, leftover}
     else
       case :gen_tcp.recv(socket, 0, 5_000) do
         {:ok, chunk} -> read_until_headers_end(socket, acc <> chunk)
@@ -149,8 +162,7 @@ defmodule Letflow.WebhookTestServer do
   end
 
   defp split_head(head) do
-    [head_part, _rest] = String.split(head, "\r\n\r\n", parts: 2)
-    [request_line | header_lines] = String.split(head_part, "\r\n")
+    [request_line | header_lines] = String.split(head, "\r\n")
     {request_line, header_lines}
   end
 
@@ -168,18 +180,22 @@ defmodule Letflow.WebhookTestServer do
     |> Map.new()
   end
 
-  defp read_body(socket, headers) do
+  defp read_body(socket, headers, leftover) do
     case Map.get(headers, "content-length") do
       nil ->
         {:ok, ""}
 
       length_str ->
         length = String.to_integer(length_str)
-        read_exact(socket, length, "")
+        # `leftover` is the body-bytes-already-in-hand portion read alongside the
+        # headers (see read_until_headers_end/2) -- only ever read MORE off the
+        # socket for what's still missing beyond it, and never re-request bytes
+        # already received.
+        read_exact(socket, length - byte_size(leftover), leftover)
     end
   end
 
-  defp read_exact(_socket, 0, acc), do: {:ok, acc}
+  defp read_exact(_socket, remaining, acc) when remaining <= 0, do: {:ok, acc}
 
   defp read_exact(socket, remaining, acc) do
     case :gen_tcp.recv(socket, remaining, 5_000) do

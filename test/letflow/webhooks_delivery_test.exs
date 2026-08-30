@@ -348,9 +348,7 @@ defmodule Letflow.WebhooksDeliveryTest do
 
       # This requirement's own scope adds no file under lib/letflow/routers/ at all --
       # REQ-184 (the deliveries route) is the next requirement, not this one.
-      refute File.exists?(
-               Path.join(File.cwd!(), "lib/letflow/routers/webhook_deliveries.ex")
-             )
+      refute File.exists?(Path.join(File.cwd!(), "lib/letflow/routers/webhook_deliveries.ex"))
     end
   end
 end

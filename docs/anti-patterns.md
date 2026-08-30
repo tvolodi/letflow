@@ -1863,3 +1863,36 @@ verify, not one: (1) does the cited function/arity/behavior genuinely exist as d
 (2) does the *specific quoted text* exist verbatim at the *specific file* you just attributed it
 to (grep for the quoted string in that exact file, not just anywhere in the repo). Fixing (1)
 does not imply (2) is still true, especially when the edit touches both in the same sentence.
+
+## A hand-rolled `:gen_tcp` test HTTP server discarding bytes read alongside the headers, misdiagnosed as a socket-close race
+
+**What happened (REQ-183, TEST-DESIGNER rework iteration 1).** `test/support/webhook_test_server.ex`'s
+`read_until_headers_end/2` reads with `:gen_tcp.recv(socket, 0, _)`, which returns *whatever bytes
+are currently available on the socket*, not exactly the header portion. For a small POST body
+(REQ-183's HMAC-signed webhook payload, ~17 bytes), `:httpc` frequently writes the full request
+(headers + body) in a single `gen_tcp:send`, so the chunk that satisfies "the `\r\n\r\n` terminator
+has arrived" commonly *already contains some or all of the body too*. The original code split that
+chunk on `\r\n\r\n` and discarded the trailing part (`[head_part, _rest] = String.split(...)`),
+then `read_body/2` unconditionally issued a fresh `:gen_tcp.recv(socket, content_length, _)` for the
+body -- blocking on bytes that had already arrived and been thrown away. That recv reliably timed
+out (5s), `@max_attempts` (4) times per delivery attempt loop, and only then did the server give up
+and close the socket -- which `:httpc` on the other end reported as `socket_closed_remotely`, an
+error shape that looks exactly like a close-before-read race. TEST-DESIGN-VALIDATOR's Step 3b
+report reasonably diagnosed it as exactly that (a `:gen_tcp.close/1` racing the peer's read) and
+routed rework on that theory. Two different close-sequencing fixes were tried first on that
+theory -- `:gen_tcp.shutdown(socket, :write)` half-close, then a full drain-until-peer-closes loop
+before closing -- and **neither changed the failure at all**, which was the actual signal that the
+diagnosis was wrong, not that the fix needed to be more aggressive. Byte-level tracing (a minimal
+standalone `:gen_tcp` listener dumping every `recv` chunk with its size) showed the real shape:
+one chunk containing the complete request, then a second `recv` call that legitimately had nothing
+left to read and timed out.
+
+**Correct alternative.** When a hand-rolled line/header-oriented TCP reader accumulates bytes across
+multiple `:gen_tcp.recv` calls and then splits off "the header portion," the split's leftover must
+be threaded through to whatever reads the body next -- never discarded on the assumption that a
+`recv(socket, 0, _)` chunk boundary lines up with a semantic boundary (line, header block, etc.) in
+the protocol being parsed. TCP has no message boundaries; a chunk is opportunistic OS buffering, not
+a framing unit. If two failed fix attempts targeting a plausible-sounding theory (here: "it's a
+close race") produce *zero change* in the failure's behavior or timing, that itself is evidence to
+stop iterating on that theory and get a byte-level trace of what is actually on the wire before
+trying a third variant of the same fix.

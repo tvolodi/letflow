@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF03-ISS0377-20260830-step05",
+  "run_id": "WF03-ISS0377-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 5 (close the issue)",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "ISSUE-FIXER",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "branch": "feature/WF03-ISS0377-20260830",
+    "evidence_commit": "b794c18",
+    "implementation_commit": "8eef01b",
+    "prefix_commit": "64eef56",
+    "validation_report": "test/specs/ISS-0377-test-design-validation.md",
+    "evidence_file": "test/specs/ISS-0377-regression-proof.md",
+    "new_permanent_test_file": "test/letflow/engine/wasm/plugin_handler_ac7_cross_platform_regression_test.exs",
+    "workflow_note": "This is WF-03 (issue resolving), not WF-02. Per docs/agents/workflows/WF-03_issue_resolving.md Step 5, the next agent is ISSUE-FIXER, which sets docs/issues/ISS-0377.yaml status to resolved (resolved_in_run/resolved_at) and closes GH#730 with a --comment citing this run and the regression test file -- NOT RELEASE-VALIDATOR/DOC-UPDATER, which belong to WF-02's downstream steps.",
+    "test_runner_note": "The launching agent's explicit instruction for this run routed TEST-DESIGN-VALIDATOR directly to ISSUE-FIXER for Step 5, rather than through TEST-RUNNER first. TEST-DESIGN-VALIDATOR's own independent re-runs in this step (quoted below and in the validation report) already produced fresh, real mix test output for every file in scope, so TEST-RUNNER's usual role (running mix test and reporting real output) was substantively fulfilled within this step.",
+    "verdict": "PASS",
+    "independent_mutation_a1_result": "Applied the A.1 mutant myself: swapped test/letflow/engine/wasm/plugin_handler_test.exs for git show 8eef01b^:... , ran MIX_ENV=test mix test test/letflow/engine/wasm/plugin_handler_test.exs --seed 0 --include wasm_hang -> Result: 13/14 passed, 1 failed (the same AC7 :external_resource assertion TEST-DESIGNER reported; TEST-DESIGNER's run excluded wasm_hang and got 9/10 -- 9+4=13, consistent, since I included the 4 wasm_hang tests). Confirmed this host's precompiled wasmex build genuinely has an empty :external_resource list -- real, not fabricated. Reverted via git checkout --, confirmed git status --porcelain empty, re-ran -> Result: 14 passed (all green). Also independently ran the new permanent test/letflow/engine/wasm/plugin_handler_ac7_cross_platform_regression_test.exs -> Result: 2 passed, matching TEST-DESIGNER's report exactly, after reading the file in full and confirming it genuinely contains both the verbatim NEW native_artifact_check/2 logic and a separate OLD-hardcoded-.so-path assertion against the same simulated Windows-shaped fixture (not a one-sided assertion).",
+    "part_b_independent_check": "Re-ran `git diff 8eef01b^ 8eef01b -- scripts/test_parallel.sh` myself and confirmed directly: pre-fix script has no Step 1.6 and launches every partition with a bare MIX_TEST_PARTITION=\"$i\" mix test (no MIX_BUILD_PATH anywhere); post-fix adds the per-partition hardlink-preserving seed pass and a distinct, command-scoped MIX_BUILD_PATH=\"_build/test-partition-$i\" per partition. Did not re-run the live mix-shim env-capture probe myself (time budget) -- the diff-based structural check is independently reproducible from the two commits alone and corroborates the claimed mechanism.",
+    "coverage_check": "Every AC7 assertion has a runnable, currently-green test; the new permanent regression file has no @tag :skip and no TODO; its fixture is a uniquely-named temp directory torn down in on_exit, no shared hardcoded state, tests are async and independent of each other and of test run order; no hardcoded secrets/connection strings found in either file.",
+    "final_tree_state": "git status --porcelain was empty at the start of this step, empty again immediately after the A.1 swap-and-revert, and the only change at the end of this step is the new test/specs/ISS-0377-test-design-validation.md report file (now committed alongside this handoff)."
+  },
+  "task": {
+    "description": "Close ISS-0377 per WF-03 Step 5: set docs/issues/ISS-0377.yaml status to resolved with resolved_in_run/resolved_at (real UTC timestamp), and close GH#730 (if reachable) with `gh issue close 730 --comment \"Fixed in WF03-ISS0377-20260830. See docs/issues/ISS-0377.yaml and the regression test at test/letflow/engine/wasm/plugin_handler_ac7_cross_platform_regression_test.exs (plus the fail-then-pass evidence in test/specs/ISS-0377-regression-proof.md).\"`. Then route to Step Final (git merge)."
+  },
+  "result": null
+}

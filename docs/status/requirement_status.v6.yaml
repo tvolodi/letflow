@@ -1000,3 +1000,17 @@ history:
       no backing subsystem. Notable: this table is GLOBAL (not per-tenant-
       schema), a deliberate, reasoned divergence from decision 0003 Decision
       B that requires REVIEWER sign-off in this run.
+  - req: REQ-183
+    event: started
+    agent: ORCH
+    at: "2026-08-30T03:34:25Z"
+    note: >
+      Queue task 356, GH#701, stage S6. Webhook delivery dispatch core --
+      HMAC-SHA256 signing, retry/backoff, auto-pause threshold, and
+      dead-letter landing via REQ-176's DLQ core. depends_on REQ-181
+      (done), REQ-176 (done), REQ-189 (done, settles the webhook HMAC
+      key ownership REQ-183 needs). No route/controller in scope --
+      REQ-184 is the route-layer half. Queue task 356's lock was
+      recovered from a stale state (no branch/commit/handoff trace of
+      any prior REQ-183 run existed in this checkout) before this
+      dispatch, per handoffs/orchestrator.log's own recovery entry.

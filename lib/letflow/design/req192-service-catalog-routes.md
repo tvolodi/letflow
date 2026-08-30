@@ -2,12 +2,17 @@
 
 Route/controller layer atop REQ-191's `Letflow.ServiceCatalog` context module
 and REQ-069's `Letflow.Api.Authorization` matrix (SVC-04). This design covers
-**only** two new router modules and their mount points — no change to
-`Letflow.ServiceCatalog`, `Letflow.ServiceCatalog.Entry`, the
-`service_catalog` migration, or `lib/letflow/api/authorization.ex`, per this
-requirement's own "NOT IN THIS REQUIREMENT" note. No file under `web/` is
-touched; `web/src/api/services.ts` and `web/src/types/api.ts` are read-only
-inputs.
+two new router modules and their mount points — no change to
+`Letflow.ServiceCatalog.Entry`, the `service_catalog` migration, or
+`lib/letflow/api/authorization.ex`, per this requirement's own "NOT IN THIS
+REQUIREMENT" note. **Revised in rework iteration 2 (§5): one small, additive,
+read-only function, `Letflow.ServiceCatalog.list_all/1`, is now added to
+`service_catalog.ex` — a deliberate, explicitly-reasoned exception to the "no
+context-module change" note, made necessary by a real conflict with
+`INV-RT-1` (REQ-078's router-layer "no `Repo.` call" invariant) discovered
+during implementation; see §5 for the full reasoning, flagged there for
+REVIEWER sign-off.** No file under `web/` is touched; `web/src/api/services.ts`
+and `web/src/types/api.ts` are read-only inputs.
 
 ## §0 — Contract sources (moduledoc-mandated statement)
 
@@ -144,70 +149,95 @@ Calls `Letflow.ServiceCatalog.list_for_tenant(params, tenant_id)` with
 scoped entries) is exactly AC1's requirement — no additional filtering
 needed in the router.
 
-## §5 — `GET /api/v1/admin/services` — no backing "list all" function (finding + resolution)
+## §5 — `GET /api/v1/admin/services` — no backing "list all" function (finding + REVISED resolution, rework iteration 2)
 
-**Gap, named explicitly:** `Letflow.ServiceCatalog` exposes exactly five
-functions — `register/1`, `get_for_tenant/2`, `list_for_tenant/2`,
-`update_scope/2`, `delete/1` — and `list_for_tenant/2` always filters by
-`tenant_id` (`where: e.scope == :global or e.owner_tenant_id == ^tenant_id`).
-There is no tenant-independent "list every row" function, and this
-requirement's own "NOT IN THIS REQUIREMENT" note forbids adding one to
-`service_catalog.ex`. AC2 ("returns entries the caller's own tenant does not
-own, demonstrating it is not tenant-filtered") cannot be satisfied by calling
+**Superseded note:** this section's original text (iteration 1, approved by
+CODE-DESIGN-VALIDATOR) specified a router-local `Ecto.Query` against
+`Letflow.ServiceCatalog.Entry` directly via `Letflow.Repo`, bypassing
+`Letflow.ServiceCatalog` entirely. Implementing that exactly as written
+caused an existing, unrelated-requirement test to fail:
+`test/letflow/routers/req078_supporting_routes_test.exs:720`, "T-19: no
+`Repo.` call anywhere under `lib/letflow/routers/` (INV-RT-1)" — a static,
+allowlist-free `Path.wildcard("lib/letflow/routers/*.ex")` scan asserting
+zero files contain `"Repo."` after comment-stripping, `assert offenders ==
+[]`, no exception mechanism. `INV-RT-1` is a named, REVIEWER-approved
+invariant from REQ-078's own design
+(`lib/letflow/design/req078-supporting-routes.md` §3.3/§20.3), still cited as
+load-bearing in `test/specs/REQ-078.md`. Full discovery record:
+`handoffs/WF02-REQ192-20260830/elixir-dev-inv-rt-1-conflict.md` and
+`handoffs/WF02-REQ192-20260830/step-02c-security-reviewer.json`. That prior
+text is replaced in full by this section.
+
+**Gap, named explicitly (unchanged from iteration 1):** `Letflow.ServiceCatalog`
+exposes exactly five functions — `register/1`, `get_for_tenant/2`,
+`list_for_tenant/2`, `update_scope/2`, `delete/1` — and `list_for_tenant/2`
+always filters by `tenant_id` (`where: e.scope == :global or
+e.owner_tenant_id == ^tenant_id`). There is no tenant-independent "list every
+row" function. AC2 ("returns entries the caller's own tenant does not own,
+demonstrating it is not tenant-filtered") cannot be satisfied by calling
 `list_for_tenant/2` with any `tenant_id`.
 
-**Resolution specified here (not left as an open question, since AC2 must be
-buildable):** `Letflow.Routers.AdminServices`'s `GET /` handler queries
-`Letflow.ServiceCatalog.Entry` directly via `Letflow.Repo` and
-`Letflow.Api.Pagination`'s public encode/decode functions
-(`build_raw_cursor/3`, `encode_cursor/1`, `decode_cursor/3`) — reusing the
-exact keyset shape `list_for_tenant/2` already established
-(`order_by: [desc: created_at, desc: service_id]`, `limit(page_size + 1)`,
-drop-the-extra-row split) but with **no** `where` clause restricting scope or
-owner. This is new query logic living in the router module, not a change to
-any file under the "NOT IN THIS REQUIREMENT" list — `Letflow.ServiceCatalog.Entry`
-is a public schema module already `alias`ed elsewhere (e.g. inside
-`Letflow.ServiceCatalog` itself), and no acceptance criterion or "NOT IN THIS
-REQUIREMENT" clause forbids a router from constructing its own `Ecto.Query`
-against an already-public schema.
+**Revised resolution: a new, minimal `Letflow.ServiceCatalog.list_all/1`
+function, added to `service_catalog.ex` by this requirement — a deliberate,
+explicitly-reasoned scope expansion beyond this requirement's original "NOT
+IN THIS REQUIREMENT: no change to REQ-191's schema or context" note.**
 
-**This is not backed by existing precedent — it is a deliberate, first-of-its-kind
-exception, flagged here for REVIEWER sign-off, not something this design rests
-on prior art.** Every other router in this codebase (`Letflow.Routers.Audit`
-delegates to `Letflow.EventStore.read_global/1`; `Letflow.Routers.Metrics`
-delegates to `Letflow.Engine.count_instances_by_status/1` and sibling
-context-module functions) reaches its data exclusively through a context
-module — a repo-wide `grep -rln 'Ecto.Query|Repo\.(all|one|get)'
-lib/letflow/routers/` turns up no genuine direct-schema-query call anywhere in
-the router layer today. This design deliberately breaks that layering
-discipline for this one handler, solely because (a) this requirement's own
-"NOT IN THIS REQUIREMENT" boundary forbids adding a tenant-agnostic list-all
-function to `service_catalog.ex`, and (b) AC2 cannot be satisfied any other
-way under that boundary. REVIEWER must independently weigh and explicitly
-sign off on this exception at Step 2d — it is not to be treated as routine or
-pre-approved by analogy to anything already in the codebase.
+**Why this scope expansion is the right call, not a silent override:** the
+"no context-module change" boundary was written before `INV-RT-1`'s existence
+was known to this requirement's authors. That boundary and `INV-RT-1` are now
+in direct, unavoidable conflict — AC2 requires a genuinely tenant-agnostic
+list, `INV-RT-1` forbids the router from querying the schema directly to get
+one, and no third option satisfies both without touching
+`service_catalog.ex`. Between the two, the layering violation is strictly
+worse: `INV-RT-1` is a repo-wide, REVIEWER-approved, test-enforced
+architectural invariant that a different requirement (REQ-078) already
+established as load-bearing for the *entire* router layer, not just this
+one file; the "no context-module change" note, by contrast, was this
+requirement's own scope-sizing choice, adopted (per REQ-192's requirement
+text) to keep this requirement's diff small, not because
+`Letflow.ServiceCatalog` is frozen for any structural reason — REQ-191's own
+design explicitly anticipates and welcomes future context-module growth (see
+`service_catalog.ex`'s own moduledoc, "Function arity" section, discussing
+future OQ resolution). A four-function-mirroring, read-only, additive
+function is a small, well-precedented change to that module — strictly
+smaller in blast radius than teaching the route layer to bypass its one
+universally-enforced discipline. This is a genuine, reasoned scope
+adjustment, flagged here explicitly for REVIEWER sign-off — not something
+silently expanded without acknowledgment, and not a re-decision of
+`INV-RT-1` itself (this design does not touch
+`req078_supporting_routes_test.exs` or `INV-RT-1`'s statement at all;
+`INV-RT-1` continues to hold, unconditionally, exactly as REQ-078 wrote it).
 
-Cursor prefix: **must be different from `"SC:"`** (`ServiceCatalog`'s own
-`@list_cursor_prefix`) — `Pagination.decode_cursor/3`'s whole point is
-cross-endpoint cursor isolation (INV-9), so a cursor minted by `GET /services`
-must be rejected (`{:error, :wrong_endpoint}` → 400) if replayed against
-`GET /admin/services` and vice versa. This design assigns
-`"SCA:"` ("Service Catalog Admin") as the admin-list router's own prefix
-constant, module-private to `Letflow.Routers.AdminServices`.
+**New function, `Letflow.ServiceCatalog.list_all/1`:**
 
-**Named as a finding for REVIEWER (in addition to the layering exception
-above):** this duplicates `list_for_tenant/2`'s keyset-pagination shape
-(order/limit/split-page logic) at the router layer, which is not ideal but is
-the only option that respects the "no change to REQ-191's schema or context"
-scope boundary. A future, `service_catalog.ex`-scoped requirement should
-consider hoisting a shared, tenant-agnostic `list_all/1` (or an
-`opts[:tenant_id] :: :any | Ecto.UUID.t()` parameter on `list_for_tenant/2`)
-into the context module, deleting this duplication, and retiring the
-direct-schema-query exception entirely. Not resolved here — out of scope,
-flagged rather than silently accepted as permanent.
+* **Signature:** `@spec list_all(list_params()) :: {:ok, %{items: [Entry.t()], next_cursor: String.t() | nil}} | {:error, :invalid_cursor | :wrong_endpoint | :expired}` — same `list_params()` type `list_for_tenant/2` already uses (`%{cursor: String.t() | nil, page_size: pos_integer()}`), same result shape. One argument, not two — there is no `tenant_id` parameter, since the entire point of this function is to be tenant-agnostic; `list_for_tenant/2` itself is untouched (same name, same two-argument arity, same body, same `where` clause — nothing about it changes).
+* **Body, by direct analogy to `list_for_tenant/2` (§3.3 in `service_catalog.ex`, lines 264-283 as currently written):** builds the identical `Entry |> ... |> order_by([e], desc: e.created_at, desc: e.service_id) |> limit(^(page_size + 1))` pipeline, with the `where([e], e.scope == :global or e.owner_tenant_id == ^tenant_id)` clause **omitted entirely** (not replaced by a permissive tautology like `where(true)` — simply never added to the pipeline). Reuses `filter_by_list_cursor/2` and `split_list_page/2` verbatim (both are already `tenant_id`-agnostic — neither references `tenant_id` in its current body — so they are shared, not duplicated, between `list_for_tenant/2` and `list_all/1`).
+* **Cursor isolation (INV-9):** `list_all/1` gets its **own** module-private cursor-prefix constant, `@list_all_cursor_prefix "SCA:"` ("Service Catalog Admin") — distinct from `list_for_tenant/2`'s existing `@list_cursor_prefix "SC:"` — passed to `Pagination.decode_cursor/3`/`Pagination.build_raw_cursor/3` exactly where `list_for_tenant/2` passes its own. A cursor minted by `GET /services` (`list_for_tenant/2`) must be rejected (`{:error, :wrong_endpoint}` → 400) if replayed against `GET /admin/services` (`list_all/1`) and vice versa — unchanged requirement from iteration 1, just now enforced by two sibling functions in the same module rather than one context function plus one router-local query.
+* **`@doc`:** must state plainly that this function performs **no tenant or scope filtering whatsoever** and is intended for `PLATFORM_ADMIN`-only call sites — authorization is the caller's responsibility (this module has never enforced authorization, per its own moduledoc's "SVC-04 permissions... not wired here" section; unchanged).
+
+**`Letflow.Routers.AdminServices`'s `GET /` handler (revised):** calls
+`Letflow.ServiceCatalog.list_all(params)` with `params :: Letflow.ServiceCatalog.list_params()`
+— the exact same shape §4's `GET /services` handler already builds via
+`Pagination.parse_page_size_param/1` → `Pagination.validate_page_size/1`, no
+new param-parsing logic needed. No `alias Letflow.ServiceCatalog.Entry`, no
+`import Ecto.Query`, no `Letflow.Repo` reference anywhere in
+`admin_services.ex` — the router goes back to being a pure
+context-module-delegating router, same shape as every other router in
+`lib/letflow/routers/`, satisfying `INV-RT-1` by construction rather than by
+exception.
 
 Result mapping is otherwise identical to §4's table (200 with the two-key
 envelope; cursor errors → 400).
+
+**Consequence for TEST-DESIGNER:** `list_all/1` needs its own direct
+context-module-level test coverage (mirroring however `list_for_tenant/2`
+itself is tested) in addition to the router-level `GET /admin/services`
+tests AC2 already calls for — both layers, not just the router.
+
+**OQ-1 is now resolved, not left open** (see §15's corresponding update) —
+the "hoist a real tenant-agnostic list function into the context module"
+option OQ-1 named as a possible future direction is exactly what this
+section now does, immediately rather than deferred.
 
 ## §6 — `POST /api/v1/admin/services` (register)
 
@@ -428,8 +458,13 @@ tests, same shape as REQ-131's own enforcement test style.
 
 ## §14 — Explicitly out of scope (restated from the requirement text)
 
-* No change to `Letflow.ServiceCatalog`, `Letflow.ServiceCatalog.Entry`, or
-  the `service_catalog` migration.
+* No change to `Letflow.ServiceCatalog.Entry` or the `service_catalog`
+  migration. **`Letflow.ServiceCatalog` itself gains one new, additive
+  function, `list_all/1` — see §5's revised resolution (rework iteration 2)
+  for why this one exception to the original "no context-module change" note
+  was necessary and REVIEWER-flagged.** `register/1`, `get_for_tenant/2`,
+  `list_for_tenant/2`, `update_scope/2`, and `delete/1` are all otherwise
+  untouched — same signatures, same bodies, same behavior.
 * No change to `lib/letflow/api/authorization.ex` (all five policy-key/
   permission clauses already exist and are consumed as-is).
 * No change to any file under `web/`.
@@ -440,11 +475,17 @@ tests, same shape as REQ-131's own enforcement test style.
 
 ## §15 — Open questions (OQ), left explicit rather than guessed
 
-* **OQ-1 (§5).** Whether `GET /api/v1/admin/services`'s router-local
-  duplicate-of-`list_for_tenant/2` query logic should instead become a real
-  `Letflow.ServiceCatalog` function in a follow-up requirement that revisits
-  the "no context-module change" scope boundary. Flagged for REVIEWER, not
-  decided here.
+* **OQ-1 (§5) — RESOLVED in rework iteration 2, not left open.** Originally:
+  whether `GET /api/v1/admin/services`'s router-local duplicate-of-
+  `list_for_tenant/2` query logic should instead become a real
+  `Letflow.ServiceCatalog` function in a follow-up requirement. Superseded:
+  implementation surfaced a hard conflict between the original router-local
+  approach and `INV-RT-1` (REQ-078's REVIEWER-approved "no `Repo.` call under
+  `lib/letflow/routers/`" invariant, test-enforced with no allowlist
+  mechanism). §5 now specifies `Letflow.ServiceCatalog.list_all/1`, added in
+  this requirement rather than deferred to a follow-up, as the direct
+  resolution — flagged for REVIEWER sign-off as a reasoned, explicit scope
+  expansion, not a follow-up requirement's future work.
 * **OQ-2 (§8).** Whether `max_retries`'s absence from `Entry` should be
   closed by a future migration (adding a real column) or by editing
   `web/src/types/api.ts` to mark it optional/removing it — both are out of

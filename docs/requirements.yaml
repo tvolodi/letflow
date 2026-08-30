@@ -11446,10 +11446,14 @@ requirements:
       reasoning (defense in depth, not redundancy): (1) `create/2` in
       `lib/letflow/webhooks.ex` is the ONLY write path for `target_url` --
       confirmed by reading the shipped code: `update/2`
-      (`lib/letflow/webhooks.ex:514`) reconciles only
-      `status`/`is_active` and never touches `target_url` at all (see its
-      own moduledoc, "Does not touch :target_url, :description,
-      :event_types"). Add the validation as a rejection path in `create/2`
+      (`lib/letflow/webhooks.ex:514`) casts only `:status, :paused_at`
+      in its `status_changeset/2` and never touches `target_url` at
+      all (design doc `lib/letflow/design/req181-webhooks-core.md:237`:
+      "Does not touch `:target_url, :description, :event_types`" --
+      this exact sentence is in the design doc, not in `webhooks.ex`'s
+      own moduledoc; independently reconfirmed here by reading
+      `status_changeset/2` itself, which casts only `:status,
+      :paused_at`). Add the validation as a rejection path in `create/2`
       (or a changeset validation reached by it) so a tenant gets fast,
       explicit feedback (`{:error, :target_url_not_allowed}` or similar)
       at subscription-creation time rather than a silent later delivery

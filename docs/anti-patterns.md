@@ -1836,3 +1836,30 @@ call sites and confirm at least one really omits that argument; if none do, drop
 entirely (`defp fn_name(a, b, c)`) -- the argument becomes required, matching how it is actually
 used, and the warning disappears. This is cheap to check and cheaper than waiting for CI to catch
 it a second time.
+
+## Fixing a citation's content without re-verifying its source location (REQ-ANALYST rework)
+
+**Occurred twice in a row on the same paragraph, REQ-204's draft, WF01/WF02-REQ204-20260830.**
+REQ-VALIDATOR's first FAIL on REQ-204 found four defects, one of them a wrong function-name
+citation (an `update/2` reference that didn't match the real function). REQ-ANALYST's rework
+fixed all four correctly -- but in fixing that one citation, it changed the arity to `update/3`
+and, in the same edit, attached a new attribution: "(see its own moduledoc, \"Does not touch
+:target_url, :description, :event_types\")". That exact sentence does exist verbatim -- but only
+in `lib/letflow/design/req181-webhooks-core.md:237`, a design doc, not in `webhooks.ex`'s own
+moduledoc anywhere. The underlying fact (`update/3` doesn't touch `target_url`) was true and
+independently verifiable by reading `status_changeset/2`'s own `cast/3` call; only the pointer
+to *where that sentence lives* was fabricated.
+
+**Why this is a distinct failure from "inheriting a claim from a record" (above):** that entry is
+about trusting *another* agent's or an earlier turn's conclusion across a gap. This is narrower:
+the *same* rework pass, fixing *one* verified error, introduces a *new*, unverified citation
+right next to it -- because attention was on making the surrounding prose read correctly, not on
+re-deriving where each specific quoted fragment actually lives. Two occurrences on the same
+paragraph in consecutive attempts suggests citation attribution isn't being separately checked
+from citation content during rework -- both need their own verification pass.
+
+**Mitigation.** When reworking a flagged citation, treat the fix as two independent claims to
+verify, not one: (1) does the cited function/arity/behavior genuinely exist as described, and
+(2) does the *specific quoted text* exist verbatim at the *specific file* you just attributed it
+to (grep for the quoted string in that exact file, not just anywhere in the repo). Fixing (1)
+does not imply (2) is still true, especially when the edit touches both in the same sentence.

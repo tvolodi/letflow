@@ -1,0 +1,109 @@
+# Test run report — WF-03 Step 5 (ISS-0378)
+
+issue_id: ISS-0378
+workflow: WF-03
+step: 5
+agent: TEST-RUNNER
+run_id: WF03-ISS0378-20260830
+date_utc: 2026-08-30T07:20:00Z
+
+git:
+  branch: feature/WF03-ISS0378-20260830
+  commit_head: ed9ed813
+  commit_subject: "chore(ORCH): WF03-ISS0378-20260830 Step 4b TEST-DESIGN-VALIDATOR -- PASS, route to TEST-RUNNER"
+  diff_vs_main_stat: >
+    Confirmed via `git diff main...HEAD --stat`. This branch touches only:
+    docs/anti-patterns.md, docs/status/requirement_status.index.yaml,
+    docs/status/requirement_status.v7.yaml, handoffs/WF03-ISS0378-20260830/*,
+    handoffs/registry.json, lib/letflow/design/iss0378-poller-ac7-test-fix.md,
+    and test/letflow/scheduler/poller_test.exs (27 lines changed, no
+    application code under lib/letflow/ outside the design doc). No
+    lib/letflow/application.ex or other runtime code is touched by this
+    branch.
+
+environment:
+  toolchain: local, via `source ~/.asdf/asdf.sh`
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] ... Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  postgres_container: letflow-1-postgres-1 (already Running via `sudo docker compose up -d`; keycloak-1 also Running)
+  db_port: "LETFLOW_DB_PORT=5463 from untracked .env"
+  rustc_on_path: "absent -- `which rustc` exit 1, confirmed directly"
+
+commands_run:
+  full_suite: "bash scripts/test_parallel.sh (N=8, auto-derived via nproc)"
+  targeted: "mix test test/letflow/scheduler/poller_test.exs test/letflow/scheduler_test.exs"
+  compile: "MIX_ENV=test mix compile --warnings-as-errors"
+
+verdict: PASS (documented-flake-class failures only, both pre-existing and outside this branch's diff)
+
+full_suite_result:
+  combined: "2624 tests, 6 properties, 2 failures (2628/2630 passed)"
+  per_partition:
+    - {partition: 1, tests: 353, properties: 3, failures: 0, exit: 0}
+    - {partition: 2, tests: 390, properties: 0, failures: 0, exit: 0}
+    - {partition: 3, tests: 288, properties: 2, failures: 0, exit: 0}
+    - {partition: 4, tests: 303, properties: 1, failures: 0, exit: 0}
+    - {partition: 5, tests: 359, properties: 0, failures: 0, exit: 0}
+    - {partition: 6, tests: 245, properties: 0, failures: 0, exit: 0}
+    - {partition: 7, tests: 325, properties: 0, failures: 2, exit: 2}
+    - {partition: 8, tests: 361, properties: 0, failures: 0, exit: 0}
+
+failures_diagnosed:
+  - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+    error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], stderr_to_stdout: true)"
+    diagnosis: >
+      Documented rustc-absent CheckToolchainTest baseline flake class (per
+      this run's own dispatching prompt and confirmed directly: `which
+      rustc` exits 1 in this environment). The test's own comments (line 276,
+      291: "expected `rustc` to be on PATH while running this suite") make
+      the baseline assumption explicit -- this is an environment gap, not a
+      code regression. rustc availability is completely unrelated to
+      test/letflow/scheduler/poller_test.exs or anything else in this
+      branch's diff.
+    verdict: PRE-EXISTING ENVIRONMENT FLAKE, not a regression from this branch.
+  - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+    error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], stderr_to_stdout: true)"
+    diagnosis: "Same root cause as above -- same file, same missing rustc binary."
+    verdict: PRE-EXISTING ENVIRONMENT FLAKE, not a regression from this branch.
+
+cross_check_vs_diff: >
+  Both failures are in test/mix/tasks/letflow_check_toolchain_test.exs
+  (Mix.Tasks.Letflow.CheckToolchainTest), which this branch's diff does not
+  touch. `git diff main...HEAD --stat` confirms the only test file this
+  branch touches is test/letflow/scheduler/poller_test.exs. Neither failure
+  is anywhere near the scheduler/poller code path.
+
+targeted_run_result:
+  command: "mix test test/letflow/scheduler/poller_test.exs test/letflow/scheduler_test.exs"
+  summary_line_verbatim: "Result: 23 passed"
+  failures: 0
+  finished_line_verbatim: "Finished in 15.4 seconds (0.00s async, 15.4s sync)"
+
+compile_result:
+  command: "MIX_ENV=test mix compile --warnings-as-errors"
+  exit_code: 0
+  output: "(no warnings, no errors -- clean compile)"
+
+pre_existing_failures_found:
+  - "CheckToolchainTest rustc-absent flake (2 tests) -- documented environment gap, unrelated to this branch's diff."
+issues_filed: none
+issues_referenced_not_refiled: none
+
+diagnosis_summary: >
+  0 real regressions. The 2 failures in the full-suite run are both the
+  documented rustc-absent CheckToolchainTest baseline flake (this sandbox
+  has no rustc on PATH), confirmed directly via `which rustc` and by reading
+  the failing tests' own :enoent stack traces plus their doc comments. This
+  branch's diff (git diff main...HEAD --stat) touches only
+  test/letflow/scheduler/poller_test.exs plus docs/handoffs -- nothing in or
+  near the scheduler/poller code path, and nothing related to Rust/toolchain
+  checking. The targeted files named in this run's acceptance criteria
+  (poller_test.exs, scheduler_test.exs) pass 23/23 with 0 failures, and
+  `mix compile --warnings-as-errors` is clean.
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-08-30-WF03-ISS0378-20260830.yaml
+  next_action: "Route to ISSUE-FIXER (WF-03 Step 5, closing step) -- no rework needed."

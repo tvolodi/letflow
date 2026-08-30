@@ -266,17 +266,26 @@ point 3):
    real actor_id today, as shown above — this is not a case of "we could easily
    thread it through but chose not to," it is a hard scope boundary this requirement
    does not have the authority to cross.
-2. These three functions are not exclusively human-driven the way `cancel_instance/3`/
-   `complete_task/3`/`assign_task/3` are in this codebase's current callers: `grep`
-   confirms `Letflow.Definitions.activate/2` is also called from
-   system/scheduler-initiated paths with no HTTP request and no human actor at all
-   (e.g. `test/letflow/scheduler_test.exs:135`, `test/letflow/scheduler/poller_test.exs:100`
-   exercise `Definitions.activate/2` the same way a timer-fired auto-promotion path
-   would, matching this schema's own `actor_id` nullability rationale in §1.1: "some
-   writes (e.g. a system/timer-fired transition) have no human/API-token actor").
-   Recording `nil` uniformly is therefore not a fabricated placeholder — it is
-   consistent with the fact that not every call to these three functions has an actor
-   to record in the first place.
+2. **[Superseded note, rework iteration 2 — see corrected point below.]** The original
+   text of this point claimed `grep` confirms `Definitions.activate/2` is "also called
+   from system/scheduler-initiated paths with no HTTP request and no human actor at
+   all," citing `test/letflow/scheduler_test.exs:135` and
+   `test/letflow/scheduler/poller_test.exs:100` as evidence. **That claim overstates
+   what those citations show, verified directly this session:**
+   `grep -rn "Definitions.activate(" lib/` (excluding this design doc) returns exactly
+   **one** production call site — `lib/letflow/routers/definitions.ex:926`, inside
+   `handle_activate/1`, i.e. the router/HTTP path itself. There is no production
+   scheduler-driven or otherwise system-driven caller of `activate/2` anywhere in
+   `lib/`. The two cited test lines are test-fixture setup helpers (`active_definition!/1`
+   in `scheduler_test.exs`, an equivalent helper in `poller_test.exs`) that call
+   `Definitions.activate/2` directly from test code to build a fixture an unrelated
+   scheduler/poller test then exercises against — they demonstrate that `activate/2`
+   *can* be invoked with no actor context available (test-harness evidence of shape),
+   not that any real production system-driven path already does so. Point 2 is
+   therefore dropped as a justification for Decision (b): it is not load-bearing —
+   point 1 above (the AC11 scope boundary) is on its own a sufficient, fully-verified
+   basis for `actor_id: nil` on these three functions, without needing a second,
+   unverifiable "already system-driven" argument.
 3. This is a stated, scoped completeness gap, not a silent one — tracked as OQ-4
    (§9) for a follow-up requirement to widen `activate_opts()`/`opts()` **and** update
    the three router handlers **together, atomically**, once a requirement exists whose
@@ -285,6 +294,76 @@ point 3):
 
 **§3.2's per-operation table** (below) states `actor_id: nil` explicitly for these
 three rows so ELIXIR-DEV does not need to infer it from this subsection.
+
+### 3.1b `actor_id` disposition for six `Letflow.Identity` functions — added in rework iteration 2
+
+**The gap (CODE-DESIGN-VALIDATOR, step 1b, second recheck):** checked directly against
+`lib/letflow/identity.ex` this session — `create_user/2` (line 218),
+`update_user_profile/3` (line 291), `update_user_status/3` (line 312),
+`create_group/2` (line 347), `create_token/3` (line 842), `revoke_token/2` (line 929)
+all take only `opts :: opts()` where `opts() :: [prefix: String.t()]` (or an
+equivalent narrow prefix-only shape) — none has an `actor_id` parameter, keyword
+option, or field anywhere in its signature or body. This is the identical gap §3.1a
+resolves for `Definitions.activate/2`/`deprecate/2`/`archive/2`, in a different
+module.
+
+**Checked this session — where these six are called from:** `grep -rn` for each of
+the six across `lib/` (excluding `lib/letflow/identity.ex` itself) shows every call
+site is in `lib/letflow/routers/identity.ex`: `create_user/2` (line 250),
+`update_user_profile/3` (line 361), `update_user_status/3` (line 394),
+`create_group/2` (line 436), `create_token/3` (line 592), `revoke_token/2` (line 636).
+No non-router caller of any of the six exists in `lib/`. The router file additionally
+does not read `conn.assigns.auth_context.user_id` anywhere today (`grep -n
+"auth_context" lib/letflow/routers/identity.ex` returns no match) — so even the one
+channel that supplies a real actor id elsewhere in this codebase (the pattern
+`handle_import/1`/`handle_rollback/2` use in `routers/definitions.ex`, and that
+§3.1a's option (a) describes) is not merely unused here but not wired into this
+router at all today.
+
+**The same two live options as §3.1a, and the same scope boundary:**
+
+* **(a) Widen the API** — add an `actor_id: Ecto.UUID.t() | nil` field to each of the
+  six functions' opts, thread it through to the `Multi`'s `:audit` step. Doing so with
+  a real value requires editing `lib/letflow/routers/identity.ex` (the only caller of
+  all six) to read `conn.assigns.auth_context.user_id` (or wherever this router's
+  authenticated actor is actually held — not yet established, since the router
+  doesn't read `auth_context` today) and pass it through. **This requirement's own
+  AC11 forbids exactly that** — "no route/controller file touched." As with
+  Definitions, widening the opts type without also editing the router to populate it
+  would ship a field no caller ever sets. **Option (a) is not available inside this
+  requirement's own scope.**
+* **(b) Record `actor_id: nil` for these six operations, as this requirement's
+  explicit, stated disposition.** Schema-legal (`actor_id` is nullable, §1.1) and does
+  not conflict with any acceptance criterion: **AC2 names only definition activation,
+  instance cancellation, and task completion as its three required audited
+  operations — no Identity operation appears in AC2 at all** — so there is no AC2
+  disjunct to reconcile here, unlike the Definitions-activate case where AC2 directly
+  names the operation. There is accordingly even less tension in choosing `nil` here
+  than for §3.1a's three functions.
+
+**Decision: (b).** `actor_id: nil` for all six of `Letflow.Identity.create_user/2`,
+`update_user_profile/3`, `update_user_status/3`, `create_group/2`, `create_token/3`,
+`revoke_token/2`'s audit rows, in this requirement's initial cut. Justification:
+
+1. AC11 rules out the one change (a router edit to `lib/letflow/routers/identity.ex`)
+   that could let these six obtain a real actor_id today — a hard scope boundary, not
+   a discretionary choice, exactly as §3.1a's point 1 establishes for Definitions.
+2. Confirmed this session (grep, above): no caller of any of the six exists outside
+   `lib/letflow/routers/identity.ex`, and that router does not currently read any
+   actor-identifying assign — so there is no unverified "maybe it's already threaded
+   somewhere" ambiguity left open; the gap is fully characterized, not partially
+   deferred.
+3. This does not conflict with AC2 (point (b) above) and does not conflict with any
+   other acceptance criterion — none of AC1/AC3–AC12 names a specific Identity
+   function this design must supply a non-nil `actor_id` for.
+4. Tracked as **OQ-5** (§9) alongside OQ-4, for a follow-up requirement scoped to
+   touch `lib/letflow/routers/identity.ex` to widen these six functions' opts **and**
+   update the router to populate `actor_id` from a real authenticated-actor source,
+   together, atomically — the same "widen the type and wire the caller in the same
+   change" constraint OQ-4 states for Definitions.
+
+**§3.2's per-operation table** (below) states `actor_id: nil` explicitly for all six
+rows, referencing this subsection, rather than repeating the reasoning six times.
 
 ### 3.2 New module: `Letflow.Audit`
 
@@ -345,23 +424,24 @@ specifically to get the same-transaction guarantee, §4).
 | Task create | wherever `Letflow.Engine.Task` rows are first inserted (engine dispatch — the same site that already creates a `tasks` row when a user-task node activates; ELIXIR-DEV locates this exact call inside `lib/letflow/engine.ex`'s dispatch path, since `Letflow.Tasks` itself is read/claim/assign-only and has no `create` entrypoint of its own) | `"task.create"` | `"task"` | new `Task.id` | whatever actor context this engine-dispatch call site already has in scope (typically the actor who advanced the preceding node, if any) — not independently verified this session (OQ-1 already covers this call site's exact location); `nil` when no such context is in scope | `nil` | the created `Task` row's field map |
 | Task complete | `Letflow.Engine.complete_task/3` | `"task.complete"` | `"task"` | `task_id` | `attrs[:actor_id]` — already an explicit argument | the pre-complete `Task` row | the post-complete `Task` row (status `COMPLETED`, output variables applied) |
 | Task assign | `Letflow.Tasks.assign_task/3` | `"task.assign"` | `"task"` | `task_id` | `attrs.actor_id` — already an explicit, required field of `assign_attrs` | the pre-assign `Task` row (previous `assignee_type`/assignee reference) | the post-assign `Task` row |
-| User create | `Letflow.Identity.create_user/2` | `"user.create"` | `"user"` | new `User.id` | not verified this session — ELIXIR-DEV checks `create_user/2`'s own signature; if it has no actor_id argument, apply the same `nil` disposition and reasoning as §3.1a (not independently re-derived here, out of this rework's scope) | `nil` | the created `User` row's field map, **with `password_hash`/any credential-bearing field excluded** — same allowlist discipline `routers/audit.ex`'s own `audit_item/1` uses (INV-2); `before_state`/`after_state` are never the raw Ecto struct, always an explicit field allowlist |
-| User status/profile change | `Letflow.Identity.update_user_status/3`, `update_user_profile/3` | `"user.update_status"` / `"user.update_profile"` | `"user"` | `User.id` | not verified this session — same note as User create, above | pre-update allowlisted map | post-update allowlisted map |
-| Group create | `Letflow.Identity.create_group/2` | `"group.create"` | `"group"` | new `Group.id` | not verified this session — same note as User create, above | `nil` | created `Group` row's field map |
-| Token issue | `Letflow.Identity.create_token/3` | `"token.create"` | `"api_token"` | new `ApiToken.id` | not verified this session — same note as User create, above | `nil` | the created row's field map **excluding `token_hash`** (INV-4 — the plaintext is never captured anywhere, per `ApiToken`'s own moduledoc, and `token_hash` itself is excluded from `after_state` too, since a hash is still a credential-adjacent secret with no audit value and this table already treats it as security-sensitive) |
-| Token revoke | `Letflow.Identity.revoke_token/2` | `"token.revoke"` | `"api_token"` | `ApiToken.id` | not verified this session — same note as User create, above | pre-revoke row (`revoked_at: nil`) minus `token_hash` | post-revoke row minus `token_hash` |
+| User create | `Letflow.Identity.create_user/2` | `"user.create"` | `"user"` | new `User.id` | **`nil` — §3.1b Decision (b), stated explicitly, not an oversight** | `nil` | the created `User` row's field map, **with `password_hash`/any credential-bearing field excluded** — same allowlist discipline `routers/audit.ex`'s own `audit_item/1` uses (INV-2); `before_state`/`after_state` are never the raw Ecto struct, always an explicit field allowlist |
+| User status/profile change | `Letflow.Identity.update_user_status/3`, `update_user_profile/3` | `"user.update_status"` / `"user.update_profile"` | `"user"` | `User.id` | **`nil` — §3.1b Decision (b)** | pre-update allowlisted map | post-update allowlisted map |
+| Group create | `Letflow.Identity.create_group/2` | `"group.create"` | `"group"` | new `Group.id` | **`nil` — §3.1b Decision (b)** | `nil` | created `Group` row's field map |
+| Token issue | `Letflow.Identity.create_token/3` | `"token.create"` | `"api_token"` | new `ApiToken.id` | **`nil` — §3.1b Decision (b)** | `nil` | the created row's field map **excluding `token_hash`** (INV-4 — the plaintext is never captured anywhere, per `ApiToken`'s own moduledoc, and `token_hash` itself is excluded from `after_state` too, since a hash is still a credential-adjacent secret with no audit value and this table already treats it as security-sensitive) |
+| Token revoke | `Letflow.Identity.revoke_token/2` | `"token.revoke"` | `"api_token"` | `ApiToken.id` | **`nil` — §3.1b Decision (b)** | pre-revoke row (`revoked_at: nil`) minus `token_hash` | post-revoke row minus `token_hash` |
 
-**On the "not verified this session" `actor_id` rows above (Identity module, Task
-create):** these are outside this rework's scope (the validator's blocker named only
-Definitions' three lifecycle functions, confirmed against `definitions.ex`
-specifically) and outside the original design's own AC2 scope (AC2 names activate/
-cancel/complete only). They are annotated here only so ELIXIR-DEV does not assume
-silence means "verified true" for rows this rework did not re-derive. Where an
-Identity function turns out to lack an actor_id argument the same way Definitions'
-three did, the same §3.1a Decision (b) reasoning applies by analogy: `nil`, stated,
-not silently defaulted — but re-verifying each one is not this rework's job to redo
-(§3.1a itself is scoped to the validator's actual finding, per the rework handoff's
-own point 5, "do not rewrite any other section without cause").
+**On the six Identity rows above:** resolved explicitly in rework iteration 2, §3.1b
+— `actor_id: nil` for all six, verified (not inferred) against `lib/letflow/identity.ex`'s
+actual signatures and `lib/letflow/routers/identity.ex`'s actual call sites this
+session. This is no longer a deferral; see §3.1b for the full reasoning.
+
+**On the Task-create row's `actor_id` note:** left as-is — it remains tied to OQ-1
+(the exact `task.create` call site inside `lib/letflow/engine.ex` is not pinned to a
+line number; checked again this session and no single unambiguous insertion site was
+found either, so this is a genuinely open question, not a resolvable gap like the
+Identity rows were). "Not independently verified this session" is accurate there in a
+way it was not for the six Identity functions above, whose signatures were fully
+knowable and simply had not been read before this rework.
 
 Every `before_state`/`after_state` map is a **plain map of scalar/string/nested-map
 values**, never a bare JSON scalar at the top level — this is an invariant the
@@ -617,3 +697,13 @@ elsewhere in `lib/letflow/`, confirmed this session).
   `handle_delete/2`'s deprecate/archive branch to populate it, together, in the same
   change (widening the type without the router edit, or vice versa, is not a valid
   partial step — either leaves a field nothing populates, or populates nothing new).
+* **OQ-5 — added in rework iteration 2, real `actor_id` for six `Letflow.Identity`
+  functions.** §3.1b decides `actor_id: nil` for `create_user/2`, `update_user_profile/3`,
+  `update_user_status/3`, `create_group/2`, `create_token/3`, `revoke_token/2`'s audit
+  rows in this requirement's initial cut, because the only caller of all six —
+  `lib/letflow/routers/identity.ex` — would need editing to supply a real actor id
+  (and does not even read an actor-identifying assign today), which AC11 forbids. A
+  follow-up requirement — scoped to touch that router file — should widen these six
+  functions' opts with an `actor_id` field **and** update
+  `lib/letflow/routers/identity.ex` to source and populate it, together, in the same
+  change, the same atomicity constraint OQ-4 states for Definitions.

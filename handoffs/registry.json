@@ -3384,15 +3384,17 @@
       "requirement_id": "REQ-192",
       "queue_task_id": 365,
       "github_issue_number": 711,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
-        "lib/letflow/routers/services.ex"
+        "lib/letflow/routers/services.ex",
+        "lib/letflow/routers/admin_services.ex",
+        "lib/letflow/service_catalog.ex"
       ],
       "started_at": "2026-08-30T04:49:06Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
-      "note": "Route layer atop REQ-191's shipped service catalog core -- GET /services, GET/POST/PATCH/DELETE /admin/services, SVC-04-gated."
+      "lock_released_at": "2026-08-30T06:50:12Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: merged PR #736 to main, queue task 365 released done)",
+      "note": "Route layer atop REQ-191's shipped service catalog core -- GET /services, GET/POST/PATCH/DELETE /admin/services, SVC-04-gated. Added Letflow.ServiceCatalog.list_all/1 (REVIEWER-signed-off scope adjustment) to resolve an INV-RT-1 conflict discovered mid-implementation. 2 design rework rounds, 1 test-design rework round (mutation-testing caught a fixture-sizing bug). PR #736 merged."
     }
   ]
 }

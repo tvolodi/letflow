@@ -796,12 +796,46 @@ volumes:
       "no entry above this footer was moved, edited or deleted"). `entries:`
       will be incremented per HOW-TO-APPEND step 6 as real appends land.
 
+  - volume: 7
+    path: docs/status/requirement_status.v7.yaml
+    status: current
+    opened: 2026-08-30
+    entries: 0
+    note: >
+      Opened by WF02-REQ190-20260830's own Step Final rebase composition
+      (ELIXIR-DEV), successor to volume 6. Created with volume 6's header
+      text verbatim (volume number, opening date and predecessor path
+      updated) and an empty `history:` list, per this index's
+      `roll_rule.on_exceed` procedure. `entries:` will be incremented per
+      HOW-TO-APPEND step 6 as real appends land.
+
   - volume: 6
     path: docs/status/requirement_status.v6.yaml
-    status: current
+    status: closed
     opened: 2026-08-28
-    entries: 41
+    closed: 2026-08-30
+    entries: 42
+    lines: 1202
+    bytes_working_tree: 73118
+    # SHA-256 of lines 1..1202 with CRLF normalised to LF, i.e. the frozen prefix.
+    # The hashed stream terminates EVERY line with a single \n, including the
+    # last, so it ends in \n. Exact definition and reference implementations:
+    # lib/letflow/design/iss-0119-status-file-readability.md §8.
+    # Asserted unchanged by test/docs/requirement_status_invariants_test.exs.
+    frozen_prefix_lines: 1202
+    frozen_prefix_sha256: "4e354ab27116f35fc6c824228b14e5773158923f410706b952e94b2bfcf64b96"
     note: >
+      Closed by WF02-REQ190-20260830's own Step Final rebase composition
+      (ELIXIR-DEV) -- composing this branch's own REQ-190 done-event append
+      against origin/main's five concurrently-appended events (REQ-190
+      started, REQ-191 done, REQ-183 started, REQ-183 blocked, REQ-192
+      started) brought the file to 42 on-disk entries (`grep -c "^  - req:"
+      docs/status/requirement_status.v6.yaml` = 42) across 1202 lines /
+      73118 bytes working-tree (CRLF) -- over the declared 1200-line roll
+      ceiling (though under the 120000-byte ceiling). Rolled to volume 7
+      per the roll_rule.on_exceed procedure; all 42 entries kept in volume
+      6 rather than split, matching every prior roll's own pattern.
+
       Incremented to 41 by ORCH's REQ-192 started-event append (Step 00,
       WF02-REQ192-20260830) -- `grep -c "^  - req:"
       docs/status/requirement_status.v6.yaml` = 41 on-disk entries, no

@@ -8,73 +8,73 @@
   "file": "handoffs/WF02-REQ201-20260830/step-01b-code-design-validator.json",
   "created_at": "2026-08-30T17:40:00Z",
   "started_at": "2026-08-30T17:35:00Z",
-  "completed_at": "2026-08-30T17:40:00Z",
+  "completed_at": "2026-08-30T18:10:00Z",
   "status": "COMPLETED",
+  "pass": 2,
   "context": {
     "design_artefact_read": "lib/letflow/design/req201-alerting-hooks.md",
-    "design_commit": "c8f795d3",
+    "design_commit": "22cffa27",
     "source_handoff": "handoffs/WF02-REQ201-20260830/step-01-code-designer.json",
     "requirement_ids_in_scope": ["REQ-201"],
     "ac_count": 14
   },
-  "validation_methodology": "Re-derived from artefact directly. Did NOT use CODE-DESIGNER's result.summary as a substitute for reading the design file. Verified all 14 ACs from docs/requirements.yaml against design sections. Applied all five Step 1b checks from WF-02_requirement_implementation.md.",
+  "validation_methodology": "Second pass — re-derived from artefact directly (rework-1 commit 22cffa27). Did NOT use CODE-DESIGNER's result.summary. Re-read lib/letflow/design/req201-alerting-hooks.md in full. Re-verified all 14 ACs and all first-pass checks. Confirmed CDV-001 resolution by locating last_correlation_id semantics in §5 ARMED→FIRED transition.",
   "checks": {
+    "check_0_cdv001_resolution": {
+      "result": "RESOLVED",
+      "notes": "§5 ARMED→FIRED transition now explicitly enumerates last_correlation_id for all four trigger types: per-subject triggers (instance_error_stuck:{instance_id} → instance_id UUID; webhook_subscription_paused:{subscription_id} → subscription_id UUID) and aggregate triggers (dlq_depth_threshold → null; scheduler_lag_threshold → null). The semantics are unambiguous and match the requested Option A resolution from CDV-001."
+    },
     "check_1_ac_coverage": {
       "result": "PASS",
-      "notes": "§10 AC-to-design mapping table covers all 14 ACs explicitly. Spot-checked: AC-1 → §5 state machine; AC-3 → §4 per-instance trigger_key; AC-5 → §9.3 lag from last_tick_started_at; AC-8 → §8 + §0.1 no-DLQ; AC-9 → §1.4 resolve/2 at delivery time; AC-10 → §3.1 per-tenant decision with reasoning; AC-11 → §9.1 integration point + §0.3 no new process; AC-12 → §0.1 distinction table; AC-13 → §0.2. AC-14 (mix test/compile) is inherently implementation-time; design correctly notes it as ELIXIR-DEV's obligation."
+      "notes": "§10 AC-to-design mapping table covers all 14 ACs. Full re-verification: AC-1 → §5 ARMED→FIRED+no-refire; AC-2 → §5 FIRED→ARMED re-arm then second crossing; AC-3 → §4 per-instance trigger_key; AC-4 → §5 ARMED+(sample≤threshold) no action; AC-5 → §9.3 observed_lag_ms from last_tick_started_at; AC-6 → §4 webhook_subscription_paused:{subscription_id} per-subscription edge-triggered; AC-7 → §7.1 body with instance_id, error_reason, stuck_duration_minutes; AC-8 → §8 backoff + §0.1 no-DLQ; AC-9 → §1.4 Secrets.resolve/2 at delivery, never stored; AC-10 → §3.1 per-tenant + explicit R-Co comparison + Decision 0003 reasoning; AC-11 → §9.1 Poller handle_info(:tick) + §0.3 no new child; AC-12 → §0.1 7-property distinction table; AC-13 → §0.2 no route/controller; AC-14 → correctly deferred to ELIXIR-DEV as implementation-time obligation."
     },
     "check_2_function_signatures": {
       "result": "PASS",
-      "notes": "Public entry point run_detection/2 has @spec with inputs and :ok return. tick_context, stuck_instance, and paused_subscription types fully typed. Five internal functions (evaluate_trigger/5, load_trigger_state/2, upsert_trigger_state/2, fire_hooks/4, deliver_with_retry/3) all carry @spec with typed inputs and {:ok,_}|{:error,_} or :ok return shapes. RetryPolicy, AlertHookConfig, AlertThresholds struct types specified field-by-field with Elixir types. Ecto schema module names stated. Private Poller helper maybe_run_alert_detection/2 lacks a formal @spec, but it is a private function in an existing module with behavior fully described in prose — not a blocking gap on its own."
+      "notes": "run_detection/2 @spec: (String.t(), tick_context()) :: :ok. tick_context, stuck_instance, paused_subscription @types fully typed. Five internal functions all carry @spec (evaluate_trigger/5 :ok; load_trigger_state/2 {:ok,_}|{:error,term()}; upsert_trigger_state/2 {:ok,_}|{:error,term()}; fire_hooks/4 :ok; deliver_with_retry/3 :ok|{:error,:exhausted}). RetryPolicy, AlertHookConfig, AlertThresholds struct @types specced field-by-field. Ecto schema module names stated (§6.3)."
     },
     "check_3_db_migrations": {
-      "result": "FAIL",
-      "blocking": true,
-      "finding_id": "CDV-001",
-      "notes": "alert_trigger_state migration (§3.2) includes field last_correlation_id (:string, null: true) but the design never specifies its write semantics: which state transition sets it, what value it receives, and from what source. The state machine (§5) enumerates all four transitions (ARMED+above, ARMED+below, FIRED+below, FIRED+above) and never mentions last_correlation_id. §7 POST body shapes never reference it. No OQ covers it. An implementer reading this design cannot determine whether to: (a) always write null, (b) set it to the trigger subject ID (e.g. instance_id for instance_error_stuck), (c) set it to a correlation ID from the tick context, or (d) something else. The requirement description states the field exists (ported from R-Co migration 022) but does not specify its semantics either. This is an unresolved schema field — a concrete implementation decision the design must make or explicitly defer as an OQ before ELIXIR-DEV touches it."
+      "result": "PASS",
+      "notes": "alert_trigger_state (§3.2): all six fields with types and nullability, trigger_key PK, no id column, no timestamps macro, no extra indexes. last_correlation_id (:string, null: true) semantics now fully defined in §5. alert_hook_emission_state (§3.3): composite PK (hook_id, trigger_key), last_emitted_key with per-trigger formats, updated_at. Both tables: per-tenant schema placement stated and reasoned (§3.1) with explicit Decision 0003 Decision B alignment. Migration naming examples given. Both to be registered in tenant_scoped_migrations/0."
     },
     "check_4_no_implementation_code": {
       "result": "PASS",
-      "notes": "All code-like blocks in the design are type annotations (@type t :: ...), @spec declarations (signatures only, no do...end bodies), config examples, pseudocode integration flow (§9.1 uses -> notation, not Elixir syntax), and a mathematical formula (§8 delay formula). No actual Elixir function bodies with do...end appear. No .ex/.exs file content is included."
+      "notes": "All code blocks are @type, @spec, config examples, pseudocode (§9.1 uses -> arrow notation not Elixir do...end), or mathematical formula (§8 delay formula). No actual function bodies. No .ex/.exs file content present."
     },
     "check_5_open_questions": {
       "result": "PASS",
-      "notes": "OQ-1 through OQ-4 explicitly listed in §11. OQ-1 (namespace string for Secrets.resolve/2), OQ-2 (Dlq.count_entries/1 existence), OQ-3 (recently-paused query window), OQ-4 (non-question: confirms no application.ex change). However, last_correlation_id semantics are NOT listed as an OQ — the field is silently present without semantics, which is the blocking issue above."
+      "notes": "OQ-1 through OQ-4 in §11 are appropriately scoped implementation-verification tasks: namespace validation (OQ-1), count API existence (OQ-2), query window clause (OQ-3), and non-question confirmation (OQ-4). CDV-001 (last_correlation_id semantics) is now resolved in §5 body text rather than as an OQ — correct approach since it is now a design decision, not an open question."
     },
     "check_6_edge_triggered_algorithm": {
       "result": "PASS",
-      "notes": "§5 specifies a named two-state machine (ARMED/FIRED) with four exhaustive and mutually exclusive transitions, initial state (always ARMED when row first created, table default), re-arm edge case named and stated correctly, and upsert mechanism (Repo.insert with on_conflict opts). Unambiguous."
+      "notes": "§5: named two-state machine (ARMED/FIRED), four exhaustive mutually-exclusive transitions with full step lists, initial state (table default is_armed=true), re-arm edge case explicitly named and described, upsert mechanism (Repo.insert with on_conflict opts, prefix). last_correlation_id semantics now integrated into ARMED→FIRED transition steps."
     },
     "check_7_alerting_vs_webhook_distinction": {
       "result": "PASS",
-      "notes": "§0.1 contains a 7-row comparison table covering audience, configuration, triggers, signing, auto-pause, delivery failure terminal action, and DLQ landing. Marked verbatim-in-substance for Letflow.Obs.Alerts moduledoc. §10 AC-12 mapping cross-references it."
+      "notes": "§0.1 contains 7-row comparison table: audience, configuration, triggers, signing, auto-pause, delivery failure terminal action, DLQ landing. Marked verbatim-in-substance for Letflow.Obs.Alerts moduledoc. §10 AC-12 mapping cross-references §0.1."
     },
     "check_8_no_new_application_child": {
       "result": "PASS",
-      "notes": "§0.3 explicitly states no new child is added to Letflow.Application. §9.1 integration is via an existing Poller handle_info(:tick) callback. AC-11 mapping in §10 confirms git diff will verify application.ex is unchanged."
+      "notes": "§0.3 states no new child added to Letflow.Application. §9.1 integration point is existing Poller handle_info(:tick). AC-11 mapping includes git diff verification instruction."
     }
   },
   "result": {
-    "status": "FAIL",
-    "summary": "Design is otherwise high quality — 14 ACs fully mapped, public API fully typed, both migrations structurally complete, edge-triggered state machine unambiguous, alerting/webhook distinction well documented, no implementation code present, open questions listed. One blocking finding: alert_trigger_state.last_correlation_id field is present in the §3.2 migration spec but has no defined write semantics anywhere in the design. The state machine (§5) never mentions it; §7 POST bodies never reference it; §11 open questions do not flag it. ELIXIR-DEV cannot implement this field correctly without a design decision. Requires rework.",
-    "blocking_findings": [
-      {
-        "id": "CDV-001",
-        "severity": "BLOCKING",
-        "section": "§3.2 alert_trigger_state migration",
-        "finding": "Field last_correlation_id (:string, null: true) is present in the migration spec but its write semantics are completely undefined. The state machine (§5) enumerates all four transitions without mentioning this field. No section of the design specifies: (a) whether it is always written as null, (b) what event/subject identifier it should hold when set, or (c) in which transition it is set. This is an unresolved implementation decision that will cause an implementer to either leave it always null (dead field) or guess incorrectly.",
-        "required_resolution": "CODE-DESIGNER must either (A) define the field's write semantics explicitly — naming which transition sets it, to what value (e.g. instance_id for instance_error_stuck triggers, subscription_id for webhook_subscription_paused, null for aggregate triggers), or (B) add it as OQ-5 with a proposed default ('always null in this implementation, reserved for future correlation tracing') and acknowledge that an always-null field can be scaffolded without behavioral consequence. Option A is preferred. Option B is acceptable if R-Co's usage cannot be determined from the available source context."
-      }
-    ],
+    "status": "PASS",
+    "summary": "Second pass — PASS. CDV-001 fully resolved by rework-1: §5 ARMED→FIRED transition now enumerates last_correlation_id write semantics for all four trigger types (per-subject UUID or null for aggregates). All 14 ACs have unambiguous design elements. Both migrations fully specced with per-tenant placement decision and reasoning. All public and named internal function signatures carry @spec with typed inputs and error shapes. Edge-triggered state machine complete (four transitions, initial state, re-arm edge case, upsert mechanism). Alerting/webhook distinction table documented in §0.1. No new application.ex child. No implementation code. Design is clear and sufficient for ELIXIR-DEV to implement without ambiguity on any AC.",
+    "blocking_findings": [],
     "non_blocking_observations": [
       {
         "id": "CDV-N01",
         "section": "§9.1-9.2 maybe_run_alert_detection/2",
-        "observation": "Private Poller function lacks a formal @spec. Its behavior is described in sufficient prose for implementation. Not a blocking gap but ELIXIR-DEV should add @spec to the implementation per the codebase's style."
+        "observation": "Private Poller helper has no formal @spec in the design. Behavior fully described in prose. ELIXIR-DEV should add @spec to the implementation per codebase style. Not a design gate issue."
+      },
+      {
+        "id": "CDV-N02",
+        "section": "§3.3 alert_hook_emission_state / §6.2",
+        "observation": "The design defines the alert_hook_emission_state table schema and last_emitted_key formats (§3.3) but does not specify the read-before-fire algorithm for checking emission state within fire_hooks. The is_armed mechanism (§5) handles all 14 ACs independently. No AC tests per-hook emission deduplication read behavior. ELIXIR-DEV should implement write-on-fire and consult R-Co source (migrations/022_obs06_alerting_state.sql) for any read semantics intent. This is a secondary correctness concern, not a gate-blocking gap."
       }
     ],
-    "next_action": "Rework CODE-DESIGNER. Return CDV-001 as the single blocking item. On rework, CODE-DESIGNER need only add the last_correlation_id semantics to the design file (§3.2 and/or §5 and/or §11) — no other sections require change. Rework count: 1 of 3 maximum."
+    "next_action": "Route to ELIXIR-DEV (Step 2a). Design gate is CLEARED. rework_count=1."
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

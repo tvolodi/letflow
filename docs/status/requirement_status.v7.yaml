@@ -621,3 +621,18 @@ history:
       (AC11) -- the ROUTE adaptation onto this store is a separate, deferred
       requirement, REQ-196. Full detail:
       handoffs/WF02-REQ195-20260830/req195-release-validation-report.md.
+  - req: REQ-196
+    event: started
+    agent: ORCH
+    at: "2026-08-30T19:48:48Z"
+    note: >
+      Queue task 369, GH#715, stage S6. Route half of the audit split,
+      atop REQ-195's just-merged audit_entries store -- the same shape
+      REQ-178/182/184 have to their cores. Repoints GET /api/v1/audit's
+      handler from EventStore.read_global/1 to the new store, preserving
+      the response envelope and :AuditRead permission. Retires
+      audit.ex's own documented caveats (constant resource_type,
+      always-null before_state/after_state) and makes the resource_type
+      filter actually discriminate. Decides the `payload` field's fate.
+      No schema/capture-logic/authorization.ex/web/ changes.
+      Depends_on [REQ-195, REQ-078, REQ-067, REQ-069], all done.

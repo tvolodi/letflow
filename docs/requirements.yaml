@@ -10497,7 +10497,7 @@ requirements:
   - id: REQ-195
     title: Audit-entry storage with before/after state capture and tamper-evident chaining (OBS-03, XC-02) -- closing routers/audit.ex's recorded null-state gap
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 368  # letflow-queue task id
     description: >

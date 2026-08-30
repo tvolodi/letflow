@@ -581,3 +581,43 @@ history:
       mechanism, and resource_id's column type. No route change (that's
       REQ-196). Depends_on [REQ-038, REQ-045, REQ-069, REQ-193], all
       done.
+  - req: REQ-195
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T18:42:56Z"
+    note: >
+      WF02-REQ195-20260830 done (queue task 368, GH#714, stage S6). Audit-entry
+      storage shipped: new tenant-scoped audit_entries table (chain_hash/
+      prev_chain_hash, before_state/after_state jsonb, DB-enforced BEFORE
+      UPDATE/BEFORE DELETE immutability triggers), audit writes Multi.merge'd
+      into the SAME transaction as the state change they describe. This closes
+      lib/letflow/routers/audit.ex's own documented gap (REQ-078): resource_type
+      was hardcoded to the constant "instance" and before_state/after_state
+      were always null because Letflow's event model had no before/after
+      capture -- both are now real. The chain-verification design genuinely
+      fixes a documented R-Co weakness, not just a cosmetic port: do_verify_chain/2
+      RECOMPUTES each entry's hash from its stored content before checking
+      prev_chain_hash linkage (R-Co's own validateAuditChain only checked
+      linkage), confirmed load-bearing by three independent adversarial traces
+      of the exact same prev_chain_hash-only-tamper scenario (SECURITY-REVIEWER,
+      REVIEWER, RELEASE-VALIDATOR, each independently) -- all three confirmed
+      both cond clauses go true simultaneously for that tamper and only clause
+      order decides hash_mismatch vs. the wrong chain_broken attribution.
+      Path: 2 CODE-DESIGN-VALIDATOR rework rounds, 1 TEST-DESIGN-VALIDATOR
+      rework round, 1 implementation rework round. The same "unverified
+      actor_id source" defect class (a design/implementation claiming a
+      function "already carries" actor_id without reading its real
+      @type/signature) was caught THREE separate times across this
+      requirement's design and implementation history -- now documented in
+      docs/anti-patterns.md ("Claiming a function 'already carries' a value
+      without reading its real parameter list"). RELEASE-VALIDATOR
+      independently re-verified all 12 acceptance criteria against the real
+      shipped code (not prior gate reports): own hand-trace of AC6, own
+      4-operation actor_id spot-check with zero overlap against
+      SECURITY-REVIEWER's/REVIEWER's already-checked set (zero discrepancies),
+      own fresh test runs (39/39 targeted, 2800/2802 full suite with only the
+      pre-existing rustc-absent baseline gap, mix compile
+      --warnings-as-errors clean). No lib/letflow/routers/ files touched
+      (AC11) -- the ROUTE adaptation onto this store is a separate, deferred
+      requirement, REQ-196. Full detail:
+      handoffs/WF02-REQ195-20260830/req195-release-validation-report.md.

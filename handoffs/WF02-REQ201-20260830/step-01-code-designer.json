@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ201-20260830/step-01-code-designer.json",
   "created_at": "2026-08-30T16:52:40Z",
   "started_at": "2026-08-30T16:52:40Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-08-30T17:25:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -53,7 +53,18 @@
       "No implementation code (no actual .ex/.exs code bodies -- signatures and type shapes only)"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Design for REQ-201 (OBS-06 alerting hooks) produced at lib/letflow/design/req201-alerting-hooks.md. Covers: Letflow.Obs.Alerts public API (run_detection/2, internal specs), AlertHookConfig/AlertThresholds/RetryPolicy struct shapes, two migration specs (alert_trigger_state and alert_hook_emission_state, both PER-TENANT schema with explicit reasoning against R-Co's global placement and Decision 0003 Decision B), edge-triggered is_armed state machine, per-instance trigger_key format for instance_error_stuck, delivery POST body shapes for all four triggers, exponential backoff algorithm with no-DLQ terminal action, scheduler integration via Letflow.Scheduler.Poller.handle_info(:tick) with observed_lag_ms from a new last_tick_started_at state field, and full 14-AC mapping table. Four open questions logged (OQ-1 through OQ-4) for ELIXIR-DEV resolution during implementation.",
+    "artifacts_out": ["lib/letflow/design/req201-alerting-hooks.md"],
+    "issues": [
+      "OQ-1: auth_secret_ref namespace string ('alert_hook' proposed) -- ELIXIR-DEV must verify against Letflow.Secrets namespace validation",
+      "OQ-2: Letflow.Dlq.count_entries/1 API existence -- ELIXIR-DEV must verify or add a count aggregate",
+      "OQ-3: paused_at query window for recently-paused subscriptions -- use last_tick_started_at from Poller state",
+      "OQ-4: confirmation that Letflow.Obs.Alerts has no process and requires no application.ex change (non-question, included for AC-11 clarity)"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

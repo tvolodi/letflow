@@ -68,7 +68,14 @@ defmodule Letflow.WebhooksTest do
       assert "tenant_id" in column_names
       assert "id" in column_names
       assert "status" in column_names
+
+      # secret_hash still exists as a real DB column (the REQ-190 migration blanks
+      # it to NULL, deliberately does not drop it -- design §5.1), but is
+      # superseded by secret_ref/secret_key_id (REQ-190, 0016 §F) as of this
+      # requirement's own migration -- see AC2 below for the current write path.
       assert "secret_hash" in column_names
+      assert "secret_ref" in column_names
+      assert "secret_key_id" in column_names
 
       # The isolation boundary is the Postgres schema, not the tenant_id
       # column (design §1) -- confirmed by there being no
@@ -88,8 +95,17 @@ defmodule Letflow.WebhooksTest do
   # storage, never exposed again by list/1 or get
   # ---------------------------------------------------------------------------------
 
-  describe "AC2: create/2 generates a secret, stores only its hash, returns plaintext once" do
-    test "no secret supplied -- generates one, stores only the SHA-256 hash, returns hmac_secret_once" do
+  describe "AC2: create/2 generates a secret, stores it via the secrets table (not a hash), returns plaintext once" do
+    # REQ-190 (0016 §F) superseded this AC's original hashed-secret storage: a
+    # one-way SHA-256 hash cannot supply the key material HMAC-SHA256 signing
+    # needs, so create/2 now writes the plaintext through Letflow.Secrets.put/2
+    # and stores only the resulting secret_ref/secret_key_id reference -- never a
+    # hash, never the plaintext itself. Confirmed expected fallout of 0016 §F by
+    # ELIXIR-DEV/REVIEWER/SECURITY-REVIEWER (not a regression); see
+    # test/specs/REQ-190.md's "webhooks_test.exs staleness fix" section and
+    # test/letflow/secrets_test.exs's AC9 for the full round-trip proof (create/2
+    # -> Secrets.put/2 -> Secrets.resolve/2 recovers the identical plaintext).
+    test "no secret supplied -- generates one, stores it via secret_ref/secret_key_id, never a plaintext-derived hash" do
       %{schema_name: schema_name} = provisioned_tenant()
 
       %{subscription: subscription, hmac_secret_once: plaintext} = create!(schema_name)
@@ -97,17 +113,30 @@ defmodule Letflow.WebhooksTest do
       assert is_binary(plaintext)
       assert plaintext != ""
 
-      expected_hash = :crypto.hash(:sha256, plaintext) |> Base.encode16(case: :lower)
-      assert subscription.secret_hash == expected_hash
-      assert subscription.secret_hash != plaintext
+      assert is_binary(subscription.secret_ref)
+      assert String.starts_with?(subscription.secret_ref, "sec://tenant/")
+      assert is_integer(subscription.secret_key_id) and subscription.secret_key_id > 0
 
       reloaded = Repo.get!(Subscription, subscription.id, prefix: schema_name)
-      assert reloaded.secret_hash == expected_hash
+      assert reloaded.secret_ref == subscription.secret_ref
+      assert reloaded.secret_key_id == subscription.secret_key_id
+
+      # The literal REQ-190 assertion: no plaintext secret persists in
+      # webhook_subscriptions. secret_hash has no field on this schema at all
+      # (Ecto.Schema tolerates an unmapped column silently), so this reads the
+      # raw column directly rather than via the struct.
+      %{rows: [[secret_hash]]} =
+        Repo.query!(
+          ~s(SELECT secret_hash FROM "#{schema_name}".webhook_subscriptions WHERE id = $1),
+          [Ecto.UUID.dump!(subscription.id)]
+        )
+
+      assert secret_hash == nil
     end
   end
 
   describe "AC2: list/1 and get (via delete's not-found path) never expose the plaintext or hmac_secret_once" do
-    test "a subsequent list/1 of the same subscription carries no plaintext and no hmac_secret_once key" do
+    test "a subsequent list/1 of the same subscription carries no plaintext, no hmac_secret_once key, and no secret_hash field at all" do
       %{schema_name: schema_name} = provisioned_tenant()
 
       %{subscription: subscription, hmac_secret_once: plaintext} = create!(schema_name)
@@ -116,8 +145,13 @@ defmodule Letflow.WebhooksTest do
 
       assert listed.id == subscription.id
       refute Map.has_key?(Map.from_struct(listed), :hmac_secret_once)
-      assert listed.secret_hash != plaintext
-      assert listed.secret_hash == subscription.secret_hash
+      # secret_hash is not a field on Letflow.Webhooks.Subscription at all as of
+      # REQ-190 -- its struct-level absence is itself the assertion (matching the
+      # schema's own moduledoc claim), not a value comparison against a field that
+      # no longer exists.
+      refute Map.has_key?(Map.from_struct(listed), :secret_hash)
+      assert listed.secret_ref == subscription.secret_ref
+      refute listed.secret_ref == plaintext
     end
   end
 

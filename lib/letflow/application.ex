@@ -7,6 +7,20 @@ defmodule Letflow.Application do
 
   @impl true
   def start(_type, _args) do
+    # REQ-190 (design req190-secrets-core.md §6.2): redacts every log
+    # event's metadata map via Letflow.Secrets.Redaction.redact_map/1
+    # before it reaches any handler. Registered first, ahead of every
+    # other child, so nothing below this line can log an unredacted
+    # secret-shaped value before the filter is active. Idempotent-safe:
+    # :logger.add_primary_filter/2 raises on a duplicate filter id, which
+    # would only happen on a second Letflow.Application.start/2 call in
+    # the same node -- not expected in normal operation (a release/test run
+    # starts the application exactly once per node).
+    :logger.add_primary_filter(
+      :letflow_secrets_redaction,
+      {&Letflow.Secrets.LogFilter.filter/2, %{}}
+    )
+
     oidc_config = Application.fetch_env!(:letflow, :oidc)
 
     children =

@@ -1,5 +1,15 @@
 import Config
 
+# REQ-190 (docs/migration/decisions/0016-secrets-storage-backend.md §B):
+# config/runtime.exs's LETFLOW_SECRETS_MASTER_KEY startup check runs in
+# EVERY environment, including dev -- it must never be weakened. Unlike
+# config/test.exs, dev intentionally does NOT inject a value here: a
+# developer running `mix run`/`mix ecto.migrate` locally must set a real
+# value themselves (in the environment, or the untracked .env at the repo
+# root -- see .env.example), same as any other operator-supplied secret this
+# codebase never defaults. This comment exists so a `raise` at dev boot is
+# recognized as the intended behavior, not a bug in this migration.
+
 # ISS-0015 (GH#71): MIX_TEST_PARTITION only takes effect under
 # config/test.exs -- a bare `mix run` (MIX_ENV=dev by default) would
 # silently ignore it and connect to the shared letflow_dev database below,

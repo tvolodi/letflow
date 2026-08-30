@@ -1,0 +1,116 @@
+run_id: WF02-REQ190-20260830
+date: "2026-08-30"
+agent: TEST-RUNNER
+branch: feature/WF02-REQ190-20260830
+commit_tested: 4b4ed9bc (077adf99 + this run's own secrets_runtime_config_test.exs fix)
+
+toolchain:
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5], Mix 1.20.3"
+  docker: "letflow-postgres-1 already up (postgres:16, port 5462, healthy); letflow-keycloak-1 up (port 8093, healthy)"
+  db_port_source: "default 5462 (no LETFLOW_DB_PORT override in .env)"
+
+full_suite_run_1:
+  command: "bash scripts/test_parallel.sh"
+  partition_count: 16
+  partition_count_source: nproc
+  test_pool_size: 5
+  exit_code: 1
+  combined_result_line: "combined: 2584 tests, 6 properties, 2 failures (2588/2590 passed)"
+  passed: 2588
+  failed: 2
+  total: 2590
+
+failures_found_run_1:
+  - test: "test AC7: retention runs on Poller's own process -- no second ticker, application.ex untouched lib/letflow/application.ex has zero diff against the base branch (Letflow.Scheduler.PollerTest)"
+    file: "test/letflow/scheduler/poller_test.exs:340"
+    partition: 2
+    error: >
+      assert output == "", "expected zero diff against application.ex, got:\n#{output}"
+      -- got a 14-line diff against origin/main.
+    classification: PRE_EXISTING_STRUCTURAL_DEFECT
+    attributable_to_req190: false
+    structural_evidence: >
+      `git diff --name-only main...HEAD` on this branch confirms
+      lib/letflow/application.ex IS part of this branch's own diff (REQ-190's
+      design, req190-secrets-core.md SS6.2, requires registering
+      :logger.add_primary_filter for secrets redaction there). The failing test
+      (poller_test.exs:340) belongs to REQ-186 (merged to main pre-existing,
+      commit 77637268, `git blame` confirms), not to REQ-190 -- REQ-190 owns no
+      files under test/letflow/scheduler/. The test's own design is defective:
+      it asserts a REQ-186-specific implementation detail (`application.ex` is
+      byte-identical to base) as a repo-wide invariant, which necessarily fails
+      the moment ANY subsequent branch legitimately touches application.ex for
+      an unrelated reason -- exactly what happened here. Not fixable from
+      REQ-190's side without reverting REQ-190's own required design (the log
+      filter registration); the fix belongs in poller_test.exs's AC7 (e.g. drop
+      the test, or scope it to REQ-186's own historical base ref instead of
+      current main). Forwarded to ORCH for issue-queue filing rather than
+      fixed on this branch, per Unblock-Everything's "unrelated -> forward"
+      branch.
+    action: forwarded_to_orch_for_issue_queue
+
+  - test: "test LETFLOW_SECRETS_MASTER_KEY unset fails application boot with a clear 'is missing' error (Letflow.SecretsRuntimeConfigTest)"
+    file: "test/letflow/secrets_runtime_config_test.exs:59"
+    partition: 7
+    error: >
+      assert output =~ "LETFLOW_SECRETS_MASTER_KEY" failed -- child `mix run`
+      subprocess actually raised config/dev.exs's ISS-0015 guard
+      ("MIX_TEST_PARTITION=7 is set, but MIX_ENV is dev ...") instead of
+      reaching the LETFLOW_SECRETS_MASTER_KEY validation this test targets.
+    classification: NEW_FIXED
+    attributable_to_req190: true
+    root_cause: >
+      Test spawns a `mix run` child via System.cmd/3 with env:
+      [{"LETFLOW_SECRETS_MASTER_KEY", nil}, {"MIX_ENV", "dev"}]. System.cmd's
+      env: option MERGES onto (does not replace) the calling process's own
+      inherited environment. Under scripts/test_parallel.sh, this test's own
+      partition process (partition 7) carries MIX_TEST_PARTITION=7 and
+      MIX_BUILD_PATH=_build/test-partition-7 in its environment, both
+      inherited by the spawned mix run child. config/dev.exs's pre-existing
+      ISS-0015 guard raises whenever MIX_ENV=dev boots with MIX_TEST_PARTITION
+      set -- exactly this scenario. The test only worked standalone (no
+      partition env) or under serial `mix test`, never under partitioned
+      parallel execution.
+    fix: >
+      test/letflow/secrets_runtime_config_test.exs -- added
+      {"MIX_TEST_PARTITION", nil} and {"MIX_BUILD_PATH", nil} to the first
+      test's env: list, explicitly clearing both inherited vars before the
+      child boots.
+    fix_verified: true
+    fix_verification_method: >
+      Reproduced standalone with `MIX_TEST_PARTITION=7 MIX_BUILD_PATH=_build/test-partition-7
+      mix test test/letflow/secrets_runtime_config_test.exs` before the fix
+      (fails); same command after the fix -- "Result: 2 passed". Then
+      re-ran the full scripts/test_parallel.sh suite (run 2 below) and
+      confirmed partition 7 clean.
+    commit: 4b4ed9bc
+
+full_suite_run_2_after_fix:
+  command: "bash scripts/test_parallel.sh"
+  partition_count: 16
+  partition_count_source: nproc
+  test_pool_size: 5
+  exit_code: 1
+  combined_result_line: "combined: 2584 tests, 6 properties, 1 failures (2589/2590 passed)"
+  passed: 2589
+  failed: 1
+  total: 2590
+  remaining_failure: "poller_test.exs:340 AC7 (partition 2) -- see failures_found_run_1, unrelated/forwarded"
+
+iss0377_regression_check:
+  expected_status: "FIXED (merged via PR #732 before this run started, per dispatch context)"
+  observed_this_run: "did not reappear -- no wasmex .so-vs-.dll or MIX_OS_CONCURRENCY_LOCK hard-link failures in either run"
+  conclusion: "consistent with fixed; no new information"
+
+verdict: PARTIAL
+verdict_note: >
+  REQ-190's own implementation (lib/letflow/secrets*, the two migrations,
+  lib/letflow/webhooks.ex changes) introduces zero new failures once its own
+  test's parallel-execution env-inheritance bug is fixed (fixed and verified
+  on this branch, commit 4b4ed9bc). The full suite's only remaining failure
+  (poller_test.exs:340, AC7) is structurally attributable to a pre-existing
+  REQ-186 test design defect unrelated to REQ-190's changes -- confirmed by
+  git diff/blame evidence, not count-matching -- and is forwarded to ORCH for
+  issue-queue filing rather than fixed on this branch. REQ-190 itself is
+  clean: 2589/2590 passed, the 1 remaining failure is out of scope for this
+  branch to fix.

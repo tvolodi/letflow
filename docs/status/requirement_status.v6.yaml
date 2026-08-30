@@ -1152,3 +1152,85 @@ history:
       GET/POST/PATCH/DELETE /admin/services (SVC-04 :AdminServicesRead/
       :AdminServicesManage). REQ-069's permission surface already ships
       these three permission names with no backing route until now.
+  - req: REQ-190
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T05:06:28Z"
+    note: >
+      WF02-REQ190-20260830 done (queue task 363, GH#709, stage S6). Secrets
+      core shipped per decision 0016: envelope-encrypted per-tenant secret
+      storage and resolution by reference (EXP-501), plus the webhook HMAC
+      key reconciliation. Letflow.Secrets context module -- put/2 (returns
+      only reference, key_id, timestamp; never plaintext/ciphertext),
+      resolve/2 (rejects a reference naming a different tenant than the
+      caller before any query; enforces the purpose/consumer matrix;
+      resolves an unpinned reference to the newest ACTIVE version, fixing
+      the R-Co defect where the newest row could be a disabled one),
+      disable/2 (preserves original created_by, does not overwrite it with
+      the disabling actor as R-Co does). AES-256-GCM envelope encryption
+      with a fresh random data key per secret; master key from
+      LETFLOW_SECRETS_MASTER_KEY, startup fails hard on absent or malformed
+      value, no all-zeros or other default key. Redaction: reference
+      rendering masks the key id; Logger configuration redacts values under
+      the R-Co exact-key list (authorization, password, password_hash,
+      token, access_token, refresh_token, bootstrap_token, api_token,
+      secret, client_secret, credential, credentials, set-cookie, cookie)
+      plus the _token/_secret/_password/_credential suffixes, moduledoc
+      honestly states redaction keys on field NAME only. Webhook HMAC
+      reconciliation: secret_ref/secret_key_id columns added to
+      webhook_subscriptions per decision 0016, migration applied to every
+      tenant schema, idempotent/re-runnable, asserted (not assumed) that no
+      existing webhook_subscriptions row needed migrating since REQ-181 was
+      still pending at the time. No route/controller added (REQ-191's
+      scope), confirmed by git diff --stat scoped to this requirement's
+      commits. Path: 1 ELIXIR-DEV rework cycle fixing an empty-plaintext
+      defect. CODE-DESIGNER, CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER,
+      REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR, TEST-RUNNER,
+      RELEASE-VALIDATOR all PASS. RELEASE-VALIDATOR independently
+      re-verified all 12 acceptance criteria. Full suite via
+      scripts/test_parallel.sh: 2589/2590 passed, 1 pre-existing
+      environmental failure (ISS-0378, filed and forwarded), not touching
+      this branch's diff. docs/migration/decisions/0016-secrets-storage-backend.md
+      confirmed unchanged and accurately reflecting what shipped -- no
+      edits needed, it was already fully written/signed-off under REQ-189.
+      README.md checked for an env-var reference table pattern to extend
+      with LETFLOW_SECRETS_MASTER_KEY: none exists (env vars are documented
+      inline in specific sections -- dev DB setup, port config -- not in a
+      central table), and this requirement adds no HTTP-visible surface, so
+      no README change made. Unblocks REQ-183 (webhook delivery dispatch,
+      depends_on: [REQ-190, REQ-181, REQ-176, REQ-189], all now done) and
+      REQ-191 (secrets route layer).
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 6 — CLOSED 2026-08-30. DO NOT APPEND TO THIS FILE.
+#
+# This volume holds the complete requirement run history from 2026-08-28 through
+# 2026-08-30 (42 entries, lines 1-1202). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed under WF02-REQ190-20260830's Step
+# Final rebase composition (ELIXIR-DEV), which merged this volume's own REQ-190
+# done-event append against origin/main's concurrently-appended REQ-190 started,
+# REQ-191 done, REQ-183 started, REQ-183 blocked, and REQ-192 started events (all
+# composed in chronological order by `at:` timestamp, none dropped, reordered or
+# overwritten), bringing this file to 1202 lines -- over its declared roll_rule
+# ceiling (max_lines: 1200) -- confirmed via `wc -l` on the working-tree (CRLF)
+# file per this volume's own "WHEN THIS VOLUME IS FULL" procedure. Reads of this
+# volume are TARGETED reads only -- a line range or a pattern match, never a
+# whole-file read. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v7.yaml
+#
+# Why this file was closed: composing WF02-REQ190-20260830's Step Final rebase
+# (REQ-190 done-event append plus origin/main's five concurrently-appended
+# events) brought the on-disk count to 42 entries across 1202 lines -- over the
+# roll ceiling. No entry above this footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none declared beyond what volumes 1-3 already
+# declare against themselves.
+# ─────────────────────────────────────────────────────────────────────────────

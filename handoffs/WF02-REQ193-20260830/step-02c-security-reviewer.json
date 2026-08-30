@@ -1,0 +1,72 @@
+{
+  "handoff_id": "f3a9c1d2-7e4b-4f85-a2c8-9d0e6b3f1a7c",
+  "run_id": "WF02-REQ193-20260830",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ193-20260830/step-02c-security-reviewer.json",
+  "created_at": "2026-08-30T00:00:00Z",
+  "completed_at": "2026-08-30T05:00:00Z",
+  "status": "COMPLETED",
+  "context": {
+    "branch": "feature/WF02-REQ193-20260830",
+    "requirement_ids": ["REQ-193"],
+    "artifacts_reviewed": [
+      "lib/letflow/obs/logger.ex",
+      "config/config.exs",
+      "config/runtime.exs"
+    ],
+    "artifacts_out_of_scope": [
+      "lib/letflow/engine/expr.ex (REQ-198 changes — security-reviewed separately at handoffs/WF02-REQ198-20260830/step-02c-security-reviewer.json, PASS)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "WF-02 STEP 2c SECURITY GATE — REQ-193 — VERDICT: FAIL.\n\nDiff reviewed: git diff main...HEAD -- lib/ config/ (scoped to REQ-193 artifacts: lib/letflow/obs/logger.ex [new], config/config.exs, config/runtime.exs). The lib/letflow/engine/expr.ex changes in the same diff are tagged REQ-198 and were security-reviewed separately (PASS); they are not re-reviewed here.\n\n=== SCOPE TEST ===\n\nIn scope for security review:\n- lib/letflow/obs/logger.ex (new): a :logger_formatter that resolves and processes log metadata including potential secret values — directly relevant to INV-4.\n- config/config.exs: configures OTP :default_handler formatter to Letflow.Obs.Logger.\n- config/runtime.exs: reads LOG_LEVEL env var, configures :logger level at boot.\n\nNot triggered:\n- No priv/repo/migrations changes.\n- No API routes reading/writing tenant-scoped data.\n- No lookup-by-ID handlers.\n- No tenant-scoped Ecto schema modules.\n- LOG_LEVEL is an operational config value, not a secret — the runtime.exs change does not resolve a secret.\n\n=== INV-1 (Tenant data isolation) ===\nNOT-APPLICABLE. No DB queries, no Ecto schema modules, no migrations, no tenant-scoped data access in this diff.\n\n=== INV-2 (Server-side field authorization) ===\nNOT-APPLICABLE. No API routes or response-shaping code (S4 not started).\n\n=== INV-3 (Untrusted runtime sandboxing) ===\nNOT-APPLICABLE. S5 not started.\n\n=== INV-4 (Secrets by reference only) — APPLIES — FAIL ===\n\nThe logger is the primary enforcement boundary for secret non-leakage in log output. Two paths through encode_entry/3 were examined:\n\nNORMAL PATH — PASS:\n  stripped = Map.drop(meta, @beam_reserved_keys)\n  {clean, violations} = split_reserved(stripped)\n  additional = clean |> redact_sensitive() |> Map.new(...)\n  Jason.encode!(Map.merge(additional, base))\nredact_sensitive/1 is called on `clean` (meta with BEAM reserved keys and formatter-reserved keys stripped) BEFORE Jason.encode!. The normal encoding path is correct.\n\nRESCUE/FALLBACK PATH — BLOCKER:\n  rescue\n    e ->\n      fallback = %{\n        ...\n        \"message\" => \"log encoding failed: #{inspect({level, msg, meta, e})}\"\n      }\n      Jason.encode!(fallback)\nHere `meta` is the ORIGINAL, UNREDACTED metadata map passed to encode_entry/3 — it is NOT the post-redact_sensitive/1 `additional` variable. The rescue block is reached when Jason.encode!/1 raises on the primary path, which happens when metadata contains a struct that does not implement Jason.Encoder. safe_value/1 converts pid/reference/function/port to inspect strings but has a catch-all `defp safe_value(v), do: v` that passes structs through unchanged — any struct in metadata will cause Jason.encode! to raise, triggering this path.\n\nIf that same metadata map also contains a sensitive key (e.g., :password, :token, :authorization, :client_secret), its plaintext value is emitted via inspect(meta) in the fallback message, completely bypassing redact_sensitive/1. This is an INV-4 violation: secrets must never appear in log output.\n\nRequired fix: replace `meta` in the inspect call with a safe version that cannot contain sensitive values. Minimal fix — use a redacted version:\n  \"log encoding failed: #{inspect({level, msg, redact_sensitive(Map.drop(meta, @beam_reserved_keys)), e})}\"\nAlternatively, omit meta from the fallback message entirely:\n  \"log encoding failed (metadata omitted): level=#{inspect(level)}\"\n\nRoute back to ELIXIR-DEV with this specific fix required before re-gate.\n\nHardcoded-secret check (INV-4 How to verify): Select-String across lib/letflow/obs/logger.ex, config/config.exs, config/runtime.exs for pattern matching secret literals — no hits. No hardcoded secrets found.\n\n=== INV-5 (Not-found/forbidden indistinguishability) ===\nNOT-APPLICABLE. No multi-tenant lookup-by-ID endpoints (S4 not started).\n\n=== INV-6 (New data-access paths prove their scoping) ===\nNOT-APPLICABLE. No new data-access paths.\n\n=== INV-7 (No SQL string interpolation) ===\nNOT-APPLICABLE. No SQL in this diff.\n\n=== INV-8 (No unhandled crashes on realistic failure paths) — APPLIES — PASS ===\n\nThe Jason.encode!/1 call on the primary path is wrapped in try/rescue — encoding failures are handled. The fallback Jason.encode!/1 operates on a plain string-to-string map and cannot raise in practice. No bare {:ok, _} = matches on external I/O found in logger.ex (verified via grep). safe_value/1 prevents crash-loop conditions for BEAM-native non-JSON types.\n\nOBSERVATION (no additional severity): safe_value/1's catch-all `defp safe_value(v), do: v` passes arbitrary structs through to Jason, which raises. The rescue catches this — no crash loop. The degradation is graceful. The concern is the unredacted meta in the fallback message, which is the INV-4 BLOCKER above.\n\n=== ADDITIONAL LOGGER-SPECIFIC CHECKS ===\n\n(a) redact_sensitive/1 before Jason.encode!/1: PASS on normal path; BLOCKER on rescue path (see INV-4 above).\n\n(b) Re-entry guard for reserved-field violation warnings: PASS. format/2 checks Map.get(meta, :formatter_violation) == true before calling encode_entry/3. The :logger.warning/3 call that fires on reserved-field violations passes %{formatter_violation: true} in its metadata map, so if it routes back through this formatter, format/2 takes the plain-text branch and returns without calling encode_entry/3 again. No infinite recursion.\n\n(c) Non-serializable metadata crash-loop: PASS. safe_value/1 handles pid/ref/fun/port. Structs without Jason.Encoder fall through the catch-all, cause Jason.encode! to raise, which is caught by the rescue block — no crash loop. The formatter does not crash the OTP logger handler on non-serializable input.\n\n(d) LOG_LEVEL invalid value exposure in error message (runtime.exs): MINOR. `raise \"Invalid LOG_LEVEL=#{inspect(invalid)}\"` exposes the invalid env var value in the startup error message. LOG_LEVEL is operator-controlled input (not tenant/user input), and this fires at boot time before any request handling, so this is not a user-data exposure. Noted for completeness; not a BLOCKER.\n\n=== VERDICT ===\nFAIL. One BLOCKER (INV-4): rescue path in encode_entry/3 (lib/letflow/obs/logger.ex line ~123) includes inspect(meta) where meta is unredacted, allowing sensitive metadata values to bypass redact_sensitive/1 and appear in the fallback log message. Route back to ELIXIR-DEV with the required fix before re-gate.",
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "invariant": "INV-4",
+        "description": "encode_entry/3 rescue block (lib/letflow/obs/logger.ex ~L123) logs `inspect({level, msg, meta, e})` where `meta` is the original unredacted metadata map, NOT the post-redact_sensitive/1 `additional` variable. If Jason.encode! raises (triggered by any struct without Jason.Encoder in metadata — safe_value/1 only covers pid/ref/fun/port), any sensitive key in meta (:password, :token, :authorization, :client_secret, etc.) is emitted in plaintext in the fallback message. This bypasses redact_sensitive/1 entirely and violates INV-4.",
+        "affected_file": "lib/letflow/obs/logger.ex",
+        "fix_required": "Replace `meta` in the rescue inspect call with a redacted version: `redact_sensitive(Map.drop(meta, @beam_reserved_keys))`, or omit meta from the fallback message entirely."
+      },
+      {
+        "severity": "MINOR",
+        "invariant": "INV-4 (informational)",
+        "description": "runtime.exs LOG_LEVEL validation uses `inspect(invalid)` in the raise message, exposing the invalid env var value. LOG_LEVEL is operator-controlled input at boot time, not tenant/user input. Not a BLOCKER; noted for completeness.",
+        "affected_file": "config/runtime.exs",
+        "fix_required": "None required. Optional: sanitize to known values only in the error string."
+      }
+    ],
+    "invariant_verdicts": {
+      "INV-1": "NOT-APPLICABLE — no DB, no tenant-scoped tables, no migrations, no Ecto queries",
+      "INV-2": "NOT-APPLICABLE — no API routes or response-shaping code (S4 not started)",
+      "INV-3": "NOT-APPLICABLE — no scripting/plugin sandbox (S5 not started)",
+      "INV-4": "APPLIES — PASS (rescue path now uses redact_sensitive(Map.drop(meta, @beam_reserved_keys)); confirmed in commit 70d058ff — no raw sensitive metadata reachable in fallback message)",
+      "INV-5": "NOT-APPLICABLE — no multi-tenant lookup-by-ID endpoints (S4 not started)",
+      "INV-6": "NOT-APPLICABLE — no new data-access paths",
+      "INV-7": "NOT-APPLICABLE — no SQL",
+      "INV-8": "APPLIES — PASS (Jason.encode! wrapped in try/rescue; no bare {:ok,_}= on external I/O; no crash loop)"
+    },
+    "next_action": "Route to REVIEWER (Step 2d)"
+  },
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-08-30T00:00:00Z",
+      "status": "FAIL",
+      "summary": "INV-4 BLOCKER: encode_entry/3 rescue block used raw unredacted `meta` in inspect call, bypassing redact_sensitive/1 and potentially emitting plaintext secrets (password, token, authorization, client_secret, etc.) in the fallback log message when Jason.encode! raises.",
+      "issues": [
+        {
+          "severity": "BLOCKER",
+          "invariant": "INV-4",
+          "description": "encode_entry/3 rescue block logged inspect({level, msg, meta, e}) where meta was the original unredacted map — any sensitive key emitted in plaintext on Jason.encode! failure.",
+          "fix_applied": "Replace raw `meta` in rescue inspect call with redact_sensitive(Map.drop(meta, @beam_reserved_keys))."
+        }
+      ],
+      "next_action": "Routed to ELIXIR-DEV for fix; commit 70d058ff applied the correction."
+    }
+  ]
+}

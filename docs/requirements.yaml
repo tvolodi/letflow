@@ -10318,7 +10318,7 @@ requirements:
   - id: REQ-193
     title: Structured JSON logging with trace-id propagation (OBS-01, XC-01's non-HTTP half)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S6
     impl_order: 366  # letflow-queue task id
     description: >

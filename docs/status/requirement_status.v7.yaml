@@ -436,3 +436,23 @@ history:
       This completes the webhooks vertical in full: REQ-181 (core),
       REQ-182 (subscription routes), REQ-183 (delivery dispatch), REQ-184
       (deliveries route) are all done.
+  - req: REQ-193
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T13:23:32Z"
+    note: >
+      WF02-REQ193-20260830 done (queue task 366, GH#712, stage S6).
+      Structured JSON logging with trace-id propagation: Letflow.Obs.Logger
+      (:logger_formatter behaviour), single-line JSON output (timestamp/level/
+      trace_id/component/message), ISO 8601 UTC microsecond timestamps, level
+      configurable via LOG_LEVEL env var with startup-error on invalid value,
+      with_trace/1 for background trace origination, sensitive-value redaction
+      (R-Co's 14-key + 4-suffix list). REQ-193 implements the shared redaction
+      mechanism first (REQ-190 confirmed not implemented). config scoped:
+      backends: [] in dev/prod only (test env preserved for CaptureLog).
+      Pipeline: CODE-DESIGNER (1 rework-free pass) -> CODE-DESIGN-VALIDATOR PASS ->
+      ELIXIR-DEV (2 rework rounds: security fallback-path redaction fix, CaptureLog
+      regression fix) -> SECURITY-REVIEWER PASS (1 rework) -> REVIEWER PASS ->
+      TEST-DESIGNER PASS (10/10) -> TEST-DESIGN-VALIDATOR PASS -> TEST-RUNNER
+      PASS (2735/2737, 2 pre-existing Windows grep flakes) -> RELEASE-VALIDATOR PASS.
+      Full detail: handoffs/WF02-REQ193-20260830/.

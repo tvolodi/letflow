@@ -1,0 +1,37 @@
+{
+  "handoff_id": "a7b2e4f8-3c1d-4a96-b5e7-8f0d9c2a6b4e",
+  "run_id": "WF02-REQ193-20260830",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ193-20260830/step-02d-reviewer.json",
+  "created_at": "2026-08-30T06:00:00Z",
+  "context": {
+    "branch": "feature/WF02-REQ193-20260830",
+    "requirement_ids": ["REQ-193"],
+    "artifacts_reviewed": [
+      "lib/letflow/obs/logger.ex",
+      "config/config.exs",
+      "config/runtime.exs"
+    ],
+    "artifacts_noted_out_of_scope": [
+      "lib/letflow/engine/expr.ex — REQ-198 expression builtins; already through its own REVIEWER gate (handoffs/WF02-REQ198-20260830/step-02d-reviewer.json, PASS). Not re-reviewed here."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "WF-02 STEP 2d REVIEWER GATE — REQ-193 — VERDICT: PASS.\n\nFour categories checked against lib/letflow/obs/logger.ex (new), config/config.exs, config/runtime.exs.\n\n=== OTP/ELIXIR IDIOM ===\n\n(a) :logger_formatter behaviour — CORRECT. Both required callbacks are present with @impl annotations: check_config/1 returns :ok (no required config, acceptable) and format/2 returns iodata() as the behaviour contract requires.\n\n(b) Logger.metadata() usage — CORRECT. Called as Logger.metadata()[:trace_id] inside with_trace/1 which is valid keyword-list access for the per-process metadata keyword list Logger returns.\n\n(c) Logger.metadata(key: val) as merge, not replace — CORRECT. Logger.metadata(trace_id: new_id) merges into existing metadata; Logger.reset_metadata(Keyword.delete(Logger.metadata(), :trace_id)) is used for the remove-only path, which is the correct idiom since Logger.delete_metadata/1 is not a public Elixir API.\n\n(d) with_trace/1 try/after cleanup — CORRECT. try/after (not rescue/catch) ensures the after block runs on normal return, exception, throw, and exit. The function's return value is the try-body value (fun.() result), propagated transparently. The prior trace_id is restored (if present) or the key is removed (if absent) regardless of how fun.() exits.\n\n(e) Message format handling (chardata vs string) — CORRECT. format_msg/1 covers all three OTP :logger message shapes: {:string, iodata} via IO.iodata_to_binary, {charlist, args} via :io_lib.format, and any other shape via inspect/1. The {:report, report} tuple falls through to inspect(other) which is acceptable and consistent with the design spec.\n\n(f) Jason dependency — PRE-EXISTING. {:jason, \"~> 1.4\"} is already in mix.exs (line 43). No new dependency introduced.\n\n=== SCOPE CREEP ===\n\n(g) Changed files within REQ-193 scope: lib/letflow/obs/logger.ex (new module), config/config.exs, config/runtime.exs, lib/letflow/design/req193-structured-logging.md. All expected by REQ-193. No lib/ files outside lib/letflow/obs/ are changed by REQ-193 (expr.ex changes are REQ-198, already reviewed separately).\n\n(h) lib/letflow/api/context.ex — NOT MODIFIED. The one-way dependency (context.ex sets Logger.metadata, logger.ex reads it) is implemented by reading, not by modifying, context.ex. No scope violation.\n\n(i) New routes — NONE. No router or endpoint files in the diff.\n\n=== DECISION-RECORD CONSISTENCY ===\n\n(j) Decision scan:\n- 0003 (Ecto schema strategy): logging is cross-cutting, no schema changes. No conflict.\n- 0006 (identity tables/tenant_id): no tenant-scoped data access in this module. No conflict.\n- 0016 (secrets storage): LOG_LEVEL env var follows the established boot-time-raise validation pattern from that record. Consistent.\n- 0008 (cross-cutting tooling stage): REQ-193 is tagged S6 which is the active stage. Consistent with Option A framing.\n- No logging-specific decisions existed before this requirement; Letflow.Obs.Logger is a new facility with no prior decision constraining it.\n\n(k) New library dependency — NONE. Jason pre-existing. No REVIEWER sign-off needed.\n\n=== SENSITIVE-VALUE REDACTION VERIFICATION ===\n\n(l) Exact key list (§2.1 of design) — 13 of 14 atom forms present. The string forms of all 14 keys are present. The implementation correctly redacts both atom and string forms of: authorization, password, password_hash, token, access_token, refresh_token, bootstrap_token, api_token, secret, client_secret, credential, credentials, cookie — atom and string. Also 'set-cookie' as string. See MINOR note #1 below.\n\nThe 4 suffixes (_token, _secret, _password, _credential) match the design spec verbatim.\n\n(m) Reserved-field protection — CORRECT. The five fields (timestamp, level, trace_id, component, message) are in @reserved_fields as both atom and string forms. split_reserved/1 strips all reserved keys from the additional section; Map.merge(additional, base) then places the formatter's computed values last, so they always win. The re-entry guard (formatter_violation: true metadata key) prevents the violation warning from triggering a recursive call to format/2 that would loop infinitely — it short-circuits to a plain-text line instead. Malicious/accidental callers cannot inject into the five reserved fields.\n\n=== SECURITY-REVIEWER FIX VERIFICATION ===\n\nThe rescue block in encode_entry/3 now uses redact_sensitive(Map.drop(meta, @beam_reserved_keys)) in the inspect call, not the raw meta map. The INV-4 blocker from the SECURITY-REVIEWER's first-iteration FAIL is correctly resolved in commit 70d058ff.",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "check": "sensitive-key list completeness (§2.1)",
+        "description": "The design doc specifies 'Both the atom and string form of each key are matched' for all 14 exact keys. The @exact_sensitive MapSet contains the string form '\"set-cookie\"' but not the atom form :'set-cookie'. The other 13 keys have both atom and string forms. Practical impact is negligible — hyphenated atoms are almost never used as logger metadata keys in Elixir; HTTP headers arrive as lowercased strings from Plug. Nevertheless, this is a stated spec deviation.",
+        "affected_file": "lib/letflow/obs/logger.ex",
+        "fix_required": "None blocking. Optional in a follow-up: add :\"set-cookie\" to @exact_sensitive alongside the already-present '\"set-cookie\"' string form, to close the spec gap."
+      }
+    ],
+    "decision_record_conflicts": [],
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  }
+}

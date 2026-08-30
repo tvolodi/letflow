@@ -32,4 +32,9 @@ config :letflow, lua_max_heap_words: nil
 # to inject an exact, pre-set timestamp.
 config :letflow, :lua_platform_time_source, Letflow.Engine.Lua.Platform.SystemClock
 
+# REQ-193: Letflow.Obs.Logger is configured as the OTP default-handler formatter
+# in config/dev.exs and config/prod.exs. Neither that nor backends: [] is set here
+# so ExUnit.CaptureLog keeps working in the test environment (capture_log relies on
+# the standard Elixir console formatter to produce [level]-prefixed output).
+
 import_config "#{config_env()}.exs"

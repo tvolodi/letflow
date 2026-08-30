@@ -195,7 +195,9 @@ defmodule Letflow.RepositoryTest do
                Canonicaliser.canonicalize_content("application/wasm", wasm_content)
 
       assert canonical_json == canonical_wasm
-      assert Canonicaliser.content_hash(canonical_json) == Canonicaliser.content_hash(canonical_wasm)
+
+      assert Canonicaliser.content_hash(canonical_json) ==
+               Canonicaliser.content_hash(canonical_wasm)
 
       assert {:ok, %ArtifactVersion{content_hash: hash_1}} =
                Repository.create(

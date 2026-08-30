@@ -1564,8 +1564,49 @@ defmodule Letflow.Engine do
     end)
     |> Repo.transaction()
     |> maybe_snapshot_after_complete_task(prefix)
+    |> emit_task_completed_telemetry(prefix)
     |> interpret_complete_result()
   end
+
+  # REQ-194 (design req194-prometheus-metrics.md §7, OBS-02 family 2): fires
+  # [:letflow, :task, :completed] AFTER the transaction has already committed (so it
+  # can only add microseconds of same-process ETS-counter overhead -- no network
+  # call, no GenServer round-trip). Pass-through -- never changes `result`, so
+  # interpret_complete_result/1 (called immediately after this in the pipe above)
+  # sees exactly what it always saw. Resolves definition_status via a separate,
+  # lightweight Definitions.get_by_id/2 call rather than re-deriving it from
+  # anything already in scope -- run_complete_task/6's own steps load
+  # instance_projection (which carries definition_id) but never the live
+  # process_definitions row's current status (design §12 open question 3 leaves the
+  # exact resolution path to this call's discretion). Best-effort: any lookup
+  # failure (should not happen for an instance whose task was just legitimately
+  # completed, but INV-8 says don't assume) simply skips the telemetry emission
+  # rather than raising -- this must never turn a real completion into an error.
+  # This call references only :telemetry -- never the metrics registry module
+  # directly (AC8: a grep for that module's fully-qualified name over this file's
+  # real code, excluding this moduledoc, must return zero hits).
+  defp emit_task_completed_telemetry(
+         {:ok,
+          %{
+            complete_task_outcome: :completed,
+            instance_projection: %InstanceProjection{definition_id: definition_id}
+          }} = result,
+         prefix
+       ) do
+    case Definitions.get_by_id(definition_id, prefix: prefix) do
+      {:ok, %{status: status}} ->
+        :telemetry.execute([:letflow, :task, :completed], %{count: 1}, %{
+          definition_status: status
+        })
+
+      _lookup_failed ->
+        :ok
+    end
+
+    result
+  end
+
+  defp emit_task_completed_telemetry(result, _prefix), do: result
 
   # REQ-054 (design doc §4.2) -- SnapshotWriter's second named call site,
   # both branches: the normal-completion path (uses the already-in-hand

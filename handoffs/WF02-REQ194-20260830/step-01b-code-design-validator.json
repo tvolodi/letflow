@@ -1,0 +1,59 @@
+{
+  "handoff_id": "step01b-WF02-REQ194-20260830",
+  "run_id": "WF02-REQ194-20260830",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ194-20260830/step-01b-code-design-validator.json",
+  "created_at": "2026-08-30T14:24:42Z",
+  "started_at": "2026-08-30T14:29:25Z",
+  "completed_at": "2026-08-30T14:29:25Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-194"],
+    "issue_ids": ["GH#713"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ194-20260830/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req194-prometheus-metrics.md",
+      "lib/letflow/routers/metrics.ex",
+      "web/src/api/metrics.ts",
+      "web/src/pages/admin/MetricsPage.tsx",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/api/authorized_router.ex",
+      "mix.exs",
+      "mix.lock",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/application.ex"
+    ],
+    "branch_name": "feature/WF02-REQ194-20260830"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR hard gate (WF-02 Step 1b) on REQ-194's design (lib/letflow/design/req194-prometheus-metrics.md). This is an architecturally significant, decision-heavy design: it resolves three axes REQ-078 deliberately left open (auth, scope, format) for Letflow's Prometheus metrics subsystem (OBS-02), and proposes ONE mix.exs dependency change ({:telemetry, \"~> 1.4\"}, already present transitively via bandit/ecto_sql/plug at v1.4.2 per mix.lock) flagged for REVIEWER sign-off, mirroring REQ-148's tv-labs/lua precedent. Do not rubber-stamp the axis reasoning -- independently verify the central claims yourself, since this design's Axis 2/3 resolution (global+unauthenticated, but a structural no-tenant-identifying-label invariant instead of REQ-078's authenticate+scope approach) is a real architectural decision, not a restatement of either R-Co's or REQ-078's prior position.",
+    "acceptance_criteria": [
+      "Independently confirm the format decision's evidence: read web/src/api/metrics.ts yourself and confirm parsePrometheusText and metricsApi.prometheusText()'s client.getText('/metrics') genuinely exist as described (unversioned, top-level path) and that web/src/pages/admin/MetricsPage.tsx genuinely consumes them -- this is REQ-194's own AC2.",
+      "Independently confirm the AC3 dependency-decision claim: grep mix.lock yourself for a 'telemetry' entry and confirm it resolves to v1.4.2 already present transitively (do not just trust the design's citation) -- then confirm the design states plainly (not silently) that it hand-rolls the registry/exposition and flags the {:telemetry, \"~> 1.4\"} mix.exs line for REVIEWER sign-off.",
+      "Scrutinize Axis 2/3's central safety argument (design Section 1): is the label-allowlist invariant (no metric family ever extracts a tenant_id/definition_id/instance_id/task_id/actor_id into a label, enforced per-family by each :telemetry handler's fixed key extraction, Section 5) actually sufficient to make a global, unauthenticated endpoint safe against cross-tenant disclosure? Reason through each of the six families in Section 3 individually against this invariant, including the definition_status restatement for family 2 -- does restating 'labelled by definition' as 'labelled by definition_status' plausibly satisfy the AC's intent without smuggling back an identifying value some other way?",
+      "Confirm the route-template normalization mechanism (Section 2) is real: read deps/plug/lib/plug/router.ex yourself around match_path/1 and append_match_path/2 and confirm the composed-template claim (a route matched inside a forward()-ed sub-router returns its fully composed template, e.g. '/api/v1/instances/:id', not a fragment) actually holds as described.",
+      "Confirm the DB-query-latency family's 'zero new instrumentation call site' claim (Section 3 row 4, Section 0): read deps/ecto_sql/lib/ecto/adapters/sql.ex and deps/ecto/lib/ecto/repo/supervisor.ex yourself and confirm Ecto really does emit [:letflow, :repo, :query] automatically for Letflow.Repo given no explicit :telemetry_prefix config exists in config/*.exs.",
+      "Confirm the DB-unavailable graceful-degradation mechanism (Section 6) is sound: does extending Letflow.Scheduler.Poller's tick with a failure-isolated active-instances refresh genuinely avoid crashing the timer poll-and-fire loop on a DBConnection.ConnectionError, and does the exposition endpoint (Section 8) genuinely never touch Letflow.Repo for the other five families?",
+      "Confirm the disposition of lib/letflow/routers/metrics.ex (Section 9 -- removed) is justified and that the 'no SPA-called route 404s afterward' claim holds: verify from web/src/api/metrics.ts and MetricsPage.tsx yourself that the SPA never actually calls /api/v1/metrics (only the unversioned /metrics), so removal is safe.",
+      "Confirm the emission-call-site decoupling claim (Section 4, Section 7, Section 8's AC8 traceability row): for each of the two new call sites (Letflow.Engine.complete_task/3, Letflow.EventStore.append/2) plus the new Letflow.Plugs.HttpMetrics plug, confirm the design specifies them calling only :telemetry directly, never Letflow.Metrics.Registry -- and that the design gives ELIXIR-DEV a concrete grep command to verify this post-implementation.",
+      "Confirm zero literal Elixir implementation code exists anywhere in the design doc -- every fenced code block must contain only @spec/@type declarations, never a def ... do ... end function body.",
+      "Confirm the full traceability table (Section 11) covers all 10 of REQ-194's real acceptance_criteria as they currently read in docs/requirements.yaml (re-read that entry yourself, do not trust the design's paraphrase uncritically).",
+      "Confirm Section 12's open questions are genuinely left open (not silently pre-resolved elsewhere in the document) and are the kind of thing ELIXIR-DEV should reasonably decide at implementation time rather than gaps the design should have closed.",
+      "CRITICAL: the handoff's top-level status field (line 12 of this file) must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing, per this project's documented recurring bug (grep for it in docs/anti-patterns.md)."
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "notes": "All 12 acceptance criteria of this handoff independently verified against real source (not the design's own citations): web/src/api/metrics.ts and MetricsPage.tsx read in full and confirmed to genuinely export/consume parsePrometheusText and metricsApi.prometheusText() -> client.getText('/metrics') (unversioned); mix.lock line 19 confirms telemetry v1.4.2 transitively present via bandit/db_connection/ecto/ecto_sql/plug/oidcc/thousand_island; deps/plug/lib/plug/router.ex:324-327 and :520-528 confirm match_path/1 and append_match_path/2 exactly as cited; deps/ecto_sql/lib/ecto/adapters/sql.ex:900/1315 and deps/ecto/lib/ecto/repo/supervisor.ex:30/55 confirm Ecto's own [:letflow, :repo, :query] telemetry emission with no telemetry_prefix override in config/*.exs; lib/letflow/event_store.ex and lib/letflow/scheduler/poller.ex read and confirmed to match the design's claims about existing structure/precedent; lib/letflow/application.ex confirmed for the Registry-child placement precedent; grepped web/src for /metrics -- no reference beyond router.tsx, MetricsPage.tsx, metrics.ts, so removing lib/letflow/routers/metrics.ex is safe. Adversarially audited Axis 2/3's label-allowlist invariant across all six families plus a route-template tenant-leak check: lib/letflow/plugs/api_pipeline.ex and every routers/*.ex file use only fixed compile-time literal path segments (R-Co's {tenant_id} segment already dropped per INV-1) -- no tenant-identifying value can reach a label via any family or via route_template. No gap found. Zero implementation code fences in the design doc. Traceability table covers all 10 real REQ-194 ACs re-read from docs/requirements.yaml. Section 12 open questions are genuine implementation-time judgment calls, not pre-resolved gaps. Routed to ELIXIR-DEV via step-02a-elixir-dev.json, with the :telemetry dependency-promotion distinction flagged explicitly for REVIEWER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

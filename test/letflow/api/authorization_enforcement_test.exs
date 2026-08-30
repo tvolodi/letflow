@@ -55,7 +55,6 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     Letflow.Routers.Tasks,
     Letflow.Routers.SolutionPacks,
     Letflow.Routers.Promotions,
-    Letflow.Routers.Metrics,
     Letflow.Routers.Services,
     Letflow.Routers.AdminServices
   ]
@@ -86,7 +85,6 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     Letflow.Routers.Tasks => "/tasks",
     Letflow.Routers.SolutionPacks => "/solution-packs",
     Letflow.Routers.Promotions => "/promotions",
-    Letflow.Routers.Metrics => "/metrics",
     Letflow.Routers.Services => "/services",
     Letflow.Routers.AdminServices => "/admin/services"
   }

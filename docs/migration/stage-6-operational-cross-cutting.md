@@ -27,8 +27,22 @@ OBS-04) is also done as of 2026-08-30, closing the real broken-contract
 gap left by REQ-080: the already-shipped SPA's
 `TimelineFeedItem.tsx` was reading `actor_display_name`, `description`,
 `timestamp` and `sequence_num`, none of which the REQ-080 route ever
-emitted. REQ-201 (alerting, the other OBS-04-adjacent rework-1 addition)
-remains open. The ordering subsystem remains
+emitted. REQ-194 (Prometheus metrics subsystem and the `GET /metrics`
+exposition, OBS-02) is also done as of 2026-08-30. It resolves all
+three of REQ-078's deliberately-recorded-open divergences: FORMAT is
+settled by the already-committed SPA Prometheus-text contract
+(`web/src/api/metrics.ts`'s `parsePrometheusText`); AUTH and SCOPE are
+resolved as global and unauthenticated (matching R-Co), made safe by a
+label-allowlist invariant that closes the cross-tenant-disclosure risk
+REQ-078 was originally worried about -- independently re-traced by
+RELEASE-VALIDATOR across every emission call site, including error and
+DB-unavailable degradation paths, with no path found by which a
+tenant/instance/definition/task/actor id can reach a metric label.
+`lib/letflow/routers/metrics.ex` (REQ-078's authenticated JSON
+endpoint) is removed outright, superseded by
+`lib/letflow/routers/metrics_exposition.ex`. REQ-201 (alerting, the
+other OBS-04-adjacent rework-1 addition) remains open. The ordering
+subsystem remains
 pending. A
 future WF-04 stage-gate check of the scheduler half specifically (not
 of S6 as a whole) is a named candidate, per RELEASE-VALIDATOR's own

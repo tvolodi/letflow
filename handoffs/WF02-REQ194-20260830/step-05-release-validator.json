@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ194-20260830-step05",
+  "run_id": "WF02-REQ194-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ194-20260830/test-runner-report.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Full mix test suite run for real via scripts/test_parallel.sh (N=8, foreground, blocking): 2772/2777 passed, 5 failures. All 5 diagnosed and confirmed as pre-existing documented flake classes unrelated to this branch's diff, not routed back for rework: (1-2) Mix.Tasks.Letflow.CheckToolchainTest x2 (partition 5) -- rustc absent from this sandbox's PATH (confirmed: `which rustc` exits 1), the documented rustc-absent CheckToolchainTest baseline flake; the test file itself asserts 'expected `rustc` to be on PATH while running this suite' at test/mix/tasks/letflow_check_toolchain_test.exs:276. (3-5) Letflow.TenantSchemaReaperTest x3 (partition 6) -- the documented ISS-0110 connection-contention flake, self-diagnosed in the partition's own log ('deferring this sweep entirely -- another mix test invocation ... is currently connected to this database ... (ISS-0110)') and preceded by a genuine Postgrex too_many_connections error, i.e. DB connection-pool exhaustion under this run's N=8 parallel-partition load -- both flake classes named in the task brief. Neither failing test file (test/mix/tasks/letflow_check_toolchain_test.exs, test/support/tenant_schema_reaper_test.exs) appears anywhere in this branch's diff (confirmed via git diff main...HEAD --stat). REQ-194's own 6 test files (test/letflow/metrics/registry_test.exs, test/letflow/metrics/exposition_test.exs, test/letflow/plugs/http_metrics_test.exs, test/letflow/routers/metrics_exposition_test.exs, test/letflow/api/authorization_enforcement_test.exs, test/letflow/routers/req078_supporting_routes_test.exs) all passed with zero failures (confirmed by grepping module names across all 8 partition logs -- they land in partitions 3 and 8, both exit 0). mix compile --warnings-as-errors: clean, no output. mix format --check-formatted: clean, no output. Full diagnosis, per-partition breakdown, and raw failure output quoted in the report file above. Note: RELEASE-VALIDATOR is expected to independently re-run the suite itself per this project's own discipline rather than trust this report alone.",
+    "report_file": "handoffs/WF02-REQ194-20260830/test-runner-report.md",
+    "combined_result": "2772/2777 passed, 5 failures (all documented pre-existing flake classes, none in this branch's diff)",
+    "static_checks": {
+      "mix_compile_warnings_as_errors": "clean",
+      "mix_format_check_formatted": "clean"
+    },
+    "prior_step_handoff": "handoffs/WF02-REQ194-20260830/step-04-test-runner.json"
+  },
+  "task": {
+    "description": "Independently re-verify REQ-194's 10 acceptance criteria before this requirement is marked done, per RELEASE-VALIDATOR's standard practice of re-deriving the test result itself rather than trusting TEST-RUNNER's report."
+  },
+  "result": null
+}

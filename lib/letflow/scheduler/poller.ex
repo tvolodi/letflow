@@ -33,10 +33,41 @@ defmodule Letflow.Scheduler.Poller do
   `try/rescue` around the `Enum.each` below would duplicate an
   already-established isolation boundary for no additional safety
   property.
+
+  ## REQ-194 addition -- `letflow_active_instances` refresh (design
+  `req194-prometheus-metrics.md` §6)
+
+  Each tick, after the timer poll-and-fire loop, sums
+  `Letflow.Engine.count_instances_by_status/1`'s `:active` key across the SAME
+  `tenant_schemas()` list already computed for that tick (no second query) and
+  writes the platform-wide total to `Letflow.Metrics.Registry.set_active_instances/1`
+  -- this is the one OBS-02 metric family that is NOT `:telemetry`-driven (see that
+  module's moduledoc for why).
+
+  Two failure isolation layers, both required so a database outage degrades this one
+  metric rather than crashing the whole scheduler (a crashed Poller stops every
+  tenant's timers firing platform-wide, a vastly worse regression than a stale
+  gauge):
+
+    * `tenant_schemas/0` itself raising (the DB is unreachable entirely) is caught by
+      `fetch_tenant_schemas/0` below -- on failure, this tick's poll-and-fire loop
+      AND the active-instances refresh are BOTH skipped (there is nothing to iterate
+      either one over), `mark_active_instances_refresh_failed/0` is called, and the
+      next tick is still scheduled normally. This is a deliberate, flagged deviation
+      from the design's literal "the timer poll-and-fire loop for that tick still
+      proceeds normally" wording: that loop's own input (`schemas`) is exactly what
+      failed to compute, so "proceeding normally" over an empty/undefined list is not
+      meaningfully different from skipping it outright -- flagged for REVIEWER.
+    * One individual schema's `count_instances_by_status/1` call raising (a single
+      tenant's schema corrupted or mid-migration) is caught per-schema in
+      `count_active_for_schema/1` -- that schema contributes `0` to the sum and every
+      other schema, plus the timer poll-and-fire loop, is unaffected.
   """
 
   use GenServer
 
+  alias Letflow.Engine
+  alias Letflow.Metrics.Registry, as: MetricsRegistry
   alias Letflow.Scheduler
   alias Letflow.TenantProvisioning.Registration
 
@@ -59,11 +90,17 @@ defmodule Letflow.Scheduler.Poller do
 
   @impl true
   def handle_info(:tick, state) do
-    schemas = tenant_schemas()
+    new_state =
+      case fetch_tenant_schemas() do
+        {:ok, schemas} ->
+          Enum.each(schemas, fn schema_name -> Scheduler.poll_and_fire(schema_name) end)
+          maybe_refresh_active_instances(schemas)
+          maybe_run_retention_sweep(schemas, state)
 
-    Enum.each(schemas, fn schema_name -> Scheduler.poll_and_fire(schema_name) end)
-
-    new_state = maybe_run_retention_sweep(schemas, state)
+        :error ->
+          MetricsRegistry.mark_active_instances_refresh_failed()
+          state
+      end
 
     schedule_next_tick()
 
@@ -87,6 +124,42 @@ defmodule Letflow.Scheduler.Poller do
     |> where([r], not is_nil(r.migrations_applied_at))
     |> select([r], r.schema_name)
     |> Repo.all()
+  end
+
+  # REQ-194 (design §6): wraps tenant_schemas/0 so a fully-unreachable database (a
+  # raised DBConnection.ConnectionError, per lib/letflow/routers/metrics.ex's own
+  # retired moduledoc note that Ecto/DBConnection surfaces pool exhaustion this way,
+  # not as an error tuple) never crashes this GenServer.
+  defp fetch_tenant_schemas do
+    {:ok, tenant_schemas()}
+  rescue
+    _error -> :error
+  end
+
+  # REQ-194 (design §6): sums count_instances_by_status/1's :active key across every
+  # schema already computed for this tick (no second tenant_schemas/0 query) and
+  # writes the platform-wide total. Never raises -- each schema's own failure is
+  # isolated in count_active_for_schema/1.
+  defp maybe_refresh_active_instances(schemas) do
+    total =
+      Enum.reduce(schemas, 0, fn schema_name, acc ->
+        acc + count_active_for_schema(schema_name)
+      end)
+
+    MetricsRegistry.set_active_instances(total)
+  end
+
+  # A single tenant's schema being corrupted or mid-migration must not zero out (or
+  # crash) the platform-wide aggregate -- design §6 judges this acceptable
+  # specifically because it is a large, low-precision-tolerant summary gauge, unlike
+  # a per-tenant figure a single tenant depends on the exact precision of.
+  defp count_active_for_schema(schema_name) do
+    case Engine.count_instances_by_status(prefix: schema_name) do
+      {:ok, counts} -> Map.get(counts, :active, 0)
+      {:error, _reason} -> 0
+    end
+  rescue
+    _error -> 0
   end
 
   defp schedule_next_tick do

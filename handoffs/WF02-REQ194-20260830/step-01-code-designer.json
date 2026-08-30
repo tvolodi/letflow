@@ -1,0 +1,60 @@
+{
+  "handoff_id": "step01-WF02-REQ194-20260830",
+  "run_id": "WF02-REQ194-20260830",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ194-20260830/step-01-code-designer.json",
+  "created_at": "2026-08-30T14:14:33Z",
+  "started_at": "2026-08-30T14:14:33Z",
+  "completed_at": "2026-08-30T14:24:42Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-194"],
+    "issue_ids": ["GH#713"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/routers/metrics.ex",
+      "web/src/api/metrics.ts",
+      "web/src/pages/admin/MetricsPage.tsx",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/api/authorized_router.ex",
+      "mix.exs",
+      "mix.lock",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/application.ex",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "branch_name": "feature/WF02-REQ194-20260830"
+  },
+  "task": {
+    "description": "CODE-DESIGNER pass (WF-02 Step 1) for REQ-194 (queue task 367, GH#713): design a Prometheus metrics subsystem (OBS-02) resolving REQ-078's three recorded divergences (auth, scope, format) against fresh evidence that web/src/api/metrics.ts already expects Prometheus text from an unversioned GET /metrics. Read REQ-078's placeholder (lib/letflow/routers/metrics.ex), confirm zero real :telemetry.execute call sites and no metrics dependency in mix.exs, reach explicit stated positions on all three axes (format settled by the SPA evidence; auth/scope reasoned through independently, including whether a definition_id-style label can leak cross-tenant identifiers on a global endpoint), decide on a metrics dependency vs hand-rolled registry (flagging REVIEWER sign-off if a dependency is added, mirroring REQ-148's tv-labs/lua precedent), specify the six OBS-02 metric families' :telemetry event/measurement/metadata shapes, the route-template normalization rule for HTTP labels, the exposition endpoint's exact path/format/Content-Type/auth, DB-unavailable graceful degradation plus a staleness decision, and the disposition of lib/letflow/routers/metrics.ex. Design only -- @spec/@type/interface descriptions, zero implementation code.",
+    "acceptance_criteria": [
+      "this requirement states an explicit decision on each of REQ-078's three recorded divergences -- auth, scope and format -- with a reason for each, in the module moduledoc; it does not silently pick one or leave any of the three unstated",
+      "the format decision cites web/src/api/metrics.ts's parsePrometheusText and metricsApi.prometheusText()'s call to client.getText('/metrics') as an already-committed consumer contract, and the endpoint Letflow serves is one that web/src/pages/admin/MetricsPage.tsx actually reaches -- asserted by a test hitting that exact path",
+      "if a metrics dependency is added to mix.exs, REVIEWER sign-off is recorded for it in this requirement's PR; if instead a registry is hand-rolled, the moduledoc states that as the decision -- one or the other, not silence",
+      "all six OBS-02 core metric families are present in the exposition output after exercising the corresponding behaviour, asserted by parsing the response body -- not by asserting the emission call was made",
+      "the HTTP-request metric labels by route template and not by raw path: two requests to the same route with different path parameters produce ONE label combination, not two, asserted by counting distinct label sets in the output",
+      "the auth and scope decisions are enforced and tested: whichever position was taken, a test asserts that one tenant's scrape cannot observe another tenant's figures or identifiers (including through label values), or -- if the endpoint is deliberately global and unauthenticated -- that no metric label carries any tenant-identifying value at all",
+      "the exposition endpoint returns a successful response with the last known values when the database is unavailable, rather than erroring, asserted with the database made unreachable",
+      "instrumentation is emitted via :telemetry events and the registry attaches to them, so the emitting call sites do not reference the registry module directly, confirmed by grep over the instrumented modules",
+      "the disposition of lib/letflow/routers/metrics.ex is explicit -- removed, or retained with its role stated in its own moduledoc -- and no route the SPA calls returns 404 afterwards",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design produced at lib/letflow/design/req194-prometheus-metrics.md, design-only (@spec/@type/interface tables and prose, zero literal Elixir implementation code -- every fenced block contains only @spec/@type declarations, verified by inspection). AXIS 1 (format): settled by direct evidence -- web/src/api/metrics.ts's parsePrometheusText and metricsApi.prometheusText()'s client.getText('/metrics') (unversioned, top-level) are an already-committed consumer contract; decision is Prometheus exposition text, Content-Type 'text/plain; version=0.0.4', at GET /metrics outside /api/v1. AXIS 2/3 (auth+scope, decided together): global and unauthenticated (mounted at Letflow.Router's top tier alongside /health and /api/tenant-config, outside ApiPipeline/AuthPipeline), reasoned through REQ-078's own substantive tenant-exposure concern rather than picking either precedent wholesale -- resolved by moving the protection from 'authenticate + scope the query' (incompatible with a genuine global scrape target, since :MetricsRead is unconditionally :Allow per authorization.ex) to a structural label-allowlist invariant: no metric family's label set ever carries a tenant_id/definition_id/instance_id/task_id/actor_id, enforced per-family by each :telemetry handler extracting only a fixed, hand-built key set (mirroring metrics.ex's own counter_group/2 discipline). The 'task-completions by definition' family is explicitly restated (named as a restatement, precedented by decision 0014's LUA-01/WASM-10 pattern) to label by definition_status (draft/active/deprecated/archived, a closed 4-value enum) rather than definition_id/name, since a raw identifier is exactly what the global/unauthenticated shape forbids. DEPENDENCY DECISION: no telemetry_metrics/telemetry_metrics_prometheus_core added -- hand-rolled Letflow.Metrics.Registry (ETS-backed, GenServer-owned table, direct-from-caller-process :ets updates so metric emission never blocks on a GenServer mailbox) and Letflow.Metrics.Exposition (pure text formatter). One mix.exs change is proposed and FLAGGED PROMINENTLY FOR REVIEWER SIGN-OFF: an explicit {:telemetry, \"~> 1.4\"} deps/0 line -- telemetry v1.4.2 is already fetched/compiled/running transitively via bandit/db_connection/ecto/ecto_sql/plug (confirmed in mix.lock and deps/), so this adds zero new bytes/transitive tree, but per REQ-194's own AC3 (no size-based carve-out stated) this design does not unilaterally decide the exception applies to itself, mirroring REQ-148's tv-labs/lua sign-off precedent even though the risk profile is materially smaller. Six metric families fully specified (Section 3): letflow_active_instances (gauge, periodic scheduler-driven refresh, DB-unavailable-safe) plus a companion _last_refresh_timestamp_seconds staleness gauge (Letflow DOES expose staleness, unlike R-Co's recorded honest gap); letflow_task_completions_total (counter, definition_status label); letflow_event_append_duration_seconds (histogram, via a new :telemetry.span/3 wrap of EventStore.append/2's existing Repo.transaction call -- no existing hook to attach to); letflow_db_query_duration_seconds (histogram, query_type label, attaches to Ecto's OWN already-emitted [:letflow, :repo, :query] telemetry event -- zero new instrumentation call site, confirmed by reading deps/ecto_sql/lib/ecto/adapters/sql.ex:900-1315 and deps/ecto/lib/ecto/repo/supervisor.ex:55-59 for the default telemetry_prefix); letflow_http_requests_total and letflow_http_errors_total (counters, method/route_template/status and route_template respectively, from a new Letflow.Plugs.HttpMetrics plug). Route-template normalization rule (Section 2) uses Plug.Router.match_path/1 (deps/plug/lib/plug/router.ex:324-327) reading conn.private[:plug_route], which append_match_path/2 (same file, 520-528) already composes across a forward()-ed sub-router into the full literal template (e.g. '/api/v1/instances/:id') -- no custom regex needed; unmatched requests fall back to the bounded constant 'unmatched', never the raw path. DB-unavailable graceful degradation (Section 6): only the active-instances gauge touches Repo (via Letflow.Scheduler.Poller's tick, extending the same GenServer that already runs REQ-188's retention sweep -- no new periodic child, per ORD-04's own established precedent); a caught DBConnection.ConnectionError on that refresh step never crashes the Poller (which would stop firing timers platform-wide) and simply leaves the gauge/timestamp at their last successful values; the exposition endpoint itself never touches Repo for any of the other five families. Disposition of lib/letflow/routers/metrics.ex (Section 9): REMOVED entirely (its own moduledoc has said since REQ-078 it is a placeholder pending supersession); its forward/2 mount in api_pipeline.ex:66 removed; the SPA never called /api/v1/metrics in the first place (REQ-078's own moduledoc recorded this as known breakage), so nothing the SPA calls regresses -- GET /metrics starts working for the first time instead of 404ing. :MetricsRead's leftover presence in Authorization is named as an explicit open question (Section 10), not silently pruned, since enum-member removal is cross-cutting and outside this requirement's stated scope item 5. Full traceability table (Section 11) maps all 10 real docs/requirements.yaml acceptance criteria to concrete design elements. Section 12 names 4 open questions explicitly (MetricsRead cleanup, bucket-boundary configurability, exact definition_status binding reuse point in complete_task/3, refresh-cadence granularity) rather than leaving them implicit.",
+    "artifacts_out": [
+      "lib/letflow/design/req194-prometheus-metrics.md"
+    ],
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b) per handoffs/WF02-REQ194-20260830/step-01b-code-design-validator.json. Flag prominently: the {:telemetry, \"~> 1.4\"} mix.exs addition needs REVIEWER sign-off recorded in this requirement's PR before ELIXIR-DEV's Step 2a work is mergeable, mirroring REQ-148's precedent."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

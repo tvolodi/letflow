@@ -241,10 +241,27 @@ defmodule Letflow.EventStore do
         created_at: DateTime.utc_now() |> DateTime.truncate(:microsecond)
       }
 
-      ctx
-      |> build_multi()
-      |> Repo.transaction()
-      |> interpret_transaction_result()
+      # REQ-194 (design req194-prometheus-metrics.md §7, OBS-02 family 3): wraps the
+      # existing Repo.transaction/2 call in :telemetry.span/3, event prefix
+      # [:letflow, :event_store, :append] -- :telemetry.span/3 automatically emits
+      # :start, then :stop (with a :duration measurement it computes itself) or
+      # :exception on the wrapped function's return/raise. The metrics registry
+      # module attaches to [:letflow, :event_store, :append, :stop] for the
+      # letflow_event_append_duration_seconds histogram. Preserves append/2's
+      # existing {:ok, _}/{:error, _} return contract exactly -- span/3 re-raises/
+      # returns the wrapped function's own result unchanged. This is the ONLY call
+      # site referencing this event prefix -- never the registry module directly
+      # (AC8: a grep for that module's fully-qualified name over this file's real
+      # code must return zero hits).
+      :telemetry.span([:letflow, :event_store, :append], %{}, fn ->
+        result =
+          ctx
+          |> build_multi()
+          |> Repo.transaction()
+          |> interpret_transaction_result()
+
+        {result, %{}}
+      end)
     end
   end
 

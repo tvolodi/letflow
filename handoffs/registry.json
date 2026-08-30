@@ -3538,7 +3538,7 @@
       "started_at": "2026-08-30T19:48:48Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 3 (TEST-DESIGNER) COMPLETE -- gap-check of req196_audit_route_test.exs against all 9 ACs done, 10 gap-fill tests added (resource_id filter, empty table, page_size exact boundary, from/to range incl. from>to 422, two malformed-cursor variants), mix test 26/26 (file) and 46/46 (combined with req078_supporting_routes_test.exs) passing, mix compile --warnings-as-errors clean. Routed to TEST-DESIGN-VALIDATOR (step-03b).",
+      "last_known_step": "Step 3b (TEST-DESIGN-VALIDATOR) rework-1 recheck PASSED -- original review found all 9 ACs genuinely covered and all 4 applied mutations correctly caught, sole gap was a whitespace-only mix format --check-formatted failure on one wrapped get_audit(...) call, fixed directly by ORCH (commit 617d409e) and independently re-verified (format clean repo-wide, 71/71 tests passing, git diff confirmed whitespace-only, compile/lint clean). Routed to TEST-RUNNER (step-04).",
       "note": "Route half of the audit split atop REQ-195's audit_entries store. Repoints GET /api/v1/audit's handler from EventStore.read_global/1 to the new store, preserving response envelope and :AuditRead permission. Retires audit.ex's own documented caveats (constant resource_type, always-null before/after state). No schema/authorization.ex/web/ changes."
     }
   ]

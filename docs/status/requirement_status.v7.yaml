@@ -563,3 +563,25 @@ history:
       handoffs/WF02-REQ194-20260830/req194-release-validation-report.md.
       docs/migration/stage-6-operational-cross-cutting.md updated to record
       REQ-194 done and the three-divergence resolution.
+
+  - req: REQ-201
+    event: started
+    agent: ORCH
+    at: "2026-08-30T16:52:40Z"
+    note: >
+      WF02-REQ201-20260830 started (queue task 374, GH#720, stage S6).
+      Alerting hooks -- threshold detection with edge-triggered firing
+      and retry/backoff delivery (OBS-06). All depends_on confirmed done
+      by queue eligibility (REQ-186, REQ-193, REQ-176, REQ-183, REQ-190,
+      REQ-061). REQ-195 (task 368) skipped per user direction -- processed
+      by a separate concurrent session. Feature branch
+      feature/WF02-REQ201-20260830 created from origin/main ca4b9fa7,
+      pushed. CODE-DESIGNER dispatched at step-01.
+      WF02-REQ201-20260830 started (queue task 374, GH#720, stage S6).
+      Alerting hooks -- threshold detection with edge-triggered firing
+      and retry/backoff delivery (OBS-06). All depends_on confirmed done
+      by queue eligibility (REQ-186, REQ-193, REQ-176, REQ-183, REQ-190,
+      REQ-061). REQ-195 (task 368) skipped per user direction -- processed
+      by a separate concurrent session. Feature branch
+      feature/WF02-REQ201-20260830 created from origin/main ca4b9fa7,
+      pushed. CODE-DESIGNER dispatched at step-01.

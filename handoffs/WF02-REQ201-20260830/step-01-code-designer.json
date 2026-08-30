@@ -1,0 +1,59 @@
+{
+  "handoff_id": "step01-WF02-REQ201-20260830",
+  "run_id": "WF02-REQ201-20260830",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ201-20260830/step-01-code-designer.json",
+  "created_at": "2026-08-30T16:52:40Z",
+  "started_at": "2026-08-30T16:52:40Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-201"],
+    "issue_ids": [],
+    "branch_name": "feature/WF02-REQ201-20260830",
+    "requirement_text": {
+      "REQ-201": "Added in this batch's rework 1 (REQ-VALIDATOR finding: src/obs/alerts.zig, 972 lines, was silently unscoped). Drafted rather than deferred because every input it needs is built by this stage or the first S6 batch, so it has no external blocker -- it is simply the last piece of src/obs. LAST of S6's observability half; it depends on the other three because its thresholds are measured against what they produce. R-Co's AlertType enum (src/obs/alerts.zig L6-11) names exactly four triggers: instance_error_stuck, dlq_depth_threshold, scheduler_lag_threshold, webhook_subscription_paused. Letflow can source all four -- REQ-061's ERROR instances, REQ-176's dlq_entries, REQ-186's poller, and REQ-183's auto-pause -- which is why this lands at the end of the stage rather than being deferred out of it. SCHEMA, ported from R-Co migrations/022_obs06_alerting_state.sql, which exists for one reason: making firing EDGE-TRIGGERED rather than level-triggered. * `alert_trigger_state`: trigger_key (string, primary key), is_armed (boolean, not null, default true), last_sample_value (bigint, not null, default 0), last_fired_at (nullable), last_correlation_id (nullable), updated_at. * `alert_hook_emission_state`: hook_id and trigger_key (composite primary key), last_emitted_key (string, not null), updated_at. Placement follows decision 0003 Decision B -- per-tenant schema with tenant_id retained -- UNLESS this requirement states an R-Co-grounded reason to go global. Note R-Co makes these tables global (the migration's header says 'scope: public ... this migration creates a global-registry table'), but its own thresholds are platform-wide while Letflow's DLQ and instances are per-tenant, so the honest placement is likely per-tenant. Decide and state it; do not inherit R-Co's placement by default. SCOPE: 1. Configuration: per-hook config matching R-Co's AlertHookConfig (L20-27) -- hook_id, enabled, destination_url, timeout_ms, auth_secret_ref, and a retry policy of max_attempts (default 3), base_backoff_ms (default 1000), max_backoff_ms (default 30000) and multiplier (default 2.0) -- plus thresholds matching AlertThresholds (L29-33): error_stuck_minutes, dlq_depth_threshold, scheduler_lag_ms. Note auth_secret_ref is a SECRET REFERENCE, so if a hook is configured with one it resolves through REQ-190's resolve/2 rather than storing a credential inline -- state this explicitly. 2. Detection for all four triggers, evaluated on REQ-186's existing scheduler cadence rather than a new periodic process, the same rule REQ-188 and REQ-199 follow. 3. EDGE-TRIGGERED FIRING, which is OBS-06's second acceptance criterion and the whole point of the state tables: when DLQ depth crosses the threshold the hook fires ONCE and does not re-fire on every subsequent poll while depth remains above it. is_armed is cleared on fire and re-armed only when the sample falls back below the threshold -- so OBS-06's stated edge case holds: depth dropping below and rising above again fires a second time. 4. PER-INSTANCE, NOT AGGREGATE, for instance_error_stuck: OBS-06's first edge case requires one alert per stuck instance, not one aggregate alert covering several. The trigger_key must therefore be per-instance for that trigger. 5. DELIVERY: POST a JSON body identifying the subject -- for the stuck-instance trigger, the instance id, the error reason and the duration in ERROR. Failed deliveries retry up to max_attempts with exponential backoff; after the final failure the failure is LOGGED via REQ-193's structured logger and nothing further happens (OBS-06 is explicit that there is no further action -- in particular an exhausted alert delivery does NOT land in REQ-176's DLQ, unlike REQ-183's webhook deliveries, and the moduledoc must say so, since the two are otherwise similar-looking retrying HTTP senders). A DISTINCTION TO STATE EXPLICITLY, because two subsystems in this one stage both POST JSON to a configured URL with retry and backoff: alerting hooks (this requirement) are PLATFORM-OPERATOR diagnostics about the health of the system, with a fixed set of four triggers and no DLQ; webhook subscriptions (REQ-181/183) are TENANT-FACING event delivery, tenant-configured, HMAC-signed, auto-pausing and DLQ-landing. They are not the same mechanism and must not be merged into one. Say so in the moduledoc. NOT IN THIS REQUIREMENT: no route or controller -- alert hooks are configured through application config, not an API, since R-Co has no alerts route and the SPA has no alerting client (verified: no web/src/api entry for alerts and no alert type in web/src/types/api.ts); no change to REQ-183's webhook dispatch; no new periodic process."
+    },
+    "artifacts_in": [
+      "lib/letflow/obs/scheduler.ex",
+      "lib/letflow/obs/webhooks.ex",
+      "lib/letflow/obs/logger.ex",
+      "lib/letflow/engine/instances.ex",
+      "lib/letflow/dlq.ex",
+      "config/config.exs",
+      "config/runtime.exs",
+      "docs/migration/stage-6-operational-cross-cutting.md",
+      "priv/repo/migrations/20260830010001_create_webhook_delivery_attempts.exs"
+    ],
+    "owned_modules": [
+      "lib/letflow/obs/alerts.ex",
+      "lib/letflow/obs/alerts/",
+      "priv/repo/migrations/",
+      "lib/letflow/design/req201-alerting-hooks.md"
+    ],
+    "related_handoff_ids": ["step00-WF02-REQ201-20260830"]
+  },
+  "task": {
+    "description": "Design REQ-201: Alerting hooks -- threshold detection with edge-triggered firing and retry/backoff delivery (OBS-06).\n\nRead the requirement from context.requirement_text[\"REQ-201\"] and the artifacts listed in context.artifacts_in. Do NOT open docs/requirements.yaml.\n\nKEY FACTS ALREADY VERIFIED BY ORCH:\n- lib/letflow/obs/scheduler.ex (REQ-186, done) drives the poll cadence. Detection for all four triggers MUST piggyback on this existing cadence, NOT spawn a new periodic process (requirement explicit on this; check application.ex to confirm no new child is added).\n- lib/letflow/obs/webhooks.ex (REQ-183, done) is a SIMILAR-LOOKING but DISTINCT subsystem: tenant-facing, HMAC-signed, auto-pausing, DLQ-landing. The design MUST document why these two are not the same mechanism (requirement's explicit distinction requirement).\n- lib/letflow/obs/logger.ex (REQ-193, done) is the structured logger. Alert delivery failures log through it (not to DLQ -- requirement is explicit).\n- REQ-190's resolve/2 (done) is how auth_secret_ref is resolved at delivery time. No credential is stored inline.\n- The two state tables (alert_trigger_state, alert_hook_emission_state) are what make firing edge-triggered, not level-triggered. This is the core design constraint.\n- Table placement decision (per-tenant vs global) must be MADE AND STATED with R-Co comparison -- do not default to R-Co's global placement without a grounded reason.\n- trigger_key for instance_error_stuck must be per-instance (not aggregate) -- OBS-06's first edge case.\n\nDesign outputs required:\n1. lib/letflow/design/req201-alerting-hooks.md with:\n   a. Letflow.Obs.Alerts module spec -- public API including detect_and_fire/2 (or equivalent called by scheduler), config shape (AlertHookConfig + AlertThresholds structs or equivalent), delivery function signature\n   b. Two migration specs: alert_trigger_state table (trigger_key PK, is_armed, last_sample_value, last_fired_at, last_correlation_id, updated_at) and alert_hook_emission_state table (hook_id + trigger_key composite PK, last_emitted_key, updated_at) -- with stated placement decision (per-tenant or global) and explicit reasoning\n   c. Edge-triggered firing algorithm: exactly how is_armed gates firing and is reset (armed → fires → disarmed → re-armed when sample falls below → fires again on next crossing)\n   d. Per-instance trigger_key format for instance_error_stuck\n   e. Delivery retry/backoff algorithm spec (exponential: base_backoff_ms * multiplier^attempt, capped at max_backoff_ms, max_attempts retries, then log-and-drop via REQ-193's logger)\n   f. auth_secret_ref resolution via REQ-190's resolve/2 called at delivery time\n   g. Moduledoc content requirements: alerting-hooks vs webhook-subscriptions distinction, no-DLQ statement for exhausted deliveries, config-only (no route/API) statement\n   h. How scheduler integration works: which callback/hook in scheduler.ex calls the detector, what data it passes (current DLQ depth, scheduler lag measurement, ERROR-instance list)\n   i. @spec for every public function\n\n2. Acceptance criteria addressed:\n   - All 14 ACs from context.requirement_text mapped to concrete design elements\n   - No implementation code (no actual .ex/.exs code bodies -- signatures and type shapes only)",
+    "acceptance_criteria": [
+      "Every acceptance criterion from context.requirement_text maps to a concrete design element -- no criterion left unaddressed",
+      "Public function signatures specified with @spec input/output types",
+      "Both DB migrations fully spec'd with table placement decision stated and reasoned",
+      "Edge-triggered firing algorithm precisely described (is_armed state machine)",
+      "Per-instance trigger_key format for instance_error_stuck stated",
+      "Delivery retry/backoff spec with no-DLQ statement for exhausted deliveries",
+      "auth_secret_ref resolution via REQ-190 at delivery time stated explicitly",
+      "Alerting vs webhook distinction documented for moduledoc",
+      "Scheduler integration described (no new periodic process, no application.ex change)",
+      "No implementation code (no actual .ex/.exs code bodies -- signatures and type shapes only)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -3515,15 +3515,15 @@
       "requirement_id": "REQ-195",
       "queue_task_id": 368,
       "github_issue_number": 714,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/audit.ex",
         "priv/repo/migrations"
       ],
       "started_at": "2026-08-30T16:21:27Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 06 (DOC-UPDATER flipped REQ-195 to done in docs/requirements.yaml, appended the done-event to docs/status/requirement_status.v7.yaml, incremented the index's entries: count to 19, and updated docs/migration/stage-6-operational-cross-cutting.md; routed to ORCH for Step Final merge via handoffs/WF02-REQ195-20260830/step-final-orch.json)",
+      "lock_released_at": "2026-08-30T18:42:56Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: pushing/merging PR to main, queue task 368 to be released done)",
       "note": "Audit-entry storage (OBS-03, XC-02), closing routers/audit.ex's recorded null-state gap. New tenant-scoped audit_entries table, DB-enforced immutability triggers, same-transaction writes, tamper-evident chain_hash with genuine recompute-based verification (fixing a documented R-Co weakness where verification only checks linkage, not content). No route change. TEST-DESIGN-VALIDATOR rework-1 recheck PASSED: check-order gap (do_verify_chain/2) now covered by a test independently confirmed to distinguish cond-clause order; format gate clean. TEST-RUNNER (step 4) found the new audit_entries tenant-scoped migration was not reflected in test/support/tenant_fixture.ex's @expected_tenant_tables oracle list/count -- same bug class as REQ-181's webhook_subscriptions gap -- routed back to ELIXIR-DEV as rework-1 (handoffs/WF02-REQ195-20260830/step-05-elixir-dev-rework1.json). ELIXIR-DEV applied the fix (test/support/tenant_fixture.ex + test/letflow/support/tenant_fixture_test.exs only). TEST-RUNNER rework-1 recheck (step-05-test-runner.json / test-runner-report-2 in handoffs/WF02-REQ195-20260830/) re-ran the full suite, confirmed the C6 guard now passes and no new regression exists, and routed forward to RELEASE-VALIDATOR (step-05-release-validator.json). RELEASE-VALIDATOR (step 06) independently re-derived all 12 ACs against the real code (not prior gate reports): personally hand-traced do_verify_chain/2 and confirmed the hash-recompute-before-linkage check order is genuinely load-bearing for AC6's specified adversarial scenario (a prev_chain_hash-only tamper makes both cond clauses true simultaneously; only clause order decides hash_mismatch vs chain_broken, and found/ran the exact test -- audit_dispositions_test.exs's prev_chain_hash-tamper test -- that independently proves it, passing). Spot-checked 4 actor_id dispositions chosen for zero overlap with SECURITY-REVIEWER/REVIEWER's already-checked set (cancel_instance/3, insert_token/3, TaskActivation.do_insert/3, plus a full re-grep of all 6 Identity nil sites) -- zero discrepancies. Confirmed the immutability trigger is registered in TenantProvisioning.tenant_scoped_migrations/0, confirmed the Ecto.Multi same-transaction guarantee at 2 real call sites, confirmed AC11 (no routers/ file touched) via git diff --stat, ran the 4 target test files (39/39 passed) and the full suite via scripts/test_parallel.sh itself (2800/2802 passed, 2 failures, both the documented pre-existing rustc-absent CheckToolchainTest flake, no new regression), and ran mix compile --warnings-as-errors itself (clean). Verdict: PASS. Full report: handoffs/WF02-REQ195-20260830/req195-release-validation-report.md. Routed to DOC-UPDATER (step-06-doc-updater.json)."
     }
   ]

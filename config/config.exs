@@ -32,4 +32,9 @@ config :letflow, lua_max_heap_words: nil
 # to inject an exact, pre-set timestamp.
 config :letflow, :lua_platform_time_source, Letflow.Engine.Lua.Platform.SystemClock
 
+# REQ-193: disable legacy :logger backends; wire Letflow.Obs.Logger as the
+# OTP default-handler formatter for structured JSON output.
+config :logger, backends: []
+config :logger, :default_handler, formatter: {Letflow.Obs.Logger, []}
+
 import_config "#{config_env()}.exs"

@@ -71,6 +71,32 @@ end
 
 config :letflow, :secrets_master_key, secrets_master_key
 
+# REQ-193: structured log level. Defaults to :info when LOG_LEVEL is absent.
+# Unrecognised values are fatal at startup (mirrors the LETFLOW_SECRETS_MASTER_KEY
+# "boot-time failure via raise" pattern).
+log_level_atom =
+  case System.get_env("LOG_LEVEL", "info") do
+    "debug" ->
+      :debug
+
+    "info" ->
+      :info
+
+    "warn" ->
+      :warning
+
+    "warning" ->
+      :warning
+
+    "error" ->
+      :error
+
+    invalid ->
+      raise "Invalid LOG_LEVEL=#{inspect(invalid)}. Must be one of: debug, info, warn, warning, error."
+  end
+
+config :logger, level: log_level_atom
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

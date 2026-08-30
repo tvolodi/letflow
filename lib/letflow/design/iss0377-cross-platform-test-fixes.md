@@ -118,11 +118,29 @@ Replace with a structural assertion that doesn't name a specific directory:
    |> Keyword.get_values(:external_resource) |> List.flatten()`).
 2. **Branch on whether the list is empty**, because a precompiled/downloaded
    build may legitimately attach zero `:external_resource` entries (see A.2):
-   - If **non-empty**: assert every entry has a source-code extension
-     appropriate to the NIF's implementation language — `String.ends_with?/2`
-     against `.rs` (Rust source) — rather than asserting a specific directory
-     substring. This still proves "these are real Rust build inputs", not
-     "these live at path X".
+   - If **non-empty**: assert **at least one** entry has a source-code
+     extension appropriate to the NIF's implementation language —
+     `Enum.any?/2` with `String.ends_with?/2` against `.rs` (Rust source) —
+     rather than asserting a specific directory substring, and rather than
+     requiring *every* entry to end in `.rs`. This is deliberate, not a
+     weaker stand-in for the stronger check: under this project's own
+     always-on `WASMEX_BUILD=true` build configuration (`.github/workflows/
+     ci.yml`, REQ-165), `Wasmex.Native` compiles through `use Rustler`'s
+     from-source path, whose `Rustler.Compiler.Config.external_resources/3`
+     globs the *entire* crate directory tree (rejecting only `target/` and
+     directories, with no extension filter at all — see
+     `deps/rustler/lib/rustler/compiler/config.ex`). The real vendored
+     crate at `deps/wasmex/native/wasmex/` confirms this in practice: its
+     `:external_resource` list mixes `.rs` sources under `src/` together
+     with non-`.rs` files the same glob sweeps in — `README.md`,
+     `Cargo.toml`, `Cargo.lock`, `.cargo/config.toml`. An "every entry ends
+     in `.rs`" assertion is therefore false on this project's own real,
+     mandated build path and would raise a real `ExUnit.AssertionError` the
+     moment it runs. "At least one entry ends in `.rs`" is the correct,
+     non-vacuous invariant here: it still proves real Rust build inputs are
+     genuinely tracked (ruling out an empty-of-substance list slipping past
+     a non-empty check), without asserting anything about the *rest* of the
+     list's composition, which this branch has no business constraining.
    - If **empty**: do not fail. Instead assert the fallback invariant from A.4
      step 3 holds (a real compiled artifact is present under `priv/native`)
      and record — via a passing assertion with a descriptive message, e.g.

@@ -449,4 +449,203 @@ defmodule Letflow.Routers.Req196AuditRouteTest do
       assert item["actor_id"] == actor_id
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # Gap-fill (TEST-DESIGNER, step-03b re-check): resource_id filter -- present
+  # in design §1.3/§1.1 and implemented in `Letflow.Audit.list_entries/1`'s
+  # `where_resource_id/2`, but had no dedicated test asserting it actually
+  # discriminates. Mirrors the AC3 resource_type-filter test shape exactly.
+  # ---------------------------------------------------------------------------
+
+  describe "resource_id filter discriminates" do
+    test "filtering to one resource_id returns only that entry" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req196-gap-resid")
+
+      seed_audit_entry!(tenant.schema_name, resource_id: "res-A", action: "definition.create")
+      seed_audit_entry!(tenant.schema_name, resource_id: "res-B", action: "definition.create")
+      seed_audit_entry!(tenant.schema_name, resource_id: "res-B", action: "definition.activate")
+
+      resp = get_audit(tenant, query_string: "resource_id=res-A")
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+      assert body["count"] == 1
+      assert [item] = body["items"]
+      assert item["resource_id"] == "res-A"
+    end
+
+    test "omitting resource_id returns entries for every resource_id" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req196-gap-resid-all")
+
+      seed_audit_entry!(tenant.schema_name, resource_id: "res-A")
+      seed_audit_entry!(tenant.schema_name, resource_id: "res-B")
+
+      resp = get_audit(tenant)
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+      assert body["count"] == 2
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Gap-fill: empty audit_entries table -- a freshly-provisioned tenant with no
+  # rows must still return a well-shaped 200 page (items: [], count: 0,
+  # next_cursor: nil), not an error and not a shape that only happens to work
+  # when items is non-empty (list_entries/1's split_list_page/2 and
+  # next_cursor/2 both have a `[]` clause that is otherwise never exercised by
+  # any test in this file).
+  # ---------------------------------------------------------------------------
+
+  describe "empty audit_entries table" do
+    test "a tenant with zero audit entries gets items: [], count: 0, next_cursor: nil, not an error" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req196-gap-empty")
+
+      resp = get_audit(tenant)
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+      assert body["items"] == []
+      assert body["count"] == 0
+      assert body["next_cursor"] == nil
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Gap-fill: page_size exact boundary. The existing pagination test only
+  # covers page_size < row_count (has_more: true). The other side of
+  # split_list_page/2's `length(rows) > page_size` branch -- exactly
+  # page_size rows, no more -- must report has_more: false / next_cursor: nil,
+  # not the has_more heuristic's documented false-positive shape.
+  # ---------------------------------------------------------------------------
+
+  describe "page_size exact boundary" do
+    test "exactly page_size rows in the table yields has_more: false and a nil next_cursor" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req196-gap-boundary")
+
+      for n <- 1..2 do
+        seed_audit_entry!(tenant.schema_name, resource_id: "boundary-#{n}")
+      end
+
+      resp = get_audit(tenant, query_string: "page_size=2")
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+      assert body["count"] == 2
+      assert body["next_cursor"] == nil
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Gap-fill: from/to time-range filter -- declared supported in the router's
+  # own "Filter disposition" table and implemented via `where_from/2`/
+  # `where_to/2`, but had no test at all: neither the inclusive-bounds
+  # filtering behavior, nor the `from > to` -> 422 `invalid_time_range` check
+  # `handle_list/1`'s `check_time_range/2` performs before any query.
+  #
+  # `Entry.timestamp` is stamped internally by `insert_entry/3`
+  # (`DateTime.utc_now()`, not attribute-overridable), so the only way to
+  # assert `from`/`to` narrows the result set is to seed against real elapsed
+  # time and read a cutoff back from the seeded rows themselves -- a short
+  # `Process.sleep/1` between inserts (matching the established idiom at
+  # `test/letflow/sandbox_pool_test.exs:149,186,729`) guarantees the two
+  # entries land in different microseconds rather than asserting anything
+  # about wall-clock time itself.
+  # ---------------------------------------------------------------------------
+
+  describe "from/to time-range filter" do
+    test "from excludes entries stamped before it; to excludes entries stamped after it" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req196-gap-timerange")
+
+      early = seed_audit_entry!(tenant.schema_name, resource_id: "early")
+      Process.sleep(5)
+      cutoff = DateTime.utc_now()
+      Process.sleep(5)
+      late = seed_audit_entry!(tenant.schema_name, resource_id: "late")
+
+      resp_from =
+        get_audit(tenant, query_string: "from=#{URI.encode_www_form(DateTime.to_iso8601(cutoff))}")
+
+      assert resp_from.status == 200
+      body_from = Jason.decode!(resp_from.resp_body)
+      resource_ids_from = Enum.map(body_from["items"], & &1["resource_id"])
+      assert late.resource_id in resource_ids_from
+      refute early.resource_id in resource_ids_from
+
+      resp_to =
+        get_audit(tenant, query_string: "to=#{URI.encode_www_form(DateTime.to_iso8601(cutoff))}")
+
+      assert resp_to.status == 200
+      body_to = Jason.decode!(resp_to.resp_body)
+      resource_ids_to = Enum.map(body_to["items"], & &1["resource_id"])
+      assert early.resource_id in resource_ids_to
+      refute late.resource_id in resource_ids_to
+    end
+
+    test "from > to is rejected with 422, before any query is issued" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req196-gap-badrange")
+      seed_audit_entry!(tenant.schema_name)
+
+      later = DateTime.utc_now()
+      earlier = DateTime.add(later, -60, :second)
+
+      query =
+        "from=#{URI.encode_www_form(DateTime.to_iso8601(later))}" <>
+          "&to=#{URI.encode_www_form(DateTime.to_iso8601(earlier))}"
+
+      resp = get_audit(tenant, query_string: query)
+
+      assert resp.status == 422
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Gap-fill: malformed cursor variants beyond the one already-tested
+  # base64-garbage case -- a cursor that decodes fine but was minted for a
+  # DIFFERENT endpoint (`decode_cursor/4`'s `:wrong_endpoint` branch,
+  # `check_prefix/2`), and a cursor with the correct "A:" prefix but a
+  # malformed inner seek payload (`cursor_seek_from_cursor/1`'s own parse
+  # failure, distinct from `Pagination.decode_cursor/4`'s failure).
+  # ---------------------------------------------------------------------------
+
+  describe "malformed cursor variants" do
+    test "a cursor minted with a different endpoint's prefix is rejected with 400" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req196-gap-wrongendpoint")
+      seed_audit_entry!(tenant.schema_name)
+
+      wrong_endpoint_cursor =
+        Letflow.Api.Pagination.build_raw_cursor(
+          "T:",
+          System.system_time(:microsecond),
+          "some-key"
+        )
+        |> Letflow.Api.Pagination.encode_cursor()
+
+      resp =
+        get_audit(tenant, query_string: "cursor=#{URI.encode_www_form(wrong_endpoint_cursor)}")
+
+      assert resp.status == 400
+    end
+
+    test "a cursor with the right prefix but a malformed inner seek payload is rejected with 400" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req196-gap-badinner")
+      seed_audit_entry!(tenant.schema_name)
+
+      # "A:" prefix present (passes check_prefix/2), but the payload after it
+      # has no parseable "<entry_ts_us>:<entry_id>" seek pair --
+      # cursor_seek_from_cursor/1 must fail this, not raise.
+      malformed_inner_cursor =
+        Letflow.Api.Pagination.build_raw_cursor(
+          "A:",
+          System.system_time(:microsecond),
+          "not-a-timestamp-colon-uuid"
+        )
+        |> Letflow.Api.Pagination.encode_cursor()
+
+      resp =
+        get_audit(tenant, query_string: "cursor=#{URI.encode_www_form(malformed_inner_cursor)}")
+
+      assert resp.status == 400
+    end
+  end
 end

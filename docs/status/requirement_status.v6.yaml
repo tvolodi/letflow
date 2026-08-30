@@ -1044,3 +1044,20 @@ history:
       Letflow.Secrets.resolve/2 contract is exactly what REQ-190 must
       implement; that branch stays open, unmerged, for reuse when
       REQ-183 resumes.
+  - req: REQ-190
+    event: started
+    agent: ORCH
+    at: "2026-08-30T03:48:30Z"
+    note: >
+      Queue task 363, GH#709, stage S6. Secrets core -- envelope-
+      encrypted per-tenant secret storage and resolution by reference
+      (EXP-501), builds what REQ-189's decision record 0016 specifies.
+      depends_on REQ-189 (done), REQ-072 (done), REQ-181 (done).
+      Resequenced ahead of REQ-183 (WF02-REQ183-20260830, paused) per
+      CODE-DESIGN-VALIDATOR's Step 1b finding and user confirmation --
+      see this volume's own REQ-183 blocked-event entry immediately
+      above for the full rationale. Scope item 6 and AC9 were reworded
+      as part of that resequencing: this requirement adds
+      webhook_subscriptions.secret_ref/.secret_key_id and proves
+      resolve/2 works for a webhook-shaped reference itself, rather
+      than assuming REQ-183's signing code already exists to retrofit.

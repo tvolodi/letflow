@@ -10038,7 +10038,7 @@ requirements:
   - id: REQ-190
     title: Secrets core -- envelope-encrypted per-tenant secret storage and resolution by reference (EXP-501), and the webhook HMAC key reconciliation
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S6
     impl_order: 363  # letflow-queue task id
     description: >

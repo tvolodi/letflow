@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF03-ISS0377-20260830-step03c",
+  "run_id": "WF03-ISS0377-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 3c (security review)",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Implementation of lib/letflow/design/iss0377-cross-platform-test-fixes.md (Part A + Part B) is complete and pushed. This is a test-infrastructure fix, not a tenant-data-path change -- no API route, migration, secret, or response-shaping code was touched. Review is expected to be lightweight per ORCH routing convention for non-tenant-data changes.",
+    "design_file": "lib/letflow/design/iss0377-cross-platform-test-fixes.md",
+    "design_commit": "697987b",
+    "implementation_commit": "8eef01b",
+    "branch": "feature/WF03-ISS0377-20260830",
+    "changed_files": [
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "scripts/test_parallel.sh"
+    ],
+    "what_changed": {
+      "part_a": "AC7 describe block in plugin_handler_test.exs now derives the expected wasmex NIF loadable-artifact extension from :os.type/0 (case-mapped table: .so for linux/freebsd/darwin, .dll for win32, loud flunk on anything unmapped) instead of hardcoding 'native/wasmex.so'. Added a directory-listing fallback (native_artifact_check/2) when the fixed-name file is absent. The :external_resource assertion now branches on emptiness: non-empty asserts at least one entry ends in .rs (not every entry); empty falls back to asserting the compiled-artifact check instead of failing.",
+      "part_b": "scripts/test_parallel.sh gained a new Step 1.6 that sequentially (no concurrency) hardlink-copies (cp -al, falling back to cp -r) the already-compiled _build/test tree into N per-partition _build/test-partition-<i> directories before any partition is backgrounded. Step 2's partition launch now sets MIX_BUILD_PATH=\"_build/test-partition-$i\" scoped to that single mix test invocation (not globally exported), alongside the existing per-invocation MIX_TEST_PARTITION."
+    },
+    "security_review_scope": {
+      "focus": "Lightweight review only -- confirm: (1) no test credentials, API keys, tenant IDs, or other secrets are newly hardcoded in either changed file; (2) the new per-partition _build/test-partition-<i> paths in scripts/test_parallel.sh don't leak data across partitions (each partition gets its own distinct, non-shared directory seeded once before backgrounding -- no partition ever reads/writes another partition's build path) and don't persist sensitive data (these are ordinary compiled-artifact/build-cache trees, already covered by the repo's existing /_build/ .gitignore entry, and this design does not add any cleanup requirement beyond what req113's design already left out of scope for the shared _build/test tree).",
+      "tenant_data_path": false,
+      "invariants_checked": "INV-4 (tenant isolation) is not implicated -- these are host-local CI/dev build directories, not tenant-scoped runtime data. No new persistence, no new API surface, no new secret material."
+    },
+    "acceptance_criteria_ref": "docs/issues/ISS-0377.yaml",
+    "toolchain_note": "No Elixir/Erlang/mix toolchain was available in the ELIXIR-DEV sandbox for this run -- `mix compile --warnings-as-errors`, `mix format`, the OQ-A1 empirical :external_resource check, and a real scripts/test_parallel.sh full-suite invocation could not be executed. Only `bash -n scripts/test_parallel.sh` (syntax-only) was run and passed. This is stated explicitly rather than claimed as a verified pass -- TEST-RUNNER or a host with mix available must run these before this change is considered verified."
+  },
+  "task": {
+    "description": "Security-review the ISS-0377 fix (test/letflow/engine/wasm/plugin_handler_test.exs AC7 assertions and scripts/test_parallel.sh per-partition build isolation) per security-invariants.md. Given this is test-infrastructure-only with no tenant-data-path touched, confirm no newly hardcoded secrets and no cross-partition data leakage/persistence risk in the new build-path scheme, then route to REVIEWER per WF-03's normal next step."
+  },
+  "result": null
+}

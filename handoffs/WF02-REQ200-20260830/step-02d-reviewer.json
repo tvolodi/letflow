@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step02d-WF02-REQ200-20260830",
+  "run_id": "WF02-REQ200-20260830",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ200-20260830/step-02d-reviewer.json",
+  "created_at": "2026-08-30T13:00:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-200"],
+    "issue_ids": [],
+    "queue_task_id": 373,
+    "github_issue": "GH#719",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ200-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ200-20260830/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ200-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ200-20260830/security-review-req200-findings.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req200-instance-timeline-rendering.md",
+      "lib/letflow/instances.ex",
+      "lib/letflow/routers/instances.ex",
+      "test/letflow/routers/instances_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ200-20260830"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER gate (WF-02 Step 2c) PASSED with no BLOCKER -- full findings in handoffs/WF02-REQ200-20260830/security-review-req200-findings.md. REQ-200 changes what GET /api/v1/instances/:id/timeline's items contain: adds actor_display_name (resolve_actor_display_name/3, a total 4-level fallback: batched users.display_name lookup -> metadata token_description -> metadata actor_label -> literal 'system') and description (render_description/3, one clause per the 7 real event types plus a mandatory generic fallback for tenant-Lua-emitted event_type strings), and renames sequence_number->sequence_num and created_at->timestamp, per the approved design lib/letflow/design/req200-instance-timeline-rendering.md. Independently re-verified (not trusting ELIXIR-DEV's self-report): mix compile clean, mix format --check-formatted clean, mix test test/letflow/routers/instances_test.exs 40/40 passing, mix letflow.lint_handoffs 0 new violations. Diff scope confirmed via git diff main...HEAD --stat: only lib/letflow/instances.ex, lib/letflow/routers/instances.ex, test/letflow/routers/instances_test.exs, the design doc, and handoff/registry/status-index bookkeeping changed -- no migration, no web/ file, lib/letflow/api/authorization.ex untouched. Traced the flagged cross-tenant risk in fetch_display_names_by_actor_id/2 concretely: Letflow.Identity.User is a per-tenant-schema table (Decision 0006 D1, shipped, no tenant_id column at all per D2), the new query passes prefix: prefix -- the same prefix value timeline/3 threads through its own existing event query and ensure_instance_exists/2 (REQ-072, unchanged) -- so the lookup is schema-scoped by construction: even under an adversarial UUID-collision assumption, Repo.all(query, prefix: prefix) cannot resolve a row living in a different tenant's Postgres schema. Confirmed the metadata-based fallback keys (token_description, actor_label) are not set by any writer in the codebase today (grep, excluding tests, hits only the two read sites), and that even if they carried tenant-controlled content, the SPA renders both actor_display_name and description as plain JSX text content (TimelineFeedItem.tsx), never dangerouslySetInnerHTML -- no injection vector. Confirmed render_description/3's 7 typed clauses only interpolate actor (already tenant-scoped) and payload keys already belonging to the same tenant-scoped event row -- no new query, no cross-instance/cross-tenant data. Confirmed the generic fallback for open-ended Lua-emitted event_type strings is plain string interpolation into a JSON string field rendered back as escaped JSX text to the same authoring tenant only -- no second interpretation layer, no injection vector, no cross-tenant exposure even in principle. Now handing to REVIEWER for the idiom/OTP/scope-creep/decision-record-consistency gate (WF-02 Step 2d) -- please review naming/style consistency of the new private-function decomposition (resolve_actor_display_name/3, render_description/3, fetch_display_names_by_actor_id/2, blank?/1) against this module's existing conventions, and whether the deliberate field-rename (sequence_number->sequence_num, created_at->timestamp, no dual-emission) is consistent with this project's compatibility conventions elsewhere.",
+    "acceptance_criteria": [
+      "Confirm code style/idiom matches Letflow.Instances' established conventions in this same module (@spec discipline, private-function naming, total-function fallback-chain shape).",
+      "Confirm no scope creep beyond the approved design doc's SS1-SS7 (actor display-name resolution, description rendering, batched lookup, field rename -- nothing else, e.g. no unscoped node-label lookup per the design doc's own flagged open question 1).",
+      "Confirm supervision/process-isolation is not implicated (this module is a plain Ecto context module, no GenServer/gen_statem changes) -- state explicitly that this check is trivially satisfied given the diff's shape.",
+      "Confirm consistency with the design doc's own decision to rename rather than dual-emit sequence_number/created_at, and that no other consumer of Letflow.Instances.timeline/3's shape was missed (grep for item.created_at / item.sequence_number elsewhere in lib/).",
+      "CRITICAL: this handoff's top-level status field is exactly PENDING (grepped and confirmed before commit, per this project's own recurring anti-pattern on this exact mistake)."
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

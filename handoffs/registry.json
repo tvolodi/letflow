@@ -3491,8 +3491,8 @@
       "started_at": "2026-08-30T12:38:22Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
-      "note": "Fixes a real broken SPA contract: TimelineFeedItem.tsx reads actor_display_name/description/timestamp/sequence_num but timeline_item/1 never emits the first two and names the latter two differently. Ports R-Co's actor-fallback chain and per-event-type description rendering, N+1-safe. Route/pagination/auth/404 from REQ-080 unchanged."
+      "last_known_step": "Step 2d (SECURITY-REVIEWER PASS -> REVIEWER)",
+      "note": "Fixes a real broken SPA contract: TimelineFeedItem.tsx reads actor_display_name/description/timestamp/sequence_num but timeline_item/1 never emits the first two and names the latter two differently. Ports R-Co's actor-fallback chain and per-event-type description rendering, N+1-safe. Route/pagination/auth/404 from REQ-080 unchanged. SECURITY-REVIEWER PASSED (handoffs/WF02-REQ200-20260830/security-review-req200-findings.md) -- routed to REVIEWER."
     }
   ]
 }

@@ -167,13 +167,25 @@ drop-the-extra-row split) but with **no** `where` clause restricting scope or
 owner. This is new query logic living in the router module, not a change to
 any file under the "NOT IN THIS REQUIREMENT" list — `Letflow.ServiceCatalog.Entry`
 is a public schema module already `alias`ed elsewhere (e.g. inside
-`Letflow.ServiceCatalog` itself), and reading it via `Ecto.Query`/`Repo.all/1`
-from a router is not different in kind from `Letflow.Routers.Audit`'s or
-`Letflow.Routers.Metrics`'s own direct-schema-query precedents (verify by
-inspection before implementing — the design does not claim a specific line
-number for that precedent, only that no acceptance criterion or "NOT IN THIS
+`Letflow.ServiceCatalog` itself), and no acceptance criterion or "NOT IN THIS
 REQUIREMENT" clause forbids a router from constructing its own `Ecto.Query`
-against an already-public schema).
+against an already-public schema.
+
+**This is not backed by existing precedent — it is a deliberate, first-of-its-kind
+exception, flagged here for REVIEWER sign-off, not something this design rests
+on prior art.** Every other router in this codebase (`Letflow.Routers.Audit`
+delegates to `Letflow.EventStore.read_global/1`; `Letflow.Routers.Metrics`
+delegates to `Letflow.Engine.count_instances_by_status/1` and sibling
+context-module functions) reaches its data exclusively through a context
+module — a repo-wide `grep -rln 'Ecto.Query|Repo\.(all|one|get)'
+lib/letflow/routers/` turns up no genuine direct-schema-query call anywhere in
+the router layer today. This design deliberately breaks that layering
+discipline for this one handler, solely because (a) this requirement's own
+"NOT IN THIS REQUIREMENT" boundary forbids adding a tenant-agnostic list-all
+function to `service_catalog.ex`, and (b) AC2 cannot be satisfied any other
+way under that boundary. REVIEWER must independently weigh and explicitly
+sign off on this exception at Step 2d — it is not to be treated as routine or
+pre-approved by analogy to anything already in the codebase.
 
 Cursor prefix: **must be different from `"SC:"`** (`ServiceCatalog`'s own
 `@list_cursor_prefix`) — `Pagination.decode_cursor/3`'s whole point is
@@ -183,15 +195,16 @@ must be rejected (`{:error, :wrong_endpoint}` → 400) if replayed against
 `"SCA:"` ("Service Catalog Admin") as the admin-list router's own prefix
 constant, module-private to `Letflow.Routers.AdminServices`.
 
-**Named as a finding for REVIEWER:** this duplicates `list_for_tenant/2`'s
-keyset-pagination shape (order/limit/split-page logic) at the router layer,
-which is not ideal but is the only option that respects the "no change to
-REQ-191's schema or context" scope boundary. A future, `service_catalog.ex`-
-scoped requirement should consider hoisting a shared, tenant-agnostic
-`list_all/1` (or an `opts[:tenant_id] :: :any | Ecto.UUID.t()` parameter on
-`list_for_tenant/2`) into the context module and deleting this duplication.
-Not resolved here — out of scope, flagged rather than silently accepted as
-permanent.
+**Named as a finding for REVIEWER (in addition to the layering exception
+above):** this duplicates `list_for_tenant/2`'s keyset-pagination shape
+(order/limit/split-page logic) at the router layer, which is not ideal but is
+the only option that respects the "no change to REQ-191's schema or context"
+scope boundary. A future, `service_catalog.ex`-scoped requirement should
+consider hoisting a shared, tenant-agnostic `list_all/1` (or an
+`opts[:tenant_id] :: :any | Ecto.UUID.t()` parameter on `list_for_tenant/2`)
+into the context module, deleting this duplication, and retiring the
+direct-schema-query exception entirely. Not resolved here — out of scope,
+flagged rather than silently accepted as permanent.
 
 Result mapping is otherwise identical to §4's table (200 with the two-key
 envelope; cursor errors → 400).

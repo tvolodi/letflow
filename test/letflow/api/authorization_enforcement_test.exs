@@ -55,7 +55,9 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     Letflow.Routers.Tasks,
     Letflow.Routers.SolutionPacks,
     Letflow.Routers.Promotions,
-    Letflow.Routers.Metrics
+    Letflow.Routers.Metrics,
+    Letflow.Routers.Services,
+    Letflow.Routers.AdminServices
   ]
 
   # `Letflow.Plugs.ApiPipeline`'s own `forward/2` mount prefix per router
@@ -84,7 +86,9 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     Letflow.Routers.Tasks => "/tasks",
     Letflow.Routers.SolutionPacks => "/solution-packs",
     Letflow.Routers.Promotions => "/promotions",
-    Letflow.Routers.Metrics => "/metrics"
+    Letflow.Routers.Metrics => "/metrics",
+    Letflow.Routers.Services => "/services",
+    Letflow.Routers.AdminServices => "/admin/services"
   }
 
   # {method, path_template, reason} -- a route whose declared policy key is

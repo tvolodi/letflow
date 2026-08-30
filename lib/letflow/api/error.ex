@@ -358,4 +358,56 @@ defmodule Letflow.Api.Error do
       extensions: %{"conflicts" => conflicts}
     }
   end
+
+  @doc """
+  HTTP 409 — Service Referenced By Active Definitions (REQ-192, design
+  `lib/letflow/design/req192-service-catalog-routes.md` §11). Modeled on
+  `promotion_conflict/2`'s own real RFC 9457 extensions-map shape (the one
+  existing precedent in this codebase for a 409 carrying a structured id
+  list), with its own accurate `type`/`title` rather than reusing
+  `promotion_conflict/2` under a service-flavored `detail` string — see the
+  design's "alternative considered and rejected" note.
+
+  `definition_ids` names every ACTIVE process-definition id (across every
+  tenant) still referencing the service the caller tried to delete —
+  `Letflow.ServiceCatalog.delete/1`'s own
+  `{:error, {:referenced_by_active_definitions, definition_ids}}` shape.
+  """
+  @spec service_referenced_by_active_definitions([String.t()]) :: t()
+  def service_referenced_by_active_definitions(definition_ids) when is_list(definition_ids) do
+    %__MODULE__{
+      type: @problems_base <> "service-referenced-by-active-definitions",
+      title: "Service Referenced By Active Definitions",
+      status: 409,
+      detail: "the service is referenced by one or more ACTIVE process definitions",
+      extensions: %{"definition_ids" => definition_ids}
+    }
+  end
+
+  @doc """
+  HTTP 409 — Service Scope Narrowing Conflict (REQ-192, design §11). Same
+  shape rationale as `service_referenced_by_active_definitions/1` above, for
+  `Letflow.ServiceCatalog.update_scope/2`'s
+  `{:error, {:referenced_by_active_definitions, conflicts}}` narrowing-path
+  shape instead — `conflicts :: [Letflow.ServiceCatalog.reference_conflict()]`,
+  each `%{tenant_id: ..., definition_ids: [...]}`, re-mapped to a
+  string-keyed extensions map here since `Error.serialise/1`'s
+  `Jason.encode!/1` call requires JSON-safe keys throughout.
+  """
+  @spec service_scope_narrowing_conflict([%{tenant_id: String.t(), definition_ids: [String.t()]}]) ::
+          t()
+  def service_scope_narrowing_conflict(conflicts) when is_list(conflicts) do
+    %__MODULE__{
+      type: @problems_base <> "service-scope-narrowing-conflict",
+      title: "Service Scope Narrowing Conflict",
+      status: 409,
+      detail: "other tenants' ACTIVE process definitions still reference this service",
+      extensions: %{
+        "conflicts" =>
+          Enum.map(conflicts, fn c ->
+            %{"tenant_id" => c.tenant_id, "definition_ids" => c.definition_ids}
+          end)
+      }
+    }
+  end
 end

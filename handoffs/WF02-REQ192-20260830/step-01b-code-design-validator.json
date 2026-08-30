@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ192-20260830-step01b",
+  "run_id": "WF02-REQ192-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 1b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req192-service-catalog-routes.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Design produced for REQ-192 (docs/requirements.yaml, queue task 365, GH#711, stage S6), on branch feature/WF02-REQ192-20260830, committed as 7ea5acb9 and pushed. Design covers two new route-layer modules (Letflow.Routers.Services at /services, Letflow.Routers.AdminServices at /admin/services) atop REQ-191's already-shipped Letflow.ServiceCatalog context module and REQ-069's already-shipped SVC-04 policy keys in lib/letflow/api/authorization.ex (L100-102, L299-304, L417-419) -- neither of those two files is modified by this design. Contains several explicit findings the validator should scrutinize rather than assume resolved: (1) section 5 -- Letflow.ServiceCatalog has no tenant-independent 'list all' function, so GET /admin/services is designed to query Letflow.ServiceCatalog.Entry directly via Repo/Ecto.Query from the router rather than reusing list_for_tenant/2, with a distinct cursor prefix; (2) section 8 -- two real ServiceRecord/Entry field mismatches (max_retries has no backing column at all; request_schema/response_schema are non-nullable in the TS contract but nullable on the schema) with a stated interim resolution rather than a fix to service_catalog.ex or web/; (3) section 11 -- two new Letflow.Api.Error constructors (service_referenced_by_active_definitions/1, service_scope_narrowing_conflict/1) proposed for the 409 problem-details bodies, modeled on the existing Error.promotion_conflict/2 precedent; (4) section 3 -- a finding about a stale comment in authorization.ex's required_permission/1 clause that is not fixed here. Verify every acceptance criterion below maps to a concrete section, that no fenced code block reproduces real .ex content (mechanical rule hit repeatedly on the two prior requirements' designs -- re-checked before this handoff via grep for triple-backtick fences, none remain), and that the design does not silently resolve the two contract gaps in section 8 without naming them."
+  },
+  "task": {
+    "description": "Validate lib/letflow/design/req192-service-catalog-routes.md against REQ-192's full acceptance criteria (docs/requirements.yaml, REQ-192 entry) before ELIXIR-DEV implements it. Confirm: every acceptance criterion maps to a concrete, buildable design element (no TBD); no implementation code (fenced .ex blocks) is present; the design does not modify or propose modifying lib/letflow/api/authorization.ex, lib/letflow/service_catalog.ex, lib/letflow/service_catalog/entry.ex, or anything under web/; the 409 conflict-body approach (new Error constructors, section 11) is unambiguous enough to implement; the GET /admin/services 'list all' resolution (section 5) is unambiguous; the two named ServiceRecord contract gaps (section 8) are stated as findings with a concrete interim behavior, not guessed away.",
+    "acceptance_criteria": [
+      "GET /api/v1/services returns global entries plus the calling tenant's own scoped entries, and a tenant-scoped entry owned by a different tenant is absent from the response -- asserted with entries of all three kinds present in the database",
+      "GET /api/v1/admin/services returns entries the caller's own tenant does not own, demonstrating it is not tenant-filtered, and requires :AdminServicesRead -- a caller holding only :ServicesRead receives 403",
+      "POST /api/v1/admin/services with a RegisterServiceBody creates the entry and returns 201 with a body whose field names match web/src/api/services.ts's ServiceRecord exactly, asserted field by field",
+      "POST, PATCH and DELETE under /api/v1/admin/services each return 403 for a caller lacking :AdminServicesManage, using the mapping already present in lib/letflow/api/authorization.ex -- three explicit tests",
+      "DELETE of a service referenced by an ACTIVE definition returns 409 whose problem-details body lists the referencing definition ids; PATCH narrowing a service other tenants' ACTIVE definitions reference returns 409 listing those tenant ids -- two explicit tests",
+      "POST with an already-registered service_id returns 409 and does not modify the existing entry",
+      "a request naming a tenant-scoped service belonging to another tenant on the non-admin path returns 404, never 403 (REQ-072's cross-tenant rule)",
+      "lib/letflow/api/authorization.ex is NOT modified by this requirement, confirmed by git diff --stat scoped to its commits -- the SVC-04 policy keys it already ships are consumed as-is",
+      "no file under web/ is added or modified, confirmed by git diff --stat -- the SPA client already exists and S8 owns it",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

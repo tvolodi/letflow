@@ -1,0 +1,59 @@
+{
+  "handoff_id": "step03-WF02-REQ201-20260830",
+  "run_id": "WF02-REQ201-20260830",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ201-20260830/step-03-test-designer.json",
+  "created_at": "2026-08-30T19:10:00Z",
+  "status": "COMPLETED",
+  "result": {
+    "status": "PASS",
+    "summary": "Cross-checked all 14 ACs for REQ-201 against test/letflow/obs/alerts_test.exs. Found 2 genuine coverage gaps and 1 cosmetic defect; all three fixed. All 17 tests pass. Spec at test/specs/REQ-201.md.",
+    "gaps_found_and_fixed": [
+      {
+        "ac": "AC-1",
+        "description": "DLQ depth hook must NOT re-fire on subsequent evaluations while above threshold; AC requires ≥3 evaluation cycles.",
+        "prior_state": "Test ran exactly 2 above-threshold cycles (fire + one no-fire). A bug that re-fired on the 3rd+ cycle would have been undetected.",
+        "fix": "Added a 3rd above-threshold run_detection call (dlq_count: 20) with refute_receive, satisfying the ≥3 cycle requirement."
+      },
+      {
+        "ac": "AC-8",
+        "description": "After retry exhaustion, exactly ONE error must be logged. 'log =~ ...' only asserts presence, not count.",
+        "prior_state": "assert log =~ \"alert delivery exhausted\" passes even if multiple exhaustion log lines are emitted.",
+        "fix": "Changed to Regex.scan/2 count assertion: exhaustion_count = length(Regex.scan(~r/alert delivery exhausted/, log)); assert exhaustion_count == 1."
+      },
+      {
+        "ac": "AC-11",
+        "description": "Second test in the AC-11 describe block was a verbatim duplicate of the first, with a misleading description claiming to check the Application children list.",
+        "prior_state": "Both tests called refute function_exported?(Alerts, :start_link, 1) and :child_spec. Second test provided zero additional coverage.",
+        "fix": "Replaced duplicate with a source-assertion test: reads lib/letflow/application.ex and asserts the string 'Letflow.Obs.Alerts' is absent — matching AC-11's own 'confirmed by git diff of application.ex' wording."
+      }
+    ],
+    "acs_covered_no_change": [
+      "AC-2: ARMED→FIRED→ARMED→FIRED four-step sequence — complete",
+      "AC-3: two distinct trigger_key rows + two POST bodies — complete",
+      "AC-4: below-threshold no-alert + at-threshold fires — complete",
+      "AC-5: real Process.sleep lag measurement passed to run_detection — complete (see note in spec)",
+      "AC-6: paused subscription fires once; second tick with same sub: no re-fire — complete",
+      "AC-7: stuck-instance POST body field-by-field assertion — complete",
+      "AC-9: Authorization header from resolved secret; credential absent from state row — complete",
+      "AC-10: behavioral per-tenant placement confirmed by prefix-qualified Repo.all — complete",
+      "AC-12: moduledoc substring assertions for DLQ/webhook/Never — complete",
+      "AC-13: Alerts has no Plug :call/:init functions — complete",
+      "AC-14: module existence and run_detection/2 function_exported? — complete"
+    ],
+    "test_run_result": "Result: 17 passed (Finished in 11.9 seconds, 0.00s async, 11.9s sync)",
+    "git_commits": [
+      {
+        "sha": "fe08ea52",
+        "message": "test(REQ-201): gap-fill AC-1 (3rd cycle), AC-8 (exact count), AC-11 (source assertion)"
+      }
+    ],
+    "artifacts_out": [
+      "test/letflow/obs/alerts_test.exs",
+      "test/specs/REQ-201.md"
+    ]
+  }
+}

@@ -988,3 +988,15 @@ history:
       merged. This SCOPE-CHANGE done-event was missing from ISSUE-FIXER's own
       Step 5 -- appended by ORCH before starting the next task, per this
       volume's own started/done pairing convention for SCOPE-CHANGE entries.
+  - req: REQ-191
+    event: started
+    agent: ORCH
+    at: "2026-08-30T02:23:30Z"
+    note: >
+      Queue task 364, GH#710, stage S6. Service catalog core -- DB-backed
+      registry that three already-shipped seams (ServiceScopeValidator,
+      solution_pack.ex, PinResolver) already depend on via an injectable
+      Lookup, plus REQ-069's already-shipped SVC-04 permission surface with
+      no backing subsystem. Notable: this table is GLOBAL (not per-tenant-
+      schema), a deliberate, reasoned divergence from decision 0003 Decision
+      B that requires REVIEWER sign-off in this run.

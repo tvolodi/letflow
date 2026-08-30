@@ -3347,6 +3347,22 @@
       "released_lock": false,
       "last_known_step": "Step 00 (ORCH bookkeeping to main)",
       "note": "Windows-specific test-environment defect filed by a sibling session's RELEASE-VALIDATOR: a Unix-hardcoded wasmex .so/.rs assertion, plus MIX_OS_CONCURRENCY_LOCK hard-link contention between parallel test partitions. This sandbox is Linux; diagnosis via source reading, not literal Windows repro."
+    },
+    {
+      "run_id": "WF02-REQ191-20260830",
+      "requirement_id": "REQ-191",
+      "queue_task_id": 364,
+      "github_issue_number": 710,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/services/",
+        "priv/repo/migrations/"
+      ],
+      "started_at": "2026-08-30T02:23:30Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
+      "note": "Service catalog core -- DB-backed registry three already-shipped seams (ServiceScopeValidator, solution_pack.ex, PinResolver) already depend on via an injectable Lookup, plus REQ-069's already-shipped SVC-04 permission surface. Global (not per-tenant-schema) table -- deliberate divergence from decision 0003 Decision B, needs REVIEWER sign-off."
     }
   ]
 }

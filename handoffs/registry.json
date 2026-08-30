@@ -3438,8 +3438,8 @@
       "started_at": "2026-08-30T10:24:24Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
-      "note": "Second and last of S6's expr half, atop REQ-197's grammar. Adds a function-call form and 8 pure builtins (length, lower, upper, trim, contains, startsWith, endsWith, coalesce), closed-whitelist lex-time design ported from R-Co. now()/date_add/date_diff explicitly excluded. Must not weaken @unsupported_call_markers."
+      "last_known_step": "Step 5 (RELEASE-VALIDATOR: PASS, independently re-verified all 11 ACs -> routed to DOC-UPDATER, step-06)",
+      "note": "Second and last of S6's expr half, atop REQ-197's grammar. Adds a function-call form and 8 pure builtins (length, lower, upper, trim, contains, startsWith, endsWith, coalesce), closed-whitelist lex-time design ported from R-Co. now()/date_add/date_diff explicitly excluded. Must not weaken @unsupported_call_markers. RELEASE-VALIDATOR independently re-ran the full suite (scripts/test_parallel.sh, 2715/2717, same 2 pre-existing rustc-absent CheckToolchainTest failures) and re-checked all 11 ACs against real code -- genuine PASS, see handoffs/WF02-REQ198-20260830/release-validation-report-req198.md."
     }
   ]
 }

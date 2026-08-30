@@ -1,0 +1,85 @@
+{
+  "handoff_id": "step02c-WF02-REQ201-20260830",
+  "run_id": "WF02-REQ201-20260830",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ201-20260830/step-02c-security-reviewer.json",
+  "created_at": "2026-08-30T19:20:00Z",
+  "status": "COMPLETED",
+  "result": {
+    "status": "PASS",
+    "summary": "All INV-1..INV-8 assessed against commit 1142fd86 (git diff main...HEAD -- lib/ priv/ test/). Four invariants APPLY; all pass. No blocking findings.",
+    "invariant_assessments": [
+      {
+        "invariant": "INV-1",
+        "verdict": "APPLIES — PASS",
+        "evidence": {
+          "a_prefix_scoping": "All Repo calls in alerts.ex (Repo.get, Repo.insert, Repo.get_by, Repo.all, Repo.aggregate via Dlq.count_entries) pass `prefix: tenant_schema`. Queries against instance_projections, webhook_subscriptions, dlq_entries, alert_trigger_state, and alert_hook_emission_state all pass the tenant_schema prefix. No Repo call without prefix found.",
+          "b_migration_placement": "20260830020001_create_alert_trigger_state.exs and 20260830020002_create_alert_hook_emission_state.exs both use the `if prefix() do` guard and `prefix: prefix()` on `create table`. Tables land in the per-tenant schema, not public.",
+          "c_tenant_id_derivation": "Neither new table has a tenant_id column (per-tenant schema is the isolation mechanism per Decision 0003 Decision B). No caller-supplied tenant_id accepted. Scoping is entirely from the schema prefix passed by the Poller.",
+          "migration_registration": "Both migrations registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0 at timestamps 20_260_830_020_001 and 20_260_830_020_002. Confirmed in tenant_provisioning.ex diff.",
+          "no_cross_tenant_reads": "Poller iterates schemas via fetch_tenant_schemas/0 (existing path, unchanged) and calls Alerts.build_context_and_detect/3 per-schema. No query touches data from more than one schema per call."
+        }
+      },
+      {
+        "invariant": "INV-2",
+        "verdict": "NOT-APPLICABLE",
+        "reason": "No new API route or response-shaping code. Alert hooks are platform-operator-only, configured through application config. No controller, no route, no plug module added. S4 not started."
+      },
+      {
+        "invariant": "INV-3",
+        "verdict": "NOT-APPLICABLE",
+        "reason": "S5 (scripting/plugins) not started. No Lua/WASM paths touched."
+      },
+      {
+        "invariant": "INV-4",
+        "verdict": "APPLIES — PASS",
+        "evidence": {
+          "secret_never_stored": "auth_secret_ref is a reference string (sec://tenant/<slug>/alert_hook/<name>), not a plaintext credential. It is stored in application config and in AlertHookConfig only as the reference. Letflow.Secrets.resolve/2 is called at delivery time inside resolve_auth_header/1; the resolved plaintext is returned from that function directly into build_headers/1 and used only to construct the Authorization header charlist — it is not stored in any state row, struct field, or log.",
+          "no_plaintext_in_logs": "Logger.error for exhausted delivery (line 471) logs: component, hook_id, trigger_key, attempt_count, last_error. last_error is either 'HTTP {status}: {body_snippet}' or 'transport error: {inspect(reason)}' — no credential. Logger.warning for resolution failure (line 524) logs: component, ref (the reference string, not plaintext). No plaintext appears in any log call.",
+          "no_hardcoded_literals": "Select-String scan for (password|secret|token) followed by a literal value returned no hits in new files. All secret access goes through Secrets.resolve/2.",
+          "no_plaintext_in_state_tables": "alert_trigger_state and alert_hook_emission_state schema definitions (trigger_key, is_armed, sample values, emission keys) contain no credential columns. No auth material is written to either table."
+        }
+      },
+      {
+        "invariant": "INV-5",
+        "verdict": "NOT-APPLICABLE",
+        "reason": "No lookup-by-ID endpoint. S4 not started."
+      },
+      {
+        "invariant": "INV-6",
+        "verdict": "APPLIES — satisfied by this handoff",
+        "evidence": "This SECURITY-REVIEWER handoff exists for the change, status PASS, with explicit per-invariant assessment of INV-1..INV-8. New data-access paths (alert_trigger_state, alert_hook_emission_state, instance_projections read, webhook_subscriptions read, dlq_entries read) are accounted for."
+      },
+      {
+        "invariant": "INV-7",
+        "verdict": "APPLIES — PASS",
+        "evidence": {
+          "no_Repo_query": "Select-String for Repo.query in lib/letflow/obs/ and lib/letflow/dlq.ex returned no hits. No raw SQL escape-hatch used.",
+          "parameterised_fragments": "Two SQL fragments in safe_stuck_instances use the Ecto fragment/2 API with `?` positional placeholders (fragment(\"coalesce(?, '')\", i.error_reason) and fragment(\"floor(extract(epoch from (now() - ?)) / 60)::bigint\", i.updated_at)). Both use bind-parameter syntax — no string interpolation of user-controlled data.",
+          "all_queries_Ecto_macro": "All other queries use from/2, Repo.get, Repo.get_by, Repo.all, Repo.insert, Repo.aggregate — parameterised by construction."
+        }
+      },
+      {
+        "invariant": "INV-8",
+        "verdict": "APPLIES — PASS",
+        "evidence": {
+          "top_level_rescue": "run_detection/2 has a rescue block catching all errors and logging without re-raise. Poller wraps Alerts.build_context_and_detect/3 in try/rescue per schema.",
+          "safe_query_wrappers": "safe_dlq_count/1, safe_stuck_instances/2, and safe_recently_paused_subs/2 each have rescue blocks returning safe defaults (0 and []) on error.",
+          "external_io_with_chains": "resolve_auth_header/1 uses a with chain with an else clause — no bare match on Secrets.resolve/2 or Identity.get_tenant_by_slug/1 return values. deliver_with_retry/4 uses case on :httpc.request/4 with explicit :ok and {:error, reason} branches.",
+          "no_bare_ok_match": "Select-String for {:ok, .*} = in alerts.ex returned no hits. No bare match on external I/O.",
+          "load_trigger_state_nil": "load_trigger_state/2 uses case Repo.get(...) handling nil (first-time row) by returning a fresh ARMED struct — no crash on missing row."
+        }
+      }
+    ],
+    "focused_checks": {
+      "1_repo_calls_prefix_scoped": "PASS. Every Repo call in alerts.ex and the new Dlq.count_entries/1 uses prefix: tenant_schema or prefix: Keyword.fetch!(opts, :prefix). No cross-tenant path found.",
+      "2_auth_secret_ref_no_storage_no_log": "PASS. Plaintext from Secrets.resolve/2 flows directly to build_headers/1 and is never stored in DB, struct field, or any log line. Reference string (not plaintext) is what appears in config, state tables, and the resolution-failure warning log.",
+      "3_destination_url_operator_config_only_no_ssrf": "PASS. destination_url is sourced exclusively from Application.get_env(:letflow, :alert_hooks) in build_hooks/1. No route, API handler, or DB column accepts destination_url from tenant input. Moduledoc and design doc §0.2 both state no route or controller exists. No tenant-controlled SSRF vector.",
+      "4_no_dlq_entries_writes": "PASS. deliver_with_retry/4 exhaustion path calls Logger.error and returns {:error, :exhausted} — no Dlq.enqueue call. fire_hooks/4 and all callers contain no Dlq write. Dlq.count_entries/1 is a read-only Repo.aggregate call. The moduledoc and design §0.1 explicitly prohibit DLQ writes for alert delivery."
+    },
+    "blocking_findings": []
+  }
+}

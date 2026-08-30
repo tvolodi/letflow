@@ -3401,15 +3401,15 @@
       "requirement_id": null,
       "queue_task_id": 378,
       "github_issue_number": 734,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "test/letflow/scheduler/poller_test.exs"
       ],
       "started_at": "2026-08-30T06:51:14Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
-      "note": "REQ-186's own AC7 test (poller_test.exs:340) hardcodes a zero-diff assertion against lib/letflow/application.ex as a repo-wide invariant, breaking on any legitimate future change to that file (first hit by REQ-190's own approved :logger filter registration). Not a REQ-190 regression -- a pre-existing test-design defect from commit 77637268."
+      "lock_released_at": "2026-08-30T07:19:11Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: merged PR #737 to main, queue task 378 released done, GH#734 closed)",
+      "note": "REQ-186's own AC7 test (poller_test.exs:340) hardcodes a zero-diff assertion against lib/letflow/application.ex as a repo-wide invariant, breaking on any legitimate future change to that file (first hit by REQ-190's own approved :logger filter registration). Not a REQ-190 regression -- a pre-existing test-design defect from commit 77637268. Fix: deleted the defective test and its unused helper, corrected a mislabeled describe title, documented the recurrence in docs/anti-patterns.md. PR #737 merged."
     }
   ]
 }

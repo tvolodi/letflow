@@ -1,0 +1,375 @@
+defmodule Letflow.Audit do
+  @moduledoc """
+  Tenant-wide, resource-typed compliance audit trail (REQ-195, OBS-03,
+  XC-02). Records every covered mutation to `audit_entries`
+  (`Letflow.Audit.Entry`) as an immutable, tamper-evident, hash-chained row
+  carrying both the prior and resulting state of the mutation it describes.
+  See `lib/letflow/design/req195-audit-entry-storage.md` for the full design
+  this module implements; this moduledoc restates, in its own words, the
+  three points AC7/AC8/AC10 require the shipped module itself to state.
+
+  ## Capture mechanism: Elixir context-function-boundary, not a Postgres trigger (AC8)
+
+  Two approaches exist for capturing an audit row: (a) a database-level
+  `BEFORE`-trigger on each covered business table, deriving the action name
+  from the row's own status transition and reading the acting user from a
+  Postgres session variable (R-Co's own approach); (b) capturing inside the
+  Elixir context-function boundary that already performs the mutation
+  (`Letflow.Definitions.activate/2`, `Letflow.Engine.cancel_instance/3`,
+  etc.), as one more step in the same transaction as the mutation itself.
+
+  **This module implements (b).**
+
+  *What the trigger approach would buy, and why it isn't worth it here:* a
+  trigger cannot miss a write, no matter what code path reaches the table --
+  a future direct-SQL script or an unrelated bug that bypasses the context
+  module entirely would still be audited. That guarantee costs two things
+  this codebase is not willing to pay for right now: (1) it requires a
+  session-level mechanism (a Postgres `SET LOCAL` GUC or equivalent) to make
+  the acting user's id visible to a trigger function -- a new cross-cutting
+  mechanism this codebase's tenancy decision record has already considered
+  and explicitly deferred, not something this requirement has the authority
+  to introduce unilaterally; and (2) it puts business logic (deriving an
+  `action` string from a status transition) into SQL, in a codebase whose
+  only precedent for "an accompanying side effect must commit or roll back
+  with its own mutation" is `Ecto.Multi` composed inline in the same Elixir
+  module as the mutation -- no migration in this codebase uses `CREATE
+  TRIGGER` for business logic anywhere else.
+
+  *The residual risk this decision accepts:* a write that reaches a covered
+  table through a path that bypasses its owning context module entirely
+  (e.g. a future raw `Repo.insert_all/3`) would not be audited. This mirrors
+  every other cross-cutting side effect this codebase already accepts the
+  same risk for (event emission, webhook dispatch), and is the reason
+  REVIEWER's idiom gate screens future changes to these tables for exactly
+  this class of bypass.
+
+  ## Canonical hashed form (AC7)
+
+  `chain_hash` is the lowercase-hex SHA-256 digest of a canonical string built
+  from exactly these 11 fields, in this exact order, each length-prefixed
+  ("netstring" form: `<decimal-byte-length>:<raw-UTF-8-bytes>`, with no bytes
+  between fields beyond what each field's own encoding contributes):
+
+    1. `id` -- canonical lowercase-hyphenated UUID string. Never NULL.
+    2. `tenant_id` -- canonical UUID string. Never NULL.
+    3. `actor_id` -- canonical UUID string, or the NULL sentinel.
+    4. `action` -- literal string. Never NULL.
+    5. `resource_type` -- literal string. Never NULL.
+    6. `resource_id` -- literal string. Never NULL.
+    7. `timestamp` -- decimal ASCII integer, `DateTime.to_unix(ts, :microsecond)`
+       formatted with `Integer.to_string/1` (microseconds since the Unix
+       epoch, no leading zeros, no sign). Never NULL.
+    8. `before_state` -- canonical JSON string (object keys sorted
+       lexicographically at every nesting level, no insignificant
+       whitespace), or the NULL sentinel when there is no prior state.
+    9. `after_state` -- canonical JSON string, same rules, or the NULL
+       sentinel.
+    10. `trace_id` -- literal string, or the NULL sentinel when absent.
+    11. `prev_chain_hash` -- the previous entry's lowercase-hex `chain_hash`,
+        or the NULL sentinel for the first entry in a tenant's chain.
+
+  A missing/absent optional value (fields 3, 8, 9, 10, 11) is encoded as the
+  fixed 3-byte literal `-1:` -- never as a zero-length field (`0:`, which
+  means "an empty string," a distinct value) and never by omitting the field
+  from the concatenation. `-1` can never be a valid byte length, so this
+  sentinel cannot collide with any real field's own encoding.
+
+  `chain_hash` itself is `Base.encode16(:crypto.hash(:sha256, canonical_string),
+  case: :lower)` -- 64 lowercase hex characters.
+
+  ## Verification recomputes; it does not just check linkage (AC6)
+
+  `verify_chain/2` recomputes each entry's hash from that entry's own
+  currently-stored column values and compares it against the stored
+  `chain_hash` *before* checking that entry's `prev_chain_hash` against the
+  previous entry's own recomputed hash. This is deliberately NOT the R-Co
+  behavior it replaces: R-Co's own chain-verification function reads every
+  content column and then only ever compares `prev_chain_hash` linkage,
+  never recomputing a digest from the content it just read -- so an operator
+  who edits a persisted `after_state` directly (bypassing the application)
+  while leaving both hash columns untouched passes R-Co's check outright.
+  This module's `verify_chain/2` catches exactly that case, immediately, at
+  the tampered entry itself, and reports it as `{:error, {:hash_mismatch,
+  entry_id}}` distinct from `{:error, {:chain_broken, entry_id}}` (a linkage
+  break -- deletion, reordering, or a corrupted `prev_chain_hash`).
+
+  ## `lua_script_execution_audit` is a separate, narrower trail (AC10)
+
+  `lib/letflow/engine/lua_script_audit.ex` (REQ-058/153/158) is a narrow,
+  single-purpose trail for Lua script executions inside `SERVICE_TASK`
+  nodes -- it records an `instance_id`, an executor-reported `manifest_hash`,
+  and an execution outcome, with no `before_state`/`after_state`/chain
+  concept at all. `audit_entries` (this module) is the general, tenant-wide,
+  resource-typed compliance trail covering definition/instance/task/identity
+  mutations. **`Letflow.Audit` does not read, write, call, or get called by
+  `Letflow.Engine.LuaScriptAudit`; `audit_entries` does not replace or
+  absorb `lua_script_execution_audit`,** and no migration in this
+  requirement touches that table.
+  """
+
+  import Ecto.Query
+
+  alias Ecto.Multi
+  alias Letflow.Audit.Entry
+  alias Letflow.Repo
+  alias Letflow.TenantProvisioning
+
+  @type entry_attrs :: %{
+          required(:actor_id) => Ecto.UUID.t() | nil,
+          required(:action) => String.t(),
+          required(:resource_type) => String.t(),
+          required(:resource_id) => String.t(),
+          required(:before_state) => map() | nil,
+          required(:after_state) => map() | nil,
+          optional(:trace_id) => String.t() | nil
+        }
+
+  @doc """
+  Converts an Ecto struct into a plain map suitable for a `before_state`/
+  `after_state` value -- drops `:__meta__` (never JSON-representable) and
+  any caller-named `exclude` fields (e.g. `:password_hash`, `:token_hash` --
+  a credential-bearing column no audit row should ever carry, INV-4). Every
+  covered context function in this codebase builds its `before_state`/
+  `after_state` maps this way rather than passing a raw struct through.
+  """
+  @spec struct_state(struct :: struct(), exclude :: [atom()]) :: map()
+  def struct_state(struct, exclude \\ []) when is_struct(struct) do
+    struct
+    |> Map.from_struct()
+    |> Map.drop([:__meta__ | exclude])
+  end
+
+  @doc """
+  Appends one `Ecto.Multi.run/3` step named `step_name` to `multi`, that
+  inserts one `Letflow.Audit.Entry` row for `attrs`, scoped to the tenant
+  schema named by `prefix`. Placed after the step(s) that perform the actual
+  mutation and before the `Multi` is submitted to `Repo.transaction/1` --
+  a failure here (a changeset error, or any other reason) aborts and rolls
+  back every other step already in `multi` (AC3), via `Ecto.Multi`'s own
+  all-or-nothing transaction semantics.
+  """
+  @spec append_multi(
+          multi :: Multi.t(),
+          step_name :: atom(),
+          attrs :: entry_attrs(),
+          prefix :: String.t()
+        ) ::
+          Multi.t()
+  def append_multi(%Multi{} = multi, step_name, attrs, prefix) when is_atom(step_name) do
+    Multi.run(multi, step_name, fn repo, _changes -> insert_entry(repo, attrs, prefix) end)
+  end
+
+  @doc """
+  Inserts one `Letflow.Audit.Entry` row for `attrs`, scoped to the tenant
+  schema named by `prefix`, using `repo` for every query/insert it issues.
+
+  Takes an explicit `repo` (a module implementing `Ecto.Repo`'s callbacks --
+  in practice `Letflow.Repo` itself, or the `repo` argument an
+  `Ecto.Multi.run/3` step function receives) rather than calling
+  `Letflow.Repo` directly, so this function can be called either as this
+  module's own `append_multi/4` does (inside a caller's already-open
+  `Ecto.Multi`) or directly inside a caller's own `Repo.transaction/1`
+  anonymous function -- both are "the same transaction as the mutation it
+  accompanies" (AC3), just built with different Ecto idioms. Every covered
+  context function in this codebase uses one of these two shapes; see
+  `Letflow.Definitions`, `Letflow.Engine`, `Letflow.Tasks`,
+  `Letflow.Identity` for both call shapes in use.
+
+  Implements the append algorithm (design §3.3): resolves `tenant_id` from
+  `prefix`, fetches the tenant's current chain tail inside this same
+  transaction, computes `chain_hash` per the canonical form (this module's
+  moduledoc §"Canonical hashed form"), and inserts the row.
+  """
+  @spec insert_entry(repo :: module(), attrs :: entry_attrs(), prefix :: String.t()) ::
+          {:ok, Entry.t()} | {:error, term()}
+  def insert_entry(repo, attrs, prefix) when is_map(attrs) and is_binary(prefix) do
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      id = Ecto.UUID.generate()
+      timestamp = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+      prev_chain_hash = fetch_chain_tail(repo, prefix)
+
+      fields = %{
+        id: id,
+        tenant_id: tenant_id,
+        actor_id: Map.get(attrs, :actor_id),
+        action: Map.fetch!(attrs, :action),
+        resource_type: Map.fetch!(attrs, :resource_type),
+        resource_id: Map.fetch!(attrs, :resource_id),
+        timestamp: timestamp,
+        before_state: Map.get(attrs, :before_state),
+        after_state: Map.get(attrs, :after_state),
+        trace_id: Map.get(attrs, :trace_id),
+        prev_chain_hash: prev_chain_hash
+      }
+
+      chain_hash = compute_hash(fields)
+
+      insert_attrs = Map.put(fields, :chain_hash, chain_hash)
+
+      %Entry{}
+      |> Entry.changeset(insert_attrs)
+      |> repo.insert(prefix: prefix)
+    end
+  end
+
+  defp fetch_chain_tail(repo, prefix) do
+    query =
+      from(e in Entry,
+        order_by: [desc: e.timestamp, desc: e.id],
+        limit: 1,
+        select: e.chain_hash
+      )
+
+    repo.one(query, prefix: prefix)
+  end
+
+  @doc """
+  Recomputes and verifies every `audit_entries` row for the tenant named by
+  `prefix` (or, when `opts[:limit]` is a positive integer, the most recent
+  `limit` entries -- verified oldest-first within that window; `:all`, the
+  default, verifies the whole chain).
+
+  Per entry, in append order (`timestamp ASC, id ASC`):
+
+    1. **Recomputes** `chain_hash` from that entry's own currently-stored
+       column values and compares it against the stored `chain_hash`. A
+       mismatch returns `{:error, {:hash_mismatch, entry.id}}` immediately --
+       this is the check R-Co's own chain-verification function never
+       performs (see this module's moduledoc).
+    2. Compares the entry's stored `prev_chain_hash` against the *previous*
+       entry's own just-recomputed `chain_hash` (never that previous entry's
+       stored `prev_chain_hash`) -- so a tampered entry is reported against
+       itself, not deferred to a linkage failure on the entry after it. A
+       mismatch (including a non-nil `prev_chain_hash` on the tenant's first
+       entry, or a nil `prev_chain_hash` on any later entry) returns
+       `{:error, {:chain_broken, entry.id}}`.
+
+  Stops at the first bad entry -- a hash computed over corrupted content has
+  no meaning for verifying anything chained after it.
+  """
+  @spec verify_chain(prefix :: String.t(), opts :: [limit: pos_integer() | :all]) ::
+          {:ok, :valid}
+          | {:error, {:hash_mismatch, entry_id :: Ecto.UUID.t()}}
+          | {:error, {:chain_broken, entry_id :: Ecto.UUID.t()}}
+  def verify_chain(prefix, opts \\ []) when is_binary(prefix) do
+    entries = load_entries_for_verification(prefix, Keyword.get(opts, :limit, :all))
+    do_verify_chain(entries, nil)
+  end
+
+  defp load_entries_for_verification(prefix, :all) do
+    from(e in Entry, order_by: [asc: e.timestamp, asc: e.id])
+    |> Repo.all(prefix: prefix)
+  end
+
+  defp load_entries_for_verification(prefix, limit) when is_integer(limit) and limit > 0 do
+    from(e in Entry, order_by: [desc: e.timestamp, desc: e.id], limit: ^limit)
+    |> Repo.all(prefix: prefix)
+    |> Enum.reverse()
+  end
+
+  defp do_verify_chain([], _prev_recomputed_hash), do: {:ok, :valid}
+
+  defp do_verify_chain([%Entry{} = entry | rest], prev_recomputed_hash) do
+    recomputed = compute_hash(fields_from_entry(entry))
+
+    cond do
+      recomputed != entry.chain_hash ->
+        {:error, {:hash_mismatch, entry.id}}
+
+      entry.prev_chain_hash != prev_recomputed_hash ->
+        {:error, {:chain_broken, entry.id}}
+
+      true ->
+        do_verify_chain(rest, recomputed)
+    end
+  end
+
+  defp fields_from_entry(%Entry{} = entry) do
+    %{
+      id: entry.id,
+      tenant_id: entry.tenant_id,
+      actor_id: entry.actor_id,
+      action: entry.action,
+      resource_type: entry.resource_type,
+      resource_id: entry.resource_id,
+      timestamp: entry.timestamp,
+      before_state: entry.before_state,
+      after_state: entry.after_state,
+      trace_id: entry.trace_id,
+      prev_chain_hash: entry.prev_chain_hash
+    }
+  end
+
+  # -----------------------------------------------------------------------
+  # Canonical hashed form (design §5) -- shared by insert_entry/3 (over
+  # pre-insert field values) and do_verify_chain/2 (over a stored Entry's
+  # own currently-persisted field values). Both call sites build the same
+  # `fields` shape first (see fields_from_entry/1 above), so this is the
+  # single implementation of the canonical form -- there is no second,
+  # independently-drifting copy.
+  # -----------------------------------------------------------------------
+
+  defp compute_hash(fields) do
+    fields
+    |> canonical_string()
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
+  end
+
+  defp canonical_string(fields) do
+    [
+      netstring_required(uuid_string(fields.id)),
+      netstring_required(uuid_string(fields.tenant_id)),
+      netstring_optional(optional_uuid_string(fields.actor_id)),
+      netstring_required(fields.action),
+      netstring_required(fields.resource_type),
+      netstring_required(fields.resource_id),
+      netstring_required(Integer.to_string(DateTime.to_unix(fields.timestamp, :microsecond))),
+      netstring_optional(canonical_json_or_nil(fields.before_state)),
+      netstring_optional(canonical_json_or_nil(fields.after_state)),
+      netstring_optional(fields.trace_id),
+      netstring_optional(fields.prev_chain_hash)
+    ]
+    |> IO.iodata_to_binary()
+  end
+
+  defp uuid_string(uuid) when is_binary(uuid), do: uuid
+
+  defp optional_uuid_string(nil), do: nil
+  defp optional_uuid_string(uuid) when is_binary(uuid), do: uuid
+
+  defp canonical_json_or_nil(nil), do: nil
+  defp canonical_json_or_nil(map) when is_map(map), do: Jason.encode!(canonicalize(map))
+
+  # Recursively rebuilds every map as a Jason.OrderedObject whose keys are
+  # sorted lexicographically (byte-wise ascending), at every nesting level --
+  # design §5.2. Lists are mapped over (order preserved -- JSON arrays are
+  # already order-significant). Every other value is already
+  # JSON-representable as-is (these maps are built only from allowlisted
+  # struct fields, never arbitrary Elixir terms -- design §3.2).
+  # Struct values (DateTime, NaiveDateTime, Decimal, ...) are left as-is --
+  # `is_map/1` is true for a struct too, but a struct's own field order is
+  # not "object key order" in the JSON sense (Jason.Encoder renders it as a
+  # scalar/string, e.g. DateTime -> its ISO-8601 string), so it must not be
+  # recursed into as if it were a plain map. This clause must come before the
+  # plain-map clause below.
+  defp canonicalize(%_struct_module{} = struct), do: struct
+
+  defp canonicalize(map) when is_map(map) do
+    map
+    |> Enum.map(fn {k, v} -> {to_string(k), canonicalize(v)} end)
+    |> Enum.sort_by(fn {k, _v} -> k end)
+    |> Jason.OrderedObject.new()
+  end
+
+  defp canonicalize(list) when is_list(list), do: Enum.map(list, &canonicalize/1)
+  defp canonicalize(other), do: other
+
+  defp netstring_required(value) when is_binary(value) do
+    "#{byte_size(value)}:#{value}"
+  end
+
+  defp netstring_optional(nil), do: "-1:"
+  defp netstring_optional(value) when is_binary(value), do: netstring_required(value)
+end

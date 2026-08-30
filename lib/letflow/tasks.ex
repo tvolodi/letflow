@@ -123,6 +123,7 @@ defmodule Letflow.Tasks do
   import Ecto.Query
 
   alias Ecto.Multi
+  alias Letflow.Audit
   alias Letflow.Api.Pagination
   alias Letflow.Definitions.InstanceDefinitionSnapshot
   alias Letflow.Engine.Task
@@ -508,9 +509,39 @@ defmodule Letflow.Tasks do
           %Task{} -> {:error, :already_assigned}
         end
       end)
+      |> Multi.merge(fn changes -> record_task_assign_audit(changes, prefix) end)
       |> Repo.transaction()
       |> unwrap_write_result()
     end
+  end
+
+  # REQ-195 -- design §3.2's per-operation table claims `attrs.actor_id` is
+  # "already an explicit, required field of assign_attrs"; verified against
+  # this module's own `@type assign_attrs :: %{required(:user_id) =>
+  # String.t()}` above and this function's body, that claim does not hold --
+  # only `claim_attrs` (`claim_task/3`) carries `actor_id`, `assign_attrs`
+  # does not. No actor context reaches this function today, and widening
+  # `assign_attrs`/this function's signature to add one would need a
+  # corresponding caller edit in lib/letflow/routers/tasks.ex, which this
+  # requirement's own AC11 forbids (same class of gap as §3.1a/§3.1b) --
+  # actor_id: nil. Flagged here rather than silently implemented as if the
+  # design's claim were correct; see this requirement's SECURITY-REVIEWER
+  # handoff for the explicit callout.
+  defp record_task_assign_audit(%{task: before, apply: updated}, prefix) do
+    Audit.append_multi(
+      Multi.new(),
+      :audit,
+      %{
+        actor_id: nil,
+        action: "task.assign",
+        resource_type: "task",
+        resource_id: before.id,
+        before_state: Audit.struct_state(before),
+        after_state: Audit.struct_state(updated),
+        trace_id: nil
+      },
+      prefix
+    )
   end
 
   @type reassign_attrs :: %{required(:user_id) => String.t()}

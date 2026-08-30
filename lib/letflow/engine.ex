@@ -339,6 +339,7 @@ defmodule Letflow.Engine do
   require Logger
 
   alias Ecto.Multi
+  alias Letflow.Audit
   alias Letflow.Definitions
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.SnapshotStore
@@ -1036,6 +1037,9 @@ defmodule Letflow.Engine do
         instance_id
       )
     end)
+    |> Multi.merge(fn changes ->
+      record_instance_create_audit(changes, instance_id, attrs, prefix)
+    end)
     |> Repo.transaction()
     |> maybe_snapshot_after_create(instance_id, new_instance_state, prefix)
     |> interpret_create_result(
@@ -1044,6 +1048,31 @@ defmodule Letflow.Engine do
       new_instance_state.status,
       current_node_ids,
       initial_variables
+    )
+  end
+
+  # REQ-195 -- create/2's own actor_id (attrs[:actor_id], already an
+  # explicit, required argument -- Letflow.Routers.Instances.handle_create/1
+  # sources it from conn.assigns.auth_context.user_id) is a real, non-nil
+  # value, unlike Definitions' lifecycle functions. after_state is the
+  # :finalize step's own resulting InstanceProjection row -- reusing that
+  # already-fetched struct rather than a second independent read.
+  defp record_instance_create_audit(changes, instance_id, attrs, prefix) do
+    finalized = Map.fetch!(changes, :finalize)
+
+    Audit.append_multi(
+      Multi.new(),
+      :audit,
+      %{
+        actor_id: Map.get(attrs, :actor_id),
+        action: "instance.create",
+        resource_type: "instance",
+        resource_id: instance_id,
+        before_state: nil,
+        after_state: Audit.struct_state(finalized),
+        trace_id: nil
+      },
+      prefix
     )
   end
 
@@ -2408,6 +2437,9 @@ defmodule Letflow.Engine do
         prefix
       )
     end)
+    |> Multi.merge(fn changes ->
+      record_task_complete_audit(normalized_changes.task, changes, actor_id, prefix)
+    end)
     |> Multi.run(:event, fn _repo, _changes ->
       append_task_completed_event(
         normalized_changes,
@@ -2638,6 +2670,30 @@ defmodule Letflow.Engine do
   # M8 -- flips the tasks row to COMPLETED (design doc §8, table row M8).
   # output_variables here is the caller's original, unmerged map -- the
   # task's own record of what it submitted.
+  # REQ-195 -- complete_task/3's own actor_id (attrs[:actor_id], already an
+  # explicit, required argument) is real, non-nil. `before_task` is the
+  # pre-complete row (`normalized_changes.task`, fetched+locked earlier in
+  # this same Multi); `changes.task_complete` is the post-complete row
+  # `:task_complete` just produced.
+  defp record_task_complete_audit(before_task, changes, actor_id, prefix) do
+    updated = Map.fetch!(changes, :task_complete)
+
+    Audit.append_multi(
+      Multi.new(),
+      :audit,
+      %{
+        actor_id: actor_id,
+        action: "task.complete",
+        resource_type: "task",
+        resource_id: before_task.id,
+        before_state: Audit.struct_state(before_task),
+        after_state: Audit.struct_state(updated),
+        trace_id: nil
+      },
+      prefix
+    )
+  end
+
   defp complete_task_row(repo, %Task{} = task, actor_id, output_variables, completed_at, prefix) do
     attrs = %{
       status: :completed,
@@ -2933,8 +2989,36 @@ defmodule Letflow.Engine do
     |> Multi.run(:projection, fn repo, %{instance_projection: projection} ->
       cancel_instance_projection(repo, projection, cancelled_at, prefix)
     end)
+    |> Multi.merge(fn changes ->
+      record_instance_cancel_audit(changes, instance_id, actor_id, prefix)
+    end)
     |> Repo.transaction()
     |> interpret_cancel_result(instance_id, cancelled_at)
+  end
+
+  # REQ-195 -- cancel_instance/3's own actor_id (attrs[:actor_id], already an
+  # explicit, required argument) is real, non-nil. before_state is the
+  # pre-cancel row (:instance_projection, fetched+locked earlier in this
+  # same Multi); after_state is the post-cancel row this Multi's own
+  # :projection step just produced.
+  defp record_instance_cancel_audit(changes, instance_id, actor_id, prefix) do
+    before = Map.fetch!(changes, :instance_projection)
+    updated = Map.fetch!(changes, :projection)
+
+    Audit.append_multi(
+      Multi.new(),
+      :audit,
+      %{
+        actor_id: actor_id,
+        action: "instance.cancel",
+        resource_type: "instance",
+        resource_id: instance_id,
+        before_state: Audit.struct_state(before),
+        after_state: Audit.struct_state(updated),
+        trace_id: nil
+      },
+      prefix
+    )
   end
 
   # M1 -- row-lock + fetch every open (:pending) tasks row for this instance,

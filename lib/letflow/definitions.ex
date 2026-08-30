@@ -125,6 +125,7 @@ defmodule Letflow.Definitions do
 
   alias Ecto.Multi
   alias Letflow.Api.Pagination
+  alias Letflow.Audit
   alias Letflow.Definitions.DefinitionSequence
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.JsonSchemaShape
@@ -1825,8 +1826,20 @@ defmodule Letflow.Definitions do
             |> case do
               {:ok, %ProcessDefinition{id: id}} ->
                 case Repo.get(ProcessDefinition, id, prefix: prefix) do
-                  %ProcessDefinition{} = found -> found
-                  nil -> Repo.rollback(:duplicate_name_version)
+                  %ProcessDefinition{} = found ->
+                    case record_definition_audit(
+                           "definition.create",
+                           found.id,
+                           nil,
+                           found,
+                           prefix
+                         ) do
+                      {:ok, _entry} -> found
+                      {:error, reason} -> Repo.rollback(reason)
+                    end
+
+                  nil ->
+                    Repo.rollback(:duplicate_name_version)
                 end
 
               {:error, %Ecto.Changeset{} = changeset} ->
@@ -1846,6 +1859,37 @@ defmodule Letflow.Definitions do
       exception -> {:error, {:transaction_failed, exception}}
     end
   end
+
+  # REQ-195 -- actor_id is nil for every Definitions lifecycle audit row
+  # (create/activate/deprecate/archive): none of these four functions'
+  # `opts()`/`activate_opts()` carries an actor_id field today, and the one
+  # channel that could supply a real one (conn.assigns.auth_context.user_id)
+  # is read only inside lib/letflow/routers/definitions.ex, which this
+  # requirement's own AC11 forbids touching -- see
+  # lib/letflow/design/req195-audit-entry-storage.md §3.1a. Called from
+  # inside each function's own Repo.transaction/1 anonymous function, so a
+  # failed insert (`{:error, reason}`) rolls back via `Repo.rollback/1` at
+  # each call site, same-transaction guarantee (AC3).
+  defp record_definition_audit(action, definition_id, before, after_, prefix) do
+    Audit.insert_entry(
+      Repo,
+      %{
+        actor_id: nil,
+        action: action,
+        resource_type: "definition",
+        resource_id: definition_id,
+        before_state: definition_audit_state(before),
+        after_state: definition_audit_state(after_),
+        trace_id: nil
+      },
+      prefix
+    )
+  end
+
+  defp definition_audit_state(nil), do: nil
+
+  defp definition_audit_state(%ProcessDefinition{} = definition),
+    do: Audit.struct_state(definition)
 
   # -----------------------------------------------------------------------------------
   # get_by_id/2 helper
@@ -2257,7 +2301,7 @@ defmodule Letflow.Definitions do
   # Repo.transaction/1 -- Repo.rollback/1 here aborts that whole transaction,
   # so both this row's writes AND any already-assigned sequence numbers are
   # discarded together on a locking failure.
-  defp activate_draft(%ProcessDefinition{id: id, name: name}, prefix, tenant_id) do
+  defp activate_draft(%ProcessDefinition{name: name} = draft, prefix, tenant_id) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
     case assign_definition_sequence(tenant_id, prefix) do
@@ -2270,14 +2314,18 @@ defmodule Letflow.Definitions do
           prefix: prefix
         )
 
-        activate_draft_row(id, prefix, tenant_id, now)
+        activate_draft_row(draft, prefix, tenant_id, now)
 
       {:error, reason} ->
         Repo.rollback(reason)
     end
   end
 
-  defp activate_draft_row(id, prefix, tenant_id, now) do
+  # REQ-195 -- `draft` (the pre-activation row, already fetched/locked by
+  # run_activate_transaction/4) is this audit row's before_state; `updated`
+  # (the now-ACTIVE row) is its after_state. actor_id: nil, see
+  # record_definition_audit/5's own comment.
+  defp activate_draft_row(%ProcessDefinition{id: id} = draft, prefix, tenant_id, now) do
     case assign_definition_sequence(tenant_id, prefix) do
       {:ok, activate_seq} ->
         {1, [updated]} =
@@ -2289,7 +2337,10 @@ defmodule Letflow.Definitions do
             prefix: prefix
           )
 
-        {:activated, updated}
+        case record_definition_audit("definition.activate", id, draft, updated, prefix) do
+          {:ok, _entry} -> {:activated, updated}
+          {:error, reason} -> Repo.rollback(reason)
+        end
 
       {:error, reason} ->
         Repo.rollback(reason)
@@ -2346,10 +2397,14 @@ defmodule Letflow.Definitions do
   # rejected transition.
   defp run_transition(id, prefix, tenant_id, from_status, to_status) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    action = transition_action(to_status)
 
     Repo.transaction(fn ->
       case assign_definition_sequence(tenant_id, prefix) do
         {:ok, seq} ->
+          # REQ-195 -- fetched before the update, inside this same
+          # transaction, as this audit row's before_state.
+          before = Repo.get(ProcessDefinition, id, prefix: prefix)
           set = transition_set(to_status, now, seq)
 
           ProcessDefinition
@@ -2357,8 +2412,14 @@ defmodule Letflow.Definitions do
           |> select([d], d)
           |> Repo.update_all([set: set], prefix: prefix)
           |> case do
-            {1, [updated]} -> updated
-            {0, _count_and_rows} -> fallback_lookup(id, prefix)
+            {1, [updated]} ->
+              case record_definition_audit(action, id, before, updated, prefix) do
+                {:ok, _entry} -> updated
+                {:error, reason} -> Repo.rollback(reason)
+              end
+
+            {0, _count_and_rows} ->
+              fallback_lookup(id, prefix)
           end
 
         {:error, reason} ->
@@ -2366,6 +2427,9 @@ defmodule Letflow.Definitions do
       end
     end)
   end
+
+  defp transition_action(:deprecated), do: "definition.deprecate"
+  defp transition_action(:archived), do: "definition.archive"
 
   defp transition_set(:archived, now, seq),
     do: [status: :archived, updated_at: now, archived_at: now, sequence_number: seq]

@@ -58,8 +58,10 @@ defmodule Letflow.Identity do
 
   require Logger
 
+  alias Ecto.Multi
   alias Letflow.Api.Authorization
   alias Letflow.Api.Pagination
+  alias Letflow.Audit
   alias Letflow.Identity.ApiToken
   alias Letflow.Identity.Group
   alias Letflow.Identity.GroupMember
@@ -219,16 +221,46 @@ defmodule Letflow.Identity do
     prefix = Keyword.fetch!(opts, :prefix)
     changeset = User.create_changeset(%User{}, attrs)
 
-    case Repo.insert(changeset, prefix: prefix) do
-      {:ok, user} ->
+    # REQ-195 -- actor_id: nil, per
+    # lib/letflow/design/req195-audit-entry-storage.md §3.1b: create_user/2
+    # takes only opts :: opts() (prefix-only), and its only caller
+    # (lib/letflow/routers/identity.ex) doesn't read any actor-identifying
+    # assign today -- widening either would require editing that router,
+    # which this requirement's own AC11 forbids. Wrapped in Ecto.Multi here
+    # specifically to get the same-transaction guarantee (AC3) -- this
+    # function had no transaction of its own before this requirement.
+    Multi.new()
+    |> Multi.insert(:user, changeset, prefix: prefix)
+    |> Multi.merge(fn %{user: user} ->
+      Audit.append_multi(
+        Multi.new(),
+        :audit,
+        %{
+          actor_id: nil,
+          action: "user.create",
+          resource_type: "user",
+          resource_id: user.id,
+          before_state: nil,
+          after_state: Audit.struct_state(user, [:password_hash]),
+          trace_id: nil
+        },
+        prefix
+      )
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{user: user}} ->
         {:ok, user}
 
-      {:error, %Ecto.Changeset{} = changeset} ->
+      {:error, :user, %Ecto.Changeset{} = changeset, _changes} ->
         if username_unique_conflict?(changeset) do
           {:error, :duplicate_username}
         else
           {:error, changeset}
         end
+
+      {:error, :audit, reason, _changes} ->
+        {:error, reason}
     end
   end
 
@@ -296,9 +328,33 @@ defmodule Letflow.Identity do
         {:error, :not_found}
 
       %User{} = user ->
-        user
-        |> User.profile_changeset(attrs)
-        |> Repo.update(prefix: prefix)
+        # REQ-195 -- actor_id: nil, §3.1b (same disposition/reasoning as
+        # create_user/2 above). Wrapped in Ecto.Multi for the
+        # same-transaction guarantee (AC3).
+        Multi.new()
+        |> Multi.update(:user, User.profile_changeset(user, attrs), prefix: prefix)
+        |> Multi.merge(fn %{user: updated} ->
+          Audit.append_multi(
+            Multi.new(),
+            :audit,
+            %{
+              actor_id: nil,
+              action: "user.update_profile",
+              resource_type: "user",
+              resource_id: updated.id,
+              before_state: Audit.struct_state(user, [:password_hash]),
+              after_state: Audit.struct_state(updated, [:password_hash]),
+              trace_id: nil
+            },
+            prefix
+          )
+        end)
+        |> Repo.transaction()
+        |> case do
+          {:ok, %{user: updated}} -> {:ok, updated}
+          {:error, :user, reason, _changes} -> {:error, reason}
+          {:error, :audit, reason, _changes} -> {:error, reason}
+        end
     end
   end
 
@@ -317,9 +373,33 @@ defmodule Letflow.Identity do
         {:error, :not_found}
 
       %User{} = user ->
-        user
-        |> User.status_changeset(%{status: status})
-        |> Repo.update(prefix: prefix)
+        # REQ-195 -- actor_id: nil, §3.1b (same disposition/reasoning as
+        # create_user/2 above). Wrapped in Ecto.Multi for the
+        # same-transaction guarantee (AC3).
+        Multi.new()
+        |> Multi.update(:user, User.status_changeset(user, %{status: status}), prefix: prefix)
+        |> Multi.merge(fn %{user: updated} ->
+          Audit.append_multi(
+            Multi.new(),
+            :audit,
+            %{
+              actor_id: nil,
+              action: "user.update_status",
+              resource_type: "user",
+              resource_id: updated.id,
+              before_state: Audit.struct_state(user, [:password_hash]),
+              after_state: Audit.struct_state(updated, [:password_hash]),
+              trace_id: nil
+            },
+            prefix
+          )
+        end)
+        |> Repo.transaction()
+        |> case do
+          {:ok, %{user: updated}} -> {:ok, updated}
+          {:error, :user, reason, _changes} -> {:error, reason}
+          {:error, :audit, reason, _changes} -> {:error, reason}
+        end
     end
   end
 
@@ -348,16 +428,41 @@ defmodule Letflow.Identity do
     prefix = Keyword.fetch!(opts, :prefix)
     changeset = Group.create_changeset(%Group{}, attrs)
 
-    case Repo.insert(changeset, prefix: prefix) do
-      {:ok, group} ->
+    # REQ-195 -- actor_id: nil, §3.1b (same disposition/reasoning as
+    # create_user/2 above). Wrapped in Ecto.Multi for the same-transaction
+    # guarantee (AC3).
+    Multi.new()
+    |> Multi.insert(:group, changeset, prefix: prefix)
+    |> Multi.merge(fn %{group: group} ->
+      Audit.append_multi(
+        Multi.new(),
+        :audit,
+        %{
+          actor_id: nil,
+          action: "group.create",
+          resource_type: "group",
+          resource_id: group.id,
+          before_state: nil,
+          after_state: Audit.struct_state(group),
+          trace_id: nil
+        },
+        prefix
+      )
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{group: group}} ->
         {:ok, group}
 
-      {:error, %Ecto.Changeset{} = changeset} ->
+      {:error, :group, %Ecto.Changeset{} = changeset, _changes} ->
         if group_name_unique_conflict?(changeset) do
           {:error, :duplicate_group_name}
         else
           {:error, changeset}
         end
+
+      {:error, :audit, reason, _changes} ->
+        {:error, reason}
     end
   end
 
@@ -888,9 +993,34 @@ defmodule Letflow.Identity do
         expires_at: Map.get(attrs, :expires_at)
       })
 
-    case Repo.insert(changeset, prefix: prefix) do
-      {:ok, token} -> {:ok, %{token: token, plaintext: plaintext}}
-      {:error, %Ecto.Changeset{}} = error -> error
+    # REQ-195 -- actor_id: nil, §3.1b (same disposition/reasoning as
+    # create_user/2 above). Wrapped in Ecto.Multi for the same-transaction
+    # guarantee (AC3). after_state excludes token_hash (INV-4 -- a hash is
+    # still a credential-adjacent secret with no audit value); the plaintext
+    # itself is never captured anywhere, per ApiToken's own moduledoc.
+    Multi.new()
+    |> Multi.insert(:token, changeset, prefix: prefix)
+    |> Multi.merge(fn %{token: token} ->
+      Audit.append_multi(
+        Multi.new(),
+        :audit,
+        %{
+          actor_id: nil,
+          action: "token.create",
+          resource_type: "api_token",
+          resource_id: token.id,
+          before_state: nil,
+          after_state: Audit.struct_state(token, [:token_hash]),
+          trace_id: nil
+        },
+        prefix
+      )
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{token: token}} -> {:ok, %{token: token, plaintext: plaintext}}
+      {:error, :token, %Ecto.Changeset{} = changeset, _changes} -> {:error, changeset}
+      {:error, :audit, reason, _changes} -> {:error, reason}
     end
   end
 
@@ -939,9 +1069,36 @@ defmodule Letflow.Identity do
       %ApiToken{} = token ->
         now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-        token
-        |> ApiToken.revoke_changeset(%{revoked_at: now})
-        |> Repo.update(prefix: prefix)
+        # REQ-195 -- actor_id: nil, §3.1b (same disposition/reasoning as
+        # create_user/2 above). Wrapped in Ecto.Multi for the
+        # same-transaction guarantee (AC3). before_state/after_state both
+        # exclude token_hash (INV-4).
+        Multi.new()
+        |> Multi.update(:token, ApiToken.revoke_changeset(token, %{revoked_at: now}),
+          prefix: prefix
+        )
+        |> Multi.merge(fn %{token: updated} ->
+          Audit.append_multi(
+            Multi.new(),
+            :audit,
+            %{
+              actor_id: nil,
+              action: "token.revoke",
+              resource_type: "api_token",
+              resource_id: updated.id,
+              before_state: Audit.struct_state(token, [:token_hash]),
+              after_state: Audit.struct_state(updated, [:token_hash]),
+              trace_id: nil
+            },
+            prefix
+          )
+        end)
+        |> Repo.transaction()
+        |> case do
+          {:ok, %{token: updated}} -> {:ok, updated}
+          {:error, :token, reason, _changes} -> {:error, reason}
+          {:error, :audit, reason, _changes} -> {:error, reason}
+        end
     end
   end
 

@@ -1,0 +1,73 @@
+{
+  "handoff_id": "step02d-WF02-REQ202-20260830",
+  "run_id": "WF02-REQ202-20260830",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ202-20260830/step-02d-reviewer.json",
+  "status": "FAILED",
+  "completed_at": "2026-08-30T23:10:00Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-202"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ202-20260830/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ202-20260830/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req202-artifact-repository.md",
+      "lib/letflow/repository.ex",
+      "lib/letflow/repository/artifact.ex",
+      "lib/letflow/repository/artifact_version.ex",
+      "lib/letflow/repository/canonicaliser.ex",
+      "priv/repo/migrations/20260830030001_create_repository_artifacts.exs",
+      "lib/letflow/definitions/promotion_digest.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/api/pagination.ex"
+    ],
+    "branch_name": "feature/WF02-REQ202-20260830"
+  },
+  "task": {
+    "description": "WF-02 Step 2d hard gate: idiomatic OTP/Ecto usage, supervision integrity, scope creep, and decision-record consistency for ELIXIR-DEV's REQ-202 implementation, following SECURITY-REVIEWER's PASS at Step 2c.",
+    "acceptance_criteria": [
+      "Idiomatic Ecto: schema/changeset conventions, transaction+retry correctness for create/2 (design §4.4)",
+      "No scope creep beyond design §2/3/4/5/6/7/8",
+      "Decision-record consistency: per-tenant placement (design §1) does not contradict 0003-ecto-schema-strategy.md",
+      "Canonicaliser.ex / promotion_digest.ex moduledoc cross-references genuinely substantive (design §3.2)",
+      "No dead-default-arg pattern in new helper functions",
+      "Supervision: confirm no process/GenServer needed or introduced",
+      "OQ-1/OQ-3/OQ-4 decisions reasonable and documented"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Everything outside the two public-function @specs is clean and idiomatic: PASS on Ecto/changeset conventions, the transaction+row-lock+retry design for create/2 (an idiomatic and arguably stronger implementation of design §4.4's contract -- SELECT ... FOR UPDATE plus unique-constraint retry, not merely optimistic retry), the per-tenant placement decision (consistent with 0003-B, no sign-off needed, reasoning holds), the Canonicaliser/PromotionDigest moduledoc cross-references (read side by side -- both state the same concrete fact: which module normalizes numbers and why merging would break INV-PRM-5/verify_digest, not a vague mutual mention), scope discipline (no route/controller/web change, no REQ-203 activation logic, git diff --stat confirms), supervision (no process needed and none introduced -- correct, this is a pure Ecto context), and OQ-1/OQ-3/OQ-4 (all reasonable, all documented in the relevant moduledocs). BLOCKING DEFECT found in lib/letflow/repository.ex: both public functions' @spec error unions are incomplete or wrong against their own actual runtime behavior, which is a real Elixir-idiom/correctness defect (Dialyzer-detectable, and exactly the class of untyped-error-path issue INV-8 cares about), not a stylistic nitpick.",
+    "findings_pass": [
+      "create/2's transaction (Repo.transaction/1 wrapping upsert_content/5 + next_version/3 + Repo.insert/2) plus SELECT ... FOR UPDATE row lock on the (artifact_kind, artifact_name) latest row, with unique-constraint-triggered retry up to @max_create_retries -- this is the design §4.4 contract, implemented more defensively than the design's own 'read-max, insert, retry-on-conflict' minimum (the row lock avoids the retry path entirely for the common case; the unique index remains the correctness backstop for the first-version race a row lock can't cover, matching repository.ex's own doc comment lines 87-91).",
+      "Ecto schema/changeset conventions match Letflow.Audit / PromotionDigest siblings: structural insert-only changesets, @primary_key overrides stated explicitly (content_hash non-autogenerate binary PK; version_id autogenerate binary_id PK), unique_constraint/2 wired to the actual migration index name.",
+      "Canonicaliser.ex moduledoc (lines 8-29) and promotion_digest.ex's added section (9-line addition) genuinely cross-reference in substance: both state the same two concrete facts (PromotionDigest does not normalize numbers; Canonicaliser does; merging breaks verify_digest/INV-PRM-5 for already-stored digests) rather than a vague mutual 'see also'. AC5 clause (iii) satisfied as CODE-DESIGN-VALIDATOR's resolved OQ-2 reading required.",
+      "Migration comment (top of 20260830030001_create_repository_artifacts.exs) satisfies AC10 at the migration-file level exactly as design §2 requires; Artifact's moduledoc separately carries the AC11 migration-058-vs-045 shape-conflict statement -- the two distinct moduledoc/migration-comment obligations are not conflated.",
+      "No route/controller/web/ file touched (git diff --stat confirmed clean of lib/letflow_web and web/); no REQ-203 (artifact_activations) table, function, or reference anywhere in the diff -- scope held to design §2-8 exactly.",
+      "No GenServer/gen_statem/spawn/Supervisor touched by this diff -- correct: this requirement is a pure Ecto context, no process needed, none introduced.",
+      "Single default arg found (list_versions/4's opts \\\\ []) -- not dead: this module has no callers yet in this diff (TEST-DESIGNER supplies the first ones), so there is nothing to check it against yet; not the ISS-class dead-default-arg bug (that requires an actual call site already passing the value explicitly).",
+      "OQ-1 (fractional float -> Jason default encoder), OQ-3 (exact-match \"application/json\" only), OQ-4 (server-generated artifact_id, minted on first sight of the (kind, name) pair) are all reasonable choices and are documented in Canonicaliser's and ArtifactVersion's moduledocs respectively, per design §9's requirement that these be recorded rather than silently picked."
+    ],
+    "findings_fail": [
+      "lib/letflow/repository.ex:97-100 -- create/2's @spec declares only `{:error, :invalid_json} | {:error, Ecto.Changeset.t()}` as error returns. Two more error atoms are real, reachable runtime returns not covered by the spec: (1) `{:error, :invalid_schema_name}` -- create/2's own `with` chain (line 106) calls `TenantProvisioning.tenant_id_for_schema_name(prefix)`, which returns `{:error, :invalid_schema_name}` on a malformed prefix (tenant_provisioning.ex:208) and propagates straight out of the `with` block unmapped; (2) `{:error, :version_number_conflict}` -- `create_with_retries/7`'s zero-retries-left clause (repository.ex:122-124) returns this literal atom after 5 failed attempts, and it is returned directly by create/2 with no re-mapping. Both are real return values of a function whose spec claims they cannot occur.",
+      "lib/letflow/repository.ex:233-243 -- list_versions/4's @spec has the same class of defect, twice: (1) the `with` chain's first clause (line 246) also calls `TenantProvisioning.tenant_id_for_schema_name(prefix)`, so `{:error, :invalid_schema_name}` is reachable here too and is entirely absent from the @spec's error union (240-243 lists only :invalid_page_size, :wrong_endpoint, :expired, :invalid_cursor); (2) line 240's `{:error, :invalid_page_size}` names an atom that does not exist anywhere in Letflow.Api.Pagination -- `Pagination.validate_page_size/1` (lib/letflow/api/pagination.ex:144-155) returns `{:error, :page_size_too_large}`, not `:invalid_page_size`, and that atom passes through list_versions/4's `with` chain unchanged. The @spec names the wrong atom outright, not merely an incomplete union.",
+      "Why this blocks: this is not a hypothetical dialyzer nag. Both functions are the entire public surface TEST-DESIGNER must write specs and tests against at Step 3, and a wrong/incomplete @spec is exactly the kind of documented-contract-vs-actual-behavior mismatch that produces an unhandled-case crash at a caller who pattern-matches exhaustively against what the spec says is possible (the same failure class INV-8 gates on, just one layer up from where SECURITY-REVIEWER looked -- SECURITY-REVIEWER's INV-8 check confirmed the internal case/with chains are exhaustive against each other, which is true; it did not check the @spec against the underlying library's actual return atoms). Left as-is, TEST-DESIGNER would plausibly design a test asserting `{:error, :invalid_page_size}` for an out-of-range page size, which would fail against the real `{:error, :page_size_too_large}` atom, and would have no design guidance at all to write a schema-name-validation-error test since that path isn't documented in either @spec."
+    ],
+    "issues": [
+      "lib/letflow/repository.ex:97-100 -- add `{:error, :invalid_schema_name}` and `{:error, :version_number_conflict}` to create/2's @spec error union; add one sentence to the @doc explaining the retries-exhausted case and what a caller should do (retry the whole call, since this indicates sustained write contention on one (artifact_kind, artifact_name) pair, not a permanent failure).",
+      "lib/letflow/repository.ex:233-243 -- fix `{:error, :invalid_page_size}` to the real atom `{:error, :page_size_too_large}` (matching Letflow.Api.Pagination.validate_page_size/1's actual return, pagination.ex:144-145), and add `{:error, :invalid_schema_name}` to the error union for the same reason as create/2.",
+      "No design-document rework needed -- this is purely an ELIXIR-DEV implementation-level @spec-accuracy defect, not a design gap; the design's §4.1/§6 signatures did not enumerate these error atoms either, but the design explicitly leaves error-shape mechanics to Step 2a (§4.4's own text: 'this design fixes the contract... not the loop's exact code shape'), so this is squarely ELIXIR-DEV's fix, not a rework of lib/letflow/design/req202-artifact-repository.md."
+    ],
+    "artifacts_out": [],
+    "next_action": "Return to ELIXIR-DEV to correct both @spec error unions in lib/letflow/repository.ex per the two issues above, then re-route through Step 2d (REVIEWER) for re-check before TEST-DESIGNER starts Step 3. SECURITY-REVIEWER's Step 2c PASS does not need to be re-run for this fix (no tenant-data-path/query/trigger logic changes -- @spec/@doc only)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

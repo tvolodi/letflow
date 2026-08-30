@@ -110,15 +110,28 @@ defmodule Letflow.Repo.Migrations.CreateRepositoryArtifacts do
         timestamps(updated_at: false)
       end
 
+      # Explicit, short, distinct names for both indexes below: Ecto's
+      # default index-naming derives a name from the column list alone and
+      # strips `desc:` annotations when doing so, so the unique_index/3 and
+      # index/3 calls that follow would otherwise both generate the SAME
+      # 66-byte name (`artifact_versions_artifact_kind_artifact_name_version_number_index`)
+      # -- which both collides between the two indexes AND exceeds
+      # Postgres's 63-byte NAMEDATALEN limit (silently truncated), the
+      # latter also breaking `Letflow.Repository.ArtifactVersion.changeset/2`'s
+      # `unique_constraint/3` name match (design §4.4's concurrency-retry
+      # contract). Both names below are given explicitly and kept well
+      # under 63 bytes so neither problem can recur.
       create unique_index(
                :artifact_versions,
                [:artifact_kind, :artifact_name, :version_number],
+               name: :artifact_versions_kind_name_number_idx,
                prefix: schema
              )
 
       create index(
                :artifact_versions,
                [:artifact_kind, :artifact_name, desc: :version_number],
+               name: :artifact_versions_kind_name_number_desc_idx,
                prefix: schema
              )
 

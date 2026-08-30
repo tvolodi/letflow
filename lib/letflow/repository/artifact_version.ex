@@ -93,7 +93,15 @@ defmodule Letflow.Repository.ArtifactVersion do
     :description
   ]
 
-  @unique_version_number_constraint_name :artifact_versions_artifact_kind_artifact_name_version_number_index
+  # Must match the explicit `:name` given to `unique_index/3` in
+  # `priv/repo/migrations/20260830030001_create_repository_artifacts.exs`
+  # exactly -- Ecto's own default-generated name for this column list is 66
+  # bytes, over Postgres's 63-byte NAMEDATALEN limit, so Postgres silently
+  # truncates the real constraint name; an untruncated name here would never
+  # match what a real unique-violation is actually raised against, and
+  # `unique_constraint/3`'s error-catching (design §4.4's concurrency-retry
+  # contract) would never fire.
+  @unique_version_number_constraint_name :artifact_versions_kind_name_number_idx
 
   @doc """
   Structural insert changeset -- `Letflow.Repository.create/2` supplies

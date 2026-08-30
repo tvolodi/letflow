@@ -3538,7 +3538,7 @@
       "started_at": "2026-08-30T19:48:48Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 3b (TEST-DESIGN-VALIDATOR) rework-1 recheck PASSED -- original review found all 9 ACs genuinely covered and all 4 applied mutations correctly caught, sole gap was a whitespace-only mix format --check-formatted failure on one wrapped get_audit(...) call, fixed directly by ORCH (commit 617d409e) and independently re-verified (format clean repo-wide, 71/71 tests passing, git diff confirmed whitespace-only, compile/lint clean). Routed to TEST-RUNNER (step-04).",
+      "last_known_step": "Step 4 (TEST-RUNNER) ran the full suite via scripts/test_parallel.sh (real Postgres, real asdf toolchain): 2822 tests, 6 properties, 2 failures (2826/2828 passed). Both failures are Mix.Tasks.Letflow.CheckToolchainTest's rust-pin tests, a documented rustc-absent environment-baseline flake (rustc not on PATH in this sandbox) -- same flake class RELEASE-VALIDATOR already documented on REQ-195. Failing file is untouched by REQ-196's diff. Routed to RELEASE-VALIDATOR (step-05).",
       "note": "Route half of the audit split atop REQ-195's audit_entries store. Repoints GET /api/v1/audit's handler from EventStore.read_global/1 to the new store, preserving response envelope and :AuditRead permission. Retires audit.ex's own documented caveats (constant resource_type, always-null before/after state). No schema/authorization.ex/web/ changes."
     }
   ]

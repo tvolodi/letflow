@@ -7,9 +7,9 @@
   "to_agent": "TEST-RUNNER",
   "file": "handoffs/WF02-REQ196-20260830/step-04-test-runner.json",
   "created_at": "2026-08-30T20:40:00Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-08-30T20:39:45Z",
+  "completed_at": "2026-08-30T20:55:00Z",
+  "status": "DONE",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -40,5 +40,17 @@
       "Route to RELEASE-VALIDATOR once satisfied, or back to the appropriate agent with a specific defect if not"
     ]
   },
-  "result": null
+  "result": {
+    "outcome": "PASS_WITH_DOCUMENTED_FLAKE",
+    "combined_counts": "combined: 2822 tests, 6 properties, 2 failures (2826/2828 passed)",
+    "per_partition": "partition 1: 321 tests, 2 properties, 2 failures, exit 2; partitions 2-8: 0 failures each (375/482/404/361/376/256/247 tests)",
+    "failures": [
+      "Mix.Tasks.Letflow.CheckToolchainTest \"rust pin (REQ-165) a matching rust pin reports OK with no mismatch\" -- System.cmd(\"rustc\", ...) :enoent, rustc not on PATH in this sandbox",
+      "Mix.Tasks.Letflow.CheckToolchainTest \"rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running\" -- same :enoent cause"
+    ],
+    "diagnosis": "Documented rustc-absent CheckToolchainTest baseline flake class. .tool-versions pins rust 1.97.1 but the asdf rust plugin/version is not actually installed in this container (which rustc exits 1), unlike elixir/erlang which resolved to real asdf shims. Both failing tests assert `rustc` must be on PATH as a stated precondition and fail during the shell-out itself, before any application assertion runs. File test/mix/tasks/letflow_check_toolchain_test.exs is not in REQ-196's diff (git diff main...HEAD --stat, 19 files, confirmed) -- unrelated to this branch's changes.",
+    "full_report": "handoffs/WF02-REQ196-20260830/test-run-report-20260830.md",
+    "routed_to": "RELEASE-VALIDATOR",
+    "routing_handoff": "handoffs/WF02-REQ196-20260830/step-05-release-validator.json"
+  }
 }

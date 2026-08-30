@@ -166,3 +166,31 @@
 # 40 entries. It never moves, edits or deletes an existing entry.
 
 history:
+  - req: REQ-192
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T06:20:17Z"
+    note: >
+      WF02-REQ192-20260830 done (queue task 365, GH#711, stage S6). Service
+      catalog route surface shipped atop REQ-191's core: GET /api/v1/services
+      (tenant-scoped, :ServicesRead) and GET/POST/PATCH/DELETE
+      /api/v1/admin/services (:AdminServicesRead/:AdminServicesManage), with
+      the new Letflow.ServiceCatalog.list_all/1 added to REQ-191's already-
+      merged context module to resolve a genuine INV-RT-1 conflict (no
+      Repo-querying from a router), REVIEWER-signed-off rather than silently
+      decided. Path: 2 CODE-DESIGNER/CODE-DESIGN-VALIDATOR rework rounds
+      settling that scope expansion, 1 TEST-DESIGN-VALIDATOR rework round
+      fixing a fixture-sizing bug (commit 09402cd6). RELEASE-VALIDATOR
+      independently re-verified all 10 acceptance criteria (own re-run of
+      test/letflow/service_catalog_test.exs + test/letflow/routers/
+      admin_services_test.exs at 39/39, own scripts/test_parallel.sh run at
+      2610/2612 with only the pre-existing rustc-absent baseline gap, own
+      grep confirming zero live-code Repo. matches under lib/letflow/routers/,
+      own git diff --stat confirming authorization.ex and web/ untouched) and
+      PASSED. This closes S6's repository half's route layer: REQ-191 (core)
+      and REQ-192 (routes) are both done. This entry was moved from volume 6
+      to volume 7 during Step Final rebase composition (ORCH), since volume 6
+      was concurrently closed/frozen by a sibling session's WF02-REQ190
+      Step Final before this branch rebased -- no entry in volume 6 was
+      moved, edited or deleted, this REQ-192 done-event simply never
+      landed there and lands here instead.

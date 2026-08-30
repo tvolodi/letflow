@@ -66,6 +66,8 @@ defmodule Letflow.Plugs.ApiPipeline do
   forward("/metrics", to: Letflow.Routers.Metrics)
   forward("/dlq", to: Letflow.Routers.Dlq)
   forward("/webhooks", to: Letflow.Routers.Webhooks)
+  forward("/services", to: Letflow.Routers.Services)
+  forward("/admin/services", to: Letflow.Routers.AdminServices)
 
   match _ do
     Letflow.Api.Response.not_found(conn)

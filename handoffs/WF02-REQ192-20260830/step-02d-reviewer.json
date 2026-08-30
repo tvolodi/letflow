@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ192-20260830-step02d",
+  "run_id": "WF02-REQ192-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 2d",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "lib/letflow/routers/admin_services.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "SECURITY-REVIEWER Step 2c re-review of rework iteration 2 PASSED. Full report: handoffs/WF02-REQ192-20260830/req192-security-review-iteration2.md. This step is REVIEWER's idiom/scope/decision-record gate on the same diff -- two items are explicitly flagged for your independent sign-off below, neither decided by SECURITY-REVIEWER.",
+    "security_review_summary": "AGREE that the router-level authorization gate (GET /admin/services -> :AdminServicesRead -> :UsersGroupsRolesManage -> PLATFORM_ADMIN-only, enforced by Letflow.Plugs.Authorize running unconditionally before :dispatch in Letflow.Api.AuthorizedRouter's plug pipeline) is a sufficient and correctly-scoped substitute for Letflow.ServiceCatalog.list_all/1's complete, by-design lack of tenant/scope filtering at the data layer. Verified independently by reading lib/letflow/api/authorization.ex's endpoint_policy_key/2, required_permission/1, and all five role_allows?/2 clauses directly, plus lib/letflow/api/authorized_router.ex's plug pipeline and lib/letflow/plugs/authorize.ex. INV-9 cursor isolation (SC: vs SCA: prefixes via Letflow.Api.Pagination.check_prefix/2) confirmed enforced, not aspirational. No data leakage found in error paths or response shaping. INV-1/4/6/7/8 and INV-RT-1 all PASS -- full detail in the report file.",
+    "flagged_for_reviewer_decision_1": "Scope expansion: Letflow.ServiceCatalog.list_all/1 was added to the already-merged REQ-191 context module (lib/letflow/service_catalog.ex), despite REQ-192's own requirement text stating 'no context-module change.' This was necessitated by a hard conflict between the original iteration-1 design (a router-local Ecto.Query against Entry) and INV-RT-1 (test/letflow/routers/req078_supporting_routes_test.exs's hard, allowlist-free 'no Repo. call under lib/letflow/routers/' invariant) -- the design was revised rather than an INV-RT-1 exception carved out. See lib/letflow/design/req192-service-catalog-routes.md §5 for the full reasoning and lib/letflow/service_catalog.ex's own moduledoc/list_all doc for the implementation. This is an architectural layering judgment call outside SECURITY-REVIEWER's remit -- needs your independent AGREE/DISAGREE.",
+    "flagged_for_reviewer_decision_2": "Internal signature change: list_for_tenant/2's two private helpers changed arity to share code safely with list_all/1 -- split_list_page/2 -> split_list_page/3 and build_list_next_cursor/1 -> build_list_next_cursor/2, both now taking an explicit cursor-prefix argument instead of a hardcoded 'SC:' literal. SECURITY-REVIEWER independently confirmed list_for_tenant/2's own public name, arity (/2), and where-clause (lib/letflow/service_catalog.ex line 274, e.scope == :global or e.owner_tenant_id == ^tenant_id) are byte-for-byte unchanged, and no external caller of list_for_tenant/2 is affected since only its two already-private helpers changed. Flagged so REVIEWER can independently confirm this refactor is idiomatic and doesn't introduce hidden coupling, per your own remit (not a security question).",
+    "unchanged_from_prior_review": "lib/letflow/routers/services.ex, lib/letflow/api/error.ex's two new constructors, lib/letflow/plugs/api_pipeline.ex's two new forward/2 mounts, and test/letflow/api/authorization_enforcement_test.exs's additions are unmodified since the iteration-1 security review and are not re-flagged here."
+  },
+  "task": {
+    "description": "Idiom/scope/decision-record review of REQ-192's rework-iteration-2 diff (lib/letflow/routers/admin_services.ex's rewrite, lib/letflow/service_catalog.ex's new list_all/1 and helper-arity refactor, plus the unchanged-since-iteration-1 surface named above). Render an explicit AGREE/DISAGREE on both flagged decisions per your role file.",
+    "acceptance_criteria": [
+      "Explicit AGREE or DISAGREE recorded on the list_all/1 scope-expansion-beyond-stated-requirement-text question",
+      "Explicit AGREE or DISAGREE recorded on the split_list_page/build_list_next_cursor arity-change refactor being idiomatic and non-leaky",
+      "Standard REVIEWER checks (OTP idiom, supervision integrity, scope creep, decision-record consistency) run against the full diff",
+      "If PASS: route to TEST-DESIGNER per WF-02 Step 3"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

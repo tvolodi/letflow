@@ -106,6 +106,7 @@ defmodule Letflow.ServiceCatalog do
   alias Letflow.Api.Pagination
 
   @list_cursor_prefix "SC:"
+  @list_all_cursor_prefix "SCA:"
 
   # ===========================================================================
   # register/1 (design §3.1)
@@ -276,7 +277,7 @@ defmodule Letflow.ServiceCatalog do
         |> limit(^(page_size + 1))
 
       rows = Repo.all(query)
-      {page, next_cursor} = split_list_page(rows, page_size)
+      {page, next_cursor} = split_list_page(rows, page_size, @list_cursor_prefix)
 
       {:ok, %{items: page, next_cursor: next_cursor}}
     end
@@ -296,33 +297,111 @@ defmodule Letflow.ServiceCatalog do
 
   defp decode_list_cursor(raw) when is_binary(raw) do
     case Pagination.decode_cursor(raw, @list_cursor_prefix, byte_size(@list_cursor_prefix)) do
-      {:ok, %Pagination.Cursor{} = cursor} -> {:ok, decode_seek(cursor)}
+      {:ok, %Pagination.Cursor{} = cursor} -> {:ok, decode_seek(cursor, @list_cursor_prefix)}
       {:error, :wrong_endpoint} -> {:error, :wrong_endpoint}
       {:error, :expired} -> {:error, :expired}
       {:error, _invalid_base64_or_invalid_cursor} -> {:error, :invalid_cursor}
     end
   end
 
-  defp decode_seek(%Pagination.Cursor{inner: inner}) do
-    prefix_len = byte_size(@list_cursor_prefix)
+  defp decode_seek(%Pagination.Cursor{inner: inner}, prefix) do
+    prefix_len = byte_size(prefix)
     rest = binary_part(inner, prefix_len, byte_size(inner) - prefix_len)
     [ts_str, service_id] = String.split(rest, ":", parts: 2)
     {String.to_integer(ts_str), service_id}
   end
 
-  defp split_list_page(rows, page_size) when length(rows) > page_size do
+  # `prefix` is threaded through here (rather than each caller building its
+  # own cursor after the fact) so `list_for_tenant/2` and `list_all/1` can
+  # genuinely share this function's body verbatim while still minting a
+  # cursor tagged with the calling function's own endpoint prefix (INV-9) --
+  # a shared helper that silently hardcoded one prefix would mis-tag the
+  # other endpoint's cursors.
+  defp split_list_page(rows, page_size, prefix) when length(rows) > page_size do
     {page, [_extra_row]} = Enum.split(rows, page_size)
-    {page, build_list_next_cursor(List.last(page))}
+    {page, build_list_next_cursor(List.last(page), prefix)}
   end
 
-  defp split_list_page(rows, _page_size), do: {rows, nil}
+  defp split_list_page(rows, _page_size, _prefix), do: {rows, nil}
 
-  defp build_list_next_cursor(%Entry{service_id: service_id, created_at: created_at}) do
+  defp build_list_next_cursor(%Entry{service_id: service_id, created_at: created_at}, prefix) do
     created_at_us = DateTime.to_unix(created_at, :microsecond)
 
-    @list_cursor_prefix
+    prefix
     |> Pagination.build_raw_cursor(created_at_us, service_id)
     |> Pagination.encode_cursor()
+  end
+
+  # ===========================================================================
+  # list_all/1 (design req192-service-catalog-routes.md §5, rework iteration 2)
+  # ===========================================================================
+
+  @doc """
+  Cursor-paginated listing of **every** `service_catalog` row, with **no**
+  tenant or scope filtering whatsoever — unlike `list_for_tenant/2`, this
+  function performs no visibility check at all. It exists solely to back
+  `Letflow.Routers.AdminServices`'s `GET /admin/services` handler, a
+  `PLATFORM_ADMIN`-only route (`Letflow.Api.Authorization`'s
+  `:AdminServicesRead`/`:UsersGroupsRolesManage` mapping); this module has
+  never enforced authorization (per this moduledoc's "SVC-04 permissions"
+  section) and does not start here — **the caller is entirely responsible
+  for ensuring only an authorized admin path ever calls this function.**
+
+  Added as a deliberate, REVIEWER-flagged scope expansion beyond REQ-192's
+  original "no context-module change" note — see
+  `lib/letflow/design/req192-service-catalog-routes.md` §5 for the full
+  reasoning (a hard conflict between that note and `INV-RT-1`, REQ-078's
+  "no `Repo.` call under `lib/letflow/routers/`" invariant).
+
+  Otherwise identical in shape to `list_for_tenant/2`: same `list_params()`
+  input, same result shape, same ordering
+  (`(created_at DESC, service_id DESC)`), same `page_size + 1`-fetch/
+  drop-the-extra-row idiom, and reuses `filter_by_list_cursor/2`/
+  `split_list_page/2` verbatim (both are already tenant-agnostic). Uses its
+  own cursor prefix, `"SCA:"`, distinct from `list_for_tenant/2`'s `"SC:"` —
+  a cursor minted by one is rejected with `{:error, :wrong_endpoint}` if
+  replayed against the other (INV-9 cross-endpoint cursor isolation,
+  `Letflow.Api.Pagination.decode_cursor/3`'s `check_prefix/2`).
+
+  `list_for_tenant/2` itself is entirely unchanged by this addition — same
+  name, arity, body, and `where` clause.
+  """
+  @spec list_all(list_params()) ::
+          {:ok, %{items: [Entry.t()], next_cursor: String.t() | nil}}
+          | {:error, :invalid_cursor | :wrong_endpoint | :expired}
+  def list_all(params) when is_map(params) do
+    page_size = Map.fetch!(params, :page_size)
+
+    with {:ok, cursor_seek} <- decode_list_all_cursor(Map.get(params, :cursor)) do
+      query =
+        Entry
+        |> filter_by_list_cursor(cursor_seek)
+        |> order_by([e], desc: e.created_at, desc: e.service_id)
+        |> limit(^(page_size + 1))
+
+      rows = Repo.all(query)
+      {page, next_cursor} = split_list_page(rows, page_size, @list_all_cursor_prefix)
+
+      {:ok, %{items: page, next_cursor: next_cursor}}
+    end
+  end
+
+  @spec decode_list_all_cursor(String.t() | nil) ::
+          {:ok, {non_neg_integer(), String.t()} | nil}
+          | {:error, :invalid_cursor | :wrong_endpoint | :expired}
+  defp decode_list_all_cursor(nil), do: {:ok, nil}
+
+  defp decode_list_all_cursor(raw) when is_binary(raw) do
+    case Pagination.decode_cursor(
+           raw,
+           @list_all_cursor_prefix,
+           byte_size(@list_all_cursor_prefix)
+         ) do
+      {:ok, %Pagination.Cursor{} = cursor} -> {:ok, decode_seek(cursor, @list_all_cursor_prefix)}
+      {:error, :wrong_endpoint} -> {:error, :wrong_endpoint}
+      {:error, :expired} -> {:error, :expired}
+      {:error, _invalid_base64_or_invalid_cursor} -> {:error, :invalid_cursor}
+    end
   end
 
   # ===========================================================================

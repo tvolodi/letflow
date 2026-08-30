@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ192-20260830-step03b-test-design-validator-recheck1",
+  "run_id": "WF02-REQ192-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 3b",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "test/letflow/service_catalog_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "recheck_scope_note": "This is a rework-1 RECHECK, not a fresh review. TEST-DESIGN-VALIDATOR's prior FAIL (handoffs/WF02-REQ192-20260830/test-design-validation-report-req192-list-all.md and the previous version of this same step-03b file) already PASSED scope-narrowing, router-idiom-check, fixture-isolation, and the mutation check -- none of that needs to be re-derived. The ONLY thing that changed and needs re-checking is the single fixture-sizing defect it identified.",
+    "fix_applied": "test/letflow/service_catalog_test.exs, describe \"REQ-192 list_all/1 <-> list_for_tenant/2: SCA:/SC: cursor cross-endpoint isolation (INV-9)\", test \"SCA: is not merely a longer match of SC: -- an SC:-prefixed cursor never accidentally satisfies list_all/1's own prefix check\" (was line ~724, now ~731 after the edit): changed from a single `register!(%{scope: :global})` call to two calls, mirroring the two sibling tests in the same describe block (lines 695-708 and 710-722) which already register 2 rows before minting a cursor with `page_size: 1`. This forces `ServiceCatalog.list_for_tenant(%{page_size: 1}, tenant.id)` to return a non-nil `next_cursor`, so `Base.url_decode64!(sc_cursor, padding: false)` no longer crashes with FunctionClauseError. No other line in the test, and no other test in either file, was touched.",
+    "real_test_run_after_fix": "source ~/.asdf/asdf.sh && mix test test/letflow/service_catalog_test.exs test/letflow/routers/admin_services_test.exs -> 'Finished in 7.9 seconds (0.00s async, 7.9s sync)' / 'Result: 39 passed' (0 failures). Also ran `mix test test/letflow/service_catalog_test.exs:731` (the previously-crashing test) in isolation to confirm the specific fix: it now passes on its own, not just as part of the full suite.",
+    "compile_check": "source ~/.asdf/asdf.sh && mix compile --warnings-as-errors -> exits clean with no output (no warnings, no errors).",
+    "diff_scope": "git diff confirms exactly one file changed (test/letflow/service_catalog_test.exs), exactly one line added (a second `register!(%{scope: :global})` call inside the one named test). No production code (lib/) touched, no other test touched, no fixture helper touched."
+  },
+  "task": {
+    "description": "Re-check ONLY the fixture-sizing fix identified in the prior FAIL. Confirm: (1) the previously-crashing test now runs and passes, both standalone and as part of the full two-file suite; (2) the fix is the minimal one specified (mirrors sibling tests, registers a second row, nothing else changed); (3) the full two-file suite is 39/39 passed for real; (4) no other file was touched. Do not re-derive the scope-narrowing, router-idiom, fixture-isolation, or mutation-check findings from the prior pass -- those already PASSED and are unaffected by this change.",
+    "acceptance_criteria": [
+      "test/letflow/service_catalog_test.exs's previously-failing 'SCA: is not merely a longer match of SC:' test now passes in isolation and in the full run",
+      "mix test test/letflow/service_catalog_test.exs test/letflow/routers/admin_services_test.exs reports 39 passed, 0 failed, with real quoted output",
+      "mix compile --warnings-as-errors passes clean",
+      "git diff shows only the single-line fixture-sizing fix in test/letflow/service_catalog_test.exs -- no other file changed"
+    ]
+  },
+  "result": null,
+  "rework_count": 1,
+  "max_rework": 3
+}

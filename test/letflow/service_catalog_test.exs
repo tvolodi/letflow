@@ -638,6 +638,144 @@ defmodule Letflow.ServiceCatalogTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # REQ-192 -- Letflow.ServiceCatalog.list_all/1 (added by REQ-192, design
+  # req192-service-catalog-routes.md §5). These tests were NOT part of the
+  # original REQ-191 acceptance criteria above (AC1-AC11); they cover only
+  # the new list_all/1 function's own behavior, added here rather than in a
+  # separate file since list_all/1 lives in this same module and this file
+  # already carries the fixture helpers (insert_tenant!/register!) it needs.
+  # list_for_tenant/2 itself is untouched and not re-tested here.
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-192 list_all/1: cross-tenant visibility, no tenant/scope filtering" do
+    test "returns rows across multiple tenants and the global scope in one call -- none filtered out" do
+      tenant_a = insert_tenant!("req192-list-all-a")
+      tenant_b = insert_tenant!("req192-list-all-b")
+
+      global_entry = register!(%{scope: :global})
+      entry_a = register!(%{scope: :tenant, owner_tenant_id: tenant_a.id})
+      entry_b = register!(%{scope: :tenant, owner_tenant_id: tenant_b.id})
+
+      assert {:ok, %{items: items}} = ServiceCatalog.list_all(%{page_size: 200})
+      ids = Enum.map(items, & &1.service_id)
+
+      # The core behavior distinguishing list_all/1 from list_for_tenant/2:
+      # tenant_a's own row, tenant_b's own row, AND the global row are all
+      # present in a single unfiltered call -- no `tenant_id` argument exists
+      # to narrow this result at all.
+      assert global_entry.service_id in ids
+      assert entry_a.service_id in ids
+      assert entry_b.service_id in ids
+    end
+
+    test "a row list_for_tenant/2 would hide from a given tenant is nonetheless present via list_all/1 -- the actual behavioral difference, not just 'also sees global rows'" do
+      tenant_a = insert_tenant!("req192-list-all-diff-a")
+      tenant_b = insert_tenant!("req192-list-all-diff-b")
+      entry_b = register!(%{scope: :tenant, owner_tenant_id: tenant_b.id})
+
+      assert {:ok, %{items: tenant_a_items}} =
+               ServiceCatalog.list_for_tenant(%{page_size: 200}, tenant_a.id)
+
+      refute entry_b.service_id in Enum.map(tenant_a_items, & &1.service_id)
+
+      assert {:ok, %{items: all_items}} = ServiceCatalog.list_all(%{page_size: 200})
+      assert entry_b.service_id in Enum.map(all_items, & &1.service_id)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-192 -- list_all/1 vs list_for_tenant/2: SCA:/SC: cross-endpoint cursor
+  # isolation (INV-9, Letflow.Api.Pagination.decode_cursor/4's check_prefix/2).
+  # A cursor minted by one function must be structurally unusable against the
+  # other -- this is the concrete, testable expression of "two functions, two
+  # cursor prefixes, never interchangeable" from design §5.
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-192 list_all/1 <-> list_for_tenant/2: SCA:/SC: cursor cross-endpoint isolation (INV-9)" do
+    test "a cursor minted by list_for_tenant/2 (SC: prefix) is rejected by list_all/1 with {:error, :wrong_endpoint}" do
+      tenant = insert_tenant!()
+      register!(%{scope: :global})
+      register!(%{scope: :global})
+
+      assert {:ok, %{next_cursor: sc_cursor}} =
+               ServiceCatalog.list_for_tenant(%{page_size: 1}, tenant.id)
+
+      assert is_binary(sc_cursor)
+      assert String.starts_with?(Base.url_decode64!(sc_cursor, padding: false), "SC:")
+
+      assert {:error, :wrong_endpoint} =
+               ServiceCatalog.list_all(%{page_size: 1, cursor: sc_cursor})
+    end
+
+    test "a cursor minted by list_all/1 (SCA: prefix) is rejected by list_for_tenant/2 with {:error, :wrong_endpoint}" do
+      tenant = insert_tenant!()
+      register!(%{scope: :global})
+      register!(%{scope: :global})
+
+      assert {:ok, %{next_cursor: sca_cursor}} = ServiceCatalog.list_all(%{page_size: 1})
+
+      assert is_binary(sca_cursor)
+      assert String.starts_with?(Base.url_decode64!(sca_cursor, padding: false), "SCA:")
+
+      assert {:error, :wrong_endpoint} =
+               ServiceCatalog.list_for_tenant(%{page_size: 1, cursor: sca_cursor}, tenant.id)
+    end
+
+    test "SCA: is not merely a longer match of SC: -- an SC:-prefixed cursor never accidentally satisfies list_all/1's own prefix check" do
+      # Guards against a regression where @list_all_cursor_prefix and
+      # @list_cursor_prefix accidentally shared a common prefix relationship
+      # (e.g. if list_all/1 had been given "S:" and list_for_tenant/2 "SC:",
+      # a naive `starts_with?` check could misfire in one direction). With
+      # the real prefixes ("SC:" vs "SCA:") neither is a prefix of the
+      # other, so both cross-checks above must independently fail closed.
+      tenant = insert_tenant!()
+      register!(%{scope: :global})
+      register!(%{scope: :global})
+
+      assert {:ok, %{next_cursor: sc_cursor}} =
+               ServiceCatalog.list_for_tenant(%{page_size: 1}, tenant.id)
+
+      refute String.starts_with?(Base.url_decode64!(sc_cursor, padding: false), "SCA:")
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-192 -- list_all/1 standard pagination correctness: next_cursor set
+  # when more rows remain, nil once exhausted. Mirrors the page_size+1-fetch/
+  # drop-the-extra-row idiom list_all/1 shares with list_for_tenant/2
+  # (service_catalog.ex's split_list_page/3).
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-192 list_all/1 pagination correctness" do
+    test "next_cursor is non-nil while more rows remain, and nil on the final page" do
+      entries = for _ <- 1..3, do: register!(%{scope: :global})
+      expected_ids = entries |> Enum.map(& &1.service_id) |> Enum.sort()
+
+      assert {:ok, %{items: page1, next_cursor: cursor1}} =
+               ServiceCatalog.list_all(%{page_size: 2})
+
+      assert length(page1) == 2
+      assert is_binary(cursor1)
+
+      assert {:ok, %{items: page2, next_cursor: cursor2}} =
+               ServiceCatalog.list_all(%{page_size: 2, cursor: cursor1})
+
+      assert length(page2) == 1
+      assert cursor2 == nil
+
+      all_ids = (page1 ++ page2) |> Enum.map(& &1.service_id) |> Enum.sort()
+      assert all_ids == expected_ids
+    end
+
+    test "next_cursor is nil on the first page when the full result set fits within page_size" do
+      entry = register!(%{scope: :global})
+
+      assert {:ok, %{items: items, next_cursor: nil}} = ServiceCatalog.list_all(%{page_size: 200})
+      assert entry.service_id in Enum.map(items, & &1.service_id)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # AC11 -- no route/controller file added or modified (structural, no git
   # history dependency: confirms the routers directory carries nothing named
   # for this catalog, independent of when it was added).

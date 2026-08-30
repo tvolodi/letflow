@@ -110,12 +110,15 @@ an injectable/stub port) until the owning stage lands.
 | `agent_artifacts.zig` | 562 | runtime-agent subsystem | post-S6 |
 | `sandbox_access.zig` | 181 | runtime-agent subsystem (guard module extracted from `agent_sandboxes.zig`, which is its only consumer; exports no `handle*`, so there is no route to port without it) | post-S6 |
 
-**Update (2026-08-30, REQ-191 done):** the `services.zig` row's "Missing
-backing" is now half-stale. `service_catalog` (REPO-07/SVC-01/SVC-03) has
-shipped as `Letflow.ServiceCatalog` — schema, migration and context module,
-no route yet. `REQ-192` (the HTTP route layer, SVC-04) is the one remaining
-piece; `services.zig`'s route surface is still unported until it lands. See
-`requirement_status.v6.yaml`'s REQ-191 `done` entry for gate results.
+**Update (2026-08-30, REQ-191 and REQ-192 done):** the `services.zig` row is
+now fully ported. `service_catalog` (REPO-07/SVC-01/SVC-03) shipped as
+`Letflow.ServiceCatalog` — schema, migration and context module (REQ-191) —
+and its HTTP route layer (SVC-04) shipped as `Letflow.Routers.Services` and
+`Letflow.Routers.AdminServices` (REQ-192): `GET /api/v1/services`
+(tenant-scoped) and `GET/POST/PATCH/DELETE /api/v1/admin/services`
+(platform-admin-only). `services.zig`'s 417-line route surface is fully
+unported now. See `requirement_status.v6.yaml`'s REQ-191 and REQ-192 `done`
+entries for gate results.
 
 The three `agent_*.zig` routes (and `sandbox_access.zig`, a guard module
 extracted from `agent_sandboxes.zig` and imported by nothing else) are

@@ -1,0 +1,33 @@
+{
+  "handoff_id": "WF02-REQ192-20260830-step01b-recheck2",
+  "run_id": "WF02-REQ192-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 1b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req192-service-catalog-routes.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "NOT a normal Step 1b recheck of a CODE-DESIGN-VALIDATOR FAIL -- this is rework iteration 2/3, requested after the design (already PASSed twice: iteration 1's fix commit c53d9e36, and this run's prior step-01b-recheck1 record, both preserved in git history) reached ELIXIR-DEV at Step 2a and implementation surfaced a real, previously-unknown blocker. Full situation: implementing section 5 exactly as approved (Letflow.Routers.AdminServices's GET / querying Letflow.ServiceCatalog.Entry directly via Letflow.Repo, bypassing Letflow.ServiceCatalog) causes an EXISTING, unrelated-requirement test to fail -- test/letflow/routers/req078_supporting_routes_test.exs:720, 'T-19: no Repo. call anywhere under lib/letflow/routers/ (INV-RT-1)', a static Path.wildcard-based grep assertion with assert offenders == [] and zero allowlist/exception mechanism. INV-RT-1 is a named, REVIEWER-approved invariant from REQ-078's own design (lib/letflow/design/req078-supporting-routes.md sections 3.3/20.3), still load-bearing per test/specs/REQ-078.md. Full discovery record: handoffs/WF02-REQ192-20260830/elixir-dev-inv-rt-1-conflict.md (ELIXIR-DEV's notes) and handoffs/WF02-REQ192-20260830/step-02c-security-reviewer.json (SECURITY-REVIEWER's review, which flagged the conflict rather than silently resolving it). CODE-DESIGNER's resolution: section 5 is rewritten in full (old text explicitly marked 'Superseded' rather than deleted, so the prior reasoning stays visible) to specify a new, minimal, additive Letflow.ServiceCatalog.list_all/1 function -- mirroring list_for_tenant/2's own signature/body/cursor-pagination shape exactly, but with the tenant/scope where-clause omitted entirely, and its own cursor-prefix constant (\"SCA:\" vs list_for_tenant/2's existing \"SC:\") for INV-9 cross-endpoint isolation. Letflow.Routers.AdminServices's GET / handler now simply calls Letflow.ServiceCatalog.list_all(params) -- no Repo, no Ecto.Query, no Entry alias anywhere in the router, satisfying INV-RT-1 by construction. This touches Letflow.ServiceCatalog itself, which the original requirement text's 'NOT IN THIS REQUIREMENT' note said was out of scope -- section 5 (and the revised top-of-file scope statement, and section 14, and OQ-1 in section 15) now states explicitly why this is a smaller, more defensible scope expansion than the previous router-layering-violation design (INV-RT-1 is a repo-wide, REVIEWER-approved, test-enforced invariant from a sibling requirement; the 'no context-module change' note was this requirement's own scope-sizing choice, not a structural freeze on Letflow.ServiceCatalog), and flags it explicitly for REVIEWER sign-off rather than treating it as pre-authorized. INV-RT-1 itself and req078_supporting_routes_test.exs are UNTOUCHED by this design -- CODE-DESIGNER did not attempt to carve out an allowlist exception to a different requirement's invariant, per elixir-dev.md's/code-designer.md's own 'do not silently re-decide a decision record or prior REVIEWER sign-off' rule. Diff is scoped to lib/letflow/design/req192-service-catalog-routes.md only (section 5 rewritten, plus small consistency edits to the top-of-file scope paragraph, section 14's out-of-scope list, and OQ-1 in section 15) -- no other section touched. Commit: see git log on feature/WF02-REQ192-20260830, message 'fix(REQ-192): rework 2 -- resolve INV-RT-1 conflict with a real service_catalog.ex addition'.",
+    "rework_pass": 3,
+    "prior_passes_preserved": [
+      "iteration 1 fix (commit c53d9e36): removed a false Audit/Metrics precedent claim from section 5 -- PASS, see req192-design-validation-report.md",
+      "this run's step-01b-recheck1: re-confirmed iteration 1's fix plus all previously-verified sections -- PASS"
+    ]
+  },
+  "task": {
+    "description": "Re-validate lib/letflow/design/req192-service-catalog-routes.md's REVISED section 5 (and its small ripple edits to the top-of-file scope paragraph, section 14, and section 15's OQ-1) against the real INV-RT-1 conflict described above. Specifically confirm: (1) the new Letflow.ServiceCatalog.list_all/1 function is fully specified (signature, type, body description by analogy to list_for_tenant/2, its own cursor-prefix constant, @doc content) with no implementation code (no fenced code blocks, no literal function bodies) -- signatures/shapes only, consistent with this role's own 'Forbidden' constraints; (2) the router-side change (GET /admin/services now calls list_all/1, no Repo/Ecto.Query/Entry reference remains in admin_services.ex) is stated clearly enough for ELIXIR-DEV to rebuild the router from scratch satisfying INV-RT-1; (3) the scope-expansion reasoning (touching Letflow.ServiceCatalog despite the original 'NOT IN THIS REQUIREMENT' note) is explicit, not silently smuggled in, and is flagged for REVIEWER sign-off rather than presented as already-decided; (4) OQ-1 is correctly marked resolved rather than left open, and section 14's out-of-scope list accurately reflects the one new exception; (5) every previously-PASSed element (two-router split, permission mappings, 409 Error constructors, both field-gap findings, stale-comment finding) is confirmed unchanged.",
+    "acceptance_criteria": [
+      "list_all/1's spec (name, arity, argument type, return type/shape) is complete and matches list_for_tenant/2's existing list_params()/result shape exactly except for the omitted tenant_id argument",
+      "No implementation code (no ```elixir fences, no literal function bodies) appears anywhere in the revised section 5 or elsewhere in the file",
+      "admin_services.ex's revised handler description contains no Repo/Ecto.Query/Entry reference of any kind",
+      "The scope-expansion reasoning explicitly acknowledges the original 'NOT IN THIS REQUIREMENT' boundary and states why this exception is justified, with an explicit REVIEWER-sign-off flag (not silent)",
+      "req078_supporting_routes_test.exs and INV-RT-1's own statement are confirmed untouched by this design (verify no edit to that file is proposed anywhere)",
+      "All previously-PASSed sections (two-router split, permission mappings, 409 constructors, field-gap findings, stale-comment finding) verified byte-for-byte unchanged"
+    ]
+  },
+  "result": null,
+  "rework_count": 2,
+  "max_rework": 3
+}

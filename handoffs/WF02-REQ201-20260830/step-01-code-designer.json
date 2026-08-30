@@ -65,6 +65,13 @@
     ],
     "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
-  "rework_count": 0,
-  "max_rework": 3
+  "rework_count": 1,
+  "max_rework": 3,
+  "rework_notes": [
+    {
+      "rework": 1,
+      "finding": "CDV-001",
+      "fix": "Added last_correlation_id write semantics to §5 state machine ARMED→FIRED transition: per-subject triggers (instance_error_stuck, webhook_subscription_paused) set it to the subject UUID extracted from the trigger_key; aggregate triggers (dlq_depth_threshold, scheduler_lag_threshold) set it to null. No other sections changed."
+    }
+  ]
 }

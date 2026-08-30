@@ -1,0 +1,28 @@
+{
+  "handoff_id": "WF03-ISS0377-20260830-step04b",
+  "run_id": "WF03-ISS0377-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 4b (test design validation)",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "branch": "feature/WF03-ISS0377-20260830",
+    "evidence_commit": "b794c18",
+    "implementation_commit": "8eef01b",
+    "prefix_commit": "64eef56",
+    "evidence_file": "test/specs/ISS-0377-regression-proof.md",
+    "new_permanent_test_file": "test/letflow/engine/wasm/plugin_handler_ac7_cross_platform_regression_test.exs",
+    "summary": "Both Part A and Part B fail-then-pass proofs are complete, reproducible, and documented in test/specs/ISS-0377-regression-proof.md with real command output.",
+    "part_a_summary": "A.1 (:external_resource assertion): a REAL, non-simulated fail-then-pass run on this Linux sandbox -- swapped test/letflow/engine/wasm/plugin_handler_test.exs for the pre-fix version (git show 8eef01b^:...), ran mix test, got 9/10 passed with the exact assertion failing (this host's precompiled wasmex build has an empty :external_resource list, which the pre-fix code had no fallback for); reverted via git checkout --, verified git status --porcelain empty, re-ran to confirm 10 passed on the restored file. A.2 (hardcoded .so path assertion): this bug only manifests on non-Unix, so proven via a simulated Windows-shaped priv/native directory (only a version/arch-suffixed .dll present) -- OLD hardcoded 'native/wasmex.so' check is unsatisfiable against it, NEW native_artifact_check/2 (verbatim copy, cited) returns {:ok, :fallback_listing, ...}. This comparison is now a PERMANENT committed test (test/letflow/engine/wasm/plugin_handler_ac7_cross_platform_regression_test.exs), verified green (2 passed).",
+    "part_b_summary": "scripts/test_parallel.sh's MIX_BUILD_PATH race cannot be reliably forced, so proven structurally: a mix shim placed earlier on $PATH recorded the actual MIX_TEST_PARTITION/MIX_BUILD_PATH each real mix test subprocess received during a live TEST_PARALLEL_N=2 scripts/test_parallel.sh run -- observed two distinct MIX_BUILD_PATH values (_build/test-partition-1, _build/test-partition-2), one per partition, plus confirmed via inode comparison (stat -c '%i') that each partition's build tree is a genuinely distinct filesystem tree. Pre-fix side confirmed by diff (8eef01b^ had no Step 1.6 and no per-partition MIX_BUILD_PATH at all -- every partition shared the default build path).",
+    "mutation_revert_confirmation": "Only mutation was the temporary full-file swap of test/letflow/engine/wasm/plugin_handler_test.exs to its pre-fix content (Part A.1), reverted via 'git checkout -- test/letflow/engine/wasm/plugin_handler_test.exs'. Verified: 'git status --porcelain' empty immediately after revert and at end of run; 'mix test test/letflow/engine/wasm/plugin_handler_test.exs --seed 0' re-run green (Result: 10 passed, 4 excluded) on the restored file. No committed file was mutated for Part B (mix shim lived entirely in scratch space, never written into the repo); the only side effects were gitignored _build/test-partition-N directories, which were removed after collecting evidence. Full final 'git status --porcelain' after all work: only the two new files this step added (now committed in b794c18) -- confirmed clean otherwise.",
+    "reproduction_steps_for_validator": "See the 'Reproducibility notes for TEST-DESIGN-VALIDATOR' section at the end of test/specs/ISS-0377-regression-proof.md -- gives exact commands to independently re-run both the A.1 real fail-then-pass swap, the A.2 committed regression test (and how to mutate it back to the OLD hardcoded check as a live mutant), and the Part B mix-shim structural check.",
+    "reviewer_style_note_carried_forward": "REVIEWER's non-blocking style note (AC7 helper defps nested inside describe block rather than hoisted to module level) was not addressed -- out of TEST-DESIGNER's scope per the step-04 handoff (do not implement further application/script fixes)."
+  },
+  "task": {
+    "description": "Independently verify TEST-DESIGNER's fail-then-pass regression evidence for ISS-0377 (Part A: plugin_handler_test.exs AC7 fixes; Part B: scripts/test_parallel.sh per-partition build isolation). Per WF-03 Step 4, apply at least one of the reported checks/mutants yourself (e.g. re-run the Part A.1 pre-fix swap, or mutate the new permanent regression test's NEW-logic call back to the OLD hardcoded check) and confirm the counts/behavior reported in test/specs/ISS-0377-regression-proof.md match your own independent run, not merely accepting TEST-DESIGNER's report. Route to TEST-RUNNER when PASS."
+  },
+  "result": null
+}

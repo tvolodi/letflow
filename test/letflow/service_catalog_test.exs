@@ -116,7 +116,7 @@ defmodule Letflow.ServiceCatalogTest do
   # -- needed only by tests exercising the referential guard or the
   # ServiceScopeValidator integration, since both walk real
   # `process_definitions` rows in real tenant schemas.
-  defp provisioned_tenant(slug_prefix \\ "req191-svc") do
+  defp provisioned_tenant(slug_prefix) do
     TenantFixture.provisioned_tenant!(
       slug_prefix: slug_prefix,
       display_name: "REQ-191 ServiceCatalog Provisioned Tenant"

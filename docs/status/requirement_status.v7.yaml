@@ -378,6 +378,18 @@ history:
       (arithmetic/parse-error surface) and REQ-198 (builtins) are both done.
       Full detail: handoffs/WF02-REQ198-20260830/release-validation-report-req198.md.
 
+  - req: REQ-184
+    event: started
+    agent: ORCH
+    at: "2026-08-30T11:27:33Z"
+    note: >
+      Queue task 357, GH#702, stage S6. Route layer atop REQ-183's just-
+      merged webhook delivery-dispatch core -- GET /api/v1/webhooks/
+      subscriptions/:id/deliveries, WebhooksManage-gated, REQ-072 cross-
+      tenant-404 mechanism (mirrors REQ-182's subscription-route pattern).
+      REQ-VALIDATOR rework of REQ-180's split. Depends_on [REQ-183,
+      REQ-181, REQ-069, REQ-072], all done.
+
   - req: REQ-193
     event: started
     agent: ORCH

@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0378-20260830-step03d",
+  "run_id": "WF03-ISS0378-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 3 -> SECURITY-REVIEWER",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "test/letflow/scheduler/poller_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "ISS-0378 fix implemented per lib/letflow/design/iss0378-poller-ac7-test-fix.md (CODE-DESIGN-VALIDATOR PASSed). This is a test-only, mechanical change -- deletes a mislabeled/undocumented test and its helper, corrects a describe-block title, and appends a recurrence note to docs/anti-patterns.md. No production code, migration, route, secret, or response-shaping code touched.",
+    "design_file": "lib/letflow/design/iss0378-poller-ac7-test-fix.md",
+    "elixir_dev_handoff": "handoffs/WF03-ISS0378-20260830/step-03-elixir-dev.json",
+    "files_changed": [
+      "test/letflow/scheduler/poller_test.exs",
+      "docs/anti-patterns.md"
+    ],
+    "files_explicitly_not_changed": [
+      "lib/letflow/application.ex",
+      "test/letflow/scheduler_req188_test.exs",
+      "priv/repo/migrations/* (none added)"
+    ],
+    "scope_assessment": "ELIXIR-DEV's own read of the scope test in .claude/agents/security-reviewer.md ('A change is a tenant-data path if it does any of: adds/modifies an API route reading/writing tenant-scoped data; adds/modifies a priv/repo/migrations/*.exs migration; adds/modifies anything resolving a secret; adds/modifies response-shaping code for a tenant-scoped entity; adds/modifies a lookup-by-ID handler') -- this change matches none of those. It is a test-file deletion/rename and a documentation-file append. ELIXIR-DEV believes SECURITY-REVIEWER should reach a fast, explicit 'out of scope -- no tenant-data path touched' PASS per that file's own instructions, but is NOT skipping this gate: docs/agents/workflows/WF-03_issue_resolving.md's Step 3 diagram routes unconditionally through SECURITY-REVIEWER then REVIEWER ('same as WF-02 2c/2d'), and docs/agents/ORCHESTRATOR.md section 10's direct-action sizing rule governs only when ORCH itself may act without the producer/validator chain -- it does not authorize ELIXIR-DEV to skip a gate on its own judgment. Routing through SECURITY-REVIEWER per the standard sequence; expect a quick PASS.",
+    "verification_already_run": {
+      "mix_format_check": "clean -- no output from `mix format --check-formatted` after running `mix format` on the edited file",
+      "mix_compile_warnings_as_errors": "clean -- no output, exit 0",
+      "mix_test_poller_test_exs": "6 tests, 0 failures (was 7 before this fix -- confirms exactly one test removed)",
+      "grep_resolve_base_ref": "zero remaining references in test/ or lib/ code (only the design doc's own historical prose still mentions the name)"
+    },
+    "branch_name": "feature/WF03-ISS0378-20260830"
+  },
+  "task": {
+    "description": "Run SECURITY-REVIEWER's scope test against this diff (git diff main...HEAD) and, per docs/agents/instructions/security-invariants.md, determine APPLIES/NOT-APPLICABLE for INV-1 through INV-8. This is expected to resolve as out-of-scope (no tenant-data path touched) given the change is test-file-only plus a docs/anti-patterns.md append, but SECURITY-REVIEWER must run its own scope test rather than trust this assessment. On PASS, route onward to REVIEWER per WF-03 Step 3 / WF-02 Step 2c-2d.",
+    "acceptance_criteria": [
+      "SECURITY-REVIEWER's scope test explicitly run and recorded against the actual diff, not assumed from this handoff's note",
+      "INV-1 through INV-8 each given an explicit APPLIES/NOT-APPLICABLE verdict",
+      "status PASS or FAIL recorded with rationale",
+      "On PASS, handoff routed to REVIEWER"
+    ]
+  },
+  "result": null
+}

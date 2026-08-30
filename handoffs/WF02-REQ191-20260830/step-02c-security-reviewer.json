@@ -6,7 +6,7 @@
   "from_agent": "ELIXIR-DEV",
   "to_agent": "SECURITY-REVIEWER",
   "file": "lib/letflow/service_catalog.ex",
-  "status": "PENDING",
+  "status": "FAILED",
   "priority": "normal",
   "context": {
     "note": "REQ-191 (service catalog core) implemented per the approved design at lib/letflow/design/req191-service-catalog-core.md. This sandbox has no mix/elixir/erl toolchain -- mix compile --warnings-as-errors and mix format could NOT be run here; see handoffs/WF02-REQ191-20260830/elixir-dev-implementation-notes.md for the full toolchain-unavailability statement and the manual cross-checks performed instead. ORCH/TEST-RUNNER must run the real toolchain independently before trusting this compiles.",
@@ -51,5 +51,8 @@
       "A PASS/FAIL verdict is recorded before routing onward to REVIEWER."
     ]
   },
-  "result": null
+  "result": {
+    "status": "FAIL",
+    "summary": "Full report: handoffs/WF02-REQ191-20260830/security-review-req191.md. INV-1 (global-table divergence, cross-tenant visibility in get_for_tenant/2, cross-schema referential guard, list_registrations/0, Lookup tenant_id capture): PASS -- get_for_tenant/2's single Repo.get + pure in-memory branch returns the identical {:error, :not_found} atom for a genuinely-missing service_id and a different-tenant-owned one, no entry data or distinguishable shape leaks on either branch; list_for_tenant/2 scopes at the SQL layer; the referential guard is Ecto.Query + parameterized fragment (no raw SQL, no string-interpolated schema name or service_id), read-only, and only reachable from unrouted catalog-admin functions; list_registrations/0 is a plain read-only Repo.all(Registration) and Registration carries no secrets. INV-4: PASS, no secrets in the diff. INV-7: PASS, zero Repo.query hits in the new code; the jsonb guard uses Ecto.Query/fragment with bound params. INV-8: FAIL -- lib/letflow/service_catalog.ex:407, delete/1 does `{:ok, _deleted} = Repo.delete(entry)`, a bare match that raises Ecto.StaleEntryError (Entry has no optimistic-lock field) if the row is deleted concurrently during the preceding sequential per-tenant-schema referential-guard query loop -- a real TOCTOU window, and a direct match for INV-8's own grep heuristic. Deviates from this codebase's own precedent (Letflow.Webhooks.delete/2 passes Repo.delete's result through a with chain instead of bare-matching it). Not a cross-tenant leak and not reachable via any route today (none exists), but INV-8 applies regardless since it touches external I/O directly, and every applicable invariant is BLOCKER with no partial credit. INV-2/3/5: NOT-APPLICABLE (no route/controller, no scripting surface, no lookup-by-ID endpoint in this diff). INV-6: satisfied by this report itself. Routed to rework: handoffs/WF02-REQ191-20260830/step-02c-rework1-elixir-dev.json. NOT forwarded to REVIEWER."
+  }
 }

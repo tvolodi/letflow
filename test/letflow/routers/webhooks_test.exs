@@ -460,18 +460,24 @@ defmodule Letflow.Routers.WebhooksTest do
   end
 
   describe "REQ-184 AC2: limit param enforcement" do
-    test "more delivery attempts than the requested limit returns exactly limit items" do
+    test "more delivery attempts than the requested limit returns exactly limit items, most-recent first" do
       tenant = provisioned_tenant("req184-limit")
       {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
 
       base_time = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      for i <- 1..5 do
-        insert_delivery!(tenant, created["id"], %{
-          attempted_at: DateTime.add(base_time, -i, :second),
-          attempt_count: 1
-        })
-      end
+      # Distinct attempted_at seconds, strictly decreasing, so the surviving
+      # subset under limit=2 is unambiguous: only the two most-recent
+      # (smallest |i|, i.e. i=1 and i=2) may appear, in that order.
+      deliveries =
+        for i <- 1..5 do
+          insert_delivery!(tenant, created["id"], %{
+            attempted_at: DateTime.add(base_time, -i, :second),
+            attempt_count: 1
+          })
+        end
+
+      [most_recent, second_most_recent | _rest] = deliveries
 
       conn =
         build_conn(:get, "/subscriptions/#{created["id"]}/deliveries?limit=2", tenant,
@@ -480,7 +486,19 @@ defmodule Letflow.Routers.WebhooksTest do
         |> dispatch()
 
       assert conn.status == 200
-      assert length(Jason.decode!(conn.resp_body)["items"]) == 2
+      items = Jason.decode!(conn.resp_body)["items"]
+      assert length(items) == 2
+
+      # Ordering-correctness of the surviving subset (not just its count),
+      # per the documented attempted_at DESC, attempt_count DESC ordering
+      # (design §4, REVIEWER sign-off) -- exercised at the context level by
+      # test/letflow/webhooks_test.exs's tie-break test; this asserts the
+      # HTTP layer preserves that same order through delivery_json/1's
+      # per-item mapping rather than re-sorting or reversing it.
+      assert Enum.map(items, & &1["delivery_id"]) == [
+               most_recent.delivery_id,
+               second_most_recent.delivery_id
+             ]
     end
 
     test "an omitted limit defaults to 20" do
@@ -503,6 +521,48 @@ defmodule Letflow.Routers.WebhooksTest do
         |> dispatch()
 
       assert length(Jason.decode!(conn.resp_body)["items"]) == 3
+    end
+
+    # OQ-1 (design §4): resolve_limit/1 falls back to the default of 20 for
+    # *any* non-positive-integer query value, not merely an omitted one.
+    # These three exercise its remaining branches directly (non-numeric,
+    # zero, negative) -- resolve_limit/1 is a several-branch private
+    # function with, before this test, zero coverage of anything but the
+    # "absent" (nil) path.
+    for {slug, raw_limit} <- [
+          {"nonnumeric", "abc"},
+          {"zero", "0"},
+          {"negative", "-1"},
+          {"trailing-garbage", "5abc"}
+        ] do
+      test "limit=#{raw_limit} (#{slug}) falls back to the default of 20, not an error or a zero-item result" do
+        tenant = provisioned_tenant("req184-limit-#{unquote(slug)}")
+        {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+
+        base_time = DateTime.utc_now() |> DateTime.truncate(:second)
+
+        for i <- 1..3 do
+          insert_delivery!(tenant, created["id"], %{
+            attempted_at: DateTime.add(base_time, -i, :second),
+            attempt_count: 1
+          })
+        end
+
+        conn =
+          build_conn(
+            :get,
+            "/subscriptions/#{created["id"]}/deliveries?limit=#{unquote(raw_limit)}",
+            tenant,
+            roles: ["PLATFORM_ADMIN"]
+          )
+          |> dispatch()
+
+        assert conn.status == 200
+        # All 3 seeded rows survive (well under the default of 20) -- proves
+        # the malformed value did not cause a 0-row/1-row limit and did not
+        # error the request.
+        assert length(Jason.decode!(conn.resp_body)["items"]) == 3
+      end
     end
   end
 

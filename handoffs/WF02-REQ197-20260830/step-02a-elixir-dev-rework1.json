@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step02a-rework1-WF02-REQ197-20260830",
+  "run_id": "WF02-REQ197-20260830",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "REVIEWER",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ197-20260830/step-02a-elixir-dev-rework1.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-197"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ197-20260830/step-02d-reviewer.json",
+      "handoffs/WF02-REQ197-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ197-20260830/security-review-req197-findings.md",
+      "handoffs/WF02-REQ197-20260830/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req197-expr-arithmetic-and-errors.md",
+      "lib/letflow/engine/expr.ex",
+      "test/letflow/engine/expr_test.exs",
+      "test/letflow/engine/transition_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ197-20260830",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "REVIEWER FAILED Step 2d (see handoffs/WF02-REQ197-20260830/step-02d-reviewer.json's own result block for the full verdict) on OQ-1: REVIEWER's sign-off decision is REQUEST the fuller signed-infinity/NaN 3-way split, not ACCEPT the current unsigned-only :infinity fallback.\n\nWhat REVIEWER confirmed by reading the real code (apply_float_arith/3, expr.ex:1083-1093; apply_ordering/3, expr.ex:1107-1120): `apply_float_arith(:div, _l, r) when r == 0.0, do: {:ok, :infinity}` collapses every float division by a zero divisor to one unsigned marker regardless of the dividend's sign, and `apply_ordering/3` then treats that marker as the greatest possible value in every comparison. Concretely: `amount / 0.0 > threshold` evaluates true for BOTH a large positive `amount` and a large-magnitude NEGATIVE `amount` -- where correct IEEE-754 signed semantics would put the negative case at -infinity (false for any finite positive threshold). This is a real, demonstrable gateway-branch-decision divergence for a plausible tenant input (a negative-amount edge case dividing by a zero-valued divisor), not a hypothetical corner case -- SECURITY-REVIEWER traced it first (handoffs/WF02-REQ197-20260830/security-review-req197-findings.md, Point 5), REVIEWER independently reproduced the same trace against the real code before deciding.\n\nWhy REVIEWER is unblocking this now rather than accepting the deferral: the reason OQ-1 was originally left open (R-Co's real src/expr/evaluator.zig unreachable from this sandbox, so the signed/NaN behaviour was \"unverified\") does not actually apply to the SIGN determination itself. IEEE 754 division-by-zero sign/NaN rules (sign(dividend)/0.0 -> +-infinity matching the dividend's sign; 0.0/0.0 -> NaN) are a fixed mathematical standard, not an R-Co-specific implementation choice -- any spec-conformant f64 arithmetic (Zig's f64 uses hardware IEEE-754 doubles) produces exactly this behaviour by construction. No amount of R-Co source access could reveal a different correct answer here, only confirm this one. REVIEWER also checked whether Elixir/Erlang's native float division already produces signed infinity natively (which would have removed the hand-rolled-marker approach entirely) -- no elixir/erl toolchain is reachable on this host to verify empirically, but by well-established BEAM semantics (already correctly stated in design doc §4.3) the BEAM's native float arithmetic operators raise ArithmeticError on divide-by-zero rather than ever constructing an IEEE infinity/NaN float term, so there is no native shortcut available; the hand-rolled sentinel-construction approach you already built is necessary and stays exactly as architected, just extended to 3 variants instead of 1.\n\nThis is NOT new design work: lib/letflow/design/req197-expr-arithmetic-and-errors.md's §4.3 and §4.6 already fully specify the fix in complete `@type`/table/guard-order detail -- the `infinity_marker :: :infinity | :neg_infinity | :nan` type, the per-operator dividend-sign table (dividend > 0.0 -> :infinity; dividend < 0.0 -> :neg_infinity; dividend == 0.0 -> :nan), and the 5-clause ordering-comparison guard order (nil-check, :nan guard, infinity-marker branch, is_number guard, type-mismatch fallback). You were blocked only on REVIEWER's sign-off, per the original step-02a handoff's own gating instruction -- that sign-off is now given. Implement design §4.3/§4.6 as already written; do not re-derive or re-negotiate the shape.\n\nEverything else from Step 2d PASSED and needs no rework: idiom/typespec/error-tuple/moduledoc conventions, the nil-in-ordering-comparison propagation change (independently re-verified safe, no gateway bypass), and the parse_strict/1 tokenizer-duplication design-preference deviation (ACCEPTED as a reasonable lower-risk tradeoff -- do not consolidate it in this pass, it is out of scope for this rework). OQ-4 (negative-operand div/mod rounding direction) remains awareness-only, no action needed.",
+    "acceptance_criteria": [
+      "infinity_marker() type extended from `:infinity` to `:infinity | :neg_infinity | :nan` per design §4.3, with the moduledoc's existing REVIEWER-gate note (expr.ex:89-96, the @typedoc directly above infinity_marker()) updated to reflect that the gate has been resolved and the 3-way split is now implemented -- do not leave stale 'not implemented yet, pending REVIEWER sign-off' language in place once it is implemented.",
+      "apply_float_arith/3's :div clause implements the 3-way dividend-sign split per design §4.3: dividend > 0.0 and divisor == 0.0 -> {:ok, :infinity}; dividend < 0.0 and divisor == 0.0 -> {:ok, :neg_infinity}; dividend == 0.0 and divisor == 0.0 -> {:ok, :nan}.",
+      "apply_neg/1 (expr.ex:1096-1100) gains clauses for :neg_infinity and :nan per design §4.4: negating :infinity <-> :neg_infinity flips; negating :nan stays :nan.",
+      "The ordering-comparison eval clause (expr.ex:1005-1030) and apply_ordering/3 (expr.ex:1107-1120) implement design §4.6's full 5-clause guard order: nil-check (already present, unchanged), a new :nan guard (either operand :nan -> {:ok, false} for every ordering operator), the existing/extended infinity-marker branch now covering both :infinity and :neg_infinity as greatest/least respectively, the existing is_number guard, and the existing type-mismatch fallback -- confirm the nil-check, :nan, and infinity-marker cases are mutually exclusive so ordering the guards this way cannot shadow anything (design §4.6's own reasoning).",
+      "Equality (==/!=) involving :nan needs the design's stated override: :nan == :nan is false, :nan != :nan is true (real IEEE-754 NaN self-inequality) -- confirm the existing eq/neq eval clause (expr.ex:998-1003, plain Elixir == which would otherwise wrongly say :nan == :nan is true since they are equal atoms) gets this override per design §4.6.",
+      "New tests added (none exist today for the signed/NaN cases): negative-dividend/zero-divisor float division -> :neg_infinity; 0.0/0.0 -> :nan; :nan compared with any value via every comparison operator is false except != which is true, including :nan vs :nan; at least one ordering-comparison test demonstrating the REVIEWER-identified sign-flip bug is now fixed (e.g. a negative amount divided by a zero-valued divisor, compared with `<` against a finite positive threshold, now evaluates true, where the old unsigned-only fallback would have wrongly evaluated false since :infinity was being compared as the greatest value regardless of sign).",
+      "Existing AC4 test (float division by a positive dividend and zero divisor -> :infinity) still passes unmodified.",
+      "expr.ex's documented purity grep (moduledoc's own command) still returns zero matches after this change -- quote the actual invocation/empty output.",
+      "mix compile --warnings-as-errors and mix test both pass, real output quoted -- run at minimum test/letflow/engine/expr_test.exs and test/letflow/engine/transition_test.exs.",
+      "No other section of expr.ex or the design doc is touched beyond what OQ-1's fix requires -- do not re-open OQ-4 or the parse_strict/1 duplication question, both already dispositioned by REVIEWER as no-action-needed for this pass.",
+      "CRITICAL: the handoff's top-level status field must be exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- grep the file yourself and run mix letflow.lint_handoffs before finishing, per this project's own recurring anti-pattern entry on this exact mistake. Route your completed handoff back to REVIEWER (step-02d, this same gate) for re-check, not directly to TEST-DESIGNER."
+    ]
+  }
+}

@@ -800,8 +800,17 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 7
+    entries: 8
     note: >
+      Recounted to 8 by ORCH's Step Final rebase composition for
+      WF02-REQ198-20260830, composing this branch's own REQ-198
+      started-event append against origin/main's concurrently-appended
+      REQ-183 done-event (which itself required a recount to 7 during
+      WF02-REQ183-20260830's own second Step Final rebase) --
+      `grep -c "^  - req:" docs/status/requirement_status.v7.yaml` = 8
+      on-disk entries after composition, recounted directly from the
+      composed file per this note's own recount-every-time rule.
+
       Recounted to 7 by WF02-REQ183-20260830 (ELIXIR-DEV)'s own second Step
       Final rebase attempt (main advanced again, past WF02-REQ197-20260830's
       own started+done pair, before the first attempt's PR could merge).
@@ -814,6 +823,11 @@ volumes:
       directly from the composed file rather than carrying forward either
       side's independently-computed 5/6, per this note's own
       recount-every-time rule.
+
+      Incremented to 7 by ORCH's REQ-198 started-event append (Step 00,
+      WF02-REQ198-20260830) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 7 on-disk entries, no
+      rebase conflict on this file at the time it was written.
 
       Incremented to 6 by WF02-REQ197-20260830 (DOC-UPDATER)'s own REQ-197
       done-event append (Step 6) -- `grep -c "^  - req:"

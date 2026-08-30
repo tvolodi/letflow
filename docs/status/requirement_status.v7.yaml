@@ -339,3 +339,16 @@ history:
       100/100; mix compile --warnings-as-errors clean; purity grep zero
       real-code matches). Full detail:
       handoffs/WF02-REQ197-20260830/release-validation-req197.md.
+  - req: REQ-198
+    event: started
+    agent: ORCH
+    at: "2026-08-30T10:24:24Z"
+    note: >
+      Queue task 371, GH#717, stage S6. Second and last of S6's expr half,
+      atop REQ-197's extended grammar. Adds a function-call form and 8 pure
+      builtins (length, lower, upper, trim, contains, startsWith, endsWith,
+      coalesce) to lib/letflow/engine/expr.ex, ported from R-Co's closed
+      lex-time whitelist design (src/expr/lexer.zig). now()/date_add/
+      date_diff explicitly excluded (clock-impure, per REQ-197's own
+      decision). Must not weaken @unsupported_call_markers. Depends_on
+      [REQ-197], done.

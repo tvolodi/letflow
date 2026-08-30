@@ -4,24 +4,70 @@ defmodule Letflow.Engine.Expr do
   `src/expr/` surface that `transition.zig`'s `evaluateGatewayCondition()`
   (~L1118, R-Co's EXP-102 adapter) actually needs for `:EXCLUSIVE_GATEWAY`
   edge conditions (REQ-050, `lib/letflow/design/req050-exclusive-gateway-cel.md`
-  §4). It ports variable references, the 6 comparison operators, boolean
-  `and`/`or`/`not`, and literal values (numbers, strings, booleans, `null`) —
-  not a full port of all 7 `src/expr/` files (`lexer.zig`, `parser.zig`,
-  `ast.zig`, `evaluator.zig`, `error.zig`, `mod.zig`, `benchmark.zig`).
-  `benchmark.zig` in particular is a Zig benchmarking harness with no Elixir
-  equivalent and is not ported at all. A fuller expression surface, if a
-  later stage needs one, extends this module rather than replacing it
-  (`docs/migration/stage-3-instance-engine.md`).
+  §4), extended by REQ-197
+  (`lib/letflow/design/req197-expr-arithmetic-and-errors.md`) with binary
+  arithmetic, unary negation, and a structured parse-error surface. It ports
+  variable references, the 6 comparison operators, boolean `and`/`or`/`not`,
+  literal values (numbers, strings, booleans, `null`), and binary
+  `+ - * / %` plus unary `-` — not a full port of all 7 `src/expr/` files
+  (`lexer.zig`, `parser.zig`, `ast.zig`, `evaluator.zig`, `error.zig`,
+  `mod.zig`, `benchmark.zig`). `benchmark.zig` in particular is a Zig
+  latency-benchmarking harness (1,000 warm-up plus 10,000 measured
+  iterations against a 10 microsecond target, debug-print output only,
+  imported by nothing) with no production behaviour and no Elixir
+  equivalent, and is deliberately not ported at all. A fuller expression
+  surface, if a later stage needs one, extends this module rather than
+  replacing it (`docs/migration/stage-3-instance-engine.md`).
+
+  ## R-Co's `src/expr` is not a CEL implementation (AC11)
+
+  R-Co's EXP-102 cut over *from* a vendored CEL (`vendor/cel`) *to*
+  `src/expr`, retiring CEL entirely. `@unsupported_call_markers` below
+  therefore rejects CEL vocabulary (macros, type-conversion functions,
+  collection functions, `in`, the ternary operator) that **neither** R-Co
+  **nor** Letflow implements — this module's translation layer restricts
+  authored conditions to what R-Co's own `src/expr` grammar actually
+  supports, not a Letflow gap against a CEL surface R-Co never had. A
+  future contributor tempted to "complete" CEL support against
+  `@unsupported_call_markers` would be acting against a closed EXP-102
+  decision, not filling a real gap.
+
+  ## `now()` / `date_add()` / `date_diff()` are deliberately not added (AC9)
+
+  R-Co's real builtin whitelist (`src/expr/lexer.zig` L17-32) has 11
+  entries: `length`, `lower`, `upper`, `trim`, `contains`, `startsWith`,
+  `endsWith`, `coalesce`, `now`, `date_add`, `date_diff`. R-Co's own
+  `evaluator.zig` documents, in its own comment, that `now()` is
+  "inherently impure; all other built-ins are pure." Adding `now()` (or
+  `date_add`/`date_diff` insofar as they depend on it) here would read the
+  system clock from inside this module, which would break both this
+  module's grep-verified purity contract below and REQ-050's determinism
+  guarantee (two calls with `==`-equal arguments must return `==`-equal
+  results) — a guarantee event-sourced replay of a past instance's gateway
+  routing decision depends on bit-for-bit. This is a decided, permanent
+  disposition, not an open deferral: if a future requirement genuinely
+  needs clock-dependent evaluation, the correct mechanism is an
+  **injected evaluation timestamp passed in by the caller** (e.g. an
+  `eval_context` argument the caller — which already has access to
+  whatever "current time" concept the engine uses — resolves and passes
+  in), never a clock read inside `expr.ex` itself. Call syntax for
+  builtins does not exist yet at all (REQ-198 adds it for the 8 pure
+  string/coalesce builtins); nothing here partially builds toward `now()`.
 
   ## Purity and determinism (AC8)
 
   Every function here is a pure function of its typed arguments alone — no
-  `Letflow.Repo`, no `Logger.*`, no clock read, no `:rand`/`:crypto`, no
-  `File.*`/HTTP/process-mailbox call anywhere in `translate_cel_to_expr/1`,
-  `parse/1`, `eval/2`, or `evaluate_condition/2`'s call graphs. Two calls
-  with `==`-equal arguments return `==`-equal results, both times — the same
-  guarantee `transition.zig`'s own header states for the ported reference:
-  "`expr.parse()` and `expr.evaluate()` are pure computations."
+  `Letflow.Repo`, no `Logger` call, no clock read, no `:rand`/`:crypto`, no
+  `File` call/HTTP/process-mailbox call anywhere in `translate_cel_to_expr/1`,
+  `parse/1`, `parse_strict/1`, `eval/2`, or `evaluate_condition/2`'s call
+  graphs. Two calls with `==`-equal arguments return `==`-equal results,
+  both times — the same guarantee `transition.zig`'s own header states for
+  the ported reference: "`expr.parse()` and `expr.evaluate()` are pure
+  computations." This still holds after REQ-197's arithmetic/parse-error
+  additions: the float-division-by-zero sentinel (`:infinity`, see below)
+  is constructed directly from a comparison against `0.0`, never via a
+  clock-touching float-formatting trick, and `parse_failure()` deliberately
+  carries no timestamp field.
 
   Verification (grep/`mix xref`-checkable, matching
   `Letflow.Engine.Transition`'s own precedent):
@@ -33,11 +79,32 @@ defmodule Letflow.Engine.Expr do
   must return zero matches.
   """
 
+  @typedoc """
+  Sentinel result for a float arithmetic outcome that IEEE 754 represents
+  as a non-finite float but the BEAM cannot construct via native `/`
+  without raising `ArithmeticError` (§4.3 of the REQ-197 design doc) —
+  never produced by a literal or a variable, only by `eval/2`'s own
+  float-division clause.
+
+  **REVIEWER GATE (OQ-1, design §4.3/§4.6, design doc §12): the full
+  signed-infinity/NaN 3-way split (`:infinity | :neg_infinity | :nan`) is
+  explicitly NOT implemented yet — it is unverified against R-Co's real
+  `evaluator.zig` (unreachable from this sandbox) and has no AC test
+  coverage. Only the single unsigned `:infinity` marker below is
+  implemented, as the design's own stated safe fallback, sufficient for
+  AC4's "float division by zero produces infinity" test. Do not silently
+  expand this to the signed/NaN split without REVIEWER sign-off.**
+  """
+  @type infinity_marker :: :infinity
+
   @typedoc "A literal or resolved value in this expr subset."
-  @type value :: number() | String.t() | boolean() | nil
+  @type value :: number() | String.t() | boolean() | nil | infinity_marker()
 
   @typedoc "The 6 comparison operators this subset's grammar supports."
   @type cmp_op :: :eq | :neq | :lt | :lte | :gt | :gte
+
+  @typedoc "The 5 binary arithmetic operators REQ-197 adds."
+  @type arith_op :: :add | :sub | :mul | :div | :mod
 
   @typedoc """
   Internal expr-syntax AST. `{:var, path}` holds a dotted-field path with
@@ -51,6 +118,8 @@ defmodule Letflow.Engine.Expr do
           | {:and, ast(), ast()}
           | {:or, ast(), ast()}
           | {:cmp, cmp_op(), ast(), ast()}
+          | {:arith, arith_op(), ast(), ast()}
+          | {:neg, ast()}
 
   # Function-call-syntax markers that identify CEL macros, type-conversion
   # functions, and collection functions in one pass (design doc §4.4) --
@@ -184,8 +253,18 @@ defmodule Letflow.Engine.Expr do
   Parses an expr-syntax string (as produced by `translate_cel_to_expr/1`)
   into this module's internal `ast()`. A small recursive-descent parser over
   the grammar design doc §4.5 states (`or_expr` > `and_expr` > `not_expr` >
-  `cmp_expr` > `operand`, lowest-to-highest precedence `or`, `and`, `not`,
-  comparison, primary).
+  `cmp_expr` > `additive_expr` > `multiplicative_expr` > `unary_expr` >
+  `operand`, lowest-to-highest precedence `or`, `and`, `not`, comparison,
+  `+`/`-`, `*`/`/`/`%`, unary `-`, primary).
+
+  UNCHANGED by REQ-197 (design doc §6.1/§6.4): this function's `@spec` and
+  outer `{:ok, ast()} | {:error, {:parse_error, reason}}` return shape are
+  byte-identical to before this requirement. `reason`'s vocabulary of
+  possible terms is unextended (arithmetic introduces no new grammar
+  failure mode beyond the existing "unexpected token"/"unexpected end of
+  input" shapes, which already fire correctly for a misplaced `+`/`-`/`*`/
+  `/`/`%` token). See `parse_strict/1` below for the new, separate,
+  structured-error entry point this requirement adds.
   """
   @spec parse(expr_source :: String.t()) ::
           {:ok, ast()} | {:error, {:parse_error, reason :: term()}}
@@ -222,6 +301,16 @@ defmodule Letflow.Engine.Expr do
   defp do_tokenize(<<">=", rest::binary>>, acc), do: do_tokenize(rest, [{:cmp_op, :gte} | acc])
   defp do_tokenize(<<"<", rest::binary>>, acc), do: do_tokenize(rest, [{:cmp_op, :lt} | acc])
   defp do_tokenize(<<">", rest::binary>>, acc), do: do_tokenize(rest, [{:cmp_op, :gt} | acc])
+
+  # REQ-197 §3.2: 5 new single-character operator tokens. `-` feeds BOTH
+  # parse_additive/1 (binary `-`) and parse_unary/1 (unary `-`) -- which
+  # meaning applies is determined purely by grammar position, never by the
+  # lexer, which only ever emits one token kind for `-`.
+  defp do_tokenize(<<"+", rest::binary>>, acc), do: do_tokenize(rest, [{:arith_op, :add} | acc])
+  defp do_tokenize(<<"-", rest::binary>>, acc), do: do_tokenize(rest, [{:arith_op, :sub} | acc])
+  defp do_tokenize(<<"*", rest::binary>>, acc), do: do_tokenize(rest, [{:arith_op, :mul} | acc])
+  defp do_tokenize(<<"/", rest::binary>>, acc), do: do_tokenize(rest, [{:arith_op, :div} | acc])
+  defp do_tokenize(<<"%", rest::binary>>, acc), do: do_tokenize(rest, [{:arith_op, :mod} | acc])
 
   defp do_tokenize(<<"\"", _::binary>> = input, acc), do: tokenize_string(input, ?", acc)
   defp do_tokenize(<<"'", _::binary>> = input, acc), do: tokenize_string(input, ?', acc)
@@ -309,7 +398,438 @@ defmodule Letflow.Engine.Expr do
 
   defp scan_string_literal(<<>>, _quote, _content), do: :error
 
-  # --- recursive-descent parser -------------------------------------------
+  # --- REQ-197 §6: position-tracking tokenizer + parser for parse_strict/1 -
+  #
+  # IMPLEMENTATION NOTE (deviation from design §6.2, flagged for REVIEWER):
+  # the design's stated preference is that parse/1 and parse_strict/1 "share
+  # one underlying tokenizer and one underlying grammar implementation."
+  # This implementation instead gives parse_strict/1 its own
+  # position-tracking tokenizer/parser pair below, structurally mirroring
+  # `do_tokenize/2`'s clauses and `parse_or/1`..`parse_primary/1`'s call
+  # chain one-for-one, rather than threading a position-tracking accumulator
+  # through the existing functions. This is a deliberate, lower-risk choice:
+  # `do_tokenize/2` carries two prior bug-fix histories (ISS-0086, ISS-0087)
+  # around its regex/escape handling, and `parse/1`'s outer shape must stay
+  # byte-identical (§6.1) with zero risk of regression. The duplication is
+  # confined to this tokenizer/parser pair; both copies share
+  # `identifier_token/1`'s sibling `identifier_token_kv/1`, `scan_string_literal/3`,
+  # and produce identical `ast()` shapes for identical input. Flagged to
+  # REVIEWER rather than silently diverging from the design's stated
+  # preference.
+
+  @typedoc "One lexed token plus the source position where it started (§6.2)."
+  @type positioned_token :: %{
+          kind: token_kind(),
+          value: term(),
+          text: String.t(),
+          line: pos_integer(),
+          column: pos_integer()
+        }
+
+  @typedoc "Every distinct token shape this grammar's lexer produces (§6.2)."
+  @type token_kind :: :lparen | :rparen | :cmp_op | :arith_op | :and | :or | :not | :lit | :var
+
+  @typedoc "The one internal error shape every tokenizer/grammar failure site produces (§6.3)."
+  @type internal_parse_error :: %{
+          reason: parse_error_reason(),
+          line: pos_integer(),
+          column: pos_integer(),
+          token_text: String.t()
+        }
+
+  @typedoc "Every distinct parse failure reason (§6.3) -- the same 8 shapes `parse/1` produces."
+  @type parse_error_reason ::
+          {:invalid_number, text :: String.t()}
+          | {:invalid_identifier, text :: String.t()}
+          | {:unexpected_char, char :: String.t()}
+          | {:unterminated_string, text :: String.t()}
+          | {:expected_rparen, found :: term()}
+          | :unexpected_end_of_input
+          | {:unexpected_token, token :: term()}
+          | {:trailing_input, tokens :: [term()]}
+
+  @typedoc "The structured parse-failure record `parse_strict/1` returns (§6.4)."
+  @type parse_failure :: %{
+          line: pos_integer(),
+          column: pos_integer(),
+          token_text: String.t(),
+          message: String.t()
+        }
+
+  @doc """
+  Parses an expr-syntax string exactly like `parse/1` (same input contract:
+  already post-`translate_cel_to_expr/1`, never raw CEL), but on failure
+  returns a structured `parse_failure()` -- line, column, the offending
+  token's exact source text, and a fixed English message -- instead of a
+  bare error atom (REQ-197 SCOPE item 3). On success, returns the identical
+  `ast()` `parse/1` would return for the same input.
+
+  This function is for callers this requirement does not itself add
+  (validation, authoring, a future editor, per the requirement text) --
+  `evaluate_condition/2`'s call graph (`translate_cel_to_expr/1` -> `parse/1`
+  -> `eval/2`) never calls this function, directly or indirectly (§6.6).
+  """
+  @spec parse_strict(expr_source :: String.t()) :: {:ok, ast()} | {:error, parse_failure()}
+  def parse_strict(expr_source) when is_binary(expr_source) do
+    with {:ok, tokens, eof_pos} <- tokenize_positioned(expr_source),
+         {:ok, ast, []} <- parse_or_p(tokens, eof_pos) do
+      {:ok, ast}
+    else
+      {:ok, _ast, [tok | _rest] = leftover} ->
+        {:error,
+         package_failure(mk_err({:trailing_input, leftover}, tok.line, tok.column, tok.text))}
+
+      {:error, internal_error} ->
+        {:error, package_failure(internal_error)}
+    end
+  end
+
+  @spec mk_err(parse_error_reason(), pos_integer(), pos_integer(), String.t()) ::
+          internal_parse_error()
+  defp mk_err(reason, line, column, token_text) do
+    %{reason: reason, line: line, column: column, token_text: token_text}
+  end
+
+  @spec package_failure(internal_parse_error()) :: parse_failure()
+  defp package_failure(%{reason: reason, line: line, column: column, token_text: token_text}) do
+    %{line: line, column: column, token_text: token_text, message: describe_parse_error(reason)}
+  end
+
+  @doc false
+  # §6.5: pure, one clause per parse_error_reason() variant, fixed English
+  # sentence -- the offending token's own text is carried separately in
+  # parse_failure().token_text, so this needs no string formatting.
+  @spec describe_parse_error(parse_error_reason()) :: String.t()
+  defp describe_parse_error(:unexpected_end_of_input), do: "unexpected end of input"
+  defp describe_parse_error({:unexpected_token, _}), do: "unexpected token"
+  defp describe_parse_error({:expected_rparen, _}), do: "expected closing parenthesis"
+  defp describe_parse_error({:unterminated_string, _}), do: "unterminated string literal"
+  defp describe_parse_error({:invalid_number, _}), do: "invalid numeric literal"
+  defp describe_parse_error({:invalid_identifier, _}), do: "invalid identifier"
+  defp describe_parse_error({:unexpected_char, _}), do: "unexpected character"
+  defp describe_parse_error({:trailing_input, _}), do: "trailing input after expression"
+
+  # --- position-tracking tokenizer ----------------------------------------
+
+  @spec tokenize_positioned(String.t()) ::
+          {:ok, [positioned_token()], eof_pos :: %{line: pos_integer(), column: pos_integer()}}
+          | {:error, internal_parse_error()}
+  defp tokenize_positioned(expr_source) do
+    do_tokenize_positioned(expr_source, 1, 1, [])
+  end
+
+  @spec advance_pos(pos_integer(), pos_integer(), String.t()) ::
+          {pos_integer(), pos_integer()}
+  defp advance_pos(line, column, text) do
+    text
+    |> String.to_charlist()
+    |> Enum.reduce({line, column}, fn
+      ?\n, {l, _c} -> {l + 1, 1}
+      _, {l, c} -> {l, c + 1}
+    end)
+  end
+
+  @spec ptok(token_kind(), term(), String.t(), pos_integer(), pos_integer()) ::
+          positioned_token()
+  defp ptok(kind, value, text, line, column) do
+    %{kind: kind, value: value, text: text, line: line, column: column}
+  end
+
+  defp do_tokenize_positioned(<<>>, line, column, acc) do
+    {:ok, Enum.reverse(acc), %{line: line, column: column}}
+  end
+
+  defp do_tokenize_positioned(<<c, rest::binary>>, line, column, acc)
+       when c in [?\s, ?\t, ?\n, ?\r] do
+    {line2, column2} = advance_pos(line, column, <<c>>)
+    do_tokenize_positioned(rest, line2, column2, acc)
+  end
+
+  defp do_tokenize_positioned(<<"(", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 1, [ptok(:lparen, nil, "(", line, column) | acc])
+  end
+
+  defp do_tokenize_positioned(<<")", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 1, [ptok(:rparen, nil, ")", line, column) | acc])
+  end
+
+  defp do_tokenize_positioned(<<"==", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 2, [
+      ptok(:cmp_op, :eq, "==", line, column) | acc
+    ])
+  end
+
+  defp do_tokenize_positioned(<<"!=", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 2, [
+      ptok(:cmp_op, :neq, "!=", line, column) | acc
+    ])
+  end
+
+  defp do_tokenize_positioned(<<"<=", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 2, [
+      ptok(:cmp_op, :lte, "<=", line, column) | acc
+    ])
+  end
+
+  defp do_tokenize_positioned(<<">=", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 2, [
+      ptok(:cmp_op, :gte, ">=", line, column) | acc
+    ])
+  end
+
+  defp do_tokenize_positioned(<<"<", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 1, [ptok(:cmp_op, :lt, "<", line, column) | acc])
+  end
+
+  defp do_tokenize_positioned(<<">", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 1, [ptok(:cmp_op, :gt, ">", line, column) | acc])
+  end
+
+  defp do_tokenize_positioned(<<"+", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 1, [
+      ptok(:arith_op, :add, "+", line, column) | acc
+    ])
+  end
+
+  defp do_tokenize_positioned(<<"-", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 1, [
+      ptok(:arith_op, :sub, "-", line, column) | acc
+    ])
+  end
+
+  defp do_tokenize_positioned(<<"*", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 1, [
+      ptok(:arith_op, :mul, "*", line, column) | acc
+    ])
+  end
+
+  defp do_tokenize_positioned(<<"/", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 1, [
+      ptok(:arith_op, :div, "/", line, column) | acc
+    ])
+  end
+
+  defp do_tokenize_positioned(<<"%", rest::binary>>, line, column, acc) do
+    do_tokenize_positioned(rest, line, column + 1, [
+      ptok(:arith_op, :mod, "%", line, column) | acc
+    ])
+  end
+
+  defp do_tokenize_positioned(<<"\"", _::binary>> = input, line, column, acc),
+    do: tokenize_string_positioned(input, ?", line, column, acc)
+
+  defp do_tokenize_positioned(<<"'", _::binary>> = input, line, column, acc),
+    do: tokenize_string_positioned(input, ?', line, column, acc)
+
+  defp do_tokenize_positioned(<<c, _::binary>> = input, line, column, acc) when c in ?0..?9 do
+    case Regex.run(~r/\A-?\d+(\.\d+)?/, input) do
+      [match | _] ->
+        rest = binary_part(input, byte_size(match), byte_size(input) - byte_size(match))
+
+        number =
+          if String.contains?(match, "."),
+            do: String.to_float(match),
+            else: String.to_integer(match)
+
+        {line2, column2} = advance_pos(line, column, match)
+
+        do_tokenize_positioned(rest, line2, column2, [
+          ptok(:lit, number, match, line, column) | acc
+        ])
+
+      nil ->
+        {:error, mk_err({:invalid_number, input}, line, column, input)}
+    end
+  end
+
+  defp do_tokenize_positioned(<<c, _::binary>> = input, line, column, acc)
+       when c in ?a..?z or c in ?A..?Z or c == ?_ do
+    case Regex.run(~r/\A[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*/, input) do
+      [match | _] ->
+        rest = binary_part(input, byte_size(match), byte_size(input) - byte_size(match))
+        {kind, value} = identifier_token_kv(match)
+        {line2, column2} = advance_pos(line, column, match)
+
+        do_tokenize_positioned(rest, line2, column2, [
+          ptok(kind, value, match, line, column) | acc
+        ])
+
+      nil ->
+        {:error, mk_err({:invalid_identifier, input}, line, column, input)}
+    end
+  end
+
+  defp do_tokenize_positioned(<<c, _::binary>>, line, column, _acc) do
+    {:error, mk_err({:unexpected_char, <<c>>}, line, column, <<c>>)}
+  end
+
+  @spec identifier_token_kv(String.t()) :: {token_kind(), term()}
+  defp identifier_token_kv("and"), do: {:and, nil}
+  defp identifier_token_kv("or"), do: {:or, nil}
+  defp identifier_token_kv("not"), do: {:not, nil}
+  defp identifier_token_kv("true"), do: {:lit, true}
+  defp identifier_token_kv("false"), do: {:lit, false}
+  defp identifier_token_kv("null"), do: {:lit, nil}
+  defp identifier_token_kv(ident), do: {:var, String.split(ident, ".")}
+
+  @spec tokenize_string_positioned(String.t(), byte(), pos_integer(), pos_integer(), [
+          positioned_token()
+        ]) ::
+          {:ok, [positioned_token()], %{line: pos_integer(), column: pos_integer()}}
+          | {:error, internal_parse_error()}
+  defp tokenize_string_positioned(<<quote, rest::binary>> = input, quote, line, column, acc) do
+    case scan_string_literal(rest, quote, <<>>) do
+      {:ok, content, remainder} ->
+        consumed = binary_part(input, 0, byte_size(input) - byte_size(remainder))
+        {line2, column2} = advance_pos(line, column, consumed)
+
+        do_tokenize_positioned(remainder, line2, column2, [
+          ptok(:lit, content, consumed, line, column) | acc
+        ])
+
+      :error ->
+        {:error, mk_err({:unterminated_string, rest}, line, column, rest)}
+    end
+  end
+
+  # --- position-tracking recursive-descent parser (mirrors parse_or/1..
+  # parse_primary/1 below one-for-one, over positioned_token() maps instead
+  # of bare tuples, threading `eof_pos` through for the
+  # :unexpected_end_of_input case) ------------------------------------------
+
+  @spec parse_or_p([positioned_token()], map()) ::
+          {:ok, ast(), [positioned_token()]} | {:error, internal_parse_error()}
+  defp parse_or_p(tokens, eof_pos) do
+    with {:ok, left, rest} <- parse_and_p(tokens, eof_pos) do
+      parse_or_rest_p(left, rest, eof_pos)
+    end
+  end
+
+  defp parse_or_rest_p(left, [%{kind: :or} | rest], eof_pos) do
+    with {:ok, right, rest2} <- parse_and_p(rest, eof_pos) do
+      parse_or_rest_p({:or, left, right}, rest2, eof_pos)
+    end
+  end
+
+  defp parse_or_rest_p(left, rest, _eof_pos), do: {:ok, left, rest}
+
+  @spec parse_and_p([positioned_token()], map()) ::
+          {:ok, ast(), [positioned_token()]} | {:error, internal_parse_error()}
+  defp parse_and_p(tokens, eof_pos) do
+    with {:ok, left, rest} <- parse_not_p(tokens, eof_pos) do
+      parse_and_rest_p(left, rest, eof_pos)
+    end
+  end
+
+  defp parse_and_rest_p(left, [%{kind: :and} | rest], eof_pos) do
+    with {:ok, right, rest2} <- parse_not_p(rest, eof_pos) do
+      parse_and_rest_p({:and, left, right}, rest2, eof_pos)
+    end
+  end
+
+  defp parse_and_rest_p(left, rest, _eof_pos), do: {:ok, left, rest}
+
+  @spec parse_not_p([positioned_token()], map()) ::
+          {:ok, ast(), [positioned_token()]} | {:error, internal_parse_error()}
+  defp parse_not_p([%{kind: :not} | rest], eof_pos) do
+    with {:ok, sub, rest2} <- parse_not_p(rest, eof_pos) do
+      {:ok, {:not, sub}, rest2}
+    end
+  end
+
+  defp parse_not_p(tokens, eof_pos), do: parse_cmp_p(tokens, eof_pos)
+
+  @spec parse_cmp_p([positioned_token()], map()) ::
+          {:ok, ast(), [positioned_token()]} | {:error, internal_parse_error()}
+  defp parse_cmp_p(tokens, eof_pos) do
+    with {:ok, left, rest} <- parse_additive_p(tokens, eof_pos) do
+      case rest do
+        [%{kind: :cmp_op, value: op} | rest2] ->
+          with {:ok, right, rest3} <- parse_additive_p(rest2, eof_pos) do
+            {:ok, {:cmp, op, left, right}, rest3}
+          end
+
+        _ ->
+          {:ok, left, rest}
+      end
+    end
+  end
+
+  @spec parse_additive_p([positioned_token()], map()) ::
+          {:ok, ast(), [positioned_token()]} | {:error, internal_parse_error()}
+  defp parse_additive_p(tokens, eof_pos) do
+    with {:ok, left, rest} <- parse_multiplicative_p(tokens, eof_pos) do
+      parse_additive_rest_p(left, rest, eof_pos)
+    end
+  end
+
+  defp parse_additive_rest_p(left, [%{kind: :arith_op, value: op} | rest], eof_pos)
+       when op in [:add, :sub] do
+    with {:ok, right, rest2} <- parse_multiplicative_p(rest, eof_pos) do
+      parse_additive_rest_p({:arith, op, left, right}, rest2, eof_pos)
+    end
+  end
+
+  defp parse_additive_rest_p(left, rest, _eof_pos), do: {:ok, left, rest}
+
+  @spec parse_multiplicative_p([positioned_token()], map()) ::
+          {:ok, ast(), [positioned_token()]} | {:error, internal_parse_error()}
+  defp parse_multiplicative_p(tokens, eof_pos) do
+    with {:ok, left, rest} <- parse_unary_p(tokens, eof_pos) do
+      parse_multiplicative_rest_p(left, rest, eof_pos)
+    end
+  end
+
+  defp parse_multiplicative_rest_p(left, [%{kind: :arith_op, value: op} | rest], eof_pos)
+       when op in [:mul, :div, :mod] do
+    with {:ok, right, rest2} <- parse_unary_p(rest, eof_pos) do
+      parse_multiplicative_rest_p({:arith, op, left, right}, rest2, eof_pos)
+    end
+  end
+
+  defp parse_multiplicative_rest_p(left, rest, _eof_pos), do: {:ok, left, rest}
+
+  @spec parse_unary_p([positioned_token()], map()) ::
+          {:ok, ast(), [positioned_token()]} | {:error, internal_parse_error()}
+  defp parse_unary_p([%{kind: :arith_op, value: :sub} | rest], eof_pos) do
+    with {:ok, sub, rest2} <- parse_unary_p(rest, eof_pos) do
+      {:ok, {:neg, sub}, rest2}
+    end
+  end
+
+  defp parse_unary_p(tokens, eof_pos), do: parse_primary_p(tokens, eof_pos)
+
+  @spec parse_primary_p([positioned_token()], map()) ::
+          {:ok, ast(), [positioned_token()]} | {:error, internal_parse_error()}
+  defp parse_primary_p([%{kind: :lparen} | rest], eof_pos) do
+    with {:ok, inner, rest2} <- parse_or_p(rest, eof_pos) do
+      case rest2 do
+        [%{kind: :rparen} | rest3] ->
+          {:ok, inner, rest3}
+
+        [tok | _] = other ->
+          {:error, mk_err({:expected_rparen, other}, tok.line, tok.column, tok.text)}
+
+        [] ->
+          {:error, mk_err({:expected_rparen, []}, eof_pos.line, eof_pos.column, "")}
+      end
+    end
+  end
+
+  defp parse_primary_p([%{kind: :lit, value: v} | rest], _eof_pos), do: {:ok, {:lit, v}, rest}
+
+  defp parse_primary_p([%{kind: :var, value: path} | rest], _eof_pos),
+    do: {:ok, {:var, path}, rest}
+
+  defp parse_primary_p([], eof_pos) do
+    {:error, mk_err(:unexpected_end_of_input, eof_pos.line, eof_pos.column, "")}
+  end
+
+  defp parse_primary_p([tok | _rest], _eof_pos) do
+    {:error, mk_err({:unexpected_token, tok}, tok.line, tok.column, tok.text)}
+  end
+
+  # --- recursive-descent parser (used by parse/1, unchanged by REQ-197) --
 
   @spec parse_or([term()]) :: {:ok, ast(), [term()]} | {:error, term()}
   defp parse_or(tokens) do
@@ -352,10 +872,10 @@ defmodule Letflow.Engine.Expr do
 
   @spec parse_cmp([term()]) :: {:ok, ast(), [term()]} | {:error, term()}
   defp parse_cmp(tokens) do
-    with {:ok, left, rest} <- parse_operand(tokens) do
+    with {:ok, left, rest} <- parse_additive(tokens) do
       case rest do
         [{:cmp_op, op} | rest2] ->
-          with {:ok, right, rest3} <- parse_operand(rest2) do
+          with {:ok, right, rest3} <- parse_additive(rest2) do
             {:ok, {:cmp, op, left, right}, rest3}
           end
 
@@ -365,8 +885,56 @@ defmodule Letflow.Engine.Expr do
     end
   end
 
-  @spec parse_operand([term()]) :: {:ok, ast(), [term()]} | {:error, term()}
-  defp parse_operand([{:lparen} | rest]) do
+  # REQ-197 §2.1 level 5: `+`/`-`, left-associative, binding looser than
+  # `*`/`/`/`%`. Mirrors parse_or_rest/parse_and_rest's left-folding shape.
+  @spec parse_additive([term()]) :: {:ok, ast(), [term()]} | {:error, term()}
+  defp parse_additive(tokens) do
+    with {:ok, left, rest} <- parse_multiplicative(tokens) do
+      parse_additive_rest(left, rest)
+    end
+  end
+
+  defp parse_additive_rest(left, [{:arith_op, op} | rest]) when op in [:add, :sub] do
+    with {:ok, right, rest2} <- parse_multiplicative(rest) do
+      parse_additive_rest({:arith, op, left, right}, rest2)
+    end
+  end
+
+  defp parse_additive_rest(left, rest), do: {:ok, left, rest}
+
+  # REQ-197 §2.1 level 6: `*`/`/`/`%`, left-associative, binding tighter
+  # than `+`/`-` and looser than unary `-`.
+  @spec parse_multiplicative([term()]) :: {:ok, ast(), [term()]} | {:error, term()}
+  defp parse_multiplicative(tokens) do
+    with {:ok, left, rest} <- parse_unary(tokens) do
+      parse_multiplicative_rest(left, rest)
+    end
+  end
+
+  defp parse_multiplicative_rest(left, [{:arith_op, op} | rest]) when op in [:mul, :div, :mod] do
+    with {:ok, right, rest2} <- parse_unary(rest) do
+      parse_multiplicative_rest({:arith, op, left, right}, rest2)
+    end
+  end
+
+  defp parse_multiplicative_rest(left, rest), do: {:ok, left, rest}
+
+  # REQ-197 §2.1 level 7: unary `-`, prefix, right-recursive (mirrors
+  # parse_not/1's own recursive-call shape so `- - x` parses). Only `-` is
+  # consulted here -- there is no unary `+` in R-Co's stated surface, so a
+  # leading `+5` is a parse error falling out of parse_primary/1's existing
+  # unmatched-token clause, per the design's deliberate choice (§3.1).
+  @spec parse_unary([term()]) :: {:ok, ast(), [term()]} | {:error, term()}
+  defp parse_unary([{:arith_op, :sub} | rest]) do
+    with {:ok, sub, rest2} <- parse_unary(rest) do
+      {:ok, {:neg, sub}, rest2}
+    end
+  end
+
+  defp parse_unary(tokens), do: parse_primary(tokens)
+
+  @spec parse_primary([term()]) :: {:ok, ast(), [term()]} | {:error, term()}
+  defp parse_primary([{:lparen} | rest]) do
     with {:ok, inner, rest2} <- parse_or(rest) do
       case rest2 do
         [{:rparen} | rest3] -> {:ok, inner, rest3}
@@ -375,10 +943,10 @@ defmodule Letflow.Engine.Expr do
     end
   end
 
-  defp parse_operand([{:lit, v} | rest]), do: {:ok, {:lit, v}, rest}
-  defp parse_operand([{:var, path} | rest]), do: {:ok, {:var, path}, rest}
-  defp parse_operand([]), do: {:error, :unexpected_end_of_input}
-  defp parse_operand([tok | _rest]), do: {:error, {:unexpected_token, tok}}
+  defp parse_primary([{:lit, v} | rest]), do: {:ok, {:lit, v}, rest}
+  defp parse_primary([{:var, path} | rest]), do: {:ok, {:var, path}, rest}
+  defp parse_primary([]), do: {:error, :unexpected_end_of_input}
+  defp parse_primary([tok | _rest]), do: {:error, {:unexpected_token, tok}}
 
   @doc """
   Evaluates `ast` against `variables`, resolving `{:var, path}` nodes via
@@ -437,15 +1005,115 @@ defmodule Letflow.Engine.Expr do
   def eval({:cmp, op, l, r}, variables) when op in [:lt, :lte, :gt, :gte] do
     with {:ok, lv} <- eval(l, variables),
          {:ok, rv} <- eval(r, variables) do
-      if is_number(lv) and is_number(rv) do
-        {:ok, apply_ordering(op, lv, rv)}
-      else
-        {:error, {:eval_error, {:type_mismatch, op, lv, rv}}}
+      cond do
+        # REQ-197 §4.5 (REVISED, rework iteration 1): a nil operand in an
+        # ordering comparison PROPAGATES -- {:ok, nil} -- rather than
+        # falling through to the type-mismatch error below. This is a
+        # deliberate, real behavioural change to this clause (design doc
+        # §4.5/§4.6), checked first because nil, :infinity, and the
+        # is_number case are mutually exclusive operand shapes, so this
+        # cannot shadow anything below it.
+        lv == nil or rv == nil ->
+          {:ok, nil}
+
+        # REQ-197 §4.6: :infinity (only the unsigned marker -- the signed/
+        # NaN 3-way split is deferred pending REVIEWER sign-off on OQ-1, see
+        # infinity_marker() moduledoc) participates in ordering as the
+        # greatest possible value, handled inside apply_ordering/3.
+        (is_number(lv) or lv == :infinity) and (is_number(rv) or rv == :infinity) ->
+          {:ok, apply_ordering(op, lv, rv)}
+
+        true ->
+          {:error, {:eval_error, {:type_mismatch, op, lv, rv}}}
       end
     end
   end
 
-  @spec apply_ordering(cmp_op(), number(), number()) :: boolean()
+  def eval({:arith, op, l, r}, variables) do
+    with {:ok, lv} <- eval(l, variables),
+         {:ok, rv} <- eval(r, variables) do
+      apply_arith(op, lv, rv)
+    end
+  end
+
+  def eval({:neg, sub}, variables) do
+    with {:ok, v} <- eval(sub, variables) do
+      apply_neg(v)
+    end
+  end
+
+  # REQ-197 §4.2: checked in this exact order for every binary arithmetic
+  # node. Null check (asymmetric with comparison, see §4.5) is checked
+  # FIRST, before any type/promotion logic.
+  @spec apply_arith(arith_op(), value(), value()) ::
+          {:ok, value()} | {:error, {:eval_error, reason :: term()}}
+  defp apply_arith(op, lv, rv) when lv == nil or rv == nil do
+    {:error, {:eval_error, {:null_in_arithmetic, op, lv, rv}}}
+  end
+
+  defp apply_arith(op, lv, rv) when not is_number(lv) or not is_number(rv) do
+    {:error, {:eval_error, {:type_mismatch, op, lv, rv}}}
+  end
+
+  defp apply_arith(op, lv, rv) when is_integer(lv) and is_integer(rv) do
+    apply_int_arith(op, lv, rv)
+  end
+
+  defp apply_arith(op, lv, rv) do
+    apply_float_arith(op, lv * 1.0, rv * 1.0)
+  end
+
+  # REQ-197 §4.3 row A: both-integer semantics.
+  @spec apply_int_arith(arith_op(), integer(), integer()) ::
+          {:ok, integer()} | {:error, {:eval_error, reason :: term()}}
+  defp apply_int_arith(:add, l, r), do: {:ok, l + r}
+  defp apply_int_arith(:sub, l, r), do: {:ok, l - r}
+  defp apply_int_arith(:mul, l, r), do: {:ok, l * r}
+  defp apply_int_arith(:div, l, 0), do: {:error, {:eval_error, {:division_by_zero, :int, l, 0}}}
+  defp apply_int_arith(:div, l, r), do: {:ok, div(l, r)}
+  defp apply_int_arith(:mod, l, 0), do: {:error, {:eval_error, {:modulo_by_zero, :int, l, 0}}}
+  defp apply_int_arith(:mod, l, r), do: {:ok, rem(l, r)}
+
+  # REQ-197 §4.3 row B: float semantics (both operands already promoted to
+  # float by apply_arith/3's final clause). Float division by a zero
+  # divisor cannot go through native `/` (raises ArithmeticError on the
+  # BEAM) -- constructed directly instead. Only the single unsigned
+  # :infinity marker is implemented (OQ-1 REVIEWER gate, see moduledoc);
+  # the signed/NaN 3-way split is deliberately NOT implemented.
+  @spec apply_float_arith(arith_op(), float(), float()) ::
+          {:ok, float() | infinity_marker()} | {:error, {:eval_error, reason :: term()}}
+  defp apply_float_arith(:add, l, r), do: {:ok, l + r}
+  defp apply_float_arith(:sub, l, r), do: {:ok, l - r}
+  defp apply_float_arith(:mul, l, r), do: {:ok, l * r}
+  defp apply_float_arith(:div, _l, r) when r == 0.0, do: {:ok, :infinity}
+  defp apply_float_arith(:div, l, r), do: {:ok, l / r}
+
+  defp apply_float_arith(:mod, l, r) do
+    {:error, {:eval_error, {:modulo_by_zero, :float, l, r}}}
+  end
+
+  # REQ-197 §4.4: unary negation.
+  @spec apply_neg(value()) :: {:ok, value()} | {:error, {:eval_error, reason :: term()}}
+  defp apply_neg(nil), do: {:error, {:eval_error, {:null_in_arithmetic, :neg, nil}}}
+  defp apply_neg(:infinity), do: {:ok, :infinity}
+  defp apply_neg(v) when is_number(v), do: {:ok, -v}
+  defp apply_neg(v), do: {:error, {:eval_error, {:type_mismatch, :neg, v}}}
+
+  # REQ-197 §4.6: :infinity is the greatest possible value. `:infinity`
+  # vs. `:infinity` is handled by the `l == r` fast path (`<=`/`>=` true,
+  # `<`/`>` false); a real-number operand is otherwise strictly less than
+  # `:infinity`. Plain-number clauses (no `:infinity` on either side) come
+  # last and are unchanged from before this requirement.
+  @spec apply_ordering(cmp_op(), number() | infinity_marker(), number() | infinity_marker()) ::
+          boolean()
+  defp apply_ordering(op, l, r) when l == :infinity or r == :infinity do
+    cond do
+      l == r -> op in [:lte, :gte]
+      l == :infinity -> op in [:gt, :gte]
+      r == :infinity -> op in [:lt, :lte]
+    end
+  end
+
   defp apply_ordering(:lt, l, r), do: l < r
   defp apply_ordering(:lte, l, r), do: l <= r
   defp apply_ordering(:gt, l, r), do: l > r

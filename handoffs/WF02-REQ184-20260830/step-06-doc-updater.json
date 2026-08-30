@@ -1,0 +1,36 @@
+{
+  "handoff_id": "step06-WF02-REQ184-20260830",
+  "run_id": "WF02-REQ184-20260830",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ184-20260830/step-06-doc-updater.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-184"],
+    "issue_ids": [],
+    "queue_task_id": 357,
+    "github_issue": "702",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ184-20260830/step-05-release-validator.json",
+      "handoffs/WF02-REQ184-20260830/req184-release-validation-report.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/webhooks.ex",
+      "lib/letflow/routers/webhooks.ex",
+      "test/letflow/webhooks_test.exs",
+      "test/letflow/routers/webhooks_test.exs",
+      "test/specs/REQ-184.md",
+      "handoffs/WF02-REQ184-20260830/req184-release-validation-report.md"
+    ],
+    "branch_name": "feature/WF02-REQ184-20260830",
+    "note": "RELEASE-VALIDATOR (WF-02 Step 5) independently re-verified all 6 of REQ-184's acceptance_criteria against the real code (not the prior chain's reports): AC1 field allowlist diffed by hand against web/src/types/api.ts's WebhookDeliveryAttempt (exact 9-field match); AC2 limit-param fallback and truncation logic read directly plus its test coverage confirmed; AC3 permission gate confirmed via the same :WebhookSubscriptionsManage/:WebhooksManage mapping as the other subscription routes, with lib/letflow/api/authorization.ex confirmed untouched by this diff; AC4 cross-tenant-404 mechanism re-traced through Letflow.Webhooks.list_delivery_attempts/3 into the shared private get/2 helper myself (same not_found-for-both-absent-and-other-tenant code path as update/3 and delete/2, not a weaker proxy); AC5 non-existent-id 404 confirmed via the same get/2 path and its test; AC6 moduledoc disclosure text read directly (R-Co's webhooks.zig not inspected, SPA contract binding instead). Re-ran `mix test test/letflow/webhooks_test.exs test/letflow/routers/webhooks_test.exs` myself for real: 43 passed, 0 failures. Ran `mix compile --warnings-as-errors` myself: clean. Grepped lib/letflow/routers/webhooks.ex for Repo./Ecto.Query myself: zero matches, INV-RT-1 unviolated. Confirmed via git diff main...HEAD --stat that lib/letflow/api/authorization.ex, any webhook_subscriptions/webhook_delivery_attempts migration, and the Delivery/Subscription schema files are genuinely untouched by this branch, and that test/mix/tasks/letflow_check_toolchain_test.exs (the file behind TEST-RUNNER's 2 documented rustc-absent baseline failures) is not touched by this diff either. Full independent basis in handoffs/WF02-REQ184-20260830/req184-release-validation-report.md. Verdict: PASS -- genuinely satisfied, not just chain-of-PASSes. Routing to DOC-UPDATER to flip REQ-184's status to done in docs/requirements.yaml and append the status-history event to the current run-history volume (check docs/status/requirement_status.index.yaml for which volume is current)."
+  },
+  "task": {
+    "description": "DOC-UPDATER (WF-02 Step 6): flip REQ-184's status to done in docs/requirements.yaml and append a 'done' status-history event with a real UTC timestamp to the current run-history volume."
+  },
+  "result": null
+}

@@ -746,6 +746,99 @@ defmodule Letflow.Engine.ExprTest do
       assert {:ok, ast} = Expr.parse(~S|coalesce("only")|)
       assert Expr.eval(ast, %{}) == {:ok, "only"}
     end
+
+    # Gap-fill (TEST-DESIGNER pass): design doc §4's arity table (traceability
+    # §10 row 3) specifies a wrong-arity example for EVERY fixed-arity
+    # builtin, not just length/coalesce -- ELIXIR-DEV's initial pass only
+    # covered those two representative cases. required_arity/1 is a per-
+    # function lookup dispatched inside check_arity/2 (§4), so a mistake
+    # scoped to one function's entry (e.g. contains wrongly requiring 3
+    # instead of 2) would not be caught by exercising length/coalesce alone.
+    # One under-arity and one over-arity test per remaining function,
+    # mirroring the existing length/coalesce shape exactly.
+    test "upper() with zero arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse("upper()")
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :upper, {:exactly, 1}, 0}}}
+    end
+
+    test "upper(a, b) with two arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|upper("a", "b")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :upper, {:exactly, 1}, 2}}}
+    end
+
+    test "lower() with zero arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse("lower()")
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :lower, {:exactly, 1}, 0}}}
+    end
+
+    test "lower(a, b) with two arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|lower("a", "b")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :lower, {:exactly, 1}, 2}}}
+    end
+
+    test "trim() with zero arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse("trim()")
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :trim, {:exactly, 1}, 0}}}
+    end
+
+    test "trim(a, b) with two arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|trim("a", "b")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :trim, {:exactly, 1}, 2}}}
+    end
+
+    test "contains(a) with one argument is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|contains("a")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :contains, {:exactly, 2}, 1}}}
+    end
+
+    test "contains(a, b, c) with three arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|contains("a", "b", "c")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :contains, {:exactly, 2}, 3}}}
+    end
+
+    test "startsWith(a) with one argument is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|startsWith("a")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :startsWith, {:exactly, 2}, 1}}}
+    end
+
+    test "startsWith(a, b, c) with three arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|startsWith("a", "b", "c")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :startsWith, {:exactly, 2}, 3}}}
+    end
+
+    test "endsWith(a) with one argument is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|endsWith("a")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :endsWith, {:exactly, 2}, 1}}}
+    end
+
+    test "endsWith(a, b, c) with three arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|endsWith("a", "b", "c")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :endsWith, {:exactly, 2}, 3}}}
+    end
   end
 
   # ---------------------------------------------------------------------

@@ -1142,3 +1142,13 @@ history:
       feature/WF02-REQ183-20260830 for reuse once REQ-190 merges; no
       implementation was started. Queue task 356 re-releasable once REQ-190
       ships.
+  - req: REQ-192
+    event: started
+    agent: ORCH
+    at: "2026-08-30T04:49:06Z"
+    note: >
+      Queue task 365, GH#711, stage S6. Route layer atop REQ-191's already-
+      shipped service catalog core -- GET /services (SVC-04 :ServicesRead),
+      GET/POST/PATCH/DELETE /admin/services (SVC-04 :AdminServicesRead/
+      :AdminServicesManage). REQ-069's permission surface already ships
+      these three permission names with no backing route until now.

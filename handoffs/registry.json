@@ -3378,6 +3378,21 @@
       "released_lock": true,
       "last_known_step": "Step 1 (CODE-DESIGNER design complete, blocked before ELIXIR-DEV)",
       "note": "Blocked: deliver/3 needs Letflow.Secrets.resolve/2 (REQ-190), which is not on main yet (mid-rework). Design artefact produced against REQ-190's drafted contract, pushed to feature/WF02-REQ183-20260830 for reuse once REQ-190 merges. No implementation started."
+    },
+    {
+      "run_id": "WF02-REQ192-20260830",
+      "requirement_id": "REQ-192",
+      "queue_task_id": 365,
+      "github_issue_number": 711,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/routers/services.ex"
+      ],
+      "started_at": "2026-08-30T04:49:06Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
+      "note": "Route layer atop REQ-191's shipped service catalog core -- GET /services, GET/POST/PATCH/DELETE /admin/services, SVC-04-gated."
     }
   ]
 }

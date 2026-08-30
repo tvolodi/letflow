@@ -144,44 +144,51 @@ survive this resolution unchanged:
   for why this is not a security regression but a correction of an
   originally-unimplementable design.
 
-### 0.3 What is NOT yet true in this codebase, stated explicitly rather than assumed
+### 0.3 Build-sequencing status — RESOLVED: REQ-190 has shipped to `main`
 
-**As of this design being written, `Letflow.Secrets` does not exist.**
-`find lib/letflow -iname '*secret*'` returns nothing in this branch's
-working tree. `docs/requirements.yaml`'s REQ-190 entry carries
-`status: in_progress` (not `done`), and its own git history
-(`WF02-REQ190-20260830 step-03 PARTIAL, rework Step 2a for empty-plaintext
-defect`) shows its most recent implementation attempt was sent back for
-rework, not merged. **This design is written against REQ-190's own already
--produced, REVIEWER-adjacent design artefact**
-(`lib/letflow/design/req190-secrets-core.md`, found on
-`origin/feature/WF02-REQ190-20260830`, itself built directly on 0016's
-REVIEWER-signed-off decision) — specifically its §3.2 `resolve/2` contract,
-reproduced verbatim in §3.2 below — **not against a stub, and not against
-guessed function names**, because that real design already fixes the exact
-signature. This is legitimate design-time work: 0016 §F is decided and
-REVIEWER-signed-off, and REQ-190's own design commits to a concrete,
-implementation-ready `resolve/2` contract — the interface this design needs
-is settled even though the module's code is not yet merged.
+**Updated on resumption (2026-08-30).** This section originally documented
+that `Letflow.Secrets` did not yet exist and that ELIXIR-DEV's
+implementation step had to be held until REQ-190 merged. That precondition
+is now satisfied: REQ-190 merged to `main` as commit `bf45c548` ("Secrets
+core — envelope-encrypted per-tenant secret storage and resolution by
+reference, webhook HMAC key reconciliation [WF02-REQ190-20260830] (#735)").
+Verified directly against `main` (not inherited from any handoff claim),
+2026-08-30:
 
-**What this means for build sequencing, stated so it is not silently
-skipped:** `docs/requirements.yaml`'s REQ-183 entry itself already records
-this as "REWORK 2" — `depends_on: [REQ-181, REQ-176, REQ-189, REQ-190]`,
-with build order **REQ-189 → REQ-190 → REQ-183 → REQ-184**, and states
-plainly: "deliver/3 calls Letflow.Secrets.resolve/2 against REQ-190's real,
-already-shipped module — no stub." **This design (Step 1) is legitimate to
-produce now** — it does not itself write or stub any `.ex` code — but
-**ELIXIR-DEV's Step 2a implementation of this design must not begin until
-REQ-190 actually merges `lib/letflow/secrets.ex` (and the
-`webhook_subscriptions.secret_ref`/`secret_key_id` migration/schema change,
-§0.1) to this branch's ancestry.** ORCH is expected to hold Step 2a
-dispatch on this requirement until REQ-190's own status flips to `done`
-(matching the documented `requirement_status` convention) — this design
-does not decide that scheduling itself, it states the precondition
-explicitly per this project's own "no silent guessing" rule, matching the
-identical flag REQ-183's own prior (pre-resequencing) design iteration
-raised in its §7 OQ-1 before the resequencing that produced the current
-`depends_on` list.
+- `lib/letflow/secrets.ex` exists on `main` and defines `put/2`, `resolve/2`,
+  `disable/2` exactly as REQ-190's own design (§3.1–§3.3) specified.
+- `priv/repo/migrations/20260830000004_add_secret_ref_to_webhook_subscriptions.exs`
+  exists on `main` — it adds `secret_ref`/`secret_key_id` to
+  `webhook_subscriptions` and blanks `secret_hash` to `NULL` (column kept,
+  not dropped, exactly as §0.1 below already assumed).
+- `lib/letflow/webhooks/subscription.ex` on `main` carries `field(:secret_ref,
+  :string)` and `field(:secret_key_id, :integer)`, and its moduledoc confirms
+  `secret_hash` is superseded, not read by any current function.
+- `lib/letflow/webhooks.ex`'s `create/2` on `main` now writes the plaintext
+  via `Letflow.Secrets.put/2` (namespace `"webhook"`, purpose
+  `:webhook_hmac`) inside one `Ecto.Multi` with the `Subscription` insert,
+  exactly matching this design's §0.1 description of the resolution.
+
+**Every signature this design depends on (§3.2) has been checked against
+the real, merged `lib/letflow/secrets.ex` on `main` byte-for-byte** — see
+§3.2 below for the side-by-side. No divergence found beyond the two
+mismatches REQ-190's own design §8 already flagged and this design already
+carried the fix for (the `consumer: :webhook_dispatcher` option and the
+`%{plaintext:, key_id:, purpose:}` map return) — both were already reflected
+in this design's §3.1/§3.2 text before this resumption pass; this update
+only replaces the now-stale "not yet true" framing and re-confirms nothing
+else drifted.
+
+**Remaining build-order note, not a blocker for this design step:** this
+feature branch's own `HEAD` does not yet contain REQ-190's commits — this
+design step (CODE-DESIGNER, no `.ex` code written) does not require them to
+be present locally, only that the contract they fix is known and correct,
+which is now independently verified against `main` rather than against a
+sibling design doc. **ELIXIR-DEV's Step 2a implementation still must not
+begin until this branch's ancestry actually includes `bf45c548`** (a rebase
+or merge of `main`/REQ-190's changes into this feature branch) — the
+precondition is satisfied upstream, but the merge into this specific branch
+is Step 2a's own prerequisite, not something this design step performs.
 
 ## 1. Migration — `webhook_delivery_attempts`
 
@@ -689,14 +696,14 @@ duplicate or re-decide any part of REQ-190's own scope.
 
 ## 7. Open questions (not silently resolved — for ELIXIR-DEV/REVIEWER/ORCH)
 
-1. **Build sequencing on REQ-190 (restated from §0.3, the most important
-   open item here).** `Letflow.Secrets` does not exist in this tree as of
-   this design. ORCH must not dispatch this design's ELIXIR-DEV
-   implementation step until REQ-190's own status is `done` and its module
-   is merged into this branch's ancestry — this design commits to REQ-190's
-   real, already-designed `resolve/2` contract (§3.2) specifically so that
-   when that day comes, the diff is "write the code this design already
-   specifies," not "guess again."
+1. **Build sequencing on REQ-190 — RESOLVED as of this resumption (restated
+   from §0.3).** REQ-190 merged to `main` as commit `bf45c548`; `Letflow.Secrets`
+   is real, shipped code there, verified byte-for-byte against this design's
+   §3.2 contract. The only remaining precondition, not itself an open
+   question, is mechanical: this feature branch's own `HEAD` must include
+   `bf45c548` (via merge/rebase from `main`) before ELIXIR-DEV's Step 2a
+   begins — ORCH/ELIXIR-DEV performs that merge as part of resuming Step 2a,
+   the same way any feature branch picks up its dependency's merged commit.
 2. **Whether a key-resolution failure (§3.1 step 3) should itself count as
    a `:FAILED` attempt row / increment `consecutive_failures`.** This
    design says no (a distinct, earlier failure mode that never reaches the

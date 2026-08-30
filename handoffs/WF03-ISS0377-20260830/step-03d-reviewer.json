@@ -5,7 +5,7 @@
   "step": "Step 3d (idiom/scope-creep review)",
   "from_agent": "SECURITY-REVIEWER",
   "to_agent": "REVIEWER",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "normal",
   "context": {
     "note": "Security review of ISS-0377's fix (Part A: test/letflow/engine/wasm/plugin_handler_test.exs AC7 cross-platform assertions; Part B: scripts/test_parallel.sh per-partition build-path isolation) is complete: PASS. No tenant-data path touched (test-infrastructure only), no applicable INV-1..INV-8 invariant failed, no newly hardcoded secrets, no cross-partition data leak in the new _build/test-partition-<i> scheme, no shell injection risk in the new Step 1.6 seeding loop. Full report at handoffs/WF03-ISS0377-20260830/security-review-report.md.",
@@ -27,5 +27,10 @@
   "task": {
     "description": "Review the ISS-0377 fix (Part A + Part B, commit 8eef01b) for OTP/shell idioms, supervision integrity (n/a here, no OTP process changes), scope creep against lib/letflow/design/iss0377-cross-platform-test-fixes.md, and decision-record consistency (req113-parallel-test-runner.md's AC4/AC5/invariants). Optionally sanity-check the hardlink-sharing note above. If it passes, route to WF-03's next step per the workflow doc; if not, route a rework handoff back to ELIXIR-DEV with specifics."
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "report": "handoffs/WF03-ISS0377-20260830/idiom-scope-review-report.md",
+    "summary": "Scope confirmed limited to the two target files plus design/handoff docs (git diff --stat main...HEAD). No OS-specific skip-guard was introduced for either symptom (A.6 non-goal and B.3 Approach-1 rejection both honored). Implementation matches the design doc: A.4's :os.type/0-derived extension mapping with loud flunk on unmapped OS, A.4 steps 2-3's fixed-name-then-fallback-listing check, A.5's corrected 'at least one .rs' assertion (not 'every entry') with the empty-external_resource fallback branch, and B.4's sequential pre-Step-2 per-partition hardlink-copy seeding with MIX_BUILD_PATH set per-invocation (not exported). One non-blocking style note: the two new AC7 helper defps are nested inside their describe block rather than hoisted to module level like this file's existing wasmex_pids/context helpers -- cosmetic, not worth a rework cycle. Investigated SECURITY-REVIEWER's hardlink-safety flag against real Mix/Elixir source (lib/mix/sync/lock.ex, lib/mix/compilers/elixir.ex): the reported MIX_OS_CONCURRENCY_LOCK symptom is produced by Mix.Sync.Lock, keyed by build_path and living entirely outside _build/ in the OS tmp dir -- distinct MIX_BUILD_PATH per partition gives each partition a distinct lock key, which eliminates that contention by construction, independent of any hardlink-sharing question. The residual concern (Mix.Compilers.Elixir.write_manifest/9 uses File.write! / in-place O_CREAT|O_TRUNC, NOT unlink+rename, so a shared-inode manifest write during a real recompile could in principle corrupt a sibling partition's copy) is real as a general statement about Mix, but does not fire here in practice: write_manifest/9 only runs when stale sources/modules are detected, and no partition should ever see a stale source in this design (Step 1's single pre-compile is fresh, cp -al preserves mtimes identically across every partition copy, and no partition's own test run touches lib/or test/ sources). Net: sound by construction for the actual reported failure mode, sound in practice (not in absolute principle) for the residual manifest-corruption question -- recorded precisely rather than repeating the design/security docs' 'replace-via-rename' framing, which is not accurate as a general claim about Mix.",
+    "next_action": "Route to TEST-DESIGNER for WF-03 Step 4 (regression test) per handoffs/WF03-ISS0377-20260830/step-04-test-designer.json"
+  }
 }

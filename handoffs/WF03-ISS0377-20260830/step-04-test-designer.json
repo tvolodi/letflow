@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF03-ISS0377-20260830-step04",
+  "run_id": "WF03-ISS0377-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 4 (regression test)",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "REVIEWER gate PASSED on ISS-0377's fix (commit 8eef01b, branch feature/WF03-ISS0377-20260830). SECURITY-REVIEWER also PASSED (out of scope for INV-1..INV-8, checked anyway). Full REVIEWER report: handoffs/WF03-ISS0377-20260830/idiom-scope-review-report.md. Result recorded in handoffs/WF03-ISS0377-20260830/step-03d-reviewer.json.",
+    "design_file": "lib/letflow/design/iss0377-cross-platform-test-fixes.md",
+    "implementation_commit": "8eef01b",
+    "branch": "feature/WF03-ISS0377-20260830",
+    "changed_files": [
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "scripts/test_parallel.sh"
+    ],
+    "important_scenario_difference_from_WF-02": "This is WF-03 (issue fix), and unusually the fix itself IS test code, not application code -- the thing being regression-tested is a correction to two EXISTING test-suite files (test/letflow/engine/wasm/plugin_handler_test.exs's AC7 assertions, and scripts/test_parallel.sh's partition-launch logic), not a new lib/ module. Per docs/agents/workflows/WF-03_issue_resolving.md's Step 2-4 section, the base fail-then-pass rule (Steps 2-4 following WF-02's 3/3b/4 shape) requires TEST-DESIGNER to show the new/corrected test logic fails against the PRE-FIX code and passes against the POST-FIX code. Read that workflow doc's Step 4 section yourself before starting -- do not rely solely on this summary.",
+    "fail_then_pass_guidance_for_this_case": [
+      "Part A (plugin_handler_test.exs AC7): the pre-fix code here is NOT 'module does not exist' (the describe block and its two tests existed before ISS-0377's fix, just with Unix-only hardcoded assertions) -- this is a fix to EXISTING behavior, so the workflow doc's plain fail-then-pass rule applies directly, NOT the 'non-existence' mutation-only carve-out. Concretely: check out the pre-fix commit (parent of 8eef01b, i.e. 64eef56 or earlier -- confirm the exact pre-fix SHA yourself), run the OLD AC7 describe block's two tests in a simulated non-Unix artifact shape (e.g. temporarily rename/relocate priv/native/wasmex.so or fake a priv_dir layout with only a .dll-named file present, or stub :code.priv_dir(:wasmex) if that's cleaner) and confirm the OLD assertions (hardcoded 'native/wasmex/src/' substring match + hardcoded 'native/wasmex.so' path) fail in that simulated shape. Then confirm the NEW (post-fix, commit 8eef01b) assertions pass against that same simulated non-Unix shape (since they derive the extension from :os.type/0 rather than hardcoding it, they should be satisfiable even when simulating a Windows-shaped artifact tree on this Linux sandbox, e.g. temporarily monkey-patching or parameterizing the extension the test looks for). If a live simulated-non-Unix run is impractical in this sandbox, the alternative explicitly given in this same handoff's routing instruction is: mutate the FIX back to the OLD broken assertion (revert just that one line/expression) and confirm that reverted version fails where the current fixed version passes -- this is the 'mutation of the fix itself' variant of the fail-then-pass proof, and is equally acceptable evidence here.",
+      "Part B (scripts/test_parallel.sh): per the design doc's own Part C note, this has no unit-testable Elixir surface -- it's bash control flow. Confirm this project's existing precedent for testing scripts/*.sh (grep test/ and scripts/ for any existing shellcheck/bats/script-level test harness) before assuming ExUnit is the only vehicle, per Part C's explicit instruction. A viable regression check: capture MIX_BUILD_PATH as logged/observed from two different partitions' environments during a real scripts/test_parallel.sh run and assert they differ (per Part C's own suggested check) -- and/or a fail-then-pass demonstration by mutating Step 1.6 out (or reverting to the pre-fix script) and showing the isolation check now fails.",
+      "Mutation is a TEMPORARY PROBE per WF-03's Step 2-4 section -- if you mutate committed files (test file assertions or the script) to demonstrate the pre-fix failure, you MUST revert the mutation and verify the revert before finishing this step. Do not leave a mutant in the tree."
+    ],
+    "acceptance_criteria_ref": "docs/issues/ISS-0377.yaml",
+    "reviewer_findings_for_awareness": "REVIEWER's report flags one non-blocking style note (AC7 helper defps nested inside their describe block rather than hoisted to module level like the file's other helpers) -- cosmetic only, does not block your work and does not need a fix in this pass. REVIEWER also investigated and confirmed (against real Mix/Elixir source) that Part B's per-partition MIX_BUILD_PATH isolation is sound: it works by giving each partition a distinct Mix.Sync.Lock key (eliminating the reported hard-link contention by construction), not by any assumption about in-place-vs-rename manifest writes. No action needed from TEST-DESIGNER on this point -- included for context only."
+  },
+  "task": {
+    "description": "Write regression test(s)/coverage for ISS-0377's fix per docs/agents/workflows/WF-03_issue_resolving.md's Step 4 section, satisfying its fail-then-pass requirement for a fix to EXISTING test-suite behavior (not a new module). Cover both Part A (plugin_handler_test.exs AC7 cross-platform assertions) and Part B (scripts/test_parallel.sh per-partition build isolation), following Part C of the design doc's guidance on vehicle choice for each. Do not implement further application/script fixes yourself -- if you find a real defect, route back to REVIEWER/ELIXIR-DEV rather than fixing it silently. Route to TEST-DESIGN-VALIDATOR when complete."
+  },
+  "result": null
+}

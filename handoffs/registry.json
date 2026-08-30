@@ -3431,15 +3431,15 @@
       "requirement_id": "REQ-198",
       "queue_task_id": 371,
       "github_issue_number": 717,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/engine/expr.ex"
       ],
       "started_at": "2026-08-30T10:24:24Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 5 (RELEASE-VALIDATOR: PASS, independently re-verified all 11 ACs -> routed to DOC-UPDATER, step-06)",
-      "note": "Second and last of S6's expr half, atop REQ-197's grammar. Adds a function-call form and 8 pure builtins (length, lower, upper, trim, contains, startsWith, endsWith, coalesce), closed-whitelist lex-time design ported from R-Co. now()/date_add/date_diff explicitly excluded. Must not weaken @unsupported_call_markers. RELEASE-VALIDATOR independently re-ran the full suite (scripts/test_parallel.sh, 2715/2717, same 2 pre-existing rustc-absent CheckToolchainTest failures) and re-checked all 11 ACs against real code -- genuine PASS, see handoffs/WF02-REQ198-20260830/release-validation-report-req198.md."
+      "lock_released_at": "2026-08-30T11:08:03Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: merged PR #741 to main, queue task 371 released done)",
+      "note": "Second and last of S6's expr half, atop REQ-197's grammar. Adds a function-call form and 8 pure builtins (length, lower, upper, trim, contains, startsWith, endsWith, coalesce), closed-whitelist lex-time design ported from R-Co. now()/date_add/date_diff explicitly excluded. Must not weaken @unsupported_call_markers. One real gap caught by TEST-DESIGNER (wrong-arity coverage missing for 6 of 8 builtins), filled and reverified. Closes S6's expr subsystem in full (REQ-197 + REQ-198 both done). PR #741 merged."
     }
   ]
 }

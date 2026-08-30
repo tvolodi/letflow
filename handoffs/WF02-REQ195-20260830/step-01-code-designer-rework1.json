@@ -1,0 +1,39 @@
+{
+  "handoff_id": "step01-rework1-WF02-REQ195-20260830",
+  "run_id": "WF02-REQ195-20260830",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ195-20260830/step-01-code-designer-rework1.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-195"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ195-20260830/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req195-audit-entry-storage.md",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/tasks.ex"
+    ],
+    "branch_name": "feature/WF02-REQ195-20260830",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR FAILED Step 1b on one BLOCKER: §3.1 Decision 2's justification for choosing Elixir-boundary capture over a DB trigger relies on the claim that 'every one of this requirement's covered call sites already receives actor_id as an explicit Elixir-level argument,' and cites 'Letflow.Definitions.activate/2's opts[:service_scope_validator]-adjacent context' as one of the four supporting examples. This claim is FALSE for activate/2, and for deprecate/2 and archive/2 as well.\n\nVerified directly against lib/letflow/definitions.ex this session:\n- `@type activate_opts :: [prefix: String.t(), service_scope_validator: service_scope_validator_fun() | nil]` (line ~190) -- no actor_id field, keyword or otherwise.\n- `def activate(id, opts) when is_list(opts) do` (line 732) only ever reads `Keyword.get(opts, :prefix)` and `Keyword.get(opts, :service_scope_validator)` -- no actor_id anywhere in the function body.\n- `deprecate/2` and `archive/2` both take `opts :: opts()` where `@type opts :: [prefix: String.t()]` -- an even narrower type with no actor_id and no service_scope_validator either. Both delegate to a private `transition/4` that never reads or threads an actor_id.\n\nBy contrast, `Letflow.Engine.cancel_instance/3`, `Letflow.Engine.complete_task/3`, and `Letflow.Tasks.assign_task/3` (via `claim_attrs`/`assign_attrs`) genuinely do receive `actor_id` as an explicit, already-plumbed argument -- confirmed directly (`@type claim_attrs :: %{required(:actor_id) => Ecto.UUID.t()}` in tasks.ex; `attrs[:actor_id]`/`Map.get(attrs, :actor_id)` used throughout engine.ex's cancel_instance/complete_task bodies). Only the Definitions module's three lifecycle functions are the exception, and AC2 explicitly requires a definition ACTIVATION to be one of the three audited operations with captured content -- this is not a peripheral call site, it is one of AC2's three named, tested operations.\n\nThis is a load-bearing factual error in Decision 2's reasoning, not a cosmetic one: the design's stated trade-off ('every covered call site already has the actor in hand at the exact point the audit row needs to be built') does not hold for activate/2/deprecate/2/archive/2, and the design gives ELIXIR-DEV no instruction for what to do about it. Left as-is, ELIXIR-DEV faces an unresolved choice with no guidance: (a) add a new `actor_id` parameter/opts key to activate/2 (and, for consistency, deprecate/2 and archive/2) -- a public API signature change this design's artifacts_out list never mentions and no caller update is scoped for; or (b) capture the definition-activation audit row with `actor_id: nil` -- which is schema-legal (actor_id is nullable) but silently discards attribution for arguably the most access-controlled of the three AC2 operations (activate/2 already takes a service_scope_validator precisely because it is a sensitive transition), and the design never states this is the intended disposition.\n\nFix required:\n1. In §3.1 Decision 2's reasoning, remove or correct the false claim about activate/2 and state plainly, for all three of activate/2, deprecate/2 and archive/2, that none of them currently receives actor_id -- this is a real gap in the 'already receives actor_id explicitly' argument for these three call sites specifically, not a uniform property of all covered call sites as currently written.\n2. Make and state an explicit decision on how the definition-lifecycle audit rows get their actor_id: either (a) add `actor_id: Ecto.UUID.t() | nil` to `activate_opts()`/a new `deprecate_opts()`/`archive_opts()` (or a shared opts type), threaded through to `Letflow.Audit.append_multi/4`'s `attrs.actor_id`, with the signature change listed in §8's artifacts_out and the trade-off of this API-widening stated; or (b) state explicitly that these three operations record `actor_id: nil` in this requirement's initial cut, with a one-sentence justification for why that is acceptable now (e.g. these are typically service/admin-driven transitions without a per-call human actor in Letflow's current callers) and note it as a completeness gap for a future requirement -- do not leave the disposition to ELIXIR-DEV's own judgment.\n3. Update §3.2's per-operation table rows for Definition activate/deprecate/archive to show the actual `actor_id` source consistent with whichever of (a)/(b) is chosen (currently the table doesn't surface actor_id at all for any row -- add it, at least for these three, since it's the disputed field).\n4. Re-check the same claim is not repeated anywhere else in the design (grep the file for 'activate/2' and 'already receives actor_id') and correct every occurrence, not just §3.1's summary sentence.\n5. Do not rewrite any other section without cause -- §1/§1.2/§1.3, §2, §4, §5, §6, §7, §9 all passed the validator's gate as written, including the canonical hashed form (§5, adversarially stress-tested this session and found unambiguous/collision-free) and the verify_chain/2 recompute-before-linkage contract (§6, confirmed to genuinely fix R-Co's documented weakness).",
+    "acceptance_criteria": [
+      "§3.1 Decision 2's reasoning no longer claims activate/2 (or deprecate/2, archive/2) already receives actor_id as an explicit argument -- verified false against lib/letflow/definitions.ex's activate_opts()/opts() types and activate/2's, deprecate/2's, archive/2's actual bodies.",
+      "An explicit decision is stated for how the three Definitions lifecycle operations' audit rows obtain actor_id -- either a signature/opts widening (with the new field named and artifacts_out updated) or an explicit actor_id: nil disposition with a one-sentence justification -- not left unstated or implied.",
+      "§3.2's per-operation table for Definition activate/deprecate/archive states the actor_id source consistent with the decision in point 2.",
+      "No other occurrence of the false 'already receives actor_id' claim survives elsewhere in the file.",
+      "All previously-passing sections (§1, §2, §4, §5, §6, §7, §9, the traceability matrix) remain intact and correct -- no unrelated rewrite.",
+      "Zero literal Elixir/SQL implementation code in the design doc, still true after the fix.",
+      "CRITICAL: the handoff's top-level status field must be exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED (top-level context as an OBJECT, not a nested wrapper) when you finish."
+    ]
+  }
+}

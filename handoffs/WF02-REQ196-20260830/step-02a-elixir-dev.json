@@ -1,0 +1,59 @@
+{
+  "handoff_id": "step02a-WF02-REQ196-20260830",
+  "run_id": "WF02-REQ196-20260830",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ196-20260830/step-02a-elixir-dev.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-196"],
+    "issue_ids": [],
+    "queue_task_id": 369,
+    "github_issue": "GH#715",
+    "related_handoff_ids": ["handoffs/WF02-REQ196-20260830/step-01b-code-design-validator.json"],
+    "artifacts_in": [
+      "lib/letflow/design/req196-audit-route.md",
+      "lib/letflow/routers/audit.ex",
+      "lib/letflow/audit.ex",
+      "lib/letflow/audit/entry.ex",
+      "lib/letflow/design/req195-audit-entry-storage.md",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/api/pagination.ex",
+      "web/src/api/audit.ts",
+      "web/src/pages/admin/AuditLogPage.tsx"
+    ],
+    "branch_name": "feature/WF02-REQ196-20260830",
+    "rework_pass": 0,
+    "design_gate_result": "PASS",
+    "verification_summary": {
+      "new_function_need": "Independently confirmed via reading lib/letflow/audit.ex in full: only append_multi/4, insert_entry/3, verify_chain/2, and struct_state/2 exist -- no read/list function of any kind. Confirmed routers/audit.ex's own moduledoc states 'this module performs no Repo call of any kind' (INV-RT-1), matching admin_services.ex-style invariants project-wide, so a filtered/paginated list genuinely cannot be built inline in the router. Confirmed the cited ServiceCatalog.list_all/1 precedent (lib/letflow/service_catalog.ex ~L369-387) matches the design's claimed shape: own list_params()-equivalent input, own cursor-prefix constant (\"SCA:\" vs \"SC:\"), page_size+1-fetch/drop-extra-row idiom, and Repo.all(query) with no tenant filter of its own (ServiceCatalog is not tenant-scoped the way Audit.Entry is). The new Letflow.Audit.list_entries/1 is genuinely required, not a convenience.",
+      "payload_removal_safety": "Read web/src/api/audit.ts in full: RawAuditEntry (L26-35) declares exactly eight fields (audit_id, actor_id, action, resource_type, resource_id, timestamp, before_state, after_state) -- no payload field. Grepped 'payload' and '\\.payload' across web/src/pages/admin/AuditLogPage.tsx and web/src/ entirely: zero matches. Removal is confirmed safe independently, not by trusting the design doc's own grep claims.",
+      "current_router_match": "Read lib/letflow/routers/audit.ex in full: moduledoc's stated caveats (resource_type constant \"instance\", before_state/after_state always null, payload as a Letflow addition), EventStore.read_global/1 usage, the payload field in audit_item/1, and all eight filter params (cursor, page_size, from, to, actor_id, resource_id, resource_type, pipeline_run_id) all match the design's description of the current state exactly.",
+      "index_backing": "Read priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs directly: confirms all three indexes the design cites exist verbatim -- (timestamp desc, id desc), (actor_id, timestamp desc, id desc), (resource_type, resource_id, timestamp desc, id desc). No new migration is needed for this requirement's filter shapes.",
+      "resource_type_filter": "Confirmed unsupported_resource_type?/1 (routers/audit.ex L211-214) currently treats any value other than nil/\"\"/\"instance\" as unsupported, short-circuiting to an empty page with no query issued -- a no-op filter. Design correctly specifies deleting this function and its call site, replacing it with a real optional equality filter (resource_type == ^resource_type when present) backed by the confirmed index #3.",
+      "authorization_unchanged": "Grepped lib/letflow/api/authorization.ex: endpoint_policy_key(\"GET\", \"/audit\") returns :AuditRead (L282), unchanged. No edit to this file is in scope.",
+      "moduledoc_rewrite_precision": "Design section 5 names the exact lines to remove (the 'Served from the event store' section, L14-37; the resource_type 'not supported' framing in the filter-disposition table) and prescribes concrete replacement content (naming Letflow.Audit.list_entries/1 as the new delegate, restating what before_state/after_state/resource_type now do) -- no 'always null'/'constant resource_type' language survives, and no TBD/deferral language anywhere in the design.",
+      "ac_cross_check": "All 9 REQ-196 acceptance criteria (docs/requirements.yaml L10651-10659) read directly and cross-checked against the design's section 0 traceability table -- every AC maps to a concrete design element (AC1/AC2 -> sections 1/2.1; AC3 -> section 3; AC4 -> sections 2/2.2; AC5 -> section 6; AC6 -> section 7; AC7 -> section 5; AC8 -> section 9 non-goals; AC9 is ELIXIR-DEV/TEST-RUNNER's own execution gate).",
+      "no_implementation_code": "Grepped the design doc for defmodule, ^\\s*def , and Ecto pipe-chain bodies (|> where(, |> Repo., Repo.all(query) -- the only match for the last pattern is prose inside backticks in section 7 describing runtime semantics, not a code fence. All six fenced blocks (L43-53 @type, L72-76 @spec, L173-183 response envelope shape) contain only type declarations and a plain map/comment sketch, no executable function bodies. Confirmed the prior pipe-operator query block rework (design section 1.3, now a plain predicate table) was fully removed."
+    }
+  },
+  "task": {
+    "description": "Implement REQ-196 strictly per the APPROVED design at lib/letflow/design/req196-audit-route.md (passed CODE-DESIGN-VALIDATOR, see verification_summary above). Add Letflow.Audit.list_entries/1 (design section 1) to lib/letflow/audit.ex: accepts the list_params() shape (page_size, optional pre-decoded cursor seek pair, from, to, actor_id, resource_id, resource_type), queries Letflow.Audit.Entry with only-when-present predicates (section 1.3's table), orders by timestamp desc/id desc, uses the page_size+1/drop-extra-row has_more idiom, and is prefix-scoped. Repoint lib/letflow/routers/audit.ex's handle_list/1 from Letflow.EventStore.read_global/1 to Letflow.Audit.list_entries/1: delete unsupported_resource_type?/1 and its call site entirely (resource_type becomes a real optional equality filter), update audit_item/1's field mapping per section 2.1 (id->audit_id rename retained, resource_type/before_state/after_state now real columns, payload field removed entirely), update next_cursor/2 to mint over the (timestamp, id) seek pair instead of global_seq. Rewrite the moduledoc per section 5: remove the 'Served from the event store, not an audit-entry table' section and the resource_type 'not supported' framing; state that GET /audit now reads from Letflow.Audit.list_entries/1 backed by REQ-195's audit_entries table, and that resource_type/before_state/after_state now carry real per-row values. Do NOT touch lib/letflow/api/authorization.ex, lib/letflow/audit/entry.ex's schema, Letflow.Audit's append_multi/4/insert_entry/3/verify_chain/2, or anything under web/. Resolve OQ-1 (whether :invalid_resource_id is reachable) and OQ-2 (cursor-decode placement) as documented in the design's section 8 -- both are open style/dead-code judgment calls, not correctness blockers.",
+    "acceptance_criteria": [
+      "GET /api/v1/audit returns entries sourced from audit_entries, with before_state and after_state carrying real non-null values for an operation that changed state -- the direct inverse of the always-null behaviour audit.ex's moduledoc records today, asserted by a test that would have failed before this requirement",
+      "resource_type in the response varies by resource kind rather than being the constant \"instance\", demonstrated by a response containing at least two different resource_type values",
+      "the resource_type query parameter filters: a request filtering to one resource kind returns only entries of that kind, and omitting it returns all kinds",
+      "the response envelope still matches web/src/api/audit.ts's RawAuditPage and RawAuditEntry field-for-field, so web/src/pages/admin/AuditLogPage.tsx continues to render without a change under web/ -- asserted field by field",
+      "the route still requires :AuditRead and still returns 403 without it, using REQ-069's existing matrix with no change to lib/letflow/api/authorization.ex (confirmed by git diff)",
+      "a caller from one tenant does not receive another tenant's audit entries",
+      "lib/letflow/routers/audit.ex's moduledoc no longer states that before_state and after_state are always null or that resource_type is a constant, and instead describes the store it now reads from",
+      "no file under web/ is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  }
+}

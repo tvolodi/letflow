@@ -1,0 +1,77 @@
+{
+  "report_id": "WF02-REQ197-20260830-test-run-report",
+  "run_id": "WF02-REQ197-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 4",
+  "agent": "TEST-RUNNER",
+  "timestamp_utc": "2026-08-30T09:55:00Z",
+  "branch": "feature/WF02-REQ197-20260830",
+  "diff_scope": {
+    "command": "git diff main...HEAD --stat",
+    "files_touched": [
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v7.yaml",
+      "handoffs/WF02-REQ197-20260830/security-review-req197-findings.md",
+      "handoffs/WF02-REQ197-20260830/step-01-code-designer-rework1.json",
+      "handoffs/WF02-REQ197-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ197-20260830/step-02a-elixir-dev-rework1.json",
+      "handoffs/WF02-REQ197-20260830/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ197-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ197-20260830/step-02d-reviewer.json",
+      "handoffs/WF02-REQ197-20260830/step-03-test-designer.json",
+      "handoffs/WF02-REQ197-20260830/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ197-20260830/step-04-test-runner.json",
+      "handoffs/WF02-REQ197-20260830/test-coverage-gap-analysis.md",
+      "handoffs/WF02-REQ197-20260830/test-design-validation-report.md",
+      "handoffs/registry.json",
+      "lib/letflow/design/req197-expr-arithmetic-and-errors.md",
+      "lib/letflow/engine/expr.ex",
+      "test/letflow/engine/expr_test.exs",
+      "test/letflow/engine/transition_test.exs",
+      "test/specs/REQ-197.md"
+    ],
+    "note": "test/mix/tasks/letflow_check_toolchain_test.exs is NOT in this branch's diff -- confirmed via git diff main...HEAD --stat."
+  },
+  "full_suite_run": {
+    "command": "scripts/test_parallel.sh",
+    "parallelism": "N=8 (source: nproc)",
+    "combined_result": "2651 tests, 6 properties, 2 failures (2655/2657 passed)",
+    "per_partition": [
+      "partition 1: 353 tests, 3 properties, 0 failures, exit 0",
+      "partition 2: 390 tests, 0 properties, 0 failures, exit 0",
+      "partition 3: 314 tests, 2 properties, 0 failures, exit 0",
+      "partition 4: 304 tests, 1 property, 0 failures, exit 0",
+      "partition 5: 359 tests, 0 properties, 0 failures, exit 0",
+      "partition 6: 245 tests, 0 properties, 0 failures, exit 0",
+      "partition 7: 325 tests, 0 properties, 2 failures, exit 2",
+      "partition 8: 361 tests, 0 properties, 0 failures, exit 0"
+    ]
+  },
+  "failure_diagnosis": {
+    "failing_tests": [
+      "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest) -- test/mix/tasks/letflow_check_toolchain_test.exs:289",
+      "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest) -- test/mix/tasks/letflow_check_toolchain_test.exs:274"
+    ],
+    "error": "** (ErlangError) Erlang error: :enoent, raised from System.cmd(\"rustc\", [\"--version\"], stderr_to_stdout: true) inside running_rust_raw/0 (test/mix/tasks/letflow_check_toolchain_test.exs:69)",
+    "root_cause": "rustc is entirely absent from this environment's PATH -- confirmed via `which rustc` (exit 1). The test's own running_rust_raw/0 helper only handles the case where System.cmd returns a non-zero-exit tuple; when the executable does not exist at all, System.cmd raises ErlangError:enoent instead, which the helper's `case` does not catch. This is a pre-existing gap in the test's own error handling for a rustc-absent host, unrelated to REQ-197.",
+    "classification": "documented flake/baseline class -- matches the 'rustc-absent CheckToolchainTest baseline' entry called out in this run's task brief. Not caused by, or fixable via, any file this branch's diff touches (test/mix/tasks/letflow_check_toolchain_test.exs is untouched by this branch).",
+    "action_taken": "None -- excluded from this branch's pass/fail verdict per the documented flake-class precedent. Not routed to ELIXIR-DEV as a REQ-197 regression."
+  },
+  "targeted_ac_checks": {
+    "mix_test_expr_and_transition": {
+      "command": "mix test test/letflow/engine/expr_test.exs test/letflow/engine/transition_test.exs",
+      "result": "Result: 100 passed (1 property, 99 tests)",
+      "note": "Only a pre-existing ExUnit.Case.register_test/4 deprecation warning noted (unrelated, framework-level)."
+    },
+    "mix_compile_warnings_as_errors": {
+      "command": "mix compile --force --warnings-as-errors",
+      "result": "Compiling 154 files (.ex) / Generated letflow app -- clean, no warnings, no errors"
+    },
+    "mix_format_check": {
+      "command": "mix format --check-formatted test/letflow/engine/expr_test.exs test/letflow/engine/transition_test.exs lib/letflow/engine/expr.ex",
+      "result": "clean -- no output, exit 0"
+    }
+  },
+  "verdict": "PASS. Combined full-suite run: 2655/2657 passed; the only 2 failures are a documented, environment-caused (rustc absent from PATH) flake class in a file this branch does not touch, not a REQ-197 regression. All REQ-197-scoped targeted checks (expr_test.exs + transition_test.exs, compile --warnings-as-errors, format --check-formatted) are fully green.",
+  "routed_to": "RELEASE-VALIDATOR"
+}

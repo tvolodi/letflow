@@ -3,28 +3,34 @@
   "run_id": "WF02-REQ192-20260830",
   "workflow_id": "WF-02",
   "step": "Step 1b",
-  "from_agent": "CODE-DESIGNER",
-  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
   "file": "lib/letflow/design/req192-service-catalog-routes.md",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "normal",
   "context": {
-    "note": "Design produced for REQ-192 (docs/requirements.yaml, queue task 365, GH#711, stage S6), on branch feature/WF02-REQ192-20260830, committed as 7ea5acb9 and pushed. Design covers two new route-layer modules (Letflow.Routers.Services at /services, Letflow.Routers.AdminServices at /admin/services) atop REQ-191's already-shipped Letflow.ServiceCatalog context module and REQ-069's already-shipped SVC-04 policy keys in lib/letflow/api/authorization.ex (L100-102, L299-304, L417-419) -- neither of those two files is modified by this design. Contains several explicit findings the validator should scrutinize rather than assume resolved: (1) section 5 -- Letflow.ServiceCatalog has no tenant-independent 'list all' function, so GET /admin/services is designed to query Letflow.ServiceCatalog.Entry directly via Repo/Ecto.Query from the router rather than reusing list_for_tenant/2, with a distinct cursor prefix; (2) section 8 -- two real ServiceRecord/Entry field mismatches (max_retries has no backing column at all; request_schema/response_schema are non-nullable in the TS contract but nullable on the schema) with a stated interim resolution rather than a fix to service_catalog.ex or web/; (3) section 11 -- two new Letflow.Api.Error constructors (service_referenced_by_active_definitions/1, service_scope_narrowing_conflict/1) proposed for the 409 problem-details bodies, modeled on the existing Error.promotion_conflict/2 precedent; (4) section 3 -- a finding about a stale comment in authorization.ex's required_permission/1 clause that is not fixed here. Verify every acceptance criterion below maps to a concrete section, that no fenced code block reproduces real .ex content (mechanical rule hit repeatedly on the two prior requirements' designs -- re-checked before this handoff via grep for triple-backtick fences, none remain), and that the design does not silently resolve the two contract gaps in section 8 without naming them."
+    "note": "Design produced for REQ-192 (docs/requirements.yaml, queue task 365, GH#711, stage S6), on branch feature/WF02-REQ192-20260830, committed as 7ea5acb9 and pushed. Full independent report at handoffs/WF02-REQ192-20260830/req192-design-validation-report.md.",
+    "rework_pass": 1
   },
   "task": {
-    "description": "Validate lib/letflow/design/req192-service-catalog-routes.md against REQ-192's full acceptance criteria (docs/requirements.yaml, REQ-192 entry) before ELIXIR-DEV implements it. Confirm: every acceptance criterion maps to a concrete, buildable design element (no TBD); no implementation code (fenced .ex blocks) is present; the design does not modify or propose modifying lib/letflow/api/authorization.ex, lib/letflow/service_catalog.ex, lib/letflow/service_catalog/entry.ex, or anything under web/; the 409 conflict-body approach (new Error constructors, section 11) is unambiguous enough to implement; the GET /admin/services 'list all' resolution (section 5) is unambiguous; the two named ServiceRecord contract gaps (section 8) are stated as findings with a concrete interim behavior, not guessed away.",
-    "acceptance_criteria": [
-      "GET /api/v1/services returns global entries plus the calling tenant's own scoped entries, and a tenant-scoped entry owned by a different tenant is absent from the response -- asserted with entries of all three kinds present in the database",
-      "GET /api/v1/admin/services returns entries the caller's own tenant does not own, demonstrating it is not tenant-filtered, and requires :AdminServicesRead -- a caller holding only :ServicesRead receives 403",
-      "POST /api/v1/admin/services with a RegisterServiceBody creates the entry and returns 201 with a body whose field names match web/src/api/services.ts's ServiceRecord exactly, asserted field by field",
-      "POST, PATCH and DELETE under /api/v1/admin/services each return 403 for a caller lacking :AdminServicesManage, using the mapping already present in lib/letflow/api/authorization.ex -- three explicit tests",
-      "DELETE of a service referenced by an ACTIVE definition returns 409 whose problem-details body lists the referencing definition ids; PATCH narrowing a service other tenants' ACTIVE definitions reference returns 409 listing those tenant ids -- two explicit tests",
-      "POST with an already-registered service_id returns 409 and does not modify the existing entry",
-      "a request naming a tenant-scoped service belonging to another tenant on the non-admin path returns 404, never 403 (REQ-072's cross-tenant rule)",
-      "lib/letflow/api/authorization.ex is NOT modified by this requirement, confirmed by git diff --stat scoped to its commits -- the SVC-04 policy keys it already ships are consumed as-is",
-      "no file under web/ is added or modified, confirmed by git diff --stat -- the SPA client already exists and S8 owns it",
-      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
-    ]
+    "description": "Validate lib/letflow/design/req192-service-catalog-routes.md against REQ-192's full acceptance criteria before ELIXIR-DEV implements it: two-router claim, permission mapping, 409 mechanism, the GET /admin/services direct-Entry-query finding, the two field-gap findings, the stale-comment finding, and no fenced implementation code."
   },
-  "result": null
+  "result": {
+    "status": "FAIL",
+    "checks_performed": {
+      "two_router_claim_section_1": "PASS -- test/letflow/api/authorization_enforcement_test.exs L55-90 read directly. @mount_prefix is a router_module => single_prefix_string map, `Map.fetch!(@mount_prefix, @router)` per router, strictly one-prefix-per-router with no dual-mount provision. Design's claim accurate.",
+      "permission_mapping_section_3": "PASS -- authorization.ex L308-313 (endpoint_policy_key/2), L417-419 (required_permission/1: :ServicesRead -> :DefinitionsRead; :AdminServicesManage/:AdminServicesRead -> :UsersGroupsRolesManage), L453-484 (role_allows?/2) read directly. Every role but :AGENT_RUNNER holds :DefinitionsRead; only :PLATFORM_ADMIN's catch-all grants :UsersGroupsRolesManage. Matches design exactly.",
+      "409_mechanism_section_11": "PASS -- error.ex L55-65 (t() struct), L351-360 (promotion_conflict/2's real type/title/status/extensions shape) and response.ex read directly. The two proposed constructors genuinely follow this precedent. Cross-checked update_scope/2 (L357-360) and delete/1 (L399-403) real @specs against design's §9/§12 tables -- correctly distinguishes delete/1's flat [String.t()] from update_scope/2's [reference_conflict()] despite the shared :referenced_by_active_definitions tag.",
+      "admin_list_direct_entry_query_section_5": "FAIL -- see issues below.",
+      "field_gap_findings_section_8": "PASS -- web/src/api/services.ts (real contract; ServiceRecord/RegisterServiceBody/UpdateServiceScopeBody live there, not in web/src/types/api.ts) and service_catalog/entry.ex + service_catalog.ex's register_attrs() (L115-124) read directly. Both gaps (max_retries no backing column; request_schema/response_schema nullable-vs-required mismatch) confirmed real, with concrete interim resolutions.",
+      "stale_comment_finding_section_3": "PASS -- authorization.ex L416-419 read directly. Comment '# platform-admin enforced in handler, per Zig's comment' confirmed present with no corresponding handler-level check anywhere. Correctly left as a flagged finding, not fixed (out of scope).",
+      "no_implementation_code": "PASS -- grep for triple-backtick fences over the full 443-line file returns zero matches."
+    },
+    "issues": [
+      "lib/letflow/design/req192-service-catalog-routes.md section 5: the claim 'reading it via Ecto.Query/Repo.all/1 from a router is not different in kind from Letflow.Routers.Audit's or Letflow.Routers.Metrics's own direct-schema-query precedents' is FALSE on inspection. lib/letflow/routers/audit.ex delegates to Letflow.EventStore.read_global/1 (a context-module function); lib/letflow/routers/metrics.ex delegates to Letflow.Engine.count_instances_by_status/1 etc (also context-module functions). Neither queries a schema directly. grep -rln 'Ecto.Query|Repo\\.(all|one|get)' lib/letflow/routers/ matches only a comment in promotions.ex mentioning Ecto.Query.CastError -- no actual direct-schema-query call exists anywhere under lib/letflow/routers/ today. This is a fabricated precedent used to justify a real, first-of-its-kind exception to this codebase's router->context-module layering discipline. Fix: remove the false Audit/Metrics precedent claim; state plainly that GET /admin/services querying Entry directly is a genuine layering exception made necessary only because REQ-192's scope forbids a service_catalog.ex change and AC2 cannot otherwise be satisfied, and flag it explicitly for REVIEWER sign-off at Step 2d rather than folding it into 'consistent with existing precedent.' The underlying decision to query Entry directly does not need to be reversed -- only its stated justification does."
+    ],
+    "verdict_statement": "FAIL. Section 5 asserts a direct-schema-query precedent in Letflow.Routers.Audit/Letflow.Routers.Metrics that does not exist in the real source -- both routers delegate to context-module functions, and no router under lib/letflow/routers/ queries a schema directly today. Everything else checked (two-router claim, permission mapping, 409 constructor shape, both field-gap findings, the stale-comment finding, no fenced code) is accurate and unambiguous. Full detail in handoffs/WF02-REQ192-20260830/req192-design-validation-report.md."
+  },
+  "rework_count": 1,
+  "max_rework": 3
 }

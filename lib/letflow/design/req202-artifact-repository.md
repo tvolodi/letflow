@@ -177,7 +177,32 @@ choice to reproduce. **This must not be ported.** Letflow has one migration file
 defining `repository_artifacts` once, in migration-045's shape, and the moduledoc for
 whichever module owns this schema must state this divergence was found and which shape
 was chosen, in these terms, so a later reader does not "helpfully" reconcile the two
-R-Co shapes by re-adding 058's columns.
+R-Co shapes by re-adding 058's columns. (This moduledoc statement is AC11's own
+requirement — see §3.2's parallel moduledoc-cross-reference discipline — and is
+distinct from the migration-file comment required immediately below for AC10.)
+
+**AC10's separate, migration-file-level requirement.** AC10 requires that "the two
+tables' placement (per-tenant vs. global) is stated in the migration with its reason" —
+this is a requirement on the migration file itself, checkable from the migration
+source, not on this design document or on a module's moduledoc (that is AC11's
+requirement, above, and it covers a different fact: the 058-vs-045 shape conflict, not
+the placement decision). Accordingly: **the migration file that creates
+`repository_artifacts` and `artifact_versions` must carry a comment, placed at the top
+of the migration (SQL comment / Ecto-migration-level comment, exact mechanical form
+left to ELIXIR-DEV at Step 2a), stating, in condensed form:**
+
+- Both tables are created **per-tenant** (schema-per-tenant via `prefix()`), not global.
+- The reason: Decision B's blast-radius-containment rationale (a per-tenant table means
+  a query that forgets a `tenant_id`/schema-prefix predicate fails loudly rather than
+  silently leaking rows across tenants — see `0003-ecto-schema-strategy.md` Decision B);
+  no acceptance criterion of REQ-202 requires cross-tenant content deduplication, so
+  Decision B's isolation argument is not outweighed by any requirement-driven need for a
+  shared, global content-addressed store; see §1 of this design document for the full
+  reasoning this comment condenses.
+
+This comment is what makes AC10 satisfiable by inspecting the migration file alone,
+independent of this design document's continued existence — §1 below states the full
+reasoning that the migration comment must condense, not duplicate in full.
 
 ### 2.1 `repository_artifacts`
 
@@ -281,17 +306,34 @@ CODE-DESIGN-VALIDATOR / TEST-DESIGNER):**
   DOES normalize numbers, for the artifact-repository content store. This module's
   `canonicalize/1` deliberately does not, to avoid changing already-stored promotion
   digests. The two must not be merged; see `Letflow.Repository.Canonicaliser`'s
-  moduledoc for the full reasoning." Since this is a moduledoc-only textual addition,
-  not a behavior change, `git diff --stat` still shows `promotion_digest.ex` touched by
-  one comment-only hunk — this must be called out explicitly in the PR/commit
-  description so AC5's "that module is NOT modified" is read as "not modified in
-  *behavior*," and CODE-DESIGN-VALIDATOR should confirm AC5's actual wording
-  (`docs/requirements.yaml` AC5: "that module is NOT modified (confirmed by git diff
-  --stat)") against this design's choice — flagged as **OQ-2** below rather than
-  silently resolved, since a literal reading of AC5 could be satisfied instead by
-  putting the cross-reference only in `Letflow.Repository.Canonicaliser`'s own
-  moduledoc and a design-doc note (this document) rather than editing
-  `promotion_digest.ex` at all.
+  moduledoc for the full reasoning."
+
+**This edit to `promotion_digest.ex` is required, not optional, and is settled —
+resolved now rather than deferred.** AC5 has three clauses: (i) the canonicaliser is a
+separate module; (ii) `promotion_digest.ex` "is NOT modified (confirmed by `git diff
+--stat`)"; (iii) "BOTH moduledocs cross-reference each other." Since
+`promotion_digest.ex`'s moduledoc today contains no reference to `Canonicaliser` at
+all, satisfying clause (iii)'s "BOTH... cross-reference each other" is only possible by
+editing `promotion_digest.ex`'s moduledoc — there is no way for both modules'
+moduledocs to cross-reference each other without touching both files. Putting the
+cross-reference only on the `Canonicaliser` side (leaving `promotion_digest.ex`
+untouched) would satisfy clause (ii) alone while directly violating clause (iii), since
+then only one of the two moduledocs (Canonicaliser's) would reference the other, not
+both — that is not a safe fallback reading of AC5, it is a different, additional AC5
+violation. The only reading under which all three clauses can be simultaneously true is:
+edit both moduledocs (satisfying (i) and (iii)), and read clause (ii)'s "is NOT
+modified" as **"no change to `canonicalize/1`, `compute_plan_digest/1`, or
+`verify_digest/2`'s behavior or specs"** — i.e. a moduledoc-only, behavior-free diff.
+
+Since this is a moduledoc-only textual addition, not a behavior change, `git diff
+--stat` will still show `promotion_digest.ex` touched by one comment-only hunk. This is
+**intentional and required by AC5's own "BOTH" clause**, not a violation of AC5's "not
+modified" language read correctly (behaviorally). **The commit/PR description must
+state this explicitly** — that `promotion_digest.ex`'s diff is a moduledoc-only,
+behavior-free addition mandated by AC5 clause (iii), with no change to
+`canonicalize/1`, `compute_plan_digest/1`, or `verify_digest/2` — so a reviewer or CI
+check reading `git diff --stat` and seeing `promotion_digest.ex` listed understands this
+is deliberate and AC5-compliant rather than a violation to flag.
 
 ### 3.3 Public interface
 
@@ -526,6 +568,11 @@ them on the strength of the shared vocabulary.
 
 ## 9. Open questions (stated explicitly, not silently resolved)
 
+(The question of whether `PromotionDigest`'s moduledoc amendment conflicts with AC5's
+"NOT modified" language — formerly listed here as OQ-2 — has been resolved, not
+deferred: see §3.2's "This edit to `promotion_digest.ex` is required, not optional, and
+is settled" discussion. It is not repeated here because it is no longer open.)
+
 - **OQ-1 — exact canonical decimal form for non-integer-valued floats.** §3.4 rule 3
   fixes the integer-valued-float case (no decimal point, no exponent) per the
   requirement's own R-Co citation, but REQ-202's text and this design's available
@@ -534,20 +581,6 @@ them on the strength of the shared vocabulary.
   identically). ELIXIR-DEV must pick one fixed, documented rule at Step 2a and state it
   in `Letflow.Repository.Canonicaliser`'s moduledoc; TEST-DESIGNER should pin it with an
   explicit test once chosen, since AC3 tests only the integer-valued case explicitly.
-- **OQ-2 — whether `PromotionDigest`'s moduledoc amendment conflicts with AC5's literal
-  wording.** §3.2 recommends adding a reciprocal cross-reference comment to
-  `promotion_digest.ex`'s moduledoc, but AC5 states that module "is NOT modified
-  (confirmed by `git diff --stat`)." A moduledoc-only comment addition would still show
-  up in `git diff --stat`. Two readings are available: (a) treat "not modified" as
-  "behavior not modified" and accept the moduledoc diff, documenting why in the commit
-  message; or (b) satisfy AC5 literally by putting the full cross-reference only on the
-  `Canonicaliser` side and recording the reciprocal fact solely in this design document
-  (not in `promotion_digest.ex` itself). This design recommends (a) for durability (a
-  future reader opening `promotion_digest.ex` directly sees the warning without also
-  having to know `Canonicaliser` exists), but does not resolve the tension unilaterally
-  — ELIXIR-DEV and CODE-DESIGN-VALIDATOR should agree on a reading before Step 2a
-  proceeds, since AC5 is machine-checked (`git diff --stat`) and a wrong guess here
-  fails the acceptance criterion outright rather than ambiguously.
 - **OQ-3 — the exact set of `content_type` values treated as "JSON" by
   `canonicalize_content/2`.** §3.3 assumes `"application/json"` is the sole JSON
   marker; REQ-202's text does not enumerate whether a parameterized form
@@ -577,12 +610,12 @@ them on the strength of the shared vocabulary.
 | AC2 — key-order/whitespace-insensitive hash | §3.4 rules 1–2 |
 | AC3 — number normalization, canonical bytes asserted | §3.4 rule 3, OQ-1 |
 | AC4 — binary content hashed by byte identity | §3.5 |
-| AC5 — separate module, `PromotionDigest` unmodified, cross-referencing moduledocs | §3.1, §3.2, OQ-2 |
+| AC5 — separate module, `PromotionDigest` unmodified, cross-referencing moduledocs | §3.1, §3.2 (resolved: reading (a) — moduledoc-only, behavior-free edit to `promotion_digest.ex` required by clause (iii), "NOT modified" read as no behavior change) |
 | AC6 — existing promotion digest unchanged by this requirement | §3.2 (no shared code path; `PromotionDigest`'s own functions are untouched in behavior) |
 | AC7 — DB-level UPDATE rejection on `repository_artifacts` | §5.1 |
 | AC8 — changed content → new version, new hash, incremented number, prior row untouched | §4.2, §4.4, §5.1 (prior row physically cannot change) |
 | AC9 — version history ordered, parent linkage, REQ-067 pagination | §6 |
-| AC10 — placement stated with reason; REVIEWER flag if global | §1 (per-tenant chosen; no flag raised, reasoning given) |
+| AC10 — placement stated with reason; REVIEWER flag if global | §2's "AC10's separate, migration-file-level requirement" (the migration-file comment ELIXIR-DEV must write) — condensing the reasoning §1 states in full (per-tenant chosen; no flag raised) |
 | AC11 — migration-058-vs-045 conflict recorded, 045's shape shipped | §2 (opening paragraph) |
 | AC12 — REQ-041 disambiguation stated | §7 |
 | AC13 — no route/controller added | §8 |

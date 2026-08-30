@@ -57,7 +57,21 @@ defmodule Letflow.SecretsRuntimeConfigTest do
   @moduletag :slow
 
   test "LETFLOW_SECRETS_MASTER_KEY unset fails application boot with a clear 'is missing' error" do
-    env = [{"LETFLOW_SECRETS_MASTER_KEY", nil}, {"MIX_ENV", "dev"}]
+    # MIX_TEST_PARTITION/MIX_BUILD_PATH must be explicitly nil'd out, not just
+    # left unset here: `System.cmd/3`'s `env:` option merges onto this test
+    # process's own inherited environment rather than replacing it, and under
+    # scripts/test_parallel.sh this process itself has MIX_TEST_PARTITION (and
+    # MIX_BUILD_PATH) set on it -- inherited by the child `mix run` below, which
+    # would then trip config/dev.exs's own ISS-0015 guard ("MIX_TEST_PARTITION is
+    # set, but MIX_ENV is dev") instead of ever reaching the assertion this test
+    # is actually checking. Reproduced: this test passed under a plain serial
+    # `mix test` but failed under `scripts/test_parallel.sh` before this fix.
+    env = [
+      {"LETFLOW_SECRETS_MASTER_KEY", nil},
+      {"MIX_ENV", "dev"},
+      {"MIX_TEST_PARTITION", nil},
+      {"MIX_BUILD_PATH", nil}
+    ]
 
     {output, exit_status} =
       System.cmd("mix", ["run", "-e", "IO.puts(:should_not_reach_here)"],

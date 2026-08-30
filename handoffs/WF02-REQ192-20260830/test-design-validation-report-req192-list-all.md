@@ -129,3 +129,37 @@ real mutation. Routed back to TEST-DESIGNER via
 with the exact fix required (register a second row in the failing test, mirror
 the two working sibling tests) and an instruction to actually run `mix test`
 before resubmitting.
+
+## Rework-1 recheck (2026-08-30) — PASS
+
+Rechecked only the fixture-sizing defect per
+`handoffs/WF02-REQ192-20260830/step-03b-test-design-validator.json`
+(handoff id `...-recheck1`); the scope-narrowing, router-idiom, fixture-isolation,
+and mutation-check findings above were not re-derived (unaffected by this
+one-line change).
+
+1. Read the fixed test myself
+   (`test/letflow/service_catalog_test.exs:724-739`): it now calls
+   `register!(%{scope: :global})` twice before minting the cursor with
+   `page_size: 1`, exactly matching its two sibling tests in the same
+   describe block (lines 695-708, 710-722), which already register 2 rows
+   each.
+2. Ran, for real, myself:
+
+   ```
+   source ~/.asdf/asdf.sh && mix test test/letflow/service_catalog_test.exs test/letflow/routers/admin_services_test.exs
+   ...
+   Finished in 8.1 seconds (0.00s async, 8.1s sync)
+   Result: 39 passed
+   ```
+
+   0 failures, matching TEST-DESIGNER's reported count independently.
+3. `git show 09402cd6 --stat` / full diff: exactly two files touched —
+   `test/letflow/service_catalog_test.exs` (one line added: a second
+   `register!(%{scope: :global})` call inside the one named test, nothing
+   else) and the `step-03b-test-design-validator.json` handoff itself. No
+   other test, no fixture helper, no `lib/` file touched.
+
+**Verdict: PASS.** The fix is minimal, mirrors the working sibling tests
+exactly, and the full two-file suite is genuinely 39/39 green. Routed to
+TEST-RUNNER via `handoffs/WF02-REQ192-20260830/step-04-test-runner.json`.

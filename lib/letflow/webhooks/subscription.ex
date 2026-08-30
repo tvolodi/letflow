@@ -159,4 +159,23 @@ defmodule Letflow.Webhooks.Subscription do
     |> cast(attrs, [:status, :paused_at])
     |> validate_required([:status])
   end
+
+  @doc """
+  Structural changeset for `Letflow.Webhooks`' private
+  `record_delivery_failure/2` write path (REQ-183, design
+  §3.4/§3.4.1). Casts exactly `:consecutive_failures, :last_failure_at,
+  :status, :paused_at` — the first writer of `consecutive_failures`/
+  `last_failure_at` since `insert_changeset/2` defaulted
+  `consecutive_failures` to `0` and never wrote `last_failure_at` at all.
+  `validate_required/2` on `:consecutive_failures, :last_failure_at` — both
+  are always computed by the caller before this changeset is built; `:status`
+  and `:paused_at` are only written together when the auto-pause threshold is
+  reached, otherwise omitted from `attrs` entirely.
+  """
+  @spec failure_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
+  def failure_changeset(subscription, attrs) do
+    subscription
+    |> cast(attrs, [:consecutive_failures, :last_failure_at, :status, :paused_at])
+    |> validate_required([:consecutive_failures, :last_failure_at])
+  end
 end

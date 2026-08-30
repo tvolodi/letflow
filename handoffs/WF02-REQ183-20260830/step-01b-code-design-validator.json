@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step01b-WF02-REQ183-20260830",
+  "run_id": "WF02-REQ183-20260830",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ183-20260830/step-01b-code-design-validator.json",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-183"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ183-20260830/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/migration/decisions/0016-secrets-storage-backend.md",
+      "lib/letflow/design/req183-webhook-delivery-dispatch.md"
+    ],
+    "branch_name": "feature/WF02-REQ183-20260830",
+    "commit": "7776a071",
+    "note": "REQ-183 depends_on [REQ-181, REQ-176, REQ-189, REQ-190] (rework 2 in requirements.yaml). REQ-189 (decision 0016) is done and REVIEWER-signed-off. REQ-190 (Letflow.Secrets, the module deliver/3 must call via resolve/2) is status in_progress, NOT done, and lib/letflow/secrets.ex does not exist in this tree -- confirmed by find. This design (SS0/SS0.3) is written directly against REQ-190's own already-produced design artefact (lib/letflow/design/req190-secrets-core.md on origin/feature/WF02-REQ190-20260830) for the real resolve/2 contract, not a guess or a stub, and explicitly states that ELIXIR-DEV's Step 2a must not begin until REQ-190 actually merges. Validator should confirm this sequencing statement is present and honest, not glossed over, in addition to the normal completeness/no-implementation-code checks."
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) hard gate on REQ-183's design artefact at lib/letflow/design/req183-webhook-delivery-dispatch.md (webhook delivery dispatch core: deliver/3, webhook_delivery_attempts schema/migration, HMAC signing, retry/backoff, auto-pause, DLQ landing). Verify every acceptance criterion below maps to a concrete design element, no fenced code block reproduces real .ex implementation (signatures/type-shapes only are acceptable), and the plaintext-secret-for-HMAC architectural question is resolved explicitly (SS0) rather than silently assumed -- including that the design correctly states REQ-190/Letflow.Secrets does not exist yet in this tree and names the build-sequencing precondition.",
+    "acceptance_criteria": [
+      "deliver/3 against a target_url returning 200 persists one webhook_delivery_attempts row with status \"SUCCESS\", http_status_code 200, and does not increment the subscription's consecutive_failures",
+      "deliver/3 against a target_url returning 500, and separately against one that refuses the connection outright, both persist a row with status \"FAILED\" and last_error populated (http_status_code 500 for the first, null for the connection-refused case) -- two explicit tests",
+      "deliver/3's signature is independently verifiable: a test computes the expected HMAC-SHA256 signature from the same secret and payload and asserts it equals the value deliver/3 actually sent in the documented header -- and the design states exactly how deliver/3 obtains that secret (Letflow.Secrets.resolve/2, not a plaintext field on Subscription)",
+      "a subscription's consecutive_failures reaching the documented threshold flips its status to \"PAUSED\" and sets paused_at -- driven by repeated failed attempts and read back afterward",
+      "a delivery exhausting max_attempts lands exactly one entry in REQ-176's DLQ core with entry_type \"webhook\" and reference_id equal to the delivery's own delivery_id, read back from the DLQ table",
+      "the moduledoc names the HMAC header/format and the PAUSED-threshold number as Letflow's own choices, explicitly not ported from R-Co's src/webhook/ (unreachable from this drafting session), and names automatic post-event triggering as an explicitly deferred follow-up rather than silently implemented or silently omitted",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "the design explicitly resolves the plaintext-secret-availability architectural question (does not silently assume plaintext is available) and states precisely why the resolution does not defeat REQ-181's original security intent",
+      "the design states plainly that Letflow.Secrets/REQ-190 does not exist yet in this tree, cites what it is designed against instead (REQ-190's own design artefact, not a guess), and states the build-sequencing precondition for ELIXIR-DEV's Step 2a",
+      "no fenced code block in the design artefact reproduces real, executable .ex implementation -- signatures/type-spec-only blocks are acceptable"
+    ]
+  },
+  "result": null
+}

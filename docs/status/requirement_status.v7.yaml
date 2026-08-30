@@ -268,6 +268,52 @@ history:
       actual arithmetic/precedence/error semantics only -- no CEL macros,
       collections, ternary, or `in`. now()/date_add/date_diff explicitly
       excluded as clock-impure. Depends_on [REQ-050, REQ-111], both done.
+  - req: REQ-183
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T09:28:43Z"
+    note: >
+      WF02-REQ183-20260830 done (queue task 356, GH#701, stage S6). Webhook
+      delivery dispatch core shipped: Letflow.Webhooks.deliver/3 computes an
+      HMAC-SHA256 signature (X-Letflow-Signature: sha256=<hex>, Letflow's own
+      choice) of the JSON-encoded payload using the signing key resolved
+      through REQ-190's real, shipped Letflow.Secrets.resolve/2 (not a
+      stub -- rework 2 fixed the implementation-dependency gap rework 1's
+      depends_on fix alone did not close), POSTs to target_url, classifies
+      SUCCESS/FAILED, and persists one webhook_delivery_attempts row per
+      attempt. On FAILED, increments consecutive_failures and retries with
+      exponential backoff (base 2s, capped at 4 attempts); reaching the
+      documented threshold (5) flips the subscription to PAUSED and sets
+      paused_at; exhausting max_attempts lands exactly one DLQ entry via
+      Letflow.Dlq.enqueue/2 with entry_type "webhook" and reference_id =
+      delivery_id. No route/controller touched (REQ-184 remains the deferred
+      route half); automatic post-event triggering remains a named, deferred
+      follow-up, not silently implemented. Gate path: CODE-DESIGNER +
+      CODE-DESIGN-VALIDATOR (1 rework round reconciling the design against
+      REQ-190's real shipped Secrets module), ELIXIR-DEV, SECURITY-REVIEWER
+      (PASS -- flagged a genuine SSRF gap on target_url, filed as new
+      requirement REQ-204 rather than blocking here, since no acceptance
+      criterion in this requirement covers it), REVIEWER (PASS, 2
+      non-blocking notes), TEST-DESIGNER (1 rework round fixing a real bug
+      in its own hand-rolled WebhookTestServer, commit 2007d9aa),
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER (full suite 2638/2638,
+      TEST_PARALLEL_N=4), RELEASE-VALIDATOR (independently re-verified: full
+      suite pass, all 7 acceptance criteria confirmed against real
+      code/tests, REQ-204 tracking confirmed). Design artefact
+      lib/letflow/design/req183-webhook-delivery-dispatch.md already
+      reflects what shipped (§0.3 records REQ-190's resolution, §8's AC
+      checklist matches) -- no touch-up needed at this step.
+
+      Step Final's own post-rebase CI run caught two `mix letflow.check.test`
+      warnings-as-errors defects this branch's own test file introduced (a
+      dead default argument on provisioned_tenant/1, an unused `alias
+      Letflow.Dlq`) that had not surfaced in this run's own pre-push local
+      checks (which ran `mix compile --warnings-as-errors` and `mix test`
+      separately, never `mix test --warnings-as-errors` together) -- fixed
+      in ELIXIR-DEV commit a43d4116, re-verified clean both narrowly
+      (`mix test test/letflow/webhooks_delivery_test.exs --warnings-as-errors`,
+      7/7) and via the full suite (scripts/test_parallel.sh, 2637/2637, 0
+      failures) before re-pushing.
   - req: REQ-197
     event: done
     agent: DOC-UPDATER

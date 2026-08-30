@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step02a-WF02-REQ195-20260830",
+  "run_id": "WF02-REQ195-20260830",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ195-20260830/step-02a-elixir-dev.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-195"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ195-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ195-20260830/step-01-code-designer-rework2.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req195-audit-entry-storage.md",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/routers/definitions.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/tasks.ex"
+    ],
+    "branch_name": "feature/WF02-REQ195-20260830"
+  },
+  "task": {
+    "description": "The design at lib/letflow/design/req195-audit-entry-storage.md has PASSED CODE-DESIGN-VALIDATOR after two rework rounds (see gate_history in step-01b-code-design-validator.json). Implement REQ-195 strictly per this design -- read it in full before writing any code, including §3.1/§3.1a/§3.1b, which resolve a recurring open question (the source of `actor_id` for each audited operation) that this rework history spent two rounds getting right. Do not re-litigate any of those decisions; the design's actor_id disposition is final for this requirement's scope.\n\nActor_id disposition, so you do not have to re-derive it from the prose (all independently re-verified against the actual source this session, not just cited):\n\nREAL actor_id (already an explicit argument today, capture it as-is):\n- Letflow.Engine.cancel_instance/3 -- attrs[:actor_id]\n- Letflow.Engine.complete_task/3 -- attrs[:actor_id]\n- Letflow.Tasks.assign_task/3 -- attrs.actor_id (required field of assign_attrs)\n\nNIL BY DESIGN (stated disposition, not a gap -- do not add actor_id parameters to any of these, and do not touch any file under lib/letflow/routers/ to wire one in; AC11 forbids it for this requirement):\n- Letflow.Definitions.create/2, activate/2, deprecate/2, archive/2 -- §3.1/§3.1a Decision (b). Their opts types (create/2's own opts(), activate_opts(), and the shared opts() deprecate/2 and archive/2 use) carry no actor_id field; the one channel that could supply a real one (conn.assigns.auth_context.user_id) is read only in lib/letflow/routers/definitions.ex's handle_import/1 and handle_rollback/2, not in handle_activate/1, handle_deprecate/1, handle_archive/1, or handle_delete/2's deprecate/archive branch -- wiring it in would require editing those router handlers, which this requirement's scope (AC11) does not permit.\n- Letflow.Identity.create_user/2, update_user_profile/3, update_user_status/3, create_group/2, create_token/3, revoke_token/2 -- §3.1b Decision (b), the identical gap class in a different module. All six take only opts :: opts() (prefix-only), are called exclusively from lib/letflow/routers/identity.ex, and that router does not read any auth_context assign at all today. Same AC11 scope boundary applies.\n\nSTILL OPEN, your call to make with the design's guidance (OQ-1): Task create's actor_id -- the design does not pin an exact lib/letflow/engine.ex insertion line for the first Task-row-creation site during graph dispatch. Locate the precise Repo.insert/Multi.insert call that creates a Task row when a USER_TASK/SERVICE_TASK node activates (function-level location is unambiguous per the design; Letflow.Tasks itself has no create entrypoint) and capture whatever actor context is genuinely already in scope there (typically the actor who advanced the preceding node, if any); use nil when no such context is in scope. Do not invent a new actor_id argument/plumbing path to manufacture one -- capture only what's already available at that call site.\n\nFollow §3.2's per-operation table exactly for action literals, resource_type/resource_id, and before_state/after_state content for every operation (Definition create/activate/deprecate/archive, Task create/complete/assign, and the six Identity operations). Implement Letflow.Audit and Letflow.Audit.Entry per §3.2's module signatures, the canonical hash form (§5), and verify_chain/2 (§6), and wire the :audit Multi step into Letflow.Definitions, Letflow.Engine, Letflow.Tasks, and Letflow.Identity per §4 -- no file under lib/letflow/routers/ may be added or modified (AC11; your own git diff --stat is the check, run it before finishing).\n\nCarry forward, do not attempt to resolve in this requirement (both are explicitly out of this requirement's scope, tracked for a future requirement):\n- OQ-4: a follow-up requirement scoped to touch lib/letflow/routers/definitions.ex should widen activate_opts()/opts() with a real actor_id and update handle_activate/1, handle_deprecate/1, handle_archive/1, and handle_delete/2's deprecate/archive branch to populate it, together, atomically.\n- OQ-5: a follow-up requirement scoped to touch lib/letflow/routers/identity.ex should widen the six Identity functions' opts with a real actor_id and update that router to source and populate it (establishing where this router's authenticated actor is even held, since it doesn't read auth_context today), together, atomically.\n\nWrite Letflow.Audit's own @moduledoc to state, in its own words (not a cross-reference to the design file), the capture-mechanism decision + trade-off (AC8), the canonical hashed form (AC7), and the lua_script_execution_audit separation (AC10) -- a cross-reference alone does not satisfy AC7/AC8/AC10, since those are checked against the shipped module.",
+    "acceptance_criteria": [
+      "AC2: definition activation, instance cancellation, and task completion each write exactly one audit_entries row with real before_state/after_state (§3.2).",
+      "Every audited operation in §3.2's table (Definition create/activate/deprecate/archive, Task create/complete/assign, User create/status/profile-update, Group create, Token issue/revoke) writes its audit row inside the same Ecto.Multi as its own mutation (§4) -- a failure in either rolls back both.",
+      "actor_id is real (not nil) for exactly cancel_instance/3, complete_task/3, and assign_task/3, per the disposition table above; nil for Definitions' four functions and all six Identity functions, per §3.1a/§3.1b; Task-create's actor_id follows OQ-1's guidance (whatever's genuinely in scope at the located call site, else nil).",
+      "No file under lib/letflow/routers/ is added or modified -- verify with git diff --stat before finishing (AC11).",
+      "Letflow.Audit's @moduledoc states the capture-mechanism decision, the canonical hash form, and the lua_script_execution_audit separation in its own text (AC7/AC8/AC10).",
+      "verify_chain/2 and the canonical chain-hash algorithm are implemented exactly per §5/§6.",
+      "mix test and mix compile --warnings-as-errors both pass, real output quoted in your result.",
+      "Run mix format on every file you write/edit before finishing."
+    ]
+  }
+}

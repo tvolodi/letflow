@@ -89,7 +89,12 @@ defmodule Letflow.SecretsTest do
         %{reference: reference} =
           put!(tenant_id, %{name: unique_segment("prop"), plaintext: plaintext})
 
-        stored = Repo.get_by!(Secret, tenant_id: tenant_id, namespace: "webhook", name: name_from(reference))
+        stored =
+          Repo.get_by!(Secret,
+            tenant_id: tenant_id,
+            namespace: "webhook",
+            name: name_from(reference)
+          )
 
         if byte_size(plaintext) > 0 do
           refute String.contains?(stored.ciphertext, plaintext)
@@ -141,7 +146,8 @@ defmodule Letflow.SecretsTest do
 
       %{reference: real_reference} = put!(tenant_b, %{purpose: :generic})
 
-      nonexistent_reference = "sec://tenant/does-not-exist-#{unique_segment("x")}/webhook/whatever"
+      nonexistent_reference =
+        "sec://tenant/does-not-exist-#{unique_segment("x")}/webhook/whatever"
 
       real_result = Secrets.resolve(real_reference, tenant_id: tenant_a)
       nonexistent_result = Secrets.resolve(nonexistent_reference, tenant_id: tenant_a)
@@ -157,7 +163,9 @@ defmodule Letflow.SecretsTest do
 
     test "tenant check ordering: cross-tenant reference to a tenant with zero secrets still returns :tenant_mismatch, not :not_found" do
       %{tenant_id: tenant_a} = provisioned_tenant("req190-secrets-order-a")
-      %{tenant_id: _tenant_b, tenant: tenant_b_record} = provisioned_tenant("req190-secrets-order-b")
+
+      %{tenant_id: _tenant_b, tenant: tenant_b_record} =
+        provisioned_tenant("req190-secrets-order-b")
 
       # tenant_b has no secrets at all -- if resolve/2 queried the secrets table
       # before checking the tenant match, the only possible outcome would be
@@ -209,7 +217,8 @@ defmodule Letflow.SecretsTest do
       %{reference: reference, key_id: older_key_id} =
         put!(tenant_id, %{name: name, plaintext: "older-active-plaintext"})
 
-      %{key_id: newer_key_id} = put!(tenant_id, %{name: name, plaintext: "newer-disabled-plaintext"})
+      %{key_id: newer_key_id} =
+        put!(tenant_id, %{name: name, plaintext: "newer-disabled-plaintext"})
 
       assert newer_key_id > older_key_id
 
@@ -245,7 +254,8 @@ defmodule Letflow.SecretsTest do
 
   describe "AC9: webhook HMAC reconciliation -- create/2 writes via put/2; resolve/2 recovers the same plaintext; secret_hash stays NULL" do
     test "webhook HMAC reconciliation" do
-      %{schema_name: schema_name, tenant_id: tenant_id} = provisioned_tenant("req190-webhook-recon")
+      %{schema_name: schema_name, tenant_id: tenant_id} =
+        provisioned_tenant("req190-webhook-recon")
 
       {:ok, %{subscription: subscription, hmac_secret_once: plaintext}} =
         Webhooks.create(%{target_url: "https://example.test/hook"}, prefix: schema_name)
@@ -257,7 +267,10 @@ defmodule Letflow.SecretsTest do
       pinned_reference = pinned(subscription.secret_ref, subscription.secret_key_id)
 
       assert {:ok, %{plaintext: ^plaintext, purpose: :webhook_hmac}} =
-               Secrets.resolve(pinned_reference, tenant_id: tenant_id, consumer: :webhook_dispatcher)
+               Secrets.resolve(pinned_reference,
+                 tenant_id: tenant_id,
+                 consumer: :webhook_dispatcher
+               )
 
       # Also true via the unpinned reference (this is the only/newest version).
       assert {:ok, %{plaintext: ^plaintext}} =

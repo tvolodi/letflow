@@ -1,0 +1,63 @@
+{
+  "handoff_id": "step02a-WF02-REQ194-20260830",
+  "run_id": "WF02-REQ194-20260830",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ194-20260830/step-02a-elixir-dev.json",
+  "created_at": "2026-08-30T14:29:25Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-194"],
+    "issue_ids": ["GH#713"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ194-20260830/step-01-code-designer.json",
+      "handoffs/WF02-REQ194-20260830/step-01b-code-design-validator.json"
+    ],
+    "design_artifact": "lib/letflow/design/req194-prometheus-metrics.md",
+    "artifacts_in": [
+      "lib/letflow/design/req194-prometheus-metrics.md",
+      "lib/letflow/routers/metrics.ex",
+      "web/src/api/metrics.ts",
+      "web/src/pages/admin/MetricsPage.tsx",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/api/authorized_router.ex",
+      "mix.exs",
+      "mix.lock",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/application.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/router.ex"
+    ],
+    "branch_name": "feature/WF02-REQ194-20260830",
+    "code_design_validator_result": {
+      "verdict": "PASS",
+      "summary": "Independently re-verified every load-bearing factual claim in the design against real source (not the design's own citations): web/src/api/metrics.ts's parsePrometheusText and metricsApi.prometheusText() -> client.getText('/metrics') (unversioned) genuinely exist and MetricsPage.tsx genuinely consumes them; mix.lock line 19 confirms telemetry v1.4.2 already present transitively via bandit/db_connection/ecto/ecto_sql/plug/oidcc/thousand_island, with zero first-party :telemetry.execute call sites today; deps/ecto_sql/lib/ecto/adapters/sql.ex:900/1315 and deps/ecto/lib/ecto/repo/supervisor.ex:30/55 confirm Ecto already emits [:letflow, :repo, :query] with no config/*.exs telemetry_prefix override; deps/plug/lib/plug/router.ex:324-327 (match_path/1) and :520-528 (append_match_path/2) confirm the route-template composition claim exactly as cited; grepped web/src for /metrics and /api/v1/metrics -- no reference beyond router.tsx's admin/metrics UI route, MetricsPage.tsx, and metrics.ts itself, so removing lib/letflow/routers/metrics.ex is safe; confirmed application.ex/poller.ex/event_store.ex citations (line numbers, existing patterns) are accurate. Adversarially audited the Axis 2/3 label-allowlist invariant against all six families individually, including a check for tenant-identifying route templates: lib/letflow/plugs/api_pipeline.ex's forward table and every routers/*.ex file use only fixed, compile-time literal path segments with :id/:slug path PARAMETERS -- no per-tenant literal route segment exists anywhere in the router tree (R-Co's {tenant_id} path segment was already deliberately dropped per INV-1, per api_pipeline.ex's own moduledoc) -- so route_template cannot smuggle a tenant identifier even indirectly. No gap found. No implementation code fences present anywhere in the design doc -- all fenced blocks are @spec/@type only."
+    },
+    "dependency_promotion_flag_for_reviewer": "mix.exs change is `{:telemetry, \"~> 1.4\"}` ONLY. Confirmed precisely: :telemetry v1.4.2 is already resolved in mix.lock (line 19) as a TRANSITIVE dependency of bandit, db_connection, ecto, ecto_sql, plug, oidcc and thousand_island -- already fetched, compiled and running in every Letflow BEAM node today. Adding the explicit mix.exs line adds ZERO new bytes, zero new packages, zero new transitive tree, zero new NIF/Port/license surface -- it is a PROMOTION of an already-vendored transitive dependency to a direct one (standard Elixir hygiene: pin what you call directly), not a new-dependency adoption. This is materially lighter than REQ-148's {:lua, \"~> 1.0\"} precedent (which did fetch new bytes/a new transitive tree). REVIEWER sign-off is still required per REQ-194 AC3's own wording (draws no size-based exception), and the design (design doc section 10) does not unilaterally claim otherwise -- but REVIEWER should weigh it as a promotion-to-direct-dependency, not a new-dependency risk review, and record that distinction explicitly in sign-off."
+  },
+  "task": {
+    "description": "Implement REQ-194 (Prometheus metrics subsystem, OBS-02) per the validated design at lib/letflow/design/req194-prometheus-metrics.md. Design has PASSED CODE-DESIGN-VALIDATOR's gate (see code_design_validator_result above) -- implement exactly what it specifies: Letflow.Metrics.Registry (ETS-backed GenServer, lib/letflow/metrics/registry.ex), Letflow.Metrics.Exposition (lib/letflow/metrics/exposition.ex), Letflow.Plugs.HttpMetrics (lib/letflow/plugs/http_metrics.ex), Letflow.Routers.MetricsExposition (lib/letflow/routers/metrics_exposition.ex) mounted at GET /metrics on Letflow.Router outside ApiPipeline/AuthPipeline, new :telemetry call sites in Letflow.Engine.complete_task/3 and Letflow.EventStore.append/2, the Letflow.Scheduler.Poller tick extension for the active-instances gauge with DB-unavailable graceful degradation, addition of {:telemetry, \"~> 1.4\"} to mix.exs deps/0 (see dependency_promotion_flag_for_reviewer -- flag for REVIEWER explicitly in the PR description regardless of its lighter risk profile), removal of lib/letflow/routers/metrics.ex and its forward/test per design section 9, and the moduledoc restating design section 1's axis decisions verbatim per this requirement's own convention. Design sections 12 lists genuinely open implementation-time decisions (definition_status resolution path in complete_task/3; active-instances refresh cadence) -- use judgment there, design does not mandate a specific answer. Run mix compile --warnings-as-errors and mix test and quote real output; do not claim success without running them.",
+    "acceptance_criteria": [
+      "this requirement states an explicit decision on each of REQ-078's three recorded divergences -- auth, scope and format -- with a reason for each, in the module moduledoc; it does not silently pick one or leave any of the three unstated",
+      "the format decision cites web/src/api/metrics.ts's parsePrometheusText and metricsApi.prometheusText()'s call to client.getText('/metrics') as an already-committed consumer contract, and the endpoint Letflow serves is one that web/src/pages/admin/MetricsPage.tsx actually reaches -- asserted by a test hitting that exact path",
+      "if a metrics dependency is added to mix.exs, REVIEWER sign-off is recorded for it in this requirement's PR; if instead a registry is hand-rolled, the moduledoc states that as the decision -- one or the other, not silence",
+      "all six OBS-02 core metric families are present in the exposition output after exercising the corresponding behaviour, asserted by parsing the response body -- not by asserting the emission call was made",
+      "the HTTP-request metric labels by route template and not by raw path: two requests to the same route with different path parameters produce ONE label combination, not two, asserted by counting distinct label sets in the output",
+      "the auth and scope decisions are enforced and tested: whichever position was taken, a test asserts that one tenant's scrape cannot observe another tenant's figures or identifiers (including through label values), or -- if the endpoint is deliberately global and unauthenticated -- that no metric label carries any tenant-identifying value at all",
+      "the exposition endpoint returns a successful response with the last known values when the database is unavailable, rather than erroring, asserted with the database made unreachable",
+      "instrumentation is emitted via :telemetry events and the registry attaches to them, so the emitting call sites do not reference the registry module directly, confirmed by grep over the instrumented modules",
+      "the disposition of lib/letflow/routers/metrics.ex is explicit -- removed, or retained with its role stated in its own moduledoc -- and no route the SPA calls returns 404 afterwards",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

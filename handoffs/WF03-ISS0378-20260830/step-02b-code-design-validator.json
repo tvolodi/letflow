@@ -1,0 +1,44 @@
+{
+  "handoff_id": "WF03-ISS0378-20260830-step02b",
+  "run_id": "WF03-ISS0378-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 2b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/iss0378-poller-ac7-test-fix.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Design for ISS-0378's fix is complete at lib/letflow/design/iss0378-poller-ac7-test-fix.md. Read that file in full -- it covers the delete-vs-narrow decision, exact line-level edits to test/letflow/scheduler/poller_test.exs, the resolve_base_ref!/0 single-call-site confirmation, test isolation confirmation, the docs/anti-patterns.md recurrence-note recommendation, and explicit scope exclusion of test/letflow/scheduler_req188_test.exs.",
+    "decision_summary": "DELETE (not narrow) the 'lib/letflow/application.ex has zero diff against the base branch' test (poller_test.exs lines 340-353) and its now-unused resolve_base_ref!/0 helper (lines 329-337) -- confirmed via grep this helper has exactly one call site, inside the deleted test, so no dangling reference results. No replacement structural assertion is proposed: the only real introspectable target (Letflow.Application.scheduler_children/0) is private, and making it public is an application.ex production-code change outside this test-only issue's scope; the property's substance ('no second ticker') is already covered by the sibling GenServer-count test, which is unchanged. The describe block's mislabeled 'AC7: ...' title (it maps to no real AC7 or any REQ-186 AC) is corrected to drop the false AC claim.",
+    "anti_patterns_action": "No new docs/anti-patterns.md entry -- this is the same defect class already documented under 'A test scoped to one specific historical commit SHA breaks the moment that commit is squash-merged away' (dlq_test.exs AC6 incident), instantiated via a defensively-resolved moving ref instead of a pinned SHA. Design recommends appending a short recurrence paragraph to that existing entry (not a new heading) as part of implementing this fix.",
+    "out_of_scope_recurrence": "test/letflow/scheduler_req188_test.exs:432-452 has the identical git-diff-zero pattern for lib/letflow/engine/transition.ex. NOT touched by this design or its implementation. ORCH should file this as its own issue per 'No Issue Left Local-Only'.",
+    "owned_modules": [
+      "test/letflow/scheduler/poller_test.exs",
+      "docs/anti-patterns.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0378-poller-ac7-test-fix.md",
+      "handoffs/WF03-ISS0378-20260830/issue-fixer-diagnosis.md",
+      "handoffs/WF03-ISS0378-20260830/step-02-code-designer.json",
+      "test/letflow/scheduler/poller_test.exs",
+      "test/specs/REQ-186.md",
+      "docs/requirements.yaml",
+      "docs/anti-patterns.md"
+    ],
+    "branch_name": "feature/WF03-ISS0378-20260830"
+  },
+  "task": {
+    "description": "Validate lib/letflow/design/iss0378-poller-ac7-test-fix.md against the acceptance criteria from step-02-code-designer.json's task block. Confirm: (1) an explicit delete-vs-narrow decision is stated with rationale tied to the AC-mapping gap; (2) no replacement structural assertion invents a nonexistent function, and none uses git/history -- verify the design's claim that Letflow.Application.scheduler_children/0 is private by checking lib/letflow/application.ex yourself; (3) the corrected describe-block title text is specified and does not claim an AC number; (4) test/letflow/scheduler_req188_test.exs is explicitly out of scope; (5) no implementation code (.ex/.exs code fences reproducing real file content) appears anywhere in the design doc -- grep for triple-backtick fences yourself to confirm. Route to ELIXIR-DEV or TEST-DESIGNER (whichever WF-03 assigns for a test-file-only edit) once passed, or back to CODE-DESIGNER with specific rework notes if not.",
+    "acceptance_criteria": [
+      "lib/letflow/design/iss0378-poller-ac7-test-fix.md reviewed in full",
+      "Delete-vs-narrow decision and rationale confirmed present and sound",
+      "Confirmed no invented function name; confirmed no git/history dependency in any proposed replacement (or absence of a replacement is confirmed acceptable)",
+      "Corrected describe-block title text confirmed present and AC-number-free",
+      "scheduler_req188_test.exs out-of-scope statement confirmed present",
+      "No literal implementation code (code fences reproducing real file content) found in the design doc",
+      "Validator's own step-02c handoff written, committed, and pushed with top-level status exactly PENDING"
+    ]
+  },
+  "result": null
+}

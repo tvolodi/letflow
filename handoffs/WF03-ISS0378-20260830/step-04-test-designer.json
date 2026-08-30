@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF03-ISS0378-20260830-step04",
+  "run_id": "WF03-ISS0378-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 4 -> TEST-DESIGNER",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "test/letflow/scheduler/poller_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "REVIEWER independently ran git diff main...HEAD -- test/letflow/scheduler/poller_test.exs and docs/anti-patterns.md, plus read the design doc (lib/letflow/design/iss0378-poller-ac7-test-fix.md), SECURITY-REVIEWER's note, and REQ-186's full acceptance_criteria list in docs/requirements.yaml. All four review points confirmed against the actual diff, not assumed from prior handoffs.",
+    "verdict": "PASS",
+    "findings": [
+      "Scope: diff touches exactly test/letflow/scheduler/poller_test.exs (deletes resolve_base_ref!/0 defp helper, lines 329-337 pre-edit, and the 'lib/letflow/application.ex has zero diff' test, lines 340-353 pre-edit; relabels the surviving describe block) and docs/anti-patterns.md (one Recurrence paragraph appended to the existing 'test scoped to one specific historical commit SHA' entry). No lib/ or priv/repo/migrations/ file touched. No scope creep beyond what the design doc specified.",
+      "describe-block rename verified accurate: new title 'no second ticker -- lib/letflow/scheduler/ has exactly one GenServer module' matches the surviving test's actual body verbatim (a Path.wildcard over lib/letflow/scheduler/**/*.ex asserting exactly one file uses GenServer). Old title falsely claimed 'AC7' and 'application.ex untouched' -- neither is what the surviving test checks.",
+      "anti-patterns.md addition follows convention: a bold '**Recurrence.**' paragraph appended directly after the existing entry's Mitigation paragraph, before the next '## ' heading -- same pattern as the file's other Recurrence notes (grep shows 6 total, e.g. lines ~1224, ~1495, ~1547, ~1600, ~1677). Content is accurate: correctly distinguishes this instance (defensively-resolved ref, still broke) from the SHA-pinned original, and correctly flags the still-open scheduler_req188_test.exs instance as out of scope.",
+      "REQ-186 acceptance-criteria cross-check (independent, not just trusting the design doc): read all 10 ACs directly in docs/requirements.yaml. Real AC7 is 'a timer reaching the configured max fire retries transitions to failed ... exactly one dlq_entries row' -- covered in test/letflow/scheduler_test.exs, unrelated to application.ex. Real AC9 is 'no route or controller file is added or modified' -- confirmed covered by a genuine structural test, describe \"AC9: REQ-186 added no route or controller construct\" at test/letflow/scheduler_test.exs:590, using Path.wildcard/File-based checks, NOT git diff. No AC of the 10 maps to 'application.ex has zero diff' in any form. The deleted test was correctly unlabeled/mislabeled and covered no real AC.",
+      "No docs/migration/decisions/ record concerns test scoping or the scheduler test suite's shape -- confirmed by listing the directory (0001-0016). No collision, nothing to touch."
+    ],
+    "reviewer_independent_take_on_point_4": "Agree with ISSUE-FIXER and CODE-DESIGN-VALIDATOR: zero replacement coverage is correct here, not just acceptable. Checked this independently rather than deferring: the only structurally-checkable claim in the deleted test's intent ('no second ticker was added to application.ex') is already fully and permanently proven by the surviving sibling test (GenServer-count over lib/letflow/scheduler/**/*.ex) -- that IS the substantive property, expressed without depending on git history. The remaining half of the deleted test's title ('application.ex untouched') was never a real requirement; REQ-186's actual application.ex-adjacent AC (AC9, no route/controller) is separately and correctly covered elsewhere via a structural check. Adding a replacement assertion that scheduler_children/0 is exercised would require exporting a currently-private function with no REQ/AC backing that -- itself exactly the kind of ahead-of-need abstraction scope-creep check #4 should flag against, not something this fix should sneak in. Concur: no gap is being silently left open, and the forward-looking note in the design doc (section 7) correctly defers that to a future requirement rather than resolving it here.",
+    "wf03_step_numbering_nuance": "Per WF-03's own step numbering this is Step 4 (TEST-DESIGNER, normally the fail-then-pass regression-proof step). Flagging explicitly: this issue IS the removal of an over-broad test with no replacement assertion -- there is no 'bug' left in application code to reproduce with a fail-then-pass test in the traditional sense (all the actual production-code work already exists and is already tested; nothing here needs a new failing-then-passing test to prove a fix). TEST-DESIGNER's job on this handoff should be to (a) confirm there is no missing regression-test need beyond what REVIEWER and the design doc already checked (the AC7/AC9 cross-check above), and (b) add a test ONLY if TEST-DESIGNER independently finds a real, currently-uncovered acceptance criterion or regression risk -- not to force an artificial 'reproduce ISS-0378's bug' test onto what is fundamentally a test-deletion issue. If TEST-DESIGNER agrees no test is warranted, route through to TEST-DESIGN-VALIDATOR with that finding stated explicitly rather than silently skipping the step.",
+    "verified_facts": {
+      "elixir_dev_reported": "mix compile --warnings-as-errors clean, mix format clean, mix test test/letflow/scheduler/poller_test.exs 6/6 passing (down from 7)",
+      "security_reviewer_verdict": "PASS -- out of scope, all INV-1..INV-8 NOT-APPLICABLE",
+      "reviewer_own_diff_check": "git diff main...HEAD --stat and full diffs of both changed application/doc files read and verified directly, not assumed from any prior agent's handoff"
+    },
+    "design_doc": "lib/letflow/design/iss0378-poller-ac7-test-fix.md",
+    "security_review_note": "handoffs/WF03-ISS0378-20260830/security-review-note.md",
+    "prior_handoff": "handoffs/WF03-ISS0378-20260830/step-03e-reviewer.json",
+    "branch_name": "feature/WF03-ISS0378-20260830"
+  },
+  "task": {
+    "description": "Confirm no missing regression-test need for ISS-0378's poller_test.exs deletion, or add one only if truly warranted by an independent finding -- do not force a fail-then-pass 'reproduce the bug' test pattern onto a test-deletion issue that has no application-code bug to reproduce.",
+    "acceptance_criteria": [
+      "TEST-DESIGNER states explicitly whether any new test is added and why, or explicitly why none is needed",
+      "If a test is added, it must map to a real, currently-uncovered acceptance criterion or regression risk -- not a git-history-based check (per docs/anti-patterns.md)",
+      "Route to TEST-DESIGN-VALIDATOR with findings stated explicitly either way"
+    ]
+  },
+  "result": null
+}

@@ -1,0 +1,41 @@
+{
+  "handoff_id": "WF03-ISS0378-20260830-step02",
+  "run_id": "WF03-ISS0378-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 2",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "CODE-DESIGNER",
+  "file": "docs/issues/ISS-0378.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "ISSUE-FIXER's full diagnosis is at handoffs/WF03-ISS0378-20260830/issue-fixer-diagnosis.md. Summary only here per 'Load Scoped Context, Not Whole Files' -- read that file for the complete reasoning, git-blame evidence, and anti-patterns.md cross-references.",
+    "registry_lookup": "No prior resolved docs/issues/*.yaml entry matches this exact symptom (checked 'application.ex', 'zero diff', 'poller'). Not a recurrence of a closed issue. docs/anti-patterns.md already documents two related, already-mitigated defect classes ('git diff main...HEAD assumes a local main branch exists' and 'a test scoped to one specific historical commit SHA breaks on squash-merge') -- this is a fresh instance of the second class's underlying shape (prove a permanent property via git diff/history instead of a structural check of the shipped artifact), not a re-occurrence of either already-closed incident.",
+    "root_cause": "test/letflow/scheduler/poller_test.exs:339-352, describe block mislabeled 'AC7: retention runs on Poller's own process -- no second ticker, application.ex untouched'. The test 'lib/letflow/application.ex has zero diff against the base branch' runs `git diff --stat #{base_ref}...HEAD -- lib/letflow/application.ex` where base_ref resolves to whatever origin/main or main CURRENTLY is (via a resolve_base_ref! helper), and asserts empty output. This test maps to NO acceptance criterion in docs/requirements.yaml's REQ-186 entry (10 ACs) and appears nowhere in test/specs/REQ-186.md's AC1-AC10 coverage checklist -- it is undocumented, extra, and mislabeled (the REAL AC7, in both docs/requirements.yaml and test/specs/REQ-186.md, is the unrelated max-fire-retries-to-failed-plus-one-DLQ-row property, already covered by test/letflow/scheduler_test.exs). It encodes a point-in-time fact (REQ-186's own commits happened not to touch application.ex) as a permanent repo-wide invariant, so it fails on every future legitimate commit that touches application.ex for any reason -- which is exactly what REQ-190's already-approved :logger primary-filter registration did. git blame confirms lines 330-352 (helper + both AC7-labeled tests) trace entirely to commit 77637268, REQ-186's original already-merged commit -- not a REQ-190 regression.",
+    "sibling_test_unaffected": "The other test in the same describe block -- 'lib/letflow/scheduler/ contains exactly one GenServer module (Poller) -- no second ticker' -- is a correct STRUCTURAL check (Path.wildcard over the actual shipped lib/letflow/scheduler/ tree) and needs no change.",
+    "related_but_out_of_scope_recurrence": "test/letflow/scheduler_req188_test.exs:432-452 has the IDENTICAL pattern for lib/letflow/engine/transition.ex ('transition.ex is untouched by REQ-188'). Same defect class, will trip the same way on any future legitimate transition.ex change. Do NOT fix it in this run -- different file, different requirement, not what tripped ISS-0378. ORCH should file this as its own issue per 'No Issue Left Local-Only' once this handoff is read.",
+    "artifacts_in": [
+      "handoffs/WF03-ISS0378-20260830/issue-fixer-diagnosis.md",
+      "test/letflow/scheduler/poller_test.exs",
+      "test/specs/REQ-186.md",
+      "docs/anti-patterns.md",
+      "docs/issues/ISS-0378.yaml"
+    ],
+    "owned_modules": [
+      "test/letflow/scheduler/poller_test.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0378-20260830"
+  },
+  "task": {
+    "description": "Design the fix for ISS-0378. Produce a design artefact at lib/letflow/design/iss0378-poller-test-application-ex-diff.md (no implementation code) covering:\n\n1. Confirm the recommended approach: DELETE the 'lib/letflow/application.ex has zero diff against the base branch' test and its now-unused resolve_base_ref!/0 helper from test/letflow/scheduler/poller_test.exs entirely, rather than narrowing the git-diff scope -- it maps to no acceptance criterion in docs/requirements.yaml or test/specs/REQ-186.md, so there is no coverage to preserve. State explicitly whether you agree or, if not, what narrower structural (non-git-diff) check you propose instead and why deletion alone is insufficient.\n2. If a replacement structural assertion is warranted at all (e.g. asserting the Poller's child spec is present/correctly configured in the application's supervision tree via a real function call, never via `git diff`), specify it precisely: which function to call (find and name Letflow.Application's actual public/introspectable surface for its child list -- do not invent a function name), what shape the assertion takes, and confirm it does not depend on git/history in any way.\n3. Address the mislabeled describe block: the surviving 'lib/letflow/scheduler/ contains exactly one GenServer module' test currently sits under a describe titled 'AC7: ...' when the real AC7 is unrelated (max-fire-retries -> failed -> one DLQ row, already covered in scheduler_test.exs) and this test isn't in test/specs/REQ-186.md's coverage matrix under any AC number either. Specify the corrected describe title (should not claim an AC number it isn't mapped to).\n4. Confirm scope: this fix touches ONLY test/letflow/scheduler/poller_test.exs. Do NOT design a fix for test/letflow/scheduler_req188_test.exs's identical pattern (transition.ex) -- that is a separate, out-of-scope recurrence for ORCH to file as its own issue.\n\nDesign must be unambiguous enough for TEST-DESIGNER/ELIXIR-DEV (whichever WF-03 routes to for the actual edit -- this is a test-file-only change) to implement without making further design decisions. Route to CODE-DESIGN-VALIDATOR per WF-03 Steps 2-4 once done.",
+    "acceptance_criteria": [
+      "lib/letflow/design/iss0378-poller-test-application-ex-diff.md exists",
+      "Explicit decision stated: delete vs. narrow the application.ex zero-diff test, with rationale referencing the acceptance-criteria-mapping gap described above",
+      "If a replacement structural assertion is proposed, it names a real, existing, verified-to-exist function/construct in lib/letflow/application.ex -- not an invented one -- and does not use git/history in any form",
+      "Corrected describe-block title specified for the surviving GenServer-count test",
+      "Design explicitly states test/letflow/scheduler_req188_test.exs is out of scope for this fix",
+      "No implementation code in the design doc"
+    ]
+  },
+  "result": null
+}

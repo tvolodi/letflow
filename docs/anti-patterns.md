@@ -1776,6 +1776,25 @@ project already proves "no route was added" for other requirements. A structural
 permanently true or false based on what's actually shipped, not on what commit history happens
 to still contain.
 
+**Recurrence.** ISS-0378 hit the same defect class a third time, in `poller_test.exs`'s
+"`lib/letflow/application.ex` has zero diff against the base branch" test, tripped by REQ-190's
+legitimate, independently-reviewed `:logger`-primary-filter addition to `application.ex`. Unlike
+the SHA-pinned original above, this instance used the *defensively resolved* `origin/main`/`main`
+ref -- the exact mitigation prescribed by the other, related entry ("A test embeds `git diff
+main...HEAD` directly...") -- and still failed the moment `application.ex` legitimately changed.
+This proves ref-resolution alone does not fix the underlying defect: proving a supposedly
+permanent property via `git diff`/history is broken regardless of how carefully the ref is
+resolved, because the property itself ("this file never changes") was never actually permanent.
+Both mitigations are needed for their own distinct failure modes (hardcoded ref vs. removed
+commit), but neither substitutes for "use a structural check instead" when the property is meant
+to hold going forward. The fix was to delete the test outright (no replacement was structurally
+provable without exporting a currently-private function -- see
+`lib/letflow/design/iss0378-poller-ac7-test-fix.md` sections 1-2), relying on this file's sibling
+GenServer-count test to cover the only part of the original intent ("no second ticker was added")
+that mapped to an actual acceptance criterion. An identical, still-open instance of this same
+pattern remains at `test/letflow/scheduler_req188_test.exs:432-452` as of this writing --
+out of scope for ISS-0378, flagged for a separate issue.
+
 ## A validator's own free-text report file, named `step-*.md`, trips the H6 handoff lint
 
 **What happened.** REQ-178's CODE-DESIGN-VALIDATOR wrote its independent-verification writeup to

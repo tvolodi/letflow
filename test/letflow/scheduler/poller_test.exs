@@ -326,32 +326,7 @@ defmodule Letflow.Scheduler.PollerTest do
     end
   end
 
-  defp resolve_base_ref! do
-    base_ref =
-      Enum.find(["origin/main", "main"], fn ref ->
-        match?({_, 0}, System.cmd("git", ["rev-parse", "--verify", ref], stderr_to_stdout: true))
-      end)
-
-    assert base_ref, "neither origin/main nor main resolved -- cannot verify a file is untouched"
-    base_ref
-  end
-
-  describe "AC7: retention runs on Poller's own process -- no second ticker, application.ex untouched" do
-    test "lib/letflow/application.ex has zero diff against the base branch" do
-      base_ref = resolve_base_ref!()
-
-      {output, 0} =
-        System.cmd("git", [
-          "diff",
-          "--stat",
-          "#{base_ref}...HEAD",
-          "--",
-          "lib/letflow/application.ex"
-        ])
-
-      assert output == "", "expected zero diff against application.ex, got:\n#{output}"
-    end
-
+  describe "no second ticker -- lib/letflow/scheduler/ has exactly one GenServer module" do
     test "lib/letflow/scheduler/ contains exactly one GenServer module (Poller) -- no second ticker" do
       root = File.cwd!()
       files = Path.wildcard(Path.join(root, "lib/letflow/scheduler/**/*.ex"))

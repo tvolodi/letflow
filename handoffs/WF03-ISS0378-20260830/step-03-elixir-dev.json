@@ -1,0 +1,53 @@
+{
+  "handoff_id": "WF03-ISS0378-20260830-step03",
+  "run_id": "WF03-ISS0378-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 3",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/design/iss0378-poller-ac7-test-fix.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Design for ISS-0378 PASSED validation (see handoffs/WF03-ISS0378-20260830/code-design-validation-report.md). Implement lib/letflow/design/iss0378-poller-ac7-test-fix.md exactly -- this is a test-file-only mechanical edit, no production code changes.",
+    "design_file": "lib/letflow/design/iss0378-poller-ac7-test-fix.md",
+    "validation_report": "handoffs/WF03-ISS0378-20260830/code-design-validation-report.md",
+    "owned_modules": [
+      "test/letflow/scheduler/poller_test.exs",
+      "docs/anti-patterns.md"
+    ],
+    "edits_required": [
+      "Delete lines 329-337 of test/letflow/scheduler/poller_test.exs -- the private resolve_base_ref!/0 helper (verified as current at validation time; re-check line numbers before editing since prior edits in this session could shift them).",
+      "Delete the test block 'lib/letflow/application.ex has zero diff against the base branch' at lines 340-353 of the same file.",
+      "Correct the describe block title at line 339 from 'AC7: retention runs on Poller's own process -- no second ticker, application.ex untouched' to wording that claims no AC number and accurately describes the sole surviving test (recommended: 'no second ticker -- lib/letflow/scheduler/ has exactly one GenServer module'; any equivalent phrasing satisfying (a) no AC number and (b) accurate description is acceptable).",
+      "Leave the surviving sibling test ('lib/letflow/scheduler/ contains exactly one GenServer module (Poller) -- no second ticker') completely unchanged.",
+      "Append a short 'Recurrence.' paragraph (matching the existing convention at docs/anti-patterns.md:1677, under the mix format entry) to the existing docs/anti-patterns.md entry 'A test scoped to one specific historical commit SHA breaks the moment that commit is squash-merged away' (starts at docs/anti-patterns.md:1751). Content per design doc section 5: note this is ISS-0378, poller_test.exs's application.ex zero-diff test, tripped by REQ-190's legitimate application.ex change; distinguish from the SHA-pinned original by noting this instance used the defensively-resolved origin/main/main ref and still failed, proving ref-resolution alone doesn't fix the underlying git-diff-based-permanent-property defect; note the still-open identical recurrence at test/letflow/scheduler_req188_test.exs:432-452 (out of scope for this fix)."
+    ],
+    "out_of_scope": [
+      "test/letflow/scheduler_req188_test.exs -- identical pattern, different file/requirement, NOT touched by this fix. Report to ORCH as its own issue per 'No Issue Left Local-Only' if not already filed.",
+      "lib/letflow/application.ex -- no production code changes; scheduler_children/0 stays private."
+    ],
+    "post_edit_verification": [
+      "mix format on the edited file",
+      "mix test test/letflow/scheduler/poller_test.exs -- confirm the surviving test still passes and the deleted test/helper are gone",
+      "grep -n resolve_base_ref test/ lib/ -- confirm zero remaining references",
+      "mix compile --warnings-as-errors"
+    ],
+    "branch_name": "feature/WF03-ISS0378-20260830"
+  },
+  "task": {
+    "description": "Implement the ISS-0378 fix per lib/letflow/design/iss0378-poller-ac7-test-fix.md: delete the undocumented, mislabeled 'application.ex zero diff' test and its now-unused resolve_base_ref!/0 helper from test/letflow/scheduler/poller_test.exs, correct the describe block's misleading AC7 title, and append a short recurrence note to the existing docs/anti-patterns.md entry. Route onward per WF-03's next step (regression/verification) once complete.",
+    "acceptance_criteria": [
+      "resolve_base_ref!/0 helper removed from poller_test.exs",
+      "The 'application.ex has zero diff against the base branch' test removed from poller_test.exs",
+      "describe block title corrected to make no AC-number claim",
+      "Surviving GenServer-count test unchanged and still passing",
+      "docs/anti-patterns.md's existing SHA-scoped-test entry has a short recurrence paragraph appended",
+      "mix test test/letflow/scheduler/poller_test.exs passes with real output quoted",
+      "mix compile --warnings-as-errors passes with real output quoted",
+      "No changes made to test/letflow/scheduler_req188_test.exs or lib/letflow/application.ex",
+      "Handoff committed and pushed"
+    ]
+  },
+  "result": null
+}

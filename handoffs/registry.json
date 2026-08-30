@@ -3507,8 +3507,8 @@
       "started_at": "2026-08-30T14:14:33Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
-      "note": "Prometheus metrics subsystem (OBS-02), resolving REQ-078's three recorded divergences (auth, scope, format) against a fresh finding: web/src/api/metrics.ts already expects Prometheus text from an unversioned GET /metrics, not the JSON REQ-078 shipped. Six metric families via :telemetry, route-template HTTP labels, DB-unavailable graceful degradation. May need a new mix.exs dependency (REVIEWER sign-off) or a hand-rolled registry."
+      "last_known_step": "Step 2c (SECURITY-REVIEWER PASS, routed to REVIEWER Step 2d)",
+      "note": "Prometheus metrics subsystem (OBS-02), resolving REQ-078's three recorded divergences (auth, scope, format) against a fresh finding: web/src/api/metrics.ts already expects Prometheus text from an unversioned GET /metrics, not the JSON REQ-078 shipped. Six metric families via :telemetry, route-template HTTP labels, DB-unavailable graceful degradation. New direct mix.exs dependency {:telemetry, \"~> 1.4\"} (promotion of an already-transitive dep, mix.lock diff empty) -- SECURITY-REVIEWER (step-02c) PASSED and granted its own sign-off (see handoffs/WF02-REQ194-20260830/security-review-req194.md); REVIEWER sign-off on the same line still pending at step-02d. Label-allowlist invariant (the entire safety mechanism for the new global unauthenticated GET /metrics endpoint) independently verified line-by-line across every handle_* function in lib/letflow/metrics/registry.ex -- no metric family can ever emit a tenant_id/instance_id/definition_id/task_id/actor_id label. Poller's DB-unavailable deviation from design section 6's literal wording assessed safe (design wording was internally incoherent on that exact failure path)."
     }
   ]
 }

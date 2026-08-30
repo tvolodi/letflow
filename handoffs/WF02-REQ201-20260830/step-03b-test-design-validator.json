@@ -1,0 +1,124 @@
+{
+  "handoff_id": "step03b-WF02-REQ201-20260830",
+  "run_id": "WF02-REQ201-20260830",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ201-20260830/step-03b-test-design-validator.json",
+  "created_at": "2026-08-31T00:25:00Z",
+  "status": "COMPLETED",
+  "result": {
+    "status": "PASS",
+    "summary": "All 14 ACs independently verified against test/letflow/obs/alerts_test.exs. 17 tests, all pass (measured: 'Result: 17 passed, Finished in 12.0 seconds'). No blocking findings.",
+    "mix_test_last_line": "Result: 17 passed",
+    "mix_test_full_summary": "Finished in 12.0 seconds (0.00s async, 12.0s sync)\nResult: 17 passed",
+    "branch": "feature/WF02-REQ201-20260830",
+    "gate_checks": [
+      {
+        "check": "No @tag :skip without passing counterpart",
+        "result": "PASS — no @tag :skip found in test file"
+      },
+      {
+        "check": "No 'TODO: implement test' left in spec",
+        "result": "PASS — spec is complete; no TODO stubs found"
+      },
+      {
+        "check": "Per-test unique fixtures (no shared hardcoded IDs)",
+        "result": "PASS — each test calls provisioned_tenant/1 with a unique slug_prefix (req201-ac1 through req201-disabled), uses Ecto.UUID.generate() for instance/subscription IDs; no cross-test shared state"
+      },
+      {
+        "check": "Tests are self-sufficient (no dependency on execution order)",
+        "result": "PASS — each test has its own WebhookTestServer.start/2, its own put_alert_config/1 with on_exit cleanup, and its own tenant schema"
+      },
+      {
+        "check": "No hardcoded secrets or connection strings",
+        "result": "PASS — the one credential used (AC-9) is stored via Letflow.Secrets.put/1 at test runtime, not hardcoded; no connection strings present"
+      }
+    ],
+    "ac_coverage": [
+      {
+        "ac": "AC-1",
+        "test": "describe 'AC-1: DLQ depth edge trigger fires once on crossing, not again while still above'",
+        "finding": "PASS — 3 above-threshold evaluation cycles verified: fire at dlq_count:11, refute_receive at dlq_count:15, refute_receive at dlq_count:20; is_armed==false asserted after all three. Satisfies ≥3 cycle requirement."
+      },
+      {
+        "ac": "AC-2",
+        "test": "describe 'AC-2: re-arms when depth falls below threshold and fires again on second crossing'",
+        "finding": "PASS — distinct from AC-1 (separate tenant slug req201-ac2, threshold 5 vs 10). ARMED→FIRED→ARMED→FIRED four-step sequence: fires on first crossing, is_armed re-set to true when depth falls below, fires again on second crossing."
+      },
+      {
+        "ac": "AC-3",
+        "test": "describe 'AC-3: two simultaneously stuck instances produce two separate deliveries'",
+        "finding": "PASS — Enum.map(1..2, ...) blocks on second receive_request/1 (flunks on timeout if < 2 requests); id1 and id2 both asserted in received instance_ids; length(keys) == 2 confirms two distinct trigger_key rows. No vacuous-pass risk."
+      },
+      {
+        "ac": "AC-4",
+        "test": "describe 'AC-4: stuck instance below threshold produces no alert; at threshold fires'",
+        "finding": "PASS — stuck_minutes:5 (below threshold 10): refute_receive; stuck_minutes:10 (at threshold): fires with correct trigger and instance_id."
+      },
+      {
+        "ac": "AC-5",
+        "test": "describe 'AC-5: scheduler lag hook fires via real Poller tick with measurable lag'",
+        "finding": "PASS — Process.sleep(10) + DateTime.diff produces a real wall-clock lag_ms, asserted >= 5 before passing to run_detection. Spec note correctly explains DataCase/Sandbox constraint preventing full Poller.handle_info path; real measurement (not synthetic integer) satisfies AC intent."
+      },
+      {
+        "ac": "AC-6",
+        "test": "describe 'AC-6: paused webhook subscription fires exactly one delivery'",
+        "finding": "PASS — first tick fires once; second tick with same subscription: refute_receive. Edge-triggered emission dedup confirmed."
+      },
+      {
+        "ac": "AC-7",
+        "test": "describe 'AC-7: stuck-instance POST body contains required fields'",
+        "finding": "PASS — body[\"instance_id\"], body[\"error_reason\"], body[\"stuck_duration_minutes\"] all asserted with exact expected values; body[\"fired_at\"] asserted to be a binary (ISO8601 string)."
+      },
+      {
+        "ac": "AC-8",
+        "test": "describe 'AC-8: delivery failure retries, exhaustion logs error, no DLQ row'",
+        "finding": "PASS — both required assertions present: (1) exhaustion_count = length(Regex.scan(~r/alert delivery exhausted/, log)); assert exhaustion_count == 1 (exact count, not just presence); (2) count = Dlq.count_entries(prefix: schema_name); assert count == 0 (DLQ absence confirmed). Hook ID 'ac8-hook' asserted in log to confirm correct hook context."
+      },
+      {
+        "ac": "AC-9",
+        "test": "describe 'AC-9: auth_secret_ref resolved via Secrets.resolve/2 at delivery time'",
+        "finding": "PASS — secret stored via Letflow.Secrets.put/1; resolved ref passed as auth_secret_ref; Authorization header asserted to contain 'Bearer' + plaintext; trigger_state row inspected with refute inspect(state) =~ 'super-secret'."
+      },
+      {
+        "ac": "AC-10",
+        "test": "describe 'AC-10: alert_trigger_state and alert_hook_emission_state are per-tenant'",
+        "finding": "PASS — Repo.all/2 with prefix: schema_name against both tables; a global-only table would raise a Postgres relation-not-found error, not return []. Meaningful falsifiable assertion."
+      },
+      {
+        "ac": "AC-11",
+        "test": "describe 'AC-11: application.ex not modified; no new child added' (2 tests)",
+        "finding": "PASS — Test 1: refute function_exported?(Alerts, :start_link, 1) and :child_spec/1. Test 2 (source assertion): source = File.read!(\"lib/letflow/application.ex\"); refute source =~ \"Letflow.Obs.Alerts\" — directly matches AC-11's 'confirmed by git diff of application.ex' wording. No longer a duplicate of test 1."
+      },
+      {
+        "ac": "AC-12",
+        "test": "describe 'AC-12: Letflow.Obs.Alerts moduledoc documents distinction from webhooks'",
+        "finding": "PASS — Code.fetch_docs/1 fetches live compiled docs; asserts moduledoc =~ \"DLQ\", \"webhook\", \"Never\"."
+      },
+      {
+        "ac": "AC-13",
+        "test": "describe 'AC-13: no route or controller added by REQ-201'",
+        "finding": "PASS — refute function_exported?(Alerts, :call, 2) and :init/1 confirm no Plug.Router or Plug.Builder."
+      },
+      {
+        "ac": "AC-14",
+        "test": "describe 'AC-14: compile + test pass (structural check)' (2 tests)",
+        "finding": "PASS — Test 1: assert function_exported?(Alerts, :run_detection, 2). Test 2: Code.ensure_loaded!(Letflow.Dlq); assert function_exported?(Letflow.Dlq, :count_entries, 1). Both structural checks confirm the compiled module surface."
+      }
+    ],
+    "extra_test": {
+      "describe": "disabled config produces no side effects",
+      "finding": "Bonus test (not mapped to a named AC) — reasonable boundary guard for the enabled: false path. Does not substitute for any AC."
+    },
+    "blocking_findings": [],
+    "artifacts_reviewed": [
+      "test/letflow/obs/alerts_test.exs",
+      "test/specs/REQ-201.md",
+      "handoffs/WF02-REQ201-20260830/step-03-test-designer.json",
+      "handoffs/WF02-REQ201-20260830/step-01-code-designer.json"
+    ],
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  }
+}

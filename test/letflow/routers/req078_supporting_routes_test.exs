@@ -39,15 +39,13 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
   import Plug.Conn
   import Ecto.Query, only: [from: 2]
 
+  alias Letflow.Audit
   alias Letflow.Definitions
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.ProcessDefinition
   alias Letflow.Definitions.SolutionPackInstall
   alias Letflow.Engine
   alias Letflow.Engine.VariableSchema
-  alias Letflow.EventStore
-  alias Letflow.EventStore.InstanceProjection
-  alias Letflow.EventStore.Registry
   alias Letflow.TenantFixture
 
   @tenant_opts Letflow.Router.init([])
@@ -163,35 +161,28 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
     |> Repo.insert!(prefix: schema_name)
   end
 
-  defp unique_type_name(prefix \\ "REQ078EVT"), do: unique(prefix)
   defp unique_idempotency_key(prefix \\ "REQ078IDK"), do: unique(prefix)
 
-  defp register_event_type!(tenant_id, json_schema \\ %{"type" => "object"}) do
-    name = unique_type_name()
+  # REQ-196: GET /audit now reads Letflow.Audit.Entry (REQ-195's
+  # audit_entries table), not the events table -- this fixture seeds a real
+  # audit_entries row instead of an event + projection pair.
+  defp seed_audit_entry!(schema_name, overrides \\ []) do
+    attrs =
+      Map.merge(
+        %{
+          actor_id: Ecto.UUID.generate(),
+          action: "instance.create",
+          resource_type: "instance",
+          resource_id: Ecto.UUID.generate(),
+          before_state: nil,
+          after_state: %{"status" => "active"},
+          trace_id: nil
+        },
+        Map.new(overrides)
+      )
 
-    assert {:ok, _event_type} =
-             Registry.register_type(
-               %{
-                 "name" => name,
-                 "schema_version" => 1,
-                 "json_schema" => json_schema,
-                 "description" => "REQ-078 test fixture"
-               },
-               tenant_id
-             )
-
-    name
-  end
-
-  defp seed_projection!(schema_name, instance_id, status \\ :active) do
-    %InstanceProjection{}
-    |> InstanceProjection.insert_changeset(%{
-      instance_id: instance_id,
-      status: status,
-      last_event_seq: 0,
-      definition_id: Ecto.UUID.generate()
-    })
-    |> Repo.insert!(prefix: schema_name)
+    assert {:ok, entry} = Audit.insert_entry(Repo, attrs, schema_name)
+    entry
   end
 
   # rebind_pins/3 requires a REAL started instance (an instance_sequence row,
@@ -233,19 +224,6 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
     on_exit(fn ->
       Repo.delete_all(from(s in SolutionPackInstall, where: s.tenant_id == ^tenant_id))
     end)
-  end
-
-  defp append_event!(schema_name, event_type, instance_id, actor_id \\ nil) do
-    attrs = %{
-      instance_id: instance_id,
-      event_type: event_type,
-      payload: Jason.encode!(%{}),
-      actor_id: actor_id || Ecto.UUID.generate(),
-      idempotency_key: unique_idempotency_key()
-    }
-
-    assert {:ok, %{event: event}} = EventStore.append(attrs, prefix: schema_name)
-    event
   end
 
   defp pack_document(definitions, variable_schemas \\ []) do
@@ -296,10 +274,7 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
 
     test "GET /audit -- 200, {items, next_cursor, count} shape" do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req078-ac1-audit")
-      event_type = register_event_type!(tenant.tenant_id)
-      instance_id = Ecto.UUID.generate()
-      seed_projection!(tenant.schema_name, instance_id)
-      append_event!(tenant.schema_name, event_type, instance_id)
+      entry = seed_audit_entry!(tenant.schema_name)
 
       resp =
         build_conn(:get, "/", tenant, roles: ["PLATFORM_ADMIN"])
@@ -310,7 +285,7 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
       assert Map.keys(body) |> Enum.sort() == ["count", "items", "next_cursor"]
       assert body["count"] == 1
       assert [item] = body["items"]
-      assert item["resource_id"] == instance_id
+      assert item["resource_id"] == entry.resource_id
     end
 
     test "POST /definitions/:id/validate -- 200, valid graph" do
@@ -414,20 +389,16 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
   # ═══════════════════════════════════════════════════════════════════════════
 
   describe "AC2: audit list is tenant-isolated; caller without :AuditRead gets 403" do
-    test "requesting as tenant A returns only A's events, never a B event_id, same time window" do
+    test "requesting as tenant A returns only A's entries, never a B audit_id, same time window" do
       tenant_a = TenantFixture.provisioned_tenant!(slug_prefix: "req078-ac2-a")
       tenant_b = TenantFixture.provisioned_tenant!(slug_prefix: "req078-ac2-b")
 
-      type_a = register_event_type!(tenant_a.tenant_id)
-      type_b = register_event_type!(tenant_b.tenant_id)
       instance_a = Ecto.UUID.generate()
       instance_b = Ecto.UUID.generate()
-      seed_projection!(tenant_a.schema_name, instance_a)
-      seed_projection!(tenant_b.schema_name, instance_b)
 
-      # Same time window: appended back-to-back, no artificial timestamp skew.
-      _event_a = append_event!(tenant_a.schema_name, type_a, instance_a)
-      event_b = append_event!(tenant_b.schema_name, type_b, instance_b)
+      # Same time window: inserted back-to-back, no artificial timestamp skew.
+      _entry_a = seed_audit_entry!(tenant_a.schema_name, resource_id: instance_a)
+      entry_b = seed_audit_entry!(tenant_b.schema_name, resource_id: instance_b)
 
       resp =
         build_conn(:get, "/", tenant_a, roles: ["PLATFORM_ADMIN"])
@@ -440,16 +411,14 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
 
       assert instance_a in resource_ids
       refute instance_b in resource_ids
-      refute event_b.event_id in audit_ids
+      refute entry_b.id in audit_ids
       assert Enum.all?(resource_ids, &(&1 == instance_a))
     end
 
-    test "a caller with only TASK_WORKER (no :AuditRead) gets 403 and no events" do
+    test "a caller with only TASK_WORKER (no :AuditRead) gets 403 and no entries" do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req078-ac2-403")
-      event_type = register_event_type!(tenant.tenant_id)
       instance_id = Ecto.UUID.generate()
-      seed_projection!(tenant.schema_name, instance_id)
-      append_event!(tenant.schema_name, event_type, instance_id)
+      seed_audit_entry!(tenant.schema_name, resource_id: instance_id)
 
       resp =
         build_conn(:get, "/", tenant, roles: ["TASK_WORKER"])

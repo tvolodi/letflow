@@ -1,0 +1,52 @@
+{
+  "handoff_id": "step02c-WF02-REQ196-20260830",
+  "run_id": "WF02-REQ196-20260830",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ196-20260830/step-02c-security-reviewer.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-196"],
+    "issue_ids": [],
+    "queue_task_id": 369,
+    "github_issue": "GH#715",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ196-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ196-20260830/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req196-audit-route.md",
+      "lib/letflow/audit.ex",
+      "lib/letflow/routers/audit.ex",
+      "test/letflow/routers/req196_audit_route_test.exs",
+      "test/letflow/routers/req078_supporting_routes_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ196-20260830",
+    "rework_pass": 0,
+    "implementation_summary": "Implemented REQ-196 exactly per the CODE-DESIGN-VALIDATOR-approved design at lib/letflow/design/req196-audit-route.md. (1) Added Letflow.Audit.list_entries/1 to lib/letflow/audit.ex -- a new tenant-scoped, filtered/paginated read of audit_entries (prefix is a REQUIRED key of its single map argument, not read from process/application config; the design's own @spec text names prefix as 'an explicit argument' but its @type sketch omitted the key, so this is a deliberate, documented implementation-level resolution, not a design deviation -- see the function's own moduledoc paragraph). Predicates (from/to/actor_id/resource_id/resource_type/cursor-seek) are applied only when present, ordered timestamp DESC/id DESC, page_size+1-fetch/drop-extra-row has_more idiom, backed entirely by REQ-195's three existing indexes -- no new migration. actor_id is UUID-cast-validated ahead of the query (:invalid_actor_id on failure); resource_id's :invalid_resource_id clause was dropped as unreachable dead code per the design's own OQ-1 guidance (resource_id is a plain :string column, no cast-error risk). (2) Repointed lib/letflow/routers/audit.ex's handle_list/1 from Letflow.EventStore.read_global/1 to Letflow.Audit.list_entries/1: unsupported_resource_type?/1 and its empty-page short-circuit are deleted entirely, resource_type is now a real optional equality filter reaching the query. Cursor decode/mint (parse_cursor_param/1, cursor_seek_from_cursor/1, next_cursor/2) were changed to carry a {timestamp, id} seek pair instead of a bare global_seq integer, keeping decode ownership in the router per the design's OQ-2 (router keeps the 'A:' prefix constant and existing parse-function shape, only the inner-payload interpretation changed) -- confirmed via a dedicated round-trip test that pagination across pages returns disjoint items and a malformed cursor is rejected 400. audit_item/1 now maps exactly Entry's 8 design-§2.1 fields (audit_id/actor_id/action/resource_type/resource_id/timestamp/before_state/after_state); payload and pipeline_run_id (the latter still 422-rejected as a query param, no column exists) are both gone from the response. render_page/2's former catch-all {:error, _} clause was removed as newly-unreachable (list_entries/1's own @spec only returns {:ok, ...} or {:error, :invalid_actor_id}) -- confirmed by mix compile --warnings-as-errors, which failed with an 'this clause is never used' warning on the catch-all until removed. (3) Moduledoc rewritten per design §5: the 'Served from the event store, not an audit-entry table' section and the resource_type 'not supported' framing are both gone; replaced with a section describing the real audit_entries-backed source, cross-referencing both req195 and req196 design docs, and stating resource_type/before_state/after_state now carry real per-row values. The 'Ordering guarantee' and INV-1 sections were updated only to rename the delegate (EventStore.read_global/1 -> Letflow.Audit.list_entries/1) and rephrase 'events could be selected' -> 'audit entries could be selected'; their substance (no Repo call in this module, prefix is the only tenant input, request cannot widen scope) is unchanged, as instructed. (4) Fixed test/letflow/routers/req078_supporting_routes_test.exs's two now-broken audit tests (they asserted the old EventStore-backed shape/fixtures) to seed via Letflow.Audit.insert_entry/3 instead of the events/projections helpers, and removed the now-unused register_event_type!/seed_projection!/append_event! helpers and their EventStore/Registry/InstanceProjection aliases (removing them was necessary, not optional -- they became genuinely dead code and mix compile --warnings-as-errors fails on unused private functions/aliases). (5) Added a new, dedicated test/letflow/routers/req196_audit_route_test.exs covering all 9 ACs directly, including AC1 (the key test: a definition.activate-shaped entry with real before/after state, which would have 404/nulled under the old implementation), AC2/AC3 (resource_type variety and real filtering), AC4 (exact field-by-field response shape against RawAuditPage/RawAuditEntry, confirmed no payload/pipeline_run_id key), AC5 (403 without :AuditRead), AC6 (cross-tenant isolation), AC7 (moduledoc no longer contains the retired caveat strings, via Code.fetch_docs/1), plus pagination cursor round-trip and actor_id cast-validation coverage beyond the 9 ACs. This is a good-faith initial test pass per the task instructions -- TEST-DESIGNER performs the full gap-check next.",
+    "not_touched": "Confirmed via git diff --stat/git status: zero changes to lib/letflow/api/authorization.ex, lib/letflow/audit/entry.ex, any priv/repo/migrations/*.exs file, or anything under web/. Letflow.Audit's append_multi/4, insert_entry/3, and verify_chain/2 are byte-identical to before this change -- list_entries/1 and its private helpers were added alongside them, nothing existing was edited.",
+    "verification_run_this_session": {
+      "mix_compile": "mix compile --warnings-as-errors -- clean, no output, exit 0.",
+      "mix_format": "mix format --check-formatted -- clean after formatting the new test file (no other file needed reformatting).",
+      "mix_test_targeted": "mix test test/letflow/routers/req196_audit_route_test.exs test/letflow/routers/req078_supporting_routes_test.exs test/letflow/audit_test.exs test/letflow/audit_capture_test.exs test/letflow/audit_dispositions_test.exs -- 63 tests, 0 failures.",
+      "mix_letflow_lint_handoffs": "OK -- 0 new violations across 1565 handoff files (25 pre-existing grandfathered, traced to ISS-0190) -- ran before this handoff file itself was added.",
+      "git_diff_stat": "lib/letflow/audit.ex (+133), lib/letflow/routers/audit.ex (+/-243 net rewrite of ~half the file), test/letflow/routers/req078_supporting_routes_test.exs (+91/-implied fixture-only changes), plus new untracked test/letflow/routers/req196_audit_route_test.exs -- no web/ file, no lib/letflow/api/authorization.ex, no migration file, no lib/letflow/audit/entry.ex change."
+    }
+  },
+  "task": {
+    "description": "Perform the security hard gate for REQ-196's implementation per docs/agents/instructions/security-invariants.md (INV-1..INV-8). This change touches a tenant-data path: it repoints a live, authenticated GET /api/v1/audit route's data source and response-shaping logic (lib/letflow/routers/audit.ex, lib/letflow/audit.ex) -- gate against every applicable invariant, with particular attention to INV-1 (tenant isolation -- list_entries/1's prefix argument and every filter it accepts), INV-2/INV-3-equivalent response-shaping (audit_item/1's hand-built 8-key allowlist, confirm no tenant_id/chain_hash/prev_chain_hash/trace_id leak), and INV-7/INV-8 (unchanged authorization gate, and this route being itself part of the tenant's compliance audit trail).",
+    "acceptance_criteria": [
+      "Each of INV-1..INV-8 is explicitly addressed (APPLICABLE with a verdict, or NOT-APPLICABLE with a one-line reason) against the actual diff",
+      "Confirm list_entries/1's prefix is always the caller's own resolved conn.assigns.scoped_opts value, never request-derived, and that every filter (actor_id/resource_id/resource_type/cursor/from/to) only narrows the query, never widens or redirects it to another tenant's schema",
+      "Confirm audit_item/1's response allowlist (8 named keys) cannot leak tenant_id, chain_hash, prev_chain_hash, trace_id, or inserted_at",
+      "Confirm the actor_id UUID-cast validation path (Ecto.UUID.cast/1 ahead of the query) cannot raise an unhandled Ecto.Query.CastError reaching the caller",
+      "Confirm :AuditRead is still the enforced permission with zero change to lib/letflow/api/authorization.ex",
+      "PASS or FAIL verdict recorded, with rework routed back to ELIXIR-DEV if FAIL"
+    ]
+  },
+  "result": null
+}

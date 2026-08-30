@@ -1,0 +1,28 @@
+id: ISS-0377
+title: "Windows test-run environment: wasmex .so-vs-.dll assertion and MIX_OS_CONCURRENCY_LOCK hard-link contention"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ189-20260830
+discovered_at: 2026-08-30T00:05:00Z
+severity: MINOR
+description: >
+  Independent full-suite re-run at WF02-REQ189-20260830 Step 5 (scripts/test_parallel.sh,
+  16 partitions) found 2 failures and 2 aborted partitions, both structurally outside
+  REQ-189's docs-only diff (git diff --stat cd91c257^..387a7610 touches only docs/ and
+  handoffs/ -- no lib/, no test/, no migration):
+  (1) Letflow.Engine.Wasm.PluginHandlerTest
+  (test/letflow/engine/wasm/plugin_handler_test.exs lines ~180/193) asserts a bundled
+  wasmex.so exists and that Wasmex.Native's external_resources name .rs sources. The
+  actual artifact built on this Windows host is
+  wasmex-v0.15.1-nif-2.15-x86_64-pc-windows-msvc.dll -- the test hardcodes a Unix
+  filename pattern and fails on Windows. Unrelated to wasmex/plugin-handler application
+  code, last touched 2026-08-29 (a day before this run).
+  (2) Partitions 4 and 7 of scripts/test_parallel.sh aborted pre-test with
+  "(Mix) could not create hard link ... permission denied" -- a Windows
+  MIX_OS_CONCURRENCY_LOCK build-directory hard-link contention artifact from two
+  parallel partitions racing the same path.
+affected_files:
+  - test/letflow/engine/wasm/plugin_handler_test.exs
+  - scripts/test_parallel.sh
+queue_task_id: 377
+github_issue: 730
+status: open

@@ -505,3 +505,22 @@ history:
       handoffs/WF02-REQ200-20260830/req200-release-validation-report.md).
       docs/migration/stage-6-operational-cross-cutting.md updated to record
       REQ-200 done.
+  - req: REQ-194
+    event: started
+    agent: ORCH
+    at: "2026-08-30T14:14:33Z"
+    note: >
+      Queue task 367, GH#713, stage S6. Prometheus metrics subsystem and
+      GET /metrics exposition (OBS-02), resolving REQ-078's three
+      recorded divergences (auth, scope, format) against fresh evidence:
+      web/src/api/metrics.ts's parsePrometheusText and
+      metricsApi.prometheusText() call GET /metrics (unversioned) and
+      expect Prometheus text, not JSON -- an already-committed SPA
+      contract REQ-078's own moduledoc anticipated being superseded by.
+      Six OBS-02 metric families via :telemetry (decoupled from
+      registry), route-template HTTP labels (cardinality guard),
+      DB-unavailable graceful degradation, explicit auth/scope decision
+      with cross-tenant-disclosure analysis. May require a new mix.exs
+      dependency (REVIEWER sign-off) or a hand-rolled registry -- must
+      decide, not default silently. Depends_on [REQ-078, REQ-069,
+      REQ-072, REQ-193], all done.

@@ -1,0 +1,55 @@
+{
+  "handoff_id": "WF02-REQ191-20260830-step02c",
+  "run_id": "WF02-REQ191-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 2c",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/service_catalog.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "REQ-191 (service catalog core) implemented per the approved design at lib/letflow/design/req191-service-catalog-core.md. This sandbox has no mix/elixir/erl toolchain -- mix compile --warnings-as-errors and mix format could NOT be run here; see handoffs/WF02-REQ191-20260830/elixir-dev-implementation-notes.md for the full toolchain-unavailability statement and the manual cross-checks performed instead. ORCH/TEST-RUNNER must run the real toolchain independently before trusting this compiles.",
+    "prior_step": "handoffs/WF02-REQ191-20260830/step-02a-elixir-dev.json",
+    "changed_files": [
+      "priv/repo/migrations/20260830000001_create_service_catalog.exs",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/definitions/solution_pack.ex"
+    ],
+    "no_route_or_controller_touched": "confirmed via git diff --stat -- only the five files listed above changed",
+    "security_concerns_to_review": [
+      "Cross-tenant visibility rules for get_for_tenant/2 (lib/letflow/service_catalog.ex): a global-scope entry is visible to any tenant; a tenant-scoped entry is visible only to its owner; a tenant-scoped entry owned by a DIFFERENT tenant must return the identical {:error, :not_found} atom a genuinely-missing service_id returns -- never a distinguishable forbidden/unauthorized shape (SVC-01 non-disclosure rule). Confirm the single-query-then-pure-in-memory-check structure actually enforces this by construction rather than by convention.",
+      "The GLOBAL-table divergence from docs/migration/decisions/0003-ecto-schema-strategy.md Decision B: service_catalog is NOT tenant-schema-scoped (no :prefix, not registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0). Review whether this global, cross-tenant-readable single table introduces any information-disclosure risk beyond what the design's own R-Co-grounded justification (global-scope entries are referenceable by every tenant by definition; service_id is globally unique across tenants and scopes) already accounts for. Full reasoning is restated in the migration's header comment and Letflow.ServiceCatalog's moduledoc.",
+      "The cross-schema referential-guard query (Letflow.ServiceCatalog's private referencing_active_definitions/2 + query_referencing_definitions/2): iterates every tenant schema via Letflow.TenantProvisioning.list_registrations/0 (new read-only function added by this change) and runs a jsonb structural EXISTS query (never a LIKE-on-serialized-string, deliberately avoiding R-Co's own bpm_active_defs_for_service bug) against each schema's own process_definitions table with prefix: schema_name. Confirm this cannot leak one tenant's process_definitions.id values to a caller who shouldn't see them -- delete/1 and update_scope/2 are the only callers, and both are catalog-owner-level operations (no route wired yet, REQ-192), but confirm the returned definition_ids/tenant_ids in the error tuples don't constitute an unintended disclosure path once REQ-192 wires a route on top.",
+      "register/1's tenant-existence check (check_tenant_exists/1 in lib/letflow/service_catalog.ex) queries Letflow.Identity.Tenant directly by owner_tenant_id before insert -- confirm this existence check itself does not leak tenant-existence information beyond what the caller already legitimately knows (the caller is naming the tenant_id itself, not probing).",
+      "Database-level CHECK constraints (required_auth enum, timeout_ms range, scope enum, scope/owner-consistency) are the authoritative enforcement per REQ-191's acceptance criteria -- changeset-level checks in lib/letflow/service_catalog/entry.ex are advisory only. Confirm no code path bypasses Repo.insert/Repo.update (e.g. no raw SQL insert anywhere) that would skip the DB constraints.",
+      "The SVC-04 permissions (:ServicesRead, :AdminServicesRead, :AdminServicesManage, already shipped by REQ-069 in lib/letflow/api/authorization.ex) are named in Letflow.ServiceCatalog's moduledoc but NOT wired to anything here -- REQ-191 has no route layer. Confirm this module's moduledoc doesn't contradict those existing permission names (it doesn't invent new ones)."
+    ],
+    "acceptance_criteria_for_reference": [
+      "the service_catalog table carries the scope/owner consistency CHECK: an insert with scope 'global' and a non-null owner_tenant_id is rejected by the DATABASE, and so is one with scope 'tenant' and a null owner_tenant_id -- two explicit tests, not changeset-level validation",
+      "required_auth and timeout_ms are CHECK constrained at the database level: an insert with required_auth 'BASIC' is rejected, and so is one with timeout_ms 0 and one with timeout_ms 3600001",
+      "get_for_tenant/2 returns a global service to any tenant; returns a tenant-scoped service to its owner; and returns NOT FOUND -- not a forbidden error -- for a tenant-scoped service owned by a different tenant, so the two cases are indistinguishable to the caller (three explicit tests)",
+      "service_id is globally unique: registering the same service_id for a second, different tenant fails, even when the first is tenant-scoped",
+      "register/2 with scope 'tenant' naming a tenant that does not exist is rejected without creating a row",
+      "delete/2 of a service referenced by an ACTIVE definition is refused and the error names the referencing definition ids; delete/2 of an unreferenced service succeeds -- and a test confirms the reference check matches an actual SERVICE_TASK service_id attribute rather than a substring of the serialized graph, by registering a service whose id appears only inside an unrelated string in some definition's graph and asserting that definition does NOT block the delete",
+      "update_scope/2 narrowing a global service to tenant-scoped is refused, naming the conflicting tenant ids, when another tenant's ACTIVE definition references it; widening a tenant-scoped service to global is always allowed",
+      "Letflow.Definitions.ServiceScopeValidator.validate/3 works unchanged when handed a Lookup backed by this catalog: a definition referencing a service not visible to its tenant is rejected at activation, and one referencing a visible service activates -- with no change to service_scope_validator.ex itself, confirmed by git diff",
+      "the migration and the module moduledoc both state that this table is GLOBAL rather than per-tenant-schema, give the R-Co-grounded reason, and flag the divergence from decision 0003 Decision B for REVIEWER sign-off",
+      "solution_pack.ex's service_catalog_entries hard-fail is either made reachable-and-functional or is explicitly retained with the owning follow-up named in this requirement's moduledoc",
+      "no route or controller file is added or modified",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted -- NOT independently verified by ELIXIR-DEV in this run, no toolchain available; see notes file"
+    ],
+    "notes_file": "handoffs/WF02-REQ191-20260830/elixir-dev-implementation-notes.md"
+  },
+  "task": {
+    "description": "Review lib/letflow/service_catalog.ex, lib/letflow/service_catalog/entry.ex, priv/repo/migrations/20260830000001_create_service_catalog.exs, the lib/letflow/tenant_provisioning.ex addition (list_registrations/0), and the lib/letflow/definitions/solution_pack.ex moduledoc/comment update against security-invariants.md INV-1..INV-8, focusing on the cross-tenant visibility, global-table, and cross-schema-query concerns listed above.",
+    "acceptance_criteria": [
+      "Every security concern listed in context.security_concerns_to_review is explicitly addressed (pass or a named finding) in the SECURITY-REVIEWER's own result.",
+      "No route or controller file is found to have been touched.",
+      "A PASS/FAIL verdict is recorded before routing onward to REVIEWER."
+    ]
+  },
+  "result": null
+}

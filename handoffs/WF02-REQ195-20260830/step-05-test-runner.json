@@ -1,0 +1,52 @@
+{
+  "handoff_id": "step05-WF02-REQ195-20260830-rework1-fixed",
+  "run_id": "WF02-REQ195-20260830",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ195-20260830/step-05-test-runner.json",
+  "created_at": "2026-08-30T18:25:00Z",
+  "started_at": "2026-08-30T18:20:00Z",
+  "completed_at": "2026-08-30T18:25:00Z",
+  "status": "PENDING",
+  "priority": "high",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-195"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ195-20260830/step-05-elixir-dev-rework1.json",
+      "handoffs/WF02-REQ195-20260830/test-runner-report.md",
+      "test/reports/report-2026-08-29-WF02-REQ181-20260829.yaml"
+    ],
+    "artifacts_in": [
+      "test/support/tenant_fixture.ex",
+      "test/letflow/support/tenant_fixture_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ195-20260830",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "Rework-1 fix for the stale tenant-fixture oracle regression TEST-RUNNER found (handoffs/WF02-REQ195-20260830/step-05-elixir-dev-rework1.json, test-runner-report.md item 5). This branch's priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs adds an audit_entries table to every tenant schema, but test/support/tenant_fixture.ex's hand-maintained @expected_tenant_tables oracle (26 entries) and test/letflow/support/tenant_fixture_test.exs:305's companion count assertion (== 26) were not updated -- the identical bug class previously hit on REQ-181 (webhook_subscriptions). Fix applied: (1) added \"audit_entries\" to test/support/tenant_fixture.ex's @expected_tenant_tables list, in its existing alphabetical position between \"api_tokens\" and \"definition_sequence\"; (2) bumped test/letflow/support/tenant_fixture_test.exs:305's assertion from 26 to 27, and updated the preceding comment block (lines ~299-304) to append the REQ-195/audit_entries entry to the existing REQ-076/125/176/181/186/183 bump history and change 'all six' to 'all seven'. No application code (lib/letflow/audit.ex or elsewhere) was touched -- this is purely a test-support oracle fix, per the rework handoff's explicit acceptance criterion not to touch application logic. Verified: `mix test test/letflow/support/tenant_fixture_test.exs` -> 14 passed, 0 failures (the C6 oracle-rot guard now passes in both directions). Also re-ran `mix test test/letflow/audit_test.exs test/letflow/audit_capture_test.exs test/letflow/audit_dispositions_test.exs` -> 25 passed, 0 failures, confirming REQ-195's own test files are unaffected. Did not re-run the full scripts/test_parallel.sh suite myself -- routing back to TEST-RUNNER per WF-02 for the formal full-suite re-verification, as instructed.",
+    "acceptance_criteria": [
+      "Run `mix test test/letflow/support/tenant_fixture_test.exs` yourself and confirm the C6 oracle-rot guard test now passes (do not trust this handoff's reported 14/14 without re-deriving it).",
+      "Run the full `scripts/test_parallel.sh` suite (N partitions, blocking foreground run) and confirm zero new failures beyond the two documented pre-existing flake/environmental classes (ISS-0110 Letflow.TenantSchemaReaperTest connection-contention flake, rustc-absent Mix.Tasks.Letflow.CheckToolchainTest) -- apply Failure Attribution Is Structural, Never By Count-Matching before excluding any failure as pre-existing.",
+      "Confirm no other test file changed as a side effect (`git diff --stat` against the prior test-runner run's commit) -- only test/support/tenant_fixture.ex and test/letflow/support/tenant_fixture_test.exs should differ.",
+      "If the suite is clean (modulo the two documented flake classes), route to RELEASE-VALIDATOR per WF-02 Step 4->5.",
+      "CRITICAL: this handoff's top-level status field is exactly PENDING (grepped and confirmed before commit, per this project's documented recurring mistake on this exact field)."
+    ]
+  },
+  "result": {
+    "status": "REWORK_APPLIED_READY_FOR_TEST_RUN",
+    "summary": "Added the missing \"audit_entries\" table to test/support/tenant_fixture.ex's @expected_tenant_tables oracle and bumped test/letflow/support/tenant_fixture_test.exs's count assertion (line 305) from 26 to 27, matching the migration this branch already added. Narrow, mechanical fix only -- no application code touched. `mix test test/letflow/support/tenant_fixture_test.exs` -> 14 passed, 0 failures. `mix test test/letflow/audit_test.exs test/letflow/audit_capture_test.exs test/letflow/audit_dispositions_test.exs` -> 25 passed, 0 failures. Full scripts/test_parallel.sh suite re-run not performed by this agent -- deferred to TEST-RUNNER per WF-02.",
+    "artifacts_out": [
+      "test/support/tenant_fixture.ex",
+      "test/letflow/support/tenant_fixture_test.exs"
+    ],
+    "issues": [],
+    "next_action": "TEST-RUNNER to re-run the full suite formally and produce a fresh structured report before routing to RELEASE-VALIDATOR."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

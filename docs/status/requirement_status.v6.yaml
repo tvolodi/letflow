@@ -871,3 +871,43 @@ history:
       CODE-DESIGNER for the WF-01/WF-02 design step (REQ-189's own scope is
       a decision record, not code). REQ-190 and REQ-183 both remain
       pending behind this.
+  - req: REQ-189
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T00:13:35Z"
+    note: >
+      WF02-REQ189-20260830 done (queue task 362, GH#708, stage S6).
+      docs/migration/decisions/0016-secrets-storage-backend.md written and
+      settled: Postgres table (not external KMS/vault) under envelope
+      encryption; master key from LETFLOW_SECRETS_MASTER_KEY (64-hex-char,
+      32-byte, startup fails hard on absent/malformed/all-zeros/all-f's,
+      directly rejecting R-Co's four hardcoded call sites and the
+      zero-match MASTER_KEY/WRAPPING_KEY grep); table placed GLOBAL in
+      public (divergence from decision 0003 Decision B, reasoned from
+      resolveSecret's reference-tenant-vs-caller-tenant check needing one
+      query surface before any per-tenant connection prefix is known);
+      reference syntax sec://tenant/<tenant>/<namespace>/<name>#<key_id>
+      adopted verbatim from R-Co; crypto is AES-256-GCM twice (payload +
+      key-wrap), stored wrapped_key_algorithm corrected to "aes_256_gcm"
+      (fixing R-Co's dishonest "aes_kw_256" claim); unpinned resolution
+      fixed to select newest status="active" row in the query itself
+      (fixing R-Co's defect where disabling the newest version broke
+      resolution instead of falling back); webhook HMAC key collision
+      resolved by superseding REQ-181's hashed secret column with
+      secret_ref/secret_key_id columns resolved through this same secrets
+      mechanism, REQ-190 named as the implementing requirement. Both
+      divergences (global table placement, superseding REQ-181's storage)
+      carry REVIEWER sign-off recorded directly in the decision file's own
+      "REVIEWER sign-off" section (2026-08-30, ad-hoc gate), GRANTED with
+      no conditions on both. CODE-DESIGN-VALIDATOR passed all 8 acceptance
+      criteria with zero rework rounds. RELEASE-VALIDATOR independently
+      re-verified all 8 acceptance criteria and PASSED, confirming no
+      migration/lib/requirements.yaml-edit diff beyond this requirement's
+      own scope. No lib/, migration, or route work -- decision-record-only
+      requirement, so Steps 2a-4/3b were correctly skipped per WF-02's
+      scope test. README.md checked: no mention of secrets/0016/MASTER_KEY
+      anywhere in it, confirmed no update needed -- this is an internal
+      decision record, not documented user-facing behavior. Unblocks
+      REQ-190 (secrets core implementation) and REQ-183 (webhook delivery
+      dispatch, HMAC signing), both depends_on: [REQ-189] (REQ-183 also
+      depends_on REQ-181, done).

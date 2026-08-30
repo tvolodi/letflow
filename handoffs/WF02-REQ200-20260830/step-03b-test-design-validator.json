@@ -6,10 +6,10 @@
   "from_agent": "TEST-DESIGNER",
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ200-20260830/step-03b-test-design-validator.json",
-  "created_at": "2026-08-30T13:30:00Z",
-  "started_at": "2026-08-30T13:10:00Z",
-  "completed_at": "2026-08-30T13:13:04Z",
-  "status": "COMPLETED",
+  "created_at": "2026-08-30T13:20:00Z",
+  "started_at": "2026-08-30T13:14:00Z",
+  "completed_at": "2026-08-30T13:20:00Z",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -36,29 +36,23 @@
     "branch_name": "feature/WF02-REQ200-20260830"
   },
   "task": {
-    "description": "TEST-DESIGNER (WF-02 Step 3) cross-checked all 11 of REQ-200's acceptance criteria in docs/requirements.yaml against ELIXIR-DEV's initial test pass in test/letflow/routers/instances_test.exs's 'REQ-200 -- actor display name and description rendering' describe block. Full per-AC verdict recorded in handoffs/WF02-REQ200-20260830/test-designer-gap-analysis.md. Summary: AC1, AC4, AC5, AC6, AC7 were already completely and correctly covered (AC7's bound was tightened from <= 1 to == 1 to close a vacuous-pass risk, inline comment added explaining why). AC8 confirmed as 'existing REQ-080 tests still pass' with no new test needed (re-verified the four describe blocks that already cover its five named properties). AC9/AC10 confirmed as process/diff-scope claims (git diff --stat, already recorded by REVIEWER), not runtime tests -- none written, matching this role's own scope-test guidance against manufactured busywork. AC11 confirmed as a process requirement for TEST-RUNNER/already-run SECURITY-REVIEWER results, not a unit test. The one genuine gap was AC2: the requirement text explicitly requires 'four explicit tests' for the four fallback levels, but the initial pass proved all four (plus AC3's deleted-user case) in one combined test keyed by task_id. Replaced that single test with 5 independent tests -- one per AC2 level (each isolating only the inputs relevant to that level, e.g. passing actor_id: nil explicitly for levels 2-4 rather than an actor_id that merely fails to resolve) plus one dedicated to AC3 (genuinely creates then Repo.delete!s a user row, then references its id -- a real 'row existed, now gone' scenario, distinct from AC2 level 4's 'no actor_id at all'). Every assertion the original combined test made survives unchanged in content, just relocated -- nothing was weakened or removed. test/specs/REQ-200.md written per this role's Step 3 deliverable with the criterion, test case(s), and why-each-exists rationale for all 11 ACs. Every test (existing and new) uses its own TenantFixture.provisioned_tenant!/1 with a unique slug_prefix -- no shared/global state, matching this file's established convention throughout. Did not run mix test myself (not this role's function) -- TEST-RUNNER runs next after this gate.",
+    "description": "REWORK-1 RECHECK (not a fresh review). This is a targeted re-verification of the single BLOCKER TEST-DESIGN-VALIDATOR raised in the previous step-03b (rework_count 0 -> this is the fix for rework_count 1 requested in handoffs/WF02-REQ200-20260830/step-03-test-designer.json). Nothing else in the file was touched or re-reviewed. Fix applied: in test/letflow/routers/instances_test.exs, the three tests 'AC2 level 2' (line 930), 'AC2 level 3' (line 948), and 'AC2 level 4' (line 966) previously passed `actor_id: nil` to insert_raw_event!/2. Letflow.EventStore.Event.insert_changeset/2 lists :actor_id in @required_fields and the events table's actor_id column is `null: false` at the DB level (priv/repo/migrations/20260816120001_create_events.exs:80), so `actor_id: nil` can never be persisted as a real event row -- Repo.insert returned {:error, changeset} before the test's own assertion ever ran, exactly as TEST-DESIGN-VALIDATOR's FAIL report diagnosed. Replaced `actor_id: nil` with `actor_id: Ecto.UUID.generate()` in all three of those tests only -- a syntactically valid but non-existent user id, matching what the pre-restructuring combined test used for these same fallback levels (git show b90a69b6:test/letflow/routers/instances_test.exs) and correctly exercising 'actor_id present but doesn't resolve to a real user' for levels 2-4, distinct from AC3's dedicated test which references a genuinely-deleted user row (a real row that existed and was removed, vs. a UUID that never matched any row). AC2 level 1, AC3, and every other test in the describe block and file were left untouched -- verified by re-running the fixed file end to end rather than just the 3 previously-failing tests.",
     "acceptance_criteria": [
-      "Verify every one of REQ-200's 11 acceptance criteria has either a runnable test or a documented, correct reason no runtime test applies (AC9/AC10/AC11).",
-      "Verify AC2 is now genuinely covered by four explicit, isolated tests (one per fallback level), not one combined test, and that AC3's deleted-user scenario is its own dedicated test distinguishable from 'no actor_id at all.'",
-      "Verify no existing assertion in test/letflow/routers/instances_test.exs was weakened or removed during the AC2 restructuring.",
-      "Verify every test (existing and new) follows this project's isolated/self-sufficient fixture convention (TenantFixture.provisioned_tenant!/1 per test, unique slug_prefix, no shared state).",
-      "Verify test/specs/REQ-200.md documents the criterion, test case(s), and a genuine why-it-exists rationale (not a restatement of the AC) for all 11 ACs.",
+      "Confirm test/letflow/routers/instances_test.exs 'AC2 level 2', 'AC2 level 3', 'AC2 level 4' now use actor_id: Ecto.UUID.generate() instead of actor_id: nil.",
+      "Confirm AC2 level 1, AC3, and all other tests in the file are byte-for-byte unchanged from the prior (failing) revision aside from this one substitution.",
+      "Confirm `mix test test/letflow/routers/instances_test.exs` passes in full (44/44, 0 failures) -- real re-run output quoted below, not assumed.",
       "CRITICAL: this handoff's top-level status field is exactly PENDING (grepped and confirmed before commit, per this project's own recurring anti-pattern on this exact mistake)."
     ]
   },
   "result": {
-    "status": "FAIL",
-    "summary": "Ran `mix test test/letflow/routers/instances_test.exs` for real (source ~/.asdf/asdf.sh; toolchain present): 41/44 passed, 3 failed. All 3 failures are in TEST-DESIGNER's own newly-split AC2 tests: 'AC2 level 2' (line 930), 'AC2 level 3' (line 948), 'AC2 level 4' (line 966). Each fails inside the insert_raw_event!/2 helper with `assert {:ok, event} = Repo.insert(changeset, ...)` matching `{:error, changeset}` -- the changeset carries `actor_id: {\"can't be blank\", [validation: :required]}`. Root cause: lib/letflow/event_store/event.ex declares :actor_id in @required_fields (line 112) and the events table's actor_id column is `null: false` at the DB level (priv/repo/migrations/20260816120001_create_events.exs:80) -- so `actor_id: nil` can never be persisted as a real event row in this schema. TEST-DESIGNER's gap-analysis explicitly states the restructuring deliberately changed levels 2-4 to pass `actor_id: nil` 'rather than an actor_id that merely fails to resolve' -- but that input is not constructible against the real schema, so 3 of the 5 restructured tests error out during fixture setup and never reach their assertion. Confirmed by diffing against the pre-restructuring version (git show b90a69b6:test/letflow/routers/instances_test.exs): the original combined test used `actor_id: Ecto.UUID.generate()` (a real, syntactically valid but unresolvable UUID) for levels 2-4, which is why it passed (SECURITY-REVIEWER's recorded 40/40). The application logic itself (lib/letflow/instances.ex resolve_actor_display_name/3) is unaffected and correctly total for a nil actor_id -- this is purely a test-fixture defect introduced in this pass, not a regression in shipped code. Did not proceed to mutation testing since the baseline suite for the file under review does not pass -- mutation testing over a broken baseline would not produce a meaningful signal. Also checked and confirmed independently, all PASS: AC1's seed data has 4 genuinely distinct event_type values (INSTANCE_STARTED, INSTANCE_CANCELLED, INSTANCE_PINS_REBOUND, TIMER_FIRED); AC6's test explicitly refutes both old field names (created_at, sequence_number) as well as asserting presence of the new ones; no @tag :skip/:pending or 'TODO: implement test' anywhere in the file (grepped); every test uses its own TenantFixture.provisioned_tenant!/1 with a unique slug_prefix, no shared state; test/specs/REQ-200.md documents criterion/test-case/rationale for all 11 ACs correctly. These do not offset the blocking failure above -- FAIL immediately and completely per this role's own mandate.",
-    "artifacts_out": [],
-    "issues": [
-      {
-        "severity": "BLOCKER",
-        "description": "AC2 levels 2, 3 and 4 (test/letflow/routers/instances_test.exs lines 930, 948, 966) pass `actor_id: nil` to insert_raw_event!/2. The events table's actor_id column is NOT NULL (priv/repo/migrations/20260816120001_create_events.exs:80) and Letflow.EventStore.Event.insert_changeset/2 lists :actor_id in @required_fields -- the insert changeset fails validation and `Repo.insert` returns `{:error, changeset}`, which the helper's `assert {:ok, event} = ...` then fails on. All 3 tests error at fixture setup, before their actor_display_name assertion ever runs. Fix: use `actor_id: Ecto.UUID.generate()` (a real, non-nil, unresolvable id) for these three levels, matching what the pre-restructuring combined test did and what a genuine 'no attributable actor' event actually looks like on this schema -- never a literal `nil`.",
-        "affected_requirement": "REQ-200"
-      }
+    "status": "READY_FOR_RECHECK",
+    "summary": "Applied the exact fix TEST-DESIGN-VALIDATOR's FAIL report specified: `actor_id: nil` -> `actor_id: Ecto.UUID.generate()` in the three named tests only (test/letflow/routers/instances_test.exs lines ~938, ~956, ~974 after edit -- originally reported at lines 930/948/966, the test names/bodies otherwise unchanged). Re-ran `mix test test/letflow/routers/instances_test.exs` for real via `source ~/.asdf/asdf.sh`. Real output: `Finished in 41.7 seconds (0.00s async, 41.7s sync)` / `Result: 44 passed` -- 44/44, 0 failures, 0 errors. No other test in the file was modified.",
+    "artifacts_out": [
+      "test/letflow/routers/instances_test.exs"
     ],
-    "next_action": "Rework TEST-DESIGNER -- 1 BLOCKER above, rework iteration 1 of 3. Re-run `mix test test/letflow/routers/instances_test.exs` after the fix and quote a real 44/44 (or updated count) pass before re-handing to TEST-DESIGN-VALIDATOR."
+    "issues": [],
+    "next_action": "TEST-DESIGN-VALIDATOR to re-check this single fix (diff-scoped recheck, not a full fresh review) and, if clean, proceed to Step 4 (RELEASE-VALIDATOR / TEST-RUNNER per WF-02)."
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

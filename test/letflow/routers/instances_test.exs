@@ -935,7 +935,7 @@ defmodule Letflow.Routers.InstancesTest do
         instance_id: instance_id,
         event_type: "TASK_COMPLETED",
         payload: %{"task_id" => "task-2", "node_id" => "node-2"},
-        actor_id: nil,
+        actor_id: Ecto.UUID.generate(),
         metadata: %{"token_description" => "CI deploy token"},
         sequence_number: 11
       })
@@ -953,7 +953,7 @@ defmodule Letflow.Routers.InstancesTest do
         instance_id: instance_id,
         event_type: "TASK_COMPLETED",
         payload: %{"task_id" => "task-3", "node_id" => "node-3"},
-        actor_id: nil,
+        actor_id: Ecto.UUID.generate(),
         metadata: %{"actor_label" => "External Webhook"},
         sequence_number: 12
       })
@@ -971,7 +971,7 @@ defmodule Letflow.Routers.InstancesTest do
         instance_id: instance_id,
         event_type: "TASK_COMPLETED",
         payload: %{"task_id" => "task-4", "node_id" => "node-4"},
-        actor_id: nil,
+        actor_id: Ecto.UUID.generate(),
         sequence_number: 13
       })
 

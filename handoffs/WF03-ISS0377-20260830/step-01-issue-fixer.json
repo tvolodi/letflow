@@ -1,0 +1,16 @@
+{
+  "handoff_id": "WF03-ISS0377-20260830-step01",
+  "run_id": "WF03-ISS0377-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 0.5 + Step 1",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "docs/issues/ISS-0377.yaml",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {"note": "Queue task 377, GH#730. Feature branch feature/WF03-ISS0377-20260830 created off main at 2c2d6e7. This sandbox is Linux; the issue was filed by a sibling session running on a Windows host and is inherently Windows-specific (a bundled wasmex artifact naming convention, and a Windows filesystem hard-link contention). You CANNOT literally reproduce a Windows failure in this sandbox -- per core-directives.md's no-speculation rule, state this explicitly rather than guessing at a repro. Diagnosis proceeds via reading the actual source (the test file's assertion logic, and scripts/test_parallel.sh's build-path/lock handling) to determine whether the described root causes are real defects in the code (portability bugs) independent of which OS is running them."},
+  "task": {
+    "description": "Step 0.5: read docs/issues/*.yaml for any resolved entry with similar symptoms (grep for 'wasmex', 'MIX_OS_CONCURRENCY_LOCK', 'Windows', 'hard link') before diagnosing from scratch -- cite a match if found. Step 1: read test/letflow/engine/wasm/plugin_handler_test.exs's AC7 test (around lines 180/193) in full and identify exactly which assertion(s) hardcode a Unix-only artifact shape (a literal '.so' extension check, or an external_resources check assuming '.rs' source paths in a specific layout) rather than accepting whatever platform-appropriate compiled artifact Wasmex.Native actually produces. Read scripts/test_parallel.sh in full and identify how MIX_BUILD_PATH/_build or any shared build-cache directory is handled across parallel partitions -- specifically what mechanism could cause two partitions to race a hard-link creation in the same path on a filesystem/OS where hard-links behave differently or require elevated permissions (this is plausible on Windows, NTFS junction/hardlink semantics differ from POSIX). Do NOT implement a fix. Write the diagnosis into the handoff's result.summary: root cause for each of the two symptoms (not just a restatement of the symptom), the affected files/lines, and what a fix needs to change to make both assertions/mechanisms genuinely cross-platform rather than merely disabling the check on non-Unix systems. State explicitly that a literal Windows repro was not possible in this sandbox and why the diagnosis is nonetheless sound (source-level analysis of the hardcoded assumption, not guesswork about symptoms). Complete the handoff with next_action: 'Route to CODE-DESIGNER for fix design'."
+  },
+  "result": null
+}

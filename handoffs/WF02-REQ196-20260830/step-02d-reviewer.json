@@ -42,5 +42,5 @@
       "PASS or FAIL verdict recorded, with rework routed back to ELIXIR-DEV/CODE-DESIGNER if FAIL"
     ]
   },
-  "result": null
+  "result": "PASS -- see handoffs/WF02-REQ196-20260830/step-03-test-designer.json for the full write-up. OQ-1 resolution (dropped :invalid_resource_id entirely) confirmed clean via grep: zero dangling references to the atom or to unsupported_resource_type?/1 anywhere in lib/ or test/. OQ-2 resolution (cursor decode kept in the router) confirmed consistent with the router's own parse_cursor_param/1 ownership and the design's stated default -- not a maintenance inconsistency. INV-RT-1 reconfirmed by direct grep: zero 'Repo.' occurrences in lib/letflow/routers/audit.ex. Every named deletion (register_event_type!/seed_projection!/append_event! test helpers, unsupported_resource_type?/1, the old render_page/2 catch-all) confirmed genuinely dead/superseded, not scope creep -- git diff main...HEAD --stat -- lib/letflow/api/authorization.ex priv/repo/migrations/ web/ lib/letflow/audit/entry.ex returned empty. mix compile --warnings-as-errors independently re-run this session: clean. Also flagged (non-blocking): list_entries/1's page_size+1/split_list_page idiom is now a 5th near-identical copy across audit.ex/dlq.ex/instances.ex/tasks.ex/service_catalog.ex -- worth a shared-helper pass but not gating. Routed to TEST-DESIGNER."
 }

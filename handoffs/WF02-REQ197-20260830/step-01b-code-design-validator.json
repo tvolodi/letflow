@@ -1,0 +1,39 @@
+{
+  "handoff_id": "step01b-WF02-REQ197-20260830",
+  "run_id": "WF02-REQ197-20260830",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ197-20260830/step-01b-code-design-validator.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-197"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req197-expr-arithmetic-and-errors.md",
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/design/req050-exclusive-gateway-cel.md"
+    ],
+    "branch_name": "feature/WF02-REQ197-20260830"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR hard gate (WF-02 Step 1b) on REQ-197's design (lib/letflow/design/req197-expr-arithmetic-and-errors.md, queue task 370, GH#716). REQ-197 extends lib/letflow/engine/expr.ex (shipped, REQ-050/REQ-111, S3) with arithmetic (+ - * / %), unary negation, and a structured parse-error surface, while EE-05's contract (transition.ex's evaluate_condition/2 call collapsing any failure to false) must stay byte-for-byte intact and expr.ex's grep-verified zero-impurity contract must keep returning zero matches. Read docs/requirements.yaml's REQ-197 entry in full yourself before validating -- do not trust this summary alone. Note the design's own §0 states R-Co's real src/expr source tree (ast.zig/lexer.zig/error.zig/evaluator.zig) is NOT reachable from this sandbox (confirmed by filesystem search, no *.zig file anywhere on this host) -- every semantic rule in the design is therefore taken from the requirement text's own quoted restatement of R-Co's source, not from independently reading R-Co directly, and the design flags 4 explicit open questions (§12, OQ-1..OQ-4) about details the requirement text under-specifies (signed-infinity/NaN split for float div-by-zero, the comparison-null 'yields null' reading, no eval-time structured-error surface, and negative-operand integer div/mod rounding direction) rather than silently guessing them. Check whether this flagging is adequate rather than a cop-out -- in particular OQ-4 (negative-operand int / and % rounding) and OQ-1 (signed infinity) are real, currently-untested assumptions baked into concrete @spec/table content elsewhere in the design (§4.3), not deferred blank slots -- confirm the design is still internally consistent and buildable even though these two specific numeric edge cases are unverified against real R-Co source.",
+    "acceptance_criteria": [
+      "Every one of REQ-197's 12 real acceptance_criteria (read from docs/requirements.yaml, not from this handoff) maps to a concrete design element -- verify the design's own §11 traceability table against the actual requirement text yourself rather than trusting the table.",
+      "Zero literal Elixir implementation code anywhere in the design doc -- grep the file for 'defmodule', 'def ', and a trailing bare 'end' outside a @type/@spec continuation; confirm every fenced block is a @type/@spec declaration, a comment-only pseudocode sketch, or a BNF/table, never a working function body.",
+      "The extended ast() type (§2) and precedence table (§2.1) actually match the requirement text's stated precedence verbatim: loosest to tightest is or, and, not, comparison, + -, * / %, unary -, primary -- check the parser call-graph diff (§3.1) implements exactly this chain with no level skipped or misordered.",
+      "The arithmetic semantics table (§4.2/§4.3) matches the requirement text's stated rules exactly: int+float promotes to float; int div-by-zero and int mod-by-zero are errors; float div-by-zero yields IEEE infinity; float mod-by-zero is always an error (not just on zero divisor -- check the design says 'always', matching the requirement text's unconditional framing); and confirm the null asymmetry (§4.5) is stated as its own explicit, separately-tested rule, not folded silently into the type-mismatch generic case.",
+      "The structured parse-error type (§6.2/§6.3/§6.4) genuinely carries line, column, offending token text, and a message field, and the design specifies a real mechanism for populating line/column (not zero-by-construction, which is the exact defect the requirement calls out in R-Co's own EvalError) -- verify §6.2's line/column bookkeeping description is concrete enough for ELIXIR-DEV to implement without further judgment calls.",
+      "The two-entry-point boundary (§6.1/§6.6) is unambiguous: parse/1's existing @spec and outer {:error, {:parse_error, reason}} shape is explicitly unchanged (checked against the one existing wildcard-reason test this design cites at expr_test.exs:157), parse_strict/1 is new and separate, and evaluate_condition/2's source is stated as requiring zero edits -- confirm this reasoning is sound, not just asserted, by checking whether any existing test in test/letflow/engine/expr_test.exs pins parse/1's error-reason shape more specifically than a wildcard (if one does, the design's backward-compatibility claim in §6.1/§0 is wrong and this must FAIL).",
+      "Purity re-verification (§7) names the exact grep command from expr.ex's own moduledoc and explicitly calls out every new code surface (arithmetic eval clauses, infinity-sentinel construction, position-tracking tokenizer, describe_parse_error/1) that must be covered by it -- confirm none of these new surfaces has an obvious purity leak the design failed to flag (e.g. does the line/column bookkeeping in §6.2 risk any clock read, any process dictionary use, anything beyond pure string/integer bookkeeping?).",
+      "The now()/date_add/date_diff disposition (§8) is a genuine DECIDED disposition with stated reasoning (not added, ever, without a future injected-timestamp mechanism -- clock reads permanently ruled out), not left open, and section 9's moduledoc-content table maps this decision to AC9's exact wording requirement.",
+      "Section 10's non-goals list matches the requirement's own NOT-IN-THIS-REQUIREMENT list item-for-item: REQ-198's 8 builtins, CEL macros/collections/ternary/in, benchmark.zig port -- confirm nothing here is broader or narrower than the requirement's actual text.",
+      "Confirm the design's claim (§3.2, §9 final paragraph) that none of the 5 new single-character operator tokens collides with or weakens any existing @unsupported_call_markers entry -- spot check this claim against the actual marker list in lib/letflow/engine/expr.ex:59-77 yourself.",
+      "CRITICAL: the handoff's top-level status field (this file, top level, not nested under result) must be exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish your pass -- grep the file yourself before finishing, and run mix letflow.lint_handoffs if available, per this project's own recurring anti-pattern entry on this exact mistake."
+    ]
+  }
+}

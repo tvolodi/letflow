@@ -730,6 +730,7 @@ defmodule Letflow.ServiceCatalogTest do
       # other, so both cross-checks above must independently fail closed.
       tenant = insert_tenant!()
       register!(%{scope: :global})
+      register!(%{scope: :global})
 
       assert {:ok, %{next_cursor: sc_cursor}} =
                ServiceCatalog.list_for_tenant(%{page_size: 1}, tenant.id)

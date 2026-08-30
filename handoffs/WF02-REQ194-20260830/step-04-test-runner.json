@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF02-REQ194-20260830-step04",
+  "run_id": "WF02-REQ194-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 4",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "test/letflow/routers/metrics_exposition_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "TEST-DESIGN-VALIDATOR PASSED REQ-194's full 10-AC test coverage. See handoffs/WF02-REQ194-20260830/step-03b-test-design-validator.json and handoffs/WF02-REQ194-20260830/test-design-validator-report.md for the full record. Independently re-derived (not trusted from TEST-DESIGNER's note): AC1's moduledoc decision table read directly in lib/letflow/routers/metrics_exposition.ex and lib/letflow/metrics/registry.ex; AC6's widened 14-identifier adversarial scan read directly in test/letflow/routers/metrics_exposition_test.exs; AC9's retired /api/v1/metrics test confirmed to exercise the REAL Letflow.Plugs.AuthPipeline plug order (traced lib/letflow/router.ex -> lib/letflow/plugs/api_pipeline.ex: AuthPipeline runs before :match/:dispatch, no /metrics forward entry remains under /api/v1), not a mock; AC8's poller.ex grep exclusion confirmed design-sanctioned by reading registry.ex's own moduledoc (Family 1 deliberately not :telemetry-driven). Fresh mix test run by TEST-DESIGN-VALIDATOR: test/letflow/metrics/ + test/letflow/plugs/http_metrics_test.exs + test/letflow/routers/metrics_exposition_test.exs + test/letflow/api/authorization_enforcement_test.exs + test/letflow/routers/req078_supporting_routes_test.exs -> 54 passed. mix compile --warnings-as-errors and mix format --check-formatted both clean. mix letflow.lint_handoffs: 0 new violations. Given this requirement's uniquely high safety stakes (a global unauthenticated endpoint whose only protection is the label-allowlist invariant), TEST-DESIGN-VALIDATOR applied THREE real mutations directly to shipped lib/ code and confirmed each is caught: (1) label-allowlist break -- changed lib/letflow/engine.ex + lib/letflow/metrics/registry.ex so the task-completions family's definition_status label carries the real definition_id instead; compile stayed clean; the scrape body under mutation literally contained letflow_task_completions_total{definition_status=\"<real-definition-uuid>\"}; AC6's widened scan caught it (2/9 failed: AC4 collateral, AC6 the real catch) -- this is the single most important check in this validation and it passed; (2) route-template normalization break -- resolve_route_template/1 changed to return the raw path; AC5 and AC6 both caught it (7/9 passed); (3) DB-unavailable degradation break -- mark_active_instances_refresh_failed/0 changed to reset the gauge to 0 instead of preserving last-known value; AC7 caught it (8/9 passed). All three mutations reverted via git checkout -- with git status --porcelain lib/ test/ confirmed empty after each individual revert and again after a final full 54-test green re-run.",
+    "design_doc": "lib/letflow/design/req194-prometheus-metrics.md",
+    "validator_report": "handoffs/WF02-REQ194-20260830/test-design-validator-report.md",
+    "files_under_test": [
+      "test/letflow/metrics/registry_test.exs",
+      "test/letflow/metrics/exposition_test.exs",
+      "test/letflow/plugs/http_metrics_test.exs",
+      "test/letflow/routers/metrics_exposition_test.exs",
+      "test/letflow/api/authorization_enforcement_test.exs",
+      "test/letflow/routers/req078_supporting_routes_test.exs"
+    ],
+    "implementation_files": [
+      "lib/letflow/metrics/registry.ex",
+      "lib/letflow/metrics/exposition.ex",
+      "lib/letflow/routers/metrics_exposition.ex",
+      "lib/letflow/plugs/http_metrics.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/scheduler/poller.ex"
+    ]
+  },
+  "task": {
+    "description": "Run the full mix test suite (not just the metrics-area files) for REQ-194 on branch feature/WF02-REQ194-20260830, quote real output, and confirm mix compile --warnings-as-errors passes. Report pass/fail with real evidence per REQ-194's own AC10 ('mix test and mix compile --warnings-as-errors both pass with real output quoted')."
+  },
+  "result": null
+}

@@ -536,6 +536,7 @@ defmodule Letflow.Obs.AlertsTest do
 
   describe "AC-14: compile + test pass (structural check)" do
     test "Letflow.Obs.Alerts module exists and exports run_detection/2" do
+      Code.ensure_loaded!(Alerts)
       assert function_exported?(Alerts, :run_detection, 2)
     end
 

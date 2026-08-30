@@ -1114,3 +1114,15 @@ history:
       ServiceScopeValidator is explicitly unchanged by this requirement).
       Unblocks REQ-192 (service catalog route surface, SVC-04), still
       pending.
+  - req: REQ-183
+    event: started
+    agent: ORCH
+    at: "2026-08-30T04:37:05Z"
+    note: >
+      Queue task 356, GH#701, stage S6. REQ-VALIDATOR-rework requirement (the
+      dispatch-core half of REQ-180's split; REQ-184 is the route-layer
+      half). Webhook delivery: HMAC-SHA256 signing, retry/backoff,
+      auto-pause on consecutive failures, DLQ landing via REQ-176's
+      enqueue/1 (entry_type "webhook"). HMAC header format and pause
+      threshold are Letflow's own choices, not ported from R-Co (unreachable
+      from this session).

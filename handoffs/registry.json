@@ -3363,6 +3363,21 @@
       "released_lock": true,
       "last_known_step": "Step 6 (DOC-UPDATER)",
       "note": "Service catalog core -- DB-backed registry three already-shipped seams (ServiceScopeValidator, solution_pack.ex, PinResolver) already depend on via an injectable Lookup, plus REQ-069's already-shipped SVC-04 permission surface. Global (not per-tenant-schema) table -- deliberate divergence from decision 0003 Decision B, needs REVIEWER sign-off. COMPLETED: RELEASE-VALIDATOR PASSED all 12 acceptance criteria. One real rework round -- SECURITY-REVIEWER caught an unhandled Ecto.StaleEntryError on a concurrent-delete race in delete/1, fixed with a proper case+rescue pattern matching this codebase's own established idiom. REVIEWER's sign-off on the global-table decision-0003 divergence was genuine, not rubber-stamped: REVIEWER found the cited precedent's analogy imperfect but constructed its own independent sufficient justification rather than accepting the design's framing uncritically. TEST-DESIGNER's concurrent-delete-race regression test is deterministic (real Postgres row-lock based, not sleep-based), independently reproduced by TEST-DESIGN-VALIDATOR. Unblocks REQ-192 (HTTP route layer)."
+    },
+    {
+      "run_id": "WF02-REQ183-20260830",
+      "requirement_id": "REQ-183",
+      "queue_task_id": 356,
+      "github_issue_number": 701,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/webhooks/delivery.ex"
+      ],
+      "started_at": "2026-08-30T04:37:05Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
+      "note": "Webhook delivery dispatch core -- HMAC signing, retry/backoff, auto-pause, DLQ landing via REQ-176's enqueue/1 (entry_type webhook). No route (REQ-184). HMAC header format and pause threshold are Letflow's own choices, not ported from R-Co."
     }
   ]
 }

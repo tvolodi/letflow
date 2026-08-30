@@ -543,10 +543,16 @@ defmodule Letflow.Routers.InstancesTest do
       assert conn.status == 200
       body = Jason.decode!(conn.resp_body)
 
-      assert [%{"event_type" => "INSTANCE_STARTED", "sequence_number" => _} = item | _] =
+      assert [%{"event_type" => "INSTANCE_STARTED", "sequence_num" => _} = item | _] =
                body["items"]
 
-      refute Map.has_key?(item, "actor_display_name")
+      # REQ-200: actor_display_name/description are now always present and
+      # non-blank (design §2/§3) -- see the dedicated REQ-200 describe block
+      # below for the full fallback-chain/rendering coverage.
+      assert is_binary(item["actor_display_name"])
+      refute String.trim(item["actor_display_name"]) == ""
+      assert is_binary(item["description"])
+      refute String.trim(item["description"]) == ""
     end
 
     test "GET /:id/pins returns the effective pin set" do
@@ -788,26 +794,298 @@ defmodule Letflow.Routers.InstancesTest do
   end
 
   defp fetch_all_history_seqs(tenant, instance_id, page_size),
-    do: fetch_all_seqs(tenant, "/#{instance_id}/history", page_size)
+    do: fetch_all_seqs(tenant, "/#{instance_id}/history", page_size, "sequence_number")
 
   defp fetch_all_timeline_seqs(tenant, instance_id, page_size),
-    do: fetch_all_seqs(tenant, "/#{instance_id}/timeline", page_size)
+    do: fetch_all_seqs(tenant, "/#{instance_id}/timeline", page_size, "sequence_num")
 
-  defp fetch_all_seqs(tenant, path, page_size),
-    do: fetch_all_seqs(tenant, path, page_size, nil, [])
+  defp fetch_all_seqs(tenant, path, page_size, seq_key),
+    do: fetch_all_seqs(tenant, path, page_size, seq_key, nil, [])
 
-  defp fetch_all_seqs(tenant, path, page_size, cursor, acc) do
+  defp fetch_all_seqs(tenant, path, page_size, seq_key, cursor, acc) do
     query = "?page_size=#{page_size}" <> if cursor, do: "&cursor=#{cursor}", else: ""
 
     conn = build_conn("GET", path <> query, tenant, %{roles: ["PROCESS_OPERATOR"]}) |> dispatch()
     assert conn.status == 200
     body = Jason.decode!(conn.resp_body)
-    seqs = Enum.map(body["items"], & &1["sequence_number"])
+    seqs = Enum.map(body["items"], & &1[seq_key])
     acc = acc ++ seqs
 
     case body["next_cursor"] do
       nil -> acc
-      next -> fetch_all_seqs(tenant, path, page_size, next, acc)
+      next -> fetch_all_seqs(tenant, path, page_size, seq_key, next, acc)
+    end
+  end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # REQ-200 -- timeline actor display names and event-type descriptions
+  # ══════════════════════════════════════════════════════════════════════
+
+  defp insert_raw_event!(schema_name, attrs) do
+    defaults = %{
+      event_id: Ecto.UUID.generate(),
+      created_at: DateTime.utc_now() |> DateTime.truncate(:microsecond),
+      payload: %{},
+      metadata: %{},
+      idempotency_key: "req200-#{System.unique_integer([:positive, :monotonic])}"
+    }
+
+    changeset =
+      Letflow.EventStore.Event.insert_changeset(
+        %Letflow.EventStore.Event{},
+        Map.merge(defaults, attrs)
+      )
+
+    assert {:ok, event} = Repo.insert(changeset, prefix: schema_name)
+    event
+  end
+
+  defp create_named_user!(schema_name, display_name) do
+    assert {:ok, user} =
+             Letflow.Identity.create_user(
+               %{
+                 "username" => unique_name("req200-user"),
+                 "display_name" => display_name,
+                 "email" => "#{unique_name("req200")}@example.test"
+               },
+               prefix: schema_name
+             )
+
+    user
+  end
+
+  defp fetch_timeline_items(tenant, instance_id, query_suffix \\ "") do
+    conn =
+      build_conn("GET", "/#{instance_id}/timeline#{query_suffix}", tenant, %{
+        roles: ["PROCESS_OPERATOR"]
+      })
+      |> dispatch()
+
+    assert conn.status == 200
+    Jason.decode!(conn.resp_body)["items"]
+  end
+
+  describe "REQ-200 -- actor display name and description rendering" do
+    test "AC1: every item over a 4+ event-type timeline has a non-blank actor_display_name and description" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req200-ac1")
+      {instance_id, _def} = start_instance!(tenant.schema_name)
+      cancel_instance!(tenant.schema_name, instance_id)
+
+      insert_raw_event!(tenant.schema_name, %{
+        instance_id: instance_id,
+        event_type: "INSTANCE_PINS_REBOUND",
+        payload: %{"reason" => "test"},
+        actor_id: Ecto.UUID.generate(),
+        sequence_number: 100
+      })
+
+      insert_raw_event!(tenant.schema_name, %{
+        instance_id: instance_id,
+        event_type: "TIMER_FIRED",
+        payload: %{"timer_id" => "t1", "node_id" => "n1", "timer_type" => "duration"},
+        actor_id: Letflow.EventStore.platform_actor_id(),
+        sequence_number: 101
+      })
+
+      items = fetch_timeline_items(tenant, instance_id, "?page_size=50")
+      assert length(items) >= 4
+
+      event_types = Enum.map(items, & &1["event_type"]) |> Enum.uniq()
+      assert length(event_types) >= 4
+
+      for item <- items do
+        assert is_binary(item["actor_display_name"])
+        refute String.trim(item["actor_display_name"]) == ""
+        assert is_binary(item["description"])
+        refute String.trim(item["description"]) == ""
+      end
+    end
+
+    test "AC2/AC3: all four actor fallback levels resolve, including a deleted user row" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req200-ac2")
+      {instance_id, _def} = start_instance!(tenant.schema_name)
+
+      user = create_named_user!(tenant.schema_name, "Ada Lovelace")
+
+      # Level 1: real, resolvable actor_id.
+      insert_raw_event!(tenant.schema_name, %{
+        instance_id: instance_id,
+        event_type: "TASK_COMPLETED",
+        payload: %{"task_id" => "task-1", "node_id" => "node-1"},
+        actor_id: user.id,
+        sequence_number: 10
+      })
+
+      # Level 2: actor_id unresolvable, but metadata token_description present.
+      insert_raw_event!(tenant.schema_name, %{
+        instance_id: instance_id,
+        event_type: "TASK_COMPLETED",
+        payload: %{"task_id" => "task-2", "node_id" => "node-2"},
+        actor_id: Ecto.UUID.generate(),
+        metadata: %{"token_description" => "CI deploy token"},
+        sequence_number: 11
+      })
+
+      # Level 3: no token_description, only actor_label.
+      insert_raw_event!(tenant.schema_name, %{
+        instance_id: instance_id,
+        event_type: "TASK_COMPLETED",
+        payload: %{"task_id" => "task-3", "node_id" => "node-3"},
+        actor_id: Ecto.UUID.generate(),
+        metadata: %{"actor_label" => "External Webhook"},
+        sequence_number: 12
+      })
+
+      # Level 4: none of the three -- literal "system".
+      insert_raw_event!(tenant.schema_name, %{
+        instance_id: instance_id,
+        event_type: "TASK_COMPLETED",
+        payload: %{"task_id" => "task-4", "node_id" => "node-4"},
+        actor_id: Ecto.UUID.generate(),
+        sequence_number: 13
+      })
+
+      # AC3: actor id refers to a user row that no longer exists.
+      deleted_user = create_named_user!(tenant.schema_name, "Soon Deleted")
+      Repo.delete!(deleted_user, prefix: tenant.schema_name)
+
+      insert_raw_event!(tenant.schema_name, %{
+        instance_id: instance_id,
+        event_type: "TASK_COMPLETED",
+        payload: %{"task_id" => "task-5", "node_id" => "node-5"},
+        actor_id: deleted_user.id,
+        sequence_number: 14
+      })
+
+      items = fetch_timeline_items(tenant, instance_id, "?page_size=50")
+      by_task = Map.new(items, &{&1["task_id"], &1["actor_display_name"]})
+
+      assert by_task["task-1"] == "Ada Lovelace"
+      assert by_task["task-2"] == "CI deploy token"
+      assert by_task["task-3"] == "External Webhook"
+      assert by_task["task-4"] == "system"
+      # AC3 -- deleted user row still falls through to "system", never nil/error.
+      assert by_task["task-5"] == "system"
+    end
+
+    test "AC4: INSTANCE_STARTED and a task-completion item render different, actor-naming sentences" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req200-ac4")
+      user = create_named_user!(tenant.schema_name, "Grace Hopper")
+      {instance_id, _def} = start_instance!(tenant.schema_name, %{actor_id: user.id})
+
+      insert_raw_event!(tenant.schema_name, %{
+        instance_id: instance_id,
+        event_type: "TASK_COMPLETED",
+        payload: %{"task_id" => "task-9", "node_id" => "approve"},
+        actor_id: user.id,
+        sequence_number: 10
+      })
+
+      items = fetch_timeline_items(tenant, instance_id, "?page_size=50")
+      started = Enum.find(items, &(&1["event_type"] == "INSTANCE_STARTED"))
+      completed = Enum.find(items, &(&1["event_type"] == "TASK_COMPLETED"))
+
+      assert started["description"] == "Instance started by Grace Hopper"
+      assert completed["description"] == "Task approve completed by Grace Hopper"
+      assert started["description"] != completed["description"]
+    end
+
+    test "AC5: an event type with no specific rendering gets a non-empty generic description" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req200-ac5")
+      {instance_id, _def} = start_instance!(tenant.schema_name)
+
+      insert_raw_event!(tenant.schema_name, %{
+        instance_id: instance_id,
+        event_type: "TENANT_CUSTOM_LUA_EVENT",
+        payload: %{"foo" => "bar"},
+        actor_id: Ecto.UUID.generate(),
+        metadata: %{"actor_label" => "Lua Script"},
+        sequence_number: 10
+      })
+
+      items = fetch_timeline_items(tenant, instance_id, "?page_size=50")
+      custom = Enum.find(items, &(&1["event_type"] == "TENANT_CUSTOM_LUA_EVENT"))
+
+      assert custom["description"] == "Event TENANT_CUSTOM_LUA_EVENT by Lua Script"
+      refute custom["description"] == ""
+    end
+
+    test "AC6: response field names match TimelineEntry -- timestamp and sequence_num present" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req200-ac6")
+      {instance_id, _def} = start_instance!(tenant.schema_name)
+
+      [item] = fetch_timeline_items(tenant, instance_id)
+
+      expected_keys =
+        ~w(event_type timestamp actor_display_name description instance_id event_id sequence_num task_id node_id metadata)
+
+      for key <- expected_keys do
+        assert Map.has_key?(item, key), "expected timeline item to have key #{key}"
+      end
+
+      refute Map.has_key?(item, "created_at")
+      refute Map.has_key?(item, "sequence_number")
+    end
+
+    test "AC7: a page whose events share one actor issues at most one user-lookup query" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req200-ac7")
+      user = create_named_user!(tenant.schema_name, "Shared Actor")
+      {instance_id, _def} = start_instance!(tenant.schema_name, %{actor_id: user.id})
+
+      for n <- 1..5 do
+        insert_raw_event!(tenant.schema_name, %{
+          instance_id: instance_id,
+          event_type: "TASK_COMPLETED",
+          payload: %{"task_id" => "task-#{n}", "node_id" => "node-#{n}"},
+          actor_id: user.id,
+          sequence_number: 10 + n
+        })
+      end
+
+      test_pid = self()
+      handler_id = {:req200_ac7_telemetry, make_ref()}
+
+      :telemetry.attach(
+        handler_id,
+        [:letflow, :repo, :query],
+        &__MODULE__.handle_req200_users_query_telemetry/4,
+        test_pid
+      )
+
+      items =
+        try do
+          fetch_timeline_items(tenant, instance_id, "?page_size=50")
+        after
+          :telemetry.detach(handler_id)
+        end
+
+      # INSTANCE_STARTED + five TASK_COMPLETED, all sharing one actor.
+      assert length(items) == 6
+
+      user_query_count =
+        Stream.repeatedly(fn ->
+          receive do
+            :req200_user_query -> :hit
+          after
+            0 -> :done
+          end
+        end)
+        |> Enum.take_while(&(&1 == :hit))
+        |> length()
+
+      assert user_query_count <= 1,
+             "expected at most one `users` lookup query for a page sharing one actor, got #{user_query_count}"
+    end
+  end
+
+  # Named (not anonymous) telemetry handler, matching router_test.exs's own
+  # ISS-0031 (GH#90) precedent -- [:letflow, :repo, :query] is a single
+  # node-global event name, so the handler filters to this test's own
+  # process before forwarding, and further filters to the `users` table so
+  # unrelated queries in the same request don't inflate the count.
+  def handle_req200_users_query_telemetry(_event, _measurements, metadata, test_pid) do
+    if self() == test_pid and metadata.source == "users" do
+      send(test_pid, :req200_user_query)
     end
   end
 end

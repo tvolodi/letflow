@@ -1,0 +1,37 @@
+{
+  "handoff_id": "step02c-WF02-REQ200-20260830",
+  "run_id": "WF02-REQ200-20260830",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ200-20260830/step-02c-security-reviewer.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-200"],
+    "issue_ids": [],
+    "queue_task_id": 373,
+    "github_issue": "GH#719",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ200-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ200-20260830/step-02a-elixir-dev.json"
+    ],
+    "branch_name": "feature/WF02-REQ200-20260830",
+    "rework_pass": 0,
+    "implementation_summary": "Implemented REQ-200 strictly per the approved design (lib/letflow/design/req200-instance-timeline-rendering.md), passed CODE-DESIGN-VALIDATOR. lib/letflow/instances.ex: added resolve_actor_display_name/3 (total 4-level actor fallback: users.display_name lookup -> metadata token_description -> metadata actor_label -> literal \"system\"), render_description/3 (one clause per the 7 real event types -- INSTANCE_STARTED, TASK_COMPLETED, INSTANCE_CANCELLED, INSTANCE_PINS_REBOUND, SUB_PROCESS_COMPLETED, EXECUTION_ERROR, TIMER_FIRED -- plus a mandatory trailing generic-fallback clause for any other event_type string), fetch_display_names_by_actor_id/2 (one batched, prefix-scoped Repo query per page over the page's distinct non-nil actor_ids, zero queries when none), and rewrote timeline_item/1 into timeline_item/2 (renames sequence_number->sequence_num and created_at->timestamp, adds actor_display_name and description). timeline/3's body now runs the batch lookup once before mapping the page. lib/letflow/routers/instances.ex: timeline_item_map/1 updated in lockstep (output keys \"sequence_num\"/\"timestamp\" plus new passthrough \"actor_display_name\"/\"description\"). history_item_map/1, the route/auth macro lines, and lib/letflow/api/authorization.ex were not touched; no file under web/ was added or modified (confirmed by git diff --stat).",
+    "security_attention_flag": "This touches user display_name resolution across a tenant boundary indirectly, via the new batched actor lookup (fetch_display_names_by_actor_id/2). Please specifically verify: (1) the lookup query is prefix-scoped to the SAME tenant schema as the timeline's own instance/event query (it is -- both use the `prefix` threaded through timeline/3's opts, and `users` is itself a per-tenant-schema table per Decision 0006 D1, so the query cannot resolve or leak another tenant's user rows even if a cross-tenant actor_id were ever presented); (2) a deleted user's or the platform sentinel's (00000000-0000-0000-0000-000000000002, TIMER_FIRED's actor) unresolvable actor_id never errors or leaks anything -- it simply falls through the 4-level fallback chain to metadata or the literal \"system\", never raising and never returning null/blank; (3) no actor_id, token_description, or actor_label value is ever echoed across a tenant boundary since all three come from either the calling tenant's own users table or that same tenant's own event metadata already scoped by the unchanged instance-existence/ownership check (ensure_instance_exists/2, REQ-072 unchanged)."
+  },
+  "task": {
+    "description": "Security review REQ-200's implementation in lib/letflow/instances.ex and lib/letflow/routers/instances.ex against docs/agents/instructions/security-invariants.md (INV-1 tenant isolation via explicit prefix on every query, INV-5 uniform 404 for cross-tenant/nonexistent, INV-7 Ecto.Query composition only -- no raw SQL/fragment). Confirm the new fetch_display_names_by_actor_id/2 query is prefix-scoped and cannot cross a tenant boundary, and that the actor-display-name fallback chain never leaks or errors on an unresolvable/deleted/sentinel actor_id.",
+    "acceptance_criteria": [
+      "fetch_display_names_by_actor_id/2's query passes prefix: explicitly, matching every other query in Letflow.Instances -- no bare unscoped Repo.all/1",
+      "no new raw SQL fragment (Ecto.Query.API.fragment/1) introduced anywhere in this diff",
+      "the 404/cross-tenant behavior REQ-072 established (ensure_instance_exists/2) is unchanged -- confirmed by re-reading the diff, not just trusting ELIXIR-DEV's summary",
+      "lib/letflow/api/authorization.ex is unmodified (git diff --stat)",
+      "no file under web/ is added or modified (git diff --stat)",
+      "the actor fallback chain (resolve_actor_display_name/3) cannot return nil, an empty string, or leak a value sourced from another tenant's data"
+    ]
+  }
+}

@@ -655,12 +655,14 @@ defmodule Letflow.Routers.Instances do
     %{
       "event_id" => item.event_id,
       "event_type" => item.event_type,
-      "sequence_number" => item.sequence_number,
+      "sequence_num" => item.sequence_num,
       "instance_id" => item.instance_id,
-      "created_at" => DateTime.to_iso8601(item.created_at),
+      "timestamp" => DateTime.to_iso8601(item.timestamp),
       "node_id" => item.node_id,
       "task_id" => item.task_id,
-      "metadata" => item.metadata
+      "metadata" => item.metadata,
+      "actor_display_name" => item.actor_display_name,
+      "description" => item.description
     }
   end
 

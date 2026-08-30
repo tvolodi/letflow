@@ -3369,15 +3369,15 @@
       "requirement_id": "REQ-183",
       "queue_task_id": 356,
       "github_issue_number": 701,
-      "status": "IN_PROGRESS",
+      "status": "BLOCKED",
       "owned_modules": [
         "lib/letflow/webhooks/delivery.ex"
       ],
       "started_at": "2026-08-30T04:37:05Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
-      "note": "Webhook delivery dispatch core -- HMAC signing, retry/backoff, auto-pause, DLQ landing via REQ-176's enqueue/1 (entry_type webhook). No route (REQ-184). HMAC header format and pause threshold are Letflow's own choices, not ported from R-Co."
+      "lock_released_at": "2026-08-30T04:47:07Z",
+      "released_lock": true,
+      "last_known_step": "Step 1 (CODE-DESIGNER design complete, blocked before ELIXIR-DEV)",
+      "note": "Blocked: deliver/3 needs Letflow.Secrets.resolve/2 (REQ-190), which is not on main yet (mid-rework). Design artefact produced against REQ-190's drafted contract, pushed to feature/WF02-REQ183-20260830 for reuse once REQ-190 merges. No implementation started."
     }
   ]
 }

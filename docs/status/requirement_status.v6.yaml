@@ -1126,3 +1126,19 @@ history:
       enqueue/1 (entry_type "webhook"). HMAC header format and pause
       threshold are Letflow's own choices, not ported from R-Co (unreachable
       from this session).
+  - req: REQ-183
+    event: blocked
+    agent: ORCH
+    at: "2026-08-30T04:47:07Z"
+    note: >
+      Queue task 356 released as blocked. CODE-DESIGNER's own investigation
+      found REQ-183's deliver/3 needs Letflow.Secrets.resolve/2 (REQ-190) to
+      obtain a usable HMAC key for REQ-181's webhook secrets, which are
+      one-way-hashed per decision 0016. REQ-190 does not exist on main yet
+      (status in_progress, mid-rework per its own git history). This task's
+      own depends_on (queue ids 354, 351 = REQ-181, REQ-176) did not surface
+      this real dependency on REQ-190. A design artefact was produced
+      against REQ-190's already-drafted contract and pushed to
+      feature/WF02-REQ183-20260830 for reuse once REQ-190 merges; no
+      implementation was started. Queue task 356 re-releasable once REQ-190
+      ships.

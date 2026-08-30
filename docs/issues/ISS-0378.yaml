@@ -22,4 +22,6 @@ affected_files:
   - test/letflow/scheduler/poller_test.exs
 queue_task_id: 378
 github_issue: 734
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0378-20260830
+resolved_at: "2026-08-30T07:18:42Z"

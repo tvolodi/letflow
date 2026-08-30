@@ -209,6 +209,35 @@ history:
       originates from commit 77637268 (REQ-186, already on main), not a
       REQ-190 regression. Fix: scope/remove the zero-diff assertion to
       check only what REQ-186 actually needs.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-30T07:19:11Z"
+    note: >
+      WF03-ISS0378-20260830 done (queue task 378, GH#734, stage S6). Root
+      cause: REQ-186's own poller_test.exs:340 (AC7) hardcoded a zero-diff
+      assertion of lib/letflow/application.ex against main as a repo-wide
+      invariant, when it was really just an artifact of when REQ-186 was
+      written (commit 77637268, confirmed via git blame) -- broke on
+      REQ-190's own already-approved :logger primary-filter registration.
+      Third occurrence of this defect class; documented in
+      docs/anti-patterns.md. Fix (commit cb9faa77): deleted the defective
+      test and its unused helper, corrected a mislabeled describe title --
+      no structural replacement was provable without exporting a
+      currently-private function (see
+      lib/letflow/design/iss0378-poller-ac7-test-fix.md secs 1-2); the
+      sibling GenServer-count test already covers the only mappable
+      acceptance criterion. Gates: ISSUE-FIXER diagnosis -> CODE-DESIGNER/
+      CODE-DESIGN-VALIDATOR (2 rework-free rounds) -> SECURITY-REVIEWER
+      PASS -> REVIEWER PASS -> TEST-DESIGNER (no coverage gap, no new test
+      needed) -> TEST-DESIGN-VALIDATOR PASS -> TEST-RUNNER PASS (full
+      suite 2628/2630, 2 pre-existing rustc-absent baseline failures
+      unrelated to this diff; targeted poller_test.exs +
+      scheduler_test.exs 23/23; mix compile --warnings-as-errors clean).
+      docs/issues/ISS-0378.yaml set to status: resolved. GH#734 closed
+      with evidence comment. Queue task 378 released via
+      POST /tasks/378/release {"status":"done"} -- HTTP 200, locked_by
+      null in response.
   - req: REQ-183
     event: started
     agent: ORCH

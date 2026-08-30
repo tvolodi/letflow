@@ -3531,14 +3531,14 @@
       "requirement_id": "REQ-196",
       "queue_task_id": 369,
       "github_issue_number": 715,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/routers/audit.ex"
       ],
       "started_at": "2026-08-30T19:48:48Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 6 (DOC-UPDATER) flipped REQ-196's status to done in docs/requirements.yaml, appended a done-event to docs/status/requirement_status.v7.yaml, incremented the index's declared entries: count, and updated docs/migration/stage-6-operational-cross-cutting.md to record the closed audit vertical (REQ-195 + REQ-196). Routed to ORCH (step-final-orch.json) for the final merge step.",
+      "lock_released_at": "2026-08-30T20:53:02Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: pushing/merging PR to main, queue task 369 to be released done)",
       "note": "Route half of the audit split atop REQ-195's audit_entries store. Repoints GET /api/v1/audit's handler from EventStore.read_global/1 to the new store, preserving response envelope and :AuditRead permission. Retires audit.ex's own documented caveats (constant resource_type, always-null before/after state). No schema/authorization.ex/web/ changes."
     }
   ]

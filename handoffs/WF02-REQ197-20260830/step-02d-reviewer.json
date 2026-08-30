@@ -1,0 +1,39 @@
+{
+  "handoff_id": "step02d-WF02-REQ197-20260830",
+  "run_id": "WF02-REQ197-20260830",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ197-20260830/step-02d-reviewer.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-197"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ197-20260830/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ197-20260830/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req197-expr-arithmetic-and-errors.md",
+      "lib/letflow/engine/expr.ex",
+      "test/letflow/engine/expr_test.exs",
+      "test/letflow/engine/transition_test.exs",
+      "handoffs/WF02-REQ197-20260830/security-review-req197-findings.md"
+    ],
+    "branch_name": "feature/WF02-REQ197-20260830"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER passed Step 2c (see step-02c-security-reviewer.json's result block and the full findings in handoffs/WF02-REQ197-20260830/security-review-req197-findings.md). Scope test was independently re-run: only lib/letflow/engine/expr.ex is touched in production code, no route/migration/secret. All applicable invariants (INV-8 only; INV-1..7 not-applicable) passed. Your scope is idiomatic OTP usage, decision-record/design-doc consistency, and scope creep -- read the real diff and the approved design (lib/letflow/design/req197-expr-arithmetic-and-errors.md) in full before verdict.\n\nTHREE ITEMS CARRIED FORWARD FROM SECURITY-REVIEWER, EACH NEEDING YOUR EXPLICIT DECISION OR AWARENESS (do not let any of these get silently accepted or silently expanded without a stated decision):\n\n(a) OQ-1 DEFERRAL -- NEEDS YOUR EXPLICIT SIGN-OFF. ELIXIR-DEV implemented the design's own stated safe fallback: a single unsigned `:infinity` marker for float division by a zero divisor (any dividend, including 0.0/0.0), rather than the full signed-infinity/NaN 3-way split design section 4.3/4.6 reasons about. SECURITY-REVIEWER's independent analysis (expr.ex:1088, 1109-1120) found this is not merely an incompleteness: `apply_float_arith(:div, _l, r) when r == 0.0` collapses every float division by zero to the same unsigned :infinity regardless of dividend sign, and apply_ordering/3 treats :infinity as the greatest possible value in every comparison. Concretely: a gateway condition of the form `amount / 0.0 > threshold` evaluates true for BOTH a large positive amount AND a large-magnitude NEGATIVE amount, where a correctly-signed implementation would put the negative case at -infinity (false for any finite positive threshold) -- a real, demonstrable gateway-branch-decision divergence for a plausible tenant input, not a hypothetical corner case. SECURITY-REVIEWER found this does NOT cross any INV-1..INV-8 boundary (a tenant's own process definition producing a wrong-but-internally-consistent decision on that tenant's own data; no cross-tenant leakage, no crash, no secret/SQL/auth issue) -- so it is not a SECURITY-REVIEWER BLOCKER, but it IS a substantive correctness question for gateway behavior that you must explicitly decide: accept the unsigned-:infinity-only fallback as REQ-197's final implemented shape (with the sign-flip behavior above understood and accepted), or send this back requesting the fuller signed/NaN split with new AC-level test coverage (none exists today for this case).\n\n(b) OQ-4 -- AWARENESS ONLY, NOT BLOCKING. Negative-operand integer division/modulo (e.g. -7/2, -7 % 2) uses Elixir's native `div/2`/`rem/2` semantics directly (truncate-toward-zero) with no new type/AST surface -- the design's own reasoned choice, not independently verified against R-Co's real evaluator.zig, and no acceptance criterion exercises a negative-operand case. No action requested beyond your awareness.\n\n(c) DESIGN-PREFERENCE DEVIATION (your own idiom/code-quality scope, not SECURITY-REVIEWER's) -- `parse_strict/1` was given its OWN position-tracking tokenizer/parser pair (`tokenize_positioned/1`, `do_tokenize_positioned/4`, `parse_or_p/2`..`parse_primary_p/2`), structurally mirroring the existing `tokenize/1`+`parse_or/1`..`parse_primary/1` pair one-for-one, rather than threading position bookkeeping through the single existing implementation as design doc section 6.2 states as its stated preference ('share one underlying tokenizer and one underlying grammar implementation'). ELIXIR-DEV's stated rationale (expr.ex:401-418): avoid touching the existing tokenizer's delicate escape-handling code (two prior bug-fix histories, ISS-0086/ISS-0087) and guarantee `parse/1`'s outer shape stays byte-for-byte safe. SECURITY-REVIEWER confirmed `parse_strict/1` is not on `evaluate_condition/2`'s call graph today (inert new surface). Please review this duplication for idiom/maintainability acceptability -- accept it as a reasonable lower-risk tradeoff, or request the shared-implementation approach the design doc actually specified.",
+    "acceptance_criteria": [
+      "Confirm Letflow.Engine.Expr's new code (arith_op(), {:arith, ...}/{:neg, ...} AST nodes, parse_additive/parse_multiplicative/parse_unary, parse_strict/1 and its tokenizer/parser pair) follows this codebase's existing conventions -- compare typespec style, error-tuple shape, moduledoc format against the rest of expr.ex.",
+      "Confirm no scope creep: only lib/letflow/engine/expr.ex, test/letflow/engine/expr_test.exs, test/letflow/engine/transition_test.exs, and the design doc are touched -- transition.ex and every other caller of Expr are untouched (confirmed already by SECURITY-REVIEWER's `git diff --stat`, but re-verify).",
+      "Decide OQ-1 (item (a) above) explicitly: accept the unsigned-:infinity fallback as final, or send back for the fuller signed/NaN split with new test coverage.",
+      "Review item (c)'s parse_strict/1 tokenizer-duplication design-preference deviation and state a verdict: acceptable tradeoff, or request the shared-implementation approach.",
+      "Note OQ-4 (item (b)) awareness in your result -- no action required beyond acknowledging it.",
+      "CRITICAL: the handoff's top-level status field must be exactly PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing."
+    ]
+  }
+}

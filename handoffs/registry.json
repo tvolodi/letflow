@@ -3423,8 +3423,8 @@
       "started_at": "2026-08-30T08:19:08Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
-      "note": "Extends expr.ex with arithmetic, unary negation, and a structured parse-error surface, matching R-Co's actual (non-CEL) expr semantics -- without breaking EE-05's catch-false gateway contract or expr.ex's zero-impurity grep. now()/date_add/date_diff explicitly excluded as clock-impure."
+      "last_known_step": "Step 2c COMPLETED (SECURITY-REVIEWER: PASS, all applicable invariants INV-8-only satisfied) -- Step 2d PENDING (routed to REVIEWER)",
+      "note": "Extends expr.ex with arithmetic, unary negation, and a structured parse-error surface, matching R-Co's actual (non-CEL) expr semantics -- without breaking EE-05's catch-false gateway contract or expr.ex's zero-impurity grep. now()/date_add/date_diff explicitly excluded as clock-impure. SECURITY-REVIEWER found the OQ-1 unsigned-:infinity fallback produces a demonstrable gateway-decision divergence for negative-dividend float-div-by-zero comparisons (not an INV violation, but a substantive correctness question) -- carried to REVIEWER for explicit sign-off in step-02d."
     }
   ]
 }

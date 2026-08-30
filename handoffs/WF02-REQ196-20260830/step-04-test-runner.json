@@ -9,11 +9,13 @@
   "created_at": "2026-08-30T20:40:00Z",
   "started_at": "2026-08-30T20:39:45Z",
   "completed_at": "2026-08-30T20:55:00Z",
-  "status": "DONE",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
-    "requirement_ids": ["REQ-196"],
+    "requirement_ids": [
+      "REQ-196"
+    ],
     "issue_ids": [],
     "queue_task_id": 369,
     "github_issue": "GH#715",

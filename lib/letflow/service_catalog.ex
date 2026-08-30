@@ -404,14 +404,29 @@ defmodule Letflow.ServiceCatalog do
       %Entry{} = entry ->
         case referencing_active_definitions(service_id, nil) do
           [] ->
-            {:ok, _deleted} = Repo.delete(entry)
-            :ok
+            delete_entry(entry)
 
           conflicts ->
             definition_ids = Enum.flat_map(conflicts, & &1.definition_ids)
             {:error, {:referenced_by_active_definitions, definition_ids}}
         end
     end
+  end
+
+  # `entry` was fetched at the top of `delete/1`, but `referencing_active_definitions/2`
+  # runs a sequential per-tenant-schema query loop in between -- a real window in which a
+  # concurrent caller can delete the same row first. `Entry` carries no optimistic-lock
+  # field, so `Repo.delete/1` matches on primary key alone: if the row is already gone,
+  # it raises `Ecto.StaleEntryError` rather than returning `{:error, changeset}`. Treat
+  # that race as a benign not-found (consistent with `get_for_tenant/2`'s own not-found
+  # handling) instead of letting it crash the caller.
+  defp delete_entry(entry) do
+    case Repo.delete(entry) do
+      {:ok, _deleted} -> :ok
+      {:error, _changeset} -> {:error, :not_found}
+    end
+  rescue
+    Ecto.StaleEntryError -> {:error, :not_found}
   end
 
   # ===========================================================================

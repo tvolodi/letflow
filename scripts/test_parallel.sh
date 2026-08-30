@@ -173,6 +173,42 @@ else
   high_pool_demand_exclude=""
 fi
 
+# --- Step 1.6: seed N per-partition build paths (sequential, before any ---
+# --- partition backgrounds) -- ISS-0377 -----------------------------------
+#
+# Step 1 above compiles _build/test exactly once (AC5). Without this step,
+# every partition launched in Step 2 would still point at that one shared
+# _build/test tree for its *entire* run (not just the pre-compile), and
+# each mix test process's own startup manifest/lock/consolidation-cache
+# touches on that shared path race against sibling partitions -- tolerated
+# (mostly) on POSIX, but a hard abort ("could not create hard link ...
+# permission denied") on Windows/NTFS. Fix: give each partition its own
+# _build/test-partition-<i> tree, seeded from the single compiled _build/
+# test tree via a hardlink-preferring recursive copy, done sequentially
+# (no concurrency) so the seed pass itself introduces no race. This is
+# filesystem duplication of an already-compiled tree, not a recompile --
+# it does not reintroduce the N-independent-compiles cost req113's AC5
+# exists to avoid. See lib/letflow/design/iss0377-cross-platform-test-fixes.md
+# Part B for the full rationale.
+echo "test_parallel: seeding $N per-partition build paths from _build/test (sequential)"
+
+i=1
+while [ "$i" -le "$N" ]; do
+  partition_build_path="_build/test-partition-$i"
+  rm -rf "$partition_build_path"
+
+  if cp -al "_build/test" "$partition_build_path" 2>/dev/null; then
+    : # hardlink-preserving copy succeeded (near-zero extra disk cost)
+  elif cp -r "_build/test" "$partition_build_path"; then
+    : # fallback: plain recursive copy on filesystems without hardlink support
+  else
+    echo "test_parallel: ERROR failed to seed $partition_build_path from _build/test -- no partition launched" >&2
+    exit 1
+  fi
+
+  i=$((i + 1))
+done
+
 # --- Step 2: launch N background partitions -------------------------------
 
 tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/letflow_test_parallel.XXXXXX")
@@ -197,7 +233,12 @@ declare -a failures
 
 i=1
 while [ "$i" -le "$N" ]; do
-  MIX_TEST_PARTITION="$i" mix test --partitions "$N" --no-color $high_pool_demand_exclude "$@" \
+  # MIX_BUILD_PATH is set per-invocation (command-scoped), not exported
+  # globally, because every partition must see a *different* value --
+  # unlike TEST_PARALLEL_GROUP/TEST_POOL_SIZE above, which are deliberately
+  # global-exported since every partition shares the same value there.
+  MIX_TEST_PARTITION="$i" MIX_BUILD_PATH="_build/test-partition-$i" \
+    mix test --partitions "$N" --no-color $high_pool_demand_exclude "$@" \
     > "$tmp_dir/partition-$i.log" 2>&1 &
   pids[$i]=$!
   i=$((i + 1))

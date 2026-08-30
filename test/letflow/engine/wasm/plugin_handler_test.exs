@@ -177,6 +177,57 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
   # ---------------------------------------------------------------------
 
   describe "AC7: the wasmex NIF is a loaded shared library, not an external process" do
+    # -----------------------------------------------------------------
+    # Per lib/letflow/design/iss0377-cross-platform-test-fixes.md Part A:
+    # the wasmex NIF loader always copies the version-qualified compiled
+    # artifact to a fixed load name ("wasmex") with the platform's native
+    # shared-library extension appended. The extension is the only thing
+    # that varies by OS -- derive it from :os.type/0 instead of hardcoding
+    # ".so". An unmapped OS must fail loudly (A.4 step 1), never skip.
+    # -----------------------------------------------------------------
+    defp expected_native_extension do
+      case :os.type() do
+        {:unix, os} when os in [:linux, :freebsd, :darwin] ->
+          ".so"
+
+        {:win32, _} ->
+          ".dll"
+
+        other ->
+          flunk(
+            "unhandled :os.type/0 value #{inspect(other)} -- no known NIF loadable-artifact " <>
+              "extension mapping; see A.4 of iss0377-cross-platform-test-fixes.md"
+          )
+      end
+    end
+
+    # Checks for the fixed-load-name compiled artifact ("wasmex" <> ext)
+    # under priv_dir/native, falling back to a directory listing (A.4 step
+    # 3) if the exact fixed-name path is absent. Returns a tagged tuple so
+    # callers can produce a failure message that distinguishes which branch
+    # fired, per A.4/A.5's requirement.
+    defp native_artifact_check(priv_dir, ext) do
+      fixed_path = Path.join([priv_dir, "native", "wasmex" <> ext])
+
+      if File.exists?(fixed_path) do
+        {:ok, :fixed_name, fixed_path}
+      else
+        native_dir = Path.join(priv_dir, "native")
+
+        case File.ls(native_dir) do
+          {:ok, entries} ->
+            if Enum.any?(entries, &String.ends_with?(&1, ext)) do
+              {:ok, :fallback_listing, native_dir}
+            else
+              {:error, :not_found, fixed_path, native_dir}
+            end
+
+          {:error, reason} ->
+            {:error, :listing_failed, fixed_path, reason}
+        end
+      end
+    end
+
     test "Wasmex.Native resolves to a compiled .beam built from Rust NIF sources" do
       beam_path = :code.which(Wasmex.Native)
       refute beam_path in [:non_existing, :cover_compiled, :preloaded]
@@ -186,16 +237,59 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
         |> Keyword.get_values(:external_resource)
         |> List.flatten()
 
-      assert Enum.any?(external_resources, &String.contains?(&1, "native/wasmex/src/")),
-             "expected Wasmex.Native's external_resource attributes to name its Rust NIF sources"
+      if external_resources == [] do
+        # A.5: a precompiled/downloaded build may legitimately attach zero
+        # :external_resource entries. Don't fail -- fall back to asserting
+        # the A.4-step-3 invariant (a real compiled artifact is present).
+        priv_dir = :code.priv_dir(:wasmex)
+        refute priv_dir == {:error, :bad_name}
+        ext = expected_native_extension()
+
+        case native_artifact_check(priv_dir, ext) do
+          {:ok, _via, _path} ->
+            assert true,
+                   "external_resource is empty for this build (precompiled/downloaded " <>
+                     "path) -- confirmed a compiled NIF artifact is present under priv/native instead"
+
+          {:error, _reason, fixed_path, extra} ->
+            flunk(
+              "external_resource is empty (precompiled/downloaded build path) and no " <>
+                "compiled NIF artifact was found either (checked #{fixed_path}, #{inspect(extra)})"
+            )
+        end
+      else
+        # Non-empty: this project's WASMEX_BUILD=true from-source build path
+        # globs the whole crate tree (README.md, Cargo.toml, Cargo.lock,
+        # .cargo/config.toml alongside .rs sources) -- assert at least one
+        # entry is a real Rust source file, not that every entry is.
+        assert Enum.any?(external_resources, &String.ends_with?(&1, ".rs")),
+               "expected at least one :external_resource entry to end in .rs (Rust NIF " <>
+                 "source) among #{inspect(external_resources)}"
+      end
     end
 
     test "the compiled NIF shared library is bundled inside wasmex's own priv/, not fetched at runtime" do
       priv_dir = :code.priv_dir(:wasmex)
       refute priv_dir == {:error, :bad_name}
 
-      so_path = Path.join(priv_dir, "native/wasmex.so")
-      assert File.exists?(so_path), "expected #{so_path} to exist as a bundled shared library"
+      ext = expected_native_extension()
+
+      case native_artifact_check(priv_dir, ext) do
+        {:ok, _via, _path} ->
+          assert true
+
+        {:error, :not_found, fixed_path, native_dir} ->
+          flunk(
+            "fixed-name file #{fixed_path} missing, and no artifact of extension #{ext} " <>
+              "found at all under #{native_dir}"
+          )
+
+        {:error, :listing_failed, fixed_path, reason} ->
+          flunk(
+            "fixed-name file #{fixed_path} missing, and listing its priv/native directory " <>
+              "failed: #{inspect(reason)}"
+          )
+      end
     end
 
     test "invoking the guest opens no new OS ports (no external process/IPC boundary)" do

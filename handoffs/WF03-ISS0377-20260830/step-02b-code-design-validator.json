@@ -1,0 +1,29 @@
+{
+  "handoff_id": "WF03-ISS0377-20260830-step02b-recheck1",
+  "run_id": "WF03-ISS0377-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 2 (design gate) -- re-check after rework 1",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/iss0377-cross-platform-test-fixes.md",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "note": "Re-submission after rework 1. This is the re-check requested in handoffs/WF03-ISS0377-20260830/step-02b-code-design-validator-rework1.json following FAIL result in handoffs/WF03-ISS0377-20260830/design-validation-findings.md.",
+    "rework_scope": "Fixed ONLY A.5 step 2's non-empty-:external_resource-branch assertion, per the rework1 handoff's required_fix and must_not_change constraints. No other section of the design was touched.",
+    "fix_applied": "A.5 step 2's non-empty branch now asserts that AT LEAST ONE :external_resource entry ends in '.rs' (Enum.any?/2 + String.ends_with?/2), replacing the prior 'every entry ends in .rs' assertion. The design text now explicitly states why: under this project's own always-on WASMEX_BUILD=true build configuration (.github/workflows/ci.yml:128, REQ-165), Wasmex.Native compiles through use Rustler's from-source path, whose Rustler.Compiler.Config.external_resources/3 (deps/rustler/lib/rustler/compiler/config.ex:85-93) globs the ENTIRE crate directory tree (rejecting only target/ and directories, no extension filter). The real vendored crate at deps/wasmex/native/wasmex/ confirms this: its external_resource list mixes .rs sources under src/ with non-.rs files the same glob sweeps in (README.md, Cargo.toml, Cargo.lock, .cargo/config.toml). An 'every entry ends in .rs' assertion is therefore false against this project's own real, mandated build path and would raise a real ExUnit.AssertionError. 'At least one entry ends in .rs' is the corrected, non-vacuous invariant: it still proves real Rust build inputs are genuinely tracked, without asserting anything about the composition of the rest of the list.",
+    "verified_against": "Re-checked directly against the real file listing of deps/wasmex/native/wasmex/ (README.md, Cargo.toml, Cargo.lock, .cargo/config.toml, src/*.rs) as cited in the rework1 findings, not re-derived from prose alone.",
+    "unchanged_per_must_not_change": "Part B (build-path isolation, Step 1.6/B.3/B.4) and the rest of Part A (A.2's extension-derivation table, A.4's fixed-name-plus-fallback design, A.5 step 1 and step 3, A.6, A.7) were left exactly as previously verified sound -- diff is scoped to A.5 step 2's assertion text only. A.2's mechanism-attribution note (non-blocking in the prior findings) was left as-is since the rework1 handoff's required_fix did not require touching it and the note was explicitly non-blocking.",
+    "design_file": "lib/letflow/design/iss0377-cross-platform-test-fixes.md",
+    "prior_findings_file": "handoffs/WF03-ISS0377-20260830/design-validation-findings.md",
+    "prior_rework_handoff": "handoffs/WF03-ISS0377-20260830/step-02b-code-design-validator-rework1.json"
+  },
+  "task": {
+    "description": "Re-validate lib/letflow/design/iss0377-cross-platform-test-fixes.md after rework 1. Confirm A.5 step 2's corrected 'at least one entry ends in .rs' assertion is empirically true against the real vendored deps/wasmex/native/wasmex/ file tree under this project's own WASMEX_BUILD=true build path, and confirm no other section was altered beyond what the required_fix called for. If PASS, route to ELIXIR-DEV for WF-03 Step 3 implementation. If FAIL, route back to CODE-DESIGNER with specifics."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "A.5 step 2's corrected non-empty-:external_resource-branch assertion ('at least one entry ends in .rs') independently re-verified true against the real vendored deps/wasmex/native/wasmex/ tree (mix of .rs sources under src/ plus README.md, Cargo.toml, Cargo.lock, .cargo/config.toml) and against Rustler.Compiler.Config.external_resources/3 (deps/rustler/lib/rustler/compiler/config.ex:85-98), which globs the whole crate tree with no extension filter, rejecting only target/ and directories -- matches the design's citation exactly. 'At least one .rs' passes against this tree; the prior 'every entry ends in .rs' assertion would fail, confirming the original FAIL was correct and this fix resolves it. git diff 10e490a..697987b on the design file shows the change scoped exactly to A.5 step 2's non-empty-branch text; working tree clean on top of 697987b. A.2's extension-derivation facts, A.4's mapping table and fixed-name-plus-fallback design, A.5 steps 1/3 and the empty-branch fallback, A.6, A.7, and all of Part B (hardlink/MIX_BUILD_PATH isolation) are byte-for-byte unchanged from the iteration-1 pass that already verified them sound. Full detail in handoffs/WF03-ISS0377-20260830/design-validation-findings.md (iteration 2 section, appended, not overwritten).",
+    "next_action": "Route to ELIXIR-DEV for WF-03 Step 3 implementation per handoffs/WF03-ISS0377-20260830/step-03-elixir-dev.json."
+  }
+}

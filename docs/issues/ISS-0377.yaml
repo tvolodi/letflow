@@ -25,4 +25,6 @@ affected_files:
   - scripts/test_parallel.sh
 queue_task_id: 377
 github_issue: 730
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0377-20260830
+resolved_at: 2026-08-30T02:04:45Z

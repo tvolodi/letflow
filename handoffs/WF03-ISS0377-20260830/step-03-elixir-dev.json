@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF03-ISS0377-20260830-step03",
+  "run_id": "WF03-ISS0377-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 3 (implementation)",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/design/iss0377-cross-platform-test-fixes.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Design gate PASSED on re-check after rework 1. Implement lib/letflow/design/iss0377-cross-platform-test-fixes.md exactly as written -- it is now design-validator-approved in full (both Part A and Part B).",
+    "design_file": "lib/letflow/design/iss0377-cross-platform-test-fixes.md",
+    "design_commit": "697987b",
+    "validator_result_file": "handoffs/WF03-ISS0377-20260830/step-02b-code-design-validator.json",
+    "validator_findings_file": "handoffs/WF03-ISS0377-20260830/design-validation-findings.md",
+    "targets": [
+      "test/letflow/engine/wasm/plugin_handler_test.exs (AC7 describe block, lines ~180-198, per Part A)",
+      "scripts/test_parallel.sh (per-partition build-path isolation, per Part B)"
+    ],
+    "must_do": [
+      "A.4: derive the expected loadable-artifact extension from :os.type/0 via the mapping table in A.4 step 1 (encode as a case/map, not left as prose) -- fail loudly on an unmapped OS, do not silently skip.",
+      "A.4 step 2/3: assert the fixed-name artifact exists for the derived extension; if absent, fall back to a directory listing of priv/native asserting at least one entry has the expected extension, with a failure message distinguishing which branch fired.",
+      "A.5: branch on whether :external_resource is empty. Non-empty branch asserts AT LEAST ONE entry ends in '.rs' (Enum.any?/2 + String.ends_with?/2) -- do NOT assert every entry ends in .rs, that is empirically false against the real vendored deps/wasmex/native/wasmex/ tree under this project's WASMEX_BUILD=true build path. Empty branch asserts the A.4-step-3 fallback invariant holds instead of failing.",
+      "A.6: do not wrap either assertion in an :os.type()-guarded skip/tag-exclude for non-Unix hosts -- this is an explicit non-goal and will be rejected by REVIEWER/CODE-DESIGN-VALIDATOR if seen.",
+      "A.7 (OQ-A1): empirically verify via a one-line mix run -e check whether :external_resource is actually empty or non-empty on this repo's real CI/dev build (WASMEX_BUILD=true), and record which of A.5's two branches actually fires -- do not assume.",
+      "Part B: give each test-partition process its own MIX_BUILD_PATH via a hardlink-preserving copy of the already-compiled _build/test tree, seeded sequentially and fully before any partition is backgrounded, per B.2-B.4. No Windows-detect-and-retry shortcut (B.3's Approach 1 is explicitly rejected in the design)."
+    ],
+    "acceptance_criteria_ref": "docs/issues/ISS-0377.yaml"
+  },
+  "task": {
+    "description": "Implement both fixes in lib/letflow/design/iss0377-cross-platform-test-fixes.md (Part A: test/letflow/engine/wasm/plugin_handler_test.exs AC7 assertions; Part B: scripts/test_parallel.sh per-partition build-path isolation). Run the affected tests and confirm real pass/fail output (do not speculate). Hand off to SECURITY-REVIEWER/REVIEWER per WF-03's normal next steps once implemented and passing."
+  },
+  "result": null
+}

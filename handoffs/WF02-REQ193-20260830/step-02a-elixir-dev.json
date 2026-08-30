@@ -17,7 +17,7 @@
     "branch_name": "feature/WF02-REQ193-20260830"
   },
   "task": {
-    "description": "Implement Letflow.Obs.Logger (:logger_formatter behaviour), Letflow.Obs namespace module, config/config.exs logger wiring, and config/runtime.exs LOG_LEVEL validation per design lib/letflow/design/req193-structured-logging.md. REWORK ITERATION 1: SECURITY-REVIEWER BLOCKER -- rescue block in encode_entry/3 uses unredacted `meta` in inspect(), bypassing redact_sensitive/1. Fix: use redact_sensitive(Map.drop(meta, @beam_reserved_keys)) in the inspect call, or drop meta entirely.",
+    "description": "Implement Letflow.Obs.Logger (:logger_formatter behaviour), Letflow.Obs namespace module, config/config.exs logger wiring, and config/runtime.exs LOG_LEVEL validation per design lib/letflow/design/req193-structured-logging.md. REWORK ITERATION 1: SECURITY-REVIEWER BLOCKER -- rescue block in encode_entry/3 uses unredacted `meta` in inspect(), bypassing redact_sensitive/1. Fix: use redact_sensitive(Map.drop(meta, @beam_reserved_keys)) in the inspect call, or drop meta entirely. REWORK ITERATION 2: TEST-RUNNER found regression -- three root causes, all scoped to test-environment interference: (1) config :logger, backends: [] in config/config.exs (all-env scope) breaks ExUnit.CaptureLog's console backend reliance; (2) config :logger, :default_handler, formatter: {Letflow.Obs.Logger, []} in config/config.exs similarly interferes with CaptureLog in the test env; (3) config/runtime.exs now defaults LOG_LEVEL to 'info' for all envs, which overrides Elixir's default :debug primary level -- capture_log([level: :debug]) docs state it does NOT override Logger.level(), so debug messages are filtered before reaching any capture handler. Fixes: (1+2) move both backends: [] and default_handler formatter to config/dev.exs and config/prod.exs only; (3) change runtime.exs LOG_LEVEL default to 'debug' when config_env() == :test.",
     "acceptance_criteria": [
       "mix compile --warnings-as-errors exits 0",
       "All migrations apply cleanly (none required)",
@@ -32,6 +32,8 @@
       "lib/letflow/obs/logger.ex",
       "lib/letflow/obs.ex",
       "config/config.exs",
+      "config/dev.exs",
+      "config/prod.exs",
       "config/runtime.exs"
     ],
     "issues": [
@@ -48,6 +50,6 @@
     },
     "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
   },
-  "rework_count": 1,
+  "rework_count": 2,
   "max_rework": 3
 }

@@ -132,3 +132,8 @@ config :letflow, :oidc_jit_provisioning, %{
 # the exact number, see lib/letflow/design/req039-sandbox-pool-fixture-loader.md
 # §9/§11 OQ-4.
 config :letflow, :sandbox_pool, max_concurrent_sandboxes: 5
+
+# REQ-193: disable legacy :logger backends in dev (structured JSON via
+# OTP default_handler only). Not set in config/test.exs so CaptureLog works.
+config :logger, backends: []
+config :logger, :default_handler, formatter: {Letflow.Obs.Logger, []}

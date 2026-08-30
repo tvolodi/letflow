@@ -1,0 +1,34 @@
+{
+  "handoff_id": "WF02-REQ192-20260830-step02c",
+  "run_id": "WF02-REQ192-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 2c",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/routers/services.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Implementation of lib/letflow/design/req192-service-catalog-routes.md (approved, iteration 2, see handoffs/WF02-REQ192-20260830/step-01b-code-design-validator.json). Changed/added files: lib/letflow/routers/services.ex (new), lib/letflow/routers/admin_services.ex (new), lib/letflow/api/error.ex (added service_referenced_by_active_definitions/1 and service_scope_narrowing_conflict/1), lib/letflow/plugs/api_pipeline.ex (two new forward/2 mounts), test/letflow/api/authorization_enforcement_test.exs (added Letflow.Routers.Services/AdminServices to @routers and @mount_prefix, per the design's own required companion fixture change). lib/letflow/api/authorization.ex, lib/letflow/service_catalog.ex, and everything under web/ were NOT modified.",
+    "carried_forward_findings_from_design_and_handoff": [
+      "ServiceRecord.max_retries omitted from service_record_json/1 output in both routers -- no backing Entry column, following Letflow.Routers.Dlq's own precedent (design §7/§8 finding 1). Flagged for TEST-DESIGNER: field-by-field assertions must document this exclusion in a comment.",
+      "request_schema/response_schema serialize as JSON null when the Entry column is nil -- no fabricated '' fallback invented (design §8 finding 2).",
+      "lib/letflow/api/authorization.ex L416-419's stale comment ('platform-admin enforced in handler, per Zig's comment') was left untouched, per the handoff's explicit instruction -- it no longer reflects reality (no handler-level PLATFORM_ADMIN check exists anywhere; the :UsersGroupsRolesManage permission mapping alone achieves the restriction). Out of scope for REQ-192; flagged for a future authorization.ex-scoped requirement."
+    ],
+    "layering_exception_flagged_for_reviewer_sign_off": "GET /api/v1/admin/services (lib/letflow/routers/admin_services.ex, handle_list/1 and list_all/1) queries Letflow.ServiceCatalog.Entry directly via Letflow.Repo/Ecto.Query, bypassing Letflow.ServiceCatalog entirely -- a deliberate, first-of-its-kind exception to this codebase's router->context-module layering discipline, specified exactly this way by the approved design's section 5 and NOT pre-approved by that design; REVIEWER must independently evaluate and sign off on it at Step 2d.",
+    "new_finding_from_implementation_not_anticipated_by_the_design": "Implementing the above exactly as designed causes an EXISTING test to fail: test/letflow/routers/req078_supporting_routes_test.exs:720, 'T-19: no Repo. call anywhere under lib/letflow/routers/ (INV-RT-1)' -- a static, allowlist-free grep assertion. INV-RT-1 is a named, REVIEWER-approved invariant from REQ-078's own design (lib/letflow/design/req078-supporting-routes.md sections 3.3/20.3), still cited as load-bearing in test/specs/REQ-078.md. REQ-192's design section 5 grepped production code for precedent but did not identify that the absence it found is a formally named, test-enforced invariant from a different requirement's already-signed-off design. Full analysis in handoffs/WF02-REQ192-20260830/elixir-dev-inv-rt-1-conflict.md (non-'step'-prefixed free-text notes file, H6 naming rule). ELIXIR-DEV did not modify test/letflow/routers/req078_supporting_routes_test.exs to make T-19 pass -- deciding whether to carve out an INV-RT-1 exception, or to send this requirement back to CODE-DESIGNER for a different section-5 resolution, is a REVIEWER-level architectural call, not ELIXIR-DEV's to make unilaterally."
+  },
+  "task": {
+    "description": "Review lib/letflow/routers/services.ex and lib/letflow/routers/admin_services.ex (plus the error.ex/api_pipeline.ex/authorization_enforcement_test.exs changes) against docs/agents/instructions/security-invariants.md, focused on: (1) permission gating -- confirm all five routes are correctly gated by the already-shipped :ServicesRead/:AdminServicesRead/:AdminServicesManage policy keys with no bypass, and that a caller holding only :ServicesRead genuinely cannot reach any /admin/services route; (2) tenant-scoping correctness on GET /services -- confirm Letflow.ServiceCatalog.list_for_tenant/2's visibility rule (global + own-tenant only) is the sole filter, with no additional or missing scoping logic in the router, and that a tenant-scoped entry owned by another tenant cannot appear in the response; (3) no data leakage in the two new 409 problem-details bodies (service_referenced_by_active_definitions/1, service_scope_narrowing_conflict/1 in lib/letflow/api/error.ex) -- confirm the extensions payloads (definition_ids, conflicts) never leak information a non-privileged caller of these PLATFORM_ADMIN-only routes shouldn't see, and that no stack trace, internal id, or unrelated tenant data rides along; (4) evaluate and record an explicit sign-off decision (AGREE/DISAGREE, with reasoning) on the section-5 layering exception described above, taking into account the newly-discovered INV-RT-1 test conflict -- this is not optional or reducible to a routine idiom check.",
+    "acceptance_criteria": [
+      "All five routes' permission gating independently verified against lib/letflow/api/authorization.ex's existing, unmodified endpoint_policy_key/2 and required_permission/1 clauses -- confirm no drift between what the router declares and what the matrix actually enforces",
+      "GET /services tenant-scoping confirmed correct by direct code reading of Letflow.ServiceCatalog.list_for_tenant/2 plus lib/letflow/routers/services.ex's handle_list/1 -- no additional where-clause or filter needed or missing",
+      "Both new Error constructors' extensions maps reviewed for data leakage -- confirm definition_ids/conflicts contain only data already computed by Letflow.ServiceCatalog.delete/1 and update_scope/2's own return values, nothing router-injected beyond what those functions already decided to disclose",
+      "Explicit AGREE or DISAGREE recorded on the design section-5 layering exception, addressing the INV-RT-1 conflict this handoff surfaces -- not deferred silently to REVIEWER without SECURITY-REVIEWER's own security-relevant opinion (a direct-schema-query bypassing a context module's own guard logic is itself a security-relevant layering question, not purely a stylistic one)",
+      "mix test's one new-to-this-change failure (T-19) and the two pre-existing, unrelated rustc-toolchain failures are distinguished and neither is mistaken for the other"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

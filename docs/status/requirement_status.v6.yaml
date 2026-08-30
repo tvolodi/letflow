@@ -971,3 +971,20 @@ history:
       contention between two scripts/test_parallel.sh partitions on Windows.
       This session's sandbox is Linux; diagnosis proceeds via source reading
       per core-directives.md's no-speculation rule, not a literal Windows repro.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-30T02:22:00Z"
+    note: >
+      WF03-ISS0377-20260830: closed ISS-0377 (Windows test-run environment --
+      wasmex .so-vs-.dll assertion and MIX_OS_CONCURRENCY_LOCK hard-link
+      contention). Fixed test/letflow/engine/wasm/plugin_handler_test.exs's
+      cross-platform artifact assertions and scripts/test_parallel.sh's
+      per-partition build-path isolation, with a mutation-based fail-then-pass
+      regression proof (the fix's "does not touch every :external_resource
+      entry" correction turned out to be a real, reproducible failure on this
+      Linux sandbox too, not merely a Windows-only symptom). GH#730 closed
+      with evidence. docs/issues/ISS-0377.yaml status: resolved. PR #732
+      merged. This SCOPE-CHANGE done-event was missing from ISSUE-FIXER's own
+      Step 5 -- appended by ORCH before starting the next task, per this
+      volume's own started/done pairing convention for SCOPE-CHANGE entries.

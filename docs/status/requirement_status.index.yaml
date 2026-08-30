@@ -800,8 +800,13 @@ volumes:
     path: docs/status/requirement_status.v6.yaml
     status: current
     opened: 2026-08-28
-    entries: 32
+    entries: 33
     note: >
+      Incremented to 33 by ORCH appending ISS-0377's own missing done-event
+      (WF03-ISS0377-20260830 Step 5/ISSUE-FIXER did not append one) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v6.yaml` = 33 on-disk
+      entries, no rebase conflict at the time it was written.
+
       Incremented to 32 by ORCH's ISS-0377 started-event append (Step 00,
       WF03-ISS0377-20260830) -- `grep -c "^  - req:"
       docs/status/requirement_status.v6.yaml` = 32 on-disk entries, no

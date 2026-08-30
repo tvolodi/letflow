@@ -309,22 +309,61 @@ text and every plausible AC-1 test can be written against without ambiguity).
   nested expressions) → negation flips `:infinity` ↔ `:neg_infinity`; `:nan` negated is `:nan`
   (matching real IEEE 754 NaN negation, which flips an unobservable sign bit only).
 
-### 4.5 The deliberate null asymmetry — comparison vs. arithmetic, stated once and cross-referenced
+### 4.5 The deliberate null asymmetry — comparison vs. arithmetic (REVISED, rework iteration 1)
+
+**Superseded note:** this section's original text (iteration 0, failed CODE-DESIGN-VALIDATOR's
+Step 1b gate — see `handoffs/WF02-REQ197-20260830/step-01b-code-design-validator.json`) left
+`eval/2`'s ordering-comparison clause (`expr.ex:437-446`) unchanged, reading the requirement's
+"null in a comparison propagates (yields null)" as satisfied only at the `evaluate_condition/2`
+catch-false boundary. That reading was wrong: `docs/requirements.yaml`'s REQ-197 text states the
+asymmetry as a SCOPE instruction to preserve/implement, not an ambiguous aside, and AC5 requires
+two tests demonstrating two **different** `eval/2`-level outcomes (a value vs. an error) — under
+the superseded reading, both comparison-with-null and arithmetic-with-null produced an
+`{:error, {:eval_error, ...}}` tuple, leaving no observable asymmetry to test. This revision makes
+`eval/2` itself produce the asymmetric outcomes. No existing test in `test/letflow/engine/
+expr_test.exs` pins the old nil-ordering-comparison error behaviour (grepped for `nil`/`null`:
+zero matches, confirmed independently by CODE-DESIGN-VALIDATOR), so this is a safe, unconstrained
+behavioural change to make.
 
 **This is the single most important semantic rule this requirement carries, called out on its own
 per the requirement text's own instruction to make it "explicit and deliberate":**
 
 | Context | `null` operand behaviour |
 |---|---|
-| Comparison (`{:cmp, op, l, r}`, existing) | **Unchanged by this requirement.** `==`/`!=` already use plain `lv == rv`/`lv != rv` (`nil == nil` is `true`, `nil == 5` is `false` — ordinary Elixir equality, already correct and untouched). Ordering comparisons (`< <= > >=`) already require `is_number(lv) and is_number(rv)` (`expr.ex:440`) and a `nil` operand there **already** produces `{:error, {:eval_error, {:type_mismatch, op, lv, rv}}}` today, matching the requirement text's framing of "null in a comparison yields null" **only in the sense that it never crashes and composes into `evaluate_condition/2`'s existing catch-false the same as any other eval error** — the AC's "null in a comparison still yields null" is satisfied at the `evaluate_condition/2` boundary (§5), not by `eval/2` literally returning `{:ok, nil}` from a comparison. §8 OQ-2 flags this reading as the one this design adopts, since the requirement text's literal "yields null" does not match `eval/2`'s current, unchanged, already-shipped ordering-comparison behaviour and this design does not silently rewrite that shipped behaviour to manufacture a literal `nil` return with no requirement scope authorizing an equality/ordering semantics change. |
-| Arithmetic (`{:arith, op, l, r}` and `{:neg, ast()}`, new) | **Always an error**, unconditionally, checked first (§4.2 row 1 / §4.4) — `variables.missing + 1` and `null + 1` both yield `{:error, {:eval_error, {:null_in_arithmetic, ...}}}`, never a value, regardless of the other operand's type. |
+| Ordering comparison (`{:cmp, op, l, r}` where `op in [:lt, :lte, :gt, :gte]`, existing node, **changed clause**) | **Propagates: `eval/2` returns `{:ok, nil}`.** The existing `is_number(lv) and is_number(rv)` guard (`expr.ex:440`) gains a **new guard clause inserted immediately ahead of it**: if `lv == nil or rv == nil`, return `{:ok, nil}` — checked before the `is_number` guard is ever reached, so a nil operand never falls through to today's `{:error, {:eval_error, {:type_mismatch, op, lv, rv}}}` outcome. This is a genuine, deliberate behavioural change to `expr.ex:437-446`, not merely a re-reading of existing behaviour — stated explicitly so ELIXIR-DEV does not mistake it for a no-op. |
+| Equality/inequality (`{:cmp, op, l, r}` where `op in [:eq, :neq]`, existing node, **unchanged**) | Already correct today via plain Elixir `lv == rv` / `lv != rv`: `nil == nil` is `true`, `nil == 5` is `false`, `nil != 5` is `true` — ordinary Elixir equality already "propagates" a null operand into a real (non-error, non-null) boolean result with no code change needed. **Explicit decision, not left ambiguous:** eq/neq needs no new nil-check clause; the new nil-check clause above applies only to the four ordering operators (`< <= > >=`), where a nil operand today reaches the numeric guard and errors, unlike eq/neq which never did. |
+| Arithmetic (`{:arith, op, l, r}` and `{:neg, ast()}`, new node, **unchanged from iteration 0**) | **Always an error**, unconditionally, checked **first**, before any type/promotion logic runs (§4.2 row 1 — the null check is check 1 of 4, ahead of the type check and both promotion rows / §4.4's `v == nil` clause, evaluated before the integer/float/type dispatch) — `variables.missing + 1` and `null + 1` both yield `{:error, {:eval_error, {:null_in_arithmetic, ...}}}`, never a value, regardless of the other operand's type. |
 
-**Consequence for the gateway path:** since `evaluate_condition/2` collapses every `eval/2` error
-to `false` (§5) regardless of which error tag fired, this asymmetry is only externally observable
-by a caller using the new strict entry point (§6) or by unit-testing `eval/2` directly — exactly
-the two surfaces the requirement's own AC ("asserted as two explicit tests") targets.
+**Two worked test cases, matching AC5's own wording ("asserted as two explicit tests") and this
+design's corrected `eval/2`-level disposition — concrete enough for TEST-DESIGNER to transcribe
+directly:**
 
-### 4.6 Equality/inequality and ordering involving an `infinity_marker()` result
+1. **Comparison-with-null yields null:** `Expr.eval({:cmp, :lt, {:var, ["amount"]}, {:lit, 100}},
+   %{"amount" => nil})` returns `{:ok, nil}` — a real, non-error value, propagated exactly as an
+   ordinary Elixir `nil` would propagate through a chain of nil-tolerant operations, matching the
+   requirement text's literal "yields null" (not "yields an error that later collapses to
+   `false`").
+2. **Arithmetic-with-null errors:** `Expr.eval({:arith, :add, {:var, ["amount"]}, {:lit, 1}},
+   %{"amount" => nil})` returns `{:error, {:eval_error, {:null_in_arithmetic, :add, nil, 1}}}` —
+   never a value, regardless of the other operand.
+
+These two outcomes are now observably different at the `eval/2` level itself (`{:ok, nil}` vs.
+`{:error, _}`), which is what makes the asymmetry a real, testable property rather than something
+that only exists in prose.
+
+**Consequence for the gateway path:** `evaluate_condition/2`'s own `with {:ok, true} <- eval(ast,
+variables) do true else _ -> false end` composition (§5) already treats `{:ok, nil}` as "not
+`true`," so it falls through to `else _ -> false` exactly like an error tuple would — this revision
+changes **nothing** about `evaluate_condition/2`'s external behaviour (a condition that compares
+against a null variable still routes the edge to `false`, same as before), only about what `eval/2`
+itself returns internally. This is why §5's "byte-for-byte unchanged" claim for
+`evaluate_condition/2`'s own source still holds even though `eval/2`'s comparison clause changes —
+the asymmetry is now real and testable at the `eval/2` boundary, but invisible at the
+`evaluate_condition/2` boundary, exactly matching AC5's own framing that the two tests are
+`eval/2`-level tests, not `evaluate_condition/2`-level ones.
+
+### 4.6 Equality/inequality and ordering involving an `infinity_marker()` result (guard ordering
+re-checked against §4.5's revised nil-check branch)
 
 **This design's own necessary extension, since arithmetic results (§4.3) can flow directly into a
 comparison node in the same expression (e.g. `"1.0 / 0.0 > 100"`) — not literally stated in the
@@ -348,6 +387,21 @@ to handle by accident:**
 - Equality (`==`/`!=`) between two `:infinity` atoms, or between `:infinity` and a real number,
   needs no special handling beyond the `:nan` override above — plain atom/number `==` already gives
   the right answer (`:infinity == :infinity` is `true`, `:infinity == 5` is `false`).
+
+**Guard ordering re-check (rework iteration 1) — confirms §4.5's new nil-check branch does not
+shadow or reorder incorrectly against the `:nan`/infinity-marker branches above:** the ordering-
+comparison clause (`< <= > >=`) now has, in order: **(1)** the nil-check from §4.5 — `lv == nil or
+rv == nil` → `{:ok, nil}`; **(2)** the `:nan` guard — either operand is `:nan` → `{:ok, false}`;
+**(3)** the `:infinity`/`:neg_infinity` ordering branch above; **(4)** the pre-existing
+`is_number(lv) and is_number(rv)` guard, unchanged, for the plain-number case; **(5)** the
+pre-existing fallback → `{:error, {:eval_error, {:type_mismatch, op, lv, rv}}}` for any remaining
+type combination (e.g. a string operand). This ordering is safe: nil, `:nan`, and the infinity
+sentinels are three **mutually exclusive** operand shapes (a value is never simultaneously `nil`
+and `:nan`), so placing the nil-check first cannot shadow the `:nan`/infinity branches — a `:nan`
+or infinity-marker operand always fails the `== nil` test and falls through to clause (2)/(3)
+exactly as before this revision, and a `nil` operand always fails the `:nan`/infinity/`is_number`
+tests and would have fallen through to the old type-mismatch fallback had clause (1) not been
+inserted ahead of it. No clause reordering beyond inserting (1) at the front is needed.
 
 ## 5. `evaluate_condition/2` — byte-for-byte unchanged (EE-05's contract)
 
@@ -664,7 +718,7 @@ scattered across the requirement text:
 | 2 | Precedence matches R-Co's: `+`/`*` grouping, comparison-vs-arithmetic ordering | §2.1 (precedence table), §2.2 (both worked examples with concrete expected values), §3.1 (parser call-graph) |
 | 3 | Int+float mix promotes to float, on a case where int arithmetic would differ | §4.2 row 4 (promotion rule) |
 | 4 | Int div/mod by zero are errors; float div by zero is infinity — 3 tests | §4.3 table (all 3 cases enumerated with exact error/result shapes) |
-| 5 | Null in comparison yields null; null in arithmetic is an error — 2 tests | §4.5 (asymmetry table, both directions stated, comparison behaviour's exact current semantics called out honestly rather than assumed) |
+| 5 | Null in comparison yields null; null in arithmetic is an error — 2 tests | §4.5 REVISED (asymmetry table with the changed ordering-comparison clause, plus the two worked test cases: `eval({:cmp, :lt, ...}, %{"amount" => nil})` → `{:ok, nil}`; `eval({:arith, :add, ...}, %{"amount" => nil})` → `{:error, {:eval_error, {:null_in_arithmetic, ...}}}`), §4.6 (guard-ordering re-check confirming the new nil-check branch doesn't shadow the `:nan`/infinity branches) |
 | 6 | Strict entry point returns structured failure: line, column, token text, message — field by field on a malformed expression | §6.2–§6.5 (`positioned_token()`, `internal_parse_error()`, `parse_failure()`, `parse_strict/1`, `describe_parse_error/1`) |
 | 7 | `evaluate_condition/2` unchanged: same malformed condition still yields `false`; transition.ex behaviour unchanged | §5 (byte-for-byte unchanged source, verification obligation naming the exact new test needed) |
 | 8 | Purity grep still zero matches after this change, quoted in the PR | §7 (exact command, exact new-code coverage list) |
@@ -675,32 +729,49 @@ scattered across the requirement text:
 
 ## 12. Open questions (§8's decision above is final and NOT one of these — listed separately since it required its own reasoning, not a guess)
 
-- **OQ-1 (§4.3):** the signed-infinity / NaN-for-`0.0/0.0` 3-way split for float division by zero
-  is this design's own reasoned extension of the requirement text's single un-signed phrase
-  ("yields the IEEE infinity"). Not independently verified against R-Co's real `evaluator.zig`
-  (§0's access gap) — a future reader with real source access should confirm R-Co actually
-  produces signed infinity/NaN here rather than a single unsigned sentinel, and adjust §4.3 if not.
-- **OQ-2 (§4.5):** this design reads "null in a comparison yields null" as being satisfied at the
-  `evaluate_condition/2` boundary (an eval error, like any other, collapses to `false`) rather than
-  as a mandate to change `eval/2`'s existing, already-shipped ordering-comparison behaviour to
-  literally return `{:ok, nil}`. If a future reader's R-Co access reveals R-Co's comparison
-  operators genuinely return a null **value** (not an error) when either operand is null — which
-  would be a real, observable difference from Letflow's current shipped `eval/2` if callers other
-  than `evaluate_condition/2` ever inspect eval's return directly — this reading should be revisited
-  and `eval/2`'s comparison clauses would need actual behavioural changes beyond this requirement's
-  own stated scope (§10 already excludes changes to `translate_cel_to_expr/1`, but not to
-  `eval/2`'s comparison clauses specifically; a correction here would need its own follow-up
-  requirement or an explicit REVIEWER-sanctioned scope note, not a silent fix inside this one).
-- **OQ-3 (§6.6 point 3):** an eval-time structured-error surface (rich detail for a
-  division-by-zero/null-in-arithmetic error, analogous to `parse_strict/1`'s parse-time surface)
-  is not built here. Flagged as a candidate for a future requirement if REQ-198 or a later
-  consumer needs one — not started here to avoid speculative scope beyond what any current AC
-  requires.
-- **OQ-4 (§4.3 row A, `/` and `%`):** the truncate-toward-zero (`div/2`/`rem/2`-style) rounding
-  direction for integer division/modulo with **negative** operands (e.g. `-7 / 2`, `-7 % 2`) is
-  this design's own decision, chosen as the most common convention among C-family/Zig-heritage
-  languages, but **not independently verified against R-Co's real `evaluator.zig`** (§0's access
-  gap) — no acceptance criterion tests a negative-operand case, so this is a real, currently
-  untested assumption. A future reader with real R-Co source access should confirm the rounding
-  direction (truncate-toward-zero vs. floor) before this assumption is treated as ported rather
-  than reasoned, and add a negative-operand test once confirmed.
+- **OQ-1 (§4.3) — genuine open question, needs REVIEWER's explicit sign-off before ELIXIR-DEV
+  implements it, carried forward unchanged from iteration 0:** the signed-infinity / NaN-for-
+  `0.0/0.0` 3-way split for float division by zero is this design's own reasoned extension of the
+  requirement text's single un-signed phrase ("yields the IEEE infinity"). Not independently
+  verified against R-Co's real `evaluator.zig` (§0's access gap — confirmed no `*.zig` file
+  reachable on this host) — this bakes new machinery (a 3-variant `infinity_marker()` type, new
+  `value()`/`ast()` surface, new comparison-ordering branches in §4.6) into concrete `@spec`/table
+  content on the strength of this design's own guess, untested by any AC. **This must not be
+  implemented by ELIXIR-DEV until REVIEWER has explicitly signed off on §4.3's 3-way split**,
+  mirroring how REQ-191's global-table divergence and REQ-192's INV-RT-1 resolution were escalated
+  to REVIEWER rather than silently decided — do not treat this design's §4.3 content as
+  pre-approved for this specific point. A future reader with real R-Co source access should confirm
+  R-Co actually produces signed infinity/NaN here rather than a single unsigned sentinel, and
+  adjust §4.3 if not.
+- **OQ-2 (§4.5) — RESOLVED in this rework iteration, no longer open:** iteration 0 read "null in a
+  comparison yields null" as satisfied at the `evaluate_condition/2` boundary alone, leaving
+  `eval/2`'s ordering-comparison clause unchanged. CODE-DESIGN-VALIDATOR's Step 1b BLOCKER (see
+  `handoffs/WF02-REQ197-20260830/step-01b-code-design-validator.json`) confirmed the requirement
+  text states this as a SCOPE instruction, not an ambiguous aside, and that AC5 is unsatisfiable
+  under the old reading. §4.5 above now specifies the actual fix: `eval/2`'s ordering-comparison
+  clause gains a new nil-check guard ahead of the `is_number` guard, returning `{:ok, nil}` for a
+  nil operand. This is a real, deliberate behavioural change to `expr.ex:437-446` (not merely a
+  re-reading), confirmed safe because no existing test pins the old behaviour. No further action
+  needed on this item.
+- **OQ-3 (§6.6 point 3) — relabelled (rework iteration 1): this is a requirement-text-confirmed
+  scope exclusion, not an open question.** An eval-time structured-error surface (rich detail for a
+  division-by-zero/null-in-arithmetic error, analogous to `parse_strict/1`'s parse-time surface) is
+  not built here — and this is not something a future reader needs to resolve, because the
+  requirement text's own SCOPE item 3 asks only for a **parse**-error surface ("line, column,
+  offending token text, message" via a new strict entry point), never an eval-time one. §6.6 point
+  3's scoping-out is therefore already the requirement's own answer, restated here for clarity, not
+  a guess awaiting confirmation. (Noted as a candidate for a *future requirement* if REQ-198 or a
+  later consumer ever needs an eval-time structured surface — but that is a scope-expansion
+  proposal for later, not an unresolved question about *this* requirement's own scope.)
+- **OQ-4 (§4.3 row A, `/` and `%`) — low-risk, flagged for REVIEWER's awareness only, not blocking,
+  carried forward unchanged from iteration 0:** the truncate-toward-zero (`div/2`/`rem/2`-style)
+  rounding direction for integer division/modulo with **negative** operands (e.g. `-7 / 2`,
+  `-7 % 2`) is this design's own decision, chosen as the most common convention among
+  C-family/Zig-heritage languages, but **not independently verified against R-Co's real
+  `evaluator.zig`** (§0's access gap) — no acceptance criterion tests a negative-operand case, so
+  this is a real, currently untested assumption. Unlike OQ-1, this does not block ELIXIR-DEV's
+  implementation: it reuses Elixir's native `div/2` and `rem/2` semantics directly, with no new
+  type or AST surface, and no AC depends on the negative-operand direction. A future reader with
+  real R-Co source access should confirm the rounding direction (truncate-toward-zero vs. floor)
+  before this assumption is treated as ported rather than reasoned, and add a negative-operand test
+  once confirmed.

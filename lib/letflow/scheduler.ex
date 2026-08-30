@@ -37,6 +37,44 @@ defmodule Letflow.Scheduler do
   present, else `EventStore.platform_actor_id()`") — used here instead of
   `nil`, without otherwise changing anything the design decided. Flagged
   for SECURITY-REVIEWER/REVIEWER, not silently substituted.
+
+  ## REQ-188 — recurring timers (SCH-07) and the periodic retention runner
+
+  `maybe_rearm_timer/3` re-arms a fired recurring timer (a timer whose
+  `repeat_expression` is non-`nil`) by inserting a new `"pending"` row in
+  the SAME `Repo.transaction/1` `fire_timer/2` already opens, anchored to
+  the fired timer's own scheduled `fire_at` plus `repeat_interval_us` (not
+  the actual firing time, to avoid drift). `run_retention_sweep/1` wraps
+  `Letflow.EventStore.archive/1` for `Letflow.Scheduler.Poller`'s periodic
+  retention sweep. See
+  `lib/letflow/design/req188-recurring-timers-and-retention.md` for the
+  full design.
+
+  Two things are deliberately OUT of scope for REQ-188, each because a
+  prerequisite this codebase does not yet have is missing, not because it
+  was overlooked:
+
+  1. **R-Co's `src/scheduler/partition_maintenance.zig` and
+     `partition_retention.zig` are NOT ported.** Both operate on a
+     `PARTITION BY RANGE` events table via `DETACH`/`ATTACH`/`DROP`.
+     Letflow's `events` table is not partitioned —
+     `docs/migration/decisions/0003-ecto-schema-strategy.md`'s Dimension C
+     deliberately defers partitioning, and `docs/issues/ISS-0014.yaml`
+     already adjudicated this exact question: it adopted option (a) — port
+     row-level `archive/1` as-is — and rejected option (c) — porting
+     `PartitionRetention`'s whole-partition model now, "because it would
+     force partitioning early, contradicting 0003 Decision C's deliberate
+     deferral." This requirement schedules the `archive/1` that already
+     exists; partition-based retention stays deferred pending a future
+     partitioning decision record.
+  2. **SCH-04 escalation timers are deferred.** SCH-04 requires a
+     `:HUMAN_TASK` node carrying an `escalation_timer_duration` attribute.
+     `lib/letflow/definitions/graph.ex`'s `check_timer_duration/1` (CHK-12)
+     validates `duration_iso8601` on `:TIMER` nodes only; no
+     `escalation_timer_duration` attribute exists on `:HUMAN_TASK` today.
+     The definition-side input this escalation mechanism would consume does
+     not exist yet, so escalation timers need a definitions-side
+     requirement first.
   """
 
   import Ecto.Query
@@ -52,6 +90,11 @@ defmodule Letflow.Scheduler do
   @default_jitter_ms 0
   @default_max_timers_per_cycle 64
   @default_max_fire_retries 3
+  # REQ-188 §2.1 -- retention must never invoke `EventStore.archive/1` on
+  # an unconfigured deployment; this default is load-bearing for INV-RETENTION-1.
+  @default_retention_enabled false
+  @default_retention_interval_ms 86_400_000
+  @default_retention_days 90
 
   # ===========================================================================
   # create/2 -- SCH-01 arming (design §2.1)
@@ -235,7 +278,13 @@ defmodule Letflow.Scheduler do
          # call is an ordinary sequential call inside an already-open
          # transaction function, not a Multi.run/3 callback.
          {:ok, :advanced} <-
-           Letflow.Engine.advance_after_timer_fired(timer, Repo, tenant_schema) do
+           Letflow.Engine.advance_after_timer_fired(timer, Repo, tenant_schema),
+         # REQ-188 §1.2 -- the LAST step of this with chain, still inside
+         # fire_timer/2's one transaction. `timer` here is the struct
+         # captured BEFORE fire_changeset/2's update -- none of the
+         # recurrence fields change on fire, so the pre-update struct is
+         # equivalent and avoids a second read.
+         {:ok, _rearm_result} <- maybe_rearm_timer(timer, now, tenant_schema) do
       {:ok, :fired}
     else
       {:error, reason} -> {:error, reason}
@@ -269,6 +318,92 @@ defmodule Letflow.Scheduler do
     |> where([t], t.id == ^timer_id)
     |> lock("FOR UPDATE")
     |> Repo.one(prefix: tenant_schema)
+  end
+
+  # ===========================================================================
+  # maybe_rearm_timer/3 -- SCH-07 recurring timers (REQ-188 design §1.2)
+  # ===========================================================================
+
+  @doc """
+  Re-arms a fired recurring timer (REQ-188 design §1.2). Called once, from
+  inside `do_fire/2` (private, this module), as the LAST step of its
+  existing `with` chain -- after `Letflow.Engine.advance_after_timer_fired/3`
+  succeeds, before `do_fire/2` returns `{:ok, :fired}`. Never called
+  anywhere else; never opens its own transaction -- it runs on the caller's
+  `Repo`/`prefix`, inside the caller's already-open `Repo.transaction/1`
+  function.
+
+  `fired_timer` is the pre-fire struct (captured BEFORE `fire_changeset/2`'s
+  update) -- none of the recurrence fields change on fire, so the pre-update
+  struct is equivalent and avoids a second read. `fired_at` is accepted for
+  signature symmetry with the design but is NOT used to compute the new
+  row's `fire_at` -- see the drift-avoidance note below.
+
+  Behavior:
+
+    * `fired_timer.repeat_expression == nil` -> `{:ok, :not_recurring}`, no
+      row inserted (the recurrence-shape CHECK constraint guarantees the
+      rest of the quartet is also `nil` in this case).
+    * `fired_timer.repeat_total != nil` and the next occurrence count
+      (`fired_timer.fired_count + 1`) has reached it -> `{:ok,
+      :series_complete}`, no row inserted -- the series has reached its cap.
+    * Otherwise -> builds and inserts a new `"pending"` row (see
+      `build_rearm_attrs/2`), returning `{:ok, :rearmed}` on success or
+      `{:error, changeset}` on failure (which, per the caller's `with`
+      short-circuit, rolls back the whole `fire_timer/2` transaction).
+
+  **`fire_at` anchor -- nominal, not actual.** The new row's `fire_at` is
+  `fired_timer.fire_at` (the timer's own SCHEDULED fire time) plus
+  `repeat_interval_us`, never the actual firing timestamp. This is
+  deliberate: anchoring to the nominal schedule prevents drift accumulation
+  from poll latency.
+  """
+  @spec maybe_rearm_timer(
+          fired_timer :: Timer.t(),
+          fired_at :: DateTime.t(),
+          tenant_schema :: String.t()
+        ) :: {:ok, :rearmed | :not_recurring | :series_complete} | {:error, Ecto.Changeset.t()}
+  def maybe_rearm_timer(%Timer{repeat_expression: nil}, _fired_at, tenant_schema)
+      when is_binary(tenant_schema) do
+    {:ok, :not_recurring}
+  end
+
+  def maybe_rearm_timer(%Timer{} = fired_timer, _fired_at, tenant_schema)
+      when is_binary(tenant_schema) do
+    new_fired_count = fired_timer.fired_count + 1
+
+    if fired_timer.repeat_total != nil and new_fired_count >= fired_timer.repeat_total do
+      {:ok, :series_complete}
+    else
+      attrs = build_rearm_attrs(fired_timer, new_fired_count)
+
+      %Timer{}
+      |> Timer.rearm_changeset(attrs)
+      |> Repo.insert(prefix: tenant_schema)
+      |> case do
+        {:ok, _new_timer} -> {:ok, :rearmed}
+        {:error, changeset} -> {:error, changeset}
+      end
+    end
+  end
+
+  # REQ-188 design §1.3 -- mirrors build_arm_changeset/2's pattern exactly.
+  defp build_rearm_attrs(%Timer{} = fired_timer, new_fired_count) do
+    %{
+      id: Ecto.UUID.generate(),
+      tenant_id: fired_timer.tenant_id,
+      instance_id: fired_timer.instance_id,
+      token_id: fired_timer.token_id,
+      timer_type: fired_timer.timer_type,
+      node_id: fired_timer.node_id,
+      fire_at: DateTime.add(fired_timer.fire_at, fired_timer.repeat_interval_us, :microsecond),
+      status: "pending",
+      repeat_expression: fired_timer.repeat_expression,
+      repeat_interval_us: fired_timer.repeat_interval_us,
+      repeat_total: fired_timer.repeat_total,
+      fired_count: new_fired_count,
+      created_at: DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    }
   end
 
   # ===========================================================================
@@ -395,5 +530,52 @@ defmodule Letflow.Scheduler do
     scheduler_config()[:max_fire_retries] || @default_max_fire_retries
   end
 
+  @spec retention_enabled?() :: boolean()
+  def retention_enabled? do
+    scheduler_config()[:retention_enabled] || @default_retention_enabled
+  end
+
+  @spec retention_interval_ms() :: pos_integer()
+  def retention_interval_ms do
+    scheduler_config()[:retention_interval_ms] || @default_retention_interval_ms
+  end
+
+  @spec retention_days() :: non_neg_integer()
+  def retention_days do
+    scheduler_config()[:retention_days] || @default_retention_days
+  end
+
   defp scheduler_config, do: Application.get_env(:letflow, :scheduler, [])
+
+  # ===========================================================================
+  # Periodic retention runner (REQ-188 design §2)
+  # ===========================================================================
+
+  @doc """
+  Runs one retention sweep for a single tenant schema (REQ-188 design
+  §2.2). Unconditional -- does NOT itself check `retention_enabled?/0`;
+  that gate lives in the caller (`Letflow.Scheduler.Poller`'s `:tick`
+  handler), exactly so this function stays directly unit-testable the same
+  way `poll_and_fire/1` already is. Thin wrapper around
+  `Letflow.EventStore.archive/1`.
+  """
+  @spec run_retention_sweep(tenant_schema :: String.t()) ::
+          {:ok, EventStore.archive_result()} | {:error, term()}
+  def run_retention_sweep(tenant_schema) when is_binary(tenant_schema) do
+    EventStore.archive(prefix: tenant_schema, retention_days: retention_days())
+  end
+
+  @doc """
+  Pure predicate (no DB access) deciding whether a retention sweep is due
+  (REQ-188 design §2.3). `nil` means "never run before" -- due immediately,
+  mirroring `Poller.init/1`'s own zero-delay-first-tick philosophy for
+  `:tick`. Otherwise due once the elapsed wall-clock time since
+  `last_run_at` reaches or exceeds `retention_interval_ms/0`.
+  """
+  @spec retention_due?(last_run_at :: DateTime.t() | nil) :: boolean()
+  def retention_due?(nil), do: true
+
+  def retention_due?(%DateTime{} = last_run_at) do
+    DateTime.diff(DateTime.utc_now(), last_run_at, :millisecond) >= retention_interval_ms()
+  end
 end

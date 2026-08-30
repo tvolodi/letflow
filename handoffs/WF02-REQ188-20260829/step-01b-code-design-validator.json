@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF02-REQ188-20260829-step01b",
+  "run_id": "WF02-REQ188-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/req188-recurring-timers-and-retention.md",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "note": "Recheck after rework iteration 1. Step 1b's prior FAIL (see handoffs/WF02-REQ188-20260829/req188-design-review-findings.md and the superseded handoffs/WF02-REQ188-20260829/step-01-code-designer.json) found the design's engineering substance sound in full and flagged exactly one mechanical defect: two fenced code blocks reproduced real .ex implementation bodies instead of signatures/type-shapes. Fixed: (1) Section 2.3's fenced block now contains only the bare `@spec retention_due?(last_run_at :: DateTime.t() | nil) :: boolean()`; the two-clause implementation (`def retention_due?(nil), do: true` / the DateTime.diff clause) was deleted and replaced with prose describing the nil case (never run, due immediately) and the non-nil case (due once retention_interval_ms() has elapsed since last_run_at). (2) Section 2.4's fenced `new_state = if ... end` block (the literal if/else body, the real Enum.each(schemas, &Scheduler.run_retention_sweep/1) call, and the state-update expression) was deleted entirely and replaced with a prose + table description of the same four properties: guarded by both retention_enabled?() and retention_due?/1; iterates the same already-computed schemas list; calls run_retention_sweep/1 once per schema when the guard passes; updates last_retention_run_at to DateTime.utc_now() only when the sweep ran, otherwise state is unchanged byte-for-byte. No other section was touched -- the re-arm mechanism, the 'at most once per cycle' structural claim, the repeat_total/fired_count bounds, the Poller state widening, retention_enabled?() defaulting false, and both the ISS-0014 and escalation_timer_duration citations are unchanged from the version already verified correct in iteration 1's review. Commit: 21d60d4 on feature/WF02-REQ188-20260829 (pushed)."
+  },
+  "task": {
+    "description": "Re-validate lib/letflow/design/req188-recurring-timers-and-retention.md. The only change since the prior FAIL is the rewrite of Section 2.3 and Section 2.4 to remove literal implementation code, per the rework instructions in the superseded step-01-code-designer.json. Confirm no fenced block anywhere in the design still reproduces a composed/runnable Elixir expression (control flow, function bodies with logic, full call chains) -- bare @spec lines and bare function heads with guards remain acceptable, per the project's existing precedent (this design's own Section 1.2 and Section 2.2, and commits 3680243 / 290c6b2 on a separate requirement). If clean on this axis, and since the prior review already independently verified all other engineering content against real source, approve.",
+    "acceptance_criteria": [
+      "a timer with repeat_expression \"R/PT1H\" that fires creates exactly one NEW pending timer with fire_at equal to the fired timer's fire_at plus one hour, in the same transaction as the firing -- demonstrated by a test that forces the firing transaction to roll back and asserts NEITHER the status change NOR the new timer persisted",
+      "a timer with repeat_expression \"R3/PT1H\" stops re-arming after its third firing: fired_count reaches 3 and the fourth poll creates no new timer, asserted by counting timers rows",
+      "a recurring timer whose instance is cancelled does not re-arm -- the chain terminates, asserted after a cancellation followed by a poll",
+      "a recurring timer whose repeat interval is SHORTER than the poll interval fires at most once per poll cycle rather than catching up multiple occurrences in one tick, asserted by an explicit test with the interval set below the configured poll interval",
+      "the retention runner is DISABLED by default: with no configuration set, a full poll cycle invokes Letflow.EventStore.archive/1 zero times, asserted rather than assumed",
+      "with the retention runner explicitly enabled in config, a poll cycle invokes archive/1 and rows older than the tenant's configured retention are moved to events_archive -- closing the zero-caller gap, asserted by row counts before and after",
+      "the retention runner runs on REQ-186's existing scheduler process rather than adding a second independent periodic process to lib/letflow/application.ex, confirmed by git diff of application.ex showing no new ticker child",
+      "the moduledoc states that partition_maintenance.zig and partition_retention.zig are deliberately not ported, naming decision 0003 Decision C's partitioning deferral and ISS-0014's adopted option (a) as the blocker, and that SCH-04 escalation timers are deferred because :HUMAN_TASK has no escalation_timer_duration attribute in Letflow's graph schema",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-grep of every fence in lib/letflow/design/req188-recurring-timers-and-retention.md (4 blocks: lines 63-69, 201-205, 212-216, 230-232) confirms all remaining blocks contain only bare @spec lines and a bare function head with a guard (Section 2.2) -- no do...end bodies, no control flow, no composed call chains. git diff 6836386..21d60d4 confirms the only changes are Section 2.3's fenced block (implementation deleted, replaced with @spec + prose) and Section 2.4's fenced block (if/else + Enum.each + state update deleted, replaced with prose + property table) -- nothing else in the file differs. All other engineering content (re-arm mechanism, at-most-once-per-cycle structural claim, repeat_total/fired_count bounds, Poller state widening, retention_enabled?() default, ISS-0014 and escalation_timer_duration citations) is unchanged from the version already verified correct in the prior review pass and was diff-confirmed untouched rather than re-derived. Approved for implementation.",
+    "findings_file": "handoffs/WF02-REQ188-20260829/req188-design-review-findings.md",
+    "routed_to": "handoffs/WF02-REQ188-20260829/step-02a-elixir-dev.json"
+  }
+}

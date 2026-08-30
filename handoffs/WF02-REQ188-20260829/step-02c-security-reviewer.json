@@ -1,0 +1,40 @@
+{
+  "handoff_id": "WF02-REQ188-20260829-step02c",
+  "run_id": "WF02-REQ188-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 2c",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/scheduler.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "REQ-188 (recurring timers SCH-07 + periodic retention runner) implemented exactly per the validated design lib/letflow/design/req188-recurring-timers-and-retention.md. Commit 7bae3f1 on feature/WF02-REQ188-20260829 (pushed). mix compile --warnings-as-errors passed clean (forced full recompile, 146 files, exit 0), mix format --check-formatted passed on all three changed files, and the pre-existing test/letflow/scheduler_test.exs + test/letflow/scheduler/ suite (18 tests) still passes unchanged against the new code. Full implementation notes: handoffs/WF02-REQ188-20260829/req188-elixir-dev-implementation-notes.md.",
+    "design_document": "lib/letflow/design/req188-recurring-timers-and-retention.md",
+    "implementation_notes": "handoffs/WF02-REQ188-20260829/req188-elixir-dev-implementation-notes.md",
+    "prior_handoff": "handoffs/WF02-REQ188-20260829/step-02a-elixir-dev.json",
+    "files_changed": [
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/scheduler/timer.ex",
+      "lib/letflow/scheduler/poller.ex"
+    ],
+    "files_not_touched_by_design": [
+      "lib/letflow/application.ex",
+      "lib/letflow/definitions/graph.ex",
+      "no route/controller file",
+      "no new migration"
+    ]
+  },
+  "task": {
+    "description": "Security-review REQ-188's tenant-data-path changes against docs/agents/instructions/security-invariants.md (INV-4/INV-7/INV-8 apply today). This is a hard gate before REVIEWER and before TEST-DESIGNER starts.",
+    "acceptance_criteria": [
+      "Verify Letflow.Scheduler.run_retention_sweep/1 only ever touches the single tenant schema it is invoked for -- confirm the prefix: tenant_schema argument passed to Letflow.EventStore.archive/1 is never a cross-tenant value, and that Letflow.Scheduler.Poller's new retention-sweep step in handle_info(:tick, state) calls run_retention_sweep/1 once per schema in a per-schema loop (Enum.each), never with a combined/batched schema list.",
+      "Verify retention is genuinely disabled by default: Letflow.Scheduler.retention_enabled?/0 returns false with no config set (scheduler_config()[:retention_enabled] || @default_retention_enabled, @default_retention_enabled == false), and that no code path in poller.ex or scheduler.ex calls run_retention_sweep/1 or EventStore.archive/1 unconditionally -- the guard in maybe_run_retention_sweep/2 is the ONLY call site.",
+      "Verify maybe_rearm_timer/3 never leaks a re-armed timer row across tenant schemas -- confirm build_rearm_attrs/2 carries tenant_id/instance_id forward from the fired_timer struct (never re-derived from any other source) and the insert uses Repo.insert(changeset, prefix: tenant_schema) with the same tenant_schema the firing transaction itself is already scoped to.",
+      "Confirm no route/controller file was added or modified, and lib/letflow/application.ex has zero diff (git diff --stat against this run's commits) -- both are acceptance criteria (AC 7, AC 9) and also relevant to attack-surface review.",
+      "Confirm the moduledoc's flagged deviation section (actor_id sentinel, pre-existing from REQ-187) is unaffected by this change, and that the new moduledoc additions (partition-retention deferral, SCH-04 deferral) do not themselves introduce or paper over a security gap.",
+      "Route to REVIEWER next on PASS; route back to ELIXIR-DEV with specific findings on FAIL."
+    ]
+  },
+  "result": null
+}

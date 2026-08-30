@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF02-REQ188-20260829-step05",
+  "run_id": "WF02-REQ188-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {"note": "REQ-188's implementation and tests passed CODE-DESIGN-VALIDATOR (1 rework round for literal code fences), SECURITY-REVIEWER, REVIEWER, and TEST-DESIGN-VALIDATOR (1 rework round for a documentation-accuracy correction on the gateway-loop fixture's auto-rearm interaction). Full suite confirmed green modulo the 3 pre-existing rustc/wasmex-absent-from-sandbox environmental failures (see test/reports/report-2026-08-30-WF02-REQ188-20260829.yaml). mix format and mix letflow.lint_handoffs both clean. Note: TEST-RUNNER's own dispatch started this run correctly but returned before it finished; ORCH observed the still-running background process, waited for it, and completed the remaining checks/report/handoff directly."},
+  "task": {
+    "description": "Independently re-derive whether each of REQ-188's 10 acceptance criteria is actually met by reading the real code and re-running tests yourself, not by trusting prior reports.",
+    "acceptance_criteria": [
+      "a timer with repeat_expression \"R/PT1H\" that fires creates exactly one NEW pending timer with fire_at equal to the fired timer's fire_at plus one hour, in the same transaction as the firing -- demonstrated by a test that forces the firing transaction to roll back and asserts NEITHER the status change NOR the new timer persisted",
+      "a timer with repeat_expression \"R3/PT1H\" stops re-arming after its third firing: fired_count reaches 3 and the fourth poll creates no new timer, asserted by counting timers rows",
+      "a recurring timer whose instance is cancelled does not re-arm -- the chain terminates, asserted after a cancellation followed by a poll",
+      "a recurring timer whose repeat interval is SHORTER than the poll interval fires at most once per poll cycle rather than catching up multiple occurrences in one tick, asserted by an explicit test with the interval set below the configured poll interval",
+      "the retention runner is DISABLED by default: with no configuration set, a full poll cycle invokes Letflow.EventStore.archive/1 zero times, asserted rather than assumed",
+      "with the retention runner explicitly enabled in config, a poll cycle invokes archive/1 and rows older than the tenant's configured retention are moved to events_archive -- closing the zero-caller gap, asserted by row counts before and after",
+      "the retention runner runs on REQ-186's existing scheduler process rather than adding a second independent periodic process to lib/letflow/application.ex, confirmed by git diff of application.ex showing no new ticker child",
+      "the moduledoc states that partition_maintenance.zig and partition_retention.zig are deliberately not ported, naming decision 0003 Decision C's partitioning deferral and ISS-0014's adopted option (a) as the blocker, and that SCH-04 escalation timers are deferred because :HUMAN_TASK has no escalation_timer_duration attribute in Letflow's graph schema",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "summary": "Independently re-verified all 10 acceptance criteria against the real shipped code and a self-run test pass, not against prior reports. Read lib/letflow/scheduler.ex in full (maybe_rearm_timer/3, build_rearm_attrs/2, retention_enabled?/0, retention_due?/1, run_retention_sweep/1) and lib/letflow/scheduler/poller.ex in full (the widened :tick handler / maybe_run_retention_sweep/2). Ran test/letflow/scheduler_req188_test.exs, test/letflow/scheduler/poller_test.exs, and test/letflow/scheduler_test.exs myself: Result: 32 passed, 0 failures. Ran mix compile --warnings-as-errors (clean), mix format --check-formatted (clean), mix letflow.lint_handoffs (0 new violations). Re-ran the FULL suite myself via scripts/test_parallel.sh, 8 partitions, foreground/blocking, not trusting TEST-RUNNER's run alone: combined 2564 tests, 5 properties, 3 failures (2566/2569 passed) -- inspected all 3 failures directly in the partition logs and confirmed they are the same pre-existing rustc-absent/wasmex-absent-from-sandbox environmental failures (Letflow.Engine.Wasm.PluginHandlerTest AC7, 2x Mix.Tasks.Letflow.CheckToolchainTest rust-pin tests), none touching REQ-188's diff. Confirmed via git diff --stat that lib/letflow/application.ex has zero diff since REQ-187 (no new ticker) and that no route/controller file was added across REQ-188's commits. Independently re-verified the ISS-0014 citation by reading docs/issues/ISS-0014.yaml directly (third re-verification in this pipeline run, still holds: adopted option (a), rejected option (c)) and cross-checked docs/migration/decisions/0003-ecto-schema-strategy.md's Dimension/Decision C section. Confirmed REQ-186/REQ-187/REQ-026 (all depends_on) are status: done. Full report: handoffs/WF02-REQ188-20260829/release-validation-req188.md. No gap found.",
+    "release_validation_report": "handoffs/WF02-REQ188-20260829/release-validation-req188.md"
+  }
+}

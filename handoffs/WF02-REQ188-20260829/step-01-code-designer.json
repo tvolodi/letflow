@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ188-20260829-step01",
+  "run_id": "WF02-REQ188-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 1",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "docs/requirements.yaml#REQ-188",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "REWORK iteration 1. Queue task 361, GH#707, stage S6. Step 1b (CODE-DESIGN-VALIDATOR) reviewed lib/letflow/design/req188-recurring-timers-and-retention.md against the real source (lib/letflow/scheduler.ex, lib/letflow/scheduler/poller.ex, the timers CHECK constraint migration, docs/issues/ISS-0014.yaml, lib/letflow/definitions/graph.ex) and found the design's engineering substance sound in full: the maybe_rearm_timer/3 insertion point genuinely fits do_fire/2's real `with` chain, the fire_at-anchored-to-scheduled-time choice is correct and matches AC1, the 'at most once per poll cycle' structural claim holds against the real claim_due_timer_ids/2 (called once per poll_and_fire/1 invocation, itself called once per tenant per tick -- never per-timer), the repeat_total/fired_count comparison matches REQ-186's real CHECK constraint bounds exactly, the Poller state widening is compatible with existing tests, and the ISS-0014/CHK-12 citations are accurate. FAIL was solely on this project's mechanical no-implementation-code rule. Full findings: handoffs/WF02-REQ188-20260829/req188-design-review-findings.md and the result block in handoffs/WF02-REQ188-20260829/step-01b-code-design-validator.json."
+  },
+  "task": {
+    "description": "REWORK ONLY -- the design's engineering content is approved as-is; do not change any substance. Fix exactly two fenced code blocks in lib/letflow/design/req188-recurring-timers-and-retention.md that reproduce real .ex implementation bodies instead of signatures/type-shapes, per this project's mechanical no-exceptions rule (already hit and fixed twice on a different requirement -- see commits 3680243 and 290c6b2 -- for the pattern to follow). (1) Section 2.3 (lines 230-236): delete the two-clause `def retention_due?(nil), do: true` / `def retention_due?(%DateTime{} = last_run_at) do ... end` full implementation. Keep only `@spec retention_due?(last_run_at :: DateTime.t() | nil) :: boolean()` in the fenced block, and move the two cases' behavior into prose immediately below it (nil means never run, due immediately; a non-nil last_run_at is due once retention_interval_ms() has elapsed since it), matching how section 1.2 already describes maybe_rearm_timer/3's cases in numbered prose while keeping only the @spec fenced. (2) Section 2.4 (lines 256-264): delete the fenced `new_state = if Scheduler.retention_enabled?() ... end` block entirely -- it reproduces the literal if/else body and Enum.each call being added to Poller.handle_info/2. Replace it with prose describing the same four properties the surrounding text already sets up: the added step is guarded by both retention_enabled?() and retention_due?/1; it iterates the same `schemas` list already computed for the timer-poll loop (not re-queried); it calls run_retention_sweep/1 once per schema when the guard passes; it updates last_retention_run_at to DateTime.utc_now() only when the sweep ran, otherwise state is left unchanged. Leave section 2.2's run_retention_sweep/1 block untouched -- it already correctly shows only a bare function head with a guard clause and no body, which is the acceptable form. Do not touch any other section; do not re-derive or restate the acceptance-criteria map, invariants, or open questions -- they were not flagged.",
+    "acceptance_criteria": [
+      "a timer with repeat_expression \"R/PT1H\" that fires creates exactly one NEW pending timer with fire_at equal to the fired timer's fire_at plus one hour, in the same transaction as the firing -- demonstrated by a test that forces the firing transaction to roll back and asserts NEITHER the status change NOR the new timer persisted",
+      "a timer with repeat_expression \"R3/PT1H\" stops re-arming after its third firing: fired_count reaches 3 and the fourth poll creates no new timer, asserted by counting timers rows",
+      "a recurring timer whose instance is cancelled does not re-arm -- the chain terminates, asserted after a cancellation followed by a poll",
+      "a recurring timer whose repeat interval is SHORTER than the poll interval fires at most once per poll cycle rather than catching up multiple occurrences in one tick, asserted by an explicit test with the interval set below the configured poll interval",
+      "the retention runner is DISABLED by default: with no configuration set, a full poll cycle invokes Letflow.EventStore.archive/1 zero times, asserted rather than assumed",
+      "with the retention runner explicitly enabled in config, a poll cycle invokes archive/1 and rows older than the tenant's configured retention are moved to events_archive -- closing the zero-caller gap, asserted by row counts before and after",
+      "the retention runner runs on REQ-186's existing scheduler process rather than adding a second independent periodic process to lib/letflow/application.ex, confirmed by git diff of application.ex showing no new ticker child",
+      "the moduledoc states that partition_maintenance.zig and partition_retention.zig are deliberately not ported, naming decision 0003 Decision C's partitioning deferral and ISS-0014's adopted option (a) as the blocker, and that SCH-04 escalation timers are deferred because :HUMAN_TASK has no escalation_timer_duration attribute in Letflow's graph schema",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

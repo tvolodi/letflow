@@ -163,21 +163,45 @@ defmodule Letflow.Scheduler.Timer do
   end
 
   @doc """
-  Reserved for REQ-188 (recurrence re-arm) — not called by any REQ-186
-  function. Would cast the recurrence quartet plus `fire_at`/`status` for a
-  newly-created re-armed row. Named here only so REQ-188's own design does
-  not have to guess a name.
+  Structural changeset for `Letflow.Scheduler.maybe_rearm_timer/3` (REQ-188
+  design §1.3). Unlike the other changesets in this module, this one builds
+  a COMPLETE new row (a fresh chain successor), not a partial update of an
+  existing struct — so it casts the same full field list `arm_changeset/2`
+  casts, plus the recurrence quartet and `fire_at`/`status`. `status` is
+  still always forced to `"pending"` by the caller
+  (`Letflow.Scheduler.build_rearm_attrs/2`), never caller-controlled,
+  matching `arm_changeset/2`'s own discipline.
   """
   @spec rearm_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def rearm_changeset(timer, attrs) do
     timer
     |> cast(attrs, [
+      :id,
+      :tenant_id,
+      :instance_id,
+      :token_id,
+      :timer_type,
+      :node_id,
+      :created_at,
       :status,
       :fire_at,
       :repeat_expression,
       :repeat_interval_us,
       :repeat_total,
       :fired_count
+    ])
+    |> validate_required([
+      :id,
+      :tenant_id,
+      :instance_id,
+      :timer_type,
+      :node_id,
+      :fire_at,
+      :status,
+      :repeat_expression,
+      :repeat_interval_us,
+      :fired_count,
+      :created_at
     ])
   end
 end

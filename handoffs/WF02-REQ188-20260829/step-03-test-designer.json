@@ -1,0 +1,49 @@
+{
+  "handoff_id": "WF02-REQ188-20260829-step03",
+  "run_id": "WF02-REQ188-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "lib/letflow/scheduler.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "REQ-188 REVIEWER review PASS. Full report: handoffs/WF02-REQ188-20260829/req188-reviewer-report.md. Idiom/supervision/scope-creep/decision-record checks all PASS -- no defect found, no rework routed back to ELIXIR-DEV.",
+    "reviewer_report": "handoffs/WF02-REQ188-20260829/req188-reviewer-report.md",
+    "security_review_report": "handoffs/WF02-REQ188-20260829/req188-security-review-report.md",
+    "design_document": "lib/letflow/design/req188-recurring-timers-and-retention.md",
+    "prior_handoff": "handoffs/WF02-REQ188-20260829/step-02d-reviewer.json",
+    "files_changed": [
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/scheduler/timer.ex",
+      "lib/letflow/scheduler/poller.ex"
+    ],
+    "key_findings": [
+      "maybe_rearm_timer/3 (scheduler.ex) and build_rearm_attrs/2 mirror build_arm_changeset/2's existing shape exactly -- same force-id/status/created_at discipline, no Ecto.Multi introduced.",
+      "fire_at anchoring confirmed: build_rearm_attrs/2 computes DateTime.add(fired_timer.fire_at, fired_timer.repeat_interval_us, :microsecond) -- the SCHEDULED time, never the actual firing timestamp (drift-avoidance property, design doc section 1.2).",
+      "Re-arm runs inside fire_timer/2's SAME Repo.transaction/1 (INV-REARM-1) -- verified directly, no new transaction, no Ecto.Multi.",
+      "repeat_total cap logic: series_complete fires when new_fired_count (fired_timer.fired_count + 1) >= repeat_total -- exactly 3 rows for repeat_total: 3 per the design's worked example.",
+      "retention_enabled?/0 defaults to false (@default_retention_enabled false); Poller.maybe_run_retention_sweep/2 gates BOTH retention_enabled?() and retention_due?/1 before calling run_retention_sweep/1.",
+      "Poller state widened from %{} to %{last_retention_run_at: DateTime.t() | nil} -- the ONE new field, documented in the moduledoc as a deliberate departure. No new supervised child; application.ex has a verified zero diff.",
+      "Moduledoc's two required deferral statements (partition_maintenance/partition_retention citing 0003 Decision C + ISS-0014 option (a)/(c); SCH-04 escalation timers citing graph.ex CHK-12's missing escalation_timer_duration attribute) verified accurate against the source records, not paraphrased into something stronger.",
+      "git diff --stat main...HEAD confirmed scoped to scheduler.ex/timer.ex/poller.ex + design doc + handoffs only -- no route/controller, no application.ex change, no graph.ex change."
+    ]
+  },
+  "task": {
+    "description": "Write mutation-driven ExUnit test coverage for REQ-188's recurring-timer re-arm (SCH-07) and periodic retention runner, per .claude/agents/test-designer.md, following REVIEWER's PASS.",
+    "acceptance_criteria": [
+      "a timer with repeat_expression \"R/PT1H\" that fires creates exactly one NEW pending timer with fire_at equal to the fired timer's fire_at plus one hour, in the same transaction as the firing -- demonstrated by a test that forces the firing transaction to roll back and asserts NEITHER the status change NOR the new timer persisted",
+      "a timer with repeat_expression \"R3/PT1H\" stops re-arming after its third firing: fired_count reaches 3 and the fourth poll creates no new timer, asserted by counting timers rows",
+      "a recurring timer whose instance is cancelled does not re-arm -- the chain terminates, asserted after a cancellation followed by a poll",
+      "a recurring timer whose repeat interval is SHORTER than the poll interval fires at most once per poll cycle rather than catching up multiple occurrences in one tick, asserted by an explicit test with the interval set below the configured poll interval",
+      "the retention runner is DISABLED by default: with no configuration set, a full poll cycle invokes Letflow.EventStore.archive/1 zero times, asserted rather than assumed",
+      "with the retention runner explicitly enabled in config, a poll cycle invokes archive/1 and rows older than the tenant's configured retention are moved to events_archive -- closing the zero-caller gap, asserted by row counts before and after",
+      "the retention runner runs on REQ-186's existing scheduler process rather than adding a second independent periodic process to lib/letflow/application.ex, confirmed by git diff of application.ex showing no new ticker child",
+      "the moduledoc states that partition_maintenance.zig and partition_retention.zig are deliberately not ported, naming decision 0003 Decision C's partitioning deferral and ISS-0014's adopted option (a) as the blocker, and that SCH-04 escalation timers are deferred because :HUMAN_TASK has no escalation_timer_duration attribute in Letflow's graph schema",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

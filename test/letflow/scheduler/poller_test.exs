@@ -32,6 +32,9 @@ defmodule Letflow.Scheduler.PollerTest do
   alias Letflow.Definitions
   alias Letflow.Engine
   alias Letflow.Engine.TokenRecord
+  alias Letflow.EventStore.ArchivedEvent
+  alias Letflow.EventStore.Event
+  alias Letflow.EventStore.InstanceSequence
   alias Letflow.Scheduler
   alias Letflow.Scheduler.Poller
   alias Letflow.Scheduler.Timer
@@ -167,6 +170,199 @@ defmodule Letflow.Scheduler.PollerTest do
 
       reloaded = Repo.get!(Timer, timer.id, prefix: schema_name)
       assert reloaded.status == "fired"
+    end
+  end
+
+  # ===================================================================================
+  # REQ-188 Part 2 -- the periodic retention runner (ACs 5-7). See
+  # test/specs/REQ-188.md for the full acceptance-criterion -> test-case map.
+  # `Poller.handle_info(:tick, state)` is called directly as a plain function
+  # (it is a public `@impl true` function, callable without starting the
+  # GenServer process), matching the design doc's own §2.4 "Default-disabled
+  # proof" note -- this sidesteps the Ecto.Sandbox ownership issue
+  # `application.ex`'s own comment documents for why the Poller is disabled
+  # by default in `config/test.exs`, and lets these tests assert on real row
+  # counts (no mocking library exists in this codebase) rather than a call
+  # count on a mock.
+  # ===================================================================================
+
+  defp table_count(schema, schema_name) do
+    Repo.aggregate(schema, :count, prefix: schema_name)
+  end
+
+  defp unique_idempotency_key(prefix \\ "req188-poller-idk"),
+    do: prefix <> "_" <> to_string(System.unique_integer([:positive, :monotonic]))
+
+  defp seed_instance_sequence!(schema_name, instance_id, next_seq \\ 1) do
+    %InstanceSequence{}
+    |> InstanceSequence.insert_changeset(%{instance_id: instance_id, next_seq: next_seq})
+    |> Repo.insert!(prefix: schema_name)
+  end
+
+  # Direct events row seeding with a caller-chosen created_at (deliberately in
+  # the past for retention-eligibility), mirroring
+  # test/letflow/event_store_test.exs's own seed_event!/7 fixture idiom (this
+  # file's own copy since that one is private to its own module).
+  defp seed_event!(schema_name, instance_id, created_at, seq \\ 1) do
+    %Event{}
+    |> Event.insert_changeset(%{
+      event_id: Ecto.UUID.generate(),
+      created_at: created_at,
+      instance_id: instance_id,
+      event_type: "req188_poller_test_event",
+      payload: %{"seeded" => true},
+      actor_id: Ecto.UUID.generate(),
+      sequence_number: seq,
+      idempotency_key: unique_idempotency_key()
+    })
+    |> Repo.insert!(prefix: schema_name)
+  end
+
+  describe "AC5: the retention runner is disabled by default -- zero archive/1 calls over a full poll cycle" do
+    test "an old, otherwise-eligible event is untouched after a tick, with no :retention_enabled config set" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+      seed_instance_sequence!(schema_name, instance_id)
+
+      old_created_at = ~U[2020-01-01 00:00:00.000000Z]
+      seed_event!(schema_name, instance_id, old_created_at)
+
+      assert table_count(Event, schema_name) == 1
+      assert table_count(ArchivedEvent, schema_name) == 0
+
+      assert Application.get_env(:letflow, :scheduler) == nil
+      assert Scheduler.retention_enabled?() == false
+
+      assert {:noreply, new_state} = Poller.handle_info(:tick, %{last_retention_run_at: nil})
+
+      assert new_state.last_retention_run_at == nil
+      assert table_count(Event, schema_name) == 1
+      assert table_count(ArchivedEvent, schema_name) == 0
+    end
+
+    test "the guard stays closed across several ticks, regardless of how much wall-clock time has elapsed" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+      seed_instance_sequence!(schema_name, instance_id)
+      seed_event!(schema_name, instance_id, ~U[2020-01-01 00:00:00.000000Z])
+
+      state =
+        Enum.reduce(1..5, %{last_retention_run_at: nil}, fn _, state ->
+          assert {:noreply, next_state} = Poller.handle_info(:tick, state)
+          next_state
+        end)
+
+      assert state.last_retention_run_at == nil
+      assert table_count(Event, schema_name) == 1
+      assert table_count(ArchivedEvent, schema_name) == 0
+    end
+  end
+
+  describe "AC6: enabling retention invokes archive/1 and moves rows older than the configured retention" do
+    test "a tick moves the old event into events_archive and leaves the recent one in events" do
+      put_scheduler_config(retention_enabled: true, retention_interval_ms: 0, retention_days: 30)
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      old_instance_id = Ecto.UUID.generate()
+      recent_instance_id = Ecto.UUID.generate()
+      seed_instance_sequence!(schema_name, old_instance_id)
+      seed_instance_sequence!(schema_name, recent_instance_id)
+
+      old_created_at =
+        DateTime.utc_now() |> DateTime.add(-60, :day) |> DateTime.truncate(:microsecond)
+
+      recent_created_at = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+      seed_event!(schema_name, old_instance_id, old_created_at)
+      seed_event!(schema_name, recent_instance_id, recent_created_at)
+
+      assert table_count(Event, schema_name) == 2
+      assert table_count(ArchivedEvent, schema_name) == 0
+
+      assert {:noreply, new_state} = Poller.handle_info(:tick, %{last_retention_run_at: nil})
+      assert %DateTime{} = new_state.last_retention_run_at
+
+      assert table_count(Event, schema_name) == 1
+      assert table_count(ArchivedEvent, schema_name) == 1
+
+      assert [remaining] = Repo.all(Event, prefix: schema_name)
+      assert remaining.instance_id == recent_instance_id
+    end
+
+    test "retention_due?/1 gates a second tick from re-sweeping before its own interval elapses" do
+      put_scheduler_config(
+        retention_enabled: true,
+        retention_interval_ms: 86_400_000,
+        retention_days: 30
+      )
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+      seed_instance_sequence!(schema_name, instance_id)
+
+      old_created_at =
+        DateTime.utc_now() |> DateTime.add(-60, :day) |> DateTime.truncate(:microsecond)
+
+      seed_event!(schema_name, instance_id, old_created_at)
+
+      assert {:noreply, state_after_first} =
+               Poller.handle_info(:tick, %{last_retention_run_at: nil})
+
+      assert %DateTime{} = first_run_at = state_after_first.last_retention_run_at
+      assert table_count(Event, schema_name) == 0
+      assert table_count(ArchivedEvent, schema_name) == 1
+
+      # A second event, old enough that it WOULD be archived if the guard
+      # re-swept -- retention_interval_ms: 86_400_000 (24h) has not elapsed
+      # since first_run_at, so this second tick must be a no-op.
+      seed_event!(schema_name, instance_id, old_created_at, 2)
+      assert table_count(Event, schema_name) == 1
+
+      assert {:noreply, state_after_second} = Poller.handle_info(:tick, state_after_first)
+
+      assert DateTime.compare(state_after_second.last_retention_run_at, first_run_at) == :eq
+      assert table_count(Event, schema_name) == 1
+      assert table_count(ArchivedEvent, schema_name) == 1
+    end
+  end
+
+  defp resolve_base_ref! do
+    base_ref =
+      Enum.find(["origin/main", "main"], fn ref ->
+        match?({_, 0}, System.cmd("git", ["rev-parse", "--verify", ref], stderr_to_stdout: true))
+      end)
+
+    assert base_ref, "neither origin/main nor main resolved -- cannot verify a file is untouched"
+    base_ref
+  end
+
+  describe "AC7: retention runs on Poller's own process -- no second ticker, application.ex untouched" do
+    test "lib/letflow/application.ex has zero diff against the base branch" do
+      base_ref = resolve_base_ref!()
+
+      {output, 0} =
+        System.cmd("git", [
+          "diff",
+          "--stat",
+          "#{base_ref}...HEAD",
+          "--",
+          "lib/letflow/application.ex"
+        ])
+
+      assert output == "", "expected zero diff against application.ex, got:\n#{output}"
+    end
+
+    test "lib/letflow/scheduler/ contains exactly one GenServer module (Poller) -- no second ticker" do
+      root = File.cwd!()
+      files = Path.wildcard(Path.join(root, "lib/letflow/scheduler/**/*.ex"))
+
+      genserver_files =
+        for path <- files,
+            source = File.read!(path),
+            source =~ ~r/use\s+GenServer/,
+            do: path
+
+      assert genserver_files == [Path.join(root, "lib/letflow/scheduler/poller.ex")]
     end
   end
 end

@@ -1,0 +1,44 @@
+run_id: WF02-REQ188-20260829
+requirement_id: REQ-188
+step: "Step 4 (TEST-RUNNER)"
+performed_by: ORCH
+note: >
+  TEST-RUNNER's own dispatch started a real scripts/test_parallel.sh run in
+  the background but returned without waiting for it or completing its
+  remaining checks. ORCH observed the real background process still running,
+  waited for it to finish, and completed the remaining verification steps
+  (mix format, mix letflow.lint_handoffs) and this report directly.
+checks:
+  mix_compile_warnings_as_errors: "not re-run separately this step -- already confirmed clean earlier in this pipeline run (pre-dispatch) and by scripts/test_parallel.sh's own pre-compile phase, which recompiled cleanly before any partition launched"
+  mix_format_check_formatted:
+    result: PASS
+    output: "(no output -- exit 0, already formatted)"
+  full_suite:
+    runner: scripts/test_parallel.sh
+    result: "3 failures, all pre-existing/environmental"
+    combined: "combined: 2564 tests, 5 properties, 3 failures (2566/2569 passed)"
+    partitions:
+      - "partition 1: 413 tests, 0 properties, 0 failures, exit 0"
+      - "partition 2: 311 tests, 4 properties, 0 failures, exit 0"
+      - "partition 3: 354 tests, 0 properties, 0 failures, exit 0"
+      - "partition 4: 270 tests, 1 property, 0 failures, exit 0"
+      - "partition 5: 227 tests, 0 properties, 0 failures, exit 0"
+      - "partition 6: 280 tests, 0 properties, 1 failures, exit 2"
+      - "partition 7: 345 tests, 0 properties, 0 failures, exit 0"
+      - "partition 8: 364 tests, 0 properties, 2 failures, exit 2"
+    failures:
+      - test: "test AC7: the wasmex NIF is a loaded shared library, not an external process (Letflow.Engine.Wasm.PluginHandlerTest)"
+        partition: 6
+        diagnosis: "pre-existing environmental -- wasmex NIF not compiled from Rust source in this sandbox, documented baseline class across REQ-177/178/181/182/185/186/187"
+      - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        partition: 8
+        diagnosis: "pre-existing environmental -- rustc/cargo absent from sandbox PATH, same documented baseline class"
+      - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        partition: 8
+        diagnosis: "pre-existing environmental -- same root cause as above"
+    diff_exclusion: "none of the 3 failures touch lib/letflow/scheduler.ex, lib/letflow/scheduler/timer.ex, lib/letflow/scheduler/poller.ex, or any REQ-188 test file -- confirmed by file path in each failure"
+  mix_letflow_lint_handoffs:
+    result: PASS
+    output: "letflow.lint_handoffs: OK -- 0 new violations across 1437 handoff files (25 pre-existing grandfathered, traced to ISS-0190)"
+verdict: PASS
+next_step: "Step 5 -- RELEASE-VALIDATOR"

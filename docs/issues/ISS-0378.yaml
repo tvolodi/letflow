@@ -1,0 +1,25 @@
+id: ISS-0378
+title: "REQ-186 poller AC7 test hardcodes application.ex-untouched as a repo-wide invariant, breaks on any legitimate future change to that file"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ190-20260830
+discovered_at: 2026-08-30T04:50:00Z
+severity: MINOR
+description: >
+  test/letflow/scheduler/poller_test.exs:340 (REQ-186's own AC7 test) fails
+  whenever a later branch legitimately modifies lib/letflow/application.ex --
+  it asserts application.ex has zero diff against main, which is not a real
+  invariant of the codebase, just an artifact of when REQ-186 happened to be
+  written. REQ-190 legitimately registers a new :logger primary filter in
+  application.ex (per its own design; SECURITY-REVIEWER and REVIEWER both
+  already passed this change), which trips the assertion. git blame confirms
+  the test itself originates from commit 77637268 (REQ-186, already on main)
+  -- not a REQ-190 regression, a pre-existing test-design defect that will
+  keep breaking on any future legitimate application.ex change. Fix: scope
+  or remove the zero-diff assertion to check only what REQ-186 actually
+  needs (e.g. the poller child spec is present/correctly configured), not a
+  repo-wide diff invariant.
+affected_files:
+  - test/letflow/scheduler/poller_test.exs
+queue_task_id: 378
+github_issue: 734
+status: open

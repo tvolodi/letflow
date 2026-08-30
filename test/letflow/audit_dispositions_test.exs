@@ -88,7 +88,8 @@ defmodule Letflow.AuditDispositionsTest do
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
 
-  defp unique_name(prefix), do: prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
+  defp unique_name(prefix),
+    do: prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
 
   defp base_entry_attrs(overrides \\ []) do
     Map.merge(
@@ -231,6 +232,90 @@ defmodule Letflow.AuditDispositionsTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # AC6 rework (TEST-DESIGN-VALIDATOR step-03 rework iteration 1) -- the one
+  # scenario that actually distinguishes do_verify_chain/2's documented
+  # "recompute before linkage" check order from a linkage-before-recompute
+  # order: a persisted entry whose OWN prev_chain_hash column is tampered
+  # directly via raw SQL, while that same entry's own chain_hash column is
+  # left untouched.
+  #
+  # Because prev_chain_hash is itself one of the 11 hashed fields (design
+  # §5.1 field 11 / lib/letflow/audit.ex moduledoc), this single-column
+  # tamper makes BOTH of do_verify_chain/2's cond clauses true for the same
+  # entry at once:
+  #   - recompute check: fields_from_entry/1 reads the *tampered*
+  #     prev_chain_hash, so the freshly recomputed hash no longer matches the
+  #     entry's untouched, originally-stored chain_hash -> hash_mismatch.
+  #   - linkage check: the tampered prev_chain_hash no longer equals the
+  #     previous entry's own (unchanged) recomputed hash -> chain_broken.
+  # Since a `cond` returns its FIRST true branch, which error comes back is
+  # entirely a function of check order -- this is genuinely order-sensitive,
+  # not vacuous. The real (documented) implementation checks recompute first,
+  # so this must report hash_mismatch; a reversed-order mutation reports
+  # chain_broken for the identical tamper (verified manually against the
+  # shipped code by TEST-DESIGNER during this rework -- see this run's
+  # handoff for the two real `mix test` outputs quoted).
+  # ---------------------------------------------------------------------------------
+
+  describe "AC6 -- check order: a prev_chain_hash-only tamper is hash_mismatch, not chain_broken" do
+    test "tampering a persisted entry's prev_chain_hash while leaving its own chain_hash untouched is reported as hash_mismatch" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:ok, %Entry{id: id_1, chain_hash: chain_hash_1}} =
+               Audit.insert_entry(Repo, base_entry_attrs(resource_id: "res-order-1"), schema_name)
+
+      assert {:ok, %Entry{id: id_2, prev_chain_hash: original_prev_hash_2}} =
+               Audit.insert_entry(Repo, base_entry_attrs(resource_id: "res-order-2"), schema_name)
+
+      # Sanity: entry 2 really does link to entry 1's real chain_hash before
+      # any tamper.
+      assert original_prev_hash_2 == chain_hash_1
+
+      # A "valid-looking" but wrong hash -- same shape as a real chain_hash
+      # (64 lowercase hex chars), just not the one entry 1 actually produced.
+      fake_prev_hash =
+        :sha256 |> :crypto.hash("not-the-real-prev-hash") |> Base.encode16(case: :lower)
+
+      refute fake_prev_hash == chain_hash_1
+
+      # Adversarially bypass the immutability trigger (§2/AC1), the same way
+      # audit_test.exs's existing AC6 tests do -- overwrite ONLY entry 2's
+      # prev_chain_hash column. Its own chain_hash column is deliberately
+      # left untouched (not recomputed to match), so entry 2 is left
+      # internally INCONSISTENT with its own (tampered) prev_chain_hash --
+      # unlike the two scenarios audit_test.exs already covers (a
+      # content-only tamper that leaves prev_chain_hash/chain_hash mutually
+      # consistent, and a deleted row that leaves every surviving row's own
+      # columns mutually consistent).
+      Repo.query!(~s(ALTER TABLE "#{schema_name}".audit_entries DISABLE TRIGGER ALL))
+
+      Repo.query!(
+        ~s(UPDATE "#{schema_name}".audit_entries SET prev_chain_hash = $1 WHERE id = $2),
+        [fake_prev_hash, Ecto.UUID.dump!(id_2)]
+      )
+
+      Repo.query!(~s(ALTER TABLE "#{schema_name}".audit_entries ENABLE TRIGGER ALL))
+
+      # Confirm the tamper actually landed and chain_hash is genuinely
+      # untouched (sanity check on the test itself).
+      tampered = Repo.get!(Entry, id_2, prefix: schema_name)
+      assert tampered.prev_chain_hash == fake_prev_hash
+
+      # Recompute-before-linkage (the documented, shipped order): the
+      # recomputed hash for entry 2 -- built from its now-tampered
+      # prev_chain_hash field -- no longer matches its untouched, originally
+      # stored chain_hash, so this is caught as hash_mismatch on id_2. A
+      # linkage-before-recompute order would instead report
+      # {:error, {:chain_broken, id_2}} for this exact same tamper, since the
+      # tampered prev_chain_hash also fails the linkage comparison against
+      # entry 1's own recomputed hash -- both cond clauses are true here, so
+      # only check ORDER decides which error verify_chain/2 returns.
+      assert {:error, {:hash_mismatch, ^id_2}} = Audit.verify_chain(schema_name)
+      refute match?({:error, {:chain_broken, ^id_2}}, Audit.verify_chain(schema_name))
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # actor_id: nil dispositions -- Definitions.create/2, deprecate/2, archive/2.
   # (activate/2 is already covered, with content assertions, in
   # audit_capture_test.exs.)
@@ -258,7 +343,9 @@ defmodule Letflow.AuditDispositionsTest do
       %{schema_name: schema_name} = provisioned_tenant()
 
       definition = draft_definition!(schema_name)
-      assert {:ok, %{definition: _active}} = Definitions.activate(definition.id, prefix: schema_name)
+
+      assert {:ok, %{definition: _active}} =
+               Definitions.activate(definition.id, prefix: schema_name)
 
       assert {:ok, %ProcessDefinition{} = deprecated} =
                Definitions.deprecate(definition.id, prefix: schema_name)
@@ -275,8 +362,12 @@ defmodule Letflow.AuditDispositionsTest do
       %{schema_name: schema_name} = provisioned_tenant()
 
       definition = draft_definition!(schema_name)
-      assert {:ok, %{definition: _active}} = Definitions.activate(definition.id, prefix: schema_name)
-      assert {:ok, %ProcessDefinition{}} = Definitions.deprecate(definition.id, prefix: schema_name)
+
+      assert {:ok, %{definition: _active}} =
+               Definitions.activate(definition.id, prefix: schema_name)
+
+      assert {:ok, %ProcessDefinition{}} =
+               Definitions.deprecate(definition.id, prefix: schema_name)
 
       assert {:ok, %ProcessDefinition{} = archived} =
                Definitions.archive(definition.id, prefix: schema_name)
@@ -344,7 +435,8 @@ defmodule Letflow.AuditDispositionsTest do
       assert profile_entry.after_state["display_name"] == "New Name"
       assert updated.display_name == "New Name"
 
-      assert {:ok, deactivated} = Identity.update_user_status(user.id, :inactive, prefix: schema_name)
+      assert {:ok, deactivated} =
+               Identity.update_user_status(user.id, :inactive, prefix: schema_name)
 
       assert [status_entry] = audit_rows_for(schema_name, "user.update_status")
       assert status_entry.actor_id == nil
@@ -357,7 +449,9 @@ defmodule Letflow.AuditDispositionsTest do
       %{schema_name: schema_name} = provisioned_tenant()
 
       assert {:ok, group} =
-               Identity.create_group(%{"name" => unique_name("req195-group")}, prefix: schema_name)
+               Identity.create_group(%{"name" => unique_name("req195-group")},
+                 prefix: schema_name
+               )
 
       assert [entry] = audit_rows_for(schema_name, "group.create")
       assert entry.actor_id == nil
@@ -423,7 +517,9 @@ defmodule Letflow.AuditDispositionsTest do
       # normal write path cannot produce -- assign_task/3's own code path
       # (including its :audit Multi step) still runs for real below.
       definition = draft_definition!(schema_name)
-      assert {:ok, %{definition: activated}} = Definitions.activate(definition.id, prefix: schema_name)
+
+      assert {:ok, %{definition: activated}} =
+               Definitions.activate(definition.id, prefix: schema_name)
 
       assert {:ok, _result} =
                Engine.create(
@@ -447,7 +543,9 @@ defmodule Letflow.AuditDispositionsTest do
       assignee_user_id = Ecto.UUID.generate()
 
       assert {:ok, assigned_task} =
-               Letflow.Tasks.assign_task(task.id, %{user_id: assignee_user_id}, prefix: schema_name)
+               Letflow.Tasks.assign_task(task.id, %{user_id: assignee_user_id},
+                 prefix: schema_name
+               )
 
       assert [entry] = audit_rows_for(schema_name, "task.assign")
       assert entry.actor_id == nil
@@ -470,7 +568,9 @@ defmodule Letflow.AuditDispositionsTest do
       %{schema_name: schema_name} = provisioned_tenant()
 
       definition = draft_definition!(schema_name)
-      assert {:ok, %{definition: activated}} = Definitions.activate(definition.id, prefix: schema_name)
+
+      assert {:ok, %{definition: activated}} =
+               Definitions.activate(definition.id, prefix: schema_name)
 
       assert {:ok, _result} =
                Engine.create(

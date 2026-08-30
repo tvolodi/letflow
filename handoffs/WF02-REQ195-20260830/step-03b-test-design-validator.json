@@ -1,69 +1,43 @@
 {
-  "handoff_id": "step03b-WF02-REQ195-20260830",
+  "handoff_id": "step03b-WF02-REQ195-20260830-rework1",
   "run_id": "WF02-REQ195-20260830",
   "workflow_id": "WF-02",
-  "step": "03b",
+  "step": "03b (rework iteration 1)",
   "from_agent": "TEST-DESIGNER",
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ195-20260830/step-03b-test-design-validator.json",
   "status": "PENDING",
-  "priority": "NORMAL",
+  "priority": "high",
   "context": {
     "stage": "S6",
     "requirement_ids": ["REQ-195"],
     "issue_ids": [],
     "related_handoff_ids": [
       "handoffs/WF02-REQ195-20260830/step-03-test-designer.json",
-      "handoffs/WF02-REQ195-20260830/step-02d-reviewer.json",
-      "handoffs/WF02-REQ195-20260830/step-02c-security-reviewer.json"
-    ],
-    "artifacts_in": [
-      "lib/letflow/design/req195-audit-entry-storage.md",
-      "lib/letflow/audit.ex",
-      "lib/letflow/audit/entry.ex",
-      "priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs",
-      "lib/letflow/definitions.ex",
-      "lib/letflow/identity.ex",
-      "lib/letflow/tasks.ex",
-      "lib/letflow/engine.ex",
-      "lib/letflow/engine/task_activation.ex",
-      "test/letflow/audit_test.exs",
-      "test/letflow/audit_capture_test.exs",
-      "test/letflow/audit_dispositions_test.exs",
+      "handoffs/WF02-REQ195-20260830/step-03-test-designer-rework1.json",
+      "handoffs/WF02-REQ195-20260830/test-design-validator-report.md",
       "handoffs/WF02-REQ195-20260830/test-designer-gap-analysis.md"
     ],
+    "artifacts_in": [
+      "lib/letflow/audit.ex",
+      "test/letflow/audit_test.exs",
+      "test/letflow/audit_capture_test.exs",
+      "test/letflow/audit_dispositions_test.exs"
+    ],
     "branch_name": "feature/WF02-REQ195-20260830",
-    "rework_pass": 0,
-    "gap_analysis_summary": "Independently re-derived coverage against all 12 ACs (design §0 traceability matrix) plus the step-03 handoff's own additional actor_id-nil-disposition item, by reading test/letflow/audit_test.exs and test/letflow/audit_capture_test.exs in full (not trusting their own moduledoc claims). Full reasoning in handoffs/WF02-REQ195-20260830/test-designer-gap-analysis.md. Summary: AC1/AC2/AC3/AC4/AC5/AC6/AC8/AC9/AC10/AC11 already had genuinely complete, correctly-targeted coverage in the two existing test files -- no duplication added for these. Two genuine gaps found and filled in a new file, test/letflow/audit_dispositions_test.exs (10 new tests, all passing): (1) AC7's 'independent-computation cross-check' clause -- neither existing file contained any hand-computed chain_hash test; every AC5/AC6 assertion only compared the implementation's own output against itself. Added a from-scratch reimplementation of the netstring+sorted-JSON+SHA-256 encoding (calling no private function of Letflow.Audit) and asserted it matches two persisted entries' stored chain_hash, including the null-prev_chain_hash first-entry case. (2) The handoff's explicit 'additionally cover actor_id: nil dispositions' item -- Definitions.create/2/deprecate/2/archive/2, all six Letflow.Identity functions (create_user/2, update_user_profile/3, update_user_status/3, create_group/2, create_token/3, revoke_token/2), Tasks.assign_task/3, and TaskActivation's task.create capture site had ZERO test coverage in the existing two files. Each now has at least one test asserting a genuinely nil actor_id alongside real (field-checked) before_state/after_state content, with password_hash/token_hash confirmed excluded where applicable (INV-2/INV-4). AC6 (the requirement's most important test) was independently re-verified as already correctly present and correctly targeting content-tamper specifically (not just linkage-tamper) -- both hash_mismatch and chain_broken have dedicated, correctly-distinguished tests already.",
-    "toolchain_verification": "Ran locally via `source ~/.asdf/asdf.sh`, MIX_ENV=test, MIX_TEST_PARTITION=99 (this workspace's own scratch partition), against the already-running letflow-1-postgres-1 docker container (host port 5463 per .env). `MIX_ENV=test mix compile --warnings-as-errors` -- clean, zero warnings. `mix test test/letflow/audit_test.exs test/letflow/audit_capture_test.exs test/letflow/audit_dispositions_test.exs` -- 24 passed, 0 failed. Full-repo `mix test` additionally run to check for regressions from the new file; see this run's follow-up commit or TEST-DESIGN-VALIDATOR/TEST-RUNNER's own re-run for its result if not yet reflected here at commit time.",
-    "self_correction_note": "Two bugs caught in my own first draft while writing the new tests (not in the shipped implementation): (1) Definitions.deprecate/2 and archive/2 return {:ok, %ProcessDefinition{}} directly, unlike activate/2's {:ok, %{definition: _}} -- my first pattern match was wrong. (2) A HUMAN_TASK node's 'role' attribute is mandatory (graph validation CHK-09), so an engine-created task's assignee_ref is never nil straight off dispatch -- Tasks.assign_task/3's own first-assignment precondition (%Task{assignee_ref: nil}) is unreachable via the ordinary create path. Fixed by forcing the row to that state via a direct Repo.update_all/2 before calling assign_task/3 for real, the same class of adversarial-state technique audit_test.exs's own AC6 tests already use (bypassing the immutability trigger via raw SQL) to exercise a state the normal write path cannot produce."
+    "rework_pass": 1,
+    "rework_summary": "This is rework iteration 1, addressing ONLY the two items TEST-DESIGN-VALIDATOR's step-03b FAIL report and its rework-request handoff (step-03-test-designer-rework1.json) routed back. All other coverage (AC1-AC5, AC7-AC11, actor_id-nil dispositions) was already validated PASS in that same report and is unchanged in this pass.\n\n(1) THE ORDER-SENSITIVITY GAP. Re-derived the reasoning from scratch against the real code (lib/letflow/audit.ex lines 273-302) before writing anything: prev_chain_hash IS one of the 11 canonical-form fields hashed into chain_hash (field 11, fields_from_entry/1 includes it, canonical_string/1 hashes fields.prev_chain_hash). So a raw-SQL tamper of ONLY a persisted entry's prev_chain_hash column (leaving that entry's own chain_hash column untouched) makes BOTH of do_verify_chain/2's cond clauses true simultaneously for that same entry: the recompute check fails (fields_from_entry/1 now reads the tampered prev_chain_hash, so the freshly recomputed hash no longer matches the untouched stored chain_hash), AND the linkage check fails (the tampered prev_chain_hash no longer equals the previous entry's own recomputed hash). Since Elixir's cond returns its first true branch, which of {:error, {:hash_mismatch, id}} / {:error, {:chain_broken, id}} comes back is decided ENTIRELY by check order -- this is genuinely order-sensitive, not vacuous; the two orderings are behaviorally distinguishable for exactly this construction (contrary to the alternative hypothesis the rework prompt asked me to rule out first). No 'internally-self-consistent-but-non-linked' construction was needed -- the direct single-column tamper the design doc and audit_test.exs's own code comment (lines 244-252) already name by example is itself the distinguishing case; audit_test.exs's existing chain_broken test (deleted middle row) and hash_mismatch test (after_state-only tamper) each leave the other check's condition false, which is precisely why neither one exercises this order dependency.\n\nAdded one new test, test/letflow/audit_dispositions_test.exs describe block 'AC6 -- check order: a prev_chain_hash-only tamper is hash_mismatch, not chain_broken': inserts two chained entries, disables the immutability trigger, overwrites entry 2's prev_chain_hash column (only) with a valid-shaped-but-wrong SHA-256 hex string via raw SQL, re-enables the trigger, and asserts Audit.verify_chain/2 returns {:error, {:hash_mismatch, id_2}} (not chain_broken) against the real, shipped, reverted implementation.\n\nVerified both directions manually (not committed, mutation reverted before handoff):\n  - Against the real implementation (recompute checked first): mix test test/letflow/audit_dispositions_test.exs -> 11 passed (10 pre-existing + this new one), including the new test.\n  - Against a manually-applied, transient reversal of do_verify_chain/2's two cond clauses (linkage before recompute) in lib/letflow/audit.ex: mix test test/letflow/audit_dispositions_test.exs -> new test FAILED with `left: {:error, {:hash_mismatch, ^id_2}}` / `right: {:error, {:chain_broken, \"<id_2>\"}}` -- confirms the new test catches exactly the mutation TEST-DESIGN-VALIDATOR applied.\n  - Mutation reverted via `git checkout -- lib/letflow/audit.ex`; `git status --porcelain lib/` empty afterward; full target suite re-confirmed green (25 passed) with the reverted implementation.\n\n(2) FORMAT FIX. Ran `mix format test/letflow/audit_dispositions_test.exs`, which reformatted the flagged multi-line `assert {:ok, ...} = ...` calls into the standard form. Re-ran `mix format --check-formatted` for the whole repo afterward: clean, zero output, exit 0.",
+    "toolchain_verification": "All commands run for real via `source ~/.asdf/asdf.sh`, against the already-running Postgres used by this workspace's mix test config. `mix format --check-formatted` (repo-wide): exit 0, no output. `mix compile --warnings-as-errors`: exit 0, no output. `mix test test/letflow/audit_test.exs test/letflow/audit_capture_test.exs test/letflow/audit_dispositions_test.exs`: Result: 25 passed. `git status --porcelain` after all work: only test/letflow/audit_dispositions_test.exs modified (the new test + format fix); lib/ and priv/ both clean, confirming the verification mutation left no trace."
   },
   "task": {
-    "description": "TEST-DESIGN-VALIDATOR: verify every one of REQ-195's 12 acceptance criteria has a runnable, non-duplicative, correctly-targeted test (or documented doc-content check), that the new file's fixtures are self-contained (DIRECTIVE T-4), and that the AC7 hand-computed-hash test and the actor_id-disposition tests in test/letflow/audit_dispositions_test.exs are genuine independent checks and not disguised round-trips through the same code path they're supposed to be cross-checking.",
+    "description": "TEST-DESIGN-VALIDATOR: re-verify the two specific items this rework pass addressed, without re-litigating coverage already validated PASS in the prior step-03b report (AC1-AC5, AC7-AC11, actor_id-nil dispositions, no-duplication).",
     "acceptance_criteria": [
-      "Confirm AC1-AC6/AC8-AC11's coverage in test/letflow/audit_test.exs and test/letflow/audit_capture_test.exs is genuinely complete and correctly targeted, per this handoff's gap-analysis summary -- spot-check at least AC6's hash_mismatch/chain_broken distinction directly against the test file.",
-      "Confirm AC7's new hand-computed hash test in test/letflow/audit_dispositions_test.exs is a genuine from-scratch reimplementation (does not call any Letflow.Audit private function) and that it is asserted against a persisted entry's stored chain_hash, not merely internally self-consistent.",
-      "Confirm every actor_id: nil disposition test (Definitions' 3 lifecycle fns beyond activate, Identity's 6 fns, Tasks.assign_task/3, TaskActivation's task.create) asserts a genuinely nil actor_id AND real (field-checked) before/after content, not merely {:ok, _}.",
-      "Confirm mix test and mix compile --warnings-as-errors both pass with real output (AC12) -- re-run yourself rather than trusting this handoff's quoted numbers.",
-      "Confirm no test file duplicates coverage already present elsewhere in this requirement's test suite."
+      "The new AC6 check-order test in test/letflow/audit_dispositions_test.exs asserts {:error, {:hash_mismatch, entry_id}} (not chain_broken) for a persisted entry whose prev_chain_hash column alone was tampered via raw SQL, chain_hash left untouched -- confirm this construction genuinely makes both do_verify_chain/2 cond clauses true (re-derive independently against lib/letflow/audit.ex, do not just trust this handoff's reasoning).",
+      "Independently reproduce the mutation-catches-it claim: apply the same cond-clause-order swap to do_verify_chain/2 yourself, confirm the new test fails with chain_broken instead of hash_mismatch, revert, confirm git status --porcelain lib/ is empty and the suite is green again.",
+      "mix format --check-formatted passes cleanly on the whole repo (re-run yourself, quote real output).",
+      "mix compile --warnings-as-errors and mix test test/letflow/audit_test.exs test/letflow/audit_capture_test.exs test/letflow/audit_dispositions_test.exs (25 tests expected) both pass (re-run yourself, quote real output).",
+      "No other file changed besides test/letflow/audit_dispositions_test.exs (git diff should show only that file relative to the pre-rework commit)."
     ]
   },
-  "result": {
-    "status": "FAIL",
-    "summary": "Re-ran mix test test/letflow/audit_test.exs test/letflow/audit_capture_test.exs test/letflow/audit_dispositions_test.exs myself: 24 passed, confirming TEST-DESIGNER's quoted number. Read lib/letflow/audit.ex's moduledoc in full: AC7 (11-field canonical order, -1: sentinel, microsecond timestamp), AC8 (Elixir-boundary decision + trigger trade-off), and AC10 (lua_script_execution_audit separation) are all genuinely and correctly stated -- no doc gap. Spot-checked AC6's hash_mismatch/chain_broken distinction directly in audit_test.exs -- correctly targeted and distinct, as claimed. Confirmed AC7's hand-computed hash test in audit_dispositions_test.exs is a genuine from-scratch reimplementation (no call into Letflow.Audit's private functions) asserted against persisted entries, not a self-round-trip. Confirmed the actor_id: nil disposition tests assert genuinely nil actor_id plus real field-checked before/after content, not merely {:ok, _}. No duplication found across the three files. Applied 4 mutations to the shipped code (all reverted after confirming, git status --porcelain lib/ priv/ empty after every revert): (1) REAL GAP FOUND -- swapped do_verify_chain/2's cond clause order (linkage check before hash-recompute check) in lib/letflow/audit.ex: ALL 24 TESTS STILL PASSED. No test in this suite exercises an entry where BOTH the content-hash check AND the linkage check would independently fail (the case created by tampering only prev_chain_hash via raw SQL without recomputing that entry's own chain_hash -- prev_chain_hash is itself one of the 11 hashed fields, so this single-column tamper breaks both checks at once). This is exactly the scenario the moduledoc's AC6 section and audit_test.exs's own code comment near the chain_broken test already describe by name, but no test performs it -- the check-order guarantee that defeats this two-property-tamper case is currently unverified. (2) broke the canonical hash form (-1: sentinel to colliding 0: encoding) -- CAUGHT by the AC7 hand-computed test (real hash mismatch). (3) weakened the DB immutability trigger (RAISE EXCEPTION to RETURN NEW/OLD) -- CAUGHT by both AC1 tests (UPDATE and DELETE). (4) broke Tasks.assign_task/3's actor_id: nil disposition (actor_id: updated.id) -- CAUGHT by the disposition test. Mutations 2-4 confirm solid coverage; mutation 1 is a genuine gap. Additionally: mix compile --warnings-as-errors is clean, but mix format --check-formatted FAILS on test/letflow/audit_dispositions_test.exs (multiple assert lines exceed line length and need standard multi-line form) -- a second, independent, mechanical failure. mix letflow.lint_handoffs reports 0 new violations (25 pre-existing grandfathered).",
-    "artifacts_out": [],
-    "issues": [
-      "do_verify_chain/2's recompute-before-linkage check order is unverified by any test -- reversing it does not fail the suite",
-      "mix format --check-formatted fails on test/letflow/audit_dispositions_test.exs"
-    ],
-    "git_evidence": {
-      "branch_name": "feature/WF02-REQ195-20260830",
-      "commit_sha_list": [],
-      "remote_branch": "origin/feature/WF02-REQ195-20260830",
-      "push_status": "pending",
-      "pr_url": null,
-      "pr_create_error": null
-    },
-    "next_action": "Route to TEST-DESIGNER for rework (handoffs/WF02-REQ195-20260830/step-03-test-designer-rework1.json)"
-  }
+  "result": null
 }

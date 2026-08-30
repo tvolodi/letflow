@@ -194,3 +194,20 @@ history:
       Step Final before this branch rebased -- no entry in volume 6 was
       moved, edited or deleted, this REQ-192 done-event simply never
       landed there and lands here instead.
+  - req: REQ-183
+    event: started
+    agent: ORCH
+    at: "2026-08-30T07:24:20Z"
+    note: >
+      RESUMED. Queue task 356, GH#701, stage S6. Webhook delivery
+      dispatch core. Paused 2026-08-30 pending REQ-190 (secrets core) --
+      see requirement_status.v6.yaml's REQ-183 blocked-event for the
+      full resequencing rationale. All depends_on now done: REQ-181,
+      REQ-176, REQ-189, REQ-190. Resuming on the preserved branch
+      feature/WF02-REQ183-20260830 (design artefact
+      lib/letflow/design/req183-webhook-delivery-dispatch.md already
+      committed) -- re-dispatching Step 1b with instructions to
+      reconcile its assumed Letflow.Secrets.resolve/2 contract against
+      REQ-190's actual shipped module (2 flagged mismatches:
+      consumer: :webhook_dispatcher opt, {:ok, %{plaintext:, key_id:,
+      purpose:}} return shape).

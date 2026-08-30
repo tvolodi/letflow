@@ -564,7 +564,9 @@ defmodule Letflow.Routers.Req196AuditRouteTest do
       late = seed_audit_entry!(tenant.schema_name, resource_id: "late")
 
       resp_from =
-        get_audit(tenant, query_string: "from=#{URI.encode_www_form(DateTime.to_iso8601(cutoff))}")
+        get_audit(tenant,
+          query_string: "from=#{URI.encode_www_form(DateTime.to_iso8601(cutoff))}"
+        )
 
       assert resp_from.status == 200
       body_from = Jason.decode!(resp_from.resp_body)

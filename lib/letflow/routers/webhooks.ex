@@ -1,22 +1,65 @@
 defmodule Letflow.Routers.Webhooks do
   @moduledoc """
   Webhook subscription sub-router (REQ-182, design
-  `lib/letflow/design/req182-webhooks-routes.md`). Mounted at `/webhooks` by
-  `Letflow.Plugs.ApiPipeline`, so the full paths under `/api/v1` are
-  `GET /api/v1/webhooks/subscriptions`, `POST /api/v1/webhooks/subscriptions`,
-  `PATCH /api/v1/webhooks/subscriptions/:id`, and
-  `DELETE /api/v1/webhooks/subscriptions/:id`. Route/controller layer only,
-  atop REQ-181's already-shipped `Letflow.Webhooks` context module — no
-  change to that module, `Letflow.Webhooks.Subscription`, or the
-  `webhook_subscriptions` migration.
+  `lib/letflow/design/req182-webhooks-routes.md`; REQ-184, design
+  `lib/letflow/design/req184-webhook-deliveries-route.md`). Mounted at
+  `/webhooks` by `Letflow.Plugs.ApiPipeline`, so the full paths under
+  `/api/v1` are `GET /api/v1/webhooks/subscriptions`,
+  `POST /api/v1/webhooks/subscriptions`,
+  `PATCH /api/v1/webhooks/subscriptions/:id`,
+  `DELETE /api/v1/webhooks/subscriptions/:id`, and
+  `GET /api/v1/webhooks/subscriptions/:id/deliveries`. Route/controller
+  layer only, atop REQ-181's already-shipped `Letflow.Webhooks` context
+  module (which also now hosts REQ-183's `deliver/3` and REQ-184's
+  `list_delivery_attempts/3`) — no change to `Letflow.Webhooks.Subscription`,
+  `Letflow.Webhooks.Delivery`, or either migration.
 
   ## Contract source
 
   R-Co's `webhooks.zig` was **not inspected** while drafting this route
-  layer — R-Co is at a Windows path unreachable from this sandbox, verified
-  absent, not assumed covered. The binding contract instead is the
-  already-shipped SPA consumer: `web/src/api/dlq.ts`'s `webhooksApi` object
-  and `web/src/types/api.ts`'s `WebhookSubscription` type.
+  layer (REQ-182) or the deliveries route added on top of it (REQ-184) — R-Co
+  is at a Windows path unreachable from this sandbox, verified absent, not
+  assumed covered. The binding contract instead is the already-shipped SPA
+  consumer: `web/src/api/dlq.ts`'s `webhooksApi` object (including
+  `getDeliveries/2`) and `web/src/types/api.ts`'s `WebhookSubscription` and
+  `WebhookDeliveryAttempt` types.
+
+  ## Delivery attempts (REQ-184)
+
+  `GET /api/v1/webhooks/subscriptions/:id/deliveries` reads rows persisted by
+  `Letflow.Webhooks.deliver/3` (REQ-183) through the new
+  `Letflow.Webhooks.list_delivery_attempts/3` context function — no existing
+  function listed `webhook_delivery_attempts` rows before this requirement.
+  The response is `%{"items" => [...]}`, each item a 9-field allowlist
+  (`delivery_id`, `subscription_id`, `event_type`, `status`,
+  `http_status_code`, `attempted_at`, `attempt_count`, `max_attempts`,
+  `last_error`) matching `web/src/types/api.ts`'s `WebhookDeliveryAttempt`
+  exactly — see `delivery_json/1` below.
+
+  The `limit` query param defaults to `20` when absent, `nil`, or not a
+  positive integer (Letflow's own choice, not ported from R-Co per the
+  contract-source note above — chosen to match the one real SPA caller's own
+  literal `{ limit: 20 }` in
+  `web/src/components/webhooks/WebhookSubscriptionDetailPanel.tsx`); no
+  acceptance criterion requires a `400` for a malformed `limit`, so a
+  malformed value silently falls back to the default rather than erroring.
+  Rows are ordered `attempted_at DESC, attempt_count DESC` (most-recent-first,
+  with `attempt_count` breaking ties within the same wall-clock second, since
+  `attempted_at` is a `:utc_datetime` column at second precision) — this
+  two-key order is what makes "more attempts than limit returns exactly
+  limit items" deterministic. Both the `limit` default and this ordering are
+  this design's own decisions (design §4, OQ-1/OQ-2), not stated by any
+  acceptance criterion or by R-Co.
+
+  **Deviation from the design's own §4 wording, flagged for REVIEWER:** the
+  design says `limit` is read from `conn.params["limit"]`, but this router's
+  pipeline (`Letflow.Api.AuthorizedRouter`, `use Plug.Router`) never calls
+  `fetch_query_params/1` — `conn.params` here only ever carries path/body
+  params (confirmed: every other query-param reader in `lib/letflow/routers/`,
+  e.g. `dlq.ex`, `tasks.ex`, `definitions.ex`, calls `fetch_query_params(conn)`
+  explicitly first and reads `conn.query_params`, never `conn.params`, for a
+  query string value). `handle_deliveries/2` follows that established,
+  codebase-wide idiom instead of the design's literal text.
 
   ## Authorization (REQ-069, REQ-131)
 
@@ -67,6 +110,7 @@ defmodule Letflow.Routers.Webhooks do
 
   alias Letflow.Api.Response
   alias Letflow.Webhooks
+  alias Letflow.Webhooks.Delivery
   alias Letflow.Webhooks.Subscription
 
   authz_get "/subscriptions", :WebhookSubscriptionsManage do
@@ -83,6 +127,10 @@ defmodule Letflow.Routers.Webhooks do
 
   authz_delete "/subscriptions/:id", :WebhookSubscriptionsManage do
     handle_delete(conn, conn.params["id"])
+  end
+
+  authz_get "/subscriptions/:id/deliveries", :WebhookSubscriptionsManage do
+    handle_deliveries(conn, conn.params["id"])
   end
 
   match _ do
@@ -170,6 +218,35 @@ defmodule Letflow.Routers.Webhooks do
     end
   end
 
+  # ── GET /webhooks/subscriptions/:id/deliveries (design §5.1, REQ-184) ─────
+
+  defp handle_deliveries(conn, id) do
+    conn = fetch_query_params(conn)
+    limit = resolve_limit(conn.query_params["limit"])
+
+    case Webhooks.list_delivery_attempts(id, limit, conn.assigns.scoped_opts) do
+      {:ok, deliveries} ->
+        Response.ok(conn, %{"items" => Enum.map(deliveries, &delivery_json/1)})
+
+      {:error, :not_found} ->
+        Response.not_found(conn)
+
+      {:error, :invalid_id} ->
+        Response.not_found(conn)
+    end
+  end
+
+  @default_deliveries_limit 20
+
+  defp resolve_limit(raw) when is_binary(raw) do
+    case Integer.parse(raw) do
+      {value, ""} when value > 0 -> value
+      _other -> @default_deliveries_limit
+    end
+  end
+
+  defp resolve_limit(_other), do: @default_deliveries_limit
+
   # ── Request-body helpers ───────────────────────────────────────────────────
 
   defp object_body(conn) do
@@ -219,4 +296,23 @@ defmodule Letflow.Routers.Webhooks do
 
   defp iso8601(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
   defp iso8601(nil), do: nil
+
+  # Hand-built allowlist over %Delivery{} (design §5.2, INV-2) -- never a raw
+  # Jason.Encoder derivation, which would leak `tenant_id`/`__meta__`/the
+  # row's own primary key `id` (not one of the nine contracted fields;
+  # `delivery_id` is a distinct column).
+  @spec delivery_json(Delivery.t()) :: map()
+  defp delivery_json(%Delivery{} = delivery) do
+    %{
+      "delivery_id" => delivery.delivery_id,
+      "subscription_id" => delivery.subscription_id,
+      "event_type" => delivery.event_type,
+      "status" => Atom.to_string(delivery.status),
+      "http_status_code" => delivery.http_status_code,
+      "attempted_at" => iso8601(delivery.attempted_at),
+      "attempt_count" => delivery.attempt_count,
+      "max_attempts" => delivery.max_attempts,
+      "last_error" => delivery.last_error
+    }
+  end
 end

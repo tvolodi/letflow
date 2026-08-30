@@ -7,10 +7,13 @@ defmodule Letflow.Webhooks do
   `Letflow.Dlq`/`Letflow.Tasks`/`Letflow.Identity`.
 
   **Scope boundary, restated from the design (§0/§4):** this module covers
-  only the schema/migration and these four functions plus the private
-  `get/2` helper they're proven against. No route, no controller, no Plug
-  module — that is REQ-182. No delivery attempts, dispatch, outgoing-payload
-  HMAC signing, or the deliveries route — that is REQ-183/REQ-184.
+  the schema/migration, `create/2`/`list/1`/`update/3`/`delete/2`, the
+  private `get/2` helper they're proven against, `deliver/3` (REQ-183's
+  dispatch core), and `list_delivery_attempts/3` (REQ-184's read-side query,
+  see `lib/letflow/design/req184-webhook-deliveries-route.md`). No route, no
+  controller, no Plug module anywhere in this file — that is REQ-182
+  (subscription CRUD routes) and REQ-184 (the deliveries route,
+  `lib/letflow/routers/webhooks.ex`).
 
   ## Tenant scoping (INV-1)
 
@@ -602,6 +605,48 @@ defmodule Letflow.Webhooks do
 
     with {:ok, subscription} <- get(id, opts) do
       Repo.delete(subscription, prefix: prefix)
+    end
+  end
+
+  # ===========================================================================
+  # list_delivery_attempts/3 (design §1.1, REQ-184)
+  # ===========================================================================
+
+  @doc """
+  Lists `webhook_delivery_attempts` rows for one subscription, ordered
+  `attempted_at DESC, attempt_count DESC` (design §4's two-key ordering,
+  OQ-2 -- `attempted_at` is a `:utc_datetime` column, second precision, so
+  two attempts within the same wall-clock second are possible; `attempt_count`
+  breaks that tie deterministically since it is always populated), limited
+  at the database level to `limit` rows via `Ecto.Query.limit/2`.
+
+  Reuses the private `get/2` helper verbatim (design §1.1 step 1) to
+  validate + tenant-scope-check the subscription first -- this is what
+  makes the cross-tenant-404 behavior automatic and consistent with
+  `update/3`/`delete/2`: `get/2` already returns `{:error, :invalid_id}` for
+  a malformed UUID (no DB round-trip) and `{:error, :not_found}` for both
+  "row absent everywhere" and "row exists only in another tenant's schema."
+  The fetched subscription itself is discarded -- only used to prove
+  existence/tenant-scope, not rendered into the response.
+
+  A real, in-tenant subscription with zero delivery attempts returns
+  `{:ok, []}`, not an error.
+  """
+  @spec list_delivery_attempts(subscription_id :: String.t(), limit :: pos_integer(), opts()) ::
+          {:ok, [Delivery.t()]} | {:error, :invalid_id} | {:error, :not_found}
+  def list_delivery_attempts(subscription_id, limit, opts)
+      when is_binary(subscription_id) and is_integer(limit) and limit > 0 and is_list(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    with {:ok, _subscription} <- get(subscription_id, opts) do
+      deliveries =
+        Delivery
+        |> where([d], d.subscription_id == ^subscription_id)
+        |> order_by([d], desc: d.attempted_at, desc: d.attempt_count)
+        |> limit(^limit)
+        |> Repo.all(prefix: prefix)
+
+      {:ok, deliveries}
     end
   end
 

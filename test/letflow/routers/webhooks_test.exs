@@ -36,6 +36,7 @@ defmodule Letflow.Routers.WebhooksTest do
   import Plug.Conn
 
   alias Letflow.TenantFixture
+  alias Letflow.Webhooks.Delivery
 
   @opts Letflow.Routers.Webhooks.init([])
 
@@ -77,6 +78,31 @@ defmodule Letflow.Routers.WebhooksTest do
       |> dispatch()
 
     {conn, Jason.decode!(conn.resp_body)}
+  end
+
+  # REQ-184 -- inserts a `webhook_delivery_attempts` row directly (bypassing
+  # `Letflow.Webhooks.deliver/3`, REQ-183's territory and untouched here),
+  # mirroring `attempt_loop/7`'s own insert shape.
+  defp insert_delivery!(tenant, subscription_id, attrs \\ %{}) do
+    base = %{
+      tenant_id: tenant.tenant_id,
+      delivery_id: Ecto.UUID.generate(),
+      subscription_id: subscription_id,
+      event_type: "instance.completed",
+      status: :SUCCESS,
+      http_status_code: 200,
+      attempted_at: DateTime.utc_now() |> DateTime.truncate(:second),
+      attempt_count: 1,
+      max_attempts: 4,
+      last_error: nil
+    }
+
+    {:ok, delivery} =
+      %Delivery{}
+      |> Delivery.insert_changeset(Map.merge(base, attrs))
+      |> Repo.insert(prefix: tenant.schema_name)
+
+    delivery
   end
 
   # ══════════════════════════════════════════════════════════════════════
@@ -358,6 +384,185 @@ defmodule Letflow.Routers.WebhooksTest do
 
       assert first_delete.status == 204
       assert second_delete.status == 404
+    end
+  end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # REQ-184 -- GET /subscriptions/:id/deliveries
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-184 AC1: response shape matches WebhookDeliveryAttempt exactly, field-by-field" do
+    test "each item has exactly the 9 contracted fields with the expected values" do
+      tenant = provisioned_tenant("req184-shape")
+      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+
+      delivery =
+        insert_delivery!(tenant, created["id"], %{
+          status: :FAILED,
+          http_status_code: 503,
+          attempt_count: 2,
+          max_attempts: 4,
+          last_error: "HTTP 503: unavailable"
+        })
+
+      conn =
+        build_conn(:get, "/subscriptions/#{created["id"]}/deliveries", tenant,
+          roles: ["PLATFORM_ADMIN"]
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert Map.keys(body) == ["items"]
+      assert [item] = body["items"]
+
+      assert Map.keys(item) |> Enum.sort() ==
+               Enum.sort([
+                 "delivery_id",
+                 "subscription_id",
+                 "event_type",
+                 "status",
+                 "http_status_code",
+                 "attempted_at",
+                 "attempt_count",
+                 "max_attempts",
+                 "last_error"
+               ])
+
+      assert item["delivery_id"] == delivery.delivery_id
+      assert item["subscription_id"] == created["id"]
+      assert item["event_type"] == "instance.completed"
+      assert item["status"] == "FAILED"
+      assert item["http_status_code"] == 503
+      assert is_binary(item["attempted_at"])
+      assert item["attempt_count"] == 2
+      assert item["max_attempts"] == 4
+      assert item["last_error"] == "HTTP 503: unavailable"
+    end
+
+    test "a SUCCESS delivery with no error carries http_status_code and last_error correctly" do
+      tenant = provisioned_tenant("req184-shape-success")
+      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+
+      insert_delivery!(tenant, created["id"], %{status: :SUCCESS, http_status_code: 200})
+
+      conn =
+        build_conn(:get, "/subscriptions/#{created["id"]}/deliveries", tenant,
+          roles: ["PLATFORM_ADMIN"]
+        )
+        |> dispatch()
+
+      assert [item] = Jason.decode!(conn.resp_body)["items"]
+      assert item["status"] == "SUCCESS"
+      assert item["http_status_code"] == 200
+      assert item["last_error"] == nil
+    end
+  end
+
+  describe "REQ-184 AC2: limit param enforcement" do
+    test "more delivery attempts than the requested limit returns exactly limit items" do
+      tenant = provisioned_tenant("req184-limit")
+      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+
+      base_time = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      for i <- 1..5 do
+        insert_delivery!(tenant, created["id"], %{
+          attempted_at: DateTime.add(base_time, -i, :second),
+          attempt_count: 1
+        })
+      end
+
+      conn =
+        build_conn(:get, "/subscriptions/#{created["id"]}/deliveries?limit=2", tenant,
+          roles: ["PLATFORM_ADMIN"]
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      assert length(Jason.decode!(conn.resp_body)["items"]) == 2
+    end
+
+    test "an omitted limit defaults to 20" do
+      tenant = provisioned_tenant("req184-limit-default")
+      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+
+      base_time = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      for i <- 1..3 do
+        insert_delivery!(tenant, created["id"], %{
+          attempted_at: DateTime.add(base_time, -i, :second),
+          attempt_count: 1
+        })
+      end
+
+      conn =
+        build_conn(:get, "/subscriptions/#{created["id"]}/deliveries", tenant,
+          roles: ["PLATFORM_ADMIN"]
+        )
+        |> dispatch()
+
+      assert length(Jason.decode!(conn.resp_body)["items"]) == 3
+    end
+  end
+
+  describe "REQ-184 AC3: route requires WebhooksManage -- 403 for a caller lacking it" do
+    test "GET /subscriptions/:id/deliveries -> 403 for a caller with no role holding WebhooksManage" do
+      tenant = provisioned_tenant("req184-403")
+      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      insert_delivery!(tenant, created["id"])
+
+      conn =
+        build_conn(:get, "/subscriptions/#{created["id"]}/deliveries", tenant,
+          roles: ["TASK_WORKER"]
+        )
+        |> dispatch()
+
+      assert conn.status == 403
+    end
+  end
+
+  describe "REQ-184 AC4: cross-tenant real subscription id -> 404, never 403, regardless of delivery attempts" do
+    test "a caller from tenant A naming tenant B's real subscription id gets 404" do
+      tenant_a = TenantFixture.provisioned_tenant!(slug_prefix: "req184-cross-a")
+      tenant_b = TenantFixture.provisioned_tenant!(slug_prefix: "req184-cross-b")
+
+      {_conn, created_in_b} = create_subscription(tenant_b, ["PLATFORM_ADMIN"])
+      insert_delivery!(tenant_b, created_in_b["id"])
+
+      conn =
+        build_conn(:get, "/subscriptions/#{created_in_b["id"]}/deliveries", tenant_a,
+          roles: ["PLATFORM_ADMIN"]
+        )
+        |> dispatch()
+
+      assert conn.status == 404
+    end
+  end
+
+  describe "REQ-184 AC5: non-existent subscription id -> 404" do
+    test "a well-formed but never-existing subscription id returns 404" do
+      tenant = provisioned_tenant("req184-missing")
+
+      conn =
+        build_conn(:get, "/subscriptions/#{Ecto.UUID.generate()}/deliveries", tenant,
+          roles: ["PLATFORM_ADMIN"]
+        )
+        |> dispatch()
+
+      assert conn.status == 404
+    end
+
+    test "a malformed subscription id also returns 404, never 400" do
+      tenant = provisioned_tenant("req184-malformed")
+
+      conn =
+        build_conn(:get, "/subscriptions/not-a-uuid/deliveries", tenant,
+          roles: ["PLATFORM_ADMIN"]
+        )
+        |> dispatch()
+
+      assert conn.status == 404
     end
   end
 

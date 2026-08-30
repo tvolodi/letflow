@@ -91,7 +91,7 @@ defmodule Letflow.AuditDispositionsTest do
   defp unique_name(prefix),
     do: prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
 
-  defp base_entry_attrs(overrides \\ []) do
+  defp base_entry_attrs(overrides) do
     Map.merge(
       %{
         actor_id: nil,

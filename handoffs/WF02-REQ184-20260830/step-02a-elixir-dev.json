@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step02a-WF02-REQ184-20260830",
+  "run_id": "WF02-REQ184-20260830",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ184-20260830/step-02a-elixir-dev.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-184"],
+    "issue_ids": [],
+    "queue_task_id": 357,
+    "github_issue": "702",
+    "related_handoff_ids": ["step01b-WF02-REQ184-20260830"],
+    "artifacts_in": [
+      "lib/letflow/design/req184-webhook-deliveries-route.md",
+      "lib/letflow/webhooks.ex",
+      "lib/letflow/webhooks/delivery.ex",
+      "lib/letflow/webhooks/subscription.ex",
+      "lib/letflow/routers/webhooks.ex",
+      "lib/letflow/api/authorization.ex",
+      "web/src/api/dlq.ts",
+      "web/src/types/api.ts"
+    ],
+    "branch_name": "feature/WF02-REQ184-20260830",
+    "note": "CODE-DESIGN-VALIDATOR PASSED lib/letflow/design/req184-webhook-deliveries-route.md against REQ-184's full 6-AC list, docs/requirements.yaml lines 9385-9415. Independently re-verified against the real source (not the design's own claims):\n\n(1) Re-read lib/letflow/webhooks.ex in full -- confirmed no existing function (create/2, deliver/3, list/1, update/3, delete/2, private get/2 at lines 612-627) lists webhook_delivery_attempts rows. The design's new Letflow.Webhooks.list_delivery_attempts/3 is genuinely new, not redundant.\n\n(2) Re-read lib/letflow/api/authorization.ex -- confirmed exactly: line 293-294 `def endpoint_policy_key(\"GET\", \"/webhooks/subscriptions/:id/deliveries\"), do: :WebhookSubscriptionsManage` already exists; line 425 `def required_permission(:WebhookSubscriptionsManage), do: :WebhooksManage` already exists. Zero authorization.ex changes are in scope -- ELIXIR-DEV must NOT add a duplicate clause (would cause a compile error).\n\n(3) Re-read lib/letflow/routers/webhooks.ex in full -- confirmed it has no `import Ecto.Query` and no `alias Letflow.Repo` today (only aliases Response/Webhooks/Subscription), so INV-RT-1 (context-module boundary) is not at risk from this design; confirmed the exact two-clause not_found/invalid_id fold the design cites at handle_update/2 (lines 140-144) and handle_delete/2 (lines 165-169) is real and is the pattern handle_deliveries/2 must mirror -- no new cross-tenant-404 mechanism, it is inherited via Letflow.Webhooks' private get/2 (called from inside the new list_delivery_attempts/3) plus this same two-clause fold at the router layer.\n\n(4) Re-read web/src/types/api.ts (lines 352-364) and web/src/api/dlq.ts's parseDeliveryAttempt/1 (lines 14-64) -- confirmed the design's 9-field allowlist (delivery_id, subscription_id, event_type, status, http_status_code, attempted_at, attempt_count, max_attempts, last_error) matches WebhookDeliveryAttempt exactly, field-by-field, including the null/undefined nuance on http_status_code (never omitted) vs last_error (may be absent or null).\n\n(5) git diff main --stat on this branch confirmed only the design doc + status/handoff bookkeeping files changed -- no touch to lib/letflow/webhooks/delivery.ex, deliver/3, or any migration.\n\n(6) Confirmed zero code fences and zero def/defp/case/with-body constructs anywhere in the design doc (grep run directly).\n\nORDERING-CHOICE DISPOSITION (design's own OQ-2, carried forward per instruction): the `[desc: attempted_at, desc: attempt_count]` ordering for the limit-cutoff determinism is a reasonable default -- AC2 only requires 'exactly limit items' and does not constrain which items, so any deterministic, documented order satisfies the AC textually. The design does not leave this ambiguous for ELIXIR-DEV: it states the exact two-key order to implement and the rationale (utc_datetime is second-precision, attempt_count is a populated positive-integer tiebreaker, UUIDv4 id is deliberately excluded as non-chronological). This is a legitimate, non-blocking design decision, not a design gap -- CODE-DESIGN-VALIDATOR does not FAIL a design for surfacing its own defensible choices as an open question. Routed to REVIEWER's attention as the design itself already flags (OQ-1 limit-default-and-malformed-fallback, OQ-2 this ordering) -- ELIXIR-DEV must implement exactly the two-key order specified in design section 4/§5.1, not just attempted_at alone, and must not silently resolve OQ-1/OQ-2 differently from the design without flagging it forward again."
+  },
+  "task": {
+    "description": "Implement REQ-184 strictly per the APPROVED design at lib/letflow/design/req184-webhook-deliveries-route.md (passed CODE-DESIGN-VALIDATOR, this handoff, first pass). Read the full design doc before writing any code. Add: (1) Letflow.Webhooks.list_delivery_attempts/3 in lib/letflow/webhooks.ex per design section 1.1 exactly -- reuses the existing private get/2 helper verbatim for the tenant-scoped existence check, then queries Letflow.Webhooks.Delivery filtered by subscription_id, ordered per section 4's two-key ordering, with a database-level Ecto.Query.limit/2. (2) One new authz_get route clause plus two new private functions (handle_deliveries/2, delivery_json/1) on the EXISTING lib/letflow/routers/webhooks.ex module per design sections 2 and 5 -- do not create a new router file, do not add any Ecto.Query/Repo alias to the router (INV-RT-1). (3) Extend the router's existing moduledoc per design section 5.3 exactly (leave the existing '## Contract source' section verbatim, extend the route-list sentence, add one new subsection documenting the new context function and the limit/ordering decisions). Do NOT touch lib/letflow/api/authorization.ex (already fully wired, section 3), lib/letflow/webhooks/delivery.ex, deliver/3, or any migration.",
+    "acceptance_criteria": [
+      "GET /api/v1/webhooks/subscriptions/:id/deliveries returns {items: [...]} with each item's fields matching WebhookDeliveryAttempt exactly (delivery_id, subscription_id, event_type, status, http_status_code, attempted_at, attempt_count, max_attempts, last_error)",
+      "the route honors the limit param, demonstrated by a test with more delivery attempts than the requested limit returning exactly limit items",
+      "the route requires the WebhooksManage permission from REQ-069's matrix -- a caller lacking it receives 403",
+      "a caller from a different tenant naming a real subscription id belonging to tenant A receives 404, never 403, regardless of whether that subscription has delivery attempts",
+      "a request against a non-existent subscription id returns 404",
+      "the route module's moduledoc states explicitly that R-Co's webhooks.zig was not inspected in this batch (unreachable from the drafting environment) and that the SPA's already-committed contract was the binding source of truth instead"
+    ]
+  },
+  "result": null
+}

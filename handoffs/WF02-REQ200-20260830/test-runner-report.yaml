@@ -1,0 +1,75 @@
+run_id: WF02-REQ200-20260830
+agent: TEST-RUNNER
+workflow_step: WF-02 Step 4
+date: 2026-08-30
+requirement_ids: [REQ-200]
+branch: feature/WF02-REQ200-20260830
+
+environment:
+  toolchain: "asdf-managed mix/elixir, sourced via ~/.asdf/asdf.sh"
+  docker_compose: "letflow-1-postgres-1 and letflow-1-keycloak-1 already running (brought up via `sudo docker compose up -d`; current user lacked docker group membership in this shell)"
+  db_port: 5463 (from untracked .env LETFLOW_DB_PORT)
+  rustc_on_path: false  # `which rustc` -> not found in this sandbox
+
+full_suite_run:
+  command: scripts/test_parallel.sh
+  parallelism: N=8 (nproc)
+  combined_result: "2749/2751 passed, 2 failures, 6 properties"
+  per_partition:
+    - {partition: 1, tests: 355, properties: 1, failures: 0, exit: 0}
+    - {partition: 2, tests: 390, properties: 2, failures: 0, exit: 0}
+    - {partition: 3, tests: 392, properties: 2, failures: 0, exit: 0}
+    - {partition: 4, tests: 251, properties: 1, failures: 0, exit: 0}
+    - {partition: 5, tests: 387, properties: 0, failures: 0, exit: 0}
+    - {partition: 6, tests: 293, properties: 0, failures: 0, exit: 0}
+    - {partition: 7, tests: 294, properties: 0, failures: 0, exit: 0}
+    - {partition: 8, tests: 383, properties: 0, failures: 2, exit: 2}
+
+failures:
+  - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+    error: "** (ErlangError) Erlang error: :enoent"
+    stack_top: "test/mix/tasks/letflow_check_toolchain_test.exs:69: Mix.Tasks.Letflow.CheckToolchainTest.running_rust_raw/0"
+  - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+    error: "** (ErlangError) Erlang error: :enoent"
+    stack_top: "test/mix/tasks/letflow_check_toolchain_test.exs:69: Mix.Tasks.Letflow.CheckToolchainTest.running_rust_raw/0"
+
+diagnosis: >
+  Both failures are the documented rustc-absent CheckToolchainTest baseline flake
+  class (named explicitly in this run's dispatch instructions and consistent with
+  docs/anti-patterns.md's toolchain-drift guidance). running_rust_raw/0
+  (test/mix/tasks/letflow_check_toolchain_test.exs:68-73) shells out to
+  `System.cmd("rustc", ["--version"], ...)`; when rustc is not on PATH this raises
+  :enoent before the test's own rescue path (exercised deliberately only in the
+  separate "F9 rustc not found on PATH" test, line ~320) is reached. Confirmed
+  `which rustc` returns nothing in this sandbox -- rustc genuinely is not
+  installed/on PATH here, not a code defect. Cross-checked against
+  `git diff main...HEAD --stat`: this branch touches only
+  lib/letflow/instances.ex, lib/letflow/routers/instances.ex,
+  test/letflow/routers/instances_test.exs, docs/status/*, and files under
+  lib/letflow/design/ and handoffs/ -- nothing in
+  test/mix/tasks/letflow_check_toolchain_test.exs or any Rust-toolchain-adjacent
+  code. Per "Failure Attribution Is Structural, Never By Count-Matching"
+  (core-directives.md), attribution here is structural: the failing test's own
+  logic path (a live `System.cmd("rustc", ...)` call) is independently
+  reproducible as an environment fact (`which rustc` -> not found), not inferred
+  from the diff not touching that file.
+  Excluded from this branch's pass/fail determination as a pre-existing,
+  environment-caused failure unrelated to REQ-200.
+
+req200_targeted_verification:
+  command: "MIX_ENV=test mix test test/letflow/routers/instances_test.exs"
+  result: "44 passed, 0 failures (39.3s)"
+  skipped_tests: "none (grepped for @tag :skip / @moduletag :skip in the file: 0 matches)"
+  order_or_shared_fixture_dependence: "none observed -- each test uses TenantFixture-provisioned per-test tenant schemas (LETFLOW_TENANT_FIXTURE phase=setup/teardown per test), independently created and dropped; no shared hardcoded fixture state across tests in this file"
+
+conclusion: >
+  No real regression introduced by this branch. The only suite failures are the
+  pre-existing, environment-caused rustc-absence flake in
+  Mix.Tasks.Letflow.CheckToolchainTest, structurally unrelated to REQ-200's diff.
+  REQ-200's own test file (test/letflow/routers/instances_test.exs) passes 44/44
+  when run standalone and contributed 0 failures inside the full parallel run.
+  Routing forward to RELEASE-VALIDATOR.
+
+next_action: "Write and push handoffs/WF02-REQ200-20260830/step-05-release-validator.json routing to RELEASE-VALIDATOR."

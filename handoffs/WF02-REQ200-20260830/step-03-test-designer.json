@@ -1,0 +1,51 @@
+{
+  "handoff_id": "step03-WF02-REQ200-20260830",
+  "run_id": "WF02-REQ200-20260830",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ200-20260830/step-03-test-designer.json",
+  "created_at": "2026-08-30T13:13:04Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-200"],
+    "issue_ids": [],
+    "queue_task_id": 373,
+    "github_issue": "GH#719",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ200-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ200-20260830/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ200-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ200-20260830/security-review-req200-findings.md",
+      "handoffs/WF02-REQ200-20260830/step-02d-reviewer.json",
+      "handoffs/WF02-REQ200-20260830/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ200-20260830/test-designer-gap-analysis.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req200-instance-timeline-rendering.md",
+      "lib/letflow/instances.ex",
+      "lib/letflow/routers/instances.ex",
+      "test/letflow/routers/instances_test.exs",
+      "test/specs/REQ-200.md"
+    ],
+    "branch_name": "feature/WF02-REQ200-20260830"
+  },
+  "task": {
+    "description": "REWORK (iteration 1). TEST-DESIGN-VALIDATOR (WF-02 Step 3b) ran `mix test test/letflow/routers/instances_test.exs` for real and got 41/44 passed, 3 failed -- all 3 in your own newly-split AC2 tests. 'AC2 level 2' (line 930), 'AC2 level 3' (line 948) and 'AC2 level 4' (line 966) each pass `actor_id: nil` to insert_raw_event!/2. That is not constructible against the real schema: lib/letflow/event_store/event.ex lists :actor_id in @required_fields, and priv/repo/migrations/20260816120001_create_events.exs:80 declares the column `null: false`. `Repo.insert(changeset, ...)` therefore returns `{:error, changeset}` with `actor_id: {\"can't be blank\", ...}`, and the helper's `assert {:ok, event} = Repo.insert(...)` fails before the test's own assertion is ever reached. Your gap-analysis (handoffs/WF02-REQ200-20260830/test-designer-gap-analysis.md) states this was a deliberate choice -- 'passing actor_id: nil explicitly for levels 2-4 rather than an actor_id that merely fails to resolve' -- but that input cannot be persisted, so the intent doesn't survive contact with the schema. The pre-restructuring combined test (git show b90a69b6:test/letflow/routers/instances_test.exs, the 'AC2/AC3: all four actor fallback levels resolve...' test) used `actor_id: Ecto.UUID.generate()` for levels 2-4 -- a real, syntactically valid, but unresolvable UUID -- and that is why it passed (SECURITY-REVIEWER's recorded 40/40 predates your restructuring). Fix: change levels 2, 3 and 4's `actor_id: nil` back to `actor_id: Ecto.UUID.generate()`. This still isolates each level correctly (a random UUID that matches no user row is 'no attributable actor' exactly as much as nil would be, and still cannot coincidentally satisfy a higher-priority fallback), and it is what a real event row on this schema actually looks like when there is no resolvable user -- level 1 (real actor_id) and AC3 (a real, once-existent, now-deleted user id) are unaffected and were not flagged. Everything else in your Step 3 pass verified clean and is not being reworked: AC1's seed data (4 distinct event types, confirmed by direct read), AC6's explicit refutes on both old field names, the AC7 ==1 tightening, no @tag :skip/pending or TODO-test anywhere, fixture isolation (unique slug_prefix per test throughout), and test/specs/REQ-200.md's per-AC documentation. Full FAIL detail in handoffs/WF02-REQ200-20260830/step-03b-test-design-validator.json's result block.",
+    "acceptance_criteria": [
+      "Fix the 3 failing AC2 tests (levels 2, 3, 4) by replacing `actor_id: nil` with `actor_id: Ecto.UUID.generate()`, matching the pre-restructuring test's approach for an unresolvable-but-real actor id.",
+      "Do not change AC2 level 1, AC3, or any other test in the describe block -- only the 3 named tests' actor_id value.",
+      "Run `mix test test/letflow/routers/instances_test.exs` yourself (source ~/.asdf/asdf.sh) and quote the real result in this handoff before re-routing -- must be 44/44 (or the then-current full count), not assumed.",
+      "Re-hand to TEST-DESIGN-VALIDATOR via step-03b-test-design-validator.json once the real re-run is green.",
+      "CRITICAL: this handoff's top-level status field is exactly PENDING (grepped and confirmed before commit, per this project's own recurring anti-pattern on this exact mistake)."
+    ]
+  },
+  "result": null,
+  "rework_count": 1,
+  "max_rework": 3
+}

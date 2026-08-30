@@ -436,6 +436,22 @@ history:
       This completes the webhooks vertical in full: REQ-181 (core),
       REQ-182 (subscription routes), REQ-183 (delivery dispatch), REQ-184
       (deliveries route) are all done.
+  - req: REQ-200
+    event: started
+    agent: ORCH
+    at: "2026-08-30T12:38:22Z"
+    note: >
+      Queue task 373, GH#719, stage S6. Fixes a real broken contract: the
+      already-shipped SPA's TimelineFeedItem.tsx reads actor_display_name,
+      description, timestamp, sequence_num from GET /instances/:id/timeline
+      (REQ-080, done S4), but timeline_item/1 never emits the first two and
+      names the latter two differently. Ports R-Co's src/obs/timeline.zig
+      actor-fallback chain (actor id -> token_description -> actor_label ->
+      "system") and per-event-type description rendering, N+1-safe (one
+      batched user lookup per page). Route/pagination/auth/404 unchanged
+      per REQ-080. No web/ changes, no authorization.ex changes. Depends_on
+      [REQ-080, REQ-072, REQ-069], all done.
+
   - req: REQ-193
     event: done
     agent: DOC-UPDATER
@@ -456,3 +472,36 @@ history:
       TEST-DESIGNER PASS (10/10) -> TEST-DESIGN-VALIDATOR PASS -> TEST-RUNNER
       PASS (2735/2737, 2 pre-existing Windows grep flakes) -> RELEASE-VALIDATOR PASS.
       Full detail: handoffs/WF02-REQ193-20260830/.
+
+  - req: REQ-200
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T13:47:40Z"
+    note: >
+      WF02-REQ200-20260830 done (queue task 373, GH#719, stage S6). Instance
+      timeline rendering shipped: actor-display-name 4-level fallback chain
+      (actor_id lookup -> metadata token_description -> metadata actor_label
+      -> literal "system", TOTAL over all paths including a deleted-user
+      actor_id) and per-event-type description rendering with a mandatory
+      generic fallback for Lua-emitted event types outside the fixed
+      whitelist, plus the timestamp/sequence_num field renames, all N+1-safe
+      via one batched actor lookup per page. This closes a real broken
+      contract left by REQ-080 (S4): the already-shipped SPA's
+      TimelineFeedItem.tsx was reading actor_display_name, description,
+      timestamp and sequence_num, none of which the REQ-080 route ever
+      emitted. Gate path: CODE-DESIGNER (found the complete 7-event-type
+      enumeration plus the open-ended Lua-emitted-event-type structural
+      finding that necessitated the generic fallback clause),
+      CODE-DESIGN-VALIDATOR, ELIXIR-DEV, SECURITY-REVIEWER (traced the
+      batched actor lookup's prefix threading to confirm cross-tenant
+      isolation), REVIEWER, TEST-DESIGNER (1 real gap: an AC2-split rework
+      hit and fixed a genuine DB null-constraint violation -- actor_id: nil
+      is not valid against the events table's null: false column -- caught
+      mid-rework), TEST-DESIGN-VALIDATOR (4 real mutations confirmed
+      caught), TEST-RUNNER, RELEASE-VALIDATOR (independently re-verified
+      all 11 acceptance criteria against the real lib/letflow/instances.ex
+      and lib/letflow/routers/instances.ex code and a self-run of the
+      suite -- PASS, see
+      handoffs/WF02-REQ200-20260830/req200-release-validation-report.md).
+      docs/migration/stage-6-operational-cross-cutting.md updated to record
+      REQ-200 done.

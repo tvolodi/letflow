@@ -21,6 +21,7 @@ defmodule Letflow.Instances do
   alias Letflow.Api.Pagination
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
+  alias Letflow.Identity.User
   alias Letflow.Repo
 
   @type opts :: [prefix: String.t()]
@@ -151,11 +152,14 @@ defmodule Letflow.Instances do
   # ── timeline/2 ───────────────────────────────────────────────────────────
 
   @doc """
-  Same underlying query/pagination as `history/2`, lighter response
-  projection: `event_type`, `sequence_number`, `created_at`, `event_id`,
-  `instance_id`, `metadata`, plus `node_id`/`task_id` extracted from
-  `payload` where present. No `actor_display_name`/`description` synthesis
-  -- see the design doc's "Deliberate non-port" note.
+  Same underlying query/pagination as `history/2`, response projection per
+  `lib/letflow/design/req200-instance-timeline-rendering.md`: `event_type`,
+  `sequence_num` (renamed from `sequence_number`), `timestamp` (renamed from
+  `created_at`), `event_id`, `instance_id`, `metadata`, `node_id`/`task_id`
+  extracted from `payload` where present, plus `actor_display_name` (§2's
+  total 4-level fallback) and `description` (§3's per-event-type renderer).
+  The distinct non-nil `actor_id`s on the page are resolved in one batched
+  query (§4) -- never one lookup per event.
   """
   @spec timeline(instance_id :: String.t(), params :: map(), opts()) ::
           {:ok, %{items: [map()], next_cursor: String.t() | nil}}
@@ -178,20 +182,144 @@ defmodule Letflow.Instances do
       rows = Repo.all(query, prefix: prefix)
       {page, next_cursor} = split_seq_page(rows, page_size, @timeline_cursor_prefix)
 
-      {:ok, %{items: Enum.map(page, &timeline_item/1), next_cursor: next_cursor}}
+      distinct_actor_ids =
+        page
+        |> Enum.map(& &1.actor_id)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.uniq()
+
+      display_names_by_id = fetch_display_names_by_actor_id(distinct_actor_ids, prefix)
+
+      items = Enum.map(page, &timeline_item(&1, display_names_by_id))
+
+      {:ok, %{items: items, next_cursor: next_cursor}}
     end
   end
 
-  defp timeline_item(%Event{} = event) do
+  # ── timeline/3 private: actor display-name batch lookup (design §4) ──────
+
+  # N+1 avoidance: one bounded query per page (zero if no event on the page
+  # carries a non-nil actor_id), never one lookup per event.
+  @spec fetch_display_names_by_actor_id(actor_ids :: [Ecto.UUID.t()], prefix :: String.t()) ::
+          %{optional(Ecto.UUID.t()) => String.t()}
+  defp fetch_display_names_by_actor_id([], _prefix), do: %{}
+
+  defp fetch_display_names_by_actor_id(actor_ids, prefix) do
+    query =
+      from(u in User,
+        where: u.id in ^actor_ids,
+        select: {u.id, u.display_name}
+      )
+
+    query
+    |> Repo.all(prefix: prefix)
+    |> Enum.reduce(%{}, fn {id, display_name}, acc ->
+      if blank?(display_name), do: acc, else: Map.put(acc, id, display_name)
+    end)
+  end
+
+  # ── timeline/3 private: actor display-name resolution (design §2) ────────
+
+  # Total function: every input combination returns a non-nil, non-blank
+  # String.t(). `display_names_by_id` holds only ids that resolved to a
+  # non-blank display_name (see `fetch_display_names_by_actor_id/2`), so an
+  # `actor_id` absent from the map -- whether it was never looked up (nil)
+  # or looked up and not found (deleted user, platform sentinel) -- falls
+  # through uniformly to the metadata-based fallbacks, then to "system".
+  @spec resolve_actor_display_name(
+          actor_id :: Ecto.UUID.t() | nil,
+          metadata :: map(),
+          display_names_by_id :: %{optional(Ecto.UUID.t()) => String.t()}
+        ) :: String.t()
+  defp resolve_actor_display_name(actor_id, metadata, display_names_by_id) do
+    cond do
+      actor_id != nil and Map.has_key?(display_names_by_id, actor_id) ->
+        Map.fetch!(display_names_by_id, actor_id)
+
+      not blank?(Map.get(metadata, "token_description")) ->
+        Map.get(metadata, "token_description")
+
+      not blank?(Map.get(metadata, "actor_label")) ->
+        Map.get(metadata, "actor_label")
+
+      true ->
+        "system"
+    end
+  end
+
+  defp blank?(nil), do: true
+  defp blank?(value) when is_binary(value), do: String.trim(value) == ""
+  defp blank?(_non_binary), do: true
+
+  # ── timeline/3 private: per-event-type description rendering (design §3) ─
+
+  # One clause per real event type this codebase can append (design §1),
+  # plus a mandatory trailing fallback clause for any other event_type
+  # string -- lua/platform.ex's emit_event hook lets a tenant script append
+  # an arbitrary event_type with no whitelist, so this must never raise on
+  # an unrecognised value (AC5).
+  @spec render_description(event :: Event.t(), actor_display_name :: String.t(), payload :: map()) ::
+          String.t()
+  defp render_description(%Event{event_type: "INSTANCE_STARTED"}, actor, _payload) do
+    "Instance started by #{actor}"
+  end
+
+  defp render_description(%Event{event_type: "TASK_COMPLETED"}, actor, payload) do
+    node_id = Map.get(payload, "node_id")
+    "Task #{node_id} completed by #{actor}"
+  end
+
+  defp render_description(%Event{event_type: "INSTANCE_CANCELLED"}, actor, _payload) do
+    "Instance cancelled by #{actor}"
+  end
+
+  defp render_description(%Event{event_type: "INSTANCE_PINS_REBOUND"}, actor, _payload) do
+    "Instance pins rebound by #{actor}"
+  end
+
+  defp render_description(%Event{event_type: "SUB_PROCESS_COMPLETED"}, actor, payload) do
+    child_instance_id = Map.get(payload, "child_instance_id")
+    "Sub-process #{child_instance_id} completed by #{actor}"
+  end
+
+  defp render_description(%Event{event_type: "EXECUTION_ERROR"}, actor, payload) do
+    error_type = Map.get(payload, "error_type") || "unknown"
+    "Execution error (#{error_type}) reported by #{actor}"
+  end
+
+  defp render_description(%Event{event_type: "TIMER_FIRED"}, _actor, payload) do
+    # Deliberately does not name the actor -- it is always the platform
+    # sentinel (design §1), so appending "by system" on every row would add
+    # no information. `actor_display_name` is still populated in the item.
+    timer_id = Map.get(payload, "timer_id")
+    "Timer #{timer_id} fired"
+  end
+
+  defp render_description(%Event{event_type: event_type}, actor, _payload) do
+    "Event #{event_type} by #{actor}"
+  end
+
+  # ── timeline/3 private: response-item assembly (design §5) ───────────────
+
+  @spec timeline_item(
+          event :: Event.t(),
+          display_names_by_id :: %{optional(Ecto.UUID.t()) => String.t()}
+        ) :: map()
+  defp timeline_item(%Event{} = event, display_names_by_id) do
+    actor_display_name =
+      resolve_actor_display_name(event.actor_id, event.metadata, display_names_by_id)
+
     %{
       event_id: event.event_id,
       event_type: event.event_type,
-      sequence_number: event.sequence_number,
+      sequence_num: event.sequence_number,
       instance_id: event.instance_id,
-      created_at: event.created_at,
+      timestamp: event.created_at,
       node_id: Map.get(event.payload, "node_id"),
       task_id: Map.get(event.payload, "task_id"),
-      metadata: event.metadata
+      metadata: event.metadata,
+      actor_display_name: actor_display_name,
+      description: render_description(event, actor_display_name, event.payload)
     }
   end
 

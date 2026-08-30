@@ -10971,7 +10971,7 @@ requirements:
   - id: REQ-200
     title: Instance timeline rendering -- actor display names and human-readable descriptions (OBS-04), closing the shipped SPA's broken TimelineFeed contract
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 373  # letflow-queue task id
     description: >

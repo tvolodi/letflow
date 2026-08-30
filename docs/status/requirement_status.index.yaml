@@ -800,14 +800,47 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 13
+    entries: 15
     note: >
+      Recounted to 15 by ORCH's Step Final rebase composition for
+      WF02-REQ200-20260830, composing this branch's own REQ-200 done-event
+      append (Step 6) against origin/main's concurrently-advanced state --
+      `grep -c "^  - req:" docs/status/requirement_status.v7.yaml` = 15
+      on-disk entries after composition, recounted directly from the
+      composed file per this note's own recount-every-time rule. This
+      closes a real broken-contract gap left by REQ-080: the already-
+      shipped SPA's TimelineFeedItem.tsx was reading actor_display_name,
+      description, timestamp and sequence_num, none of which the REQ-080
+      route ever emitted.
+
+      Recounted to 14 by ORCH's Step Final rebase composition for
+      WF02-REQ200-20260830, composing this branch's own REQ-200
+      started-event append against origin/main's concurrently-appended
+      REQ-193 done-event -- `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 14 on-disk entries after
+      composition, recounted directly from the composed file per this
+      note's own recount-every-time rule.
+
       Recounted to 13 by ORCH's Step Final rebase composition for
       WF02-REQ193-20260830, composing this branch's own REQ-193 done-event
       append against origin/main's concurrently-appended REQ-184 done-event --
       `grep -c "^  - req:" docs/status/requirement_status.v7.yaml` = 13
       on-disk entries after composition, recounted directly from the composed
       file per this note's own recount-every-time rule.
+
+      Incremented to 14 by WF02-REQ200-20260830 (DOC-UPDATER)'s own REQ-200
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 14 on-disk entries, no
+      rebase conflict on this file at the time it was written. This closes
+      a real broken-contract gap left by REQ-080: the already-shipped
+      SPA's TimelineFeedItem.tsx was reading actor_display_name,
+      description, timestamp and sequence_num, none of which the REQ-080
+      route ever emitted.
+
+      Incremented to 13 by ORCH's REQ-200 started-event append (Step 00,
+      WF02-REQ200-20260830) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 13 on-disk entries, no
+      rebase conflict on this file at the time it was written.
 
       Recounted to 12 by ORCH's Step Final rebase composition for
       WF02-REQ184-20260830, composing this branch's own REQ-184 done-event

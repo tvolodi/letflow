@@ -1,0 +1,60 @@
+{
+  "handoff_id": "step02a-WF02-REQ200-20260830",
+  "run_id": "WF02-REQ200-20260830",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ200-20260830/step-02a-elixir-dev.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-200"],
+    "issue_ids": [],
+    "queue_task_id": 373,
+    "github_issue": "GH#719",
+    "related_handoff_ids": ["handoffs/WF02-REQ200-20260830/step-01b-code-design-validator.json"],
+    "artifacts_in": [
+      "lib/letflow/design/req200-instance-timeline-rendering.md",
+      "lib/letflow/instances.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/identity/user.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/event_store/event.ex",
+      "lib/letflow/event_store.ex",
+      "web/src/types/api.ts",
+      "web/src/components/instances/TimelineFeedItem.tsx",
+      "web/src/pages/instances/timelineUtils.ts"
+    ],
+    "branch_name": "feature/WF02-REQ200-20260830",
+    "rework_pass": 0,
+    "design_gate_result": "PASS",
+    "verification_summary": {
+      "event_type_enumeration": "Independently re-grepped every `EventStore.append(` call site with a literal `event_type:` across lib/ (engine.ex L1250/2632/3015, sub_process.ex L630/1203, pin_rebind.ex L469, execution_error.ex L302, scheduler.ex L307) -- confirms the design's 7-type list byte-for-byte: INSTANCE_STARTED, TASK_COMPLETED, INSTANCE_CANCELLED, INSTANCE_PINS_REBOUND, SUB_PROCESS_COMPLETED, EXECUTION_ERROR, TIMER_FIRED. Confirmed the 3 platform-scoped exclusions (DEFINITION_PROMOTED, DEFINITION_VERSION_ROLLED_BACK, PROMOTION_ASSERTION_TEARDOWN_FAILED) land via append_platform_event/2 in definitions/promotion.ex and definitions.ex, never carrying an instance_id matching instance_projections. Independently confirmed the open-ended-event-types finding: lua/platform.ex's do_emit_event/3 (L803-824) accepts an arbitrary caller-supplied `event_type` binary with no whitelist against the 7-type list, appended via the same EventStore.append/2 path -- this makes the design's AC5 generic-fallback clause a structural requirement, not a rare edge case, exactly as the design states in section 1.",
+      "timer_fired_actor_sentinel": "Read scheduler.ex L294-313 directly: append_timer_fired_event/4 sets actor_id: EventStore.platform_actor_id(), and event_store.ex L771/790-791 defines platform_actor_id/0 as the hardcoded sentinel \"00000000-0000-0000-0000-000000000002\" -- a UUID never inserted as a users row. Confirmed the design correctly treats this as a real, naturally-occurring instance of AC3's 'actor id refers to a user row that no longer exists' case (the sentinel is simply never found by the batch lookup in section 4, so it falls through the same absent-from-map path as a deleted user).",
+      "actor_fallback_totality": "Traced section 2's resolve_actor_display_name/3 spec by hand for a nil-lookup-result: display_names_by_id only ever contains ids that resolved to a non-blank display_name (section 4 step 3 explicitly omits nil/blank-display_name rows from the map). A deleted user, the platform sentinel, or a genuinely nil actor_id are all simply absent from that map, so step 1 misses uniformly and falls through to step 2 (token_description) -> step 3 (actor_label) -> step 4 (literal \"system\") without any special-casing needed to distinguish 'no such id' from 'never looked up'. Confirmed total for all four fallback levels.",
+      "field_rename_safety": "Independently grepped `timeline_item\\b` and `timeline_item_map` across lib/ and web/: the only producer is lib/letflow/instances.ex's private timeline_item/1 (L185-196) and the only consumer of that shape is lib/letflow/routers/instances.ex's private timeline_item_map/1 (L654-664) -- confirmed the sibling history_item_map/1 (L620-627) is a separate function on a separate route (/:id/history) untouched by this design, keeping created_at/sequence_number as-is. Confirmed web/src/types/api.ts's TimelineEntry (L177-188) has no created_at or sequence_number member, only timestamp and sequence_num. The rename is safe with zero other callers to update.",
+      "n_plus_1_design": "Confirmed fetch_display_names_by_actor_id/2's design (section 4) is a sound, specific Ecto query shape without being implementation code: one pre-pass (Enum.map/reject-nil/uniq) over the page's actor_ids, one Repo.all/2 call filtered by `where([u], u.id in ^distinct_actor_ids)` with `prefix: prefix` threaded through (matching every other query in Instances, per Decision 0006 D1's per-tenant-schema users table), skipped entirely (zero queries) when the pre-pass list is empty. This bounds the query count to exactly one (or zero) per page regardless of page_size -- specific enough that ELIXIR-DEV cannot accidentally reintroduce a per-row lookup and still match the design.",
+      "unchanged_surfaces_citations": "Cross-checked the design's section 6/7 citations against the real, unmodified files: routers/instances.ex L196-198 (route macro + :InstancesRead gate, verbatim), L166-180 in instances.ex (timeline/3's query-building, unchanged; only L181's response-item-building line changes), ensure_instance_exists/2 (404 + REQ-072 cross-tenant scoping via opts' prefix, unchanged), and lib/letflow/api/authorization.ex (not cited as read or edited, matching the no-touch claim). All citations point at real, currently-unmodified code.",
+      "ac_cross_check": "All 11 REQ-200 acceptance criteria (docs/requirements.yaml ~L11043-11053) individually cross-checked against design sections 1-7 -- every AC maps to a concrete design element (AC1/AC4/AC5 -> sections 2-3's total fallback + mandatory generic clause; AC2/AC3 -> section 2's four-level chain and the deleted-user/sentinel case; AC6 -> section 5's rename; AC7 -> section 4's batching; AC8/AC9/AC10 -> section 6/7's unchanged-surface citations; AC11 is a run-and-quote obligation for ELIXIR-DEV). No TBD/deferral language found anywhere in the design.",
+      "no_implementation_code": "All four code fences in the design (lines 62-68, 107-113, 158-163, 228-233) contain only @spec typespec signatures -- no function bodies, no case/fn/-> clauses. Confirmed clean."
+    }
+  },
+  "task": {
+    "description": "Implement REQ-200 strictly per the APPROVED design at lib/letflow/design/req200-instance-timeline-rendering.md (passed CODE-DESIGN-VALIDATOR, see verification_summary above). Add three new private functions to lib/letflow/instances.ex: resolve_actor_display_name/3 (section 2, total 4-level fallback), render_description/3 (section 3, one clause per the 7 real event types plus a mandatory generic fallback clause for any other event_type string -- required because lua/platform.ex's emit_event hook can append arbitrary tenant-chosen event_type strings), and fetch_display_names_by_actor_id/2 (section 4, one batched Repo query per page, prefix-scoped, zero queries when no event on the page has a non-nil actor_id). Rewrite timeline_item/1 into timeline_item/2 (section 5) renaming sequence_number->sequence_num and created_at->timestamp and adding actor_display_name and description; update timeline/3's body to run the batch lookup before mapping over the page. Update routers/instances.ex's timeline_item_map/1 (L654-664) in lockstep: output keys \"sequence_num\" and \"timestamp\" (still ISO-8601-encoded), plus new passthrough keys \"actor_display_name\" and \"description\". Do NOT touch history_item_map/1, the route/auth macro lines, lib/letflow/api/authorization.ex, or anything under web/.",
+    "acceptance_criteria": [
+      "every timeline item carries a non-empty actor_display_name and a non-empty description -- asserted over a timeline containing at least four different event types, with no item having a blank or null value for either",
+      "the actor fallback chain is exercised at all four levels by four explicit tests: an event with an actor id resolves to that user's display_name; one with no actor id but a token_description in metadata resolves to that; one with only an actor_label resolves to that; and one with none of the three resolves to the literal \"system\"",
+      "an event whose actor id refers to a user row that no longer exists still yields a name via the remaining fallback chain rather than erroring or returning null",
+      "descriptions are event-type specific: an INSTANCE_STARTED item and a task-completion item produce different, human-readable sentences each naming the resolved actor, asserted on the actual strings",
+      "an event type with no specific rendering produces a defined non-empty generic description rather than an empty string, asserted by appending an event type the renderer does not special-case",
+      "the response item field names match web/src/types/api.ts's TimelineEntry exactly -- specifically timestamp and sequence_num are present, asserted field by field against that type's declared members",
+      "a page of N timeline events issues a bounded number of user-lookup queries rather than one per event, asserted by counting queries (or by asserting a single lookup for a page whose events share one actor, and at most one lookup per DISTINCT actor otherwise)",
+      "everything REQ-080 established still holds: the route is still GET /api/v1/instances/:id/timeline, still requires :InstancesRead, still returns items in ascending sequence order, still paginates by REQ-067's cursor, and still returns 404 for an instance in another tenant -- five assertions, so the rewrite of item CONTENT does not regress the endpoint",
+      "no file under web/ is added or modified, confirmed by git diff --stat scoped to this requirement's commits -- the SPA component already exists and must render against the new payload unchanged",
+      "lib/letflow/api/authorization.ex is not modified, confirmed by git diff --stat",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  }
+}

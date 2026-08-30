@@ -1,0 +1,66 @@
+{
+  "handoff_id": "step01b-WF02-REQ200-20260830",
+  "run_id": "WF02-REQ200-20260830",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ200-20260830/step-01b-code-design-validator.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-200"],
+    "issue_ids": [],
+    "queue_task_id": 373,
+    "github_issue": "GH#719",
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/instances.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/identity/user.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/event_store/event.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/event_store/platform_events.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/execution_error.ex",
+      "lib/letflow/engine/sub_process.ex",
+      "lib/letflow/engine/pin_rebind.ex",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/engine/lua/platform.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "web/src/types/api.ts",
+      "web/src/components/instances/TimelineFeedItem.tsx",
+      "web/src/pages/instances/timelineUtils.ts",
+      "lib/letflow/design/req080-instance-routes-read.md"
+    ],
+    "artifacts_out": [
+      "lib/letflow/design/req200-instance-timeline-rendering.md"
+    ],
+    "branch_name": "feature/WF02-REQ200-20260830"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) for REQ-200. Verify lib/letflow/design/req200-instance-timeline-rendering.md against docs/requirements.yaml's REQ-200 entry (queue task 373, GH#719, all 11 acceptance_criteria) before this design is eligible to route to ELIXIR-DEV. Check in particular: (1) no implementation code -- the two @spec code fences in the design contain only typespec signatures, no function bodies, no case/fn/-> clauses, consistent with the @spec-only precedent already established in lib/letflow/design/req157-lua-capability-model.md's validated PASS; (2) the actor-display-name fallback chain (section 2) is TOTAL and matches R-Co's resolveActorDisplayName order exactly, including the deleted-user-row edge case; (3) the event-type list in section 1 is grounded in a real grep of EventStore.append/2 call sites (not guessed), correctly excludes the three platform-events-table event types, and section 3's fallback clause is unconditional; (4) the N+1 batching design in section 4 issues at most one query per page; (5) section 5's rename-vs-emit-both decision is justified by evidence that timeline_item/1 and timeline_item_map/1 are the only producers/consumers of the old field names; (6) section 6/7 correctly cite unmodified route/auth/pagination/404/cross-tenant/authorization.ex/web/ code paths.",
+    "acceptance_criteria": [
+      "every timeline item carries a non-empty actor_display_name and a non-empty description -- asserted over a timeline containing at least four different event types, with no item having a blank or null value for either",
+      "the actor fallback chain is exercised at all four levels by four explicit tests: an event with an actor id resolves to that user's display_name; one with no actor id but a token_description in metadata resolves to that; one with only an actor_label resolves to that; and one with none of the three resolves to the literal \"system\"",
+      "an event whose actor id refers to a user row that no longer exists still yields a name via the remaining fallback chain rather than erroring or returning null",
+      "descriptions are event-type specific: an INSTANCE_STARTED item and a task-completion item produce different, human-readable sentences each naming the resolved actor, asserted on the actual strings",
+      "an event type with no specific rendering produces a defined non-empty generic description rather than an empty string, asserted by appending an event type the renderer does not special-case",
+      "the response item field names match web/src/types/api.ts's TimelineEntry exactly -- specifically timestamp and sequence_num are present, asserted field by field against that type's declared members",
+      "a page of N timeline events issues a bounded number of user-lookup queries rather than one per event, asserted by counting queries (or by asserting a single lookup for a page whose events share one actor, and at most one lookup per DISTINCT actor otherwise)",
+      "everything REQ-080 established still holds: the route is still GET /api/v1/instances/:id/timeline, still requires :InstancesRead, still returns items in ascending sequence order, still paginates by REQ-067's cursor, and still returns 404 for an instance in another tenant -- five assertions, so the rewrite of item CONTENT does not regress the endpoint",
+      "no file under web/ is added or modified, confirmed by git diff --stat scoped to this requirement's commits -- the SPA component already exists and must render against the new payload unchanged",
+      "lib/letflow/api/authorization.ex is not modified, confirmed by git diff --stat",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ],
+    "design_summary": "Wrote lib/letflow/design/req200-instance-timeline-rendering.md. Enumerated the real instance-scoped event types by reading every EventStore.append/2 call site (excluding append_platform_event/2 sites, which land in a separate, non-instance-scoped stream): INSTANCE_STARTED, TASK_COMPLETED, INSTANCE_CANCELLED, INSTANCE_PINS_REBOUND, SUB_PROCESS_COMPLETED, EXECUTION_ERROR, TIMER_FIRED -- plus an open-ended set from Letflow.Engine.Lua.Platform's emit_event script hook, which is why the design treats the AC5 generic fallback as structural rather than an edge case. Specified resolve_actor_display_name/3 (total, 4-level fallback per R-Co's resolveActorDisplayName order) and render_description/3 (one rendering per real event type plus a mandatory fallback clause) as @spec-only signatures, no bodies. Specified the batched actor lookup (fetch_display_names_by_actor_id/2: one pre-pass collecting distinct non-nil actor_ids, one Repo query keyed by that set with the request's own prefix, zero queries if no event on the page has a non-nil actor_id). Decided to RENAME created_at->timestamp and sequence_number->sequence_num rather than emit both, justified by timeline_item/1 and timeline_item_map/1 being the only producers/consumers of that shape anywhere in lib/ (grep-confirmed) and by web/'s TimelineEntry having no created_at/sequence_number member to preserve. Confirmed route/auth/pagination/404/cross-tenant all remain untouched by citing the exact unmodified lines in routers/instances.ex and instances.ex, and confirmed no authorization.ex or web/ change is needed.",
+    "open_questions": [
+      "TASK_COMPLETED's description names raw node_id, not a human node_label -- no node-label lookup exists anywhere in scope for this requirement; flagged for a future requirement rather than silently building an unscoped lookup",
+      "EXECUTION_ERROR's description names only error_type, not the full 'affected' payload detail, to keep the sentence short per the requirement's own framing",
+      "TIMER_FIRED's description omits the actor (always the platform sentinel) to avoid a content-free 'by system' suffix on every row, even though actor_display_name is still populated in the item"
+    ]
+  }
+}

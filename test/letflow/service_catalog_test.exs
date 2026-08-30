@@ -296,7 +296,9 @@ defmodule Letflow.ServiceCatalogTest do
       entry = register!(%{scope: :tenant, owner_tenant_id: owner.id})
 
       invisible_result = ServiceCatalog.get_for_tenant(entry.service_id, other.id)
-      missing_result = ServiceCatalog.get_for_tenant(unique_service_id("req191-nonexistent"), other.id)
+
+      missing_result =
+        ServiceCatalog.get_for_tenant(unique_service_id("req191-nonexistent"), other.id)
 
       assert invisible_result == {:error, :not_found}
       assert missing_result == {:error, :not_found}
@@ -457,7 +459,9 @@ defmodule Letflow.ServiceCatalogTest do
   describe "AC7: update_scope/2 narrow/widen" do
     test "narrowing global -> tenant is refused, naming the conflicting tenant, when another tenant's ACTIVE definition references it" do
       %{tenant_id: assignee_tenant_id} = provisioned_tenant("req191-narrow-assignee")
-      %{tenant_id: other_tenant_id, schema_name: other_schema} = provisioned_tenant("req191-narrow-other")
+
+      %{tenant_id: other_tenant_id, schema_name: other_schema} =
+        provisioned_tenant("req191-narrow-other")
 
       entry = register!(%{scope: :global})
       insert_active_definition!(other_schema, [service_task_node("n1", entry.service_id)])
@@ -496,7 +500,10 @@ defmodule Letflow.ServiceCatalogTest do
       insert_active_definition!(other_schema, [service_task_node("n1", entry.service_id)])
 
       assert {:ok, %Entry{scope: :global, owner_tenant_id: nil}} =
-               ServiceCatalog.update_scope(entry.service_id, %{scope: :global, owner_tenant_id: nil})
+               ServiceCatalog.update_scope(entry.service_id, %{
+                 scope: :global,
+                 owner_tenant_id: nil
+               })
     end
   end
 
@@ -557,9 +564,7 @@ defmodule Letflow.ServiceCatalogTest do
   describe "AC9: migration and moduledoc document the GLOBAL-table divergence" do
     test "the migration header cites decision 0003 and REVIEWER sign-off" do
       migration_source =
-        File.read!(
-          "priv/repo/migrations/20260830000001_create_service_catalog.exs"
-        )
+        File.read!("priv/repo/migrations/20260830000001_create_service_catalog.exs")
 
       assert migration_source =~ "0003-ecto-schema-strategy.md"
       assert migration_source =~ "REVIEWER sign-off"

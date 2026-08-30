@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF02-REQ191-20260830-step05",
+  "run_id": "WF02-REQ191-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "REQ-191's implementation and tests passed CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (1 rework round), REVIEWER, and TEST-DESIGN-VALIDATOR (all PASS -- see handoffs/WF02-REQ191-20260830/step-04-test-runner.json's context for TEST-DESIGN-VALIDATOR's own fresh mix test / mutation-reproduction / per-AC coverage notes). TEST-RUNNER then ran the full suite fresh: combined 2592 tests, 5 properties, 2 failures (2595/2597 passed), both the documented pre-existing rustc-absent-from-sandbox environmental baseline (Mix.Tasks.Letflow.CheckToolchainTest rust-pin tests) -- structurally excluded via git diff --name-only main...HEAD not touching that test file, and `which rustc cargo` returning nothing in this sandbox. mix compile --warnings-as-errors: clean. mix format --check-formatted: found and fixed a pre-existing formatting drift in test/letflow/service_catalog_test.exs (whitespace/line-wrap only, no semantic change) before re-confirming clean. mix letflow.lint_handoffs: OK, 0 new violations. Checked specifically for test-count-oracle staleness from the new GLOBAL service_catalog table (the class of bug hit on prior requirements when a new TENANT-scoped table was added): zero references to service_catalog in any fixture/count oracle, confirming no update was needed and nothing else assumes a fixed global-table count. Full report: test/reports/report-2026-08-30-WF02-REQ191-20260830.yaml."
+  },
+  "task": {
+    "description": "Independently re-derive whether each of REQ-191's 12 acceptance criteria is actually met by reading the real code and re-running tests yourself, not by trusting prior reports.",
+    "acceptance_criteria": [
+      "the service_catalog table carries the scope/owner consistency CHECK: an insert with scope 'global' and a non-null owner_tenant_id is rejected by the DATABASE, and so is one with scope 'tenant' and a null owner_tenant_id -- two explicit tests, not changeset-level validation",
+      "required_auth and timeout_ms are CHECK constrained at the database level: an insert with required_auth 'BASIC' is rejected, and so is one with timeout_ms 0 and one with timeout_ms 3600001",
+      "get_for_tenant/2 returns a global service to any tenant; returns a tenant-scoped service to its owner; and returns NOT FOUND -- not a forbidden error -- for a tenant-scoped service owned by a different tenant, so the two cases are indistinguishable to the caller (three explicit tests)",
+      "service_id is globally unique: registering the same service_id for a second, different tenant fails, even when the first is tenant-scoped",
+      "register/2 with scope 'tenant' naming a tenant that does not exist is rejected without creating a row",
+      "delete/2 of a service referenced by an ACTIVE definition is refused and the error names the referencing definition ids; delete/2 of an unreferenced service succeeds -- and a test confirms the reference check matches an actual SERVICE_TASK service_id attribute rather than a substring of the serialized graph, by registering a service whose id appears only inside an unrelated string in some definition's graph and asserting that definition does NOT block the delete",
+      "update_scope/2 narrowing a global service to tenant-scoped is refused, naming the conflicting tenant ids, when another tenant's ACTIVE definition references it; widening a tenant-scoped service to global is always allowed",
+      "Letflow.Definitions.ServiceScopeValidator.validate/3 works unchanged when handed a Lookup backed by this catalog: a definition referencing a service not visible to its tenant is rejected at activation, and one referencing a visible service activates -- with no change to service_scope_validator.ex itself, confirmed by git diff",
+      "the migration and the module moduledoc both state that this table is GLOBAL rather than per-tenant-schema, give the R-Co-grounded reason (a global-scope entry is referenceable by every tenant and service_id is unique across tenants), and flag the divergence from decision 0003 Decision B for REVIEWER sign-off",
+      "solution_pack.ex's service_catalog_entries hard-fail is either made reachable-and-functional or is explicitly retained with the owning follow-up named in this requirement's moduledoc -- it is not left unaddressed, asserted by a test covering whichever outcome was chosen",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

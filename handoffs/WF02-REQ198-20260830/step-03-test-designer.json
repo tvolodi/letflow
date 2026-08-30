@@ -1,0 +1,48 @@
+{
+  "handoff_id": "step03-WF02-REQ198-20260830",
+  "run_id": "WF02-REQ198-20260830",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ198-20260830/step-03-test-designer.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-198"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ198-20260830/step-02d-reviewer.json",
+      "handoffs/WF02-REQ198-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ198-20260830/security-review-req198-findings.md",
+      "handoffs/WF02-REQ198-20260830/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req198-expr-builtin-functions.md",
+      "lib/letflow/engine/expr.ex",
+      "test/letflow/engine/expr_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ198-20260830",
+    "reviewer_pass": "PASS",
+    "verification_evidence": {
+      "diff_read_directly": "Read the full git diff main...HEAD -- lib/letflow/engine/expr.ex (not the design doc's paraphrase). Confirmed the implementation matches the design's specified mechanism exactly: identifier_token/1 and identifier_token_kv/1 each gained the same 8 literal clauses mapping a fixed string to {:builtin_call, atom}, inserted before the pre-existing {:var, ...} catch-all; a {:comma} token was added to both do_tokenize/2 and do_tokenize_positioned/4; parse_primary/1 and parse_primary_p/2 each gained one clause matching [{:builtin_call, name}, {:lparen} | rest] before their existing {:lparen} sub-expression clause; parse_call_args/1+parse_call_args_rest/2 and their positioned twins parse_call_args_p/2+parse_call_args_rest_p/3 implement the comma-separated arg_list grammar; eval/2 gained one {:call, name, args} clause dispatching through eval_args/3 (left-to-right, short-circuits on first arg error) -> check_arity/2 (required_arity/1 lookup) -> apply_builtin/2 (8 per-function clauses plus string_predicate/4 for the 3 boolean string predicates, plus ascii_trim/1 + ascii_trim_leading/1 + ascii_trim_trailing/1 for trim). No unexplained deviation from the design doc's §1-§6.",
+      "one_minor_undocumented_addition_noted_nonblocking": "ELIXIR-DEV added a public accessor `builtin_function_names/0` (expr.ex:146-151) returning @builtin_function_names, with a comment saying it exists to let a test consult the real list rather than hand-copying it. The design doc did not specify this accessor. In practice it is unused: grep confirms zero call sites in both lib/ and test/ -- the AC9 marker-iteration test in expr_test.exs instead hand-copies the (different) @unsupported_call_markers list, not @builtin_function_names. This is dead public API, flagged as a minor, non-blocking cleanliness note, not a defect -- TEST-DESIGNER is not required to add a test that exercises it, and ELIXIR-DEV is not required to remove it as part of this gate, but a future pass should either use it or delete it.",
+      "test_file_spot_check": "Read expr_test.exs:640-789 directly. AC6 ASCII-casing tests (lines 673-679) assert lower(\"CAFÉ\") == \"cafÉ\" and upper(\"café\") == \"CAFé\" -- correct: É is a 2-byte UTF-8 sequence outside the ASCII A-Z/a-z byte ranges the design specifies, so it must pass through unchanged while the plain ASCII letters convert; this matches String.downcase(s, :ascii)/String.upcase(s, :ascii)'s documented behavior and the moduledoc's own worked example. AC9's marker-iteration test (lines 759-786) generates one test per entry of a fixed 17-item literal copy of @unsupported_call_markers (private, so it cannot be referenced directly), asserting translate_cel_to_expr/1 still returns {:error, :unsupported_cel_feature} for each -- correct in shape and exhaustive over the real 17-entry list (compared by hand against expr.ex:129-147). Also spot-checked AC3 (wrong-arity, lines 722-749), AC2/AC7 (parse-rejection of frobnicate/now/date_add/date_diff, lines 690-715), and AC5 (type-mismatch, lines 649-664) -- all genuinely correct on inspection.",
+      "open_questions_carried_forward": "OQ-1 (trim's exact ASCII-whitespace byte set) and OQ-2 (byte-vs-codepoint semantics for contains/startsWith/endsWith) are implemented exactly as the design specifies (ascii_trim_leading/trailing use the same [?\\s, ?\\t, ?\\n, ?\\r] set as do_tokenize/2's whitespace-skip clause; contains/startsWith/endsWith use String.contains?/2 et al. directly on UTF-8 binaries). REVIEWER confirms both remain genuinely non-blocking: no acceptance criterion exercises a non-ASCII-whitespace trim input or a case where byte vs. codepoint substring matching would diverge (impossible for valid UTF-8 in any case). TEST-DESIGNER does not need to add coverage for either; do not treat their absence as a gap.",
+      "no_scope_creep_confirmed": "No clock-dependent builtin, no CEL macro/collection function, no user-defined-function/registration mechanism was added -- confirmed by direct reading of the diff and by the now()/date_add()/date_diff() parse-rejection tests already present. Only lib/letflow/engine/expr.ex, test/letflow/engine/expr_test.exs, the design doc, and handoff/registry bookkeeping changed (git diff main...HEAD --stat).",
+      "decision_record_consistency": "No entry in docs/migration/decisions/ needed touching -- this continues REQ-197's already-recorded purity/determinism and clock-exclusion decisions without re-litigating either; confirmed no new decision record was warranted or silently bypassed.",
+      "supervision_check": "Trivially satisfied -- expr.ex is a pure function module, no GenServer/gen_statem/process/supervision tree involvement anywhere in this diff."
+    }
+  },
+  "task": {
+    "description": "REVIEWER PASSED REQ-198's function-call syntax and 8 pure builtins (length, lower, upper, trim, contains, startsWith, endsWith, coalesce) added to lib/letflow/engine/expr.ex atop REQ-197's grammar. SECURITY-REVIEWER already PASSED (handoffs/WF02-REQ198-20260830/security-review-req198-findings.md) with independently re-verified compile/format/purity/test/lint results and substantive confirmation of the closed-whitelist mechanism, no ReDoS/resource-exhaustion risk, and no injection/encoding-confusion risk from the ASCII-only casing decision. REVIEWER separately confirmed idiomatic fit (eval_args/check_arity/apply_builtin mirror the module's existing pattern-matching-dispatch and {:ok,_}/{:error,_} tagged-tuple conventions with no new error-shape family), no scope creep, and decision-record consistency -- see verification_evidence above for the one minor, non-blocking finding (an unused public accessor). ELIXIR-DEV already wrote an initial ~50-test pass in test/letflow/engine/expr_test.exs as a good-faith first cut covering all 11 ACs at least once each. TEST-DESIGNER's job here is a full gap-check of that existing suite against all 11 acceptance criteria in docs/requirements.yaml's REQ-198 entry -- following the REQ-197 precedent pattern (verify coverage exists, add what's missing, do not duplicate or rewrite what already correctly covers an AC) -- not a from-scratch rewrite of the test file.",
+    "acceptance_criteria": [
+      "Every one of REQ-198's 11 acceptance criteria in docs/requirements.yaml maps to at least one runnable ExUnit test, with test names/comments citing the AC number where not already present.",
+      "OQ-1 (trim's ASCII-whitespace byte set) and OQ-2 (byte-vs-codepoint substring semantics) require no new test coverage -- both are REVIEWER-confirmed non-blocking and already implemented consistently with the design; do not treat their absence as a gap.",
+      "The existing ~50 tests ELIXIR-DEV already wrote (test/letflow/engine/expr_test.exs) are preserved and built upon, not duplicated or rewritten wholesale.",
+      "mix test test/letflow/engine/expr_test.exs test/letflow/engine/transition_test.exs passes in full after any additions, with real output quoted -- not asserted from memory.",
+      "No scope creep: only test files touched unless a genuine implementation gap against the design or an AC is found, in which case route back through ELIXIR-DEV rather than patching lib/ directly."
+    ]
+  }
+}

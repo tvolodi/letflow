@@ -3425,6 +3425,21 @@
       "released_lock": true,
       "last_known_step": "Step Final (ORCH: merged PR #740 to main, queue task 370 released done)",
       "note": "Extends expr.ex with arithmetic, unary negation, and a structured parse-error surface, matching R-Co's actual (non-CEL) expr semantics -- without breaking EE-05's catch-false gateway contract or expr.ex's zero-impurity grep. now()/date_add/date_diff explicitly excluded as clock-impure. Two real defects caught mid-pipeline: CODE-DESIGN-VALIDATOR's AC5 null-asymmetry gap (design rework 1), and REVIEWER's hand-traced signed-infinity sign-flip bug where float division-by-zero used one unsigned :infinity marker regardless of dividend sign (implementation rework 1) -- both fixed and independently reverified. PR #740 merged."
+    },
+    {
+      "run_id": "WF02-REQ198-20260830",
+      "requirement_id": "REQ-198",
+      "queue_task_id": 371,
+      "github_issue_number": 717,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/engine/expr.ex"
+      ],
+      "started_at": "2026-08-30T10:24:24Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 5 (RELEASE-VALIDATOR: PASS, independently re-verified all 11 ACs -> routed to DOC-UPDATER, step-06)",
+      "note": "Second and last of S6's expr half, atop REQ-197's grammar. Adds a function-call form and 8 pure builtins (length, lower, upper, trim, contains, startsWith, endsWith, coalesce), closed-whitelist lex-time design ported from R-Co. now()/date_add/date_diff explicitly excluded. Must not weaken @unsupported_call_markers. RELEASE-VALIDATOR independently re-ran the full suite (scripts/test_parallel.sh, 2715/2717, same 2 pre-existing rustc-absent CheckToolchainTest failures) and re-checked all 11 ACs against real code -- genuine PASS, see handoffs/WF02-REQ198-20260830/release-validation-report-req198.md."
     }
   ]
 }

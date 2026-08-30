@@ -1,0 +1,62 @@
+{
+  "handoff_id": "step03b-WF02-REQ198-20260830",
+  "run_id": "WF02-REQ198-20260830",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ198-20260830/step-03b-test-design-validator.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-198"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ198-20260830/step-03-test-designer.json",
+      "handoffs/WF02-REQ198-20260830/test-designer-gap-analysis-req198.md",
+      "handoffs/WF02-REQ198-20260830/step-02d-reviewer.json",
+      "handoffs/WF02-REQ198-20260830/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req198-expr-builtin-functions.md",
+      "lib/letflow/engine/expr.ex",
+      "test/letflow/engine/expr_test.exs",
+      "handoffs/WF02-REQ198-20260830/test-designer-gap-analysis-req198.md"
+    ],
+    "branch_name": "feature/WF02-REQ198-20260830",
+    "gap_analysis_summary": {
+      "method": "Cross-checked all 11 acceptance criteria in docs/requirements.yaml's REQ-198 entry (lines 10826-10837) against ELIXIR-DEV's existing ~50-test pass in test/letflow/engine/expr_test.exs, read in full myself, following the REQ-197 precedent pattern (verify, fill genuine gaps only, no rewrite). Full per-AC disposition and reasoning is in handoffs/WF02-REQ198-20260830/test-designer-gap-analysis-req198.md.",
+      "acs_already_complete_no_gap": [
+        "AC1 (one test per builtin, concrete value)",
+        "AC2 (frobnicate(1) rejected as structured parse error, including parse_strict/1 field check)",
+        "AC4 (null propagation -- AC4's own wording enumerates exactly 3 required tests, all present, plus 2 bonus cases)",
+        "AC5 (non-string argument type_mismatch, 3 representative tests)",
+        "AC6 (ASCII-only case-conversion decision + non-ASCII test, already REVIEWER-spot-checked)",
+        "AC7 (now/date_add/date_diff all 3 individually tested, plus frobnicate, plus an evaluate_condition/2 catch-false composition test)",
+        "AC8 (PR-description obligation per its own wording -- a runtime grep-based ExUnit test already exceeds this minimum, predates REQ-198, covers the whole file)",
+        "AC9 (marker-iteration test -- hand-copy of the private, non-exported @unsupported_call_markers list is explicitly pre-authorized by the design doc's own SS5 fallback text; no public accessor exists for this attribute, unlike the separately-flagged, unrelated, unused builtin_function_names/0)",
+        "AC10 (catch-false tested correctly at the evaluate_condition/2 gateway level, not just eval/2)"
+      ],
+      "gap_found_and_filled": {
+        "ac": "AC3 (wrong arity)",
+        "gap": "Only length and coalesce had wrong-arity tests before this pass, even though design doc SS4's arity table specifies a wrong-arity example for every fixed-arity builtin and required_arity/1 is a per-function lookup where a single function's table entry could be wrong without any of the other functions' tests catching it.",
+        "fix": "Added 12 tests to the existing 'eval/2 -- wrong arity is rejected (AC3)' describe block in test/letflow/engine/expr_test.exs: one under-arity + one over-arity test each for upper, lower, trim, contains, startsWith, endsWith, in the same style as the pre-existing length/coalesce tests (parse real condition syntax via Expr.parse/1, assert the exact {:error, {:eval_error, {:wrong_arity, name, expected, got}}} tuple)."
+      },
+      "ac11_not_evaluated": "mix test / mix compile --warnings-as-errors execution is TEST-RUNNER's job, not evaluated by TEST-DESIGNER per core-directives.",
+      "file_touched": "test/letflow/engine/expr_test.exs only -- no lib/ changes, no genuine implementation gap found against the design or any AC.",
+      "tests_not_run_by_test_designer": "Per role scope, TEST-DESIGNER did not run mix test itself; TEST-DESIGN-VALIDATOR/TEST-RUNNER must execute the suite and quote real output."
+    }
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR hard gate (WF-02 Step 3b) on REQ-198's test suite after TEST-DESIGNER's gap-analysis pass (test/letflow/engine/expr_test.exs, ~50 -> 62 tests). Read handoffs/WF02-REQ198-20260830/test-designer-gap-analysis-req198.md in full first -- it documents the AC-by-AC disposition, the one genuine gap found (AC3, wrong-arity coverage incomplete for 6 of 8 builtins) and the 12 tests added to close it, and the reasoning for NOT adding coverage that would exceed what any AC actually asks for (AC4's narrowly-enumerated null-prop scope, AC9's design-doc-sanctioned hand-copy fallback). Verify independently rather than trusting the report.",
+    "acceptance_criteria": [
+      "Every one of REQ-198's 11 acceptance criteria in docs/requirements.yaml maps to at least one runnable, passing ExUnit test -- confirm this yourself against the test file, not just against the gap-analysis doc's claims.",
+      "Independently verify the AC3 gap-fill: read the 12 newly-added wrong-arity tests (upper/lower/trim/contains/startsWith/endsWith) yourself and confirm each asserts the exact {:wrong_arity, name, expected, got} tuple against a real parsed AST, not a hand-built one that could mask a parser bug.",
+      "Independently assess the AC9 hand-copy disposition: confirm lib/letflow/engine/expr.ex's @unsupported_call_markers (line 173) genuinely has no public accessor, and confirm the design doc (lib/letflow/design/req198-expr-builtin-functions.md SS5) genuinely pre-authorizes a literal-copy fallback when the attribute is not exported, before accepting this as a non-gap.",
+      "Confirm no @tag :skip, no pending/TODO tests, no shared mutable fixture state, and async: true remains valid (pure module, no Repo/Sandbox dependency) across the whole file.",
+      "mix test test/letflow/engine/expr_test.exs test/letflow/engine/transition_test.exs passes in full, real output quoted -- not asserted from memory.",
+      "CRITICAL: the handoff's top-level status field must be exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing, per this project's documented recurring bug."
+    ]
+  }
+}

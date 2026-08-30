@@ -339,3 +339,41 @@ history:
       100/100; mix compile --warnings-as-errors clean; purity grep zero
       real-code matches). Full detail:
       handoffs/WF02-REQ197-20260830/release-validation-req197.md.
+  - req: REQ-198
+    event: started
+    agent: ORCH
+    at: "2026-08-30T10:24:24Z"
+    note: >
+      Queue task 371, GH#717, stage S6. Second and last of S6's expr half,
+      atop REQ-197's extended grammar. Adds a function-call form and 8 pure
+      builtins (length, lower, upper, trim, contains, startsWith, endsWith,
+      coalesce) to lib/letflow/engine/expr.ex, ported from R-Co's closed
+      lex-time whitelist design (src/expr/lexer.zig). now()/date_add/
+      date_diff explicitly excluded (clock-impure, per REQ-197's own
+      decision). Must not weaken @unsupported_call_markers. Depends_on
+      [REQ-197], done.
+  - req: REQ-198
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T11:08:03Z"
+    note: >
+      WF02-REQ198-20260830 done (queue task 371, GH#717, stage S6). Added
+      expr.ex's function-call form and 8 pure builtins (length, lower, upper,
+      trim, contains, startsWith, endsWith, coalesce) atop REQ-197's
+      extended grammar, preserving the lex-time closed whitelist (unknown
+      names fall to the bare-variable path and surface as parse errors, not
+      evaluated), EE-05's catch-false gateway contract, and the zero-impurity
+      grep. now()/date_add/date_diff remain excluded as clock-impure.
+      TEST-DESIGNER found and filled one real coverage gap: wrong-arity
+      tests for 6 of the 8 builtins were initially missing (only length and
+      coalesce had them); all 8 now have both-direction (too few/too many)
+      arity coverage. TEST-DESIGN-VALIDATOR confirmed 3 real mutations
+      caught. RELEASE-VALIDATOR independently re-verified all 11 acceptance
+      criteria against the real code and a self-run test pass (targeted
+      expr_test.exs + transition_test.exs 160/160; mix compile
+      --warnings-as-errors clean; mix format --check-formatted clean; full
+      suite via scripts/test_parallel.sh 2715/2717, the 2 failures being the
+      pre-existing rustc-absent letflow_check_toolchain_test.exs baseline,
+      not a regression). This closes S6's expr subsystem in full: REQ-197
+      (arithmetic/parse-error surface) and REQ-198 (builtins) are both done.
+      Full detail: handoffs/WF02-REQ198-20260830/release-validation-report-req198.md.

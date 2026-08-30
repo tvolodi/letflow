@@ -558,4 +558,338 @@ defmodule Letflow.Engine.ExprTest do
       assert Expr.eval(ast, %{}) == Expr.eval(ast, %{})
     end
   end
+
+  # ---------------------------------------------------------------------
+  # REQ-198 AC1 -- each of the 8 builtins, one test per with a concrete
+  # expected value. Parsed from real condition syntax so the tokenizer's
+  # new {:builtin_call, name} classification and the call-syntax grammar
+  # are exercised too, not just eval/2's dispatch.
+  # ---------------------------------------------------------------------
+
+  describe "parse/1 + eval/2 -- each of the 8 builtins, one test per (AC1)" do
+    test "length(s) returns the string's byte length" do
+      assert {:ok, ast} = Expr.parse(~S|length("hello")|)
+      assert ast == {:call, :length, [{:lit, "hello"}]}
+      assert Expr.eval(ast, %{}) == {:ok, 5}
+    end
+
+    test "lower(s) lowercases ASCII input" do
+      assert {:ok, ast} = Expr.parse(~S|lower("HELLO")|)
+      assert Expr.eval(ast, %{}) == {:ok, "hello"}
+    end
+
+    test "upper(s) uppercases ASCII input" do
+      assert {:ok, ast} = Expr.parse(~S|upper("hello")|)
+      assert Expr.eval(ast, %{}) == {:ok, "HELLO"}
+    end
+
+    test "trim(s) strips leading/trailing ASCII whitespace, leaving interior whitespace alone" do
+      assert {:ok, ast} = Expr.parse("trim(\" \thi there\r\n \")")
+      assert Expr.eval(ast, %{}) == {:ok, "hi there"}
+    end
+
+    test "contains(haystack, needle) is a byte-substring boolean check" do
+      assert {:ok, ast} = Expr.parse(~S|contains("hello world", "wor")|)
+      assert Expr.eval(ast, %{}) == {:ok, true}
+    end
+
+    test "startsWith(haystack, prefix)" do
+      assert {:ok, ast} = Expr.parse(~S|startsWith("hello world", "hello")|)
+      assert Expr.eval(ast, %{}) == {:ok, true}
+    end
+
+    test "endsWith(haystack, suffix)" do
+      assert {:ok, ast} = Expr.parse(~S|endsWith("hello world", "world")|)
+      assert Expr.eval(ast, %{}) == {:ok, true}
+    end
+
+    test "coalesce(a, ...) returns the first non-null argument" do
+      assert {:ok, ast} = Expr.parse(~S|coalesce(1, 2)|)
+      assert Expr.eval(ast, %{}) == {:ok, 1}
+    end
+
+    test "a builtin call can take a variable and a nested builtin call as an argument" do
+      assert {:ok, ast} = Expr.parse(~S|contains(name, upper("ab"))|)
+      assert Expr.eval(ast, %{"name" => "xABy"}) == {:ok, true}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-198 AC4 -- null propagation, three explicit tests.
+  # ---------------------------------------------------------------------
+
+  describe "eval/2 -- null propagation (AC4)" do
+    test "length(null) yields null" do
+      assert Expr.eval({:call, :length, [{:lit, nil}]}, %{}) == {:ok, nil}
+    end
+
+    test "contains(null, \"x\") yields null" do
+      assert Expr.eval({:call, :contains, [{:lit, nil}, {:lit, "x"}]}, %{}) == {:ok, nil}
+    end
+
+    test "contains(\"x\", null) also yields null -- either position propagates" do
+      assert Expr.eval({:call, :contains, [{:lit, "x"}, {:lit, nil}]}, %{}) == {:ok, nil}
+    end
+
+    test "coalesce(null, null, 3) yields 3" do
+      assert Expr.eval({:call, :coalesce, [{:lit, nil}, {:lit, nil}, {:lit, 3}]}, %{}) ==
+               {:ok, 3}
+    end
+
+    test "coalesce(null, null) yields null when every argument is null" do
+      assert Expr.eval({:call, :coalesce, [{:lit, nil}, {:lit, nil}]}, %{}) == {:ok, nil}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-198 AC5 -- a non-string argument to a string function is an error,
+  # not a coerced result.
+  # ---------------------------------------------------------------------
+
+  describe "eval/2 -- non-string argument is a type_mismatch error, never coerced (AC5)" do
+    test "length(42) is a type_mismatch error" do
+      assert Expr.eval({:call, :length, [{:lit, 42}]}, %{}) ==
+               {:error, {:eval_error, {:type_mismatch, :length, 42}}}
+    end
+
+    test "lower(true) is a type_mismatch error" do
+      assert Expr.eval({:call, :lower, [{:lit, true}]}, %{}) ==
+               {:error, {:eval_error, {:type_mismatch, :lower, true}}}
+    end
+
+    test "contains(1, \"x\") is a type_mismatch error" do
+      assert Expr.eval({:call, :contains, [{:lit, 1}, {:lit, "x"}]}, %{}) ==
+               {:error, {:eval_error, {:type_mismatch, :contains, 1, "x"}}}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-198 AC6 -- ASCII-only case conversion decision (moduledoc), tested
+  # on a non-ASCII input: the accented byte sequence must pass through
+  # UNCHANGED, not Unicode-casefolded.
+  # ---------------------------------------------------------------------
+
+  describe "eval/2 -- ASCII-only case conversion on non-ASCII input (AC6)" do
+    test "lower(\"CAFÉ\") lowercases only the ASCII letters, leaving É unchanged" do
+      assert Expr.eval({:call, :lower, [{:lit, "CAFÉ"}]}, %{}) == {:ok, "cafÉ"}
+    end
+
+    test "upper(\"café\") uppercases only the ASCII letters, leaving é unchanged" do
+      assert Expr.eval({:call, :upper, [{:lit, "café"}]}, %{}) == {:ok, "CAFé"}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-198 AC2/AC7 -- an unrecognized call name (frobnicate) and the
+  # deliberately-excluded clock builtin (now) are both rejected as parse
+  # errors, never evaluated or raised, via the pre-existing trailing-input
+  # mechanism -- no special-casing for "clock builtin" vs. any other
+  # undefined name.
+  # ---------------------------------------------------------------------
+
+  describe "parse/1 -- unrecognized/excluded call names are parse errors, not eval errors (AC2, AC7)" do
+    test "frobnicate(1) is rejected as a parse error (AC2)" do
+      assert {:error, {:parse_error, _reason}} = Expr.parse("frobnicate(1)")
+    end
+
+    test "now() is rejected as a parse error, never evaluated (AC7)" do
+      assert {:error, {:parse_error, _reason}} = Expr.parse("now()")
+    end
+
+    test "date_add(a, b) is rejected as a parse error (AC7)" do
+      assert {:error, {:parse_error, _reason}} = Expr.parse("date_add(a, b)")
+    end
+
+    test "date_diff(a, b) is rejected as a parse error (AC7)" do
+      assert {:error, {:parse_error, _reason}} = Expr.parse("date_diff(a, b)")
+    end
+
+    test "parse_strict/1 surfaces frobnicate(1) through REQ-197's structured parse-failure shape" do
+      assert {:error, %{line: _, column: _, token_text: _, message: _}} =
+               Expr.parse_strict("frobnicate(1)")
+    end
+
+    test "evaluate_condition/2 collapses now() to false, never raises" do
+      assert Expr.evaluate_condition("now()", %{}) == false
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-198 AC3 -- wrong arity is rejected for a fixed-arity function
+  # (length) and for coalesce's >=1 requirement.
+  # ---------------------------------------------------------------------
+
+  describe "eval/2 -- wrong arity is rejected (AC3)" do
+    test "length() with zero arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse("length()")
+      assert ast == {:call, :length, []}
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :length, {:exactly, 1}, 0}}}
+    end
+
+    test "length(a, b) with two arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|length("a", "b")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :length, {:exactly, 1}, 2}}}
+    end
+
+    test "coalesce() with zero arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse("coalesce()")
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :coalesce, {:at_least, 1}, 0}}}
+    end
+
+    test "coalesce(a) with one argument is valid, not a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|coalesce("only")|)
+      assert Expr.eval(ast, %{}) == {:ok, "only"}
+    end
+
+    # Gap-fill (TEST-DESIGNER pass): design doc §4's arity table (traceability
+    # §10 row 3) specifies a wrong-arity example for EVERY fixed-arity
+    # builtin, not just length/coalesce -- ELIXIR-DEV's initial pass only
+    # covered those two representative cases. required_arity/1 is a per-
+    # function lookup dispatched inside check_arity/2 (§4), so a mistake
+    # scoped to one function's entry (e.g. contains wrongly requiring 3
+    # instead of 2) would not be caught by exercising length/coalesce alone.
+    # One under-arity and one over-arity test per remaining function,
+    # mirroring the existing length/coalesce shape exactly.
+    test "upper() with zero arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse("upper()")
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :upper, {:exactly, 1}, 0}}}
+    end
+
+    test "upper(a, b) with two arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|upper("a", "b")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :upper, {:exactly, 1}, 2}}}
+    end
+
+    test "lower() with zero arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse("lower()")
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :lower, {:exactly, 1}, 0}}}
+    end
+
+    test "lower(a, b) with two arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|lower("a", "b")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :lower, {:exactly, 1}, 2}}}
+    end
+
+    test "trim() with zero arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse("trim()")
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :trim, {:exactly, 1}, 0}}}
+    end
+
+    test "trim(a, b) with two arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|trim("a", "b")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :trim, {:exactly, 1}, 2}}}
+    end
+
+    test "contains(a) with one argument is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|contains("a")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :contains, {:exactly, 2}, 1}}}
+    end
+
+    test "contains(a, b, c) with three arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|contains("a", "b", "c")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :contains, {:exactly, 2}, 3}}}
+    end
+
+    test "startsWith(a) with one argument is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|startsWith("a")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :startsWith, {:exactly, 2}, 1}}}
+    end
+
+    test "startsWith(a, b, c) with three arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|startsWith("a", "b", "c")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :startsWith, {:exactly, 2}, 3}}}
+    end
+
+    test "endsWith(a) with one argument is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|endsWith("a")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :endsWith, {:exactly, 2}, 1}}}
+    end
+
+    test "endsWith(a, b, c) with three arguments is a wrong_arity error" do
+      assert {:ok, ast} = Expr.parse(~S|endsWith("a", "b", "c")|)
+
+      assert Expr.eval(ast, %{}) ==
+               {:error, {:eval_error, {:wrong_arity, :endsWith, {:exactly, 2}, 3}}}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-198 AC9 -- every pre-existing @unsupported_call_markers rejection
+  # still holds after adding the 8 builtins. `@unsupported_call_markers`
+  # is a private module attribute, so this is a fixed literal copy of its
+  # 17 real entries (expr.ex L129-147), re-verified by execution here
+  # rather than by static inspection alone.
+  # ---------------------------------------------------------------------
+
+  describe "translate_cel_to_expr/1 -- every pre-existing unsupported-call marker still rejected (AC9)" do
+    @unsupported_call_markers [
+      "has(",
+      "matches(",
+      "all(",
+      "exists_one(",
+      "exists(",
+      "int(",
+      "uint(",
+      "double(",
+      "string(",
+      "bool(",
+      "bytes(",
+      "duration(",
+      "timestamp(",
+      "size(",
+      "map(",
+      "map{",
+      "filter("
+    ]
+
+    for marker <- @unsupported_call_markers do
+      test "#{marker} is still rejected as unsupported after REQ-198" do
+        condition = "variables.x == #{unquote(marker)}1)"
+        assert Expr.translate_cel_to_expr(condition) == {:error, :unsupported_cel_feature}
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-198 AC10 -- EE-05's catch-false contract holds: a gateway condition
+  # calling a builtin with wrong arity still yields false, never raises.
+  # ---------------------------------------------------------------------
+
+  describe "evaluate_condition/2 -- catch-false on a wrong-arity builtin call (AC10, EE-05)" do
+    test "a wrong-arity builtin call in a gateway condition yields false, not a raise" do
+      assert Expr.evaluate_condition("length() == 0", %{}) == false
+    end
+
+    test "a wrong-arity coalesce() call in a gateway condition yields false, not a raise" do
+      assert Expr.evaluate_condition("coalesce()", %{}) == false
+    end
+  end
 end

@@ -1,0 +1,51 @@
+{
+  "handoff_id": "step02a-WF02-REQ198-20260830",
+  "run_id": "WF02-REQ198-20260830",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ198-20260830/step-02a-elixir-dev.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-198"],
+    "issue_ids": [],
+    "related_handoff_ids": ["handoffs/WF02-REQ198-20260830/step-01b-code-design-validator.json"],
+    "artifacts_in": [
+      "lib/letflow/design/req198-expr-builtin-functions.md",
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/design/req197-expr-arithmetic-and-errors.md"
+    ],
+    "branch_name": "feature/WF02-REQ198-20260830",
+    "rework_pass": 0,
+    "design_gate_result": "PASS",
+    "verification_summary": {
+      "parse_error_mechanism": "Confirmed by direct trace of the real expr.ex: parse_primary/1 (L937-950)'s {:var, path} clause consumes only the var token, leaving a following {:lparen} unconsumed; none of parse_multiplicative_rest/parse_additive_rest/parse_cmp/parse_and_rest/parse_or_rest (L835-935) consume a bare {:lparen} either, so it propagates to parse/1's outer with-clause (L272-280), which produces {:error, {:parse_error, {:trailing_input, leftover}}} for any non-empty leftover. now(1)/date_add(a,b)/frobnicate(1) all hit this path today with zero new code once now/date_add/date_diff are excluded from the 8-name whitelist.",
+      "unsupported_call_markers": "Real list re-grepped at expr.ex L129-147, confirmed byte-for-byte identical to the design's quoted 17 entries: has(, matches(, all(, exists_one(, exists(, int(, uint(, double(, string(, bool(, bytes(, duration(, timestamp(, size(, map(, map{, filter(. None of the 8 new names (length(, lower(, upper(, trim(, contains(, startsWith(, endsWith(, coalesce() is a substring of, or contains as a substring, any existing entry -- independently re-checked, including contains( vs has( and startsWith( vs string(/size(.",
+      "ascii_casing_verification": "Empirically verified on this host's Elixir toolchain (asdf-shimmed): String.downcase(\"CAFE-accent\", :ascii) and String.upcase(\"cafe-accent\", :ascii) leave the non-ASCII byte untouched while lowercasing/uppercasing only the ASCII letters, matching the design's stated test values exactly; String.downcase/1 (Unicode default) instead lowercases the accented character too, confirming the design's stated divergence claim is real, not assumed.",
+      "ac_cross_check": "All 11 REQ-198 acceptance criteria (docs/requirements.yaml ~L10826-10838) individually cross-checked against design sections 1-8/10 -- all map to concrete design elements, no TBD/deferral language found. AC6's ASCII decision is genuinely decided with reasoning and concrete test values. AC7 (now() rejection) and AC9 (marker-iteration test obligation) and AC10 (EE-05 catch-false via evaluate_condition/2's unmodified catch-all) are all traced to real design sections and are coherent with the real code.",
+      "open_questions_disposition": {
+        "OQ-1_trim_whitespace_set": "NON-BLOCKING. No AC exercises a non-ASCII-whitespace input for trim; the chosen 4-byte ASCII set matches this module's one existing definition of whitespace (do_tokenize/2 L292). ELIXIR-DEV should implement per the design's stated set.",
+        "OQ-2_contains_byte_vs_codepoint": "NON-BLOCKING. String.contains?/2 and friends operate correctly on valid UTF-8 binaries; no AC exercises a case where byte vs codepoint framing would produce a different answer. No action needed beyond using the stdlib functions as specified."
+      }
+    }
+  },
+  "task": {
+    "description": "Implement REQ-198 per lib/letflow/design/req198-expr-builtin-functions.md, which passed the design gate (see verification_summary above). Add the closed 8-name lex-time whitelist (length, lower, upper, trim, contains, startsWith, endsWith, coalesce) to identifier_token/1 and identifier_token_kv/1, the new {:call, builtin_name(), args} AST node, the new parse_primary/1 and parse_primary_p/2 call-syntax clauses, the new eval/2 {:call, name, args} clause with arity checking (:wrong_arity eval-error reason) and the 8 functions' exact semantics per design sections 3.1-3.5. now()/date_add()/date_diff() must NOT be added to the whitelist -- their rejection is the pre-existing trailing-input parse-error path, requiring no new rejection code. Follow the design's ASCII-only casing decision (String.downcase/upcase(s, :ascii)), the design's trim whitespace set (space/tab/\\n/\\r), and byte-based length/contains/startsWith/endsWith semantics exactly as specified.",
+    "acceptance_criteria": [
+      "each of the eight builtins evaluates correctly, asserted by at least one test per function with a concrete expected value -- eight tests minimum",
+      "a call to a name outside the whitelist, such as frobnicate(1), is rejected as a parse error rather than evaluating or raising, and the rejection carries REQ-197's structured error",
+      "wrong arity is rejected for a fixed-arity function: length() with zero arguments and length(a, b) with two are both errors, and coalesce() with zero arguments is an error while coalesce(a) with one is valid",
+      "null propagation matches R-Co: length(null) yields null, contains(null, \"x\") yields null, and coalesce(null, null, 3) yields 3 -- three explicit tests",
+      "a non-string argument to a string function, such as length(42), is an error rather than a coerced result",
+      "the case-conversion decision is stated in the moduledoc -- ASCII-only matching R-Co -- and a test asserts the chosen behaviour on a non-ASCII input",
+      "none of now(), date_add or date_diff is added, and a test asserts an expression calling now() is rejected rather than evaluated",
+      "expr.ex's documented purity grep still returns ZERO matches after this change, quoted in the PR",
+      "every construct @unsupported_call_markers rejected before this requirement is still rejected after it, asserted by a test iterating the marker list -- adding the eight builtins did not weaken the CEL rejection",
+      "EE-05's catch-false contract holds: a gateway condition calling a builtin with wrong arity still yields false from evaluate_condition/2 rather than raising",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  }
+}

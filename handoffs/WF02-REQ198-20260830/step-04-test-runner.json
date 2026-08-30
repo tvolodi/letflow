@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF02-REQ198-20260830-step04",
+  "run_id": "WF02-REQ198-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 4",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "test/letflow/engine/expr_test.exs",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-198"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ198-20260830/step-03-test-designer.json",
+      "handoffs/WF02-REQ198-20260830/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ198-20260830/test-designer-gap-analysis-req198.md",
+      "handoffs/WF02-REQ198-20260830/test-design-validation-report-req198.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/design/req198-expr-builtin-functions.md",
+      "test/letflow/engine/expr_test.exs",
+      "test/letflow/engine/transition_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ198-20260830",
+    "note": "TEST-DESIGN-VALIDATOR PASSED (hard gate). All 11 REQ-198 ACs re-checked directly against docs/requirements.yaml (lines 10826-10837) and against test/letflow/engine/expr_test.exs read in full. AC3's 12 newly-added wrong-arity tests (upper/lower/trim/contains/startsWith/endsWith) were confirmed to parse real condition syntax via Expr.parse/1 and assert the exact {:wrong_arity, name, expected, got} tuple against the real parsed AST. AC9's marker-iteration test was independently re-counted against the real @unsupported_call_markers list in lib/letflow/engine/expr.ex (17 entries, same order, not a stale subset) and its hand-copy fallback confirmed design-doc-sanctioned (no public accessor exists for that private attribute). AC10 was confirmed to call Expr.evaluate_condition/2 (the gateway composition entry point), not eval/2 directly. Three real mutations were applied directly to the working tree and each was confirmed caught by a specific, named test, then reverted via `git checkout -- lib/letflow/engine/expr.ex` with `git status --porcelain lib/` confirmed empty after each: (1) required_arity/1's :length clause changed from {:exactly, 1} to its own {:exactly, 2} clause -- 5 of 132 tests failed, including the length()/length(a,b) wrong-arity tests; (2) apply_builtin(:lower, ...) changed from String.downcase(s, :ascii) to plain String.downcase(s) -- exactly 1 test failed, the AC6 lower(\"CAFÉ\") test; (3) identifier_token/1 given an extra now->{:builtin_call, :now} clause simulating an accidental whitelist-scope violation -- 2 tests failed (now() parse-rejection test, and evaluate_condition/2's now() catch-false test, which instead raised FunctionClauseError, confirming the AC7 tests are load-bearing against exactly this kind of accidental scope creep). Full suite re-ran green (160 passed, 1 property, 159 tests) after each revert; no mutant remains in the tree. mix test test/letflow/engine/expr_test.exs test/letflow/engine/transition_test.exs: 160 passed (1 property, 159 tests), 0 failures, real output quoted in test-design-validation-report-req198.md. mix compile --warnings-as-errors: clean, no warnings. mix format --check-formatted: clean (exit 0). mix letflow.lint_handoffs: OK -- 0 new violations across 1499 handoff files (25 pre-existing grandfathered, traced to ISS-0190). No @tag :skip/pending/TODO anywhere in the test file; async: true confirmed valid (pure module, no Repo/Sandbox dependency); no shared mutable fixture state; every test self-sufficient. Only test/letflow/engine/expr_test.exs was touched by TEST-DESIGNER's pass -- no lib/ changes."
+  },
+  "task": {
+    "description": "Run the full test suite exactly as CI will (mix test, then mix compile --warnings-as-errors) for test/letflow/engine/expr_test.exs and test/letflow/engine/transition_test.exs, and diagnose any failure. Confirm mix format --check-formatted passes on the touched test file. Report pass/fail with real output quoted, then route onward per WF-02 (RELEASE-VALIDATOR / DOC-UPDATER) once green.",
+    "acceptance_criteria": [
+      "mix test test/letflow/engine/expr_test.exs test/letflow/engine/transition_test.exs passes in full with real output quoted",
+      "mix compile --warnings-as-errors passes clean with real output quoted",
+      "mix format --check-formatted passes on the touched files"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Full suite via scripts/test_parallel.sh (N=8): combined 2711 tests, 6 properties, 2 failures (2715/2717 passed). Both failures are in Mix.Tasks.Letflow.CheckToolchainTest (rust pin tests), root-caused to :enoent on System.cmd(\"rustc\", ...) -- rustc genuinely absent from this environment's PATH, confirmed directly (`which rustc` empty, `rustc --version` -> command not found). Matches the documented rustc-absent CheckToolchainTest baseline flake class. Confirmed via `git diff main...HEAD --stat` that this branch does not touch that test file or anything rust/toolchain-related -- only lib/letflow/engine/expr.ex, test/letflow/engine/expr_test.exs, the REQ-198 design doc, and status/handoff bookkeeping. test/letflow/engine/expr_test.exs and test/letflow/engine/transition_test.exs both passed with zero failures across the full run. `mix compile --warnings-as-errors --force`: clean, 'Compiling 154 files (.ex)' / 'Generated letflow app', exit 0. `mix format --check-formatted` on both touched test files plus expr.ex: exit 0, clean. Full report: handoffs/WF02-REQ198-20260830/test-runner-report-req198.md.",
+    "routed_to": "RELEASE-VALIDATOR"
+  }
+}

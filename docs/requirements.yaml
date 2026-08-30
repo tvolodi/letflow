@@ -10769,7 +10769,7 @@ requirements:
   - id: REQ-198
     title: Add expr.ex's 8 pure builtin functions (length, lower, upper, trim, contains, startsWith, endsWith, coalesce) with call syntax and arity checking
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 371  # letflow-queue task id
     description: >

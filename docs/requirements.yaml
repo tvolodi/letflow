@@ -9283,7 +9283,7 @@ requirements:
   - id: REQ-183
     title: Webhook delivery dispatch core -- HMAC signing, retry/backoff, auto-pause, and dead-letter landing (WebhookDeliveryAttempt, entry_type "webhook", no route)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S6
     impl_order: 356  # letflow-queue task id
     description: >

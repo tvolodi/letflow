@@ -123,11 +123,14 @@ defmodule Letflow.Obs.AlertsTest do
       # Second evaluation at depth 15 (still above) — must NOT fire again
       ctx_still_above = base_tick_context(%{dlq_count: 15})
       Alerts.run_detection(schema_name, ctx_still_above)
-
-      # No second request
       refute_receive {:webhook_test_server_request, _}, 300
 
-      # State must be FIRED (is_armed: false)
+      # Third evaluation at depth 20 (still above) — must still NOT fire
+      ctx_third = base_tick_context(%{dlq_count: 20})
+      Alerts.run_detection(schema_name, ctx_third)
+      refute_receive {:webhook_test_server_request, _}, 300
+
+      # State must be FIRED (is_armed: false) after all three evaluations
       state = trigger_state!(schema_name, "dlq_depth_threshold")
       assert state.is_armed == false
     end
@@ -401,9 +404,10 @@ defmodule Letflow.Obs.AlertsTest do
           Alerts.run_detection(schema_name, ctx)
         end)
 
-      # 2 attempts should have been made (max_attempts: 2)
-      # Expect both to fail and one error log
-      assert log =~ "alert delivery exhausted"
+      # 2 attempts should have been made (max_attempts: 2).
+      # Exhaustion must log exactly ONE error entry (not one per attempt).
+      exhaustion_count = length(Regex.scan(~r/alert delivery exhausted/, log))
+      assert exhaustion_count == 1, "expected exactly 1 exhaustion log, got #{exhaustion_count}"
       assert log =~ "ac8-hook"
 
       # Must NOT have written any dlq_entries row
@@ -493,11 +497,12 @@ defmodule Letflow.Obs.AlertsTest do
       refute function_exported?(Alerts, :child_spec, 1)
     end
 
-    test "Letflow.Application children list does not include Letflow.Obs.Alerts" do
-      # Verify the module has no start_link (no supervised process shape)
-      # and that application.ex does not register it as a child spec.
-      refute function_exported?(Alerts, :start_link, 1)
-      refute function_exported?(Alerts, :child_spec, 1)
+    test "Letflow.Application source does not reference Letflow.Obs.Alerts" do
+      # Source-assertion: git diff of application.ex is the AC-11 evidence.
+      # A module without start_link/child_spec cannot appear as a child spec,
+      # but the source check catches an accidental bare module atom reference too.
+      source = File.read!("lib/letflow/application.ex")
+      refute source =~ "Letflow.Obs.Alerts"
     end
   end
 

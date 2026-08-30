@@ -127,7 +127,8 @@ defmodule Letflow.Obs.Logger do
           "level" => "error",
           "trace_id" => "",
           "component" => "letflow",
-          "message" => "log encoding failed: #{inspect({level, msg, meta, e})}"
+          "message" =>
+            "log encoding failed: #{inspect({level, msg, redact_sensitive(Map.drop(meta, @beam_reserved_keys)), e})}"
         }
 
         Jason.encode!(fallback) <> "\n"

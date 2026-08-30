@@ -563,3 +563,21 @@ history:
       handoffs/WF02-REQ194-20260830/req194-release-validation-report.md.
       docs/migration/stage-6-operational-cross-cutting.md updated to record
       REQ-194 done and the three-divergence resolution.
+  - req: REQ-195
+    event: started
+    agent: ORCH
+    at: "2026-08-30T16:21:27Z"
+    note: >
+      Queue task 368, GH#714, stage S6. Audit-entry storage (OBS-03,
+      XC-02), closing lib/letflow/routers/audit.ex's (REQ-078, done)
+      recorded gap: resource_type hardcoded "instance", before_state/
+      after_state always null. New audit_entries table (tenant-scoped
+      per decision 0003 Decision B), DB-enforced immutability triggers,
+      same-transaction writes with the state change, tamper-evident
+      chain_hash/prev_chain_hash. Must fix a documented R-Co weakness:
+      chain verification must RECOMPUTE each hash from stored content,
+      not just check linkage (R-Co's own validateAuditChain doesn't).
+      Must decide: DB-trigger vs Elixir-context-boundary capture
+      mechanism, and resource_id's column type. No route change (that's
+      REQ-196). Depends_on [REQ-038, REQ-045, REQ-069, REQ-193], all
+      done.

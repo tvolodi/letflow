@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF02-REQ191-20260830-step02c-rework1",
+  "run_id": "WF02-REQ191-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 2c rework 1",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/service_catalog.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "SECURITY-REVIEWER FAILED Step 2c (handoffs/WF02-REQ191-20260830/step-02c-security-reviewer.json's result, full report handoffs/WF02-REQ191-20260830/security-review-req191.md). One BLOCKER: INV-8 (no unhandled crashes on realistic failure paths, docs/agents/instructions/security-invariants.md). Every other reviewed invariant passed (INV-1 including cross-tenant visibility, the global-table divergence, the cross-schema referential guard, list_registrations/0, and the ServiceScopeValidator Lookup; INV-4; INV-7; INV-2/3/5 not applicable) -- do not re-litigate those, only fix the INV-8 defect below and resubmit.",
+    "prior_step": "handoffs/WF02-REQ191-20260830/step-02c-security-reviewer.json",
+    "defect": {
+      "location": "lib/letflow/service_catalog.ex:407, inside delete/1",
+      "code": "{:ok, _deleted} = Repo.delete(entry)",
+      "why_it_fails_INV_8": "entry is fetched via Repo.get(Entry, service_id) at the top of delete/1; referencing_active_definitions/2 then runs a sequential per-tenant-schema query loop before this line executes -- a real window in which another caller can delete the same row concurrently. Entry has no optimistic-lock field, so Repo.delete/1 matches on primary key alone: if the row is gone by the time this line runs, Repo.delete/1 raises Ecto.StaleEntryError, which this bare match cannot catch -- it crashes the calling process instead of returning a typed error. This is the exact pattern INV-8's own grep heuristic (`grep -rn \"^\\s*{:ok, .*} = \" lib/letflow/`) is written to catch, and it touches external I/O (the DB) directly, so INV-8 applies regardless of whether a route exists yet on top of delete/1.",
+      "precedent_in_this_codebase": "lib/letflow/webhooks.ex:270, Letflow.Webhooks.delete/2, passes Repo.delete(subscription, prefix: prefix)'s result straight through a `with` chain rather than bare-matching it -- Letflow.ServiceCatalog.delete/1 deviates from that established pattern without justification.",
+      "suggested_fix_not_prescriptive": "Replace the bare match with a case/with that handles Repo.delete/1's actual {:ok, _} | {:error, Ecto.Changeset.t()} result. If a concurrent delete should be treated as a benign outcome, rescue/handle Ecto.StaleEntryError explicitly and translate it to {:error, :not_found}, consistent with get_for_tenant/2's and update_scope/2's own not-found handling -- but do not leave the crash-on-race path unhandled."
+    }
+  },
+  "task": {
+    "description": "Fix the single INV-8 defect named above in Letflow.ServiceCatalog.delete/1 (lib/letflow/service_catalog.ex). Do not change any other function's behavior -- get_for_tenant/2, list_for_tenant/2, register/1, update_scope/2, the referential guard, and the Lookup implementation all passed security review as-is. Re-run mix compile --warnings-as-errors and mix test with real output quoted, then re-submit to SECURITY-REVIEWER (Step 2c) for re-review.",
+    "acceptance_criteria": [
+      "delete/1 no longer contains a bare pattern match on Repo.delete/1's result that can raise on a realistic concurrent-delete race",
+      "delete/1's documented @spec return shape (:ok | {:error, :not_found} | {:error, {:referenced_by_active_definitions, [String.t()]}}) is preserved or, if widened to cover the new error case, the @doc/@spec are updated to match",
+      "no other function in lib/letflow/service_catalog.ex is modified beyond what this fix requires",
+      "mix compile --warnings-as-errors and mix test both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

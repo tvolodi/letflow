@@ -10136,7 +10136,7 @@ requirements:
   - id: REQ-191
     title: Service catalog core -- the DB-backed registry three existing seams already depend on (REPO-07, SVC-01/03)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 364  # letflow-queue task id
     description: >

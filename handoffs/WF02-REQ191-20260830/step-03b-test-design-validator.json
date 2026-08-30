@@ -1,0 +1,52 @@
+{
+  "handoff_id": "WF02-REQ191-20260830-step03b-test-design-validator",
+  "run_id": "WF02-REQ191-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 3b",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "test/letflow/service_catalog_test.exs",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "note": "New test file for lib/letflow/service_catalog.ex, lib/letflow/service_catalog/entry.ex, and priv/repo/migrations/20260830000001_create_service_catalog.exs. First test-design pass for this module -- no prior coverage existed. Spec file at test/specs/REQ-191.md maps each of the 11 acceptance criteria (per handoffs/WF02-REQ191-20260830/step-03-test-designer.json's task.acceptance_criteria list) to its test case(s) and states why each exists.",
+    "toolchain": "Elixir/OTP available via asdf (not on default PATH -- `source ~/.asdf/asdf.sh` first). Postgres reachable via docker compose (letflow-1-postgres-1, port 5463), already running and healthy in this sandbox; `sudo docker compose ps` needed to observe it (plain `docker` lacks socket permission for this user, `sudo -n docker` works).",
+    "mix_test_result": "mix test test/letflow/service_catalog_test.exs -> 'Result: 26 passed', 0 failures. Re-ran 3 additional times after the mutation-testing pass to confirm the new concurrent-delete-race test is not flaky -- 'Result: 26 passed' all 3 times.",
+    "mix_compile_result": "MIX_ENV=test mix compile --warnings-as-errors -> exit 0, no warnings.",
+    "mutation_testing": {
+      "target_file": "lib/letflow/service_catalog.ex",
+      "mutants_applied": 4,
+      "mutants_caught": 4,
+      "detail": [
+        {
+          "mutant": "Collapsed get_for_tenant/2's scope: :tenant visibility case clauses into one that always returns {:ok, entry} regardless of owner_tenant_id match, removing the cross-tenant leak guard.",
+          "result": "23/25 passed (2 failures) -- AC3's 'a tenant-scoped service owned by a different tenant is NOT_FOUND, not forbidden' and 'a real-but-invisible service and a genuinely missing service produce the identical error shape' both failed."
+        },
+        {
+          "mutant": "Replaced the structural jsonb_array_elements/SERVICE_TASK/service_id EXISTS fragment in @service_task_reference_fragment with a plain (?::text LIKE '%' || ? || '%') substring fragment.",
+          "result": "24/25 passed (1 failure) -- AC6's 'a service id appearing only as a substring inside an unrelated string does NOT block delete' failed, now blocked as expected of a LIKE-based guard."
+        },
+        {
+          "mutant": "check_tenant_exists/1's scope: :tenant clause changed to unconditionally return :ok, skipping the Letflow.Identity.Tenant existence lookup.",
+          "result": "24/25 passed (1 failure) -- AC5's 'returns {:error, :tenant_not_found} and creates no row' failed (register/1 succeeded against a non-existent tenant instead)."
+        },
+        {
+          "mutant": "Removed the 'rescue Ecto.StaleEntryError -> {:error, :not_found}' clause from delete_entry/1.",
+          "result": "25/26 passed (1 failure) -- AC6's new 'a concurrent delete of the same row is treated as a benign not-found, not a crash' test crashed with the real Ecto.StaleEntryError propagating through Task.await instead of delete/1 returning {:error, :not_found}. This test deterministically forces the race (a real Postgres row lock held open in a second process, released only after delete/1's own Repo.delete/1 has started and blocked on it) rather than relying on incidental scheduling, so the failure is reproducible, not probabilistic."
+        }
+      ],
+      "revert_confirmation": "git checkout -- lib/letflow/service_catalog.ex after each mutant; git diff --stat lib/letflow/service_catalog.ex was empty after every revert. git status --short at the end of the session shows only the two new test files (test/letflow/service_catalog_test.exs, test/specs/REQ-191.md) as additions -- lib/letflow/service_catalog.ex, lib/letflow/service_catalog/entry.ex, and the migration are all byte-identical to the committed REVIEWER-approved state.",
+      "note_on_db_check_constraint_acs": "AC1/AC2 (the four DB-level CHECK constraint tests) were not part of this mutation pass -- their tests use raw Repo.query/2 SQL against the real schema and would only be falsified by mutating the migration itself (out of this task's stated scope, which named only lib/letflow/service_catalog.ex lines). They were verified independently by running them against the current, unmutated migration and confirming each raises %Postgrex.Error{postgres: %{code: :check_violation}}}."
+    },
+    "service_scope_validator_untouched": "git diff --stat main...HEAD -- lib/letflow/definitions/service_scope_validator.ex returned empty output before this handoff was written -- confirmed untouched, per AC8's requirement.",
+    "no_route_controller_check": "test/letflow/service_catalog_test.exs's own AC11 test lists lib/letflow/routers/ and asserts no filename mentions the service catalog (structural, git-history-independent). Additionally confirmed manually: git diff --stat main...HEAD across this run's commits touches no file under lib/letflow/routers/.",
+    "known_test_infrastructure_note_for_future_readers": "service_catalog is a GLOBAL table (no tenant schema, no DROP SCHEMA cleanup), so every test in this file needs real, explicit row cleanup via on_exit/1. Because Ecto.Adapters.SQL.Sandbox's manual/shared per-test connection is tied to the test process's own pid, and on_exit/1 callbacks run in a separate process after that pid has already exited, an on_exit/1 callback that tries to query through a still-manual/shared sandboxed connection fails with an 'owner exited' crash (this is exactly why Letflow.TenantFixture.provisioned_tenant!/1 itself switches Sandbox.mode/2 to :auto before doing anything it must clean up in on_exit/1). This test file adds a file-level `setup do Sandbox.mode(Letflow.Repo, :auto) end` block for this reason -- every test in the file runs against real, committed rows with real, working on_exit/1 cleanup, consistent with the established pattern in dlq_test.exs / engine_complete_task_test.exs / TenantFixture. Flagging this explicitly since a validator unfamiliar with this quirk might otherwise flag the :auto-mode setup block as suspicious."
+  },
+  "task": {
+    "description": "Verify test/letflow/service_catalog_test.exs provides a runnable test for every one of REQ-191's 11 acceptance criteria (see handoffs/WF02-REQ191-20260830/step-03-test-designer.json's task.acceptance_criteria and test/specs/REQ-191.md's AC-to-test mapping), that no coverage is skipped or stubbed, that fixtures are isolated/self-sufficient (no shared mutable state across tests, no reliance on prior test execution order), and that the mutation-testing report above is credible (spot-check at least one reported mutant by re-applying it and re-running the suite)."
+  },
+  "result": {
+    "verdict": "PASS",
+    "summary": "All 11 ACs have real, non-vacuous coverage; no skipped/stubbed tests; fixtures self-sufficient. Fresh mix test run: 26 passed, 0 failures. Independently reproduced mutant 4 (removed Ecto.StaleEntryError rescue from delete_entry/1): 25/26 passed, matching TEST-DESIGNER's report, with the real StaleEntryError crash confirming the concurrent-delete-race test uses a genuine Postgres row lock, not a sleep-based probabilistic race. Reverted; git status --porcelain lib/ test/ empty; suite re-run green. Full report: handoffs/WF02-REQ191-20260830/test-design-validator-report.md. Routed to TEST-RUNNER via step-04-test-runner.json."
+  }
+}

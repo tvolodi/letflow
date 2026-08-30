@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF02-REQ191-20260830-step02c-rework1-security-review",
+  "run_id": "WF02-REQ191-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 2c re-check (post rework 1)",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "lib/letflow/service_catalog.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Rework of the single INV-8 BLOCKER from the prior SECURITY-REVIEWER pass (handoffs/WF02-REQ191-20260830/security-review-req191.md, handoffs/WF02-REQ191-20260830/step-02c-security-reviewer.json). Every other invariant already passed on that pass (INV-1 including cross-tenant visibility, the global-table divergence, the cross-schema referential guard, list_registrations/0, and the ServiceScopeValidator Lookup; INV-4; INV-7; INV-2/3/5 not applicable) and was not touched in this rework -- please re-verify only the INV-8 fix below plus that nothing else changed.",
+    "prior_steps": [
+      "handoffs/WF02-REQ191-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ191-20260830/security-review-req191.md",
+      "handoffs/WF02-REQ191-20260830/step-02c-rework1-elixir-dev.json"
+    ],
+    "fix_applied": {
+      "location": "lib/letflow/service_catalog.ex, delete/1 and new private delete_entry/1 helper",
+      "commit": "d06cf21 (feature/WF02-REQ191-20260830)",
+      "before": "%Entry{} = entry -> case referencing_active_definitions(...) do [] -> {:ok, _deleted} = Repo.delete(entry); :ok",
+      "after": "%Entry{} = entry -> case referencing_active_definitions(...) do [] -> delete_entry(entry), where delete_entry/1 does `case Repo.delete(entry) do {:ok, _deleted} -> :ok; {:error, _changeset} -> {:error, :not_found} end rescue Ecto.StaleEntryError -> {:error, :not_found} end`",
+      "rationale": "Repo.delete/1 matches on primary key alone (Entry has no optimistic-lock field), so a row deleted concurrently between the top-of-function Repo.get/2 and this call raises Ecto.StaleEntryError rather than returning {:error, changeset}. The bare match could not catch either outcome. The new delete_entry/1 both passes through Repo.delete/1's real {:ok, _} | {:error, changeset} result (matching the lib/letflow/webhooks.ex:270 Letflow.Webhooks.delete/2 precedent cited in the prior review) and explicitly rescues Ecto.StaleEntryError, translating the concurrent-delete race to {:error, :not_found} -- consistent with get_for_tenant/2's and update_scope/2's own not-found handling. The @spec on delete/1 already declared {:error, :not_found} as a valid return, so no @spec/@doc change was needed.",
+      "scope": "Only delete/1's success-path delete call and the new delete_entry/1 private helper changed. get_for_tenant/2, list_for_tenant/2, register/1, update_scope/2, referencing_active_definitions/2, query_referencing_definitions/2, and the Lookup implementation are byte-for-byte unchanged (see the diff -- 17 insertions, 2 deletions, all within delete/1's success branch and the new helper)."
+    },
+    "verification": {
+      "mix_compile_warnings_as_errors": "PASS -- `mix compile --warnings-as-errors` (asdf-selected elixir 1.20.3-otp-29) recompiled lib/letflow/service_catalog.ex with zero warnings/errors.",
+      "mix_format": "no changes -- file was already formatted per project style after the edit.",
+      "mix_test_full_suite": "2572/2574 tests passed (5/5 properties, 2567/2569 tests), 10 excluded. The 2 failures are pre-existing and unrelated: Mix.Tasks.Letflow.CheckToolchainTest's two 'rust pin (REQ-165)' tests fail with `** (ErlangError) Erlang error: :enoent` from `System.cmd(\"rustc\", [\"--version\"], ...)` -- this sandbox has no `rustc` on PATH, an environment/toolchain-availability gap unrelated to lib/letflow/service_catalog.ex. No test file exists yet for ServiceCatalog (TEST-DESIGNER has not run for REQ-191)."
+    }
+  },
+  "task": {
+    "description": "Re-review lib/letflow/service_catalog.ex's delete/1 (and new delete_entry/1 helper) against INV-8 only, and confirm no other function was modified beyond what the fix required. If INV-8 now passes, forward to REVIEWER (Step 2d) per the already-flagged global-table divergence sign-off noted in the prior review; do not re-litigate INV-1/INV-4/INV-6/INV-7, which already passed and were not touched by this change.",
+    "acceptance_criteria": [
+      "delete/1 no longer contains a bare pattern match on Repo.delete/1's result that can raise on a realistic concurrent-delete race",
+      "the concurrent-delete race (Ecto.StaleEntryError) is now handled and mapped to a typed error consistent with the module's existing not-found convention",
+      "delete/1's documented @spec return shape is unchanged (already covered {:error, :not_found})",
+      "no function other than delete/1 and the new private delete_entry/1 helper was modified"
+    ]
+  },
+  "result": null
+}

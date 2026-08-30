@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF02-REQ191-20260830-step04-test-runner",
+  "run_id": "WF02-REQ191-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 4",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "test/letflow/service_catalog_test.exs",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "verdict": "PASS",
+    "note": "TEST-DESIGN-VALIDATOR independently validated test/letflow/service_catalog_test.exs against REQ-191's 11 acceptance criteria (see test/specs/REQ-191.md and handoffs/WF02-REQ191-20260830/step-01-code-designer.json's task.acceptance_criteria). Full report: handoffs/WF02-REQ191-20260830/test-design-validator-report.md.",
+    "toolchain": "Elixir/OTP via asdf (source ~/.asdf/asdf.sh first). Postgres reachable via docker compose (letflow-1-postgres-1, port 5463); sudo docker compose ps to observe.",
+    "fresh_mix_test_result": "mix test test/letflow/service_catalog_test.exs -> Result: 26 passed, 0 failures (this session, not copied from TEST-DESIGNER's report).",
+    "fresh_mix_compile_result": "MIX_ENV=test mix compile --warnings-as-errors -> exit 0, no warnings.",
+    "per_ac_coverage": "All 11 ACs checked individually against their describe blocks -- real, non-vacuous coverage for each, no @tag :skip, no TODO placeholders, fixtures self-sufficient (on_exit/1 cleanup, monotonic unique_service_id/1, no cross-test ordering dependency, no shared hardcoded state, no hardcoded secrets/connection strings).",
+    "mutation_reproduction": "Independently reproduced TEST-DESIGNER's mutant 4 (removed 'rescue Ecto.StaleEntryError -> {:error, :not_found}' from delete_entry/1 in lib/letflow/service_catalog.ex). Result: 25/26 passed, 1 failure -- matches TEST-DESIGNER's reported count exactly. Failure output shows the real %Ecto.StaleEntryError{} propagating through Task.Supervised.invoke_mfa/2 / Task.await/2 in the concurrent-delete-race test, confirming the test's mechanism is a real Postgres row lock held open in a second process (Repo.transaction + Repo.delete_all + receive :release_lock, synchronized via assert_receive :row_locked), not a sleep-based probabilistic race -- Process.sleep(200) only gives delete/1 time to reach and block on the lock before release, it does not manufacture the race itself. Reverted via 'git checkout -- lib/letflow/service_catalog.ex'; git status --porcelain lib/ test/ returned empty; mix test re-run and returned to 'Result: 26 passed'.",
+    "structural_claims_reproduced": "git diff --stat main...HEAD -- lib/letflow/definitions/service_scope_validator.ex: empty (untouched, AC8). git diff --stat main...HEAD -- lib/letflow/routers/: empty, and ls lib/letflow/routers/ contains no service_catalog-named file (AC11).",
+    "instruction_for_test_runner": "Run the full suite (mix test) for this branch, not only this file, and report per WF-02 Step 4's normal procedure."
+  },
+  "task": {
+    "description": "Run the full mix test suite for feature/WF02-REQ191-20260830, diagnose any failures, and report pass/fail with real output, per WF-02 Step 4."
+  },
+  "result": {
+    "verdict": "PASS",
+    "summary": "Ran the full checks per WF-02 Step 4. mix compile --warnings-as-errors: exit 0, no warnings. mix format --check-formatted initially found test/letflow/service_catalog_test.exs unformatted (3 whitespace/line-wrap-only hunks, no semantic change, verified by git diff) -- fixed via `mix format test/letflow/service_catalog_test.exs`, re-run clean. scripts/test_parallel.sh (N=8, source nproc): combined 2592 tests, 5 properties, 2 failures (2595/2597 passed) -- both failures are Mix.Tasks.Letflow.CheckToolchainTest rust-pin tests raising ErlangError :enoent from System.cmd(\"rustc\", ...), the documented pre-existing rustc-absent-from-sandbox environmental baseline (confirmed structurally: `git diff --name-only main...HEAD` does not include the toolchain test file or any rust-related file, and `which rustc cargo` returns nothing in this sandbox). All 26 service_catalog_test.exs tests (AC1-AC11) ran to completion with 0 failures. Checked for the class of test-count-oracle staleness bug hit on prior requirements when a new table is added: grepped test/support/, test/letflow/*fixture*, lib/, and test/ broadly for any count()/fixture reference to service_catalog -- zero hits, confirming the deliberately-global (non-per-tenant-schema) table needed no tenant_fixture.ex oracle update and nothing else assumes a fixed global-table count. mix letflow.lint_handoffs: OK, 0 new violations across 1459 handoff files (25 pre-existing grandfathered, traced to ISS-0190). Full report: test/reports/report-2026-08-30-WF02-REQ191-20260830.yaml.",
+    "artifacts_out": ["test/reports/report-2026-08-30-WF02-REQ191-20260830.yaml"],
+    "next_action": "Route to RELEASE-VALIDATOR"
+  }
+}

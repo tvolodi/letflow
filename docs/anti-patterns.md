@@ -1797,16 +1797,20 @@ otherwise correct the artifact, never delete it to silence the check.
 
 ## A test helper's default argument goes dead the moment every call site starts passing it explicitly
 
-**What happened (2nd occurrence, REQ-178 then REQ-187).** `defp fn_name(a, b, c \\ default)` only
-compiles warning-free under `--warnings-as-errors` if at least one call site actually omits `c`
-and relies on the default. TEST-DESIGNER wrote a private test helper with a default argument
-(`provisioned_tenant/1`'s `slug_prefix \\ "..."` on REQ-178; `arm_timer!/3`'s `overrides \\ %{}`
-on REQ-187), then every single call site in the same file supplied that argument explicitly
-anyway -- as tests accumulated across a large file, "just pass it every time for clarity" wins
-out, and nothing runs the zero-arg clause. The compiler's "default values ... are never used"
-warning failed CI both times, though the full local suite (which does not force
-`--warnings-as-errors` on every path the same way) passed cleanly first, so it was caught only
-when the PR's CI ran `mix letflow.check`.
+**What happened (3rd occurrence: REQ-178, REQ-187, REQ-191).** `defp fn_name(a, b, c \\ default)`
+only compiles warning-free under `--warnings-as-errors` if at least one call site actually omits
+`c` and relies on the default. TEST-DESIGNER wrote a private test helper with a default argument
+(`provisioned_tenant/1`'s `slug_prefix \\ "..."` on REQ-178 and again verbatim on REQ-191;
+`arm_timer!/3`'s `overrides \\ %{}` on REQ-187), then every single call site in the same file
+supplied that argument explicitly anyway -- as tests accumulated across a large file, "just pass
+it every time for clarity" wins out, and nothing runs the zero-arg clause. The compiler's
+"default values ... are never used" warning failed CI all three times, though the full local
+suite (which does not force `--warnings-as-errors` on every path the same way) passed cleanly
+first, so it was caught only when the PR's CI ran `mix letflow.check`. Three occurrences of the
+identical `provisioned_tenant/1` pattern specifically (not just the general class) means this
+project's own test-writing convention keeps reintroducing the same named helper with the same
+dead default -- worth a standing local grep/lint before any TEST-DESIGNER handoff is considered
+done, not just a documented mitigation nobody checks against.
 
 **Mitigation.** Before shipping a test helper with a default argument, grep the same file for its
 call sites and confirm at least one really omits that argument; if none do, drop the default

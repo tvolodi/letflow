@@ -1,0 +1,45 @@
+{
+  "handoff_id": "WF02-REQ191-20260830-step03-test-designer",
+  "run_id": "WF02-REQ191-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 3",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "lib/letflow/service_catalog.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "REVIEWER gate PASSES on lib/letflow/service_catalog.ex, lib/letflow/service_catalog/entry.ex, priv/repo/migrations/20260830000001_create_service_catalog.exs, lib/letflow/tenant_provisioning.ex's list_registrations/0 addition, and lib/letflow/definitions/solution_pack.ex's moduledoc update. Full disposition in handoffs/WF02-REQ191-20260830/reviewer-report-req191.md.",
+    "idiom_and_scope_disposition": "No OTP-idiom or supervision-integrity defect found (plain Ecto context module, no process -- same shape as Letflow.Dlq/Letflow.Webhooks; consistent typed-error-atom convention; Letflow.Api.Pagination cursor idiom reused verbatim from Letflow.Dlq.list/2). No scope creep: TenantProvisioning.list_registrations/0 confirmed a minimal, read-only, necessary addition (design's own OQ-3 flagged it for this confirmation); solution_pack.ex's change is moduledoc/comment-only, no functional change. git diff --stat main...HEAD confirmed to touch only files REQ-191 authorizes -- no route/controller, no service_scope_validator.ex change, no pin_resolver.ex change.",
+    "decision_0003_divergence_sign_off": "AGREE. REVIEWER's sign-off recorded 2026-08-30 in lib/letflow/design/req191-service-catalog-core.md section 0 (full reasoning block), mirrored in lib/letflow/service_catalog.ex's moduledoc and the migration's header comment. The global-table divergence is structurally justified independent of the solution_pack_installs precedent it cites (that analogy is imperfect -- solution_pack_installs is global for operational-infrastructure reasons, not because a single row must be visible from every tenant's schema simultaneously); service_catalog's own argument is sufficient on its own: a scope=:global row must be visible identically from every tenant at once (schema-per-tenant cannot express this without replication-plus-sync machinery Decision B doesn't provide), and service_id must be globally unique across all tenants and both scopes (a per-schema unique index cannot enforce this at all). Consequence noted for TEST-DESIGNER: get_for_tenant/2's visibility predicate is now the SOLE tenant-isolation mechanism for this data (no physical schema separation backstopping it) -- this makes the three-way visibility acceptance criterion especially load-bearing; do not treat it as an ordinary business-rule test.",
+    "type_safety_finding_for_orch_to_file": {
+      "title": "Letflow.ServiceCatalog's scope-typed attrs accept atom() | String.t() instead of the narrower :global | :tenant, even though Ecto.Enum already constrains the column",
+      "description": "register_attrs.scope and update_scope_attrs.scope in lib/letflow/service_catalog.ex type as atom() | String.t() rather than :global | :tenant, though the Entry schema's Ecto.Enum field already constrains the DB column to exactly those two values. A caller passing an arbitrary string only fails at Repo.insert/Repo.update time via the changeset, not at compile/dialyzer time -- a class of invalid input a tighter @type could make unrepresentable at the type-check layer instead of relying solely on the runtime changeset/DB constraint. Non-blocking (does not affect REVIEWER's PASS) but worth tracking as the schema grows.",
+      "severity": "MINOR",
+      "tag": "type-safety",
+      "discovered_by": "REVIEWER",
+      "discovered_in_run": "WF02-REQ191-20260830",
+      "affected_files": ["lib/letflow/service_catalog.ex"],
+      "note_to_orch": "Per docs/agents/protocols/ISSUE_QUEUE.md, REVIEWER does not allocate an ISS-NNNN id or write docs/issues/ directly -- please register this via letflow-queue's register_task (task_type: issue) so it becomes claimable work, then write docs/issues/<issue_ref>.yaml per the protocol."
+    },
+    "not_yet_covered": "No test file exists yet for ServiceCatalog -- this is the first test-design pass for this module."
+  },
+  "task": {
+    "description": "Write test specs and ExUnit/StreamData test code for lib/letflow/service_catalog.ex, lib/letflow/service_catalog/entry.ex, and priv/repo/migrations/20260830000001_create_service_catalog.exs, covering REQ-191's full acceptance-criteria list with mutation-driven coverage (do not merely restate the acceptance criteria as one test each -- probe boundary and adversarial cases the design doc itself calls out, e.g. the SERVICE_TASK-structural-match-not-substring-match referential guard test, the narrow-exemption-for-the-assignee-tenant case in update_scope/2, and the concurrent-delete-race path delete_entry/1's rescue clause now covers).",
+    "acceptance_criteria": [
+      "the service_catalog table carries the scope/owner consistency CHECK: an insert with scope 'global' and a non-null owner_tenant_id is rejected by the DATABASE, and so is one with scope 'tenant' and a null owner_tenant_id -- two explicit tests, not changeset-level validation",
+      "required_auth and timeout_ms are CHECK constrained at the database level: an insert with required_auth 'BASIC' is rejected, and so is one with timeout_ms 0 and one with timeout_ms 3600001",
+      "get_for_tenant/2 returns a global service to any tenant; returns a tenant-scoped service to its owner; and returns NOT FOUND -- not a forbidden error -- for a tenant-scoped service owned by a different tenant, so the two cases are indistinguishable to the caller (three explicit tests)",
+      "service_id is globally unique: registering the same service_id for a second, different tenant fails, even when the first is tenant-scoped",
+      "register/1 with scope 'tenant' naming a tenant that does not exist is rejected without creating a row",
+      "delete/1 of a service referenced by an ACTIVE definition is refused and the error names the referencing definition ids; delete/1 of an unreferenced service succeeds -- and a test confirms the reference check matches an actual SERVICE_TASK service_id attribute rather than a substring of the serialized graph, by registering a service whose id appears only inside an unrelated string in some definition's graph and asserting that definition does NOT block the delete",
+      "update_scope/2 narrowing a global service to tenant-scoped is refused, naming the conflicting tenant ids, when another tenant's ACTIVE definition references it; widening a tenant-scoped service to global is always allowed",
+      "Letflow.Definitions.ServiceScopeValidator.validate/3 works unchanged when handed a Lookup backed by this catalog (scope_validator_lookup/1): a definition referencing a service not visible to its tenant is rejected at activation, and one referencing a visible service activates -- with no change to service_scope_validator.ex itself, confirmed by git diff",
+      "the migration and the module moduledoc both state that this table is GLOBAL rather than per-tenant-schema, give the R-Co-grounded reason, and flag (now resolved by REVIEWER sign-off) the divergence from decision 0003 Decision B",
+      "solution_pack.ex's service_catalog_entries hard-fail is confirmed still explicitly retained with REQ-192 named as the owning follow-up -- asserted by a test covering that outcome (export always [], install rejects a non-empty array with {:error, :unsupported_pack_section})",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

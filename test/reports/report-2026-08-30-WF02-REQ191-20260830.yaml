@@ -1,0 +1,69 @@
+run_id: WF02-REQ191-20260830
+requirement_id: REQ-191
+step: "Step 4 (TEST-RUNNER)"
+performed_by: TEST-RUNNER
+note: >
+  Ran mix format --check-formatted first and found test/letflow/service_catalog_test.exs
+  (owned by TEST-DESIGNER, in scope of this run) unformatted -- 3 spots reformatted by
+  `mix format test/letflow/service_catalog_test.exs`. Whitespace/line-wrap only, no
+  semantic change (verified via git diff). Re-ran mix format --check-formatted after
+  the fix: PASS.
+checks:
+  mix_compile_warnings_as_errors:
+    result: PASS
+    output: "MIX_ENV=test mix compile --warnings-as-errors -> exit 0, no warnings, no output"
+  mix_format_check_formatted:
+    result: "FAIL then PASS (fixed in this step)"
+    output: >
+      Initial run: 'mix format failed due to --check-formatted' on
+      test/letflow/service_catalog_test.exs (3 diff hunks, all reflow/line-wrap only).
+      Fixed via `mix format test/letflow/service_catalog_test.exs`; re-run:
+      exit 0, no output.
+  full_suite:
+    runner: scripts/test_parallel.sh
+    N: 8
+    N_source: nproc
+    result: "2 failures, both pre-existing/environmental"
+    combined: "combined: 2592 tests, 5 properties, 2 failures (2595/2597 passed)"
+    partitions:
+      - "partition 1: 407 tests, 0 properties, 0 failures, exit 0"
+      - "partition 2: 366 tests, 0 properties, 2 failures, exit 2"
+      - "partition 3: 300 tests, 2 properties, 0 failures, exit 0"
+      - "partition 4: 296 tests, 3 properties, 0 failures, exit 0"
+      - "partition 5: 314 tests, 0 properties, 0 failures, exit 0"
+      - "partition 6: 217 tests, 0 properties, 0 failures, exit 0"
+      - "partition 7: 319 tests, 0 properties, 0 failures, exit 0"
+      - "partition 8: 373 tests, 0 properties, 0 failures, exit 0"
+    failures:
+      - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        partition: 2
+        error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...) at lib/system.ex:1141, via test/mix/tasks/letflow_check_toolchain_test.exs:69/76"
+        diagnosis: >
+          Pre-existing environmental -- rustc/cargo absent from this sandbox's PATH
+          (confirmed: `which rustc cargo` returns nothing). Same documented baseline
+          class as REQ-177/178/181/182/185/186/187/188.
+      - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        partition: 2
+        diagnosis: "pre-existing environmental -- same root cause as above"
+    diff_exclusion: >
+      `git diff --name-only main...HEAD` does not include
+      test/mix/tasks/letflow_check_toolchain_test.exs or any rust-toolchain-related
+      file -- structural evidence (form (a)) that these failures are unrelated to
+      REQ-191's changes, per core-directives.md's Failure Attribution Is Structural.
+    req191_specific: >
+      test/letflow/service_catalog_test.exs (26 tests) ran to completion in
+      partition 5 with 0 failures (partition 5: "Result: 314 passed" includes all
+      ServiceCatalogTest AC1-AC11 tests, confirmed individually present by log grep).
+    service_catalog_global_table_oracle_check: >
+      Grepped test/support/ and all test/letflow/*fixture* files, plus lib/ and test/
+      broadly, for any count(...) query or fixture assumption referencing
+      service_catalog: zero hits. tenant_fixture.ex has no service_catalog-related
+      oracle to begin with (it is a per-tenant-schema fixture; service_catalog is
+      deliberately the first GLOBAL, non-per-tenant-schema table). Confirmed nothing
+      else in the suite assumes a fixed global-table count that this new global table
+      would perturb.
+  mix_letflow_lint_handoffs:
+    result: PASS
+    output: "letflow.lint_handoffs: OK -- 0 new violations across 1459 handoff files (25 pre-existing grandfathered, traced to ISS-0190)"
+verdict: PASS
+next_step: "Step 5 -- RELEASE-VALIDATOR"

@@ -1,0 +1,46 @@
+{
+  "handoff_id": "WF02-REQ188-20260829-step03b",
+  "run_id": "WF02-REQ188-20260829",
+  "workflow_id": "WF-02",
+  "step": "Step 3b",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "test/letflow/scheduler_req188_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "REQ-188 test design complete. Full acceptance-criterion -> test-case map and fixture-strategy rationale in test/specs/REQ-188.md. Mutation-testing detail (5 mutations, real mix test output per mutation, confirmed revert) in handoffs/WF02-REQ188-20260829/req188-test-designer-notes.md.",
+    "prior_handoff": "handoffs/WF02-REQ188-20260829/step-03-test-designer.json",
+    "test_spec": "test/specs/REQ-188.md",
+    "test_designer_notes": "handoffs/WF02-REQ188-20260829/req188-test-designer-notes.md",
+    "files_changed": [
+      "test/letflow/scheduler_req188_test.exs",
+      "test/letflow/scheduler/poller_test.exs",
+      "test/specs/REQ-188.md"
+    ],
+    "key_findings": [
+      "Firing a recurring timer more than once through the REAL, unmocked engine requires the token to return to a :TIMER node after every firing (Engine.Transition.dispatch_timer_fired/4 errors {:token_not_at_timer, ...} otherwise) -- a bare TIMER self-loop is rejected by Letflow.Definitions.Graph's CHK-06 cycle check, so a new graph_gateway_loop/1 fixture (a 2-node cycle through an EXCLUSIVE_GATEWAY) is used instead, verified empirically not to also trigger REQ-187's own separate TIMER->TIMER auto-rearm mechanism.",
+      "AC1's 'same transaction' rollback test wraps the real fire_timer/2 call in an outer Repo.transaction/1 deliberately rolled back after fire_timer/2 itself reports {:ok, :fired} -- Ecto nests the inner transaction as a real Postgres SAVEPOINT, so the outer rollback only leaves neither the status change nor the new timer persisted if the re-arm insert genuinely runs in that same nested scope; this is the exact test that caught mutation 5 (see below).",
+      "AC2/AC4 use test-controlled repeat_interval_us values (1ms-1s) decoupled from repeat_expression's descriptive text, per the design doc's own OQ-1 (the ISO 8601 repeat grammar is never parsed by this requirement) -- avoids any wall-clock waiting while still labeling rows with the AC's own R3/PT1H-style strings.",
+      "Retention tests (AC5-7) call Poller.handle_info(:tick, state) directly as a plain function (public @impl true function), matching the design doc's own §2.4 guidance, and assert on real events/events_archive row counts -- no mocking library exists in this codebase (mix.exs has no mox/meck).",
+      "AC7 and the transition.ex-untouched check use a defensively-resolved git base ref (origin/main first, main fallback), per this project's own documented anti-pattern fix (docs/anti-patterns.md, 'A test embeds git diff main...HEAD directly') rather than hardcoding either ref.",
+      "5 mutations applied one at a time to lib/letflow/scheduler.ex/poller.ex (fire_at anchor, repeat_total cap removal, retention_enabled?/0 default flip, retention_due?/1 gate skip, fire-and-forget Task-based re-arm insert), each caught by a specific new test, each reverted and confirmed clean via git diff --stat against all three implementation files.",
+      "mix compile --warnings-as-errors: clean (no output). mix format --check-formatted on both changed test files: clean (no output)."
+    ]
+  },
+  "task": {
+    "description": "Independently verify REQ-188's test coverage per .claude/agents/test-design-validator.md: every acceptance criterion has a runnable test, no skipped coverage, fixtures are isolated/self-sufficient, and the mutation-testing evidence in the notes file is sound.",
+    "verification_targets": [
+      "test/letflow/scheduler_req188_test.exs",
+      "test/letflow/scheduler/poller_test.exs",
+      "test/specs/REQ-188.md",
+      "handoffs/WF02-REQ188-20260829/req188-test-designer-notes.md"
+    ],
+    "commands_to_rerun": [
+      "mix compile --warnings-as-errors",
+      "mix test test/letflow/scheduler_test.exs test/letflow/scheduler/poller_test.exs test/letflow/scheduler_req188_test.exs",
+      "mix format --check-formatted test/letflow/scheduler_req188_test.exs test/letflow/scheduler/poller_test.exs"
+    ]
+  },
+  "result": null
+}

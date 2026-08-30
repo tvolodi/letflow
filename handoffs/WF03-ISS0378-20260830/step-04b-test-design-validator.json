@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF03-ISS0378-20260830-step04b",
+  "run_id": "WF03-ISS0378-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 4b -> TEST-DESIGN-VALIDATOR",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "test/letflow/scheduler/poller_test.exs",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "TEST-DESIGNER independently re-derived, not just trusted, ISSUE-FIXER/CODE-DESIGN-VALIDATOR/REVIEWER's shared conclusion that this deletion leaves no coverage gap. Read docs/requirements.yaml REQ-186's full 10 ACs, test/specs/REQ-186.md, the actual bodies of scheduler_test.exs's AC7 and AC9 describe blocks, and the post-deletion tail of poller_test.exs (343 lines) directly.",
+    "verdict": "no_test_added",
+    "rationale_file": "handoffs/WF03-ISS0378-20260830/test-designer-coverage-check.md",
+    "findings_summary": [
+      "REQ-186's 10 ACs (read in full from docs/requirements.yaml) contain no 'application.ex has zero diff / untouched' property in any form -- the deleted test mapped to no AC, confirming the design doc and REVIEWER's prior read.",
+      "test/specs/REQ-186.md's existing coverage checklist assigns real AC7 (max_fire_retries -> failed, exactly one dlq_entries row) and real AC9 (no route/controller file) to test/letflow/scheduler_test.exs, not to the deleted poller_test.exs test -- the deleted test was never part of the documented coverage matrix.",
+      "Read scheduler_test.exs's AC7 describe block (~line 506) body directly: drives a timer through 2 failed fire attempts with max_fire_retries: 2, asserts pending -> pending(fire_error_count 1) -> failed(fire_error_count 2, failed_at set), exactly one dlq_entries row, and a third poll does not reattempt or double-enqueue. Real, DB-backed, currently passing.",
+      "Read scheduler_test.exs's AC9 describe block (~line 590) body directly: File.read!-based refutes of Plug.Router/controller/route patterns in scheduler.ex/timer.ex, plus a Path.wildcard sweep of lib/letflow/api/**, lib/letflow/routers/**, web/src/** asserting none reference Letflow.Scheduler/timers. Structural, no git-history dependency.",
+      "Read poller_test.exs post-deletion (343 lines, tail read in full): only the AC8 retention_due?/1 tests and the renamed, unaffected 'no second ticker' GenServer-count structural test remain. grep -rn resolve_base_ref across test/ confirms zero remaining references to the deleted helper or test name in any test file (one hit is a historical test/reports/*.yaml run-report artifact, not a test, needing no edit).",
+      "No test added: the deleted test's only structurally-real claim ('no second ticker') survives verbatim in the sibling test kept in place; the 'application.ex untouched' half was never a real AC and re-encoding it in any form (including exporting the private scheduler_children/0 with no REQ/AC backing) would itself be scope creep and/or a disguised recurrence of the git-history-check anti-pattern this fix removes."
+    ],
+    "design_doc": "lib/letflow/design/iss0378-poller-ac7-test-fix.md",
+    "prior_handoff": "handoffs/WF03-ISS0378-20260830/step-04-test-designer.json",
+    "branch_name": "feature/WF03-ISS0378-20260830"
+  },
+  "task": {
+    "description": "Independently verify TEST-DESIGNER's finding that no coverage gap exists and no test is warranted for the ISS-0378 poller_test.exs deletion -- confirm AC7/AC9 are genuinely covered in scheduler_test.exs by reading the test bodies, not by trusting this handoff's summary, and confirm the deleted test mapped to no acceptance criterion.",
+    "acceptance_criteria": [
+      "TEST-DESIGN-VALIDATOR independently re-reads REQ-186's 10 ACs, test/specs/REQ-186.md, and the actual AC7/AC9 test bodies in scheduler_test.exs",
+      "Confirms (or disputes, with reasoning) that zero replacement coverage is correct for this deletion",
+      "If a genuine gap is found that TEST-DESIGNER missed, routes back to TEST-DESIGNER rather than silently accepting"
+    ]
+  },
+  "result": null
+}

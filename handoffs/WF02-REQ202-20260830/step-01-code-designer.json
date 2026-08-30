@@ -1,0 +1,54 @@
+{
+  "handoff_id": "step01-WF02-REQ202-20260830",
+  "run_id": "WF02-REQ202-20260830",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ202-20260830/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-30T22:03:10Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-202"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-202": "Content-addressed artifact store (repository_artifacts, artifact_versions) plus a SEPARATE REPO-04 canonicaliser, deliberately NOT an extension of REQ-036's promotion digest. Ported from R-Co migrations/045_repository_artifacts.sql. Full text read from docs/requirements.yaml lines 11158-11302."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "lib/letflow/definitions/promotion_digest.ex",
+      "lib/letflow/design/req041-pack-update-diff-schema.md",
+      "lib/letflow/design/req195-audit-entry-storage.md",
+      "lib/letflow/api/pagination.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/repository/canonicaliser.ex",
+      "lib/letflow/repository.ex",
+      "lib/letflow/repository/repository_artifact.ex",
+      "lib/letflow/repository/artifact_version.ex"
+    ],
+    "branch_name": "feature/WF02-REQ202-20260830"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-202. Wrote lib/letflow/design/req202-artifact-repository.md covering the two-table content-addressed store, the migration-058-vs-045 conflict, the separate canonicaliser module, create/2 dedup+versioning semantics, DB-level immutability, REQ-067 cursor pagination for version history, and the REQ-041 name-collision disambiguation.",
+    "acceptance_criteria": [
+      "Every one of REQ-202's 14 acceptance criteria maps to a concrete design element (design doc section 10 traceability table)",
+      "No implementation code -- signatures/type shapes only, no .ex/.exs code fences, no literal SQL",
+      "Tenant-scope placement decision (per-tenant vs global) stated with explicit reasoning, REVIEWER-flagged if global",
+      "Canonicaliser is a separate module from promotion_digest.ex with required moduledoc cross-reference recorded",
+      "DB-level immutability mechanism specified (not just app-level absence of update)",
+      "Open questions listed explicitly rather than silently resolved"
+    ]
+  },
+  "result": {
+    "artifacts_out": ["lib/letflow/design/req202-artifact-repository.md"],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "summary": "Design places both repository_artifacts and artifact_versions PER-TENANT (Decision 0003-B default), NOT global -- diverging from R-Co's own effectively-global store. Reasoning: no acceptance criterion requires cross-tenant dedup, Decision B's own stated rationale is physical blast-radius isolation (not storage efficiency), cross-tenant byte-identical collisions are not a realistic workload for tenant-authored config/business-logic artifacts, and going global would be S6's only unforced divergence from Decision B. Consequence stated explicitly: dedup (REPO-01) is per-tenant only, a deliberate forfeiture of cross-tenant storage savings. Because this follows Decision B rather than diverging, NO REVIEWER sign-off flag is raised. New Letflow.Repository.Canonicaliser module (lib/letflow/repository/canonicaliser.ex) built separate from PromotionDigest, confirmed by direct source read that PromotionDigest.canonicalize/1 passes all numbers through unchanged (no normalization), while REPO-04 requires normalized integer-valued-float forms -- merging would silently break every stored promotion digest (INV-PRM-5). Required moduledoc cross-references specified on both modules. DB-level immutability via a per-tenant-schema trigger (copied from req195-audit-entry-storage.md's precedent) raising 'repository_artifacts is immutable' / 'artifact_versions is immutable' on UPDATE (and DELETE for repository_artifacts). Version history reuses Letflow.Api.Pagination's REQ-067 cursor contract verbatim. REQ-041's solution_pack_artefact_bases explicitly disambiguated as an unrelated global install-tracking table. Migration ships R-Co migration 045's shape only; migration 058's conflicting shape (version_id PK, TEXT content_hash, inline content_json) recorded as a defect not to port. Four open questions flagged: OQ-1 (exact decimal form for non-integer floats), OQ-2 (tension between recommended PromotionDigest moduledoc amendment and AC5's literal 'not modified' wording, checked by git diff --stat), OQ-3 (exact JSON content-type match set), OQ-4 (artifact_id generation/semantics, caller-supplied vs server-derived)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,150 @@
+run_id: WF02-REQ192-20260830
+workflow_id: WF-02
+step: "Step 4"
+agent: TEST-RUNNER
+generated_at: "2026-08-30T06:09:31Z"
+requirement: REQ-192
+scope: >
+  Letflow.ServiceCatalog.list_all/1, GET /admin/services router gate, and
+  SCA:/SC: cursor cross-endpoint isolation (INV-9).
+
+commands_run:
+  - command: "docker compose up -d"
+    result: "postgres and keycloak containers already Running (letflow-1-postgres-1, letflow-1-keycloak-1); port 5463 per checkout .env LETFLOW_DB_PORT"
+  - command: "bash scripts/test_parallel.sh"
+    result: "combined: 2607 tests, 5 properties, 13 failures (2599/2612 passed)"
+  - command: "mix test test/letflow/service_catalog_test.exs test/letflow/routers/admin_services_test.exs"
+    result: "Result: 39 passed (0 failures)"
+  - command: "mix test test/letflow/sandbox_pool_test.exs test/support/tenant_schema_reaper_test.exs test/letflow/api_token_auth_pipeline_test.exs (isolated re-run, no parallel partitions)"
+    result: "Result: 34 passed (0 failures)"
+
+full_suite_result:
+  parallel_partitions: 8
+  combined_tests: 2612
+  combined_passed: 2599
+  combined_failed: 13
+  per_partition:
+    - partition: 1
+      tests: 356
+      failures: 0
+    - partition: 2
+      tests: 347
+      failures: 4
+    - partition: 3
+      tests: 323
+      failures: 2
+    - partition: 4
+      tests: 264
+      failures: 7
+    - partition: 5
+      tests: 347
+      failures: 0
+    - partition: 6
+      tests: 286
+      failures: 0
+    - partition: 7
+      tests: 286
+      failures: 0
+    - partition: 8
+      tests: 398
+      failures: 0
+
+failures_diagnosed:
+  - group: "Mix.Tasks.Letflow.CheckToolchainTest (2 failures, partition 3)"
+    tests:
+      - "rust pin (REQ-165) a matching rust pin reports OK with no mismatch"
+      - "rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running"
+    error: "** (ErlangError) Erlang error: :enoent at System.cmd(\"rustc\", [\"--version\"], ...)"
+    diagnosis: >
+      Documented flake class per README.md's Notes section and TEST-RUNNER's own
+      standing instructions: this sandbox has no rustc/cargo toolchain installed, so
+      any test that shells out to `rustc --version` fails with :enoent regardless of
+      code changes. Not related to REQ-192.
+    classification: "documented pre-existing environment gap, excluded from this change's diff"
+
+  - group: "Letflow.SandboxPoolTest ISS-0224 regression tests (4 failures, partition 2)"
+    tests:
+      - "RT-5 (death path b'): a caller that dies while its reservation is still QUEUED frees its slot and provisions nothing"
+      - "RT-4 (death path b): a caller that dies DURING its provisioning leaks no slot and no schema"
+      - "RT-1 (control): a parked waiter times out on schedule when nothing is provisioning"
+      - "RT-7: a DB-free claim(0) is answered immediately while a provisioning is running"
+    error: >
+      Assertion failures comparing schema-name sets (final == baseline), plus a real
+      Postgrex/DBConnection error in the same log window: "client ... timed out because
+      it queued and checked out the connection for longer than 15000ms" while dropping
+      a sandbox schema.
+    diagnosis: >
+      Real-timing/real-DB tests whose pass/fail depends on schema create/drop
+      completing inside fixed windows. Under this run's 8-way `test_parallel.sh`
+      partitioning on an 8-core host, DB connection/CPU contention pushed a DROP
+      SCHEMA past its expected window, corrupting the before/after schema-name-set
+      comparison these tests make. Re-ran test/letflow/sandbox_pool_test.exs alone
+      (no parallel partitions): all tests in that file passed as part of a 34-test
+      isolated run (see commands_run). REQ-192's diff touches none of
+      lib/letflow/sandbox_pool.ex or its tests (confirmed via `git diff main --stat`).
+    classification: "load-induced timing flake under N=8 parallel partitions, confirmed non-reproducing in isolation; excluded from this change's diff"
+
+  - group: "Letflow.TenantSchemaReaperTest ISS-0110 concurrent-invocation guard tests (3 failures, partition 4)"
+    tests:
+      - "schema_name format guard: skips an old row with a malformed schema_name instead of attempting a drop"
+      - "concurrent-invocation liveness guard (ISS-0110): spares an old row while another invocation's connection is open, reclaims it once that connection closes"
+      - "reclaims an old, well-formed orphaned row: drops the real schema and deletes both rows"
+    error: >
+      Assertions on reclaimed/skipped counts failed (0 instead of >=1); log shows
+      "TenantSchemaReaper.sweep_orphans/2: deferring this sweep entirely -- another
+      mix test invocation ... is currently connected to this database ... (ISS-0110)."
+    diagnosis: >
+      test/support/tenant_schema_reaper_test.exs's own ISS-0217 comment (around its
+      fake-tagged-connection setup) documents exactly this cascade: under
+      TEST_PARALLEL_N>1 connection-pool pressure, a transient DBConnection timeout can
+      leave a fake/foreign-tagged connection open past its test, which then makes every
+      later sweep_orphans/2 call in that process see a genuinely-external
+      (no-matching-group) connection and defer. This run's partition 4 log also shows
+      literal Postgres-level "FATAL 53300 (too_many_connections) sorry, too many
+      clients already" errors in the same window (ApiTokenAuthPipelineTest, see below),
+      corroborating real connection-pool exhaustion under this run's N=8 load. Re-ran
+      test/support/tenant_schema_reaper_test.exs alone (no parallel partitions): passed
+      as part of the 34-test isolated run. REQ-192's diff touches none of
+      test/support/tenant_schema_reaper.ex or its test.
+    classification: "load-induced flake under N=8 parallel partitions, documented in the test file itself (ISS-0217); confirmed non-reproducing in isolation; excluded from this change's diff"
+
+  - group: "Letflow.ApiTokenAuthPipelineTest (4 failures, partition 4)"
+    tests:
+      - "REQ-076 AC5/INV-1: a tenant-A-minted token cannot authenticate a tenant-B request (HTTP level)"
+      - "REQ-076 §3.5: a missing X-Tenant-Slug header is rejected 401"
+      - "REQ-076 §3.5: an unresolvable X-Tenant-Slug value is rejected 401"
+      - "REQ-076 §3.5: a syntactically-lf_tok_-shaped but never-issued plaintext is rejected 401"
+    error: >
+      ** (DBConnection.ConnectionError) connection not available and request was
+      dropped from queue after 2320-4000ms; surrounding log lines show repeated
+      Postgrex "FATAL 53300 (too_many_connections) sorry, too many clients already"
+      across 8 of the pool's connections (db_conn_1 through db_conn_10).
+    diagnosis: >
+      Direct evidence of Postgres connection-pool exhaustion: this host's Postgres
+      instance hit its max_connections limit under the combined load of 8 simultaneous
+      `mix test --partitions 8` processes each opening their own pool. This is
+      environment resource contention, not application behavior -- these tests only
+      exercise the API-token auth pipeline via HTTP, which REQ-192 does not touch. Not
+      one of the four is in a file REQ-192's diff modifies. Re-ran
+      test/letflow/api_token_auth_pipeline_test.exs alone (no parallel partitions):
+      passed as part of the 34-test isolated run.
+    classification: "load-induced Postgres connection exhaustion under N=8 parallel partitions; excluded from this change's diff"
+
+conclusion: >
+  All 13 full-suite failures are accounted for and none touch REQ-192's diff
+  (lib/letflow/service_catalog.ex, lib/letflow/routers/admin_services.ex,
+  lib/letflow/routers/services.ex, lib/letflow/plugs/api_pipeline.ex,
+  lib/letflow/api/error.ex, test/letflow/service_catalog_test.exs,
+  test/letflow/routers/admin_services_test.exs,
+  test/letflow/api/authorization_enforcement_test.exs -- confirmed via
+  `git diff main --stat`). 2 are the standing rustc-absent CheckToolchainTest
+  baseline gap; the other 11 are load-induced DB-connection-contention flakes under
+  this run's N=8 parallel partitioning (one class -- TenantSchemaReaperTest -- is
+  explicitly self-documented as susceptible to exactly this under
+  TEST_PARALLEL_N>1). All three affected non-target test files were re-run in
+  isolation (no parallel partitions) and passed cleanly (34/34). The two target
+  files for this requirement, test/letflow/service_catalog_test.exs and
+  test/letflow/routers/admin_services_test.exs, passed with 0 failures both inside
+  the full parallel run and in a standalone re-run (39/39), matching
+  TEST-DESIGN-VALIDATOR's own recheck result exactly.
+recommendation: "PASS -- route to RELEASE-VALIDATOR"

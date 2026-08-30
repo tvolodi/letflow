@@ -911,3 +911,50 @@ history:
       REQ-190 (secrets core implementation) and REQ-183 (webhook delivery
       dispatch, HMAC signing), both depends_on: [REQ-189] (REQ-183 also
       depends_on REQ-181, done).
+  - req: REQ-188
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T00:53:33Z"
+    note: >
+      WF02-REQ188-20260829 done (queue task 361, GH#707, stage S6). Third
+      and last requirement of S6's scheduler half: SCH-07 recurring timer
+      re-arm shipped atop REQ-186/187's poll loop (a fired recurring timer
+      creates its NEW pending successor in the SAME transaction as the
+      firing, honors repeat_total exhaustion, stops re-arming a cancelled
+      instance's chain, and fires at most once per poll cycle when its
+      interval is shorter than the poll interval), plus a periodic
+      retention runner on REQ-186's existing scheduler process invoking
+      the already-shipped but previously zero-caller
+      Letflow.EventStore.archive/1, DISABLED by default. Partition-based
+      retention (partition_maintenance.zig/partition_retention.zig) and
+      SCH-04 escalation timers both named as deliberately deferred in the
+      moduledoc, per ISS-0014's adopted option (a) and the missing
+      escalation_timer_duration Graph attribute respectively. Path: 2 real
+      rework rounds -- CODE-DESIGN-VALIDATOR caught literal Elixir code
+      fences in the design doc; TEST-DESIGN-VALIDATOR caught a
+      factually-wrong claim about REQ-187's auto-rearm side-effect in test
+      documentation, independently traced and empirically confirmed via
+      real code tracing rather than trusted. SECURITY-REVIEWER and
+      REVIEWER both passed cleanly, no rework. TEST-RUNNER's own agent
+      dispatch left a real background test process running without
+      waiting for it; ORCH recovered by observing the still-running
+      process, waiting for it, and completing the remaining verification
+      steps directly. RELEASE-VALIDATOR independently re-verified all 10
+      acceptance criteria against the real shipped code
+      (lib/letflow/scheduler.ex, lib/letflow/scheduler/poller.ex) and a
+      self-run test pass (32/32 on the three named test files; full suite
+      via scripts/test_parallel.sh 2566/2569, same 3 pre-existing
+      rustc/wasmex-absent-from-sandbox environmental failures, none
+      touching this branch's diff); mix compile --warnings-as-errors,
+      mix format --check-formatted, and mix letflow.lint_handoffs all
+      clean -- PASS, no gap found
+      (handoffs/WF02-REQ188-20260829/release-validation-req188.md). This
+      closes S6's SCHEDULER HALF IN FULL: REQ-185 (firing-architecture
+      decision), REQ-186 (timers schema + scheduler core), REQ-187 (engine
+      wiring), and REQ-188 (this recurrence + retention runner) are all
+      done. S6's SECRETS HALF (REQ-189 onward) is separate and remains
+      open -- REQ-189 has itself since landed on main (decision record
+      0016), unblocking REQ-190/REQ-183, but REQ-190 onward is still
+      pending. Candidate for a future WF-04 stage-gate check of the
+      scheduler half specifically, per RELEASE-VALIDATOR's own handoff
+      note -- not performed here since this is a WF-02 run, not WF-04.

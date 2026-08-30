@@ -3306,7 +3306,7 @@
       "requirement_id": "REQ-188",
       "queue_task_id": 361,
       "github_issue_number": 707,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/scheduler.ex",
         "lib/letflow/scheduler/poller.ex"
@@ -3314,8 +3314,8 @@
       "started_at": "2026-08-29T23:09:11Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 6 (DOC-UPDATER) -- content-producing steps done, ORCH Step Final (rebase/push/PR/CI-wait/merge/queue-release) still pending",
-      "note": "Last requirement of S6's scheduler half: SCH-07 recurring timer re-arm atop REQ-186/187, plus a periodic retention runner on the existing scheduler process invoking the zero-caller EventStore.archive/1, disabled by default. Defers partition-based retention (ISS-0014) and SCH-04 escalation timers. RELEASE-VALIDATOR independently re-verified all 10 acceptance criteria against the real shipped code and a self-run full test pass (2566/2569, same 3 pre-existing environmental failures) -- PASS, no gap found (handoffs/WF02-REQ188-20260829/release-validation-req188.md). Closes S6's scheduler half in full (REQ-185/186/187/188); S6's secrets half (REQ-189 onward) remains open. queue_task_id 361 not yet released -- that is ORCH's Step Final job."
+      "last_known_step": "Step 6 (DOC-UPDATER) COMPLETE -- docs/requirements.yaml flipped to done, requirement_status.v6.yaml done-event appended, stage-6 doc updated to close the scheduler half. ORCH Step Final (rebase/push/PR/CI-wait/merge/queue-release) is the only step left; queue_task_id 361 not yet released, that is ORCH's job.",
+      "note": "Last requirement of S6's scheduler half: SCH-07 recurring timer re-arm atop REQ-186/187, plus a periodic retention runner on the existing scheduler process invoking the zero-caller EventStore.archive/1, disabled by default. Defers partition-based retention (ISS-0014) and SCH-04 escalation timers. Path: 2 real rework rounds -- CODE-DESIGN-VALIDATOR caught literal Elixir code fences in the design doc; TEST-DESIGN-VALIDATOR caught a factually-wrong claim about REQ-187's auto-rearm side-effect in test documentation, independently traced and empirically confirmed via real code tracing rather than trusted. SECURITY-REVIEWER and REVIEWER both passed cleanly, zero rework. TEST-RUNNER's own agent dispatch left a real background test process running without waiting for it; ORCH recovered by observing the still-running process, waiting for it, and completing the remaining verification steps directly. RELEASE-VALIDATOR independently re-verified all 10 acceptance criteria against the real shipped code and a self-run full test pass (2566/2569, same 3 pre-existing environmental failures) -- PASS, no gap found (handoffs/WF02-REQ188-20260829/release-validation-req188.md). Closes S6's scheduler half in full (REQ-185/186/187/188); S6's secrets half (REQ-189 onward) remains open (REQ-189 itself is now done, unblocking REQ-190/REQ-183)."
     },
     {
       "run_id": "WF02-REQ189-20260830",

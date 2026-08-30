@@ -9,11 +9,17 @@ REQ-182 (the webhook route layer atop it) are both done as of
 mirroring the DLQ half's REQ-176/177/178 completion. REQ-185 (scheduler
 timer-firing architecture, decision-and-design-only), REQ-186 (timers
 schema + scheduler core: poll-and-fire, missed-timer recovery, failure
-accounting) and REQ-187 (wiring TIMER nodes into transition.ex,
-SCH-01/03, plus cancellation) are all done as of 2026-08-29 -- REQ-188
-(recurrence, SCH-07, plus escalation and the retention runner) is now
-the last remaining piece of the scheduler half. Requirements, expanded
-in two batches:
+accounting), REQ-187 (wiring TIMER nodes into transition.ex, SCH-01/03,
+plus cancellation) and REQ-188 (recurrence, SCH-07, plus the periodic
+retention runner) are all done as of 2026-08-29/30 -- **S6's scheduler
+half is now fully complete.** S6's secrets half (REQ-189 onward) is
+separate and remains open: REQ-189 (the secrets storage decision
+record) is itself now done, unblocking REQ-190 and REQ-183, but
+REQ-190 onward is still pending, as are the repository, observability,
+expr and ordering subsystems the second batch also registered. A
+future WF-04 stage-gate check of the scheduler half specifically (not
+of S6 as a whole) is a named candidate, per RELEASE-VALIDATOR's own
+REQ-188 handoff note. Requirements, expanded in two batches:
 
 **First batch (DLQ and webhooks):** REQ-176 (Dead-letter queue schema
 and core entry lifecycle, OBS-05 foundation); REQ-177 (Wire REQ-056's
@@ -257,8 +263,31 @@ the design/security/reviewer/test-design gates. RELEASE-VALIDATOR
 independently re-verified all 10 acceptance criteria, including the
 fragile lock-ordering fix -- PASS, no gap found. This closes REQ-186's
 engine-integration half; REQ-188 (recurrence, SCH-07, plus escalation
-and the retention runner) is now the last remaining piece of the
+and the retention runner) was the last remaining piece of the
 scheduler half.
+
+**REQ-188, SETTLED (done, 2026-08-29/30) -- closes the scheduler half
+in full.** Two deliverables sharing REQ-186's poll loop mechanism:
+SCH-07 recurring-timer re-arm (a fired recurring timer creates its NEW
+pending successor in the SAME transaction as the firing; `repeat_total`
+exhaustion ends the chain with no new timer; a cancelled instance's
+chain does not re-arm; an interval shorter than the poll interval fires
+at most once per cycle rather than catching up multiple occurrences),
+and a periodic retention runner added to REQ-186's existing scheduler
+process (not a second independent ticker) invoking the already-shipped
+but previously zero-caller `Letflow.EventStore.archive/1`, **disabled
+by default**. Path: 2 real rework rounds (CODE-DESIGN-VALIDATOR caught
+literal Elixir code fences in the design; TEST-DESIGN-VALIDATOR caught
+a factually-wrong claim about REQ-187's auto-rearm side-effect in test
+documentation, independently traced and empirically confirmed rather
+than trusted). SECURITY-REVIEWER and REVIEWER both passed cleanly.
+RELEASE-VALIDATOR independently re-verified all 10 acceptance criteria
+against the real shipped code (`lib/letflow/scheduler.ex`,
+`lib/letflow/scheduler/poller.ex`) -- PASS, no gap found
+(`handoffs/WF02-REQ188-20260829/release-validation-req188.md`). With
+this, **REQ-185, REQ-186, REQ-187 and REQ-188 are all done: S6's
+scheduler half is complete.** S6's secrets half (REQ-189 onward) is a
+separate track and remains open.
 
 **Deliberately deferred, blocker named:** `partition_maintenance.zig`
 and `partition_retention.zig` are **not** ported. Both need a
@@ -269,8 +298,13 @@ keeping REQ-026's row-level `archive/1`, and expressly rejecting option
 (c) because porting partition retention now "would force partitioning
 early, contradicting 0003 Decision C's deliberate deferral, and would
 need REVIEWER sign-off / a new decision record". Reopening it needs a
-new decision record. REQ-188 therefore schedules the `archive/1` that
-does exist.
+new decision record. REQ-188 schedules the `archive/1` that does
+exist, disabled by default. SCH-04 escalation timers are also
+deferred: they require a `HUMAN_TASK` node carrying an
+`escalation_timer_duration` attribute, and Letflow's
+`Letflow.Definitions.Graph` has no such attribute and no validator for
+one yet -- a definitions-side requirement is needed before escalation
+timers can be built.
 
 ## REVIEWER sign-off
 

@@ -9818,7 +9818,7 @@ requirements:
   - id: REQ-188
     title: Recurring timers and periodic retention runner (SCH-07 re-arm, plus the archive/1 and artifact-retention sweeps nothing currently invokes)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 361  # letflow-queue task id
     description: >

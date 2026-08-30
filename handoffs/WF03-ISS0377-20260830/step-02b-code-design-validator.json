@@ -1,0 +1,22 @@
+{
+  "handoff_id": "WF03-ISS0377-20260830-step02b",
+  "run_id": "WF03-ISS0377-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 2 (design gate)",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "lib/letflow/design/iss0377-cross-platform-test-fixes.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Design covers both of ISS-0377's independent symptoms per the Step 2 handoff's fix_requirements. No implementation code included -- signatures, a platform-extension mapping table, and prose/pseudocode flow changes only.",
+    "symptom_1_summary": "test/letflow/engine/wasm/plugin_handler_test.exs AC7 describe block (lines 189, 197). Verified against the actual vendored dependency (deps/wasmex/mix.exs, deps/wasmex/lib/wasmex/native.ex, deps/wasmex/priv/native/) rather than guessed: wasmex is a RustlerPrecompiled NIF whose loadable artifact is copied to a FIXED name ('wasmex' + platform extension) for Erlang's :erlang.load_nif/2, while the originally downloaded/built artifact is separately version-and-target-qualified. Design derives the expected extension from :os.type/0 via an explicit mapping table (.so on unix-linux/freebsd/darwin -- Erlang's own NIF loader convention, not Cargo's -- .dll on win32) instead of hardcoding '.so', with a directory-listing fallback if the fixed-name file is absent. The external_resource substring check is replaced with a branch: non-empty list asserts every entry ends in '.rs' (source-extension check, not a directory-substring match); empty list (plausible for a precompiled/non-source build, flagged as open question OQ-A1 since it could not be verified without a mix toolchain in this sandbox) falls back to asserting a real compiled artifact is present. Explicitly does NOT wrap either assertion in an :os.type()-guarded skip, per the Step 2 handoff's out-of-scope note.",
+    "symptom_2_summary": "scripts/test_parallel.sh Step 2 partition launch (lines 176-204). Recommends per-partition MIX_BUILD_PATH isolation (new Step 1.6: sequentially seed N _build/test-partition-<i> directories from Step 1's single compiled _build/test tree via hardlink-preferring copy, before any partition backgrounds) over (a) doing nothing/retrying on Windows -- rejected, explicitly out of scope per the Step 2 handoff -- (b) N fully independent per-partition recompiles -- rejected, would reintroduce the exact N-times-compile cost req113-parallel-test-runner.md's AC5/S4.2 pre-compile-once step exists to avoid, contradicting this project's own CI-speed rationale for the script -- and (c) directory-level symlinking back to the shared tree -- rejected as a non-fix, still one physical directory. Section B.3 states the recommendation and full rationale; B.4 gives the concrete flow change (new Step 1.6, and MIX_BUILD_PATH set per-partition-invocation, never globally exported, contrasted explicitly with TEST_PARALLEL_GROUP/TEST_POOL_SIZE's deliberate global export). Two open questions left explicit (OQ-B1 reseed-every-run vs reuse-if-current, OQ-B2 exact hardlink tool choice, OQ-B3 .gitignore coverage check) rather than silently resolved.",
+    "open_questions_flagged": ["OQ-A1", "OQ-B1", "OQ-B2", "OQ-B3"],
+    "no_fenced_code_blocks_check": "grep -n '```' on the design file returned no matches -- confirmed before commit."
+  },
+  "task": {
+    "description": "Validate lib/letflow/design/iss0377-cross-platform-test-fixes.md per CODE-DESIGN-VALIDATOR's normal gate: every element of the Step 2 handoff's fix_requirements (symptom_1 and symptom_2) must map to a concrete design element, no implementation code (.ex/.sh literal bodies) present, no unstated assumptions, and confirm the design does not silently resolve the two explicit out-of-scope traps (Unix-only :os.type() skip guard for symptom 1; Windows-detect-and-retry/serialize for symptom 2) that the diagnosis and Step 2 handoff both called out. If PASS, route to ELIXIR-DEV for WF-03 Step 3 implementation. If FAIL, route back to CODE-DESIGNER with specifics."
+  },
+  "result": null
+}

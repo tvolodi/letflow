@@ -3410,6 +3410,21 @@
       "released_lock": true,
       "last_known_step": "Step Final (ORCH: merged PR #737 to main, queue task 378 released done, GH#734 closed)",
       "note": "REQ-186's own AC7 test (poller_test.exs:340) hardcodes a zero-diff assertion against lib/letflow/application.ex as a repo-wide invariant, breaking on any legitimate future change to that file (first hit by REQ-190's own approved :logger filter registration). Not a REQ-190 regression -- a pre-existing test-design defect from commit 77637268. Fix: deleted the defective test and its unused helper, corrected a mislabeled describe title, documented the recurrence in docs/anti-patterns.md. PR #737 merged."
+    },
+    {
+      "run_id": "WF02-REQ197-20260830",
+      "requirement_id": "REQ-197",
+      "queue_task_id": 370,
+      "github_issue_number": 716,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/engine/expr.ex"
+      ],
+      "started_at": "2026-08-30T08:19:08Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
+      "note": "Extends expr.ex with arithmetic, unary negation, and a structured parse-error surface, matching R-Co's actual (non-CEL) expr semantics -- without breaking EE-05's catch-false gateway contract or expr.ex's zero-impurity grep. now()/date_add/date_diff explicitly excluded as clock-impure."
     }
   ]
 }

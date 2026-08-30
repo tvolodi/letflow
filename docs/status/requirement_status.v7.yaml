@@ -255,3 +255,16 @@ history:
       REQ-190's actual shipped module (2 flagged mismatches:
       consumer: :webhook_dispatcher opt, {:ok, %{plaintext:, key_id:,
       purpose:}} return shape).
+  - req: REQ-197
+    event: started
+    agent: ORCH
+    at: "2026-08-30T08:19:08Z"
+    note: >
+      Queue task 370, GH#716, stage S6. Extends lib/letflow/engine/expr.ex
+      with arithmetic (+ - * / %), unary negation, and a structured
+      parse-error surface, without breaking EE-05's catch-false gateway
+      contract or expr.ex's zero-impurity grep. R-Co's expr is NOT a CEL
+      implementation (EXP-102 cut over from vendored CEL); scope is R-Co's
+      actual arithmetic/precedence/error semantics only -- no CEL macros,
+      collections, ternary, or `in`. now()/date_add/date_diff explicitly
+      excluded as clock-impure. Depends_on [REQ-050, REQ-111], both done.

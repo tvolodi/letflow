@@ -198,6 +198,210 @@ defmodule Letflow.Engine.ExprTest do
   end
 
   # ---------------------------------------------------------------------
+  # REQ-197 AC1 -- each of + - * / % and unary negation, one test per
+  # operator with a concrete expected value. Parsed from real condition
+  # syntax (not hand-built ASTs) so the tokenizer/parser path is exercised
+  # too, matching design doc §2.2's own worked examples where they overlap.
+  # ---------------------------------------------------------------------
+
+  describe "parse/1 + eval/2 -- each arithmetic operator, one test per (AC1)" do
+    test "+ adds" do
+      assert {:ok, ast} = Expr.parse("2 + 3")
+      assert Expr.eval(ast, %{}) == {:ok, 5}
+    end
+
+    test "- subtracts" do
+      assert {:ok, ast} = Expr.parse("5 - 3")
+      assert Expr.eval(ast, %{}) == {:ok, 2}
+    end
+
+    test "* multiplies" do
+      assert {:ok, ast} = Expr.parse("4 * 3")
+      assert Expr.eval(ast, %{}) == {:ok, 12}
+    end
+
+    test "/ divides (integer, truncating, non-zero divisor)" do
+      assert {:ok, ast} = Expr.parse("7 / 2")
+      assert Expr.eval(ast, %{}) == {:ok, 3}
+    end
+
+    test "% is the remainder (non-zero divisor)" do
+      assert {:ok, ast} = Expr.parse("7 % 2")
+      assert Expr.eval(ast, %{}) == {:ok, 1}
+    end
+
+    test "unary - negates" do
+      assert {:ok, ast} = Expr.parse("- 5")
+      assert Expr.eval(ast, %{}) == {:ok, -5}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-197 AC2 -- operator precedence, matching design doc §2.1/§2.2's
+  # own worked examples exactly (loosest-to-tightest: or, and, not,
+  # comparison, +/-, */%, unary -, primary).
+  # ---------------------------------------------------------------------
+
+  describe "parse/1 + eval/2 -- operator precedence (AC2)" do
+    test "an expression mixing + and * groups the * first: 2 + 3 * 4 == 14, not 20" do
+      assert {:ok, ast} = Expr.parse("2 + 3 * 4")
+      assert ast == {:arith, :add, {:lit, 2}, {:arith, :mul, {:lit, 3}, {:lit, 4}}}
+      assert Expr.eval(ast, %{}) == {:ok, 14}
+    end
+
+    test "a comparison mixed with arithmetic evaluates the arithmetic first: 1 + 1 == 2 is true" do
+      assert {:ok, ast} = Expr.parse("1 + 1 == 2")
+      assert ast == {:cmp, :eq, {:arith, :add, {:lit, 1}, {:lit, 1}}, {:lit, 2}}
+      assert Expr.eval(ast, %{}) == {:ok, true}
+    end
+
+    test "- and / are left-associative: 3 - 1 - 1 == 1, not 3" do
+      assert {:ok, ast} = Expr.parse("3 - 1 - 1")
+      assert Expr.eval(ast, %{}) == {:ok, 1}
+    end
+
+    test "unary - is right-recursive: - - 5 == 5" do
+      assert {:ok, ast} = Expr.parse("- - 5")
+      assert Expr.eval(ast, %{}) == {:ok, 5}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-197 AC3 -- an integer mixed with a float promotes to float, on a
+  # case where integer arithmetic would give a different answer: 7 / 2 is
+  # 3 (integer, truncating division, per AC1 above) but 7 / 2.0 is 3.5.
+  # ---------------------------------------------------------------------
+
+  describe "eval/2 -- int/float promotion (AC3)" do
+    test "int / float promotes the int operand, giving a different answer than int / int" do
+      assert {:ok, ast} = Expr.parse("7 / 2.0")
+      assert Expr.eval(ast, %{}) == {:ok, 3.5}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-197 AC4 -- int division/modulo by zero are errors (float division
+  # by zero -> infinity is already covered by the signed-infinity describe
+  # block below, whose first test is explicitly cross-referenced as AC4's
+  # third case).
+  # ---------------------------------------------------------------------
+
+  describe "eval/2 -- integer division/modulo by zero (AC4)" do
+    test "integer division by zero is an error, not a crash or a wrong value" do
+      ast = {:arith, :div, {:lit, 5}, {:lit, 0}}
+      assert Expr.eval(ast, %{}) == {:error, {:eval_error, {:division_by_zero, :int, 5, 0}}}
+    end
+
+    test "integer modulo by zero is an error, not a crash or a wrong value" do
+      ast = {:arith, :mod, {:lit, 5}, {:lit, 0}}
+      assert Expr.eval(ast, %{}) == {:error, {:eval_error, {:modulo_by_zero, :int, 5, 0}}}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-197 AC5 -- the deliberate null asymmetry: null in a comparison
+  # yields null (a real, non-error value), null in arithmetic is an error.
+  # Design doc §4.5's own two worked test cases, transcribed directly.
+  # ---------------------------------------------------------------------
+
+  describe "eval/2 -- null asymmetry: comparison propagates, arithmetic errors (AC5)" do
+    test "null in an ordering comparison yields null, not an error" do
+      ast = {:cmp, :lt, {:var, ["amount"]}, {:lit, 100}}
+      assert Expr.eval(ast, %{"amount" => nil}) == {:ok, nil}
+    end
+
+    test "null in arithmetic is an error, regardless of the other operand's type" do
+      ast = {:arith, :add, {:var, ["amount"]}, {:lit, 1}}
+
+      assert Expr.eval(ast, %{"amount" => nil}) ==
+               {:error, {:eval_error, {:null_in_arithmetic, :add, nil, 1}}}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-197 AC6 -- parse_strict/1's structured parse-failure surface,
+  # asserted field by field on a deliberately malformed expression: a
+  # trailing binary operator with no right operand.
+  # ---------------------------------------------------------------------
+
+  describe "parse_strict/1 -- structured parse failure, field by field (AC6)" do
+    test "a trailing operator with no right operand reports line, column, token text and message" do
+      assert Expr.parse_strict("amount + ") ==
+               {:error,
+                %{
+                  line: 1,
+                  column: 10,
+                  token_text: "",
+                  message: "unexpected end of input"
+                }}
+    end
+
+    test "on success, returns the identical ast() parse/1 would return for the same input" do
+      assert Expr.parse_strict("amount + 1") == Expr.parse("amount + 1")
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-197 §4.3/§4.6 -- signed-infinity/NaN 3-way split for float
+  # division by a zero divisor (REVIEWER rework, OQ-1 resolved: the
+  # unsigned-only :infinity fallback wrongly made an :infinity marker the
+  # greatest value in ordering regardless of dividend sign).
+  # ---------------------------------------------------------------------
+
+  describe "eval/2 -- signed float division-by-zero (REQ-197 §4.3, OQ-1 sign-flip fix)" do
+    test "positive dividend / 0.0 -> :infinity (AC4, still passes unmodified)" do
+      ast = {:arith, :div, {:lit, 1.0}, {:lit, 0.0}}
+      assert Expr.eval(ast, %{}) == {:ok, :infinity}
+    end
+
+    test "negative dividend / 0.0 -> :neg_infinity" do
+      ast = {:arith, :div, {:lit, -1.0}, {:lit, 0.0}}
+      assert Expr.eval(ast, %{}) == {:ok, :neg_infinity}
+    end
+
+    test "0.0 / 0.0 -> :nan" do
+      ast = {:arith, :div, {:lit, 0.0}, {:lit, 0.0}}
+      assert Expr.eval(ast, %{}) == {:ok, :nan}
+    end
+
+    test ":nan compares false against everything via every ordering operator, including :nan vs :nan" do
+      nan_ast = {:arith, :div, {:lit, 0.0}, {:lit, 0.0}}
+
+      for op <- [:lt, :lte, :gt, :gte] do
+        assert Expr.eval({:cmp, op, nan_ast, {:lit, 5.0}}, %{}) == {:ok, false}
+        assert Expr.eval({:cmp, op, nan_ast, nan_ast}, %{}) == {:ok, false}
+      end
+    end
+
+    test ":nan == :nan is false and :nan != :nan is true (real IEEE 754 NaN self-inequality)" do
+      nan_ast = {:arith, :div, {:lit, 0.0}, {:lit, 0.0}}
+
+      assert Expr.eval({:cmp, :eq, nan_ast, nan_ast}, %{}) == {:ok, false}
+      assert Expr.eval({:cmp, :neq, nan_ast, nan_ast}, %{}) == {:ok, true}
+    end
+
+    test "REGRESSION (REVIEWER-identified sign-flip bug): a negative amount divided by a zero-valued divisor, compared with `<` against a finite positive threshold, now evaluates true -- the old unsigned-only :infinity fallback wrongly evaluated this false" do
+      # amount / divisor < threshold, with amount negative and divisor 0.0.
+      # Correct IEEE-754 semantics: -1000.0 / 0.0 == :neg_infinity, and
+      # :neg_infinity is the least possible value, so :neg_infinity < 100.0
+      # must be true. Under the old unsigned-only fallback, this division
+      # produced the single unsigned :infinity marker (treated as GREATEST
+      # in every comparison), so `:infinity < 100.0` wrongly evaluated to
+      # false.
+      ast =
+        {:cmp, :lt, {:arith, :div, {:var, ["amount"]}, {:var, ["divisor"]}}, {:lit, 100.0}}
+
+      assert Expr.eval(ast, %{"amount" => -1000.0, "divisor" => 0.0}) == {:ok, true}
+    end
+
+    test "REGRESSION, gateway-level (`>` direction): a negative amount divided by a zero-valued divisor, compared with `>` against a finite positive threshold, now evaluates false via evaluate_condition/2 -- the old unsigned-only fallback wrongly routed this edge as true" do
+      condition = "variables.amount / variables.divisor > 100.0"
+
+      refute Expr.evaluate_condition(condition, %{"amount" => -1000.0, "divisor" => 0.0})
+    end
+  end
+
+  # ---------------------------------------------------------------------
   # evaluate_condition/2 -- the composed, always-boolean entry point.
   # Catch-false composition tested across every failing stage.
   # ---------------------------------------------------------------------
@@ -250,6 +454,26 @@ defmodule Letflow.Engine.ExprTest do
 
     test "a malformed/unparseable condition returns false, not a raised error" do
       assert Expr.evaluate_condition("", %{}) == false
+    end
+
+    # REQ-197 AC7 / design doc §5's verification obligation: a deliberately
+    # malformed ARITHMETIC condition (trailing operator, no right operand)
+    # must still collapse to false via the same unconditional
+    # `else _ -> false` composition, proving the catch-false rule absorbs
+    # this requirement's new failure classes too, not just the pre-existing
+    # ones already covered by the other tests in this describe block.
+    test "a malformed arithmetic condition (trailing operator) returns false, not a raised error or an error tuple (AC7)" do
+      assert Expr.evaluate_condition("variables.amount / ", %{"amount" => 5}) == false
+    end
+
+    # REQ-197 AC7: an eval-time arithmetic error (division by zero) must
+    # also collapse to false, exactly like the pre-existing eval-error
+    # cases (undefined variable, type mismatch) above.
+    test "an integer-division-by-zero condition returns false, not a raised error or an error tuple (AC7)" do
+      assert Expr.evaluate_condition("variables.amount / variables.divisor > 1", %{
+               "amount" => 5,
+               "divisor" => 0
+             }) == false
     end
 
     test "a CEL method-call condition (matches()) returns false, not a raised CaseClauseError (ISS-0086/GH#303)" do

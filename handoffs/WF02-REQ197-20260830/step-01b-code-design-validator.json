@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step01b-rework1-WF02-REQ197-20260830",
+  "run_id": "WF02-REQ197-20260830",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ197-20260830/step-01b-code-design-validator.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-197"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ197-20260830/step-01-code-designer-rework1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req197-expr-arithmetic-and-errors.md",
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/engine/transition.ex",
+      "test/letflow/engine/expr_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ197-20260830",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "Re-check REQ-197's design (lib/letflow/design/req197-expr-arithmetic-and-errors.md) after CODE-DESIGNER's rework iteration 1, which addresses the single BLOCKER from the prior Step 1b FAIL (handoffs/WF02-REQ197-20260830/step-01b-code-design-validator.json, now overwritten by this re-request -- see git history for the FAILED verdict text if needed) plus two non-blocking flagged items. Read docs/requirements.yaml's REQ-197 entry in full yourself before validating -- do not trust this summary alone.\n\nWhat changed since the FAILED pass:\n1. BLOCKER FIX -- §4.5 (retitled 'REVISED, rework iteration 1', old text described as superseded rather than silently deleted, per this project's established convention -- see how REQ-192's design doc handled its own rework for the pattern): eval/2's ordering-comparison clause (< <= > >=) now specifies a NEW nil-check guard inserted immediately ahead of the existing is_number(lv) and is_number(rv) guard at expr.ex:437-446 -- a nil operand there now returns {:ok, nil} (propagates), not the old {:error, {:eval_error, {:type_mismatch, ...}}}. Eq/neq (==, !=) are explicitly stated as needing NO code change (plain Elixir == already propagates nil sensibly). Arithmetic's null-is-always-an-error disposition (§4.2 check 1, ahead of the type/promotion checks; §4.4) is unchanged from iteration 0. §4.5 now also states two concrete worked eval/2-level test cases matching AC5's own wording: (a) Expr.eval({:cmp, :lt, {:var, [\"amount\"]}, {:lit, 100}}, %{\"amount\" => nil}) -> {:ok, nil}; (b) Expr.eval({:arith, :add, {:var, [\"amount\"]}, {:lit, 1}}, %{\"amount\" => nil}) -> {:error, {:eval_error, {:null_in_arithmetic, :add, nil, 1}}}. These are now observably DIFFERENT eval/2-level outcomes (a value vs. an error), which is what makes AC5 satisfiable. §4.6 (equality/ordering involving infinity_marker()) was re-checked and now states the full 5-clause guard order for the ordering-comparison clause (nil-check, then :nan guard, then infinity-marker branch, then is_number guard, then type-mismatch fallback) with reasoning for why inserting the nil-check first cannot shadow the :nan/infinity branches (mutually exclusive operand shapes). §11's AC5 traceability row now points at the corrected §4.5/§4.6 content with the two worked test cases spelled out.\n2. OQ-1 (§12, signed infinity/NaN 3-way split for float div/mod-by-zero, §4.3) -- carried forward UNCHANGED in substance, now with an explicit statement that ELIXIR-DEV must NOT implement §4.3's 3-way split until REVIEWER has given explicit sign-off (mirroring how REQ-191/REQ-192 escalated similar unverified-against-R-Co-source points), since R-Co's real src/expr/evaluator.zig remains confirmed unreachable from this sandbox (no *.zig file anywhere on this host).\n3. OQ-4 (§12, negative-operand int div/mod rounding direction, §4.2 row A) -- carried forward UNCHANGED in substance, still flagged for REVIEWER's awareness only (not blocking): low-risk, reuses Elixir's native div/2 and rem/2 semantics with no new type/AST surface, no AC depends on it.\n4. OQ-3 (§12, eval-time structured-error surface) -- relabelled only, no behavioural change: now stated plainly as a requirement-text-confirmed SCOPE EXCLUSION (the requirement's own SCOPE item 3 asks only for a parse-error surface, never an eval-time one), not an open question awaiting a future reader's resolution.\n\nNo other section was rewritten -- §2/§2.1/§2.2/§2.3, §3, §5, §6.1-§6.6, §7, §8, §9, §10 are unchanged from the version that already passed every other Step 1b check in the prior (FAILED-on-one-BLOCKER-only) pass.",
+    "acceptance_criteria": [
+      "§4.5's revised ordering-comparison disposition genuinely resolves the BLOCKER: confirm eval/2's ordering-comparison clause is specified to return {:ok, nil} for a nil operand (checked ahead of is_number), and that this is stated as a real, deliberate behavioural change to expr.ex:437-446 -- not hedged back into an evaluate_condition/2-boundary-only reading.",
+      "AC5's two worked test cases in §4.5 are genuinely two DIFFERENT eval/2-level outcomes (one {:ok, nil}, one {:error, {:eval_error, {:null_in_arithmetic, ...}}}) -- re-verify this actually satisfies AC5's exact wording as read from docs/requirements.yaml, not from this handoff's paraphrase.",
+      "§4.6's re-checked guard ordering (nil-check, :nan guard, infinity-marker branch, is_number guard, type-mismatch fallback) is internally consistent and does not shadow or misorder against the pre-existing :nan/infinity-marker handling -- verify the mutual-exclusivity reasoning given (nil vs. :nan vs. infinity-marker are disjoint operand shapes) actually holds.",
+      "§11's AC5 traceability row points at the corrected §4.5/§4.6 content.",
+      "Eq/neq's 'no code change needed' claim in §4.5 is correct -- spot check that plain Elixir == on nil against another value or nil produces the stated results (nil == nil is true, nil == 5 is false) and that this genuinely satisfies the requirement's propagation framing for eq/neq without a new guard.",
+      "OQ-1 is carried forward as a genuine open question requiring REVIEWER's explicit sign-off before ELIXIR-DEV implements §4.3's 3-way infinity/NaN split -- confirm this gating language is present and unambiguous, not silently downgraded to 'awareness only'.",
+      "OQ-4 is carried forward as REVIEWER-awareness-only, non-blocking -- confirm it is not mistakenly escalated to blocking or merged with OQ-1's stronger gating language.",
+      "OQ-3 is correctly relabelled as a confirmed scope exclusion (matching the requirement's own SCOPE item 3 wording, parse-error surface only) rather than an open question -- no behavioural content should have changed here, wording only.",
+      "Re-confirm no other section was rewritten without cause -- diff-check that §2/§2.1/§2.2/§2.3, §3, §5, §6.1-§6.6, §7, §8, §9, §10 remain byte-identical (or near-identical, allowing only the §11 AC5 row edit) to the version that already passed those specific checks in the prior Step 1b pass.",
+      "Zero literal Elixir implementation code anywhere in the design doc -- grep for 'defmodule', 'def ', and a trailing bare 'end' outside a @type/@spec continuation; confirm every fenced block remains a @type/@spec declaration, BNF/table, or plain-English pseudocode, never a working function body.",
+      "CRITICAL: the handoff's top-level status field (this file, top level, not nested under result) must be exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish your pass -- grep the file yourself before finishing, and run mix letflow.lint_handoffs if available, per this project's own recurring anti-pattern entry on this exact mistake."
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "handoff_id": "WF02-REQ197-20260830-step04",
+  "run_id": "WF02-REQ197-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 4",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "test/letflow/engine/expr_test.exs",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-197"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ197-20260830/step-03-test-designer.json",
+      "handoffs/WF02-REQ197-20260830/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ197-20260830/test-coverage-gap-analysis.md",
+      "handoffs/WF02-REQ197-20260830/test-design-validation-report.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/engine/transition.ex",
+      "test/letflow/engine/expr_test.exs",
+      "test/letflow/engine/transition_test.exs",
+      "test/specs/REQ-197.md"
+    ],
+    "branch_name": "feature/WF02-REQ197-20260830",
+    "note": "TEST-DESIGN-VALIDATOR PASSED (hard gate). All 12 REQ-197 ACs re-checked against docs/requirements.yaml directly (not just test/specs/REQ-197.md's own table). AC6's parse_strict('amount + ') expected values (line:1, column:10, token_text:'', message:'unexpected end of input') were independently re-derived by loading lib/letflow/engine/expr.ex with `elixir -e` and inspecting the real return -- matched exactly. AC7's new transition_test.exs describe block ('dispatch_exclusive_gateway -- REQ-197 arithmetic error falls through via catch-false') was read directly and confirmed to exercise Transition.transition/3's real dispatch_exclusive_gateway path via graph/node/edge/instance_state fixtures, not expr.ex directly. Two real mutations applied in a throwaway git worktree (not the working tree) and confirmed caught: (1) reverted apply_float_arith's signed-infinity 3-way split back to unsigned :infinity for any float div-by-zero -- 6 of 100 tests failed (the pre-existing signed-infinity/NaN regression block), confirming those tests still discriminate correct from buggy sign handling; (2) made apply_arith silently coerce nil to 0 instead of erroring -- exactly 1 test failed (AC5's 'null in arithmetic is an error' test), confirming AC5's asymmetry test is load-bearing. Both mutants reverted via `git checkout --`; `git status --porcelain lib/ test/` confirmed empty and the full suite re-ran green (100 passed) before the worktree was removed. mix test test/letflow/engine/expr_test.exs test/letflow/engine/transition_test.exs: 100 passed (1 property, 99 tests), 0 failures. mix compile --force --warnings-as-errors: clean, no warnings. mix letflow.lint_handoffs: OK -- 0 new violations (25 pre-existing grandfathered, unrelated to this run). No @tag :skip/pending/TODO anywhere in the touched test files. Only test files (plus test/specs/REQ-197.md and this run's own handoff artifacts) were touched by TEST-DESIGNER's commit (b8ff4fc6) -- confirmed via `git show --stat`; no edit to lib/letflow/engine/expr.ex or transition.ex in this step."
+  },
+  "task": {
+    "description": "Run the full test suite exactly as CI will (mix test, then mix compile --warnings-as-errors) for test/letflow/engine/expr_test.exs and test/letflow/engine/transition_test.exs, and diagnose any failure. Confirm mix format --check-formatted passes on the touched test files. Report pass/fail with real output quoted, then route onward per WF-02 (RELEASE-VALIDATOR / DOC-UPDATER) once green.",
+    "acceptance_criteria": [
+      "mix test test/letflow/engine/expr_test.exs test/letflow/engine/transition_test.exs passes in full with real output quoted",
+      "mix compile --warnings-as-errors passes clean with real output quoted",
+      "mix format --check-formatted passes on the touched files"
+    ]
+  },
+  "result": null
+}

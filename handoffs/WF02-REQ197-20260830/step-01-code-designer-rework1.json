@@ -1,0 +1,39 @@
+{
+  "handoff_id": "step01-rework1-WF02-REQ197-20260830",
+  "run_id": "WF02-REQ197-20260830",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ197-20260830/step-01-code-designer-rework1.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-197"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ197-20260830/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req197-expr-arithmetic-and-errors.md",
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/engine/transition.ex",
+      "test/letflow/engine/expr_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ197-20260830",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR FAILED Step 1b (see handoffs/WF02-REQ197-20260830/step-01b-code-design-validator.json for the full verdict) on one BLOCKER: §4.5/§12 OQ-2 mislabels a question the requirement text already answers as an unresolvable open question, and the design's chosen disposition contradicts that answer.\n\nBLOCKER, quoting the requirement text that resolves it: docs/requirements.yaml's REQ-197 description states, in its SCOPE section (not as an aside): \"Note the deliberate asymmetry Letflow must preserve: null in a COMPARISON propagates (yields null), but null in ARITHMETIC is an error.\" This is an instruction to make eval/2 itself return {:ok, nil} when an ordering comparison (`< <= > >=`) has a nil operand -- not a restatement of expr.ex's current, already-shipped behaviour (expr.ex:437-446's `is_number(lv) and is_number(rv)` guard, which today produces `{:error, {:eval_error, {:type_mismatch, op, lv, rv}}}` for a nil operand). Your design's §4.5/§12 OQ-2 instead reads the requirement's 'yields null' phrase as already satisfied by evaluate_condition/2's catch-false boundary (an error collapsing to false, same as any other error) and leaves eval/2's comparison behaviour unchanged. That disposition makes AC5 unsatisfiable: 'null in a comparison still yields null and null in arithmetic yields an error -- the deliberate asymmetry, asserted as two explicit tests' requires two tests demonstrating two DIFFERENT eval/2-level outcomes (a value vs. an error) -- but under your current design, BOTH cases still produce an {:error, {:eval_error, ...}} tuple from eval/2, so there is no observable asymmetry left to test; both collapse to `false` identically at evaluate_condition/2 and are indistinguishable there.\n\nThis is not a real R-Co-source-dependent gap: it is fully resolved by the requirement's own text, and is safe to implement -- CODE-DESIGN-VALIDATOR grepped test/letflow/engine/expr_test.exs for 'nil'/'null' and found zero matches, so no existing shipped test pins today's type-mismatch-on-nil ordering-comparison behaviour.\n\nFix required:\n1. Revise §4.2 (the eval/2 dispatch table) to add an explicit nil check ahead of the existing `is_number(lv) and is_number(rv)` guard in the ordering-comparison (`:lt`/`:lte`/`:gt`/`:gte`) eval clause, so a nil operand there returns `{:ok, nil}` rather than a type-mismatch error. State explicitly whether this also touches the `:eq`/`:neq` clause (today `nil == nil` is already `true` and `nil == 5` is already `false` via plain Elixir `==`, which may already be a correct reading of 'propagates' for equality without needing a code change -- decide and state which, do not leave it ambiguous).\n2. Update §4.5's asymmetry table to reflect the new, actual eval/2-level behaviour (not the 'satisfied only at the evaluate_condition/2 boundary' framing), and update the worked-example prose accordingly.\n3. Update §11's traceability row for AC5 to point at the corrected §4.2/§4.5 content.\n4. Re-check §4.6 (equality/ordering involving `infinity_marker()`) for any interaction with the new nil-handling branch in the ordering-comparison clause -- confirm ordering the guards (nil-check, then infinity-marker check, then is_number check) doesn't shadow or reorder incorrectly.\n5. Do NOT touch OQ-1 or OQ-4 (§12) -- these are genuine R-Co-source-dependent gaps CODE-DESIGN-VALIDATOR confirmed are unresolvable from the requirement text alone; carry them forward unchanged. Re-label OQ-3 (§6.6 point 3 / §12) to state plainly that it is a requirement-text-confirmed scope exclusion (SCOPE item 3 only asks for a PARSE-error surface, never an eval-time one), not an open question requiring a future reader's resolution -- a wording fix only, no behavioural change.\n6. Do not needlessly rewrite any other section -- §2/§2.1/§2.2/§2.3, §3, §5, §6.1-§6.5, §7, §8, §9, §10 all passed the validator's gate as written.",
+    "acceptance_criteria": [
+      "§4.2's ordering-comparison eval clause now specifies returning {:ok, nil} for a nil operand, ahead of the is_number guard, with the eq/neq treatment stated explicitly one way or the other.",
+      "§4.5's asymmetry table and prose reflect the corrected eval/2-level behaviour, not the evaluate_condition/2-boundary framing that made AC5 unsatisfiable.",
+      "§11's AC5 traceability row points at the corrected content.",
+      "§4.6's guard ordering is re-checked and stated to be still correct with the new nil-check branch inserted.",
+      "OQ-1 and OQ-4 carried forward unchanged; OQ-3 re-labelled as a confirmed scope exclusion, not an open question; no other section rewritten without cause.",
+      "Zero literal Elixir implementation code in the design doc, still true after the fix.",
+      "CRITICAL: the handoff's top-level status field must be exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish -- run mix letflow.lint_handoffs before finishing if available."
+    ]
+  }
+}

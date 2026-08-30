@@ -10662,7 +10662,7 @@ requirements:
   - id: REQ-197
     title: Extend expr.ex with arithmetic, unary negation and a structured parse-error surface -- without breaking EE-05's catch-false gateway contract
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 370  # letflow-queue task id
     description: >

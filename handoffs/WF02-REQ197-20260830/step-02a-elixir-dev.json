@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step02a-WF02-REQ197-20260830",
+  "run_id": "WF02-REQ197-20260830",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ197-20260830/step-02a-elixir-dev.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-197"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ197-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ197-20260830/step-01-code-designer-rework1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req197-expr-arithmetic-and-errors.md",
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/engine/transition.ex",
+      "test/letflow/engine/expr_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ197-20260830",
+    "design_pass": "PASS (rework iteration 1, re-check)"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR PASSED lib/letflow/design/req197-expr-arithmetic-and-errors.md on re-check after CODE-DESIGNER's rework iteration 1. Implement REQ-197 (docs/requirements.yaml) against this design. Read the design doc in full, then implement the extended ast() (5 new node shapes: arithmetic +, unary negation), the extended tokenizer/parser, the extended eval/2 arithmetic semantics, the new position-tracking internal token/error representation, and the new parse_strict/1 public entry point, per the design's §2-§10.\n\nRE-CHECK BASIS (rework iteration 1 recheck, this validator's own verification, not a restatement of CODE-DESIGNER's claim): (1) read the requirement's AC5 verbatim from docs/requirements.yaml ('null in a comparison still yields null and null in arithmetic yields an error -- the deliberate asymmetry, asserted as two explicit tests') and confirmed §4.5's two worked eval/2-level test cases are genuinely two different outcomes: Expr.eval({:cmp, :lt, {:var, [\"amount\"]}, {:lit, 100}}, %{\"amount\" => nil}) -> {:ok, nil}, versus Expr.eval({:arith, :add, {:var, [\"amount\"]}, {:lit, 1}}, %{\"amount\" => nil}) -> {:error, {:eval_error, {:null_in_arithmetic, :add, nil, 1}}}. (2) Read the real expr.ex:437-446 ordering-comparison clause directly and confirmed §4.5's new nil-check guard, inserted immediately ahead of the existing is_number(lv) and is_number(rv) guard, is a real, correctly-targeted change to that exact clause. (3) Read §4.6's re-checked 5-clause guard order (nil-check, :nan guard, infinity-marker branch, is_number guard, type-mismatch fallback) and confirmed the mutual-exclusivity reasoning holds: nil, :nan, and the infinity sentinels are disjoint operand shapes, so inserting the nil-check first cannot shadow the :nan/infinity branches. (4) Diff-confirmed against the pre-rework design version that only §4.5, §4.6, §11's AC5 row, and §12 changed; §2/§2.1/§2.2/§2.3, §3, §5, §6.1-§6.6, §7, §8, §9, §10 are unchanged. (5) Confirmed zero implementation code fences in the design doc (no defmodule/def/bare end outside @type/@spec).\n\nIMPLEMENTATION GATING -- READ BEFORE STARTING §4.3: OQ-1 (design §12) is carried forward as a genuine BLOCKING open question. The signed-infinity / NaN-for-0.0/0.0 3-way split for float division by zero (§4.3's infinity_marker() sentinel rule: :infinity / :neg_infinity / :nan) is the design's own reasoned extension of the requirement text's single un-signed phrase ('yields the IEEE infinity'), NOT independently verified against R-Co's real src/expr/evaluator.zig (no *.zig file reachable on this host). Do NOT implement §4.3's 3-way split, the infinity_marker() type, or §4.6's :nan/infinity comparison branches until REVIEWER has explicitly signed off on this specific point. Implement everything else in the design (arithmetic dispatch, promotion, div/mod-by-zero errors for the non-float-zero-divisor cases, unary negation, the null asymmetry fix in §4.5, the structured parse-error surface in §6) and flag §4.3's signed-infinity/NaN split plus §4.6's dependent comparison branches to REVIEWER for sign-off rather than building past them silently. If REVIEWER sign-off is not yet available when you reach this point, implement the single unsigned-infinity case only (float division by any nonzero-dividend / zero-divisor -> :infinity, no sign/NaN split) and flag the gap explicitly in your handoff rather than guessing at the 3-way split.\n\nCarried forward, non-blocking, for awareness only: OQ-4 (design §12) -- the truncate-toward-zero (div/2 / rem/2) rounding direction for integer division/modulo with negative operands is the design's own decision, not independently verified against R-Co's real evaluator.zig, but is low-risk (reuses Elixir's native div/2 and rem/2 semantics, no new type/AST surface, no AC depends on it). No action required beyond implementing it as designed; do not block on it.",
+    "acceptance_criteria": [
+      "each of + - * / % and unary negation evaluates correctly in a condition, one test per operator with a concrete expected value (AC1)",
+      "operator precedence matches R-Co's per §2.1/§2.2 (AC2)",
+      "integer/float mix promotes to float (AC3)",
+      "integer division/modulo by zero are errors; float division by zero yields infinity for the unsigned/non-blocked case at minimum (AC4) -- full signed/NaN 3-way split gated on REVIEWER sign-off per OQ-1 above",
+      "null in comparison yields {:ok, nil} from eval/2; null in arithmetic yields {:error, {:eval_error, {:null_in_arithmetic, ...}}} -- two explicit eval/2-level tests per §4.5 (AC5)",
+      "parse_strict/1 returns a structured parse failure with line, column, offending token text, and message, field by field on a malformed expression (AC6)",
+      "evaluate_condition/2 is byte-for-byte unchanged in source; a test asserts transition.ex's exclusive-gateway behaviour for a bad condition is unchanged (AC7)",
+      "expr.ex's documented purity grep still returns zero matches, quoted in the handoff (AC8)",
+      "now() is not added; moduledoc states why per §8 (AC9)",
+      "moduledoc states benchmark.zig is deliberately not ported (AC10)",
+      "moduledoc records R-Co's expr is not CEL and EXP-102's cutover (AC11)",
+      "mix test and mix compile --warnings-as-errors both pass, real output quoted (AC12)",
+      "any part of §4.3/§4.6 not implemented pending REVIEWER sign-off (OQ-1) is explicitly named in your handoff to the next step, not silently omitted"
+    ]
+  }
+}

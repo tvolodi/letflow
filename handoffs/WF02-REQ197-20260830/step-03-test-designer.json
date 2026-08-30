@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step03-WF02-REQ197-20260830",
+  "run_id": "WF02-REQ197-20260830",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ197-20260830/step-03-test-designer.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-197"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ197-20260830/step-02d-reviewer.json",
+      "handoffs/WF02-REQ197-20260830/step-02a-elixir-dev-rework1.json",
+      "handoffs/WF02-REQ197-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ197-20260830/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req197-expr-arithmetic-and-errors.md",
+      "lib/letflow/engine/expr.ex",
+      "test/letflow/engine/expr_test.exs",
+      "test/letflow/engine/transition_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ197-20260830",
+    "reviewer_pass": "PASS (rework iteration 2 recheck)",
+    "verification_evidence": {
+      "hand_traced_sign_flip_scenario": "amount=-1000.0, divisor=0.0, condition `amount/divisor > 100.0`: apply_float_arith(:div, -1000.0, 0.0) matches the `r == 0.0 and l < 0.0` clause -> {:ok, :neg_infinity} (expr.ex:1114). eval/2's ordering clause for :gt routes :neg_infinity through apply_ordering/3 (expr.ex:1143-1152): l == :neg_infinity -> op in [:lt, :lte] -> :gt not a member -> false. Confirmed by direct hand-trace against the real committed code, not the design doc.",
+      "ieee754_nan_semantics": "eval/2's ordering clause (expr.ex:1030-1036) checks `lv == :nan or rv == :nan` before the infinity-marker branch and returns {:ok, false} unconditionally for all four ordering operators, including :nan vs :nan -- confirmed by reading the guard order and by the test at expr_test.exs:223-230 which loops [:lt, :lte, :gt, :gte] against both a finite RHS and :nan vs :nan itself. Equality clause (expr.ex:999-1014) overrides plain atom equality: :nan == :nan -> false, :nan != anything (incl. :nan) -> true (expr.ex:1007-1008), confirmed by expr_test.exs:232-236.",
+      "regression_tests_confirmed_real": "test/letflow/engine/expr_test.exs:239-251 reproduces the exact eval/2-level sign-flip scenario (amount=-1000.0, divisor=0.0, `<` against 100.0, asserts {:ok, true}); expr_test.exs:253-257 reproduces the same scenario at the evaluate_condition/2 gateway level using CEL-syntax `variables.amount / variables.divisor > 100.0`, asserting refute (false). Both read directly, not taken on ELIXIR-DEV's description alone.",
+      "h3_handoff_lint_fix": "Confirmed already committed at c7bfa8f7 (step-02c-security-reviewer.json's stray top-level \"verification\" key folded into context.verification_evidence). mix letflow.lint_handoffs run directly: 0 new violations across 1487 handoff files (25 pre-existing grandfathered, traced to ISS-0190). Not re-flagged.",
+      "compile_format_purity_test": "mix compile --warnings-as-errors: exit 0, no output. mix format --check-formatted: exit 0, no output. Purity grep (moduledoc's own documented command) against lib/letflow/engine/expr.ex: the sole match is the moduledoc's own literal text of the grep command string (pre-existing lines 75-79), zero matches against actual code. mix test test/letflow/engine/expr_test.exs test/letflow/engine/transition_test.exs: 'Result: 80 passed (1 property, 79 tests)', 0 failures."
+    }
+  },
+  "task": {
+    "description": "REVIEWER PASSED expr.ex's signed-infinity/NaN 3-way split (infinity_marker() extended to :infinity | :neg_infinity | :nan) on rework-1 recheck. The prior FAIL (unsigned-only :infinity marker made every float division-by-zero compare as the greatest value regardless of dividend sign, so `amount / 0.0 > threshold` wrongly evaluated true even for large-magnitude negative amounts) is confirmed fixed by direct hand-trace against the real committed code: apply_float_arith/3's :div clauses branch on dividend sign (expr.ex:1112-1115), apply_neg/1 flips :infinity<->:neg_infinity and leaves :nan as :nan (expr.ex:1126-1131), the ordering eval/2 clause's guard order (expr.ex:1016-1049) filters nil then :nan (always false, including nan vs nan) then routes both infinity markers through apply_ordering/3 (expr.ex:1141-1154, :infinity greatest / :neg_infinity least), and the eq/neq clause (expr.ex:999-1014) makes :nan self-unequal ahead of plain atom equality. New regression tests in test/letflow/engine/expr_test.exs (lines 207-258) exercise the exact sign-flip scenario at both the eval/2 level and the evaluate_condition/2 gateway level and were read directly, not taken on description. Idiom/scope check: no supervision or process-isolation concerns (expr.ex is a pure functional evaluator, no GenServer/gen_statem involved), no scope creep (only expr.ex and expr_test.exs touched, OQ-4 and the parse_strict/1 duplication question correctly left unopened per REVIEWER's own prior carry-forward), no new type-safety gap worth filing (the infinity_marker() type itself is the type-safety improvement -- it makes the 3-way split representable in @type rather than leaving it an untyped sentinel). This gate is now closed for REQ-197: implement full test-design coverage for the acceptance criteria in docs/requirements.yaml's REQ-197 entry, including the arithmetic operators, unary negation, structured parse errors, the null-in-arithmetic-vs-null-in-comparison asymmetry (AC5), and the signed-infinity/NaN float division semantics now confirmed correct (AC4 and this rework's regression cases). Existing tests in test/letflow/engine/expr_test.exs and test/letflow/engine/transition_test.exs already cover much of this -- TEST-DESIGNER should verify full AC coverage exists and add any gaps rather than duplicating what ELIXIR-DEV's rework already added.",
+    "acceptance_criteria": [
+      "Every acceptance criterion in docs/requirements.yaml's REQ-197 entry maps to at least one runnable ExUnit test, with test names/comments citing the AC number.",
+      "OQ-4 (negative-operand integer div/mod rounding direction) requires no test action -- it is awareness-only, already accepted by REVIEWER in a prior pass, and must not be re-opened or treated as a coverage gap.",
+      "The signed-infinity/NaN regression tests already added by ELIXIR-DEV (test/letflow/engine/expr_test.exs:207-258) are preserved as-is, not duplicated or removed.",
+      "mix test test/letflow/engine/expr_test.exs test/letflow/engine/transition_test.exs passes in full after any additions, with real output quoted.",
+      "No scope creep: only test files touched unless a genuine implementation gap is found, in which case route back through ELIXIR-DEV rather than patching lib/ directly."
+    ]
+  }
+}

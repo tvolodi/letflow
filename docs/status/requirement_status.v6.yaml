@@ -1014,3 +1014,33 @@ history:
       recovered from a stale state (no branch/commit/handoff trace of
       any prior REQ-183 run existed in this checkout) before this
       dispatch, per handoffs/orchestrator.log's own recovery entry.
+  - req: REQ-183
+    event: blocked
+    agent: ORCH
+    at: "2026-08-30T03:47:13Z"
+    note: >
+      CODE-DESIGN-VALIDATOR (Step 1b) found a genuine circular
+      dependency: REQ-183's AC3 requires resolving the webhook signing
+      key through the REAL secrets mechanism (REQ-189's decided
+      mechanism, "the test and the signer obtain the key the same
+      way"), but that mechanism's implementation is REQ-190, which was
+      not yet built and whose own depends_on named REQ-183 (REQ-190's
+      scope item 6 assumed REQ-183's signing code already existed to be
+      "made to resolve through resolve/2"). Neither could legitimately
+      go first as originally worded -- CODE-DESIGN-VALIDATOR verdict:
+      FAIL, remedy is ORCH resequencing, not CODE-DESIGNER rework (the
+      design artefact itself was not defective). User confirmed:
+      resequence REQ-190 before REQ-183. Corrected in
+      docs/requirements.yaml: REQ-183.depends_on gains REQ-190;
+      REQ-190.depends_on drops REQ-183; REQ-190's scope item 6 and AC9
+      reworded (REQ-190 now adds the columns and proves resolve/2 works
+      for a webhook-shaped reference itself, rather than assuming
+      REQ-183's code already exists to retrofit); REQ-183's description
+      gets a REWORK 2 note recording this. REQ-183 reverted
+      in_progress -> pending, queue task 356 released back to open
+      (unlocked, not force-completed) pending REQ-190. Design artefact
+      lib/letflow/design/req183-webhook-delivery-dispatch.md on branch
+      feature/WF02-REQ183-20260830 is NOT wasted -- its assumed
+      Letflow.Secrets.resolve/2 contract is exactly what REQ-190 must
+      implement; that branch stays open, unmerged, for reuse when
+      REQ-183 resumes.

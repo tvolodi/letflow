@@ -9283,7 +9283,7 @@ requirements:
   - id: REQ-183
     title: Webhook delivery dispatch core -- HMAC signing, retry/backoff, auto-pause, and dead-letter landing (WebhookDeliveryAttempt, entry_type "webhook", no route)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: pending
     stage: S6
     impl_order: 356  # letflow-queue task id
     description: >
@@ -9363,6 +9363,15 @@ requirements:
       1134_iss0112_add_secret_ref_to_tenant_schemas.sql and
       1138_iss0635_webhook_secret_ref_corrective.sql. REQ-190 implements
       whichever resolution REQ-189 chooses.
+      REWORK 2 (WF02-REQ183-20260830, CODE-DESIGN-VALIDATOR finding,
+      ORCH resequencing, user-confirmed): rework 1 fixed the DECISION
+      dependency (depends_on REQ-189) but not the IMPLEMENTATION
+      dependency -- AC3 requires resolving the signing key through the
+      real secrets mechanism, which does not exist until REQ-190 is
+      built, not merely decided. REQ-190 is now added to depends_on and
+      build order is REQ-189 -> REQ-190 -> REQ-183 -> REQ-184. deliver/3
+      calls Letflow.Secrets.resolve/2 against REQ-190's real,
+      already-shipped module -- no stub.
     acceptance_criteria:
       - "deliver/3 against a target_url returning 200 persists one webhook_delivery_attempts row with status \"SUCCESS\", http_status_code 200, and does not increment the subscription's consecutive_failures"
       - "deliver/3 against a target_url returning 500, and separately against one that refuses the connection outright, both persist a row with status \"FAILED\" and last_error populated (http_status_code 500 for the first, null for the connection-refused case) -- two explicit tests"
@@ -9371,7 +9380,7 @@ requirements:
       - "a delivery exhausting max_attempts lands exactly one entry in REQ-176's DLQ core with entry_type \"webhook\" and reference_id equal to the delivery's own delivery_id, read back from the DLQ table"
       - "the moduledoc names the HMAC header/format and the PAUSED-threshold number as Letflow's own choices, explicitly not ported from R-Co's src/webhook/ (unreachable from this drafting session), and names automatic post-event triggering as an explicitly deferred follow-up rather than silently implemented or silently omitted"
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
-    depends_on: [REQ-181, REQ-176, REQ-189]
+    depends_on: [REQ-181, REQ-176, REQ-189, REQ-190]
 
   - id: REQ-184
     title: Port webhooks.zig's deliveries route onto the delivery-dispatch core (GET /api/v1/webhooks/subscriptions/:id/deliveries, WebhooksManage-gated)
@@ -10086,8 +10095,10 @@ requirements:
       must state this rather than claiming a guarantee it does not have.
       6. THE WEBHOOK HMAC RECONCILIATION REQ-189 decided. If that record
       chose the secret_ref path, this requirement adds secret_ref and
-      secret_key_id to webhook_subscriptions and makes REQ-183's signing
-      resolve its key through resolve/2. Follow R-Co's own migration
+      secret_key_id to webhook_subscriptions, so that REQ-183 (built
+      after this requirement, per the resequencing below) can resolve
+      its signing key through resolve/2 from the start rather than
+      needing a later retrofit. Follow R-Co's own migration
       shape (GBL-128 adds both columns, backfills, then BLANKS the
       plaintext column rather than dropping it), but avoid the two
       failures R-Co hit and had to correct twice: its migration was
@@ -10116,11 +10127,11 @@ requirements:
       - "with the master-key environment variable unset, and separately with it set to a malformed value, application startup FAILS with a clear error in both cases -- two tests; no all-zeros or other default key is ever used"
       - "a log call passing a value under each of the keys secret, password, token and client_secret, and under one key ending in _secret, emits \"[REDACTED]\" in place of every one of those values while keeping the key names, asserted against captured log output"
       - "the reference-redaction function renders a reference with its key id masked, asserted on a reference that has a key id and on one that does not"
-      - "the webhook HMAC reconciliation REQ-189 decided is implemented and its outcome asserted: if secret_ref columns were chosen, a test shows REQ-183's signing key resolving through resolve/2 and shows no plaintext secret persisting in webhook_subscriptions; if REQ-189 chose otherwise, a test asserts that decision's stated outcome instead. The moduledoc quotes REQ-189's chosen resolution either way."
+      - "the webhook HMAC reconciliation REQ-189 decided is implemented and its outcome asserted: if secret_ref columns were chosen, a test shows a secret written via put/2 with a webhook purpose, referenced from a webhook_subscriptions row's secret_ref/secret_key_id columns, resolving via resolve/2 to the correct plaintext for a webhook consumer, and shows no plaintext secret persisting in webhook_subscriptions; if REQ-189 chose otherwise, a test asserts that decision's stated outcome instead. The moduledoc quotes REQ-189's chosen resolution either way. (REQ-183, built after this requirement per the resequencing recorded in this entry's depends_on, is the one that actually wires deliver/3's signing to resolve/2 -- this criterion is satisfied by REQ-190 proving the mechanism works for a webhook-shaped reference, not by REQ-183's code existing yet.)"
       - "the moduledoc states that redaction keys on field NAMES and therefore does not catch a secret placed under an unrecognised key, rather than claiming a complete guarantee"
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
-    depends_on: [REQ-189, REQ-072, REQ-181, REQ-183]
+    depends_on: [REQ-189, REQ-072, REQ-181]
 
   - id: REQ-191
     title: Service catalog core -- the DB-backed registry three existing seams already depend on (REPO-07, SVC-01/03)

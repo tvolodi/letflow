@@ -10395,7 +10395,7 @@ requirements:
   - id: REQ-194
     title: Prometheus metrics subsystem and the GET /metrics exposition the SPA already parses (OBS-02) -- resolving REQ-078's three recorded divergences
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 367  # letflow-queue task id
     description: >

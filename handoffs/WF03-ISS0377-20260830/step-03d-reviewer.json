@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0377-20260830-step03d",
+  "run_id": "WF03-ISS0377-20260830",
+  "workflow_id": "WF-03",
+  "step": "Step 3d (idiom/scope-creep review)",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Security review of ISS-0377's fix (Part A: test/letflow/engine/wasm/plugin_handler_test.exs AC7 cross-platform assertions; Part B: scripts/test_parallel.sh per-partition build-path isolation) is complete: PASS. No tenant-data path touched (test-infrastructure only), no applicable INV-1..INV-8 invariant failed, no newly hardcoded secrets, no cross-partition data leak in the new _build/test-partition-<i> scheme, no shell injection risk in the new Step 1.6 seeding loop. Full report at handoffs/WF03-ISS0377-20260830/security-review-report.md.",
+    "design_file": "lib/letflow/design/iss0377-cross-platform-test-fixes.md",
+    "implementation_commit": "8eef01b",
+    "branch": "feature/WF03-ISS0377-20260830",
+    "changed_files": [
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "scripts/test_parallel.sh"
+    ],
+    "security_review_result": {
+      "status": "PASS",
+      "report": "handoffs/WF03-ISS0377-20260830/security-review-report.md",
+      "scope": "out of scope for INV-1..INV-8 (no tenant-data path) -- checked anyway per routing handoff's explicit instructions",
+      "note_for_reviewer": "Flagging one item for REVIEWER's correctness/idiom lens, not a security finding: Part B's hardlink-copy (cp -al) seeding shares inode data across sibling partition build trees. This is only safe if nothing in a mix test run (as opposed to mix compile) mutates a shared file in place rather than replacing it via unlink/rename. I traced this as consistent with Mix's own delete-and-replace manifest/lock semantics (the same mechanism whose Windows hard-link abort is the original symptom being fixed) and note ORCH's real full-suite run completed cleanly with zero wasm_hang flake, but a single clean run isn't a proof of absence for a rare race -- worth a quick sanity check from REVIEWER since it's the load-bearing assumption of the whole Part B fix."
+    },
+    "orch_verification_summary": "ORCH independently verified with a real toolchain: mix compile --warnings-as-errors clean, mix format clean, bash -n scripts/test_parallel.sh valid, full plugin_handler_test.exs suite passes (including AC7, run with --include wasm_hang), full scripts/test_parallel.sh invocation succeeds with the new per-partition seeding step working, zero wasm_hang flake this run. Only known pre-existing rustc-absent-from-sandbox failures remain."
+  },
+  "task": {
+    "description": "Review the ISS-0377 fix (Part A + Part B, commit 8eef01b) for OTP/shell idioms, supervision integrity (n/a here, no OTP process changes), scope creep against lib/letflow/design/iss0377-cross-platform-test-fixes.md, and decision-record consistency (req113-parallel-test-runner.md's AC4/AC5/invariants). Optionally sanity-check the hardlink-sharing note above. If it passes, route to WF-03's next step per the workflow doc; if not, route a rework handoff back to ELIXIR-DEV with specifics."
+  },
+  "result": null
+}

@@ -1,0 +1,39 @@
+{
+  "handoff_id": "WF02-REQ192-20260830-step02a",
+  "run_id": "WF02-REQ192-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 2a",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/design/req192-service-catalog-routes.md",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "Design PASSED Step 1b validation (iteration 2, after one rework pass for a fabricated precedent claim in section 5 -- see handoffs/WF02-REQ192-20260830/req192-design-validation-report.md for the full validation record and handoffs/WF02-REQ192-20260830/step-01b-code-design-validator.json for the verdict). Implement lib/letflow/routers/services.ex and lib/letflow/routers/admin_services.ex (two separate router modules per the design's section 1 -- authorization_enforcement_test.exs's @mount_prefix mechanism is strictly one-router-to-one-mount-prefix, no dual mount) exactly per lib/letflow/design/req192-service-catalog-routes.md. Do NOT modify lib/letflow/api/authorization.ex, lib/letflow/service_catalog.ex, or anything under web/ -- consume them as-is per the design.",
+    "carried_forward_findings": [
+      "Field gap 1 (section 8): ServiceRecord.max_retries (required, number) has no backing Entry column and no register_attrs() key -- Entry only has retry_policy :: String.t() | nil. Implement per the design's stated interim resolution in section 8, do not silently invent a different one.",
+      "Field gap 2 (section 8): request_schema/response_schema are required non-nullable string in ServiceRecord/RegisterServiceBody but optional(...) => String.t() | nil in register_attrs() and absent from insert_changeset/2's validate_required/2 list. Implement per the design's stated interim resolution in section 8.",
+      "Stale comment (section 3): lib/letflow/api/authorization.ex L416-419 carries a stale comment ('platform-admin enforced in handler, per Zig's comment') that no longer reflects reality -- no handler-level PLATFORM_ADMIN-only check exists; the permission mapping alone achieves the restriction. This is out of scope for REQ-192 -- do not fix authorization.ex. Leave the finding for a future requirement.",
+      "Layering exception (section 5) -- FLAGGED FOR REVIEWER SIGN-OFF AT STEP 2d, NOT PRE-APPROVED: GET /api/v1/admin/services queries Letflow.ServiceCatalog.Entry directly via Letflow.Repo/Ecto.Query, bypassing the context module, because list_for_tenant/2 is always tenant-filtered and this requirement's own scope boundary forbids adding a tenant-agnostic list-all function to service_catalog.ex. This is a genuine first-of-its-kind exception to this codebase's router->context-module layering discipline (every other router, including Audit and Metrics, delegates to a context-module function). Implement exactly as designed in section 5 (reuse list_for_tenant/2's keyset shape -- order_by desc created_at/service_id, limit(page_size+1), drop-extra-row split -- with no where clause, cursor prefix 'SCA:' distinct from ServiceCatalog's own 'SC:'). Do not silently normalize this into a context-module function yourself; REVIEWER must independently evaluate and sign off on this exception at Step 2d before it can be treated as settled. Section 5 also separately names the keyset-shape duplication of list_for_tenant/2 as a related finding for REVIEWER -- do not resolve that duplication in this pass either (out of scope, a future service_catalog.ex-scoped requirement should address it)."
+    ]
+  },
+  "task": {
+    "description": "Implement the service catalog route layer per lib/letflow/design/req192-service-catalog-routes.md in full: lib/letflow/routers/services.ex (GET /api/v1/services) and lib/letflow/routers/admin_services.ex (GET/POST /api/v1/admin/services, PATCH and DELETE /api/v1/admin/services/:service_id), wired into lib/letflow/plugs/api_pipeline.ex per section 2, using the policy keys already shipped in lib/letflow/api/authorization.ex (:ServicesRead, :AdminServicesRead, :AdminServicesManage) unchanged. Map REQ-191's context-module error tuples to HTTP responses per sections 9, 11, 12 (two new Error constructors: service_referenced_by_active_definitions/1, service_scope_narrowing_conflict/1). ServiceRecord JSON serialization must match web/src/api/services.ts field-for-field per section 7, applying the two interim field-gap resolutions from section 8. Cross-tenant-404 behavior on the non-admin GET path per section 10 (REQ-072). Run mix test and mix compile --warnings-as-errors and quote real output -- do not claim success without running them.",
+    "acceptance_criteria": [
+      "GET /api/v1/services returns global entries plus the calling tenant's own scoped entries, and a tenant-scoped entry owned by a different tenant is absent from the response -- asserted with entries of all three kinds present in the database",
+      "GET /api/v1/admin/services returns entries the caller's own tenant does not own, demonstrating it is not tenant-filtered, and requires :AdminServicesRead -- a caller holding only :ServicesRead receives 403",
+      "POST /api/v1/admin/services with a RegisterServiceBody creates the entry and returns 201 with a body whose field names match web/src/api/services.ts's ServiceRecord exactly, asserted field by field",
+      "POST, PATCH and DELETE under /api/v1/admin/services each return 403 for a caller lacking :AdminServicesManage, using the mapping already present in lib/letflow/api/authorization.ex -- three explicit tests",
+      "DELETE of a service referenced by an ACTIVE definition returns 409 whose problem-details body lists the referencing definition ids; PATCH narrowing a service other tenants' ACTIVE definitions reference returns 409 listing those tenant ids -- two explicit tests",
+      "POST with an already-registered service_id returns 409 and does not modify the existing entry",
+      "a request naming a tenant-scoped service belonging to another tenant on the non-admin path returns 404, never 403 (REQ-072's cross-tenant rule)",
+      "lib/letflow/api/authorization.ex is NOT modified by this requirement, confirmed by git diff --stat scoped to its commits -- the SVC-04 policy keys it already ships are consumed as-is",
+      "no file under web/ is added or modified, confirmed by git diff --stat -- the SPA client already exists and S8 owns it",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted",
+      "the section 5 direct-schema-query layering exception is implemented exactly as designed and explicitly flagged (in the handoff to SECURITY-REVIEWER/REVIEWER) for REVIEWER sign-off at Step 2d -- not silently treated as pre-approved"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

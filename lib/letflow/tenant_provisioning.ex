@@ -462,7 +462,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_829_020_001, Letflow.Repo.Migrations.CreateTimers,
      "20260829020001_create_timers.exs"},
     {20_260_830_000_004, Letflow.Repo.Migrations.AddSecretRefToWebhookSubscriptions,
-     "20260830000004_add_secret_ref_to_webhook_subscriptions.exs"}
+     "20260830000004_add_secret_ref_to_webhook_subscriptions.exs"},
+    {20_260_830_010_001, Letflow.Repo.Migrations.CreateWebhookDeliveryAttempts,
+     "20260830010001_create_webhook_delivery_attempts.exs"}
   ]
 
   @doc """
@@ -492,8 +494,10 @@ defmodule Letflow.TenantProvisioning do
   (`lib/letflow/design/req054-instance-state-snapshots.md` §3), REQ-176 one
   more: `dlq_entries` (`lib/letflow/design/req176-dlq-core.md` §4), REQ-181
   one more: `webhook_subscriptions`
-  (`lib/letflow/design/req181-webhooks-core.md` §1), and REQ-186 one more:
-  `timers` (`lib/letflow/design/req186-scheduler-core.md` §1) —
+  (`lib/letflow/design/req181-webhooks-core.md` §1), REQ-186 one more:
+  `timers` (`lib/letflow/design/req186-scheduler-core.md` §1), and REQ-183
+  one more: `webhook_delivery_attempts`
+  (`lib/letflow/design/req183-webhook-delivery-dispatch.md` §1) —
   entries in total (see `@tenant_scoped_migration_manifest` itself for the
   authoritative, up-to-date count), ordered by version. Every future tenant-scoped migration must append its
   own entry to `@tenant_scoped_migration_manifest`, in addition to following the

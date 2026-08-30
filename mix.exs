@@ -23,7 +23,12 @@ defmodule Letflow.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger],
+      # :inets and :ssl: REQ-183's deliver/3 uses :httpc.request/4 for
+      # outbound webhook delivery -- both are required started for :httpc to
+      # work, neither was needed before this requirement (the project's
+      # first outbound-HTTP-call requirement, design
+      # req183-webhook-delivery-dispatch.md §5).
+      extra_applications: [:logger, :inets, :ssl],
       mod: {Letflow.Application, []}
     ]
   end

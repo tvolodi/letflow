@@ -144,6 +144,7 @@ defmodule Letflow.TenantFixture do
     "tokens",
     "users",
     "variable_schemas",
+    "webhook_delivery_attempts",
     "webhook_subscriptions"
   ]
 

@@ -1,0 +1,38 @@
+{
+  "handoff_id": "WF02-REQ192-20260830-step03-test-designer",
+  "run_id": "WF02-REQ192-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 3",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "lib/letflow/routers/admin_services.ex",
+  "status": "PENDING",
+  "priority": "normal",
+  "context": {
+    "note": "REVIEWER gate PASSES on lib/letflow/routers/admin_services.ex (full rewrite) and lib/letflow/service_catalog.ex's new list_all/1 plus the split_list_page/build_list_next_cursor arity refactor. Full disposition in handoffs/WF02-REQ192-20260830/reviewer-report-req192-iteration2.md. SECURITY-REVIEWER already PASSed (handoffs/WF02-REQ192-20260830/req192-security-review-iteration2.md).",
+    "scope_expansion_disposition": "AGREE. list_all/1's addition to the already-merged REQ-191 context module is a defensible, minimal, additive exception to REQ-192's own 'no context-module change' note -- necessitated by a real, unavoidable conflict with INV-RT-1 (REQ-078's repo-wide 'no Repo. call under lib/letflow/routers/' invariant) discovered during implementation of the original router-local-query design. list_for_tenant/2's own name/arity/where-clause/behavior are confirmed byte-for-byte unchanged. Not treated as grounds to reopen REQ-191 -- no migration, schema, or existing-function-signature change occurred, and the global-table decision (decision 0003 divergence) already signed off under REQ-191 is not re-litigated.",
+    "signature_change_disposition": "AGREE. split_list_page/2->/3 and build_list_next_cursor/1->/2 are a private-helper-only refactor confirmed safe: grep across lib/ and test/ shows the only other split_list_page/build_list_next_cursor definitions live in lib/letflow/dlq.ex, lib/letflow/tasks.ex, and lib/letflow/instances.ex -- separate private functions in separate modules, no cross-module visibility possible, no other caller affected.",
+    "idiom_and_scope_disposition": "No OTP-idiom or supervision-integrity defect (plain Ecto context module and Plug router, no process -- same shape as Letflow.Dlq/Letflow.Routers.Dlq). No scope creep beyond the two flagged-and-AGREED items: admin_services.ex is a pure context-module-delegating router with zero Repo./Ecto.Query references (grep-confirmed), satisfying INV-RT-1 by construction. service_record_json/1's duplication between services.ex and admin_services.ex matches the established one-router-per-mount-prefix precedent (dlq.ex/webhooks.ex), not premature abstraction. No docs/migration/decisions/ entry needed -- this applies the already-settled global-table decision (REQ-191), it doesn't diverge from it.",
+    "list_all_test_coverage_required": "list_all/1 needs test coverage distinct from list_for_tenant/2's existing tests, specifically: (1) cross-tenant visibility -- a caller (i.e. a direct context-module-level test, no auth context) sees service_catalog rows owned by tenants other than any single tenant, proving zero filtering, not just 'sees global rows'; (2) SCA: cursor isolation from SC: cursors -- a cursor minted by list_for_tenant/2 (SC: prefix) is rejected with {:error, :wrong_endpoint} when replayed against list_all/1, and vice versa a list_all/1-minted SCA: cursor is rejected when replayed against list_for_tenant/2; (3) the admin_services.ex router's GET / (list-all) endpoint authorization enforcement specifically -- a caller holding only :ServicesRead (or any non-PLATFORM_ADMIN role) gets 403 on GET /admin/services before any handler code runs, and a PLATFORM_ADMIN caller sees rows across tenants in the response body (not just a 200 status).",
+    "not_yet_covered": "This is the first test-design pass for lib/letflow/routers/admin_services.ex, lib/letflow/routers/services.ex, and list_all/1. list_for_tenant/2, register/1, update_scope/2, and delete/1 already have direct context-module tests from REQ-191 (test/letflow/service_catalog_test.exs) -- do not re-derive those, focus new coverage on the router layer (both new router modules' request/response/error-mapping/403 behavior per design doc req192-service-catalog-routes.md AC1-AC10) and on list_all/1's context-module-level behavior per the three points above."
+  },
+  "task": {
+    "description": "Write test specs and ExUnit test code for lib/letflow/routers/services.ex, lib/letflow/routers/admin_services.ex, and lib/letflow/service_catalog.ex's new list_all/1, covering REQ-192's full acceptance-criteria list (see lib/letflow/design/req192-service-catalog-routes.md AC1-AC10 and the design's per-section result-mapping tables) with mutation-driven coverage, not one test per acceptance criterion restated.",
+    "acceptance_criteria": [
+      "GET /api/v1/services returns entries visible to the caller's own tenant (global + own-tenant), confirmed by a test with at least one global entry, one own-tenant entry, and one other-tenant entry all present, asserting the response includes exactly the first two",
+      "GET /api/v1/admin/services returns entries the caller's own tenant does not own, demonstrating it is not tenant-filtered (list_all/1's cross-tenant-visibility test, both at the context-module level and the router level)",
+      "service_record_json/1's response fields are asserted field by field against a registered entry, explicitly documenting (per design doc SS8 finding 1) that max_retries is excluded from the comparison since it has no backing column",
+      "three explicit 403 tests, one per admin write route (POST/PATCH/DELETE /admin/services...), for a caller whose auth_context.roles holds none of :PLATFORM_ADMIN",
+      "two 409 tests: DELETE of a service referenced by an ACTIVE definition (service_referenced_by_active_definitions), and PATCH narrowing scope on a service another tenant's ACTIVE definition still references (service_scope_narrowing_conflict) -- both asserting the RFC 9457 extensions payload (definition_ids / conflicts) is present and correctly shaped",
+      "POST /admin/services with a duplicate service_id returns 409 via plain Response.conflict, and confirms no row was modified",
+      "a cursor minted by GET /services (SC: prefix) is rejected with 400 'invalid cursor' when replayed against GET /admin/services, and vice versa a cursor minted by GET /admin/services (SCA: prefix) is rejected when replayed against GET /services -- INV-9 cross-endpoint isolation, at the router level",
+      "GET /admin/services with a caller holding only :PLATFORM_ADMIN succeeds (200) and its response body includes rows from more than one tenant",
+      "auth_method (request body) -> required_auth (response field) translation is confirmed round-trip via POST then a subsequent read",
+      "PATCH/DELETE on a nonexistent service_id returns 404 with no cross-tenant-disguise distinction (design SS10 -- 404 on admin routes means only 'no such id exists')",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

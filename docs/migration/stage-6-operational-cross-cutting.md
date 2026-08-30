@@ -64,7 +64,18 @@ now genuinely discriminates -- with the response envelope unchanged
 against `web/src/api/audit.ts`'s `RawAuditPage`/`RawAuditEntry` and no
 `web/` file touched. This closes the full audit vertical (REQ-195 +
 REQ-196) in full. REQ-201 (alerting, the
-other OBS-04-adjacent rework-1 addition) remains open. The ordering
+other OBS-04-adjacent rework-1 addition) remains open. REQ-202
+(Content-addressed artifact store and the REPO-04 canonicaliser) is
+also done as of 2026-08-30: `repository_artifacts` +
+`artifact_versions` (migration 045's shape, not R-Co's conflicting
+migration 058 shape), a canonicaliser deliberately kept SEPARATE from
+REQ-036's `PromotionDigest` (both moduledocs cross-reference each
+other; merging them would silently redrive every stored promotion
+digest), DB-level immutability on the content store, and REQ-041's
+`solution_pack_artefact_bases` disambiguated as an unrelated table.
+No activation (REQ-203, the natural next half of this pair) and no
+route/controller surface -- both explicitly out of scope here. The
+ordering
 subsystem remains
 pending. A
 future WF-04 stage-gate check of the scheduler half specifically (not

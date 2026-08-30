@@ -11158,7 +11158,7 @@ requirements:
   - id: REQ-202
     title: Content-addressed artifact store and the REPO-04 canonicaliser (REPO-01/02/03/04) -- deliberately NOT an extension of REQ-036's promotion digest
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 375  # letflow-queue task id
     description: >

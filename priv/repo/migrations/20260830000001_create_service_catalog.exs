@@ -28,6 +28,10 @@
 # This table therefore carries no `if prefix() do ... end` guard and is NOT
 # registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0.
 #
+# REVIEWER sign-off: AGREE, 2026-08-30 (WF02-REQ191-20260830 Step 2d). Full
+# reasoning in lib/letflow/design/req191-service-catalog-core.md section 0
+# and Letflow.ServiceCatalog's own moduledoc.
+#
 # `owner_tenant_id`, when present, carries a database-level foreign key to
 # tenants.id (the global Letflow.Identity.Tenant table) -- same
 # `references(:tenants, type: :binary_id)` shape tenant_schemas.tenant_id and

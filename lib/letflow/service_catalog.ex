@@ -52,6 +52,13 @@ defmodule Letflow.ServiceCatalog do
   tenant's own schema; this table doesn't, and `owner_tenant_id` already
   carries the one tenant association this table needs.
 
+  **REVIEWER sign-off: AGREE, 2026-08-30 (WF02-REQ191-20260830 Step 2d).**
+  Full reasoning recorded in
+  `lib/letflow/design/req191-service-catalog-core.md` §0 — this is a real
+  architectural decision (a global table is a different security/scaling
+  surface than schema-per-tenant), signed off on independent structural
+  grounds, not on the `solution_pack_installs` precedent alone.
+
   ## No `opts[:prefix]` on any function
 
   Unlike every other S6 context module, this one's backing table is global,

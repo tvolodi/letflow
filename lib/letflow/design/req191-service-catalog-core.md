@@ -23,6 +23,50 @@ catalog (greenfield, unscoped to any stage).
 
 ## 0. Divergence from decision 0003 Decision B — flagged for REVIEWER sign-off
 
+**REVIEWER sign-off:** ✅ **RECORDED, 2026-08-30, WF02-REQ191-20260830 Step
+2d.**
+
+> **REVIEWER SIGN-OFF: AGREE — `service_catalog` as a GLOBAL table is
+> structurally justified, not merely precedent-matched.** The reasoning
+> below stands on its own even independent of the `solution_pack_installs`
+> citation: a `scope = :global` row is, by definition, one entity that must
+> be visible identically from every tenant's query path simultaneously.
+> Schema-per-tenant (Decision B) has no primitive for "one row, many
+> schemas" short of either (a) replicating the row into every tenant schema
+> and inventing a synchronization mechanism Decision B does not provide, or
+> (b) a cross-schema query fan-out on every read — both strictly worse than
+> one global table for a registry that is read far more often than written.
+> The second half of the argument — `service_id` globally unique across
+> *all* tenants and *both* scopes — is even less avoidable behind Decision
+> B: a per-tenant unique index can only ever enforce uniqueness within its
+> own schema, so global uniqueness would require either a second global
+> table just to hold the uniqueness constraint (strictly more machinery
+> than what this design proposes) or an application-level distributed lock
+> with no natural home in this codebase. I checked the `solution_pack_installs`
+> precedent this design cites and found the analogy imperfect but
+> immaterial: that table stores one row per (tenant, pack) and is global for
+> operational-infrastructure reasons, not because any single row must be
+> visible from multiple tenants at once — a narrower situation than
+> `service_catalog`'s. The design's citation slightly overstates "exactly
+> the same shape," but `service_catalog` does not need that precedent to
+> carry its own weight; it has an independent, sufficient structural
+> argument, which is the stronger of the two anyway. On consequences: yes,
+> a global table is a different security/scaling surface than
+> schema-per-tenant — every function loses the "isolation by construction"
+> `:prefix` gives every other S6 context module, and `get_for_tenant/2`'s
+> visibility rule becomes the *entire* tenant-isolation mechanism for this
+> data instead of a belt-and-suspenders check on top of physical
+> separation. I read `get_for_tenant/2`/`list_for_tenant/2` and confirm
+> both apply that rule correctly and identically (same visibility
+> predicate, same `{:error, :not_found}` non-disclosure convention for a
+> real-but-invisible row) — SECURITY-REVIEWER's INV-1 pass already verified
+> this from the security angle; I confirm it holds up as the *sole*
+> mechanism now, which is precisely why it matters that it's correct. This
+> is a real, load-bearing architectural decision (not a rubber stamp), and
+> I agree with it as stated.
+>
+> — REVIEWER, WF02-REQ191-20260830 Step 2d, 2026-08-30
+
 Decision `0003-ecto-schema-strategy.md` Decision B makes schema-per-tenant
 (Ecto `:prefix`-scoped tables, `tenant_id` retained intra-schema) the general
 rule for business tables. `service_catalog` deliberately does **not** follow

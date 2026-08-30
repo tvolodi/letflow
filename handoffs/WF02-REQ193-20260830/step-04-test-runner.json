@@ -1,0 +1,71 @@
+{
+  "agent": "TEST-RUNNER",
+  "req": "REQ-193",
+  "timestamp_utc": "2026-08-30T12:44:00Z",
+  "branch": "feature/WF02-REQ193-20260830",
+  "result": {
+    "status": "FAIL",
+    "summary": "Full suite: 2734/2737 passed (2728 tests + 6 properties), 3 failed, 10 excluded. Mix compile --warnings-as-errors: exit 0 (clean). Targeted run of test/letflow/obs/logger_test.exs: 10/10 passed."
+  },
+  "runs": {
+    "targeted_logger_test": {
+      "command": "mix test test/letflow/obs/logger_test.exs --seed 0",
+      "result": "10 passed",
+      "finished_line": "Finished in 0.09 seconds (0.00s async, 0.09s sync)\nResult: 10 passed"
+    },
+    "full_suite": {
+      "command": "mix test 2>&1 (run via PowerShell, not bash scripts/test_parallel.sh due to Windows grep unavailability)",
+      "result": "2734/2737 passed, 3 failed",
+      "finished_line": "Finished in 913.1 seconds (13.6s async, 899.5s sync)\nResult: 2734/2737 passed (6/6 properties, 2728/2731 tests), 10 excluded\nFailed: 3 tests\nExit code: 2"
+    },
+    "compile": {
+      "command": "mix compile --warnings-as-errors",
+      "exit_code": 0,
+      "output": "no warnings, no errors -- clean compile"
+    }
+  },
+  "issues": [
+    {
+      "test": "test the only call site (AC1) Lua.new( appears exactly once under lib/, inside sandbox.ex",
+      "module": "Letflow.Engine.Lua.SandboxTest",
+      "file": "test/letflow/engine/lua/sandbox_test.exs:31",
+      "error": "** (ErlangError) Erlang error: :enoent\ncode: {output, 0} = System.cmd(\"grep\", [\"-rn\", \"Lua.new(\", \"lib\", \"--include=*.ex\"])\nstacktrace:\n  (elixir 1.20.3) lib/system.ex:1141: System.cmd(\"grep\", ..., [])\n  test/letflow/engine/lua/sandbox_test.exs:32: (test)",
+      "diagnosis": "System.cmd(\"grep\", ...) fails with :enoent on Windows (grep is not a native Windows command). This test file was not changed by REQ-193 (git log main..HEAD shows no change to sandbox_test.exs). Pre-existing environment flake, same class as 'rustc' failures documented in test/reports/report-2026-08-30-WF03-ISS0378-20260830.yaml. Passes on Linux/WSL via scripts/test_parallel.sh.",
+      "verdict": "PRE-EXISTING WINDOWS ENVIRONMENT FLAKE -- not a regression from REQ-193",
+      "routing": "No action needed -- known environment gap"
+    },
+    {
+      "test": "test REQ-159: platform.log -- level mapping and malformed input 'debug' maps to Elixir Logger level [debug]",
+      "module": "Letflow.Engine.Lua.PlatformTest",
+      "file": "test/letflow/engine/lua/platform_test.exs:837",
+      "error": "Assertion with =~ failed\ncode:  assert log =~ \"[debug]\"\nleft:  \"\"\nright: \"[debug]\"",
+      "diagnosis": "ExUnit.CaptureLog.capture_log/2 returns empty string (\"\"). Root cause: REQ-193 added 'config :logger, backends: []' to config/config.exs (which applies to ALL environments including test). This disables Elixir Logger's backend mechanism, breaking ExUnit.CaptureLog.capture_log which relies on the backend system to capture log output. The captured log is completely empty -- the assertion fail is on format (\"[debug]\" vs JSON) but the real bug is that nothing is captured at all. The test file (platform_test.exs) was not modified by REQ-193 (it was last changed in e9696eae, REQ-159). This is a NEW REGRESSION introduced by REQ-193.",
+      "verdict": "REAL REGRESSION introduced by REQ-193 -- routes to ELIXIR-DEV",
+      "routing": "ELIXIR-DEV: fix config/test.exs (or config/config.exs) to restore ExUnit.CaptureLog compatibility. Options: (a) add 'config :logger, backends: [:console]' back in config/test.exs to restore ExUnit capture mechanism in test environment only, OR (b) update platform_test.exs tests that rely on capture_log to use an alternative capture approach compatible with OTP handler-based logging. The affected tests in platform_test.exs are the for-comprehension at line 830 (4 tests: debug/info/warn/error level mapping) plus the 'unrecognized level' test at line 847."
+    },
+    {
+      "test": "test AC8: no host function calls Letflow.Repo with a guest-derived prefix structural grep: host_api.ex never CALLS Letflow.Repo",
+      "module": "Letflow.Engine.Wasm.HostApiTest",
+      "file": "test/letflow/engine/wasm/host_api_test.exs:557",
+      "error": "** (ErlangError) Erlang error: :enoent\ncode: System.cmd(\"grep\", [\"-nE\", \"Letflow\\\\.Repo\\\\.\", \"lib/letflow/engine/wasm/host_api.ex\"], [stderr_to_stdout: true, cd: \"c:/Users/tvolo/dev/ai-dala/letflow\"])\nstacktrace:\n  (elixir 1.20.3) lib/system.ex:1141: System.cmd(\"grep\", ..., [stderr_to_stdout: true, cd: ...])\n  test/letflow/engine/wasm/host_api_test.exs:559: (test)",
+      "diagnosis": "Same root cause as issue 1: System.cmd(\"grep\", ...) fails with :enoent on Windows. host_api_test.exs was last changed in 2c478f6a (REQ-171), not by REQ-193. Pre-existing Windows environment flake.",
+      "verdict": "PRE-EXISTING WINDOWS ENVIRONMENT FLAKE -- not a regression from REQ-193",
+      "routing": "No action needed -- known environment gap"
+    }
+  ],
+  "failure_classification": {
+    "regressions_from_req_193": 1,
+    "pre_existing_windows_environment_flakes": 2,
+    "real_req_193_logic_failures": 0
+  },
+  "targeted_test_detail": {
+    "file": "test/letflow/obs/logger_test.exs",
+    "tests_run": 10,
+    "all_passed": true,
+    "notable_output": [
+      "2026-08-30T12:27:02.080000Z [formatter_violation] Log metadata contains reserved field name: trace_id",
+      "These are intentional -- tests verify the formatter_violation guard behavior"
+    ]
+  },
+  "action_required": "Route REGRESSION (issue 2) to ELIXIR-DEV: fix ExUnit.CaptureLog compatibility broken by 'config :logger, backends: []' in config/config.exs. The two pre-existing grep flakes require no action."
+}

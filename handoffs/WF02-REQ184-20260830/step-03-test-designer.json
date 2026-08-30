@@ -1,0 +1,49 @@
+{
+  "handoff_id": "step03-WF02-REQ184-20260830",
+  "run_id": "WF02-REQ184-20260830",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ184-20260830/step-03-test-designer.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-184"],
+    "issue_ids": [],
+    "queue_task_id": 357,
+    "github_issue": "702",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ184-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ184-20260830/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ184-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ184-20260830/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req184-webhook-deliveries-route.md",
+      "lib/letflow/webhooks.ex",
+      "lib/letflow/routers/webhooks.ex",
+      "test/letflow/webhooks_test.exs",
+      "test/letflow/routers/webhooks_test.exs",
+      "handoffs/WF02-REQ184-20260830/req184-security-review-findings.md"
+    ],
+    "branch_name": "feature/WF02-REQ184-20260830",
+    "note": "REVIEWER hard gate (WF-02 Step 2d) result: PASS, following SECURITY-REVIEWER's PASS at Step 2c (handoffs/WF02-REQ184-20260830/req184-security-review-findings.md). Full REVIEWER findings below -- not restated elsewhere, per anti-duplication rule.\n\n1. fetch_query_params/1 fix (carried from SECURITY-REVIEWER): confirmed idiomatic and non-scope-creeping. Read dlq.ex:112, tasks.ex:146/209, definitions.ex:399/460/505 directly -- every one of them calls `conn = fetch_query_params(conn)` then reads `conn.query_params[...]`, never `conn.params[...]`, for a query-string value. handle_deliveries/2 (lib/letflow/routers/webhooks.ex:220-234) does exactly this. This is a faithful mechanical fix to reach the design's own intended behavior (the design's §4 text assumed conn.params[\"limit\"] was already populated, which is false for this router's Plug.Router pipeline), not a novel pattern and not scope creep. Documented correctly in the moduledoc's 'Deviation from the design's own §4 wording' paragraph. PROCESS NOTE (non-blocking, for CODE-DESIGN-VALIDATOR's awareness going forward, not filed as a docs/issues item since this is a process observation, not a code defect): the design asserted an unverified claim about framework/pipeline behavior (conn.params containing query-string values) that a design validator could plausibly have caught by checking whether this router's pipeline calls fetch_query_params/1, the same way CODE-DESIGN-VALIDATOR already checks other cited-line claims against real source. Not blocking here because ELIXIR-DEV caught it via a real failing test and the fix is correct and idiomatic.\n\n2. Ordering choice (design's own OQ-2) -- REVIEWER SIGN-OFF: [desc: attempted_at, desc: attempt_count] is affirmed as the correct default. Read web/src/components/webhooks/WebhookDeliveryAttemptsTable.tsx in full: it renders `attempts` in the exact array order it receives them (no client-side sort), so the server's ordering IS the display order. Most-recent-attempt-first is the standard convention for a delivery/attempt log a human operator scans (matches the DLQ list's own convention), and the design's tiebreaker rationale (attempted_at is :utc_datetime, second precision; attempt_count is a populated positive-integer tiebreaker; UUIDv4 id deliberately excluded as non-chronological) is sound. No pushback -- this ordering serves WebhookSubscriptionDetailPanel.tsx's real usage (limit: 20, most recent attempts) correctly.\n\n3. Diff scope (git diff main...HEAD --stat): matches design §6 exactly -- one new context function (list_delivery_attempts/3), one new authz_get route clause, two new private handler functions (handle_deliveries/2, delivery_json/1, plus private resolve_limit/1), moduledoc extension only. No touch to authorization.ex, Delivery schema, migrations, or Subscription. No scope creep.\n\n4. Code quality: delivery_json/1 (lib/letflow/routers/webhooks.ex:304-317) is consistent with subscription_json/1's existing hand-built-map-literal-over-the-struct convention (same module, same file) -- correctly reuses the existing private iso8601/1 helper rather than reimplementing DateTime.to_iso8601/1 inline. This is now the third route added to this webhooks vertical (REQ-181 context, REQ-182 subscription CRUD routes, REQ-184 this route) and the second hand-built *_json/1 allowlist function in the same file -- worth watching as a pattern, not yet worth extracting: both allowlists map different schemas (Subscription vs Delivery) with different field sets, so a shared helper would need per-field configuration and would likely reduce readability at only two call sites. Not flagged as a defect; noting for future watch per REVIEWER's standing instruction to flag repeated patterns even when not yet worth abstracting.\n\n5. Upper clamp on `limit` (SECURITY-REVIEWER's minor non-blocking note): accepted as a future improvement, not required now. No acceptance criterion requires it, the query is DB-bounded to one subscription's own row set (no cross-tenant or unbounded-fan-out reach), and no existing codebase idiom (dlq.ex, tasks.ex use page_size validation for cursor-paginated lists, a different resource-exhaustion shape than a single bounded LIMIT here) requires an upper clamp on this kind of single-row-set query. Not a REVIEWER blocker.\n\n6. Decision-record consistency: re-derived independently (not trusted from SECURITY-REVIEWER's report) -- 0003-ecto-schema-strategy.md's schema-per-tenant mechanism (Decision B) is followed via `Repo.all(query, prefix: prefix)` and reuse of the existing private get/2 helper for tenant-scoped existence. No other decision record (0001 web framework, 0013 authorization role set, 0016 secrets storage) is implicated by this diff. Nothing needs touching in docs/migration/decisions/.\n\nVERDICT: PASS. Routing to TEST-DESIGNER.",
+    "prior_test_coverage": "ELIXIR-DEV already wrote an initial test pass across two files (test/letflow/webhooks_test.exs and test/letflow/routers/webhooks_test.exs, 39/39 passing per SECURITY-REVIEWER's independent re-run) covering at minimum the 6 stated ACs at an implementation-verification level. TEST-DESIGNER's job here is the full 6-AC gap-check per WF-02 (coverage completeness, edge cases, isolation of fixtures, malformed-limit/zero-attempts/exact-limit-cutoff cases per design §4 and §8's AC coverage map) -- not a rewrite of the existing tests."
+  },
+  "task": {
+    "description": "TEST-DESIGNER (WF-02 Step 3) full 6-AC gap-check on REQ-184's implementation, following REVIEWER's PASS at Step 2d. Read lib/letflow/design/req184-webhook-deliveries-route.md §8 (AC coverage map) and the two existing test files in full before adding anything. Identify any acceptance criterion, edge case, or design-specified behavior (OQ-1's malformed-limit-falls-back-to-20 rule, OQ-2's two-key ordering under a limit cutoff, zero-delivery-attempts-on-a-real-subscription returning {items: []} not an error) not yet exercised by ELIXIR-DEV's existing tests, and add tests to close any real gap. Do not duplicate existing passing coverage.",
+    "acceptance_criteria": [
+      "AC1 (response shape, 9-field allowlist) has a passing test asserting the exact field set, not a superset/subset",
+      "AC2 (limit honored) has a passing test with more attempts than limit, asserting exactly limit items survive, under the documented attempted_at DESC, attempt_count DESC ordering",
+      "AC3 (403 without WebhooksManage) has a passing test",
+      "AC4 (cross-tenant real id -> 404 regardless of attempts) has a passing test using two real distinct tenant schemas",
+      "AC5 (non-existent id -> 404) has a passing test, distinct from AC4's cross-tenant case",
+      "AC6 (moduledoc R-Co-not-inspected/SPA-contract disclosure) is confirmed present in the moduledoc (doc-level check, not a runtime test)",
+      "malformed/zero/negative limit falls back to default 20 (OQ-1) is exercised by at least one test",
+      "a real in-tenant subscription with zero delivery attempts returns {items: []}, not an error"
+    ]
+  },
+  "result": null
+}

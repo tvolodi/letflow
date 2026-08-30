@@ -5,7 +5,7 @@
   "step": "Step 6",
   "from_agent": "RELEASE-VALIDATOR",
   "to_agent": "DOC-UPDATER",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "normal",
   "context": {
     "stage": "S6",
@@ -33,5 +33,16 @@
       "No other status-history events edited or removed (append-only discipline)."
     ]
   },
-  "result": null
+  "result": {
+    "outcome": "PASS",
+    "summary": "REQ-191 flipped to 'done' in docs/requirements.yaml. Appended one 'done' event to docs/status/requirement_status.v6.yaml (field order req/event/agent/at/note, verified against several existing entries -- REQ-190/REQ-183 -- immediately before writing) -- git diff --numstat showed 53 insertions, 0 deletions. Volume 6 recounted via grep -c \"^  - req:\" both before (34, but a sibling session had advanced main to 37 by the time this branch pulled/rebased -- REQ-183 started+blocked and REQ-190 started had landed in the interim) and after (38) the append; 1116 lines / 67176 bytes, well under the 1200-line/120000-byte roll ceiling, no roll triggered. index.yaml's volume-6 entries count incremented from 37 to 38 in the same commit, note prepended (not overwritten) per the file's own convention. Rebased this branch onto origin/main first (17 commits behind: REQ-183 resequencing, REQ-190 started) -- stashed local edits, rebased cleanly, popped the stash, which reapplied both docs/requirements.yaml's status flip and docs/migration/stage-4-api-surface.md's edit with no conflicts. docs/migration/stage-4-api-surface.md's services.zig fronting-subsystems row got an 'Update (2026-08-30, REQ-191 done)' annotation, matching the file's own established REQ-131 precedent, noting the core has shipped and REQ-192 (route layer) is the remaining piece. docs/migration/stage-6-operational-cross-cutting.md and stage-3-instance-engine.md were checked and need no update -- neither asserts a now-false claim (stage-3's injectable-Lookup pattern for ServiceScopeValidator is explicitly unchanged by this requirement, confirmed by RELEASE-VALIDATOR's own diff check). handoffs/registry.json's WF02-REQ191-20260830 entry updated in place to status COMPLETED (released_lock: true, lock_released_at set), following the file's established one-entry-per-run-id, mutate-to-terminal-state pattern, with the rework/sign-off/test-determinism notes folded in. Verified this file's own top-level status field was never 'DONE' before writing (it was 'PENDING', now 'COMPLETED', the documented vocabulary, confirmed against handoffs/WF02-REQ188-20260829/step-06-doc-updater.json's precedent).",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v6.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/migration/stage-4-api-surface.md",
+      "handoffs/registry.json",
+      "handoffs/WF02-REQ191-20260830/step-06-doc-updater.json"
+    ]
+  }
 }

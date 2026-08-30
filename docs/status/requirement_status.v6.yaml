@@ -1061,3 +1061,56 @@ history:
       webhook_subscriptions.secret_ref/.secret_key_id and proves
       resolve/2 works for a webhook-shaped reference itself, rather
       than assuming REQ-183's signing code already exists to retrofit.
+  - req: REQ-191
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T04:08:13Z"
+    note: >
+      WF02-REQ191-20260830 done (queue task 364, GH#710, stage S6). Service
+      catalog core shipped: Letflow.ServiceCatalog context module +
+      Letflow.ServiceCatalog.Entry schema + GLOBAL (not per-tenant-schema)
+      service_catalog migration -- register/2, get_for_tenant/2 (SVC-01
+      resolution: global visible to all, tenant-scoped visible only to its
+      owner, a different tenant's entry returns NOT FOUND indistinguishable
+      from non-existent), list_for_tenant/2 with REQ-067 cursor pagination,
+      update_scope/2, delete/2, both with referential guards checking real
+      SERVICE_TASK service_id attributes structurally rather than R-Co's
+      substring-over-match LIKE approach. Satisfies seam (a) with a real
+      Lookup for Letflow.Definitions.ServiceScopeValidator.validate/3, with
+      NO change to service_scope_validator.ex itself (confirmed by git diff).
+      Seam (b) resolved explicitly: solution_pack.ex's service_catalog_entries
+      hard-fail is retained with the owning follow-up named in the moduledoc,
+      not left dangling. Path: 1 real rework round -- SECURITY-REVIEWER caught
+      an unhandled Ecto.StaleEntryError on a concurrent-delete race in
+      delete/1, fixed with a case+rescue pattern matching this codebase's own
+      established idiom. REVIEWER's sign-off on the global-table decision-0003
+      Decision B divergence was genuine, not rubber-stamped: REVIEWER found
+      the cited precedent's analogy imperfect but constructed its own
+      independent sufficient justification (a global-scope entry is
+      referenceable by every tenant and service_id is unique across tenants,
+      so no per-tenant-schema copy could express either property) before
+      granting AGREE. TEST-DESIGNER's concurrent-delete-race regression test
+      is deterministic -- built on a real Postgres row lock, not a sleep --
+      independently reproduced by TEST-DESIGN-VALIDATOR. RELEASE-VALIDATOR
+      independently re-verified all 12 acceptance criteria (own mix compile
+      --warnings-as-errors, own scripts/test_parallel.sh run -- 2592 tests, 5
+      properties, 2595/2597 passed, both failures the pre-existing
+      Mix.Tasks.Letflow.CheckToolchainTest rustc-absent-from-sandbox
+      environmental baseline, unrelated to this diff -- plus
+      test/letflow/service_catalog_test.exs directly at 26/26, mix
+      letflow.lint_handoffs 0 new violations, mix format --check-formatted
+      clean, and confirmed service_scope_validator.ex's diff is empty) and
+      PASSED. No route or controller file added, confirmed by git diff
+      --stat scoped to this requirement's commits, per this requirement's
+      own scope boundary. docs/migration/stage-4-api-surface.md's
+      `services.zig` fronting-subsystems row updated with an "Update
+      (2026-08-30, REQ-191 done)" annotation (matching the file's own
+      REQ-131 precedent) noting the core has shipped and REQ-192 (the HTTP
+      route layer) is the one remaining piece; docs/migration/
+      stage-6-operational-cross-cutting.md and stage-3-instance-engine.md
+      were checked and need no update -- both already correctly describe
+      REQ-191/REQ-192 as the owning requirements and neither asserts a
+      now-false claim (stage-3's injectable-Lookup pattern for
+      ServiceScopeValidator is explicitly unchanged by this requirement).
+      Unblocks REQ-192 (service catalog route surface, SVC-04), still
+      pending.

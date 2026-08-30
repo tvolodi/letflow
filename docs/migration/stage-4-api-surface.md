@@ -110,6 +110,13 @@ an injectable/stub port) until the owning stage lands.
 | `agent_artifacts.zig` | 562 | runtime-agent subsystem | post-S6 |
 | `sandbox_access.zig` | 181 | runtime-agent subsystem (guard module extracted from `agent_sandboxes.zig`, which is its only consumer; exports no `handle*`, so there is no route to port without it) | post-S6 |
 
+**Update (2026-08-30, REQ-191 done):** the `services.zig` row's "Missing
+backing" is now half-stale. `service_catalog` (REPO-07/SVC-01/SVC-03) has
+shipped as `Letflow.ServiceCatalog` — schema, migration and context module,
+no route yet. `REQ-192` (the HTTP route layer, SVC-04) is the one remaining
+piece; `services.zig`'s route surface is still unported until it lands. See
+`requirement_status.v6.yaml`'s REQ-191 `done` entry for gate results.
+
 The three `agent_*.zig` routes (and `sandbox_access.zig`, a guard module
 extracted from `agent_sandboxes.zig` and imported by nothing else) are
 R-Co's implementation of the

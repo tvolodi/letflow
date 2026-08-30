@@ -3353,16 +3353,16 @@
       "requirement_id": "REQ-191",
       "queue_task_id": 364,
       "github_issue_number": 710,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/services/",
         "priv/repo/migrations/"
       ],
       "started_at": "2026-08-30T02:23:30Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (ORCH bookkeeping to main)",
-      "note": "Service catalog core -- DB-backed registry three already-shipped seams (ServiceScopeValidator, solution_pack.ex, PinResolver) already depend on via an injectable Lookup, plus REQ-069's already-shipped SVC-04 permission surface. Global (not per-tenant-schema) table -- deliberate divergence from decision 0003 Decision B, needs REVIEWER sign-off."
+      "lock_released_at": "2026-08-30T04:08:13Z",
+      "released_lock": true,
+      "last_known_step": "Step 6 (DOC-UPDATER)",
+      "note": "Service catalog core -- DB-backed registry three already-shipped seams (ServiceScopeValidator, solution_pack.ex, PinResolver) already depend on via an injectable Lookup, plus REQ-069's already-shipped SVC-04 permission surface. Global (not per-tenant-schema) table -- deliberate divergence from decision 0003 Decision B, needs REVIEWER sign-off. COMPLETED: RELEASE-VALIDATOR PASSED all 12 acceptance criteria. One real rework round -- SECURITY-REVIEWER caught an unhandled Ecto.StaleEntryError on a concurrent-delete race in delete/1, fixed with a proper case+rescue pattern matching this codebase's own established idiom. REVIEWER's sign-off on the global-table decision-0003 divergence was genuine, not rubber-stamped: REVIEWER found the cited precedent's analogy imperfect but constructed its own independent sufficient justification rather than accepting the design's framing uncritically. TEST-DESIGNER's concurrent-delete-race regression test is deterministic (real Postgres row-lock based, not sleep-based), independently reproduced by TEST-DESIGN-VALIDATOR. Unblocks REQ-192 (HTTP route layer)."
     }
   ]
 }

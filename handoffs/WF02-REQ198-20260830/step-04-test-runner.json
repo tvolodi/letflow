@@ -35,5 +35,9 @@
       "mix format --check-formatted passes on the touched files"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "Full suite via scripts/test_parallel.sh (N=8): combined 2711 tests, 6 properties, 2 failures (2715/2717 passed). Both failures are in Mix.Tasks.Letflow.CheckToolchainTest (rust pin tests), root-caused to :enoent on System.cmd(\"rustc\", ...) -- rustc genuinely absent from this environment's PATH, confirmed directly (`which rustc` empty, `rustc --version` -> command not found). Matches the documented rustc-absent CheckToolchainTest baseline flake class. Confirmed via `git diff main...HEAD --stat` that this branch does not touch that test file or anything rust/toolchain-related -- only lib/letflow/engine/expr.ex, test/letflow/engine/expr_test.exs, the REQ-198 design doc, and status/handoff bookkeeping. test/letflow/engine/expr_test.exs and test/letflow/engine/transition_test.exs both passed with zero failures across the full run. `mix compile --warnings-as-errors --force`: clean, 'Compiling 154 files (.ex)' / 'Generated letflow app', exit 0. `mix format --check-formatted` on both touched test files plus expr.ex: exit 0, clean. Full report: handoffs/WF02-REQ198-20260830/test-runner-report-req198.md.",
+    "routed_to": "RELEASE-VALIDATOR"
+  }
 }

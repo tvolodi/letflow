@@ -1,0 +1,47 @@
+{
+  "handoff_id": "WF02-REQ198-20260830-step05",
+  "run_id": "WF02-REQ198-20260830",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "docs/requirements.yaml",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-198"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ198-20260830/step-04-test-runner.json",
+      "handoffs/WF02-REQ198-20260830/test-runner-report-req198.md",
+      "handoffs/WF02-REQ198-20260830/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ198-20260830/test-design-validation-report-req198.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/design/req198-expr-builtin-functions.md",
+      "test/letflow/engine/expr_test.exs",
+      "test/letflow/engine/transition_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ198-20260830",
+    "note": "All prior gates PASSED: CODE-DESIGNER/CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER (1 gap found/filled), TEST-DESIGN-VALIDATOR (3 real mutations applied and confirmed caught, then reverted -- see step-03b handoff and test-design-validation-report-req198.md). TEST-RUNNER (this step) ran the FULL suite for real via scripts/test_parallel.sh (N=8): combined 2711 tests, 6 properties, 2 failures (2715/2717 passed). Both failures are Mix.Tasks.Letflow.CheckToolchainTest rust-pin tests, root-caused live to :enoent on System.cmd(\"rustc\", ...) because rustc is genuinely absent from this environment's PATH (confirmed directly: `which rustc` empty, `rustc --version` -> command not found) -- the documented rustc-absent CheckToolchainTest baseline flake class, not a regression. Confirmed via `git diff main...HEAD --stat` that this branch touches only lib/letflow/engine/expr.ex, test/letflow/engine/expr_test.exs, the REQ-198 design doc, and status/handoff bookkeeping -- nothing rust/toolchain-related. test/letflow/engine/expr_test.exs and test/letflow/engine/transition_test.exs (the two files this requirement's tests live in) both passed in full, 0 failures. `mix compile --warnings-as-errors --force`: clean ('Compiling 154 files (.ex)', 'Generated letflow app', exit 0). `mix format --check-formatted` on expr.ex and both touched test files: exit 0, clean. Full real output quoted in handoffs/WF02-REQ198-20260830/test-runner-report-req198.md. RELEASE-VALIDATOR should independently re-run the suite itself per this project's core-directives.md rather than trusting this report alone."
+  },
+  "task": {
+    "description": "Independently re-derive and verify all 11 REQ-198 acceptance criteria (docs/requirements.yaml, id REQ-198) against the actual shipped code and tests on branch feature/WF02-REQ198-20260830 -- do not trust any prior agent's PASS claim, re-run the suite and re-check the code yourself. In particular: confirm all 8 builtins (length, lower, upper, trim, contains, startsWith, endsWith, coalesce) evaluate correctly with concrete expected values; confirm wrong-name and wrong-arity calls are rejected as structured parse errors; confirm null propagation matches R-Co exactly (length(null)->null, contains(null,\"x\")->null, coalesce(null,null,3)->3); confirm non-string arguments to string functions error rather than coerce; confirm the moduledoc states and tests the ASCII-vs-Unicode case-conversion decision; confirm now()/date_add/date_diff are NOT added and now() is rejected; confirm expr.ex's purity grep still returns zero matches; confirm @unsupported_call_markers still rejects everything it rejected before, via a test iterating the full marker list; confirm EE-05's catch-false contract holds for wrong-arity builtin calls through evaluate_condition/2; confirm mix test and mix compile --warnings-as-errors both pass, with the 2 known pre-existing rustc-absent CheckToolchainTest failures being the only acceptable exceptions (name them explicitly, do not silently wave off any other failure).",
+    "acceptance_criteria": [
+      "each of the eight builtins evaluates correctly, asserted by at least one test per function with a concrete expected value -- eight tests minimum",
+      "a call to a name outside the whitelist, such as frobnicate(1), is rejected as a parse error rather than evaluating or raising, and the rejection carries REQ-197's structured error",
+      "wrong arity is rejected for a fixed-arity function: length() with zero arguments and length(a, b) with two are both errors, and coalesce() with zero arguments is an error while coalesce(a) with one is valid",
+      "null propagation matches R-Co: length(null) yields null, contains(null, \"x\") yields null, and coalesce(null, null, 3) yields 3 -- three explicit tests",
+      "a non-string argument to a string function, such as length(42), is an error rather than a coerced result",
+      "the case-conversion decision is stated in the moduledoc -- ASCII-only matching R-Co, or full Unicode -- and a test asserts the chosen behaviour on a non-ASCII input",
+      "none of now(), date_add or date_diff is added, and a test asserts an expression calling now() is rejected rather than evaluated",
+      "expr.ex's documented purity grep still returns ZERO matches after this change, quoted in the PR",
+      "every construct @unsupported_call_markers rejected before this requirement is still rejected after it, asserted by a test iterating the marker list -- adding the eight builtins did not weaken the CEL rejection",
+      "EE-05's catch-false contract holds: a gateway condition calling a builtin with wrong arity still yields false from evaluate_condition/2 rather than raising",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": null
+}

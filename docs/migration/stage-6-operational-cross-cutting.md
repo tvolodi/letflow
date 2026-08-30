@@ -15,8 +15,11 @@ retention runner) are all done as of 2026-08-29/30 -- **S6's scheduler
 half is now fully complete.** S6's secrets half (REQ-189 onward) is
 separate and remains open: REQ-189 (the secrets storage decision
 record) is itself now done, unblocking REQ-190 and REQ-183, but
-REQ-190 onward is still pending, as are the repository, observability,
-expr and ordering subsystems the second batch also registered. A
+REQ-190 onward is still pending, as are the repository and observability
+subsystems the second batch also registered. The expr subsystem's first
+half, REQ-197 (arithmetic, unary negation, structured parse-error
+surface), is done as of 2026-08-30; REQ-198 (the 8 pure builtin
+functions) and the ordering subsystem remain pending. A
 future WF-04 stage-gate check of the scheduler half specifically (not
 of S6 as a whole) is a named candidate, per RELEASE-VALIDATOR's own
 REQ-188 handoff note. Requirements, expanded in two batches:

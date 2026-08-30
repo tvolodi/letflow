@@ -198,6 +198,66 @@ defmodule Letflow.Engine.ExprTest do
   end
 
   # ---------------------------------------------------------------------
+  # REQ-197 §4.3/§4.6 -- signed-infinity/NaN 3-way split for float
+  # division by a zero divisor (REVIEWER rework, OQ-1 resolved: the
+  # unsigned-only :infinity fallback wrongly made an :infinity marker the
+  # greatest value in ordering regardless of dividend sign).
+  # ---------------------------------------------------------------------
+
+  describe "eval/2 -- signed float division-by-zero (REQ-197 §4.3, OQ-1 sign-flip fix)" do
+    test "positive dividend / 0.0 -> :infinity (AC4, still passes unmodified)" do
+      ast = {:arith, :div, {:lit, 1.0}, {:lit, 0.0}}
+      assert Expr.eval(ast, %{}) == {:ok, :infinity}
+    end
+
+    test "negative dividend / 0.0 -> :neg_infinity" do
+      ast = {:arith, :div, {:lit, -1.0}, {:lit, 0.0}}
+      assert Expr.eval(ast, %{}) == {:ok, :neg_infinity}
+    end
+
+    test "0.0 / 0.0 -> :nan" do
+      ast = {:arith, :div, {:lit, 0.0}, {:lit, 0.0}}
+      assert Expr.eval(ast, %{}) == {:ok, :nan}
+    end
+
+    test ":nan compares false against everything via every ordering operator, including :nan vs :nan" do
+      nan_ast = {:arith, :div, {:lit, 0.0}, {:lit, 0.0}}
+
+      for op <- [:lt, :lte, :gt, :gte] do
+        assert Expr.eval({:cmp, op, nan_ast, {:lit, 5.0}}, %{}) == {:ok, false}
+        assert Expr.eval({:cmp, op, nan_ast, nan_ast}, %{}) == {:ok, false}
+      end
+    end
+
+    test ":nan == :nan is false and :nan != :nan is true (real IEEE 754 NaN self-inequality)" do
+      nan_ast = {:arith, :div, {:lit, 0.0}, {:lit, 0.0}}
+
+      assert Expr.eval({:cmp, :eq, nan_ast, nan_ast}, %{}) == {:ok, false}
+      assert Expr.eval({:cmp, :neq, nan_ast, nan_ast}, %{}) == {:ok, true}
+    end
+
+    test "REGRESSION (REVIEWER-identified sign-flip bug): a negative amount divided by a zero-valued divisor, compared with `<` against a finite positive threshold, now evaluates true -- the old unsigned-only :infinity fallback wrongly evaluated this false" do
+      # amount / divisor < threshold, with amount negative and divisor 0.0.
+      # Correct IEEE-754 semantics: -1000.0 / 0.0 == :neg_infinity, and
+      # :neg_infinity is the least possible value, so :neg_infinity < 100.0
+      # must be true. Under the old unsigned-only fallback, this division
+      # produced the single unsigned :infinity marker (treated as GREATEST
+      # in every comparison), so `:infinity < 100.0` wrongly evaluated to
+      # false.
+      ast =
+        {:cmp, :lt, {:arith, :div, {:var, ["amount"]}, {:var, ["divisor"]}}, {:lit, 100.0}}
+
+      assert Expr.eval(ast, %{"amount" => -1000.0, "divisor" => 0.0}) == {:ok, true}
+    end
+
+    test "REGRESSION, gateway-level (`>` direction): a negative amount divided by a zero-valued divisor, compared with `>` against a finite positive threshold, now evaluates false via evaluate_condition/2 -- the old unsigned-only fallback wrongly routed this edge as true" do
+      condition = "variables.amount / variables.divisor > 100.0"
+
+      refute Expr.evaluate_condition(condition, %{"amount" => -1000.0, "divisor" => 0.0})
+    end
+  end
+
+  # ---------------------------------------------------------------------
   # evaluate_condition/2 -- the composed, always-boolean entry point.
   # Catch-false composition tested across every failing stage.
   # ---------------------------------------------------------------------

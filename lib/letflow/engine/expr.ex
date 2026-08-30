@@ -86,16 +86,17 @@ defmodule Letflow.Engine.Expr do
   never produced by a literal or a variable, only by `eval/2`'s own
   float-division clause.
 
-  **REVIEWER GATE (OQ-1, design §4.3/§4.6, design doc §12): the full
-  signed-infinity/NaN 3-way split (`:infinity | :neg_infinity | :nan`) is
-  explicitly NOT implemented yet — it is unverified against R-Co's real
-  `evaluator.zig` (unreachable from this sandbox) and has no AC test
-  coverage. Only the single unsigned `:infinity` marker below is
-  implemented, as the design's own stated safe fallback, sufficient for
-  AC4's "float division by zero produces infinity" test. Do not silently
-  expand this to the signed/NaN split without REVIEWER sign-off.**
+  **REVIEWER GATE (OQ-1, design §4.3/§4.6) RESOLVED (rework iteration 2):**
+  REVIEWER confirmed IEEE 754 division-by-zero sign/NaN rules are a fixed
+  mathematical standard, not an R-Co-specific implementation choice, so no
+  amount of R-Co source access could change the correct answer here — the
+  earlier "unverified against `evaluator.zig`" deferral did not actually
+  apply to sign determination. The full signed-infinity/NaN 3-way split is
+  now implemented: `:infinity` (positive), `:neg_infinity`, and `:nan`,
+  per the per-operator dividend-sign table in §4.3 and the ordering/
+  equality guard rules in §4.6.
   """
-  @type infinity_marker :: :infinity
+  @type infinity_marker :: :infinity | :neg_infinity | :nan
 
   @typedoc "A literal or resolved value in this expr subset."
   @type value :: number() | String.t() | boolean() | nil | infinity_marker()
@@ -998,7 +999,17 @@ defmodule Letflow.Engine.Expr do
   def eval({:cmp, op, l, r}, variables) when op in [:eq, :neq] do
     with {:ok, lv} <- eval(l, variables),
          {:ok, rv} <- eval(r, variables) do
-      {:ok, if(op == :eq, do: lv == rv, else: lv != rv)}
+      cond do
+        # REQ-197 §4.6: real IEEE 754 NaN self-inequality -- :nan == :nan is
+        # false and :nan != anything (including :nan) is true. Plain Elixir
+        # `==`/`!=` would otherwise wrongly say `:nan == :nan` since they
+        # are equal atoms, so this override is checked first.
+        lv == :nan or rv == :nan ->
+          {:ok, op == :neq}
+
+        true ->
+          {:ok, if(op == :eq, do: lv == rv, else: lv != rv)}
+      end
     end
   end
 
@@ -1010,17 +1021,25 @@ defmodule Letflow.Engine.Expr do
         # ordering comparison PROPAGATES -- {:ok, nil} -- rather than
         # falling through to the type-mismatch error below. This is a
         # deliberate, real behavioural change to this clause (design doc
-        # §4.5/§4.6), checked first because nil, :infinity, and the
-        # is_number case are mutually exclusive operand shapes, so this
-        # cannot shadow anything below it.
+        # §4.5/§4.6), checked first because nil, :nan, the infinity
+        # markers, and the is_number case are mutually exclusive operand
+        # shapes, so this cannot shadow anything below it.
         lv == nil or rv == nil ->
           {:ok, nil}
 
-        # REQ-197 §4.6: :infinity (only the unsigned marker -- the signed/
-        # NaN 3-way split is deferred pending REVIEWER sign-off on OQ-1, see
-        # infinity_marker() moduledoc) participates in ordering as the
-        # greatest possible value, handled inside apply_ordering/3.
-        (is_number(lv) or lv == :infinity) and (is_number(rv) or rv == :infinity) ->
+        # REQ-197 §4.6 (rework iteration 2, OQ-1 resolved): :nan compares as
+        # false against everything via every ordering operator, including
+        # :nan vs :nan, matching real IEEE 754 NaN semantics. Checked ahead
+        # of the infinity-marker branch below since :nan is mutually
+        # exclusive with :infinity/:neg_infinity.
+        lv == :nan or rv == :nan ->
+          {:ok, false}
+
+        # REQ-197 §4.6: :infinity/:neg_infinity participate in ordering as
+        # the greatest/least possible value respectively, handled inside
+        # apply_ordering/3.
+        (is_number(lv) or lv in [:infinity, :neg_infinity]) and
+            (is_number(rv) or rv in [:infinity, :neg_infinity]) ->
           {:ok, apply_ordering(op, lv, rv)}
 
         true ->
@@ -1077,40 +1096,58 @@ defmodule Letflow.Engine.Expr do
   # REQ-197 §4.3 row B: float semantics (both operands already promoted to
   # float by apply_arith/3's final clause). Float division by a zero
   # divisor cannot go through native `/` (raises ArithmeticError on the
-  # BEAM) -- constructed directly instead. Only the single unsigned
-  # :infinity marker is implemented (OQ-1 REVIEWER gate, see moduledoc);
-  # the signed/NaN 3-way split is deliberately NOT implemented.
+  # BEAM) -- constructed directly instead, per the signed-infinity/NaN
+  # 3-way dividend-sign split (OQ-1 resolved, rework iteration 2): a
+  # positive dividend over a zero divisor yields :infinity, a negative
+  # dividend yields :neg_infinity, and 0.0/0.0 yields :nan (true IEEE
+  # 754 0.0/0.0 behaviour). Clause order matters: the l == 0.0 clause
+  # must come before the l > 0.0 / l < 0.0 clauses since 0.0 satisfies
+  # neither of those guards on its own, but is checked explicitly first
+  # for clarity and to match the design doc's own ordering.
   @spec apply_float_arith(arith_op(), float(), float()) ::
           {:ok, float() | infinity_marker()} | {:error, {:eval_error, reason :: term()}}
   defp apply_float_arith(:add, l, r), do: {:ok, l + r}
   defp apply_float_arith(:sub, l, r), do: {:ok, l - r}
   defp apply_float_arith(:mul, l, r), do: {:ok, l * r}
-  defp apply_float_arith(:div, _l, r) when r == 0.0, do: {:ok, :infinity}
+  defp apply_float_arith(:div, l, r) when r == 0.0 and l == 0.0, do: {:ok, :nan}
+  defp apply_float_arith(:div, l, r) when r == 0.0 and l > 0.0, do: {:ok, :infinity}
+  defp apply_float_arith(:div, l, r) when r == 0.0 and l < 0.0, do: {:ok, :neg_infinity}
   defp apply_float_arith(:div, l, r), do: {:ok, l / r}
 
   defp apply_float_arith(:mod, l, r) do
     {:error, {:eval_error, {:modulo_by_zero, :float, l, r}}}
   end
 
-  # REQ-197 §4.4: unary negation.
+  # REQ-197 §4.4: unary negation. Negating :infinity/:neg_infinity flips
+  # sign (only reachable via a nested `-(-1.0/0.0)`-shaped expression);
+  # negating :nan stays :nan, matching real IEEE 754 NaN negation (which
+  # flips an unobservable sign bit only).
   @spec apply_neg(value()) :: {:ok, value()} | {:error, {:eval_error, reason :: term()}}
   defp apply_neg(nil), do: {:error, {:eval_error, {:null_in_arithmetic, :neg, nil}}}
-  defp apply_neg(:infinity), do: {:ok, :infinity}
+  defp apply_neg(:infinity), do: {:ok, :neg_infinity}
+  defp apply_neg(:neg_infinity), do: {:ok, :infinity}
+  defp apply_neg(:nan), do: {:ok, :nan}
   defp apply_neg(v) when is_number(v), do: {:ok, -v}
   defp apply_neg(v), do: {:error, {:eval_error, {:type_mismatch, :neg, v}}}
 
-  # REQ-197 §4.6: :infinity is the greatest possible value. `:infinity`
-  # vs. `:infinity` is handled by the `l == r` fast path (`<=`/`>=` true,
-  # `<`/`>` false); a real-number operand is otherwise strictly less than
-  # `:infinity`. Plain-number clauses (no `:infinity` on either side) come
-  # last and are unchanged from before this requirement.
+  # REQ-197 §4.6: :infinity is the greatest possible value and
+  # :neg_infinity the least (OQ-1 resolved, rework iteration 2). The
+  # caller (eval/2's ordering-comparison clause) already filters out
+  # :nan before apply_ordering/3 is ever invoked, so no :nan clause is
+  # needed here. Two equal markers hit the `l == r` fast path
+  # (`<=`/`>=` true, `<`/`>` false). Plain-number clauses (no infinity
+  # marker on either side) come last and are unchanged from before this
+  # requirement.
   @spec apply_ordering(cmp_op(), number() | infinity_marker(), number() | infinity_marker()) ::
           boolean()
-  defp apply_ordering(op, l, r) when l == :infinity or r == :infinity do
+  defp apply_ordering(op, l, r)
+       when l in [:infinity, :neg_infinity] or r in [:infinity, :neg_infinity] do
     cond do
       l == r -> op in [:lte, :gte]
       l == :infinity -> op in [:gt, :gte]
+      l == :neg_infinity -> op in [:lt, :lte]
       r == :infinity -> op in [:lt, :lte]
+      r == :neg_infinity -> op in [:gt, :gte]
     end
   end
 

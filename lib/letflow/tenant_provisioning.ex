@@ -208,6 +208,26 @@ defmodule Letflow.TenantProvisioning do
   def tenant_id_for_schema_name(_schema_name), do: {:error, :invalid_schema_name}
 
   @doc """
+  Lists every provisioned tenant's `Registration` row -- a plain
+  `Repo.all(Registration)`, no new query logic. Added for REQ-191's
+  cross-schema referential guard (`Letflow.ServiceCatalog`'s `delete/2`/
+  `update_scope/2`, design `lib/letflow/design/req191-service-catalog-core.md`
+  §4 step 1), which must enumerate every tenant schema to check for
+  `process_definitions` rows referencing a service, since
+  `process_definitions` is a per-tenant-schema table with no global home
+  (Decision B) and this module is the sole registry of which schemas exist.
+
+  This is a read-only addition -- no existing function's behavior changes.
+  Flagged (per the design doc's OQ-3) as a minimal extension to this
+  module's public surface beyond REQ-191's own stated scope, for REVIEWER to
+  confirm is acceptable rather than scope creep.
+  """
+  @spec list_registrations() :: [Registration.t()]
+  def list_registrations do
+    Repo.all(Registration)
+  end
+
+  @doc """
   Idempotently provisions a tenant's physical Postgres schema: derives the
   schema name, serializes concurrent calls for the same tenant via a
   transaction-scoped advisory lock, issues `CREATE SCHEMA IF NOT EXISTS`, and

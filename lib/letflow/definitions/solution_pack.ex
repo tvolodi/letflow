@@ -32,11 +32,22 @@ defmodule Letflow.Definitions.SolutionPack do
       that must populate that table, and without it the table ships empty and
       REQ-061's variable-schema rejection branch stays unreachable
       (ISS-0063 / GH#212).
-    * `service_catalog_entries` — **not supported.** Letflow has no service
-      catalog; `services.zig` is a group-(b) module owning stage S6. Export
-      always emits `[]`; install **rejects** a non-empty array with
+    * `service_catalog_entries` — **still not supported.** A
+      `Letflow.ServiceCatalog` now exists (REQ-191), but which
+      tenant-visibility policy a packed catalog entry should install under
+      — tenant-scoped-to-the-installer only (consistent with every other
+      `install/3` write) or a `scope: :global`, cross-tenant-visible entry
+      (which no other `install/3` write does, and which raises its own
+      write-authorization question) — is a decision left to REQ-192, the
+      requirement already positioned to decide this catalog's
+      write-authorization policy for its HTTP surface (SVC-04:
+      `:AdminServicesManage`). Resolving `service_catalog_entries` at the
+      same time avoids inventing a second, possibly inconsistent
+      authorization stance later. Export still always emits `[]`; install
+      still **rejects** a non-empty array with
       `{:error, :unsupported_pack_section}` rather than silently discarding
-      tenant-supplied content.
+      tenant-supplied content or guessing at a policy this module was never
+      asked to decide.
     * `manifest.required_roles` — supported, **read-only**: it produces the
       advisory `role_mapping_checklist` (see `install/3`). No role is created
       and no install is ever rejected because of it.
@@ -509,6 +520,10 @@ defmodule Letflow.Definitions.SolutionPack do
 
   # ── install/3 steps 1-3 (pure, zero queries) ──────────────────────────────
 
+  # REQ-191 retains this hard-fail as-is (does not make it functional) --
+  # see this module's moduledoc "service_catalog_entries" bullet. REQ-192
+  # is named as the owning follow-up for deciding the install-time
+  # visibility policy a packed entry would need.
   defp check_unsupported_sections(%{service_catalog_entries: []}), do: :ok
   defp check_unsupported_sections(_parsed), do: {:error, :unsupported_pack_section}
 

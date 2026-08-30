@@ -10257,7 +10257,7 @@ requirements:
   - id: REQ-192
     title: Port services.zig's route surface onto the service catalog (GET /services, GET/POST/PATCH/DELETE /admin/services, SVC-04)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 365  # letflow-queue task id
     description: >

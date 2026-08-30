@@ -50,34 +50,34 @@ defmodule Letflow.Routers.AdminServices do
   be corrected in a future, `authorization.ex`-scoped requirement (design
   §3).
 
-  ## `GET /` — no backing "list all" function (design §5, layering exception
-  ## FLAGGED FOR REVIEWER SIGN-OFF, not pre-approved)
+  ## `GET /` — `Letflow.ServiceCatalog.list_all/1` (design §5, REVISED in
+  ## rework iteration 2 — FLAGGED FOR REVIEWER SIGN-OFF, not pre-approved)
 
-  `Letflow.ServiceCatalog` exposes no tenant-independent "list every row"
-  function, and adding one is out of this requirement's scope. This
-  handler therefore queries `Letflow.ServiceCatalog.Entry` **directly** via
-  `Letflow.Repo`/`Ecto.Query`, bypassing the context module — a genuine
-  first-of-its-kind exception to this codebase's router -> context-module
-  layering discipline (every other router, including
-  `Letflow.Routers.Audit` and `Letflow.Routers.Metrics`, delegates to a
-  context-module function). This is deliberate, not an oversight: reuses
-  `Letflow.ServiceCatalog.list_for_tenant/2`'s exact keyset shape
-  (`order_by: [desc: created_at, desc: service_id]`, `limit(page_size + 1)`,
-  drop-the-extra-row split) with **no** `where` clause, under its own cursor
-  prefix `"SCA:"` (distinct from `ServiceCatalog`'s own `"SC:"`, so a cursor
-  minted by one endpoint is rejected — `{:error, :wrong_endpoint}` — if
-  replayed against the other, per `Letflow.Api.Pagination`'s INV-9
-  cross-endpoint isolation).
+  Delegates to `Letflow.ServiceCatalog.list_all/1`, a new, additive,
+  read-only function added to that context module by this requirement
+  (see the module's own moduledoc for the full reasoning). This handler
+  itself performs **no** direct `Ecto.Query`/`Letflow.Repo` access — the
+  original iteration-1 design specified exactly that (a router-local query
+  against `Letflow.ServiceCatalog.Entry`, bypassing the context module
+  entirely), but implementing it caused
+  `test/letflow/routers/req078_supporting_routes_test.exs`'s T-19
+  (`INV-RT-1`, "no `Repo.` call anywhere under `lib/letflow/routers/`") to
+  fail — a hard, allowlist-free, repo-wide invariant with no exception
+  mechanism. `list_all/1` resolves that conflict by moving the
+  tenant-agnostic query into the context module instead, so this router
+  goes back to being a pure context-module-delegating router, same shape as
+  every other router in `lib/letflow/routers/`.
 
-  **REVIEWER must independently evaluate and sign off on this exception at
-  Step 2d — it is not to be treated as routine or pre-approved by analogy to
-  anything already in the codebase.** Also named as a related finding for
-  REVIEWER: this duplicates `list_for_tenant/2`'s keyset-pagination shape at
-  the router layer; a future, `service_catalog.ex`-scoped requirement should
-  consider hoisting a shared, tenant-agnostic list-all function into the
-  context module and retiring this duplication (design §5, OQ-1). Neither
-  point is resolved here — both are named, not silently accepted as
-  permanent.
+  `list_all/1` performs **no** tenant or scope filtering whatsoever — see
+  its own `@doc` in `lib/letflow/service_catalog.ex`. This router's own
+  `:AdminServicesRead` policy key (`PLATFORM_ADMIN`-only, per
+  `Letflow.Api.Authorization`) is what actually restricts this endpoint;
+  `list_all/1` itself trusts the caller entirely.
+
+  **REVIEWER must independently evaluate and sign off on this
+  `Letflow.ServiceCatalog` scope expansion at Step 2d — it is not to be
+  treated as routine or pre-approved by analogy to anything already in the
+  codebase.**
 
   ## `auth_method` -> `:required_auth` translation (design §6)
 
@@ -116,20 +116,11 @@ defmodule Letflow.Routers.AdminServices do
 
   use Letflow.Api.AuthorizedRouter
 
-  import Ecto.Query
-
   alias Letflow.Api.Error
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
-  alias Letflow.Repo
   alias Letflow.ServiceCatalog
   alias Letflow.ServiceCatalog.Entry
-
-  # Distinct from ServiceCatalog's own "SC:" -- Pagination.decode_cursor/3's
-  # whole point is cross-endpoint cursor isolation (INV-9), so a cursor
-  # minted by GET /services must be rejected if replayed against
-  # GET /admin/services and vice versa (design §5).
-  @list_cursor_prefix "SCA:"
 
   authz_get "/", :AdminServicesRead do
     handle_list(conn)
@@ -151,11 +142,10 @@ defmodule Letflow.Routers.AdminServices do
     Response.not_found(conn)
   end
 
-  # ── GET /admin/services (design §5) ───────────────────────────────────────
+  # ── GET /admin/services (design §5, revised) ──────────────────────────────
   #
-  # Deliberate, flagged layering exception -- see moduledoc. Queries
-  # Letflow.ServiceCatalog.Entry directly, with no `where` clause restricting
-  # scope or owner, so every row is visible regardless of tenant.
+  # Delegates to Letflow.ServiceCatalog.list_all/1 -- see moduledoc. No
+  # Repo/Ecto.Query access in this router.
 
   defp handle_list(conn) do
     conn = fetch_query_params(conn)
@@ -169,7 +159,7 @@ defmodule Letflow.Routers.AdminServices do
       }
 
       params
-      |> list_all()
+      |> ServiceCatalog.list_all()
       |> handle_list_result(conn)
     else
       {:error, :invalid_page_size} ->
@@ -178,69 +168,6 @@ defmodule Letflow.Routers.AdminServices do
       {:error, :page_size_too_large} ->
         Response.bad_request(conn, "page_size out of range")
     end
-  end
-
-  @spec list_all(%{cursor: String.t() | nil, page_size: pos_integer()}) ::
-          {:ok, %{items: [Entry.t()], next_cursor: String.t() | nil}}
-          | {:error, :invalid_cursor | :wrong_endpoint | :expired}
-  defp list_all(params) do
-    page_size = Map.fetch!(params, :page_size)
-
-    with {:ok, cursor_seek} <- decode_list_cursor(Map.get(params, :cursor)) do
-      query =
-        Entry
-        |> filter_by_list_cursor(cursor_seek)
-        |> order_by([e], desc: e.created_at, desc: e.service_id)
-        |> limit(^(page_size + 1))
-
-      rows = Repo.all(query)
-      {page, next_cursor} = split_list_page(rows, page_size)
-
-      {:ok, %{items: page, next_cursor: next_cursor}}
-    end
-  end
-
-  defp filter_by_list_cursor(query, nil), do: query
-
-  defp filter_by_list_cursor(query, {created_at_us, service_id}) do
-    ts = DateTime.from_unix!(created_at_us, :microsecond)
-    from(e in query, where: {e.created_at, e.service_id} < {^ts, ^service_id})
-  end
-
-  @spec decode_list_cursor(String.t() | nil) ::
-          {:ok, {non_neg_integer(), String.t()} | nil}
-          | {:error, :invalid_cursor | :wrong_endpoint | :expired}
-  defp decode_list_cursor(nil), do: {:ok, nil}
-
-  defp decode_list_cursor(raw) when is_binary(raw) do
-    case Pagination.decode_cursor(raw, @list_cursor_prefix, byte_size(@list_cursor_prefix)) do
-      {:ok, %Pagination.Cursor{} = cursor} -> {:ok, decode_seek(cursor)}
-      {:error, :wrong_endpoint} -> {:error, :wrong_endpoint}
-      {:error, :expired} -> {:error, :expired}
-      {:error, _invalid_base64_or_invalid_cursor} -> {:error, :invalid_cursor}
-    end
-  end
-
-  defp decode_seek(%Pagination.Cursor{inner: inner}) do
-    prefix_len = byte_size(@list_cursor_prefix)
-    rest = binary_part(inner, prefix_len, byte_size(inner) - prefix_len)
-    [ts_str, service_id] = String.split(rest, ":", parts: 2)
-    {String.to_integer(ts_str), service_id}
-  end
-
-  defp split_list_page(rows, page_size) when length(rows) > page_size do
-    {page, [_extra_row]} = Enum.split(rows, page_size)
-    {page, build_list_next_cursor(List.last(page))}
-  end
-
-  defp split_list_page(rows, _page_size), do: {rows, nil}
-
-  defp build_list_next_cursor(%Entry{service_id: service_id, created_at: created_at}) do
-    created_at_us = DateTime.to_unix(created_at, :microsecond)
-
-    @list_cursor_prefix
-    |> Pagination.build_raw_cursor(created_at_us, service_id)
-    |> Pagination.encode_cursor()
   end
 
   defp handle_list_result({:ok, %{items: items, next_cursor: next_cursor}}, conn) do

@@ -3639,6 +3639,22 @@
       "released_lock": true,
       "last_known_step": "Step Final (ORCH: pushing/merging PR to main, queue task 376 to be released done)",
       "note": "Per-tenant artifact activation (REPO-08/09/10), completing the REQ-202/REQ-203 artifact-repository pair. Atomic multi-artifact Ecto.Multi activation with a rigorously re-derived READ-COMMITTED/MVCC observability guarantee (no isolation-level bump needed). DB-level UNIQUE/CHECK/FK invariants; REQ-195 audit_entries disambiguation. Unusually long rework chain (3 design reworks -- isolation-level argument confirmed correct, OQ-A/E/F resolved, rationale-validation mechanism corrected twice after two opposite false claims about Ecto's trim/validation pipeline; 1 implementation @spec/FK-constraint fix; 2 REVIEWER reworks on a test-only concurrency seam requiring compile-time gating; 1 doc-staleness fix), each round catching a genuine, independently-confirmed defect. RELEASE-VALIDATOR independently re-verified all 12 ACs."
+    },
+    {
+      "run_id": "WF03-ISS0381-20260831",
+      "requirement_id": null,
+      "issue_id": "ISS-0381",
+      "queue_task_id": 381,
+      "github_issue_number": 753,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/dlq/entry.ex"
+      ],
+      "started_at": "2026-08-31T07:23:20Z",
+      "lock_released_at": "2026-08-31T08:51:20Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: pushing/merging PR to main, queue task 381 to be released done)",
+      "note": "Letflow.Dlq.Entry.insert_changeset/2's cast/3 list contradicted its own docstring (tenant_id/status/retry_count/retry_history/created_at all listed as castable despite being documented 'deliberately not castable'). Fix: cast/3 narrowed to 12 fields; tenant_id/created_at now set via put_change/3 reading attrs directly; status/retry_count/retry_history now rely on Ecto.Schema's own struct defaults once excluded from cast, matching the established pattern in solution_pack_install.ex/promotion_review.ex. Design went through 3 rework rounds (a field-count arithmetic error, then two rounds catching residual literal-Elixir-code fragments in the design doc). Regression test independently reproduced fail-first (2 new tests in test/letflow/dlq_test.exs fail against the pre-fix cast list, pass post-fix) by both TEST-DESIGNER and TEST-DESIGN-VALIDATOR separately. Along the way, fixed 8 handoff-schema violations (wrong field names, illegal top-level status values) in a concurrent sibling session's (WF02-REQ199) own handoff files that were blocking CI's lint_handoffs gate for every PR built off main."
     }
   ]
 }

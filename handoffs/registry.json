@@ -3588,17 +3588,17 @@
       "queue_task_id": 379,
       "github_issue_number": 738,
       "stage": "S6",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/webhooks.ex",
         "lib/letflow/webhooks/",
         "docs/agents/instructions/security-invariants.md"
       ],
       "lock_acquired_at": "2026-08-31T02:50:43Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (git setup PASS)",
-      "note": "SSRF validation for webhook target_url: scheme allowlist (https only) + private/loopback/link-local/cloud-metadata range rejection at create/2 and defense-in-depth at deliver/3 pre-request. INV-9 addition to security-invariants.md. depends_on REQ-181 (done) and REQ-183 (done on main, deliver/3 at lib/letflow/webhooks.ex). WF-02 pipeline: queued from letflow-queue task 379, agent_id orch-main."
+      "lock_released_at": "2026-08-31T05:30:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: merged PR #751 to main 8b08ed9c, queue task 379 released done)",
+      "note": "SSRF validation for webhook target_url: Letflow.Webhooks.UrlValidator added (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, ::1/128, fc00::/7, fe80::/10, IPv4-mapped). Wired into create/2 and dispatch_http/4. INV-9 added. 65 tests pass. PR #751 squash-merged at 8b08ed9c."
     }
   ]
 }

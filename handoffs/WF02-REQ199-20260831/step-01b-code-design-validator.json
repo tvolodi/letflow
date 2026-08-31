@@ -1,0 +1,71 @@
+{
+  "handoff_id": "step01b-WF02-REQ199-20260831",
+  "run_id": "WF02-REQ199-20260831",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ199-20260831/step-01b-code-design-validator.json",
+  "created_at": "2026-08-31T00:00:00Z",
+  "started_at": "2026-08-31T12:00:00Z",
+  "completed_at": "2026-08-31T12:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-199"],
+    "branch_name": "feature/WF02-REQ199-20260831",
+    "artifacts_in": [
+      "lib/letflow/design/req199-ordering.md"
+    ],
+    "requirement_text": "REQ-199: Correlated effect re-entry ordering (ORD-01/02/03/04). 18 acceptance criteria covering per-tenant table placement, idempotent insert, strict sequence ordering, silent rollback for out-of-order, conditional cursor advance, cursor init, parallel correlations, gap sweeper all-or-nothing with strict-greater-than predicate, configurable gap timeout, no cross-sleep connection hold, scheduler wiring without new app.ex child, event type registration, per-correlation lag metric, oldest-pending age nil when no PENDING, lag-threshold event, moduledoc ORD-04 deferral, no route/controller change, mix test and compile pass."
+  },
+  "task": {
+    "description": "Gate CODE-DESIGNER's design artefact at lib/letflow/design/req199-ordering.md. Verify all 18 acceptance criteria are addressed by named design elements, all public function signatures are fully specified with @spec and error shapes, both Ecto schemas are complete, migration timestamps explicit, transaction boundary is a numbered step sequence, strict-greater-than predicate is stated and distinguished from >=, DLQ integration is fully specified, ORD-04 metric names and nil-age behavior are addressed, scheduler wiring names specific handle_info clause, event type strings are named, connection pool discipline explicitly prohibits cross-sleep connection hold citing GH-654/ISS-0649, tenant_fixture update names tables in alphabetical order, moduledoc deferral wording is prescriptive, open questions are present, and no implementation code is present.",
+    "acceptance_criteria": [
+      "All 18 REQ-199 acceptance criteria mapped to named design elements in §17",
+      "All public function signatures have @spec with input types, output types, and error cases",
+      "Both Ecto schemas fully specified (fields, types, constraints, indexes)",
+      "Migration timestamps 20260831000001 and 20260831000002 explicitly stated",
+      "Per-tenant placement stated with reason citing decision 0003 Decision B",
+      "Transaction boundary listed as numbered step sequence, ONE transaction stated",
+      "Strict-greater-than predicate explicitly stated and distinguished from >=",
+      "DLQ integration: function named, argument shape specified, all-or-nothing behavior stated",
+      "ORD-04: specific Prometheus family names, label allow-list, nil-age behavior addressed",
+      "Scheduler wiring: specific handle_info clause named, no new application.ex child stated",
+      "Event type strings named, registration mechanism referenced",
+      "Connection pool discipline: no cross-sleep hold stated, GH-654/ISS-0649 named",
+      "tenant_fixture.ex: both tables named with alphabetical positions",
+      "ORD-04 deferral: prescriptive moduledoc wording provided",
+      "At least one open question explicitly listed",
+      "No implementation code present",
+      "No TBD deferrals on any acceptance criterion"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "Design artefact lib/letflow/design/req199-ordering.md is approved for ELIXIR-DEV implementation. All 18 checks passed.",
+    "check_results": {
+      "check_1_ac_mapping_completeness": "PASS — §17 contains an explicit 18-row AC→element mapping table. AC1–AC17 each map to one or more named sections. AC18 (mix test/compile pass) is correctly noted as a runtime gate rather than a design artefact — this is a valid observation, not a TBD deferral.",
+      "check_2_function_signatures": "PASS — All public functions have @spec with full types. @type insert_error, cycle_result, claim_result, lag_info all defined. §6.1: insert_completion/2 (input attrs map with required/optional keys, opts, output {:ok, Completion.t()} | {:error, insert_error()}), run_cycle/2 (String.t(), opts() :: cycle_result()), sweep_gaps/2 (String.t(), opts() :: :ok), emit_lag_metrics/2 (String.t(), opts() :: :ok). §6.2: claim/1, try_apply/2. §6.3: Sweeper.run/2. §6.4: compute_all_lags/1, write_to_registry/2. §6.5: upsert_init/2, advance_conditional/3. No TBD on any signature.",
+      "check_3_ecto_schema_completeness": "PASS — effect_completions (§3): 9 fields with Ecto types, Postgres types, null/not-null, defaults, CHECK on status IN ('PENDING','APPLIED','DEAD'), CHECK on sequence_no >= 0, UNIQUE index on (correlation_id, sequence_no), partial index WHERE status='PENDING', pk index. correlation_cursors (§4): 5 fields, primary key on correlation_id (string, not UUID), CHECK on applied_seq >= 0, default 0, timestamps. All indexes and constraints present.",
+      "check_4_migration_timestamps": "PASS — §5.1 states '20260831000001' for effect_completions; §5.2 states '20260831000002' for correlation_cursors. Both explicit.",
+      "check_5_per_tenant_placement": "PASS — §2 states the reason: 'required by decision 0003 Decision B — all business tables that operate per-correlation-per-tenant must be schema-isolated so a bug that forgets a tenant_id predicate fails loudly (row not found in the wrong schema) rather than silently leaking rows across tenants.' Reason stated, not just asserted. Decision B cited.",
+      "check_6_transaction_boundary": "PASS — §7.1 lists M1–M9 as a numbered step sequence. Explicit statement: 'All eight steps are inside ONE Repo.transaction/2 call.' Every step enumerated: claim (FOR UPDATE SKIP LOCKED), advisory lock, cursor upsert-init, read applied_seq, order check, EventStore.append, status update, advance_conditional, COMMIT.",
+      "check_7_strict_greater_than": "PASS — §8.1 states: 'STRICT GREATER-THAN rule (AC8 explicit test): a correlation whose lowest PENDING sequence is exactly applied_seq + 1 is merely slow. It must NOT be swept regardless of age. The check is min_pending_seq > applied_seq + 1, not >=.' Explicitly distinguishes from >=.",
+      "check_8_dlq_integration": "PASS — §8.2 names Letflow.Dlq.enqueue/2. §9 specifies argument shape: entry_type: \"ordering_gap\", reference_id: correlation_id, reason: \"gap timeout — no predecessor\", context_json with keys correlation_id, unapplied_sequence_numbers (sorted ascending), applied_seq, oldest_pending_age_seconds. All-or-nothing: 'If the Dlq.enqueue/2 call fails (e.g. changeset error), the whole transaction is rolled back — no DEAD rows are committed without a corresponding DLQ entry.'",
+      "check_9_ord04_metric_names": "PASS — §10.1 names letflow_ordering_correlation_lag and letflow_ordering_oldest_pending_age_seconds. Label allow-list: 'none — No correlation_id, tenant_id, or any per-entity identifier is ever used as a label value.' §10.3 addresses nil-age: 'nil oldest age means no pending rows'; OQ-2 explicitly flags the Prometheus exposition question for ELIXIR-DEV resolution.",
+      "check_10_scheduler_wiring": "PASS — §12.1 names 'handle_info(:tick, state) in Letflow.Scheduler.Poller' as the exact function/callback to extend. §12.3: 'No new child is added to lib/letflow/application.ex.' Also §12.2 names three private helpers (maybe_run_ordering_cycle, maybe_run_ordering_sweeper, maybe_run_ordering_metrics).",
+      "check_11_event_type_registration": "PASS — §11 states both strings: \"effect_applied\" and \"ordering_lag_threshold_exceeded\". Mechanism: 'seed migration or an upsert in TenantProvisioning.replay_migrations/1 ... matches REQ-140's precedent for instance_promoted / instance_promotion_failed / instance_promotion_deferred.' OQ-3 flags a clarification needed before implementation.",
+      "check_12_connection_pool_discipline": "PASS — §13: 'A Repo connection is acquired exactly at Repo.transaction/2 open and released exactly at commit or rollback. Between calls to run_cycle/2 — i.e., between individual tick invocations — no connection is held.' GH-654/ISS-0649 named explicitly. Correct alternative: per-transaction checkout, no Repo.checkout/2 wrapping multiple cycles.",
+      "check_13_tenant_fixture_update": "PASS — §14 names both tables with exact alphabetical positions: 'correlation_cursors (between definition_sequence and dlq_entries)' and 'effect_completions (between dlq_entries and event_idempotency)'. Anti-pattern precedent and line reference (line 122) included.",
+      "check_14_ord04_deferral_moduledoc": "PASS — §15 prescribes exact moduledoc wording, beginning 'ORD-04's dynamic consumer-count reduction under contention is deliberately deferred and NOT implemented here...' through the scope boundary sentence. This is prescriptive text ready for copy-paste, not a vague 'we defer this.'",
+      "check_15_open_questions": "PASS — §18 has five explicitly stated open questions: OQ-1 (advisory lock hash width), OQ-2 (Prometheus exposition of nil age gauge), OQ-3 (event_type_registry mechanism), OQ-4 (consumer count per tick), OQ-5 (lag threshold default value).",
+      "check_16_no_implementation_code": "PASS — Doc header states 'No implementation code — no function bodies, no .ex/.exs code blocks. ELIXIR-DEV writes those from this document at Step 2a.' All code blocks contain @spec/@type declarations, schema type shapes (field lists without bodies), SQL queries, pseudocode transaction steps (M1-M9 using pseudo-Elixir with if/then notation, not real Elixir syntax), or :ets.insert call shapes. No actual function bodies are present.",
+      "check_17_no_tbd_deferrals": "PASS — No acceptance criterion is addressed with 'TBD', 'to be implemented', or equivalent. Open questions (OQ-1 through OQ-5) are appropriately scoped advisory items, not AC deferrals. AC18 correctly observes it is a runtime gate, not deferred.",
+      "check_18_error_cases_stated": "PASS — insert_completion/2: @type insert_error :: :invalid_schema_name | Ecto.Changeset.t(). run_cycle/2: cycle_result type includes :applied, :not_next, :lock_contention, :cursor_race, :no_pending, {:error, term()}. Both main functions have explicit error cases; no error shape is left as 'error reason TBD.'"
+    },
+    "gaps": [],
+    "notes": "Design is thorough. Five open questions (OQ-1 to OQ-5) are advisory; none blocks ELIXIR-DEV from proceeding. OQ-2 (nil gauge exposition) and OQ-3 (event_type_registry mechanism) require ELIXIR-DEV to verify implementation details before writing code for those specific integration points, but the design intent is unambiguous in both cases. AC18 (mix test/compile pass) is correctly left as a runtime gate with no design element required."
+  }
+}

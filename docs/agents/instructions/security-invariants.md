@@ -283,6 +283,7 @@ codebase's history):
 - 169.254.0.0/16 — link-local, including 169.254.169.254 (cloud metadata) explicitly
 - ::1/128 — IPv6 loopback
 - fc00::/7 — IPv6 ULA (unique local)
+- fe80::/10 — IPv6 link-local (REVIEWER-approved, OQ-1 — same attack class as 169.254.0.0/16)
 - IPv4-mapped-IPv6 forms (::ffff:A.B.C.D and ::A.B.C.D) of any of the IPv4
   ranges above
 

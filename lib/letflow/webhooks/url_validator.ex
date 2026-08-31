@@ -15,6 +15,7 @@ defmodule Letflow.Webhooks.UrlValidator do
   - 169.254.0.0/16 — link-local, including 169.254.169.254 (cloud metadata)
   - ::1/128 — IPv6 loopback
   - fc00::/7 — IPv6 ULA (unique local)
+  - fe80::/10 — IPv6 link-local (REVIEWER-approved, OQ-1 — same attack class as 169.254.0.0/16)
   - IPv4-mapped-IPv6 forms (::ffff:A.B.C.D and ::A.B.C.D) of any IPv4 ranges above
 
   Only `"https"` is permitted as URL scheme; `"http"` and all other schemes
@@ -161,6 +162,8 @@ defmodule Letflow.Webhooks.UrlValidator do
   defp blocked_ipv6?({0, 0, 0, 0, 0, 0, 0, 1}), do: true
   # fc00::/7: first 16-bit group in 0xFC00..0xFDFF
   defp blocked_ipv6?({a, _, _, _, _, _, _, _}) when a in 0xFC00..0xFDFF, do: true
+  # fe80::/10 — IPv6 link-local (same attack class as 169.254.0.0/16, REVIEWER-approved OQ-1)
+  defp blocked_ipv6?({a, _, _, _, _, _, _, _}) when a in 0xFE80..0xFEBF, do: true
   # IPv4-mapped ::ffff:A.B.C.D
   defp blocked_ipv6?({0, 0, 0, 0, 0, 0xFFFF, hi, lo}),
     do: blocked_ipv4?(ipv4_from_mapped_ipv6({0, 0, 0, 0, 0, 0xFFFF, hi, lo}))

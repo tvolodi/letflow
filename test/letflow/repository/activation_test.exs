@@ -201,17 +201,16 @@ defmodule Letflow.Repository.ActivationTest do
 
   describe "AC1 -- atomic multi-artifact activation, forced-failure rollback" do
     # Real forced-failure/rollback case: a third artifact whose version_id
-    # does not exist in artifact_versions at all. The current implementation
-    # (`upsert_activation_pointer/8`'s `repo.update` call has no
-    # `foreign_key_constraint/3` mapped on `Letflow.Repository.Activation`'s
-    # changeset) surfaces this as a RAISED `Ecto.ConstraintError` out of
-    # `activate_group/4` rather than a returned `{:error, {atom(),
-    # Ecto.Changeset.t()}}` tuple that function's own @spec advertises --
-    # noted here as a real finding for REVIEWER (the transaction itself
-    # still rolls back correctly either way, which is what AC1 asks for; the
-    # @spec-vs-actual-behavior mismatch on the *error shape* is a separate,
-    # narrower concern this test does not paper over by catching more than
-    # the actual raised exception).
+    # does not exist in artifact_versions at all. `Letflow.Repository.Activation`'s
+    # changeset (used by `upsert_activation_pointer/8`'s `repo.insert`/
+    # `repo.update` calls) now maps `:active_version_id`'s FK via
+    # `foreign_key_constraint/3` (see `Letflow.Repository.Activation.changeset/2`),
+    # so this real FK violation is translated into the documented
+    # `{:error, {atom(), Ecto.Changeset.t()}}` tuple `activate_group/4`'s own
+    # @spec has always promised, instead of raising `Ecto.ConstraintError` --
+    # fixed per REQ-203 Step 3b test-design-validator's finding. The
+    # transaction itself still rolls back correctly either way, which is
+    # what AC1 asks for.
     test "a version_id with no matching artifact_versions row rolls back the whole group, no partial state, no history rows" do
       %{schema_name: schema} = provisioned_tenant()
 
@@ -236,22 +235,23 @@ defmodule Letflow.Repository.ActivationTest do
 
       history_count_before = Repo.aggregate(ActivationHistory, :count, prefix: schema)
 
-      assert_raise Ecto.ConstraintError, fn ->
-        Activation.activate_group(
-          [
-            activation_input(v1b),
-            activation_input(v2b),
-            %{
-              artifact_kind: :definition,
-              artifact_name: "rbx-artifact-three",
-              version_id: bogus_version_id
-            }
-          ],
-          activator,
-          "forced failure via bogus version_id",
-          schema
-        )
-      end
+      assert {:error, {:validation, %Ecto.Changeset{} = changeset}} =
+               Activation.activate_group(
+                 [
+                   activation_input(v1b),
+                   activation_input(v2b),
+                   %{
+                     artifact_kind: :definition,
+                     artifact_name: "rbx-artifact-three",
+                     version_id: bogus_version_id
+                   }
+                 ],
+                 activator,
+                 "forced failure via bogus version_id",
+                 schema
+               )
+
+      assert {"does not exist", _} = changeset.errors[:active_version_id]
 
       # All three remain at their PRIOR versions (v*a, not v1b/v2b) -- the
       # transaction rolled back completely, including artifact-one/-two's

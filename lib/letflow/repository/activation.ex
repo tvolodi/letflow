@@ -202,28 +202,56 @@ defmodule Letflow.Repository.Activation do
   all-or-nothing guarantee: any step's failure rolls back every prior step,
   including every already-processed artifact in the group.
   """
-  @typedoc """
-  TEST-ONLY seam (added by TEST-DESIGNER at REQ-203 Step 3, flagged for
-  REVIEWER; see design §4.3 and `test/letflow/repository/activation_test.exs`
-  AC1/AC2's concurrency test). No production call site passes this option --
-  `activate_group/4`'s public `@spec` above intentionally omits it so callers
-  do not discover it by autocomplete. `:test_pause_after` is the 1-based
-  index (in `activations` order) after whose `Multi.run/3` steps a pause step
-  is inserted; `:test_pause_fun` is a 0-arity function invoked synchronously
-  *inside the open transaction* at that point (expected to signal a waiting
-  test process and then block on a reply), giving a concurrent reader a real
-  window to observe the partially-applied, still-uncommitted state. Omitting
-  both opts (the default, `[]`) reproduces the exact `Multi` shape design §4.2
-  describes, byte-for-byte -- this seam adds nothing to the production path.
-  """
-  @type test_opts :: [test_pause_after: pos_integer(), test_pause_fun: (-> any())]
+  # TEST-ONLY seam (added by TEST-DESIGNER at REQ-203 Step 3, flagged for
+  # REVIEWER; see design §4.3 and `test/letflow/repository/activation_test.exs`
+  # AC1/AC2's concurrency test). No production call site passes this option,
+  # and this type is deliberately `@typep` (private) rather than public: the
+  # public `@spec activate_group/5` below types its 5th argument as plain
+  # `keyword()`, not `test_opts()`, so a caller reading only the public
+  # contract (`h Letflow.Repository.Activation.activate_group/5`, or editor
+  # autocomplete against the `@spec`) genuinely does not see
+  # `test_pause_after`/`test_pause_fun` -- this doc's shape is visible only to
+  # a reader of this module's source (a `@typedoc` here would be discarded
+  # anyway, since typedocs are only ever kept for public `@type`s -- hence a
+  # plain comment, not `@typedoc`). `:test_pause_after` is the 1-based index
+  # (in `activations` order) after whose `Multi.run/3` steps a pause step is
+  # inserted; `:test_pause_fun` is a 0-arity function invoked synchronously
+  # *inside the open transaction* at that point (expected to signal a waiting
+  # test process and then block on a reply), giving a concurrent reader a real
+  # window to observe the partially-applied, still-uncommitted state. Omitting
+  # both opts (the default, `[]`) reproduces the exact `Multi` shape design
+  # §4.2 describes, byte-for-byte -- this seam adds nothing to the production
+  # path.
+  #
+  # Beyond the discoverability limit above, `maybe_add_test_pause_step/4`'s
+  # functional clause (the only place `test_pause_fun` is ever invoked) is
+  # additionally gated behind `@activation_test_hooks_enabled?`, resolved once
+  # at compile time via `Application.compile_env(:letflow,
+  # :activation_test_hooks_enabled?, false)` and defaulting to `false`. Only
+  # `config/test.exs` sets it to `true` -- `config/dev.exs`/`config/prod.exs`
+  # neither set it (so the `false` default holds) -- so a dev/prod build can
+  # never execute the pause step regardless of what opts a caller supplies.
+  # Matches this codebase's own established pattern for a test-only production
+  # seam: `lib/letflow/design/req021-auth-plug-pipeline.md`'s OQ-5 (config-
+  # resolved indirection, not ad hoc `Mix.env()` branching).
+  @typep test_opts :: [test_pause_after: pos_integer(), test_pause_fun: (-> any())]
+
+  # See @typep test_opts above for the full rationale. Resolved once at
+  # compile time (not a runtime Mix.env() call, which is unavailable in a
+  # compiled release) -- becomes a literal `true`/`false` in the compiled
+  # BEAM code.
+  @activation_test_hooks_enabled? Application.compile_env(
+                                    :letflow,
+                                    :activation_test_hooks_enabled?,
+                                    false
+                                  )
 
   @spec activate_group(
           [activation_input()],
           Ecto.UUID.t(),
           String.t(),
           String.t(),
-          test_opts()
+          keyword()
         ) ::
           {:ok, activate_group_result()}
           | {:error, :empty_group}
@@ -253,9 +281,6 @@ defmodule Letflow.Repository.Activation do
           Multi.new()
           |> Multi.insert(:group, group_changeset, prefix: prefix)
 
-        pause_after = Keyword.get(opts, :test_pause_after)
-        pause_fun = Keyword.get(opts, :test_pause_fun)
-
         multi =
           activations
           |> Enum.with_index(1)
@@ -271,7 +296,7 @@ defmodule Letflow.Repository.Activation do
               group_id,
               prefix
             )
-            |> maybe_add_test_pause_step(index, pause_after, pause_fun)
+            |> maybe_add_test_pause_step(index, opts)
           end)
 
         multi
@@ -283,13 +308,30 @@ defmodule Letflow.Repository.Activation do
     end
   end
 
-  # TEST-ONLY (see @type test_opts above) -- a no-op unless a test explicitly
-  # supplies both `test_pause_after`/`test_pause_fun`.
-  defp maybe_add_test_pause_step(multi, index, index, pause_fun) when is_function(pause_fun, 0) do
-    Multi.run(multi, :__test_pause__, fn _repo, _changes -> {:ok, pause_fun.()} end)
-  end
+  # TEST-ONLY (see @typep test_opts above) -- a no-op unless
+  # @activation_test_hooks_enabled? is compiled in as `true` (only
+  # config/test.exs does this) AND a test explicitly supplies both
+  # `test_pause_after`/`test_pause_fun`. The `if @activation_test_hooks_enabled?`
+  # below (a compile-time-constant branch, not a guard) is what makes this a
+  # genuine no-op in a dev/prod build regardless of what opts a caller
+  # supplies -- it is deliberately NOT expressed as a guard clause
+  # (`when ... and @activation_test_hooks_enabled?`) because the compiler
+  # statically proves a guard ANDed with a literal `false` can never succeed
+  # and rejects the module under `--warnings-as-errors`; an `if` on the same
+  # literal has no such restriction and still compiles away to nothing
+  # (`unquote(@activation_test_hooks_enabled?)`'s `false` branch is the only
+  # one reachable) in a dev/prod build.
+  @spec maybe_add_test_pause_step(Multi.t(), pos_integer(), test_opts()) :: Multi.t()
+  defp maybe_add_test_pause_step(multi, index, opts) do
+    pause_after = Keyword.get(opts, :test_pause_after)
+    pause_fun = Keyword.get(opts, :test_pause_fun)
 
-  defp maybe_add_test_pause_step(multi, _index, _pause_after, _pause_fun), do: multi
+    if @activation_test_hooks_enabled? and index == pause_after and is_function(pause_fun, 0) do
+      Multi.run(multi, :__test_pause__, fn _repo, _changes -> {:ok, pause_fun.()} end)
+    else
+      multi
+    end
+  end
 
   defp validate_non_empty_group([]), do: {:error, :empty_group}
   defp validate_non_empty_group([_ | _]), do: :ok

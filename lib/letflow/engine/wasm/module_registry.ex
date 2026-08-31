@@ -59,8 +59,40 @@ defmodule Letflow.Engine.Wasm.ModuleRegistry do
   wiring registration in front of an actual invocation call path is a
   future dispatch-integration requirement's job (design §2.1).
 
-  See `lib/letflow/design/req166-wasm-module-abi-validation.md`
-  (gate-approved) for the full design this module implements.
+  ## Residual risk — a hung instantiation's native thread outlives the kill (ISS-0380)
+
+  `Task.shutdown(task, :brutal_kill)` on stage 2's timeout branch kills only the
+  Elixir `Task` process — it does not stop the underlying native Wasmtime
+  execution. Live-verified (WF02-REQ166-20260828, TEST-DESIGNER): a
+  genuinely-hanging guest module (an unconditional infinite loop in its
+  `start` function) correctly drives the 5000ms `Task.yield/2` timeout, but
+  the BEAM dirty-NIF scheduler thread actually running the guest loop keeps
+  consuming CPU afterward — confirmed via `/proc/<beam_pid>/stat`
+  utime+stime deltas over an otherwise-idle window. `Task.shutdown/2` is an
+  Erlang-process-level operation and cannot reach a non-preemptible native
+  busy loop.
+
+  Checked against the pinned `wasmex` dependency (0.15.1): its fuel-metering
+  and epoch-interruption mechanisms (`Wasmex.EngineConfig.consume_fuel/2`,
+  cooperative interruption of a running call) apply only around
+  `Wasmex.call_function/4` — invoking an already-instantiated module. Neither
+  covers `Wasmex.start_link/1` (instantiation), which is the exact call this
+  gap hangs inside. There is currently no wasmex-exposed way to bound a
+  hanging instantiation's native execution.
+
+  Not yet exploitable: `register/1`'s only application-code caller
+  (`Letflow.Engine.Wasm.ModuleVersionRegistry`, REQ-173) has no
+  application-code caller of its own — only tests reach either module today,
+  so a malicious/pathological WASM module cannot currently reach this path
+  from any tenant-facing surface. This is the SAME class of gap
+  `Letflow.Engine.Wasm.PluginHandler`'s own moduledoc discloses for its
+  invocation call path (see that module's "Residual risk" section) — a
+  process boundary that bounds hangs at the Elixir level without being able
+  to reach the native thread underneath. Fixing this for real (bounding or
+  killing a hung native Wasmtime execution) is a design decision belonging
+  to whichever future requirement first wires a tenant-facing WASM
+  module-registration or execution path to this module — not attempted
+  here, per docs/issues/ISS-0380.yaml.
   """
 
   defmodule RegisteredModule do

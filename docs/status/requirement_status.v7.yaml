@@ -869,3 +869,38 @@ history:
       metrics. New tables effect_completions + correlation_cursors (per-tenant,
       decision 0003-B). Gap sweeper on REQ-186 scheduler. Event types registered.
       All 18 ACs independently verified by RELEASE-VALIDATOR.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-31T09:52:00Z"
+    note: >
+      WF03-ISS0380-20260831 done (queue task 380, GH#752, MINOR,
+      former_local_id ISS-0351 -- same finding). ModuleRegistry.register/1's
+      timeout path (Task.yield/2 + Task.shutdown(:brutal_kill) on a hanging
+      guest module's instantiation) kills only the Elixir Task, not the
+      underlying native Wasmtime execution thread -- confirmed via direct
+      source read of instantiate/1. ISSUE-FIXER's diagnosis confirmed the
+      pinned wasmex 0.15.1's fuel-metering/epoch-interruption mechanisms
+      only bound Wasmex.call_function/4, never Wasmex.start_link/1
+      (instantiation) -- the exact call this hangs inside -- so a real fix
+      is not currently possible without an upstream wasmex change. Checked
+      docs/issues/ISS-0352.yaml as precedent: this codebase's own prior
+      resolution to the identical mechanism class (a hung wasmex NIF call
+      leaking a native thread) chose containment over a native-level fix,
+      confirming this is an established pattern. No tenant-facing exploit
+      path exists today (register/1's only application-code caller has no
+      caller of its own). Per ORCH's direct-action sizing rule (single
+      file, comment-only, no new public function/spec, no migration, no
+      supervision-tree touch, no tenant-data path, no test-behavior
+      change), ORCH acted directly rather than routing through the full
+      CODE-DESIGNER/ELIXIR-DEV/.../TEST-RUNNER chain: added a "Residual
+      risk" moduledoc disclosure to
+      lib/letflow/engine/wasm/module_registry.ex, mirroring
+      lib/letflow/engine/wasm/plugin_handler.ex's own established pattern
+      for the same class of native-crash/hang residual risk, citing
+      ISS-0380 so a future tenant-facing WASM path implementer confronts
+      the gap. Verified: mix compile --warnings-as-errors clean, mix
+      format --check-formatted clean, module_registry_test.exs 20/20
+      unchanged. docs/issues/ISS-0380.yaml set to status: resolved. GH#752
+      closed with evidence comment.

@@ -19,7 +19,43 @@ note_on_id: >
   Handoff files, handoffs/registry.json and the requirement_status volumes still
   cite ISS-0351 -- those are immutable run records and were deliberately NOT
   rewritten. Treat ISS-0351 and ISS-0380 as the same finding.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0380-20260831
+resolved_at: "2026-08-31T09:52:00Z"
+resolution: >
+  Not fixed at the native-thread level -- confirmed not currently possible.
+  ISSUE-FIXER's diagnosis (handoffs/WF03-ISS0380-20260831/step-01-issue-fixer-diagnosis.json)
+  checked the pinned wasmex dependency (0.15.1) directly: its fuel-metering
+  and epoch-interruption mechanisms only bound Wasmex.call_function/4
+  (invoking an already-instantiated module), never Wasmex.start_link/1
+  (instantiation) -- the exact call this bug hangs inside. There is
+  currently no wasmex-exposed way to bound a hanging instantiation's native
+  execution; the real fix would require an upstream wasmex change or an
+  unverified experiment, not something to attempt speculatively here.
+  Precedent checked (docs/issues/ISS-0352.yaml, the same "hung wasmex NIF
+  call leaks a native thread" mechanism class): this codebase's own prior
+  resolution chose containment/isolation over fixing native-thread
+  survival, confirming this is an established, accepted pattern rather
+  than a gap unique to this module.
+  No tenant-facing exploit path exists today (ModuleRegistry.register/1's
+  only application-code caller, ModuleVersionRegistry, has no
+  application-code caller of its own -- only tests reach either module).
+  Per ORCH's direct-action sizing rule (docs/agents/ORCHESTRATOR.md §10):
+  a single-file, comment-only documentation change, adding no public
+  function/spec, no migration, no supervision-tree touch, no tenant-data
+  path, and no test-behavior change -- so ORCH acted directly rather than
+  routing through the full CODE-DESIGNER/ELIXIR-DEV/.../TEST-RUNNER chain.
+  Added a "Residual risk" disclosure to
+  lib/letflow/engine/wasm/module_registry.ex's moduledoc, at the exact
+  call site (instantiate/1's timeout branch), mirroring
+  lib/letflow/engine/wasm/plugin_handler.ex's own established pattern for
+  disclosing the identical class of native-crash/hang residual risk --
+  citing this issue by id, so a future implementer of a tenant-facing WASM
+  module-registration or execution path is forced to confront the gap
+  rather than discover it independently. Verified: mix compile
+  --warnings-as-errors clean, mix format --check-formatted clean,
+  test/letflow/engine/wasm/module_registry_test.exs 20/20 passed
+  unchanged (doc-only diff, confirmed via git diff --stat).
 description: >
   While mutation-testing lib/letflow/engine/wasm/module_registry.ex's stage-2
   timeout branch (Step 3, WF02-REQ166-20260828), TEST-DESIGNER live-verified

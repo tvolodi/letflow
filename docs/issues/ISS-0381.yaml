@@ -20,7 +20,29 @@ note_on_id: >
   Handoff files, handoffs/registry.json and the requirement_status volumes still
   cite ISS-0353 -- those are immutable run records and were deliberately NOT
   rewritten. Treat ISS-0353 and ISS-0381 as the same finding.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0381-20260831
+resolved_at: "2026-08-31T08:51:20Z"
+resolution_summary: >
+  Fixed in lib/letflow/dlq/entry.ex's insert_changeset/2: cast/3's field list
+  narrowed from 15 to 12 fields, dropping tenant_id, status, retry_count,
+  retry_history and created_at. tenant_id and created_at (no schema-level
+  default) are now set explicitly via put_change/3 reading them out of
+  attrs, so enqueue/2's contract is preserved without relying on cast.
+  status, retry_count and retry_history (all have schema-level defaults --
+  :pending/0/[]) now rely on Ecto.Schema's own struct defaults once excluded
+  from cast, matching the pattern already used by
+  lib/letflow/definitions/solution_pack_install.ex and
+  lib/letflow/definitions/promotion_review.ex. The docstring was corrected
+  to match the now-true cast list. Verified via an independently-reproduced
+  fail-first regression: 2 new tests in test/letflow/dlq_test.exs that fail
+  against the pre-fix cast/3 list (a caller-supplied tenant_id/created_at
+  reaching the changeset via raw cast) and pass post-fix. Full-suite
+  TEST-RUNNER run: 2945/2947 passed, the only 2 failures being the
+  documented pre-existing rustc-absent sandbox flake
+  (Mix.Tasks.Letflow.CheckToolchainTest), unrelated to this change; zero
+  DLQ-related failures. former_local_id ISS-0353 is confirmed the same
+  finding (see note_on_id above) -- no separate closure needed for it.
 tags:
   - idiom-gap
 description: >

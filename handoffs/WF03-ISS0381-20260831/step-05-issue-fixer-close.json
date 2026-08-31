@@ -1,0 +1,72 @@
+{
+  "handoff_id": "WF03-ISS0381-20260831-step05",
+  "run_id": "WF03-ISS0381-20260831",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0381-20260831/step-05-issue-fixer-close.json",
+  "created_at": "2026-08-31T08:51:20Z",
+  "started_at": "2026-08-31T08:51:20Z",
+  "completed_at": "2026-08-31T08:51:20Z",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "issue_id": "ISS-0381",
+    "former_local_id": "ISS-0353",
+    "queue_task_id": 381,
+    "github_issue": 753,
+    "severity": "MINOR",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0381-20260831/step-04c-test-runner.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0381-20260831/step-04c-test-runner.json",
+      "docs/issues/ISS-0381.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 5: close ISS-0381 now that all prior gates (SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR with independently-reproduced fail-first proof, TEST-RUNNER full-suite clean) have passed -- flip the issue registry entry to resolved, close the linked GitHub issue, and append the requirement_status done event per this project's SCOPE-CHANGE convention for issue closures.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0381.yaml status flipped open -> resolved with resolving run-id and real UTC timestamp",
+      "GitHub issue 753 closed with an evidence comment naming the resolving run",
+      "former_local_id ISS-0353 consistency confirmed (already documented in the yaml's own note_on_id, not duplicated)",
+      "requirement_status done event appended following the project's actual convention for issue closures (confirmed by reading requirement_status.v7.yaml's own header), not guessed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read step-04c-test-runner.json (TEST-RUNNER PASS: full suite 2945/2947, only the 2 pre-existing documented rustc-absent CheckToolchainTest flakes, zero DLQ-related failures, mix compile --warnings-as-errors and mix format --check-formatted both clean, mix letflow.lint_handoffs clean) and docs/issues/ISS-0381.yaml.\n\n1. Flipped docs/issues/ISS-0381.yaml status: open -> resolved, added resolved_in_run: WF03-ISS0381-20260831, resolved_at: \"2026-08-31T08:51:20Z\" (real UTC clock timestamp), and a resolution_summary describing the fix (cast/3 narrowed to 12 fields dropping tenant_id/status/retry_count/retry_history/created_at; tenant_id/created_at now set via put_change/3; status/retry_count/retry_history now rely on schema defaults; docstring corrected) and the fail-first verification (2 new tests in test/letflow/dlq_test.exs, independently reproduced failing pre-fix, passing post-fix). Noted former_local_id ISS-0353 is confirmed the same finding per the file's own pre-existing note_on_id field -- no separate closure entry needed, none added.\n\n2. Closed GitHub issue #753: `gh issue close 753 --comment \"Fixed in WF03-ISS0381-20260831, see docs/issues/ISS-0381.yaml\"` -- confirmed closed (verified issue was OPEN beforehand via `gh issue view 753 --json state`, and the close command reported success).\n\n3. Convention check: grepped docs/status/requirement_status.v2.yaml through .v7.yaml for `req: ISS-` and found the v7 header (and every other volume's identical header) states explicitly under '`req:` — THE COMPLETE LIST': 'THERE IS NO THIRD VALUE. In particular: `req: ISS-NNNN` IS NOT LEGAL and has zero precedent... Recording an issue fix uses `req: SCOPE-CHANGE` with the ISS id named in `note:`.' Confirmed this is the live convention (not just documented but followed) via a matching real example already in v7.yaml: ISS-0378's own started/done pair uses req: SCOPE-CHANGE with the ISS id and full narrative in note. Followed the identical pattern: appended one `req: SCOPE-CHANGE, event: done, agent: ISSUE-FIXER` entry to docs/status/requirement_status.v7.yaml (the current volume per requirement_status.index.yaml) with at: \"2026-08-31T08:51:20Z\" and a note covering root cause, fix, gate sequence, and closure evidence. Post-append size: 793 lines / 45630 bytes, well under the 1200-line/120000-byte roll ceiling -- no roll triggered. Updated requirement_status.index.yaml's volume-7 entries count 28 -> 29 and its note to reflect the recount, preserving (not deleting) the prior superseded note per this file's own append-only/non-destructive-note convention.\n\nNo requirement_status.yaml entry uses `req: ISS-NNNN` -- confirmed this run did not introduce the illegal form.",
+    "issue_registry_update": {
+      "file": "docs/issues/ISS-0381.yaml",
+      "status_before": "open",
+      "status_after": "resolved",
+      "resolved_in_run": "WF03-ISS0381-20260831",
+      "resolved_at": "2026-08-31T08:51:20Z"
+    },
+    "github_issue_closure": {
+      "issue": 753,
+      "state_before": "OPEN",
+      "action": "gh issue close 753 --comment \"Fixed in WF03-ISS0381-20260831, see docs/issues/ISS-0381.yaml\"",
+      "result": "closed"
+    },
+    "former_local_id_check": {
+      "former_local_id": "ISS-0353",
+      "consistency": "confirmed same finding via ISS-0381.yaml's own pre-existing note_on_id field; not duplicated, no separate entry added"
+    },
+    "requirement_status_update": {
+      "convention_used": "req: SCOPE-CHANGE (confirmed live, documented, and zero-precedent for req: ISS-NNNN in every requirement_status.v*.yaml header; matched to ISS-0378's own real precedent entry in v7.yaml)",
+      "volume": "docs/status/requirement_status.v7.yaml",
+      "index_updated": "docs/status/requirement_status.index.yaml (volume 7 entries: 28 -> 29)",
+      "post_append_size": "793 lines / 45630 bytes (ceiling: 1200 lines / 120000 bytes -- no roll triggered)"
+    },
+    "merge_readiness": "READY -- issue closed on all fronts (registry, GitHub, run history). No further work items outstanding for ISS-0381.",
+    "artifacts_out": [
+      "docs/issues/ISS-0381.yaml",
+      "docs/status/requirement_status.v7.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF03-ISS0381-20260831/step-05-issue-fixer-close.json"
+    ],
+    "issues": []
+  }
+}

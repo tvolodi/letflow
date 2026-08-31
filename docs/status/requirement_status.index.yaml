@@ -800,8 +800,18 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 31
+    entries: 32
     note: >
+      Recounted to 32 after rebasing WF03-ISS0381-20260831 onto main, which
+      by then included ORCH's retroactive-evidence-comment append (31) plus
+      this run's own SCOPE-CHANGE done event (ISSUE-FIXER, WF03-ISS0381-20260831).
+      `grep -c "^  - req:" docs/status/requirement_status.v7.yaml` = 32
+      on-disk entries (`wc`: 857 lines / 49488 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered). This
+      supersedes both the 31-count and 29-count notes below, which were
+      each correct for their own branch's state before the other's append
+      landed on main.
+
       Recounted to 31 on 2026-08-31 after ORCH posted retroactive evidence
       comments on 4 closed issues to clear mix letflow.audit_issue_closures'
       new-violation set (0 new violations after; 30 grandfathered unaffected).
@@ -815,6 +825,19 @@ volumes:
       on-disk entries (`wc`: 808 lines, still well under the 1200-line/
       120000-byte roll ceiling, so no roll triggered). This supersedes the
       28-count note below, which was correct before those two appends.
+
+      Recounted to 29 after WF03-ISS0381-20260831's own done event
+      (ISSUE-FIXER) appended. `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 29 on-disk entries (`wc`:
+      793 lines / 45630 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered). This supersedes the prior 28-count
+      note below, which was correct after a second rebase of
+      WF02-REQ203-20260831 onto main, which by then also included the
+      merged WF02-REQ204-20260831 branch (REQ-204 started/done) and
+      WF02-REQ199-20260831's started event. That note in turn superseded
+      a prior 25-count note, which was correct for the branch's state
+      after only the first rebase (before REQ-204's concurrent append
+      landed on main).
 
       Recounted to 28 after a second rebase of WF02-REQ203-20260831 onto
       main, which by then also included the merged WF02-REQ204-20260831

@@ -371,7 +371,13 @@ defmodule Letflow.Webhooks do
   # in mix.exs today. Flagged as an open question for REVIEWER (design §7
   # OQ-7): a future requirement may switch this to Req.
   defp dispatch_http(target_url, json_body, signature) do
-    dispatch_http(target_url, json_body, signature, &UrlValidator.default_resolver/1)
+    # :webhook_ssrf_validation_enabled defaults to true; set to false in delivery
+    # tests only so the local :gen_tcp test server's http://127.0.0.1:PORT URL passes.
+    if Application.get_env(:letflow, :webhook_ssrf_validation_enabled, true) do
+      dispatch_http(target_url, json_body, signature, &UrlValidator.default_resolver/1)
+    else
+      do_dispatch_http(target_url, json_body, signature)
+    end
   end
 
   # Test-injectable variant for DNS-rebinding tests (AC4 per design §6.2).

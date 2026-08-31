@@ -40,14 +40,14 @@ precedent, `Ecto.Multi`-as-transaction-boundary precedent) and `lib/letflow/audi
     autogenerate), `tenant_id` (`:binary_id`), `artifact_id` (`:binary_id`,
     server-generated per OQ-4's shipped resolution), `artifact_kind` (`Ecto.Enum`,
     `[:definition, :form, :schema, :service_catalog, :script, :module, :scenario]`),
-    `artifact_name` (`:string`), `version_number` (`:integer` in the Ecto schema —
-    note: the requirement's schema text calls this `bigint`; Ecto's `:integer` maps
-    to Postgres `integer` unless the migration declares `:bigint` explicitly, so
-    §2.1 below states the FK column type must match whatever
-    `artifact_versions.version_number`'s **migration-level** Postgres type actually
-    is, not assume `bigint` from the requirement text alone — flagged as **OQ-A**
-    below since this design does not have the migration file's column-type
-    declaration in hand, only the schema module's Ecto type), `content_hash`
+    `artifact_name` (`:string`), `version_number` (`:integer` in the Ecto schema,
+    but confirmed directly from
+    `priv/repo/migrations/20260830030001_create_repository_artifacts.exs:88`
+    this session — `add :version_number, :bigint, null: false` — so the
+    **migration-level** Postgres column type is `:bigint`, not the 32-bit
+    `integer` Ecto's schema-level `:integer` type might otherwise suggest; §2.2
+    below states this confirmed type directly, no open question remains here),
+    `content_hash`
     (`:binary`, FK to `repository_artifacts`), `parent_version_id` (`:binary_id`,
     nullable self-FK), `created_by` (`:binary_id`), `description` (`:string`,
     nullable), `inserted_at` only (`timestamps(updated_at: false)`).
@@ -229,7 +229,7 @@ design's scope, same as every prior tenant-scoped-table addition).
 | `artifact_name` | `:string, size: 255` | `null: false`. |
 | `previous_version_id` | `:binary_id`, nullable | **FK to `artifact_versions.version_id`, `on_delete: :restrict`** — nullable because the first activation of a given `(tenant, kind, name)` triple has no prior version (§4.2 step 2's "null on first activation," matching AC5's own wording). `:restrict`, not `:nilify_all`, because a history row's `previous_version_id` is a factual record of what was active before — nilifying it on a later, unrelated version deletion would silently corrupt the historical record; restricting means a version that appears anywhere in this trail (as either `previous_version_id` or `new_version_id`) can never be deleted, which is the stronger, correct guarantee for an audit-adjacent trail (consistent with `artifact_versions` itself already having no delete path in this codebase's scope, per REQ-202 §8). |
 | `new_version_id` | `:binary_id` | `null: false` — **FK to `artifact_versions.version_id`, `on_delete: :restrict`** (same reasoning). |
-| `new_version_number` | matches `artifact_versions.version_number`'s actual migration-level Postgres column type exactly (see OQ-A) | `null: false` — denormalized copy of the activated version's own `version_number`, so a history-row reader does not need a join back to `artifact_versions` to know which version number was activated (REPO-10's own schema spec lists this explicitly). |
+| `new_version_number` | `:bigint`, matching `artifact_versions.version_number`'s confirmed migration-level type (`priv/repo/migrations/20260830030001_create_repository_artifacts.exs:88`, `add :version_number, :bigint, null: false` — confirmed directly from source this session, §0 above) | `null: false` — denormalized copy of the activated version's own `version_number`, so a history-row reader does not need a join back to `artifact_versions` to know which version number was activated (REPO-10's own schema spec lists this explicitly). |
 | `activator_user_id` | `:binary_id` | `null: false`. |
 | `activated_at` | `utc_datetime_usec` | `null: false`. |
 | `rationale` | `:text` | **`null: false`, AND a changeset-level `validate_required/2` AND a DB-level `CHECK` constraint rejecting the empty string** — see §2.4 below for why both layers are used, not either alone. |
@@ -279,22 +279,30 @@ in this run's own task brief, and consistent with REQ-202's DB-level-immutabilit
 precedent for a criterion phrased as "rejected... rather than...") for DB-level
 enforcement wherever an acceptance criterion uses that exact rejection framing:
 
-1. **Changeset-level:** `validate_required(:rationale)` catches the `nil`/missing
-   case *and* — critically — Ecto's `validate_required/2` alone does **not** reject
-   an empty string (`""` is a present, non-nil value, and `validate_required/2`'s
-   own documented behavior only fails on `nil` or a value considered "empty" by its
-   own narrow definition, which for a `:text`/`:string` field is `nil` or an
-   all-whitespace string trimmed — this is worth stating explicitly because it is
-   the exact gap this design's second layer exists to close: a changeset-only
-   implementation that assumes `validate_required/2` alone rejects `""` is
-   correct for the whitespace-only case but easy to get wrong for a caller that
-   submits a literal empty string with no surrounding text — ELIXIR-DEV should
-   verify `validate_required/2`'s exact `""`-handling behavior in the Ecto version
-   this codebase pins, per OQ-D below, since this design does not have that
-   confirmed from source this session). Regardless of that confirmation, this
-   design adds an explicit `validate_length(:rationale, min: 1)` (or equivalent
-   "not blank" check) at the changeset level as the **primary, fast-fail, no-DB-
-   round-trip** rejection path — the normal path every valid caller hits.
+1. **Changeset-level:** `validate_required(:rationale)`, and nothing more —
+   **confirmed directly from this codebase's pinned Ecto source**
+   (`deps/ecto/lib/ecto/changeset.ex`, Ecto 3.14.1 per `mix.lock`):
+   `validate_required/2`'s `missing?/2` helper treats a value as missing if it
+   is `nil` **or** a member of `changeset.empty_values` (default `[""]`), and
+   `cast/4` — the standard pipeline every context function in this codebase
+   uses — already converts any `empty_values` member (including a literal
+   `""`) to `nil` before `validate_required/2` ever runs. So
+   `validate_required(:rationale)` **does** reject both `nil`/missing and a
+   literal empty string `""` reaching it via `cast/4`, with no separate
+   `validate_length/3` or other mechanism needed for that case (this also
+   resolves what an earlier draft of this design left as an open question
+   about `validate_required/2`'s exact `""` behavior — it is now confirmed
+   from source, not assumed).
+   **What this layer explicitly does NOT reject: a whitespace-only string**
+   (e.g. `" "`, a single space). `" "` is neither `nil` nor `""`, so `cast/4`
+   never nils it out and `validate_required/2` never sees it as missing — a
+   caller submitting a rationale of pure whitespace passes the changeset layer
+   unmodified. This design states that gap explicitly rather than claiming a
+   protection this mechanism does not deliver (an earlier draft incorrectly
+   described this layer as also rejecting "blank/whitespace" input via
+   `validate_length(:rationale, min: 1)`, which is wrong — `validate_length`
+   counts characters, and a whitespace string has length ≥ 1 — that claim is
+   corrected here, not carried forward).
 2. **DB-level `CHECK` constraint:** `CHECK (rationale <> '')` (via `execute/1` in
    the migration, the same DSL escape hatch REQ-202/`req195` use for the mutation-
    rejecting trigger) on both `artifact_activation_history.rationale` and
@@ -309,8 +317,27 @@ enforcement wherever an acceptance criterion uses that exact rejection framing:
    rejection-framing this project's other DB-level-invariant acceptance criteria
    use (REQ-202's AC7 "rejected by the DATABASE, not merely absent from the
    context API"; this requirement's own AC4 for the UNIQUE constraint) — a
-   two-layer defense (fast changeset rejection for the normal path, DB `CHECK` as
-   the structural backstop) rather than relying on the changeset alone.
+   two-layer defense (changeset rejection of `nil`/`""` for the normal
+   application path, DB `CHECK` as the structural backstop for any path that
+   bypasses the changeset) rather than relying on the changeset alone. **This
+   `CHECK` also only rejects exact-empty (`rationale <> ''`), the same
+   whitespace-only gap as the changeset layer** — `btrim(rationale) <> ''`
+   would additionally catch a whitespace-only value, but this design does
+   **not** adopt that stronger form.
+
+**Whitespace-only rationale: decided out of scope, stated explicitly.**
+AC6's literal wording is "an activation submitted with **no rationale** is
+REJECTED rather than stored with an **empty rationale**" — both the "no
+rationale" and "empty rationale" halves of that sentence describe
+missing/absent or exact-empty-string input, not whitespace-only input; AC6
+does not use "blank" or otherwise gesture at whitespace. Given that, this
+design deliberately does **not** add a `validate_change/3`-with-`String.trim/1`
+check or a `btrim`-based `CHECK` to additionally catch a whitespace-only
+rationale — doing so would be solving a stronger, unrequested problem past
+what AC6 actually asks for, and no other acceptance criterion in this
+requirement's list touches `rationale` either. A caller who submits `"   "` as
+a rationale gets it accepted and stored verbatim by both layers described
+above; this is an accepted, explicitly-stated gap, not an oversight.
 
 ---
 
@@ -344,11 +371,16 @@ enforcement wherever an acceptance criterion uses that exact rejection framing:
 
 ### 4.1 Signature
 
-`Letflow.Repository.Activation.activate_group(activations :: [%{artifact_kind: artifact_kind(), artifact_name: String.t(), version_id: Ecto.UUID.t()}], activator_user_id :: Ecto.UUID.t(), rationale :: String.t(), prefix :: String.t()) :: {:ok, %{group: ActivationGroup.t(), activations: [Activation.t()], history: [ActivationHistory.t()]}} | {:error, :empty_rationale} | {:error, :empty_group} | {:error, {atom(), Ecto.Changeset.t()}}`
+`Letflow.Repository.Activation.activate_group(activations :: [%{artifact_kind: artifact_kind(), artifact_name: String.t(), version_id: Ecto.UUID.t()}], activator_user_id :: Ecto.UUID.t(), rationale :: String.t(), prefix :: String.t()) :: {:ok, %{group: ActivationGroup.t(), activations: [Activation.t()], history: [ActivationHistory.t()]}} | {:error, :empty_rationale} | {:error, :empty_group} | {:error, :duplicate_artifact_in_group} | {:error, {atom(), Ecto.Changeset.t()}}`
 
 `activations` is a non-empty list (`{:error, :empty_group}` for a zero-length
 list — a "group" of zero artifacts is not a meaningful atomic unit and this design
-does not silently accept it as a no-op). A single-artifact activation (§4.4) is the
+does not silently accept it as a no-op) with no duplicate `(artifact_kind,
+artifact_name)` pair among its elements (`{:error, :duplicate_artifact_in_group}`
+otherwise — a caller submitting the same artifact twice in one group is a caller
+error, rejected up front by an explicit pre-check before the `Multi` is built at
+all, §4.2 step 1b, rather than surfacing as an opaque `Ecto.Multi` step-name
+collision or a same-transaction unique-index self-conflict). A single-artifact activation (§4.4) is the
 `length(activations) == 1` case of this same function, not a structurally separate
 code path — REQ-203's scope item 5 ("a resolution function") plus items 2-4 (group
 activation, isolation, history) do not separately ask for a distinct
@@ -360,21 +392,30 @@ rather than a special-cased one.
 
 ### 4.2 Steps, as an `Ecto.Multi` pipeline (stated as a sequence, not as code)
 
-1. Validate `rationale` is non-blank (§2.4's changeset-level check, applied once
-   at the group level before building the `Multi` at all — a cheap, no-DB-round-
-   trip fail-fast for the common "forgot to pass a rationale" caller mistake,
-   *and* per §2.4 there is still a DB-level `CHECK` backstop on the two tables
-   this reaches even if this pre-check were ever bypassed).
+1. **Two validation passes over the input, before building the `Multi` at all**
+   (both cheap, no-DB-round-trip fail-fast checks against caller-input mistakes,
+   run in this order):
+   a. Validate `rationale` is non-blank (§2.4's changeset-level check) — the
+      common "forgot to pass a rationale" caller mistake; per §2.4 there is
+      still a DB-level `CHECK` backstop on the two tables this reaches even if
+      this pre-check were ever bypassed.
+   b. Validate `activations` contains no duplicate `(artifact_kind,
+      artifact_name)` pair — build the list of `{artifact_kind, artifact_name}`
+      tuples from the input, compare its length against the length of its
+      `Enum.uniq/1`, and return `{:error, :duplicate_artifact_in_group}`
+      immediately if they differ, **before** any `Multi` step is built. This is
+      the design's committed resolution for a caller submitting the same
+      artifact twice in one group (§4.1): rejected explicitly and up front,
+      not left to surface as an opaque `Ecto.Multi` step-name collision or a
+      same-transaction unique-index self-conflict.
 2. Insert one `artifact_activation_groups` row (`Multi.insert/3`, step name
    `:group`) — `tenant_id`, `activated_at` (stamped once, shared by every
    activation in the group — see §4.5 for why one timestamp, not N), `activator_user_id`,
    `rationale`.
 3. **For each artifact in `activations`, in the order supplied** (order is not
-   semantically significant to correctness — the UNIQUE index means each
-   `(artifact_kind, artifact_name)` in the input list must be distinct or the
-   `Multi` itself would attempt two conflicting upserts in one transaction and
-   fail; a caller submitting a duplicate `(kind, name)` pair in one group is a
-   caller error, not a case this design silently resolves — see OQ-E), add one
+   semantically significant to correctness; step 1b above already guarantees
+   every `(artifact_kind, artifact_name)` pair in the input is distinct, so no
+   two steps in this loop ever target the same `artifact_activations` row), add one
    `Multi.run/3` step (step name derived from the artifact's own
    `(artifact_kind, artifact_name)`, e.g. `{:activation, artifact_kind,
    artifact_name}`, so a failure identifies exactly which artifact in the group
@@ -410,6 +451,13 @@ rather than a special-cased one.
       `activator_user_id`, `activated_at` (the group's shared timestamp, §4.5),
       `rationale` (the group's shared rationale text, §2.3's note), `group_id`
       (the `:group` step's inserted id, §2.3).
+   e. Appends one `Letflow.Audit.append_multi/4` call as a further `Multi.run/3`
+      step for **this same artifact** — one audit-entry row per artifact
+      activated, not one row for the whole group (§7's committed granularity
+      decision) — `action: "artifact.activate"`, `resource_type: "artifact"`,
+      `resource_id`: this artifact's `artifact_id` (REQ-202 OQ-4's stable
+      per-`(kind, name)` handle), `before_state`/`after_state`: the pre/post
+      `artifact_activations` row for this artifact, `actor_id: activator_user_id`.
 4. Submit the fully-built `Multi` to `Repo.transaction/1` **once**, for the whole
    group — this is REPO-08's "ONE transaction" requirement satisfied structurally
    by `Ecto.Multi`'s own composition (identical to how `req195`'s design uses one
@@ -655,25 +703,31 @@ different angles — this is not duplication to later delete:**
 **Both are populated by the same real-world activation event, independently,
 neither reading nor writing the other.** An artifact activation is expected (per
 R-Co's own REPO-10/OBS-03 cross-reference) to *also* append one `audit_entries`
-row via `Letflow.Audit.append_multi/4` — `action: "artifact.activate"` (or
-per-group `"artifact.activate_group"`), `resource_type: "artifact"`,
+row via `Letflow.Audit.append_multi/4` — `action: "artifact.activate"`
+(one row per artifact activated, per this design's committed granularity
+decision below — no separate `"artifact.activate_group"` action is needed,
+since a group is never audited as a single summary row), `resource_type: "artifact"`,
 `resource_id`: the artifact's stable identity (this design uses
 `artifact_versions.artifact_id`, REQ-202 OQ-4's server-generated per-`(kind,
 name)` handle, as the natural `resource_id` value — not `activation_id`, since
 `resource_id` should identify *the artifact*, not this particular activation
 event), `before_state`/`after_state`: the pre/post `artifact_activations` row
 (allowlisted field map, `Letflow.Audit.struct_state/2`), `actor_id:
-activator_user_id`. **This design adds this `Letflow.Audit.append_multi/4` call
-as one more `Multi.run/3` step inside §4.2's same `Multi`** (per artifact in the
-group, or once for the whole group — ELIXIR-DEV's choice, flagged as OQ-F below
-since REQ-203's acceptance criteria do not test `audit_entries` population
-directly, only requiring the moduledoc to state the relationship) — same
+activator_user_id`. **This design commits to one `Letflow.Audit.append_multi/4`
+call per artifact activated** (§4.2 step 3e), not one call summarizing the
+whole group — a further `Multi.run/3` step inside §4.2's same `Multi`, added
+alongside each artifact's own activation/history steps, matching
+`artifact_activation_history`'s own one-row-per-artifact granularity (§2.2) and
+`req195`'s own per-resource-instance audit-row convention (§3.2 of that design
+never audits a "batch" as one row). No acceptance criterion in this requirement
+tests `audit_entries` population directly (only the moduledoc statement of the
+*relationship* between the two tables is checked), so this granularity is a
+design decision stated here, not a fact left for ELIXIR-DEV to invent — same
 same-transaction guarantee reasoning `req195` §4 gives its own audit steps: if
-the audit insert fails, the whole activation (including every artifact in the
-group) rolls back with it, consistent with `req195`'s own AC3-equivalent
-same-transaction discipline, even though no acceptance criterion in *this*
-requirement names an audit-insert-failure test directly (§9 OQ-F covers this
-gap explicitly).
+any artifact's audit insert fails, the whole activation (including every
+artifact in the group) rolls back with it, consistent with `req195`'s own
+AC3-equivalent same-transaction discipline, even though no acceptance criterion
+in *this* requirement names an audit-insert-failure test directly.
 
 **Neither table is ever read, written, or deleted by the other's context
 module** — `Letflow.Repository.Activation` never queries `audit_entries`, and
@@ -699,19 +753,18 @@ tamper-evidence.
 
 ## 9. Open questions (stated explicitly, not silently resolved)
 
-- **OQ-A — `artifact_versions.version_number`'s actual migration-level Postgres
-  type.** `Letflow.Repository.ArtifactVersion`'s Ecto schema declares
-  `field(:version_number, :integer)` (confirmed from source, §0), but Ecto's
-  `:integer` type does not by itself confirm whether the underlying migration
-  declared the Postgres column as `integer` (32-bit) or `bigint` (64-bit) — REQ-202's
-  own requirement text calls for `bigint`, but this design has not read
-  REQ-202's actual shipped migration file to confirm which was used. ELIXIR-DEV
-  must check `priv/repo/migrations/20260830030001_create_repository_artifacts.exs`
-  (or wherever `artifact_versions`' migration lives) directly and declare
-  `artifact_activation_history.new_version_number`'s column type to match exactly
-  — a mismatch (e.g. this design's table using `bigint` against a `version_number`
-  that is actually 32-bit `integer`) is harmless for small values but is a latent
-  inconsistency worth avoiding outright.
+**Four questions this design's prior draft left open have since been resolved
+and are no longer listed here:** the `version_number` migration-level column
+type (now confirmed `:bigint` and stated directly in §2.2, formerly OQ-A); the
+duplicate-`(artifact_kind, artifact_name)`-in-one-group case (now a committed
+design decision — explicit `{:error, :duplicate_artifact_in_group}` pre-check,
+§4.1/§4.2 step 1b, formerly OQ-E); the `audit_entries` cross-write granularity
+(now committed to one row per artifact, §4.2 step 3e/§7, formerly OQ-F); and
+`validate_required/2`'s empty-string behavior (now confirmed from this
+codebase's pinned Ecto 3.14.1 source — it does reject a literal `""` reaching
+it via `cast/4` — stated directly in §2.4, formerly OQ-D). Only the two
+genuinely open questions below remain.
+
 - **OQ-B — sharing `artifact_kind`'s `Ecto.Enum` value list across four schema
   modules.** `Letflow.Repository.ArtifactVersion` already declares this seven-atom
   list inline (§0); this design's three new schemas (§2.1/§2.2) need the identical
@@ -731,40 +784,6 @@ tamper-evidence.
   pre-resolve, since REQ-203's own text describes no such call path today (mirrors
   `req195`'s OQ-4/OQ-5 treatment of the analogous "no real system-driven caller
   today" question for its own tables).
-- **OQ-D — `validate_required/2`'s exact empty-string behavior in this codebase's
-  pinned Ecto version.** §2.4 point 1 flags that this design does not have direct
-  source confirmation this session of whether `Ecto.Changeset.validate_required/2`
-  alone rejects a literal `""` value for a `:text`/`:string` field (as opposed to
-  only `nil`) in the Ecto version this codebase depends on. This does not change
-  §2.4's conclusion (an explicit `validate_length(:rationale, min: 1)`-or-equivalent
-  check plus a DB-level `CHECK` constraint are both added regardless, so the
-  invariant holds either way), but ELIXIR-DEV should confirm this detail at Step 2a
-  so the changeset-level check is not accidentally redundant-and-harmless in a way
-  that masks a real gap if the assumption is wrong.
-- **OQ-E — a caller submitting a duplicate `(artifact_kind, artifact_name)` pair
-  within one `activate_group/4` call.** §4.2 step 3 notes this is a caller error
-  this design does not silently resolve (e.g. by de-duplicating or by taking "the
-  last one wins"). ELIXIR-DEV should decide at Step 2a whether to reject this
-  up front with an explicit `{:error, :duplicate_artifact_in_group}` (preferred,
-  since it fails fast with a clear reason rather than surfacing as an opaque
-  `Ecto.Multi` step-collision error) or let the `Multi`'s own internal step-name
-  collision or a same-transaction unique-index self-conflict surface it — this
-  design flags the case as real (worth an explicit test) without mandating which
-  of those two shapes the rejection takes.
-- **OQ-F — whether the `audit_entries` cross-write (§7) is one call per artifact
-  in the group or one call for the whole group.** §7 adds a
-  `Letflow.Audit.append_multi/4` step inside `activate_group/4`'s own `Multi`
-  (same-transaction, so a failure there rolls back the whole activation), but
-  does not mandate whether this is N audit rows (one per artifact activated) or
-  one audit row summarizing the whole group. No acceptance criterion in this
-  requirement tests `audit_entries` population directly (only the moduledoc
-  statement of the *relationship* between the two tables is checked, per §7's
-  own opening note), so this granularity choice is left to ELIXIR-DEV at Step 2a,
-  with a preference stated but not mandated: one audit row per artifact (matching
-  `artifact_activation_history`'s own one-row-per-artifact granularity) is more
-  consistent with `req195`'s own per-resource-instance audit-row convention
-  (§3.2 of that design never audits a "batch" as one row) than a single
-  group-level summary row would be.
 
 ---
 
@@ -777,7 +796,7 @@ tamper-evidence.
 | AC3 — REPO-09 per-tenant isolation, two explicit tests | §1 (per-tenant placement), §2.1 (UNIQUE scoped by tenant_id) |
 | AC4 — UNIQUE (tenant_id, artifact_kind, artifact_name) enforced by the DATABASE | §2.1 (unique index) |
 | AC5 — every activation appends one history row, previous_version_id null-then-populated | §2.2, §4.2 steps 3b/3d |
-| AC6 — activation with no rationale REJECTED, not stored empty | §2.4 (changeset + DB CHECK, both layers) |
+| AC6 — activation with no rationale REJECTED, not stored empty | §2.4 (changeset `validate_required/2` rejects nil/missing/`""`, DB `CHECK (rationale <> '')` backstop — whitespace-only is a stated, deliberate non-goal per AC6's literal wording, see §2.4's closing note) |
 | AC7 — activation history chronological, REQ-067 pagination | §6 |
 | AC8 — resolution function returns active version or not-found, never arbitrary | §3 |
 | AC9 — ON DELETE RESTRICT prevents deleting an active version | §2.1 (`active_version_id` FK), §2.2 (history FKs) |

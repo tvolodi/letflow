@@ -1,0 +1,50 @@
+{
+  "handoff_id": "step01-WF02-REQ203-20260831-rework1",
+  "run_id": "WF02-REQ203-20260831",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ203-20260831/step-01-code-designer-rework1.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-31T00:00:00Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-203"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ203-20260831/step-01-code-designer.json",
+      "handoffs/WF02-REQ203-20260831/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req203-artifact-activation.md",
+      "priv/repo/migrations/20260830030001_create_repository_artifacts.exs",
+      "deps/ecto/lib/ecto/changeset.ex"
+    ],
+    "branch_name": "feature/WF02-REQ203-20260831"
+  },
+  "task": {
+    "description": "Rework (iteration 3 overall, iteration 1 for content-correctness) of lib/letflow/design/req203-artifact-activation.md addressing CODE-DESIGN-VALIDATOR's FAIL (step-01b): 3 BLOCKERs (OQ-A, OQ-E, OQ-F left open despite being resolvable/decidable) and 1 MAJOR (§2.4 internal inconsistency between stated intent and mechanism, plus OQ-D resolvable). §4.3's REPO-08 isolation-level argument was confirmed CORRECT by the validator and left untouched.",
+    "acceptance_criteria": [
+      "OQ-A resolved: §2.2's new_version_number column states ':bigint' directly, matching priv/repo/migrations/20260830030001_create_repository_artifacts.exs:88's confirmed migration-level type; OQ-A removed from §9",
+      "OQ-E resolved: {:error, :duplicate_artifact_in_group} added to §4.1's error union; §4.2 adds an explicit pre-Multi validation pass (step 1b) checking for duplicate (artifact_kind, artifact_name) pairs; OQ-E removed from §9",
+      "OQ-F resolved: §4.2 (step 3e) and §7 commit to one Letflow.Audit.append_multi/4 call per artifact activated, not one per group; OQ-F removed from §9",
+      "OQ-D resolved: §2.4 states, from deps/ecto/lib/ecto/changeset.ex (Ecto 3.14.1 per mix.lock), that validate_required/2 does reject a literal empty string reaching it via cast/4; OQ-D removed from §9",
+      "§2.4 internal inconsistency fixed: the incorrect validate_length(:rationale, min: 1) claim (does not reject whitespace-only) is removed; the changeset layer is now stated accurately as validate_required/2 rejecting nil/missing/literal-empty-string only; a whitespace-only rationale is explicitly acknowledged as NOT rejected by either the changeset layer or the DB CHECK (rationale <> ''); a stated decision is made (per AC6's literal wording, which only requires rejecting missing/empty, not whitespace) that this gap is acceptable and out of scope -- a btrim-based CHECK is deliberately not adopted",
+      "§9 now lists only the two genuinely open questions (OQ-B, OQ-C), down from six, with a note explaining the other four's resolutions and where they now live in the document",
+      "§10's AC6 traceability row updated to reflect the corrected mechanism and the stated whitespace-only non-goal",
+      "§1, §3, §4.3, §5, §6, §8 left untouched; §7 touched only for the OQ-F granularity commitment",
+      "No implementation code introduced -- signatures/type shapes/API-shape references only"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Reworked lib/letflow/design/req203-artifact-activation.md per all four findings in step-01b. (1) OQ-A: §0 and §2.2 now state new_version_number's type as confirmed ':bigint' from priv/repo/migrations/20260830030001_create_repository_artifacts.exs:88, with no deferral to ELIXIR-DEV; OQ-A removed from §9. (2) OQ-E: §4.1's signature now includes {:error, :duplicate_artifact_in_group}; §4.2 restructures step 1 into 1a (rationale check) and 1b (an explicit duplicate-(artifact_kind, artifact_name)-pair pre-check over the input list, run before the Multi is built, returning the new error atom immediately on a match); OQ-E removed from §9. (3) OQ-F: §4.2 adds step 3e (one Letflow.Audit.append_multi/4 call per artifact, inside that artifact's own Multi.run/3 step) and §7's narrative now states the per-artifact granularity as a committed decision (matching artifact_activation_history's own one-row-per-artifact convention and req195's per-resource-instance precedent), removing the 'ELIXIR-DEV's choice'/'action: artifact.activate_group' ambiguity; OQ-F removed from §9. (4) §2.4 rewritten: the changeset-level mechanism is corrected to validate_required(:rationale) only, with the Ecto 3.14.1 source-confirmed fact stated directly (cast/4's empty_values conversion means validate_required/2 does reject nil and literal ''); the incorrect validate_length(:rationale, min:1) 'rejects blank/whitespace' claim is removed and explicitly flagged as a corrected error; a new closing paragraph states the decision that whitespace-only rationale is a deliberate, accepted gap (neither changeset nor DB CHECK catches it), reasoned directly from AC6's literal wording ('no rationale'/'empty rationale', not 'blank'), and that a btrim-based CHECK is deliberately not adopted; OQ-D removed from §9 with the same source-confirmed fact stated. §9 now carries a short resolution note plus only OQ-B and OQ-C (2 open questions, down from 6). §10's AC6 row updated to name the corrected mechanism and the stated whitespace non-goal. §1, §3, §4.3 (verified-correct isolation argument), §5, §6, §8 untouched; §7 touched only for the OQ-F commitment. No implementation code introduced anywhere -- all references remain API-shape citations (function names/arities, error atoms, column types), consistent with the prior two literal-code-removal reworks.",
+    "artifacts_out": ["lib/letflow/design/req203-artifact-activation.md"],
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for re-check (step-01c)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

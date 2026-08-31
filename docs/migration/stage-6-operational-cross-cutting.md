@@ -40,8 +40,15 @@ DB-unavailable degradation paths, with no path found by which a
 tenant/instance/definition/task/actor id can reach a metric label.
 `lib/letflow/routers/metrics.ex` (REQ-078's authenticated JSON
 endpoint) is removed outright, superseded by
-`lib/letflow/routers/metrics_exposition.ex`. REQ-201 (alerting, the
-other OBS-04-adjacent rework-1 addition) remains open. The ordering
+`lib/letflow/routers/metrics_exposition.ex`. REQ-201 (alerting hooks
+with edge-triggered firing and retry/backoff delivery, OBS-06) is also
+done as of 2026-08-30/31: threshold detection for all four OBS-06
+trigger types (instance_error_stuck, dlq_depth_threshold,
+scheduler_lag_threshold, webhook_subscription_paused), edge-triggered
+firing (no repeat fires while an alert is active), and retry/backoff
+delivery via REQ-183's existing webhook dispatch mechanism, with
+RELEASE-VALIDATOR independently re-verifying all 14 acceptance criteria
+and 17/17 targeted tests (PASS). The ordering
 subsystem remains
 pending. A
 future WF-04 stage-gate check of the scheduler half specifically (not

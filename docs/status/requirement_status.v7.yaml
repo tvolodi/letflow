@@ -585,3 +585,20 @@ history:
       by a separate concurrent session. Feature branch
       feature/WF02-REQ201-20260830 created from origin/main ca4b9fa7,
       pushed. CODE-DESIGNER dispatched at step-01.
+  - req: REQ-201
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T21:42:30Z"
+    note: >
+      WF02-REQ201-20260830 done (queue task 374, GH#720, stage S6). Alerting
+      hooks shipped: threshold detection for all four OBS-06 trigger types
+      (instance_error_stuck, dlq_depth_threshold, scheduler_lag_threshold,
+      webhook_subscription_paused), edge-triggered firing (no repeat fires
+      while an alert is active), and retry/backoff delivery via REQ-183's
+      existing Letflow.Webhooks.deliver/3 mechanism. RELEASE-VALIDATOR
+      independently re-verified all 14 acceptance criteria against the real
+      lib/letflow/obs/alerts.ex code -- PASS, 14/14 ACs confirmed; own
+      re-run of test/letflow/obs/alerts_test.exs: 17/17 tests passed;
+      mix compile --warnings-as-errors clean; full suite 2794/2797 with
+      3 pre-existing failures (none from REQ-201 diff, independently
+      diagnosed). Full detail: handoffs/WF02-REQ201-20260830/.

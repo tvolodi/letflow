@@ -257,4 +257,58 @@ until those stages begin. INV-1 no longer belongs in that group: S1 is done and 
 migrations exist, so it is checkable on any diff touching a tenant-scoped table,
 schema, or migration — SECURITY-REVIEWER's scope test (see its role file) determines
 applicability per diff, same mechanism as always, but INV-1 is now a live invariant to
-run that test against, not a default skip. INV-1, INV-4, INV-7, INV-8 apply today.
+run that test against, not a default skip. INV-1, INV-4, INV-7, INV-8 apply today. INV-9 applies now (REQ-204 shipped).
+
+---
+
+## INV-9 — Tenant-controlled outbound URL validation
+
+**Rule.** Any URL a Letflow server process will make an outbound HTTP/HTTPS
+request to, where that URL is derived from tenant-controlled input, must pass
+**both** a scheme allowlist (only `"https"` is permitted — no `"http"`, no
+other scheme) **and** a private-range rejection check at the point of the
+actual request call — not at ingestion time alone. DNS rebinding (a hostname
+that resolved to a public IP at subscription-registration time but resolves
+to a private IP at delivery time) does not defeat the protection because the
+check runs immediately before every `:httpc.request/4` call.
+
+The set of rejected IP ranges is **Letflow's own choice**, not ported from
+R-Co (R-Co's `src/webhook/` SSRF handling is not inspectable from this
+codebase's history):
+
+- 127.0.0.0/8 — loopback
+- 10.0.0.0/8 — RFC-1918 private
+- 172.16.0.0/12 — RFC-1918 private
+- 192.168.0.0/16 — RFC-1918 private
+- 169.254.0.0/16 — link-local, including 169.254.169.254 (cloud metadata) explicitly
+- ::1/128 — IPv6 loopback
+- fc00::/7 — IPv6 ULA (unique local)
+- fe80::/10 — IPv6 link-local (REVIEWER-approved, OQ-1 — same attack class as 169.254.0.0/16)
+- IPv4-mapped-IPv6 forms (::ffff:A.B.C.D and ::A.B.C.D) of any of the IPv4
+  ranges above
+
+**Reference.** `Letflow.Webhooks.UrlValidator` (`lib/letflow/webhooks/url_validator.ex`,
+REQ-204). Enforced at two call sites: `Letflow.Webhooks.create/2` (fast
+tenant feedback at subscription-creation time, returns
+`{:error, :target_url_not_allowed}` for blocked URLs) and the private
+`Letflow.Webhooks.dispatch_http/3` (defence-in-depth, runs immediately
+before every `:httpc.request/4` call, returns `{:FAILED, nil, "target_url
+not allowed (SSRF protection)"}` for blocked URLs at dispatch time).
+
+**How to verify.**
+(1) `mix test test/letflow/webhooks/url_validator_test.exs` — must include
+    a named test per blocked range (127.x, 10.x, 172.16–31.x, 192.168.x,
+    169.254.x including 169.254.169.254 by name, ::1, fc00::, IPv4-mapped
+    forms) plus a non-https scheme test and a legitimate-https pass test.
+(2) `mix test test/letflow/webhooks_test.exs` — must include tests for
+    `create/2` rejecting non-https scheme (AC1), `create/2` rejecting each
+    of the five explicit addresses in AC2, `create/2` succeeding with a
+    legitimate https target (AC3), `deliver/3` DNS-rebinding scenario (AC4,
+    using an injected resolver that returns a private IP), and explicit
+    assertion that `dispatch_http/3` does not follow 3xx redirects (AC5).
+(3) SECURITY-REVIEWER confirms any new route or internal code path that
+    makes an outbound HTTP request using a tenant-supplied URL has a
+    corresponding `UrlValidator.validate/2` call in its dispatch path before
+    the `:httpc` (or future HTTP client) call.
+
+**Severity.** BLOCKER.

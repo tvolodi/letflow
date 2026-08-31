@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step01-WF02-REQ204-20260831",
+  "run_id": "WF02-REQ204-20260831",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ204-20260831/step-01-code-designer.json",
+  "created_at": "2026-08-31T02:51:30Z",
+  "started_at": "2026-08-31T02:55:00Z",
+  "completed_at": "2026-08-31T02:55:41Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-204"],
+    "branch_name": "feature/WF02-REQ204-20260831",
+    "artifacts_in": [
+      "lib/letflow/webhooks.ex",
+      "lib/letflow/webhooks/subscription.ex",
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/design/req181-webhooks-core.md",
+      "lib/letflow/design/req183-webhook-delivery-dispatch.md"
+    ],
+    "requirement_text": "SECURITY-REVIEWER finding, WF02-REQ183-20260830 Step 2c (ad-hoc gate on REQ-183's design/implementation). `target_url` on `webhook_subscriptions` is fully tenant-controlled (set by `Letflow.Webhooks.create/2`, `lib/letflow/webhooks.ex`, via `POST /api/v1/webhooks/subscriptions`, REQ-181/REQ-182, both already shipped) and is validated NOWHERE in the write path today: `create/2` casts `:target_url` as a plain `:string` with only a not-null constraint (see `lib/letflow/design/req181-webhooks-core.md` §\"casts\", and `lib/letflow/routers/webhooks.ex`'s `fetch_target_url/1`, which checks only that the JSON value is a binary). No scheme allowlist, no rejection of loopback/private/link-local/cloud-metadata ranges. This is a genuine SSRF-as-a-service primitive: any tenant can point a webhook subscription at an internal service or the cloud metadata endpoint, and REQ-183's `deliver/3` (implemented at `lib/letflow/webhooks.ex:242` on feature branch `feature/WF02-REQ183-20260830`, commit `82e8d2a7` -- REQ-183's Step 2a/2c/2d gates have already passed, but that branch is NOT YET merged to `main`; REQ-183 itself remains `status: in_progress` in this file) will sign and POST a request there once merged. Compounding this: `deliver/3` persists up to 500 chars of the response into `webhook_delivery_attempts.last_error` on a FAILED attempt, and REQ-184 (pending, not yet built) is a GET .../deliveries route the SAME tenant can call to read that column back -- turning the SSRF primitive into a read-oracle into internal network responses once REQ-184 ships. SECURITY-REVIEWER confirmed (by reading `docs/agents/instructions/security-invariants.md` in full) that this does not violate any of that file's 8 numbered invariants as currently written -- it is a genuine gap in that document's own coverage, not a violation of an existing rule.\n\n      VALIDATION RULES: reject a target_url whose scheme is not exactly \"https\" (no \"http\", no any other scheme); reject if the host, once resolved via DNS, has ANY resolved A/AAAA address falling in a loopback, private, link-local, or reserved range -- specifically 127.0.0.0/8, ::1/128, 169.254.0.0/16 (169.254.169.254 explicitly, the common cloud metadata endpoint), 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7, and the IPv4-mapped-IPv6 forms of the above (::ffff:10.0.0.0/104 etc.); reject a bare IP-literal host in any of those ranges without requiring a DNS lookup at all. The moduledoc for wherever this validation lands must state these ranges explicitly and name them as Letflow's own choice.\n\n      WHERE VALIDATION LANDS: (1) `create/2` in `lib/letflow/webhooks.ex` is the ONLY write path for `target_url` -- add the validation as a rejection path in `create/2` (or a changeset validation reached by it) so a tenant gets fast, explicit feedback (`{:error, :target_url_not_allowed}` or similar) at subscription-creation time. (2) Defensively, inside REQ-183's `deliver/3` itself, immediately before every outbound `:httpc.request/4` call -- REQUIRED, not optional, because a `create/2`-only gate cannot catch DNS rebinding. Redirects are NOT an open design choice: `dispatch_http/3`'s `:httpc.request(:post, request, [{:timeout, @http_timeout_ms}], [])` call passes no `{autoredirect, true}` in its HTTPOptions, so `:httpc` already does NOT auto-follow redirects.\n\n      PROPOSED INV-9: add a new numbered invariant to `docs/agents/instructions/security-invariants.md`, following the existing INV-1..INV-8 format (Rule/Reference/How to verify/Severity: BLOCKER), stating that any tenant-controlled URL a Letflow server process will itself make an outbound HTTP request to must pass scheme-allowlist and private/loopback/link-local/metadata-range rejection before the request is issued, checked against the resolved IP at request time. Reference this requirement's delivered module(s) as the concrete mechanism."
+  },
+  "task": {
+    "description": "Produce a design artefact for REQ-204 (SSRF validation for webhook target_url). The design must produce a markdown file at `lib/letflow/design/req204-ssrf-validation.md` covering: (1) where validation logic lives (new module or inline); (2) exact function signatures with @spec; (3) the create/2 integration point; (4) the deliver/3 / dispatch_http/3 integration point; (5) how DNS resolution is performed (use :inet.getaddrinfo/1 from OTP stdlib -- no new hex dependency); (6) exact IP ranges to reject; (7) INV-9 text for security-invariants.md. Design docs only -- no implementation code.",
+    "acceptance_criteria": [
+      "Design artefact at lib/letflow/design/req204-ssrf-validation.md exists",
+      "All 9 acceptance criteria from docs/requirements.yaml REQ-204 are explicitly addressed in the design",
+      "DNS resolution uses :inet.getaddrinfo/1 (OTP stdlib, no new hex dependency)",
+      "Module boundaries and @spec signatures are stated explicitly",
+      "INV-9 text is included in the design artefact (for ELIXIR-DEV to add to security-invariants.md)",
+      "No implementation code in the design file"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "lib/letflow/design/req204-ssrf-validation.md"
+    ],
+    "notes": "Design artefact written. New module Letflow.Webhooks.UrlValidator chosen (separate from Letflow.Webhooks private functions) for moduledoc clarity, independent testability, and clean SECURITY-REVIEWER reference target. All 9 acceptance criteria explicitly addressed. INV-9 text included verbatim in §5 ready for ELIXIR-DEV to paste into security-invariants.md. Four open questions flagged (IPv6 fe80::/10 omission, nil-host error atom, DNS-failure-as-blocked policy, per-attempt DNS cost). No implementation code in the artefact. dns_resolver injection pattern specified for both UrlValidator.validate/2 (2-arity, direct) and dispatch_http/3 (4-arity overload recommendation)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

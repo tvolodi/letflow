@@ -257,8 +257,10 @@ defmodule Letflow.SecretsTest do
       %{schema_name: schema_name, tenant_id: tenant_id} =
         provisioned_tenant("req190-webhook-recon")
 
+      # REQ-204: example.test does not resolve via DNS (SSRF check blocks it).
+      # Use a public IP literal (203.0.113.0/24 is RFC 5737 TEST-NET-3, not in any blocked range).
       {:ok, %{subscription: subscription, hmac_secret_once: plaintext}} =
-        Webhooks.create(%{target_url: "https://example.test/hook"}, prefix: schema_name)
+        Webhooks.create(%{target_url: "https://203.0.113.1/hook"}, prefix: schema_name)
 
       assert is_binary(subscription.secret_ref)
       assert String.starts_with?(subscription.secret_ref, "sec://tenant/")

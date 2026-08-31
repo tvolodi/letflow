@@ -665,3 +665,26 @@ history:
       WF02-REQ202-20260830 done (queue task 375, GH#720, stage S6).
       Content-addressed artifact store shipped. Full detail:
       handoffs/WF02-REQ202-20260830/release-validation-report-20260830.md.
+
+  - req: REQ-204
+    event: started
+    agent: ORCH
+    at: "2026-08-31T02:50:43Z"
+    note: >
+      WF02-REQ204-20260831 started (queue task 379, GH#738, stage S6).
+      SSRF validation for webhook target_url: scheme allowlist + private/loopback
+      range rejection at create/2 and defense-in-depth at deliver/3.
+      depends_on REQ-181 (done) and REQ-183 (done on main).
+
+  - req: REQ-204
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-31T05:00:46Z"
+    note: >
+      WF02-REQ204-20260831 done (queue task 379, GH#738, stage S6).
+      SSRF validation for webhook target_url: Letflow.Webhooks.UrlValidator
+      added with scheme allowlist (https only) + private-range blocklist
+      (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16,
+      ::1/128, fc00::/7, fe80::/10). Wired into create/2 (fast rejection) and
+      dispatch_http/3 (DNS rebinding defense). INV-9 added to security-invariants.md.
+      65/65 tests pass. PR to follow (Step Final).

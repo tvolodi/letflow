@@ -1,0 +1,61 @@
+{
+  "handoff_id": "step02a-WF02-REQ204-20260831",
+  "run_id": "WF02-REQ204-20260831",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ204-20260831/step-02a-elixir-dev.json",
+  "created_at": "2026-08-31T03:10:00Z",
+  "started_at": "2026-08-31T04:00:00Z",
+  "completed_at": "2026-08-31T04:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-204"],
+    "branch_name": "feature/WF02-REQ204-20260831",
+    "artifacts_in": [
+      "lib/letflow/design/req204-ssrf-validation.md",
+      "lib/letflow/webhooks.ex",
+      "lib/letflow/webhooks/subscription.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "requirement_text": "REQ-204: SSRF validation for webhook target_url. See lib/letflow/design/req204-ssrf-validation.md for the full design. Implement the design exactly: (1) new Letflow.Webhooks.UrlValidator module at lib/letflow/webhooks/url_validator.ex with @moduledoc stating exact blocked ranges as Letflow own choice; (2) validate/1 (production) and validate/2 (test-injectable dns_resolver) entry points; (3) call to UrlValidator.validate/1 in create/2 before the with block, returning {:error, :target_url_not_allowed}; (4) call to UrlValidator.validate/1 in dispatch_http/3 before :httpc.request/4, returning {:FAILED, nil, 'target_url not allowed (SSRF protection)'} on rejection; (5) add INV-9 to docs/agents/instructions/security-invariants.md."
+  },
+  "task": {
+    "description": "Implement REQ-204 per the design at lib/letflow/design/req204-ssrf-validation.md. Files to create/modify: (1) NEW lib/letflow/webhooks/url_validator.ex; (2) MODIFY lib/letflow/webhooks.ex (add UrlValidator.validate/1 call in create/2 and in dispatch_http/3); (3) MODIFY docs/agents/instructions/security-invariants.md (add INV-9 per §5 of design). No migration. Run mix compile --warnings-as-errors after implementation to confirm it compiles clean.",
+    "acceptance_criteria": [
+      "lib/letflow/webhooks/url_validator.ex exists with @moduledoc stating exact blocked ranges as Letflow's own choice",
+      "validate/1 delegates to validate/2 with &:inet.getaddrinfo/1",
+      "validate/2 accepts custom dns_resolver for testability",
+      "blocked_ipv4?/1 covers 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16",
+      "blocked_ipv6?/1 covers ::1/128, fc00::/7, and IPv4-mapped forms",
+      "create/2 in lib/letflow/webhooks.ex calls UrlValidator.validate before Multi.new, returns {:error, :target_url_not_allowed} on rejection",
+      "dispatch_http/3 in lib/letflow/webhooks.ex calls UrlValidator.validate before :httpc.request, returns {:FAILED, nil, 'target_url not allowed (SSRF protection)'} on rejection",
+      "INV-9 added to docs/agents/instructions/security-invariants.md following existing Rule/Reference/How to verify/Severity format",
+      "mix compile --warnings-as-errors exits 0 (quoted output)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "files_created": [
+      "lib/letflow/webhooks/url_validator.ex"
+    ],
+    "files_modified": [
+      "lib/letflow/webhooks.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "compile_output": "Compiling 4 files (.ex)\nGenerated letflow app",
+    "compile_exit_code": 0,
+    "notes": [
+      "Design referenced &:inet.getaddrinfo/1 (OTP stdlib) which does not exist. Used :inet.getaddrs/2 for both :inet and :inet6 families via a private resolve_all/1 and a @doc false public default_resolver/1 in UrlValidator. The public function is needed so webhooks.ex can form a function reference &UrlValidator.default_resolver/1 for dispatch_http/3's delegation to dispatch_http/4 — without it Elixir would warn on an unused private dispatch_http/4.",
+      "fc00::/7 check implemented as `when a in 0xFC00..0xFDFF` guard (no Bitwise import needed for that clause). Bitwise imported for >>> and &&& in ipv4_from_mapped_ipv6/1.",
+      "OQ-1 (fe80::/10 IPv6 link-local not in blocklist): flagged for REVIEWER. Not silently added.",
+      "dispatch_http/4 added and IS called by dispatch_http/3 (which delegates to it with &UrlValidator.default_resolver/1). Test injection for AC4 DNS-rebinding available via dispatch_http/4 if TEST-DESIGNER threads dns_resolver through attempt_loop/deliver — or tests can call UrlValidator.validate/2 directly for the DNS-rebinding unit coverage."
+    ],
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

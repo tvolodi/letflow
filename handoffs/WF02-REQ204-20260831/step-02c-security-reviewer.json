@@ -1,0 +1,112 @@
+{
+  "handoff_id": "step02c-WF02-REQ204-20260831",
+  "run_id": "WF02-REQ204-20260831",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ204-20260831/step-02c-security-reviewer.json",
+  "created_at": "2026-08-31T03:25:00Z",
+  "started_at": "2026-08-31T04:10:00Z",
+  "completed_at": "2026-08-31T04:18:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-204"],
+    "branch_name": "feature/WF02-REQ204-20260831",
+    "artifacts_in": [
+      "lib/letflow/webhooks/url_validator.ex",
+      "lib/letflow/webhooks.ex",
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/design/req204-ssrf-validation.md"
+    ],
+    "requirement_text": "REQ-204: SSRF validation for webhook target_url. Adds Letflow.Webhooks.UrlValidator module that validates URLs at create/2 (fast rejection) and dispatch_http/3 (DNS rebinding defense). Adds INV-9 to security-invariants.md."
+  },
+  "task": {
+    "description": "Security review of REQ-204 implementation. This is the SSRF-prevention requirement itself. Assess: (1) INV-1 applicability (UrlValidator introduces no new data-access path, only validation -- but confirm); (2) INV-4: validate no plaintext secrets are logged or leaked through the new validation path; (3) INV-7: no SQL in the new code; (4) INV-8: error handling in the new validation path uses typed results throughout; (5) the new INV-9 text in security-invariants.md is correctly stated and covers the full scope. Also confirm the implementation actually implements the protection it claims -- check blocked_ipv4?/1, blocked_ipv6?/1, scheme check, and DNS-resolution path.",
+    "acceptance_criteria": [
+      "INV-1 applicability assessed (no new tenant data access path)",
+      "INV-4: no secret leakage in new code paths",
+      "INV-7: no SQL in url_validator.ex",
+      "INV-8: all error paths use {:ok,_}/{:error,_} typed results",
+      "INV-9: text is correctly stated and verifiable",
+      "blocked_ipv4?/1 covers all 5 required IPv4 ranges",
+      "blocked_ipv6?/1 covers ::1/128, fc00::/7, and IPv4-mapped forms",
+      "dispatch_http/3 validation runs before :httpc.request/4 call",
+      "DNS failure correctly treated as blocked"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "assessed_by": "SECURITY-REVIEWER",
+    "assessed_at": "2026-08-31T04:18:00Z",
+    "invariants": [
+      {
+        "id": "INV-1",
+        "verdict": "PASS",
+        "applicability": "APPLIES (S1 done, S2 migrations exist — scope test run)",
+        "evidence": "UrlValidator (lib/letflow/webhooks/url_validator.ex) contains zero Repo calls, zero Ecto queries, zero DB access — pure Elixir validation only. create/2 calls UrlValidator.validate/1 before entering the Multi/transaction block; no new data-access path introduced, no cross-tenant access risk added. check (a): create/2's Repo.insert uses prefix: prefix from opts[:prefix]. check (b): no migration in this diff. check (c): tenant_id derived from TenantProvisioning.tenant_id_for_schema_name(prefix), not from caller-supplied attrs."
+      },
+      {
+        "id": "INV-2",
+        "verdict": "NOT-APPLICABLE",
+        "applicability": "NOT-APPLICABLE (S4 not started — no API response serialisation in this diff)",
+        "evidence": "UrlValidator is validation-only; no new response shape, no new serialisation path."
+      },
+      {
+        "id": "INV-3",
+        "verdict": "NOT-APPLICABLE",
+        "applicability": "NOT-APPLICABLE (S5 scripting/plugins not started)",
+        "evidence": "No sandbox surface in this diff."
+      },
+      {
+        "id": "INV-4",
+        "verdict": "PASS",
+        "applicability": "APPLIES (secrets/config exist at MVP-1/S0 scale — scope test run)",
+        "evidence": "UrlValidator receives only a URL string, never secret material. The last_error string on SSRF rejection is the literal constant 'target_url not allowed (SSRF protection)' (webhooks.ex:~380) — does NOT interpolate target_url or any part of it, so no internal network topology information leaks into the delivery_attempts row readable via REQ-184. The 'transport error: #{inspect(reason)}' path in do_dispatch_http is a runtime :httpc error, not a secret. No new logging of secret material introduced."
+      },
+      {
+        "id": "INV-5",
+        "verdict": "NOT-APPLICABLE",
+        "applicability": "NOT-APPLICABLE (S4 not started — no lookup-by-ID endpoint in this diff)",
+        "evidence": "No cross-tenant probe surface introduced."
+      },
+      {
+        "id": "INV-6",
+        "verdict": "PASS",
+        "applicability": "APPLIES (meta-invariant: every new data-access path must prove scoping)",
+        "evidence": "UrlValidator introduces NO new data-access path (no DB, no Repo, no query). SECURITY-REVIEWER handoff exists, status PASS, all applicable invariants assessed."
+      },
+      {
+        "id": "INV-7",
+        "verdict": "PASS",
+        "applicability": "APPLIES (Ecto in use)",
+        "evidence": "url_validator.ex contains no SQL of any kind — pure Elixir with :inet and Bitwise. No Repo.query or raw SQL string building anywhere in the new code."
+      },
+      {
+        "id": "INV-8",
+        "verdict": "PASS",
+        "applicability": "APPLIES (new code touches external I/O — DNS resolution via :inet.getaddrs)",
+        "evidence": "resolve_and_check/2: {ok, addrs} branch runs blocked check; {:error, _} catch-all returns {:error, :target_url_not_allowed} — no crash. check_ip_literal/1: case on :inet.parse_address/1 covers {:ok, 4-tuple}, {:ok, 8-tuple}, {:error, _} — all branches handled. blocked_ipv4?/1: five range clauses + defp blocked_ipv4?(_), do: false catch-all. blocked_ipv6?/1: ::1 exact match + fc00::/7 range + IPv4-mapped + IPv4-compatible + defp blocked_ipv6?(_), do: false catch-all. ipv4_from_mapped_ipv6/1 has a nil catch-all; passed to blocked_ipv4?(_) which returns false — safe. The Enum.any? lambda in resolve_and_check covers {:inet, tuple, _} and {:inet6, tuple, _}; default_resolver only ever returns those forms per its typespec and implementation."
+      },
+      {
+        "id": "INV-9",
+        "verdict": "PASS",
+        "applicability": "APPLIES (REQ-204 is the requirement that introduces INV-9)",
+        "evidence": "INV-9 text verified in security-invariants.md: (a) 'only https is permitted' stated explicitly; (b) all 8 ranges listed (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, ::1/128, fc00::/7, IPv4-mapped forms); (c) 'at the point of the actual request call — not at ingestion time alone' + 'DNS rebinding does not defeat the protection because the check runs immediately before every :httpc.request/4 call'; (d) Reference cites Letflow.Webhooks.UrlValidator (lib/letflow/webhooks/url_validator.ex, REQ-204) and both call sites; (e) Severity BLOCKER. Implementation matches: scheme check in check_scheme/1, all 5 IPv4 ranges in blocked_ipv4?/1, all 3 IPv6 forms in blocked_ipv6?/1, validation before :httpc in dispatch_http/4 → do_dispatch_http."
+      }
+    ],
+    "ssrf_correctness": {
+      "verdict": "PASS",
+      "blocked_ipv4_ranges": "127.x.x.x ✓ | 10.x.x.x ✓ | 172.16-31.x.x (b >= 16 and b <= 31 guard) ✓ | 192.168.x.x ✓ | 169.254.x.x ✓ | catch-all false ✓",
+      "blocked_ipv6": "::1/128 exact match ✓ | fc00::/7 via a in 0xFC00..0xFDFF ✓ | ::ffff:A.B.C.D mapped form ✓ | ::A.B.C.D compatible form (hi!=0 or lo>1 guard) ✓ | catch-all false ✓",
+      "dispatch_order": "dispatch_http/4 calls UrlValidator.validate/2 first; only on :ok does it delegate to do_dispatch_http/3 which contains headers and :httpc.request/4",
+      "dns_failure": "resolve_all/1 returns {:error, :nxdomain} when v4++v6 == []; resolve_and_check/2 maps {:error, _} → {:error, :target_url_not_allowed}",
+      "last_error_url_leak": "PASS — rejection string is the constant 'target_url not allowed (SSRF protection)', target_url not interpolated"
+    },
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

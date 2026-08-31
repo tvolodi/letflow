@@ -1,0 +1,76 @@
+{
+  "handoff_id": "step05-WF02-REQ204-20260831",
+  "run_id": "WF02-REQ204-20260831",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ204-20260831/step-05-release-validator.json",
+  "created_at": "2026-08-31T04:55:00Z",
+  "started_at": "2026-08-31T09:57:00Z",
+  "completed_at": "2026-08-31T10:10:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-204"],
+    "branch_name": "feature/WF02-REQ204-20260831",
+    "requirement_text": "REQ-204: SSRF validation for webhook target_url (create-time and defense-in-depth at delivery). 9 acceptance criteria. See docs/requirements.yaml id: REQ-204 for full text."
+  },
+  "task": {
+    "description": "Re-derive all 9 acceptance criteria for REQ-204 independently from source and real command output. Do NOT trust TEST-RUNNER's report alone. Run mix compile --warnings-as-errors and mix test (scoped to relevant files with MIX_TEST_TIMEOUT=120000). Independently verify: (1) Letflow.Webhooks.UrlValidator exists with correct blocked ranges in @moduledoc; (2) create/2 calls UrlValidator.validate before Multi; (3) dispatch_http calls UrlValidator.validate before :httpc.request; (4) INV-9 in security-invariants.md; (5) all 9 ACs satisfied by running tests; (6) no unrelated scope change.",
+    "acceptance_criteria": [
+      "AC1-AC9 from REQ-204 independently re-derived from source and test output",
+      "mix compile --warnings-as-errors: exit 0 (quoted)",
+      "mix test on relevant files: exit 0, 0 failures (quoted)",
+      "INV-9 present in security-invariants.md with correct format",
+      "UrlValidator @moduledoc lists all 8 required ranges"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdicts": {
+      "AC1": {
+        "verdict": "PASS",
+        "evidence": "create/2 in lib/letflow/webhooks.ex calls UrlValidator.validate(target_url) as the first `with` arm before Multi.new() or any DB access. Test in webhooks_test.exs describe 'REQ-204 AC1' asserts {:error, :target_url_not_allowed} for http://example.com/hook."
+      },
+      "AC2": {
+        "verdict": "PASS",
+        "evidence": "Exactly 5 tests in webhooks_test.exs under describe 'REQ-204 AC2: create/2 rejects five explicit private IP literals': 127.0.0.1, 169.254.169.254, 10.0.0.5, 172.16.0.5, 192.168.0.5. Each asserts {:error, :target_url_not_allowed}."
+      },
+      "AC3": {
+        "verdict": "PASS",
+        "evidence": "Test in webhooks_test.exs describe 'REQ-204 AC3' creates subscription with https://93.184.216.34/hook (public IP literal, outside all blocked ranges), asserts {:ok, %{subscription: subscription, hmac_secret_once: secret}} with subscription.status == :ACTIVE."
+      },
+      "AC4": {
+        "verdict": "PASS",
+        "evidence": "Test in webhooks_test.exs describe 'REQ-204 AC4' creates subscription with public IP, updates target_url in DB to https://169.254.169.254/hook (simulating DNS rebinding), calls deliver/3, asserts last_delivery.status == :FAILED and last_delivery.last_error == 'target_url not allowed (SSRF protection)'. First attempt row persisted with same error confirmed via Repo.one!/2."
+      },
+      "AC5": {
+        "verdict": "PASS",
+        "evidence": "do_dispatch_http/3 in lib/letflow/webhooks.ex calls :httpc.request(:post, request, [{:timeout, @http_timeout_ms}], []) — options list is [{:timeout, @http_timeout_ms}] only, no {:autoredirect, true} or {:follow_redirect, true}. Source-assertion test in webhooks_test.exs describe 'REQ-204 AC5' uses refute source =~ ~r/autoredirect.*true/i and refute source =~ ~r/follow_redirect.*true/i."
+      },
+      "AC6": {
+        "verdict": "PASS",
+        "evidence": "docs/agents/instructions/security-invariants.md contains INV-9 at line 264. Sections present: Rule (scheme allowlist + private-range rejection, DNS rebinding explicitly addressed), Reference (UrlValidator, two call sites), How to verify (3 numbered steps), Severity: BLOCKER."
+      },
+      "AC7": {
+        "verdict": "PASS",
+        "evidence": "lib/letflow/webhooks/url_validator.ex @moduledoc lists all 8 required ranges: 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 (explicitly naming 169.254.169.254 cloud metadata), ::1/128, fc00::/7, fe80::/10 (REVIEWER OQ-1 approval cited), IPv4-mapped-IPv6 forms. States 'Letflow's own choice, not ported from R-Co'."
+      },
+      "AC8": {
+        "verdict": "PASS",
+        "compile_output": "compile exit: 0",
+        "test_output": "Finished in 87.7 seconds (0.4s async, 87.2s sync)\nResult: 65 passed (1 property, 64 tests)\ntest exit: 0",
+        "evidence": "mix compile --warnings-as-errors exited 0 with no output. mix test on url_validator_test.exs, webhooks_test.exs, webhooks_delivery_test.exs, secrets_test.exs: 65 passed, 0 failures, exit 0."
+      },
+      "AC9": {
+        "verdict": "PASS",
+        "evidence": "git diff --stat main..feature/WF02-REQ204-20260831 shows 23 files: all in expected set (lib/letflow/webhooks/url_validator.ex new, lib/letflow/webhooks.ex, docs/agents/instructions/security-invariants.md, lib/letflow/design/req204-ssrf-validation.md new, test/letflow/webhooks/url_validator_test.exs new, test/letflow/webhooks_test.exs, test/letflow/webhooks_delivery_test.exs, test/letflow/secrets_test.exs, test/specs/REQ-204.md new, handoff files, docs/requirements.yaml, docs/status/*). Changes in secrets_test.exs (4 lines: example.test -> 203.0.113.1) and webhooks_delivery_test.exs (41 lines: SSRF bypass setup + create_subscription! bypasses Webhooks.create/2 to avoid blocking local test server URL) are consequential REQ-204 changes, not unrelated scope. No changes to HMAC signing, retry/backoff, auto-pause logic, CRUD routes, or REQ-184 code confirmed by reading the webhooks.ex diff."
+      }
+    },
+    "summary": "All 9 ACs PASS. REQ-204 independently verified from source and real test run. RELEASE-VALIDATOR declares REQ-204 done."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

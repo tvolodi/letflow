@@ -3580,6 +3580,25 @@
       "released_lock": true,
       "last_known_step": "Step Final (ORCH: merged PR #748 to main, queue task 375 released done)",
       "note": "Content-addressed artifact store (REPO-01..04): per-tenant repository_artifacts/artifact_versions tables, dedup by content_hash, DB-level immutability triggers, REQ-067 cursor-paginated version history. New Letflow.Repository.Canonicaliser deliberately separate from Letflow.Definitions.PromotionDigest (normalizes numbers; PromotionDigest does not and must not, to avoid breaking stored promotion digests/INV-PRM-5) -- both moduledocs cross-reference each other per AC5. REQ-041 (solution_pack_artefact_bases) disambiguated as an unrelated table. No route/controller/web/ changes. Design reworked once (AC10 migration-comment requirement; OQ-2 AC5-interpretation resolved rather than deferred). Implementation reworked three times: (1) @spec accuracy fix; (2) two real Postgres bugs TEST-DESIGNER found by actually running migrations against a per-tenant schema -- an Ecto default index-name collision (desc: annotation stripped from the generated name, colliding with a sibling index) and a truncated/mismatched unique-constraint name past Postgres's 63-byte NAMEDATALEN limit, both fixed with explicit short names; (3) tenant-table oracle-rot guard in test/support/tenant_fixture.ex was missing the two new tables (3rd occurrence of this class across REQ-181/REQ-195/REQ-202 -- now documented in docs/anti-patterns.md for the first time). Test design reworked once: a mutation-confirmed gap where a content_hash collision must not re-validate content_type/byte_size against the existing row. RELEASE-VALIDATOR independently re-derived all 14 ACs from source and real command output. Two new anti-pattern entries filed. CI: 3 consecutive full reruns hit the pre-existing, unrelated :wasm_hang timing-flake class (confirmed via empty git diff on wasm paths) before a clean run landed; fed back via SendFeedback given the unusual persistence."
+    },
+    {
+      "run_id": "WF02-REQ204-20260831",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-204"],
+      "queue_task_id": 379,
+      "github_issue_number": 738,
+      "stage": "S6",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/webhooks.ex",
+        "lib/letflow/webhooks/",
+        "docs/agents/instructions/security-invariants.md"
+      ],
+      "lock_acquired_at": "2026-08-31T02:50:43Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (git setup PASS)",
+      "note": "SSRF validation for webhook target_url: scheme allowlist (https only) + private/loopback/link-local/cloud-metadata range rejection at create/2 and defense-in-depth at deliver/3 pre-request. INV-9 addition to security-invariants.md. depends_on REQ-181 (done) and REQ-183 (done on main, deliver/3 at lib/letflow/webhooks.ex). WF-02 pipeline: queued from letflow-queue task 379, agent_id orch-main."
     }
   ]
 }

@@ -1,0 +1,84 @@
+{
+  "handoff_id": "step02d-WF02-REQ204-20260831",
+  "run_id": "WF02-REQ204-20260831",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ204-20260831/step-02d-reviewer.json",
+  "created_at": "2026-08-31T03:35:00Z",
+  "started_at": "2026-08-31T04:10:00Z",
+  "completed_at": "2026-08-31T04:18:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-204"],
+    "branch_name": "feature/WF02-REQ204-20260831",
+    "artifacts_in": [
+      "lib/letflow/webhooks/url_validator.ex",
+      "lib/letflow/webhooks.ex",
+      "lib/letflow/design/req204-ssrf-validation.md"
+    ],
+    "requirement_text": "REQ-204: SSRF validation for webhook target_url. Adds pure-function Letflow.Webhooks.UrlValidator module and wires it into create/2 and dispatch_http/3. No process, no supervision, no migration."
+  },
+  "task": {
+    "description": "Idiom review of REQ-204 implementation. Check: (1) OTP idiom - UrlValidator is a pure-function module with no process, appropriate for this job; (2) supervision integrity - no new supervised processes added, nothing to review; (3) scope creep - confirm no changes outside the intended scope (url_validator.ex, webhooks.ex, security-invariants.md); (4) decision-record consistency - confirm the choice to NOT add fe80::/10 (IPv6 link-local) is explicitly flagged in the design and deferred properly rather than silently omitted; (5) @spec completeness - validate/1, validate/2, and all private helpers have @spec; (6) create/2 @spec includes the new {:error, :target_url_not_allowed} return variant; (7) Bitwise usage is correct (import Bitwise vs use Bitwise).",
+    "acceptance_criteria": [
+      "UrlValidator is appropriate as a plain module (not a GenServer/Agent/process)",
+      "No unintended scope creep (only url_validator.ex, webhooks.ex, security-invariants.md changed)",
+      "create/2 @spec includes {:error, :target_url_not_allowed}",
+      "All public functions have @spec",
+      "fe80::/10 omission is explicitly flagged (in design §7 OQ-1) not silently missed",
+      "Bitwise import is correct OTP usage",
+      "dispatch_http/3 -> dispatch_http/4 delegation is idiomatic"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "checks": {
+      "otp_idiom": {
+        "verdict": "PASS",
+        "notes": "Letflow.Webhooks.UrlValidator is a plain module with no process of any kind — no GenServer, Agent, ETS writes, registry lookups, or spawn. Pure functions: URI.parse/1, :inet.parse_address/1, :inet.getaddrs/2, pattern matching, guards. Appropriate for pure validation work."
+      },
+      "supervision_integrity": {
+        "verdict": "PASS",
+        "notes": "No new supervised processes added. No use GenServer/Agent/Supervisor anywhere in url_validator.ex. Webhooks.ex supervisor topology unchanged."
+      },
+      "scope_creep": {
+        "verdict": "PASS",
+        "notes": "git diff main..feature/WF02-REQ204-20260831 --name-only returns exactly: url_validator.ex (new), webhooks.ex (modified), security-invariants.md (modified), req204-ssrf-validation.md (new design doc), handoff files, docs/requirements.yaml, docs/status/ (2 files). No surprise source file changes."
+      },
+      "decision_record_consistency": {
+        "verdict": "PASS",
+        "notes": "fe80::/10 omission is documented in design §7 OQ-1 — explicitly flagged and escalated, not silently missed. OQ-1 text: 'ELIXIR-DEV should flag this to REVIEWER at implementation time and recommend adding it — but must not silently add it as scope creep. If REVIEWER approves, the INV-9 text in §5 is updated before ELIXIR-DEV merges.' OQ-1 satisfied the check: this is fine.",
+        "oq1_reviewer_decision": "APPROVE: fe80::/10 should be added. It is the IPv6 link-local range — same attack class as 169.254.0.0/16 (already blocked). Fix is one line in blocked_ipv6?/1: 'defp blocked_ipv6?({a, _, _, _, _, _, _, _}) when a in 0xFE80..0xFEBF, do: true'. Report to ORCH as a pending finding (security-gap tag, high priority); ORCH should route to ELIXIR-DEV before merging."
+      },
+      "spec_completeness": {
+        "verdict": "PASS",
+        "notes": "validate/1 has @spec. validate/2 has @spec. create/2 @spec includes {:error, :target_url_not_allowed} as a variant. All public functions have @spec. OBSERVATION (not a criterion failure): dispatch_http/3 and dispatch_http/4 are private (defp) and lack @spec — inconsistent with url_validator.ex's exhaustive private-function spec coverage but acceptance criterion says 'all PUBLIC functions have @spec' and both are defp."
+      },
+      "bitwise_usage": {
+        "verdict": "PASS",
+        "notes": "import Bitwise is correct (not use Bitwise). Operators used: >>> (bsr/2, logical right shift) and &&& (band/2, bitwise AND) in ipv4_from_mapped_ipv6/1. Both are part of the Bitwise stdlib since Elixir 1.12. No name collision risk — &&&/2 and >>>/2 are infix aliases for band/2 and bsr/2; nothing in the existing webhooks.ex codebase uses these operators."
+      },
+      "dispatch_delegation": {
+        "verdict": "PASS",
+        "notes": "dispatch_http/3 delegates to dispatch_http/4 by passing &UrlValidator.default_resolver/1 as the injected dns_resolver. Idiomatic for test-injectable parameters in Elixir. do_dispatch_http/3 contains the actual :httpc.request/4 call. Indirection depth (3→4→do_dispatch) is appropriate: the extra arity carries the injectable seam needed for DNS-rebinding property tests (design §6.2 AC4)."
+      }
+    },
+    "issues_to_report_to_orch": [
+      {
+        "title": "UrlValidator: fe80::/10 (IPv6 link-local) not blocked",
+        "severity": "security-gap",
+        "priority": "high",
+        "description": "blocked_ipv6?/1 does not cover fe80::/10 (the IPv6 link-local range, 0xFE80..0xFEBF in the first 16-bit group). This is the IPv6 equivalent of 169.254.0.0/16 which is already blocked. An attacker with control over a webhook target_url could supply a literal [fe80::1] address to reach link-local services. Fix: add 'defp blocked_ipv6?({a, _, _, _, _, _, _, _}) when a in 0xFE80..0xFEBF, do: true' before the catch-all clause. INV-9 text should be updated to list fe80::/10 alongside fc00::/7. REVIEWER decision: APPROVE adding this before merge.",
+        "affected_files": ["lib/letflow/webhooks/url_validator.ex", "docs/agents/instructions/security-invariants.md"],
+        "source_oq": "design §7 OQ-1"
+      }
+    ],
+    "summary": "PASS — all 7 acceptance criteria met. One pending finding for ORCH: fe80::/10 (IPv6 link-local) is missing from blocked_ipv6?/1. REVIEWER approves adding it; ORCH should route to ELIXIR-DEV before merge. Minor observation only: dispatch_http/3 and dispatch_http/4 (both private) lack @spec, inconsistent with url_validator.ex's exhaustive coverage."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

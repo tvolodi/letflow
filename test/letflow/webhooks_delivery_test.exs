@@ -26,9 +26,21 @@ defmodule Letflow.WebhooksDeliveryTest do
 
   alias Letflow.Dlq.Entry, as: DlqEntry
   alias Letflow.Secrets
+  alias Letflow.TenantProvisioning
   alias Letflow.Webhooks
   alias Letflow.Webhooks.Delivery
+  alias Letflow.Webhooks.Subscription
   alias Letflow.WebhookTestServer
+
+  # Delivery tests use a real local :gen_tcp HTTP server at http://127.0.0.1:PORT
+  # which is blocked by both the scheme check and IP check in UrlValidator. SSRF
+  # validation is tested separately in url_validator_test.exs and webhooks_test.exs
+  # (AC1-AC4); these tests cover dispatch mechanics only.
+  setup do
+    Application.put_env(:letflow, :webhook_ssrf_validation_enabled, false)
+    on_exit(fn -> Application.delete_env(:letflow, :webhook_ssrf_validation_enabled) end)
+    :ok
+  end
 
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers
@@ -42,8 +54,33 @@ defmodule Letflow.WebhooksDeliveryTest do
   end
 
   defp create_subscription!(schema_name, target_url) do
-    {:ok, %{subscription: subscription}} =
-      Webhooks.create(%{target_url: target_url}, prefix: schema_name)
+    {:ok, tenant_id} = TenantProvisioning.tenant_id_for_schema_name(schema_name)
+    subscription_id = Ecto.UUID.generate()
+    created_at = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    {:ok, secret} =
+      Secrets.put(%{
+        tenant_id: tenant_id,
+        namespace: "webhook",
+        name: subscription_id,
+        purpose: :webhook_hmac,
+        plaintext: "lf_whsec_" <> (:crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)),
+        created_by: "system:test_helper"
+      })
+
+    {:ok, subscription} =
+      %Subscription{}
+      |> Subscription.insert_changeset(%{
+        id: subscription_id,
+        tenant_id: tenant_id,
+        target_url: target_url,
+        secret_ref: secret.reference,
+        secret_key_id: secret.key_id,
+        description: nil,
+        event_types: [],
+        created_at: created_at
+      })
+      |> Repo.insert(prefix: schema_name)
 
     subscription
   end

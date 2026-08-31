@@ -44,7 +44,9 @@ defmodule Letflow.WebhooksTest do
   end
 
   defp create!(schema_name, attrs \\ %{}) do
-    base = %{target_url: "https://example.test/hook"}
+    # Use a literal public IP so SSRF validation passes without a DNS round-trip
+    # (REQ-204 blocks any hostname that fails to resolve, including .test TLDs).
+    base = %{target_url: "https://93.184.216.34/hook"}
     {:ok, result} = Webhooks.create(Map.merge(base, attrs), prefix: schema_name)
     result
   end
@@ -433,6 +435,135 @@ defmodule Letflow.WebhooksTest do
         refute source =~ ~r/use\s+\w*Web,\s*:controller/, "#{path} unexpectedly is a controller"
         refute source =~ ~r/\bget\s+"\//, "#{path} unexpectedly defines a route"
       end
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-204 — SSRF validation for create/2, deliver/3, and dispatch_http/3
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-204 AC1: create/2 rejects non-https scheme before any DB access" do
+    # Scheme check happens first in create/2's with-chain; the DB is never touched.
+    # A fake prefix is sufficient because TenantProvisioning.tenant_id_for_schema_name/1
+    # is never reached when URL validation short-circuits.
+    test "http:// scheme rejected with {:error, :target_url_not_allowed}" do
+      assert {:error, :target_url_not_allowed} =
+               Webhooks.create(%{target_url: "http://example.com/hook"}, prefix: "not_a_schema")
+    end
+  end
+
+  describe "REQ-204 AC2: create/2 rejects five explicit private IP literals" do
+    # IP literals are checked without a DNS lookup; DB is never touched on rejection.
+
+    test "127.0.0.1 (loopback) rejected" do
+      assert {:error, :target_url_not_allowed} =
+               Webhooks.create(%{target_url: "https://127.0.0.1/hook"}, prefix: "not_a_schema")
+    end
+
+    test "169.254.169.254 (cloud metadata / link-local) rejected" do
+      assert {:error, :target_url_not_allowed} =
+               Webhooks.create(
+                 %{target_url: "https://169.254.169.254/hook"},
+                 prefix: "not_a_schema"
+               )
+    end
+
+    test "10.0.0.5 (RFC-1918) rejected" do
+      assert {:error, :target_url_not_allowed} =
+               Webhooks.create(%{target_url: "https://10.0.0.5/hook"}, prefix: "not_a_schema")
+    end
+
+    test "172.16.0.5 (RFC-1918) rejected" do
+      assert {:error, :target_url_not_allowed} =
+               Webhooks.create(%{target_url: "https://172.16.0.5/hook"}, prefix: "not_a_schema")
+    end
+
+    test "192.168.0.5 (RFC-1918) rejected" do
+      assert {:error, :target_url_not_allowed} =
+               Webhooks.create(%{target_url: "https://192.168.0.5/hook"}, prefix: "not_a_schema")
+    end
+  end
+
+  describe "REQ-204 AC3: create/2 succeeds for legitimate https target with public IP literal" do
+    test "https target with public IP literal creates the subscription and returns hmac_secret_once" do
+      %{schema_name: schema_name} = provisioned_tenant("req204-ac3")
+
+      assert {:ok, %{subscription: subscription, hmac_secret_once: secret}} =
+               Webhooks.create(
+                 %{target_url: "https://93.184.216.34/hook"},
+                 prefix: schema_name
+               )
+
+      assert is_binary(secret) and secret != ""
+      assert subscription.target_url == "https://93.184.216.34/hook"
+      assert subscription.status == :ACTIVE
+    end
+  end
+
+  describe "REQ-204 AC4: deliver/3 blocks delivery when target_url is a private IP at dispatch time (DNS rebinding)" do
+    # Tests defence-in-depth: dispatch_http/3 re-validates target_url immediately
+    # before every :httpc.request/4 call, catching DNS rebinding (a URL that was
+    # valid at create/2 time can resolve to a private IP at deliver/3 time).
+    #
+    # Approach: create a subscription with a valid public IP literal (passes
+    # create/2), then update target_url directly in the DB to a private IP
+    # (simulating the rebinding), then call deliver/3 and assert every attempt
+    # is FAILED with the SSRF refusal message.
+    #
+    # This test is slow (~7s) due to deliver/3's real Process.sleep/1 backoff
+    # across four attempts — same class as REQ-183's backoff test. See
+    # test/specs/REQ-183.md's "Backoff-timing problem" section.
+    @tag timeout: 30_000
+    test "deliver/3 records FAILED attempts and does not POST when target_url is private at dispatch time" do
+      import Ecto.Query
+
+      %{schema_name: schema_name} = provisioned_tenant("req204-ac4")
+
+      # Create with a valid public IP so create/2 validation passes.
+      {:ok, %{subscription: subscription}} =
+        Webhooks.create(%{target_url: "https://93.184.216.34/hook"}, prefix: schema_name)
+
+      # Simulate DNS rebinding: update target_url to the cloud metadata IP directly
+      # in the DB, bypassing create/2's validator. This models the real attack vector
+      # where the hostname resolved to a public IP at subscription time but to
+      # 169.254.169.254 at delivery time.
+      {1, _} =
+        Repo.update_all(
+          from(s in Subscription, where: s.id == ^subscription.id),
+          [set: [target_url: "https://169.254.169.254/hook"]],
+          prefix: schema_name
+        )
+
+      reloaded = Repo.get!(Subscription, subscription.id, prefix: schema_name)
+
+      # deliver/3 re-validates at dispatch_http/3 time on every attempt.
+      {:ok, last_delivery} =
+        Webhooks.deliver(reloaded, "req204.ssrf.dns_rebinding", %{"probe" => true})
+
+      assert last_delivery.status == :FAILED
+      assert last_delivery.last_error == "target_url not allowed (SSRF protection)"
+      assert is_nil(last_delivery.http_status_code)
+
+      # At least the first attempt must be persisted with the SSRF refusal.
+      first_attempt =
+        Delivery
+        |> where([d], d.delivery_id == ^last_delivery.delivery_id and d.attempt_count == 1)
+        |> Repo.one!(prefix: schema_name)
+
+      assert first_attempt.status == :FAILED
+      assert first_attempt.last_error == "target_url not allowed (SSRF protection)"
+    end
+  end
+
+  describe "REQ-204 AC5: dispatch_http/3 does not auto-follow 3xx redirects" do
+    # Source-assertion pattern (docs/anti-patterns.md): reading the source file
+    # is the robust way to assert a status-quo configuration — no network
+    # needed, no timing dependence, and it fails immediately if someone adds
+    # the option rather than silently passing through a redirect.
+    test "dispatch_http/3 does not pass autoredirect: true or follow_redirect: true to :httpc" do
+      source = File.read!(Path.join(File.cwd!(), "lib/letflow/webhooks.ex"))
+      refute source =~ ~r/autoredirect.*true/i
+      refute source =~ ~r/follow_redirect.*true/i
     end
   end
 end

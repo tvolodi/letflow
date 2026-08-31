@@ -164,9 +164,10 @@ concretely provable pre/post fix given this nuance.
 
 No change to `lib/letflow/dlq.ex`. `enqueue/2` (lines 81-113) already builds
 `insert_attrs` via `Map.take/2` (12-key allowlist, excludes all 5 protected
-fields) then `Map.merge/2`s in its own trusted `tenant_id`, `status: :pending`,
-`retry_count: 0`, `retry_history: []`, `created_at: DateTime.utc_now() |>
-DateTime.truncate(:second)` — this merged map is `insert_changeset/2`'s
+fields) then merges in its own trusted values: `tenant_id` (from
+`TenantProvisioning`), a pending status, a zero retry count, an empty retry
+history, and a `created_at` timestamp derived from the current UTC time
+truncated to second precision — this merged map is `insert_changeset/2`'s
 `attrs` argument. Post-fix, `insert_changeset/2` reads `:tenant_id` and
 `:created_at` out of that same merged map via `put_change/3` instead of
 `cast/3`; `enqueue/2` supplies both keys today exactly as it always has, so

@@ -81,12 +81,14 @@ redrive every stored promotion digest), DB-level immutability on the
 content store, and REQ-041's `solution_pack_artefact_bases`
 disambiguated as an unrelated table. No activation (REQ-203, the
 natural next half of this pair) and no route/controller surface --
-both explicitly out of scope here. The ordering
-subsystem remains
-pending. A
-future WF-04 stage-gate check of the scheduler half specifically (not
-of S6 as a whole) is a named candidate, per RELEASE-VALIDATOR's own
-REQ-188 handoff note. Requirements, expanded in two batches:
+both explicitly out of scope here. **REQ-199 (Correlated effect
+re-entry ordering, ORD-01/02/03/04) is also done as of 2026-08-31:**
+`effect_completions` + `correlation_cursors` tables (per-tenant,
+decision 0003-B), ORD-01 claim guard (FOR UPDATE SKIP LOCKED), ORD-02
+per-correlation advisory lock, ORD-03 cursor-based in-order apply with
+gap sweeper on REQ-186's scheduler, and ORD-04 lag surface via REQ-194
+metrics. All 18 ACs independently verified by RELEASE-VALIDATOR. The ordering
+subsystem is now complete. Requirements, expanded in two batches:
 
 **First batch (DLQ and webhooks):** REQ-176 (Dead-letter queue schema
 and core entry lifecycle, OBS-05 foundation); REQ-177 (Wire REQ-056's

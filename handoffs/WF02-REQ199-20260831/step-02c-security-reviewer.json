@@ -2,8 +2,10 @@
   "run_id": "WF02-REQ199-20260831",
   "workflow": "WF-02",
   "step": "02c-security-reviewer",
-  "status": "PENDING",
+  "status": "PASS",
   "dispatched_at": "2026-08-31T07:48:07Z",
+  "completed_at": "2026-08-31T07:55:15Z",
+  "commit": "c89c08c8",
   "from": "ORCH",
   "to": "SECURITY-REVIEWER",
   "context": {

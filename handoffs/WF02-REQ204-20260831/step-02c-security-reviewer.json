@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step02c-WF02-REQ204-20260831",
+  "run_id": "WF02-REQ204-20260831",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ204-20260831/step-02c-security-reviewer.json",
+  "created_at": "2026-08-31T03:25:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-204"],
+    "branch_name": "feature/WF02-REQ204-20260831",
+    "artifacts_in": [
+      "lib/letflow/webhooks/url_validator.ex",
+      "lib/letflow/webhooks.ex",
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/design/req204-ssrf-validation.md"
+    ],
+    "requirement_text": "REQ-204: SSRF validation for webhook target_url. Adds Letflow.Webhooks.UrlValidator module that validates URLs at create/2 (fast rejection) and dispatch_http/3 (DNS rebinding defense). Adds INV-9 to security-invariants.md."
+  },
+  "task": {
+    "description": "Security review of REQ-204 implementation. This is the SSRF-prevention requirement itself. Assess: (1) INV-1 applicability (UrlValidator introduces no new data-access path, only validation -- but confirm); (2) INV-4: validate no plaintext secrets are logged or leaked through the new validation path; (3) INV-7: no SQL in the new code; (4) INV-8: error handling in the new validation path uses typed results throughout; (5) the new INV-9 text in security-invariants.md is correctly stated and covers the full scope. Also confirm the implementation actually implements the protection it claims -- check blocked_ipv4?/1, blocked_ipv6?/1, scheme check, and DNS-resolution path.",
+    "acceptance_criteria": [
+      "INV-1 applicability assessed (no new tenant data access path)",
+      "INV-4: no secret leakage in new code paths",
+      "INV-7: no SQL in url_validator.ex",
+      "INV-8: all error paths use {:ok,_}/{:error,_} typed results",
+      "INV-9: text is correctly stated and verifiable",
+      "blocked_ipv4?/1 covers all 5 required IPv4 ranges",
+      "blocked_ipv6?/1 covers ::1/128, fc00::/7, and IPv4-mapped forms",
+      "dispatch_http/3 validation runs before :httpc.request/4 call",
+      "DNS failure correctly treated as blocked"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

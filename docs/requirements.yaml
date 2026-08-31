@@ -11514,7 +11514,7 @@ requirements:
   - id: REQ-205
     title: S7 scenario-harness foundation -- Elixir scenario runner, business-tenant fixture seeding, and the API-vs-GUI execution split
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S7
     impl_order: 382  # letflow-queue task id, GH#754
     description: >

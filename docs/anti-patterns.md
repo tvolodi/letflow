@@ -2170,3 +2170,74 @@ regression-suite re-run as a substitute for REVIEWER's idiom/scope gate. This sh
 in `docs/agents/workflows/WF-02_requirement_implementation.md`'s Step 2d/Step 3 description rather
 than left to each TEST-DESIGN-VALIDATOR run to reason out independently, since it worked out correctly
 here but is exactly the kind of judgment call a future run could get wrong under time pressure.
+
+## An established template-substitution mechanism applied to two of three sibling code paths, not all three
+
+**What happened.** REQ-205's `Letflow.Simulation.Runner.verify_outcome/2` has three
+`expected_outcomes.verification.method` clauses -- `task_assigned`, `instance_state`, and
+`audit_event` -- each meant to resolve `{{produces.X}}` template references (a prior step's
+captured runtime output, e.g. an instance id) before querying real state. The first two
+clauses did this correctly via a shared `resolve_ref/3` helper. The third, `:audit_event`,
+was implemented with the exact opposite: it took `produces` as a parameter named `_produces`
+(the underscore-prefix Elixir convention for "intentionally unused") and never touched it,
+so a scenario's `audit_event` outcome referencing `resource_id: "{{produces.instance.
+instance_id}}"` silently matched nothing instead of resolving to the real id or failing
+closed. Caught by TEST-DESIGNER at Step 3 (not CODE-DESIGN-VALIDATOR, not REVIEWER, not
+SECURITY-REVIEWER -- all of whom saw the same function earlier and passed it), fixed by
+ELIXIR-DEV rework 1 with a new `resolve_optional_ref/3` mirroring the existing
+`resolve_ref/3`, plus two regression tests proving real substitution and real
+query-scoping.
+
+**Why this is a distinct class from a missing mechanism.** The gap here was never "does
+this codebase have a way to resolve `{{produces.X}}`" -- it manifestly did, used correctly
+in the other two clauses right above and below the broken one in the same function. The
+defect is a *partial application* of an already-established mechanism: one sibling branch
+of a multi-clause dispatch quietly opted out (via a parameter name suggesting the omission
+was deliberate design, not oversight) while its neighbors used the real thing. This is
+harder to catch by reading any one clause in isolation -- `_produces` reads as intentional,
+unused-arg hygiene, not as a bug -- and only becomes visible by diffing the three clauses'
+handling of the same conceptual input against each other.
+
+**Correct alternative.** When a function has multiple clauses/branches implementing the
+same conceptual step for different cases (here: three verification methods all needing to
+resolve template references before use), diff their handling of that shared concern against
+each other explicitly, rather than reviewing each clause only against its own acceptance
+criterion in isolation. A parameter prefixed `_` in one branch when its siblings use the
+same-named parameter for real is a specific, greppable smell worth checking on sight in this
+class of multi-clause dispatch code.
+
+## Handoff schema drift produced by ORCH's own dispatched subagents within a single run, not a sibling-session collision
+
+**What happened.** `docs/anti-patterns.md`'s existing handoff-schema entries (see "Subagents
+write a handoff's top-level `status` field with an ad hoc value instead of the schema enum",
+above) and its handoffs/registry.json entries all describe drift introduced by *independent,
+concurrently-running sessions* stepping on shared state. WF02-REQ205-20260831 surfaced a
+different mechanism: 6 of that single run's own handoff files -- all written by subagents
+ORCH itself dispatched in sequence within this one run (`step-02a-elixir-dev(.json/
+-rework1)`, `step-02c-security-reviewer`, `step-02d-reviewer(.json/-recheck1)`,
+`step-03-test-designer`, `step-03b-test-design-validator`) -- store verdict/result-shaped
+data (`summary`, `verdict`, `per_ac_findings`, `mutation_test_results`,
+`findings_for_orch`, etc.) inside the handoff's `context` block instead of the schema's
+`task`/`result` blocks. `mix letflow.lint_handoffs` flagged this as 8 new `[H3]`
+non-schema-top-level-key violations (found by TEST-RUNNER at Step 4, independently
+reconfirmed by RELEASE-VALIDATOR at Step 5); neither step corrected the 6 pre-existing
+files, since fixing another step's already-completed handoff was out of scope for both.
+
+**Why this is worth a separate entry, not folded into the sibling-session cases.** The
+existing entries' mitigations (grep the top-level `status` field before dispatching the next
+step; a git pre-push hook running the lint) are aimed at catching drift *between* sessions
+racing on shared files. This drift had no race at all -- every one of the 6 files was
+written once, by one subagent, in one linear run, with no concurrent writer to blame. That
+means the standard mitigation (inline vigilance from ORCH between steps) was fully available
+and simply didn't fire: ORCH dispatched each of these 6 steps and received each of their
+handoffs before dispatching the next, so a `mix letflow.lint_handoffs` check at each
+dispatch boundary -- not just before a PR/CI push -- would have caught this at step-02a
+already, five steps before TEST-RUNNER's Step 4 did.
+
+**Correct alternative.** Run (or at minimum, structurally check for `context`-block keys
+that shadow `task`/`result` field names like `summary`/`verdict`/`findings_for_orch`)
+`mix letflow.lint_handoffs` immediately after receiving *any* subagent's handoff, not only
+before a push/PR -- the existing entries already recommend this for the top-level `status`
+enum specifically; this occurrence shows the same discipline is needed for the
+context-vs-task/result shape distinction too, and that "no concurrent writer" is not a
+reason to expect schema drift to be absent.

@@ -38,6 +38,37 @@ REQ-205 states this distinction explicitly in its own moduledoc; that
 router slot stays unmounted until whichever future requirement actually
 builds it.
 
+**REQ-205 done (2026-08-31, WF02-REQ205-20260831).** `Letflow.Simulation.Seed`
+and `Letflow.Simulation.Runner` (test-support) ship the harness this stage's
+remaining requirements run scenarios through, with the `api`/`gui` execution
+split working (real HTTP for `api` steps, `DEFERRED_TO_S8` recorded — never
+silently skipped, never run as an `api` step — for `gui` steps). All 8
+acceptance criteria independently re-verified by RELEASE-VALIDATOR; full
+detail in `handoffs/WF02-REQ205-20260831/release-validation-report-20260831.md`.
+
+**HARD BLOCKING PREREQUISITE for REQ-206 (flagged by RELEASE-VALIDATOR at
+REQ-205's Step 5, not a deferrable cleanup).** The 12 company/org/process
+fixture files under `test/fixtures/simulation/{swiftroute,vortex,meridian}/`
+are **SYNTHETIC, self-authored data**, honestly disclosed in each file's own
+header comment — NOT a byte-for-byte port of R-Co's
+`tests/simulation/companies/` tree. ELIXIR-DEV found that source genuinely
+unreachable from the Linux sandbox this run executed in (no `/mnt/c` mount,
+no filesystem trace anywhere on the box), independently reconfirmed by
+RELEASE-VALIDATOR's own fresh search — even though some earlier session/host
+*did* have R-Co filesystem access when REQ-ANALYST drafted REQ-205's own
+requirement text (which cites literal file/line counts from it), so this is a
+routing gap, not permanently lost data. `Letflow.Simulation.Seed`/`Runner`
+depend only on fixture **shape** (never on specific R-Co values, confirmed by
+reading both modules directly), so swapping in real content is a data-only
+change requiring **zero code changes** to either module. REQ-206/207/208 all
+carry real R-Co scenario YAML referencing specific `actor_id` values (e.g.
+`actor-swiftroute-lena`) — those references will **not resolve** against the
+current synthetic fixtures. **REQ-206 must not start until the real 12 fixture
+files are ported** from a host with `c:\Users\tvolo\dev\ai-dala\R-Co\` access
+(not this sandbox) — tracked as a follow-up in `docs/issues/ISS-0382.yaml`
+("Port REQ-205's 12 simulation fixture files from real R-Co source (blocks
+REQ-206)"), registered by ORCH at Step Final.
+
 **`tests/differential/`'s corpus is ported as a regression suite, not a
 differential one** (REQ-209). R-Co's `differential_test.zig` diffed a
 vendored CEL library against `src/expr` as its own now-completed EXP-102

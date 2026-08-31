@@ -1,4 +1,4 @@
-id: ISS-0353
+id: ISS-0381
 title: >
   Letflow.Dlq.Entry.insert_changeset/2's cast list contradicts its own
   docstring -- tenant_id/status/retry_count/retry_history/created_at are all
@@ -7,6 +7,19 @@ discovered_by: REVIEWER
 discovered_in_run: WF02-REQ176-20260829
 discovered_at: "2026-08-29T00:00:00Z"
 severity: MINOR
+queue_task_id: 381   # registered 2026-08-31 (reconciliation); originally filed as ISS-0353 before an id existed
+github_issue: 753
+former_local_id: ISS-0353   # historical alias -- see note below
+note_on_id: >
+  Filed during WF02-REQ176-20260829 as ISS-0353, a filename-derived id assigned
+  before this finding had been through register_task -- so it carried no
+  queue_task_id and no GitHub issue, and was therefore invisible to the
+  GitHub-issue control loop. Registered 2026-08-31 during a state-reconciliation
+  pass; register_task is the only allocator of ids, and it allocated a new one.
+  This record was renamed ISS-0353 -> ISS-0381 to match.
+  Handoff files, handoffs/registry.json and the requirement_status volumes still
+  cite ISS-0353 -- those are immutable run records and were deliberately NOT
+  rewritten. Treat ISS-0353 and ISS-0381 as the same finding.
 status: open
 tags:
   - idiom-gap

@@ -1,4 +1,4 @@
-id: ISS-0351
+id: ISS-0380
 title: >
   ModuleRegistry.register/1 timeout path leaves a Wasmtime native thread
   spinning after Task.shutdown(:brutal_kill)
@@ -6,6 +6,19 @@ discovered_by: TEST-DESIGNER
 discovered_in_run: WF02-REQ166-20260828
 discovered_at: "2026-08-28T04:42:27Z"
 severity: MINOR
+queue_task_id: 380   # registered 2026-08-31 (reconciliation); originally filed as ISS-0351 before an id existed
+github_issue: 752
+former_local_id: ISS-0351   # historical alias -- see note below
+note_on_id: >
+  Filed during WF02-REQ166-20260828 as ISS-0351, a filename-derived id assigned
+  before this finding had been through register_task -- so it carried no
+  queue_task_id and no GitHub issue, and was therefore invisible to the
+  GitHub-issue control loop. Registered 2026-08-31 during a state-reconciliation
+  pass; register_task is the only allocator of ids, and it allocated a new one.
+  This record was renamed ISS-0351 -> ISS-0380 to match.
+  Handoff files, handoffs/registry.json and the requirement_status volumes still
+  cite ISS-0351 -- those are immutable run records and were deliberately NOT
+  rewritten. Treat ISS-0351 and ISS-0380 as the same finding.
 status: open
 description: >
   While mutation-testing lib/letflow/engine/wasm/module_registry.ex's stage-2

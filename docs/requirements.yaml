@@ -10840,7 +10840,7 @@ requirements:
   - id: REQ-199
     title: Correlated effect re-entry ordering -- completion claim, per-correlation execute guard, and in-order cursor apply (ORD-01/02/03/04)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S6
     impl_order: 372  # letflow-queue task id
     description: >

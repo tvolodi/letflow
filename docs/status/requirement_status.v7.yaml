@@ -688,3 +688,16 @@ history:
       ::1/128, fc00::/7, fe80::/10). Wired into create/2 (fast rejection) and
       dispatch_http/3 (DNS rebinding defense). INV-9 added to security-invariants.md.
       65/65 tests pass. PR to follow (Step Final).
+
+  - req: REQ-199
+    event: started
+    agent: ORCH
+    at: "2026-08-31T05:36:00Z"
+    note: >
+      WF02-REQ199-20260831 started (queue task 372, GH#718, stage S6).
+      Correlated effect re-entry ordering: ORD-01 claim guard (FOR UPDATE SKIP LOCKED),
+      ORD-02 per-correlation advisory lock, ORD-03 cursor-based in-order apply,
+      ORD-04 lag surface. New tables effect_completions + correlation_cursors.
+      Wired on REQ-186's scheduler. Stale queue lock force-released (no branch/
+      handoff/registry evidence from prior session). depends_on REQ-186/023/025/072/176/194
+      all done.

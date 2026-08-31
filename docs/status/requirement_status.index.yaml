@@ -800,8 +800,16 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 28
+    entries: 30
     note: >
+      Recounted to 30 on 2026-08-31 after ORCH's state-reconciliation pass
+      appended two SCOPE-CHANGE entries (the orphaned-issue registration and
+      S7's WF-01 expansion into REQ-205..REQ-210).
+      `grep -c "^  - req:" docs/status/requirement_status.v7.yaml` = 30
+      on-disk entries (`wc`: 808 lines, still well under the 1200-line/
+      120000-byte roll ceiling, so no roll triggered). This supersedes the
+      28-count note below, which was correct before those two appends.
+
       Recounted to 28 after a second rebase of WF02-REQ203-20260831 onto
       main, which by then also included the merged WF02-REQ204-20260831
       branch (REQ-204 started/done) and WF02-REQ199-20260831's started

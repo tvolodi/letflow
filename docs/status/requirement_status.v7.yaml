@@ -760,3 +760,49 @@ history:
       Wired on REQ-186's scheduler. Stale queue lock force-released (no branch/
       handoff/registry evidence from prior session). depends_on REQ-186/023/025/072/176/194
       all done.
+
+  - req: SCOPE-CHANGE
+    event: revised
+    agent: ORCH
+    at: "2026-08-31T07:34:33Z"
+    note: >
+      State-reconciliation pass, user-directed. Three findings, all corrected.
+      (1) GH#494/REQ-123 was left open on GitHub despite the requirement being
+      genuinely done -- decisions/0015-cutover-strategy.md exists, records an
+      explicit decision (S7 signal insufficient, cutover selection deferred),
+      and stage-8's Decisions section links it; all 5 ACs met. Closed with
+      evidence. (2) ISS-0351 and ISS-0353 were both filed with filename-derived
+      ids before going through register_task, so neither carried a queue_task_id
+      nor a GitHub issue -- invisible to the GitHub-issue control loop the owner
+      drives implementation from. Registered as tasks 380/381 (GH#752/753) and
+      renamed ISS-0351->ISS-0380, ISS-0353->ISS-0381 with former_local_id
+      aliases; historical citations in handoffs/ and the v5/v6 volumes were
+      deliberately NOT rewritten, being immutable run records. Both remain open,
+      neither fixed. (3) Zero requirements are blocked -- REQ-077 and REQ-133,
+      blocked at last review, are both done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-31T07:34:33Z"
+    note: >
+      WF-01 expanded S7 (simulation-and-uat-parity) into REQ-205..REQ-210, the
+      last stage carrying zero requirements. Registered as queue tasks 382-387
+      (GH#754-759) in dependency order so each depends_on resolved to a real
+      queue id. R-Co was reachable, so every cited source path was verified
+      rather than guessed: 11 tenant-business scenarios (4 swiftroute / 4 vortex
+      / 3 meridian), the 15-entry condition corpus, and seed.py at 356 lines.
+      Scope decisions recorded in the entries themselves: S7 stays a correctness
+      gate (a scenario blocked by a backend gap reports the gap, never silently
+      builds it -- two already identified, advance-timer and document-attachment);
+      simulation_test.zig is a different subsystem from the scenario corpus and
+      its router slot stays unmounted; the differential corpus becomes regression
+      coverage since Letflow only ever had one condition evaluator; the 18-file
+      platform corpus is out of scope with a named follow-up; GUI-dependent
+      scenarios record DEFERRED_TO_S8 rather than a fabricated pass.
+      REQ-VALIDATOR gated over two rework rounds -- a stage-doc self-
+      contradiction, an inflated platform-corpus count (20 claimed vs 18 real),
+      and a stale AC cross-reference introduced by fixing the first -- final
+      verdict PASS. check_requirements_registration 184/184, 0 deferred;
+      check_deferral_staleness 0 stale. Statuses stay pending; WF-01 confirms
+      well-formedness only. Commits 17092696 and 058a58e7, both pushed to main.

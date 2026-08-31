@@ -280,29 +280,50 @@ precedent for a criterion phrased as "rejected... rather than...") for DB-level
 enforcement wherever an acceptance criterion uses that exact rejection framing:
 
 1. **Changeset-level:** `validate_required(:rationale)`, and nothing more —
-   **confirmed directly from this codebase's pinned Ecto source**
-   (`deps/ecto/lib/ecto/changeset.ex`, Ecto 3.14.1 per `mix.lock`):
-   `validate_required/2`'s `missing?/2` helper treats a value as missing if it
-   is `nil` **or** a member of `changeset.empty_values` (default `[""]`), and
-   `cast/4` — the standard pipeline every context function in this codebase
-   uses — already converts any `empty_values` member (including a literal
-   `""`) to `nil` before `validate_required/2` ever runs. So
-   `validate_required(:rationale)` **does** reject both `nil`/missing and a
-   literal empty string `""` reaching it via `cast/4`, with no separate
-   `validate_length/3` or other mechanism needed for that case (this also
-   resolves what an earlier draft of this design left as an open question
-   about `validate_required/2`'s exact `""` behavior — it is now confirmed
-   from source, not assumed).
-   **What this layer explicitly does NOT reject: a whitespace-only string**
-   (e.g. `" "`, a single space). `" "` is neither `nil` nor `""`, so `cast/4`
-   never nils it out and `validate_required/2` never sees it as missing — a
-   caller submitting a rationale of pure whitespace passes the changeset layer
-   unmodified. This design states that gap explicitly rather than claiming a
-   protection this mechanism does not deliver (an earlier draft incorrectly
-   described this layer as also rejecting "blank/whitespace" input via
-   `validate_length(:rationale, min: 1)`, which is wrong — `validate_length`
-   counts characters, and a whitespace string has length ≥ 1 — that claim is
-   corrected here, not carried forward).
+   **confirmed directly from this codebase's pinned Ecto source, both by
+   reading it and by running it**
+   (`deps/ecto/lib/ecto/changeset.ex` and `deps/ecto/lib/ecto/type.ex`, Ecto
+   3.14.1 per `mix.lock`): `validate_required/2`'s `missing?/2` helper treats a
+   value as missing if it is `nil` **or** a member of `changeset.empty_values`
+   (default `[""]`). Separately, and upstream of that check, `cast/4` — the
+   standard pipeline every context function in this codebase uses — applies
+   its default `trim_values` behavior to every incoming binary param
+   (`Ecto.Type.trim/2`, `deps/ecto/lib/ecto/type.ex:1007`, which calls
+   `String.trim_leading/1`) and then, in `cast_field/9`'s `filter_values/5`
+   check, converts the value to `nil` if the **trimmed** result is itself a
+   member of `empty_values`. So `cast/4`'s trim-then-filter step, not
+   `validate_required/2` alone, is what decides which raw strings become
+   `nil` before `validate_required/2` ever runs — and it converts **all
+   three** of `nil`, a literal `""`, and an all-whitespace string like
+   `"   "` to `nil`, because `String.trim_leading("   ")` is `""`, which is a
+   member of the default `empty_values`. `validate_required(:rationale)`
+   therefore **does** reject a purely-whitespace rationale, exactly the same
+   way it rejects a literal empty string, with no separate `validate_length/3`
+   or `validate_change/3` mechanism needed for either case. This is confirmed
+   two ways, not merely restated: from source (the `cast_field/9` →
+   `filter_values/5` → `trim_values.(type, value) in empty_values` path) and
+   empirically (running this codebase's actual pinned Ecto 3.14.1 against a
+   throwaway schema/changeset shaped exactly like this mechanism —
+   `cast(params, [:rationale]) |> validate_required(:rationale)` — where
+   `%{"rationale" => "   "}` produced `valid?: false`,
+   `errors: [rationale: {"can't be blank", ...}]`, while real non-blank text
+   validated as `valid?: true` in the same run, confirming the check itself
+   is sound). An earlier draft of this design claimed the opposite (that
+   whitespace-only input passes `validate_required/2` unmodified); that claim
+   was wrong and is corrected here, not carried forward. (A still-earlier
+   draft's separate, also-wrong claim — that this layer used
+   `validate_length(:rationale, min: 1)` to catch blank/whitespace input —
+   remains correctly removed; `validate_length` counts characters and would
+   not catch this case, but that mechanism is not what's used here in either
+   version of this section.)
+   **The one input shape this layer genuinely does NOT catch:** a string with
+   *non-leading* whitespace surrounding real content, e.g. `" x "` or a
+   trailing-whitespace-only-after-content string. `Ecto.Type.trim/2` calls
+   `String.trim_leading/1`, not `String.trim/1` — it strips only leading
+   whitespace, so `" x "` trims to `"x "`, which is not empty and is not a
+   member of `empty_values`; `cast/4` leaves it as `"x "` (not `nil`), and
+   `validate_required/2` accepts it as present. This design does not attempt
+   to catch that shape either at the changeset or DB level — see below.
 2. **DB-level `CHECK` constraint:** `CHECK (rationale <> '')` (via `execute/1` in
    the migration, the same DSL escape hatch REQ-202/`req195` use for the mutation-
    rejecting trigger) on both `artifact_activation_history.rationale` and
@@ -317,27 +338,59 @@ enforcement wherever an acceptance criterion uses that exact rejection framing:
    rejection-framing this project's other DB-level-invariant acceptance criteria
    use (REQ-202's AC7 "rejected by the DATABASE, not merely absent from the
    context API"; this requirement's own AC4 for the UNIQUE constraint) — a
-   two-layer defense (changeset rejection of `nil`/`""` for the normal
-   application path, DB `CHECK` as the structural backstop for any path that
-   bypasses the changeset) rather than relying on the changeset alone. **This
-   `CHECK` also only rejects exact-empty (`rationale <> ''`), the same
-   whitespace-only gap as the changeset layer** — `btrim(rationale) <> ''`
-   would additionally catch a whitespace-only value, but this design does
-   **not** adopt that stronger form.
+   two-layer defense (changeset rejection of `nil`/`""`/whitespace-only for the
+   normal application path, DB `CHECK` as the structural backstop for any path
+   that bypasses the changeset) rather than relying on the changeset alone.
+   **This `CHECK` does NOT independently catch a whitespace-only string** —
+   `CHECK (rationale <> '')` is a plain SQL string-inequality test with no
+   trimming, so a raw SQL insert of `'   '` would satisfy it (`'   ' <> ''` is
+   true in Postgres). This is a real gap in the `CHECK` alone, distinct from
+   the changeset layer's behavior — the changeset layer's own trim-based
+   rejection of whitespace-only input (point 1, above) does not extend to the
+   DB constraint, because a changeset-bypassing write path skips the
+   changeset's `cast/4` trim step entirely and reaches the `CHECK` with the
+   raw, untrimmed value.
 
-**Whitespace-only rationale: decided out of scope, stated explicitly.**
-AC6's literal wording is "an activation submitted with **no rationale** is
-REJECTED rather than stored with an **empty rationale**" — both the "no
-rationale" and "empty rationale" halves of that sentence describe
-missing/absent or exact-empty-string input, not whitespace-only input; AC6
-does not use "blank" or otherwise gesture at whitespace. Given that, this
-design deliberately does **not** add a `validate_change/3`-with-`String.trim/1`
-check or a `btrim`-based `CHECK` to additionally catch a whitespace-only
-rationale — doing so would be solving a stronger, unrequested problem past
-what AC6 actually asks for, and no other acceptance criterion in this
-requirement's list touches `rationale` either. A caller who submits `"   "` as
-a rationale gets it accepted and stored verbatim by both layers described
-above; this is an accepted, explicitly-stated gap, not an oversight.
+**Decision on the `CHECK`'s residual whitespace-only gap: accepted, not
+strengthened, stated explicitly.** The gap only matters for a write path that
+bypasses `Letflow.Repository.Activation`'s changeset-based functions entirely
+(a raw `Repo.insert_all/3` or direct SQL) — this design's own §8 ("Functions
+deliberately NOT built") and §4 do not define or expose any such path for
+`artifact_activation_history` or `artifact_activation_groups`; every writer
+this design specifies goes through the changeset, where whitespace-only
+`rationale` is already rejected per point 1 above. This mirrors the reasoning
+REQ-202's design uses elsewhere for an analogous residual gap: a
+changeset-only invariant is accepted as sufficient when no real call path in
+this codebase bypasses the changeset, and the DB constraint's job is limited
+to catching the literal-empty-string case for defense-in-depth, not to
+independently re-implement every changeset-level validation in SQL. This
+design therefore does **not** strengthen the `CHECK` to
+`btrim(rationale) <> ''`, on the grounds that doing so would hedge against a
+hypothetical bypass this codebase does not actually have, at the cost of a
+migration-level `btrim` dependency with no corresponding real caller to
+protect against. If a future requirement ever adds a changeset-bypassing bulk
+writer for these tables, that writer would need its own whitespace-trimming
+step (or the `CHECK` would need to move to `btrim(rationale) <> ''` at that
+time) — this design flags that as a condition to watch for, not as
+something to solve now.
+
+**The one input shape genuinely out of scope for this design: non-leading
+whitespace around real content (e.g. `" x "`).** As derived in point 1 above,
+neither the changeset layer (which only strips *leading* whitespace before
+the empty-value check) nor the DB `CHECK` (a plain non-trimming inequality)
+rejects this shape — `" x "` is accepted and stored verbatim by both layers.
+AC6's literal wording ("an activation submitted with **no rationale** is
+REJECTED rather than stored with an **empty rationale**") describes
+missing/absent or exact-empty-string input, not a string that already
+contains real non-whitespace content with incidental surrounding whitespace;
+this design reads that as out of AC6's scope, and no other acceptance
+criterion in this requirement's list touches `rationale` either. This design
+deliberately does **not** add a `validate_change/3`-with-`String.trim/1`
+check or a `btrim`-based `CHECK` to additionally reject or normalize this
+shape — doing so would be solving a stronger, unrequested problem past what
+AC6 actually asks for. This is an accepted, explicitly-stated gap, not an
+oversight, and it is a materially narrower gap than the whitespace-only case
+an earlier draft of this section incorrectly believed was open.
 
 ---
 
@@ -796,7 +849,7 @@ genuinely open questions below remain.
 | AC3 — REPO-09 per-tenant isolation, two explicit tests | §1 (per-tenant placement), §2.1 (UNIQUE scoped by tenant_id) |
 | AC4 — UNIQUE (tenant_id, artifact_kind, artifact_name) enforced by the DATABASE | §2.1 (unique index) |
 | AC5 — every activation appends one history row, previous_version_id null-then-populated | §2.2, §4.2 steps 3b/3d |
-| AC6 — activation with no rationale REJECTED, not stored empty | §2.4 (changeset `validate_required/2` rejects nil/missing/`""`, DB `CHECK (rationale <> '')` backstop — whitespace-only is a stated, deliberate non-goal per AC6's literal wording, see §2.4's closing note) |
+| AC6 — activation with no rationale REJECTED, not stored empty | §2.4 (changeset `validate_required/2`, via `cast/4`'s default trim-leading/empty-value pipeline, rejects `nil`, `""`, AND whitespace-only strings like `"   "`; DB `CHECK (rationale <> '')` backstop for changeset-bypassing writes, which is accepted as not independently catching whitespace-only input since no such write path exists in this design — see §2.4's decision paragraph. Only non-leading whitespace around real content, e.g. `" x "`, is a stated, deliberate non-goal.) |
 | AC7 — activation history chronological, REQ-067 pagination | §6 |
 | AC8 — resolution function returns active version or not-found, never arbitrary | §3 |
 | AC9 — ON DELETE RESTRICT prevents deleting an active version | §2.1 (`active_version_id` FK), §2.2 (history FKs) |

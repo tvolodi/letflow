@@ -79,9 +79,30 @@ deliberately kept SEPARATE from REQ-036's `PromotionDigest` (both
 moduledocs cross-reference each other; merging them would silently
 redrive every stored promotion digest), DB-level immutability on the
 content store, and REQ-041's `solution_pack_artefact_bases`
-disambiguated as an unrelated table. No activation (REQ-203, the
-natural next half of this pair) and no route/controller surface --
-both explicitly out of scope here. The ordering
+disambiguated as an unrelated table.
+**REQ-203 (per-tenant artifact activation, REPO-08/09/10) is also done
+as of 2026-08-31, closing the artifact-repository pair in full:**
+`artifact_activations` (the current pointer, UNIQUE (tenant_id,
+artifact_kind, artifact_name) DB-enforced), `artifact_activation_history`
+(append-only, mandatory rationale, `previous_version_id` null-then-
+populated), and `artifact_activation_groups` (the multi-artifact
+envelope). REPO-08's atomic multi-artifact activation runs as one
+`Ecto.Multi` transaction, with its observability criterion -- no mixed
+old/new version state observable to a concurrent reader mid-activation
+-- rigorously verified as a structural consequence of Postgres's own
+READ COMMITTED MVCC, with no isolation-level bump needed. REPO-09
+(per-tenant isolation) and REPO-10 (activation history) are both
+DB-enforced (UNIQUE/CHECK/FK, ON DELETE RESTRICT on every
+version-id FK). REQ-195's `audit_entries` disambiguated in the
+moduledoc as a different, non-redundant trail (subsystem-specific
+queryable lineage with mandatory rationale, vs. the tenant-wide
+hash-chained compliance trail). Still no route/controller surface,
+per the same deferral REQ-202 already recorded. **This closes S6's
+artifact-repository pair in full: REQ-202 (REPO-01..04, content store
+and canonicaliser) and REQ-203 (REPO-08/09/10, per-tenant activation)
+are both done.** REPO-05 (form-schema indexing) and the repository
+HTTP surface (REPO-11..14) remain deferred, per REQ-202's own
+description. The ordering
 subsystem remains
 pending. A
 future WF-04 stage-gate check of the scheduler half specifically (not

@@ -2075,3 +2075,73 @@ against it. Now that this is a filed, three-occurrence pattern, a fourth instanc
 as a signal that the check itself belongs closer to the migration (a compile-time or
 migration-review assertion cross-referencing the manifest against the oracle list) rather than
 left to whichever downstream test happens to run C6 first.
+
+## Claiming a DEPENDENCY's runtime behavior without reading its actual source -- two opposite false claims in one requirement's design stage
+
+**REQ-203 (per-tenant artifact activation), design stage, two rounds in a row -- distinct from the
+REQ-195 entry above.** That earlier entry ("Claiming a function 'already carries' a value without
+reading its real parameter list") is about misjudging THIS CODEBASE's own function signatures by
+analogy to sibling functions. This is a different defect class: misjudging a THIRD-PARTY
+LIBRARY's (Ecto's) actual runtime behavior, stated as settled fact without reading that library's
+source, in two opposite directions on the same requirement:
+
+1. **Original design (§2.4/OQ-D)** claimed `validate_required(:rationale)` "may not reject" a
+   whitespace-only string, and defended against that gap by ALSO adding `validate_length(min: 1)`
+   -- which is equally defeated by a whitespace-only string, since `validate_length/3` counts
+   `String.length/1` on the raw value and `"   "` has length 3, not 0. Neither validator, as
+   described, actually closed the gap the design believed it was closing.
+2. **Rework 1's fix** overcorrected to the opposite wrong claim: that `validate_required(:rationale)`
+   "does NOT reject" a whitespace-only string because `cast/4` "never nils it out." CODE-DESIGN-
+   VALIDATOR's recheck1 read `deps/ecto/lib/ecto/changeset.ex`'s actual `cast_field/9` pipeline
+   directly (the `filter_values` lambda at line 774, `Ecto.Type.trim/2` at `deps/ecto/lib/ecto/
+   type.ex:1007`) AND ran a throwaway empirical script against this project's real pinned Ecto
+   3.14.1 dependency: `cast(%{"rationale" => "   "}) |> validate_required(:rationale)` produces
+   `valid?: false`, `errors: [rationale: {"can't be blank", ...}]` -- `Ecto.Type.trim/2` strips
+   LEADING whitespace before `validate_required/2` ever runs, so an all-whitespace string collapses
+   to `""` and IS rejected. Only rework 2's design got this right, and only after both a source
+   read and a real, dependency-linked reproduction were done together (see
+   `handoffs/WF02-REQ203-20260831/step-01b-code-design-validator-recheck1.json`,
+   `-recheck2.json`).
+
+**Why this is worth its own entry, not folded into REQ-195's:** the REQ-195 pattern is caught by
+reading `@type`/signature lines already inside `lib/`; this pattern requires reading a *vendored
+dependency's* source (`deps/<pkg>/lib/...`) and, ideally, running a small real reproduction against
+the project's actual pinned version -- a plausible-sounding claim about a widely-used library
+function (`validate_required`, `validate_length`) is exactly the kind of thing an author is tempted
+to state from general familiarity rather than checking against the specific version pinned here.
+
+**Correct alternative:** any design or implementation claim about what a third-party
+library/framework function does or does not reject/accept/mutate must be checked against that
+library's actual vendored source under `deps/` for the version this project has pinned (`mix.lock`),
+not stated from general familiarity with the library -- and where the behavior is genuinely
+load-bearing for an acceptance criterion (as `validate_required`/`validate_length`'s whitespace
+handling was here, for AC6), back the source read with a real, throwaway reproduction against the
+actual dependency rather than trusting the source read alone to have been interpreted correctly.
+
+## A test-only production-code seam added after REVIEWER's sign-off needs a fresh REVIEWER pass, not just TEST-DESIGN-VALIDATOR's
+
+**REQ-203, Step 3 (TEST-DESIGNER) added a `test_pause_after`/`test_pause_fun` synchronization hook
+to `activate_group/4` (bumping its arity to 5) AFTER REVIEWER had already PASSED the implementation
+at Step 2d.** TEST-DESIGN-VALIDATOR (`handoffs/WF02-REQ203-20260831/step-03b-test-design-validator.json`)
+made the correct call here, but the workflow doc (`docs/agents/workflows/WF-02_requirement_
+implementation.md`) does not currently say this explicitly anywhere, so a weaker or less careful
+agent could plausibly reason "TEST-DESIGN-VALIDATOR already checked the diff is behavior-preserving,
+that's enough" and skip re-routing to REVIEWER. TEST-DESIGN-VALIDATOR's own reasoning for why that
+would have been wrong: this is new production-file surface (a changed public arity, a new `@type`)
+landing in `lib/letflow/repository/activation.ex` that REVIEWER has literally never seen, regardless
+of how carefully TEST-DESIGN-VALIDATOR itself verified the diff is additive and a structural no-op
+outside `MIX_ENV=test` -- CLAUDE.md's central redundancy principle ("every producing step has a
+validating step... adopted specifically so the pipeline stays reliable even when the executing model
+is weak") does not carve out an exception for changes that *look* safe. The seam needed TWO REVIEWER
+rework rounds before it re-passed cleanly (`step-02d-reviewer-recheck1.json`,
+`-recheck2.json`) -- it was not a rubber-stamp re-approval.
+
+**Correct alternative:** whenever a later pipeline step (TEST-DESIGNER, ELIXIR-DEV rework, or anyone
+else) modifies a file under `lib/` or `priv/repo/migrations/` that REVIEWER already PASSED earlier in
+the same run -- even a change TEST-DESIGN-VALIDATOR itself judges to be additive, behavior-preserving,
+and gated to `MIX_ENV=test` only via `Application.compile_env/3` -- route back to REVIEWER for a fresh
+pass on the actual new diff before TEST-RUNNER, rather than treating TEST-DESIGN-VALIDATOR's own
+regression-suite re-run as a substitute for REVIEWER's idiom/scope gate. This should be made explicit
+in `docs/agents/workflows/WF-02_requirement_implementation.md`'s Step 2d/Step 3 description rather
+than left to each TEST-DESIGN-VALIDATOR run to reason out independently, since it worked out correctly
+here but is exactly the kind of judgment call a future run could get wrong under time pressure.

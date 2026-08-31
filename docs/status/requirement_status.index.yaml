@@ -800,8 +800,33 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 27
+    entries: 28
     note: >
+      Recounted to 28 after a second rebase of WF02-REQ203-20260831 onto
+      main, which by then also included the merged WF02-REQ204-20260831
+      branch (REQ-204 started/done) and WF02-REQ199-20260831's started
+      event. `grep -c "^  - req:" docs/status/requirement_status.v7.yaml`
+      = 28 on-disk entries (`wc`: 762 lines / 43729 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered). This
+      supersedes the prior 25-count note below, which was correct for
+      the branch's state after only the first rebase (before REQ-204's
+      concurrent append landed on main).
+
+      Recounted to 25 after rebasing WF02-REQ203-20260831 onto main, which
+      by then included the merged WF02-REQ201-20260830 concurrent branch.
+      `grep -c "^  - req:" docs/status/requirement_status.v7.yaml` = 25
+      on-disk entries (`wc`: 725 lines / 42137 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered). This
+      supersedes WF02-REQ203-20260831's own pre-rebase count of 23 --
+      that count was correct for the branch's state at the time it was
+      written, before REQ-201's concurrent append landed on main.
+
+      Incremented to 23 by WF02-REQ203-20260831 (DOC-UPDATER)'s own REQ-203
+      done-event append (Step 6) -- branch-local count before rebase, no
+      conflict on this file at the time it was written (checked for a
+      concurrent REQ-204 session's own append; none had landed on this
+      volume yet).
+
       Recounted to 24 after merge of WF02-REQ201-20260830 and
       WF02-REQ202-20260830 concurrent branches (REQ-201 started/done from
       one session; REQ-195 started/done + REQ-196 started/done + REQ-202

@@ -1,0 +1,64 @@
+{
+  "handoff_id": "step04-WF02-REQ205-20260831",
+  "run_id": "WF02-REQ205-20260831",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ205-20260831/step-04-test-runner.json",
+  "created_at": "2026-08-31T12:20:00Z",
+  "started_at": "2026-08-31T12:20:00Z",
+  "completed_at": "2026-08-31T12:31:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-205"],
+    "requirement_text": {
+      "REQ-205": "S7 scenario-harness foundation: Elixir scenario runner, business-tenant fixture seeding, and the API-vs-GUI execution split. See docs/requirements.yaml id: REQ-205 for full text (8 acceptance criteria)."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req205-simulation-harness-foundation.md",
+      "handoffs/WF02-REQ205-20260831/step-03b-test-design-validator.json",
+      "mix.exs",
+      "mix.lock",
+      "test/letflow/simulation/",
+      "test/fixtures/simulation/",
+      "test/support/simulation/"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the full project test suite (scripts/test_parallel.sh) plus mix compile --warnings-as-errors, mix format --check-formatted, mix deps.get (confirming the new yaml_elixir test-only dependency resolves cleanly), the tenant-table oracle-rot guard, and mix letflow.lint_handoffs, to confirm REQ-205's implementation introduces no regression anywhere in the suite before RELEASE-VALIDATOR's independent re-verification.",
+    "acceptance_criteria": [
+      "mix deps.get resolves yaml_elixir cleanly",
+      "mix compile --warnings-as-errors is clean",
+      "mix format --check-formatted is clean",
+      "Full suite via scripts/test_parallel.sh run and combined Result: quoted; any failures classified as documented environmental flakes or genuine new regressions",
+      "test/letflow/support/tenant_fixture_test.exs (oracle-rot guard) confirmed passing",
+      "mix letflow.lint_handoffs run against this run's own handoff files"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Environment: docker compose up -d (via sudo, docker socket group-restricted in this sandbox) brought up letflow-1-postgres-1 and letflow-1-keycloak-1 (LETFLOW_DB_PORT=5463 per this workspace's untracked .env). mix deps.get resolved yaml_elixir 2.12.2 + yamerl 0.10.0 (the new test-only dependency) cleanly; only pre-existing, unrelated advisories (bandit, oidcc) were flagged. mix compile --warnings-as-errors --force: 'Compiling 180 files (.ex) / Generated letflow app', exit 0, zero warnings. mix format --check-formatted: exit 0, no output. Full suite via scripts/test_parallel.sh (N=8 partitions): combined 2981 tests, 6 properties, 2 failures (2985/2987 passed). Both failures are in Mix.Tasks.Letflow.CheckToolchainTest ('a mismatched rust pin reports a MISMATCH row...' and 'a matching rust pin reports OK with no mismatch...'), each raising ** (ErlangError) Erlang error: :enoent from System.cmd(\"rustc\", [\"--version\"], ...) -- exactly the documented rustc/cargo-absent-from-PATH environmental flake for this sandbox, not a regression and unrelated to REQ-205. No TenantSchemaReaperTest connection-pool flakes occurred this run. No failures, warnings, or slowdowns attributable to the new yaml_elixir dependency or test/support/simulation/ modules appeared outside the simulation test files themselves. test/letflow/support/tenant_fixture_test.exs (oracle-rot guard): Result: 14 passed, 0 failed -- confirmed unbroken (REQ-205 adds no new tenant-scoped tables, so no update to this guard was expected). mix letflow.lint_handoffs: ran against the full handoffs/ tree; found 8 new (un-grandfathered) [H3] non-schema-top-level-key violations, all pre-existing in this run's own earlier sibling files (step-02a-elixir-dev(.json/-rework1), step-02c-security-reviewer, step-02d-reviewer(.json/-recheck1), step-03-test-designer, step-03b-test-design-validator -- each carries a flat context/notes shape instead of the schema's task/result blocks) plus this file's own first draft, which has now been rewritten to the correct schema shape below. This TEST-RUNNER step's own handoff file is schema-compliant; the 6 sibling files from steps 02a/02c/02d/03/03b are pre-existing schema drift from earlier steps in this same run, flagged here for ORCH/RELEASE-VALIDATOR since TEST-RUNNER does not own those files and correcting them retroactively is out of scope for this step. REPEATING THE DISCLOSED AC1 GAP FOR RELEASE-VALIDATOR: the 12 fixture files under test/fixtures/simulation/ are SYNTHETIC, self-authored data, not a byte-for-byte port of real R-Co source content -- R-Co's source tree is unreachable from this sandbox. This was disclosed honestly in code comments/moduledocs and already flagged by TEST-DESIGN-VALIDATOR at step-03b; TEST-RUNNER cannot fix it. RELEASE-VALIDATOR must weigh this gap when deciding whether REQ-205 is done.",
+    "artifacts_out": [],
+    "issues": [
+      {"severity": "MINOR", "description": "mix letflow.lint_handoffs reports 8 new un-grandfathered [H3] violations (non-schema top-level keys, mainly a flat context/notes shape instead of task/result blocks) across this run's own earlier handoff files: step-02a-elixir-dev.json, step-02a-elixir-dev-rework1.json, step-02c-security-reviewer.json, step-02d-reviewer.json, step-02d-reviewer-recheck1.json, step-03-test-designer.json, step-03b-test-design-validator.json. Pre-existing schema drift from earlier steps, not introduced by this step; this step's own file has been corrected. Not a test/code regression and does not block RELEASE-VALIDATOR, but ORCH should have those 6 files corrected or accept them as grandfathered.", "affected_requirement": "REQ-205"},
+      {"severity": "MINOR", "description": "Full suite shows 2 failures in Mix.Tasks.Letflow.CheckToolchainTest, both traced to rustc/cargo being absent from this sandbox's PATH (ErlangError :enoent on System.cmd(\"rustc\", [\"--version\"])) -- a documented, pre-existing environmental limitation of this sandbox, not a regression introduced by REQ-205.", "affected_requirement": null}
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ205-20260831",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ205-20260831",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to RELEASE-VALIDATOR (Step 5) for independent re-verification. No genuine new defect found; the two CheckToolchainTest failures are a documented environmental flake and the AC1 synthetic-fixture gap is the one substantive open item for RELEASE-VALIDATOR to weigh."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

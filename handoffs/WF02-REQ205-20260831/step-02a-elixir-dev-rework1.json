@@ -11,7 +11,9 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
-    "requirement_ids": ["REQ-205"],
+    "requirement_ids": [
+      "REQ-205"
+    ],
     "issue_ids": [],
     "artifacts_in": [
       "handoffs/WF02-REQ205-20260831/step-03-test-designer.json",
@@ -47,14 +49,14 @@
       "test_command": "mix test test/letflow/simulation/ test/fixtures/simulation/",
       "test_result": "Result: 25 passed, 0 failed (23 pre-existing + 2 new audit_event template-substitution tests)"
     },
-    "security_review_note": "This is a narrow bugfix confined entirely to test/support/simulation/runner.ex's existing verify_outcome/2 function (already reviewed and passed by SECURITY-REVIEWER/REVIEWER in this run's step-02c/02d) -- it adds no new tenant-data-path behavior, only applies an already-approved substitution mechanism (used elsewhere in the same function) to one more argument set before an existing read-only query. ELIXIR-DEV's assessment: does not need a full SECURITY-REVIEWER re-pass, but this is ORCH's call per this role's standing instructions, not ELIXIR-DEV's to self-certify."
+    "security_review_note": "This is a narrow bugfix confined entirely to test/support/simulation/runner.ex's existing verify_outcome/2 function (already reviewed and passed by SECURITY-REVIEWER/REVIEWER in this run's step-02c/02d) -- it adds no new tenant-data-path behavior, only applies an already-approved substitution mechanism (used elsewhere in the same function) to one more argument set before an existing read-only query. ELIXIR-DEV's assessment: does not need a full SECURITY-REVIEWER re-pass, but this is ORCH's call per this role's standing instructions, not ELIXIR-DEV's to self-certify.",
+    "issues": [],
+    "artifacts_out": [
+      "test/support/simulation/runner.ex",
+      "test/letflow/simulation/runner_template_and_outcomes_test.exs"
+    ],
+    "next_action": "Route to REVIEWER for a narrow re-check of this one fix (idiom/shape of resolve_optional_ref/3 and the with-based fail-closed clause). ORCH to decide whether SECURITY-REVIEWER re-pass is also warranted; ELIXIR-DEV's read is no, per security_review_note above."
   },
-  "issues": [],
-  "artifacts_out": [
-    "test/support/simulation/runner.ex",
-    "test/letflow/simulation/runner_template_and_outcomes_test.exs"
-  ],
-  "next_action": "Route to REVIEWER for a narrow re-check of this one fix (idiom/shape of resolve_optional_ref/3 and the with-based fail-closed clause). ORCH to decide whether SECURITY-REVIEWER re-pass is also warranted; ELIXIR-DEV's read is no, per security_review_note above.",
   "rework_count": 1,
   "max_rework": 3
 }

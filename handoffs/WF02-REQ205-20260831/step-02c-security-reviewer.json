@@ -11,7 +11,9 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
-    "requirement_ids": ["REQ-205"],
+    "requirement_ids": [
+      "REQ-205"
+    ],
     "issue_ids": [],
     "artifacts_in": [
       "handoffs/WF02-REQ205-20260831/step-02a-elixir-dev.json",
@@ -41,15 +43,19 @@
       "no_production_code_touched": "git diff main...HEAD --stat -- lib/ priv/repo/migrations/ shows exactly one file changed under lib/: lib/letflow/design/req205-simulation-harness-foundation.md (a design doc, not code). No route, controller, context module, or migration under lib/letflow/ or priv/repo/migrations/ was modified. All 25 other changed files are under test/, handoffs/, or mix.exs/mix.lock.",
       "auth_pipeline_not_bypassed": "Letflow.Simulation.Runner.dispatch_api_step/4 builds a Plug.Test conn with real Authorization: Bearer <plaintext-token> and x-tenant-slug headers and calls Letflow.Router.call(request_conn, @router_opts) -- the same real Letflow.Router used in production, which per lib/letflow/router.ex's own comments routes non-explicitly-public paths through Letflow.Plugs.AuthPipeline with no bypass. Confirmed no test-only auth shortcut, mock plug, or header injection that skips AuthPipeline exists anywhere in runner.ex. This pattern is safe to exist in test-support code and would not mask a real security gap if copied elsewhere, since it exercises the real pipeline rather than substituting for it."
     },
-    "note_on_elixir_dev_disclosure": "ELIXIR-DEV's honest disclosure that R-Co source was unreachable and synthetic fixtures were substituted (AC1's literal 'ported from R-Co' content requirement not met) is a requirement-completeness/AC-satisfaction question for RELEASE-VALIDATOR/ORCH, not a security concern -- the synthetic fixtures contain no secrets and exercise the identical code paths real fixtures would, so this disposition does not change the security verdict. Not re-litigated here; flagged only for completeness of this handoff's record."
+    "note_on_elixir_dev_disclosure": "ELIXIR-DEV's honest disclosure that R-Co source was unreachable and synthetic fixtures were substituted (AC1's literal 'ported from R-Co' content requirement not met) is a requirement-completeness/AC-satisfaction question for RELEASE-VALIDATOR/ORCH, not a security concern -- the synthetic fixtures contain no secrets and exercise the identical code paths real fixtures would, so this disposition does not change the security verdict. Not re-litigated here; flagged only for completeness of this handoff's record.",
+    "files_changed": {
+      "modified": [],
+      "created": [
+        "handoffs/WF02-REQ205-20260831/step-02c-security-reviewer.json"
+      ]
+    },
+    "issues": [],
+    "artifacts_out": [
+      "handoffs/WF02-REQ205-20260831/step-02c-security-reviewer.json"
+    ],
+    "next_action": "Route to REVIEWER for idiom/supervision/scope-creep review and the formal AC7 (yaml_elixir dependency) sign-off per WF-02 Step 2d."
   },
-  "files_changed": {
-    "modified": [],
-    "created": ["handoffs/WF02-REQ205-20260831/step-02c-security-reviewer.json"]
-  },
-  "issues": [],
-  "artifacts_out": ["handoffs/WF02-REQ205-20260831/step-02c-security-reviewer.json"],
-  "next_action": "Route to REVIEWER for idiom/supervision/scope-creep review and the formal AC7 (yaml_elixir dependency) sign-off per WF-02 Step 2d.",
   "rework_count": 0,
   "max_rework": 3
 }

@@ -11,7 +11,9 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
-    "requirement_ids": ["REQ-205"],
+    "requirement_ids": [
+      "REQ-205"
+    ],
     "issue_ids": [],
     "artifacts_in": [
       "lib/letflow/design/req205-simulation-harness-foundation.md",
@@ -69,5 +71,11 @@
       "compile_check": "mix compile --warnings-as-errors -- clean, no warnings"
     }
   },
-  "notes": "Routing to TEST-DESIGN-VALIDATOR per WF-02 step 3->3a. Two findings above are carried forward for ORCH's attention regardless of the validator's own verdict -- neither blocks REQ-205 itself (both are pre-existing implementation behavior this session's testing surfaced, not new defects introduced by this step)."
+  "task": {
+    "description": "See result.notes for the full completion report."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "notes": "Routing to TEST-DESIGN-VALIDATOR per WF-02 step 3->3a. Two findings above are carried forward for ORCH's attention regardless of the validator's own verdict -- neither blocks REQ-205 itself (both are pre-existing implementation behavior this session's testing surfaced, not new defects introduced by this step)."
+  }
 }

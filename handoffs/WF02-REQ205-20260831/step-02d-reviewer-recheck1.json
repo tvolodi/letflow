@@ -11,7 +11,9 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
-    "requirement_ids": ["REQ-205"],
+    "requirement_ids": [
+      "REQ-205"
+    ],
     "issue_ids": [],
     "artifacts_in": [
       "handoffs/WF02-REQ205-20260831/step-02a-elixir-dev-rework1.json",
@@ -46,14 +48,14 @@
       "Type-safety: no new class of invalid state introduced. args remains a raw map from hand-built/YAML-sourced scenario data (already the existing shape); the {:ok, nil} vs {:error, {:missing_arg, key}} split for optional vs required keys is exactly the distinction Audit.list_entries/1's existing signature already expects. Not filing a type-safety issue for this change -- it's a same-shape extension of an existing, already-reviewed pattern, not a new gap.",
       "Scope: minimal and matched to the fix -- one clause changed, one small helper added, two tests added. No abstraction, behaviour, or plumbing introduced ahead of what this bugfix needs.",
       "Security-review-scope assessment: agree with ELIXIR-DEV's read that a SECURITY-REVIEWER re-pass is not warranted. The change is confined to test/support/simulation/runner.ex's existing verify_outcome/2 (already reviewed and passed at step-02c/02d in this same run), touches no tenant-data-path production code (no new route, migration, secret handling, or response shaping), and only threads an already-approved read-only-query-scoping mechanism (used elsewhere in the same already-reviewed function) onto two more of that same query's existing parameters. This is REVIEWER's assessment for ORCH's decision, not a self-certification on ELIXIR-DEV's or REVIEWER's part."
-    ]
+    ],
+    "issues": [],
+    "artifacts_out": [
+      "test/support/simulation/runner.ex",
+      "test/letflow/simulation/runner_template_and_outcomes_test.exs"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b) to validate coverage of this fix. TEST-DESIGNER's existing suite already grew by 2 tests targeting exactly this gap in step 02a rework1 -- Step 3 (TEST-DESIGNER) does not need to redo work, only Step 3b needs to confirm the added coverage is sufficient and isolated."
   },
-  "issues": [],
-  "artifacts_out": [
-    "test/support/simulation/runner.ex",
-    "test/letflow/simulation/runner_template_and_outcomes_test.exs"
-  ],
-  "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b) to validate coverage of this fix. TEST-DESIGNER's existing suite already grew by 2 tests targeting exactly this gap in step 02a rework1 -- Step 3 (TEST-DESIGNER) does not need to redo work, only Step 3b needs to confirm the added coverage is sufficient and isolated.",
   "rework_count": 0,
   "max_rework": 3
 }

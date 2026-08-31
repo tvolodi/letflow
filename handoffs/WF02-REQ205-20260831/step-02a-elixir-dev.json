@@ -11,7 +11,9 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
-    "requirement_ids": ["REQ-205"],
+    "requirement_ids": [
+      "REQ-205"
+    ],
     "issue_ids": [],
     "artifacts_in": [
       "lib/letflow/design/req205-simulation-harness-foundation.md",
@@ -66,39 +68,42 @@
       "§6 task_assigned compares against Task.t()'s real assignee_type/assignee_ref fields (no single 'assignee' field exists). Documented in runner.ex moduledoc.",
       "Scenario.step() gained an 'actor' field beyond the design's literal table (via/action/params/produces) -- necessary plumbing since real HTTP dispatch needs a caller identity and the design deferred this. Documented in scenario struct moduledoc (test/support/simulation/runner.ex)."
     ],
-    "security_review_routing_note": "ELIXIR-DEV's own read: this change is test-support code (test/support/simulation/, test/fixtures/simulation/, test/letflow/simulation/) that EXERCISES real tenant-provisioning/identity/definition/instance context functions (Letflow.Identity.create_tenant/1, Letflow.TenantOnboarding.provision_and_migrate/1, Letflow.Identity.create_user/2, Letflow.Identity.create_token/3, real HTTP through Letflow.Router.call/2 with a real API-token bearer credential) but ships no production code path -- nothing under lib/letflow/ changed except mix.exs's deps/0 (a test-only dependency addition). Per CLAUDE.md's roster table, SECURITY-REVIEWER gates 'tenant-data-path changes' -- this touches tenant-data *paths* (real provisioning, real credential issuance/verification) even though it is test-only code, and per this project's redundancy principle ('every producing step has a validating step') ELIXIR-DEV should not decide this gate is skippable. Routing to SECURITY-REVIEWER per the workflow's normal Step 2b; SECURITY-REVIEWER should make the final call on whether test-support-only code touching these paths needs the same INV-1..INV-8 scrutiny as production code (this session's own read: yes for INV-4 -- plaintext API tokens are handled in test code (runner_test.exs setup) exactly once, held only in local variables, never logged or persisted beyond the test's own on_exit teardown, matching the production create_token/3 discipline; no other INV appears implicated since no new production code exists)."
-  },
-  "files_changed": {
-    "modified": ["mix.exs", "mix.lock"],
-    "created": [
-      "test/fixtures/simulation/swiftroute/company.yaml",
-      "test/fixtures/simulation/swiftroute/org_structure.yaml",
-      "test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml",
-      "test/fixtures/simulation/swiftroute/process_route_approval.yaml",
-      "test/fixtures/simulation/vortex/company.yaml",
-      "test/fixtures/simulation/vortex/org_structure.yaml",
-      "test/fixtures/simulation/vortex/process_work_order.yaml",
-      "test/fixtures/simulation/vortex/process_quality_check.yaml",
-      "test/fixtures/simulation/meridian/company.yaml",
-      "test/fixtures/simulation/meridian/org_structure.yaml",
-      "test/fixtures/simulation/meridian/process_claim_intake.yaml",
-      "test/fixtures/simulation/meridian/process_policy_binding.yaml",
-      "test/fixtures/simulation/fixture_shape_test.exs",
+    "security_review_routing_note": "ELIXIR-DEV's own read: this change is test-support code (test/support/simulation/, test/fixtures/simulation/, test/letflow/simulation/) that EXERCISES real tenant-provisioning/identity/definition/instance context functions (Letflow.Identity.create_tenant/1, Letflow.TenantOnboarding.provision_and_migrate/1, Letflow.Identity.create_user/2, Letflow.Identity.create_token/3, real HTTP through Letflow.Router.call/2 with a real API-token bearer credential) but ships no production code path -- nothing under lib/letflow/ changed except mix.exs's deps/0 (a test-only dependency addition). Per CLAUDE.md's roster table, SECURITY-REVIEWER gates 'tenant-data-path changes' -- this touches tenant-data *paths* (real provisioning, real credential issuance/verification) even though it is test-only code, and per this project's redundancy principle ('every producing step has a validating step') ELIXIR-DEV should not decide this gate is skippable. Routing to SECURITY-REVIEWER per the workflow's normal Step 2b; SECURITY-REVIEWER should make the final call on whether test-support-only code touching these paths needs the same INV-1..INV-8 scrutiny as production code (this session's own read: yes for INV-4 -- plaintext API tokens are handled in test code (runner_test.exs setup) exactly once, held only in local variables, never logged or persisted beyond the test's own on_exit teardown, matching the production create_token/3 discipline; no other INV appears implicated since no new production code exists).",
+    "files_changed": {
+      "modified": [
+        "mix.exs",
+        "mix.lock"
+      ],
+      "created": [
+        "test/fixtures/simulation/swiftroute/company.yaml",
+        "test/fixtures/simulation/swiftroute/org_structure.yaml",
+        "test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml",
+        "test/fixtures/simulation/swiftroute/process_route_approval.yaml",
+        "test/fixtures/simulation/vortex/company.yaml",
+        "test/fixtures/simulation/vortex/org_structure.yaml",
+        "test/fixtures/simulation/vortex/process_work_order.yaml",
+        "test/fixtures/simulation/vortex/process_quality_check.yaml",
+        "test/fixtures/simulation/meridian/company.yaml",
+        "test/fixtures/simulation/meridian/org_structure.yaml",
+        "test/fixtures/simulation/meridian/process_claim_intake.yaml",
+        "test/fixtures/simulation/meridian/process_policy_binding.yaml",
+        "test/fixtures/simulation/fixture_shape_test.exs",
+        "test/support/simulation/seed.ex",
+        "test/support/simulation/runner.ex",
+        "test/letflow/simulation/seed_idempotency_test.exs",
+        "test/letflow/simulation/runner_test.exs"
+      ]
+    },
+    "issues": [],
+    "artifacts_out": [
       "test/support/simulation/seed.ex",
       "test/support/simulation/runner.ex",
-      "test/letflow/simulation/seed_idempotency_test.exs",
-      "test/letflow/simulation/runner_test.exs"
-    ]
+      "test/fixtures/simulation/",
+      "test/letflow/simulation/",
+      "mix.exs"
+    ],
+    "next_action": "Route to SECURITY-REVIEWER (this touches real tenant-provisioning/identity/credential context-function paths even though it is test-only code -- see security_review_routing_note). SECURITY-REVIEWER and REVIEWER (idiom + AC7's dependency sign-off) are both hard gates before TEST-DESIGNER per WF-02 Steps 2b-2d."
   },
-  "issues": [],
-  "artifacts_out": [
-    "test/support/simulation/seed.ex",
-    "test/support/simulation/runner.ex",
-    "test/fixtures/simulation/",
-    "test/letflow/simulation/",
-    "mix.exs"
-  ],
-  "next_action": "Route to SECURITY-REVIEWER (this touches real tenant-provisioning/identity/credential context-function paths even though it is test-only code -- see security_review_routing_note). SECURITY-REVIEWER and REVIEWER (idiom + AC7's dependency sign-off) are both hard gates before TEST-DESIGNER per WF-02 Steps 2b-2d.",
   "rework_count": 0,
   "max_rework": 3
 }

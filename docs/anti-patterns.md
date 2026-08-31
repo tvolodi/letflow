@@ -2005,3 +2005,73 @@ three instances on the first pass. When a design depends on several sibling func
 same shape, verify each one individually and say so explicitly (as REQ-195's final design does in
 §3.1a/§3.1b) rather than asserting the family-wide generalization once and trusting it to hold for
 every member.
+
+## Ecto's default index/constraint naming can silently collide or exceed Postgres's 63-byte NAMEDATALEN limit -- invisible to a plain `mix ecto.migrate`
+
+**REQ-202 (content-addressed artifact store), caught by TEST-DESIGNER's own test run against
+real Postgres, not by review.** The migration declared both a `unique_index/3` and a plain
+`index/3` on `artifact_versions(:artifact_kind, :artifact_name, :version_number)`, the second
+with `desc: :version_number`. Ecto derives an index's default name from its column list alone --
+the `desc:` annotation changes the generated SQL but not the derived name -- so both calls
+produced the *identical* default name. That name was also 66 bytes, seven over Postgres's
+63-byte `NAMEDATALEN` limit, so even a single occurrence would have been silently truncated to a
+different, shorter identifier than what the code (here, `ArtifactVersion`'s
+`@unique_version_number_constraint_name`, used by `unique_constraint/3`'s error-matching) assumed.
+Two independent failure modes from one root cause: a **name collision** between two index
+declarations, and a **truncation mismatch** between the constraint name Postgres actually stores
+and the atom the schema module matches errors against.
+
+**Why this is invisible to `mix ecto.migrate` alone:** that command runs the migration once,
+against the `public`/non-tenant schema, in whatever database state the running session already
+has. It never replays the migration into a *fresh* per-tenant schema the way
+`Letflow.TenantProvisioning`'s real provisioning path does, so a collision between two index
+names in the SAME migration only surfaces the moment Postgres is asked to create both inside one
+schema from a clean slate -- exactly what TEST-DESIGNER's test run did (and what an interactive
+`mix ecto.migrate` against a long-lived dev database, which already has the first index and skips
+re-creating it, would not reproduce). Likewise, a truncated name compiles and migrates fine; it
+only breaks the moment application code tries to pattern-match a Postgres error against the name
+the code *assumes* was stored, which is a runtime-error-path test, not a migration-apply check.
+
+**Correct alternative:** any migration whose index or constraint's default name is built from
+more than two or three column names, or that mixes `desc:`/`asc:` direction annotations across
+sibling index declarations on the same column set, should be given an explicit, short `:name`
+option rather than trusting Ecto's default -- and that default should be computed and checked
+against the 63-byte limit by hand (`column_list |> Enum.join("_") |> then(&"#{table}_#{&1}_index")
+|> byte_size`) before relying on it, not assumed safe because the migration compiles. A design or
+review pass that only reads the migration's DDL cannot catch this class either -- it takes an
+actual replay against a real, freshly-provisioned per-tenant schema (TEST-DESIGNER's or
+TEST-RUNNER's own suite run, not `mix ecto.migrate`) to surface it.
+
+## A new tenant-scoped migration's tables must be added to `test/support/tenant_fixture.ex`'s `@expected_tenant_tables` oracle in the SAME change -- three occurrences, and it was never actually documented here until now
+
+**REQ-181 (webhook_subscriptions), REQ-195 (audit_entries), and now REQ-202
+(artifact_versions/repository_artifacts) each independently forgot this step**, and each was
+caught by the SAME guard test (`Letflow.Support.TenantFixtureTest`'s "C6 -- oracle-rot guard",
+which asserts the set of tables a real tenant-schema provisioning run actually creates equals
+`@expected_tenant_tables/0` in both directions) rather than by review. REQ-202's own TEST-RUNNER
+handoff (step-04-test-runner.json) asserted in passing that this was "the exact same recurring
+bug class documented on REQ-181 ... and REQ-195" -- but at the time that sentence was written, no
+anti-patterns.md entry for it actually existed: neither prior occurrence had been filed here, so
+there was nothing in this file an ELIXIR-DEV session could have grepped for to pre-empt REQ-202's
+own instance before TEST-RUNNER caught it a third time. This entry is that filing, after the fact,
+for all three.
+
+**The mechanism, each time:** a migration adds one or more new `prefix: schema`-scoped tables
+(`priv/repo/migrations/`), and `Letflow.TenantProvisioning.tenant_scoped_migrations/0`'s manifest
+is updated to run it during provisioning -- but `test/support/tenant_fixture.ex`'s
+`@expected_tenant_tables` list, a separate, hand-maintained oracle of every table a freshly
+provisioned tenant schema should contain, is a different file with no compiler or migration-runner
+link forcing it to move in lockstep. C6's guard test is the only thing that notices the drift, and
+it only fires when the full suite (or that specific test file) is actually run against a real,
+freshly provisioned schema -- exactly the category of check `mix ecto.migrate` alone (see this
+file's adjacent NAMEDATALEN entry) cannot perform either.
+
+**Correct alternative:** any requirement whose acceptance criteria include a new tenant-scoped
+migration should treat updating `@expected_tenant_tables` (and the paired count assertion in
+`test/letflow/support/tenant_fixture_test.exs`) as part of that migration's own diff, not a
+follow-up -- ELIXIR-DEV should grep for `@expected_tenant_tables` and add the new table name(s)
+in the same commit that adds the migration, before TEST-DESIGNER or TEST-RUNNER ever runs C6
+against it. Now that this is a filed, three-occurrence pattern, a fourth instance should be treated
+as a signal that the check itself belongs closer to the migration (a compile-time or
+migration-review assertion cross-referencing the manifest against the oracle list) rather than
+left to whichever downstream test happens to run C6 first.

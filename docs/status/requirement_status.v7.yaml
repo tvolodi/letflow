@@ -672,3 +672,62 @@ history:
       documented "COMPLETED") was caught and fixed (commit 25de8c3e) --
       the 6th documented occurrence of this exact recurring bug class on
       this project.
+  - req: REQ-202
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T23:46:59Z"
+    note: >
+      WF02-REQ202-20260830 done (queue task 375, GH#720, stage S6). Content-
+      addressed artifact store shipped: repository_artifacts (content_hash
+      BYTEA primary key, content_type, byte_size) + artifact_versions
+      (named/ordered versions with parent_version_id lineage), preserving
+      migration 045's shape and explicitly rejecting R-Co's conflicting
+      migration 058 shape. A dedicated Letflow.Repository.Canonicaliser
+      module was built deliberately SEPARATE from REQ-036's
+      PromotionDigest -- both moduledocs cross-reference each other,
+      stating the two algorithms differ (REPO-04 normalises number forms;
+      PromotionDigest passes numbers through unchanged) and that merging
+      them would silently redrive every stored promotion digest. Binary
+      content is hashed by byte identity with no canonicalisation.
+      Per-tenant placement (decision 0003 Decision B) stated with reason.
+      DB-level immutability enforced on repository_artifacts (no UPDATE
+      path, not merely absent from the API). REQ-041's
+      solution_pack_artefact_bases disambiguated in the moduledoc as an
+      unrelated, global, install-tracking table this requirement neither
+      reads nor writes. Five rework cycles total: (1) ELIXIR-DEV @spec
+      rework fixing two undeclared error-return atoms in create/2 and
+      list_versions/4 after re-tracing the real error paths; (2) ELIXIR-DEV
+      migration-naming rework fixing TWO REAL POSTGRES BUGS that
+      TEST-DESIGNER's own actual test execution against real Postgres
+      caught (not a review-time finding): Ecto's default index-naming
+      generated the SAME 66-byte name for both a unique_index/3 and a
+      plain index/3 on artifact_versions because the desc: annotation on
+      the second doesn't factor into the derived name (a collision), and
+      that same derived name exceeded Postgres's 63-byte NAMEDATALEN
+      limit and would have been silently truncated -- fixed with explicit,
+      short index names and the ArtifactVersion schema's constraint-name
+      atom corrected to match; (3) TEST-DESIGNER coverage-gap rework
+      adding an upsert-on-collision test proving content_type/byte_size
+      are not re-validated against an existing content row; (4) a
+      test-fixture oracle-rot rework (rework 3) adding
+      artifact_versions/repository_artifacts to
+      test/support/tenant_fixture.ex's @expected_tenant_tables and
+      bumping the count assertion 27->29 -- the 3rd occurrence of this
+      exact defect class (REQ-181, REQ-195, now REQ-202), caught this time
+      by TEST-RUNNER's own C6 guard run rather than pre-empted, since no
+      anti-patterns.md entry existed yet to prompt ELIXIR-DEV to check for
+      it up front (now filed, see docs/anti-patterns.md); (5) no fifth
+      rework was needed beyond RELEASE-VALIDATOR's own PASS. RELEASE-
+      VALIDATOR independently re-verified all 14 acceptance criteria
+      against the real shipped code (own read of both moduledocs
+      side-by-side, own git diff confirming promotion_digest.ex's change
+      is a 9-line moduledoc-only addition with zero touch to
+      canonicalize/1, compute_plan_digest/1 or verify_digest/2, own read
+      of the migration's trigger DDL and comments, own Code.fetch_docs/1
+      read of both moduledocs, own git diff --stat confirming no route/
+      controller/web file touched, own full-suite reruns matching
+      TEST-RUNNER's recheck1 figures: 2865/2867, the only 2 failures being
+      the documented rustc-absent CheckToolchainTest baseline). Full
+      detail: handoffs/WF02-REQ202-20260830/release-validation-report-20260830.md.
+      docs/migration/stage-6-operational-cross-cutting.md updated to
+      record REQ-202 done.

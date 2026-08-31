@@ -1,0 +1,105 @@
+run_id: WF02-REQ202-20260830
+requirement_id: REQ-202
+step: "Step 4 (TEST-RUNNER)"
+performed_by: TEST-RUNNER
+note: >
+  Full-suite run of the whole project (not just REQ-202's own test files), per
+  WF-02 Step 4. docker compose Postgres/Keycloak containers were already up
+  (started under sudo by an earlier session in this sandbox; this session's own
+  user lacks docker socket permission, confirmed via `docker ps` ->
+  "permission denied", then `sudo -n docker compose up -d` -> both containers
+  already Running).
+checks:
+  mix_compile_warnings_as_errors:
+    result: PASS
+    output: "(no output -- clean compile, zero warnings)"
+  mix_format_check_formatted:
+    result: PASS
+    output: "(no output -- already formatted)"
+  toolchain_baseline_check:
+    result: CONFIRMED
+    output: >
+      `which rustc` and `which cargo` both produced no output / exit 1 -- rustc
+      and cargo are not on PATH in this sandbox, confirming the documented
+      Mix.Tasks.Letflow.CheckToolchainTest baseline (2 tests) applies here.
+  full_suite:
+    runner: scripts/test_parallel.sh
+    N: 8
+    N_source: nproc
+    result: "6 failures: 2 documented rustc-absent baseline + 1 documented pre-existing TenantSchemaReaperTest concurrency flake class (3 sub-tests) + 1 GENUINE NEW REGRESSION introduced by this PR"
+    combined: "combined: 2861 tests, 6 properties, 6 failures (2861/2867 passed)"
+    partitions:
+      - "partition 1: 330 tests, 2 properties, 0 failures, exit 0"
+      - "partition 2: 311 tests, 0 properties, 0 failures, exit 0"
+      - "partition 3: 452 tests, 0 properties, 2 failures, exit 2"
+      - "partition 4: 370 tests, 1 property, 3 failures, exit 2"
+      - "partition 5: 367 tests, 2 properties, 0 failures, exit 0"
+      - "partition 6: 419 tests, 0 properties, 1 failures, exit 2"
+      - "partition 7: 282 tests, 1 property, 0 failures, exit 0"
+      - "partition 8: 330 tests, 0 properties, 0 failures, exit 0"
+    failures:
+      - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        partition: 3
+        error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...)"
+        diagnosis: "Documented rustc-absent CheckToolchainTest baseline. No rustc/cargo on this sandbox's PATH (confirmed via which). Not a real defect."
+      - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        partition: 3
+        error: "** (ErlangError) Erlang error: :enoent -- same root cause"
+        diagnosis: "Documented rustc-absent CheckToolchainTest baseline. Same root cause as above."
+      - test: "test sweep_orphans/2 concurrent-invocation liveness guard (ISS-0110) spares an old row while another invocation's connection is open, reclaims it once that connection closes (Letflow.TenantSchemaReaperTest)"
+        partition: 4
+        error: "** (DBConnection.ConnectionError) connection not available, dropped from queue after 4000ms"
+        diagnosis: >
+          Documented pre-existing TenantSchemaReaperTest concurrency/connection-pool
+          flake class under N=8 parallel load (same class seen in
+          test/reports/report-2026-08-28-WF02-REQ165-20260828.yaml, attributed there as
+          PRE-EXISTING/environmental). test/support/tenant_schema_reaper_test.exs is
+          not in this branch's diff (git diff main...HEAD --stat) -- structurally
+          unrelated to REQ-202.
+      - test: "test sweep_orphans/2 reclaims an old, well-formed orphaned row drops the real schema and deletes both rows (Letflow.TenantSchemaReaperTest)"
+        partition: 4
+        error: "Assertion with >= failed: assert reclaimed >= 1, left: 0, right: 1 (log shows another mix test invocation detected as connected, deferring sweep -- ISS-0110 liveness guard behaving as designed under N=8 parallel contention)"
+        diagnosis: "Same pre-existing concurrency flake class as above; same file, structurally unrelated to REQ-202's diff."
+      - test: "test sweep_orphans/2 schema_name format guard skips an old row with a malformed schema_name instead of attempting a drop (Letflow.TenantSchemaReaperTest)"
+        partition: 4
+        error: "Assertion with >= failed: assert skipped >= 1, left: 0, right: 1"
+        diagnosis: "Same pre-existing concurrency flake class as above; same file, structurally unrelated to REQ-202's diff."
+      - test: "test C6 -- oracle-rot guard observed tables equal expected_tenant_tables/0 in both directions (Letflow.Support.TenantFixtureTest)"
+        partition: 6
+        error: >
+          a manifest migration created a table the oracle does not list:
+          ["artifact_versions", "repository_artifacts"]
+          at test/letflow/support/tenant_fixture_test.exs:401
+        diagnosis: >
+          GENUINE NEW REGRESSION, caused by this PR. REQ-202's migration
+          (priv/repo/migrations/20260830030001_create_repository_artifacts.exs)
+          creates two tenant-scoped tables (create table(:repository_artifacts,
+          prefix: schema) at line 68 and create table(:artifact_versions, prefix:
+          schema) at line 82) but test/support/tenant_fixture.ex's
+          @expected_tenant_tables oracle list (lines 122-150) was never updated to
+          include them -- confirmed via `git diff main...HEAD --stat`, which shows
+          test/support/tenant_fixture.ex is NOT among the 27 files this branch
+          touches. This is the exact same bug class documented twice before on this
+          same oracle (REQ-181/webhook_subscriptions,
+          test/reports/report-2026-08-23 era, and REQ-195/audit_entries,
+          test/reports/report-2026-08-30-WF02-REQ195-20260830-rework1.yaml) --
+          each time a new tenant-scoped migration lands, @expected_tenant_tables and
+          the "== 27" count assertion at
+          test/letflow/support/tenant_fixture_test.exs:305 must be updated in the
+          same PR. Fix required: add "artifact_versions" and "repository_artifacts"
+          to @expected_tenant_tables (alphabetically ordered per existing list
+          convention), and bump the count assertion at
+          test/letflow/support/tenant_fixture_test.exs:305 from 27 to 29 (with an
+          added comment line following the existing REQ-181/REQ-195-style
+          changelog-in-comment convention).
+    diff_scope_check: "git diff main...HEAD --stat: 27 files changed -- confirms test/support/tenant_fixture.ex and test/support/tenant_schema_reaper_test.exs are NOT touched by this branch, isolating the oracle-rot failure as this branch's own defect and the reaper failures as pre-existing/unrelated."
+  ci_parity_task:
+    result: NOT_COMPLETED
+    output: >
+      `mix letflow.check.test` was run in the foreground with a 590s timeout and did
+      not finish in that window (terminated, exit 143). Not re-attempted with a
+      longer budget given the full-suite run above already surfaced the blocking
+      regression that must be fixed before this task is worth re-running. No
+      speculation offered about what it would have reported.
+verdict: FAIL
+next_step: "Route back to Step 02a (ELIXIR-DEV) to add artifact_versions and repository_artifacts to test/support/tenant_fixture.ex's @expected_tenant_tables oracle and bump the count assertion at test/letflow/support/tenant_fixture_test.exs:305 from 27 to 29, then re-run the full REVIEWER -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER gate sequence for that narrow fix."

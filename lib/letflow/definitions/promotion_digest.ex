@@ -27,6 +27,15 @@ defmodule Letflow.Definitions.PromotionDigest do
   reaches this module.
   `Letflow.Definitions.PromotionPlan.compute_promotion_plan/5` guarantees
   this (its own moduledoc states the same cross-module dependency).
+
+  ## A second, separate canonicaliser exists (REQ-202)
+
+  A second, separate canonicaliser exists at
+  `Letflow.Repository.Canonicaliser` (REQ-202), which DOES normalize
+  numbers, for the artifact-repository content store. This module's
+  `canonicalize/1` deliberately does not, to avoid changing already-stored
+  promotion digests. The two must not be merged; see
+  `Letflow.Repository.Canonicaliser`'s moduledoc for the full reasoning.
   """
 
   @doc """

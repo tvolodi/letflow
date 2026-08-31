@@ -1,0 +1,46 @@
+run_id: WF02-REQ202-20260830
+step: "04-recheck1"
+agent: TEST-RUNNER
+date: 2026-08-30
+branch: feature/WF02-REQ202-20260830
+purpose: >
+  Independent re-check that ELIXIR-DEV's step-02a-rework3 test-fixture-only fix
+  (test/support/tenant_fixture.ex + test/letflow/support/tenant_fixture_test.exs)
+  actually resolved the C6 oracle-rot regression found in step-04-test-runner.json,
+  without introducing any new breakage.
+
+checks:
+  - name: "mix compile --warnings-as-errors"
+    result: PASS
+    output: "(no output, exit 0)"
+  - name: "mix format --check-formatted"
+    result: PASS
+    output: "(no output, exit 0)"
+  - name: "mix test test/letflow/support/tenant_fixture_test.exs"
+    result: PASS
+    output: "Result: 14 passed (exit 0) -- includes C6 oracle-rot guard test, now passing against real Postgres"
+  - name: "bash scripts/test_parallel.sh (N=8, nproc)"
+    result: PASS
+    output: |
+      partition 1: 330 tests, 2 properties, 0 failures, exit 0
+      partition 2: 311 tests, 0 properties, 0 failures, exit 0
+      partition 3: 452 tests, 0 properties, 2 failures, exit 2
+      partition 4: 370 tests, 1 property, 0 failures, exit 0
+      partition 5: 367 tests, 2 properties, 0 failures, exit 0
+      partition 6: 419 tests, 0 properties, 0 failures, exit 0
+      partition 7: 282 tests, 1 property, 0 failures, exit 0
+      partition 8: 330 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 2861 tests, 6 properties, 2 failures (2865/2867 passed)
+    failure_breakdown:
+      - "2 failures in partition 3, both Mix.Tasks.Letflow.CheckToolchainTest ('a mismatched rust pin reports a MISMATCH row...' and 'a matching rust pin reports OK with no mismatch...') -- documented pre-existing baseline, rustc/cargo absent in this sandbox (independently confirmed via `which rustc`/`which cargo` both failing)."
+      - "0 TenantSchemaReaperTest failures this run -- the documented up-to-3-failure connection-pool flake class did not manifest in this particular run; its absence is expected variance (a flake class), not evidence it was fixed, and is not treated as a new finding."
+    genuine_regression_status: "RESOLVED -- C6 oracle-rot guard (Letflow.Support.TenantFixtureTest) passes; failure count matches only the documented rustc-absent baseline (2/2), down from the prior run's 6 (2 baseline + 3 reaper-flake + 1 genuine regression)."
+
+verdict: PASS
+notes: >
+  Re-verified independently (fresh compile, format check, targeted test file, full
+  parallel suite) rather than trusting ELIXIR-DEV's step-02a-rework3 report. All
+  claims in that report check out. No new findings. Routing to RELEASE-VALIDATOR
+  (Step 5) for its own independent re-verification per core-directives.md's
+  "every producing step has a validating step."

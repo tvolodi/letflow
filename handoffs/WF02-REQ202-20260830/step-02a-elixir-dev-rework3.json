@@ -1,0 +1,53 @@
+{
+  "handoff_id": "step02a-WF02-REQ202-20260830-rework3",
+  "run_id": "WF02-REQ202-20260830",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ202-20260830/step-02a-elixir-dev-rework3.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-202"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ202-20260830/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "priv/repo/migrations/20260830030001_create_repository_artifacts.exs",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/support/tenant_fixture_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ202-20260830"
+  },
+  "task": {
+    "description": "Fix the oracle-rot regression TEST-RUNNER (Step 4) found: test/support/tenant_fixture.ex's @expected_tenant_tables oracle was never updated when REQ-202's migration (priv/repo/migrations/20260830030001_create_repository_artifacts.exs) added two new tenant-scoped tables. Same recurring bug class as REQ-181 and REQ-195.",
+    "acceptance_criteria": [
+      "test/support/tenant_fixture.ex's @expected_tenant_tables includes \"artifact_versions\" and \"repository_artifacts\"",
+      "test/letflow/support/tenant_fixture_test.exs's count assertion matches the actual list length after the addition",
+      "C6 oracle-rot guard test passes against real Postgres",
+      "test/letflow/repository_test.exs and test/letflow/repository/canonicaliser_test.exs remain untouched and passing (39/39)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Test-fixture-only fix, no application code touched. Added \"artifact_versions\" and \"repository_artifacts\" (alphabetically ordered, matching existing list convention) to @expected_tenant_tables in test/support/tenant_fixture.ex (now 29 entries, verified by direct count of the edited list, not by trusting the prior report's arithmetic). Bumped the count assertion in test/letflow/support/tenant_fixture_test.exs:306 from 27 to 29 and extended the inline REQ-181/REQ-195-style changelog comment with a REQ-202 entry. No third location found: `git log -p --all -S\"expected_tenant_tables\"` and a grep across test/ for literal tenant-table-count assertions confirm only these two files (test/support/tenant_fixture.ex's list, test/letflow/support/tenant_fixture_test.exs's count) ever needed updating for this bug class; all other tenant_scoped_migrations/0 references in test/ are per-migration registration checks, unrelated to this oracle.",
+    "checks_passed": [
+      "mix compile --warnings-as-errors: clean, no output",
+      "mix format --check-formatted: clean, no output",
+      "mix test test/letflow/support/tenant_fixture_test.exs: Result: 14 passed, exit 0 -- C6 oracle-rot guard and full file pass",
+      "mix test test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs: Result: 39 passed, exit 0 -- unchanged as expected, these files are not in this fix's diff",
+      "Broader run: bash scripts/test_parallel.sh (N=8, nproc) -- combined: 2861 tests, 6 properties, 5 failures (2862/2867 passed). All 5 remaining failures independently confirmed as pre-existing, unrelated: 2 are the documented rustc-absent Mix.Tasks.Letflow.CheckToolchainTest baseline (`which rustc`/`which cargo` both fail in this sandbox, System.cmd raises :enoent), 3 are the documented Letflow.TenantSchemaReaperTest connection-pool/concurrency flake class under N=8 parallel load (test/support/tenant_schema_reaper_test.exs is not in this branch's diff). The genuine regression TEST-RUNNER found (C6 oracle-rot failure) is gone -- failure count dropped from 6 to exactly 5, matching the pre-existing baseline."
+    ],
+    "issues": [],
+    "artifacts_out": [
+      "test/support/tenant_fixture.ex",
+      "test/letflow/support/tenant_fixture_test.exs"
+    ],
+    "next_action": "Route to TEST-RUNNER for Step 4 re-check. No REVIEWER or SECURITY-REVIEWER re-review needed: this is a test-fixture-only fix (a hardcoded oracle list and its count assertion), no application code (lib/, priv/repo/migrations/) was touched, so no tenant-data path or OTP-idiom surface changed since their prior sign-off."
+  },
+  "rework_count": 3,
+  "max_rework": 3
+}

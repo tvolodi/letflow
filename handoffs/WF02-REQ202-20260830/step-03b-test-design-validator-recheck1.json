@@ -1,0 +1,50 @@
+{
+  "handoff_id": "step03b-recheck1-WF02-REQ202-20260830",
+  "run_id": "WF02-REQ202-20260830",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ202-20260830/step-03b-test-design-validator-recheck1.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-202"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ202-20260830/step-03-test-designer.json",
+      "handoffs/WF02-REQ202-20260830/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ202-20260830/step-03c-test-designer-rework1.json"
+    ],
+    "artifacts_in": [
+      "test/specs/REQ-202.md",
+      "test/letflow/repository_test.exs",
+      "test/letflow/repository/canonicaliser_test.exs",
+      "lib/letflow/repository.ex",
+      "lib/letflow/repository/canonicaliser.ex",
+      "lib/letflow/design/req202-artifact-repository.md"
+    ],
+    "branch_name": "feature/WF02-REQ202-20260830"
+  },
+  "task": {
+    "description": "Re-check TEST-DESIGNER's rework1 (step-03c), which claims to close the single gap this validator found in step-03b: design §4.2 step 3's rule that upserting repository_artifacts on a content_hash collision must NOT re-validate content_type/byte_size against the existing row had zero test coverage."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently verified TEST-DESIGNER's rework1 claim rather than trusting it. Read the new test in test/letflow/repository_test.exs (lines 182-241, 'AC1 -- REPO-01 deduplication' describe block, 'upsert on a content_hash collision does not re-validate content_type/byte_size against the existing row (design §4.2 step 3)') in full: it (1) sanity-checks the collision construction inline via Canonicaliser.canonicalize_content/2 and Canonicaliser.content_hash/1 on both content_type/content pairs before relying on it, (2) creates version 1 under content_type 'application/json' with raw content ~s({\"a\":1}) and asserts the stored repository_artifacts row's content_type/byte_size, (3) creates version 2 under a DIFFERENT artifact_name with content_type 'application/wasm' and the identical raw bytes, asserting create/2 still returns {:ok, _} with the same content_hash, (4) asserts Repo.aggregate(Artifact, :count, ...) == 1 (no duplicate content row), (5) re-fetches the row by hash and asserts content_type/byte_size are UNCHANGED at the first writer's values -- not overwritten by or validated against the second writer's -- and (6) asserts the second create/2 call's returned ArtifactVersion carries the same content_hash, its own version_number 1 under its own artifact_name, and a non-nil version_id. This matches the claim exactly.\n\nRan the suite myself: `source ~/.asdf/asdf.sh && mix test test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs` -> `Result: 39 passed`, 0 failures.\n\nReproduced the SAME mutation myself (not trusted from the rework report): edited lib/letflow/repository.ex's upsert_content/5 to Repo.get the existing Artifact row first and raise 'MUTANT: content_type/byte_size mismatch on hash collision' when content_type or byte_size differ from the incoming values on a hash collision -- exactly the design-forbidden re-validation. Re-ran the same suite: `Result: 38/39 passed`, 1 failed -- the ONLY failure was `AC1 -- REPO-01 deduplication upsert on a content_hash collision does not re-validate content_type/byte_size against the existing row (design §4.2 step 3) (Letflow.RepositoryTest)` at test/letflow/repository_test.exs:182, with `** (RuntimeError) MUTANT: content_type/byte_size mismatch on hash collision` raised from lib/letflow/repository.ex:185 inside upsert_content/5, exactly matching the mutant. No other test broke and no other test incidentally caught it. Reverted via `git checkout -- lib/letflow/repository.ex`; confirmed `git status --porcelain lib/` produced no output; re-ran the suite once more: `Result: 39 passed`, 0 failures.\n\nAlso confirmed `mix format --check-formatted` (clean, no output) and `mix compile --warnings-as-errors` (clean, no output/warnings).\n\nThe step-03b gap is genuinely closed by a real, mutation-confirmed test, and no new defect was introduced. Full repo `git status --porcelain` was empty before and after this re-check (no test/spec files were modified by this validator; only the throwaway lib/ mutation was applied and reverted).",
+    "checks_passed": [
+      "New test read in full and confirmed to genuinely construct a real content_hash collision (verified inline against real Canonicaliser source), assert no error, assert exactly one repository_artifacts row, assert the first writer's content_type/byte_size are retained not overwritten, and assert the second create/2 call succeeds with a distinct version",
+      "mix test test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs: 39 passed, 0 failures (real output, reproduced independently)",
+      "Mutation reproduced independently by this validator (spurious re-validation raise in upsert_content/5): 38/39 passed, sole failure is the new test with the exact mutant error",
+      "Mutation reverted via git checkout; git status --porcelain lib/ empty; suite green again (39 passed, 0 failures)",
+      "mix format --check-formatted clean",
+      "mix compile --warnings-as-errors clean"
+    ],
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": "Route to TEST-RUNNER (Step 4) to run the full suite as the next pipeline gate."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

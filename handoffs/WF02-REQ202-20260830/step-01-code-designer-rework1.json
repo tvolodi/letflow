@@ -1,0 +1,54 @@
+{
+  "handoff_id": "step01-rework1-WF02-REQ202-20260830",
+  "run_id": "WF02-REQ202-20260830",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ202-20260830/step-01-code-designer-rework1.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-30T22:20:00Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-202"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-202": "Content-addressed artifact store (repository_artifacts, artifact_versions) plus a SEPARATE REPO-04 canonicaliser, deliberately NOT an extension of REQ-036's promotion digest. Ported from R-Co migrations/045_repository_artifacts.sql. Full text read from docs/requirements.yaml lines 11158-11302."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ202-20260830/step-01-code-designer.json",
+      "handoffs/WF02-REQ202-20260830/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req202-artifact-repository.md",
+      "lib/letflow/definitions/promotion_digest.ex",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "lib/letflow/design/req195-audit-entry-storage.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/repository/canonicaliser.ex",
+      "lib/letflow/repository.ex",
+      "lib/letflow/repository/repository_artifact.ex",
+      "lib/letflow/repository/artifact_version.ex"
+    ],
+    "branch_name": "feature/WF02-REQ202-20260830"
+  },
+  "task": {
+    "description": "CODE-DESIGNER rework (iteration 2) of lib/letflow/design/req202-artifact-repository.md, addressing the two FAIL findings from step-01b-code-design-validator.json.",
+    "acceptance_criteria": [
+      "AC10: the migration file itself (not just the design document) must be instructed to carry a comment recording the per-tenant placement decision and its reasoning, distinct from AC11's separate migration-058-vs-045 moduledoc requirement; §10 traceability row for AC10 updated to point at this new instruction",
+      "OQ-2 resolved now (not deferred): §3.2 states firmly that promotion_digest.ex's moduledoc WILL be edited (reading (a)), explains why fallback reading (b) fails AC5's 'BOTH' clause, and instructs that the commit/PR description must call out the moduledoc-only nature of that edit; OQ-2 removed from §9's open-questions list; §10 traceability row for AC5 updated accordingly",
+      "OQ-1, OQ-3, OQ-4 left untouched (validator confirmed these are legitimate ELIXIR-DEV deferrals)"
+    ]
+  },
+  "result": {
+    "artifacts_out": ["lib/letflow/design/req202-artifact-repository.md"],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for re-check",
+    "summary": "Fix 1 (AC10): added a new subsection in §2 ('AC10's separate, migration-file-level requirement') instructing that the migration file creating repository_artifacts/artifact_versions must carry a top-of-file comment stating the per-tenant placement decision and its condensed reasoning (Decision B blast-radius rationale, no AC requiring cross-tenant dedup), explicitly distinguished from AC11's moduledoc-based 058-vs-045 conflict recording. §10's AC10 row now points at this migration-comment instruction rather than at §1 alone. Fix 2 (OQ-2): §3.2 now states as settled, non-deferred fact that promotion_digest.ex's moduledoc will be edited to add the reciprocal cross-reference -- required by AC5 clause (iii) 'BOTH moduledocs cross-reference each other', since promotion_digest.ex currently has zero Canonicaliser references and no edit-free way exists to make both moduledocs cross-reference each other. Explains why the previously-proposed fallback (cross-reference only on the Canonicaliser side) fails AC5 outright (violates 'BOTH'). AC5 clause (ii) 'is NOT modified' is now explicitly read as 'no behavioral change' (canonicalize/1, compute_plan_digest/1, verify_digest/2 unchanged), making the moduledoc-only git diff --stat hit on promotion_digest.ex intentional and required, and instructs that the commit/PR description must say so explicitly. OQ-2 removed from §9's open-questions list (replaced with a pointer to the §3.2 resolution); §10's AC5 row updated to reflect the resolved reading instead of citing OQ-2. OQ-1/OQ-3/OQ-4 left exactly as-is per the validator's own confirmation that they are legitimate ELIXIR-DEV deferrals with no AC depending on their resolution. No implementation code was added or existed already (grep for markdown code fences returns nothing)."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

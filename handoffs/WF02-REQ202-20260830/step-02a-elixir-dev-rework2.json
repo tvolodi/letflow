@@ -1,0 +1,61 @@
+{
+  "handoff_id": "step02a-WF02-REQ202-20260830-rework2",
+  "run_id": "WF02-REQ202-20260830",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ202-20260830/step-02a-elixir-dev-rework2.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-202"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ202-20260830/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ202-20260830/step-02a-elixir-dev-rework1.json",
+      "handoffs/WF02-REQ202-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ202-20260830/step-02d-reviewer-recheck1.json",
+      "handoffs/WF02-REQ202-20260830/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "priv/repo/migrations/20260830030001_create_repository_artifacts.exs",
+      "lib/letflow/repository/artifact_version.ex",
+      "test/specs/REQ-202.md"
+    ],
+    "branch_name": "feature/WF02-REQ202-20260830"
+  },
+  "task": {
+    "description": "Rework of REQ-202's Step 2a implementation per TEST-DESIGNER's step-03 findings (defect_a_duplicate_index_name and defect_b_truncated_constraint_name_mismatch): the migration's unique_index/3 and index/3 on artifact_versions both defaulted to the same Ecto-generated 66-byte index name (collides AND exceeds Postgres's 63-byte NAMEDATALEN limit, so Postgres silently truncates it), and ArtifactVersion.changeset/2's unique_constraint/3 referenced the full untruncated name, never matching the real (truncated) constraint Postgres raises against -- breaking design section 4.4's concurrency-retry contract.",
+    "acceptance_criteria": [
+      "The migration gives both the unique_index/3 and the index/3 call on artifact_versions explicit, distinct, well-under-63-byte names via the :name option",
+      "ArtifactVersion.changeset/2's unique_constraint/3 :name option exactly matches the migration's new explicit unique index name",
+      "Any other unique/FK constraint name introduced by this migration is audited for the same length/collision risk",
+      "test/letflow/repository_test.exs and test/letflow/repository/canonicaliser_test.exs pass against real Postgres",
+      "mix compile --warnings-as-errors and mix format --check-formatted both pass"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Fixed both defects TEST-DESIGNER found by actually running the suite against real Postgres. (1) priv/repo/migrations/20260830030001_create_repository_artifacts.exs: gave unique_index/3 the explicit name :artifact_versions_kind_name_number_idx and the plain index/3 (desc: :version_number) the explicit name :artifact_versions_kind_name_number_desc_idx -- both short, distinct, and well under the 63-byte NAMEDATALEN limit, eliminating both the name collision and the silent-truncation risk. Added a migration comment explaining why (Ecto's default-index-naming strips desc: annotations, so both calls previously generated the identical 66-byte name). (2) lib/letflow/repository/artifact_version.ex: changed @unique_version_number_constraint_name from the old 66-byte default-derived atom to :artifact_versions_kind_name_number_idx, exactly matching the migration's new explicit unique index name, so unique_constraint/3's error-catching now actually matches the real Postgres constraint name and design section 4.4's concurrency-retry contract fires correctly. Audited every other unique/FK constraint this migration introduces for the same risk: repository_artifacts primary key (content_hash, no derived name), artifact_versions_content_hash_fkey (35 bytes), artifact_versions_parent_version_id_fkey (40 bytes), artifact_versions_content_hash_index (36 bytes) -- all well under 63 bytes, none at risk, no further changes needed.",
+    "files_modified": [
+      "priv/repo/migrations/20260830030001_create_repository_artifacts.exs (added explicit :name options to unique_index/3 and index/3 on artifact_versions, plus an explanatory comment)",
+      "lib/letflow/repository/artifact_version.ex (@unique_version_number_constraint_name updated to match the migration's new explicit unique index name, plus an explanatory comment)"
+    ],
+    "verification_performed": {
+      "mix_compile_warnings_as_errors": "PASS -- clean compile, no warnings",
+      "mix_format_check_formatted": "PASS -- no unformatted files",
+      "mix_test_real_postgres": "PASS -- `mix test test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs` run twice against the real Postgres instance in this environment: both runs report `Result: 38 passed`, 0 failures. Previously (per TEST-DESIGNER's step-03 report) 15 tests failed on defect A (every provisioned_tenant() migration replay hit Postgres 42P07 duplicate_table) and 1 additional test failed on defect B (unhandled Ecto.ConstraintError from the concurrent create/2 test) once defect A was patched diagnostically. All 16 previously-failing cases now pass with both fixes applied together.",
+      "constraint_name_audit": "Manually computed byte length of every unique/FK/plain-index name this migration produces (unique_index: 39 bytes explicit; index desc: 45 bytes explicit; content_hash FK: 35 bytes default; parent_version_id self-FK: 40 bytes default; content_hash plain index: 36 bytes default) -- all under 63 bytes, no other collision or truncation risk found."
+    },
+    "issues": [],
+    "artifacts_out": [
+      "priv/repo/migrations/20260830030001_create_repository_artifacts.exs",
+      "lib/letflow/repository/artifact_version.ex"
+    ],
+    "next_action": "Route to REVIEWER for a fresh re-check -- this rework touches the migration and schema file REVIEWER already passed at step-02d-reviewer-recheck1, but the change is narrow (explicit index/constraint naming only, no shape/logic/behavior change). SECURITY-REVIEWER's step-02c sign-off is unaffected (no route/query/tenant-scoping/trigger logic changed), but that skip decision is left to ORCH rather than assumed here."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

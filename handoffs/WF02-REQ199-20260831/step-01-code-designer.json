@@ -1,24 +1,40 @@
 {
+  "handoff_id": "step01-WF02-REQ199-20260831",
   "run_id": "WF02-REQ199-20260831",
-  "workflow": "WF-02",
+  "workflow_id": "WF-02",
   "step": "01-code-designer",
-  "status": "PASS",
-  "dispatched_at": "2026-08-31T05:37:06Z",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ199-20260831/step-01-code-designer.json",
   "completed_at": "2026-08-31T05:44:44Z",
-  "commit": "3aeceac9",
-  "from": "ORCH",
-  "to": "CODE-DESIGNER",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
   "context": {
     "branch_name": "feature/WF02-REQ199-20260831",
-    "requirement_ids": ["REQ-199"],
+    "requirement_ids": [
+      "REQ-199"
+    ],
     "queue_task_id": 372,
     "github_issue_number": 718,
     "stage": "S6",
     "requirement_text": "The last of this batch's six subsystems, and the one the first batch deferred for having 'zero grounding anywhere in this repo'. With R-Co reachable it is now fully grounded, and it turns out to be a self-contained, well-specified subsystem.\nWHAT PROBLEM IT SOLVES: when a long-running external effect completes out-of-band, its completion must be re-entered into the engine IN THE ORDER the effects were emitted, per correlation, across a pool of independent consumers, without any consumer blocking another. R-Co stacks three guards (src/ordering/mod.zig L7-24): ORD-01's claim guard (FOR UPDATE SKIP LOCKED, so no two consumers hold the same row), ORD-02's execute guard (a per-correlation transaction advisory lock, so two rows of the SAME correlation are not applied concurrently), and ORD-03's order guard (a per-correlation cursor, so a completion applies only when its sequence number is exactly one past the last applied). Different correlations proceed fully in parallel (ORD-04).\nBEWARE TWO FALSE POSITIVES in Letflow, both verified: lib/letflow/api/pagination.ex's 'cursor' is HTTP list pagination (REQ-067), and lib/letflow/event_store/instance_sequence.ex plus the global_seq column (REQ-023/025/026) are the event store's own sequencing. Neither is this subsystem, and neither is changed here.\nSCHEMA, ported from R-Co migrations/1145_ord01_plat_effect_completion.sql and 1146_ord04_plat_correlation_cursor.sql -- both are PER-TENANT in R-Co (each migration explicitly skips the public pass), which matches decision 0003 Decision B, so both live in each tenant's schema with tenant_id retained:\n* effect_completions: completion_id (uuid pk), correlation_id (string, not null), sequence_no (bigint, not null), status (string, not null, default 'PENDING', CHECK in PENDING | APPLIED | DEAD), payload (jsonb, not null, default empty), received_at, applied_at (nullable), created_at, with UNIQUE (correlation_id, sequence_no) so a retried insert is absorbed rather than duplicated, plus a partial claim index on (correlation_id, sequence_no) WHERE status = 'PENDING' matching the claim query's exact shape.\n* correlation_cursors: correlation_id (string, primary key), applied_seq (bigint, not null, default 0, CHECK >= 0), updated_at, created_at.\nSCOPE:\n1. Both tables and their migrations.\n2. Insert of a completion, idempotent on (correlation_id, sequence_no) -- a duplicate insert is absorbed, never a second apply.\n3. One claim-and-apply cycle: claim the lowest-sequence PENDING row with FOR UPDATE SKIP LOCKED ordered by (correlation_id, sequence_no); take the per-correlation advisory lock with the TRY variant so a losing consumer never blocks; read the cursor; and apply only when sequence_no equals applied_seq + 1. A completion that is not next rolls back SILENTLY -- no error, no retry-count increment, the row stays PENDING for a later cycle. Applying marks the row APPLIED, appends an effect-applied event via REQ-025, and advances the cursor with the CONDITIONAL update (set applied_seq = N where applied_seq = N - 1) -- all in ONE transaction. A zero-row result from that conditional update means another consumer won the race: roll back and re-claim.\n4. A cursor row that does not exist yet is initialised at applied_seq 0 rather than failing.\n5. THE GAP SWEEPER (ORD-03's last acceptance criterion): when a correlation's lowest PENDING sequence is more than one past its applied_seq and that orphaned successor is older than a configured gap timeout (R-Co's default is 300 seconds), every PENDING row of that correlation moves to DEAD as ONE unit, never half, and lands in REQ-176's DLQ naming the correlation and every unapplied sequence number. The strict-greater-than test matters: a row sitting at exactly applied_seq + 1 is merely slow and must NOT be swept.\n6. RUN IT ON REQ-186's SCHEDULER, not a new ticker.\n7. THE ORD-04 LAG SURFACE: per-correlation LAG (max(sequence_no) - applied_seq) and age of oldest PENDING row, emitted through REQ-194's metrics registry. Emit the lag-threshold-exceeded event REQ-025 registers.\nTWO R-Co DEFECTS NOT TO PORT: (a) holding a pooled connection across poll sleep (GH-654/ISS-0649) -- hold connection only for one cycle. (b) the R-Co ordering subsystem has NO production driver -- Letflow must wire it.\nNOT IN THIS REQUIREMENT: no route or controller; no dynamic consumer-count reduction under contention (ORD-04's third criterion); no change to REQ-067's pagination cursor or event store sequencing.",
     "rework_count": 0,
-    "max_rework": 3
+    "max_rework": 3,
+    "artifacts_in": [
+      "docs/migration/stage-6-operational-cross-cutting.md",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "docs/guides/backend_developer_guide.md",
+      "lib/letflow/scheduler/",
+      "lib/letflow/obs/dlq.ex",
+      "lib/letflow/obs/metrics.ex",
+      "lib/letflow/event_store.ex"
+    ],
+    "artifacts_out": [
+      "lib/letflow/design/req199-ordering.md"
+    ]
   },
   "task": {
+    "description": "You are CODE-DESIGNER for Letflow WF-02. Read docs/guides/backend_developer_guide.md, docs/migration/stage-6-operational-cross-cutting.md, docs/migration/decisions/0003-ecto-schema-strategy.md, and the relevant decisions. Then produce lib/letflow/design/req199-ordering.md containing: (1) full public function signatures with @spec-style types for every new function in every new/modified module; (2) Ecto schema field definitions with types, constraints, and table placement decision (per-tenant per decision 0003-B, both tables); (3) the claim-and-apply cycle flow with explicit transaction boundary; (4) gap sweeper algorithm with the strict-greater-than predicate; (5) ORD-04 lag metric names, types, and emission points into REQ-194's registry; (6) wiring into REQ-186's scheduler (which function/callback to add, no new supervisor children); (7) DLQ integration with REQ-176; (8) event type to register in event_type_registry for REQ-025 ES-05 check; (9) cross-module dependency list (Scheduler, DLQ, EventStore, Metrics.Registry); (10) open questions explicitly listed. Every one of the 18 acceptance criteria must map to a named design element. NO ELIXIR CODE in the design doc -- signatures and type shapes only, no function bodies. Next action: Complete lib/letflow/design/req199-ordering.md on feature/WF02-REQ199-20260831, commit, then complete this handoff with status PASS or FAIL.",
     "acceptance_criteria": [
       "both tables live inside each tenant's Postgres schema with tenant_id retained (decision 0003 Decision B, matching R-Co's own per-tenant placement), verified by inspecting the migrations",
       "inserting the same (correlation_id, sequence_no) twice results in ONE row and, after processing, exactly ONE applied effect -- no double apply",
@@ -39,17 +55,5 @@
       "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
       "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     ]
-  },
-  "instructions": "You are CODE-DESIGNER for Letflow WF-02. Read docs/guides/backend_developer_guide.md, docs/migration/stage-6-operational-cross-cutting.md, docs/migration/decisions/0003-ecto-schema-strategy.md, and the relevant decisions. Then produce lib/letflow/design/req199-ordering.md containing: (1) full public function signatures with @spec-style types for every new function in every new/modified module; (2) Ecto schema field definitions with types, constraints, and table placement decision (per-tenant per decision 0003-B, both tables); (3) the claim-and-apply cycle flow with explicit transaction boundary; (4) gap sweeper algorithm with the strict-greater-than predicate; (5) ORD-04 lag metric names, types, and emission points into REQ-194's registry; (6) wiring into REQ-186's scheduler (which function/callback to add, no new supervisor children); (7) DLQ integration with REQ-176; (8) event type to register in event_type_registry for REQ-025 ES-05 check; (9) cross-module dependency list (Scheduler, DLQ, EventStore, Metrics.Registry); (10) open questions explicitly listed. Every one of the 18 acceptance criteria must map to a named design element. NO ELIXIR CODE in the design doc -- signatures and type shapes only, no function bodies.",
-  "artifacts_in": [
-    "docs/migration/stage-6-operational-cross-cutting.md",
-    "docs/migration/decisions/0003-ecto-schema-strategy.md",
-    "docs/guides/backend_developer_guide.md",
-    "lib/letflow/scheduler/",
-    "lib/letflow/obs/dlq.ex",
-    "lib/letflow/obs/metrics.ex",
-    "lib/letflow/event_store.ex"
-  ],
-  "artifacts_out": ["lib/letflow/design/req199-ordering.md"],
-  "next_action": "Complete lib/letflow/design/req199-ordering.md on feature/WF02-REQ199-20260831, commit, then complete this handoff with status PASS or FAIL."
+  }
 }

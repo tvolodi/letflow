@@ -185,3 +185,14 @@ config :letflow, :sandbox_pool, max_concurrent_sandboxes: 1
 # (T1/T2/T4/T5) already pass an explicit :timeout_ms via the 3-arity overload and
 # are unaffected by this default.
 config :letflow, lua_wallclock_timeout_ms: 5000
+
+# REQ-203 Step 2d rework2 (REVIEWER recheck1 FAIL item 1): compile-time kill
+# switch for Letflow.Repository.Activation's test-only pause seam
+# (`maybe_add_test_pause_step/4`, see that module's `@typep test_opts` doc).
+# Resolved via `Application.compile_env/3` (this codebase's own established
+# pattern for a test-only production seam -- see
+# lib/letflow/design/req021-auth-plug-pipeline.md's OQ-5), defaulting to
+# `false` everywhere this key is absent (config/dev.exs, config/prod.exs).
+# Only set to `true` here, so the pause step can execute only under
+# MIX_ENV=test.
+config :letflow, activation_test_hooks_enabled?: true

@@ -472,7 +472,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_830_040_001, Letflow.Repo.Migrations.CreateAlertTriggerState,
      "20260830040001_create_alert_trigger_state.exs"},
     {20_260_830_040_002, Letflow.Repo.Migrations.CreateAlertHookEmissionState,
-     "20260830040002_create_alert_hook_emission_state.exs"}
+     "20260830040002_create_alert_hook_emission_state.exs"},
+    {20_260_831_000_001, Letflow.Repo.Migrations.CreateArtifactActivations,
+     "20260831000001_create_artifact_activations.exs"}
   ]
 
   @doc """

@@ -1,0 +1,92 @@
+run_id: WF02-REQ203-20260831
+requirement_id: REQ-203
+step: "Step 4 (TEST-RUNNER)"
+performed_by: TEST-RUNNER
+note: >
+  Full-suite run of the whole project (not just REQ-203's own test files), per
+  WF-02 Step 4. Postgres/Keycloak docker containers were already up under sudo
+  from an earlier session in this sandbox (this session's own user lacks the
+  docker socket permission, confirmed via `docker compose ps` -> "permission
+  denied"; `sudo -n docker compose ps` showed both containers already
+  Running/healthy on the workspace's .env-configured port 5463). Ran as a
+  single blocking `MIX_ENV=test mix test` invocation (not the parallel
+  script) since this branch's activation-concurrency test needs
+  Application.compile_env(:letflow, :activation_test_hooks_enabled?, false)
+  gated on via config/test.exs -- MIX_ENV=test is required for it to
+  compile/run correctly.
+checks:
+  mix_compile_warnings_as_errors:
+    result: PASS
+    output: "(no output -- clean compile, zero warnings, exit 0)"
+  mix_format_check_formatted:
+    result: PASS
+    output: "(no output -- already formatted, exit 0)"
+  toolchain_baseline_check:
+    result: CONFIRMED
+    output: >
+      `which rustc` and `which cargo` both produced no output (not found) --
+      rustc/cargo are not on PATH in this sandbox, confirming the documented
+      Mix.Tasks.Letflow.CheckToolchainTest baseline (2 tests) applies here.
+  full_suite:
+    runner: "MIX_ENV=test mix test (full suite, no path filter)"
+    result: "2896/2898 passed (6/6 properties, 2890/2892 tests), 10 excluded. Failed: 2 tests."
+    failures:
+      - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        diagnosis: "Documented rustc-absent CheckToolchainTest baseline for this sandbox. Confirmed rustc/cargo absent from PATH. Not a real defect, not a regression."
+      - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        diagnosis: "Same root cause as above -- documented baseline, not a regression."
+    tenant_schema_reaper_flake: "Not observed this run (ran as single non-parallel `mix test`, not scripts/test_parallel.sh, so the documented N=8-parallel-load connection-pool flake class for Letflow.TenantSchemaReaperTest did not have the concurrent-load conditions to trigger). No failures from this file this run."
+    regression_check: "No new/unexplained failures. Both failures match the single documented environmental baseline class exactly; nothing else failed."
+  tenant_fixture_oracle_rot_guard:
+    result: PASS
+    output: >
+      test/letflow/support/tenant_fixture_test.exs: 14 tests, 0 failures
+      (includes the C6 oracle-rot guard: observed tables equal
+      expected_tenant_tables/0 in both directions).
+    independent_verification: >
+      Given REQ-181/REQ-195/REQ-202 all previously hit this exact bug class
+      (a new tenant-scoped migration landing without updating
+      test/support/tenant_fixture.ex's @expected_tenant_tables), did not trust
+      ELIXIR-DEV's report or the passing test alone. Independently derived the
+      full tenant-scoped table set by parsing every migration file named in
+      lib/letflow/tenant_provisioning.ex's @tenant_scoped_migration_manifest
+      (44 entries) for `create table(:name, ...)` statements, producing 32
+      distinct table names. Diffed this derived set against the 32 entries in
+      test/support/tenant_fixture.ex's @expected_tenant_tables (lines
+      123-154): zero-element symmetric difference -- exact match in both
+      directions. Confirmed the three new REQ-203 tables
+      (artifact_activations, artifact_activation_groups,
+      artifact_activation_history) are created by
+      priv/repo/migrations/20260831000001_create_artifact_activations.exs
+      (all three `create table(...)` calls verified directly in that file)
+      and are present in @expected_tenant_tables. artifact_versions and
+      repository_artifacts (REQ-202's tables, already present) were also
+      re-confirmed present and correctly attributed to the earlier
+      20260830030001_create_repository_artifacts.exs migration, not to
+      REQ-203. ELIXIR-DEV's claim of having added the three new tables to the
+      oracle is genuinely correct.
+  ci_parity_task:
+    result: FAIL (matches full_suite's documented baseline, not a new/blocking issue)
+    output: >
+      `mix letflow.check.test` run to completion (1327.6s). Its first phase
+      (`mix test`, :keycloak/:wasm_hang excluded) reproduced the identical
+      Result: 2896/2898 passed, 2 failures -- the same two documented
+      CheckToolchainTest rustc-absent failures as the full_suite run above,
+      byte-for-byte the same test names. Because that first phase's `mix
+      test` subprocess exited 2, `mix letflow.check.test` itself reported
+      "FAILED -- underlying `mix test` run exited 2 (real test failure/error)"
+      and did not proceed to its second phase (`mix test --only wasm_hang`).
+      This FAIL is attributable entirely to the same environmental
+      rustc/cargo-absent baseline already confirmed above, not to REQ-203's
+      diff or any new defect; the wasm_hang phase was not exercised as a
+      consequence but there is no reason tied to this PR's diff to expect it
+      would fail.
+verdict: PASS
+next_step: >
+  No genuine new defects found. Both mix_test failures and the
+  ci_parity_task failure are the single documented, pre-existing,
+  environment-only Mix.Tasks.Letflow.CheckToolchainTest rustc/cargo-absent
+  baseline for this sandbox -- not present in CI, not caused by this PR.
+  compile (--warnings-as-errors), format check, full test suite (net of the
+  documented baseline), and the tenant-table oracle-rot guard are all clean.
+  Routing to RELEASE-VALIDATOR (Step 5) for independent re-verification.

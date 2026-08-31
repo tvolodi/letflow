@@ -1,0 +1,68 @@
+{
+  "handoff_id": "step03c-rework1-WF02-REQ203-20260831",
+  "run_id": "WF02-REQ203-20260831",
+  "workflow_id": "WF-02",
+  "step": "03c",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ203-20260831/step-03c-test-designer-rework1.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-203"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ203-20260831/step-03b-test-design-validator-recheck1.json",
+      "handoffs/WF02-REQ203-20260831/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ203-20260831/step-02a-elixir-dev-rework1.json",
+      "handoffs/WF02-REQ203-20260831/step-02a-elixir-dev-rework2.json",
+      "handoffs/WF02-REQ203-20260831/step-02d-reviewer-recheck2.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF02-REQ203-20260831/step-03b-test-design-validator-recheck1.json",
+      "test/specs/REQ-203.md",
+      "test/letflow/repository/activation_test.exs",
+      "lib/letflow/repository/activation.ex"
+    ],
+    "artifacts_out": [
+      "test/specs/REQ-203.md",
+      "test/letflow/repository/activation_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ203-20260831",
+    "requirement_text": "REQ-203 (docs/requirements.yaml, stage S6) -- per-tenant artifact activation, atomic multi-artifact groups, and activation history (REPO-08/09/10)."
+  },
+  "task": {
+    "description": "Documentation-only rework: TEST-DESIGN-VALIDATOR's recheck1 found test/specs/REQ-203.md and activation_test.exs's @moduledoc were never updated after two shipped fixes (FK-constraint mapping via foreign_key_constraint/3, and the pause-seam's compile-time gating + test_opts becoming @typep). No test code, assertions, or lib/ implementation changes were needed or made -- text only.",
+    "acceptance_criteria": [
+      "test/specs/REQ-203.md item 2 (forced-failure rollback) describes the current {:error, {:validation, changeset}} behavior with changeset.errors[:active_version_id] == {\"does not exist\", _}, not the old assert_raise Ecto.ConstraintError behavior",
+      "test/specs/REQ-203.md's AC1/AC2 concurrency-mechanism note reflects REVIEWER's resolved (not open) sign-off and refers to @typep test_opts, not @type test_opts",
+      "test/specs/REQ-203.md's 'Real Postgres runs' section describes the FK-failure finding's actual resolution (implementation fixed via commit 6169d009), not 'asserting the real observed exception'",
+      "activation_test.exs's @moduledoc carries the same three corrections",
+      "No test assertions, test code, or lib/letflow/repository/activation.ex changed",
+      "Full suite still 67/67 passed",
+      "mix format --check-formatted clean"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Made three text corrections to test/specs/REQ-203.md and the matching correction to activation_test.exs's @moduledoc, per step-03b-test-design-validator-recheck1.json's findings. Read the current lib/letflow/repository/activation.ex directly (not from memory) to confirm the exact final state being documented: Activation.changeset/2 (lines 138-146) maps foreign_key_constraint(:active_version_id, name: :artifact_activations_active_version_id_fkey); test_opts (line 237) is @typep, not @type; @activation_test_hooks_enabled? (line 243) resolves via Application.compile_env(:letflow, :activation_test_hooks_enabled?, false), gating maybe_add_test_pause_step/3's functional clause (line 329).\n\nEdits made:\n1. test/specs/REQ-203.md, item 2 (AC1 forced-failure rollback): replaced the 'real finding... surfaces this failure as a RAISED Ecto.ConstraintError... flagged for REVIEWER' language (framed as an open, current defect) with past-tense text stating the gap was found blocking at Step 3b, fixed in commit 6169d009 via foreign_key_constraint/3 on Activation.changeset/2, and that the test now asserts {:error, {:validation, changeset}} with changeset.errors[:active_version_id] == {\"does not exist\", _}.\n2. test/specs/REQ-203.md, 'A note on the AC1/AC2 concurrency mechanism' section: changed '@type test_opts moduledoc' to '@typep test_opts', and replaced '**Flagged for REVIEWER**: this is new surface on a file REVIEWER already signed off on' with '**Resolved by REVIEWER**' language naming the two concrete things REVIEWER required and confirmed before final sign-off (step-02d-reviewer-recheck2.json): compile-time gating via Application.compile_env(:letflow, :activation_test_hooks_enabled?, false), and the test_opts @type-to-@typep fix.\n3. test/specs/REQ-203.md, 'Real Postgres runs performed during test design' section: rewrote the FK-failure bullet to state the actual resolution (the raised-exception behavior was flagged blocking at Step 3b and fixed by ELIXIR-DEV in commit 6169d009, not resolved by 'asserting the real observed exception rather than an invented one').\n4. test/letflow/repository/activation_test.exs's @moduledoc (lines ~25-33): same three corrections -- '@typep test_opts' instead of '@type test_opts moduledoc', and REVIEWER's sign-off stated as resolved (two rework rounds, compile-time gating + typing fix), not an open flag.\n\nNo test assertion, test helper, fixture, or any line of lib/letflow/repository/activation.ex was touched -- verified via `git diff --stat` before committing (only test/specs/REQ-203.md and test/letflow/repository/activation_test.exs changed, and within the latter only the @moduledoc block).\n\nVerification run directly (not assumed): `MIX_ENV=test mix test test/letflow/repository/activation_test.exs test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs` -> 'Result: 67 passed', 0 failures, real Postgres, unchanged from recheck1's own measurement. `mix format --check-formatted` -> no output, clean.\n\nGrepped both files afterward for residual staleness: `grep -n \"@type test_opts\\|assert_raise Ecto.ConstraintError\\|[Ff]lagged.*REVIEWER\"` across both files -- only the three assert_raise Ecto.ConstraintError occurrences in activation_test.exs (lines 505, 832, 862) remain, and those are the AC4/AC9 cases recheck1 itself already confirmed are genuinely different, unmapped constraints (not the fixed FK path) and require no change.",
+    "verification": {
+      "spec_item2_updated": "Rewrote to state {:error, {:validation, changeset}} / changeset.errors[:active_version_id] == {\"does not exist\", _} as current behavior, with the raised-exception behavior described as a past, fixed finding (commit 6169d009).",
+      "spec_concurrency_note_updated": "'@type test_opts' -> '@typep test_opts'; 'Flagged for REVIEWER' (open) -> 'Resolved by REVIEWER' with the two concrete requirements named (compile-time gate, @typep fix).",
+      "spec_postgres_runs_section_updated": "FK-failure bullet rewritten to describe the fix (commit 6169d009) as the final resolution, replacing the stale 'asserting the real observed exception' framing.",
+      "moduledoc_updated": "test/letflow/repository/activation_test.exs @moduledoc given the identical three corrections.",
+      "no_test_or_impl_changes": "git diff --stat confirms only test/specs/REQ-203.md and the @moduledoc block of activation_test.exs changed; zero lines of lib/letflow/repository/activation.ex or any test assertion touched.",
+      "suite_unchanged": "MIX_ENV=test mix test test/letflow/repository/activation_test.exs test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs -> Result: 67 passed, matching recheck1's own baseline exactly.",
+      "format_clean": "mix format --check-formatted -> no output (clean)."
+    },
+    "issues": [],
+    "artifacts_out": [
+      "test/specs/REQ-203.md",
+      "test/letflow/repository/activation_test.exs"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR for a narrow re-check limited to confirming test/specs/REQ-203.md and activation_test.exs's @moduledoc are now fully consistent with the shipped implementation and test code -- no test-code or implementation re-verification needed, that was already fully passed in recheck1 (checks 1-6)."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

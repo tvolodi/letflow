@@ -1,0 +1,62 @@
+{
+  "handoff_id": "step01-WF02-REQ203-20260831",
+  "run_id": "WF02-REQ203-20260831",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ203-20260831/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-31T00:52:35Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-203"],
+    "issue_ids": [],
+    "requirement_text": {
+      "REQ-203": "Per-tenant artifact activation -- atomic multi-artifact groups and activation history (REPO-08/09/10). Three tables: artifact_activations (current pointer, UNIQUE (tenant_id, artifact_kind, artifact_name)), artifact_activation_history (append-only trail, mandatory rationale), artifact_activation_groups (multi-artifact envelope). Second half of the artifact-repository pair REQ-202 opens. Full text read from docs/requirements.yaml lines 11304-11392."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["step01-WF02-REQ202-20260830"],
+    "artifacts_in": [
+      "lib/letflow/design/req202-artifact-repository.md",
+      "lib/letflow/repository.ex",
+      "lib/letflow/repository/artifact.ex",
+      "lib/letflow/repository/artifact_version.ex",
+      "lib/letflow/design/req195-audit-entry-storage.md",
+      "lib/letflow/audit.ex",
+      "lib/letflow/api/pagination.ex",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "lib/letflow/design/req-055-concurrent-instance-isolation.md",
+      "lib/letflow/repo.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/repository/activation.ex",
+      "lib/letflow/repository/activation_history.ex",
+      "lib/letflow/repository/activation_group.ex"
+    ],
+    "branch_name": "feature/WF02-REQ203-20260831"
+  },
+  "task": {
+    "description": "CODE-DESIGNER (WF-02 Step 1) for REQ-203. Wrote lib/letflow/design/req203-artifact-activation.md covering the three-table activation schema (artifact_activations, artifact_activation_history, artifact_activation_groups), the Ecto.Multi transactional shape for atomic multi-artifact activation (REPO-08), the READ-COMMITTED isolation-level argument for the observability acceptance criterion, per-tenant isolation (REPO-09), the mandatory non-empty rationale enforcement (changeset + DB CHECK), the append-only-without-DB-trigger judgment call for activation history, the resolution function's not-found semantics, and the required REQ-195/audit_entries disambiguation.",
+    "acceptance_criteria": [
+      "Every one of REQ-203's 11 acceptance criteria maps to a concrete design element (design doc section 10 traceability table)",
+      "No implementation code -- signatures/type shapes only, no .ex/.exs code fences, no literal SQL",
+      "Placement decision (per-tenant vs global) stated with explicit reasoning, following REQ-202's precedent; REVIEWER-flag statement made explicit (not needed, since no divergence from Decision B)",
+      "Ecto.Multi transactional shape specified for atomic multi-artifact activation, with an explicit, non-hand-waved isolation-level argument for why the observability acceptance criterion (no mixed state visible to a concurrent reader) is achievable and how it must be tested",
+      "Failure-atomicity stated: forced failure leaves all activations at prior state, no history rows written",
+      "Mandatory rationale non-empty enforcement specified at both changeset and DB-CHECK-constraint level, per this project's DB-level-invariant convention for 'rejected... rather than...' acceptance-criterion framing",
+      "Activation history's append-only nature addressed with explicit judgment (no DB trigger, reasoned) rather than silently copying or silently omitting REQ-202/REQ-195's trigger precedent",
+      "REQ-195/activation-history disambiguation moduledoc requirement specified in full (table comparing scope/shape/mandatory-field/tamper-evidence/consumer)",
+      "No route/controller -- explicitly out of scope, stated",
+      "Open questions listed explicitly rather than silently resolved"
+    ]
+  },
+  "result": {
+    "artifacts_out": ["lib/letflow/design/req203-artifact-activation.md"],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "summary": "Placement: all three tables (artifact_activations, artifact_activation_history, artifact_activation_groups) are PER-TENANT, following REQ-202's actual shipped placement (confirmed per-tenant, not global, from the shipped Letflow.Repository.Artifact moduledoc) -- no tension exists here at all (no dedup mechanism on any of the three tables), so no REVIEWER sign-off flag is raised. Core technical risk (REPO-08 observability) addressed directly: Letflow.Repo (lib/letflow/repo.ex) sets no isolation-level override, so every transaction including activate_group/4's runs at Postgres's server default, READ COMMITTED -- confirmed by grep across lib/letflow and config/*.exs finding no isolation-level configuration anywhere. Argued explicitly that READ COMMITTED already suffices for the 'no mixed state observable' criterion WITHOUT needing SERIALIZABLE/REPEATABLE READ or any extra lock beyond the per-row FOR UPDATE already needed for write-write concurrency correctness: Postgres MVCC never exposes an in-progress transaction's uncommitted writes to any other transaction at ANY isolation level (no dirty reads exist in Postgres at all), and a transaction's N internal writes become visible to outside readers atomically at COMMIT, not incrementally -- so packaging the whole group as one Ecto.Multi submitted to one Repo.transaction/1 call structurally guarantees the property; a bump to SERIALIZABLE would guard a different anomaly class (write skew across separate transactions) not what REPO-08 asks for. Stated precisely what a REAL test of this must do (a naive commit-then-read test is vacuous): hold the transaction open mid-Multi via a test-only synchronization point, using Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto) (not the shared-connection default), per the req-055 concurrent-isolation design's own precedent for constructing genuinely separate concurrent connections in this codebase, and assert a concurrent resolve/3 call sees every artifact at its OLD version during the pause and every artifact at its NEW version after commit, never a mix. Failure-atomicity, per-tenant isolation, and the resolution function's not-found semantics (:error, :not_activated, never an arbitrary version) are specified structurally. rationale non-emptiness is enforced at BOTH changeset level (validate_length(min: 1), since validate_required/2 alone may not reject a literal empty string -- flagged as OQ-D) AND a DB-level CHECK constraint on both artifact_activation_history and artifact_activation_groups, matching this project's convention for AC language phrased as 'rejected... rather than stored...'. Activation history's append-only nature gets NO DB-level immutability trigger (judgment call, reasoned in full in design section 5): unlike REQ-202/REQ-195, no acceptance criterion in REQ-203's text uses the 'rejected by the DATABASE' framing for this table, and it has no hash-chain/tamper-evidence property to defend the way audit_entries does -- Decision 0003-C's application-layer default for insert-only tables applies instead, with the ON DELETE RESTRICT FKs already providing the concrete protection that matters (a version referenced in history can never be deleted). REQ-195 disambiguation table written comparing scope/shape/mandatory-rationale-field/tamper-evidence/consumer, plus the required cross-write: activate_group/4's own Multi also appends one Letflow.Audit.append_multi/4 step per artifact (reusing REQ-195's shipped function unmodified), so an activation produces both a domain history row here and a general audit_entries row there, from the same real event, read/written by neither module's context functions. Six open questions flagged explicitly (OQ-A through OQ-F): artifact_versions.version_number's actual migration-level Postgres type (not confirmed from source this session), sharing the artifact_kind Ecto.Enum value list across four schema modules, whether a system-driven activation with no human actor is a real call path, validate_required/2's exact empty-string behavior in this codebase's pinned Ecto version, duplicate-artifact-in-one-group caller-error handling, and audit_entries cross-write granularity (per-artifact vs per-group)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

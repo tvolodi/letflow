@@ -676,6 +676,65 @@ history:
       range rejection at create/2 and defense-in-depth at deliver/3.
       depends_on REQ-181 (done) and REQ-183 (done on main).
 
+  - req: REQ-203
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-31T04:00:32Z"
+    note: >
+      WF02-REQ203-20260831 done (queue task 376, stage S6). Per-tenant
+      artifact activation shipped, completing the REQ-202/REQ-203
+      artifact-repository pair: artifact_activations (the current pointer,
+      UNIQUE (tenant_id, artifact_kind, artifact_name) DB-enforced),
+      artifact_activation_history (append-only, mandatory rationale,
+      previous_version_id null-then-populated), and
+      artifact_activation_groups (the multi-artifact envelope). REPO-08's
+      atomic-group activation runs as one Ecto.Multi transaction; its
+      observability criterion -- concurrent reads during activation see
+      either every artifact at its old version or every artifact at its new
+      version, never a mix -- was rigorously re-verified rather than
+      assumed: the isolation-level argument was independently re-derived to
+      confirm Postgres's own READ COMMITTED MVCC structurally prevents
+      mixed-state visibility across one open transaction, so no isolation-
+      level bump was needed. REPO-09 (per-tenant isolation) and REPO-10
+      (activation history with mandatory rationale) both DB-enforced
+      (UNIQUE/CHECK/FK, ON DELETE RESTRICT on all three version-id FKs).
+      REQ-195's audit_entries disambiguated in the moduledoc: subsystem-
+      specific queryable lineage with mandatory rationale, vs. the
+      tenant-wide hash-chained compliance trail -- neither is redundant
+      with the other. No route/controller surface, confirmed by git diff
+      --stat. Unusually long rework chain, each round catching a genuine,
+      independently-confirmed defect rather than a formality: 3
+      CODE-DESIGN-VALIDATOR design reworks (the isolation-level argument
+      corrected and then confirmed correct; OQ-A/E/F resolved with
+      concrete decisions; the rationale-validation mechanism corrected
+      TWICE after two different false claims about Ecto's
+      validate_required/validate_length trim behavior), 1 ELIXIR-DEV
+      implementation rework (an @spec/FK-constraint mapping fix on
+      activate_group/5's insert AND update branches), 2 TEST-DESIGN-
+      VALIDATOR-triggered REVIEWER reworks gating a test-only concurrency
+      seam (a compile-time-gated test_pause_after/test_pause_fun hook,
+      resolving to a structural no-op outside MIX_ENV=test via
+      Application.compile_env(:letflow, :activation_test_hooks_enabled?,
+      false) -- fixed twice before REVIEWER re-passed the exact shipped
+      code, not the design), and 1 documentation-staleness fix
+      (test/specs/REQ-203.md left describing the pre-rework FK-constraint
+      behavior). RELEASE-VALIDATOR independently re-verified all 12
+      acceptance criteria against the real shipped code (own re-run:
+      scripts/test_parallel.sh 2893/2895, the 2 failures being the
+      pre-existing rustc-absent CheckToolchainTest baseline; own mutation
+      test on resolve/3, reverted and confirmed clean; own read of the
+      Multi pipeline, migration DDL, and moduledoc). Full detail:
+      handoffs/WF02-REQ203-20260831/release-validation-report-20260831.md.
+      docs/migration/stage-6-operational-cross-cutting.md updated to mark
+      the REQ-202/REQ-203 artifact-repository pair fully done (REPO-01..04
+      and REPO-08/09/10). Two anti-pattern entries added/cross-referenced:
+      a new entry for claiming a LIBRARY/DEPENDENCY's runtime behavior
+      (Ecto's trim/validation pipeline) without reading its actual source,
+      distinct from REQ-195's entry about a codebase's OWN function
+      signatures; and a process-pattern note that production code changed
+      after REVIEWER's sign-off (even a test-only seam) needs a fresh
+      REVIEWER pass, not just TEST-DESIGN-VALIDATOR's own sign-off.
+
   - req: REQ-204
     event: done
     agent: DOC-UPDATER

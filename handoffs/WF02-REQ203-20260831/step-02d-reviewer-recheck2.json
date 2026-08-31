@@ -1,0 +1,62 @@
+{
+  "handoff_id": "step02d-recheck2-WF02-REQ203-20260831",
+  "run_id": "WF02-REQ203-20260831",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ203-20260831/step-02d-reviewer-recheck2.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-203"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ203-20260831/step-02d-reviewer-recheck1.json",
+      "handoffs/WF02-REQ203-20260831/step-02a-elixir-dev-rework2.json",
+      "handoffs/WF02-REQ203-20260831/step-03b-test-design-validator.json",
+      "lib/letflow/design/req021-auth-plug-pipeline.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/repository/activation.ex",
+      "config/test.exs",
+      "config/dev.exs",
+      "config/prod.exs"
+    ],
+    "branch_name": "feature/WF02-REQ203-20260831",
+    "requirement_text": "REQ-203 (docs/requirements.yaml, stage S6) -- per-tenant artifact activation, atomic multi-artifact groups, and activation history (REPO-08/09/10)."
+  },
+  "task": {
+    "description": "Final narrow REVIEWER re-check of ELIXIR-DEV's rework2 (step-02a-elixir-dev-rework2.json), which claims to fix the two findings from step-02d-reviewer-recheck1: (1) the test-only activate_group pause seam was not compile-time-gated, only argument-matched; (2) the moduledoc/typedoc's claim that the public @spec 'omits' test_opts() was false because the @spec listed it directly.",
+    "acceptance_criteria": [
+      "Application.compile_env(:letflow, :activation_test_hooks_enabled?, false) module attribute exists and resolves to false by default",
+      "config/test.exs sets the flag true; config/dev.exs and config/prod.exs are silent on it",
+      "the gating mechanism (if/else on the compiled-in attribute, not a guard clause) is genuinely a no-op when the flag is false, verified by clean --warnings-as-errors compiles under both default and MIX_ENV=test",
+      "test_opts() is @typep (private) and activate_group/5's public @spec 5th argument is plain keyword(), making the doc's claim literally true",
+      "no unused-type/unused-private-function warnings",
+      "all 67 targeted tests still pass under MIX_ENV=test"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Both findings from recheck1 are genuinely fixed. No new defect found. This is the FINAL PASS for Step 2d on REQ-203.\n\nFINDING 1 (compile-time gate) -- FIXED. Read lib/letflow/repository/activation.ex in full. Lines 243-247 define `@activation_test_hooks_enabled? Application.compile_env(:letflow, :activation_test_hooks_enabled?, false)`, a module attribute resolved once at compile time. Confirmed via grep that only config/test.exs sets the key (`config :letflow, activation_test_hooks_enabled?: true`, config/test.exs:198); config/dev.exs and config/prod.exs have zero matches for `activation_test_hooks_enabled`, so compile_env's `false` default holds in both. The gating mechanism (activation.ex:325-334) is `if @activation_test_hooks_enabled? and index == pause_after and is_function(pause_fun, 0) do Multi.run(...) else multi end` inside `maybe_add_test_pause_step/3` -- correctly abandoned the earlier function-guard approach (which the compiler statically rejects as 'guard will never succeed' once the literal is `false`) in favor of an `if` on the same compiled-in attribute, which has no such restriction and genuinely compiles away to the `else` branch whenever the flag is `false`. Verified this myself, independently: ran `mix compile --warnings-as-errors --force` under default (dev) MIX_ENV -- 170 files, 'Generated letflow app', clean, exit 0; ran `MIX_ENV=test mix compile --warnings-as-errors --force` -- 184 files, 'Generated letflow app', clean, exit 0. Both compile clean, confirming the flag correctly resolves to `false` in dev and `true` in test with no warning in either build, and that the pause step is a real no-op (not merely hard to trigger by argument-matching) whenever the flag is off.\n\nFINDING 2 (false typedoc claim) -- FIXED. `test_opts` (activation.ex:237) is now `@typep` (private), not a public `@type`. The public `@spec activate_group/5` (activation.ex:249-261) types its 5th argument as plain `keyword()`, not `test_opts()` -- confirmed by reading the @spec directly, not taking the comment's claim on trust. The `@typedoc` was correctly converted to a plain comment (activation.ex:205-236), since `@typep`'s typedocs are discarded by the compiler and would otherwise produce their own 'typedoc discarded for private type' warning under `--warnings-as-errors` -- this itself is evidence the change is real, since a stale/fake `@typedoc` would have failed the same compile check I ran. The doc's discoverability claim ('a caller reading only the public contract... genuinely does not see test_pause_after/test_pause_fun') is now actually true: `h Letflow.Repository.Activation.activate_group/5` and editor autocomplete against the public @spec would show only `keyword()`.\n\nFINDING 3 (no new unused-warning regressions) -- CONFIRMED. `maybe_add_test_pause_step/3` carries its own `@spec` referencing `test_opts()` (activation.ex:324), giving the now-private type a real internal use site so no unused-private-type warning fires; both `--warnings-as-errors` compiles above came back clean, which would have caught any unused-type, unused-private-function, or discarded-typedoc warning. No new defect introduced by this rework.\n\nSupervision/idiom/scope-creep questions from the original Step 2d PASS are unaffected by this rework -- this iteration only touched the pause-seam gating and the test_opts type visibility, both additive/narrowing changes with no bearing on gen_statem usage, InstanceSupervisor isolation, or new abstractions. No scope creep: the fix is exactly the config-resolved-flag pattern already established by req021-auth-plug-pipeline.md's OQ-5, reused rather than reinvented, and no new behaviour/adapter module was introduced (rejecting that heavier option was correct per recheck1's own instruction).\n\nVERIFICATION RUN (this pass, independently, real Postgres):\n- `mix compile --warnings-as-errors --force` (default/dev MIX_ENV): 170 files, 'Generated letflow app', clean, exit 0.\n- `MIX_ENV=test mix compile --warnings-as-errors --force`: 184 files, 'Generated letflow app', clean, exit 0.\n- `mix format --check-formatted`: exit 0, no output.\n- `MIX_ENV=test mix test test/letflow/repository/activation_test.exs test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs`: 'Result: 67 passed', 0 failures, real Postgres (tenant schema created and torn down cleanly in the log output).\n- `grep -n activation_test_hooks_enabled config/*.exs`: only config/test.exs matches (line 198, value true); config/dev.exs and config/prod.exs have zero matches.",
+    "verification": {
+      "mix_compile_dev_warnings_as_errors": "PASS -- ran myself, 170 files, 'Generated letflow app', clean, exit 0.",
+      "mix_compile_test_warnings_as_errors": "PASS -- ran myself, `MIX_ENV=test mix compile --warnings-as-errors --force`, 184 files, 'Generated letflow app', clean, exit 0.",
+      "mix_format_check_formatted": "PASS -- exit 0, no output.",
+      "mix_test_targeted": "PASS -- ran myself, `MIX_ENV=test mix test test/letflow/repository/activation_test.exs test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs`, 'Result: 67 passed', 0 failures, real Postgres.",
+      "flag_default_check": "Confirmed via grep that only config/test.exs sets activation_test_hooks_enabled? (true); config/dev.exs and config/prod.exs are silent on the key, so Application.compile_env's false default governs those builds -- also independently confirmed by the clean dev-MIX_ENV compile above.",
+      "gating_mechanism_check": "Read activation.ex:325-334 directly: `if @activation_test_hooks_enabled? and index == pause_after and is_function(pause_fun, 0) do ... else multi end` -- a compile-time-constant branch, not a guard clause, correctly avoiding the compiler's 'guard will never succeed' rejection while still making the pause step a genuine no-op when the flag is false.",
+      "spec_and_typep_check": "Read test_opts's declaration (activation.ex:237, @typep) and activate_group/5's public @spec (activation.ex:249-261, 5th argument typed keyword()) directly -- the moduledoc's discoverability claim is now literally true, not just less wrong.",
+      "no_new_warnings_check": "Both --warnings-as-errors compiles (dev and test MIX_ENV) came back clean, which would have caught any unused-type, unused-private-function, or discarded-typedoc-on-@typep warning."
+    },
+    "issues": [],
+    "artifacts_out": [
+      "handoffs/WF02-REQ203-20260831/step-02d-reviewer-recheck2.json"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR for its own final Step 3b re-check. Both conditions TEST-DESIGN-VALIDATOR's prior FAIL (step-03b-test-design-validator.json) was contingent on -- the FK-constraint fix and this pause-seam gating/typing fix -- have now independently passed REVIEWER. No further ELIXIR-DEV rework expected on this chain."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

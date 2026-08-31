@@ -1,0 +1,71 @@
+{
+  "handoff_id": "step01b-WF02-REQ203-20260831",
+  "run_id": "WF02-REQ203-20260831",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ203-20260831/step-01b-code-design-validator.json",
+  "status": "FAILED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-203"],
+    "issue_ids": [],
+    "related_handoff_ids": ["handoffs/WF02-REQ203-20260831/step-01-code-designer.json"],
+    "artifacts_in": [
+      "lib/letflow/design/req203-artifact-activation.md",
+      "docs/requirements.yaml",
+      "lib/letflow/repository.ex",
+      "lib/letflow/repository/artifact_version.ex",
+      "lib/letflow/audit.ex",
+      "lib/letflow/repo.ex",
+      "priv/repo/migrations/20260830030001_create_repository_artifacts.exs",
+      "deps/ecto/lib/ecto/changeset.ex"
+    ],
+    "branch_name": "feature/WF02-REQ203-20260831"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR hard gate (WF-02 Step 1b) on REQ-203's design (lib/letflow/design/req203-artifact-activation.md). Independently re-derived the design's factual claims against source rather than accepting the design report's summary, with specific focus on the REPO-08 READ-COMMITTED observability argument (§4.3), the two-layer rationale-non-empty enforcement (§2.4), and whether OQ-A/OQ-E/OQ-F are legitimate deferrals to ELIXIR-DEV or design-stage-resolvable gaps, per this run's precedent (REQ-202's OQ-4 treatment).",
+    "acceptance_criteria": [
+      "REPO-08 isolation-level argument (§4.3) independently verified against Postgres MVCC semantics and this codebase's actual Repo/config",
+      "OQ-A checked against the actual migration file the design itself names",
+      "OQ-D checked against actual Ecto.Changeset source for this codebase's pinned Ecto version",
+      "OQ-E and OQ-F judged as legitimate open questions or as design decisions that should have been resolved now",
+      "§2.4's two-layer enforcement checked for internal consistency between its stated intent and its stated mechanism",
+      "Traceability table spot-checked against AC1, AC2, AC4, AC9",
+      "No implementation code present",
+      "Verdict recorded with evidence"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "The isolation-level argument in §4.3 is CORRECT, independently re-derived, and is the strongest part of this design. Verified: (1) lib/letflow/repo.ex is a plain Ecto.Adapters.Postgres repo with no isolation-level override in init/2, and a grep across lib/letflow and config/*.exs finds no isolation/serializable/read_committed/SET TRANSACTION hits anywhere relevant -- the design's premise (every transaction here runs at Postgres's default READ COMMITTED) is accurate. (2) Postgres genuinely has no dirty-read isolation level at all -- READ COMMITTED, REPEATABLE READ, and SERIALIZABLE all share the floor that an uncommitted transaction's writes are never visible to any other transaction; they differ only in snapshot re-acquisition timing across a transaction's own multiple statements, not in whether uncommitted rows leak. (3) Because activate_group/4's entire group is one Ecto.Multi submitted to exactly one Repo.transaction/1 call, there is no committed intermediate state for a concurrent reader to observe -- before commit every reader sees the full old state (regardless of how many internal UPDATE/INSERT statements already ran on the held connection), after commit every reader sees the full new state. This is correctly independent of isolation level; a SERIALIZABLE bump would guard write-skew across separate transactions, a different anomaly class than REPO-08 asks about. (4) The FOR UPDATE row locks in §4.2 step 3a affect writer-writer serialization only -- an ordinary concurrent SELECT (resolve/3) is never blocked by them and is irrelevant to the visibility argument, correctly not conflated with it in the design. (5) This project's own precedent (req025, req047, req053, promotion_review_state_machine.md) already relies on the identical READ-COMMITTED-suffices reasoning for analogous same-transaction-atomicity claims, so this is not a novel argument being smuggled through. CONFIRMED CORRECT, no flaw found -- REPO-08's test design in §4.3 (SQL.Sandbox.mode(:auto), a paused Task mid-Multi, concurrent resolve/3 reads during the pause) is a real test of the claim, not a vacuous one.\n\nHowever, the design fails on other grounds -- three genuine defects, not style preference:\n\n(A) OQ-A is a resolvable fact left unresolved, despite the design citing its own answer's exact location. §0 and OQ-A name the migration file 'priv/repo/migrations/20260830030001_create_repository_artifacts.exs' as the place ELIXIR-DEV must check for artifact_versions.version_number's real Postgres column type, framing it as unconfirmed this session. I read that exact file: line 88 declares 'add :version_number, :bigint, null: false'. This was one grep away and the design already knew the exact filename -- this is precisely the kind of deferred-but-answerable fact this project's REQ-202 precedent (OQ-4) does not accept as a legitimate open question when the design stage could trivially resolve it. §2.2's new_version_number row must state the concrete type (:bigint) directly, not leave it as 'matches whatever the migration says, see OQ-A.'\n\n(B) OQ-E and OQ-F are design decisions being punted to ELIXIR-DEV, not facts needing further investigation -- this is exactly the class of gap this gate exists to catch per this run's own framing (per REQ-202's precedent, cited explicitly in the task brief). OQ-E (duplicate (artifact_kind, artifact_name) pair within one activate_group/4 call) already has the design's own preferred resolution stated (an explicit {:error, :duplicate_artifact_in_group} pre-check) but the design declines to commit to it, leaving §4.1's error union incomplete for a caller-input case that is easy to construct and worth an explicit AC1-adjacent test. OQ-F (whether the audit_entries cross-write in §7 is one Letflow.Audit.append_multi/4 call per artifact or one for the whole group) likewise already has a stated preference (per-artifact, for consistency with artifact_activation_history's own granularity) but is left open -- this directly determines how many Multi.run/3 steps §4.2/§7 actually specifies, which is not a detail ELIXIR-DEV should be inventing at implementation time for a section describing an Ecto.Multi's exact step composition. Both must be resolved to a single stated design now; §4.1's error type union and §4.2/§7's step list must reflect the chosen answer.\n\n(C) §2.4's two-layer rationale enforcement has an internal inconsistency between its stated intent and its stated mechanism. The design's own narrative frames the changeset-level validate_length(:rationale, min: 1) as existing to reject 'blank/whitespace' rationale (explicit language: 'validate_length(:rationale, min: 1) (or equivalent \\'not blank\\' check)... this design does not read that as... a blank/whitespace-only implementation is correct'), but validate_length(min: 1) only checks character count -- a rationale of a single space or of '   ' has length >= 1 and passes this check untouched, so it does NOT reject whitespace-only input despite the design's narrative claiming that intent. Separately verified from deps/ecto/lib/ecto/changeset.ex (Ecto 3.14.1, this codebase's pinned version, per mix.lock): validate_required/2's field_missing?/missing?/2 helper treats a value as missing only if it is nil or a member of changeset.empty_values (default [\\\"\\\"]) -- so validate_required/2 DOES already reject a literal empty string for a field populated via the standard cast/4 pipeline (cast/4 replaces any empty_values member with nil before validate_required ever runs), resolving OQ-D as answerable now (this, unlike OQ-A/E/F, does not block the design's own stated conclusion, since both layers are added regardless -- but the design should state this confirmed fact rather than leave OQ-D open too, now that it costs nothing to state). The design must either (i) correct the changeset-layer mechanism to something that actually rejects whitespace-only text (e.g. validate_change/3 with String.trim/1 == \\\"\\\"), or (ii) state explicitly that whitespace-only rationale is accepted and out of scope, since AC6's literal wording ('no rationale... rejected rather than stored with an empty rationale') only requires rejecting missing/nil and exact-empty-string, not whitespace-only -- as written, the design claims a protection its own specified mechanism does not deliver, which is exactly the kind of gap that reaches ELIXIR-DEV as an ambiguity rather than a decision.\n\nTraceability spot-check (AC1, AC2, AC4, AC9): all four map correctly to the design sections claimed (§4.2/§4.2-step-4 for AC1's all-or-nothing rollback with no history rows written; §4.3 for AC2's observability argument and required test shape; §2.1's unique_index for AC4; §2.1's active_version_id FK plus §2.2's history FKs, both on_delete: :restrict, for AC9). No mapping errors found. No implementation code found anywhere in the document -- all references to Ecto/Repo functions are API-shape citations (Multi.insert/3, Repo.get_by/2 with lock:, etc.), never function bodies or literal SQL; this satisfies the no-code requirement cleanly, consistent with this design's prior two reworks having already stripped literal code.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "OQ-A left open despite being resolvable from a file the design itself names. priv/repo/migrations/20260830030001_create_repository_artifacts.exs:88 declares 'add :version_number, :bigint, null: false'. §2.2's new_version_number column spec must state ':bigint' directly (matching artifact_versions.version_number's real Postgres type) instead of deferring the check to ELIXIR-DEV via OQ-A.",
+        "affected_requirement": "REQ-203"
+      },
+      {
+        "severity": "BLOCKER",
+        "description": "OQ-E (duplicate (artifact_kind, artifact_name) pair within one activate_group/4 call) is a design decision, not an open fact, and the design already states its own preferred resolution ({:error, :duplicate_artifact_in_group} pre-check) without committing to it. Resolve now: add the error atom to §4.1's return-type union and state the pre-check step explicitly in §4.2.",
+        "affected_requirement": "REQ-203"
+      },
+      {
+        "severity": "BLOCKER",
+        "description": "OQ-F (audit_entries cross-write granularity: one Letflow.Audit.append_multi/4 call per artifact vs one for the whole group) is a design decision affecting the exact Ecto.Multi step list §4.2/§7 must specify, not a fact needing further investigation. The design already states a preference (per-artifact). Commit to it and update §4.2/§7's step enumeration to reflect the chosen granularity exactly.",
+        "affected_requirement": "REQ-203"
+      },
+      {
+        "severity": "MAJOR",
+        "description": "§2.4's changeset-level check (validate_length(:rationale, min: 1)) does not achieve the 'reject blank/whitespace' intent the design's own narrative claims for it -- a whitespace-only rationale (e.g. a single space) has length >= 1 and passes unmodified. Either specify a mechanism that actually rejects whitespace-only input (e.g. validate_change/3 with String.trim/1 == \"\") or explicitly narrow the claimed intent to match AC6's literal wording (reject missing/nil/exact-empty-string only, whitespace-only is out of scope). As a secondary, non-blocking note: OQ-D is answerable now from deps/ecto/lib/ecto/changeset.ex (Ecto 3.14.1 per mix.lock) -- validate_required/2 does reject a literal empty string reaching it via the standard cast/4 pipeline (cast/4's default empty_values [\"\"] converts \"\" to nil before validate_required runs) -- state this confirmed fact rather than leaving OQ-D open, since resolving it costs nothing and removes one more unnecessary open question.",
+        "affected_requirement": "REQ-203"
+      }
+    ],
+    "next_action": "Rework CODE-DESIGNER -- 3 BLOCKERs + 1 MAJOR above, rework iteration 3 (design doc already reworked twice for a separate literal-code-removal issue; this is the first content-correctness rework)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

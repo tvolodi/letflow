@@ -11304,7 +11304,7 @@ requirements:
   - id: REQ-203
     title: Per-tenant artifact activation -- atomic multi-artifact groups and activation history (REPO-08/09/10)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 376  # letflow-queue task id
     description: >

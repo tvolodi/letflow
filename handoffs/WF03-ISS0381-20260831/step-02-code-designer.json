@@ -1,0 +1,63 @@
+{
+  "handoff_id": "WF03-ISS0381-20260831-step02",
+  "run_id": "WF03-ISS0381-20260831",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0381-20260831/step-02-code-designer.json",
+  "created_at": "2026-08-31T07:28:46Z",
+  "started_at": "2026-08-31T07:28:46Z",
+  "completed_at": "2026-08-31T07:28:46Z",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "issue_id": "ISS-0381",
+    "former_local_id": "ISS-0353",
+    "queue_task_id": 381,
+    "github_issue": 753,
+    "severity": "MINOR",
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0381-20260831/step-01-issue-fixer-diagnosis.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0381.yaml",
+      "handoffs/WF03-ISS0381-20260831/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/dlq/entry.ex",
+      "lib/letflow/dlq.ex",
+      "lib/letflow/definitions/solution_pack_install.ex",
+      "lib/letflow/definitions/promotion_review.ex"
+    ]
+  },
+  "task": {
+    "description": "Design a fix for lib/letflow/dlq/entry.ex's insert_changeset/2 per ISS-0381 and the confirmed diagnosis at step-01: narrow cast/3's field list to drop :status/:retry_count/:retry_history (schema defaults apply), replace :tenant_id/:created_at's cast-list membership with explicit put_change/3 calls reading both from attrs, update the docstring to match, and specify the changeset-level regression test for WF-03 Step 4.",
+    "acceptance_criteria": [
+      "insert_changeset/2 no longer casts :status, :retry_count, :retry_history, :tenant_id, or :created_at",
+      ":status/:retry_count/:retry_history rely on existing Ecto.Schema struct defaults once excluded from cast/3",
+      ":tenant_id and :created_at are set via put_change/3 inside insert_changeset/2, reading them from attrs, placed after cast/3 and before validate_required/2",
+      "Letflow.Dlq.enqueue/2 requires no change",
+      "the docstring becomes accurate about the actual mechanism",
+      "regression test shape specified so it fails pre-fix and passes post-fix",
+      "no implementation code in the design artefact"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design written to lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md. Fix: (1) cast/3's field list narrows from 18 to 13 atoms, dropping :tenant_id, :status, :retry_count, :retry_history, :created_at; (2) two put_change/3 calls added -- put_change(:tenant_id, Map.get(attrs, :tenant_id)) and put_change(:created_at, Map.get(attrs, :created_at)) -- placed after cast/3 (which must run first to produce the %Ecto.Changeset{} put_change/3 requires) and before validate_required/2 (unchanged list: [:tenant_id, :entry_type, :status, :retry_count, :created_at]) so validate_required/2 still sees the put_change'd values and still rejects a genuinely missing key with the standard 'can't be blank' error -- confirmed this is not a new silent-nil hole: put_change(:tenant_id, nil) writes an explicit nil into changes, and validate_required/2 treats that identically to a nil/missing value from cast/3 today. :status/:retry_count/:retry_history need no validate_required/2 change (retry_history was never in that list, confirmed by step-01). (3) Docstring rewritten to state the actual post-fix mechanism per field, not the aspirational claim. (4) enqueue/2 (lib/letflow/dlq.ex) needs zero changes -- it already merges trusted tenant_id/status/retry_count/retry_history/created_at into insert_attrs before calling insert_changeset/2; put_change/3 reading the same two keys out of that same merged map is a drop-in replacement for cast/3's prior handling of them. (5) Regression test shape specified in the design's section 9 for TEST-DESIGNER at WF-03 Step 4: construct insert_changeset/2 directly (bypassing enqueue/2) with a raw/unfiltered attrs map carrying caller-supplied :status (non-default, e.g. :resolved), :retry_count (nonzero), :retry_history (non-empty) values -- these three assertions are genuinely fail-first: pre-fix, cast/3 casts all three from attrs verbatim so get_field(changeset, :status) == :resolved (not :pending) and the test's assertion that it equals :pending FAILS pre-fix and PASSES post-fix (schema default wins once excluded from cast). Flagged an important nuance for :tenant_id/:created_at specifically: because both are still read from the same attrs map (via cast/3 pre-fix, via put_change/3 post-fix), a plain value-round-trip assertion passes on BOTH sides of the fix and is NOT discriminating for those two fields -- the design specifies the actual discriminating mechanism-level assertion instead: a malformed value (a non-UUID string for tenant_id, a non-timestamp string for created_at) produces a changeset validation error pre-fix (cast/3 performs type casting and fails it) but no changeset-level error post-fix (put_change/3 performs no type casting, the malformed value would only surface as a DB-level error at Repo.insert/2 time) -- this cast-vs-put_change error-shape divergence is the fail-first proof for those two fields, distinct from the value-divergence proof for the other three. Both proof shapes documented explicitly in section 9 so TEST-DESIGNER does not need to re-derive them. No implementation code written anywhere -- design doc contains signatures, field-list specifications as prose/data, pipeline ordering, and message/mechanism descriptions only; no .ex file touched.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+      "handoffs/WF03-ISS0381-20260831/step-02-code-designer.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0381-20260831",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0381-20260831",
+      "push_status": "pending"
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (WF-03 Step 2, same rigor as WF-02 Step 1b) to gate this design before ELIXIR-DEV implements it at WF-03 Step 3."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

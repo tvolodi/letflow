@@ -806,3 +806,21 @@ history:
       verdict PASS. check_requirements_registration 184/184, 0 deferred;
       check_deferral_staleness 0 stale. Statuses stay pending; WF-01 confirms
       well-formedness only. Commits 17092696 and 058a58e7, both pushed to main.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-31T08:12:47Z"
+    note: >
+      User-directed cleanup of the last outstanding item from the reconciliation
+      pass: mix letflow.audit_issue_closures FAILed with 4 new (non-grandfathered)
+      ZERO_EVIDENCE violations -- GH#586/ISS-0293, GH#645/ISS-0333, GH#665/ISS-0346,
+      GH#562/ISS-0285, all genuinely resolved locally but closed on GitHub without
+      an evidence comment. Posted retroactive evidence comments on all four,
+      quoting each local record's actual resolution/resolution_note field rather
+      than inventing new justification. GH#562/ISS-0285 also clarified as a
+      letflow-queue-repo defect (tracked at tvolodi/letflow-queue#5), correctly
+      closed here with no local fix expected. Re-ran the audit: OK -- 0 new
+      violations across 195 tracked closed issues (30 pre-existing grandfathered,
+      unaffected). No repo files changed; GitHub-only fix, hence recorded as a
+      SCOPE-CHANGE entry rather than against any REQ.

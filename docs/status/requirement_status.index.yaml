@@ -800,8 +800,14 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 30
+    entries: 31
     note: >
+      Recounted to 31 on 2026-08-31 after ORCH posted retroactive evidence
+      comments on 4 closed issues to clear mix letflow.audit_issue_closures'
+      new-violation set (0 new violations after; 30 grandfathered unaffected).
+      `wc`: 826 lines, still well under the 1200-line/120000-byte roll ceiling.
+      This supersedes the 30-count note below.
+
       Recounted to 30 on 2026-08-31 after ORCH's state-reconciliation pass
       appended two SCOPE-CHANGE entries (the orphaned-issue registration and
       S7's WF-01 expansion into REQ-205..REQ-210).

@@ -43,9 +43,5 @@
       "test/letflow/engine/lua/sandbox_test.exs AC1: System.cmd('grep', ...) fails with :enoent in Windows PowerShell (grep not on PATH); pre-existing environment failure, no Lua/Wasm files touched",
       "test/letflow/engine/wasm/host_api_test.exs AC8: same :enoent cause; pre-existing"
     ]
-  },
-  "tenant_data_path_changes": [
-    "lib/letflow/obs/alerts.ex: reads alert_trigger_state and alert_hook_emission_state (per-tenant prefix), reads instance_projections (per-tenant prefix), reads webhook_subscriptions (per-tenant prefix). All reads scoped via prefix: tenant_schema. No cross-tenant path. No writes to dlq_entries (design OBS-06). Delivery POSTs to operator-configured URLs (application config only, no tenant-supplied URLs).",
-    "lib/letflow/dlq.ex: count_entries/1 is a read-only aggregate scoped to opts[:prefix]. No write path."
-  ]
+  }
 }

@@ -1,0 +1,21 @@
+{
+  "run_id": "WF02-REQ199-20260831",
+  "workflow": "WF-02",
+  "step": "01b-code-design-validator",
+  "status": "PENDING",
+  "dispatched_at": "2026-08-31T05:44:44Z",
+  "from": "ORCH",
+  "to": "CODE-DESIGN-VALIDATOR",
+  "context": {
+    "branch_name": "feature/WF02-REQ199-20260831",
+    "requirement_ids": ["REQ-199"],
+    "design_artifact": "lib/letflow/design/req199-ordering.md",
+    "design_commit": "3aeceac9",
+    "rework_count": 0,
+    "max_rework": 3
+  },
+  "instructions": "You are CODE-DESIGN-VALIDATOR for Letflow WF-02. Read lib/letflow/design/req199-ordering.md DIRECTLY — do not use CODE-DESIGNER's summary as a substitute. Verify: (1) every one of the 18 acceptance criteria maps to an explicitly named design element; (2) all public function signatures have @spec-style types with input and output specified; (3) both Ecto schemas have complete field-level types, constraints, and index specs; (4) DB migration timestamps stated (20260831000001, 20260831000002); (5) the per-tenant placement decision is stated with its reason; (6) the claim-and-apply transaction boundary lists every operation in sequence; (7) the gap-sweeper strict-greater-than predicate is stated explicitly; (8) DLQ integration specifies the exact function called and argument shape; (9) ORD-04 metric names, types, and label policy are specified; (10) scheduler wiring names the specific function/callback in poller.ex; (11) the event type names for registration are stated; (12) connection pool discipline is explicitly stated; (13) tenant_fixture.ex oracle update is noted; (14) the ORD-04 deferral is prescribed with exact moduledoc wording; (15) open questions are listed rather than silently resolved; (16) NO implementation code (no .ex/.exs code blocks with function bodies — only type shapes and signatures). Report PASS with specific evidence per criterion, or FAIL listing every gap. Each gap must cite the specific AC or design criterion it fails, not a vague description.",
+  "artifacts_in": ["lib/letflow/design/req199-ordering.md"],
+  "artifacts_out": ["handoffs/WF02-REQ199-20260831/step-01b-code-design-validator.json"],
+  "next_action": "Complete your validation, write your report to handoffs/WF02-REQ199-20260831/step-01b-code-design-validator.json on the feature branch, commit, and return PASS or FAIL with specific evidence."
+}

@@ -197,12 +197,18 @@ needed here). One function per `seed.py` responsibility, per Decision 1.
 
 - Input: the same `org_structure.yaml` map's group/team definitions (group name
   plus member `actor_id`/username references), plus `tenant`.
-- For each group entry: idempotency mechanism mirrors §2.2 — look up first via
-  `Letflow.Identity.list_groups/1` filtered by name (or, if no by-name lookup
-  exists on that function, list and match client-side against the fixture's
-  group name — resolved by ELIXIR-DEV against `list_groups/1`'s actual filter
-  parameters), and skip `create_group/2` if a same-name group already exists in
-  this tenant's schema. If `create_group/2` still races, its own confirmed
+- For each group entry: idempotency mechanism mirrors §2.2 — `list_groups/1`
+  (re-read directly this session at `lib/letflow/identity.ex:527-537`) takes
+  only `opts :: [prefix: String.t()]`, builds
+  `from(g in Group, order_by: [asc: g.name])` with no name/filter clause of
+  any kind, and returns `{:ok, %{groups: [...], total: ...}}` — the tenant's
+  full, unpaginated group list. There is no server-side by-name lookup to
+  call. `seed_groups/2` therefore lists ALL of the tenant's groups via
+  `list_groups/1` and matches the fixture's group name **client-side**
+  (`Enum.find/2` on `groups` by `name ==`) to decide whether a same-name
+  group already exists — this is the settled mechanism, not a pending
+  question. If a match is found, skip `create_group/2` for that entry. If
+  `create_group/2` still races, its own confirmed
   `duplicate_group_name` conflict branch (seen at
   `lib/letflow/routers/identity.ex:437-438`'s handler, backed by
   `Letflow.Identity.group_name_unique_conflict?/1`) is treated as
@@ -255,50 +261,43 @@ inference from "no error was raised."
 
 Location: `test/support/simulation/runner.ex`.
 
-### 3.1 Parsed-scenario struct
+### 3.1 Parsed-scenario struct — `Letflow.Simulation.Scenario`
 
-```
-defmodule Letflow.Simulation.Scenario do
-  @type step :: %{
-          required(:via) => :api | :gui,
-          required(:action) => String.t(),
-          optional(:params) => map(),
-          optional(:produces) => String.t()  # name this step's captured output is stored under
-        }
+`Letflow.Simulation.Scenario` is a plain struct (no Ecto schema, no
+persistence — this is an in-memory parsed-fixture shape) with the following
+fields:
 
-  @type precondition :: %{
-          required(:check) => :process_definition_active | :no_pending_instances | :custom,
-          optional(:args) => map()
-        }
+| Field | Type | Meaning |
+|---|---|---|
+| `id` | `String.t()` | Scenario identifier, from the fixture's own `id` field. |
+| `company_id` | `String.t()` | Which of the three seeded companies (swiftroute/vortex/meridian) this scenario runs against. |
+| `process_id` | `String.t()` | The process definition name/key this scenario exercises. |
+| `actors` | `%{optional(String.t()) => map()}` | Maps a scenario-local actor key (matching the fixture's `actor_id` convention, e.g. `"actor-swiftroute-lena"`) to whatever identity/credential data the api-via steps need to authenticate as that actor (resolved at implementation time against however `Letflow.Identity.create_token/3`-issued tokens get attached to a `Plug.Test` conn's `Authorization` header — same mechanism REQ-076's token work already exposes; not re-derived here since it is settled elsewhere). |
+| `preconditions` | `[precondition()]` | List of precondition sub-shapes, see below. Evaluated in list order before any step runs (§3.3 step 1). |
+| `steps` | `[step()]` | List of step sub-shapes, see below. Executed in declared order (§3.3 steps 2-3). |
+| `expected_outcomes` | `[expected_outcome()]` | List of expected-outcome sub-shapes, see below. Verified after all steps run (§3.3 step 4). |
 
-  @type expected_outcome :: %{
-          required(:verification) => %{
-            required(:method) => :task_assigned | :instance_state | :audit_event,
-            required(:args) => map()
-          }
-        }
+**`step()` sub-shape** — one entry of `steps`:
 
-  @type t :: %__MODULE__{
-          id: String.t(),
-          company_id: String.t(),
-          process_id: String.t(),
-          actors: %{optional(String.t()) => map()},
-          preconditions: [precondition()],
-          steps: [step()],
-          expected_outcomes: [expected_outcome()]
-        }
+| Field | Type | Meaning |
+|---|---|---|
+| `via` | `:api \| :gui` (required) | Dispatch mechanism — `:api` runs the step through the real HTTP stack (§3.3 step 2), `:gui` is recorded `:deferred_to_s8` and never executed (§3.3 step 3, Decision 2). |
+| `action` | `String.t()` (required) | An HTTP method+path descriptor for `via: :api` steps, e.g. `"POST /api/v1/instances"`. |
+| `params` | `map()` (optional) | Request body/parameters, subject to `{{produces.X}}` template substitution (§5) before dispatch. |
+| `produces` | `String.t()` (optional) | Name under which this step's response body is stored in the accumulated `produces` map, for later steps'/outcomes' template references. |
 
-  defstruct [:id, :company_id, :process_id, actors: %{}, preconditions: [], steps: [], expected_outcomes: []]
-end
-```
+**`precondition()` sub-shape** — one entry of `preconditions`:
 
-`actors` maps a scenario-local actor key (matching the fixture's `actor_id`
-convention, e.g. `"actor-swiftroute-lena"`) to whatever identity/credential
-data the api-via steps need to authenticate as that actor (resolved at
-implementation time against however `Letflow.Identity.create_token/3`-issued
-tokens get attached to a `Plug.Test` conn's `Authorization` header — same
-mechanism REQ-076's token work already exposes; not re-derived here since it
-is settled elsewhere).
+| Field | Type | Meaning |
+|---|---|---|
+| `check` | `:process_definition_active \| :no_pending_instances \| :custom` (required) | Which of §3.3 step 1's three real-query checks to run. |
+| `args` | `map()` (optional) | Check-specific arguments (e.g. the definition name for `:process_definition_active`, the predicate name for `:custom`). |
+
+**`expected_outcome()` sub-shape** — one entry of `expected_outcomes`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `verification` | `%{method: :task_assigned \| :instance_state \| :audit_event, args: map()}` (required) | `method` selects one of §6's three real-query verification implementations; `args` supplies that method's check-specific parameters (e.g. an instance reference and expected status for `instance_state`). |
 
 ### 3.2 `run/1` and its result shape
 
@@ -307,31 +306,32 @@ is settled elsewhere).
         {:ok, Letflow.Simulation.RunReport.t()} | {:error, term()}
 ```
 
-```
-defmodule Letflow.Simulation.RunReport do
-  @type step_result :: %{
-          step: Letflow.Simulation.Scenario.step(),
-          outcome: :ok | :error | :deferred_to_s8,
-          captured: map() | nil,   # this step's `produces` output, if any
-          detail: term()
-        }
+`Letflow.Simulation.RunReport` is likewise a plain struct (no Ecto schema —
+an in-memory run-result shape) with the following fields:
 
-  @type outcome_result :: %{
-          expected_outcome: Letflow.Simulation.Scenario.expected_outcome(),
-          outcome: :pass | :fail,
-          observed: term()   # the actual queried state compared against
-        }
+| Field | Type | Meaning |
+|---|---|---|
+| `scenario_id` | `String.t()` | Echoes the run scenario's `id`. |
+| `precondition_results` | `[%{precondition: term(), outcome: :ok \| :error, detail: term()}]` | One entry per evaluated precondition, in list order; empty if a precondition failed and halted the run before steps executed (§3.3 step 1). |
+| `step_results` | `[step_result()]` | One entry per step, see below. |
+| `outcome_results` | `[outcome_result()]` | One entry per expected outcome, see below. |
 
-  @type t :: %__MODULE__{
-          scenario_id: String.t(),
-          precondition_results: [%{precondition: term(), outcome: :ok | :error, detail: term()}],
-          step_results: [step_result()],
-          outcome_results: [outcome_result()]
-        }
+**`step_result()` sub-shape** — one entry of `step_results`:
 
-  defstruct [:scenario_id, precondition_results: [], step_results: [], outcome_results: []]
-end
-```
+| Field | Type | Meaning |
+|---|---|---|
+| `step` | `Scenario`'s `step()` shape | The step this result corresponds to, echoed back. |
+| `outcome` | `:ok \| :error \| :deferred_to_s8` | `:ok`/`:error` for executed `via: :api` steps; `:deferred_to_s8` for `via: :gui` steps, always (§3.3 step 3). |
+| `captured` | `map() \| nil` | This step's `produces` output, if any; `nil` for steps with no `produces` field or steps that errored/deferred. |
+| `detail` | `term()` | Free-form diagnostic detail — the response body on error, or the deferral message for `:deferred_to_s8` (§3.3 step 3). |
+
+**`outcome_result()` sub-shape** — one entry of `outcome_results`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `expected_outcome` | `Scenario`'s `expected_outcome()` shape | The expected outcome this result corresponds to, echoed back. |
+| `outcome` | `:pass \| :fail` | Result of §6's verification method for this outcome. |
+| `observed` | `term()` | The actual queried state compared against — never inferred from the absence of a step error (§6). |
 
 ### 3.3 Execution algorithm (Decision 3, in order)
 
@@ -547,14 +547,14 @@ outcome is diagnosable from the report alone.
   `opts: [prefix: ...]` calls (§2.2) is not re-derived here — ELIXIR-DEV must
   read `lib/letflow/identity/tenant.ex` (or wherever `Tenant` is defined) to
   confirm the field name before implementing `seed_users/2`/`seed_groups/2`.
-- **OQ-2**: `Letflow.Identity.list_groups/1`'s actual filter parameters (does
-  it accept a name filter, or only pagination/prefix opts?) are not confirmed
-  in this session beyond its `@spec` at `lib/letflow/identity.ex:527`
-  (`list_groups(opts) :: {:ok, %{groups: [...], total: ...}}`) — §2.3's
-  by-name lookup may need to list-and-filter client-side rather than pass a
-  name filter through `opts`; ELIXIR-DEV resolves this against the real
-  function body at implementation time.
-- **OQ-3**: the exact HTTP method+path->context-function mapping for
+- **(resolved, formerly OQ-2)**: `Letflow.Identity.list_groups/1`'s actual
+  behavior — confirmed by reading its full body, not just its `@spec`, at
+  `lib/letflow/identity.ex:527-537` — takes only `opts :: [prefix: ...]`,
+  applies no name filter, and returns the tenant's full unpaginated group
+  list. §2.3 states the settled consequence: `seed_groups/2` lists all
+  groups and matches the fixture's group name client-side. No open question
+  remains here.
+- **OQ-2**: the exact HTTP method+path->context-function mapping for
   `Letflow.Engine`'s instance-creation and task-lookup endpoints (needed for
   `step.action` parsing in §3.3 and `task_assigned`/`instance_state` in §6) is
   not enumerated here field-by-field — ELIXIR-DEV resolves each specific
@@ -562,7 +562,7 @@ outcome is diagnosable from the report alone.
   scenario content is ported (this requirement only specifies the *mechanism*
   of dispatch, not an exhaustive action table, since no scenario content
   exists yet in this requirement's scope).
-- **OQ-4**: whether `yaml_elixir`'s YAML 1.1 parsing round-trips every scalar
+- **OQ-3**: whether `yaml_elixir`'s YAML 1.1 parsing round-trips every scalar
   type R-Co's fixture files actually use (e.g. YAML's `on`/`off`/`yes`/`no`
   boolean coercion quirks) without silently mis-typing a field is not verified
   in this session — flagged for ELIXIR-DEV to confirm against the real ported

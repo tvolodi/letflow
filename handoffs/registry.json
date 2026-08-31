@@ -3761,10 +3761,10 @@
                                            "lib/letflow/design/req199-ordering.md"
                                        ],
                      "lock_acquired_at":  "2026-08-31T05:34:40Z",
-                     "lock_released_at":  null,
-                     "released_lock":  false,
-                     "last_known_step":  "Step Final PENDING -- all gates passed (design/code/security/reviewer/test-design/test-runner/release-validator/doc-updater all PASS)",
-                     "note":  "REQ-199: Correlated effect re-entry ordering (ORD-01/02/03/04). New tables effect_completions + correlation_cursors. Consumer claim cycle with FOR UPDATE SKIP LOCKED + per-correlation advisory lock + cursor-based in-order apply. Gap sweeper on REQ-186 scheduler. ORD-04 lag surface via REQ-194 metrics."
+                     "lock_released_at":  "2026-08-31T09:48:26Z",
+                     "released_lock":  true,
+                     "last_known_step":  "Step Final (ORCH: merged PR #761 to main 0c9cfb15, queue task 372 released done)",
+                     "note":  "REQ-199 done -- Correlated effect re-entry ordering (ORD-01/02/03/04): effect_completions + correlation_cursors tables (per-tenant, decision 0003-B), FOR UPDATE SKIP LOCKED claim guard, pg_try_advisory_xact_lock per-correlation execute guard, cursor-based in-order apply with CONDITIONAL cursor advance, gap sweeper on REQ-186 scheduler, ORD-04 lag surface via REQ-194 metrics, event types registered. Migration timestamps 20260831050001/050002 (collision with REQ-203\u0027s 000001 resolved at Step Final). 18/18 ACs independently verified. PR #761 squash-merged at 0c9cfb15."
                  },
                  {
                      "run_id":  "WF02-REQ203-20260831",

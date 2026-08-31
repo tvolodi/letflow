@@ -30,8 +30,8 @@ defmodule Letflow.Webhooks.UrlValidator do
               [
                 {:inet, {byte(), byte(), byte(), byte()}, []}
                 | {:inet6,
-                   {0..65535, 0..65535, 0..65535, 0..65535,
-                    0..65535, 0..65535, 0..65535, 0..65535}, []}
+                   {0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535,
+                    0..65535}, []}
               ]}
              | {:error, term()})
 
@@ -57,8 +57,8 @@ defmodule Letflow.Webhooks.UrlValidator do
            [
              {:inet, {byte(), byte(), byte(), byte()}, []}
              | {:inet6,
-                {0..65535, 0..65535, 0..65535, 0..65535,
-                 0..65535, 0..65535, 0..65535, 0..65535}, []}
+                {0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535},
+                []}
            ]}
           | {:error, term()}
   def default_resolver(host_charlist), do: resolve_all(host_charlist)
@@ -70,8 +70,8 @@ defmodule Letflow.Webhooks.UrlValidator do
            [
              {:inet, {byte(), byte(), byte(), byte()}, []}
              | {:inet6,
-                {0..65535, 0..65535, 0..65535, 0..65535,
-                 0..65535, 0..65535, 0..65535, 0..65535}, []}
+                {0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535},
+                []}
            ]}
           | {:error, term()}
   defp resolve_all(host_charlist) do
@@ -156,8 +156,7 @@ defmodule Letflow.Webhooks.UrlValidator do
   defp blocked_ipv4?(_), do: false
 
   @spec blocked_ipv6?(
-          {0..65535, 0..65535, 0..65535, 0..65535,
-           0..65535, 0..65535, 0..65535, 0..65535}
+          {0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535}
         ) :: boolean()
   defp blocked_ipv6?({0, 0, 0, 0, 0, 0, 0, 1}), do: true
   # fc00::/7: first 16-bit group in 0xFC00..0xFDFF
@@ -175,8 +174,7 @@ defmodule Letflow.Webhooks.UrlValidator do
   defp blocked_ipv6?(_), do: false
 
   @spec ipv4_from_mapped_ipv6(
-          {0..65535, 0..65535, 0..65535, 0..65535,
-           0..65535, 0..65535, 0..65535, 0..65535}
+          {0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535, 0..65535}
         ) :: {byte(), byte(), byte(), byte()} | nil
   defp ipv4_from_mapped_ipv6({0, 0, 0, 0, 0, 0xFFFF, hi, lo}) do
     {hi >>> 8, hi &&& 0xFF, lo >>> 8, lo &&& 0xFF}

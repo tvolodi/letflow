@@ -353,18 +353,93 @@ defmodule Letflow.Simulation.RunnerTemplateAndOutcomesTest do
   # ── §6: audit_event -- real query, driven by a real HTTP-triggered event ──
 
   describe "audit_event verification method" do
-    # NOTE (TEST-DESIGNER finding, reported in the handoff -- not fixed here,
-    # not this role's remit): `verify_outcome/2`'s `:audit_event` clause reads
-    # `args` raw (`_produces` is discarded, see runner.ex's function head) --
-    # unlike `:task_assigned`/`:instance_state`, it never runs `args` through
-    # `resolve_ref/3`'s `{{produces.X}}` template substitution. A scenario
-    # cannot scope an audit_event check to "the resource this run just
-    # created" via `"resource_id" => "{{produces.instance.instance_id}}"` --
-    # that literal string is sent to the query verbatim and matches nothing.
-    # These tests therefore verify scoped only by `resource_type`/`event_type`
-    # (real filters that *do* work) rather than by the produced resource_id,
-    # which is the only way to get a genuine, non-vacuous pass/fail pair out
-    # of this method as currently implemented.
+    # ELIXIR-DEV rework (WF02-REQ205-20260831, step 2a rework 1): fixes the
+    # gap TEST-DESIGNER's finding above described -- `verify_outcome/2`'s
+    # `:audit_event` clause now runs `resource_id`/`resource_type` through
+    # the same `{{produces.X}}` substitution `:task_assigned`/`:instance_state`
+    # already used. This test proves the fixed path: `resource_id` is a
+    # genuine `{{produces.instance.instance_id}}` reference resolved against
+    # a runtime-only UUID (not hardcoded), and the query is verified to
+    # actually scope by it -- a mismatched resource_id must fail even though
+    # the real audit row for the right event_type exists.
+    test "resolves a {{produces.X}} resource_id reference and scopes the real query by it",
+         %{schema_name: schema_name, definition: definition, actor: actor} do
+      scenario = %Scenario{
+        id: "req205-audit-event-produces-resource-id",
+        company_id: "swiftroute",
+        process_id: definition.name,
+        actors: %{"operator" => actor},
+        preconditions: [],
+        steps: [
+          %{
+            via: :api,
+            action: "POST /api/v1/instances",
+            params: %{"definition_name" => definition.name, "initial_variables" => %{}},
+            produces: "instance",
+            actor: "operator"
+          }
+        ],
+        expected_outcomes: [
+          %{
+            verification: %{
+              method: :audit_event,
+              args: %{
+                "prefix" => schema_name,
+                "resource_id" => "{{produces.instance.instance_id}}",
+                "resource_type" => "instance",
+                "event_type" => "instance.create"
+              }
+            }
+          }
+        ]
+      }
+
+      assert {:ok, report} = Runner.run(scenario)
+
+      assert [%{outcome: :ok, captured: captured}] = report.step_results
+      instance_id = captured["instance_id"]
+
+      assert [%{outcome: :pass, observed: %{matching_entry: entry}}] = report.outcome_results
+      assert %AuditEntry{action: "instance.create", resource_id: ^instance_id} = entry
+    end
+
+    test "fails when the resolved {{produces.X}} resource_id does not match the real persisted row -- proving the substitution actually scopes the query, not a no-op",
+         %{schema_name: schema_name, definition: definition, actor: actor} do
+      scenario = %Scenario{
+        id: "req205-audit-event-produces-resource-id-mismatch",
+        company_id: "swiftroute",
+        process_id: definition.name,
+        actors: %{"operator" => actor},
+        preconditions: [],
+        steps: [
+          %{
+            via: :api,
+            action: "POST /api/v1/instances",
+            params: %{"definition_name" => definition.name, "initial_variables" => %{}},
+            produces: "instance",
+            actor: "operator"
+          }
+        ],
+        expected_outcomes: [
+          %{
+            verification: %{
+              method: :audit_event,
+              args: %{
+                "prefix" => schema_name,
+                "resource_id" => Ecto.UUID.generate(),
+                "resource_type" => "instance",
+                "event_type" => "instance.create"
+              }
+            }
+          }
+        ]
+      }
+
+      assert {:ok, report} = Runner.run(scenario)
+      assert [%{outcome: :ok}] = report.step_results
+      assert [%{outcome: :fail, observed: %{matching_entry: nil}}] = report.outcome_results
+    end
+
     test "passes for the real instance.create audit row a genuine HTTP-dispatched instance-start produces",
          %{schema_name: schema_name, definition: definition, actor: actor} do
       scenario = %Scenario{

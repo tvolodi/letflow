@@ -501,25 +501,29 @@ defmodule Letflow.Simulation.Runner do
     end
   end
 
-  defp verify_outcome(%{verification: %{method: :audit_event, args: args}} = expected, _produces) do
-    prefix = Map.fetch!(args, "prefix")
-    resource_id = Map.get(args, "resource_id")
-    resource_type = Map.get(args, "resource_type")
-    expected_action = Map.fetch!(args, "event_type")
+  defp verify_outcome(%{verification: %{method: :audit_event, args: args}} = expected, produces) do
+    with {:ok, prefix} <- fetch_prefix(args),
+         {:ok, resource_id} <- resolve_optional_ref(args, "resource_id", produces),
+         {:ok, resource_type} <- resolve_optional_ref(args, "resource_type", produces) do
+      expected_action = Map.fetch!(args, "event_type")
 
-    query_params = %{
-      prefix: prefix,
-      page_size: 100,
-      resource_id: resource_id,
-      resource_type: resource_type
-    }
+      query_params = %{
+        prefix: prefix,
+        page_size: 100,
+        resource_id: resource_id,
+        resource_type: resource_type
+      }
 
-    case Audit.list_entries(query_params) do
-      {:ok, %{items: items}} ->
-        matching = Enum.find(items, &(&1.action == expected_action))
-        outcome = if matching, do: :pass, else: :fail
-        %{expected_outcome: expected, outcome: outcome, observed: %{matching_entry: matching}}
+      case Audit.list_entries(query_params) do
+        {:ok, %{items: items}} ->
+          matching = Enum.find(items, &(&1.action == expected_action))
+          outcome = if matching, do: :pass, else: :fail
+          %{expected_outcome: expected, outcome: outcome, observed: %{matching_entry: matching}}
 
+        {:error, reason} ->
+          %{expected_outcome: expected, outcome: :fail, observed: {:error, reason}}
+      end
+    else
       {:error, reason} ->
         %{expected_outcome: expected, outcome: :fail, observed: {:error, reason}}
     end
@@ -536,6 +540,17 @@ defmodule Letflow.Simulation.Runner do
     case Map.fetch(args, key) do
       {:ok, raw} -> substitute_templates(raw, produces)
       :error -> {:error, {:missing_arg, key}}
+    end
+  end
+
+  # Like resolve_ref/3, but the key is optional (:audit_event's `resource_id`/
+  # `resource_type` args) -- a missing key resolves to `nil` rather than
+  # `{:error, {:missing_arg, key}}`, since `Audit.list_entries/1` already
+  # treats a `nil` resource_id/resource_type as "don't filter on this field."
+  defp resolve_optional_ref(args, key, produces) do
+    case Map.fetch(args, key) do
+      {:ok, raw} -> substitute_templates(raw, produces)
+      :error -> {:ok, nil}
     end
   end
 

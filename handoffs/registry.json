@@ -3499,18 +3499,19 @@
       "requirement_id": "REQ-201",
       "queue_task_id": 374,
       "github_issue_number": 720,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/obs/alerts.ex",
         "lib/letflow/obs/alerts/",
-        "priv/repo/migrations/",
+        "priv/repo/migrations/20260830040001_create_alert_trigger_state.exs",
+        "priv/repo/migrations/20260830040002_create_alert_hook_emission_state.exs",
         "lib/letflow/design/req201-alerting-hooks.md"
       ],
       "started_at": "2026-08-30T16:52:40Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 01 dispatched (CODE-DESIGNER)",
-      "note": ""
+      "lock_released_at": "2026-08-31T01:34:20Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: merged PR #749 to main at ea73febe, queue task 374 released done)",
+      "note": "REQ-201 (OBS-06): alerting hooks -- edge-triggered threshold detection for 4 triggers (instance_error_stuck, dlq_depth_threshold, scheduler_lag_threshold, webhook_subscription_paused), retry/backoff delivery, auth_secret_ref via REQ-190, no DLQ writes. Concurrent with REQ-195/196/202 on main; migrations renumbered 020001/020002 → 040001/040002 to avoid timestamp collision. Admin-override merge (wasm_hang pre-existing on main, not introduced by this branch). RELEASE-VALIDATOR independently verified 14/14 ACs, 17/17 targeted tests."
     },
     {
       "run_id": "WF02-REQ194-20260830",

@@ -824,6 +824,7 @@ history:
       violations across 195 tracked closed issues (30 pre-existing grandfathered,
       unaffected). No repo files changed; GitHub-only fix, hence recorded as a
       SCOPE-CHANGE entry rather than against any REQ.
+
   - req: SCOPE-CHANGE
     event: done
     agent: ISSUE-FIXER
@@ -855,3 +856,16 @@ history:
       --warnings-as-errors and mix format --check-formatted both clean).
       docs/issues/ISS-0381.yaml set to status: resolved. GH#753 closed
       with evidence comment.
+
+  - req: REQ-199
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-31T09:30:21Z"
+    note: >
+      WF02-REQ199-20260831 done (queue task 372, GH#718, stage S6).
+      Correlated effect re-entry ordering subsystem: ORD-01 claim guard
+      (FOR UPDATE SKIP LOCKED), ORD-02 per-correlation advisory lock,
+      ORD-03 cursor-based in-order apply, ORD-04 lag surface via REQ-194
+      metrics. New tables effect_completions + correlation_cursors (per-tenant,
+      decision 0003-B). Gap sweeper on REQ-186 scheduler. Event types registered.
+      All 18 ACs independently verified by RELEASE-VALIDATOR.

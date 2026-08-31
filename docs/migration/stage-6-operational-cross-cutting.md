@@ -79,6 +79,7 @@ deliberately kept SEPARATE from REQ-036's `PromotionDigest` (both
 moduledocs cross-reference each other; merging them would silently
 redrive every stored promotion digest), DB-level immutability on the
 content store, and REQ-041's `solution_pack_artefact_bases`
+<<<<<<< HEAD
 disambiguated as an unrelated table.
 **REQ-203 (per-tenant artifact activation, REPO-08/09/10) is also done
 as of 2026-08-31, closing the artifact-repository pair in full:**
@@ -97,17 +98,16 @@ version-id FK). REQ-195's `audit_entries` disambiguated in the
 moduledoc as a different, non-redundant trail (subsystem-specific
 queryable lineage with mandatory rationale, vs. the tenant-wide
 hash-chained compliance trail). Still no route/controller surface,
-per the same deferral REQ-202 already recorded. **This closes S6's
-artifact-repository pair in full: REQ-202 (REPO-01..04, content store
-and canonicaliser) and REQ-203 (REPO-08/09/10, per-tenant activation)
-are both done.** REPO-05 (form-schema indexing) and the repository
-HTTP surface (REPO-11..14) remain deferred, per REQ-202's own
-description. The ordering
-subsystem remains
-pending. A
-future WF-04 stage-gate check of the scheduler half specifically (not
-of S6 as a whole) is a named candidate, per RELEASE-VALIDATOR's own
-REQ-188 handoff note. Requirements, expanded in two batches:
+per the same deferral REQ-202 already recorded.
+**REQ-199 (Correlated effect re-entry ordering, ORD-01/02/03/04) is also
+done as of 2026-08-31:** `effect_completions` + `correlation_cursors`
+tables (per-tenant, decision 0003-B), ORD-01 claim guard (FOR UPDATE
+SKIP LOCKED), ORD-02 per-correlation advisory lock, ORD-03 cursor-based
+in-order apply with gap sweeper on REQ-186's scheduler, and ORD-04 lag
+surface via REQ-194 metrics. All 18 ACs independently verified by
+RELEASE-VALIDATOR. **S6 is now complete.** REPO-05 (form-schema indexing)
+and the repository HTTP surface (REPO-11..14) remain deferred, per
+REQ-202's own description. Requirements, expanded in two batches:
 
 **First batch (DLQ and webhooks):** REQ-176 (Dead-letter queue schema
 and core entry lifecycle, OBS-05 foundation); REQ-177 (Wire REQ-056's

@@ -474,7 +474,11 @@ defmodule Letflow.TenantProvisioning do
     {20_260_830_040_002, Letflow.Repo.Migrations.CreateAlertHookEmissionState,
      "20260830040002_create_alert_hook_emission_state.exs"},
     {20_260_831_000_001, Letflow.Repo.Migrations.CreateArtifactActivations,
-     "20260831000001_create_artifact_activations.exs"}
+     "20260831000001_create_artifact_activations.exs"},
+    {20_260_831_050_001, Letflow.Repo.Migrations.CreateEffectCompletions,
+     "20260831050001_create_effect_completions.exs"},
+    {20_260_831_050_002, Letflow.Repo.Migrations.CreateCorrelationCursors,
+     "20260831050002_create_correlation_cursors.exs"}
   ]
 
   @doc """
@@ -912,6 +916,38 @@ defmodule Letflow.TenantProvisioning do
           "scheduled_fire_at",
           "actual_fired_at"
         ]
+      }
+    },
+    %{
+      name: "effect_applied",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Ordering.Consumer.try_apply/2 (REQ-199, ORD-01) when a " <>
+          "PENDING effect completion is applied in strict sequence order.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "correlation_id" => %{"type" => "string"},
+          "sequence_no" => %{"type" => "integer"},
+          "completion_id" => %{"type" => "string"}
+        },
+        "required" => ["correlation_id", "sequence_no", "completion_id"]
+      }
+    },
+    %{
+      name: "ordering_lag_threshold_exceeded",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Ordering.Metrics.write_to_registry/2 (REQ-199, ORD-04) " <>
+          "when a correlation's lag exceeds the configured :letflow, :ordering, :lag_threshold.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "correlation_id" => %{"type" => "string"},
+          "lag" => %{"type" => "integer"},
+          "oldest_pending_age_seconds" => %{"type" => ["integer", "null"]}
+        },
+        "required" => ["correlation_id", "lag", "oldest_pending_age_seconds"]
       }
     }
   ]

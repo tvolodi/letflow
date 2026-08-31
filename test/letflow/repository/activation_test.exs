@@ -25,13 +25,17 @@ defmodule Letflow.Repository.ActivationTest do
   `activate_group/4`'s public `@spec` takes no test-visible options; this
   file relies on a small TEST-ONLY seam added to
   `lib/letflow/repository/activation.ex` for this exact purpose
-  (`test_pause_after`/`test_pause_fun`, see that module's `@type test_opts`
-  moduledoc) -- flagged here for REVIEWER's attention since it is new
-  surface on a file REVIEWER already signed off. The seam is a pure
-  addition: omitting both options (every non-test call site) reproduces the
-  exact `Multi` pipeline design §4.2 describes with zero behavioral change,
-  verified by every other test in this file (and in
-  `test/letflow/repository_test.exs`) passing unmodified.
+  (`test_pause_after`/`test_pause_fun`, see that module's `@typep test_opts`
+  for the full rationale) -- this new surface went through two rework
+  rounds before REVIEWER's final sign-off (`step-02d-reviewer-recheck2.json`):
+  REVIEWER required, and confirmed present, compile-time gating of the pause
+  step behind `Application.compile_env(:letflow,
+  :activation_test_hooks_enabled?, false)` (only `config/test.exs` sets it to
+  `true`) plus the `test_opts` typing fix from a public `@type` to a private
+  `@typep`. The seam is a pure addition: omitting both options (every
+  non-test call site) reproduces the exact `Multi` pipeline design §4.2
+  describes with zero behavioral change, verified by every other test in
+  this file (and in `test/letflow/repository_test.exs`) passing unmodified.
 
   The pause step is inserted as an extra `Multi.run/3` step immediately
   after the first artifact's own steps (`test_pause_after: 1`) and before

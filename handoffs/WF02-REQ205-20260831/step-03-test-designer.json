@@ -1,0 +1,73 @@
+{
+  "handoff_id": "step03-WF02-REQ205-20260831",
+  "run_id": "WF02-REQ205-20260831",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ205-20260831/step-03-test-designer.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-31T12:15:00Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-205"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req205-simulation-harness-foundation.md",
+      "test/support/simulation/seed.ex",
+      "test/support/simulation/runner.ex",
+      "test/letflow/simulation/seed_idempotency_test.exs",
+      "test/letflow/simulation/runner_test.exs",
+      "test/fixtures/simulation/fixture_shape_test.exs",
+      "handoffs/WF02-REQ205-20260831/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ205-20260831/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ205-20260831/step-02d-reviewer.json"
+    ],
+    "artifacts_out": [
+      "test/specs/REQ-205.md",
+      "test/letflow/simulation/runner_template_and_outcomes_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ205-20260831",
+    "requirement_text": "REQ-205 -- S7 scenario-harness foundation: Elixir scenario runner, business-tenant fixture seeding, and the API-vs-GUI execution split. See docs/requirements.yaml id: REQ-205 for full text.",
+    "summary": "Extended ELIXIR-DEV's 16 existing smoke tests (which already cover AC1-AC3 and AC4/AC5's happy path adequately -- verified, not duplicated) with 7 new tests in test/letflow/simulation/runner_template_and_outcomes_test.exs closing real gaps: (1) substring-form {{produces.X}} substitution verified against real Postgres state (not a hardcoded expectation, since the substituted value is a runtime UUID); (2) an unresolved-produces-reference fail-closed test; (3) the design's specifically-named case of a later step referencing a via:gui step's nonexistent produces output, failing closed with :unresolved_template rather than nil/literal-string substitution; (4)/(5) task_assigned and audit_event verification-method match/mismatch test pairs (both had zero prior coverage) proving neither is a 'no error raised' stub. Total simulation-harness test count: 23 passed (16 pre-existing + 7 new), mix compile --warnings-as-errors clean.",
+    "mutation_test_results": [
+      {
+        "target": "Letflow.Simulation.Runner.verify_outcome/2, :instance_state clause",
+        "mutation": "Replaced the real Instances.get_by_id/2 query + status/variables comparison with an unconditional %{outcome: :pass, observed: :mutated_always_pass}.",
+        "before_mutation": "test/letflow/simulation/runner_test.exs: 2 passed",
+        "after_mutation": "test/letflow/simulation/runner_test.exs: 1/2 passed -- AC4 test failed with UndefinedFunctionError (:mutated_always_pass.status/0 undefined), since the test reads observed.status",
+        "after_revert": "test/letflow/simulation/runner_test.exs: 2 passed",
+        "verdict": "Existing AC4 test catches this regression."
+      },
+      {
+        "target": "Letflow.Simulation.Runner.resolve_dotted_path/2, unresolved-lookup branch",
+        "mutation": "Changed {:error, {:unresolved_template, \"produces.\" <> dotted_path}} to {:ok, \"{{produces.\" <> dotted_path <> \"}}\"} -- silently re-substituting the literal template text instead of failing closed.",
+        "before_mutation": "test/letflow/simulation/runner_template_and_outcomes_test.exs: 7 passed",
+        "after_mutation": "test/letflow/simulation/runner_template_and_outcomes_test.exs: 5/7 passed -- both new fail-closed tests failed (one: left :ok / right :error on step outcome; the other: step_results match failed, outcome was :ok not :error)",
+        "after_revert": "test/letflow/simulation/runner_template_and_outcomes_test.exs: 7 passed",
+        "verdict": "New fail-closed tests catch this regression; pre-existing tests would NOT have caught it (neither exercised an unresolved reference before this session)."
+      }
+    ],
+    "findings_for_orch": [
+      {
+        "severity": "MINOR",
+        "component": "test/support/simulation/runner.ex, verify_outcome/2 :audit_event clause",
+        "description": "Unlike :task_assigned and :instance_state, the :audit_event verification clause discards its produces argument (bound as _produces) and never runs args through resolve_ref/3's {{produces.X}} template substitution. A scenario cannot write \"resource_id\" => \"{{produces.instance.instance_id}}\" in an audit_event expected outcome -- the literal template string is sent to Audit.list_entries/1 verbatim and silently matches nothing (outcome: :fail, not an error). Discovered while writing this session's audit_event test pair; those tests were written to scope by resource_type/event_type only to avoid depending on the broken path. Not fixed here (test/support/simulation/runner.ex implementation is ELIXIR-DEV's file, outside TEST-DESIGNER's remit). Likely to matter concretely for REQ-206/207/208, which own the real scenario corpus and will want resource-id-scoped audit_event checks.",
+        "recommendation": "Route a small fix to ELIXIR-DEV before or alongside REQ-206: have the :audit_event clause call resolve_ref/3 on resource_id (and resource_type, for consistency) before querying, same as the other two methods already do."
+      },
+      {
+        "severity": "INFO",
+        "component": "test/support/simulation/seed.ex, all four conflict-branch fallbacks",
+        "description": "AC3's belt-and-suspenders TOCTOU conflict-branch fallback (retry_onboarding_lookup/2, refetch_user_or_error/2, refetch_group_or_error/2, refetch_process_or_error/2) is not exercised by any test, including this session's additions -- only the pre-check path is. Reasoning recorded in test/specs/REQ-205.md's AC3 section: no injectable seam exists to force the race deterministically without a timing-dependent Task.async test, which this session's own instructions rule out (no wall-clock/unseeded-randomness dependence). Coverage substitute: code-review-level confirmation this session that each fallback branch is reachable and correctly shaped (re-fetches and returns the winner rather than propagating the error)."
+      }
+    ],
+    "ac7_dependency_scope_check": "git diff main...feature/WF02-REQ205-20260831 -- mix.exs mix.lock confirmed this session: the only changes are the {:yaml_elixir, \"~> 2.11\", only: :test} line in mix.exs and the corresponding yamerl/yaml_elixir entries in mix.lock. Nothing else changed in either file.",
+    "test_evidence": {
+      "command": "mix test test/letflow/simulation/ test/fixtures/simulation/",
+      "result": "23 passed, 0 failed",
+      "compile_check": "mix compile --warnings-as-errors -- clean, no warnings"
+    }
+  },
+  "notes": "Routing to TEST-DESIGN-VALIDATOR per WF-02 step 3->3a. Two findings above are carried forward for ORCH's attention regardless of the validator's own verdict -- neither blocks REQ-205 itself (both are pre-existing implementation behavior this session's testing surfaced, not new defects introduced by this step)."
+}

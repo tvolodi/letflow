@@ -802,6 +802,13 @@ volumes:
     opened: 2026-08-30
     entries: 33
     note: >
+      Recounted to 33 after WF03-ISS0380-20260831's own SCOPE-CHANGE done
+      event (ORCH) appended. `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 33 on-disk entries (`wc`:
+      892 lines / 51597 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered). This supersedes the 32-count note
+      below.
+
       Recounted to 32 after rebasing WF03-ISS0381-20260831 onto main, which
       by then included ORCH's retroactive-evidence-comment append (31) plus
       this run's own SCOPE-CHANGE done event (ISSUE-FIXER, WF03-ISS0381-20260831).

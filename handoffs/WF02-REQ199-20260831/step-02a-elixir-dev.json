@@ -1,0 +1,73 @@
+{
+  "run_id": "WF02-REQ199-20260831",
+  "workflow": "WF-02",
+  "step": "02a-elixir-dev",
+  "status": "PENDING",
+  "dispatched_at": "2026-08-31T05:51:22Z",
+  "from": "ORCH",
+  "to": "ELIXIR-DEV",
+  "context": {
+    "branch_name": "feature/WF02-REQ199-20260831",
+    "requirement_ids": ["REQ-199"],
+    "queue_task_id": 372,
+    "github_issue_number": 718,
+    "stage": "S6",
+    "design_artifact": "lib/letflow/design/req199-ordering.md",
+    "design_commit": "f5c48aae",
+    "rework_count": 0,
+    "max_rework": 3,
+    "requirement_text": "Correlated effect re-entry ordering -- completion claim, per-correlation execute guard, and in-order cursor apply (ORD-01/02/03/04). See lib/letflow/design/req199-ordering.md for the full grounded design.",
+    "open_questions_from_design": {
+      "OQ-1": "Advisory lock hash width: :erlang.phash2 has 31-bit range. Use wider hash if tenant scale warrants it.",
+      "OQ-2": "Prometheus nil-age gauge: omit vs 0 vs NaN when no PENDING rows — resolve with REQ-194's Exposition module convention.",
+      "OQ-3": "event_type_registry mechanism: confirm whether seed migration (REQ-140 precedent) is the right approach for event type registration. Read lib/letflow/event_store/registry.ex.",
+      "OQ-4": "Consumer count per tick: design wires one run_cycle/2 call per schema per tick. Confirm this is appropriate.",
+      "OQ-5": "Lag threshold default 10 is arbitrary — adjust if needed."
+    }
+  },
+  "task": {
+    "description": "Implement REQ-199: Correlated effect re-entry ordering subsystem. The design document at lib/letflow/design/req199-ordering.md is ALREADY VALIDATED — implement from it, not by re-deriving. Key implementation checklist:\n\n1. MIGRATIONS (20260831000001, 20260831000002) — both per-tenant (if prefix() do ... end pattern, matching REQ-181/REQ-195/REQ-202). effect_completions: all constraints from §3 (UNIQUE on correlation_id+sequence_no, partial index WHERE status='PENDING', CHECK on status enum, CHECK sequence_no >= 0). correlation_cursors: string PK, CHECK applied_seq >= 0.\n\n2. ECTO SCHEMAS — Letflow.Ordering.Completion and Letflow.Ordering.Cursor. Match §3 and §4 exactly. Completion has @primary_key {:completion_id, :binary_id, autogenerate: true}. Cursor has @primary_key {:correlation_id, :string, autogenerate: false}.\n\n3. CONTEXT MODULE Letflow.Ordering — implement insert_completion/2 (idempotent: ON CONFLICT (correlation_id, sequence_no) DO NOTHING returns existing row), run_cycle/2, sweep_gaps/2, emit_lag_metrics/2.\n\n4. CONSUMER (Letflow.Ordering.Consumer) — claim/1 with FOR UPDATE SKIP LOCKED, try_apply/2 with the 9-step transaction exactly as §7.1 specifies. Critical: use pg_try_advisory_xact_lock(:erlang.phash2(correlation_id, 2_147_483_647)) at step M2. The conditional cursor advance at M8 must use execute/3 with an UPDATE ... WHERE applied_seq = $expected_current and count returned rows.\n\n5. SWEEPER (Letflow.Ordering.Sweeper) — strict-greater-than check (min_pending_seq > applied_seq + 1), all-or-nothing per correlation in ONE transaction, RETURNING on the DEAD update, one DLQ entry per correlation.\n\n6. METRICS (Letflow.Ordering.Metrics) — compute_all_lags/1 query, write_to_registry/2. nil oldest_pending_age_seconds when no PENDING rows (not 0). Emit lag-threshold-exceeded event when lag > configured threshold.\n\n7. SCHEDULER WIRING — add three private helpers to lib/letflow/scheduler/poller.ex: maybe_run_ordering_cycle/1, maybe_run_ordering_sweeper/1, maybe_run_ordering_metrics/1. Each iterates schemas and wraps calls in try/rescue. Called from handle_info(:tick, state) AFTER existing work. DO NOT touch lib/letflow/application.ex.\n\n8. EVENT TYPE REGISTRATION — add 'effect_applied' and 'ordering_lag_threshold_exceeded' to event_type_registry. Read lib/letflow/event_store/registry.ex to confirm the mechanism (REQ-140's seed migration approach is the assumed precedent — OQ-3).\n\n9. tenant_fixture.ex — add 'correlation_cursors' and 'effect_completions' to @expected_tenant_tables in alphabetical position (see §14 of design doc for exact positions).\n\n10. MODULEDOC — include the exact ORD-04 deferral wording from §15 of the design doc.\n\nAfter implementation, run:\n- mix compile --warnings-as-errors\n- mix test\nQuote actual output. Both must pass.",
+    "acceptance_criteria": [
+      "both tables live inside each tenant's Postgres schema with tenant_id retained (decision 0003 Decision B, matching R-Co's own per-tenant placement), verified by inspecting the migrations",
+      "inserting the same (correlation_id, sequence_no) twice results in ONE row and, after processing, exactly ONE applied effect -- no double apply",
+      "completions for one correlation apply strictly in sequence order: inserting sequence 6 before sequence 5 leaves 6 PENDING with its retry state unchanged, and after 5 is inserted and applied, 6 applies -- asserted by the order of the appended events, not merely by final row status",
+      "a completion whose sequence is not applied_seq + 1 rolls back silently: the row stays PENDING, no error is raised to the caller, and no event is appended",
+      "the cursor advance is conditional: a test simulating two concurrent applies of the same sequence results in exactly one success and one rolled-back re-claim, with applied_seq advancing by exactly one",
+      "a correlation with no cursor row applies its first completion successfully, initialising the cursor rather than failing",
+      "two different correlations, each with a next-in-sequence completion, both apply -- neither is serialised behind the other, asserted by both being APPLIED after concurrent processing",
+      "the gap sweeper moves EVERY PENDING row of an affected correlation to DEAD as one unit and creates exactly one DLQ entry naming the correlation and listing every unapplied sequence number; a correlation whose lowest PENDING row sits at exactly applied_seq + 1 is NOT swept regardless of age -- two explicit tests covering both the sweep and the non-sweep",
+      "the sweeper's gap timeout is configurable and a correlation younger than it is not swept even when its predecessor is absent",
+      "the consumer does not hold a database connection across its poll interval, asserted by a test that runs the cycle against a pool smaller than the consumer count without exhausting it -- the failure R-Co recorded as GH-654/ISS-0649",
+      "the subsystem is actually WIRED: a running cycle applies a completion end to end without a test manually invoking the internal apply function -- correcting R-Co's own unwired state, and it runs on REQ-186's scheduler rather than adding a new periodic child to lib/letflow/application.ex (confirmed by git diff of application.ex)",
+      "the effect-applied event type is registered in the per-tenant event_type_registry, so REQ-025's ES-05 registry check accepts it",
+      "per-correlation lag is computed as max(sequence_no) minus applied_seq and is exposed through REQ-194's metrics registry: a correlation with completions at sequences 1..5 and applied_seq 2 reports a lag of 3, and a fully-applied correlation reports 0 -- two explicit tests (ORD-04 AC1/AC2)",
+      "the age of the oldest PENDING row is reported per correlation, and a correlation with no PENDING rows reports no age rather than a zero that is indistinguishable from a fresh row",
+      "crossing the configured lag threshold emits the lag event with the correlation id, the lag and the oldest-pending age in its payload, asserted on the appended event",
+      "the moduledoc states that ORD-04's dynamic consumer-count reduction under contention is deliberately deferred while its lag MEASUREMENT half is implemented here, that R-Co left the reduction unimplemented too, and that the deferred half depends on REQ-194's metrics",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "artifacts_in": [
+    "lib/letflow/design/req199-ordering.md",
+    "lib/letflow/scheduler/poller.ex",
+    "lib/letflow/obs/dlq.ex",
+    "lib/letflow/obs/metrics.ex",
+    "lib/letflow/event_store.ex",
+    "lib/letflow/tenant_provisioning.ex",
+    "test/support/tenant_fixture.ex"
+  ],
+  "artifacts_out": [
+    "lib/letflow/ordering.ex",
+    "lib/letflow/ordering/completion.ex",
+    "lib/letflow/ordering/cursor.ex",
+    "lib/letflow/ordering/consumer.ex",
+    "lib/letflow/ordering/sweeper.ex",
+    "lib/letflow/ordering/metrics.ex",
+    "priv/repo/migrations/20260831000001_create_effect_completions.exs",
+    "priv/repo/migrations/20260831000002_create_correlation_cursors.exs",
+    "lib/letflow/scheduler/poller.ex (modified)",
+    "test/support/tenant_fixture.ex (modified)"
+  ],
+  "next_action": "Implement all files on feature/WF02-REQ199-20260831, run mix compile --warnings-as-errors and mix test, quote actual output, commit with feat(REQ-199): prefix, push, and complete this handoff with status PASS or FAIL."
+}

@@ -676,6 +676,65 @@ history:
       range rejection at create/2 and defense-in-depth at deliver/3.
       depends_on REQ-181 (done) and REQ-183 (done on main).
 
+  - req: REQ-203
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-31T04:00:32Z"
+    note: >
+      WF02-REQ203-20260831 done (queue task 376, stage S6). Per-tenant
+      artifact activation shipped, completing the REQ-202/REQ-203
+      artifact-repository pair: artifact_activations (the current pointer,
+      UNIQUE (tenant_id, artifact_kind, artifact_name) DB-enforced),
+      artifact_activation_history (append-only, mandatory rationale,
+      previous_version_id null-then-populated), and
+      artifact_activation_groups (the multi-artifact envelope). REPO-08's
+      atomic-group activation runs as one Ecto.Multi transaction; its
+      observability criterion -- concurrent reads during activation see
+      either every artifact at its old version or every artifact at its new
+      version, never a mix -- was rigorously re-verified rather than
+      assumed: the isolation-level argument was independently re-derived to
+      confirm Postgres's own READ COMMITTED MVCC structurally prevents
+      mixed-state visibility across one open transaction, so no isolation-
+      level bump was needed. REPO-09 (per-tenant isolation) and REPO-10
+      (activation history with mandatory rationale) both DB-enforced
+      (UNIQUE/CHECK/FK, ON DELETE RESTRICT on all three version-id FKs).
+      REQ-195's audit_entries disambiguated in the moduledoc: subsystem-
+      specific queryable lineage with mandatory rationale, vs. the
+      tenant-wide hash-chained compliance trail -- neither is redundant
+      with the other. No route/controller surface, confirmed by git diff
+      --stat. Unusually long rework chain, each round catching a genuine,
+      independently-confirmed defect rather than a formality: 3
+      CODE-DESIGN-VALIDATOR design reworks (the isolation-level argument
+      corrected and then confirmed correct; OQ-A/E/F resolved with
+      concrete decisions; the rationale-validation mechanism corrected
+      TWICE after two different false claims about Ecto's
+      validate_required/validate_length trim behavior), 1 ELIXIR-DEV
+      implementation rework (an @spec/FK-constraint mapping fix on
+      activate_group/5's insert AND update branches), 2 TEST-DESIGN-
+      VALIDATOR-triggered REVIEWER reworks gating a test-only concurrency
+      seam (a compile-time-gated test_pause_after/test_pause_fun hook,
+      resolving to a structural no-op outside MIX_ENV=test via
+      Application.compile_env(:letflow, :activation_test_hooks_enabled?,
+      false) -- fixed twice before REVIEWER re-passed the exact shipped
+      code, not the design), and 1 documentation-staleness fix
+      (test/specs/REQ-203.md left describing the pre-rework FK-constraint
+      behavior). RELEASE-VALIDATOR independently re-verified all 12
+      acceptance criteria against the real shipped code (own re-run:
+      scripts/test_parallel.sh 2893/2895, the 2 failures being the
+      pre-existing rustc-absent CheckToolchainTest baseline; own mutation
+      test on resolve/3, reverted and confirmed clean; own read of the
+      Multi pipeline, migration DDL, and moduledoc). Full detail:
+      handoffs/WF02-REQ203-20260831/release-validation-report-20260831.md.
+      docs/migration/stage-6-operational-cross-cutting.md updated to mark
+      the REQ-202/REQ-203 artifact-repository pair fully done (REPO-01..04
+      and REPO-08/09/10). Two anti-pattern entries added/cross-referenced:
+      a new entry for claiming a LIBRARY/DEPENDENCY's runtime behavior
+      (Ecto's trim/validation pipeline) without reading its actual source,
+      distinct from REQ-195's entry about a codebase's OWN function
+      signatures; and a process-pattern note that production code changed
+      after REVIEWER's sign-off (even a test-only seam) needs a fresh
+      REVIEWER pass, not just TEST-DESIGN-VALIDATOR's own sign-off.
+
   - req: REQ-204
     event: done
     agent: DOC-UPDATER
@@ -688,6 +747,116 @@ history:
       ::1/128, fc00::/7, fe80::/10). Wired into create/2 (fast rejection) and
       dispatch_http/3 (DNS rebinding defense). INV-9 added to security-invariants.md.
       65/65 tests pass. PR to follow (Step Final).
+
+  - req: REQ-199
+    event: started
+    agent: ORCH
+    at: "2026-08-31T05:36:00Z"
+    note: >
+      WF02-REQ199-20260831 started (queue task 372, GH#718, stage S6).
+      Correlated effect re-entry ordering: ORD-01 claim guard (FOR UPDATE SKIP LOCKED),
+      ORD-02 per-correlation advisory lock, ORD-03 cursor-based in-order apply,
+      ORD-04 lag surface. New tables effect_completions + correlation_cursors.
+      Wired on REQ-186's scheduler. Stale queue lock force-released (no branch/
+      handoff/registry evidence from prior session). depends_on REQ-186/023/025/072/176/194
+      all done.
+
+  - req: SCOPE-CHANGE
+    event: revised
+    agent: ORCH
+    at: "2026-08-31T07:34:33Z"
+    note: >
+      State-reconciliation pass, user-directed. Three findings, all corrected.
+      (1) GH#494/REQ-123 was left open on GitHub despite the requirement being
+      genuinely done -- decisions/0015-cutover-strategy.md exists, records an
+      explicit decision (S7 signal insufficient, cutover selection deferred),
+      and stage-8's Decisions section links it; all 5 ACs met. Closed with
+      evidence. (2) ISS-0351 and ISS-0353 were both filed with filename-derived
+      ids before going through register_task, so neither carried a queue_task_id
+      nor a GitHub issue -- invisible to the GitHub-issue control loop the owner
+      drives implementation from. Registered as tasks 380/381 (GH#752/753) and
+      renamed ISS-0351->ISS-0380, ISS-0353->ISS-0381 with former_local_id
+      aliases; historical citations in handoffs/ and the v5/v6 volumes were
+      deliberately NOT rewritten, being immutable run records. Both remain open,
+      neither fixed. (3) Zero requirements are blocked -- REQ-077 and REQ-133,
+      blocked at last review, are both done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-31T07:34:33Z"
+    note: >
+      WF-01 expanded S7 (simulation-and-uat-parity) into REQ-205..REQ-210, the
+      last stage carrying zero requirements. Registered as queue tasks 382-387
+      (GH#754-759) in dependency order so each depends_on resolved to a real
+      queue id. R-Co was reachable, so every cited source path was verified
+      rather than guessed: 11 tenant-business scenarios (4 swiftroute / 4 vortex
+      / 3 meridian), the 15-entry condition corpus, and seed.py at 356 lines.
+      Scope decisions recorded in the entries themselves: S7 stays a correctness
+      gate (a scenario blocked by a backend gap reports the gap, never silently
+      builds it -- two already identified, advance-timer and document-attachment);
+      simulation_test.zig is a different subsystem from the scenario corpus and
+      its router slot stays unmounted; the differential corpus becomes regression
+      coverage since Letflow only ever had one condition evaluator; the 18-file
+      platform corpus is out of scope with a named follow-up; GUI-dependent
+      scenarios record DEFERRED_TO_S8 rather than a fabricated pass.
+      REQ-VALIDATOR gated over two rework rounds -- a stage-doc self-
+      contradiction, an inflated platform-corpus count (20 claimed vs 18 real),
+      and a stale AC cross-reference introduced by fixing the first -- final
+      verdict PASS. check_requirements_registration 184/184, 0 deferred;
+      check_deferral_staleness 0 stale. Statuses stay pending; WF-01 confirms
+      well-formedness only. Commits 17092696 and 058a58e7, both pushed to main.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-08-31T08:12:47Z"
+    note: >
+      User-directed cleanup of the last outstanding item from the reconciliation
+      pass: mix letflow.audit_issue_closures FAILed with 4 new (non-grandfathered)
+      ZERO_EVIDENCE violations -- GH#586/ISS-0293, GH#645/ISS-0333, GH#665/ISS-0346,
+      GH#562/ISS-0285, all genuinely resolved locally but closed on GitHub without
+      an evidence comment. Posted retroactive evidence comments on all four,
+      quoting each local record's actual resolution/resolution_note field rather
+      than inventing new justification. GH#562/ISS-0285 also clarified as a
+      letflow-queue-repo defect (tracked at tvolodi/letflow-queue#5), correctly
+      closed here with no local fix expected. Re-ran the audit: OK -- 0 new
+      violations across 195 tracked closed issues (30 pre-existing grandfathered,
+      unaffected). No repo files changed; GitHub-only fix, hence recorded as a
+      SCOPE-CHANGE entry rather than against any REQ.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-31T08:51:20Z"
+    note: >
+      WF03-ISS0381-20260831 done (queue task 381, GH#753, stage S6, MINOR,
+      former_local_id ISS-0353 -- same finding, confirmed consistent with
+      the yaml's own note_on_id, no separate closure needed). Root cause:
+      Letflow.Dlq.Entry.insert_changeset/2's cast/3 list contradicted its
+      own docstring -- tenant_id, status, retry_count, retry_history and
+      created_at were all listed as castable despite the docstring calling
+      them "deliberately not castable" (Letflow.Dlq.enqueue/2's own
+      Map.take/2 pre-sanitization was the actual, undocumented safety
+      boundary, not the changeset). Fix: cast/3 narrowed to 12 fields,
+      dropping all five; tenant_id/created_at (no schema default) now set
+      via put_change/3 reading them out of attrs; status/retry_count/
+      retry_history (schema defaults :pending/0/[]) now rely on
+      Ecto.Schema's own struct defaults once excluded from cast, matching
+      the established pattern in lib/letflow/definitions/
+      solution_pack_install.ex and promotion_review.ex. Docstring corrected
+      to match. Gates: ISSUE-FIXER diagnosis -> CODE-DESIGNER/
+      CODE-DESIGN-VALIDATOR -> SECURITY-REVIEWER PASS -> REVIEWER PASS ->
+      TEST-DESIGNER (2 new fail-first regression tests in
+      test/letflow/dlq_test.exs, independently reproduced failing against
+      pre-fix cast list) -> TEST-DESIGN-VALIDATOR PASS -> TEST-RUNNER PASS
+      (full suite 2945/2947, only the 2 pre-existing documented
+      rustc-absent sandbox flakes in Mix.Tasks.Letflow.CheckToolchainTest,
+      unrelated to this change; zero DLQ-related failures; mix compile
+      --warnings-as-errors and mix format --check-formatted both clean).
+      docs/issues/ISS-0381.yaml set to status: resolved. GH#753 closed
+      with evidence comment.
+
   - req: REQ-199
     event: done
     agent: DOC-UPDATER

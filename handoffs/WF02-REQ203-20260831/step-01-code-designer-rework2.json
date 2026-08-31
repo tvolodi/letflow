@@ -1,0 +1,49 @@
+{
+  "handoff_id": "step01-WF02-REQ203-20260831-rework2",
+  "run_id": "WF02-REQ203-20260831",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ203-20260831/step-01-code-designer-rework2.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-203"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ203-20260831/step-01-code-designer-rework1.json",
+      "handoffs/WF02-REQ203-20260831/step-01b-code-design-validator-recheck1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req203-artifact-activation.md",
+      "priv/repo/migrations/20260830030001_create_repository_artifacts.exs",
+      "deps/ecto/lib/ecto/changeset.ex",
+      "deps/ecto/lib/ecto/type.ex"
+    ],
+    "branch_name": "feature/WF02-REQ203-20260831"
+  },
+  "task": {
+    "description": "Rework 2 (iteration 3): correct §2.4's factually-wrong claim that validate_required(:rationale) does not reject whitespace-only rationale, per step-01b-code-design-validator-recheck1.json's finding. §0/§10 citations of the same claim corrected in the same pass. §2.2/§4.1/§4.2/§7 (OQ-A/OQ-E/OQ-F fixes) left untouched, as instructed.",
+    "acceptance_criteria": [
+      "§2.4 states, correctly, that validate_required(:rationale) via cast/4's default trim_values/empty_values pipeline (Ecto.Type.trim/2, String.trim_leading/1, deps/ecto/lib/ecto/type.ex:1007) rejects nil, literal \"\", AND whitespace-only strings like \"   \" -- all three collapse to nil before validate_required/2 runs",
+      "§2.4 states the changeset layer alone is sufficient for nil/\"\"/whitespace-only rejection, no validate_length/validate_change needed",
+      "§2.4 correctly identifies the DB CHECK (rationale <> '') does NOT independently catch whitespace-only input for a changeset-bypassing write path, and makes an explicit decision (accepted as-is, not strengthened to btrim(rationale) <> '') with reasoning parallel to REQ-202's residual-gap-acceptance pattern",
+      "§2.4 correctly narrows the true residual gap to non-leading whitespace around real content (e.g. \" x \"), which trim_leading does not touch",
+      "§10's AC6 traceability row corrected to match, no longer repeating the false whitespace claim",
+      "§2.2, §4.1, §4.2, §7 (OQ-A/OQ-E/OQ-F content) left unchanged"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Rewrote lib/letflow/design/req203-artifact-activation.md §2.4 point 1 to state, with source citation (deps/ecto/lib/ecto/type.ex:1007, cast_field/9 -> filter_values/5 in deps/ecto/lib/ecto/changeset.ex) and the validator's own empirical Ecto 3.14.1 run, that validate_required(:rationale) via cast/4's default trim-leading/empty-value pipeline correctly rejects nil, literal \"\", and whitespace-only strings such as \"   \" -- all three reduce to nil before validate_required/2 runs, because String.trim_leading(\"   \") == \"\" and \"\" is a member of the default empty_values. No validate_length/validate_change addition is needed at the changeset level. Narrowed the genuinely-open gap to non-leading whitespace around real content (e.g. \" x \"), which trim_leading does not touch, since trim_leading strips only leading whitespace. For the DB CHECK (point 2), added an explicit finding that CHECK (rationale <> '') does NOT independently catch a whitespace-only string for a changeset-bypassing write path (a raw SQL insert of '   ' passes '   ' <> ''), and added a new decision paragraph: this residual gap is ACCEPTED, not fixed by strengthening to btrim(rationale) <> '', because this design defines no changeset-bypassing writer for either table (per its own §8/§4) -- every writer goes through the changeset where whitespace-only is already rejected -- mirroring REQ-202's precedent of accepting a residual gap that has no real call path in this codebase. Flagged that a future changeset-bypassing bulk writer would need to revisit this. Replaced the old 'decided out of scope' closing paragraph (which incorrectly conflated the whitespace-only case with the narrower non-leading-whitespace-around-content case) with a correctly-scoped closing paragraph naming only the true remaining gap (\" x \"-shaped input) as the accepted non-goal. Updated §10's AC6 row to match: changeset validate_required now correctly credited with rejecting nil/\"\"/whitespace-only; DB CHECK's own whitespace-only gap and its acceptance reasoning summarized; only the non-leading-whitespace-around-content case named as the stated non-goal. Did not touch §2.2, §4.1, §4.2, or §7 (OQ-A/OQ-E/OQ-F content), confirmed unchanged by re-reading the diff before commit. Final decision on the DB CHECK's whitespace-only gap: ACCEPTED as-is (no btrim strengthening), because no changeset-bypassing writer exists in this design's scope; if one is added later, the CHECK should move to btrim(rationale) <> '' at that time.",
+    "artifacts_out": [
+      "lib/letflow/design/req203-artifact-activation.md"
+    ],
+    "issues": [],
+    "next_action": "CODE-DESIGN-VALIDATOR to re-check §2.4 and §10's AC6 row against Ecto 3.14.1 source/runtime semantics, and confirm §2.2/§4.1/§4.2/§7 remain unchanged from the version already confirmed correct in step-01b-code-design-validator-recheck1."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

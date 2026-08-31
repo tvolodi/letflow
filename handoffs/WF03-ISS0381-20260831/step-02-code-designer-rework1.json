@@ -1,0 +1,60 @@
+{
+  "handoff_id": "WF03-ISS0381-20260831-step02-rework1",
+  "run_id": "WF03-ISS0381-20260831",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0381-20260831/step-02-code-designer-rework1.json",
+  "created_at": "2026-08-31T07:34:55Z",
+  "started_at": "2026-08-31T07:34:55Z",
+  "completed_at": "2026-08-31T07:34:55Z",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "issue_id": "ISS-0381",
+    "former_local_id": "ISS-0353",
+    "queue_task_id": 381,
+    "github_issue": 753,
+    "severity": "MINOR",
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0381-20260831/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0381-20260831/step-02-code-designer.json",
+      "handoffs/WF03-ISS0381-20260831/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0381-20260831/step-02b-code-design-validator.json",
+      "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+      "lib/letflow/dlq/entry.ex",
+      "lib/letflow/dlq.ex"
+    ]
+  },
+  "task": {
+    "description": "Rework of lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md addressing CODE-DESIGN-VALIDATOR's FAIL at step-02b: (D1, blocking) an arithmetic error in section 3's cast/3 field count, and (D2, non-blocking but required in this pass) remaining inline literal Elixir expressions scattered through the document.",
+    "acceptance_criteria": [
+      "Section 3 states the CURRENT cast/3 field count as 17 (not 18), verified by direct field-by-field re-read of lib/letflow/dlq/entry.ex lines 107-125, explicitly excluding next_retry_at (a schema field never present in cast/3 at all)",
+      "Section 3 states the POST-FIX cast/3 field count as 12 (not 13), consistent with its own enumerated field list and independently cross-checked against enqueue/2's 12-key Map.take/2 allowlist (lib/letflow/dlq.ex:87-100)",
+      "No literal, directly copy-pasteable Elixir expressions remain anywhere in the document (not just sections 4/5) -- mechanisms are described structurally/in prose (e.g. 'a put_change/3 call for :tenant_id, reading its value out of attrs') rather than as literal callable syntax (e.g. put_change(:tenant_id, Map.get(attrs, :tenant_id)))",
+      "The malformed-value fail-first proof (cast/3 vs put_change/3 error-shape divergence for tenant_id/created_at) is preserved unchanged -- validator confirmed this reasoning is correct and it was not to be altered"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reworked lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md to fix both defects from step-02b. D1 (arithmetic, blocking): re-read lib/letflow/dlq/entry.ex lines 107-125 field by field and confirmed the CURRENT cast/3 call has exactly 17 elements (tenant_id, entry_type, instance_id, reference_id, reason, full_reason, error_detail, error_chain, source_payload, context_json, retry_limit, first_failed_at, last_failed_at, status, retry_count, retry_history, created_at) -- not 18; next_retry_at is a schema field but was never in cast/3's list and must not be counted. Section 3 now presents a 17-row disposition table (one row per atom, REMOVED vs. stays) instead of the prior 18-count claim, and states the post-fix count as 12 (5 rows REMOVED: tenant_id, status, retry_count, retry_history, created_at), matching both the table's own 12-atom enumeration and enqueue/2's 12-key Map.take/2 allowlist (lib/letflow/dlq.ex:87-100) as an independent cross-check -- the prior internal inconsistency (12 atoms listed but labeled '13 fields') is resolved by making the count and the list agree at 12 throughout. D2 (inline literal code, non-blocking but fixed in this pass): did a full read-through of the whole document, not just sections 4/5, and replaced every remaining literal, directly copy-pasteable Elixir expression with a structural/prose description -- covered instances in section 2's field-disposition table (put_change(:tenant_id, ...) / put_change(:created_at, ...) calls), section 3's old code-fenced field list (replaced entirely by the prose disposition table), section 4's pipeline steps (cast(entry, attrs, [...]), the two put_change(...) calls, the literal validate_required([...]) argument list), section 5 (put_change(:tenant_id, Map.get(attrs, :tenant_id)), put_change(:tenant_id, nil), Map.get(attrs, ...)), section 8 (the literal validate_required([...]) call), and section 9's test-spec prose (changeset.changes[:status], get_field(changeset, :status) == :pending, attrs[:status] = :resolved, attrs[:tenant_id], the literal Letflow.Dlq.Entry.insert_changeset(%Letflow.Dlq.Entry{}, attrs) call). Every one of these is now phrased as a description of the mechanism/function by name and arity (e.g. 'a put_change/3 call for :tenant_id, reading its value out of attrs', 'get_field/3 for :retry_count returns 0, not 7') with no literal callable syntax remaining -- verified by re-grepping the finished file for call/bracket-index patterns; the only remaining match is a type reference (String.t()) and a string-literal example value (\"not-a-uuid\"), both acceptable per the project's established design-doc convention (consistent with prior WF-02 designs this session). The validator's confirmation that the malformed-value fail-first proof (cast/3 vs put_change/3 error-shape divergence for tenant_id/created_at) is technically correct was left untouched in substance -- only its phrasing was de-coded from literal Elixir into prose, no reasoning changed. No implementation code was written or altered anywhere; only lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md was edited.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+      "handoffs/WF03-ISS0381-20260831/step-02-code-designer-rework1.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0381-20260831",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0381-20260831",
+      "push_status": "pending"
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (WF-03 Step 2b, rework re-check) to re-gate the corrected design before ELIXIR-DEV implements it at WF-03 Step 3."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

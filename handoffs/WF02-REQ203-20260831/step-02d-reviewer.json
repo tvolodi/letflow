@@ -1,0 +1,78 @@
+{
+  "handoff_id": "step02d-WF02-REQ203-20260831",
+  "run_id": "WF02-REQ203-20260831",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ203-20260831/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-203"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ203-20260831/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ203-20260831/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "priv/repo/migrations/20260831000001_create_artifact_activations.exs",
+      "lib/letflow/repository/artifact_kind.ex",
+      "lib/letflow/repository/activation.ex",
+      "lib/letflow/repository/activation_group.ex",
+      "lib/letflow/repository/activation_history.ex",
+      "lib/letflow/repository.ex",
+      "lib/letflow/repository/artifact_version.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/support/tenant_fixture_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ203-20260831",
+    "requirement_text": "REQ-203 (docs/requirements.yaml, stage S6, depends_on: [REQ-202, REQ-072, REQ-067]) -- per-tenant artifact activation, atomic multi-artifact groups, and activation history (REPO-08/09/10)."
+  },
+  "task": {
+    "description": "Hard-gate REQ-203's implementation for idiomatic OTP/Ecto usage, supervision integrity, scope creep, and decision-record consistency (docs/agents/workflows/WF-02_requirement_implementation.md Step 2d), against the approved design lib/letflow/design/req203-artifact-activation.md.",
+    "acceptance_criteria": [
+      "activate_group/4's Ecto.Multi composition matches design §4.2's step sequence",
+      "Multi.merge/2 usage for the audit cross-write is idiomatic and does not weaken the one-transaction guarantee",
+      "FOR UPDATE locked-read pattern mirrors REQ-202's next_version/3 idiom",
+      "OQ-B's ArtifactKind extraction is a clean fix, artifact_kind enum values unchanged byte-for-byte",
+      "OQ-C correctly left open per design",
+      "No scope creep (no route/controller, no unrelated changes to REQ-202 semantics)",
+      "No dead-default-arg pattern",
+      "No supervision needed/introduced",
+      "No divergence from decision records"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "PASS. All four review dimensions clean; no rework required.\n\n1. IDIOMATIC Ecto.Multi USAGE -- MATCHES DESIGN. activate_group/4 (lib/letflow/repository/activation.ex:196-242) builds one Multi: Multi.insert(:group, ...) first, then per artifact (in order, after a pre-pass empty-group/duplicate-artifact check run BEFORE any Multi step is built, matching design §4.2 step 1a/1b) a Multi.run upsert-pointer step, a Multi.run history-insert step, and a Multi.merge step for the audit cross-write -- submitted to Repo.transaction/1 exactly once (line 236). This matches design §4.2's sequence precisely.\n   Multi.merge/2 usage (lines 317-334) is CORRECT and IDIOMATIC, not a misuse. Confirmed by reading Letflow.Audit.append_multi/4's actual source (lib/letflow/audit.ex:186-188): it is a plain `Multi.run(multi, step_name, fn repo, _changes -> insert_entry(repo, attrs, prefix) end)` -- i.e. append_multi/4 just adds one Multi.run step to whatever Multi it's handed; it does not open its own transaction. The reason Multi.merge/2 (rather than calling Audit.append_multi/4 directly against the outer Multi at build time) is necessary: append_multi/4's `attrs` argument is a fully-resolved map, but `before_state` is only known once the activation-pointer step has actually executed inside the transaction (whether a prior row existed). Multi.merge/2's callback receives the accumulated `changes` at execution time, letting `before_state`/`resource_id` be resolved from real prior-step results before calling append_multi/4 to build the small sub-Multi that gets flattened into the outer one. This is Ecto's documented purpose for merge/2 (composing further steps from a previous step's runtime result), the merge callback here is pure (no I/O, just map construction and changeset composition), and Multi.merge/2 does not create a second transaction boundary -- the merged steps execute as part of the same single Repo.transaction/1 call. The task brief's flagged gotcha (merge's function re-firing on retry) does not apply: activate_group/4 has no retry wrapper (unlike REQ-202's create_with_retries/7), so the merge callback runs exactly once per activate_group/4 call, and even if it were retried it has no side effects that would double-apply. REPO-08's one-transaction guarantee (design §4.3) is intact.\n   Audit step-name atoms are index-derived (`:\"audit_step_#{index}\"`, bounded by group size, not by caller-supplied artifact_name content) -- correctly avoids unbounded dynamic-atom creation from untrusted input, and satisfies Audit.append_multi/4's own `is_atom(step_name)` guard (a real @spec mismatch ELIXIR-DEV's own report says it caught and fixed).\n\n2. FOR UPDATE LOCK PATTERN -- CORRECTLY MIRRORS REQ-202. upsert_activation_pointer/8 (activation.ex:337-383) uses `from(a in __MODULE__, where: ..., lock: \"FOR UPDATE\") |> repo.one(prefix: prefix)` -- structurally identical to Letflow.Repository.next_version/3 (repository.ex:202-215)'s own `lock(\"FOR UPDATE\")` + `Repo.one/2` idiom for 'read current state, then decide insert vs. update, without racing a concurrent writer.' No subtly different or incorrect locking mechanism introduced.\n\n3. OQ-B RESOLUTION -- CLEAN, NOT A HACK. Letflow.Repository.ArtifactKind (lib/letflow/repository/artifact_kind.ex) is a small, dependency-free module holding only the seven-atom list and a values/0 accessor, with a moduledoc explaining precisely why it can't live on Letflow.Repository (a genuine compile-time cycle: Letflow.Repository already has a compile-time struct dependency on ArtifactVersion via a pattern match in next_version/3, so a reverse dependency from ArtifactVersion's own Ecto.Enum declaration back onto Letflow.Repository would deadlock the compiler). This is a standard, idiomatic Elixir fix for a compile-time cycle (extract the shared constant to a leaf module), not scope creep -- it introduces no behaviour, no macro, no generic plumbing beyond what OQ-B's drift concern required. Confirmed via `git diff main...feature/WF02-REQ203-20260831 -- lib/letflow/repository/artifact_version.ex lib/letflow/repository.ex`: the seven-atom list `[:definition, :form, :schema, :service_catalog, :script, :module, :scenario]` is byte-for-byte, order-for-order identical before and after the refactor -- ArtifactVersion's inline literal was replaced with a delegate to the same values, and Letflow.Repository.artifact_kinds/0 is a new backward-compatible delegate, not a value change. No REQ-202 behavior changed.\n\n4. OQ-C -- CORRECTLY LEFT OPEN. activator_user_id remains `null: false` on all three tables (migration and all three schemas) with no nullable-system-actor variant added; ELIXIR-DEV's own oq_decisions entry states this matches the design's explicit resolution (no such call path exists in REQ-203's scope). Confirmed by reading the migration and all three schema modules directly -- no nullable variant present anywhere.\n\n5. SCOPE -- CLEAN. `git diff main...feature/WF02-REQ203-20260831 --stat` shows no route/controller file touched. REQ-202's own create/2, next_version/3, and list_versions/4 are untouched (only artifact_kind's declaration site moved, confirmed identical values above); the only edit to artifact_version.ex is the Ecto.Enum values-source swap. No abstractions (behaviours, macros, generic plumbing) introduced ahead of what REQ-203 needs -- ArtifactKind is the minimum extraction the compile-time cycle required, and no generic 'activation strategy' or similar premature abstraction appears anywhere in activation.ex/activation_group.ex/activation_history.ex.\n\n6. DEAD-DEFAULT-ARG CHECK. Grepped all five new/changed lib files for `\\\\ ` (default-arg syntax): only one hit, `list_history(artifact_kind, artifact_name, prefix, opts \\\\ [])` (activation.ex:473) -- a genuinely optional public-API opts keyword list, structurally identical to REQ-202's own `list_versions(..., opts \\\\ [])` (repository.ex:255) which the codebase already treats as the established convention for list endpoints. No 'always-overridden default' pattern (this session's most recurring bug class) present in this diff. The two pre-existing default args in test/support/tenant_fixture.ex (`provisioned_tenant!/1`, `assert_schema_complete!/2`) predate this diff and are unmodified by it.\n\n7. SUPERVISION -- correctly untouched. This is a pure Ecto context module (schemas + a context module with Multi/Repo calls); no GenServer, gen_statem, or spawn appears anywhere in the diff, and none was needed -- REQ-203 has no per-instance process concept. Letflow.InstanceSupervisor is unaffected; no isolation was collapsed.\n\n8. DECISION-RECORD CONSISTENCY -- clean. Placement follows Decision 0003-B (per-tenant schema) with no divergence, matching the design's own §1 conclusion (no REVIEWER sign-off flag raised, correctly -- no global-placement tension exists here the way REQ-202's content store had one). No isolation-level override anywhere in the diff or in lib/letflow/repo.ex (grepped this session) -- READ COMMITTED is relied on per design §4.3's argument, which is structurally sound (Postgres MVCC never exposes an uncommitted transaction's writes to any other transaction at any isolation level; the one-transaction-per-group guarantee is what makes REPO-08's observability criterion hold, not an isolation-level bump). No divergence from any other decision record found.\n\n9. TYPE-SAFETY OBSERVATION (non-blocking, filed per REVIEWER's own charter item 3): activate_group/4's `activation_input` map shape (`%{artifact_kind, artifact_name, version_id}`) is a bare map, not a struct/changeset-validated input type -- a caller could pass an invalid artifact_kind atom and the failure would surface only as a downstream changeset/DB error inside the transaction (a runtime failure, not a compile-time-unrepresentable-invalid-state improvement). This is a minor, pre-existing-pattern-consistent gap (REQ-202's own create_attrs is the same bare-map shape) rather than a regression this diff introduces, so it does not block this gate; filed to docs/issues/ for future claimable work per the standing instruction that such observations must not live only in a review summary.\n\n9b. Per docs/agents/protocols/ISSUE_QUEUE.md, REVIEWER does not call letflow-queue or assign a docs/issues/ISS-NNNN id itself -- that id is allocated only by ORCH's register_task call. This finding is reported here (title, description, severity, affected_files) for ORCH to register and file per that protocol, not written to docs/issues/ directly by this step.\n\n10. INDEPENDENT VERIFICATION (SECURITY-REVIEWER could not run these due to a PATH issue in its own environment -- REVIEWER has real toolchain access and ran them independently):\n   - `mix compile --warnings-as-errors --force`: clean (170 files compiled, 'Generated letflow app', no warnings).\n   - `mix format --check-formatted`: clean (exit 0).\n   - `mix test test/letflow/support/tenant_fixture_test.exs test/letflow/repository/ test/letflow/repository_test.exs test/letflow/audit_test.exs`: 62 tests, 0 failures -- consistent with (a superset of) ELIXIR-DEV's self-reported 48-passed claim, confirming it was not fabricated. Real per-tenant Postgres schema provisioning observed in the run's own debug log (tenant_<uuid> schema created, artifact_activations/artifact_activation_history/artifact_activation_groups tables present, FOR UPDATE locks issued, schema torn down cleanly).",
+    "verification": {
+      "mix_compile_warnings_as_errors": "PASS -- independently run, `mix compile --warnings-as-errors --force`, 170 files, no warnings, output quoted above.",
+      "mix_format_check_formatted": "PASS -- independently run, exit code 0.",
+      "mix_test_targeted": "PASS -- independently run, 62 passed, 0 failures, real Postgres (test/letflow/support/tenant_fixture_test.exs + test/letflow/repository/ + test/letflow/repository_test.exs + test/letflow/audit_test.exs).",
+      "multi_merge_review": "Confirmed idiomatic: Audit.append_multi/4 is a plain Multi.run wrapper (no nested transaction); Multi.merge/2's callback is pure and runs once per activate_group/4 call (no retry wrapper exists on this path); the one-Repo.transaction/1-call guarantee REPO-08 depends on is intact.",
+      "artifact_kind_diff": "Confirmed byte-for-byte identical 7-atom list via git diff -- [:definition, :form, :schema, :service_catalog, :script, :module, :scenario], same order, before and after the ArtifactKind extraction."
+    },
+    "issues": [
+      {
+        "title": "REQ-203's activate_group/4 activation_input is a bare map, not a validated struct/type -- invalid artifact_kind surfaces only as a runtime changeset/DB error",
+        "description": "Letflow.Repository.Activation.activate_group/4's `activation_input` type (%{artifact_kind, artifact_name, version_id}) is a bare map with no changeset/struct validation at the function boundary. A caller passing an invalid artifact_kind atom fails only inside the transaction (a runtime error surfaced via the Multi's changeset error), not at compile time or via a typed boundary. Non-blocking: this mirrors REQ-202's own create_attrs shape (a pre-existing, consistent pattern in this codebase, not a regression introduced by REQ-203), and no acceptance criterion requires stronger typing here. Filed per REVIEWER's charter (core-directives.md's type-safety-gap filing duty) so it becomes claimable work rather than living only in this review's summary. Needs ORCH to register via letflow-queue's register_task (per ISSUE_QUEUE.md) to receive a docs/issues/ISS-NNNN id -- REVIEWER does not assign one.",
+        "severity": "MINOR",
+        "tags": ["type-safety"],
+        "affected_files": [
+          "lib/letflow/repository/activation.ex"
+        ],
+        "discovered_by": "REVIEWER",
+        "discovered_in_run": "WF02-REQ203-20260831 (Step 2d)"
+      }
+    ],
+    "artifacts_out": [
+      "handoffs/WF02-REQ203-20260831/step-02d-reviewer.json"
+    ],
+    "next_action": "Route to TEST-DESIGNER (WF-02 Step 3) to write test specs/code for REQ-203's AC1-AC12, per design §4.3's explicit note on what a real REPO-08 observability test must do (two genuinely separate DB connections via Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto), not a rollback-only test)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,81 @@
+{
+  "handoff_id": "step03-WF02-REQ203-20260831",
+  "run_id": "WF02-REQ203-20260831",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ203-20260831/step-03-test-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-203"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ203-20260831/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ203-20260831/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ203-20260831/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "priv/repo/migrations/20260831000001_create_artifact_activations.exs",
+      "lib/letflow/repository/artifact_kind.ex",
+      "lib/letflow/repository/activation.ex",
+      "lib/letflow/repository/activation_group.ex",
+      "lib/letflow/repository/activation_history.ex",
+      "lib/letflow/design/req203-artifact-activation.md",
+      "test/letflow/repository_test.exs",
+      "test/letflow/repository/canonicaliser_test.exs",
+      "test/letflow/engine_concurrency_test.exs"
+    ],
+    "artifacts_out": [
+      "test/specs/REQ-203.md",
+      "test/letflow/repository/activation_test.exs",
+      "lib/letflow/repository/activation.ex (TEST-ONLY seam added -- flagged for REVIEWER, see below)"
+    ],
+    "branch_name": "feature/WF02-REQ203-20260831",
+    "requirement_text": "REQ-203 (docs/requirements.yaml, stage S6, depends_on: [REQ-202, REQ-072, REQ-067]) -- per-tenant artifact activation, atomic multi-artifact groups, and activation history (REPO-08/09/10)."
+  },
+  "task": {
+    "description": "Write test specs and ExUnit test code covering all 12 acceptance criteria of REQ-203, with special rigor on AC1/AC2's REPO-08 observability guarantee (design §4.3), against real Postgres (docs/agents/workflows/WF-02_requirement_implementation.md Step 3).",
+    "acceptance_criteria": [
+      "AC1: atomic multi-artifact activation, all-succeed and forced-failure-rollback (no partial state, no history rows)",
+      "AC2 (REPO-08 observability): a genuine cross-connection concurrent read against a partially-applied, still-uncommitted activation sees no mixed state",
+      "AC3 (REPO-09 isolation): tenant A/B independence, same version active in one tenant not another",
+      "AC4: UNIQUE (tenant_id, artifact_kind, artifact_name) enforced by the database",
+      "AC5: previous_version_id null-then-populated, field-by-field across two activations",
+      "AC6: nil/empty/whitespace-only rationale all rejected, plus a DB CHECK backstop",
+      "AC7: chronological order + REQ-067 cursor pagination, both per-artifact and tenant-wide list_history/4 shapes",
+      "AC8: resolve/3 not-found semantics never fall back to an arbitrary version",
+      "AC9: ON DELETE RESTRICT prevents deleting a referenced artifact_versions row",
+      "AC10: moduledoc states how activation history differs from audit_entries",
+      "AC11: no route/controller added",
+      "AC12: mix test/mix compile -- TEST-RUNNER's job, not this step's"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "COMPLETE. Wrote test/specs/REQ-203.md (14-item AC-to-test-case mapping) and test/letflow/repository/activation_test.exs (28 tests, all passing against real Postgres). Every acceptance criterion has at least one real test; AC1/AC2 (the hardest) got the most rigor per the task's own instruction.\n\nAC1/AC2 SYNCHRONIZATION MECHANISM -- THE CENTRAL TECHNICAL WORK OF THIS STEP: design §4.3 explicitly anticipated that the shipped activate_group/4 had no way for a test to hold its transaction open mid-Multi, and named the exact required mechanism (Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto) + a Task pausing inside the Multi at a test-only sync point, matching test/letflow/engine_concurrency_test.exs's REQ-055 precedent). No such point existed in lib/letflow/repository/activation.ex as implemented, so I added one: activate_group/4 now takes an optional 5th argument, opts \\\\ [] (previously arity 4), with test_pause_after (1-based artifact index) / test_pause_fun (0-arity callback invoked synchronously inside the open transaction, immediately after that artifact's own Multi.run steps, via one extra Multi.run(:__test_pause__, ...) step). Every non-test call site (opts defaulting to []) reproduces the exact Multi pipeline design §4.2 describes with ZERO behavioral change -- verified directly: test/letflow/repository_test.exs + test/letflow/repository/canonicaliser_test.exs (39 tests, REQ-202's own suite) pass unmodified after this change, and every other test in the new file (27 of 28) never passes opts at all. FLAGGED FOR REVIEWER: this is new public surface (a new @type test_opts, a changed arity) on a file REVIEWER already signed off in step-02d -- the change is additive-only and clearly marked TEST-ONLY in both the @type's moduledoc and inline comments, but REVIEWER should confirm it does not need its own re-review pass.\n\nThe AC2 test itself (describe \"AC2 -- concurrent read during an in-flight multi-artifact activation observes no mixed state\") does exactly what design §4.3 specifies: activates 3 artifacts to old versions, creates 3 new versions, launches activate_group/4 as a Task with test_pause_after: 1, waits for the :paused signal (proving artifact 1's row is already updated INSIDE the open transaction while 2/3 are untouched), issues resolve/3 for all three from the main process (a genuinely separate connection under :auto mode) and asserts ALL THREE still show OLD versions -- never a mix -- then signals :continue, awaits the commit, and re-reads asserting ALL THREE now show NEW versions. This is real, not vacuous: a broken implementation splitting the group across multiple transactions, or exposing a per-statement-commit semantics, would show a mixed old/new state during the pause or hang with nothing to observe after -- exactly the failure mode design §4.3 warns a naive commit-then-read test would miss.\n\nAC1's forced-failure case activates two artifacts normally, then submits a second group with new versions for those two plus a THIRD artifact pointing at a non-existent version_id (a real mid-Multi FK violation, not the duplicate-artifact pre-check). REAL FINDING surfaced by actually running this against real Postgres (not by inspection): the implementation raises Ecto.ConstraintError out of activate_group/4 rather than returning the {:error, {atom(), Ecto.Changeset.t()}} tuple its own @spec advertises, because no foreign_key_constraint/3 is mapped on the Activation changeset used by the internal repo.update call in upsert_activation_pointer/8. The transaction still rolls back correctly (which is all AC1 itself requires -- verified: all three artifacts remain at prior versions, zero new history rows, group envelope row count unchanged), so this is a narrower @spec-vs-actual-behavior mismatch, not an atomicity bug. Test asserts the real observed behavior (assert_raise Ecto.ConstraintError) rather than an invented one -- flagged here and in the test's own comments for REVIEWER/ELIXIR-DEV attention, not silently worked around.\n\nMUTATION-DRIVEN VERIFICATION PERFORMED (per this run's own instruction): temporarily mutated resolve/3 (lib/letflow/repository/activation.ex) to fall back to 'latest artifact_versions row by version_number' instead of returning {:error, :not_activated} when no activation row exists -- the exact silent-fallback bug AC8's wording explicitly rules out. Ran test/letflow/repository/activation_test.exs against the mutant: 26/28 passed, 2 FAILED -- 'AC8 ... resolve/3 returns {:error, :not_activated} when no activation row exists, even though versions DO exist' (the dedicated test) AND 'AC3 -- per-tenant isolation ... activating in tenant A does not change tenant B's active version' (an incidental catch, since that test also asserts strict not-found semantics for tenant A before its own activation). Reverted the mutation and re-ran: 28/28 passed again, confirming the revert was clean and the coverage is real, not accidental.\n\nOther real-Postgres bugs found and fixed while writing this file (test_developer_guide's own T-1 discipline, matching REQ-202's own precedent of catching real Postgres issues during test design): (1) a moduledoc substring assertion (AC10) broken by an embedded newline between 'Neither' and 'table' in the actual source text -- fixed with a whitespace-tolerant regex rather than reformatting the moduledoc; (2) an insert_all/3 type mismatch (DateTime vs the schema's NaiveDateTime inserted_at) that masked the real assertion target; (3) after fixing (2), the AC6 raw-insert-bypassing-changeset test's expected exception was wrong -- insert_all/3 bypasses the changeset entirely (no constraint mapping), so the real Postgres CHECK violation surfaces as Postgrex.Error, not Ecto.ConstraintError (matching test/letflow/repository_test.exs's own DB-trigger-immutability precedent and test/letflow/event_store/retention_policy_test.exs's raw-CHECK-constraint precedent) -- fixed to assert the actual exception type and message pattern.\n\nAC coverage summary (all verified against real Postgres, test/specs/REQ-203.md has the full mapping): AC1 (2 tests: all-succeed + forced-failure-rollback, plus a separate duplicate-pre-check test), AC2 (1 test, the concurrency test described above), AC3 (2 tests), AC4 (1 test), AC5 (1 test, field-by-field), AC6 (4 tests: nil/empty/whitespace + DB CHECK backstop), AC7 (7 tests: per-artifact order, tenant-wide order, pagination, page_size_too_large, wrong_endpoint, expired, invalid_cursor), AC8 (2 tests, including the mutation-verified one), AC9 (2 tests: active_version_id and history-referenced version), duplicate-artifact-in-group (1 test), empty-group (1 test), audit_entries cross-write (1 test, asserting 2 rows for a 2-artifact group with full field checks), AC10 (1 test), AC11 (1 structural test, noting git diff --stat is the authoritative check per REQ-202's own precedent). AC12 is TEST-RUNNER's.\n\nFixture/tenant-provisioning shape mirrors test/letflow/repository_test.exs exactly (provisioned_tenant/0, insert_tenant!/0, drop_schema!/1) -- DIRECTIVE T-4 (self-contained, no shared fixtures with any other test file). Cursor-pagination test shape mirrors test/letflow/repository_test.exs AC9's own test cases verbatim (page-size sweep, wrong_endpoint/expired/invalid_cursor), substituting REQ-203's 'AH:' cursor prefix and REQ-202's 'RV:' as the foreign-prefix construction.",
+    "verification": {
+      "mix_compile_warnings_as_errors": "PASS -- ran directly, no output (clean compile), including the new TEST-ONLY 5th-argument seam on activate_group/4.",
+      "activation_test_exs": "PASS -- 28/28, real Postgres. Iterated 3 real failures to 0 while writing (see summary): a wrong assumed exception type for the mid-Multi FK-failure case, a moduledoc-newline substring mismatch, and an insert_all/3 type+exception-type mismatch -- all resolved by matching actual observed Postgres/Ecto behavior, not by weakening the assertions.",
+      "repository_test_exs_regression_check": "PASS -- test/letflow/repository_test.exs + test/letflow/repository/canonicaliser_test.exs, 39/39, confirming the activate_group/4 arity/opts change is behavior-preserving for every existing (non-test) call shape.",
+      "full_suite_regression_check": "Ran the full `mix test` suite (2898 tests, real Postgres, ~1315s): 2887 passed, 11 failed on the first pass. Re-ran exactly those 11 via `mix test --failed`: 9 passed on retry (flaky/transient, none in the repository/activation namespace), and the remaining 2 are Mix.Tasks.Letflow.CheckToolchainTest's 'rust pin (REQ-165)' tests, both failing deterministically with System.cmd(\"rustc\", ...) -> :enoent -- this sandbox has no rustc binary installed, a pre-existing environment gap unrelated to REQ-203/this change (confirmed by re-running test/letflow/repository/activation_test.exs + test/letflow/repository_test.exs + test/letflow/repository/canonicaliser_test.exs together afterward: 67/67 passed). No regression from this step's changes.",
+      "mutation_test_ac8": "Mutant applied (resolve/3 falls back to latest-by-version_number instead of :not_activated) -> 26/28 passed, 2 failed (the AC8 test itself + the AC3 isolation test) -> mutant reverted -> 28/28 passed again. Full before/after counts quoted in the summary above."
+    },
+    "test_only_seam_flagged_for_reviewer": {
+      "file": "lib/letflow/repository/activation.ex",
+      "change": "activate_group/4 -> activate_group/5 with opts \\\\ [] (test_pause_after :: pos_integer(), test_pause_fun :: (-> any())), plus a private maybe_add_test_pause_step/3 helper and a @type test_opts moduledoc explaining the seam is TEST-ONLY and additive.",
+      "why": "Design §4.3 requires a genuine cross-connection concurrent-read test against a partially-applied, still-open transaction; no synchronization point existed in the shipped code for a test to pause the Multi mid-flight. This is the minimal seam that makes AC1/AC2's real test possible without altering production behavior.",
+      "production_impact": "None -- verified by REQ-202's own 39-test suite passing unmodified, and by every other test in the new file (27/28) never passing opts.",
+      "requested_action": "REVIEWER/ELIXIR-DEV should confirm this additive seam does not need a fresh idiom/security re-review given it already passed step-02d before this change existed."
+    },
+    "additional_finding_flagged": {
+      "title": "activate_group/4's @spec promises {:error, {atom(), Ecto.Changeset.t()}} for a mid-transaction failure, but a real FK violation (e.g. a bogus version_id) raises Ecto.ConstraintError instead of returning that tuple",
+      "affected_file": "lib/letflow/repository/activation.ex (upsert_activation_pointer/8's internal repo.update call has no foreign_key_constraint/3 mapped on the Activation changeset)",
+      "severity": "minor -- atomicity/rollback (AC1's actual requirement) is unaffected; this is an error-shape/API-contract mismatch a caller relying on the documented @spec would be surprised by",
+      "evidence": "test/letflow/repository/activation_test.exs, describe \"AC1 -- atomic multi-artifact activation, forced-failure rollback\", first test -- run live against real Postgres, confirmed the raise, and asserted the real behavior rather than papering over it"
+    },
+    "next_agent_should": "TEST-DESIGN-VALIDATOR: verify every AC has a runnable, non-vacuous test (especially AC1/AC2's concurrency mechanism and the AC8 mutation-verified test), confirm the TEST-ONLY seam on activate_group/4 is genuinely additive/behavior-preserving (re-run test/letflow/repository_test.exs if in doubt), and decide whether the seam and/or the @spec-mismatch finding need to route back to REVIEWER/ELIXIR-DEV before TEST-RUNNER."
+  }
+}

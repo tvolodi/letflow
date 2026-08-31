@@ -1,0 +1,62 @@
+{
+  "handoff_id": "step02a-WF02-REQ203-20260831",
+  "run_id": "WF02-REQ203-20260831",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ203-20260831/step-02a-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-203"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ203-20260831/step-01-code-designer-rework2.json",
+      "handoffs/WF02-REQ203-20260831/step-01b-code-design-validator-recheck2.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req203-artifact-activation.md"
+    ],
+    "branch_name": "feature/WF02-REQ203-20260831",
+    "requirement_text": "REQ-203 (docs/requirements.yaml, stage S6, depends_on: [REQ-202, REQ-072, REQ-067]) -- per-tenant artifact activation, atomic multi-artifact groups, and activation history (REPO-08/09/10)."
+  },
+  "task": {
+    "description": "Implement REQ-203 exactly per the approved design: three tables/schemas (artifact_activations, artifact_activation_history, artifact_activation_groups), Ecto.Multi atomic activate_group/4, resolve/3, list_history/4, REQ-195 disambiguation moduledoc, tenant-scoped-migration manifest registration, and tenant-fixture table-completeness registration.",
+    "acceptance_criteria": [
+      "AC1-AC12 of REQ-203 (docs/requirements.yaml)"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Implemented per lib/letflow/design/req203-artifact-activation.md, no re-litigation of settled decisions. Migration priv/repo/migrations/20260831000001_create_artifact_activations.exs creates artifact_activations (mutable current-pointer, UNIQUE (tenant_id, artifact_kind, artifact_name) via explicit-named index artifact_activations_tenant_kind_name_idx -- REPO-09's DB-level enforcement, AC4), artifact_activation_groups, and artifact_activation_history (nullable group_id FK, previous_version_id nullable/ON DELETE RESTRICT, new_version_id/new_version_number :bigint matching artifact_versions.version_number's confirmed migration type, DB CHECK (rationale <> '') on both activation_history.rationale and activation_groups.rationale via explicitly-named constraints). Every index/FK/constraint in the migration has an explicit short name (no repeat of REQ-202's index-collision/name-truncation bugs). No DB-level immutability trigger on activation_history/activation_groups, per design §5's explicit judgment call. Registered in Letflow.TenantProvisioning's @tenant_scoped_migration_manifest and in test/support/tenant_fixture.ex's @expected_tenant_tables (all three new tables); bumped test/letflow/support/tenant_fixture_test.exs's count assertion from 29 to 32 (counted the edited list directly). New module Letflow.Repository.ArtifactKind holds the shared seven-atom artifact_kind value list (OQ-B) with no compile-time dependency on Letflow.Repository (needed to avoid a real compiler deadlock hit during implementation -- Letflow.Repository has a compile-time struct dependency on ArtifactVersion, so putting the shared list on Letflow.Repository itself would have created ArtifactVersion -> Letflow.Repository -> ArtifactVersion); ArtifactVersion, Activation, and ActivationHistory all declare their Ecto.Enum field against this one shared source now (ArtifactVersion's inline literal list was replaced with the shared reference to remove the drift risk OQ-B flagged). Letflow.Repository.Activation implements resolve/3 (not-found semantics, AC8), activate_group/4 (Ecto.Multi: one :group insert step, then per artifact one Multi.run upsert-pointer step with FOR UPDATE locked read, one Multi.run history-insert step, and one Ecto.Multi.merge/2 step that calls Letflow.Audit.append_multi/4 with attrs resolved from the just-computed previous/new activation state -- merge/2 was necessary because append_multi/4's attrs argument is a fixed map but before_state genuinely depends on a runtime-only prior-row read; this is the same one-Repo.transaction/1-call structural guarantee the design's §4.3 observability argument relies on), empty_group/duplicate_artifact_in_group pre-checks before any Multi step is built, and list_history/4 (REQ-067 cursor contract, prefix 'AH:', both per-artifact and tenant-wide call shapes). Moduledoc states the activation_history vs audit_entries distinction per design §7/AC10. No route/controller file touched (confirmed via git status --short: only lib/letflow/repository*.ex, lib/letflow/tenant_provisioning.ex, the new migration, and the two tenant_fixture test-support files changed).",
+    "verification": {
+      "mix_compile_warnings_as_errors": "PASS -- `mix compile --warnings-as-errors` clean (one real deadlock bug found and fixed during implementation: shared artifact_kind list originally placed on Letflow.Repository itself, extracted to standalone Letflow.Repository.ArtifactKind to break a genuine compile-time module cycle; one real @spec type-mismatch found and fixed: Letflow.Audit.append_multi/4 requires an atom() step_name, not a tuple -- switched the per-artifact audit Multi step name to an index-derived atom, :\"audit_step_#{index}\", bounded by group size rather than caller-supplied artifact_name content).",
+      "mix_format_check_formatted": "PASS -- clean after one `mix format` pass (migration's long index column-list needed reformatting).",
+      "mix_test_targeted": "PASS -- test/letflow/support/tenant_fixture_test.exs: 14 passed (this run provisions a REAL per-tenant Postgres schema via TenantProvisioning.replay_migrations/1 and asserts tables_present/applied_versions/manifest_versions match exactly; observed tables_present list included artifact_activations, artifact_activation_history, and artifact_activation_groups, and versions_missing was []). test/letflow/repository/ + test/letflow/repository_test.exs + test/letflow/audit_test.exs: 48 passed (covers the ArtifactVersion Ecto.Enum change and Audit.append_multi/4/insert_entry/3 usage this change relies on).",
+      "mix_test_full_suite": "NOT COMPLETED -- a full `mix test` run exceeds this environment's practical single-tool-call execution window (background-timeout-relocated past 600s with no final Result: summary observed before the run was terminated to reclaim the shared Postgres instance). Per core-directives.md's prohibition on waiting for a cross-turn background-task notification for a load-bearing check, this is reported honestly as NOT run to completion by ELIXIR-DEV rather than fabricated or left silently implied as passing -- TEST-RUNNER is expected to run the full suite (and REQ-203's own new tests, once TEST-DESIGNER writes them) to completion as part of its own step.",
+      "migration_self_verified_against_real_per_tenant_schema": "YES -- test/letflow/support/tenant_fixture_test.exs's own suite provisions a real Postgres tenant schema (not just `public`) via TenantProvisioning.provision_tenant_schema/1 + replay_migrations/1 and asserts schema completeness; this run confirms the new migration applied cleanly against a real per-tenant schema with no index-name collision or constraint-name-truncation error (the exact bug class REQ-202 hit twice) -- every new index/constraint in this migration carries an explicit, short, distinct name for exactly this reason."
+    },
+    "oq_decisions": {
+      "OQ-B": "Extracted the shared artifact_kind value list into a new, dependency-free module Letflow.Repository.ArtifactKind (values/0) rather than a function on Letflow.Repository itself -- required to avoid a real compile-time module cycle discovered during implementation (Letflow.Repository already has a compile-time struct dependency on ArtifactVersion via a pattern match in next_version/3; adding a reverse compile-time dependency from ArtifactVersion's schema declaration back onto Letflow.Repository deadlocked the compiler). Letflow.Repository.artifact_kinds/0 now delegates to it for backward-compatible callers. ArtifactVersion, Activation, and ActivationHistory all declare their Ecto.Enum artifact_kind field against this one shared source -- the design's own concern (value-set drift) is fully addressed.",
+      "OQ-C": "Left open per the design's own resolution -- activator_user_id remains a plain required (non-nullable) field; no system/scheduler-driven activation call path exists in this requirement's scope."
+    },
+    "artifacts_out": [
+      "priv/repo/migrations/20260831000001_create_artifact_activations.exs",
+      "lib/letflow/repository/artifact_kind.ex",
+      "lib/letflow/repository/activation.ex",
+      "lib/letflow/repository/activation_group.ex",
+      "lib/letflow/repository/activation_history.ex",
+      "lib/letflow/repository.ex",
+      "lib/letflow/repository/artifact_version.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/support/tenant_fixture_test.exs"
+    ],
+    "issues": [],
+    "next_action": "Route to SECURITY-REVIEWER (this change touches a tenant-data path: new per-tenant tables, activation pointer writes, audit-entry writes) per WF-02 Step 2b, then REVIEWER (Step 2c) before TEST-DESIGNER (Step 2d)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -300,12 +300,16 @@ defmodule Letflow.Support.TenantFixtureTest do
       # added webhook_subscriptions, bumping it from 23 to 24; REQ-186 added timers,
       # bumping it from 24 to 25; REQ-183 added webhook_delivery_attempts, bumping it
       # from 25 to 26; REQ-195 added audit_entries, bumping it from 26 to 27; REQ-202
-      # added repository_artifacts and artifact_versions, bumping it from 27 to 29 --
-      # REQ-201 added alert_trigger_state and alert_hook_emission_state, bumping it from 29 to 31;
-      # REQ-199 added correlation_cursors and effect_completions, bumping it from 31 to 33 --
+<<<<<<< HEAD
+      # added repository_artifacts and artifact_versions, bumping it from 27 to 29;
+      # REQ-203 added artifact_activations, artifact_activation_history,
+      # and artifact_activation_groups, bumping it from 29 to 32; REQ-201 added
+      # alert_trigger_state and alert_hook_emission_state, bumping it from 32 to 34;
+      # REQ-199 added correlation_cursors and effect_completions, bumping it from
+      # 34 to 36 --
       # test/support/tenant_fixture.ex's own @expected_tenant_tables list already
-      # carries all 33.)
-      assert length(TenantFixture.expected_tenant_tables()) == 33
+      # carries all 36.)
+      assert length(TenantFixture.expected_tenant_tables()) == 36
       assert length(state.manifest_versions) > 0
     end
 

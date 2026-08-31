@@ -386,6 +386,109 @@ defmodule Letflow.DlqTest do
   # with no route or controller-shaped constructs of their own
   # ---------------------------------------------------------------------------------
 
+  # ---------------------------------------------------------------------------------
+  # ISS-0381 regression -- Entry.insert_changeset/2's cast/3 list must not
+  # contradict its own docstring's claim that status/retry_count/
+  # retry_history/tenant_id/created_at are "deliberately not castable". See
+  # docs/issues/ISS-0381.yaml and
+  # lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md §9 (the exact
+  # proof shape these two tests implement). These are changeset-level tests,
+  # deliberately NOT routed through Dlq.enqueue/2 -- the whole point is to
+  # prove the CHANGESET itself enforces the invariant, not enqueue/2's own
+  # Map.take/2 caller discipline (which was already sufficient pre-fix and is
+  # unchanged by this fix).
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0381: insert_changeset/2 -- status/retry_count/retry_history cannot be caller-overridden" do
+    test "a raw, unfiltered attrs map with non-default status/retry_count/retry_history is ignored in favor of schema defaults" do
+      trusted_tenant_id = Ecto.UUID.generate()
+      trusted_created_at = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      # Deliberately unfiltered/hand-built -- NOT enqueue/2's sanitized
+      # insert_attrs map. A real attacker-shaped payload: every protected
+      # field carries a value the caller should never be able to force.
+      attrs = %{
+        entry_type: "event",
+        tenant_id: trusted_tenant_id,
+        created_at: trusted_created_at,
+        status: :discarded,
+        retry_count: 7,
+        retry_history: [
+          %{
+            attempt_no: 99,
+            attempted_at: "2020-01-01T00:00:00Z",
+            outcome: "failed",
+            error_message: "forged"
+          }
+        ]
+      }
+
+      changeset = Entry.insert_changeset(%Entry{}, attrs)
+
+      # Fail-first assertions (design §9): pre-fix, cast/3 cast all three of
+      # these fields verbatim from attrs, so get_field/3 would have returned
+      # :discarded / 7 / the forged list here. Post-fix, none of the three is
+      # in cast/3's field list at all, so get_field/3 falls back to the
+      # struct's own schema default.
+      assert Ecto.Changeset.get_field(changeset, :status) == :pending
+      assert Ecto.Changeset.get_field(changeset, :retry_count) == 0
+      assert Ecto.Changeset.get_field(changeset, :retry_history) == []
+
+      # tenant_id/created_at are NOT fail-first discriminating on their own
+      # (design §9's own nuance) -- both cast/3 (pre-fix) and put_change/3
+      # (post-fix) read the same attrs map, so a value round-trip passes on
+      # both sides of the fix. Included here only as the "still required and
+      # still supplied correctly" sanity check, not as regression proof.
+      assert Ecto.Changeset.get_field(changeset, :tenant_id) == trusted_tenant_id
+      assert Ecto.Changeset.get_field(changeset, :created_at) == trusted_created_at
+
+      # The changeset is otherwise valid -- the forged fields are silently
+      # overridden, not surfaced as validation errors, exactly like a
+      # `cast/3` field list that simply never named them.
+      assert changeset.valid?
+    end
+  end
+
+  describe "ISS-0381: insert_changeset/2 -- tenant_id/created_at mechanism (cast/3 vs put_change/3 error-shape divergence)" do
+    test "a malformed (non-UUID) tenant_id and a non-parseable created_at surface no changeset-level cast error, deferring failure past changeset validity" do
+      attrs = %{
+        entry_type: "event",
+        tenant_id: "not-a-uuid",
+        created_at: "not-a-timestamp"
+      }
+
+      changeset = Entry.insert_changeset(%Entry{}, attrs)
+
+      # This is the discriminating, mechanism-level assertion design §9
+      # specifies for these two fields -- a value round-trip is NOT
+      # discriminating here (both cast/3 and put_change/3 read the same
+      # attrs), so the proof is on changeset.valid?/changeset.errors
+      # instead:
+      #
+      #   pre-fix:  tenant_id/created_at are in cast/3's field list ->
+      #             Ecto.UUID/:utc_datetime type-casting is attempted on
+      #             these raw strings, fails, and cast/3 adds an "is
+      #             invalid" error for each to changeset.errors ->
+      #             changeset.valid? == false.
+      #   post-fix: tenant_id/created_at are NOT in cast/3's field list ->
+      #             put_change/3 performs no type casting at all, writes the
+      #             raw string straight into changeset.changes -> no cast
+      #             error is added for either field -> changeset.valid? at
+      #             this level is true (any type mismatch is deferred to
+      #             Repo.insert/2, out of scope for a changeset-level test).
+      assert changeset.valid?
+
+      refute Keyword.has_key?(changeset.errors, :tenant_id)
+      refute Keyword.has_key?(changeset.errors, :created_at)
+
+      # put_change/3 wrote the raw, uncast value directly -- confirms the
+      # mechanism (no type-casting attempted), not merely "some value is
+      # present".
+      assert Ecto.Changeset.get_change(changeset, :tenant_id) == "not-a-uuid"
+      assert Ecto.Changeset.get_change(changeset, :created_at) == "not-a-timestamp"
+    end
+  end
+
   describe "AC6: Letflow.Dlq core itself has no route or controller-shaped constructs" do
     # NOTE: an earlier revision of this test scoped a `git show --stat` to
     # REQ-176's own implementation commit (b5a028d) -- that hardcoded SHA

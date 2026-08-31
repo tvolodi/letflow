@@ -97,15 +97,25 @@ defmodule Letflow.Dlq.Entry do
 
   @doc """
   Structural changeset for `Letflow.Dlq.enqueue/2`. `status`, `retry_count`,
-  `retry_history`, `tenant_id`, and `created_at` are deliberately not
-  castable here — `Letflow.Dlq.enqueue/2` sets all five itself, never from
-  caller-supplied `attrs` (design §3.1).
+  and `retry_history` are excluded from `cast/3` and rely on their
+  `Ecto.Schema` struct defaults (`:pending`, `0`, `[]`) — `enqueue/2` never
+  needs to set them via a cast-reachable path because the schema itself
+  supplies the value. `tenant_id` and `created_at` are likewise excluded
+  from `cast/3` and are instead set via two explicit `put_change/3` calls
+  below, reading both keys out of the `attrs` map this function receives —
+  because neither key is in `cast/3`'s field list, a caller-supplied
+  `attrs` map containing keys with those two names still reaches the
+  changeset (via `put_change/3`'s own read of `attrs`); the guarantee this
+  adds is that `status`/`retry_count`/`retry_history` can no longer be
+  influenced by `cast/3` regardless of what `attrs` contains, and that the
+  changeset's structure now matches what this docstring says. See
+  `Letflow.Dlq.enqueue/2` and design §3.1
+  (`lib/letflow/design/req176-dlq-core.md`).
   """
   @spec insert_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def insert_changeset(entry, attrs) do
     entry
     |> cast(attrs, [
-      :tenant_id,
       :entry_type,
       :instance_id,
       :reference_id,
@@ -117,12 +127,10 @@ defmodule Letflow.Dlq.Entry do
       :context_json,
       :retry_limit,
       :first_failed_at,
-      :last_failed_at,
-      :status,
-      :retry_count,
-      :retry_history,
-      :created_at
+      :last_failed_at
     ])
+    |> put_change(:tenant_id, Map.get(attrs, :tenant_id))
+    |> put_change(:created_at, Map.get(attrs, :created_at))
     |> validate_required([:tenant_id, :entry_type, :status, :retry_count, :created_at])
   end
 

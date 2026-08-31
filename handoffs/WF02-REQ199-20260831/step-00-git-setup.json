@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step00-WF02-REQ199-20260831",
+  "run_id": "WF02-REQ199-20260831",
+  "workflow_id": "WF-02",
+  "step": "00-git-setup",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ199-20260831/step-00-git-setup.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "branch_name": "feature/WF02-REQ199-20260831",
+    "requirement_ids": [
+      "REQ-199"
+    ],
+    "queue_task_id": 372,
+    "github_issue_number": 718,
+    "stage": "S6",
+    "requirement_text": "The last of this batch's six subsystems, and the one the first batch deferred for having 'zero grounding anywhere in this repo'. With R-Co reachable it is now fully grounded, and it turns out to be a self-contained, well-specified subsystem.\nWHAT PROBLEM IT SOLVES: when a long-running external effect completes out-of-band, its completion must be re-entered into the engine IN THE ORDER the effects were emitted, per correlation, across a pool of independent consumers, without any consumer blocking another. R-Co stacks three guards (src/ordering/mod.zig L7-24): ORD-01's claim guard (FOR UPDATE SKIP LOCKED, so no two consumers hold the same row), ORD-02's execute guard (a per-correlation transaction advisory lock, so two rows of the SAME correlation are not applied concurrently), and ORD-03's order guard (a per-correlation cursor, so a completion applies only when its sequence number is exactly one past the last applied). Different correlations proceed fully in parallel (ORD-04).\nBEWARE TWO FALSE POSITIVES in Letflow, both verified: lib/letflow/api/pagination.ex's 'cursor' is HTTP list pagination (REQ-067), and lib/letflow/event_store/instance_sequence.ex plus the global_seq column (REQ-023/025/026) are the event store's own sequencing. Neither is this subsystem, and neither is changed here.\nSCHEMA, ported from R-Co migrations/1145_ord01_plat_effect_completion.sql and 1146_ord04_plat_correlation_cursor.sql -- both are PER-TENANT in R-Co (each migration explicitly skips the public pass), which matches decision 0003 Decision B, so both live in each tenant's schema with tenant_id retained:\n* effect_completions: completion_id (uuid pk), correlation_id (string, not null), sequence_no (bigint, not null), status (string, not null, default 'PENDING', CHECK in PENDING | APPLIED | DEAD), payload (jsonb, not null, default empty), received_at, applied_at (nullable), created_at, with UNIQUE (correlation_id, sequence_no) so a retried insert is absorbed rather than duplicated, plus a partial claim index on (correlation_id, sequence_no) WHERE status = 'PENDING' matching the claim query's exact shape.\n* correlation_cursors: correlation_id (string, primary key), applied_seq (bigint, not null, default 0, CHECK >= 0), updated_at, created_at.\nSCOPE:\n1. Both tables and their migrations.\n2. Insert of a completion, idempotent on (correlation_id, sequence_no) -- a duplicate insert is absorbed, never a second apply.\n3. One claim-and-apply cycle: claim the lowest-sequence PENDING row with FOR UPDATE SKIP LOCKED ordered by (correlation_id, sequence_no); take the per-correlation advisory lock with the TRY variant so a losing consumer never blocks; read the cursor; and apply only when sequence_no equals applied_seq + 1. A completion that is not next rolls back SILENTLY -- no error, no retry-count increment, the row stays PENDING for a later cycle. Applying marks the row APPLIED, appends an effect-applied event via REQ-025, and advances the cursor with the CONDITIONAL update (set applied_seq = N where applied_seq = N - 1) -- all in ONE transaction. A zero-row result from that conditional update means another consumer won the race: roll back and re-claim.\n4. A cursor row that does not exist yet is initialised at applied_seq 0 rather than failing.\n5. THE GAP SWEEPER (ORD-03's last acceptance criterion): when a correlation's lowest PENDING sequence is more than one past its applied_seq and that orphaned successor is older than a configured gap timeout (R-Co's default is 300 seconds), every PENDING row of that correlation moves to DEAD as ONE unit, never half, and lands in REQ-176's DLQ naming the correlation and every unapplied sequence number. The strict-greater-than test matters: a row sitting at exactly applied_seq + 1 is merely slow and must NOT be swept.\n6. RUN IT ON REQ-186's SCHEDULER, not a new ticker.\n7. THE ORD-04 LAG SURFACE: per-correlation LAG (max(sequence_no) - applied_seq) and age of oldest PENDING row, emitted through REQ-194's metrics registry. Emit the lag-threshold-exceeded event REQ-025 registers.\nTWO R-Co DEFECTS NOT TO PORT: (a) holding a pooled connection across poll sleep (GH-654/ISS-0649) -- hold connection only for one cycle. (b) the R-Co ordering subsystem has NO production driver -- Letflow must wire it.\nNOT IN THIS REQUIREMENT: no route or controller; no dynamic consumer-count reduction under contention (ORD-04's third criterion); no change to REQ-067's pagination cursor or event store sequencing.",
+    "artifacts_in": [],
+    "artifacts_out": []
+  },
+  "task": {
+    "description": "Next action: ELIXIR-DEV: run GIT_SETUP.md procedure to create and push feature/WF02-REQ199-20260831 from origin/main d82875fe",
+    "acceptance_criteria": [
+      "both tables live inside each tenant's Postgres schema with tenant_id retained (decision 0003 Decision B, matching R-Co's own per-tenant placement), verified by inspecting the migrations",
+      "inserting the same (correlation_id, sequence_no) twice results in ONE row and, after processing, exactly ONE applied effect -- no double apply",
+      "completions for one correlation apply strictly in sequence order: inserting sequence 6 before sequence 5 leaves 6 PENDING with its retry state unchanged, and after 5 is inserted and applied, 6 applies -- asserted by the order of the appended events, not merely by final row status",
+      "a completion whose sequence is not applied_seq + 1 rolls back silently: the row stays PENDING, no error is raised to the caller, and no event is appended",
+      "the cursor advance is conditional: a test simulating two concurrent applies of the same sequence results in exactly one success and one rolled-back re-claim, with applied_seq advancing by exactly one",
+      "a correlation with no cursor row applies its first completion successfully, initialising the cursor rather than failing",
+      "two different correlations, each with a next-in-sequence completion, both apply -- neither is serialised behind the other, asserted by both being APPLIED after concurrent processing",
+      "the gap sweeper moves EVERY PENDING row of an affected correlation to DEAD as one unit and creates exactly one DLQ entry naming the correlation and listing every unapplied sequence number; a correlation whose lowest PENDING row sits at exactly applied_seq + 1 is NOT swept regardless of age -- two explicit tests covering both the sweep and the non-sweep",
+      "the sweeper's gap timeout is configurable and a correlation younger than it is not swept even when its predecessor is absent",
+      "the consumer does not hold a database connection across its poll interval, asserted by a test that runs the cycle against a pool smaller than the consumer count without exhausting it -- the failure R-Co recorded as GH-654/ISS-0649",
+      "the subsystem is actually WIRED: a running cycle applies a completion end to end without a test manually invoking the internal apply function -- correcting R-Co's own unwired state, and it runs on REQ-186's scheduler rather than adding a new periodic child to lib/letflow/application.ex (confirmed by git diff of application.ex)",
+      "the effect-applied event type is registered in the per-tenant event_type_registry, so REQ-025's ES-05 registry check accepts it",
+      "per-correlation lag is computed as max(sequence_no) minus applied_seq and is exposed through REQ-194's metrics registry: a correlation with completions at sequences 1..5 and applied_seq 2 reports a lag of 3, and a fully-applied correlation reports 0 -- two explicit tests (ORD-04 AC1/AC2)",
+      "the age of the oldest PENDING row is reported per correlation, and a correlation with no PENDING rows reports no age rather than a zero that is indistinguishable from a fresh row",
+      "crossing the configured lag threshold emits the lag event with the correlation id, the lag and the oldest-pending age in its payload, asserted on the appended event",
+      "the moduledoc states that ORD-04's dynamic consumer-count reduction under contention is deliberately deferred while its lag MEASUREMENT half is implemented here, that R-Co left the reduction unimplemented too, and that the deferred half depends on REQ-194's metrics",
+      "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  }
+}

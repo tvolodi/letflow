@@ -1,103 +1,18 @@
 {
-  "handoff_id": "WF02-REQ199-20260831",
-  "step": "02d",
-  "agent": "REVIEWER",
-  "timestamp_utc": "2026-08-31T08:00:11Z",
-  "reviewed_commit": "ba4915fa",
-  "branch": "feature/WF02-REQ199-20260831",
+  "handoff_id": "step02d-WF02-REQ199-20260831",
+  "run_id": "WF02-REQ199-20260831",
+  "workflow_id": "WF-02",
+  "step": "02d-reviewer",
+  "from_agent": null,
+  "to_agent": null,
+  "file": "handoffs/WF02-REQ199-20260831/step-02d-reviewer.json",
+  "completed_at": "2026-08-31T08:01:48Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {},
+  "task": {},
   "result": {
-    "status": "PASS",
-    "verdict": "PASS — no blocking issues found. Five non-blocking findings filed below. TEST-DESIGNER may proceed."
-  },
-  "checklist": {
-    "1_otp_idiom": {
-      "status": "PASS",
-      "evidence": "No new GenServer introduced. Consumer/Sweeper/Metrics are plain modules. Scheduler extension follows the established REQ-185 piggybacking pattern (poller.ex private helpers). FOR UPDATE SKIP LOCKED expressed via Ecto DSL lock: fragment — idiomatic. pg_try_advisory_xact_lock used as a non-blocking xact lock — correct OTP-safe advisory pattern (no process-state side-effects)."
-    },
-    "2_no_new_supervisor_children": {
-      "status": "PASS",
-      "evidence": "git show ba4915fa -- lib/letflow/application.ex produced no output — file untouched. Confirmed AC11 satisfied."
-    },
-    "3_supervision_integrity": {
-      "status": "PASS",
-      "evidence": "All three new private helpers (maybe_run_ordering_cycle/1, maybe_run_ordering_sweeper/1, maybe_run_ordering_metrics/1) wrap each per-schema call in try/rescue _ -> :ok. All three receive the already-computed `schemas` list as argument and do not call tenant_schemas/0 again."
-    },
-    "4_ecto_patterns": {
-      "status": "PASS",
-      "evidence": "insert_completion/2 uses on_conflict: :nothing, conflict_target: [:correlation_id, :sequence_no] — correct idempotency upsert. FOR UPDATE SKIP LOCKED expressed via Ecto query lock: fragment. Repo.transaction/2 used correctly throughout. M7 update_all uses embedded update: clause with prefix: opts — matches Ecto 3.x 3-arity Repo.update_all/3 signature; compiled without warnings."
-    },
-    "5_advisory_lock_pattern": {
-      "status": "PASS",
-      "evidence": "Repo.query!(\"SELECT pg_try_advisory_xact_lock($1::bigint)\", [lock_key]) — parameterized via $1, not interpolated. Lock acquired inside the Repo.transaction(fn -> ... end) started by try_apply/2 — xact-scoped, released at transaction end. Correct."
-    },
-    "6_conditional_cursor_advance": {
-      "status": "PASS",
-      "evidence": "Cursor.advance_conditional/3 uses Repo.update_all with WHERE applied_seq == ^expected_current. Returns {count, _}; checks count == 1, returns :race on 0 rows. Called from do_apply M8 inside the open transaction; Repo.rollback(:cursor_race) on :race correctly rolls back M7 APPLIED update."
-    },
-    "7_scope_creep": {
-      "status": "PASS",
-      "evidence": "13 files changed — all within expected set: 6 new ordering modules, 2 migrations, 3 poller.ex + tenant_provisioning.ex + test support additions. No web/, no authorization.ex, no routes, no framework machinery ahead of current stage."
-    },
-    "8_decision_record_consistency": {
-      "status": "PASS",
-      "evidence": "Both migrations (20260831000001, 20260831000002) use if prefix() do wrapping all DDL statements, consistent with Decision B (docs/migration/decisions/0003-ecto-schema-strategy.md schema-per-tenant). Both registered in TenantProvisioning.tenant_scoped_migrations/0. Migration file headers cite the decision record and dlq_entries precedent."
-    },
-    "9_connection_pool_discipline": {
-      "status": "PASS",
-      "evidence": "run_cycle/2 issues two separate short transactions (claim/1 then try_apply/2); no connection held across poll sleep. claim/1 wraps one FOR UPDATE SKIP LOCKED query in a transaction and commits immediately (M1 in try_apply re-locks). Sweeper and Metrics acquire a connection only inside Repo.transaction or Repo.query and release at commit/return. AC10 satisfied."
-    },
-    "10_sweeper_all_or_nothing": {
-      "status": "PASS",
-      "evidence": "sweep_correlation/2 wraps both the UPDATE...SET status='DEAD' (via Repo.query!) and Dlq.enqueue/2 inside a single Repo.transaction(fn -> ... end). Dlq.enqueue failure calls Repo.rollback(reason), rolling back the DEAD status updates. All-or-nothing satisfied (AC8/AC9)."
-    },
-    "11_moduledoc_ord04_deferral": {
-      "status": "PASS",
-      "evidence": "lib/letflow/ordering.ex @moduledoc contains an explicit 'ORD-04 deferral notice' section stating the reduction algorithm is deliberately deferred, references REQ-199 AC16 as the scope boundary, and notes R-Co's own unwired state."
-    },
-    "12_no_fabricated_citations": {
-      "status": "PASS",
-      "evidence": "lib/letflow/design/req199-ordering.md exists on the branch (commit 3aeceac9, 778 lines). The claim that correlation_cursors uses a string PK 'matching R-Co' is a migration design note, not a load-bearing invariant — not independently verifiable here but flagged as an unverified design provenance note rather than a blocking citation. All other cross-references (decision 0003, dlq_entries precedent) verified against tracked files."
-    }
-  },
-  "non_blocking_findings": [
-    {
-      "id": "NB-1",
-      "location": "lib/letflow/ordering/cursor.ex:upsert_init/2",
-      "finding": "Dead public function. do_apply in consumer.ex inlines the same Repo.insert logic directly (M3) rather than calling Cursor.upsert_init/2. The function is documented as 'called inside the apply transaction' but nothing in the codebase calls it. Creates a duplicated logic path and a confusing public API surface. Recommend removing or converting to private and wiring it into do_apply.",
-      "tag": "dead-code",
-      "blocks": false
-    },
-    {
-      "id": "NB-2",
-      "location": "lib/letflow/ordering.ex:insert_completion/2",
-      "finding": "Unconditional re-read after Repo.insert. When on_conflict: :nothing fires without a conflict (happy path), the code still performs a Repo.get_by to fetch the inserted row — one extra round-trip per successful insert. Correctness is fine; the re-read is necessary when on_conflict fires (Ecto returns a partial struct on :nothing conflict). A minor optimisation opportunity: return the inserted struct directly on {:ok, struct} when there is no conflict, and only re-read on conflict. Non-critical at current volume.",
-      "tag": "performance",
-      "blocks": false
-    },
-    {
-      "id": "NB-3",
-      "location": "lib/letflow/ordering.ex:run_cycle/2, emit_lag_metrics/2",
-      "finding": "The schema_name parameter is named _schema_name (deliberately ignored) in both run_cycle/2 and emit_lag_metrics/2. Only sweep_gaps/2 actually passes it through to Sweeper.run/2. This produces an inconsistent public API: three functions share the same signature shape but only one uses the first argument. Not a correctness issue since the callers always pass opts[:prefix] == schema_name, but the dead parameter in two of three functions is misleading.",
-      "tag": "api-inconsistency",
-      "blocks": false
-    },
-    {
-      "id": "NB-4",
-      "location": "lib/letflow/ordering/metrics.ex:emit_threshold_exceeded_event/4",
-      "finding": "The idempotency key uses System.os_time(:millisecond) as a timestamp suffix: \"ordering_lag_exceeded:#{correlation_id}:#{System.os_time(:millisecond)}\". This means a correlation that stays above the threshold will emit a new event on EVERY tick (keys are unique per millisecond). If AC15 intends 'fire once per threshold-crossing epoch' (not per tick), this misfires. Verify the design doc's intended emission frequency. If per-tick is correct, the key shape is fine but should be documented explicitly.",
-      "tag": "functional-concern",
-      "blocks": false
-    },
-    {
-      "id": "NB-5",
-      "location": "lib/letflow/ordering/sweeper.ex, metrics.ex — Repo.query calls",
-      "finding": "prefix: prefix is passed as an option to Repo.query/3 for raw SQL calls in sweeper and metrics. For raw SQL, Ecto/Postgrex ignores the :prefix option — the schema is already embedded in the SQL string via \"#{schema_name}\" interpolation. The option is harmless but misleading; a future reader might believe removing the SQL interpolation and relying on :prefix would be equivalent (it would not). String interpolation of schema_name is the established codebase pattern (see Sweeper, Metrics precedents from prior requirements) — flagged as tracked technical debt, not an actionable change here.",
-      "tag": "misleading-api",
-      "blocks": false
-    }
-  ],
-  "type_safety_observation": {
-    "filed_as_issue": false,
-    "note": "No new class of invalid state found that a type/struct change could make unrepresentable. Ecto.Enum already makes the status transition set explicit (pending/applied/dead). The advisory lock hash collision is accepted at S6 stage (documented in moduledoc). Nothing rises to the type-safety issue threshold."
+    "status": "COMPLETED",
+    "summary": "Verdict: PASS. Non-blocking findings: NB-1: ordering/cursor.ex Cursor.upsert_init/2 is dead code -- do_apply inlines same logic; NB-2: ordering.ex insert_completion/2 always re-reads after insert including happy path (extra round-trip); NB-3: ordering.ex run_cycle/2 and emit_lag_metrics/2 take _schema_name (unused) -- inconsistent API; NB-4: ordering/metrics.ex emit_threshold_exceeded_event uses System.os_time(:millisecond) as idempotency key -- emits once-per-tick above threshold, not once-per-crossing; verify AC15 intent; NB-5: sweeper.ex/metrics.ex prefix: prefix on raw Repo.query is no-op for raw SQL -- misleading but harmless. NB-4 is highest-priority non-blocker: TEST-DESIGNER must verify AC15 test assertion covers the intent (event emitted when crossing threshold) vs edge-triggered-only semantics. AC15 text says 'emits the lag event ... asserted on the appended event' -- once-per-tick while above threshold is sufficient if the test only asserts event presence on first crossing."
   }
 }

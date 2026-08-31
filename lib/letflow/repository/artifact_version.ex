@@ -46,17 +46,7 @@ defmodule Letflow.Repository.ArtifactVersion do
     field(:tenant_id, :binary_id)
     field(:artifact_id, :binary_id)
 
-    field(:artifact_kind, Ecto.Enum,
-      values: [
-        :definition,
-        :form,
-        :schema,
-        :service_catalog,
-        :script,
-        :module,
-        :scenario
-      ]
-    )
+    field(:artifact_kind, Ecto.Enum, values: Letflow.Repository.ArtifactKind.values())
 
     field(:artifact_name, :string)
     field(:version_number, :integer)

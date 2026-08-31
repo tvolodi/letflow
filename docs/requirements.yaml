@@ -11304,7 +11304,7 @@ requirements:
   - id: REQ-203
     title: Per-tenant artifact activation -- atomic multi-artifact groups and activation history (REPO-08/09/10)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 376  # letflow-queue task id
     description: >
@@ -11510,3 +11510,488 @@ requirements:
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
       - "no unrelated change to REQ-181's or REQ-183's other scope (HMAC signing, retry/backoff, auto-pause, DLQ landing, CRUD routes) or to REQ-184, confirmed by git diff --stat scoped to this requirement's commits"
     depends_on: [REQ-181, REQ-183]
+
+  - id: REQ-205
+    title: S7 scenario-harness foundation -- Elixir scenario runner, business-tenant fixture seeding, and the API-vs-GUI execution split
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S7
+    impl_order: 382  # letflow-queue task id, GH#754
+    description: >
+      FIRST requirement of S7, the correctness gate over S4/S5/S6's combined
+      output (docs/migration/stage-7-simulation-uat-parity.md). Builds the
+      harness REQ-206/207/208 run scenarios through; ports no scenario logic
+      itself and adds no engine functionality -- this is a test-execution
+      tool, same "correctness gate, not new functionality" boundary the
+      stage doc states.
+      SOURCE MATERIAL (all confirmed present in R-Co at
+      c:\Users\tvolo\dev\ai-dala\R-Co\ this session, not assumed):
+      tests/simulation/README.md (harness design rationale),
+      tests/simulation/companies/{swiftroute,vortex,meridian}/{company.yaml,
+      org_structure.yaml,process_*.yaml} (12 files -- static fixtures: tenant
+      identity, org structure/actor ids, process definitions), and
+      tests/simulation/seed.py (356 lines, Python -- validates the YAML then
+      POSTs it to a running platform's REST API: company.yaml ->
+      POST /api/v1/onboarding, org_structure.yaml people ->
+      POST /api/v1/users + POST /api/v1/admin/groups(+members), process_*.yaml
+      -> POST /api/v1/definitions + activate).
+      DECISION 1 -- FIXTURES ARE PORTED AS DATA, SEEDING IS REWRITTEN IN
+      ELIXIR, NOT INVOKED AS PYTHON. seed.py's own logic is a thin,
+      mechanical YAML-to-REST-call mapper with no business logic worth
+      preserving as Python -- Letflow already has every target endpoint
+      (Letflow.Routers.Onboarding, Letflow.Routers.Tenants -- REQ-076;
+      user/group admin endpoints -- REQ-0xx identity work;
+      Letflow.Routers.Definitions -- S2) reachable in-process from ExUnit
+      via Letflow.Engine.create/2 and the Plug test conventions this repo's
+      test suite already uses, with no need to shell out to a Python process
+      or a running HTTP server. Port the 12 company/org/process YAML files
+      into test/fixtures/simulation/{swiftroute,vortex,meridian}/ verbatim
+      in content (field names/values unchanged so R-Co's actor ids like
+      actor-swiftroute-lena stay stable references), and write
+      Letflow.Simulation.Seed (test-support module, test/support/) with one
+      function per seed.py responsibility: seed_company/1 (tenant +
+      onboarding), seed_users/2, seed_groups/2, seed_process/1 -- each
+      calling Letflow's own context modules directly (Letflow.Identity,
+      Letflow.Definitions, Letflow.Engine), not HTTP, mirroring how
+      REQ-107's manual-walkthrough precedent and this repo's existing
+      integration tests already provision test tenants. Idempotency
+      (seed.py's "409 means already exists, left unchanged" contract) is
+      preserved as "seeding a tenant/user/group/definition that already
+      exists from a prior seed call in the same test run is a no-op, not an
+      error" -- verified by a test that seeds twice.
+      DECISION 2 -- SCENARIO EXECUTION SPLITS INTO TWO LANES, NOT ONE.
+      Every scenario YAML declares each step's via: as either api or gui.
+      S8 (frontend integration against Letflow's own API) has not started
+      (depends_on: [S7] in docs/migration/README.md's stage table) and only
+      one of the two Playwright pipeline specs the 11-scenario corpus
+      references currently exists in this repo's web/
+      (web/tests/e2e/pipelines/onboarding-wizard.pipeline.e2e.spec.ts;
+      shipment-attach-delivery-note.pipeline.e2e.spec.ts and
+      entity-list-query.pipeline.e2e.spec.ts do not exist -- verified by
+      find over web/tests/e2e/pipelines/ this session). So: `via: api` steps
+      run for real, now, through this harness, against a real running
+      Letflow instance's HTTP API (Letflow.Router, Bandit) -- this is the
+      genuine correctness-gate work S7 exists for. `via: gui` steps CANNOT
+      run for real yet, because there is no integrated web/-against-Letflow
+      environment (S8's job) and, for two of the three GUI-driven scenarios,
+      no Playwright spec exists at all. This requirement's runner must
+      therefore record every gui step's outcome as DEFERRED_TO_S8 (a real,
+      auditable status, not silently skipped and not force-run as if it
+      were an api step) rather than fabricating a pass. REQ-206/207/208 each
+      state, per scenario, exactly which steps ran for real and which were
+      recorded DEFERRED_TO_S8 -- this is a stated finding, not a gap to
+      paper over (S8's own stage doc, "Reconcile the documented drift",
+      already expects this class of item).
+      DECISION 3 -- RUNNER SHAPE. Letflow.Simulation.Runner (test-support),
+      taking a parsed scenario struct (id, company_id, process_id, actors,
+      preconditions, steps, expected_outcomes) and executing: preconditions
+      (check: process_definition_active / no_pending_instances / custom ->
+      each a small predicate against real DB/API state, not a stub),
+      api-via steps in order (each an HTTP call through the same client
+      helper this repo's existing router tests use, substituting
+      {{produces.X}} template references from a prior step's captured
+      output), gui-via steps recorded DEFERRED_TO_S8, and finally each
+      expected_outcomes entry's verification.method (task_assigned /
+      instance_state / audit_event) evaluated against real queried state --
+      never against "no error was raised," matching UAT-RUNNER's own
+      forbidden-pattern rule (.claude/agents/uat-runner.md). This is NOT
+      simulation_test.zig/scenario_runner.zig's mechanism -- that R-Co
+      subsystem (src/api/routes/simulation_test.zig,
+      src/simulation/scenario_runner.zig, POST /simulation/validate and
+      POST /simulation/run, permission-gated simulation:validate/
+      simulation:run) is a design-time dry-run tool for validating a
+      candidate process DEFINITION against a schema+event-trace assertion
+      set, unrelated in purpose and shape to this stage's business-scenario
+      corpus (confirmed by reading both R-Co files this session -- they
+      share the English word "scenario" and nothing else: different input
+      shape, different caller, different question answered). Letflow.Router
+      already reserves a route slot for it
+      ("Letflow.Routers.SimulationTest | simulation_test.zig | S7 (simulation
+      harness)") -- that slot is NOT this requirement's scope and building
+      it here would be new functionality the stage doc forbids; note this
+      explicitly in the runner moduledoc so a future reader does not
+      conflate the two and does not silently fill that router slot as a
+      side effect of this work.
+      SCENARIO FORMAT: parse the YAML as-is (Letflow already depends on
+      yaml parsing indirectly nowhere -- add a YAML-parsing library
+      dependency here if none exists in mix.exs, flagging it for REVIEWER
+      sign-off same as REQ-148/REQ-165's precedent for new top-level
+      deps) rather than hand-translating each scenario into Elixir source --
+      the 11 YAML files themselves are ported verbatim into
+      test/fixtures/simulation/scenarios/ in the next three requirements,
+      not rewritten, so a future diff against R-Co's originals stays
+      possible.
+      NOT IN THIS REQUIREMENT: no scenario content (REQ-206/207/208); no
+      differential/regression corpus (REQ-209); no stage-level report
+      (REQ-210); no advance-timer endpoint (flagged as a gap in REQ-208,
+      which is the first requirement that actually needs it); no build of
+      Letflow.Routers.SimulationTest (see Decision 3 above).
+    acceptance_criteria:
+      - "test/fixtures/simulation/{swiftroute,vortex,meridian}/ contains all 12 company/org/process YAML files ported from R-Co's tests/simulation/companies/, with actor_id values unchanged from the R-Co originals -- verified by a diff-style comparison test"
+      - "Letflow.Simulation.Seed provisions all three companies' tenant, users, groups and process definitions by calling Letflow's own context modules directly (no HTTP client, no Python subprocess), demonstrated by a test that seeds swiftroute and then queries Letflow.Identity/Letflow.Definitions directly for the resulting records"
+      - "seeding the same company twice in one test run is a no-op the second time (no duplicate tenant/user/group/definition, no raised error) -- one explicit test per entity kind (tenant, user, group, definition), matching seed.py's documented idempotent-409 contract"
+      - "Letflow.Simulation.Runner executes a minimal one-step api-via scenario end to end against a real running instance (real HTTP through Letflow.Router, not a mocked handler) and evaluates at least one instance_state-method expected outcome by querying actual instance state afterward"
+      - "a scenario step declared via: gui is recorded with outcome DEFERRED_TO_S8 by the runner, never silently skipped (absent from the report) and never executed as if it were an api step"
+      - "the runner moduledoc explicitly distinguishes this harness from Letflow.Routers.SimulationTest/simulation_test.zig's design-time definition-validation tool, states that this requirement does not build that router, and cites both R-Co source files by path"
+      - "if a YAML-parsing library is added to mix.exs, REVIEWER sign-off is recorded for it in this requirement's PR"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-076, REQ-030, REQ-080, REQ-085, REQ-199]
+
+  - id: REQ-206
+    title: Run SwiftRoute's 4 simulation scenarios against Letflow (tenant onboarding, high-value shipment, timeout escalation, delivery-note attachment) and report per-scenario findings
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S7
+    impl_order: 383  # letflow-queue task id, GH#755
+    description: >
+      Second requirement of S7. Ports and runs, via REQ-205's harness, the
+      four SwiftRoute scenario YAMLs confirmed present in R-Co at
+      tests/simulation/scenarios/: swiftroute-tenant-onboarding-happy.yaml
+      (5 steps, 4 via api / 1 via gui in its actual current form -- steps
+      1-3 use via: gui explicitly, step 4-5 also gui; this is a GUI-first
+      scenario per its own pipeline_test field pointing at
+      web/tests/e2e/pipelines/onboarding-wizard.pipeline.e2e.spec.ts, which
+      DOES exist in this repo's web/ -- verified this session -- so this is
+      the one scenario of the four where a real Playwright run against a
+      live web/-plus-Letflow pair could in principle execute today; still
+      record it per REQ-205's DEFERRED_TO_S8 rule because S8's integration
+      work (pointing web/ at Letflow's API) has not started, so no such live
+      pair exists yet even though the spec file itself is present -- state
+      this distinction explicitly in the report rather than conflating
+      "spec exists" with "integration exists"),
+      swiftroute-shipment-high-value-happy.yaml (3 steps, all via: api --
+      declared value EUR 750 exceeding the EUR 500 CEO co-sign threshold,
+      exercises REQ-050's exclusive-gateway CEL/expr condition dispatch),
+      swiftroute-shipment-ops-timeout-escalation.yaml (3 steps; step 2 is
+      via: api but requires POST /api/v1/instances/:id/advance-timer, which
+      does not exist in Letflow.Router today -- verified by grep of
+      lib/letflow/router.ex and every file under lib/letflow/routers/,
+      zero matches -- and the scenario's own note field already anticipates
+      this: "If not available, this scenario is marked SKIP with severity
+      MINOR." Follow that exact disposition: run steps 1 and 3 for real,
+      mark step 2 SKIP/MINOR, and file the missing endpoint as a finding
+      per core-directives.md's "No Issue Left Local-Only" -- report the
+      finding to ORCH rather than building the endpoint here, since a new
+      timer-advance route is new functionality outside a correctness-gate
+      requirement's scope), and
+      swiftroute-shipment-attach-delivery-note.yaml (5 steps, all via: gui,
+      pipeline_test: web/tests/e2e/pipelines/shipment-attach-delivery-note.
+      pipeline.e2e.spec.ts -- confirmed this session that file does NOT
+      exist in web/tests/e2e/pipelines/ -- so this scenario has no possible
+      real execution today on either lane: no attachment/document-upload
+      API exists in Letflow (verified: no attachment-related route in any
+      lib/letflow/routers/*.ex, and R-Co's own src/ has no attachment or
+      document-upload subsystem either -- the two src/ hits for "attach"/
+      "storage" are src/db/partition_attach.zig and
+      src/design/iss501_storage_mode_routing.md, both unrelated to shipment
+      document attachments -- so this is not a Letflow gap against an
+      existing R-Co feature, it is a scenario describing a feature that
+      does not exist as a real backend capability in EITHER codebase yet).
+      Record this scenario's disposition as UNBUILT_FEATURE (a fourth
+      runner status alongside PASS/FAIL/DEFERRED_TO_S8/SKIP), file it as a
+      finding per ISSUE_QUEUE.md rather than silently building a document-
+      attachment subsystem inside this requirement, and do not attempt to
+      execute any of its 5 steps.
+      For every scenario actually run (api-lane steps of the first three),
+      evaluate each expected_outcomes entry against real queried state
+      (task_assigned against Letflow.Tasks.list_tasks/2, instance_state
+      against Letflow.Engine's instance record, audit_event against
+      REQ-195/196's audit_entries store) and record PASS/FAIL with the
+      concrete evidence queried, per REQ-205's runner contract.
+      NOT IN THIS REQUIREMENT: no advance-timer endpoint implementation; no
+      document-attachment subsystem implementation; no web/ Playwright spec
+      authoring (FRONTEND-DEV's domain, and gated on S8 having actually
+      started); no Vortex or Meridian scenarios (REQ-207/REQ-208).
+    acceptance_criteria:
+      - "swiftroute-tenant-onboarding-happy's api-equivalent provisioning (tenant + admin user + realm) is exercised through REQ-205's harness and its EO-001..EO-003-equivalent state (onboarding completed, slug/hostname registered, admin login-ready) is verified against real Letflow state; its gui steps are recorded DEFERRED_TO_S8 with the spec-exists-but-not-integrated distinction stated explicitly in the report"
+      - "swiftroute-shipment-high-value-happy runs end to end (dispatcher submit -> ops approve -> CEO co-sign) against a real running instance and all 4 expected_outcomes are evaluated against real queried state (task assignment, instance status, completion timing), each recorded PASS or FAIL with the specific evidence"
+      - "swiftroute-shipment-ops-timeout-escalation's step 1 and step 3 run for real; step 2 (timer advance) is recorded SKIP with severity MINOR exactly matching the scenario's own documented fallback; the missing POST /api/v1/instances/:id/advance-timer capability is reported to ORCH as a finding (not filed directly, per core-directives.md's No Issue Left Local-Only) with its file/line evidence (grep result showing zero matches)"
+      - "swiftroute-shipment-attach-delivery-note is recorded UNBUILT_FEATURE with zero steps executed, and the finding (no document/attachment API exists in Letflow or in R-Co's own src/) is reported to ORCH with the specific R-Co paths checked and found not to contain the feature"
+      - "the requirement's own report states, per scenario, a closed disposition set (PASS/FAIL/SKIP/DEFERRED_TO_S8/UNBUILT_FEATURE) for every one of the four scenarios' steps -- no step is left unaddressed or silently omitted"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-205]
+
+  - id: REQ-207
+    title: Run Vortex's 4 simulation scenarios against Letflow (production-order budget gate, supplier-deviation critical/false-positive compensation, entity list filter/page) and report per-scenario findings
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S7
+    impl_order: 384  # letflow-queue task id, GH#756
+    description: >
+      Third requirement of S7. Ports and runs, via REQ-205's harness, the
+      four Vortex scenario YAMLs confirmed present in R-Co:
+      vortex-production-order-above-threshold.yaml (3 steps, all via: api --
+      order value EUR 15,000 above the EUR 10,000 budget threshold, exercises
+      the same exclusive-gateway condition dispatch as REQ-206's high-value
+      shipment scenario but on a different process definition, plus a
+      service-task-equivalent line-assignment step),
+      vortex-supplier-quality-deviation-critical.yaml (3 steps, all via: api
+      -- exercises sub-process spawn on CRITICAL classification, EO-001's
+      quarantine-before-classification audit-event ORDERING assertion is the
+      scenario's actual point, not just its final state),
+      vortex-supplier-quality-deviation-false-positive.yaml (2 steps, all
+      via: api -- exercises the COMPENSATION path: quarantine fires
+      unconditionally, then release-quarantine fires on false_positive:
+      true, ending on end-false-positive rather than end-closed -- a
+      distinct terminal state EO-003 specifically checks is not conflated
+      with the critical path's end-closed), and
+      vortex-entity-list-filter-and-page.yaml (6 steps, all via: gui,
+      pipeline_test: web/tests/e2e/pipelines/entity-list-query.pipeline.
+      e2e.spec.ts -- confirmed this session that file does NOT exist in
+      web/tests/e2e/pipelines/. Unlike REQ-206's delivery-note-attachment
+      scenario, this one's underlying CAPABILITY is not obviously absent --
+      it describes filtering/sorting/paging a list with field-level
+      authorization (cost figures hidden from an unauthorized role) and a
+      distinct-from-empty-vs-forbidden information-disclosure check (EO-004)
+      on an "entity" list, which is S5/S6 entity-subsystem territory
+      (Letflow.Router's own deferred-routes table already names
+      Letflow.Routers.Entities / Letflow.Routers.EntityQuery against
+      entities.zig / entity_query.zig as S5/S6, not yet mounted -- verified
+      by reading lib/letflow/router.ex this session). Check, at
+      implementation time, whether REQ-2xx's entity/entity-query
+      subsystem (grep docs/requirements.yaml for the actual REQ ids once
+      S5/S6's entity work is identified) has landed; if it has, run this
+      scenario's api-equivalent assertions (filter/sort/page against a real
+      entity-list endpoint, field-level authorization) for real and record
+      only the gui steps DEFERRED_TO_S8 same as REQ-206; if the entity
+      subsystem has not landed as of this requirement's execution, record
+      the whole scenario BLOCKED_ON_DEPENDENCY naming the specific missing
+      subsystem, not UNBUILT_FEATURE -- these are different dispositions:
+      UNBUILT_FEATURE (REQ-206's delivery-note case) means neither codebase
+      has the capability at all; BLOCKED_ON_DEPENDENCY means R-Co has it and
+      Letflow's port is simply not yet at this point in its own stage
+      sequence.
+      For every scenario actually run, evaluate each expected_outcomes
+      entry against real queried state, matching REQ-206's evidence
+      discipline exactly (task_assigned / instance_state / audit_event,
+      including EO-001's specific ordering assertion on
+      vortex-supplier-quality-deviation-critical -- audit event timestamp
+      ordering, not merely "both events occurred").
+      NOT IN THIS REQUIREMENT: no entity-list subsystem implementation
+      (that is S5/S6 scope, wherever it lands); no SwiftRoute or Meridian
+      scenarios (REQ-206/REQ-208).
+    acceptance_criteria:
+      - "vortex-production-order-above-threshold runs end to end and all 4 expected outcomes are verified against real queried state, including that the process routed to controller approval rather than skipping straight to line assignment"
+      - "vortex-supplier-quality-deviation-critical runs end to end and EO-001's ordering claim (quarantine-batch audit event precedes severity-classification task creation) is verified by comparing actual event/task timestamps from real queried state, not asserted from final status alone"
+      - "vortex-supplier-quality-deviation-false-positive runs end to end and its instance reaches end-false-positive specifically (not end-closed), verified by querying the actual end node reached"
+      - "vortex-entity-list-filter-and-page's disposition is determined by checking whether Letflow's own entity/entity-query subsystem has landed as of this requirement's execution (cite the specific REQ id(s) and their status): if landed, its api-equivalent filter/sort/page and field-authorization assertions run for real against real queried state and its gui steps are recorded DEFERRED_TO_S8; if not landed, the whole scenario is recorded BLOCKED_ON_DEPENDENCY naming the missing subsystem, distinct from UNBUILT_FEATURE"
+      - "the requirement's report states a closed disposition for every one of the four scenarios -- no step or scenario left unaddressed"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-205]
+
+  - id: REQ-208
+    title: Run Meridian's 3 simulation scenarios against Letflow (large-loan committee quorum, small-loan standard authority, BaFin 21-day SLA regulatory escalation) and report per-scenario findings
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S7
+    impl_order: 385  # letflow-queue task id, GH#757
+    description: >
+      Fourth requirement of S7. Ports and runs, via REQ-205's harness, the
+      three Meridian scenario YAMLs confirmed present in R-Co:
+      meridian-loan-origination-above-threshold.yaml (6 steps, all via: api
+      -- EUR 750,000 loan, three PARALLEL assessment tracks (credit memo,
+      risk, KYC/AML) fork before the eligibility gate, then amount-driven
+      routing to a multi-voter credit-committee task requiring quorum 2-of-3;
+      this exercises the parallel-fork-then-converge shape and the
+      multi-voter quorum primitive together -- if either was not fully
+      exercised by S3's own instance-engine test suite in genuine
+      concurrent-completion form, note that explicitly as this scenario's
+      real contribution rather than assuming S3's unit tests already cover
+      it),
+      meridian-loan-origination-below-threshold.yaml (6 steps, all via: api
+      -- EUR 50,000 loan, same three parallel tracks but amount-driven
+      routing to the standard L1/L2 chain instead of committee -- EO-002
+      specifically asserts the committee-vote task type is NOT assigned,
+      a negative assertion the runner must support, not just positive
+      task_assigned checks), and
+      meridian-regulatory-compliance-review-bafin.yaml (3 steps; step 3 is
+      via: api and explicitly requires the SAME
+      POST /api/v1/instances/:id/advance-timer capability REQ-206 already
+      found missing from Letflow.Router -- this scenario's own note field
+      states it directly: "UAT-RUNNER advances the timer boundary on the
+      risk-evaluation node by calling POST /api/v1/instances/{instance_id}/
+      advance-timer rather than waiting 21 days of real time." Unlike
+      REQ-206's shipment-timeout scenario, THIS scenario's own YAML carries
+      no documented SKIP/MINOR fallback for the missing endpoint -- its
+      whole point (BaFin regulatory-notice filing on SLA breach) is
+      unreachable without it. Record this scenario's step 3 as BLOCKED
+      (not SKIP -- SKIP is reserved for the case a scenario itself
+      documents as acceptable to skip; this one does not), evaluate steps 1
+      and 2 for real, and reference REQ-206's already-filed advance-timer
+      finding rather than filing a duplicate -- state in this requirement's
+      report that the same gap blocks two independent scenarios across two
+      different tenants, which is itself evidence the gap is a real
+      cross-cutting one rather than a single scenario's edge case.
+      This is the one scenario batch that most directly needs REQ-199's
+      correlated-effect-ordering subsystem (ORD-01..04): the committee vote
+      quorum mechanism and the three-parallel-track fork/join both depend on
+      multiple independent completions being applied without a lost-update
+      race, which is exactly the property REQ-199 exists to guarantee for
+      out-of-band effect completions. As of this drafting REQ-199 is
+      status: in_progress (docs/requirements.yaml, verified this session) --
+      state plainly in this requirement's own status/report whether REQ-199
+      landed before this requirement executed, since a genuine race in the
+      quorum/parallel-join path would itself be exactly the class of
+      correctness-gate finding S7 exists to surface, not something to
+      quietly work around.
+      NOT IN THIS REQUIREMENT: no advance-timer endpoint implementation
+      (REQ-206 already files this finding; this requirement references it);
+      no SwiftRoute or Vortex scenarios (REQ-206/REQ-207).
+    acceptance_criteria:
+      - "meridian-loan-origination-above-threshold runs end to end: all three parallel assessment tracks are confirmed created from real queried task state, the committee-vote route is confirmed taken (not the L1/L2 chain) once the eligibility gate clears, quorum 2-of-3 is confirmed reached from the actual committee_outcome variable, and disbursement completes on end-disbursed"
+      - "meridian-loan-origination-below-threshold runs end to end and EO-002's negative assertion (no committee-vote task exists for any actor) is verified by querying real task state and confirming absence, not merely by the L1/L2 tasks being present"
+      - "meridian-regulatory-compliance-review-bafin's steps 1 and 2 run for real against real queried state; step 3 is recorded BLOCKED (not SKIP) citing REQ-206's already-filed advance-timer finding rather than filing a duplicate, and the report states explicitly that this same missing capability now blocks scenarios in two different tenant batches"
+      - "the requirement's report states explicitly whether REQ-199 (correlated effect ordering) was status: done at the time this requirement executed, and if it was still in_progress or blocked, states that as a material caveat on the parallel-track and quorum assertions above rather than silently proceeding as if the dependency were closed"
+      - "the requirement's report states a closed disposition for every one of the three scenarios -- no step or scenario left unaddressed"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-205, REQ-199]
+
+  - id: REQ-209
+    title: Port R-Co's condition-evaluation corpus (tests/differential/corpus/conditions_v1.json, 15 entries) as an ExUnit regression suite for Letflow.Engine.Expr
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S7
+    impl_order: 386  # letflow-queue task id, GH#758
+    description: >
+      Fifth requirement of S7. Ports what's portable from
+      tests/differential/ (tests/differential/corpus/conditions_v1.json,
+      confirmed 15 entries this session by counting condition_id fields;
+      tests/differential/differential_test.zig, 476+ lines).
+      WHY THIS IS A REGRESSION PORT, NOT A DIFFERENTIAL PORT (stated
+      explicitly because the stage doc's own scope line names
+      "tests/differential/" without qualifying this distinction, and a
+      future reader could otherwise assume a second Elixir condition
+      evaluator needs building to diff against). R-Co's differential_test.zig
+      evaluates each corpus condition_text with BOTH vendor/cel (a vendored
+      CEL library) and src/expr (R-Co's own hand-written replacement),
+      asserting they agree -- this was R-Co's own EXP-102 cutover gate,
+      retiring CEL entirely once green (confirmed by reading the file's own
+      header comment and lib/letflow/engine/expr.ex's moduledoc this
+      session: "R-Co's EXP-102 cut over *from* a vendored CEL... *to*
+      src/expr, retiring CEL entirely"). Letflow never had two
+      implementations -- lib/letflow/engine/expr.ex (REQ-050, extended by
+      REQ-197/REQ-198) is a direct Elixir port of R-Co's POST-cutover
+      src/expr grammar only; Letflow has no vendored-CEL equivalent and is
+      not building one. So this requirement has no second implementation to
+      diff Letflow's expr.ex against -- the corpus's real remaining value
+      for Letflow is as a REGRESSION/GOLDEN-VALUE suite: each entry's
+      condition_text (CEL surface syntax, e.g.
+      "variables.order_total > 1000") through expr.ex's existing
+      translate_cel_to_expr/1 (also confirmed present, expr.ex ~L194) and
+      then its evaluator, asserting the result equals the corpus's
+      recorded expected_result under the corpus's own context object bound
+      as variables.
+      SCOPE: port all 15 corpus entries into
+      test/fixtures/simulation/differential_corpus.json verbatim (condition_id,
+      condition_text, context, expected_result preserved byte-for-byte;
+      source_definition_id/source_definition_version/source_gateway_node_id
+      are R-Co-internal cross-references with no Letflow equivalent and may
+      be carried as inert metadata, not resolved). Write one ExUnit test
+      (property-style, iterating the corpus, not 15 hand-written individual
+      tests) asserting Letflow.Engine.Expr's condition-evaluation path
+      (translate_cel_to_expr/1 then evaluate, the same two-stage path
+      transition.ex's dispatch_exclusive_gateway/4 uses) returns each
+      entry's expected_result given its context bound as the variables
+      namespace. Any entry whose condition_text uses a CEL feature
+      expr.ex's @unsupported_call_markers deliberately rejects (per
+      expr.ex's own AC11 section -- macros, type-conversion functions,
+      collection functions, `in`, ternary) is a genuinely expected
+      rejection, not a corpus failure -- inspect all 15 entries' condition_text
+      strings against expr.ex's documented supported grammar (variable refs,
+      6 comparators, and/or/not, literals, binary arithmetic, unary
+      negation, the 8 REQ-198 builtins) at drafting-adjacent implementation
+      time and record, for any entry outside that grammar, an explicit
+      EXPECTED_UNSUPPORTED disposition with the specific unsupported
+      construct named -- never silently drop the entry from the suite and
+      never force it to "pass" by loosening the assertion.
+      NOT IN THIS REQUIREMENT: no second (CEL) implementation; no change to
+      expr.ex's grammar or supported-builtin set (that is REQ-197/REQ-198's
+      already-closed scope, or a future requirement if a corpus entry
+      reveals a genuine gap -- report such a finding to ORCH rather than
+      silently extending expr.ex here); no business-scenario execution
+      (REQ-206/207/208).
+    acceptance_criteria:
+      - "test/fixtures/simulation/differential_corpus.json contains all 15 entries from R-Co's tests/differential/corpus/conditions_v1.json with condition_id, condition_text, context and expected_result preserved byte-for-byte, verified by a count/diff-style check against the count established this session (15)"
+      - "a single property-style ExUnit test iterates every corpus entry and asserts Letflow.Engine.Expr's translate_cel_to_expr/1 + evaluate path returns exactly expected_result given the entry's context bound as variables -- one test loop, not 15 duplicated test bodies"
+      - "every corpus entry is accounted for in the suite's own run output as either evaluated-and-matched or EXPECTED_UNSUPPORTED with the specific rejected construct named -- the sum of both categories equals 15, and zero entries are silently absent from the suite"
+      - "the test module's moduledoc states explicitly that this is a regression/golden-value port, not a CEL-vs-expr differential, and cites both R-Co source files (tests/differential/differential_test.zig, tests/differential/corpus/conditions_v1.json) and expr.ex's own EXP-102/AC11 moduledoc section as the reason no second implementation exists to diff against"
+      - "if any corpus entry's evaluated result diverges from its expected_result on a construct expr.ex's own moduledoc claims to support (i.e. a genuine regression, not an EXPECTED_UNSUPPORTED case), it is reported to ORCH as a finding per core-directives.md's No Issue Left Local-Only rather than silently adjusted or excluded"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-050, REQ-197, REQ-198]
+
+  - id: REQ-210
+    title: S7 stage-level parity report -- aggregate findings across REQ-206..209, file every open gap, and record the stage's REVIEWER sign-off entry
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S7
+    impl_order: 387  # letflow-queue task id, GH#759
+    description: >
+      Sixth and closing requirement of S7's initial batch. This requirement
+      produces no new engine code -- it is the aggregation and gate-closure
+      step, matching the pattern R-Co's own tests/uat-reports/ directory
+      shows for a completed UAT cycle (a per-scenario report plus a
+      release-level roll-up), adapted to this project's own humanless
+      pipeline: no BO-*/PRODUCT-OWNER persona layer is reproduced here
+      (already decided and stated in .claude/agents/uat-runner.md's "Note on
+      scope" and docs/migration/decisions/0004-humanless-pipeline.md) --
+      RELEASE-VALIDATOR is Letflow's equivalent gate, per WF-05's own
+      "Deferred: business-owner personas" section.
+      SCOPE:
+      1. Collect every disposition recorded by REQ-206/207/208/209's four
+      reports (PASS / FAIL / SKIP / BLOCKED / DEFERRED_TO_S8 /
+      UNBUILT_FEATURE / BLOCKED_ON_DEPENDENCY / EXPECTED_UNSUPPORTED) into
+      one table covering all 11 business scenarios plus the 15-entry
+      differential corpus, so the full S7 scope this batch actually covered
+      is visible in one place rather than scattered across four
+      requirements' descriptions.
+      2. Every finding already reported to ORCH by REQ-206/207/208 (the
+      missing advance-timer endpoint, the missing document-attachment
+      subsystem, the vortex-entity-list dependency status) must actually
+      have resulted in a registered, claimable issue by the time this
+      requirement runs -- confirm each one has a real issue_ref/GitHub
+      issue (per ISSUE_QUEUE.md), not merely a mention in a prior
+      requirement's prose. If any finding was reported but never actually
+      registered, that is itself a finding this requirement must report.
+      3. Write docs/migration/stage-7-simulation-uat-parity.md's REVIEWER
+      sign-off section (append-only per that file's own stated convention,
+      "a log, not a summary") with a dated entry stating plainly what
+      passed, what was found broken, what was deferred to S8, and what
+      remains genuinely unbuilt -- an honest "not fully clear, here is
+      exactly why" entry is explicitly valid per docs/migration/README.md's
+      own convention for this section, and is very likely the correct
+      entry here given REQ-206/207/208's own findings (a missing
+      advance-timer endpoint blocking two tenants' scenarios, an unbuilt
+      document-attachment feature, GUI coverage entirely deferred to S8).
+      4. Explicitly record the 18-file tests/simulation/scenarios/platform/
+      corpus (platform-tenant-branding-applied.yaml,
+      platform-outbox-cap-backpressure.yaml, and 16 others -- confirmed
+      present this session, tagged platform_workflow: PW-NN,
+      company_id: platform, distinct in scope and origin from the 11
+      tenant-business scenarios this batch covers, and NOT in the set ORCH
+      named when scoping this batch) as explicitly OUT OF SCOPE for this
+      batch, not silently covered and not silently dropped -- name it as a
+      deliberate, sized-for-its-own-batch follow-up in the stage doc, the
+      same way MVP-1's cancellation and S9's own scoping were recorded as
+      explicit decisions rather than left implicit
+      (docs/migration/README.md's "Requirement expansion" section already
+      models this kind of explicit scope note).
+      5. State whether S7's stage gate (the correctness-gate purpose the
+      stage doc states) can be considered cleared given the findings, or
+      whether it is blocked pending the filed gaps -- this is a factual
+      report, not an authority to unilaterally declare the stage done;
+      that determination is ORCH/RELEASE-VALIDATOR's per the stage-gate
+      rules in docs/agents/ORCHESTRATOR.md §8, and this requirement's own
+      acceptance criteria are scoped to producing the report and filing
+      the findings, not to declaring the gate result itself.
+      NOT IN THIS REQUIREMENT: no fix for any filed gap (those become their
+      own future requirements/issues); no expansion of the
+      tests/simulation/scenarios/platform/ corpus into requirements (named
+      as future scope only); no change to REQ-206/207/208/209's own
+      artefacts beyond reading their reports.
+    acceptance_criteria:
+      - "one aggregate table exists (in this requirement's own artefact, e.g. docs/status/ or the PR description per this project's existing convention) covering all 11 business scenarios and the differential corpus's 15 entries, each with its final disposition and a pointer to which requirement (REQ-206..209) recorded it -- every one of the 26 items has exactly one disposition, none omitted"
+      - "every finding REQ-206/207/208 reported to ORCH (advance-timer endpoint gap, document-attachment subsystem gap, vortex-entity-list dependency status) is confirmed to have a real registered issue_ref by the time this requirement completes -- checked against the issue registry, not assumed from the prior requirement's prose; any finding that was reported but never actually registered is itself reported as a new finding"
+      - "docs/migration/stage-7-simulation-uat-parity.md gains a dated REVIEWER sign-off entry that REPLACES the section's current 'Pending -- REQ-210 records...' placeholder rather than being appended alongside it, so the section states one thing and not two, stating explicitly what passed, what failed, what was deferred to S8, and what is genuinely unbuilt"
+      - "the stage doc explicitly names the 18-file tests/simulation/scenarios/platform/ corpus as out of scope for this batch and records it as a named future follow-up, distinct from the 11 tenant-business scenarios this batch covered"
+      - "the requirement states a factual pass/blocked assessment of S7's correctness-gate purpose given the findings, without itself declaring the stage done -- that determination is left to ORCH/RELEASE-VALIDATOR per docs/agents/ORCHESTRATOR.md §8"
+    depends_on: [REQ-206, REQ-207, REQ-208, REQ-209]

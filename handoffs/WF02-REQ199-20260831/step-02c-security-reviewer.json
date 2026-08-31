@@ -1,91 +1,38 @@
 {
-  "agent": "SECURITY-REVIEWER",
-  "requirement": "REQ-199",
-  "workflow": "WF02-REQ199-20260831",
-  "branch": "feature/WF02-REQ199-20260831",
-  "commit_reviewed": "ba4915fa",
-  "timestamp": "2026-08-31T14:00:00Z",
-  "status": "PASS",
-
-  "scope_test": {
-    "result": "IN-SCOPE",
-    "reasons": [
-      "Two new priv/repo/migrations (20260831000001, 20260831000002) — tenant-scoped tables",
-      "New Ecto schema modules Completion and Cursor read/write tenant business data",
-      "No new API routes, controllers, or secret-resolving paths"
-    ]
+  "handoff_id": "step02c-WF02-REQ199-20260831",
+  "run_id": "WF02-REQ199-20260831",
+  "workflow_id": "WF-02",
+  "step": "02c-security-reviewer",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ199-20260831/step-02c-security-reviewer.json",
+  "completed_at": "2026-08-31T07:55:15Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "branch_name": "feature/WF02-REQ199-20260831",
+    "requirement_ids": [
+      "REQ-199"
+    ],
+    "implementation_commit": "ba4915fa",
+    "rework_count": 0,
+    "max_rework": 3,
+    "artifacts_in": [
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/ordering/",
+      "lib/letflow/ordering.ex",
+      "lib/letflow/scheduler/poller.ex"
+    ],
+    "artifacts_out": [
+      "handoffs/WF02-REQ199-20260831/step-02c-security-reviewer.json"
+    ],
+    "reviewed_commit": "c89c08c8"
   },
-
-  "invariants": {
-    "INV-1": {
-      "verdict": "APPLIES + PASSES",
-      "checks": {
-        "a_prefix_scoping": "All Ecto calls (Repo.one, Repo.insert, Repo.get!, Repo.update_all, Repo.query) carry prefix: prefix derived from Keyword.fetch!(opts, :prefix). FOR UPDATE SKIP LOCKED claim query in consumer.ex/claim/1 passes prefix: prefix to Repo.one. Inline re-lock in try_apply/M1 also passes prefix: prefix.",
-        "b_migration_not_in_public": "Both migrations wrapped in 'if prefix() do ... end' — neither table is created in the public schema. Confirmed: 20260831000001_create_effect_completions.exs and 20260831000002_create_correlation_cursors.exs.",
-        "c_tenant_id_from_prefix": "insert_completion/2 in ordering.ex calls TenantProvisioning.tenant_id_for_schema_name(prefix) and sets tenant_id from its result — not from caller attrs. consumer.ex/do_apply M3 does the same inline. cursor.ex/upsert_init/2 does the same. No path accepts tenant_id as a caller-supplied field."
-      }
-    },
-    "INV-2": {
-      "verdict": "NOT-APPLICABLE",
-      "reason": "S4 not started. No new API routes or serialised response types in this diff."
-    },
-    "INV-3": {
-      "verdict": "NOT-APPLICABLE",
-      "reason": "S5 not started. No Lua or WASM paths in this diff."
-    },
-    "INV-4": {
-      "verdict": "APPLIES + PASSES",
-      "checks": {
-        "no_hardcoded_secrets": "Manual scan of all new files found no hardcoded passwords, tokens, keys, or client secrets. Config values (gap_timeout_seconds, ordering:enabled) read via Application.get_env.",
-        "no_secrets_in_handoff": "No secret material in this file or other handoff artifacts.",
-        "secrets_by_reference": "The sole secret-adjacent lookup in this diff is Application.get_env(:letflow, :ordering) for timeouts/flags — no credentials."
-      }
-    },
-    "INV-5": {
-      "verdict": "NOT-APPLICABLE",
-      "reason": "S4 not started. No lookup-by-ID endpoints in this diff."
-    },
-    "INV-6": {
-      "verdict": "APPLIES + PASSES",
-      "reason": "This handoff is the proof. Two new data-access paths (effect_completions and correlation_cursors tables) are explicitly assessed below. Both satisfy INV-1(a)(b)(c), INV-7, and INV-8."
-    },
-    "INV-7": {
-      "verdict": "APPLIES + PASSES",
-      "checks": {
-        "consumer_ex_L111": "SELECT pg_try_advisory_xact_lock($1::bigint) — lock_key bound as $1. PASS.",
-        "sweeper_ex_L54": "find_eligible_correlations SQL interpolates schema_name only for table-path qualification (\"schema\".table — system-managed provisioning value, not user input); gap_timeout bound as $1. PASS.",
-        "sweeper_ex_L91": "UPDATE \"#{prefix}\".effect_completions ... WHERE correlation_id = $1 — prefix is schema-path qualification (system value); correlation_id bound as $1. PASS.",
-        "metrics_ex_L50": "SELECT from \"#{prefix}\".effect_completions / correlation_cursors — prefix is schema-path qualification (system value); no user-controlled values in the SQL body. PASS.",
-        "schema_interpolation_note": "Schema-name interpolation for table-path qualification ('\"schema_name\".table_name') is the codebase-established pattern for schema-per-tenant scoping (same as DLQ, event store, retention policy). The interpolated value is a system-managed schema name from TenantProvisioning, not raw user input — it is not a SQL injection vector."
-      }
-    },
-    "INV-8": {
-      "verdict": "APPLIES + PASSES",
-      "checks": {
-        "bare_match_found": "consumer.ex:118: {:ok, tenant_id} = TenantProvisioning.tenant_id_for_schema_name(prefix) inside do_apply/3.",
-        "risk_assessment": "prefix is schema_name from TenantProvisioning.tenant_schemas() — a system-managed value, not user-controlled input. Realistic failure probability is low. Even if MatchError is raised: it occurs inside a Repo.transaction/fn callback (Ecto rolls back and re-raises), which is caught by poller.ex's try/rescue _ -> :ok for that schema iteration. No shared Poller process state is corrupted; no other tenant is affected.",
-        "external_io_paths": "All external I/O call sites (EventStore.append_platform_event, Dlq.enqueue, Repo.* calls) use explicit case pattern matching on {:ok,_}/{:error,_}. Rollback paths are explicit and correct.",
-        "poller_isolation": "Poller wraps each schema's run_cycle, sweep_gaps, and emit_lag_metrics in try/rescue — per design §2.2. One tenant failure cannot degrade other tenants' timer firing."
-      }
-    },
-    "INV-9": {
-      "verdict": "NOT-APPLICABLE",
-      "reason": "No outbound HTTP calls in this diff. Ordering subsystem is purely database I/O (Ecto/PostgreSQL)."
-    }
+  "task": {
+    "description": "You are SECURITY-REVIEWER for Letflow WF-02. Review the implementation on feature/WF02-REQ199-20260831 (commit ba4915fa) against docs/agents/instructions/security-invariants.md (INV-1 through INV-9). The diff touches: lib/letflow/ordering.ex, lib/letflow/ordering/completion.ex, lib/letflow/ordering/consumer.ex, lib/letflow/ordering/cursor.ex, lib/letflow/ordering/metrics.ex, lib/letflow/ordering/sweeper.ex, lib/letflow/scheduler/poller.ex, lib/letflow/tenant_provisioning.ex, priv/repo/migrations/20260831000001_create_effect_completions.exs, priv/repo/migrations/20260831000002_create_correlation_cursors.exs, test/support/tenant_fixture.ex. Key areas to check: (1) tenant_id derivation -- all DB operations must derive prefix from opts[:prefix], never from caller-supplied attrs (INV-1/INV-2); (2) the FOR UPDATE SKIP LOCKED query and advisory lock in consumer.ex -- no cross-tenant data path; (3) no auth bypass or new unauthenticated endpoints (no new routes added); (4) the metrics surface in metrics.ex -- label allow-list must not include tenant_id/correlation_id/instance_id; (5) migration table placement -- both tables are per-tenant schema; (6) DLQ enqueue in sweeper.ex -- tenant_id derived from prefix. State which invariants apply and whether each APPLIES+PASSES, APPLIES+FAILS, or NOT-APPLICABLE. Compile the complete findings to handoffs/WF02-REQ199-20260831/step-02c-security-reviewer.json on the feature branch and return PASS or FAIL."
   },
-
-  "additional_scope_checks": {
-    "for_update_skip_locked_cross_tenant": "PASS — claim/1 passes prefix: prefix to Repo.one; the query only scans rows in the tenant's own schema. No cross-tenant row access is possible.",
-    "advisory_lock_tenant_isolation": "PASS — phash2(correlation_id, 2_147_483_647) collision between two different correlations (possibly from different tenants) causes serialization only, not data leakage. Each consumer still reads from its own prefix. Design doc §7 acknowledges birthday probability and accepts it.",
-    "sweeper_dlq_tenant_id_derivation": "PASS — Dlq.enqueue(dlq_attrs, opts) passes opts through; Dlq.enqueue derives tenant_id from opts[:prefix] (same pattern as all other context modules). No tenant_id in dlq_attrs.",
-    "metrics_ets_label_exposure": "PASS — ETS writes use keys {:gauge, :ordering_correlation_lag, %{}} and {:gauge, :ordering_oldest_pending_age_seconds, %{}} with EMPTY label maps. Per moduledoc: 'neither metric carries per-tenant or per-correlation labels'. correlation_id only appears inside emit_threshold_exceeded_event's private platform event payload (EventStore, not Prometheus).",
-    "no_new_routes_or_controllers": "CONFIRMED — diff contains no new Phoenix router entries, controller modules, or plug pipelines.",
-    "insert_completion_caller_attrs": "PASS — ordering.ex/insert_completion/2 accepts only {correlation_id, sequence_no, payload, received_at} from caller; tenant_id is independently derived from TenantProvisioning.tenant_id_for_schema_name(prefix)."
-  },
-
   "result": {
-    "status": "PASS",
-    "blocker_findings": [],
-    "notes": "One bare match (consumer.ex:118) noted but assessed non-blocking: system-managed input, poller try/rescue containment in place. INV-6 satisfied by this explicit per-invariant assessment."
+    "status": "COMPLETED",
+    "summary": "SECURITY-REVIEWER returned PASS (no findings text captured in this handoff)."
   }
 }

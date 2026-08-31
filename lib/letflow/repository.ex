@@ -52,8 +52,16 @@ defmodule Letflow.Repository do
 
   @list_versions_cursor_prefix "RV:"
 
-  @type artifact_kind ::
-          :definition | :form | :schema | :service_catalog | :script | :module | :scenario
+  @type artifact_kind :: Letflow.Repository.ArtifactKind.t()
+
+  @doc """
+  The shared `artifact_kind` value list (OQ-B, `req203-artifact-activation.md`
+  §9) -- delegates to `Letflow.Repository.ArtifactKind`, which carries no
+  compile-time dependency on this module (see that module's moduledoc for
+  why the value list cannot live here without deadlocking the compiler).
+  """
+  @spec artifact_kinds() :: [artifact_kind()]
+  def artifact_kinds, do: Letflow.Repository.ArtifactKind.values()
 
   @type create_attrs :: %{
           required(:artifact_kind) => artifact_kind(),

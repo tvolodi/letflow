@@ -1,0 +1,63 @@
+{
+  "handoff_id": "WF03-ISS0381-20260831-step02b-recheck1",
+  "run_id": "WF03-ISS0381-20260831",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+  "status": "FAILED",
+  "priority": "normal",
+  "context": {
+    "issue_id": "ISS-0381",
+    "former_local_id": "ISS-0353",
+    "queue_task_id": 381,
+    "github_issue": 753,
+    "severity": "MINOR",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0381-20260831/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0381-20260831/step-02-code-designer.json",
+      "handoffs/WF03-ISS0381-20260831/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0381-20260831/step-02-code-designer-rework1.json"
+    ],
+    "artifacts_reviewed": [
+      "handoffs/WF03-ISS0381-20260831/step-02-code-designer-rework1.json",
+      "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+      "lib/letflow/dlq/entry.ex",
+      "lib/letflow/dlq.ex"
+    ]
+  },
+  "task": {
+    "description": "Re-check of the reworked design at lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md against the two defects (D1 blocking, D2 must-fix-this-pass) raised at handoffs/WF03-ISS0381-20260831/step-02b-code-design-validator.json.",
+    "acceptance_criteria_checked": [
+      "CURRENT cast/3 field count independently re-derived from lib/letflow/dlq/entry.ex lines 107-125 and compared against the design's claimed 17",
+      "Design's 17-row disposition table (section 3) checked row by row against the real field list and dispositions",
+      "POST-FIX count (design claims 12) cross-checked against the design's own enumerated 12-field list and against enqueue/2's Map.take/2 allowlist (lib/letflow/dlq.ex:87-100)",
+      "Full document scanned for literal, directly copy-pasteable Elixir expressions (function calls with real arguments, bracket-index expressions, pipe operators on real identifiers), not just sections 4/5",
+      "Malformed-value fail-first proof (cast/3 vs put_change/3 error-shape divergence) checked for unchanged substance versus the prior review"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "D1 (the blocking arithmetic defect) is genuinely fixed: independently re-counted, confirmed correct. D2 is NOT genuinely fixed despite the rework's claim -- a literal, directly copy-pasteable Elixir expression (a real pipe operator applied to real function calls, plus map-literal key/value pairs) still appears verbatim in section 6, quoted straight from lib/letflow/dlq.ex. The rework's own report claims 'the only remaining match is a type reference (String.t()) and a string-literal example value (\"not-a-uuid\")' -- this claim is false; re-grepping the finished document surfaces a third, larger literal-code match the rework missed. Per the fail-immediately-no-partial-credit rule, this re-check FAILS and routes back to CODE-DESIGNER.",
+    "checks_that_passed": [
+      "D1 arithmetic, independently re-verified: entry.ex's real cast/3 call (lines 107-125) has exactly 17 elements -- tenant_id, entry_type, instance_id, reference_id, reason, full_reason, error_detail, error_chain, source_payload, context_json, retry_limit, first_failed_at, last_failed_at, status, retry_count, retry_history, created_at -- counted field by field myself; next_retry_at correctly excluded (it is a schema field, never in cast/3's list). Section 3's 17-row disposition table lists all 17 in the same order with correct REMOVED/stays dispositions (5 REMOVED: tenant_id, status, retry_count, retry_history, created_at; 12 stay).",
+      "Post-fix count of 12 is correct: 17 - 5 = 12, and the design's own enumerated post-fix list (entry_type, instance_id, reference_id, reason, full_reason, error_detail, error_chain, source_payload, context_json, retry_limit, first_failed_at, last_failed_at) matches lib/letflow/dlq.ex's enqueue/2 Map.take/2 allowlist (lines 87-100) atom for atom, in the same order -- independently confirmed by direct re-read of dlq.ex.",
+      "The malformed-value fail-first proof (section 9, cast/3-vs-put_change/3 error-shape divergence for a malformed :tenant_id / :created_at value) is present, unchanged in substance from the prior review, and technically correct: cast/3 type-casts and would add an 'is invalid' changeset error for a non-UUID/non-DateTime string, while put_change/3 performs no type casting and writes the raw value, deferring any error to Repo.insert/2's DB-level type check. Only the phrasing was de-coded from literal syntax into prose per the rework's own description; the reasoning itself was not altered."
+    ],
+    "defects": [
+      {
+        "id": "D2-INLINE-LITERAL-CODE-STILL-PRESENT",
+        "severity": "BLOCKING",
+        "location": "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md, section 6, lines ~165-169",
+        "description": "Section 6 states: \"`enqueue/2` (lines 81-113) already builds `insert_attrs` via `Map.take/2` ... then `Map.merge/2`s in its own trusted `tenant_id`, `status: :pending`, `retry_count: 0`, `retry_history: []`, `created_at: DateTime.utc_now() |> DateTime.truncate(:second)`\". The fragment `created_at: DateTime.utc_now() |> DateTime.truncate(:second)` is a literal, directly copy-pasteable Elixir expression -- a pipe operator applied to two real function calls (`DateTime.utc_now/0`, `DateTime.truncate/2`) -- quoted verbatim from lib/letflow/dlq.ex:106. It is accompanied by three literal map key/value pairs in the same sentence (`status: :pending`, `retry_count: 0`, `retry_history: []`), also copied verbatim from dlq.ex:103-105. I independently re-read lib/letflow/dlq.ex:100-107 and confirmed this is an exact character-for-character quote of the real source, not a paraphrase.",
+        "why_it_fails_the_rework's_own_claim": "The rework's result.summary explicitly asserts, after 'a full read-through of the whole document, not just sections 4/5' and 're-grepping the finished file for call/bracket-index patterns', that 'the only remaining match is a type reference (String.t()) and a string-literal example value (\"not-a-uuid\")'. That claim is demonstrably false: grepping the document myself for pipe operators and map-literal syntax immediately surfaces this section-6 fragment, which the rework's own re-grep should have caught (a `|>` pipe applied to two real, args-bearing function calls is exactly the pattern the original task instructions called out to search for). This is not a new complaint invented on this pass -- it falls squarely inside D2's original scope ('literal Elixir code scattered through the doc instead of prose/structural description'), which this rework round was explicitly required to close out completely, not partially.",
+        "why_blocking_this_time": "The prior review marked D2 as non-blocking only because D1 already blocked outright and this document had a documented history (two prior rework rounds, commits 3680243 and 290c6b2) of the same underlying complaint recurring. This rework round's own handoff explicitly scoped D2 as 'must-fix in this pass' with an acceptance criterion requiring zero remaining literal, directly copy-pasteable Elixir expressions anywhere in the document. Since a literal expression demonstrably remains and the rework's report incorrectly certifies it does not, this is now a genuine failed acceptance criterion in its own right, not a courtesy note -- per WF-02/WF-03 rules (fail immediately and completely on any single failed check, no partial credit), this FAILS the re-check outright.",
+        "suggested_fix": "Rephrase section 6's quoted fragment structurally, e.g.: 'enqueue/2 (lines 81-113) already builds insert_attrs via Map.take/2 (12-key allowlist, excludes all 5 protected fields) then merges in its own trusted values: tenant_id (from TenantProvisioning), a :pending status, a zero retry count, an empty retry history, and a created_at timestamp derived from the current time truncated to second precision.' No literal call syntax, pipe operators, or map-literal key/value pairs -- describe the mechanism and the value's provenance, not the copy-pasteable expression that produces it."
+      }
+    ],
+    "next_action": "Route back to CODE-DESIGNER for a third rework pass (rework_count would become 3, at max_rework): fix ONLY the section-6 fragment identified above (D2-INLINE-LITERAL-CODE-STILL-PRESENT) by rephrasing it structurally as suggested. D1 is fully resolved and must not be touched again. Do a genuinely exhaustive re-grep of the finished document for `|>`, bracket-index expressions, and any other verbatim-quoted source lines before re-submitting -- the rework's re-grep claim was inaccurate once already on this same defect class."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

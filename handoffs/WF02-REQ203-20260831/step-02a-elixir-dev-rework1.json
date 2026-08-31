@@ -1,0 +1,61 @@
+{
+  "handoff_id": "step02a-rework1-WF02-REQ203-20260831",
+  "run_id": "WF02-REQ203-20260831",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ203-20260831/step-02a-elixir-dev-rework1.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-203"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ203-20260831/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ203-20260831/step-02d-reviewer.json",
+      "handoffs/WF02-REQ202-20260830/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/repository/activation.ex",
+      "test/letflow/repository/activation_test.exs",
+      "priv/repo/migrations/20260831000001_create_artifact_activations.exs"
+    ],
+    "artifacts_out": [
+      "lib/letflow/repository/activation.ex",
+      "test/letflow/repository/activation_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ203-20260831",
+    "requirement_text": "REQ-203 (docs/requirements.yaml, stage S6) -- per-tenant artifact activation, atomic multi-artifact groups, and activation history (REPO-08/09/10)."
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR (Step 3b) FAILED the implementation on one real defect: activate_group/4's @spec promises {:error, {atom(), Ecto.Changeset.t()}} for a mid-transaction failure, but a real FK violation (a version_id absent from artifact_versions) raised an unhandled Ecto.ConstraintError instead, because upsert_activation_pointer/8's internal Activation.changeset/2 had no foreign_key_constraint/3 mapped for the active_version_id FK. Same defect class this session's own REQ-202 REVIEWER already treated as BLOCKING at its Step 2d. Fix the real behavior to match the documented contract rather than widening the @spec.",
+    "acceptance_criteria": [
+      "Activation.changeset/2 maps the active_version_id FK via foreign_key_constraint/3 using the exact constraint name given in the migration (artifact_activations_active_version_id_fkey)",
+      "A real FK violation during activate_group/4 now returns {:error, {atom(), Ecto.Changeset.t()}} (matching the existing {:error, {:validation, changeset}} shape format_activate_group_result/2 already uses for changeset failures) instead of raising Ecto.ConstraintError",
+      "ActivationHistory's own FKs (previous_version_id/new_version_id/group_id) checked for the same gap; each is unreachable by construction within the same Multi transaction and left as-is, with the reasoning stated explicitly in code comments rather than blindly adding unreachable mappings",
+      "test/letflow/repository/activation_test.exs's AC1 forced-failure-rollback test updated to assert the corrected {:error, {:validation, changeset}} tuple instead of assert_raise Ecto.ConstraintError -- no other test touched",
+      "mix compile --warnings-as-errors clean",
+      "mix format --check-formatted clean",
+      "mix test test/letflow/repository/activation_test.exs test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs all pass"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Fixed the @spec-vs-behavior mismatch TEST-DESIGN-VALIDATOR flagged. In lib/letflow/repository/activation.ex, Letflow.Repository.Activation.changeset/2 (used by both the insert and update branches of upsert_activation_pointer/8) now pipes through foreign_key_constraint(:active_version_id, name: :artifact_activations_active_version_id_fkey) -- the exact explicit FK-constraint name the migration (priv/repo/migrations/20260831000001_create_artifact_activations.exs) gives that FK. A real Postgres FK violation on active_version_id is now translated by Ecto into a changeset error instead of propagating as a raised Ecto.ConstraintError; format_activate_group_result/2's existing {:error, failed_step, %Ecto.Changeset{} = changeset, _changes} -> {:error, {:validation, changeset}} clause (already used for the group-envelope changeset failure path) now also handles this path, so activate_group/4's actual behavior matches its own @spec-documented {:error, {atom(), Ecto.Changeset.t()}} union.\n\nChecked artifact_activation_history's own three FKs (previous_version_id, new_version_id both to artifact_versions; group_id to artifact_activation_groups) for the same gap and determined each is unreachable by construction within the same Ecto.Multi transaction, since Postgres FK constraints are checked IMMEDIATE (not DEFERRABLE) by default and this migration never opts into deferred checking: new_version_id is the identical version_id upsert_activation_pointer/8 already wrote (and had FK-validated) into active_version_id earlier in the same transaction (activation_step always runs before history_step in add_activation_steps/9); previous_version_id is read back from an existing, already-FK-validated artifact_activations row, and on_delete: :restrict means a referenced version can never later disappear; group_id is the group envelope row's own primary key, inserted as the Multi's :group step before any add_activation_steps/9 step runs, so a failure there aborts the whole transaction before insert_activation_history/12 is ever reached. Documented this reasoning as a code comment directly above insert_activation_history/12 in lib/letflow/repository/activation.ex rather than adding unreachable foreign_key_constraint/3 mappings to ActivationHistory.changeset/2.\n\nUpdated the one specific test TEST-DESIGN-VALIDATOR named: test/letflow/repository/activation_test.exs's 'AC1 -- atomic multi-artifact activation, forced-failure rollback' describe block's first test ('a version_id with no matching artifact_versions row rolls back the whole group...') now asserts {:error, {:validation, %Ecto.Changeset{} = changeset}} = Activation.activate_group(...) plus {\"does not exist\", _} = changeset.errors[:active_version_id], replacing the prior assert_raise Ecto.ConstraintError. Updated the test's own comment block to describe the fixed behavior instead of the defect. No other test in the file was touched. Did not touch the TEST-ONLY seam (activate_group/4 arity 4->5, test_pause_after/test_pause_fun, maybe_add_test_pause_step/3) per the routing instruction -- that is REVIEWER's separate concern in this same combined pass.",
+    "verification": {
+      "mix_compile_warnings_as_errors": "PASS -- ran `mix compile --force --warnings-as-errors` myself (via asdf shims, elixir 1.20.3-otp-29 / erlang 29.0.5): 'Compiling 170 files (.ex)', 'Generated letflow app', clean, no warnings, exit 0.",
+      "mix_format_check_formatted": "PASS -- ran `mix format --check-formatted` myself: no output, exit 0.",
+      "mix_test_targeted": "PASS -- ran `mix test test/letflow/repository/activation_test.exs test/letflow/repository_test.exs test/letflow/repository/canonicaliser_test.exs` myself: 'Finished in 45.8 seconds (0.9s async, 44.8s sync)', 'Result: 67 passed', 0 failures. This includes the updated AC1 forced-failure test now passing under the corrected tuple-return assertion, plus the full REQ-202 regression suite (repository_test.exs + canonicaliser_test.exs) unaffected."
+    },
+    "artifacts_out": [
+      "lib/letflow/repository/activation.ex",
+      "test/letflow/repository/activation_test.exs"
+    ],
+    "issues": [],
+    "next_action": "Route to REVIEWER for ONE combined Step 2d re-check covering (a) this fix (foreign_key_constraint/3 addition to Activation.changeset/2, plus the ActivationHistory unreachable-FK reasoning) and (b) the TEST-ONLY seam TEST-DESIGNER added at Step 3 (activate_group/4 arity 4->5, test_pause_after/test_pause_fun, maybe_add_test_pause_step/3) that REVIEWER has not yet seen -- per TEST-DESIGN-VALIDATOR's own sequencing at handoffs/WF02-REQ203-20260831/step-03b-test-design-validator.json, this avoids a duplicate REVIEWER pass. After REVIEWER PASSes both, route to TEST-DESIGNER (Step 3 rework) to update test/specs/REQ-203.md's corresponding entry (the test file itself is already updated by this handoff), then TEST-DESIGN-VALIDATOR (Step 3b re-check)."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

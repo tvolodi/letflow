@@ -197,9 +197,19 @@ defmodule Letflow.Obs.Alerts do
     thresholds = build_thresholds(cfg)
     hooks = build_hooks(cfg)
 
-    evaluate_dlq_depth(tenant_schema, tick_context.dlq_count, thresholds.dlq_depth_threshold, hooks)
+    evaluate_dlq_depth(
+      tenant_schema,
+      tick_context.dlq_count,
+      thresholds.dlq_depth_threshold,
+      hooks
+    )
 
-    evaluate_scheduler_lag(tenant_schema, tick_context.observed_lag_ms, thresholds.scheduler_lag_ms, hooks)
+    evaluate_scheduler_lag(
+      tenant_schema,
+      tick_context.observed_lag_ms,
+      thresholds.scheduler_lag_ms,
+      hooks
+    )
 
     Enum.each(tick_context.stuck_instances, fn inst ->
       evaluate_stuck_instance(tenant_schema, inst, thresholds.error_stuck_minutes, hooks)
@@ -239,7 +249,16 @@ defmodule Letflow.Obs.Alerts do
     # Pass (threshold_minutes - 1) so that stuck_minutes >= threshold_minutes
     # satisfies the evaluate_trigger fire condition (sample > effective_threshold).
     effective_threshold = max(threshold_minutes - 1, 0)
-    evaluate_trigger(trigger_key, inst.stuck_minutes, effective_threshold, hooks, tenant_schema, inst.instance_id, payload)
+
+    evaluate_trigger(
+      trigger_key,
+      inst.stuck_minutes,
+      effective_threshold,
+      hooks,
+      tenant_schema,
+      inst.instance_id,
+      payload
+    )
   end
 
   defp evaluate_paused_subscription(tenant_schema, sub, hooks) do
@@ -251,7 +270,15 @@ defmodule Letflow.Obs.Alerts do
 
   # Core edge-triggered state machine. Uses ARMED/FIRED states per design §5.
   # `correlation_id` is the subject UUID for per-instance/per-subscription triggers, nil for aggregates.
-  defp evaluate_trigger(trigger_key, sample, threshold, hooks, tenant_schema, correlation_id, payload \\ nil) do
+  defp evaluate_trigger(
+         trigger_key,
+         sample,
+         threshold,
+         hooks,
+         tenant_schema,
+         correlation_id,
+         payload \\ nil
+       ) do
     now = DateTime.utc_now()
     state = load_trigger_state(trigger_key, tenant_schema)
 
@@ -324,7 +351,12 @@ defmodule Letflow.Obs.Alerts do
     }
   end
 
-  defp build_default_payload("webhook_subscription_paused:" <> subscription_id, _sample, _threshold, now) do
+  defp build_default_payload(
+         "webhook_subscription_paused:" <> subscription_id,
+         _sample,
+         _threshold,
+         now
+       ) do
     %{
       "trigger" => "webhook_subscription_paused",
       "fired_at" => format_datetime(now),
@@ -422,7 +454,9 @@ defmodule Letflow.Obs.Alerts do
   end
 
   defp build_emitted_key("instance_error_stuck:" <> instance_id, payload) do
-    reason_hash = :crypto.hash(:md5, Map.get(payload, "error_reason", "")) |> Base.encode16(case: :lower)
+    reason_hash =
+      :crypto.hash(:md5, Map.get(payload, "error_reason", "")) |> Base.encode16(case: :lower)
+
     "#{instance_id}:#{reason_hash}"
   end
 
@@ -517,11 +551,13 @@ defmodule Letflow.Obs.Alerts do
   defp resolve_auth_header(ref) do
     with [_, slug] <- Regex.run(@reference_slug_pattern, ref),
          {:ok, %{id: tenant_id}} <- Identity.get_tenant_by_slug(slug),
-         {:ok, %{plaintext: plaintext}} <- Secrets.resolve(ref, tenant_id: tenant_id, consumer: :generic) do
+         {:ok, %{plaintext: plaintext}} <-
+           Secrets.resolve(ref, tenant_id: tenant_id, consumer: :generic) do
       plaintext
     else
       _ ->
-        Logger.warning("alert hook auth_secret_ref resolution failed, sending without Authorization",
+        Logger.warning(
+          "alert hook auth_secret_ref resolution failed, sending without Authorization",
           component: "alert_delivery",
           ref: ref
         )
@@ -646,7 +682,8 @@ defmodule Letflow.Obs.Alerts do
 
   defp safe_recently_paused_subs(tenant_schema, last_tick_started_at) do
     from(s in Subscription,
-      where: s.status == :PAUSED and not is_nil(s.paused_at) and s.paused_at >= ^last_tick_started_at,
+      where:
+        s.status == :PAUSED and not is_nil(s.paused_at) and s.paused_at >= ^last_tick_started_at,
       select: %{subscription_id: s.id}
     )
     |> Repo.all(prefix: tenant_schema)

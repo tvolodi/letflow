@@ -448,7 +448,12 @@ defmodule Letflow.Obs.AlertsTest do
             destination_url: server.url,
             timeout_ms: 5_000,
             auth_secret_ref: ref,
-            retry_policy: [max_attempts: 1, base_backoff_ms: 1, max_backoff_ms: 10, multiplier: 2.0]
+            retry_policy: [
+              max_attempts: 1,
+              base_backoff_ms: 1,
+              max_backoff_ms: 10,
+              multiplier: 2.0
+            ]
           ]
         ]
       )

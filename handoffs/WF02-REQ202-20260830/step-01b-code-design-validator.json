@@ -1,0 +1,57 @@
+{
+  "handoff_id": "step01b-WF02-REQ202-20260830",
+  "run_id": "WF02-REQ202-20260830",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ202-20260830/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-30T22:05:51Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-202"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ202-20260830/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req202-artifact-repository.md",
+      "lib/letflow/definitions/promotion_digest.ex",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "lib/letflow/design/req195-audit-entry-storage.md"
+    ],
+    "branch_name": "feature/WF02-REQ202-20260830"
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) review of REQ-202's design (lib/letflow/design/req202-artifact-repository.md), checking all 14 acceptance criteria, the no-implementation-code rule, the per-tenant-vs-global placement reasoning, and whether the four stated open questions (OQ-1..OQ-4) are legitimately deferrable to ELIXIR-DEV or must be resolved now."
+  },
+  "result": {
+    "status": "FAIL",
+    "checks_performed": {
+      "no_implementation_code": "PASS -- zero markdown code fences in the entire document (grep '```' returns nothing); no literal .ex/.exs bodies or SQL statements, signatures/type shapes only.",
+      "promotion_digest_citation": "PASS -- read lib/letflow/definitions/promotion_digest.ex L87-104 directly. Confirmed: canonicalize/1's final clause (L104, `defp canonicalize(value), do: value`) passes every non-map/non-list/non-atom value through unchanged, including numbers/floats. No number normalization exists anywhere in the module. Design's §0 and §3.2 citation is accurate, not merely trusted from the requirement's paraphrase.",
+      "decision_0003_citation": "PASS -- read 0003-ecto-schema-strategy.md in full. Decision B's stated reasoning is confirmed as a physical-isolation/blast-radius argument ('a bug that forgets a tenant_id predicate ... fails loudly ... instead of silently leaking rows'), matching the design's §1.2 quotation. Decision C (event-table immutability as application-layer, not DB-layer) is correctly characterized and correctly distinguished from this design's DB-trigger choice.",
+      "req195_trigger_precedent": "PASS -- read req195-audit-entry-storage.md §2 directly. Confirmed: per-tenant-schema-qualified trigger function raising a fixed-text error, wired as BEFORE UPDATE (and BEFORE DELETE for audit_entries), created inside the same `if prefix() do ... end`-guarded migration block, no shared public-schema function. Design §5 copies this pattern accurately with artifact-specific message text.",
+      "placement_reasoning_internal_consistency": "PASS -- §1's per-tenant-vs-global argument is internally consistent and does not merely restate Decision B by default; it directly engages REQ-202's own stated tension (cross-tenant dedup forfeited) and gives a reasoned basis (no AC requires cross-tenant dedup; Decision B's isolation rationale argues against a shared-row model; workload-realism argument; batch-consistency argument). Persuasive against the 14 ACs as written -- AC1 is satisfiable per-tenant and no AC anywhere requires cross-tenant sharing.",
+      "traceability_sample_AC3": "PASS -- §3.4 rule 3 states the integer-valued-float normalization rule concretely (no decimal point, no exponent) and ties it to AC3's exact wording. AC3 only requires the integer-valued case, which is fully specified (non-integer float format is correctly out of AC3's scope, see OQ-1).",
+      "traceability_sample_AC7": "PASS -- §5.1 specifies the DB-level BEFORE UPDATE/DELETE trigger mechanism concretely, matching AC7's 'rejected by the DATABASE' requirement.",
+      "traceability_sample_AC9": "PASS -- §6 specifies ordering, parent_version_id inclusion, and REQ-067 cursor-contract reuse concretely.",
+      "traceability_sample_AC10": "FAIL -- AC10's literal text requires the per-tenant-vs-global placement and its reason to be 'stated in the migration' (i.e. in the migration file itself, machine-checkable from the migration source), distinct from AC11's separate, explicitly-different requirement that the migration-058-vs-045 conflict be recorded in 'the moduledoc.' The design's §1 gives extensive placement reasoning, but that reasoning lives only in this design document -- §2 (the Migration section) contains no instruction that the migration file must carry a comment recording the per-tenant decision and its reason. The §10 traceability table maps AC10 to '§1' without noting this file-vs-doc distinction, so as written the design does not produce a migration file satisfying AC10 literally; ELIXIR-DEV would have no design instruction to put this reasoning where AC10 requires it to be checkable.",
+      "oq_evaluation": {
+        "OQ-1_non_integer_float_decimal_form": "Legitimate deferral (b) -- REQ-202's own text and the design's available R-Co citations specify only the integer-valued-float case; no acceptance criterion (AC3 included) exercises the fractional-number format. Correctly left to ELIXIR-DEV with a moduledoc-documentation requirement attached. No rework needed.",
+        "OQ-3_json_content_type_set": "Legitimate deferral (b) -- no AC depends on charset-parameter or +json-suffix handling; requirement text does not enumerate the set. The design already recommends the narrowest reading as a default, which is sufficient guidance. No rework needed.",
+        "OQ-4_artifact_id_semantics": "Legitimate deferral (b) -- none of the 14 ACs reference artifact_id's generation/semantics; REQ-202's schema spec lists the column but is silent on its population rule. No rework needed.",
+        "OQ-2_promotiondigest_moduledoc_vs_AC5": "MUST BE RESOLVED NOW (a), not deferred -- this is exactly the failure mode this session's REQ-195 CODE-DESIGN-VALIDATOR precedent rejected: an AC-interpretation question flagged as uncertain rather than answered. Analysis: AC5 has three clauses -- (i) canonicaliser is a separate module, (ii) promotion_digest.ex 'is NOT modified (confirmed by git diff --stat)', (iii) 'BOTH moduledocs cross-reference each other'. Clauses (ii) and (iii) are in direct tension on ANY reading: promotion_digest.ex's moduledoc currently contains no reference to Canonicaliser, so satisfying (iii) ('BOTH... cross-reference each other') requires editing promotion_digest.ex, which git diff --stat will show as touched -- there is no way to make 'both' moduledocs cross-reference each other without editing both files. The design's own option (b) ('satisfy AC5 literally by putting the full cross-reference only on the Canonicaliser side... not in promotion_digest.ex itself') does not actually satisfy AC5 either: it satisfies clause (ii) but violates clause (iii), since then only ONE moduledoc (Canonicaliser's) would reference the other, not BOTH. So (a) and (b) are not two equally-valid readings of one ambiguous AC -- (b) is demonstrably a partial failure of AC5's own explicit text, and (a) (edit both moduledocs; read 'is NOT modified' as 'no behavioral/functional modification', i.e. no change to canonicalize/1, compute_plan_digest/1, or verify_digest/2's logic or specs) is the only reading under which all three clauses can be simultaneously true. This is derivable now, from AC5's text alone, without needing R-Co source or any implementation-time information -- it is not a legitimate Step-2a judgment call, it is a requirements-interpretation the design stage owns. The design must commit to reading (a), state explicitly why (b) fails clause (iii), and instruct that the commit/PR description documents the moduledoc-only nature of the promotion_digest.ex diff so a human/CI reviewer checking 'git diff --stat shows promotion_digest.ex touched' understands this is the intended, AC5-compliant outcome rather than a violation."
+      }
+    },
+    "issues": [
+      "lib/letflow/design/req202-artifact-repository.md §9 OQ-2: remove the 'flagged... does not resolve the tension unilaterally' framing. Commit to reading (a) explicitly: promotion_digest.ex's moduledoc MUST be edited to add the reciprocal cross-reference (this is required, not optional, to satisfy AC5 clause (iii) 'BOTH moduledocs cross-reference each other'); 'that module is NOT modified' in AC5 is read as 'no change to compute_plan_digest/1, verify_digest/2, or canonicalize/1's behavior/specs' -- a moduledoc-only diff. State explicitly, as part of this resolution, why option (b) (cross-reference on the Canonicaliser side only) does NOT satisfy AC5: it would leave only one of the two moduledocs referencing the other, violating the 'BOTH' clause outright, so (b) is not a safe fallback reading -- it is a different, additional AC5 violation. Update §3.2's 'Required moduledoc cross-reference' subsection to state this as settled, and update §10's AC5 traceability row to no longer cite OQ-2 as an open item.",
+      "lib/letflow/design/req202-artifact-repository.md §2 (Migration): add an explicit instruction that the migration file itself (not only this design document) must carry a comment recording the per-tenant placement decision and its reason (the same substance as §1.2's reasoning, condensed), so that AC10's literal text -- 'the two tables' placement ... is stated in the migration with its reason' -- is satisfied by something checkable in the migration source, distinct from AC11's separate moduledoc-recording requirement. Update §10's AC10 traceability row to point at this new instruction rather than at §1 alone (§1 is design-document reasoning, not an instruction for what the migration file must contain)."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

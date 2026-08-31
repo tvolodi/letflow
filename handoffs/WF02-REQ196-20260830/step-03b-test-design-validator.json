@@ -1,0 +1,58 @@
+{
+  "handoff_id": "step03b-WF02-REQ196-20260830",
+  "run_id": "WF02-REQ196-20260830",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ196-20260830/step-03b-test-design-validator.json",
+  "created_at": "2026-08-30T20:21:29Z",
+  "started_at": "2026-08-30T20:20:00Z",
+  "completed_at": "2026-08-30T20:32:00Z",
+  "status": "FAILED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-196"],
+    "issue_ids": [],
+    "queue_task_id": 369,
+    "github_issue": "GH#715",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ196-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ196-20260830/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ196-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ196-20260830/security-review-req196.md",
+      "handoffs/WF02-REQ196-20260830/step-02d-reviewer.json",
+      "handoffs/WF02-REQ196-20260830/step-03-test-designer.json",
+      "handoffs/WF02-REQ196-20260830/test-designer-gap-analysis.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req196-audit-route.md",
+      "lib/letflow/audit.ex",
+      "lib/letflow/routers/audit.ex",
+      "test/letflow/routers/req196_audit_route_test.exs",
+      "test/letflow/routers/req078_supporting_routes_test.exs",
+      "handoffs/WF02-REQ196-20260830/test-designer-gap-analysis.md"
+    ],
+    "branch_name": "feature/WF02-REQ196-20260830"
+  },
+  "task": {
+    "description": "Full gap-check of test/letflow/routers/req196_audit_route_test.exs (ELIXIR-DEV's first pass, REVIEWER already spot-checked AC1/AC2) plus test/letflow/routers/req078_supporting_routes_test.exs's fixture swap, against all 9 acceptance criteria in docs/requirements.yaml REQ-196. Full rationale in handoffs/WF02-REQ196-20260830/test-designer-gap-analysis.md (see that file for the per-AC verdict table, the response to each of the 10 specific checks the orchestrating agent asked for, and the verification transcript). Summary: all 9 ACs already had genuine, non-tautological coverage from ELIXIR-DEV's first pass -- AC1's seeding via Letflow.Audit.insert_entry/3 is REQ-195's own real write API (not a hand-inserted fake row), consistent with REQ-196's own non-goal of not touching REQ-195's capture logic, and with the identical pre-existing idiom in req078_supporting_routes_test.exs. The pre-existing cursor-round-trip test already exercises the NEW (timestamp, id) seek-pair scheme (not the old global_seq scheme), and actor_id UUID-cast validation was already both implemented and tested. Genuine gaps found and filled (10 new tests, matching exactly the edge-case list step-03's own task.acceptance_criteria named): (1) resource_id filter -- implemented (where_resource_id/2) but never tested; added filter-to-one / omit-returns-all pair. (2) empty audit_entries table -- split_list_page/2's []/next_cursor/2's []-clause never exercised; added a zero-row test asserting items:[]/count:0/next_cursor:nil. (3) page_size exact boundary -- only page_size<row_count (has_more:true) was tested; added the has_more:false side (rows == page_size exactly). (4) from/to time-range filter, including from>to -> 422 -- never tested at all; added inclusive-bounds test (reading a real cutoff timestamp between two seeded inserts, 5ms Process.sleep between them to guarantee distinct microsecond timestamps, matching the sandbox_pool_test.exs precedent -- not asserting anything about wall-clock time itself) plus a from>to 422 test. (5) malformed cursor variants beyond the one already-tested base64-garbage case -- added a wrong-endpoint-prefix cursor (hits Pagination.decode_cursor/4's :wrong_endpoint branch) and a right-prefix-but-malformed-inner-payload cursor (hits cursor_seek_from_cursor/1's own parse failure, a distinct code path). No existing test weakened, skipped, or removed; grep confirms zero @tag :skip/:pending anywhere in either file.",
+    "acceptance_criteria": [
+      "Verify TEST-DESIGNER's gap-analysis in test-designer-gap-analysis.md correctly maps each of REQ-196's 9 ACs to its covering test(s), with no AC left with only a tautological or hand-waved check",
+      "Verify the 10 newly-added gap-fill tests (resource_id filter x2, empty table x1, page_size boundary x1, from/to range x2, malformed cursor x2, plus confirm the pre-existing actor_id/cursor tests) are genuine -- each asserts a real behavior distinction, not a restatement",
+      "Confirm no @tag :skip/:pending and no weakened assertion anywhere in test/letflow/routers/req196_audit_route_test.exs or test/letflow/routers/req078_supporting_routes_test.exs",
+      "Independently re-run mix test test/letflow/routers/req196_audit_route_test.exs test/letflow/routers/req078_supporting_routes_test.exs and mix compile --warnings-as-errors, quoting real output, rather than trusting this handoff's quoted 26/46-passed transcript",
+      "Route to TEST-RUNNER once satisfied"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Independently re-verified all 9 REQ-196 ACs against docs/requirements.yaml's real entry, test/letflow/routers/req196_audit_route_test.exs, and the shipped lib/letflow/audit.ex/lib/letflow/routers/audit.ex source: TEST-DESIGNER's gap-analysis mapping is accurate, all 46 tests pass (mix test test/letflow/routers/req196_audit_route_test.exs test/letflow/routers/req078_supporting_routes_test.exs test/letflow/audit_test.exs test/letflow/audit_capture_test.exs test/letflow/audit_dispositions_test.exs -> 71 passed, 0 failures, real toolchain/real Postgres). mix compile --warnings-as-errors is clean. mix letflow.lint_handoffs reports 0 new violations. handoffs/registry.json format (2-space, no BOM) confirmed unmodified. Applied 4 real mutations to the shipped logic and confirmed the suite catches each, then reverted every one (git status --porcelain lib/ test/ empty and the file re-ran green, 26 passed, after all four reverts): (1) removed `prefix:` from list_entries/1's Repo.all/2 call -- this is NOT a reachable silent cross-tenant leak (no unscoped audit_entries table exists to fall back to); it raises Postgrex 42P01 undefined_table and fails all 16 tests that reach the query, which itself confirms AC6/INV-1's tenant-scoping is structural, not just filtered. (2) made where_resource_type/2 a no-op -- AC3's 'filtering to one resource kind' test caught it (25/26 passed). (3) swapped before_state/after_state in audit_item/1 -- both AC1 tests plus the AC4 field-by-field test caught it (23/26 passed). (4) made check_time_range/2 always return :ok -- the new from>to gap-fill test caught it (25/26 passed). ONE GAP FOUND, otherwise a clean pass: mix format --check-formatted is NOT clean -- test/letflow/routers/req196_audit_route_test.exs has one unformatted call site (the new 'from excludes entries stamped before it' test's get_audit(tenant, query_string: ...) line exceeds the wrap width mix format enforces). This is the only failure; per this project's own FAIL-immediately-and-completely rule for TEST-DESIGN-VALIDATOR, routing back to TEST-DESIGNER for a whitespace-only fix rather than fixing it in this validating step.",
+    "artifacts_out": [],
+    "issues": [
+      {"severity": "BLOCKER", "description": "mix format --check-formatted fails on test/letflow/routers/req196_audit_route_test.exs (one unformatted get_audit(...) call in the from/to time-range gap-fill test around line 566-567). No other check failed. Run mix format on the file (or apply the wrap mix format itself proposes) and re-run mix format --check-formatted to confirm 0 files listed, without touching any assertion or test logic.", "affected_requirement": "REQ-196"}
+    ],
+    "next_action": "Rework TEST-DESIGNER -- 1 BLOCKER above (formatting only), rework iteration 1. See handoffs/WF02-REQ196-20260830/step-03c-test-designer-rework1.json."
+  }
+}

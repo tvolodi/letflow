@@ -1612,6 +1612,19 @@ instead make it structurally impossible (e.g. ORCH greps every handoff it did no
 author for a valid top-level `status` before dispatching the next step, or a git
 pre-push hook runs `mix letflow.lint_handoffs` locally).
 
+**Recurrence (6th occurrence, WF02-REQ196-20260830).** TEST-RUNNER's own summary of its
+step-04 handoff work used the phrase "status `DONE`" -- and its step-04-test-runner.json
+did in fact carry top-level `status: "DONE"`. This time ORCH caught it from the wording of
+the subagent's own completion report (before dispatching the next step, and before any CI
+run), fixed it directly to `"COMPLETED"`, and reran `mix letflow.lint_handoffs` locally to
+confirm 0 new violations before proceeding -- catching it earlier in the pipeline than any
+of the five prior occurrences, but still via manual vigilance, not a structural check. The
+suggested mitigation (ORCH greps every handoff's top-level `status` before dispatching the
+next step) is doable per-instance but still not automated; a git pre-push hook or a
+dedicated `mix letflow.lint_handoffs` call inserted into every review-role agent's own
+dispatch template remains the only fix that would catch this without relying on a human or
+ORCH noticing the wording.
+
 ## A test embeds `git diff main...HEAD` directly, assuming a local `main` branch always exists
 
 **What happened.** REQ-165's `plugin_handler_test.exs` had a test asserting
@@ -1837,6 +1850,15 @@ entirely (`defp fn_name(a, b, c)`) -- the argument becomes required, matching ho
 used, and the warning disappears. This is cheap to check and cheaper than waiting for CI to catch
 it a second time.
 
+**Recurrence (4th occurrence: REQ-195).** `test/letflow/audit_dispositions_test.exs`'s
+`base_entry_attrs/1` declared `overrides \\ []`; all four of its call sites passed `overrides`
+explicitly. Slipped past a real local `mix compile --warnings-as-errors --force` run (both plain
+and `MIX_ENV=test`) because plain compilation of `lib/` does not recompile `test/` files -- the
+warning only surfaces when the test file itself is actually compiled, e.g. by `mix test` or
+`mix letflow.check.test` (the same narrow ISS-0069-focused task CI's backend gate runs). Caught
+by CI, not by local pre-push verification, exactly as REQ-178/187/191 were. The standing
+local-grep/lint this entry already asked for is still not implemented four occurrences in.
+
 ## Fixing a citation's content without re-verifying its source location (REQ-ANALYST rework)
 
 **Occurred twice in a row on the same paragraph, REQ-204's draft, WF01/WF02-REQ204-20260830.**
@@ -1934,3 +1956,122 @@ format-preserving method instead (a plain text-mode append of one new array elem
 closing bracket, or a JSON write that copies the source's existing `indent`/`separators`/`ensure_ascii`
 settings) -- this is a recurring risk on any file this project's agents update from a mixed
 Bash/PowerShell fleet, not unique to `registry.json`.
+
+## Claiming a function "already carries" a value without reading its real parameter list -- three instances in one requirement's design
+
+**REQ-195 (audit-entry storage), three separate occurrences before REVIEWER's gate, each caught
+one function-call later than the last.** The design's original text asserted, as supporting
+reasoning for using real actor ids in several audit rows, that a set of context functions
+"already receives `actor_id` as an explicit Elixir-level argument." Each assertion turned out to
+be checking the wrong thing -- a plausible inference from the *shape* of similar functions
+elsewhere in the same module, not a read of the specific function's own `@type`/signature:
+
+1. **Rework 1** -- `Letflow.Definitions.activate/2`/`deprecate/2`/`archive/2` were claimed to carry
+   `actor_id` via `activate_opts()`. CODE-DESIGN-VALIDATOR read `activate_opts() :: [prefix:
+   String.t(), service_scope_validator: ...]` directly and found no `actor_id` field anywhere.
+2. **Rework 2** -- the same design, having just fixed instance 1, made an *adjacent* unverified
+   claim to patch over the gap: that `activate/2` is "also called from system/scheduler-initiated
+   paths with no human actor," citing two test-fixture-helper call sites as evidence. Verified
+   directly this session: `grep -rn "Definitions.activate(" lib/` (excluding the design doc) finds
+   exactly one production caller -- the router -- and the cited tests are fixture setup, not a
+   real production system-driven path. The correction to instance 1 had introduced a second,
+   equally unverified claim.
+3. **Implementation** -- SECURITY-REVIEWER, re-checking the *shipped code* rather than the by-then-twice-corrected
+   design doc, found the design's own §3.2 table still asserted `Letflow.Tasks.assign_task/3`
+   "already has `actor_id` as an explicit, required field of `assign_attrs`." Reading
+   `lib/letflow/tasks.ex` directly showed `@type assign_attrs :: %{required(:user_id) =>
+   String.t()}` -- no `actor_id` field at all; only the *sibling* function `claim_task/3`'s
+   `claim_attrs` carries it. ELIXIR-DEV caught this one itself before it shipped uncorrected and
+   disclosed it in the handoff rather than papering over it, which is why it surfaced as a
+   disclosed disposition rather than a fourth CODE-DESIGN-VALIDATOR rework cycle.
+
+**Why this kept recurring despite being caught each time:** each claim was locally plausible --
+`activate_opts()`, `assign_attrs`, and `claim_attrs` are all option/attrs types on sibling
+functions inside the same module, and several *do* carry `actor_id` (`cancel_instance/3`'s
+`attrs[:actor_id]`, `complete_task/3`'s `attrs[:actor_id]`, `claim_attrs.actor_id`). A design
+author who has just confirmed the pattern holds for three or four functions in a family has a real
+incentive to assume it generalizes to the rest of the family without re-checking each one
+individually -- the claim reads as "obviously true by analogy" right up until the one function
+that breaks the pattern is actually opened.
+
+**Correct alternative:** when a design (or an implementation building on a design) asserts that a
+specific named function "already carries," "already receives," or "already has" a value its
+downstream logic depends on, that claim must be checked against *that exact function's own
+`@type`/signature and body* -- not inferred from a sibling function in the same module, not
+inferred from the module's general shape, and not treated as re-confirmed by fixing a
+*different*, adjacent unverified claim. `grep -rn "<the exact function call>(" lib/` for real
+callers, and reading the specific `@type` line, both cost one tool call and would have caught all
+three instances on the first pass. When a design depends on several sibling functions having the
+same shape, verify each one individually and say so explicitly (as REQ-195's final design does in
+§3.1a/§3.1b) rather than asserting the family-wide generalization once and trusting it to hold for
+every member.
+
+## Ecto's default index/constraint naming can silently collide or exceed Postgres's 63-byte NAMEDATALEN limit -- invisible to a plain `mix ecto.migrate`
+
+**REQ-202 (content-addressed artifact store), caught by TEST-DESIGNER's own test run against
+real Postgres, not by review.** The migration declared both a `unique_index/3` and a plain
+`index/3` on `artifact_versions(:artifact_kind, :artifact_name, :version_number)`, the second
+with `desc: :version_number`. Ecto derives an index's default name from its column list alone --
+the `desc:` annotation changes the generated SQL but not the derived name -- so both calls
+produced the *identical* default name. That name was also 66 bytes, seven over Postgres's
+63-byte `NAMEDATALEN` limit, so even a single occurrence would have been silently truncated to a
+different, shorter identifier than what the code (here, `ArtifactVersion`'s
+`@unique_version_number_constraint_name`, used by `unique_constraint/3`'s error-matching) assumed.
+Two independent failure modes from one root cause: a **name collision** between two index
+declarations, and a **truncation mismatch** between the constraint name Postgres actually stores
+and the atom the schema module matches errors against.
+
+**Why this is invisible to `mix ecto.migrate` alone:** that command runs the migration once,
+against the `public`/non-tenant schema, in whatever database state the running session already
+has. It never replays the migration into a *fresh* per-tenant schema the way
+`Letflow.TenantProvisioning`'s real provisioning path does, so a collision between two index
+names in the SAME migration only surfaces the moment Postgres is asked to create both inside one
+schema from a clean slate -- exactly what TEST-DESIGNER's test run did (and what an interactive
+`mix ecto.migrate` against a long-lived dev database, which already has the first index and skips
+re-creating it, would not reproduce). Likewise, a truncated name compiles and migrates fine; it
+only breaks the moment application code tries to pattern-match a Postgres error against the name
+the code *assumes* was stored, which is a runtime-error-path test, not a migration-apply check.
+
+**Correct alternative:** any migration whose index or constraint's default name is built from
+more than two or three column names, or that mixes `desc:`/`asc:` direction annotations across
+sibling index declarations on the same column set, should be given an explicit, short `:name`
+option rather than trusting Ecto's default -- and that default should be computed and checked
+against the 63-byte limit by hand (`column_list |> Enum.join("_") |> then(&"#{table}_#{&1}_index")
+|> byte_size`) before relying on it, not assumed safe because the migration compiles. A design or
+review pass that only reads the migration's DDL cannot catch this class either -- it takes an
+actual replay against a real, freshly-provisioned per-tenant schema (TEST-DESIGNER's or
+TEST-RUNNER's own suite run, not `mix ecto.migrate`) to surface it.
+
+## A new tenant-scoped migration's tables must be added to `test/support/tenant_fixture.ex`'s `@expected_tenant_tables` oracle in the SAME change -- three occurrences, and it was never actually documented here until now
+
+**REQ-181 (webhook_subscriptions), REQ-195 (audit_entries), and now REQ-202
+(artifact_versions/repository_artifacts) each independently forgot this step**, and each was
+caught by the SAME guard test (`Letflow.Support.TenantFixtureTest`'s "C6 -- oracle-rot guard",
+which asserts the set of tables a real tenant-schema provisioning run actually creates equals
+`@expected_tenant_tables/0` in both directions) rather than by review. REQ-202's own TEST-RUNNER
+handoff (step-04-test-runner.json) asserted in passing that this was "the exact same recurring
+bug class documented on REQ-181 ... and REQ-195" -- but at the time that sentence was written, no
+anti-patterns.md entry for it actually existed: neither prior occurrence had been filed here, so
+there was nothing in this file an ELIXIR-DEV session could have grepped for to pre-empt REQ-202's
+own instance before TEST-RUNNER caught it a third time. This entry is that filing, after the fact,
+for all three.
+
+**The mechanism, each time:** a migration adds one or more new `prefix: schema`-scoped tables
+(`priv/repo/migrations/`), and `Letflow.TenantProvisioning.tenant_scoped_migrations/0`'s manifest
+is updated to run it during provisioning -- but `test/support/tenant_fixture.ex`'s
+`@expected_tenant_tables` list, a separate, hand-maintained oracle of every table a freshly
+provisioned tenant schema should contain, is a different file with no compiler or migration-runner
+link forcing it to move in lockstep. C6's guard test is the only thing that notices the drift, and
+it only fires when the full suite (or that specific test file) is actually run against a real,
+freshly provisioned schema -- exactly the category of check `mix ecto.migrate` alone (see this
+file's adjacent NAMEDATALEN entry) cannot perform either.
+
+**Correct alternative:** any requirement whose acceptance criteria include a new tenant-scoped
+migration should treat updating `@expected_tenant_tables` (and the paired count assertion in
+`test/letflow/support/tenant_fixture_test.exs`) as part of that migration's own diff, not a
+follow-up -- ELIXIR-DEV should grep for `@expected_tenant_tables` and add the new table name(s)
+in the same commit that adds the migration, before TEST-DESIGNER or TEST-RUNNER ever runs C6
+against it. Now that this is a filed, three-occurrence pattern, a fourth instance should be treated
+as a signal that the check itself belongs closer to the migration (a compile-time or
+migration-review assertion cross-referencing the manifest against the oracle list) rather than
+left to whichever downstream test happens to run C6 first.

@@ -299,10 +299,11 @@ defmodule Letflow.Support.TenantFixtureTest do
       # it from 21 to 22; REQ-176 added dlq_entries, bumping it from 22 to 23; REQ-181
       # added webhook_subscriptions, bumping it from 23 to 24; REQ-186 added timers,
       # bumping it from 24 to 25; REQ-183 added webhook_delivery_attempts, bumping it
-      # from 25 to 26 --
+      # from 25 to 26; REQ-195 added audit_entries, bumping it from 26 to 27; REQ-202
+      # added repository_artifacts and artifact_versions, bumping it from 27 to 29 --
       # test/support/tenant_fixture.ex's own @expected_tenant_tables list already
-      # carries all six.)
-      assert length(TenantFixture.expected_tenant_tables()) == 28
+      # carries all nine.)
+      assert length(TenantFixture.expected_tenant_tables()) == 31
       assert length(state.manifest_versions) > 0
     end
 

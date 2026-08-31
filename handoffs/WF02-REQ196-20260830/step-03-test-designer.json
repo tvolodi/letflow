@@ -1,0 +1,46 @@
+{
+  "handoff_id": "step03-WF02-REQ196-20260830",
+  "run_id": "WF02-REQ196-20260830",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ196-20260830/step-03-test-designer.json",
+  "created_at": "2026-08-30T20:13:45Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-196"],
+    "issue_ids": [],
+    "queue_task_id": 369,
+    "github_issue": "GH#715",
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ196-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ196-20260830/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ196-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ196-20260830/security-review-req196.md",
+      "handoffs/WF02-REQ196-20260830/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req196-audit-route.md",
+      "lib/letflow/audit.ex",
+      "lib/letflow/routers/audit.ex",
+      "test/letflow/routers/req196_audit_route_test.exs",
+      "test/letflow/routers/req078_supporting_routes_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ196-20260830"
+  },
+  "task": {
+    "description": "REVIEWER idiom/scope/decision-record gate (WF-02 Step 2d) PASSED. This is REQ-196's route-half of the audit split: GET /api/v1/audit repointed from Letflow.EventStore.read_global/1 to REQ-195's Letflow.Audit.list_entries/1 over the audit_entries table. SECURITY-REVIEWER already PASSED (see security-review-req196.md) with independent toolchain verification (mix compile clean, mix format clean, 63/63 targeted tests, INV-1/4/7/8 gated PASS, INV-2/3/5 N/A). This REVIEWER pass additionally re-ran `mix compile --warnings-as-errors` independently this session (clean, no output) and read the full git diff (lib/letflow/audit.ex, lib/letflow/routers/audit.ex, both test files) directly rather than trusting prior summaries. Findings: (1) list_params()'s :prefix as a required map key (vs. the design's sketch, which omitted it) is a faithful resolution of the design's own §1.3 statement that prefix reaches list_entries/1 'the same way insert_entry/3 accepts prefix' -- with a single map argument, required-key is the only way to satisfy that; ELIXIR-DEV documented the reasoning directly in the @typedoc (lib/letflow/audit.ex list_params typedoc). Not a deviation needing rework. (2) The {timestamp, id} cursor seek pair is not actually a deviation at all -- design §1.1/§1.3 explicitly specifies this seek-pair scheme; OQ-2 was only about *where* decoding lives (router vs. context module), and ELIXIR-DEV kept it in the router per the design's stated default, consistent with routers/audit.ex's existing parse_cursor_param/1 ownership. (3) unsupported_resource_type?/1's deletion is clean: grepped, zero references remain anywhere in lib/ or test/ (only the design doc's historical 'Before/After' narrative mentions the old name). (4) INV-RT-1 reconfirmed by direct grep: zero 'Repo.' occurrences in lib/letflow/routers/audit.ex. (5) list_entries/1's page_size+1/drop-extra-row idiom matches Letflow.ServiceCatalog.list_all/1's split_list_page/2 and Letflow.Dlq/Letflow.Instances/Letflow.Tasks's own split_list_page/2 -- this is now the fifth independent copy of the same 2-line helper across the codebase (audit.ex, dlq.ex, instances.ex, tasks.ex, service_catalog.ex). Not a blocker (each copy is idiomatic and tiny, and three of the five already predate this requirement), but worth a shared-helper pass soon -- flagged, not gating. (6) Moduledoc re-read in full: all stale 'always null'/constant-resource_type/'Letflow has no such table' language is gone, replaced with an accurate description of the audit_entries-backed source; confirmed by both direct reading and the diff. (7) AC5 (:AuditRead) and decision-record consistency confirmed: git diff main...HEAD --stat -- lib/letflow/api/authorization.ex priv/repo/migrations/ web/ lib/letflow/audit/entry.ex returned empty (zero changes); this consumes REQ-195's already-decided schema, no decisions/ record needs touching. (8) Spot-checked req196_audit_route_test.exs's AC1 tests (lines 97-140, real before_state/after_state != old always-null behavior) and AC2 test (lines 146-168, three seeded resource_types, asserts sorted list == [\"definition\",\"instance\",\"task\"]) -- both genuinely exercise the fixed defect, not tautologies. req078_supporting_routes_test.exs's fixture swap (register_event_type!/seed_projection!/append_event! -> seed_audit_entry!) is a legitimate stale-fixture repair; AC2's cross-tenant refute and the 403 test both preserved in substance. PASS. Routing to TEST-DESIGNER for the full gap-check -- ELIXIR-DEV's req196_audit_route_test.exs already covers all 9 ACs as a first pass (AC1-AC9 including pagination and actor_id-validation edge cases); your job is to find what it missed, not to re-write it wholesale.",
+    "acceptance_criteria": [
+      "Full gap-check of test/letflow/routers/req196_audit_route_test.exs and the req078_supporting_routes_test.exs fixture change against all 9 ACs in docs/requirements.yaml REQ-196",
+      "Confirm/extend edge-case coverage (empty audit_entries table, from>to, page_size boundary, resource_id filter, malformed cursor variants beyond the one already tested)",
+      "No @tag :skip/pending, no weakened assertions",
+      "Hand to TEST-DESIGN-VALIDATOR (step-03b) once satisfied"
+    ]
+  },
+  "result": null
+}

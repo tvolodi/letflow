@@ -3527,6 +3527,58 @@
       "released_lock": true,
       "last_known_step": "Step Final (ORCH: merged PR #745 to main, queue task 367 released done)",
       "note": "Prometheus metrics subsystem (OBS-02), resolving REQ-078's three recorded divergences (auth, scope, format) against a fresh finding: web/src/api/metrics.ts already expects Prometheus text from an unversioned GET /metrics, not the JSON REQ-078 shipped. Six metric families via :telemetry, route-template HTTP labels, DB-unavailable graceful degradation. New direct mix.exs dependency {:telemetry, \"~> 1.4\"} (promotion of an already-transitive dep, mix.lock diff empty) -- SECURITY-REVIEWER (step-02c) PASSED and granted its own sign-off (see handoffs/WF02-REQ194-20260830/security-review-req194.md). Label-allowlist invariant (the entire safety mechanism for the new global unauthenticated GET /metrics endpoint) independently verified line-by-line across every handle_* function in lib/letflow/metrics/registry.ex -- no metric family can ever emit a tenant_id/instance_id/definition_id/task_id/actor_id label. Poller's DB-unavailable deviation from design section 6's literal wording assessed safe (design wording was internally incoherent on that exact failure path). REVIEWER (step-02d) PASSED: dependency sign-off on {:telemetry, \"~> 1.4\"} explicitly granted (checked decision-record precedent 0014-scripting-plugin-runtime-strategy.md -- not applicable, a lighter-weight handoff sign-off is the right mechanism for a zero-risk transitive promotion); Metrics.Registry's supervision placement, ETS table ownership (GenServer-owned, callers write directly from their own processes, :telemetry.attach_many/4 detached in terminate/2), and the Poller's schedule_next_tick/0 (unconditional, same delay regardless of success/failure -- no tight failure-loop risk) all confirmed idiomatic; no scope creep found. Three MINOR non-blocking findings filed in step-02d-reviewer.json (two stale comments referencing the deleted Letflow.Routers.Metrics module, design §6 wording not yet amended to match shipped behavior, and Engine.emit_task_completed_telemetry/2's real DB read being heavier than design §3's stated overhead framing) -- none require rework. Routed to TEST-DESIGNER at step-03 for the full 10-AC gap-check (ELIXIR-DEV's existing 53 passing tests are not a rewrite target)."
+    },
+    {
+      "run_id": "WF02-REQ195-20260830",
+      "requirement_id": "REQ-195",
+      "queue_task_id": 368,
+      "github_issue_number": 714,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/audit.ex",
+        "priv/repo/migrations"
+      ],
+      "started_at": "2026-08-30T16:21:27Z",
+      "lock_released_at": "2026-08-30T18:42:56Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: merged PR #746 to main, queue task 368 released done)",
+      "note": "Audit-entry storage (OBS-03, XC-02), closing routers/audit.ex's recorded null-state gap. New tenant-scoped audit_entries table, DB-enforced immutability triggers, same-transaction writes, tamper-evident chain_hash with genuine recompute-based verification (fixing a documented R-Co weakness where verification only checks linkage, not content). No route change. TEST-DESIGN-VALIDATOR rework-1 recheck PASSED: check-order gap (do_verify_chain/2) now covered by a test independently confirmed to distinguish cond-clause order; format gate clean. TEST-RUNNER (step 4) found the new audit_entries tenant-scoped migration was not reflected in test/support/tenant_fixture.ex's @expected_tenant_tables oracle list/count -- same bug class as REQ-181's webhook_subscriptions gap -- routed back to ELIXIR-DEV as rework-1 (handoffs/WF02-REQ195-20260830/step-05-elixir-dev-rework1.json). ELIXIR-DEV applied the fix (test/support/tenant_fixture.ex + test/letflow/support/tenant_fixture_test.exs only). TEST-RUNNER rework-1 recheck (step-05-test-runner.json / test-runner-report-2 in handoffs/WF02-REQ195-20260830/) re-ran the full suite, confirmed the C6 guard now passes and no new regression exists, and routed forward to RELEASE-VALIDATOR (step-05-release-validator.json). RELEASE-VALIDATOR (step 06) independently re-derived all 12 ACs against the real code (not prior gate reports): personally hand-traced do_verify_chain/2 and confirmed the hash-recompute-before-linkage check order is genuinely load-bearing for AC6's specified adversarial scenario (a prev_chain_hash-only tamper makes both cond clauses true simultaneously; only clause order decides hash_mismatch vs chain_broken, and found/ran the exact test -- audit_dispositions_test.exs's prev_chain_hash-tamper test -- that independently proves it, passing). Spot-checked 4 actor_id dispositions chosen for zero overlap with SECURITY-REVIEWER/REVIEWER's already-checked set (cancel_instance/3, insert_token/3, TaskActivation.do_insert/3, plus a full re-grep of all 6 Identity nil sites) -- zero discrepancies. Confirmed the immutability trigger is registered in TenantProvisioning.tenant_scoped_migrations/0, confirmed the Ecto.Multi same-transaction guarantee at 2 real call sites, confirmed AC11 (no routers/ file touched) via git diff --stat, ran the 4 target test files (39/39 passed) and the full suite via scripts/test_parallel.sh itself (2800/2802 passed, 2 failures, both the documented pre-existing rustc-absent CheckToolchainTest flake, no new regression), and ran mix compile --warnings-as-errors itself (clean). Verdict: PASS. Full report: handoffs/WF02-REQ195-20260830/req195-release-validation-report.md. Routed to DOC-UPDATER (step-06-doc-updater.json)."
+    },
+    {
+      "run_id": "WF02-REQ196-20260830",
+      "requirement_id": "REQ-196",
+      "queue_task_id": 369,
+      "github_issue_number": 715,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/routers/audit.ex"
+      ],
+      "started_at": "2026-08-30T19:48:48Z",
+      "lock_released_at": "2026-08-30T20:53:02Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: pushing/merging PR to main, queue task 369 to be released done)",
+      "note": "Route half of the audit split atop REQ-195's audit_entries store. Repoints GET /api/v1/audit's handler from EventStore.read_global/1 to the new store, preserving response envelope and :AuditRead permission. Retires audit.ex's own documented caveats (constant resource_type, always-null before/after state). No schema/authorization.ex/web/ changes."
+    },
+    {
+      "run_id": "WF02-REQ202-20260830",
+      "requirement_id": "REQ-202",
+      "queue_task_id": 375,
+      "github_issue_number": 721,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/repository.ex",
+        "lib/letflow/repository/artifact.ex",
+        "lib/letflow/repository/artifact_version.ex",
+        "lib/letflow/repository/canonicaliser.ex",
+        "lib/letflow/definitions/promotion_digest.ex",
+        "lib/letflow/tenant_provisioning.ex",
+        "priv/repo/migrations"
+      ],
+      "started_at": "2026-08-30T21:58:57Z",
+      "lock_released_at": "2026-08-31T00:30:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: merged PR #748 to main, queue task 375 released done)",
+      "note": "Content-addressed artifact store (REPO-01..04): per-tenant repository_artifacts/artifact_versions tables, dedup by content_hash, DB-level immutability triggers, REQ-067 cursor-paginated version history. New Letflow.Repository.Canonicaliser deliberately separate from Letflow.Definitions.PromotionDigest (normalizes numbers; PromotionDigest does not and must not, to avoid breaking stored promotion digests/INV-PRM-5) -- both moduledocs cross-reference each other per AC5. REQ-041 (solution_pack_artefact_bases) disambiguated as an unrelated table. No route/controller/web/ changes. Design reworked once (AC10 migration-comment requirement; OQ-2 AC5-interpretation resolved rather than deferred). Implementation reworked three times: (1) @spec accuracy fix; (2) two real Postgres bugs TEST-DESIGNER found by actually running migrations against a per-tenant schema -- an Ecto default index-name collision (desc: annotation stripped from the generated name, colliding with a sibling index) and a truncated/mismatched unique-constraint name past Postgres's 63-byte NAMEDATALEN limit, both fixed with explicit short names; (3) tenant-table oracle-rot guard in test/support/tenant_fixture.ex was missing the two new tables (3rd occurrence of this class across REQ-181/REQ-195/REQ-202 -- now documented in docs/anti-patterns.md for the first time). Test design reworked once: a mutation-confirmed gap where a content_hash collision must not re-validate content_type/byte_size against the existing row. RELEASE-VALIDATOR independently re-derived all 14 ACs from source and real command output. Two new anti-pattern entries filed. CI: 3 consecutive full reruns hit the pre-existing, unrelated :wasm_hang timing-flake class (confirmed via empty git diff on wasm paths) before a clean run landed; fed back via SendFeedback given the unusual persistence."
     }
   ]
 }

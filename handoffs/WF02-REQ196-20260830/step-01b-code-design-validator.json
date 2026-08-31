@@ -1,0 +1,45 @@
+{
+  "handoff_id": "step01b-WF02-REQ196-20260830",
+  "run_id": "WF02-REQ196-20260830",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ196-20260830/step-01b-code-design-validator.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-196"],
+    "issue_ids": [],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req196-audit-route.md",
+      "lib/letflow/routers/audit.ex",
+      "lib/letflow/audit.ex",
+      "lib/letflow/audit/entry.ex",
+      "lib/letflow/design/req195-audit-entry-storage.md",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/api/pagination.ex",
+      "web/src/api/audit.ts",
+      "web/src/pages/admin/AuditLogPage.tsx"
+    ],
+    "branch_name": "feature/WF02-REQ196-20260830",
+    "rework_pass": 0
+  },
+  "task": {
+    "description": "Validate REQ-196's design (lib/letflow/design/req196-audit-route.md) -- the route half of the audit split, repointing GET /api/v1/audit's handler from Letflow.EventStore.read_global/1 onto REQ-195's just-merged audit_entries store (lib/letflow/audit.ex, lib/letflow/audit/entry.ex). Read docs/requirements.yaml's REQ-196 entry in full yourself before validating -- do not trust this summary alone.\n\nThe design's key claims, for you to independently re-verify against the real current code (not just the design doc's own prose):\n\n1. A NEW read function is needed: Letflow.Audit.list_entries/1 (design section 1). Letflow.Audit today (post-REQ-195) exposes only append_multi/4, insert_entry/3, verify_chain/2 -- confirm via grep that no list/query function already exists. Confirm the design's INV-RT-1 argument (lib/letflow/routers/audit.ex's own moduledoc states this router performs no Repo call; the same invariant is stated at lib/letflow/routers/admin_services.ex:64) genuinely forces a new context-module function rather than an inline router query -- verify the cited precedent, Letflow.ServiceCatalog.list_all/1 (lib/letflow/service_catalog.ex:369-387, added for REQ-192 to resolve an identical INV-RT-1 conflict per lib/letflow/design/req192-service-catalog-routes.md section 5), actually matches the shape the design claims (own list_params() type, own cursor-prefix constant, page_size+1-fetch/drop-extra-row idiom, no tenant filter of its own).\n\n2. The response-envelope mapping (design section 2.1) is claimed to be a straightforward 1:1 column-to-field mapping, with only Entry.id -> \"audit_id\" renamed (matching routers/audit.ex's existing audit_item/1 convention for event.event_id -> \"audit_id\"). Verify each RawAuditEntry field (web/src/api/audit.ts lines 26-35: audit_id, actor_id, action, resource_type, resource_id, timestamp, before_state, after_state) maps to exactly one Letflow.Audit.Entry column (lib/letflow/audit/entry.ex) and that the mapping table is complete and correct.\n\n3. resource_type filter (design section 3): confirm the design correctly identifies that routers/audit.ex's CURRENT unsupported_resource_type?/1 (lines 154, 211-214) treats anything but \"instance\" as an empty-page no-op, and that this function plus its call site must be deleted entirely, replaced by a real optional equality filter backed by REQ-195's migration index 3 (resource_type, resource_id, timestamp desc, id desc) -- confirm that index actually exists in the audit_entries migration.\n\n4. The `payload` field decision (design section 4): decision is REMOVAL. Independently re-verify, by reading the files yourself, that web/src/api/audit.ts's RawAuditEntry interface (lines 26-35) does NOT declare a payload field, and that AuditLogPage.tsx does not reference `.payload` anywhere. Confirm the design's reasoning (after_state now supplies equivalent/better information) is sound and that no other code path reads this endpoint's payload field.\n\n5. Moduledoc rewrite (design section 5): confirm the design correctly identifies every claim in routers/audit.ex's CURRENT moduledoc that must be removed (the \"Served from the event store, not an audit-entry table\" section, lines 14-37; the resource_type \"not supported\" framing in the filter-disposition table) and that it prescribes concrete replacement content (naming Letflow.Audit.list_entries/1 as the new delegate, restating what before_state/after_state/resource_type now do) rather than just deletion.\n\n6. Authorization (design section 6) and tenant-scoping (design section 7): confirm zero change is needed to lib/letflow/api/authorization.ex (grep endpoint_policy_key(\"GET\", \"/audit\") and the :AuditRead role mapping yourself) and that the tenant-scoping mechanism (prefix from conn.assigns.scoped_opts, same as today) is inherited automatically with no new mechanism introduced.\n\n7. Non-goals (design section 9): confirm the design does not touch REQ-195's schema/capture logic, does not modify web/, adds no new routes, and needs no new migration (the three indexes REQ-195 already created are claimed sufficient for every filter shape this route needs -- re-verify against the actual migration file).\n\n8. Traceability (design section 0): cross-check the design's own traceability table against REQ-196's real 9 acceptance_criteria in docs/requirements.yaml yourself, don't trust the table's accuracy.\n\nAlso verify, independently of the design doc's own claims: zero literal Elixir implementation code anywhere in the design doc -- grep for 'defmodule', 'def ', a real Ecto.Query pipeline (|> where(...) |> Repo.all(...)), or any other working code shape; confirm every fenced code block is a @type/@spec declaration or a plain shape sketch with no executable body. This project has twice reworked a design doc (REQ-197, commits 3680243, 290c6b2) for exactly this defect, and REQ-195's own design doc (this same run's predecessor) went through two rework iterations for factual-accuracy gaps found by exactly this validation step -- read this design doc's section 1.3 (query construction) especially closely, since an earlier draft of it contained a literal Ecto pipe-operator query block that was rewritten into a prose/table form before this handoff was written; confirm that rewrite actually removed all executable-looking syntax.",
+    "acceptance_criteria": [
+      "Every one of REQ-196's 9 acceptance criteria (docs/requirements.yaml) maps to a concrete design element -- cross-check the design's own section 0 traceability table against the real acceptance_criteria list yourself.",
+      "The claim that no read/list function exists yet in Letflow.Audit is verified by grep against the real lib/letflow/audit.ex, and the ServiceCatalog.list_all/1 precedent cited as justification for adding one is verified against the real lib/letflow/service_catalog.ex and its own design doc.",
+      "The response-envelope mapping (section 2.1) is verified field-by-field against the real RawAuditEntry/RawAuditPage types in web/src/api/audit.ts and against the real Letflow.Audit.Entry schema in lib/letflow/audit/entry.ex.",
+      "The resource_type filter's before/after behavior is verified against the real current routers/audit.ex code (unsupported_resource_type?/1) and the real REQ-195 migration's index list.",
+      "The `payload` field removal decision is independently re-verified by reading web/src/api/audit.ts and web/src/pages/admin/AuditLogPage.tsx yourself, not by trusting the design doc's own grep claims.",
+      "The moduledoc-rewrite section correctly identifies every stale claim in the CURRENT routers/audit.ex moduledoc that AC7 requires removed, and prescribes concrete replacement content.",
+      "No change to lib/letflow/api/authorization.ex is confirmed necessary, and the tenant-scoping mechanism is confirmed to require no new code path.",
+      "Zero literal Elixir/Ecto implementation code anywhere in the design doc -- grep for 'defmodule', 'def ', a real Ecto.Query pipeline, or any other working code shape; confirm every fenced block remains a @type/@spec declaration, table, or plain-English/shape sketch.",
+      "CRITICAL: the handoff's top-level status field (this file, top level, not nested under result) must be exactly one of PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED when you finish your pass -- grep the file yourself before finishing, and run mix letflow.lint_handoffs if available, per this project's own recurring anti-pattern entry on this exact mistake."
+    ]
+  }
+}

@@ -602,3 +602,66 @@ history:
       mix compile --warnings-as-errors clean; full suite 2794/2797 with
       3 pre-existing failures (none from REQ-201 diff, independently
       diagnosed). Full detail: handoffs/WF02-REQ201-20260830/.
+  - req: REQ-195
+    event: started
+    agent: ORCH
+    at: "2026-08-30T16:21:27Z"
+    note: >
+      Queue task 368, GH#714, stage S6. Audit-entry storage (OBS-03,
+      XC-02), closing lib/letflow/routers/audit.ex's (REQ-078, done)
+      recorded gap: resource_type hardcoded "instance", before_state/
+      after_state always null. New audit_entries table (tenant-scoped
+      per decision 0003 Decision B), DB-enforced immutability triggers,
+      same-transaction writes with the state change, tamper-evident
+      chain_hash/prev_chain_hash. Must fix a documented R-Co weakness:
+      chain verification must RECOMPUTE each hash from stored content,
+      not just check linkage (R-Co's own validateAuditChain doesn't).
+      Must decide: DB-trigger vs Elixir-context-boundary capture
+      mechanism, and resource_id's column type. No route change (that's
+      REQ-196). Depends_on [REQ-038, REQ-045, REQ-069, REQ-193], all
+      done.
+  - req: REQ-195
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T18:42:56Z"
+    note: >
+      WF02-REQ195-20260830 done (queue task 368, GH#714, stage S6). Audit-entry
+      storage shipped: new tenant-scoped audit_entries table (chain_hash/
+      prev_chain_hash, before_state/after_state jsonb, DB-enforced BEFORE
+      UPDATE/BEFORE DELETE immutability triggers), audit writes Multi.merge'd
+      into the SAME transaction as the state change they describe. This closes
+      lib/letflow/routers/audit.ex's own documented gap (REQ-078): resource_type
+      was hardcoded to the constant "instance" and before_state/after_state
+      were always null because Letflow's event model had no before/after
+      capture -- both are now real. The chain-verification design genuinely
+      fixes a documented R-Co weakness, not just a cosmetic port: do_verify_chain/2
+      RECOMPUTES each entry's hash from its stored content before checking
+      prev_chain_hash linkage (R-Co's own validateAuditChain only checked
+      linkage). RELEASE-VALIDATOR independently re-verified all 12 acceptance
+      criteria. Full detail:
+      handoffs/WF02-REQ195-20260830/req195-release-validation-report.md.
+  - req: REQ-196
+    event: started
+    agent: ORCH
+    at: "2026-08-30T19:48:48Z"
+    note: >
+      Queue task 369, GH#715, stage S6. Route half of the audit split,
+      atop REQ-195's just-merged audit_entries store.
+  - req: REQ-196
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T20:53:02Z"
+    note: >
+      WF02-REQ196-20260830 done (queue task 369, GH#715, stage S6). GET
+      /api/v1/audit repointed from Letflow.EventStore.read_global/1 to
+      REQ-195's audit_entries store. This closes the full audit vertical:
+      REQ-195 (store) and REQ-196 (route) are both done. Full detail:
+      handoffs/WF02-REQ196-20260830/release-validation-report-20260830.md.
+  - req: REQ-202
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T23:46:59Z"
+    note: >
+      WF02-REQ202-20260830 done (queue task 375, GH#720, stage S6).
+      Content-addressed artifact store shipped. Full detail:
+      handoffs/WF02-REQ202-20260830/release-validation-report-20260830.md.

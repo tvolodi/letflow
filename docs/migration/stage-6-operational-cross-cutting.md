@@ -40,15 +40,48 @@ DB-unavailable degradation paths, with no path found by which a
 tenant/instance/definition/task/actor id can reach a metric label.
 `lib/letflow/routers/metrics.ex` (REQ-078's authenticated JSON
 endpoint) is removed outright, superseded by
-`lib/letflow/routers/metrics_exposition.ex`. REQ-201 (alerting hooks
-with edge-triggered firing and retry/backoff delivery, OBS-06) is also
-done as of 2026-08-30/31: threshold detection for all four OBS-06
-trigger types (instance_error_stuck, dlq_depth_threshold,
-scheduler_lag_threshold, webhook_subscription_paused), edge-triggered
-firing (no repeat fires while an alert is active), and retry/backoff
-delivery via REQ-183's existing webhook dispatch mechanism, with
-RELEASE-VALIDATOR independently re-verifying all 14 acceptance criteria
-and 17/17 targeted tests (PASS). The ordering
+`lib/letflow/routers/metrics_exposition.ex`. REQ-195 (Audit-entry
+storage with before/after state capture and tamper-evident chaining,
+OBS-03/XC-02) is also done as of 2026-08-30, closing
+`lib/letflow/routers/audit.ex`'s own documented gap (REQ-078):
+`resource_type` was hardcoded to the constant `"instance"` and
+`before_state`/`after_state` were always null because Letflow's event
+model had no before/after capture -- both are now real, written in the
+same transaction as the state change they describe, into a new
+DB-immutable, tenant-scoped `audit_entries` table. The chain
+verification also fixes a genuine R-Co weakness rather than just
+porting it: `do_verify_chain/2` recomputes each entry's hash from its
+stored content before checking `prev_chain_hash` linkage, where R-Co's
+own `validateAuditChain` only checked linkage. REQ-195 is core-only,
+no route change. REQ-196 (Serve `GET /api/v1/audit` from the audit
+store) is also done as of 2026-08-30: the route's handler is repointed
+from `Letflow.EventStore.read_global/1` to REQ-195's `audit_entries`
+store, retiring `routers/audit.ex`'s own documented caveats in full --
+`resource_type` now varies by real resource kind instead of the
+constant `"instance"`, `before_state`/`after_state` carry real
+captured state instead of always null, and the `resource_type` filter
+now genuinely discriminates -- with the response envelope unchanged
+against `web/src/api/audit.ts`'s `RawAuditPage`/`RawAuditEntry` and no
+`web/` file touched. This closes the full audit vertical (REQ-195 +
+REQ-196) in full. REQ-201 (alerting hooks with edge-triggered firing
+and retry/backoff delivery, OBS-06) is also done as of 2026-08-30/31:
+threshold detection for all four OBS-06 trigger types
+(instance_error_stuck, dlq_depth_threshold, scheduler_lag_threshold,
+webhook_subscription_paused), edge-triggered firing (no repeat fires
+while an alert is active), and retry/backoff delivery via REQ-183's
+existing webhook dispatch mechanism, with RELEASE-VALIDATOR
+independently re-verifying all 14 acceptance criteria and 17/17
+targeted tests (PASS). REQ-202 (Content-addressed artifact store and
+the REPO-04 canonicaliser) is also done as of 2026-08-30:
+`repository_artifacts` + `artifact_versions` (migration 045's shape,
+not R-Co's conflicting migration 058 shape), a canonicaliser
+deliberately kept SEPARATE from REQ-036's `PromotionDigest` (both
+moduledocs cross-reference each other; merging them would silently
+redrive every stored promotion digest), DB-level immutability on the
+content store, and REQ-041's `solution_pack_artefact_bases`
+disambiguated as an unrelated table. No activation (REQ-203, the
+natural next half of this pair) and no route/controller surface --
+both explicitly out of scope here. The ordering
 subsystem remains
 pending. A
 future WF-04 stage-gate check of the scheduler half specifically (not

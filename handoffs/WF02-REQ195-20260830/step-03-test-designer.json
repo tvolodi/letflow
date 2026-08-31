@@ -1,0 +1,70 @@
+{
+  "handoff_id": "step03-WF02-REQ195-20260830",
+  "run_id": "WF02-REQ195-20260830",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ195-20260830/step-03-test-designer.json",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-195"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ195-20260830/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ195-20260830/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ195-20260830/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ195-20260830/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req195-audit-entry-storage.md",
+      "lib/letflow/audit.ex",
+      "lib/letflow/audit/entry.ex",
+      "priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/task_activation.ex",
+      "lib/letflow/tasks.ex",
+      "lib/letflow/identity.ex",
+      "test/letflow/audit_test.exs",
+      "test/letflow/audit_capture_test.exs",
+      "handoffs/WF02-REQ195-20260830/security-review-report.md"
+    ],
+    "branch_name": "feature/WF02-REQ195-20260830",
+    "rework_pass": 0,
+    "reviewer_verdict": {
+      "verdict": "PASS",
+      "diff_vs_design_fidelity": "Read the real git diff for every artifacts_in file (not just the design doc). lib/letflow/audit.ex's insert_entry/3 and do_verify_chain/2 both build their hash input via a single shared field-shape (insert_entry's `fields` map / fields_from_entry/1 for a stored Entry) and funnel through the same private canonical_string/1 + compute_hash/1 -- there is no second, independently-drifting implementation of the canonical form, exactly as the design's §6 requires ('the same function append_multi/4 uses internally'). Confirmed the 11-field order, the `-1:` netstring sentinel for nil/absent fields (distinct from `0:` for an empty string), and Jason.OrderedObject-based recursive key-sorting for before_state/after_state canonical JSON all match design §5 byte-for-byte -- no liberties taken. verify_chain/2's cond clauses independently re-confirmed to check hash_mismatch strictly before chain_broken, chaining off the previous entry's just-recomputed (not stored) hash, matching SECURITY-REVIEWER's own adversarial trace.",
+      "idiom_and_supervision": "No new process, no new supervision tree, no gen_statem/GenServer involved -- this requirement is pure Ecto.Multi/Repo.transaction composition, so the idiom question is entirely about Multi/transaction style. Confirmed idiomatic and NOT ad hoc across all ~11 covered call sites: Letflow.Definitions (create/2, activate/2, deprecate/2, archive/2) uses the module's pre-existing Repo.transaction(fn -> ... Repo.rollback ... end) idiom, matching that module's own established style; Letflow.Engine (create/2, complete_task/3, cancel_instance/3) and Letflow.Tasks.assign_task/3 use Multi.merge/2 to fold in Audit.append_multi/4's :audit step, matching Letflow.Webhooks/Dlq/Scheduler precedent; Letflow.Identity's six functions (create_user/2, update_user_profile/3, update_user_status/3, create_group/2, create_token/3, revoke_token/2) each gained a *new* Ecto.Multi (none had a transaction before this requirement) via the same Multi.insert/Multi.update + Multi.merge shape -- verified each of the six correctly unwraps Repo.transaction/1's {:error, failed_step, reason, changes} envelope back to its own pre-existing {:error, _} contract shape (e.g. create_user/2's {:error, :user, changeset, _} still routes through username_unique_conflict?/1 exactly as before). Letflow.Engine.TaskActivation's do_insert/3 uses the third documented shape (a bare repo/prefix passed to Audit.insert_entry/3 directly, inside whatever transaction its own caller already opened) -- this is the design's own explicitly-named second call shape for insert_entry/3, not a fourth ad hoc pattern.",
+      "canonical_hash_form_fidelity": "Genuinely matches the design's exact specification -- verified netstring encoding, the -1: sentinel, and sorted-key canonical JSON directly against lib/letflow/audit.ex's canonical_string/1, canonicalize/1, netstring_required/1, netstring_optional/1. Two independent implementations following the design's §5 would produce identical chain_hash values against this one.",
+      "db_trigger_and_provisioning": "priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs creates a real per-tenant-schema PL/pgSQL trigger function plus BEFORE UPDATE and BEFORE DELETE triggers bound to it, inside the same if prefix() do...end guard as the table -- idiomatic Postgres, correctly tenant-scoped. Confirmed the tenant_provisioning.ex diff registers {20_260_830_020_001, Letflow.Repo.Migrations.CreateAuditEntriesTenantScoped, \"20260830020001_create_audit_entries_tenant_scoped.exs\"} in @tenant_scoped_migration_manifest -- every future-provisioned tenant schema gets this table and its triggers.",
+      "decision_record_consistency": "Decision 0003-C states event-table immutability is enforced 'at the application/context-module layer, not the migration layer' because 'Ecto migrations don't have a no-updates DDL primitive to reach for.' REQ-195's design (§2) and this module's own moduledoc both explicitly name this as a deliberate divergence, justified by AC1's stronger requirement (rejection must survive a caller that bypasses Letflow.Audit/Ecto entirely, which an application-layer-only guarantee cannot do) -- not a silent departure from 0003-C's precedent. Also confirmed the design/implementation never confuse this immutability trigger with the separately-considered-and-rejected capture-mechanism trigger (design §3.1 Decision 2, R-Co's BEFORE-trigger-derived capture approach) -- these are two different triggers serving two different purposes, and both the design text and the moduledoc keep them clearly distinct. No docs/migration/decisions/ file needs editing; this is a correctly-scoped, correctly-justified exception, not a reason to revise 0003 itself.",
+      "ac10_separation": "Confirmed via grep: lib/letflow/engine/lua_script_audit.ex has zero reference to Letflow.Audit, and grep -rln \"Letflow.Audit\\.\" lib/ returns only lib/letflow/audit.ex, lib/letflow/audit/entry.ex, and the design doc itself -- no cross-reference introduced in either direction, no shared code path, no migration in this requirement touches lua_script_execution_audit.",
+      "scope": "git diff --stat main...HEAD -- lib/letflow/routers/ returns empty -- reconfirmed independently, AC11 holds. Every file touched (lib/letflow/audit.ex, lib/letflow/audit/entry.ex, the one new migration, tenant_provisioning.ex, definitions.ex, engine.ex, engine/task_activation.ex, tasks.ex, identity.ex, plus the two new test files) is exactly the artifacts_in list above -- no REQ-196 (route/controller layer) or REQ-201 scope creep found.",
+      "recurring_actor_id_defect_disposition": "This design/implementation went through three real instances of the same defect class (design rework 1: Definitions' three lifecycle fns wrongly claimed to carry actor_id; design rework 2: an unverified 'already system-driven' claim introduced while fixing instance 1; implementation: assign_task/3's assign_attrs wrongly claimed by the design to carry actor_id, caught by ELIXIR-DEV itself and independently re-confirmed by SECURITY-REVIEWER and this review). Judged this worth naming as a process pattern given the recurrence (not required by any AC) -- filed as a new docs/anti-patterns.md entry: 'Claiming a function \"already carries\" a value without reading its real parameter list -- three instances in one requirement's design', committed in this same handoff's commit.",
+      "type_safety_note": "No new class of invalid state found that isn't already handled by Entry's changeset/2 required-field validation plus the DB NOT NULL constraints -- resource_type/resource_id are deliberately kept as open :string per design §1.1/§1.2 (a closed Ecto.Enum would reintroduce R-Co's own documented widening hazard), so this is not a gap to file."
+    },
+    "orch_independent_verification": "mix compile --warnings-as-errors clean, mix format clean, 134/134 passing across target test files (ORCH, prior to SECURITY-REVIEWER's step)."
+  },
+  "task": {
+    "description": "TEST-DESIGNER: full 12-AC gap-check for REQ-195's audit-entry storage implementation, now that it has passed both SECURITY-REVIEWER and REVIEWER's hard gates. ELIXIR-DEV already wrote an initial pass of ~14 passing tests (test/letflow/audit_test.exs, test/letflow/audit_capture_test.exs) covering immutability (AC1), chain-hash recompute-before-linkage (AC6), and same-transaction rollback (AC3) at a representative call site. Your job is NOT to redo that work -- it is to independently re-derive full coverage against all 12 ACs in lib/letflow/design/req195-audit-entry-storage.md's traceability matrix (§0) and lib/letflow/audit.ex's own moduledoc, and identify what the existing tests do not yet cover.",
+    "acceptance_criteria": [
+      "AC1: UPDATE and DELETE against audit_entries are rejected by the DB trigger, exercised via a raw Repo.query!/Ecto.Adapters.SQL.query! call that goes around Ecto's changeset layer entirely -- confirm both UPDATE and DELETE are covered (not just one)",
+      "AC2: at least the three named operations (definition activation, instance cancellation, task completion) each produce exactly one audit_entries row with real (non-placeholder) before_state and after_state -- verify against actual column values, not just {:ok, _}",
+      "AC3: a test that forces the audit insert to fail (e.g. an invalid/oversized attrs value, or a forced changeset error) leaves the accompanying definition/instance/task mutation completely unchanged -- needs coverage across at least one Repo.transaction-based call site (Definitions) and one Ecto.Multi-based call site (Engine or Identity), since they're structurally different rollback paths",
+      "AC4: audit_entries rows are tenant-scoped -- a row written under one tenant's prefix is not visible/queryable from another tenant's prefix",
+      "AC5: prev_chain_hash is null for a tenant's first entry and links correctly for every subsequent entry",
+      "AC6: verify_chain/2 recomputes and catches a directly-tampered after_state (hash_mismatch) distinct from a broken/deleted-entry linkage (chain_broken) -- confirm both error variants have their own dedicated test, not just one",
+      "AC7: the canonical form (field order, -1: sentinel, timestamp representation) is documented in Letflow.Audit's moduledoc -- a doc-presence check, plus at least one test asserting a hand-computed chain_hash for a known fixed input matches the implementation's output (an independent-computation cross-check, not just round-tripping through the same code)",
+      "AC8: the moduledoc states the capture-mechanism decision and its trade-off -- doc-presence check",
+      "AC9: the moduledoc/migration states resource_id's type decision and reasoning, plus a test confirming no non-UUID resource_id exists today (or documents that none does)",
+      "AC10: lua_script_execution_audit stays fully separate -- a regression test (or an explicit grep-based check in the test suite) confirming no shared code path was introduced",
+      "AC11: no router/controller file touched -- a mechanical git-diff-stat-based check belongs in the test suite or CI, not just this review's own manual confirmation",
+      "AC12: mix test and mix compile --warnings-as-errors both pass with the full new test suite included",
+      "Additionally cover the actor_id: nil dispositions (Definitions' four lifecycle fns, Identity's six fns, Tasks.assign_task/3, TaskActivation's task.create) with at least one test each confirming the row is written with a real before/after state and a genuinely nil actor_id, not silently defaulting to some other placeholder"
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "handoff_id": "step03b-WF02-REQ195-20260830-rework1",
+  "run_id": "WF02-REQ195-20260830",
+  "workflow_id": "WF-02",
+  "step": "03b (rework iteration 1)",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ195-20260830/step-03b-test-design-validator.json",
+  "status": "PENDING",
+  "priority": "high",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-195"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ195-20260830/step-03-test-designer.json",
+      "handoffs/WF02-REQ195-20260830/step-03-test-designer-rework1.json",
+      "handoffs/WF02-REQ195-20260830/test-design-validator-report.md",
+      "handoffs/WF02-REQ195-20260830/test-designer-gap-analysis.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/audit.ex",
+      "test/letflow/audit_test.exs",
+      "test/letflow/audit_capture_test.exs",
+      "test/letflow/audit_dispositions_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ195-20260830",
+    "rework_pass": 1,
+    "rework_summary": "This is rework iteration 1, addressing ONLY the two items TEST-DESIGN-VALIDATOR's step-03b FAIL report and its rework-request handoff (step-03-test-designer-rework1.json) routed back. All other coverage (AC1-AC5, AC7-AC11, actor_id-nil dispositions) was already validated PASS in that same report and is unchanged in this pass.\n\n(1) THE ORDER-SENSITIVITY GAP. Re-derived the reasoning from scratch against the real code (lib/letflow/audit.ex lines 273-302) before writing anything: prev_chain_hash IS one of the 11 canonical-form fields hashed into chain_hash (field 11, fields_from_entry/1 includes it, canonical_string/1 hashes fields.prev_chain_hash). So a raw-SQL tamper of ONLY a persisted entry's prev_chain_hash column (leaving that entry's own chain_hash column untouched) makes BOTH of do_verify_chain/2's cond clauses true simultaneously for that same entry: the recompute check fails (fields_from_entry/1 now reads the tampered prev_chain_hash, so the freshly recomputed hash no longer matches the untouched stored chain_hash), AND the linkage check fails (the tampered prev_chain_hash no longer equals the previous entry's own recomputed hash). Since Elixir's cond returns its first true branch, which of {:error, {:hash_mismatch, id}} / {:error, {:chain_broken, id}} comes back is decided ENTIRELY by check order -- this is genuinely order-sensitive, not vacuous; the two orderings are behaviorally distinguishable for exactly this construction (contrary to the alternative hypothesis the rework prompt asked me to rule out first). No 'internally-self-consistent-but-non-linked' construction was needed -- the direct single-column tamper the design doc and audit_test.exs's own code comment (lines 244-252) already name by example is itself the distinguishing case; audit_test.exs's existing chain_broken test (deleted middle row) and hash_mismatch test (after_state-only tamper) each leave the other check's condition false, which is precisely why neither one exercises this order dependency.\n\nAdded one new test, test/letflow/audit_dispositions_test.exs describe block 'AC6 -- check order: a prev_chain_hash-only tamper is hash_mismatch, not chain_broken': inserts two chained entries, disables the immutability trigger, overwrites entry 2's prev_chain_hash column (only) with a valid-shaped-but-wrong SHA-256 hex string via raw SQL, re-enables the trigger, and asserts Audit.verify_chain/2 returns {:error, {:hash_mismatch, id_2}} (not chain_broken) against the real, shipped, reverted implementation.\n\nVerified both directions manually (not committed, mutation reverted before handoff):\n  - Against the real implementation (recompute checked first): mix test test/letflow/audit_dispositions_test.exs -> 11 passed (10 pre-existing + this new one), including the new test.\n  - Against a manually-applied, transient reversal of do_verify_chain/2's two cond clauses (linkage before recompute) in lib/letflow/audit.ex: mix test test/letflow/audit_dispositions_test.exs -> new test FAILED with `left: {:error, {:hash_mismatch, ^id_2}}` / `right: {:error, {:chain_broken, \"<id_2>\"}}` -- confirms the new test catches exactly the mutation TEST-DESIGN-VALIDATOR applied.\n  - Mutation reverted via `git checkout -- lib/letflow/audit.ex`; `git status --porcelain lib/` empty afterward; full target suite re-confirmed green (25 passed) with the reverted implementation.\n\n(2) FORMAT FIX. Ran `mix format test/letflow/audit_dispositions_test.exs`, which reformatted the flagged multi-line `assert {:ok, ...} = ...` calls into the standard form. Re-ran `mix format --check-formatted` for the whole repo afterward: clean, zero output, exit 0.",
+    "toolchain_verification": "All commands run for real via `source ~/.asdf/asdf.sh`, against the already-running Postgres used by this workspace's mix test config. `mix format --check-formatted` (repo-wide): exit 0, no output. `mix compile --warnings-as-errors`: exit 0, no output. `mix test test/letflow/audit_test.exs test/letflow/audit_capture_test.exs test/letflow/audit_dispositions_test.exs`: Result: 25 passed. `git status --porcelain` after all work: only test/letflow/audit_dispositions_test.exs modified (the new test + format fix); lib/ and priv/ both clean, confirming the verification mutation left no trace."
+  },
+  "task": {
+    "description": "TEST-DESIGN-VALIDATOR: re-verify the two specific items this rework pass addressed, without re-litigating coverage already validated PASS in the prior step-03b report (AC1-AC5, AC7-AC11, actor_id-nil dispositions, no-duplication).",
+    "acceptance_criteria": [
+      "The new AC6 check-order test in test/letflow/audit_dispositions_test.exs asserts {:error, {:hash_mismatch, entry_id}} (not chain_broken) for a persisted entry whose prev_chain_hash column alone was tampered via raw SQL, chain_hash left untouched -- confirm this construction genuinely makes both do_verify_chain/2 cond clauses true (re-derive independently against lib/letflow/audit.ex, do not just trust this handoff's reasoning).",
+      "Independently reproduce the mutation-catches-it claim: apply the same cond-clause-order swap to do_verify_chain/2 yourself, confirm the new test fails with chain_broken instead of hash_mismatch, revert, confirm git status --porcelain lib/ is empty and the suite is green again.",
+      "mix format --check-formatted passes cleanly on the whole repo (re-run yourself, quote real output).",
+      "mix compile --warnings-as-errors and mix test test/letflow/audit_test.exs test/letflow/audit_capture_test.exs test/letflow/audit_dispositions_test.exs (25 tests expected) both pass (re-run yourself, quote real output).",
+      "No other file changed besides test/letflow/audit_dispositions_test.exs (git diff should show only that file relative to the pre-rework commit)."
+    ]
+  },
+  "result": null
+}

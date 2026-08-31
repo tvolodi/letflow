@@ -1,0 +1,56 @@
+{
+  "handoff_id": "step05-WF02-REQ195-20260830-rework1",
+  "run_id": "WF02-REQ195-20260830",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ195-20260830/step-05-elixir-dev-rework1.json",
+  "created_at": "2026-08-30T18:18:33Z",
+  "started_at": "2026-08-30T18:12:00Z",
+  "completed_at": "2026-08-30T18:18:33Z",
+  "status": "PENDING",
+  "priority": "high",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-195"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ195-20260830/step-04-test-runner.json",
+      "handoffs/WF02-REQ195-20260830/test-runner-report.md",
+      "test/reports/report-2026-08-29-WF02-REQ181-20260829.yaml"
+    ],
+    "artifacts_in": [
+      "priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/support/tenant_fixture_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ195-20260830",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "Ran the full suite for real (scripts/test_parallel.sh, N=8 partitions, blocking foreground run): combined 2796 tests, 6 properties, 6 failures (2796/2802 passed). 5 of the 6 failures are documented pre-existing flake/environmental classes structurally unrelated to this branch's diff (3x Letflow.TenantSchemaReaperTest ISS-0110 connection-contention flake in partition 1, each logging the module's own 'deferring this sweep entirely ... ISS-0110' diagnostic line; 2x Mix.Tasks.Letflow.CheckToolchainTest rust-pin tests in partition 8 failing with System.cmd(\"rustc\", ...) :enoent because rustc/cargo are genuinely absent from this sandbox's PATH, same class as the REQ-181/REQ-177/REQ-178 runs) -- neither test file is touched by this branch's diff (git diff main...HEAD --stat confirmed). The 6th failure is a GENUINE REGRESSION from this branch: 'test C6 -- oracle-rot guard observed tables equal expected_tenant_tables/0 in both directions (Letflow.Support.TenantFixtureTest)' at test/letflow/support/tenant_fixture_test.exs:382 fails with 'a manifest migration created a table the oracle does not list: [\"audit_entries\"]'. This branch adds priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs, a tenant-scoped migration (if prefix() do ... end guard, Decision 0003-B) creating audit_entries inside every tenant schema, but test/support/tenant_fixture.ex's @expected_tenant_tables oracle list (currently 26 entries, lines ~122-150) was not updated to include \"audit_entries\", and test/letflow/support/tenant_fixture_test.exs:305's companion count assertion (assert length(TenantFixture.expected_tenant_tables()) == 26) was not bumped to 27. This is the identical bug class to REQ-181 (webhook_subscriptions missing from the same oracle, routed back to ELIXIR-DEV and fixed there -- see test/reports/report-2026-08-29-WF02-REQ181-20260829.yaml) and REQ-176/REQ-125 both correctly followed this same convention when adding a tenant-scoped table. Reproduced standalone: mix test test/letflow/support/tenant_fixture_test.exs -> same single failure, isolated from the rest of the suite.",
+    "acceptance_criteria": [
+      "Add \"audit_entries\" to test/support/tenant_fixture.ex's @expected_tenant_tables list (keep the list's existing alphabetical ordering convention).",
+      "Bump test/letflow/support/tenant_fixture_test.exs:305's count assertion from 26 to 27 (and update its surrounding comment if it names the count/table list literally).",
+      "Re-run `mix test test/letflow/support/tenant_fixture_test.exs` and confirm the C6 oracle-rot guard now passes.",
+      "Re-run the full `scripts/test_parallel.sh` suite and confirm only the two documented pre-existing flake classes (ISS-0110 TenantSchemaReaperTest, rustc-absent CheckToolchainTest) remain, with zero new failures.",
+      "Do not touch lib/letflow/audit.ex's schema/logic to work around this -- the gap is purely in the test-support oracle list not tracking the new migration; no application-code change is implicated.",
+      "Route back to TEST-RUNNER (not directly to RELEASE-VALIDATOR) once fixed, per WF-02, so the full suite gets re-verified formally."
+    ]
+  },
+  "result": {
+    "status": "TEST_SUITE_FAIL_REWORK_NEEDED",
+    "summary": "6 total suite failures: 5 are documented pre-existing flakes/environmental gaps unrelated to this branch's diff (ISS-0110 TenantSchemaReaperTest x3, rustc-absent CheckToolchainTest x2), 1 is a genuine regression -- test/support/tenant_fixture.ex's @expected_tenant_tables oracle and its companion count assertion were not updated for the new audit_entries tenant-scoped table this branch's migration adds. Same bug class and same fix as REQ-181's precedent.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ195-20260830/test-runner-report.md"
+    ],
+    "issues": [
+      "test/support/tenant_fixture.ex @expected_tenant_tables missing \"audit_entries\"",
+      "test/letflow/support/tenant_fixture_test.exs:305 count assertion stale at 26, needs 27"
+    ],
+    "next_action": "ELIXIR-DEV to add the missing table to the oracle list and bump the count assertion, then route back to TEST-RUNNER for a fresh full-suite run."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

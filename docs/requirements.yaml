@@ -10497,7 +10497,7 @@ requirements:
   - id: REQ-195
     title: Audit-entry storage with before/after state capture and tamper-evident chaining (OBS-03, XC-02) -- closing routers/audit.ex's recorded null-state gap
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 368  # letflow-queue task id
     description: >
@@ -10604,7 +10604,7 @@ requirements:
   - id: REQ-196
     title: Serve GET /api/v1/audit from the audit_entries store and retire routers/audit.ex's null-state and constant-resource_type caveats
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 369  # letflow-queue task id
     description: >
@@ -11158,7 +11158,7 @@ requirements:
   - id: REQ-202
     title: Content-addressed artifact store and the REPO-04 canonicaliser (REPO-01/02/03/04) -- deliberately NOT an extension of REQ-036's promotion digest
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 375  # letflow-queue task id
     description: >

@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step01b-WF02-REQ205-20260831-recheck1",
+  "run_id": "WF02-REQ205-20260831",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ205-20260831/step-01b-code-design-validator-recheck1.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-31T11:01:22Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-205"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req205-simulation-harness-foundation.md",
+      "handoffs/WF02-REQ205-20260831/step-01-code-designer-rework1.json",
+      "handoffs/WF02-REQ205-20260831/step-01b-code-design-validator.json",
+      "lib/letflow/identity.ex",
+      "lib/letflow/design/req203-artifact-activation.md"
+    ],
+    "branch_name": "feature/WF02-REQ205-20260831",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "Re-check of CODE-DESIGNER's rework1 of lib/letflow/design/req205-simulation-harness-foundation.md against the two findings in step-01b-code-design-validator.json (implementation-code leakage in §3.1/§3.2; OQ-2 left as an avoidably-deferred open question)."
+  },
+  "result": {
+    "status": "PASS",
+    "checks_performed": {
+      "no_implementation_code": "PASS -- grepped the full 569-line file for 'defmodule' and 'defstruct': zero occurrences. Also grepped for '^  def ', '^def ', and lines ending 'do$': zero occurrences. §3.1 now presents Letflow.Simulation.Scenario as a markdown field table (id, company_id, process_id, actors, preconditions, steps, expected_outcomes) plus three sub-shape tables (step(), precondition(), expected_outcome()); §3.2 presents Letflow.Simulation.RunReport the same way (scenario_id, precondition_results, step_results, outcome_results) plus step_result()/outcome_result() sub-shape tables. Spot-checked field content against §3.3's execution algorithm text for internal consistency (not against the original defmodule blocks, which no longer exist in the file, but against the surrounding prose that described the same fields pre-rework per the FAIL handoff's own quotes) -- e.g. precondition.check's three values (:process_definition_active/:no_pending_instances/:custom) match §3.3 step 1's three checks verbatim; step_result.outcome's three values (:ok/:error/:deferred_to_s8) match §3.3 steps 2-3; outcome_result.outcome (:pass/:fail) matches §6. No field or semantic content appears dropped.",
+      "run1_spec_retained": "PASS -- the single @spec block for run/1 (lines 305-307) is still present as a bare @spec, no def/body. Re-confirmed the distinction holds on a fresh look: a multi-line @spec/@type declaration cannot be pasted into a file and compiled as a working module on its own (it has no `def`, no `do...end`, nothing to execute), unlike the removed defmodule/defstruct blocks which were complete, loadable modules. This is the same line REQ-157's rework history already established for this session; no reason to move it.",
+      "list_groups_1_reverify": "PASS -- independently re-read lib/letflow/identity.ex lines 500-537 directly (not the design's quoted excerpt). list_groups/1's real body is at lines 527-537 exactly as the design cites: `@spec list_groups(opts :: opts()) :: {:ok, %{groups: [Group.t()], total: non_neg_integer()}}` (527), `def list_groups(opts) do` (528), `prefix = Keyword.fetch!(opts, :prefix)` (529), `query = from(g in Group, order_by: [asc: g.name])` (531, no name/filter clause), `groups = Repo.all(query, prefix: prefix)` / `total = Repo.aggregate(Group, :count, prefix: prefix)` (533-534, unpaginated), `{:ok, %{groups: groups, total: total}}` (536). Confirms the design's claim verbatim: opts-only signature (prefix: only), no server-side name filter, full unpaginated list.",
+      "section_2_3_settled": "PASS -- §2.3 now reads 'There is no server-side by-name lookup to call. seed_groups/2 therefore lists ALL of the tenant's groups via list_groups/1 and matches the fixture's group name client-side ... this is the settled mechanism, not a pending question.' No hedging language ('or, if no by-name lookup exists...') remains anywhere in §2.3.",
+      "oq2_resolution_and_renumbering": "PASS -- §9 now has: OQ-1 (Tenant.t() prefix field name, unchanged in content), a '(resolved, formerly OQ-2)' note citing lib/letflow/identity.ex:527-537 and pointing to §2.3's settled text (no question remains), a renumbered OQ-2 (formerly OQ-3: HTTP method+path -> context-function mapping deferred because no scenario content exists yet in this requirement's scope -- content matches the prior FAIL handoff's description of the original OQ-3 verbatim), and a renumbered OQ-3 (formerly OQ-4: yaml_elixir YAML 1.1 scalar-coercion fidelity, not verified this session -- content matches the prior FAIL handoff's description of the original OQ-4 verbatim). No other OQ content was altered.",
+      "full_reread_for_collateral_damage": "PASS -- read the entire 569-line file top to bottom (not just §3/§9). §8's traceability table still correctly references §1, §2.1-2.4/§2.5, §3.2-3.3, §3.3 step 3, §7, §4 -- all section numbers are unchanged from before the rework since only the internal presentation of §3.1/§3.2 and the OQ-2 entry changed, not section numbering. §0, §1, §2.1/§2.2/§2.4/§2.5, §4, §5, §6, §7 read as untouched and internally consistent with the reworked §2.3/§3.1/§3.2/§9."
+    },
+    "issues": [],
+    "artifacts_out": [
+      "lib/letflow/design/req205-simulation-harness-foundation.md"
+    ],
+    "next_action": "Proceed to WF-02 Step 2a: ELIXIR-DEV implements per this design."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

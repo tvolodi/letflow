@@ -3680,6 +3680,23 @@
       "released_lock": true,
       "last_known_step": "Step Final (ORCH: pushing/merging PR to main, queue task 380 to be released done)",
       "note": "ModuleRegistry.register/1's timeout path (Task.yield/2 + Task.shutdown(:brutal_kill) on a hanging guest module's instantiation) kills only the Elixir Task, not the underlying native Wasmtime execution thread. ISSUE-FIXER's diagnosis confirmed a real native-level fix is not currently possible: the pinned wasmex 0.15.1's fuel-metering/epoch-interruption mechanisms only bound Wasmex.call_function/4, never Wasmex.start_link/1 (instantiation) -- the exact call this hangs inside. Precedent (ISS-0352, same mechanism class) confirmed this codebase's own established pattern is containment/documentation over a native-thread fix. No tenant-facing exploit path exists today. Handled as an ORCH direct action per the sizing rule (single file, comment-only, no new public function/spec, no migration, no supervision-tree touch, no tenant-data path, no test-behavior change) rather than the full WF-03 gate chain: added a 'Residual risk' moduledoc disclosure mirroring plugin_handler.ex's own established pattern for the same risk class, citing ISS-0380 by id."
+    },
+    {
+      "run_id": "WF02-REQ205-20260831",
+      "requirement_id": "REQ-205",
+      "queue_task_id": 382,
+      "github_issue_number": 754,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "test/fixtures/simulation",
+        "test/support/simulation_seed.ex",
+        "test/support/simulation_runner.ex"
+      ],
+      "started_at": "2026-08-31T10:49:03Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (ORCH: branch created, entering Step 1 CODE-DESIGNER)",
+      "note": "S7 scenario-harness foundation: Elixir Letflow.Simulation.Seed/Runner (test-support), business-tenant fixtures ported from R-Co's tests/simulation/companies/, API-vs-GUI execution split (gui steps recorded DEFERRED_TO_S8, never silently skipped or force-run). Explicitly distinct from Letflow.Routers.SimulationTest/simulation_test.zig (a design-time definition-validation tool, not built here). Registered here explicitly at Step 00 per this session's established practice."
     }
   ]
 }

@@ -924,11 +924,22 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # unchanged and correct -- it caught this drift exactly as designed.
       # S7 joins `active` the moment any of REQ-205..210 goes
       # in_progress/done/blocked.
+      #
+      # UPDATE (REQ-205 done, 2026-08-31): the predicted event happened --
+      # REQ-205 (stage S7, status done) landed in WF02-REQ205-20260831. Per
+      # the detector rule, S7 moves from inactive to active, same transition
+      # S5/S6 made for their own first done requirement. Re-derived, not
+      # guessed: confirmed live via `MIX_ENV=test mix run -e` calling
+      # Mix.Tasks.Letflow.CheckDeferralStaleness.audit/1 against the live
+      # docs/requirements.yaml, returning
+      # active == ["S0","S1","S2","S3","S4","S5","S6","S7","S8","S9"],
+      # inactive == [], violations == 0. Test-data-only update; the detector
+      # is unchanged and correct.
       active = for s <- result.stages, s.activity == :active, do: s.stage
       inactive = for s <- result.stages, s.activity == :inactive, do: s.stage
 
-      assert active == ["S0", "S1", "S2", "S3", "S4", "S5", "S6", "S8", "S9"]
-      assert inactive == ["S7"]
+      assert active == ["S0", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"]
+      assert inactive == []
     end
 
     test "T-LIVE-DEFERRED-COUNT-IS-ZERO -- documents today's vacuous green", %{result: result} do

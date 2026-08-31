@@ -66,7 +66,7 @@ defmodule Letflow.Obs.AlertsTest do
     ]
   end
 
-  defp base_tick_context(overrides \\ %{}) do
+  defp base_tick_context(overrides) do
     Map.merge(
       %{
         dlq_count: 0,

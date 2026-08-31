@@ -11394,7 +11394,7 @@ requirements:
   - id: REQ-204
     title: SSRF validation for webhook subscription target_url (create-time and defense-in-depth at delivery)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S6
     impl_order: 379  # letflow-queue task id
     description: >

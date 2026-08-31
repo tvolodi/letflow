@@ -800,7 +800,7 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 24
+    entries: 25
     note: >
       Recounted to 24 after merge of WF02-REQ201-20260830 and
       WF02-REQ202-20260830 concurrent branches (REQ-201 started/done from

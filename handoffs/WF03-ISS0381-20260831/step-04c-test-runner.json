@@ -1,0 +1,93 @@
+{
+  "handoff_id": "WF03-ISS0381-20260831-step04c",
+  "run_id": "WF03-ISS0381-20260831",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0381-20260831/step-04c-test-runner.json",
+  "created_at": "2026-08-31T08:49:32Z",
+  "started_at": "2026-08-31T08:01:00Z",
+  "completed_at": "2026-08-31T08:49:32Z",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "issue_id": "ISS-0381",
+    "former_local_id": "ISS-0353",
+    "queue_task_id": 381,
+    "github_issue": 753,
+    "severity": "MINOR",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0381-20260831/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0381-20260831/step-03c-security-reviewer.json",
+      "handoffs/WF03-ISS0381-20260831/step-03d-reviewer.json",
+      "handoffs/WF03-ISS0381-20260831/step-04-test-designer.json",
+      "handoffs/WF03-ISS0381-20260831/step-04b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+      "lib/letflow/dlq/entry.ex",
+      "test/letflow/dlq_test.exs",
+      "test/specs/ISS-0381.md",
+      "handoffs/WF03-ISS0381-20260831/step-04b-test-design-validator.json"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4 / final run-and-report sub-step: run the full project test suite plus mix compile --warnings-as-errors, mix format --check-formatted, and mix letflow.lint_handoffs to confirm the ISS-0381 fix (Letflow.Dlq.Entry.insert_changeset/2 cast-list narrowing) introduces no regression anywhere in the codebase, and quote real output rather than assuming pass.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors run and quoted (clean or not)",
+      "mix format --check-formatted run and quoted (clean or not)",
+      "MIX_ENV=test mix test (full suite, unfiltered) run to completion and the real Result:/Failed: line quoted",
+      "any failing test diagnosed: matched against documented environmental-flake classes for this sandbox, or flagged as a genuine new regression",
+      "mix letflow.lint_handoffs run to confirm this run's own handoff files are schema-compliant",
+      "structured handoff report written, committed, and pushed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Ran the full project verification suite for the ISS-0381 fix (Letflow.Dlq.Entry.insert_changeset/2 cast-list narrowing, already passed SECURITY-REVIEWER, REVIEWER, and TEST-DESIGN-VALIDATOR with an independently-reproduced fail-first proof). All checks run as normal blocking foreground calls (source ~/.asdf/asdf.sh first); no test process was watched via Monitor or left for a cross-turn notification -- this session polled the backgrounded shell process directly via `ps -p <pid>` in a bounded sleep loop until exit, per core-directives ISS-0213/ISS-0223.\n\n1. `mix compile --warnings-as-errors`: exit 0, no output (clean compile, no warnings).\n\n2. `mix format --check-formatted`: exit 0, no output (fully formatted).\n\n3. `MIX_ENV=test mix test` (full suite, unfiltered, no partitioning): completed in 1404.7s (12.0s async, 1392.6s sync). Real output line: `Result: 2945/2947 passed (6/6 properties, 2939/2941 tests), 10 excluded` / `Failed: 2 tests`. Both failures identified by name and stack trace: `Mix.Tasks.Letflow.CheckToolchainTest` -- 'test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running' and 'a matching rust pin reports OK with no mismatch', both failing with `** (ErlangError) Erlang error: :enoent` from `System.cmd(\"rustc\", [\"--version\"], ...)` at test/mix/tasks/letflow_check_toolchain_test.exs:69/76 -- this is exactly the documented rustc/cargo-absent-from-PATH environmental flake class for this sandbox (2 CheckToolchainTest failures), not a new or genuine regression, and unrelated to the DLQ/Entry change. No TenantSchemaReaperTest connection-pool flake occurred (full-suite `mix test` run, not the parallel-partitioned script, so that particular flake class did not apply here). Grepped the full log for every occurrence of `dlq_test.exs` and for any failure entries -- zero DLQ-related failures; both new ISS-0381 regression tests (cast/put_change divergence proofs in test/letflow/dlq_test.exs) and all pre-existing DLQ-adjacent tests (dlq_test.exs, routers/dlq_test.exs, engine_dlq_landing_test.exs, obs/alerts_test.exs DLQ assertions, engine_plugin_error_routing_test.exs, req204 SSRF webhook DLQ test, etc.) passed cleanly within the full run.\n\n4. `mix letflow.lint_handoffs`: `letflow.lint_handoffs: OK -- 0 new violations across 1654 handoff files (25 pre-existing grandfathered, traced to ISS-0190)`. This run's own handoff files (step-01 through step-04b) produced zero new ARTIFACTS_OUT_SELF_REF or H-SIZE violations. The tool separately reports WF03-ISS0381-20260831 as 'on disk but missing from registry.json' under H5 registry coverage -- expected/informational for an in-flight run not yet closed, not a lint violation.\n\nVERDICT: full suite green modulo the 2 pre-existing, documented, environment-only rustc-absence failures (unrelated to this change and to the DLQ code path). No regression introduced by the ISS-0381 fix. Compile and format clean. Handoff schema clean. Routing to ISSUE-FIXER for WF-03 Step 5 (close issue).",
+    "compile_check": {
+      "command": "mix compile --warnings-as-errors",
+      "exit_code": 0,
+      "output": "(none -- clean compile)"
+    },
+    "format_check": {
+      "command": "mix format --check-formatted",
+      "exit_code": 0,
+      "output": "(none -- fully formatted)"
+    },
+    "full_suite": {
+      "command": "MIX_ENV=test mix test",
+      "duration": "Finished in 1404.7 seconds (12.0s async, 1392.6s sync)",
+      "result_line": "Result: 2945/2947 passed (6/6 properties, 2939/2941 tests), 10 excluded",
+      "failed_line": "Failed: 2 tests",
+      "failures": [
+        {
+          "test": "Mix.Tasks.Letflow.CheckToolchainTest: test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running",
+          "location": "test/mix/tasks/letflow_check_toolchain_test.exs:289",
+          "error": "** (ErlangError) Erlang error: :enoent from System.cmd(\"rustc\", [\"--version\"], ...) at line 69",
+          "classification": "documented environmental flake -- rustc/cargo absent from PATH in this sandbox, not a regression"
+        },
+        {
+          "test": "Mix.Tasks.Letflow.CheckToolchainTest: test rust pin (REQ-165) a matching rust pin reports OK with no mismatch",
+          "location": "test/mix/tasks/letflow_check_toolchain_test.exs:274",
+          "error": "** (ErlangError) Erlang error: :enoent from System.cmd(\"rustc\", [\"--version\"], ...) at line 69",
+          "classification": "documented environmental flake -- rustc/cargo absent from PATH in this sandbox, not a regression"
+        }
+      ],
+      "dlq_related_failures": 0,
+      "tenant_schema_reaper_flake_observed": false
+    },
+    "lint_handoffs_check": {
+      "command": "mix letflow.lint_handoffs",
+      "result": "OK -- 0 new violations across 1654 handoff files (25 pre-existing grandfathered, traced to ISS-0190)",
+      "this_run_new_violations": 0
+    },
+    "regression_found": false,
+    "merge_readiness": "READY -- no genuine regression detected; the only 2 failures are the sandbox's pre-existing documented rustc-absence flake class, unrelated to lib/letflow/dlq/entry.ex or any DLQ-adjacent path.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0381-20260831/step-04c-test-runner.json"
+    ],
+    "issues": []
+  }
+}

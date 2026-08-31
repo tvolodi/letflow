@@ -800,8 +800,16 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 18
+    entries: 19
     note: >
+      Incremented to 19 by ORCH (DOC-UPDATER rate-limited) REQ-201
+      done-event append (WF02-REQ201-20260830) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 19 on-disk entries.
+
+      Incremented to 18 by WF02-REQ201-20260830 ORCH started-event append
+      (Step 00) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 18 on-disk entries.
+
       Incremented to 17 by WF02-REQ194-20260830 (DOC-UPDATER)'s own REQ-194
       done-event append (Step 6) -- `grep -c "^  - req:"
       docs/status/requirement_status.v7.yaml` = 17 on-disk entries, no

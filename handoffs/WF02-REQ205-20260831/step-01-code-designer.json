@@ -1,0 +1,63 @@
+{
+  "handoff_id": "step01-WF02-REQ205-20260831",
+  "run_id": "WF02-REQ205-20260831",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ205-20260831/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-205"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      ".claude/agents/uat-runner.md",
+      "lib/letflow/router.ex",
+      "lib/letflow/routers/onboarding.ex",
+      "lib/letflow/routers/tenants.ex",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/routers/definitions.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/engine.ex",
+      "test/letflow/routers/req078_supporting_routes_test.exs",
+      "test/support/webhook_test_server.ex",
+      "mix.exs",
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "lib/letflow/design/req148-lua-runtime-spike.md"
+    ],
+    "branch_name": "feature/WF02-REQ205-20260831"
+  },
+  "task": {
+    "description": "CODE-DESIGNER pass (WF-02 Step 1) for REQ-205 (S7 scenario-harness foundation -- Elixir scenario runner, business-tenant fixture seeding, API-vs-GUI execution split). Produce a design artefact under lib/letflow/design/ covering: (1) porting mechanism/target paths for the 12 R-Co YAML fixture files; (2) Letflow.Simulation.Seed's four function signatures (seed_company/1, seed_users/2, seed_groups/2, seed_process/1), their exact idempotency mechanisms, and which real Letflow context functions each calls; (3) Letflow.Simulation.Runner's parsed-scenario struct shape and execution algorithm (preconditions -> api-steps-in-order with {{produces.X}} template substitution -> gui-steps as DEFERRED_TO_S8 -> expected_outcomes verification); (4) the YAML-parsing dependency decision (add one if none exists, flag for REVIEWER sign-off per REQ-148/REQ-165 precedent); (5) the template-substitution mechanism; (6) the three verification methods (task_assigned/instance_state/audit_event) as real queries, never 'no error was raised', matching UAT-RUNNER's forbidden-pattern rule; (7) required moduledoc content distinguishing this from Letflow.Routers.SimulationTest/simulation_test.zig; (8) full acceptance-criteria-to-design-element traceability. No implementation code -- signatures/@spec/@type/structural descriptions only. Verify all cited router/context module names against real source before using them.",
+    "acceptance_criteria": [
+      "test/fixtures/simulation/{swiftroute,vortex,meridian}/ contains all 12 company/org/process YAML files ported from R-Co's tests/simulation/companies/, with actor_id values unchanged from the R-Co originals -- verified by a diff-style comparison test",
+      "Letflow.Simulation.Seed provisions all three companies' tenant, users, groups and process definitions by calling Letflow's own context modules directly (no HTTP client, no Python subprocess), demonstrated by a test that seeds swiftroute and then queries Letflow.Identity/Letflow.Definitions directly for the resulting records",
+      "seeding the same company twice in one test run is a no-op the second time (no duplicate tenant/user/group/definition, no raised error) -- one explicit test per entity kind (tenant, user, group, definition), matching seed.py's documented idempotent-409 contract",
+      "Letflow.Simulation.Runner executes a minimal one-step api-via scenario end to end against a real running instance (real HTTP through Letflow.Router, not a mocked handler) and evaluates at least one instance_state-method expected outcome by querying actual instance state afterward",
+      "a scenario step declared via: gui is recorded with outcome DEFERRED_TO_S8 by the runner, never silently skipped (absent from the report) and never executed as if it were an api step",
+      "the runner moduledoc explicitly distinguishes this harness from Letflow.Routers.SimulationTest/simulation_test.zig's design-time definition-validation tool, states that this requirement does not build that router, and cites both R-Co source files by path",
+      "if a YAML-parsing library is added to mix.exs, REVIEWER sign-off is recorded for it in this requirement's PR",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req205-simulation-harness-foundation.md. Design-only, no implementation code (only @spec/@type/defstruct-shape declarations, no function bodies, matching this session's established convention -- verified against req168's/req157's rework history that @spec/@type blocks are acceptable and only literal function bodies/closures are not). Key decisions: (1) fixture port is a verbatim file copy into test/fixtures/simulation/{swiftroute,vortex,meridian}/, 12 files total, verified by a diff-style test with inlined expected values (no R-Co source access assumed at CI time). (2) Letflow.Simulation.Seed's four functions each specify a pre-check-then-create idempotency mechanism against a real lookup function (get_tenant_by_slug/1, get_by_username/2, list_groups/1 by name, get_active_by_name/2) plus a fallback re-fetch on the underlying context function's own already-confirmed conflict-detection helpers (username_unique_conflict?/1, group_name_unique_conflict?/1, duplicate_group_name), calling Letflow.Identity/Letflow.TenantOnboarding/Letflow.Definitions directly, never HTTP. (3) Letflow.Simulation.Runner's Scenario/RunReport struct shapes and a 4-phase execution algorithm (preconditions, api-steps via Letflow.Router.call/2 -- reusing this repo's own Plug.Test router-test dispatch convention confirmed in test/letflow/routers/req078_supporting_routes_test.exs, gui-steps recorded :deferred_to_s8 inline in declared order not batched, expected_outcomes verification). (4) YAML dependency: none exists in mix.exs (confirmed by reading deps/0 in full) -- names {:yaml_elixir, \"~> 2.11\", only: :test} and flags it for REVIEWER sign-off with an alternatives-considered section mirroring REQ-148/REQ-165's precedent format. (5) {{produces.X}} substitution: recursive walk of step params, dotted-path lookup into an accumulated produces map keyed by each step's own produces field, fails closed (never substitutes nil) on an unresolved reference -- this is also how a gui-step's un-producible output is handled downstream. (6) task_assigned/instance_state/audit_event each specified as a real query against Engine/Audit context functions, explicitly citing .claude/agents/uat-runner.md's forbidden-pattern rule verbatim. (7) moduledoc content spec cites both src/api/routes/simulation_test.zig and src/simulation/scenario_runner.zig by path plus lib/letflow/router.ex's own confirmed router-inventory table row reserving that slot. (8) full 8-row AC traceability table. Verified this session by direct source read (not assumed): Letflow.Routers.Onboarding/Tenants/Identity/Definitions all real and mounted as described; Letflow.Identity.create_user/2, create_group/2, add_group_member/3, get_tenant_by_slug/1, get_by_username/2, get_onboarding_by_hostname/1 all present with @specs; Letflow.Definitions.create/2, get_active_by_name/2, activate/2 present; Letflow.Engine.create/2 and count_instances_by_status/1 present; lib/letflow/router.ex's router-inventory table does list Letflow.Routers.SimulationTest as an S7-reserved, unbuilt slot; mix.exs has no YAML dependency, direct or transitive. Four explicit open questions recorded (Tenant.t() prefix field name, list_groups/1's actual filter parameters, exact HTTP action->context-function table left to REQ-206/207/208's actual scenario content, yaml_elixir's YAML 1.1 scalar-coercion fidelity against the real ported fixtures) -- none silently resolved.",
+    "artifacts_out": [
+      "lib/letflow/design/req205-simulation-harness-foundation.md"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "OQ-1..OQ-4 in the design doc (Tenant.t() prefix field name; Letflow.Identity.list_groups/1's actual filter capability; the HTTP action-to-context-function table, deferred to REQ-206/207/208 since no scenario content exists in this requirement's scope; yaml_elixir YAML 1.1 scalar-coercion fidelity against the real fixture content). None block implementation; all explicit."
+      }
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

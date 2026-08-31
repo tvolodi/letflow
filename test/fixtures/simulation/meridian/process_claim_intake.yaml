@@ -1,0 +1,23 @@
+# SYNTHETIC FIXTURE -- NOT ported from R-Co. See
+# test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml for the full
+# explanation.
+name: meridian-claim-intake
+version: "1.0.0"
+description: Synthetic START -> HUMAN_TASK -> END process for scenario harness smoke coverage.
+graph:
+  nodes:
+    - id: start
+      node_type: START
+    - id: review_task
+      node_type: HUMAN_TASK
+      attributes:
+        role: adjuster
+    - id: end
+      node_type: END
+  edges:
+    - id: e1
+      source: start
+      target: review_task
+    - id: e2
+      source: review_task
+      target: end

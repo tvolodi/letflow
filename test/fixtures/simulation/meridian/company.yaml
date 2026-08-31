@@ -1,0 +1,6 @@
+# SYNTHETIC FIXTURE -- NOT ported from R-Co. See
+# test/fixtures/simulation/swiftroute/company.yaml for the full explanation of why
+# (R-Co's tests/simulation/companies/meridian/ tree is unreachable from this sandbox).
+slug: meridian
+display_name: Meridian Insurance Group
+hostname: meridian.simulation.test

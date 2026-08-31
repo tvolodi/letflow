@@ -904,3 +904,66 @@ history:
       format --check-formatted clean, module_registry_test.exs 20/20
       unchanged. docs/issues/ISS-0380.yaml set to status: resolved. GH#752
       closed with evidence comment.
+  - req: REQ-205
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-31T12:52:59Z"
+    note: >
+      WF02-REQ205-20260831 done (queue task 382, GH#754, stage S7). S7's FIRST
+      requirement: the scenario-harness foundation. Ships
+      Letflow.Simulation.Seed (test-support) provisioning tenant/users/groups/
+      process-definitions by calling Letflow.Identity/Letflow.Definitions
+      directly (no HTTP, no Python subprocess), idempotent on a second seed of
+      the same company, and Letflow.Simulation.Runner executing api-via
+      scenario steps for real over HTTP through Letflow.Router while recording
+      every gui-via step as DEFERRED_TO_S8 (never silently skipped, never
+      run as an api step) -- the API-vs-GUI execution split this requirement
+      exists to establish, since S8 (web/-against-Letflow integration) has not
+      started. A yaml_elixir ~> 2.11 (only: :test) dependency was added for
+      scenario-fixture parsing, REVIEWER-signed-off per AC7 (confirmed at
+      mix.exs line 64, matching the sign-off's claimed scoping). One real bug
+      found and fixed mid-pipeline: TEST-DESIGNER's step-03 findings caught
+      verify_outcome/2's :audit_event clause silently discarding `produces`
+      and never running resource_id/resource_type through the same
+      {{produces.X}} template-substitution mechanism the task_assigned/
+      instance_state clauses already used -- a partial application of an
+      established mechanism, not a missing one. ELIXIR-DEV's rework 1 added
+      resolve_optional_ref/3 (mirroring the existing resolve_ref/3) so the
+      clause now fails closed on an unresolved reference instead of matching
+      nothing, with 2 new regression tests proving real substitution and real
+      query-scoping (mismatch case). RELEASE-VALIDATOR independently
+      re-verified all 8 acceptance criteria and made the accept/reject call
+      the run's own gates deferred on AC1: the 12 fixture YAML files under
+      test/fixtures/simulation/{swiftroute,vortex,meridian}/ are SYNTHETIC,
+      self-authored data disclosed honestly in every file's header comment,
+      NOT a byte-for-byte port of R-Co's tests/simulation/companies/ tree --
+      ELIXIR-DEV found that source genuinely unreachable from this Linux
+      sandbox (no /mnt/c mount, no filesystem trace, confirmed independently
+      by RELEASE-VALIDATOR's own fresh search), even though R-Co WAS reachable
+      from whatever host/session drafted REQ-205's own requirement text
+      (which cites literal file counts/line counts from it). Verdict: ACCEPT
+      WITH RECORDED CAVEAT -- AC1 is PARTIALLY MET (mechanism/shape/tests
+      genuinely met; literal content-and-actor-id-fidelity NOT met) rather
+      than a blanket "all 8 ACs cleanly met"; does not block REQ-205 being
+      marked done because Seed/Runner depend only on fixture SHAPE, never on
+      specific R-Co values (confirmed by reading both modules), so swapping
+      in real content later is a data-only change with zero code change
+      required. Full detail:
+      handoffs/WF02-REQ205-20260831/release-validation-report-20260831.md.
+      CONSEQUENCE FOR REQ-206/207/208 (flagged by RELEASE-VALIDATOR, recorded
+      here and in docs/migration/stage-7-simulation-uat-parity.md): those
+      three requirements carry REAL R-Co scenario YAML referencing specific
+      actor_id values (e.g. actor-swiftroute-lena) that will NOT resolve
+      against these synthetic fixtures -- porting the real 12 R-Co fixture
+      files is now a HARD BLOCKING PREREQUISITE for REQ-206 starting, not a
+      deferrable cleanup, since it requires filesystem access to
+      c:\Users\tvolo\dev\ai-dala\R-Co\ this sandbox does not have. Follow-up
+      issue filed for this (see docs/issues/ISS-0382.yaml, to be registered
+      by ORCH at Step Final). Also carried forward: TEST-RUNNER's step-04
+      finding, independently reconfirmed by RELEASE-VALIDATOR, that 6 sibling
+      handoff files from this run's OWN dispatched subagents (step-02a
+      /-rework1, step-02c, step-02d/-recheck1, step-03, step-03b) store
+      result-shaped data (summary/verdict/per_ac_findings/mutation_test_
+      results/etc.) inside their `context` block instead of `task`/`result`
+      -- pre-existing schema drift, not corrected here since this DOC-UPDATER
+      step does not own those files; flagged to ORCH.

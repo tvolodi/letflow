@@ -1,0 +1,61 @@
+{
+  "handoff_id": "step02d-recheck1-WF02-REQ205-20260831",
+  "run_id": "WF02-REQ205-20260831",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ205-20260831/step-02d-reviewer-recheck1.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-31T12:20:00Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [
+      "REQ-205"
+    ],
+    "issue_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ205-20260831/step-02a-elixir-dev-rework1.json",
+      "test/support/simulation/runner.ex",
+      "test/letflow/simulation/runner_template_and_outcomes_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ205-20260831",
+    "requirement_text": "REQ-205 -- S7 scenario-harness foundation: Elixir scenario runner, business-tenant fixture seeding, and the API-vs-GUI execution split. See docs/requirements.yaml id: REQ-205 for full text.",
+    "rework_reason": "Re-check of ELIXIR-DEV's rework1 fixing the :audit_event clause's missing {{produces.X}} template substitution (TEST-DESIGNER MINOR finding from step-03)."
+  },
+  "task": {
+    "description": "Re-check the narrow fix to verify_outcome/2's :audit_event clause in test/support/simulation/runner.ex plus its new resolve_optional_ref/3 helper, and the two new tests added to test/letflow/simulation/runner_template_and_outcomes_test.exs.",
+    "checks_performed": [
+      "1. Read full test/support/simulation/runner.ex and the diff (8734146c^ ffc31ca1). The :audit_event clause now takes `produces` (was `_produces`) and runs resource_id/resource_type through resolve_optional_ref/3 before building query_params, inside a `with` -- shape now matches task_assigned's resolve_ref/fetch_prefix pattern and instance_state's, both structurally and in ordering (prefix, then refs, then the read).",
+      "2. resolve_optional_ref/3 mirrors resolve_ref/3 exactly except the :error branch on Map.fetch returns {:ok, nil} instead of {:error, {:missing_arg, key}}. Confirmed this is the correct distinction: Audit.list_entries/1's query_params already passes resource_id/resource_type straight through and (per the pre-existing, unchanged clause body) a nil in either field is a real 'do not filter on this field' value the query context already handles -- unlike task_ref/instance_ref, which are required identifiers with no meaningful nil case. args still requires \"event_type\" and \"prefix\" (Map.fetch! / fetch_prefix), which is right since those two are never optional.",
+      "3. Fail-closed confirmed: the `with` has a single `else` clause matching {:error, reason} -> %{expected_outcome: expected, outcome: :fail, observed: {:error, reason}}, identical in shape to task_assigned's and instance_state's own else clauses. An unresolved {{produces.X}} in resource_id/resource_type now produces :fail with the resolution error, not a literal template string reaching the query.",
+      "4. Diff scope confirmed via `git diff 8734146c^ ffc31ca1 -- test/support/simulation/runner.ex`: exactly the :audit_event clause body and the new resolve_optional_ref/3 helper (inserted next to resolve_ref/3) changed. `git diff --stat` on test/support/simulation/seed.ex is empty -- untouched. No other function in runner.ex changed.",
+      "5. Read the two new tests in the 'audit_event verification method' describe block of test/letflow/simulation/runner_template_and_outcomes_test.exs: (a) 'resolves a {{produces.X}} resource_id reference and scopes the real query by it' -- dispatches a real POST /api/v1/instances HTTP step via Letflow.Router.call/2, captures the runtime-only instance_id, references it as \"{{produces.instance.instance_id}}\" in the audit_event outcome's resource_id, asserts :pass and that the matched real Postgres AuditEntry.resource_id equals the captured runtime id -- not hardcoded. (b) the mismatch pair using a resolved-but-wrong Ecto.UUID.generate() value, asserting :fail with matching_entry: nil even though a real row for the right event_type/resource_type exists -- proves the substitution genuinely scopes the query rather than being a no-op. Both mirror the existing task_assigned match/mismatch pattern in shape and the pre-existing audit_event match/mismatch tests (which still pass unmodified, since they don't set resource_id at all and hit resolve_optional_ref's {:ok, nil} branch)."
+    ],
+    "independent_verification": {
+      "compile": "mix compile --warnings-as-errors -- clean, no warnings (re-run independently by REVIEWER)",
+      "format": "mix format --check-formatted -- clean, exit 0 (re-run independently by REVIEWER)",
+      "test_command": "mix test test/letflow/simulation/ test/fixtures/simulation/",
+      "test_result": "Result: 25 passed, 0 failed -- confirmed independently, matching ELIXIR-DEV's reported evidence"
+    }
+  },
+  "result": {
+    "status": "PASS",
+    "findings": [
+      "Idiomatic: the fix extends an already-approved substitution mechanism (substitute_templates/2, already used by task_assigned/instance_state) to a third clause via a minimal, correctly-differentiated helper (resolve_optional_ref/3 vs resolve_ref/3) rather than inventing a new mechanism or duplicating substitution logic inline. No crutch pattern introduced.",
+      "Supervision: not applicable -- this module is a test-support HTTP-dispatch harness (test/support/), not a supervised runtime process; no change to Letflow.InstanceSupervisor or process isolation.",
+      "Type-safety: no new class of invalid state introduced. args remains a raw map from hand-built/YAML-sourced scenario data (already the existing shape); the {:ok, nil} vs {:error, {:missing_arg, key}} split for optional vs required keys is exactly the distinction Audit.list_entries/1's existing signature already expects. Not filing a type-safety issue for this change -- it's a same-shape extension of an existing, already-reviewed pattern, not a new gap.",
+      "Scope: minimal and matched to the fix -- one clause changed, one small helper added, two tests added. No abstraction, behaviour, or plumbing introduced ahead of what this bugfix needs.",
+      "Security-review-scope assessment: agree with ELIXIR-DEV's read that a SECURITY-REVIEWER re-pass is not warranted. The change is confined to test/support/simulation/runner.ex's existing verify_outcome/2 (already reviewed and passed at step-02c/02d in this same run), touches no tenant-data-path production code (no new route, migration, secret handling, or response shaping), and only threads an already-approved read-only-query-scoping mechanism (used elsewhere in the same already-reviewed function) onto two more of that same query's existing parameters. This is REVIEWER's assessment for ORCH's decision, not a self-certification on ELIXIR-DEV's or REVIEWER's part."
+    ],
+    "issues": [],
+    "artifacts_out": [
+      "test/support/simulation/runner.ex",
+      "test/letflow/simulation/runner_template_and_outcomes_test.exs"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b) to validate coverage of this fix. TEST-DESIGNER's existing suite already grew by 2 tests targeting exactly this gap in step 02a rework1 -- Step 3 (TEST-DESIGNER) does not need to redo work, only Step 3b needs to confirm the added coverage is sufficient and isolated."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

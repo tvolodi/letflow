@@ -1,0 +1,14 @@
+# SYNTHETIC FIXTURE -- NOT ported from R-Co. See company.yaml in this directory.
+name: swiftroute-route-approval
+version: "1.0.0"
+description: Synthetic START -> END process (synchronous completion) for the runner's minimal api-via smoke scenario.
+graph:
+  nodes:
+    - id: start
+      node_type: START
+    - id: end
+      node_type: END
+  edges:
+    - id: e1
+      source: start
+      target: end

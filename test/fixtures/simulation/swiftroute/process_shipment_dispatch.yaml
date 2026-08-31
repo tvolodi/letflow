@@ -1,0 +1,21 @@
+# SYNTHETIC FIXTURE -- NOT ported from R-Co. See company.yaml in this directory.
+name: swiftroute-shipment-dispatch
+version: "1.0.0"
+description: Synthetic START -> HUMAN_TASK -> END process for scenario harness smoke coverage.
+graph:
+  nodes:
+    - id: start
+      node_type: START
+    - id: dispatch_task
+      node_type: HUMAN_TASK
+      attributes:
+        role: dispatcher
+    - id: end
+      node_type: END
+  edges:
+    - id: e1
+      source: start
+      target: dispatch_task
+    - id: e2
+      source: dispatch_task
+      target: end

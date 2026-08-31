@@ -1,0 +1,17 @@
+# SYNTHETIC FIXTURE -- NOT ported from R-Co. See
+# test/fixtures/simulation/swiftroute/org_structure.yaml for the full explanation.
+# actor_id values are self-authored, not R-Co's real actor-vortex-* references.
+people:
+  - actor_id: actor-vortex-nia
+    username: vortex-nia
+    display_name: Nia Fontaine
+    email: nia@vortex.simulation.test
+  - actor_id: actor-vortex-omar
+    username: vortex-omar
+    display_name: Omar Haddad
+    email: omar@vortex.simulation.test
+
+groups:
+  - name: vortex-planners
+    display_name: Production Planners
+    members: [actor-vortex-nia, actor-vortex-omar]

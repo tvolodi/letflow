@@ -800,8 +800,14 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 34
+    entries: 35
     note: >
+      Recounted to 35 after WF02-REQ205-20260831's own DOC-UPDATER done event
+      appended. `grep -c "^  - req:" docs/status/requirement_status.v7.yaml`
+      = 35 on-disk entries (`wc`: 969 lines / 56578 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered). This
+      supersedes the 34-count note below.
+
       Recounted to 34 after rebasing WF03-ISS0380-20260831 onto main a
       second time, which by then included WF02-REQ199-20260831's own
       DOC-UPDATER done event (merged as PR #761) landing alongside this

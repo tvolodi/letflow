@@ -1,0 +1,53 @@
+{
+  "handoff_id": "step01b-WF02-REQ205-20260831",
+  "run_id": "WF02-REQ205-20260831",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ205-20260831/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-31T10:57:03Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-205"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req205-simulation-harness-foundation.md",
+      "lib/letflow/router.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/routers/identity.ex",
+      "mix.exs",
+      "test/letflow/routers/req078_supporting_routes_test.exs",
+      ".claude/agents/uat-runner.md",
+      "lib/letflow/design/req203-artifact-activation.md"
+    ],
+    "branch_name": "feature/WF02-REQ205-20260831",
+    "rework_pass": 0
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR (WF-02 Step 1b) for REQ-205: validate lib/letflow/design/req205-simulation-harness-foundation.md against docs/requirements.yaml's REQ-205 acceptance_criteria and against the no-implementation-code constraint (WF-02_requirement_implementation.md Step 1b(e))."
+  },
+  "result": {
+    "status": "FAIL",
+    "checks_performed": {
+      "source_of_truth_facts_reverified": "PASS -- independently re-checked every §0 claim against real source, not the design's own paraphrase: lib/letflow/router.ex lines ~73-83 do list `Letflow.Routers.SimulationTest | simulation_test.zig | S7 (simulation harness)` as a reserved, unbuilt slot. Letflow.Identity.create_tenant/1, create_user/2, create_group/2, add_group_member/3, get_tenant_by_slug/1, get_by_username/2, get_onboarding_by_hostname/1, list_groups/1, username_unique_conflict?/1, group_name_unique_conflict?/1 all exist with the claimed @specs. Letflow.Definitions.create/2, get_active_by_name/2, activate/2 exist. Letflow.Engine.create/2 and count_instances_by_status/1 exist. lib/letflow/routers/identity.ex line 438 has the duplicate_group_name conflict branch (design cited 437-438, off by one line but substantively correct) and line 489-491 has the created?-flag response exactly as described. mix.exs deps/0 has no YAML-parsing library, direct or transitive, confirmed by reading the full deps list. test/letflow/routers/req078_supporting_routes_test.exs's moduledoc confirms the Plug.Test conn + Letflow.Router.call/2 (cross-cutting) or sub-router .call/2 (with conn.assigns.auth_context set by hand) dispatch convention exactly as the design states. .claude/agents/uat-runner.md line 33 contains the cited forbidden-pattern sentence verbatim: \"Don't record PASS on the absence of an error; confirm the expected state was actually reached.\"",
+      "traceability_table_ac3_ac4_ac5": "PASS -- AC3 (double-seed no-op per entity kind) maps to §2.1-2.4's idempotency mechanisms plus §2.5's four explicit row-count tests, matches the design body. AC4 (minimal one-step api-via scenario, real HTTP through Letflow.Router, >=1 instance_state outcome) maps to §3.2-3.3 step 2 (Letflow.Router.call/2 dispatch) and §6's instance_state method, matches. AC5 (gui step recorded DEFERRED_TO_S8, never silently skipped, never force-run) maps to §3.3 step 3, matches -- the design explicitly states gui-via steps are recorded inline in declared order, never batched or dropped from step_results.",
+      "yaml_dependency_choice": "ACCEPTABLE -- yaml_elixir ~> 2.11 is a real, current package; only: :test scoping is correctly justified (mirrors stream_data's existing only: :test entry; nothing under lib/letflow/ parses YAML). Not a failure.",
+      "no_implementation_code_present": "FAIL. Section 3.1 and section 3.2 each contain a full `defmodule Letflow.Simulation.Scenario do ... defstruct [...] end` / `defmodule Letflow.Simulation.RunReport do ... defstruct [...] end` block -- complete, syntactically valid Elixir module definitions with nested @type declarations and defstruct field-default lists, not bare @spec-style signatures. This is materially different from how the OTHER design this session that reached PASS with an equivalent struct/type-shape need (lib/letflow/design/req203-artifact-activation.md, §2.1-2.3 for its three new schemas, §4.1 for its Ecto.Multi-returning function) expressed the identical kind of information: req203 uses prose/markdown tables (column | type | constraints) for every schema shape and single-line inline type signatures for functions (e.g. `Letflow.Repository.Activation.resolve(artifact_kind :: artifact_kind(), ...) :: {:ok, ArtifactVersion.t()} | {:error, :not_activated} | ...`), with zero `defmodule`/`defstruct` code fences anywhere in the document. REQ-157's own rework history (commits 3680243/f9b3a0b/b88e051) establishes this session's working standard precisely: '@spec/@type blocks are permitted' but a design must not present something 'copy-paste-ready' as if it were real source -- and a full `defmodule ... defstruct [...] end` block IS copy-paste-ready: it could be pasted verbatim into test/support/simulation/scenario.ex and would compile and run as the real module, unlike a bare @type or @spec line, which cannot stand alone as a working module. Per this role's mandate ('FAIL immediately and completely on any single failed check -- no partial credit'; 'no partial credit' for being 'otherwise strong'), sections 3.1 and 3.2 must be rewritten as prose/table field descriptions (field name | type | description, matching req203's §2.1-2.3 convention) with no defmodule/defstruct wrapper, before this design can pass.",
+      "open_questions_oq1_oq4": "OQ-2 FAILS the 'not silently resolved when resolvable now' standard this session already applied to REQ-202/REQ-203's validators. §2.3 already states the design read `list_groups/1`'s @spec at lib/letflow/identity.ex:527, but the design had (and used) read access to that function's full BODY too -- independently re-read here: `def list_groups(opts)` (lib/letflow/identity.ex lines 527-537) takes only `opts :: opts()` (a `prefix:` keyword list), builds `from(g in Group, order_by: [asc: g.name])` with NO name/filter clause of any kind, and returns the full unpaginated per-tenant list. There is no server-side name filter to discover -- this is a settled fact, not an open question. §2.3 must be corrected to state plainly: `list_groups/1` accepts no name filter; `seed_groups/2`'s idempotency pre-check must list the tenant's groups via `list_groups/1` and match the fixture's group name client-side, full stop -- not phrased as 'if no by-name lookup exists... resolved by ELIXIR-DEV against list_groups/1's actual filter parameters,' which defers a question this design's own §0 already had the material to answer. OQ-1, OQ-3, OQ-4 remain legitimate: OQ-1 (Tenant.t()'s exact prefix-field name) and OQ-4 (yaml_elixir's YAML 1.1 scalar-coercion fidelity against not-yet-ported fixture content) both require information the design could not have resolved from this session's read set alone (OQ-1 needs lib/letflow/identity/tenant.ex, not in artifacts_in; OQ-4 needs the actual fixture content, not yet ported); OQ-3 is correctly scoped out since REQ-206/207/208's scenario content does not exist yet in this requirement's scope."
+    },
+    "issues": [
+      "lib/letflow/design/req205-simulation-harness-foundation.md §3.1: replace the `defmodule Letflow.Simulation.Scenario do ... @type step :: %{...} ... defstruct [...] end` code fence with a prose/table description of the Scenario struct's fields (name, type, description), following lib/letflow/design/req203-artifact-activation.md's §2.1-2.3 convention. No defmodule/defstruct code fence.",
+      "lib/letflow/design/req205-simulation-harness-foundation.md §3.2: replace the `defmodule Letflow.Simulation.RunReport do ... defstruct [...] end` code fence the same way -- prose/table field descriptions, no defmodule/defstruct block. The `run/1` @spec single-line signature itself is fine to keep as-is (matches the permitted @spec-style convention used elsewhere in §2.1-2.4).",
+      "lib/letflow/design/req205-simulation-harness-foundation.md §2.3 and OQ-2 (§9): list_groups/1 (lib/letflow/identity.ex lines 527-537, function body directly re-read this session) takes only `opts :: opts()` and applies no name filter of any kind -- this is confirmed, settled fact, not an open question. Rewrite §2.3's idempotency mechanism to state plainly that seed_groups/2 lists all groups via list_groups/1 and matches the fixture's group name client-side; remove OQ-2 from §9 (or state it as resolved, matching req203 §9's own precedent of moving resolved former-open-questions into a 'resolved' note rather than leaving them phrased as open)."
+    ],
+    "artifacts_out": [],
+    "next_action": "Rework CODE-DESIGNER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

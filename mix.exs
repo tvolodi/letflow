@@ -54,6 +54,14 @@ defmodule Letflow.MixProject do
       # step-02a handoff) -- REVIEWER sign-off must be recorded before this merges.
       {:telemetry, "~> 1.4"},
       {:stream_data, "~> 0.6", only: :test},
+      # REQ-205 (design lib/letflow/design/req205-simulation-harness-foundation.md
+      # §4): pure-Elixir YAML 1.1 parser (wraps :yamerl) for the S7 simulation
+      # harness's business-fixture YAML (test/fixtures/simulation/). Test-only --
+      # nothing under lib/letflow/ (production code) ever parses YAML -- mirrors
+      # stream_data's own `only: :test` entry, not wasmex/lua's unconditional
+      # runtime-engine entries. Flagged for REVIEWER sign-off per REQ-205's AC7,
+      # same procedural precedent as REQ-148/REQ-165's own new top-level deps.
+      {:yaml_elixir, "~> 2.11", only: :test},
       {:ueberauth_oidcc, "~> 0.4"},
       {:lua, "~> 1.0"},
       {:wasmex, "~> 0.15.1"}

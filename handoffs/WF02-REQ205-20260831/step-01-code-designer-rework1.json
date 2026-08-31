@@ -1,0 +1,44 @@
+{
+  "handoff_id": "step01-WF02-REQ205-20260831-rework1",
+  "run_id": "WF02-REQ205-20260831",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ205-20260831/step-01-code-designer-rework1.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-31T10:59:46Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-205"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req205-simulation-harness-foundation.md",
+      "handoffs/WF02-REQ205-20260831/step-01b-code-design-validator.json",
+      "lib/letflow/identity.ex",
+      "lib/letflow/design/req203-artifact-activation.md"
+    ],
+    "branch_name": "feature/WF02-REQ205-20260831",
+    "rework_pass": 1
+  },
+  "task": {
+    "description": "Rework of lib/letflow/design/req205-simulation-harness-foundation.md addressing CODE-DESIGN-VALIDATOR's step-01b FAIL: (1) removed literal defmodule/defstruct Elixir code fences from §3.1 (Letflow.Simulation.Scenario) and §3.2 (Letflow.Simulation.RunReport), replacing them with prose/markdown field tables (field | type | meaning), matching lib/letflow/design/req203-artifact-activation.md's established convention; the run/1 single-line @spec was kept as-is per the validator's explicit note that it was fine. (2) Re-read Letflow.Identity.list_groups/1's full body directly at lib/letflow/identity.ex:527-537, independently confirming it takes only opts :: [prefix: ...], applies no name/filter clause, and returns the tenant's full unpaginated group list. Rewrote §2.3 to state plainly, as a settled design decision, that seed_groups/2 lists ALL groups via list_groups/1 and matches the fixture's group name client-side. Removed OQ-2 from §9, replacing it with a '(resolved, formerly OQ-2)' note pointing to §2.3's settled text, and renumbered the former OQ-3/OQ-4 to OQ-2/OQ-3 (no other changes to their content). OQ-1 and the renumbered OQ-2/OQ-3 (formerly OQ-3/OQ-4) are otherwise untouched, as are §0, §1, §4, §5, §6, §7, and §8 (§8's references to §3.1/§3.2 by section number remain accurate since only the presentation within those sections changed, not their numbering)."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "changes_made": [
+      "§3.1 rewritten: Scenario struct + step()/precondition()/expected_outcome() sub-shapes expressed as markdown field tables, no defmodule/defstruct fence.",
+      "§3.2 rewritten: RunReport struct + step_result()/outcome_result() sub-shapes expressed as markdown field tables, no defmodule/defstruct fence; run/1 @spec line retained.",
+      "§2.3 rewritten to state list_groups/1 lists all groups (no server-side name filter) and seed_groups/2 matches client-side, as a settled decision.",
+      "§9 OQ-2 removed and replaced with a resolved-note; former OQ-3/OQ-4 renumbered to OQ-2/OQ-3 (content unchanged)."
+    ],
+    "verification": "grep confirms zero remaining 'defmodule'/'defstruct' occurrences in the file. list_groups/1's body was read directly (lib/letflow/identity.ex:515-537) this session, confirming the validator's finding verbatim: opts-only signature, no name filter, from(g in Group, order_by: [asc: g.name]), Repo.all/Repo.aggregate unpaginated, always {:ok, ...}.",
+    "artifacts_out": [
+      "lib/letflow/design/req205-simulation-harness-foundation.md"
+    ],
+    "next_action": "CODE-DESIGN-VALIDATOR re-check"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

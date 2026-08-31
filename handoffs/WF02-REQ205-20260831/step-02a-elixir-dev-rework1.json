@@ -1,0 +1,62 @@
+{
+  "handoff_id": "step02a-rework1-WF02-REQ205-20260831",
+  "run_id": "WF02-REQ205-20260831",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ205-20260831/step-02a-elixir-dev-rework1.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-31T12:20:00Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [
+      "REQ-205"
+    ],
+    "issue_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ205-20260831/step-03-test-designer.json",
+      "test/support/simulation/runner.ex",
+      "lib/letflow/design/req205-simulation-harness-foundation.md"
+    ],
+    "branch_name": "feature/WF02-REQ205-20260831",
+    "requirement_text": "REQ-205 -- S7 scenario-harness foundation: Elixir scenario runner, business-tenant fixture seeding, and the API-vs-GUI execution split. See docs/requirements.yaml id: REQ-205 for full text.",
+    "rework_reason": "TEST-DESIGNER's step-03 handoff (findings_for_orch, MINOR severity) reported a real inconsistency: verify_outcome/2's :audit_event clause discarded `produces` and never ran `args` through the {{produces.X}} template-substitution mechanism the :task_assigned and :instance_state clauses already used -- a scenario referencing a prior step's captured output in an audit_event outcome's args (e.g. resource_id: \"{{produces.instance.instance_id}}\") silently matched nothing instead of resolving to the real id or failing closed."
+  },
+  "task": {
+    "description": "Fix the :audit_event clause in test/support/simulation/runner.ex's verify_outcome/2 to run resource_id/resource_type through the same {{produces.X}} substitution mechanism the other two clauses already use, and add a real test exercising the fixed path.",
+    "acceptance_criteria": [
+      "audit_event's verify_outcome/2 clause resolves {{produces.X}} references in resource_id/resource_type before querying Letflow.Audit.list_entries/1, matching task_assigned/instance_state's existing pattern",
+      "an unresolved {{produces.X}} reference in an audit_event outcome's args fails closed (outcome: :fail with the resolution error), same as the other two methods, rather than sending the literal template string to the query",
+      "a new or adjusted test proves a genuine {{produces.X}} reference resolves against real Postgres state and actually scopes the query (a mismatched resolved value must fail even when a real row for the right event_type exists)",
+      "mix compile --warnings-as-errors clean; mix format --check-formatted clean; all pre-existing simulation-harness tests (23) still pass"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "fix_summary": "verify_outcome/2's :audit_event clause (test/support/simulation/runner.ex) now takes `produces` (was `_produces`, discarded) and runs resource_id/resource_type through a new resolve_optional_ref/3 helper before building the Audit.list_entries/1 query. resolve_optional_ref/3 mirrors the existing resolve_ref/3 (used by task_assigned's task_ref and instance_state's instance_ref) but treats a missing key as {:ok, nil} rather than {:error, {:missing_arg, key}} -- resource_id/resource_type are optional args on this method (Audit.list_entries/1 already treats nil as 'do not filter on this field'), unlike task_ref/instance_ref which are required. The clause body is now wrapped in a `with` that fails closed (outcome: :fail, observed: {:error, reason}) on any resolution error, exactly matching task_assigned/instance_state's existing failure shape.",
+    "files_changed": {
+      "modified": [
+        "test/support/simulation/runner.ex",
+        "test/letflow/simulation/runner_template_and_outcomes_test.exs"
+      ]
+    },
+    "test_added": "Two new tests in the 'audit_event verification method' describe block of test/letflow/simulation/runner_template_and_outcomes_test.exs: (1) 'resolves a {{produces.X}} resource_id reference and scopes the real query by it' -- a real HTTP-dispatched instance-create step produces a runtime-only instance_id; the audit_event outcome's args reference it as \"{{produces.instance.instance_id}}\"; asserts :pass and that the matched real Postgres row's resource_id equals the captured runtime id (not hardcoded). (2) a mismatch pair using a resolved-but-wrong UUID, proving the substitution actually scopes the query rather than being a no-op that would pass regardless. The pre-existing audit_event tests' stale NOTE comment (recording the now-fixed gap) was removed since it no longer describes current behavior.",
+    "test_evidence": {
+      "compile": "mix compile --warnings-as-errors -- clean, no warnings",
+      "format": "mix format --check-formatted -- clean, exit 0",
+      "test_command": "mix test test/letflow/simulation/ test/fixtures/simulation/",
+      "test_result": "Result: 25 passed, 0 failed (23 pre-existing + 2 new audit_event template-substitution tests)"
+    },
+    "security_review_note": "This is a narrow bugfix confined entirely to test/support/simulation/runner.ex's existing verify_outcome/2 function (already reviewed and passed by SECURITY-REVIEWER/REVIEWER in this run's step-02c/02d) -- it adds no new tenant-data-path behavior, only applies an already-approved substitution mechanism (used elsewhere in the same function) to one more argument set before an existing read-only query. ELIXIR-DEV's assessment: does not need a full SECURITY-REVIEWER re-pass, but this is ORCH's call per this role's standing instructions, not ELIXIR-DEV's to self-certify.",
+    "issues": [],
+    "artifacts_out": [
+      "test/support/simulation/runner.ex",
+      "test/letflow/simulation/runner_template_and_outcomes_test.exs"
+    ],
+    "next_action": "Route to REVIEWER for a narrow re-check of this one fix (idiom/shape of resolve_optional_ref/3 and the with-based fail-closed clause). ORCH to decide whether SECURITY-REVIEWER re-pass is also warranted; ELIXIR-DEV's read is no, per security_review_note above."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

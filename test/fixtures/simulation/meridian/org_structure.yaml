@@ -1,0 +1,17 @@
+# SYNTHETIC FIXTURE -- NOT ported from R-Co. See
+# test/fixtures/simulation/swiftroute/org_structure.yaml for the full explanation.
+# actor_id values are self-authored, not R-Co's real actor-meridian-* references.
+people:
+  - actor_id: actor-meridian-priya
+    username: meridian-priya
+    display_name: Priya Chandran
+    email: priya@meridian.simulation.test
+  - actor_id: actor-meridian-sam
+    username: meridian-sam
+    display_name: Sam Whitfield
+    email: sam@meridian.simulation.test
+
+groups:
+  - name: meridian-adjusters
+    display_name: Claims Adjusters
+    members: [actor-meridian-priya, actor-meridian-sam]

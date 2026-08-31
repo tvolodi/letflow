@@ -108,6 +108,9 @@ defmodule Letflow.Scheduler.Poller do
           maybe_refresh_active_instances(schemas)
           retention_state = maybe_run_retention_sweep(schemas, state)
           maybe_run_alert_detection(schemas, observed_lag_ms, get_last_tick_started_at(state))
+          maybe_run_ordering_cycle(schemas)
+          maybe_run_ordering_sweeper(schemas)
+          maybe_run_ordering_metrics(schemas)
           Map.put(retention_state, :last_tick_started_at, now)
 
         :error ->
@@ -208,6 +211,51 @@ defmodule Letflow.Scheduler.Poller do
     case Scheduler.jitter_ms() do
       0 -> 0
       jitter_ms -> :rand.uniform(jitter_ms + 1) - 1
+    end
+  end
+
+  # REQ-199: ordering consumer cycle, one per schema per tick, no new application.ex child.
+  defp maybe_run_ordering_cycle(schemas) do
+    cfg = Application.get_env(:letflow, :ordering, [])
+
+    if Keyword.get(cfg, :enabled, true) do
+      Enum.each(schemas, fn schema_name ->
+        try do
+          Letflow.Ordering.run_cycle(schema_name, prefix: schema_name)
+        rescue
+          _ -> :ok
+        end
+      end)
+    end
+  end
+
+  # REQ-199: gap sweeper, one per schema per tick.
+  defp maybe_run_ordering_sweeper(schemas) do
+    cfg = Application.get_env(:letflow, :ordering, [])
+
+    if Keyword.get(cfg, :enabled, true) do
+      Enum.each(schemas, fn schema_name ->
+        try do
+          Letflow.Ordering.sweep_gaps(schema_name, prefix: schema_name)
+        rescue
+          _ -> :ok
+        end
+      end)
+    end
+  end
+
+  # REQ-199: lag metrics surface, one per schema per tick.
+  defp maybe_run_ordering_metrics(schemas) do
+    cfg = Application.get_env(:letflow, :ordering, [])
+
+    if Keyword.get(cfg, :enabled, true) do
+      Enum.each(schemas, fn schema_name ->
+        try do
+          Letflow.Ordering.emit_lag_metrics(schema_name, prefix: schema_name)
+        rescue
+          _ -> :ok
+        end
+      end)
     end
   end
 end

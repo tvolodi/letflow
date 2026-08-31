@@ -3540,6 +3540,27 @@
       "released_lock": true,
       "last_known_step": "Step Final (ORCH: pushing/merging PR to main, queue task 369 to be released done)",
       "note": "Route half of the audit split atop REQ-195's audit_entries store. Repoints GET /api/v1/audit's handler from EventStore.read_global/1 to the new store, preserving response envelope and :AuditRead permission. Retires audit.ex's own documented caveats (constant resource_type, always-null before/after state). No schema/authorization.ex/web/ changes."
+    },
+    {
+      "run_id": "WF02-REQ202-20260830",
+      "requirement_id": "REQ-202",
+      "queue_task_id": 375,
+      "github_issue_number": 721,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/repository.ex",
+        "lib/letflow/repository/artifact.ex",
+        "lib/letflow/repository/artifact_version.ex",
+        "lib/letflow/repository/canonicaliser.ex",
+        "lib/letflow/definitions/promotion_digest.ex",
+        "lib/letflow/tenant_provisioning.ex",
+        "priv/repo/migrations"
+      ],
+      "started_at": "2026-08-30T21:58:57Z",
+      "lock_released_at": "2026-08-31T00:30:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: merged PR #748 to main, queue task 375 released done)",
+      "note": "Content-addressed artifact store (REPO-01..04): per-tenant repository_artifacts/artifact_versions tables, dedup by content_hash, DB-level immutability triggers, REQ-067 cursor-paginated version history. New Letflow.Repository.Canonicaliser deliberately separate from Letflow.Definitions.PromotionDigest (normalizes numbers; PromotionDigest does not and must not, to avoid breaking stored promotion digests/INV-PRM-5) -- both moduledocs cross-reference each other per AC5. REQ-041 (solution_pack_artefact_bases) disambiguated as an unrelated table. No route/controller/web/ changes. Design reworked once (AC10 migration-comment requirement; OQ-2 AC5-interpretation resolved rather than deferred). Implementation reworked three times: (1) @spec accuracy fix; (2) two real Postgres bugs TEST-DESIGNER found by actually running migrations against a per-tenant schema -- an Ecto default index-name collision (desc: annotation stripped from the generated name, colliding with a sibling index) and a truncated/mismatched unique-constraint name past Postgres's 63-byte NAMEDATALEN limit, both fixed with explicit short names; (3) tenant-table oracle-rot guard in test/support/tenant_fixture.ex was missing the two new tables (3rd occurrence of this class across REQ-181/REQ-195/REQ-202 -- now documented in docs/anti-patterns.md for the first time). Test design reworked once: a mutation-confirmed gap where a content_hash collision must not re-validate content_type/byte_size against the existing row. RELEASE-VALIDATOR independently re-derived all 14 ACs from source and real command output. Two new anti-pattern entries filed. CI: 3 consecutive full reruns hit the pre-existing, unrelated :wasm_hang timing-flake class (confirmed via empty git diff on wasm paths) before a clean run landed; fed back via SendFeedback given the unusual persistence."
     }
   ]
 }

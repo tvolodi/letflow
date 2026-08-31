@@ -186,15 +186,37 @@ defmodule Letflow.Repository.Activation do
   all-or-nothing guarantee: any step's failure rolls back every prior step,
   including every already-processed artifact in the group.
   """
-  @spec activate_group([activation_input()], Ecto.UUID.t(), String.t(), String.t()) ::
+  @typedoc """
+  TEST-ONLY seam (added by TEST-DESIGNER at REQ-203 Step 3, flagged for
+  REVIEWER; see design §4.3 and `test/letflow/repository/activation_test.exs`
+  AC1/AC2's concurrency test). No production call site passes this option --
+  `activate_group/4`'s public `@spec` above intentionally omits it so callers
+  do not discover it by autocomplete. `:test_pause_after` is the 1-based
+  index (in `activations` order) after whose `Multi.run/3` steps a pause step
+  is inserted; `:test_pause_fun` is a 0-arity function invoked synchronously
+  *inside the open transaction* at that point (expected to signal a waiting
+  test process and then block on a reply), giving a concurrent reader a real
+  window to observe the partially-applied, still-uncommitted state. Omitting
+  both opts (the default, `[]`) reproduces the exact `Multi` shape design §4.2
+  describes, byte-for-byte -- this seam adds nothing to the production path.
+  """
+  @type test_opts :: [test_pause_after: pos_integer(), test_pause_fun: (-> any())]
+
+  @spec activate_group(
+          [activation_input()],
+          Ecto.UUID.t(),
+          String.t(),
+          String.t(),
+          test_opts()
+        ) ::
           {:ok, activate_group_result()}
           | {:error, :empty_group}
           | {:error, :duplicate_artifact_in_group}
           | {:error, :invalid_schema_name}
           | {:error, {:group, Ecto.Changeset.t()}}
           | {:error, {atom(), Ecto.Changeset.t()}}
-  def activate_group(activations, activator_user_id, rationale, prefix)
-      when is_list(activations) and is_binary(prefix) do
+  def activate_group(activations, activator_user_id, rationale, prefix, opts \\ [])
+      when is_list(activations) and is_binary(prefix) and is_list(opts) do
     with :ok <- validate_non_empty_group(activations),
          :ok <- validate_no_duplicate_artifacts(activations),
          {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
@@ -215,12 +237,15 @@ defmodule Letflow.Repository.Activation do
           Multi.new()
           |> Multi.insert(:group, group_changeset, prefix: prefix)
 
+        pause_after = Keyword.get(opts, :test_pause_after)
+        pause_fun = Keyword.get(opts, :test_pause_fun)
+
         multi =
           activations
           |> Enum.with_index(1)
           |> Enum.reduce(multi, fn {activation, index}, acc ->
-            add_activation_steps(
-              acc,
+            acc
+            |> add_activation_steps(
               activation,
               index,
               tenant_id,
@@ -230,6 +255,7 @@ defmodule Letflow.Repository.Activation do
               group_id,
               prefix
             )
+            |> maybe_add_test_pause_step(index, pause_after, pause_fun)
           end)
 
         multi
@@ -240,6 +266,14 @@ defmodule Letflow.Repository.Activation do
       end
     end
   end
+
+  # TEST-ONLY (see @type test_opts above) -- a no-op unless a test explicitly
+  # supplies both `test_pause_after`/`test_pause_fun`.
+  defp maybe_add_test_pause_step(multi, index, index, pause_fun) when is_function(pause_fun, 0) do
+    Multi.run(multi, :__test_pause__, fn _repo, _changes -> {:ok, pause_fun.()} end)
+  end
+
+  defp maybe_add_test_pause_step(multi, _index, _pause_after, _pause_fun), do: multi
 
   defp validate_non_empty_group([]), do: {:error, :empty_group}
   defp validate_non_empty_group([_ | _]), do: :ok

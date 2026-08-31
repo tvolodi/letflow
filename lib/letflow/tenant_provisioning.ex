@@ -473,10 +473,10 @@ defmodule Letflow.TenantProvisioning do
      "20260830040001_create_alert_trigger_state.exs"},
     {20_260_830_040_002, Letflow.Repo.Migrations.CreateAlertHookEmissionState,
      "20260830040002_create_alert_hook_emission_state.exs"},
-    {20_260_831_000_001, Letflow.Repo.Migrations.CreateEffectCompletions,
-     "20260831000001_create_effect_completions.exs"},
-    {20_260_831_000_002, Letflow.Repo.Migrations.CreateCorrelationCursors,
-     "20260831000002_create_correlation_cursors.exs"}
+    {20_260_831_050_001, Letflow.Repo.Migrations.CreateEffectCompletions,
+     "20260831050001_create_effect_completions.exs"},
+    {20_260_831_050_002, Letflow.Repo.Migrations.CreateCorrelationCursors,
+     "20260831050002_create_correlation_cursors.exs"}
   ]
 
   @doc """

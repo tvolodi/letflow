@@ -3624,16 +3624,21 @@
       "requirement_id": "REQ-203",
       "queue_task_id": 376,
       "github_issue_number": 722,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/repository.ex",
+        "lib/letflow/repository/activation.ex",
+        "lib/letflow/repository/activation_group.ex",
+        "lib/letflow/repository/activation_history.ex",
+        "lib/letflow/repository/artifact_kind.ex",
+        "lib/letflow/tenant_provisioning.ex",
         "priv/repo/migrations"
       ],
       "started_at": "2026-08-31T00:46:22Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 (ORCH: branch created, entering Step 1 CODE-DESIGNER)",
-      "note": "Per-tenant artifact activation (REPO-08/09/10), the second half of the REQ-202 artifact-repository pair: atomic multi-artifact activation groups, activation history with mandatory rationale, and a resolution function. Registered here explicitly at Step 00 to avoid REQ-202's gap (that run's lock entry was never registered until ORCH added it retroactively after merge)."
+      "lock_released_at": "2026-08-31T04:20:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final (ORCH: pushing/merging PR to main, queue task 376 to be released done)",
+      "note": "Per-tenant artifact activation (REPO-08/09/10), completing the REQ-202/REQ-203 artifact-repository pair. Atomic multi-artifact Ecto.Multi activation with a rigorously re-derived READ-COMMITTED/MVCC observability guarantee (no isolation-level bump needed). DB-level UNIQUE/CHECK/FK invariants; REQ-195 audit_entries disambiguation. Unusually long rework chain (3 design reworks -- isolation-level argument confirmed correct, OQ-A/E/F resolved, rationale-validation mechanism corrected twice after two opposite false claims about Ecto's trim/validation pipeline; 1 implementation @spec/FK-constraint fix; 2 REVIEWER reworks on a test-only concurrency seam requiring compile-time gating; 1 doc-staleness fix), each round catching a genuine, independently-confirmed defect. RELEASE-VALIDATOR independently re-verified all 12 ACs."
     }
   ]
 }

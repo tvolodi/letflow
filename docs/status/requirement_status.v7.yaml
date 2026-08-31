@@ -824,3 +824,34 @@ history:
       violations across 195 tracked closed issues (30 pre-existing grandfathered,
       unaffected). No repo files changed; GitHub-only fix, hence recorded as a
       SCOPE-CHANGE entry rather than against any REQ.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-08-31T08:51:20Z"
+    note: >
+      WF03-ISS0381-20260831 done (queue task 381, GH#753, stage S6, MINOR,
+      former_local_id ISS-0353 -- same finding, confirmed consistent with
+      the yaml's own note_on_id, no separate closure needed). Root cause:
+      Letflow.Dlq.Entry.insert_changeset/2's cast/3 list contradicted its
+      own docstring -- tenant_id, status, retry_count, retry_history and
+      created_at were all listed as castable despite the docstring calling
+      them "deliberately not castable" (Letflow.Dlq.enqueue/2's own
+      Map.take/2 pre-sanitization was the actual, undocumented safety
+      boundary, not the changeset). Fix: cast/3 narrowed to 12 fields,
+      dropping all five; tenant_id/created_at (no schema default) now set
+      via put_change/3 reading them out of attrs; status/retry_count/
+      retry_history (schema defaults :pending/0/[]) now rely on
+      Ecto.Schema's own struct defaults once excluded from cast, matching
+      the established pattern in lib/letflow/definitions/
+      solution_pack_install.ex and promotion_review.ex. Docstring corrected
+      to match. Gates: ISSUE-FIXER diagnosis -> CODE-DESIGNER/
+      CODE-DESIGN-VALIDATOR -> SECURITY-REVIEWER PASS -> REVIEWER PASS ->
+      TEST-DESIGNER (2 new fail-first regression tests in
+      test/letflow/dlq_test.exs, independently reproduced failing against
+      pre-fix cast list) -> TEST-DESIGN-VALIDATOR PASS -> TEST-RUNNER PASS
+      (full suite 2945/2947, only the 2 pre-existing documented
+      rustc-absent sandbox flakes in Mix.Tasks.Letflow.CheckToolchainTest,
+      unrelated to this change; zero DLQ-related failures; mix compile
+      --warnings-as-errors and mix format --check-formatted both clean).
+      docs/issues/ISS-0381.yaml set to status: resolved. GH#753 closed
+      with evidence comment.

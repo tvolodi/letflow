@@ -1,0 +1,53 @@
+{
+  "handoff_id": "WF03-ISS0381-20260831-step03",
+  "run_id": "WF03-ISS0381-20260831",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0381-20260831/step-03-elixir-dev.json",
+  "created_at": "2026-08-31T00:00:00Z",
+  "started_at": "2026-08-31T00:00:00Z",
+  "completed_at": "2026-08-31T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "issue_id": "ISS-0381",
+    "former_local_id": "ISS-0353",
+    "queue_task_id": 381,
+    "github_issue": 753,
+    "severity": "MINOR",
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0381-20260831/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0381-20260831/step-02-code-designer-rework2.json",
+      "handoffs/WF03-ISS0381-20260831/step-02b-code-design-validator-recheck2.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+      "lib/letflow/dlq/entry.ex",
+      "lib/letflow/dlq.ex"
+    ]
+  },
+  "task": {
+    "description": "Implement the approved design (lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md) fixing Letflow.Dlq.Entry.insert_changeset/2's cast list vs. docstring contradiction.",
+    "acceptance_criteria": [
+      "cast/3's field list in insert_changeset/2 narrowed from 17 to the 12 fields the design's disposition table keeps (drops :tenant_id, :status, :retry_count, :retry_history, :created_at)",
+      "two put_change/3 calls added, setting :tenant_id and :created_at from attrs, placed after cast/3 and before validate_required/2",
+      "validate_required/2's field list unchanged",
+      "docstring rewritten to state the real per-field mechanism (schema defaults for status/retry_count/retry_history; put_change/3 for tenant_id/created_at)",
+      "lib/letflow/dlq.ex untouched",
+      "mix compile --warnings-as-errors and mix format --check-formatted both clean",
+      "existing DLQ test suite (dlq_test.exs, routers/dlq_test.exs, engine_dlq_landing_test.exs) passes with no regression, confirming enqueue/2's happy path still lands tenant_id/created_at/status/retry_count/retry_history correctly"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented exactly per the approved design. In lib/letflow/dlq/entry.ex's insert_changeset/2: narrowed cast/3's field list from 17 elements to the 12 the design's §3 disposition table keeps (entry_type, instance_id, reference_id, reason, full_reason, error_detail, error_chain, source_payload, context_json, retry_limit, first_failed_at, last_failed_at) -- dropped tenant_id, status, retry_count, retry_history, created_at. Added put_change(:tenant_id, Map.get(attrs, :tenant_id)) and put_change(:created_at, Map.get(attrs, :created_at)) immediately after the cast/3 pipe and before validate_required/2, per design §4's exact ordering (steps 2/3 before step 4; either relative order between the two put_change calls is fine per the design, both placed tenant_id-then-created_at). validate_required/2's field list left untouched (still lists :tenant_id, :entry_type, :status, :retry_count, :created_at) per design §8 -- no edit needed since put_change/3 populates :changes and the two schema-default fields (:status/:retry_count) fall back to :data. Rewrote the @doc above insert_changeset/2 to state the actual mechanism: status/retry_count/retry_history excluded from cast/3, rely on Ecto.Schema struct defaults; tenant_id/created_at excluded from cast/3, set via the two put_change/3 calls reading attrs directly, with the docstring plainly noting a caller-supplied attrs map with those two key names still reaches the changeset via put_change/3's own read (matching design §7's required content, including the cross-reference to Letflow.Dlq.enqueue/2 and design req176-dlq-core.md §3.1). Did NOT touch lib/letflow/dlq.ex -- confirmed by full read of enqueue/2 (lines 81-113): its Map.take/2 allowlist (12 keys) already excludes all 5 protected fields and Map.merge/2's its own trusted tenant_id/status/retry_count/retry_history/created_at on top, so the insert_attrs map enqueue/2 builds is unaffected by the cast-list narrowing -- put_change/3 reads the same :tenant_id/:created_at keys enqueue/2 already puts in that map. Verification: mix compile --warnings-as-errors -> clean, no warnings. mix format --check-formatted -> clean, no diff. mix test test/letflow/dlq_test.exs test/letflow/routers/dlq_test.exs test/letflow/engine_dlq_landing_test.exs -> 36 passed, 0 failures (38.9s). Observed the actual INSERT SQL logged during the enqueue/2 happy-path test: INSERT INTO dlq_entries (status, tenant_id, created_at, entry_type, retry_count, retry_history, id) VALUES ($1..$7) [:pending, <tenant_id>, <created_at>, \"event\", 0, [], <id>] -- confirms all five previously-cast-now-put_change-or-default fields land correctly on the real inserted row end-to-end, no silent-nil regression. This is a WF-03 issue fix (not a full requirement implementation) -- TEST-DESIGNER adds the changeset-level regression test (design §9) at Step 4, not implemented here. Routing to SECURITY-REVIEWER next: this change touches lib/letflow/dlq/entry.ex, a tenant-data schema (tenant_id field), per WF-03's step sequence.",
+    "artifacts_out": [
+      "lib/letflow/dlq/entry.ex",
+      "handoffs/WF03-ISS0381-20260831/step-03-elixir-dev.json"
+    ],
+    "issues": []
+  }
+}

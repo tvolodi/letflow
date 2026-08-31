@@ -1,0 +1,99 @@
+{
+  "handoff_id": "WF03-ISS0381-20260831-step03c",
+  "run_id": "WF03-ISS0381-20260831",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0381-20260831/step-03c-security-reviewer.json",
+  "created_at": "2026-08-31T00:00:00Z",
+  "started_at": "2026-08-31T00:00:00Z",
+  "completed_at": "2026-08-31T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "issue_id": "ISS-0381",
+    "former_local_id": "ISS-0353",
+    "queue_task_id": 381,
+    "github_issue": 753,
+    "severity": "MINOR",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0381-20260831/step-03-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/dlq/entry.ex",
+      "lib/letflow/dlq.ex",
+      "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md"
+    ]
+  },
+  "task": {
+    "description": "Hard-gate ELIXIR-DEV's fix to Letflow.Dlq.Entry.insert_changeset/2 (ISS-0381) against security-invariants.md INV-1..INV-9 before REVIEWER's idiom pass.",
+    "scope_test": "IN SCOPE — diff touches lib/letflow/dlq/entry.ex, an Ecto schema module for the tenant-scoped dlq_entries table (has a tenant_id column), and changes how insert_changeset/2 populates tenant_id."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD for lib/letflow/dlq/entry.ex (the only production code file changed; lib/letflow/dlq.ex confirmed genuinely untouched by the diff), the design doc, the ISSUE record, and the ELIXIR-DEV handoff. Shipped code matches the design exactly: cast/3's field list narrowed to the 12 non-protected fields (entry_type, instance_id, reference_id, reason, full_reason, error_detail, error_chain, source_payload, context_json, retry_limit, first_failed_at, last_failed_at); two put_change/3 calls -- put_change(:tenant_id, Map.get(attrs, :tenant_id)) then put_change(:created_at, Map.get(attrs, :created_at)) -- inserted immediately after cast/3 and before validate_required/2, whose own field list is unchanged.",
+    "invariant_assessment": [
+      {
+        "invariant": "INV-1",
+        "verdict": "APPLIES",
+        "result": "PASS",
+        "detail": "(a) All reads/writes of Entry still go through Letflow.Dlq's Repo calls, each passed prefix: prefix from opts -- unchanged by this diff, confirmed by re-reading dlq.ex's enqueue/2 (untouched). (b) No migration touched by this diff -- dlq_entries' schema-per-tenant placement is pre-existing and out of scope for this fix. (c) tenant_id derivation: enqueue/2 (the sole caller) still derives tenant_id from opts[:prefix] via TenantProvisioning.tenant_id_for_schema_name/1 and Map.merges it into insert_attrs -- entirely unchanged by this diff. The changed line inside insert_changeset/2 (put_change(:tenant_id, Map.get(attrs, :tenant_id)) instead of cast(attrs, [:tenant_id, ...])) reads the exact same insert_attrs map enqueue/2 already builds; it does not add or remove any path by which a caller-supplied tenant_id could reach the row beyond what already existed pre-fix. No new caller of insert_changeset/2 was introduced. 0003's addendum (derived-from-prefix, not caller-supplied) remains satisfied by enqueue/2's unchanged Map.take/2 allowlist + Map.merge/2, which is the actual enforcement boundary -- exactly as the issue itself documents."
+      },
+      {
+        "invariant": "INV-2",
+        "verdict": "NOT-APPLICABLE",
+        "result": "N/A",
+        "detail": "No multi-tenant API response surface exists yet (S4 not started); this change is a changeset-internal fix with no controller/response-shaping code touched."
+      },
+      {
+        "invariant": "INV-3",
+        "verdict": "NOT-APPLICABLE",
+        "result": "N/A",
+        "detail": "S5 (scripting/plugins) has not started; unrelated to a changeset fix."
+      },
+      {
+        "invariant": "INV-4",
+        "verdict": "APPLIES (no violation)",
+        "result": "PASS",
+        "detail": "grep -niE secret/token/password pattern and grep Repo.query against lib/letflow/dlq/entry.ex: zero hits. No secret material is read, logged, or threaded through this changeset. Applicable-by-default check, cleanly passes."
+      },
+      {
+        "invariant": "INV-5",
+        "verdict": "NOT-APPLICABLE",
+        "result": "N/A",
+        "detail": "No multi-tenant lookup-by-ID endpoint touched; S4 not started."
+      },
+      {
+        "invariant": "INV-6",
+        "verdict": "APPLIES",
+        "result": "PASS",
+        "detail": "This handoff itself is the proof-of-scoping artifact INV-6 requires: it explicitly lists which of INV-1..INV-9 apply and how each is satisfied, per the meta-invariant's own requirement."
+      },
+      {
+        "invariant": "INV-7",
+        "verdict": "APPLIES (no violation)",
+        "result": "PASS",
+        "detail": "grep -n \"Repo.query\" lib/letflow/dlq/entry.ex: zero hits. The changed code uses only cast/3, put_change/3, validate_required/2 -- no raw SQL anywhere in this file."
+      },
+      {
+        "invariant": "INV-8",
+        "verdict": "APPLIES (no violation)",
+        "result": "PASS",
+        "detail": "grep -n \"^\\s*{:ok, .*} = \" lib/letflow/dlq/entry.ex: zero hits. insert_changeset/2 has no bare pattern match that can raise; put_change/3 with a nil value from Map.get/2 does not raise, it produces a changeset later rejected cleanly by validate_required/2 as {:error, changeset}, matching enqueue/2's existing {:ok, _} | {:error, Ecto.Changeset.t()} contract."
+      },
+      {
+        "invariant": "INV-9",
+        "verdict": "NOT-APPLICABLE",
+        "result": "N/A",
+        "detail": "No outbound HTTP/webhook URL logic touched by this diff."
+      }
+    ],
+    "vulnerability_closure_analysis": "Re-read the issue's own actual scope (docs/issues/ISS-0381.yaml, description + candidate_scope_for_whoever_picks_this_up) before judging what property this fix must deliver. The issue is explicitly an idiom-gap / docstring-vs-implementation contradiction, NOT a claim that a caller-supplied tenant_id can currently reach the DB (the issue's own description states plainly: 'Today this is harmless ... no caller-supplied value for any of these five fields can currently reach insert_changeset/2' -- enqueue/2's Map.take/2 is the real, and only, current enforcement boundary). The issue's candidate_scope explicitly prescribes put_change/3 reading attrs as the correct fix mechanism for tenant_id/created_at, stating outright: 'only the mechanism changes from cast to put_change, not the caller contract.' The design doc and the shipped docstring both plainly disclose that put_change(:tenant_id, Map.get(attrs, :tenant_id)) still reads the same attrs map -- so a caller who bypasses enqueue/2 and calls insert_changeset/2 directly with a raw/unfiltered attrs map still has tenant_id/created_at influenced by whatever that raw map contains, identical to pre-fix behavior for those two fields. This is NOT a regression and NOT a false claim: the property this fix actually delivers, correctly, is (1) status/retry_count/retry_history can no longer be influenced via cast/3 under any attrs content -- they now hard-depend on Ecto.Schema struct defaults, closing that sub-slice completely regardless of caller discipline; and (2) the changeset's structure now genuinely matches its own docstring's description of the enforcement mechanism, rather than silently relying on caller (enqueue/2) discipline while claiming otherwise. Testing this fix against 'no caller-supplied tenant_id can ever influence the row' would be testing a property this fix never claimed and the issue never asked for -- the actual, correctly-scoped and correctly-delivered property is 'the changeset now correctly enforces what its docstring already claimed, for the 3 fields that have safe schema defaults; for tenant_id/created_at the caller-discipline boundary (enqueue/2's Map.take/2) remains the real enforcement, exactly as before and exactly as the issue's own text states.' No cross-tenant leak is introduced: enqueue/2, the sole caller, is untouched and continues to derive tenant_id from opts[:prefix], never from raw request attrs.",
+    "default_correctness_check": "Verified against the Ecto.Schema field definitions in entry.ex (schema block): field(:retry_history, {:array, :map}, default: []), field(:retry_count, :integer, default: 0), field(:status, Ecto.Enum, values: [...], default: :pending). Since %Entry{} is built as a fresh struct literal in Letflow.Dlq.enqueue/2 before insert_changeset/2 is called, these three fields carry their correct Ecto.Schema struct defaults on `entry.data` even though cast/3 no longer touches them -- no silent-nil regression. Confirmed independently by ELIXIR-DEV's own reported observation of the actual logged INSERT SQL during the enqueue/2 happy-path test: INSERT INTO dlq_entries (status, tenant_id, created_at, entry_type, retry_count, retry_history, id) VALUES (...) [:pending, <tenant_id>, <created_at>, \"event\", 0, [], <id>] -- every previously-cast-now-defaulted-or-put_change field lands correctly end-to-end.",
+    "validate_required_nil_check": "Confirmed against Ecto.Changeset semantics: validate_required/2 calls Ecto.Changeset.get_field/2 internally, which checks :changes first, falling back to :data only when the field has no entry in :changes. put_change(:tenant_id, nil) DOES add a :tenant_id => nil entry to :changes (put_change/3 always writes to :changes regardless of value, including nil), so get_field/2 returns nil from :changes (does not fall back to :data), and validate_required/2 treats nil as missing and adds the 'can't be blank' error -- exactly as the design and CODE-DESIGN-VALIDATOR claimed. This is different from status/retry_count's omission-from-cast case, where no :changes entry exists at all and get_field/2 correctly falls back to :data's schema-default value -- the two behaviors are not the same mechanism and the design/docstring correctly distinguish them.",
+    "dead_default_arg_check": "grep '\\\\ ' lib/letflow/dlq/entry.ex: zero hits. No default-argument bug class present in the changed file.",
+    "route_controller_check": "git diff main...HEAD --stat confirms only handoffs/, lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md, and lib/letflow/dlq/entry.ex changed in the diff (plus new handoff JSON files under handoffs/WF03-ISS0381-20260831/). No web/, router, controller, or Plug module touched. lib/letflow/dlq.ex full-file read confirms it is byte-for-byte untouched -- enqueue/2's Map.take/2 allowlist (12 keys, none of the 5 protected fields) and its own Map.merge/2 of trusted tenant_id/status/retry_count/retry_history/created_at values are exactly as before this fix.",
+    "issues": []
+  }
+}

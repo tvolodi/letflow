@@ -905,11 +905,30 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # not guessed: confirmed live via CI surfacing
       # `left: [...,"S6",...], right: [...]` (S6 missing from `active`) on
       # this exact assertion. `active` gains "S6"; `inactive` returns to [].
+      #
+      # UPDATE (S7 expansion, 2026-08-31): OQ-5's predicted event happened a
+      # fourth time -- S7 (simulation-and-uat-parity) was expanded via WF-01
+      # into REQ-205..REQ-210 (all `pending`) per this stage's own scenario
+      # corpus. Same rule as S5's and S6's own expansions: `pending` does not
+      # confer activity (F-PENDING-NOT-ACTIVE), so S7 is present but
+      # :inactive, the same state S5/S6 passed through before their first
+      # requirement went done. `active` is unchanged; `inactive` moves from
+      # [] to ["S7"]. Re-derived, not guessed: confirmed live via
+      # `MIX_ENV=test mix run -e` calling
+      # Mix.Tasks.Letflow.CheckDeferralStaleness.audit/1 (passed
+      # File.read!("docs/requirements.yaml") -- audit/1 takes file content,
+      # not a path) against the live corpus, returning
+      # active == ["S0","S1","S2","S3","S4","S5","S6","S8","S9"],
+      # inactive == ["S7"], violations == 0. Test-data-only update; the
+      # detector in lib/mix/tasks/letflow.check_deferral_staleness.ex is
+      # unchanged and correct -- it caught this drift exactly as designed.
+      # S7 joins `active` the moment any of REQ-205..210 goes
+      # in_progress/done/blocked.
       active = for s <- result.stages, s.activity == :active, do: s.stage
       inactive = for s <- result.stages, s.activity == :inactive, do: s.stage
 
       assert active == ["S0", "S1", "S2", "S3", "S4", "S5", "S6", "S8", "S9"]
-      assert inactive == []
+      assert inactive == ["S7"]
     end
 
     test "T-LIVE-DEFERRED-COUNT-IS-ZERO -- documents today's vacuous green", %{result: result} do

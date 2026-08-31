@@ -1,18 +1,18 @@
 {
+  "handoff_id": "step02d-WF02-REQ199-20260831",
   "run_id": "WF02-REQ199-20260831",
-  "workflow": "WF-02",
+  "workflow_id": "WF-02",
   "step": "02d-reviewer",
-  "status": "PASS",
-  "dispatched_at": "2026-08-31T07:55:15Z",
+  "from_agent": null,
+  "to_agent": null,
+  "file": "handoffs/WF02-REQ199-20260831/step-02d-reviewer.json",
   "completed_at": "2026-08-31T08:01:48Z",
-  "commit": "2f18b3eb",
-  "verdict": "PASS",
-  "non_blocking_findings": [
-    "NB-1: ordering/cursor.ex Cursor.upsert_init/2 is dead code -- do_apply inlines same logic",
-    "NB-2: ordering.ex insert_completion/2 always re-reads after insert including happy path (extra round-trip)",
-    "NB-3: ordering.ex run_cycle/2 and emit_lag_metrics/2 take _schema_name (unused) -- inconsistent API",
-    "NB-4: ordering/metrics.ex emit_threshold_exceeded_event uses System.os_time(:millisecond) as idempotency key -- emits once-per-tick above threshold, not once-per-crossing; verify AC15 intent",
-    "NB-5: sweeper.ex/metrics.ex prefix: prefix on raw Repo.query is no-op for raw SQL -- misleading but harmless"
-  ],
-  "note": "NB-4 is highest-priority non-blocker: TEST-DESIGNER must verify AC15 test assertion covers the intent (event emitted when crossing threshold) vs edge-triggered-only semantics. AC15 text says 'emits the lag event ... asserted on the appended event' -- once-per-tick while above threshold is sufficient if the test only asserts event presence on first crossing."
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {},
+  "task": {},
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Verdict: PASS. Non-blocking findings: NB-1: ordering/cursor.ex Cursor.upsert_init/2 is dead code -- do_apply inlines same logic; NB-2: ordering.ex insert_completion/2 always re-reads after insert including happy path (extra round-trip); NB-3: ordering.ex run_cycle/2 and emit_lag_metrics/2 take _schema_name (unused) -- inconsistent API; NB-4: ordering/metrics.ex emit_threshold_exceeded_event uses System.os_time(:millisecond) as idempotency key -- emits once-per-tick above threshold, not once-per-crossing; verify AC15 intent; NB-5: sweeper.ex/metrics.ex prefix: prefix on raw Repo.query is no-op for raw SQL -- misleading but harmless. NB-4 is highest-priority non-blocker: TEST-DESIGNER must verify AC15 test assertion covers the intent (event emitted when crossing threshold) vs edge-triggered-only semantics. AC15 text says 'emits the lag event ... asserted on the appended event' -- once-per-tick while above threshold is sufficient if the test only asserts event presence on first crossing."
+  }
 }

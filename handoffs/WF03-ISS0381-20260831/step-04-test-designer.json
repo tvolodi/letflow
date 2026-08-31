@@ -1,0 +1,68 @@
+{
+  "handoff_id": "WF03-ISS0381-20260831-step04",
+  "run_id": "WF03-ISS0381-20260831",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0381-20260831/step-04-test-designer.json",
+  "created_at": "2026-08-31T00:00:00Z",
+  "started_at": "2026-08-31T00:00:00Z",
+  "completed_at": "2026-08-31T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "issue_id": "ISS-0381",
+    "former_local_id": "ISS-0353",
+    "queue_task_id": 381,
+    "github_issue": 753,
+    "severity": "MINOR",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0381-20260831/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0381-20260831/step-03c-security-reviewer.json",
+      "handoffs/WF03-ISS0381-20260831/step-03d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+      "lib/letflow/dlq/entry.ex",
+      "test/letflow/dlq_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Write the WF-03 Step 4 regression test for ISS-0381 (Letflow.Dlq.Entry.insert_changeset/2's cast list vs. docstring), per design §9's exact proof-shape specification, and empirically prove fail-first (fails against pre-fix code, passes against post-fix code).",
+    "acceptance_criteria": [
+      "changeset-level test(s) calling insert_changeset/2 directly, bypassing enqueue/2, per design §9",
+      "a value-divergence test for :status/:retry_count/:retry_history proving a caller-supplied override no longer reaches the changeset",
+      "a mechanism (cast-vs-put_change error-shape) test for :tenant_id/:created_at using malformed values, per design §9's explicit note that a value round-trip is not discriminating for these two fields",
+      "empirical fail-then-pass proof via temporary revert of entry.ex to its pre-fix shape, not merely asserted",
+      "working tree left clean of any temporary mutation to entry.ex after verification"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read docs/issues/ISS-0381.yaml, the design doc (lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md, particularly §9's exact proof-shape spec), all three step-03/03c/03d handoffs, the shipped entry.ex, and the existing test/letflow/dlq_test.exs to match its established style (Letflow.DataCase, provisioned_tenant helper, describe-per-AC structure). Added two new describe blocks to test/letflow/dlq_test.exs, both calling Letflow.Dlq.Entry.insert_changeset/2 directly (never through enqueue/2), per design §9: (1) 'status/retry_count/retry_history cannot be caller-overridden' -- a raw, hand-built attrs map with status: :discarded, retry_count: 7, and a non-empty forged retry_history asserts via Ecto.Changeset.get_field/3 that all three resolve to the schema defaults (:pending/0/[]), the value-divergence proof design §9 calls the sharpest, unambiguous fail-first assertion; (2) 'tenant_id/created_at mechanism (cast/3 vs put_change/3 error-shape divergence)' -- attrs carrying a non-UUID tenant_id ('not-a-uuid') and a non-parseable created_at ('not-a-timestamp') asserts changeset.valid? == true, no :tenant_id/:created_at keys in changeset.errors, and Ecto.Changeset.get_change/2 returning the raw uncast strings -- the mechanism-level proof design §9 mandates because a plain value round-trip for these two fields passes on both sides of the fix and proves nothing (both cast/3 pre-fix and put_change/3 post-fix read the same attrs map). Wrote test/specs/ISS-0381.md documenting both test shapes, why each is fail-first-discriminating per design §9's own reasoning, and the empirical fail-then-pass procedure/output. EMPIRICAL FAIL-FIRST PROOF PERFORMED (not just asserted): confirmed clean tree (git status --porcelain showed only the new test file); temporarily replaced lib/letflow/dlq/entry.ex with 'git checkout d21d5095^ -- lib/letflow/dlq/entry.ex' (d21d5095 is the ISS-0381 fix commit; its parent is the pre-fix shape, confirmed via diff to have all 17 fields in cast/3 including the 5 protected ones and no put_change/3 calls); ran 'MIX_ENV=test mix test test/letflow/dlq_test.exs --seed 0' against the mutated file -- result: 16/18 passed, 2 failed, and the 2 failures were exactly the two new ISS-0381 tests (test 1: 'assert Ecto.Changeset.get_field(changeset, :status) == :pending' failed with left: :discarded, right: :pending; test 2: 'assert changeset.valid?' failed with Expected truthy, got false) -- all 16 pre-existing dlq_test.exs tests still passed, confirming the failures were isolated to the new assertions and not a broken mutation. Reverted with 'git checkout HEAD -- lib/letflow/dlq/entry.ex', confirmed byte-identical restoration via diff against a pre-mutation copy saved to scratch space, then re-ran 'MIX_ENV=test mix test test/letflow/dlq_test.exs test/letflow/routers/dlq_test.exs test/letflow/engine_dlq_landing_test.exs --seed 0' -- result: 38 passed, 0 failures (36 pre-existing + 2 new, no regression). Also independently re-ran mix compile --warnings-as-errors (clean) and mix format --check-formatted (clean, exit 0) after the restore. Final git status --porcelain shows only test/letflow/dlq_test.exs and test/specs/ISS-0381.md as new/modified -- lib/letflow/dlq/entry.ex is untouched relative to the incoming fix commit, confirmed clean of the temporary mutation.",
+    "fail_first_proof": {
+      "pre_fix_run": {
+        "command": "MIX_ENV=test mix test test/letflow/dlq_test.exs --seed 0",
+        "mutation": "git checkout d21d5095^ -- lib/letflow/dlq/entry.ex (pre-fix parent commit of the ISS-0381 fix)",
+        "result": "16 passed, 2 failed",
+        "failed_tests": [
+          "ISS-0381: insert_changeset/2 -- status/retry_count/retry_history cannot be caller-overridden -- assert Ecto.Changeset.get_field(changeset, :status) == :pending failed (left: :discarded, right: :pending)",
+          "ISS-0381: insert_changeset/2 -- tenant_id/created_at mechanism (cast/3 vs put_change/3 error-shape divergence) -- assert changeset.valid? failed (Expected truthy, got false)"
+        ]
+      },
+      "post_fix_run": {
+        "command": "MIX_ENV=test mix test test/letflow/dlq_test.exs test/letflow/routers/dlq_test.exs test/letflow/engine_dlq_landing_test.exs --seed 0",
+        "restore": "git checkout HEAD -- lib/letflow/dlq/entry.ex, confirmed byte-identical to pre-mutation copy via diff",
+        "result": "38 passed, 0 failures"
+      },
+      "working_tree_clean_of_mutation": true
+    },
+    "artifacts_out": [
+      "test/letflow/dlq_test.exs",
+      "test/specs/ISS-0381.md",
+      "handoffs/WF03-ISS0381-20260831/step-04-test-designer.json"
+    ],
+    "issues": []
+  }
+}

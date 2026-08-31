@@ -1,0 +1,65 @@
+{
+  "handoff_id": "WF03-ISS0381-20260831-step04b",
+  "run_id": "WF03-ISS0381-20260831",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0381-20260831/step-04b-test-design-validator.json",
+  "created_at": "2026-08-31T08:00:00Z",
+  "started_at": "2026-08-31T07:57:00Z",
+  "completed_at": "2026-08-31T08:00:00Z",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "issue_id": "ISS-0381",
+    "former_local_id": "ISS-0353",
+    "queue_task_id": 381,
+    "github_issue": 753,
+    "severity": "MINOR",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0381-20260831/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0381-20260831/step-03c-security-reviewer.json",
+      "handoffs/WF03-ISS0381-20260831/step-03d-reviewer.json",
+      "handoffs/WF03-ISS0381-20260831/step-04-test-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+      "lib/letflow/dlq/entry.ex",
+      "test/letflow/dlq_test.exs",
+      "test/specs/ISS-0381.md",
+      "handoffs/WF03-ISS0381-20260831/step-04-test-designer.json"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4 hard gate on TEST-DESIGNER's ISS-0381 regression tests: verify both new dlq_test.exs describe blocks match design doc §9's exact proof-shape (value-divergence for status/retry_count/retry_history; cast-vs-put_change mechanism divergence for tenant_id/created_at, not a value round-trip), independently reproduce the fail-first proof, confirm test isolation, and confirm compile/format cleanliness.",
+    "acceptance_criteria": [
+      "both new test cases genuinely match design §9's specified proof-shapes",
+      "fail-first proof independently reproduced by TEST-DESIGN-VALIDATOR (not just re-read from TEST-DESIGNER's report)",
+      "tests are self-contained / do not share polluting fixtures with other dlq_test.exs tests",
+      "mix compile --warnings-as-errors and mix format --check-formatted clean on current (fixed) state",
+      "working tree left clean of any temporary mutation to entry.ex"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified TEST-DESIGNER's ISS-0381 regression tests against design doc §9 and reproduced the fail-first proof myself rather than trusting the reported counts.\n\n1. PROOF-SHAPE MATCH (read test/letflow/dlq_test.exs lines 402-489 directly, not just the report): describe block 1 ('status/retry_count/retry_history cannot be caller-overridden', lines 402-450) builds a raw hand-built attrs map with entry_type + trusted tenant_id/created_at + status: :discarded, retry_count: 7, and a non-empty forged retry_history, calls Entry.insert_changeset(%Entry{}, attrs) directly (never through enqueue/2), and asserts via Ecto.Changeset.get_field/3 that status/retry_count/retry_history resolve to the schema defaults (:pending/0/[]) -- exactly design §9's 'sharpest, unambiguous' value-divergence proof. It explicitly comments that the tenant_id/created_at round-trip assertions included here are NOT fail-first discriminating on their own, matching §9's nuance precisely rather than silently glossing over it. Describe block 2 (lines 452-489) uses tenant_id: \"not-a-uuid\" and created_at: \"not-a-timestamp\" -- non-UUID/non-parseable malformed values, NOT a value round-trip -- and asserts changeset.valid?, absence of :tenant_id/:created_at keys in changeset.errors, and Ecto.Changeset.get_change/2 returning the raw uncast strings. This is exactly the cast-vs-put_change error-shape divergence design §9 mandates as the only discriminating assertion for these two fields. No gap found between the design's proof-shape spec and what was actually written.\n\n2. FAIL-FIRST PROOF INDEPENDENTLY REPRODUCED. Confirmed clean tree first (git status --porcelain empty). Ran 'git checkout d21d5095^ -- lib/letflow/dlq/entry.ex' myself (d21d5095 is the ISS-0381 fix commit) and read the resulting file directly: cast/3's field list contained all 17 fields including :tenant_id/:status/:retry_count/:retry_history/:created_at, no put_change/3 calls present, and the docstring still read the old 'deliberately not castable' claim -- confirming this is genuinely the pre-fix shape, not a reconstruction. Ran 'MIX_ENV=test mix test test/letflow/dlq_test.exs --seed 0' against this mutated file myself: RESULT 16/18 passed, 2 failed -- exactly the 2 new ISS-0381 tests, with errors matching the report verbatim: test 1 failed on 'assert Ecto.Changeset.get_field(changeset, :status) == :pending' with left: :discarded, right: :pending; test 2 failed on 'assert changeset.valid?' with 'Expected truthy, got false'. All 16 pre-existing dlq_test.exs tests passed unmutated, confirming the failures are isolated to the new assertions. Restored with 'git checkout HEAD -- lib/letflow/dlq/entry.ex', confirmed via 'git diff --quiet lib/letflow/dlq/entry.ex' (exit 0, byte-identical to HEAD) and 'git status --porcelain' (empty). Re-ran 'MIX_ENV=test mix test test/letflow/dlq_test.exs test/letflow/routers/dlq_test.exs test/letflow/engine_dlq_landing_test.exs --seed 0' myself: RESULT 38 passed, 0 failures -- matches the reported post-fix count exactly.\n\n3. NON-VACUOUSNESS: this fix modifies existing behaviour in an existing function (insert_changeset/2's cast/3 field list narrowed from 17 to 12 fields, two put_change/3 calls added) -- it is NOT a 'the code under test did not exist pre-fix' case (no UndefinedFunctionError; the function existed and ran with a different, broader cast list). The mandatory additional-mutant-application rule in WF-03's 'When the pre-fix failure is code under test does not exist' section therefore does not apply here; the direct pre-fix/post-fix revert-and-rerun above already demonstrates the tests discriminate the actual mechanism the fix changes (cast/3 field membership and cast/3-vs-put_change/3), not something incidental -- both failures reproduced are precisely of the field being cast (pre-fix) vs excluded and defaulted (post-fix), the exact mechanism under test.\n\n4. TEST ISOLATION (DIRECTIVE T-4): both new describe blocks build their own %Entry{} struct and attrs map inline, call Entry.insert_changeset/2 directly with no database I/O, no Repo call, no tenant provisioning, and no shared setup/fixture blocks with any other test in the file (the file's provisioned_tenant/enqueue!/force_status!/normalize_attempt helpers are all untouched by these two tests). Each test is fully self-sufficient and order-independent; confirmed no cross-test state (running the two tests in isolation within the full file, and in the file's normal order, produced the same result). No risk of cross-test pollution.\n\n5. mix compile --warnings-as-errors: clean, exit 0. mix format --check-formatted: clean, exit 0. git status --porcelain: empty (final state).\n\nVERDICT: PASS. Genuine, non-vacuous, design-conformant fail-first regression coverage, independently reproduced. Routing to TEST-RUNNER per WF-03 Step 4's sequence (TEST-DESIGNER -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER, same as WF-02 3/3b/4) for the final run-and-report sub-step before ISSUE-FIXER's Step 5 close.",
+    "fail_first_reproduction": {
+      "pre_fix_mutation": "git checkout d21d5095^ -- lib/letflow/dlq/entry.ex",
+      "pre_fix_run_command": "MIX_ENV=test mix test test/letflow/dlq_test.exs --seed 0",
+      "pre_fix_result": "16 passed, 2 failed",
+      "pre_fix_failures_matched_report": true,
+      "restore_command": "git checkout HEAD -- lib/letflow/dlq/entry.ex",
+      "restore_verified": "git diff --quiet lib/letflow/dlq/entry.ex (exit 0) and git status --porcelain (empty)",
+      "post_fix_run_command": "MIX_ENV=test mix test test/letflow/dlq_test.exs test/letflow/routers/dlq_test.exs test/letflow/engine_dlq_landing_test.exs --seed 0",
+      "post_fix_result": "38 passed, 0 failures",
+      "compile_warnings_as_errors": "clean",
+      "format_check": "clean"
+    },
+    "mutant_isolation_rule_applicability": "Not applicable -- insert_changeset/2 existed pre-fix with a different cast/3 field list; the pre-fix failure is a genuine assertion-value mismatch on existing code, not UndefinedFunctionError from a newly-added module, so WF-03's mandatory additional-mutant-application rule for the 'code does not exist' case does not apply to this issue.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0381-20260831/step-04b-test-design-validator.json"
+    ],
+    "issues": []
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "handoff_id": "WF03-ISS0381-20260831-step02b",
+  "run_id": "WF03-ISS0381-20260831",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+  "status": "FAILED",
+  "priority": "normal",
+  "context": {
+    "issue_id": "ISS-0381",
+    "former_local_id": "ISS-0353",
+    "queue_task_id": 381,
+    "github_issue": 753,
+    "severity": "MINOR",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0381-20260831/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0381-20260831/step-02-code-designer.json"
+    ],
+    "artifacts_reviewed": [
+      "docs/issues/ISS-0381.yaml",
+      "handoffs/WF03-ISS0381-20260831/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+      "handoffs/WF03-ISS0381-20260831/step-02-code-designer.json",
+      "lib/letflow/dlq/entry.ex",
+      "lib/letflow/dlq.ex"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 1b (same rigor as WF-02's CODE-DESIGN-VALIDATOR) — gate the design at lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md before it is eligible for ELIXIR-DEV.",
+    "acceptance_criteria_checked": [
+      "Zero implementation code / literal code fences in the design doc",
+      "cast/3 field-narrowing arithmetic (18->13 claim) verified against the real source file field-by-field count",
+      "no other schema field besides the claimed 5 has an undocumented 'not castable' claim",
+      "put_change/3 ordering claim verified against Ecto.Changeset semantics and in-repo precedent",
+      "malformed-value fail-first proof (cast/3 vs put_change/3 error-shape divergence) verified against Ecto's actual documented behavior",
+      "enqueue/2 needing zero changes re-verified against its actual merged attrs map",
+      "docstring's proposed corrected text checked for accuracy"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "FAILED on a concrete arithmetic defect in §3 of the design doc, exactly the kind of ambiguity this gate exists to catch before ELIXIR-DEV builds from it.",
+    "defects": [
+      {
+        "id": "D1-ARITHMETIC-ERROR",
+        "severity": "BLOCKING",
+        "location": "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md, section 3",
+        "description": "The design claims the CURRENT cast/3 field list in lib/letflow/dlq/entry.ex has 18 elements ('only the 5 protected atoms are removed from the existing 18-element list') and that the post-fix list has 13 elements. Both counts are wrong. I counted the actual cast/3 call at entry.ex lines 107-125 field by field: tenant_id, entry_type, instance_id, reference_id, reason, full_reason, error_detail, error_chain, source_payload, context_json, retry_limit, first_failed_at, last_failed_at, status, retry_count, retry_history, created_at -- that is 17 elements, not 18 (next_retry_at is a schema field but was never in cast/3's list at all, before or after this fix; it appears the design miscounted by implicitly including it). Removing the correct 5 protected fields (tenant_id, status, retry_count, retry_history, created_at) from the real 17-element list leaves 12 fields, not 13. This is independently corroborated by Letflow.Dlq.enqueue/2's own Map.take/2 allowlist (lib/letflow/dlq.ex:87-100), which lists exactly 12 keys and matches the 12 non-protected fields exactly (entry_type, instance_id, reference_id, reason, full_reason, error_detail, error_chain, source_payload, context_json, retry_limit, first_failed_at, last_failed_at) -- confirming 12, not 13, is the arithmetically and functionally correct post-fix cast/3 length. Section 3's own enumerated 'resulting cast/3 list' text lists exactly 12 atoms but mislabels the count as '13 fields' in the surrounding prose -- the document is internally inconsistent, not just wrong against the source.",
+        "why_blocking": "Per WF-02/WF-03 design-validation rules: fail immediately and completely on any single failed check, no partial credit. An incorrect element count in the one section whose entire purpose is to specify cast/3's exact post-fix field list is not cosmetic -- it signals the design was not actually verified against the real source file's current state before being written, which is the same failure mode (design proceeding on an unverified/incorrect premise) this gate exists to block. Downstream, ELIXIR-DEV reading '13 fields' against an enumerated list of 12 items has no way to know which number is authoritative without independently re-deriving it themselves -- exactly the ambiguity this validator must not wave through as 'close enough.'"
+      },
+      {
+        "id": "D2-INLINE-LITERAL-CODE",
+        "severity": "NOTE-FOR-REWORK",
+        "location": "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md, sections 4 and 5",
+        "description": "This design doc has already been through two prior rework rounds specifically for containing literal Elixir code fences (commits 3680243 and 290c6b2). The current draft has removed fenced code blocks containing full expressions, but still contains literal, directly-copyable Elixir expressions inline in backticks with zero placeholders, e.g. `put_change(:tenant_id, Map.get(attrs, :tenant_id))` (appears in both §4 step 2 and §5), `put_change(:created_at, ...)`, and `validate_required([:tenant_id, :entry_type, :status, :retry_count, :created_at])`. These are not signatures or type shapes -- they are the exact real implementation expressions ELIXIR-DEV would write into entry.ex, merely moved from a fenced block into inline prose. This does not itself independently fail the design (the arithmetic error in D1 already does), but CODE-DESIGNER should scrub these inline literal expressions in the same rework pass, describing the mechanism (e.g. 'put_change/3 for :tenant_id, reading the value out of attrs by the same key name') without writing the literal callable expression, to avoid a third rework round on the same underlying complaint."
+      }
+    ],
+    "checks_that_passed": [
+      "The 5 protected fields (tenant_id, status, retry_count, retry_history, created_at) are correctly identified -- no other schema field carries an undocumented 'not castable' claim; the remaining 12 fields correspond exactly to enqueue/2's own Map.take/2 allowlist, confirming no additional field needs similar protection.",
+      "put_change/3 ordering (after cast/3, before validate_required/2) is correct per Ecto.Changeset semantics: put_change/3's first argument must already be an %Ecto.Changeset{} (cast/3 is what produces one from the bare struct), and validate_required/2 reads the changeset's effective current value via get_field-style resolution (changes, falling back to data), so it must run after put_change/3 to see the put_change'd value. No in-repo precedent exists for this exact ordering (solution_pack_install.ex/promotion_review.ex never need put_change/3 since none of their excluded fields lack schema defaults), so the design's reasoning had to stand on Ecto's documented semantics alone -- verified independently, holds.",
+      "The malformed-value fail-first proof (cast/3 vs put_change/3 error-shape divergence) is technically correct: cast/3 invokes Ecto.Type casting per field and adds a changeset-level type error (e.g. 'is invalid') when a value fails to cast, so a malformed UUID string reaching cast/3 today produces changeset.valid? == false with a :tenant_id cast error. put_change/3 performs no type casting -- it writes the raw value directly into changeset.changes, so post-fix the same malformed string produces no changeset-level error; the type mismatch would only surface when Repo.insert/2 attempts to dump/persist the value. The design's own instruction to TEST-DESIGNER -- that a plain value-round-trip assertion is NOT discriminating for tenant_id/created_at, and that only this cast-vs-put_change error-shape check is fail-first-provable for those two fields -- is the correct and non-obvious conclusion; a naive test asserting only 'attrs[:tenant_id] made it onto the changeset' would indeed pass on both pre-fix and post-fix code and would be a worthless regression test for those two fields specifically.",
+      "enqueue/2 requiring zero changes is confirmed by direct re-read of lib/letflow/dlq.ex:81-113: its Map.take/2 allowlist and Map.merge/2'd trusted values (tenant_id, status: :pending, retry_count: 0, retry_history: [], created_at) are unaffected by moving tenant_id/created_at from cast/3 to put_change/3 inside insert_changeset/2, since both mechanisms read the same key names from the same merged attrs map enqueue/2 already builds.",
+      "The proposed docstring correction (section 7) accurately describes the post-fix mechanism per field and does not overstate the security property gained for tenant_id/created_at (section 5 and 7 both correctly note that put_change/3 still trusts whatever attrs[:tenant_id] contains, which is the same caller-supplied-value channel cast/3 used -- the fix's real guarantee is for status/retry_count/retry_history, not an additional trust boundary for tenant_id/created_at)."
+    ],
+    "next_action": "Route back to CODE-DESIGNER for rework: (1) recount the current cast/3 field list directly from lib/letflow/dlq/entry.ex (17 elements, not 18) and correct the post-fix count throughout section 3 to 12 fields, not 13, reconciling the prose count with the actually-enumerated list; (2) while reworking, also replace the remaining inline literal Elixir expressions in sections 4 and 5 (e.g. `put_change(:tenant_id, Map.get(attrs, :tenant_id))`) with mechanism descriptions rather than literal copy-pasteable code, to close out the same class of complaint that already drove two prior rework rounds on this document."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

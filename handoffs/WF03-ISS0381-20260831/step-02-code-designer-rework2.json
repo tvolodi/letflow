@@ -1,0 +1,80 @@
+{
+  "handoff_id": "WF03-ISS0381-20260831-step02-rework2",
+  "run_id": "WF03-ISS0381-20260831",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0381-20260831/step-02-code-designer-rework2.json",
+  "created_at": "2026-08-31T00:00:00Z",
+  "started_at": "2026-08-31T00:00:00Z",
+  "completed_at": "2026-08-31T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "issue_id": "ISS-0381",
+    "former_local_id": "ISS-0353",
+    "queue_task_id": 381,
+    "github_issue": 753,
+    "severity": "MINOR",
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0381-20260831/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0381-20260831/step-02-code-designer.json",
+      "handoffs/WF03-ISS0381-20260831/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0381-20260831/step-02-code-designer-rework1.json",
+      "handoffs/WF03-ISS0381-20260831/step-02b-code-design-validator-recheck1.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0381-20260831/step-02b-code-design-validator-recheck1.json",
+      "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+      "lib/letflow/dlq/entry.ex",
+      "lib/letflow/dlq.ex"
+    ]
+  },
+  "task": {
+    "description": "Third, narrow rework of lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md addressing the single remaining defect D2-INLINE-LITERAL-CODE-STILL-PRESENT raised at step-02b-code-design-validator-recheck1.json: section 6 (~lines 165-169) still quoted a literal, directly copy-pasteable Elixir expression (`created_at: DateTime.utc_now() |> DateTime.truncate(:second)`) plus literal map key/value pairs (`status: :pending`, `retry_count: 0`, `retry_history: []`) verbatim from lib/letflow/dlq.ex:100-107. D1 (arithmetic) was already confirmed resolved by the validator and was explicitly not to be touched again.",
+    "acceptance_criteria": [
+      "Section 6's description of enqueue/2's merged default values (tenant_id, status, retry_count, retry_history, created_at) is rephrased structurally/in prose, with no literal Elixir map-literal key/value syntax and no literal pipe-operator expression remaining",
+      "No other section of the document is modified -- smallest possible diff, D1 and all other content left exactly as validated in the recheck1 pass",
+      "A real grep (not visual inspection) for pipe operators (|>), map-literal key:value syntax, and function-call syntax with real arguments is run against the finished document and its output is quoted verbatim in the rework report"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Fixed the single remaining defect from step-02b-code-design-validator-recheck1.json (D2-INLINE-LITERAL-CODE-STILL-PRESENT). Section 6's sentence describing enqueue/2's merge of default values into insert_attrs previously quoted the literal expression `created_at: DateTime.utc_now() |> DateTime.truncate(:second)` plus the literal map key/value pairs `status: :pending`, `retry_count: 0`, `retry_history: []`, copied verbatim from lib/letflow/dlq.ex:100-107. Replaced this with a structural/prose description: enqueue/2 'merges in its own trusted values: tenant_id (from TenantProvisioning), a pending status, a zero retry count, an empty retry history, and a created_at timestamp derived from the current UTC time truncated to second precision' -- no map-literal syntax, no pipe operator, no literal callable expression. This is the only edit made; nothing else in the document (including D1's disposition table and count, and every other section validated in recheck1) was touched. Verified with real grep commands run against the finished file (not visual inspection): (1) `grep -n '|>' <file>` -> no matches; (2) a bracket-index-expression grep -> no matches; (3) a function-call grep for `word.word(...)` with real arguments -> only two matches, both type references / example literals already accepted by the prior validator pass (`Entry.t()` / `Ecto.Changeset.t()` return-type references at line 174, and the string-literal example value `\"not-a-uuid\"` at line 297) -- neither is a callable expression; (4) a map-literal `key: value` (atom/number/[]) grep -> no matches; (5) a supplementary grep for `Module.function/arity`-style references confirms every remaining `Name.name(...)`-shaped token in the document is actually a `/arity` reference (e.g. `Map.take/2`, `Map.merge/2`, `Ecto.Changeset.validate_required/2`, `Ecto.Changeset.get_field/3`), not a literal call with real arguments. No implementation code was written or altered anywhere; only lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md was edited, and only its section 6.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+      "handoffs/WF03-ISS0381-20260831/step-02-code-designer-rework2.json"
+    ],
+    "issues": [],
+    "verification": {
+      "grep_pipe_operator": {
+        "command": "grep -n '|>' lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+        "output": "(no matches)"
+      },
+      "grep_bracket_index": {
+        "command": "grep -nE '[A-Za-z_.]+\\[[^]]*\\]' lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md | grep -v '^\\s*\\['",
+        "output": "(no matches)"
+      },
+      "grep_function_call_with_args": {
+        "command": "grep -nE '[A-Za-z_]+\\.[A-Za-z_]+\\([^)]*\\)' lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+        "output": "174:its `{:ok, Entry.t()} | {:error, Ecto.Changeset.t()}` return contract and\n297:a `String.t()` that is NOT a syntactically valid UUID (`\"not-a-uuid\"`)"
+      },
+      "grep_map_literal_key_value": {
+        "command": "grep -nE ':[a-z_]+ ?: ?(:[a-z_]+|[0-9]+|\\[\\])' lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+        "output": "(no matches)"
+      },
+      "interpretation": "The two remaining matches in grep_function_call_with_args are type references (String.t(), Entry.t(), Ecto.Changeset.t()) and a quoted string-literal example value, not literal callable Elixir expressions -- consistent with the interpretation the CODE-DESIGN-VALIDATOR itself applied in its recheck1 pass. No pipe operators, no bracket-index expressions, and no map-literal key/value pairs remain anywhere in the document."
+    },
+    "git_evidence": {
+      "branch": "feature/WF03-ISS0381-20260831",
+      "files_changed": [
+        "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md",
+        "handoffs/WF03-ISS0381-20260831/step-02-code-designer-rework2.json"
+      ]
+    }
+  },
+  "rework_count": 3,
+  "max_rework": 3
+}

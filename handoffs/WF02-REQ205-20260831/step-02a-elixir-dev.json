@@ -1,0 +1,104 @@
+{
+  "handoff_id": "step02a-WF02-REQ205-20260831",
+  "run_id": "WF02-REQ205-20260831",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ205-20260831/step-02a-elixir-dev.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-31T11:55:00Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-205"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req205-simulation-harness-foundation.md",
+      "handoffs/WF02-REQ205-20260831/step-01b-code-design-validator-recheck1.json"
+    ],
+    "branch_name": "feature/WF02-REQ205-20260831",
+    "requirement_text": "REQ-205 -- S7 scenario-harness foundation: Elixir scenario runner, business-tenant fixture seeding, and the API-vs-GUI execution split. See docs/requirements.yaml id: REQ-205 for full text.",
+    "acceptance_criteria": [
+      "AC1: test/fixtures/simulation/{swiftroute,vortex,meridian}/ contains all 12 company/org/process YAML files ported from R-Co's tests/simulation/companies/, with actor_id values unchanged from the R-Co originals -- verified by a diff-style comparison test",
+      "AC2: Letflow.Simulation.Seed provisions all three companies' tenant, users, groups and process definitions by calling Letflow's own context modules directly (no HTTP client, no Python subprocess), demonstrated by a test that seeds swiftroute and then queries Letflow.Identity/Letflow.Definitions directly for the resulting records",
+      "AC3: seeding the same company twice in one test run is a no-op the second time (no duplicate tenant/user/group/definition, no raised error) -- one explicit test per entity kind",
+      "AC4: Letflow.Simulation.Runner executes a minimal one-step api-via scenario end to end against a real running instance (real HTTP through Letflow.Router, not a mocked handler) and evaluates at least one instance_state-method expected outcome by querying actual instance state afterward",
+      "AC5: a scenario step declared via: gui is recorded with outcome DEFERRED_TO_S8 by the runner, never silently skipped and never executed as if it were an api step",
+      "AC6: the runner moduledoc explicitly distinguishes this harness from Letflow.Routers.SimulationTest/simulation_test.zig's design-time definition-validation tool, states that this requirement does not build that router, and cites both R-Co source files by path",
+      "AC7: if a YAML-parsing library is added to mix.exs, REVIEWER sign-off is recorded for it in this requirement's PR",
+      "AC8: mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "task": {
+    "description": "Implement REQ-205 per the approved design (lib/letflow/design/req205-simulation-harness-foundation.md, passed CODE-DESIGN-VALIDATOR recheck1)."
+  },
+  "result": {
+    "status": "PARTIAL_PASS_WITH_FLAGGED_GAP",
+    "environment_constraint": {
+      "r_co_source_reachable": false,
+      "checked": [
+        "ls /mnt/c/Users/tvolo/dev/ai-dala/R-Co -> No such file or directory",
+        "find / for any R-Co checkout, any *swiftroute*/*vortex*/*meridian* file anywhere on this filesystem -> none found",
+        "no prior handoff/session artifact in this repo carries R-Co's real fixture content"
+      ],
+      "disposition": "R-Co's tests/simulation/companies/{swiftroute,vortex,meridian}/ tree (on c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\, a different/Windows host) is genuinely unreachable from this Linux sandbox, matching this session's own established pattern (REQ-202's design doc recorded the same constraint). Fabricating the real fixture content would violate CLAUDE.md's no-speculation rule, so AC1's literal requirement ('ported... from R-Co's tests/simulation/companies/') is NOT satisfied. Everything else in the requirement was implemented fully and correctly against self-authored SYNTHETIC fixtures that exercise the identical shapes (company.yaml/org_structure.yaml/process_*.yaml) the design specifies -- every fixture file's header comment states this explicitly. RELEASE-VALIDATOR/ORCH should decide: accept structurally-faithful synthetic fixtures as sufficient, or open a follow-up task for a host with real R-Co access to re-port the 12 files (in which case only test/fixtures/simulation/**/*.yaml need replacing -- Seed/Runner code depends only on the fixture *shape*, not specific values)."
+    },
+    "acceptance_criteria_status": {
+      "AC1": "NOT MET (content) / MET (structure+mechanism) -- 12 files exist across the 3 company dirs (4 each: company.yaml, org_structure.yaml, 2x process_*.yaml), each with a header comment stating they are synthetic, not ported. test/fixtures/simulation/fixture_shape_test.exs is a self-consistency test (file count, parseability, hardcoded scalar match against these synthetic values) -- explicitly NOT the R-Co diff-style parity test AC1 asks for, since there is nothing to diff against from this sandbox.",
+      "AC2": "MET -- Letflow.Simulation.Seed.seed_company/1, seed_users/2, seed_groups/2, seed_process/3 (arity widened from the design's literal seed_process/1, see seed.ex moduledoc) call Letflow.Identity/Letflow.TenantOnboarding/Letflow.Definitions directly, no HTTP, no subprocess. Demonstrated by test/letflow/simulation/seed_idempotency_test.exs and runner_test.exs, which seed swiftroute-shaped fixtures and query Letflow.Identity/Letflow.Definitions/Repo directly for the resulting rows.",
+      "AC3": "MET -- test/letflow/simulation/seed_idempotency_test.exs has one test per entity kind (tenant, user, group, definition), each seeding twice and asserting a direct DB row-count of 1 (not an inference from 'no error'). All 4 pass against real Postgres.",
+      "AC4": "MET -- test/letflow/simulation/runner_test.exs 'AC4: a minimal one-step api-via scenario...' builds a real Scenario, dispatches POST /api/v1/instances through Letflow.Router.call/2 with a real API token + x-tenant-slug header (real AuthPipeline traversal, not a mocked handler), and verifies an instance_state outcome via Letflow.Instances.get_by_id/2 against the live Postgres row. Passes.",
+      "AC5": "MET -- test/letflow/simulation/runner_test.exs 'AC5: a via: gui step...' confirms a gui step is recorded outcome: :deferred_to_s8, appears in step_results (not dropped), and is never dispatched as HTTP. Passes.",
+      "AC6": "MET -- Letflow.Simulation.Runner's moduledoc (test/support/simulation/runner.ex) states the distinction, cites both src/api/routes/simulation_test.zig and src/simulation/scenario_runner.zig by path, and states this requirement does not build Letflow.Routers.SimulationTest.",
+      "AC7": "FLAGGED for REVIEWER -- {:yaml_elixir, \"~> 2.11\", only: :test} added to mix.exs deps/0 with an inline comment naming the design section justifying it (§4). REVIEWER sign-off is a hard gate before merge, not something ELIXIR-DEV can self-certify.",
+      "AC8": "MET -- mix compile --warnings-as-errors clean (full project, 196 files); mix format --check-formatted clean; full mix test suite: 2979/2981 passed (2973/2975 tests + 6/6 properties), 10 excluded, 2 failed -- both pre-existing/environmental (Mix.Tasks.Letflow.CheckToolchainTest's rust-pin tests, System.cmd(\"rustc\", ...) ENOENT because rustc is not installed in this sandbox; unrelated to REQ-205, confirmed by reading the failure stack traces). All REQ-205 test files (test/letflow/simulation/, test/fixtures/simulation/) pass: 16/16 in isolation, and included cleanly in the full run."
+    },
+    "oq_resolutions": {
+      "OQ-1": "Tenant.t() has NO prefix/schema-name field at all (confirmed by reading lib/letflow/identity/tenant.ex's schema: id, slug, display_name, status, idp_realm_id, timestamps only). The schema name is separate state owned by Letflow.TenantProvisioning (Registration.schema_name / schema_name_for_tenant/1). Seed derives prefix via TenantProvisioning.schema_name_for_tenant(tenant.id) wherever needed -- documented in seed.ex's moduledoc as a design/implementation discrepancy.",
+      "OQ-2 (HTTP action -> context-function mapping)": "Resolved concretely only for this requirement's one minimal scenario: 'POST /api/v1/instances' -> Letflow.Engine.create/2 via Letflow.Routers.Instances' handle_create/1, response {instance_id, status, created_at}. General action-string parsing implemented as method+path split + Letflow.Router.call/2 dispatch (Runner.parse_action!/1) -- REQ-206/207/208 extend real action coverage as their own scenario corpus is ported, per the design's own deferral.",
+      "OQ-3 (yaml_elixir scalar-coercion fidelity)": "Verified informally against this session's own synthetic fixtures (strings, nested maps/lists, no YAML 1.1 on/off/yes/no boolean fields present in any fixture) -- all fields round-tripped as expected string/map/list types in fixture_shape_test.exs and the Seed/Runner tests. NOT verified against R-Co's real fixture content (unreachable, per the environment-constraint section above) -- if a future real port introduces YAML boolean-like scalars, this needs re-verification then."
+    },
+    "additional_deviations_from_design_recorded_in_code": [
+      "get_by_username/2 and username_unique_conflict?/1 (design cited as callable) are actually `defp` (module-private) in lib/letflow/identity.ex -- substituted with Letflow.Identity.list_users/2's public :search filter + client-side exact match, same idiom already settled for seed_groups/2's OQ-2 (list_groups + client-side match). Documented in seed.ex moduledoc.",
+      "Engine.count_instances_by_status/1 takes only opts: [prefix: ...], no process_id scoping (design implied per-process scoping) -- Runner's :no_pending_instances precondition is tenant-wide, not per-process. Documented in runner.ex moduledoc.",
+      "§6 instance_state's real backing function is Letflow.Instances.get_by_id/2, not a function on Letflow.Engine itself. Documented in runner.ex moduledoc.",
+      "§6 task_assigned compares against Task.t()'s real assignee_type/assignee_ref fields (no single 'assignee' field exists). Documented in runner.ex moduledoc.",
+      "Scenario.step() gained an 'actor' field beyond the design's literal table (via/action/params/produces) -- necessary plumbing since real HTTP dispatch needs a caller identity and the design deferred this. Documented in scenario struct moduledoc (test/support/simulation/runner.ex)."
+    ],
+    "security_review_routing_note": "ELIXIR-DEV's own read: this change is test-support code (test/support/simulation/, test/fixtures/simulation/, test/letflow/simulation/) that EXERCISES real tenant-provisioning/identity/definition/instance context functions (Letflow.Identity.create_tenant/1, Letflow.TenantOnboarding.provision_and_migrate/1, Letflow.Identity.create_user/2, Letflow.Identity.create_token/3, real HTTP through Letflow.Router.call/2 with a real API-token bearer credential) but ships no production code path -- nothing under lib/letflow/ changed except mix.exs's deps/0 (a test-only dependency addition). Per CLAUDE.md's roster table, SECURITY-REVIEWER gates 'tenant-data-path changes' -- this touches tenant-data *paths* (real provisioning, real credential issuance/verification) even though it is test-only code, and per this project's redundancy principle ('every producing step has a validating step') ELIXIR-DEV should not decide this gate is skippable. Routing to SECURITY-REVIEWER per the workflow's normal Step 2b; SECURITY-REVIEWER should make the final call on whether test-support-only code touching these paths needs the same INV-1..INV-8 scrutiny as production code (this session's own read: yes for INV-4 -- plaintext API tokens are handled in test code (runner_test.exs setup) exactly once, held only in local variables, never logged or persisted beyond the test's own on_exit teardown, matching the production create_token/3 discipline; no other INV appears implicated since no new production code exists)."
+  },
+  "files_changed": {
+    "modified": ["mix.exs", "mix.lock"],
+    "created": [
+      "test/fixtures/simulation/swiftroute/company.yaml",
+      "test/fixtures/simulation/swiftroute/org_structure.yaml",
+      "test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml",
+      "test/fixtures/simulation/swiftroute/process_route_approval.yaml",
+      "test/fixtures/simulation/vortex/company.yaml",
+      "test/fixtures/simulation/vortex/org_structure.yaml",
+      "test/fixtures/simulation/vortex/process_work_order.yaml",
+      "test/fixtures/simulation/vortex/process_quality_check.yaml",
+      "test/fixtures/simulation/meridian/company.yaml",
+      "test/fixtures/simulation/meridian/org_structure.yaml",
+      "test/fixtures/simulation/meridian/process_claim_intake.yaml",
+      "test/fixtures/simulation/meridian/process_policy_binding.yaml",
+      "test/fixtures/simulation/fixture_shape_test.exs",
+      "test/support/simulation/seed.ex",
+      "test/support/simulation/runner.ex",
+      "test/letflow/simulation/seed_idempotency_test.exs",
+      "test/letflow/simulation/runner_test.exs"
+    ]
+  },
+  "issues": [],
+  "artifacts_out": [
+    "test/support/simulation/seed.ex",
+    "test/support/simulation/runner.ex",
+    "test/fixtures/simulation/",
+    "test/letflow/simulation/",
+    "mix.exs"
+  ],
+  "next_action": "Route to SECURITY-REVIEWER (this touches real tenant-provisioning/identity/credential context-function paths even though it is test-only code -- see security_review_routing_note). SECURITY-REVIEWER and REVIEWER (idiom + AC7's dependency sign-off) are both hard gates before TEST-DESIGNER per WF-02 Steps 2b-2d.",
+  "rework_count": 0,
+  "max_rework": 3
+}

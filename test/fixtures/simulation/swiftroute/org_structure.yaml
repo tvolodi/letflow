@@ -1,0 +1,19 @@
+# SYNTHETIC FIXTURE -- NOT ported from R-Co. See company.yaml in this directory for
+# the full explanation (R-Co's tests/simulation/companies/swiftroute/org_structure.yaml
+# is unreachable from this sandbox). actor_id values below are self-authored, not
+# R-Co's real actor-swiftroute-* references -- do not treat them as stable across a
+# future real port.
+people:
+  - actor_id: actor-swiftroute-lena
+    username: swiftroute-lena
+    display_name: Lena Ostrowski
+    email: lena@swiftroute.simulation.test
+  - actor_id: actor-swiftroute-marco
+    username: swiftroute-marco
+    display_name: Marco Delgado
+    email: marco@swiftroute.simulation.test
+
+groups:
+  - name: swiftroute-dispatchers
+    display_name: Dispatchers
+    members: [actor-swiftroute-lena, actor-swiftroute-marco]

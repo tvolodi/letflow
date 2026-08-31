@@ -1,0 +1,16 @@
+# SYNTHETIC FIXTURE -- NOT ported from R-Co. See
+# test/fixtures/simulation/swiftroute/process_route_approval.yaml for the full
+# explanation.
+name: meridian-policy-binding
+version: "1.0.0"
+description: Synthetic START -> END process (synchronous completion).
+graph:
+  nodes:
+    - id: start
+      node_type: START
+    - id: end
+      node_type: END
+  edges:
+    - id: e1
+      source: start
+      target: end

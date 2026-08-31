@@ -1859,6 +1859,31 @@ warning only surfaces when the test file itself is actually compiled, e.g. by `m
 by CI, not by local pre-push verification, exactly as REQ-178/187/191 were. The standing
 local-grep/lint this entry already asked for is still not implemented four occurrences in.
 
+**Recurrence (7th occurrence: REQ-203).** `test/letflow/repository/activation_test.exs`'s
+`version_attrs/1` declared `overrides \\ []`; both of its two call sites (`new_version!/3`'s own
+body, and one direct call inside the cross-tenant-isolation test) passed `overrides` explicitly.
+This slipped past not only TEST-DESIGNER's own local `mix compile --warnings-as-errors` and a
+real `mix test` run of just that file (the file compiles fine standalone -- both call sites are in
+the same file, so nothing about running that one file in isolation forces the dead-default
+warning to differ from any other compile), but also past FIVE separate hard gates that each ran a
+real `mix compile`/`mix test` pass on this exact file: TEST-DESIGN-VALIDATOR (twice), REVIEWER
+(twice, on unrelated fixes to the same file), and RELEASE-VALIDATOR -- none of whom happened to
+run the project's own narrow `mix letflow.check.test` task, only `mix test <specific files>` or
+`scripts/test_parallel.sh`. It was caught only by CI's own `mix letflow.check` gate, on the actual
+merge PR, after every WF-02 gate had already passed. This confirms the standing local-grep/lint
+this entry has asked for since the 1st occurrence is still not implemented, and additionally shows
+that running `mix test` on the exact file containing the dead default is *not* sufficient to catch
+it -- only `mix letflow.check.test` (or an equivalent full/isolated recompile) reliably surfaces
+this warning class, because Elixir's incremental compiler does not always force a fresh
+warnings-as-errors compile of already-compiled test modules across separate `mix test` invocations
+within the same `_build` cache. A meta-observation worth acting on: this bug class has now
+survived REQ-analyst, ELIXIR-DEV, TEST-DESIGNER, TWO TEST-DESIGN-VALIDATOR passes, TWO REVIEWER
+passes, and RELEASE-VALIDATOR across seven separate occurrences without the mitigation this file
+already recommends ever being implemented as an actual grep/lint step in any agent's own
+checklist -- the fix here is not "try harder to remember," it is to add `mix letflow.check.test`
+(not merely `mix test <file>`) as a mandatory, named step in TEST-DESIGNER's and RELEASE-VALIDATOR's
+own instructions, since both are the natural last local checkpoints before a PR's own CI run.
+
 ## Fixing a citation's content without re-verifying its source location (REQ-ANALYST rework)
 
 **Occurred twice in a row on the same paragraph, REQ-204's draft, WF01/WF02-REQ204-20260830.**

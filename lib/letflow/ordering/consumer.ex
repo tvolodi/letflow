@@ -42,11 +42,12 @@ defmodule Letflow.Ordering.Consumer do
     prefix = Keyword.fetch!(opts, :prefix)
 
     query =
-      from c in Completion,
+      from(c in Completion,
         where: c.status == :pending,
         order_by: [asc: c.correlation_id, asc: c.sequence_no],
         limit: 1,
         lock: "FOR UPDATE SKIP LOCKED"
+      )
 
     Repo.transaction(fn ->
       case Repo.one(query, prefix: prefix) do
@@ -108,7 +109,9 @@ defmodule Letflow.Ordering.Consumer do
   defp do_apply(%Completion{} = completion, prefix, opts) do
     # M2: advisory lock (ORD-02) — non-blocking; false → another consumer holds it
     lock_key = :erlang.phash2(completion.correlation_id, 2_147_483_647)
-    %{rows: [[got_lock]]} = Repo.query!("SELECT pg_try_advisory_xact_lock($1::bigint)", [lock_key])
+
+    %{rows: [[got_lock]]} =
+      Repo.query!("SELECT pg_try_advisory_xact_lock($1::bigint)", [lock_key])
 
     unless got_lock do
       Repo.rollback(:lock_contention)

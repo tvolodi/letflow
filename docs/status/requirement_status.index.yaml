@@ -800,8 +800,18 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 33
+    entries: 34
     note: >
+      Recounted to 34 after rebasing WF03-ISS0380-20260831 onto main a
+      second time, which by then included WF02-REQ199-20260831's own
+      DOC-UPDATER done event (merged as PR #761) landing alongside this
+      run's own SCOPE-CHANGE append. `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 34 on-disk entries (`wc`:
+      906 lines / 52205 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered). This supersedes the 33-count note
+      below, which was correct for this branch's state before REQ-199's
+      concurrent append landed on main.
+
       Recounted to 33 after WF03-ISS0380-20260831's own SCOPE-CHANGE done
       event (ORCH) appended. `grep -c "^  - req:"
       docs/status/requirement_status.v7.yaml` = 33 on-disk entries (`wc`:

@@ -42,9 +42,7 @@ defmodule Letflow.Repo.Migrations.CreateEffectCompletions do
         add :created_at, :utc_datetime_usec, null: false
       end
 
-      create unique_index(:effect_completions, [:correlation_id, :sequence_no],
-               prefix: prefix()
-             )
+      create unique_index(:effect_completions, [:correlation_id, :sequence_no], prefix: prefix())
 
       schema = prefix()
 

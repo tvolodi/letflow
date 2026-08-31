@@ -20,13 +20,18 @@ defmodule Letflow.Ordering.Completion do
 
   @primary_key {:completion_id, :binary_id, autogenerate: true}
   schema "effect_completions" do
-    field :tenant_id, :binary_id
-    field :correlation_id, :string
-    field :sequence_no, :integer
-    field :status, Ecto.Enum, values: [pending: "PENDING", applied: "APPLIED", dead: "DEAD"], default: :pending
-    field :payload, :map, default: %{}
-    field :received_at, :utc_datetime_usec
-    field :applied_at, :utc_datetime_usec
+    field(:tenant_id, :binary_id)
+    field(:correlation_id, :string)
+    field(:sequence_no, :integer)
+
+    field(:status, Ecto.Enum,
+      values: [pending: "PENDING", applied: "APPLIED", dead: "DEAD"],
+      default: :pending
+    )
+
+    field(:payload, :map, default: %{})
+    field(:received_at, :utc_datetime_usec)
+    field(:applied_at, :utc_datetime_usec)
 
     timestamps(type: :utc_datetime_usec, updated_at: false, inserted_at: :created_at)
   end

@@ -17,8 +17,8 @@ defmodule Letflow.Ordering.Cursor do
 
   @primary_key {:correlation_id, :string, autogenerate: false}
   schema "correlation_cursors" do
-    field :tenant_id, :binary_id
-    field :applied_seq, :integer, default: 0
+    field(:tenant_id, :binary_id)
+    field(:applied_seq, :integer, default: 0)
 
     timestamps(type: :utc_datetime_usec, inserted_at: :created_at)
   end

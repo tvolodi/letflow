@@ -90,8 +90,11 @@ defmodule Letflow.OrderingTest do
       tenant = provisioned_tenant()
       corr_id = Ecto.UUID.generate()
 
-      {:ok, _} = Ordering.insert_completion(%{correlation_id: corr_id, sequence_no: 1}, opts(tenant))
-      {:ok, _} = Ordering.insert_completion(%{correlation_id: corr_id, sequence_no: 1}, opts(tenant))
+      {:ok, _} =
+        Ordering.insert_completion(%{correlation_id: corr_id, sequence_no: 1}, opts(tenant))
+
+      {:ok, _} =
+        Ordering.insert_completion(%{correlation_id: corr_id, sequence_no: 1}, opts(tenant))
 
       count =
         Repo.one!(

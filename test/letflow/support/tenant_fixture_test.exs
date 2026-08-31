@@ -303,7 +303,7 @@ defmodule Letflow.Support.TenantFixtureTest do
       # added repository_artifacts and artifact_versions, bumping it from 27 to 29 --
       # test/support/tenant_fixture.ex's own @expected_tenant_tables list already
       # carries all nine.)
-      assert length(TenantFixture.expected_tenant_tables()) == 29
+      assert length(TenantFixture.expected_tenant_tables()) == 31
       assert length(state.manifest_versions) > 0
     end
 

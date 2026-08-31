@@ -468,7 +468,11 @@ defmodule Letflow.TenantProvisioning do
     {20_260_830_020_001, Letflow.Repo.Migrations.CreateAuditEntriesTenantScoped,
      "20260830020001_create_audit_entries_tenant_scoped.exs"},
     {20_260_830_030_001, Letflow.Repo.Migrations.CreateRepositoryArtifacts,
-     "20260830030001_create_repository_artifacts.exs"}
+     "20260830030001_create_repository_artifacts.exs"},
+    {20_260_830_040_001, Letflow.Repo.Migrations.CreateAlertTriggerState,
+     "20260830040001_create_alert_trigger_state.exs"},
+    {20_260_830_040_002, Letflow.Repo.Migrations.CreateAlertHookEmissionState,
+     "20260830040002_create_alert_hook_emission_state.exs"}
   ]
 
   @doc """

@@ -1,0 +1,33 @@
+id: PENDING
+title: "REQ-201 alerts.ex: deliver_with_retry calls Process.sleep on Scheduler.Poller's process, blocking message queue during HTTP retries"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ201-20260830
+discovered_at: 2026-08-30T00:00:00Z
+severity: MINOR
+tags: [type-safety, otp-idiom]
+description: >
+  `Letflow.Obs.Alerts.deliver_with_retry/4` uses `Process.sleep(delay_ms)` for
+  exponential backoff between HTTP retry attempts. Because this function is called
+  synchronously from `Letflow.Scheduler.Poller.handle_info(:tick)` (via
+  `maybe_run_alert_detection` → `Alerts.build_context_and_detect` → `run_detection`
+  → `fire_hooks` → `deliver_with_retry`), each failed HTTP attempt blocks the
+  Poller's GenServer message processing for the sleep duration, starving all tenant
+  timer delivery for that period.
+
+  With default retry policy (3 attempts, base=1000ms, multiplier=2.0), worst-case
+  blocking per hook per firing event is 3000ms (1s + 2s before attempts 2 and 3).
+  With N tenants all simultaneously triggering M hooks with full exhaustion:
+  total blocking = N × M × 3s. At the expected scale (1–3 platform-operator hooks,
+  not per-tenant), this is acceptable; it becomes a correctness issue if hook count
+  grows or if hooks are ever moved to per-tenant configuration.
+
+  Contrast: `Letflow.Webhooks.deliver/3` also uses `Process.sleep` for backoff
+  (webhooks.ex:341), but that function is called outside the Poller's tick chain
+  (delivery triggering is deferred, per webhooks.ex moduledoc §6).
+
+  Mitigation options (for a future requirement):
+  - Spawn a Task under a Task.Supervisor for per-hook delivery (async, doesn't block Poller)
+  - Or impose a firm cap on max_attempts and max_backoff_ms for alert hooks via config validation
+affected_files:
+  - lib/letflow/obs/alerts.ex
+  - lib/letflow/scheduler/poller.ex

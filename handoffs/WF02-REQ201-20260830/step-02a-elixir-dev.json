@@ -1,0 +1,47 @@
+{
+  "handoff_id": "step02a-WF02-REQ201-20260830",
+  "run_id": "WF02-REQ201-20260830",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ201-20260830/step-02a-elixir-dev.json",
+  "created_at": "2026-08-30T18:55:00Z",
+  "status": "COMPLETED",
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-201 (OBS-06 alerting hooks) fully implemented. Two per-tenant migrations, Letflow.Obs.Alerts context module with ARMED/FIRED edge-triggered state machine, retry/backoff HTTP delivery, no-DLQ terminal action, Scheduler.Poller integration (lag tracking), Dlq.count_entries/1 aggregate, 17 tests covering all 14 ACs, tenant_fixture oracle updated (26->28 tables).",
+    "git_commits": [
+      {
+        "sha": "1142fd86",
+        "message": "feat(REQ-201): alerting hooks -- edge-triggered threshold detection with retry/backoff delivery (OBS-06)"
+      }
+    ],
+    "mix_test_last_line": "Result: 57 passed (targeted run covering alerts_test, tenant_fixture_test, poller_test, requirement_status_invariants_test)",
+    "mix_compile_result": "mix compile --warnings-as-errors exit 0",
+    "oq_resolutions": {
+      "OQ-1": "Letflow.Secrets.resolve/2 requires [tenant_id: uuid] in opts; namespace 'alert_hook' is embedded in the reference string sec://tenant/<slug>/alert_hook/<name> and is valid per ~r/^[a-z0-9_-]+$/. To call resolve for platform-level alert hook secrets, the tenant_id is derived from the reference's own slug via Identity.get_tenant_by_slug/1. On any resolution failure, the Authorization header is omitted and a warning is logged (no crash, no credential stored).",
+      "OQ-2": "Letflow.Dlq.count_entries/1 did not exist. Added as a public function in lib/letflow/dlq.ex following the existing opts :: [prefix: String.t()] pattern: Repo.aggregate(Entry, :count, prefix: prefix). Read-only aggregate, no new requirement needed.",
+      "OQ-3": "Recently-paused subscriptions query uses paused_at >= last_tick_started_at. When last_tick_started_at is nil (first tick), the paused-subscription check is skipped entirely. webhook_subscriptions.paused_at confirmed available (Subscription schema has :paused_at field).",
+      "OQ-4": "Confirmed: Letflow.Obs.Alerts has no start_link/1, no child_spec/1, no process. application.ex is unchanged. Detection runs on Letflow.Scheduler.Poller's existing tick via maybe_run_alert_detection/3 (private, called from handle_info(:tick))."
+    },
+    "artifacts_out": [
+      "lib/letflow/obs/alerts.ex",
+      "lib/letflow/obs/alert_trigger_state.ex",
+      "lib/letflow/obs/alert_hook_emission_state.ex",
+      "priv/repo/migrations/20260830020001_create_alert_trigger_state.exs",
+      "priv/repo/migrations/20260830020002_create_alert_hook_emission_state.exs",
+      "lib/letflow/dlq.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/obs/alerts_test.exs",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/support/tenant_fixture_test.exs",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "pre_existing_failures_noted": [
+      "test/letflow/engine/lua/sandbox_test.exs AC1: System.cmd('grep', ...) fails with :enoent in Windows PowerShell (grep not on PATH); pre-existing environment failure, no Lua/Wasm files touched",
+      "test/letflow/engine/wasm/host_api_test.exs AC8: same :enoent cause; pre-existing"
+    ]
+  }
+}

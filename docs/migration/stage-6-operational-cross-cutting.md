@@ -63,19 +63,25 @@ captured state instead of always null, and the `resource_type` filter
 now genuinely discriminates -- with the response envelope unchanged
 against `web/src/api/audit.ts`'s `RawAuditPage`/`RawAuditEntry` and no
 `web/` file touched. This closes the full audit vertical (REQ-195 +
-REQ-196) in full. REQ-201 (alerting, the
-other OBS-04-adjacent rework-1 addition) remains open. REQ-202
-(Content-addressed artifact store and the REPO-04 canonicaliser) is
-also done as of 2026-08-30: `repository_artifacts` +
-`artifact_versions` (migration 045's shape, not R-Co's conflicting
-migration 058 shape), a canonicaliser deliberately kept SEPARATE from
-REQ-036's `PromotionDigest` (both moduledocs cross-reference each
-other; merging them would silently redrive every stored promotion
-digest), DB-level immutability on the content store, and REQ-041's
-`solution_pack_artefact_bases` disambiguated as an unrelated table.
-No activation (REQ-203, the natural next half of this pair) and no
-route/controller surface -- both explicitly out of scope here. The
-ordering
+REQ-196) in full. REQ-201 (alerting hooks with edge-triggered firing
+and retry/backoff delivery, OBS-06) is also done as of 2026-08-30/31:
+threshold detection for all four OBS-06 trigger types
+(instance_error_stuck, dlq_depth_threshold, scheduler_lag_threshold,
+webhook_subscription_paused), edge-triggered firing (no repeat fires
+while an alert is active), and retry/backoff delivery via REQ-183's
+existing webhook dispatch mechanism, with RELEASE-VALIDATOR
+independently re-verifying all 14 acceptance criteria and 17/17
+targeted tests (PASS). REQ-202 (Content-addressed artifact store and
+the REPO-04 canonicaliser) is also done as of 2026-08-30:
+`repository_artifacts` + `artifact_versions` (migration 045's shape,
+not R-Co's conflicting migration 058 shape), a canonicaliser
+deliberately kept SEPARATE from REQ-036's `PromotionDigest` (both
+moduledocs cross-reference each other; merging them would silently
+redrive every stored promotion digest), DB-level immutability on the
+content store, and REQ-041's `solution_pack_artefact_bases`
+disambiguated as an unrelated table. No activation (REQ-203, the
+natural next half of this pair) and no route/controller surface --
+both explicitly out of scope here. The ordering
 subsystem remains
 pending. A
 future WF-04 stage-gate check of the scheduler half specifically (not

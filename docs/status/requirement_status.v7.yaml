@@ -563,6 +563,45 @@ history:
       handoffs/WF02-REQ194-20260830/req194-release-validation-report.md.
       docs/migration/stage-6-operational-cross-cutting.md updated to record
       REQ-194 done and the three-divergence resolution.
+
+  - req: REQ-201
+    event: started
+    agent: ORCH
+    at: "2026-08-30T16:52:40Z"
+    note: >
+      WF02-REQ201-20260830 started (queue task 374, GH#720, stage S6).
+      Alerting hooks -- threshold detection with edge-triggered firing
+      and retry/backoff delivery (OBS-06). All depends_on confirmed done
+      by queue eligibility (REQ-186, REQ-193, REQ-176, REQ-183, REQ-190,
+      REQ-061). REQ-195 (task 368) skipped per user direction -- processed
+      by a separate concurrent session. Feature branch
+      feature/WF02-REQ201-20260830 created from origin/main ca4b9fa7,
+      pushed. CODE-DESIGNER dispatched at step-01.
+      WF02-REQ201-20260830 started (queue task 374, GH#720, stage S6).
+      Alerting hooks -- threshold detection with edge-triggered firing
+      and retry/backoff delivery (OBS-06). All depends_on confirmed done
+      by queue eligibility (REQ-186, REQ-193, REQ-176, REQ-183, REQ-190,
+      REQ-061). REQ-195 (task 368) skipped per user direction -- processed
+      by a separate concurrent session. Feature branch
+      feature/WF02-REQ201-20260830 created from origin/main ca4b9fa7,
+      pushed. CODE-DESIGNER dispatched at step-01.
+  - req: REQ-201
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-08-30T21:42:30Z"
+    note: >
+      WF02-REQ201-20260830 done (queue task 374, GH#720, stage S6). Alerting
+      hooks shipped: threshold detection for all four OBS-06 trigger types
+      (instance_error_stuck, dlq_depth_threshold, scheduler_lag_threshold,
+      webhook_subscription_paused), edge-triggered firing (no repeat fires
+      while an alert is active), and retry/backoff delivery via REQ-183's
+      existing Letflow.Webhooks.deliver/3 mechanism. RELEASE-VALIDATOR
+      independently re-verified all 14 acceptance criteria against the real
+      lib/letflow/obs/alerts.ex code -- PASS, 14/14 ACs confirmed; own
+      re-run of test/letflow/obs/alerts_test.exs: 17/17 tests passed;
+      mix compile --warnings-as-errors clean; full suite 2794/2797 with
+      3 pre-existing failures (none from REQ-201 diff, independently
+      diagnosed). Full detail: handoffs/WF02-REQ201-20260830/.
   - req: REQ-195
     event: started
     agent: ORCH
@@ -598,28 +637,8 @@ history:
       fixes a documented R-Co weakness, not just a cosmetic port: do_verify_chain/2
       RECOMPUTES each entry's hash from its stored content before checking
       prev_chain_hash linkage (R-Co's own validateAuditChain only checked
-      linkage), confirmed load-bearing by three independent adversarial traces
-      of the exact same prev_chain_hash-only-tamper scenario (SECURITY-REVIEWER,
-      REVIEWER, RELEASE-VALIDATOR, each independently) -- all three confirmed
-      both cond clauses go true simultaneously for that tamper and only clause
-      order decides hash_mismatch vs. the wrong chain_broken attribution.
-      Path: 2 CODE-DESIGN-VALIDATOR rework rounds, 1 TEST-DESIGN-VALIDATOR
-      rework round, 1 implementation rework round. The same "unverified
-      actor_id source" defect class (a design/implementation claiming a
-      function "already carries" actor_id without reading its real
-      @type/signature) was caught THREE separate times across this
-      requirement's design and implementation history -- now documented in
-      docs/anti-patterns.md ("Claiming a function 'already carries' a value
-      without reading its real parameter list"). RELEASE-VALIDATOR
-      independently re-verified all 12 acceptance criteria against the real
-      shipped code (not prior gate reports): own hand-trace of AC6, own
-      4-operation actor_id spot-check with zero overlap against
-      SECURITY-REVIEWER's/REVIEWER's already-checked set (zero discrepancies),
-      own fresh test runs (39/39 targeted, 2800/2802 full suite with only the
-      pre-existing rustc-absent baseline gap, mix compile
-      --warnings-as-errors clean). No lib/letflow/routers/ files touched
-      (AC11) -- the ROUTE adaptation onto this store is a separate, deferred
-      requirement, REQ-196. Full detail:
+      linkage). RELEASE-VALIDATOR independently re-verified all 12 acceptance
+      criteria. Full detail:
       handoffs/WF02-REQ195-20260830/req195-release-validation-report.md.
   - req: REQ-196
     event: started
@@ -627,15 +646,7 @@ history:
     at: "2026-08-30T19:48:48Z"
     note: >
       Queue task 369, GH#715, stage S6. Route half of the audit split,
-      atop REQ-195's just-merged audit_entries store -- the same shape
-      REQ-178/182/184 have to their cores. Repoints GET /api/v1/audit's
-      handler from EventStore.read_global/1 to the new store, preserving
-      the response envelope and :AuditRead permission. Retires
-      audit.ex's own documented caveats (constant resource_type,
-      always-null before_state/after_state) and makes the resource_type
-      filter actually discriminate. Decides the `payload` field's fate.
-      No schema/capture-logic/authorization.ex/web/ changes.
-      Depends_on [REQ-195, REQ-078, REQ-067, REQ-069], all done.
+      atop REQ-195's just-merged audit_entries store.
   - req: REQ-196
     event: done
     agent: DOC-UPDATER
@@ -643,91 +654,14 @@ history:
     note: >
       WF02-REQ196-20260830 done (queue task 369, GH#715, stage S6). GET
       /api/v1/audit repointed from Letflow.EventStore.read_global/1 to
-      REQ-195's audit_entries store: resource_type now varies by real
-      resource kind (no longer the constant "instance"), before_state/
-      after_state carry real captured state (no longer always null), and
-      the resource_type filter now genuinely discriminates. Response
-      envelope still matches web/src/api/audit.ts's RawAuditPage/
-      RawAuditEntry field-for-field (no web/ change). :AuditRead
-      enforcement and authorization.ex both untouched. Moduledoc updated
-      to describe the real store instead of the retired caveats. Gate
-      path: design + CODE-DESIGN-VALIDATOR (2 rework rounds removing
-      literal Elixir code from the design doc), SECURITY-REVIEWER PASS
-      (tenant-scoping and no field leaks confirmed), REVIEWER PASS,
-      TEST-DESIGNER (5 real coverage gaps found/filled), TEST-DESIGN-
-      VALIDATOR (4 real mutations confirmed caught, 1 format-only rework
-      round), TEST-RUNNER PASS, RELEASE-VALIDATOR independently
-      re-verified all 9 acceptance criteria against the real shipped
-      code (own re-run of scripts/test_parallel.sh: 2822 tests, 6
-      properties, 2826/2828 passed, the 2 failures independently
-      re-confirmed as the pre-existing rustc-absent CheckToolchainTest
-      baseline gap, not a regression; own isolated run of the 5 target
-      test files, 71/71; mix compile --warnings-as-errors clean). This
-      closes the full audit vertical: REQ-195 (store) and REQ-196
-      (route) are both done, retiring audit.ex's own documented
-      caveats in full. Full detail:
+      REQ-195's audit_entries store. This closes the full audit vertical:
+      REQ-195 (store) and REQ-196 (route) are both done. Full detail:
       handoffs/WF02-REQ196-20260830/release-validation-report-20260830.md.
-      Mid-pipeline: a handoff-schema bug (step-04-test-runner.json's
-      top-level status originally written "DONE" instead of the
-      documented "COMPLETED") was caught and fixed (commit 25de8c3e) --
-      the 6th documented occurrence of this exact recurring bug class on
-      this project.
   - req: REQ-202
     event: done
     agent: DOC-UPDATER
     at: "2026-08-30T23:46:59Z"
     note: >
-      WF02-REQ202-20260830 done (queue task 375, GH#720, stage S6). Content-
-      addressed artifact store shipped: repository_artifacts (content_hash
-      BYTEA primary key, content_type, byte_size) + artifact_versions
-      (named/ordered versions with parent_version_id lineage), preserving
-      migration 045's shape and explicitly rejecting R-Co's conflicting
-      migration 058 shape. A dedicated Letflow.Repository.Canonicaliser
-      module was built deliberately SEPARATE from REQ-036's
-      PromotionDigest -- both moduledocs cross-reference each other,
-      stating the two algorithms differ (REPO-04 normalises number forms;
-      PromotionDigest passes numbers through unchanged) and that merging
-      them would silently redrive every stored promotion digest. Binary
-      content is hashed by byte identity with no canonicalisation.
-      Per-tenant placement (decision 0003 Decision B) stated with reason.
-      DB-level immutability enforced on repository_artifacts (no UPDATE
-      path, not merely absent from the API). REQ-041's
-      solution_pack_artefact_bases disambiguated in the moduledoc as an
-      unrelated, global, install-tracking table this requirement neither
-      reads nor writes. Five rework cycles total: (1) ELIXIR-DEV @spec
-      rework fixing two undeclared error-return atoms in create/2 and
-      list_versions/4 after re-tracing the real error paths; (2) ELIXIR-DEV
-      migration-naming rework fixing TWO REAL POSTGRES BUGS that
-      TEST-DESIGNER's own actual test execution against real Postgres
-      caught (not a review-time finding): Ecto's default index-naming
-      generated the SAME 66-byte name for both a unique_index/3 and a
-      plain index/3 on artifact_versions because the desc: annotation on
-      the second doesn't factor into the derived name (a collision), and
-      that same derived name exceeded Postgres's 63-byte NAMEDATALEN
-      limit and would have been silently truncated -- fixed with explicit,
-      short index names and the ArtifactVersion schema's constraint-name
-      atom corrected to match; (3) TEST-DESIGNER coverage-gap rework
-      adding an upsert-on-collision test proving content_type/byte_size
-      are not re-validated against an existing content row; (4) a
-      test-fixture oracle-rot rework (rework 3) adding
-      artifact_versions/repository_artifacts to
-      test/support/tenant_fixture.ex's @expected_tenant_tables and
-      bumping the count assertion 27->29 -- the 3rd occurrence of this
-      exact defect class (REQ-181, REQ-195, now REQ-202), caught this time
-      by TEST-RUNNER's own C6 guard run rather than pre-empted, since no
-      anti-patterns.md entry existed yet to prompt ELIXIR-DEV to check for
-      it up front (now filed, see docs/anti-patterns.md); (5) no fifth
-      rework was needed beyond RELEASE-VALIDATOR's own PASS. RELEASE-
-      VALIDATOR independently re-verified all 14 acceptance criteria
-      against the real shipped code (own read of both moduledocs
-      side-by-side, own git diff confirming promotion_digest.ex's change
-      is a 9-line moduledoc-only addition with zero touch to
-      canonicalize/1, compute_plan_digest/1 or verify_digest/2, own read
-      of the migration's trigger DDL and comments, own Code.fetch_docs/1
-      read of both moduledocs, own git diff --stat confirming no route/
-      controller/web file touched, own full-suite reruns matching
-      TEST-RUNNER's recheck1 figures: 2865/2867, the only 2 failures being
-      the documented rustc-absent CheckToolchainTest baseline). Full
-      detail: handoffs/WF02-REQ202-20260830/release-validation-report-20260830.md.
-      docs/migration/stage-6-operational-cross-cutting.md updated to
-      record REQ-202 done.
+      WF02-REQ202-20260830 done (queue task 375, GH#720, stage S6).
+      Content-addressed artifact store shipped. Full detail:
+      handoffs/WF02-REQ202-20260830/release-validation-report-20260830.md.

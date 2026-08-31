@@ -11060,7 +11060,7 @@ requirements:
   - id: REQ-201
     title: Alerting hooks -- threshold detection with edge-triggered firing and retry/backoff delivery (OBS-06)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 374  # letflow-queue task id
     description: >

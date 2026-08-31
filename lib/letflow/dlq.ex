@@ -113,6 +113,22 @@ defmodule Letflow.Dlq do
   end
 
   # ===========================================================================
+  # count_entries/1 (REQ-201 OQ-2 — read-only aggregate for alert threshold)
+  # ===========================================================================
+
+  @doc """
+  Returns the total count of all `dlq_entries` rows in the given tenant
+  schema. Used by `Letflow.Obs.Alerts` to measure DLQ depth for the
+  `dlq_depth_threshold` alert trigger. No status/type filter — the alert
+  fires on total depth, regardless of status.
+  """
+  @spec count_entries(opts()) :: non_neg_integer()
+  def count_entries(opts) when is_list(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+    Repo.aggregate(Entry, :count, prefix: prefix)
+  end
+
+  # ===========================================================================
   # list/2 (design §3.2)
   # ===========================================================================
 

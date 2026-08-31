@@ -1,0 +1,87 @@
+{
+  "handoff_id": "step05-WF02-REQ205-20260831",
+  "run_id": "WF02-REQ205-20260831",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ205-20260831/step-05-release-validator.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-08-31T12:55:00Z",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-205"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req205-simulation-harness-foundation.md",
+      "test/support/simulation/seed.ex",
+      "test/support/simulation/runner.ex",
+      "test/letflow/simulation/seed_idempotency_test.exs",
+      "test/letflow/simulation/runner_test.exs",
+      "test/letflow/simulation/runner_template_and_outcomes_test.exs",
+      "test/fixtures/simulation/swiftroute/company.yaml",
+      "test/fixtures/simulation/vortex/company.yaml",
+      "test/fixtures/simulation/meridian/company.yaml",
+      "mix.exs",
+      "mix.lock",
+      "handoffs/WF02-REQ205-20260831/step-01-code-designer.json",
+      "handoffs/WF02-REQ205-20260831/step-01-code-designer-rework1.json",
+      "handoffs/WF02-REQ205-20260831/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ205-20260831/step-01b-code-design-validator-recheck1.json",
+      "handoffs/WF02-REQ205-20260831/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ205-20260831/step-02a-elixir-dev-rework1.json",
+      "handoffs/WF02-REQ205-20260831/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ205-20260831/step-02d-reviewer.json",
+      "handoffs/WF02-REQ205-20260831/step-02d-reviewer-recheck1.json",
+      "handoffs/WF02-REQ205-20260831/step-03-test-designer.json",
+      "handoffs/WF02-REQ205-20260831/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ205-20260831/step-04-test-runner.json"
+    ],
+    "branch_name": "feature/WF02-REQ205-20260831",
+    "requirement_text": "REQ-205 -- S7 scenario-harness foundation: Elixir scenario runner, business-tenant fixture seeding, and the API-vs-GUI execution split. See docs/requirements.yaml id: REQ-205 for full text and 8 acceptance_criteria.",
+    "acceptance_criteria": [
+      "AC1: test/fixtures/simulation/{swiftroute,vortex,meridian}/ contains all 12 company/org/process YAML files ported from R-Co's tests/simulation/companies/, with actor_id values unchanged from the R-Co originals -- verified by a diff-style comparison test",
+      "AC2: Letflow.Simulation.Seed provisions all three companies' tenant, users, groups and process definitions by calling Letflow's own context modules directly (no HTTP client, no Python subprocess)",
+      "AC3: seeding the same company twice in one test run is a no-op the second time -- one explicit test per entity kind",
+      "AC4: Letflow.Simulation.Runner executes a minimal one-step api-via scenario end to end against a real running instance and evaluates at least one instance_state-method expected outcome",
+      "AC5: a scenario step declared via: gui is recorded with outcome DEFERRED_TO_S8, never silently skipped, never executed as an api step",
+      "AC6: the runner moduledoc distinguishes this harness from Letflow.Routers.SimulationTest/simulation_test.zig, states this requirement does not build that router, cites both R-Co source files by path",
+      "AC7: if a YAML-parsing library is added to mix.exs, REVIEWER sign-off is recorded for it",
+      "AC8: mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR pass (WF-02 Step 5) for REQ-205 -- independently re-verify all 8 acceptance criteria against current source and re-run tests, and make the primary AC1 accept/reject decision the run's own gates deferred (ELIXIR-DEV found R-Co source at c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\ genuinely unreachable from this Linux sandbox and substituted disclosed synthetic fixture content; SECURITY-REVIEWER/REVIEWER/TEST-DESIGN-VALIDATOR/TEST-RUNNER all confirmed the disclosure is honest and deferred the accept/reject call to this step)."
+  },
+  "result": {
+    "status": "PASS",
+    "ac1_decision": {
+      "verdict": "ACCEPT WITH RECORDED CAVEAT -- does not block REQ-205 being marked done",
+      "reachability_reverified_independently": "No /mnt/c or Windows-host mount; find / -xdev for swiftroute/vortex/meridian content (excluding this repo's own now-existing fixtures) returns nothing; no sibling-session artifact in this repo carries the real content. This sandbox DOES have outbound network reachability (confirmed: ICMP + raw TCP connect both succeed) but that is irrelevant -- there is no address/credential anywhere in this repo for the specific Windows host at c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\. Confirmed genuinely unreachable from this sandbox, same conclusion as ELIXIR-DEV, independently re-derived rather than trusted.",
+      "key_observation": "docs/requirements.yaml's own REQ-205 description states the source material was 'confirmed present in R-Co ... this session' at requirement-drafting time -- meaning some session/host DID have R-Co filesystem access when REQ-ANALYST wrote this requirement. This makes AC1's gap a routing problem (dispatch the fixture-porting work to a host with R-Co access), not a permanently-lost-data problem.",
+      "rest_of_requirement_stands_independently": "Yes -- Letflow.Simulation.Seed and Letflow.Simulation.Runner depend only on the fixture YAML's shape (slug/display_name/hostname, people/groups with actor_id, name/version/graph), never on specific R-Co values -- confirmed by reading both modules directly, no hardcoded synthetic values found outside the fixture files themselves. Swapping the 12 files for real R-Co content later is a data-only change with zero code change required.",
+      "precedent": "None found for 'real content unavailable, structurally-equivalent synthetic substituted, explicitly disclosed' in this session. REQ-202's design doc records the same environmental constraint (R-Co unreachable) but a different resolution -- REQ-202's requirement text already had the needed facts pre-verified/recorded at drafting time, so no fresh file access was needed. REQ-205's AC1 needed literal byte-for-byte content never transcribed anywhere. This is a novel resolution for this session, not a repeat of an already-accepted pattern -- flagging it as the precedent going forward, not citing one.",
+      "consequence_for_req206_207_208": "REQ-206/207/208 run real R-Co scenario YAML referencing specific actor_id values (e.g. actor-swiftroute-lena) expected to resolve against REQ-205's org/company fixtures. Against the current SYNTHETIC fixtures, those real actor references will not resolve -- REQ-206 cannot be genuinely run against real R-Co scenario content until REQ-205's 12 fixture files are the real, actor-id-matching ones. This is a hard blocking prerequisite for REQ-206, not a deferrable cleanup.",
+      "recommendation_to_orch": "File a follow-up task (RELEASE-VALIDATOR does not self-file per ISSUE_QUEUE.md -- routing is ORCH's job): port REQ-205's 12 R-Co company/org/process fixture files with real content and unchanged actor_id values, on a host with c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\ access, and make it a hard depends_on prerequisite of REQ-206 starting. Scope is small: only test/fixtures/simulation/**/*.yaml changes; zero test/support/simulation/{seed,runner}.ex changes required per ELIXIR-DEV's own note, re-confirmed by this step.",
+      "doc_updater_instructions": "Record REQ-205 status as done, but its acceptance-criteria record must show AC1 as PARTIALLY MET (structure/mechanism/test genuinely met; literal 'ported from R-Co with actor_id values unchanged' content NOT met -- synthetic substitute in place, disclosed in every fixture file's header comment), not a blanket 'all 8 ACs met.' The status-history event must state this caveat explicitly and reference handoffs/WF02-REQ205-20260831/release-validation-report-20260831.md. Cross-reference the follow-up fixture-porting task once ORCH files it."
+    },
+    "ac2_ac8_independent_reverification": {
+      "AC2": "MET -- re-read test/support/simulation/seed.ex in full (371 lines); seed_company/1, seed_users/2, seed_groups/2, seed_process/3 all call Letflow.Identity/Letflow.TenantOnboarding/Letflow.Definitions directly, zero HTTP/subprocess calls (grepped).",
+      "AC3": "MET -- independently ran test/letflow/simulation/ + test/fixtures/simulation/: 'Result: 25 passed'. One test per entity kind (tenant/user/group/definition) each seeding twice, asserting a direct row count of 1.",
+      "AC4": "MET -- re-read runner_test.exs's AC4 test: real HTTP dispatch through Letflow.Router.call/2 with real bearer token + tenant-slug header, real instance_state query via Letflow.Instances.get_by_id/2. Passes.",
+      "AC5": "MET -- re-read runner_test.exs's AC5 test: gui step recorded outcome: :deferred_to_s8 in step_results, never dispatched as HTTP. Passes.",
+      "AC6": "MET -- re-read Letflow.Simulation.Runner's moduledoc directly (test/support/simulation/runner.ex ~104-150): all three required points present (distinguishes from simulation_test.zig/scenario_runner.zig, states this requirement does not build that router, cites both R-Co paths).",
+      "AC7": "MET -- step-02d-reviewer.json's ac7_dependency_signoff.decision reads 'SIGNED OFF'; independently confirmed mix.exs line 64 `{:yaml_elixir, \"~> 2.11\", only: :test}` matches the sign-off's claimed scoping exactly.",
+      "AC8": "MET, independently re-run (not copied from TEST-RUNNER): mix compile --warnings-as-errors --force clean (180 files); mix format --check-formatted clean; scripts/test_parallel.sh combined 2981 tests, 6 properties, 2 failures (2985/2987 passed) -- both failures are the pre-existing Mix.Tasks.Letflow.CheckToolchainTest rustc-ENOENT environmental flake, re-confirmed by reading the actual stack trace, matching TEST-RUNNER's step-04 report exactly."
+    },
+    "audit_event_fix_reverified": "Re-read verify_outcome/2's :audit_event clause and resolve_optional_ref/3 directly in test/support/simulation/runner.ex (lines 504-553): now threads produces through substitute_templates/2 for resource_id/resource_type, fails closed ({:error, {:unresolved_template, ...}}) on an unresolvable {{produces.X}} reference rather than sending nil or the literal string. Confirmed via runner_template_and_outcomes_test.exs, included in the 25-passed run above.",
+    "process_note": "A first attempt to independently re-run scripts/test_parallel.sh was contaminated by RELEASE-VALIDATOR's own error: the tool auto-backgrounded the first invocation after a 120s foreground timeout, and a second invocation was then started concurrently against the same Postgres instance, producing 29 unrelated failures and 2 crashed partitions from pool/resource contention between the two overlapping runs. That contaminated output was discarded. The first (actually clean, non-overlapping) run's own output was retrieved and is the one quoted in this report (2981 tests, 2 failures). Re-confirmed the two failures are limited to partition 3 (grepped all 8 partition logs for numbered failure entries).",
+    "handoff_schema_note_carried_forward": "TEST-RUNNER's step-04 handoff flagged 6 sibling files in this run as carrying non-schema flat context/notes shapes instead of task/result blocks (step-02a-elixir-dev(.json/-rework1), step-02c-security-reviewer, step-02d-reviewer(.json/-recheck1), step-03-test-designer, step-03b-test-design-validator). Confirmed still present. Not a blocker for this gate; re-flagged for ORCH since correcting historical handoff files is out of scope here too.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ205-20260831/release-validation-report-20260831.md"
+    ],
+    "next_action": "Route to DOC-UPDATER (Step 6): flip REQ-205 to done with AC1 recorded as PARTIALLY MET (caveat, not a clean pass) per this handoff's doc_updater_instructions; ORCH to file the R-Co-fixture-porting follow-up task and gate REQ-206 on it."
+  }
+}

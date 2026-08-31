@@ -82,6 +82,7 @@ defmodule Letflow.Webhooks do
   alias Letflow.TenantProvisioning
   alias Letflow.Webhooks.Delivery
   alias Letflow.Webhooks.Subscription
+  alias Letflow.Webhooks.UrlValidator
 
   @typedoc "Threaded into every `Repo` call below — `:prefix` derived by the caller from `Letflow.Api.Context.scoped_repo_opts/1`, never from request data."
   @type opts :: [prefix: String.t()]
@@ -143,12 +144,15 @@ defmodule Letflow.Webhooks do
   """
   @spec create(create_attrs(), opts()) ::
           {:ok, %{subscription: Subscription.t(), hmac_secret_once: String.t()}}
+          | {:error, :target_url_not_allowed}
           | {:error, {:secret_write_failed, term()}}
           | {:error, Ecto.Changeset.t()}
   def create(attrs, opts) when is_map(attrs) and is_list(opts) do
     prefix = Keyword.fetch!(opts, :prefix)
+    target_url = Map.get(attrs, :target_url, "")
 
-    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+    with :ok <- UrlValidator.validate(target_url),
+         {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
       plaintext = resolve_secret_plaintext(attrs)
       subscription_id = Ecto.UUID.generate()
       created_at = current_timestamp()
@@ -367,6 +371,21 @@ defmodule Letflow.Webhooks do
   # in mix.exs today. Flagged as an open question for REVIEWER (design §7
   # OQ-7): a future requirement may switch this to Req.
   defp dispatch_http(target_url, json_body, signature) do
+    dispatch_http(target_url, json_body, signature, &UrlValidator.default_resolver/1)
+  end
+
+  # Test-injectable variant for DNS-rebinding tests (AC4 per design §6.2).
+  defp dispatch_http(target_url, json_body, signature, dns_resolver) do
+    case UrlValidator.validate(target_url, dns_resolver) do
+      {:error, :target_url_not_allowed} ->
+        {:FAILED, nil, "target_url not allowed (SSRF protection)"}
+
+      :ok ->
+        do_dispatch_http(target_url, json_body, signature)
+    end
+  end
+
+  defp do_dispatch_http(target_url, json_body, signature) do
     headers = [
       {~c"content-type", ~c"application/json"},
       {String.to_charlist(@signature_header), String.to_charlist(signature)}

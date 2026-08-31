@@ -1,0 +1,38 @@
+{
+  "handoff_id": "step01b-WF02-REQ204-20260831",
+  "run_id": "WF02-REQ204-20260831",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ204-20260831/step-01b-code-design-validator.json",
+  "created_at": "2026-08-31T03:00:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-204"],
+    "branch_name": "feature/WF02-REQ204-20260831",
+    "artifacts_in": [
+      "lib/letflow/design/req204-ssrf-validation.md",
+      "docs/requirements.yaml (REQ-204 section, lines 11394-11558)"
+    ],
+    "requirement_text": "REQ-204: SSRF validation for webhook target_url (create-time and defense-in-depth at delivery). 9 acceptance criteria: (1) non-https scheme rejection; (2) 5 explicit private-range rejections (127.0.0.1, 169.254.169.254, 10.0.0.5, 172.16.0.5, 192.168.0.5); (3) legitimate https target succeeds; (4) deliver/3 DNS-rebinding defense test; (5) no-redirect regression test; (6) INV-9 addition to security-invariants.md; (7) moduledoc states exact ranges as Letflow's own choice; (8) mix test and mix compile --warnings-as-errors pass; (9) no unrelated scope change."
+  },
+  "task": {
+    "description": "Gate the CODE-DESIGNER's design artefact at lib/letflow/design/req204-ssrf-validation.md. Verify: (1) all 9 acceptance criteria are addressed; (2) no implementation code is present; (3) the design is unambiguous enough for ELIXIR-DEV to implement without interpretation gaps; (4) DNS injection hook is present and sufficient for testability; (5) INV-9 text is present and follows INV-1..INV-8 format (Rule/Reference/How to verify/Severity).",
+    "acceptance_criteria": [
+      "All 9 acceptance criteria from REQ-204 are explicitly addressed in the design",
+      "No Elixir implementation code (only @spec signatures and conceptual pseudocode)",
+      "Module boundary decision is stated with reasoning",
+      "DNS resolver injection hook is present and sufficient for DNS-rebinding test (AC4)",
+      "INV-9 text is present, follows Rule/Reference/How to verify/Severity format",
+      "Design is unambiguous: ELIXIR-DEV can implement it without interpretation gaps"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

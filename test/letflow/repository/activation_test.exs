@@ -126,7 +126,7 @@ defmodule Letflow.Repository.ActivationTest do
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
 
-  defp version_attrs(overrides \\ []) do
+  defp version_attrs(overrides) do
     Map.merge(
       %{
         artifact_kind: :definition,

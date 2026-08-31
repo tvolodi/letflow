@@ -28,8 +28,8 @@ two in-repo precedents (`Letflow.Definitions.SolutionPackInstall.insert_changese
 | `:status` | `:pending` (`Ecto.Enum`, entry.ex line 61) | Drop from `cast/3` entirely. Struct default applies on `%Entry{}` construction, unaffected by `cast/3` no longer touching it. |
 | `:retry_count` | `0` (entry.ex line 55) | Drop from `cast/3` entirely. Same reasoning. |
 | `:retry_history` | `[]` (entry.ex line 54) | Drop from `cast/3` entirely. Same reasoning. Not currently in `validate_required/2`'s list either (confirmed by ISSUE-FIXER) — no `validate_required/2` change needed for this field. |
-| `:tenant_id` | none | Drop from `cast/3`'s field list. Add an explicit `put_change(:tenant_id, ...)` call reading `:tenant_id` out of `attrs`, inside `insert_changeset/2`, before `validate_required/2`. |
-| `:created_at` | none | Drop from `cast/3`'s field list. Add an explicit `put_change(:created_at, ...)` call reading `:created_at` out of `attrs`, inside `insert_changeset/2`, before `validate_required/2`. |
+| `:tenant_id` | none | Drop from `cast/3`'s field list. Add an explicit `put_change/3` call for `:tenant_id`, reading its value out of `attrs`, inside `insert_changeset/2`, before `validate_required/2`. |
+| `:created_at` | none | Drop from `cast/3`'s field list. Add an explicit `put_change/3` call for `:created_at`, reading its value out of `attrs`, inside `insert_changeset/2`, before `validate_required/2`. |
 
 This matches `candidate_scope_for_whoever_picks_this_up` in ISS-0381.yaml and
 the diagnosis's `acceptance_criteria` verbatim — nothing added, nothing
@@ -37,57 +37,66 @@ narrowed.
 
 ## 3. `cast/3`'s post-fix field list
 
-`cast/3`'s second argument (the castable-fields list) becomes exactly these
-13 atoms, in this order (the 13 non-protected fields already in the list,
-unchanged in order — only the 5 protected atoms are removed from the
-existing 18-element list):
+The CURRENT `cast/3` call (entry.ex lines 107-125) has exactly 17 elements,
+counted field by field directly from the source: `tenant_id`, `entry_type`,
+`instance_id`, `reference_id`, `reason`, `full_reason`, `error_detail`,
+`error_chain`, `source_payload`, `context_json`, `retry_limit`,
+`first_failed_at`, `last_failed_at`, `status`, `retry_count`,
+`retry_history`, `created_at` — 17 atoms, not 18. (`next_retry_at` is a
+schema field but has never appeared in `cast/3`'s list at all, before or
+after this fix; it must not be counted here.)
 
-```
-:tenant_id  — REMOVED (moves to put_change/3, see §4)
-:entry_type
-:instance_id
-:reference_id
-:reason
-:full_reason
-:error_detail
-:error_chain
-:source_payload
-:context_json
-:retry_limit
-:first_failed_at
-:last_failed_at
-:status          — REMOVED (schema default)
-:retry_count     — REMOVED (schema default)
-:retry_history   — REMOVED (schema default)
-:created_at      — REMOVED (moves to put_change/3, see §4)
-```
+Disposition of each of the 17, one row per atom:
 
-Resulting `cast/3` list (13 fields, same relative order as today minus the 5
-removed): `:entry_type, :instance_id, :reference_id, :reason, :full_reason,
-:error_detail, :error_chain, :source_payload, :context_json, :retry_limit,
-:first_failed_at, :last_failed_at` — plus `:tenant_id` is NOT in this list
-(moved to `put_change/3`).
+| # | Field | Post-fix disposition |
+|---|---|---|
+| 1 | `:tenant_id` | REMOVED — moves to `put_change/3`, see §4 |
+| 2 | `:entry_type` | stays in `cast/3` |
+| 3 | `:instance_id` | stays in `cast/3` |
+| 4 | `:reference_id` | stays in `cast/3` |
+| 5 | `:reason` | stays in `cast/3` |
+| 6 | `:full_reason` | stays in `cast/3` |
+| 7 | `:error_detail` | stays in `cast/3` |
+| 8 | `:error_chain` | stays in `cast/3` |
+| 9 | `:source_payload` | stays in `cast/3` |
+| 10 | `:context_json` | stays in `cast/3` |
+| 11 | `:retry_limit` | stays in `cast/3` |
+| 12 | `:first_failed_at` | stays in `cast/3` |
+| 13 | `:last_failed_at` | stays in `cast/3` |
+| 14 | `:status` | REMOVED — schema default applies |
+| 15 | `:retry_count` | REMOVED — schema default applies |
+| 16 | `:retry_history` | REMOVED — schema default applies |
+| 17 | `:created_at` | REMOVED — moves to `put_change/3`, see §4 |
 
-Note the literal list above is prose/data specification, not a code block to
-copy verbatim into a function body — ELIXIR-DEV writes the actual `cast/3`
-call.
+5 rows are REMOVED, 12 rows stay. The resulting post-fix `cast/3` field list
+therefore has 12 elements, in the same relative order as today: `entry_type`,
+`instance_id`, `reference_id`, `reason`, `full_reason`, `error_detail`,
+`error_chain`, `source_payload`, `context_json`, `retry_limit`,
+`first_failed_at`, `last_failed_at`. This set is identical, atom for atom, to
+the 12-key allowlist `enqueue/2` already passes to `Map.take/2`
+(`lib/letflow/dlq.ex:87-100`) — an independent cross-check confirming 12 is
+correct for the post-fix list.
+
+The table above is prose/data specification, not a code block to copy
+verbatim into a function body — ELIXIR-DEV writes the actual `cast/3` call.
 
 ## 4. `put_change/3` placement in the pipeline
 
 Exact pipeline order inside `insert_changeset/2`, stage by stage:
 
-1. **`cast(entry, attrs, [...13 fields from §3...])`** runs first. This is
+1. **The `cast/3` call, using the 12-field list from §3,** runs first. This is
    mandatory — `cast/3` is what turns `entry` (a bare `%Entry{}` struct) into
    an `%Ecto.Changeset{}` struct in the first place; `put_change/3` requires
    a changeset as its first argument, so it cannot run before `cast/3`.
-2. **`put_change(:tenant_id, Map.get(attrs, :tenant_id))`** — reads
-   `:tenant_id` out of the same `attrs` map `cast/3` was given, writes it
-   directly onto the changeset's `:changes`, bypassing `cast/3`'s
-   allowed-fields filter entirely for this key.
-3. **`put_change(:created_at, Map.get(attrs, :created_at))`** — same
-   mechanism, for `:created_at`.
-4. **`validate_required([:tenant_id, :entry_type, :status, :retry_count, :created_at])`**
-   runs last, unchanged from today's list. It must run AFTER both
+2. **A `put_change/3` call for `:tenant_id`** — reads the `:tenant_id` entry
+   out of the same `attrs` map `cast/3` was given, writes it directly onto
+   the changeset's `:changes`, bypassing `cast/3`'s allowed-fields filter
+   entirely for this key.
+3. **A `put_change/3` call for `:created_at`** — same mechanism, reading the
+   `:created_at` entry out of `attrs`.
+4. **The existing `validate_required/2` call**, listing the same five field
+   names it lists today (`:tenant_id`, `:entry_type`, `:status`,
+   `:retry_count`, `:created_at`), unchanged. It must run AFTER both
    `put_change/3` calls, not before — `validate_required/2` inspects the
    changeset's current `:changes`/`:data` state at the point it runs, so if
    it ran before `put_change/3` it would see `:tenant_id`/`:created_at` as
@@ -100,18 +109,20 @@ relative to one another; both must occur after step 1 and before step 4.
 ## 5. Why this doesn't create a silent-nil hole
 
 The task's own concern: since `attrs` is caller-controlled at the
-`insert_changeset/2` boundary (not only at `enqueue/2`'s), does
-`put_change(:tenant_id, Map.get(attrs, :tenant_id))` silently write `nil`
-when `attrs` lacks the `:tenant_id` key, and does `validate_required/2` still
-catch that?
+`insert_changeset/2` boundary (not only at `enqueue/2`'s), does the
+`put_change/3` call for `:tenant_id` (reading its value out of `attrs`)
+silently write `nil` when `attrs` lacks the `:tenant_id` key, and does
+`validate_required/2` still catch that?
 
 Answer: yes, `validate_required/2` still catches it, and this is not a new
 hole — `cast/3` has the identical behavior today for any field whose value is
 `nil` or missing. `Ecto.Changeset.validate_required/2`'s documented contract
 treats a field as missing if the changeset's effective value for that field
 (from `:changes` if present there, else falling back to `:data`) is `nil` or
-not present at all. `put_change(:tenant_id, nil)` sets `changeset.changes.tenant_id
-= nil` explicitly; `validate_required/2` sees that `nil` and adds the
+not present at all. When `attrs` lacks the `:tenant_id` key, the
+`put_change/3` call reads a `nil` and writes `nil` directly into
+`changeset.changes` for `:tenant_id`; `validate_required/2` sees that `nil`
+and adds the
 `"can't be blank"` error for `:tenant_id`, exactly as it would if `cast/3` had
 cast a `nil`/missing `:tenant_id` today. So: a call to `insert_changeset/2`
 with an `attrs` map lacking `:tenant_id` or `:created_at` still produces an
@@ -180,7 +191,7 @@ text stating the actual post-fix mechanism:
   both keys out of the `attrs` map it receives. State plainly: because
   neither key is in `cast/3`'s field list, a caller-supplied `attrs` map
   containing keys with those two names still reaches the changeset (via
-  `put_change/3`'s own `Map.get(attrs, ...)` read) — the guarantee this fix
+  `put_change/3`'s own read of `attrs`) — the guarantee this fix
   adds is that `status`/`retry_count`/`retry_history` can no longer be
   influenced by `cast/3` regardless of what `attrs` contains, and that the
   changeset's structure now matches what the docstring says, rather than
@@ -193,8 +204,9 @@ issue and this fix do not touch either function.
 
 ## 8. `validate_required/2` — unchanged list, confirmed correct
 
-`validate_required([:tenant_id, :entry_type, :status, :retry_count,
-:created_at])` (entry.ex line 126) needs no edit. All five listed fields
+The existing `validate_required/2` call (entry.ex line 126), listing
+`:tenant_id`, `:entry_type`, `:status`, `:retry_count`, and `:created_at`,
+needs no edit. All five listed fields
 still have a value in the changeset's effective state after the fix's
 pipeline (§4): `:tenant_id`/`:created_at` via `put_change/3`, `:status`/
 `:retry_count` via the struct's own default (present in `changeset.data`
@@ -221,10 +233,10 @@ confirmed no direct `insert_changeset/2` call exists there today).
      "intended/trusted" tenant_id the test separately supplies via
      `put_change/3`'s actual read path — i.e., the test's `attrs` map's
      `:tenant_id` key is exactly what the fixed `put_change/3` call will
-     read, so the test is really asserting "whatever is in `attrs[:tenant_id]`
-     is what lands on the changeset, and nothing else (e.g. no stale/cached
-     struct field, no double-write) can override it" — see the more
-     targeted framing below.
+     read, so the test is really asserting that whatever value is at the
+     `attrs` map's `:tenant_id` entry is what lands on the changeset, and
+     nothing else (e.g. no stale/cached struct field, no double-write) can
+     override it — see the more targeted framing below.
    - `:status` set to a value OTHER than `:pending` (e.g. `:resolved` or
      `:discarded`) — a value the caller should never be able to force at
      insert time.
@@ -236,24 +248,24 @@ confirmed no direct `insert_changeset/2` call exists there today).
      since `validate_required/2` requires it) so the changeset's validity
      turns only on the protected-field assertions, not on an unrelated
      missing-required-field error.
-3. Call `Letflow.Dlq.Entry.insert_changeset(%Letflow.Dlq.Entry{}, attrs)`
-   directly.
+3. Call `Letflow.Dlq.Entry.insert_changeset/2`, passing a freshly-constructed
+   `%Entry{}` struct and the `attrs` map built in step 2.
 4. Assert on the resulting `%Ecto.Changeset{}`:
-   - `changeset.changes[:status]` is NOT present (or, if present due to
-     `Ecto.Changeset.get_field/3` falling back, `get_field(changeset,
-     :status) == :pending`, the schema default) — i.e., the caller-supplied
-     `:resolved`/`:discarded` value from `attrs` did NOT reach the
-     changeset's effective `:status`.
-   - `get_field(changeset, :retry_count) == 0`, not `7`.
-   - `get_field(changeset, :retry_history) == []`, not the non-empty list
+   - the `:status` entry is NOT present in the changeset's `:changes` map
+     (or, if checked via `Ecto.Changeset.get_field/3`'s fallback-to-default
+     behavior, that function returns `:pending`, the schema default, for
+     `:status`) — i.e., the caller-supplied `:resolved`/`:discarded` value
+     from `attrs` did NOT reach the changeset's effective `:status`.
+   - `get_field/3` for `:retry_count` returns `0`, not `7`.
+   - `get_field/3` for `:retry_history` returns `[]`, not the non-empty list
      supplied.
-   - `get_field(changeset, :tenant_id)` is exactly the value the fixed
-     `put_change/3` call reads from `attrs[:tenant_id]` (this proves the
-     MECHANISM — `put_change/3` — is what's populating it, not `cast/3`; see
-     the fail-first framing below for how this specific assertion
-     distinguishes pre-fix from post-fix behavior).
-   - `get_field(changeset, :created_at)` is exactly `attrs[:created_at]`'s
-     value (same reasoning).
+   - `get_field/3` for `:tenant_id` returns exactly the value the fixed
+     `put_change/3` call reads from the `attrs` map's `:tenant_id` entry
+     (this proves the MECHANISM — `put_change/3` — is what's populating it,
+     not `cast/3`; see the fail-first framing below for how this specific
+     assertion distinguishes pre-fix from post-fix behavior).
+   - `get_field/3` for `:created_at` returns exactly the value at `attrs`'s
+     `:created_at` entry (same reasoning).
 
 **The fail-first proof (the part that makes this a genuine regression test,
 not a restatement of intended behavior):**
@@ -261,22 +273,23 @@ not a restatement of intended behavior):**
 The sharpest, unambiguous fail-first assertion is on `:status`/
 `:retry_count`/`:retry_history` specifically, NOT on `:tenant_id`/
 `:created_at` — because pre-fix, `cast/3` casts all five fields from `attrs`
-verbatim, so pre-fix the test's `attrs[:status] = :resolved` DOES reach
-`get_field(changeset, :status)` (equal to `:resolved`, not `:pending`) —
-the assertion `get_field(changeset, :status) == :pending` FAILS against
-pre-fix code and PASSES post-fix (where `:status` is absent from `cast/3`'s
-field list, so `cast/3` never touches it, and the struct default `:pending`
-is what `get_field/3` returns). Same fail-first shape for `:retry_count` (
-pre-fix: `7` reaches the changeset via `cast/3`; post-fix: `0`, the schema
-default) and `:retry_history` (pre-fix: the non-empty list reaches the
-changeset; post-fix: `[]`, the schema default).
+verbatim, so pre-fix the test's `attrs` value of `:resolved` for `:status`
+DOES reach `get_field/3`'s result for `:status` (equal to `:resolved`, not
+`:pending`) — the assertion that `get_field/3` returns `:pending` for
+`:status` FAILS against pre-fix code and PASSES post-fix (where `:status`
+is absent from `cast/3`'s field list, so `cast/3` never touches it, and the
+struct default `:pending` is what `get_field/3` returns). Same fail-first
+shape for `:retry_count` (pre-fix: `7` reaches the changeset via `cast/3`;
+post-fix: `0`, the schema default) and `:retry_history` (pre-fix: the
+non-empty list reaches the changeset; post-fix: `[]`, the schema default).
 
 For `:tenant_id`/`:created_at`, note precisely what the fail-first test CAN
 and CANNOT show, per §5's nuance: because both fields' values are still read
 from the same `attrs` map (via `cast/3` pre-fix, via `put_change/3`
-post-fix), a test that only checks "the changeset's `:tenant_id` equals
-`attrs[:tenant_id]`" passes on BOTH sides of the fix and is not a
-discriminating regression test for those two fields specifically. The
+post-fix), a test that only checks that the changeset's `:tenant_id` equals
+the value at the `attrs` map's `:tenant_id` entry passes on BOTH sides of
+the fix and is not a discriminating regression test for those two fields
+specifically. The
 discriminating assertion for `:tenant_id`/`:created_at` is a MECHANISM
 check, not a value check: assert directly on `changeset.changes` structure —
 e.g. that a changeset built from an `attrs` map with `:tenant_id` supplied as

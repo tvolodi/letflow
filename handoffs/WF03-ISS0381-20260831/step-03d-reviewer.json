@@ -1,0 +1,70 @@
+{
+  "handoff_id": "WF03-ISS0381-20260831-step03d",
+  "run_id": "WF03-ISS0381-20260831",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0381-20260831/step-03d-reviewer.json",
+  "created_at": "2026-08-31T00:00:00Z",
+  "started_at": "2026-08-31T00:00:00Z",
+  "completed_at": "2026-08-31T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "issue_id": "ISS-0381",
+    "former_local_id": "ISS-0353",
+    "queue_task_id": 381,
+    "github_issue": 753,
+    "severity": "MINOR",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0381-20260831/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0381-20260831/step-03c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/dlq/entry.ex",
+      "lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md"
+    ]
+  },
+  "task": {
+    "description": "Hard-gate ELIXIR-DEV's fix to Letflow.Dlq.Entry.insert_changeset/2 (ISS-0381) for idiomatic Ecto usage, supervision integrity, scope discipline, and decision-record consistency, per WF-03's step sequence (after SECURITY-REVIEWER's PASS, before TEST-DESIGNER)."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-read the issue, the approved design, both handoffs, the actual git diff, the shipped entry.ex, and the two named precedent modules (SolutionPackInstall, PromotionReview). Independently re-ran mix compile --warnings-as-errors (clean), mix format --check-formatted (clean, exit 0), and mix test test/letflow/dlq_test.exs test/letflow/routers/dlq_test.exs test/letflow/engine_dlq_landing_test.exs (36 passed, 0 failures, 38.6s) -- confirms ELIXIR-DEV's reported 36/36 independently rather than trusting the report. Observed the actual INSERT SQL logged during the happy-path test myself: INSERT INTO dlq_entries (status, tenant_id, entry_type, retry_count, retry_history, created_at, id) VALUES (:pending, <tenant_id>, \"event\", 0, [], <created_at>, <id>) -- confirms end-to-end correctness of the new mechanism.",
+    "idiomatic_ecto_check": {
+      "verdict": "PASS",
+      "detail": "The post-fix cast/3 -> put_change/3 x2 -> validate_required/2 pipeline matches the shape and ordering convention of the two named precedents. SolutionPackInstall.insert_changeset/2 and PromotionReview.insert_changeset/2 both use cast/3 (with a narrowed field list that structurally excludes the protected fields) followed directly by validate_required/2 -- neither precedent needed put_change/3 because none of their protected fields lack a schema default AND need to be caller-supplied at insert time (SolutionPackInstall's status/uninstalled_at, PromotionReview's status/approved_by/approved_at/superseded_by/row_version are all either defaulted-and-never-caller-supplied at insert, or simply absent from insert_changeset's job entirely). Entry.insert_changeset/2 is different in kind, not merely in choice of idiom: tenant_id and created_at MUST be caller-supplied per-insert (no static schema default is correct for either), which cast/3 alone cannot enforce without being reachable-and-therefore-overridable by attrs. put_change/3 immediately after cast/3 and before validate_required/2 is the correct, idiomatic Ecto mechanism for 'set this from a trusted source, unconditionally, bypassing the cast allowlist' -- this is standard practice (see Ecto's own docs on put_change/3 for exactly this pattern) and is not scope creep or a novel abstraction; it is the smallest correct primitive for the job. Formatting (pipe chaining, field list layout, one field per line for the >3-element list) matches the surrounding file's own established style, and mix format --check-formatted confirms it program matically."
+    },
+    "supervision_check": {
+      "verdict": "N/A",
+      "detail": "This is a plain Ecto.Schema changeset function, no process, no gen_statem, no supervision tree involvement -- correctly matches the module's own moduledoc statement that it is 'Ordinary Ecto.Schema, no process, no gen_statem.' Nothing in this diff touches Letflow.InstanceSupervisor or any process boundary."
+    },
+    "scope_check": {
+      "verdict": "PASS",
+      "detail": "git diff main --stat confirms only two files outside handoffs/: lib/letflow/design/iss0381-dlq-entry-insert-changeset-fix.md (the design doc, additive) and lib/letflow/dlq/entry.ex (26 lines changed: 17 insertions, 9 deletions net). lib/letflow/dlq.ex is confirmed byte-for-byte untouched (also independently confirmed by SECURITY-REVIEWER). No router/controller/Plug file touched. No unrelated refactoring: the diff is confined to insert_changeset/2's cast list, the two put_change/3 additions, and the docstring rewrite -- retry_changeset/2 and discard_changeset/2 are untouched, as the design mandated in its §7 scope note."
+    },
+    "docstring_accuracy_check": {
+      "verdict": "PASS",
+      "detail": "Read the actual committed docstring text (entry.ex lines 98-114), not ELIXIR-DEV's paraphrase of it. It accurately states: (1) status/retry_count/retry_history are excluded from cast/3 and rely on Ecto.Schema struct defaults; (2) tenant_id/created_at are excluded from cast/3 and set via two explicit put_change/3 calls reading attrs; (3) explicitly and correctly discloses the residual property -- a caller-supplied attrs map containing :tenant_id/:created_at keys still reaches the changeset via put_change/3's own read of attrs, so the guarantee added is specifically that status/retry_count/retry_history can no longer be cast-influenced, not a blanket 'nothing in attrs can influence anything.' This matches actual runtime behavior verified by the mix test run above and is a materially more honest docstring than the pre-fix version, which flatly claimed all five fields were 'deliberately not castable' when only three of the five now are (in the relevant cast-vs-default sense) and the other two are put_change-sourced from the same attrs map, not immune to attrs content. No overclaim found."
+    },
+    "dead_default_arg_check": {
+      "verdict": "PASS",
+      "detail": "grep '\\\\\\\\ ' lib/letflow/dlq/entry.ex: zero hits. No default-argument pattern present anywhere in the changed function; put_change(:tenant_id, Map.get(attrs, :tenant_id)) reads attrs directly with no default value silently masking a missing key -- a missing key resolves to nil, which put_change/3 writes into :changes as nil, which validate_required/2 then correctly rejects (verified against Ecto.Changeset semantics by SECURITY-REVIEWER's step-03c handoff and re-confirmed by my own read of the code)."
+    },
+    "decision_record_consistency_check": {
+      "verdict": "PASS, with one follow-up finding reported (not fixed here)",
+      "detail": "No decision record contradiction: this is a narrow changeset-mechanism fix inside a single module, does not touch schema-per-tenant placement (0003), web framework choice, or any other settled decision. Grepped lib/ for the phrase pattern 'deliberately (not|NOT) castable' plus 'deliberately NOT' broadly across every insert_changeset/2-bearing module in the codebase to check whether any OTHER schema has the same docstring-vs-cast-list mismatch this issue found in Entry. Checked every other hit that names specific fields as excluded: Letflow.Definitions.PromotionAssertionRun.insert_changeset/2 (promotion_assertion_run.ex:84-94) claims status/sandbox_id/assertions_total/assertions_passed/assertions_failed/failing_assertion_ids/teardown_error/completed_at are 'deliberately NOT castable' -- its actual cast/3 call (line 94) lists only [:review_id, :idempotency_key, :plan_digest], genuinely excluding all eight named fields. Matches its docstring. Letflow.EventStore.Event.insert_changeset/2 (event.ex:122-124) claims global_seq is 'deliberately not castable' -- its cast/3 call uses @cast_fields (lines 94-104), which does not include :global_seq. Matches its docstring. SolutionPackInstall and PromotionReview (already-cited precedents) both independently reconfirmed clean. No other schema module in lib/ was found with the Entry-style mismatch (docstring naming a field as excluded while cast/3's literal field list still includes it). This confirms the issue's own framing was correct: Entry was the sole outlier, this is a closed, one-off fix, not something needing a broader sweep. No follow-up issue filed -- there is nothing further to find here."
+    },
+    "type_safety_observation": {
+      "verdict": "not blocking, no new finding beyond what's already tracked",
+      "detail": "No new class of runtime-only-catchable invalid state was introduced by this diff. The existing validate_required/2 field list already provides the type-safety backstop for tenant_id/created_at being present; put_change/3 does not introduce a new gap that a struct/@type change could close beyond what already exists. Not filing a new docs/issues/ entry for this dimension."
+    },
+    "verification_performed": {
+      "mix_compile": "mix compile --warnings-as-errors -> clean, no output, no warnings",
+      "mix_format": "mix format --check-formatted -> exit 0, no diff",
+      "mix_test": "mix test test/letflow/dlq_test.exs test/letflow/routers/dlq_test.exs test/letflow/engine_dlq_landing_test.exs -> Result: 36 passed, 0 failures, 38.6s -- independently re-run, not trusted from ELIXIR-DEV's report alone"
+    },
+    "issues": []
+  }
+}

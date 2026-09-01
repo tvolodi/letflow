@@ -46,8 +46,35 @@ defmodule Letflow.Plugs.ApiPipeline do
   use Plug.Router
 
   # 2 MB cap — matches R-Co's `max_body_size` default; large enough for any
-  # single-workflow payload while preventing unbounded reads.
-  plug(Plug.Parsers, parsers: [:json], json_decoder: Jason, length: 2_097_152)
+  # single-workflow payload while preventing unbounded reads. This root
+  # `length:` is the shared floor forwarded to every parser in the list
+  # below UNLESS a parser overrides it via its own `{parser, opts}` tuple
+  # (`Plug.Parsers.init/1`: `Keyword.merge(root_opts, opts)`, per-parser
+  # `opts` winning) — so the `:json` branch keeps this 2 MB ceiling
+  # unchanged.
+  #
+  # REQ-212 added `:multipart` so `POST /instances/:id/attachments` can
+  # accept a file upload — deliberately NOT via a route-scoped second
+  # Plug.Parsers plug (Letflow.Api.AuthorizedRouter's plug chain is fixed to
+  # match/Authorize/dispatch for every router using it; changing that would
+  # affect every other router) and deliberately NOT by raising the shared
+  # root `length:` itself (every other sub-router mounted below would
+  # silently start accepting a much larger body of ANY content type, a
+  # DoS-surface change no other route asked for). Instead `:multipart` gets
+  # its own per-parser `length:` override, `26_214_400` (25 MiB) — MUST stay
+  # numerically identical to `Letflow.Repository.Attachments.@max_upload_bytes`
+  # (lib/letflow/repository/attachments.ex), REQ-211's own upload-size
+  # ceiling and the authoritative check (this Plug.Parsers value is a
+  # stronger, earlier DoS defense — rejecting an oversized multipart body
+  # before it is fully buffered — not a replacement for that check). Both
+  # numbers must change together; flagged for REVIEWER (design
+  # lib/letflow/design/req212-instance-attachments-routes.md §2.1/§7).
+  plug(Plug.Parsers,
+    parsers: [:json, {:multipart, length: 26_214_400}],
+    json_decoder: Jason,
+    length: 2_097_152
+  )
+
   plug(:assign_trace_id)
   plug(Letflow.Plugs.AuthPipeline)
   plug(Letflow.Plugs.TenantStatus)

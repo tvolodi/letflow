@@ -135,6 +135,159 @@ defmodule Letflow.Routers.Instances do
   performs no `Repo` call at all**; every read, lock and append is inside
   `Letflow.Engine.PinRebind.rebind_pins/3`, whose `opts` argument *is* the
   prefix.
+
+  ## REQ-212 — instance-attachment routes
+
+  Design: `lib/letflow/design/req212-instance-attachments-routes.md`. Four
+  routes atop REQ-211's shipped `Letflow.Repository.Attachments` context
+  module: `POST`/`GET /instances/:id/attachments` and
+  `GET`/`DELETE /instances/:id/attachments/:attachment_id`.
+
+  **No existing `web/` SPA consumer and no R-Co route contract exist for this
+  surface** — this requirement DEFINES the response shapes below rather than
+  matching an existing one, the same way REQ-176/181's core modules became
+  REQ-178/182's routes' binding contract.
+
+  **Content-vs-metadata distinction (AC8) — the two `GET` routes return
+  fundamentally different bodies:**
+
+    * `GET /instances/:id/attachments` returns **JSON metadata** —
+      `{"items": [...], "next_cursor": ...}`, each item shaped like the
+      `POST` response below.
+    * `GET /instances/:id/attachments/:attachment_id` returns the **raw
+      uploaded file bytes**, byte-for-byte, as the response body — never a
+      JSON document under any 2xx status. `Content-Type` is the attachment's
+      stored `content_type`; `Content-Disposition` carries the stored
+      `file_name`.
+
+  A caller wanting one attachment's metadata as JSON uses the list route
+  (client-side filtering by id) or already has it from the upload response —
+  `Letflow.Repository.Attachments.get/2` (REQ-211) is metadata-only by
+  design and has no single-item route of its own here.
+
+  `content_hash` is **never** surfaced in any response body, JSON or
+  otherwise — no acceptance criterion or known future consumer needs it, and
+  omitting it entirely is safer than risking it being misused as an opaque
+  download token.
+
+  ### Response shapes (binding, design §3)
+
+  `POST .../attachments` (201) and each item of `GET .../attachments`
+  (200, inside `"items"`) share one shape — see `attachment_json/1`:
+
+  ```json
+  {
+    "id": "...", "instance_id": "...", "file_name": "...",
+    "content_type": "...", "byte_size": 123, "uploaded_by": "...",
+    "description": "...", "created_at": "..."
+  }
+  ```
+
+  `DELETE .../attachments/:attachment_id` returns 204 No Content — this
+  codebase's first hard-delete route; 204 (not 200-with-body, unlike
+  `Letflow.Routers.Dlq`'s retry/discard, which return a genuinely *changed*
+  resource) because a delete has no new state to show, matching
+  `Letflow.Api.Response.no_content/1`'s own precedent. A considered
+  divergence from DLQ's own 200 convention, flagged for REVIEWER.
+
+  ### Multipart upload mechanism (design §2) — two-ceiling synchronization hazard
+
+  `Letflow.Plugs.ApiPipeline`'s shared `Plug.Parsers` declaration was
+  extended (`parsers: [:json, {:multipart, length: 26_214_400}]`) rather
+  than raising its shared root `length:` — the `:multipart` parser gets its
+  own 25 MiB per-parser override (`Plug.Parsers.init/1`'s documented
+  `{parser, opts}` tuple form merges `opts` over the root, per-parser
+  winning), so every OTHER JSON route on every OTHER sub-router keeps its
+  existing 2 MB ceiling unchanged. **This 25 MiB value
+  (`26_214_400`) MUST stay numerically identical to
+  `Letflow.Repository.Attachments.@max_upload_bytes`** — REQ-211's own
+  upload-size ceiling and the authoritative check; `Plug.Parsers`'s ceiling
+  is a stronger, earlier DoS defense (rejects an oversized multipart body
+  before it is fully buffered) layered on top of, not instead of, `upload/2`'s
+  own check. Both numbers must change together — flagged for REVIEWER.
+
+  The upload route reads a required `file` multipart part
+  (`%Plug.Upload{}` — `path`/`filename`/`content_type`) and an optional
+  `description` text part. `content_type` is sourced from the multipart
+  part's own declared `Content-Type`, never re-derived or sniffed (REQ-211's
+  own INV-a: `content_type` is caller-supplied metadata, never a validated
+  fact).
+
+  ### Two distinct 404 checks (design §5.1, AC5/AC6, INV-5)
+
+  Every one of the four routes relies on **(a) cross-tenant scoping** —
+  structural, via `conn.assigns.scoped_opts`'s `:prefix`
+  (`Letflow.Api.Context.scoped_repo_opts/1`'s output, resolved before this
+  router's code runs) — an attachment or instance belonging to another
+  tenant simply does not exist in the caller's own Postgres schema, so
+  `Letflow.Repository.Attachments.get/2`/`list/2` already resolve that to
+  `{:error, :not_found}`/an empty list.
+
+  The two `:attachment_id` routes (byte-content `GET` and `DELETE`)
+  additionally perform **(b) an explicit, in-handler cross-instance check**:
+  `Attachments.get/2` takes no `instance_id` parameter, so it cannot itself
+  verify a fetched attachment belongs to the `:id` named in the path — this
+  router compares `attachment.instance_id == path_instance_id` after every
+  `get/2` call on those two routes and treats a mismatch identically to
+  `{:error, :not_found}`. **This is a distinct code path from (a) and must
+  never be skipped because (a) already passed** — an attachment that is
+  real and tenant-correct but belongs to a different instance must still
+  404, not leak.
+
+  Both checks fold to the same `Response.not_found/1` call — no
+  distinguishing detail, matching this router's own existing INV-5
+  precedent for every other route above.
+
+  ### Byte-retrieval mechanism (design §4, corrected for INV-RT-1)
+
+  The byte-content `GET` route calls `Letflow.Repository.Attachments.
+  get_content/2`, which performs **two** sequential lookups internally, both
+  inside the same tenant prefix: `get/2`'s own metadata query, then a
+  second, separate `Repo.get(Letflow.Repository.Artifact,
+  attachment.content_hash, prefix: prefix)` reading its `content` column
+  (the `bytea` field REQ-211's design §2A added) for the actual bytes.
+  **This design's own §4 originally specified that second `Repo.get` call
+  as this route layer's own job** — corrected during Step 2a: this
+  codebase's project-wide `INV-RT-1` invariant
+  (`test/letflow/routers/req078_supporting_routes_test.exs`'s `T-19` test)
+  forbids any `Repo.*` call from `lib/letflow/routers/` at all, the same
+  conflict REQ-191/192 already hit and resolved by adding the needed read
+  to the context module rather than the router
+  (`Letflow.ServiceCatalog.list_all/1`) — `get_content/2` is that same
+  relocation applied here, not a change to the retrieval mechanism itself.
+  The metadata routes (`POST`, list `GET`, `DELETE`) never touch
+  `repository_artifacts` at all. A `{:error, :content_missing}` result from
+  `get_content/2` is a structural-invariant violation (the FK guarantees a
+  matching row) — mapped to `Response.internal_error/1`, never a 404, since
+  a 404 here would incorrectly suggest the attachment itself doesn't exist.
+
+  ### Authorization (design §6)
+
+  `AttachmentsManage` (upload, delete) and `AttachmentsRead` (list,
+  download) — see `Letflow.Api.Authorization`'s own moduledoc section for
+  why these are genuinely new permissions, not pre-ported like
+  `DlqOperate`/`WebhooksManage`, and why AC4 requires the two-permission
+  split kept rather than collapsed into one. Role mapping (a judgment call,
+  flagged for REVIEWER, design §6.5): `PLATFORM_ADMIN` holds both
+  (catch-all); `PROCESS_OPERATOR` holds both; `PROCESS_DESIGNER` and
+  `TASK_WORKER` hold `AttachmentsRead` only; `AGENT_RUNNER` holds neither.
+
+  ### Not validated by this route layer (design §5.1, §9 OQ-1)
+
+  Instance existence itself is not checked before `upload/2`/`list/2` — no
+  acceptance criterion asks for it, and REQ-211's own OQ-1 left it
+  unresolved. A caller can upload/list against a syntactically-valid UUID
+  that names no real instance; `upload/2` creates the row anyway and
+  `list/2` returns an empty page. Deferred, not silently decided.
+
+  ### Route ordering
+
+  The four new routes are declared immediately after `/:id/pins` and before
+  the bare `authz_get "/:id"` — all four are literal path suffixes under
+  `/:id/`, so they do not collide with the bare `/:id` route's matching, but
+  must be declared above it so `/:id/attachments...` isn't swallowed as a
+  literal `:id` value (same ordering discipline this moduledoc's own
+  "Route ordering" section above already states for `/:id/history` etc.).
   """
 
   use Letflow.Api.AuthorizedRouter
@@ -150,6 +303,9 @@ defmodule Letflow.Routers.Instances do
   alias Letflow.Engine.PinResolver
   alias Letflow.Engine.Reconstruction
   alias Letflow.Instances
+  alias Letflow.Repository.Artifact
+  alias Letflow.Repository.Attachment
+  alias Letflow.Repository.Attachments
 
   @idempotency_key_header "idempotency-key"
   @max_idempotency_key_bytes 255
@@ -199,6 +355,25 @@ defmodule Letflow.Routers.Instances do
 
   authz_get "/:id/pins", :InstancesRead do
     handle_get_pins(conn, conn.params["id"])
+  end
+
+  # REQ-212 -- instance-attachment routes. MUST precede the bare `authz_get
+  # "/:id"`/`authz_post "/"` below -- same ordering hazard class as
+  # /:id/history etc. above (see moduledoc's "Route ordering" section).
+  authz_post "/:id/attachments", :AttachmentsManage do
+    handle_upload_attachment(conn, conn.params["id"])
+  end
+
+  authz_get "/:id/attachments", :AttachmentsRead do
+    handle_list_attachments(conn, conn.params["id"])
+  end
+
+  authz_get "/:id/attachments/:attachment_id", :AttachmentsRead do
+    handle_get_attachment_content(conn, conn.params["id"], conn.params["attachment_id"])
+  end
+
+  authz_delete "/:id/attachments/:attachment_id", :AttachmentsManage do
+    handle_delete_attachment(conn, conn.params["id"], conn.params["attachment_id"])
   end
 
   authz_get "/:id", :InstancesRead do
@@ -730,6 +905,256 @@ defmodule Letflow.Routers.Instances do
       "resolved_id" => pin.resolved_id,
       "version" => pin.version,
       "source" => Atom.to_string(pin.source)
+    }
+  end
+
+  # ── POST /instances/:id/attachments (REQ-212 design §5.4) ────────────────
+
+  defp handle_upload_attachment(conn, raw_id) do
+    opts = conn.assigns.scoped_opts
+
+    with {:ok, instance_id} <- cast_instance_id(raw_id),
+         {:ok, actor_id} <- actor_id(conn),
+         {:ok, attrs} <- upload_attrs_from_conn(conn, instance_id, actor_id) do
+      render_upload_attachment(conn, Attachments.upload(attrs, opts))
+    else
+      {:error, :invalid_instance_id} ->
+        Response.unprocessable(conn, "instance_id is not a valid UUID")
+
+      {:error, :missing_scope_or_actor} ->
+        Response.internal_error(conn)
+
+      {:error, :missing_file} ->
+        Response.unprocessable(conn, "a file part named \"file\" is required")
+    end
+  end
+
+  # Sourced fields (design §5.4): instance_id from the already-cast path
+  # :id, raw_bytes/file_name/content_type from the multipart `file` part
+  # (%Plug.Upload{}), uploaded_by from the authenticated caller (never a
+  # request field), description from the optional `description` text part.
+  @spec upload_attrs_from_conn(Plug.Conn.t(), Ecto.UUID.t(), Ecto.UUID.t()) ::
+          {:ok, Attachments.upload_attrs()} | {:error, :missing_file}
+  defp upload_attrs_from_conn(conn, instance_id, actor_id) do
+    case conn.body_params["file"] do
+      %Plug.Upload{path: path, filename: filename, content_type: content_type} ->
+        attrs = %{
+          instance_id: instance_id,
+          raw_bytes: File.read!(path),
+          file_name: filename,
+          content_type: content_type,
+          uploaded_by: actor_id,
+          description: attachment_description(conn.body_params["description"])
+        }
+
+        {:ok, attrs}
+
+      _missing_or_not_a_file ->
+        {:error, :missing_file}
+    end
+  end
+
+  defp attachment_description(value) when is_binary(value) and byte_size(value) > 0, do: value
+  defp attachment_description(_absent_or_empty), do: nil
+
+  defp render_upload_attachment(conn, {:ok, attachment}) do
+    Response.created(conn, attachment_json(attachment))
+  end
+
+  defp render_upload_attachment(conn, {:error, :file_too_large}) do
+    Response.payload_too_large(conn, "uploaded file exceeds the maximum allowed size")
+  end
+
+  # An Ecto.Changeset failure here means file_name exceeded 255 characters
+  # (REQ-211 schema's only realistic changeset-rejection path via this
+  # route's own construction) or another required_fields gap this route's
+  # own construction should make unreachable -- mapped anyway for
+  # completeness, matching render_create/2's own "unreachable but mapped"
+  # discipline above.
+  defp render_upload_attachment(conn, {:error, %Ecto.Changeset{}}) do
+    Response.unprocessable(conn, "request failed validation")
+  end
+
+  # ── GET /instances/:id/attachments (REQ-212 design §5.2) ─────────────────
+
+  defp handle_list_attachments(conn, raw_id) do
+    opts = conn.assigns.scoped_opts
+    conn = fetch_query_params(conn)
+    query = conn.query_params
+
+    with {:ok, instance_id} <- cast_instance_id(raw_id),
+         {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+         {:ok, page_size} <- Pagination.validate_page_size(raw_page_size) do
+      params = %{
+        instance_id: instance_id,
+        cursor: Map.get(query, "cursor"),
+        page_size: page_size
+      }
+
+      render_list_attachments(conn, Attachments.list(params, opts))
+    else
+      {:error, :invalid_instance_id} ->
+        Response.unprocessable(conn, "instance_id is not a valid UUID")
+
+      {:error, :invalid_page_size} ->
+        Response.bad_request(conn, "invalid page_size")
+
+      {:error, :page_size_too_large} ->
+        Response.bad_request(conn, "page_size out of range")
+    end
+  end
+
+  # Deliberately NOT render_page_result/3 -- that shared helper adds a
+  # "count" key this route's own {items, next_cursor} shape (matching DLQ's
+  # precedent) must not carry. See moduledoc/design §5.2.
+  defp render_list_attachments(conn, {:ok, %{items: items, next_cursor: next_cursor}}) do
+    Response.ok(conn, %{
+      "items" => Enum.map(items, &attachment_json/1),
+      "next_cursor" => next_cursor
+    })
+  end
+
+  defp render_list_attachments(conn, {:error, reason})
+       when reason in [:invalid_cursor, :wrong_endpoint],
+       do: Response.unprocessable(conn, "cursor is not valid for this endpoint")
+
+  defp render_list_attachments(conn, {:error, :expired}),
+    do: Response.send_problem(conn, Error.cursor_expired())
+
+  defp render_list_attachments(conn, {:error, :page_size_too_large}),
+    do: Response.bad_request(conn, "page_size out of range")
+
+  # ── GET /instances/:id/attachments/:attachment_id (REQ-212 design §4/§5.3) ──
+
+  defp handle_get_attachment_content(conn, raw_id, raw_attachment_id) do
+    opts = conn.assigns.scoped_opts
+
+    with {:ok, instance_id} <- cast_instance_id(raw_id),
+         {:ok, attachment, artifact} <-
+           fetch_scoped_attachment_content(raw_attachment_id, instance_id, opts) do
+      send_attachment_content(conn, attachment, artifact)
+    else
+      {:error, :not_found} ->
+        Response.not_found(conn)
+
+      {:error, :content_missing} ->
+        Response.internal_error(conn)
+
+      {:error, :invalid_instance_id} ->
+        Response.unprocessable(conn, "instance_id is not a valid UUID")
+    end
+  end
+
+  # INV-RT-1 (this codebase's project-wide route-layer boundary -- no
+  # Repo.* call may be issued directly from lib/letflow/routers/, enforced
+  # by test/letflow/routers/req078_supporting_routes_test.exs's T-19 test):
+  # both the byte content lookup (Attachments.get_content/2's own second
+  # Repo.get against repository_artifacts) and this handler's two 404
+  # checks are delegated to the context module rather than issued here.
+  #
+  # Both the cross-tenant check (structural, via opts[:prefix]) and the
+  # cross-instance-same-tenant check (explicit, in-handler) fold to the same
+  # {:error, :not_found} -- design §5.1, AC5/AC6/INV-5. A malformed
+  # attachment_id (:invalid_id) folds to the same tuple too, matching
+  # Letflow.Routers.Dlq's own :invalid_id -> not_found precedent for a
+  # cross-tenant-probeable UUID.
+  @spec fetch_scoped_attachment_content(String.t(), Ecto.UUID.t(), keyword()) ::
+          {:ok, Attachment.t(), Artifact.t()} | {:error, :not_found | :content_missing}
+  defp fetch_scoped_attachment_content(raw_attachment_id, instance_id, opts) do
+    case Attachments.get_content(raw_attachment_id, opts) do
+      {:ok, %Attachment{instance_id: ^instance_id} = attachment, artifact} ->
+        {:ok, attachment, artifact}
+
+      {:ok, %Attachment{}, _artifact} ->
+        {:error, :not_found}
+
+      {:error, :invalid_id} ->
+        {:error, :not_found}
+
+      {:error, :not_found} ->
+        {:error, :not_found}
+
+      {:error, :content_missing} ->
+        {:error, :content_missing}
+    end
+  end
+
+  # Metadata-only sibling of fetch_scoped_attachment_content/3, for DELETE
+  # -- same two 404 checks, no repository_artifacts lookup (DELETE never
+  # needs the byte content).
+  @spec fetch_scoped_attachment_metadata(String.t(), Ecto.UUID.t(), keyword()) ::
+          {:ok, Attachment.t()} | {:error, :not_found}
+  defp fetch_scoped_attachment_metadata(raw_attachment_id, instance_id, opts) do
+    case Attachments.get(raw_attachment_id, opts) do
+      {:ok, %Attachment{instance_id: ^instance_id} = attachment} -> {:ok, attachment}
+      {:ok, %Attachment{}} -> {:error, :not_found}
+      {:error, :invalid_id} -> {:error, :not_found}
+      {:error, :not_found} -> {:error, :not_found}
+    end
+  end
+
+  defp send_attachment_content(conn, %Attachment{} = attachment, %Artifact{} = artifact) do
+    conn
+    |> put_resp_content_type(attachment.content_type)
+    |> put_resp_header("content-disposition", content_disposition(attachment.file_name))
+    |> send_resp(200, artifact.content)
+  end
+
+  # Escapes literal `"` and `\` (Content-Disposition's own quoting rules)
+  # and strips CR/LF/other C0 control characters before interpolating a
+  # caller-supplied file_name into a raw HTTP header value -- put_resp_header/3
+  # does not sanitize a handler-constructed header VALUE for CRLF injection
+  # the way it does for a handler-controlled header NAME (design §3.3.1,
+  # flagged for SECURITY-REVIEWER). Strip (not reject) chosen per design §7
+  # OQ-3 -- this never affects the stored/returned file_name value itself,
+  # only this one header's rendering.
+  @spec content_disposition(String.t()) :: String.t()
+  defp content_disposition(file_name) do
+    sanitized =
+      file_name
+      |> String.replace("\\", "\\\\")
+      |> String.replace("\"", "\\\"")
+      |> strip_control_characters()
+
+    "attachment; filename=\"#{sanitized}\""
+  end
+
+  defp strip_control_characters(value) do
+    String.replace(value, ~r/[\x00-\x1F\x7F]/, "")
+  end
+
+  # ── DELETE /instances/:id/attachments/:attachment_id (REQ-212 design §3.4) ──
+
+  defp handle_delete_attachment(conn, raw_id, raw_attachment_id) do
+    opts = conn.assigns.scoped_opts
+
+    with {:ok, instance_id} <- cast_instance_id(raw_id),
+         {:ok, _attachment} <-
+           fetch_scoped_attachment_metadata(raw_attachment_id, instance_id, opts),
+         {:ok, _deleted} <- Attachments.delete(raw_attachment_id, opts) do
+      Response.no_content(conn)
+    else
+      {:error, :not_found} -> Response.not_found(conn)
+    end
+  end
+
+  # ── Response allowlist (INV-2) — shared by POST/GET list (REQ-212 design §5.5) ──
+
+  # Hand-built allowlist, matching dlq_entry_json/1's precedent -- never a
+  # raw Jason.Encoder derivation over %Attachment{}, which would leak
+  # __meta__/tenant_id. content_hash is likewise deliberately never
+  # included -- see moduledoc.
+  @spec attachment_json(Attachment.t()) :: map()
+  defp attachment_json(%Attachment{} = attachment) do
+    %{
+      "id" => attachment.id,
+      "instance_id" => attachment.instance_id,
+      "file_name" => attachment.file_name,
+      "content_type" => attachment.content_type,
+      "byte_size" => attachment.byte_size,
+      "uploaded_by" => attachment.uploaded_by,
+      "description" => attachment.description,
+      "created_at" => DateTime.to_iso8601(attachment.created_at)
     }
   end
 

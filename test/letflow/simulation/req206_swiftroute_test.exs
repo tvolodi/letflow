@@ -506,26 +506,23 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
              "Found 'advance_timer' in instances.ex — UNIMPLEMENTED finding is no longer accurate"
     end
 
-    test "no attachment/document-upload routes in any lib/letflow/routers/ file" do
-      # AC4: source evidence that no attachment API exists in Letflow.
-      routers_dir = Path.expand("../../../lib/letflow/routers", __DIR__)
-
-      router_files = File.ls!(routers_dir) |> Enum.filter(&String.ends_with?(&1, ".ex"))
-
-      attachment_matches =
-        Enum.flat_map(router_files, fn file ->
-          content = File.read!(Path.join(routers_dir, file))
-
-          if String.contains?(content, "attachment") or
-               (String.contains?(content, "upload") and String.contains?(content, "shipment")) do
-            [file]
-          else
-            []
-          end
-        end)
-
-      assert attachment_matches == [],
-             "Found unexpected attachment/upload route references in: #{inspect(attachment_matches)}"
-    end
+    # SUPERSEDED by REQ-212 (2026-09-01): this test's original assertion
+    # ("no attachment/document-upload routes exist anywhere in
+    # lib/letflow/routers/") was the machine-verifiable source evidence for
+    # this file's own moduledoc finding #2, "No document/attachment API in
+    # Letflow or R-Co src/". REQ-211 (core context module) and REQ-212
+    # (this exact route surface -- POST/GET/DELETE
+    # /instances/:id/attachments...) have since shipped
+    # `lib/letflow/routers/instances.ex`, so that finding is no longer
+    # accurate and the grep this test ran now legitimately matches. This
+    # does NOT retroactively change the `shipment-attach-delivery-note`
+    # scenario's own :unbuilt_feature disposition assertion above (that
+    # scenario's YAML/notes text and the Runner's own reasoning are
+    # REQ-206/simulation-harness scope, not touched here) -- only this
+    # narrower source-evidence guard, which is now testing a stale premise,
+    # is removed rather than left permanently red. See
+    # `lib/letflow/design/req212-instance-attachments-routes.md` and
+    # `test/letflow/routers/req212_attachments_routes_test.exs` for the
+    # route surface's own coverage.
   end
 end

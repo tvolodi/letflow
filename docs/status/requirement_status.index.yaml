@@ -1478,8 +1478,18 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 3
+    entries: 4
     note: >
+      Incremented to 4 by ORCH's Step-Final rebase of
+      feature/WF02-REQ212-20260901 onto main, which by then included a
+      concurrent sibling session's WF03-ISS0400-20260901 run (2 entries:
+      started + done) landing alongside this run's own REQ-212 done-event
+      append -- `grep -c "^  - req:" docs/status/requirement_status.v8.yaml`
+      = 4 on-disk entries after the merge (1 REQ-211 + 2 ISS-0400 + 1
+      REQ-212), no entry lost. `wc`: 322 lines / 19790 bytes, well under
+      the 1200-line/120000-byte roll ceiling, so no roll triggered. Closes
+      GH#769/ISS-0390 in full (REQ-211 core + REQ-212 routes both done).
+
       Incremented to 3 by ORCH's own WF03-ISS0400-20260901 done-event
       append (Step Final) -- `grep -c "^  - req:"
       docs/status/requirement_status.v8.yaml` = 3 on-disk entries, no

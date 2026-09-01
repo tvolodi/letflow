@@ -1,0 +1,59 @@
+{
+  "handoff_id": "269427bb-bfd9-475f-9d38-8efdd09ebed7",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0392-20260901/step-02-rework1-code-designer.json",
+  "created_at": "2026-09-01T10:38:37Z",
+  "started_at": "2026-09-01T10:38:37Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0392-multi-task-records-collision-fix.md",
+      "handoffs/WF03-ISS0392-20260901/step-03-elixir-dev.json",
+      "docs/issues/ISS-0392.yaml",
+      "handoffs/WF03-ISS0392-20260901/step-01-issue-fixer.json",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/sub_process.ex",
+      "lib/letflow/engine/task_activation.ex"
+    ],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/engine/sub_process.ex"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: ELIXIR-DEV (step-03-elixir-dev.json, result.issues[0]) found your design's SS2.4 'replace-on-repeat' mechanism is not mechanically achievable with Ecto.Multi: Multi.run steps execute strictly in append order, a Multi.merge/2 callback (where call (2)'s collision detection would happen) only evaluates at transaction-EXECUTION time -- strictly AFTER call (1)'s own step has already executed its write -- so there is no Multi primitive to un-execute/replace an already-run step. They confirmed this both from deps/ecto/lib/ecto/multi.ex's source (add_operation/3, apply_operation/5) and empirically via a throwaway script showing Multi.to_list/1's operation order. Ecto.Multi.delete/2 (which your design left as 'an implementation detail ELIXIR-DEV resolves' for the replace) doesn't exist for step-removal either -- it's delete/3,4, a write operation, not a step-removal function. Read step-03-elixir-dev.json's result.issues[0] in full for the complete finding, including a concrete alternative they identified but did NOT implement themselves (correctly, since it diverges from your approved design and is your call, not theirs): prepared_children (from prepare_sub_process_children_for_completion/8, engine.ex:2291-2343) already carries each child's child_initial_state.status BEFORE any Multi exists at all -- so for the first-level collision (ISS-0392's actual repro), it's knowable at BUILD TIME, before appending call (1)'s {:task_records, parent_instance_id} step, that a same-instance_id call (2) will happen later in this same transaction. Revise SS2.2-SS2.4 of the design to a build-time skip/defer mechanism (using prepared_children's already-known child_initial_state.status to decide, before building call 1, whether to omit/defer parent_instance_id's task-activation step so call 2's own step is the only one appended for that instance_id) rather than the infeasible runtime-replace. Re-verify SS3's cascade-level design still holds under the revised mechanism -- ELIXIR-DEV's finding notes the always-reachable core bug is the first-level case; confirm whether SS3's grandparent-cascade handling needs any adjustment or stays as designed. You do NOT need to implement code -- design only, as before. When revising, if you determine the new mechanism changes any function signature already stated in SS2.5/SS3, update those @spec blocks accordingly.",
+    "acceptance_criteria": [
+      "The revised design's collision-avoidance mechanism is mechanically achievable with real Ecto.Multi semantics (build-time skip/defer, not runtime replace of an already-executed step) -- verify this yourself against Ecto.Multi's actual behavior before finishing, not just by asserting it",
+      "SS2.2-SS2.4 (or their renumbered equivalents) revised to reflect the new mechanism; any changed function signatures updated in the @spec blocks",
+      "SS3 (cascade) re-examined and confirmed still correct under the revised mechanism, or revised if not",
+      "AC1/AC2/AC3 (as CODE-DESIGNER itself framed them in the original step-02 handoff) still each map to a concrete, achievable design element",
+      "No implementation code (.ex/.exs function bodies) in the design doc",
+      "Open questions (SS6) re-reviewed -- carry forward what's still open, drop what this revision resolves, add any new ones the revision introduces"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

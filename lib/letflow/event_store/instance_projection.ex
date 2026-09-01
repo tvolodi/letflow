@@ -105,6 +105,19 @@ defmodule Letflow.EventStore.InstanceProjection do
   `{:variable_schema_lookup_failed, _}` tuple as one of its returns, since
   nothing on that call path can produce it.
 
+  ## `join_counters` (ISS-0397)
+
+  Added by `priv/repo/migrations/20260901030001_add_join_counters_to_instance_projections.exs`
+  (see `lib/letflow/design/iss0397-join-counters-fix.md`) to make
+  `Letflow.Engine.JoinCounter` state durable across separate
+  `Letflow.Engine.complete_task/3`/`advance_after_timer_fired/3` calls,
+  closing REQ-048 design doc's own MAJOR OQ-3 / INV-EE48-7 gap. Same `:map`
+  (jsonb), `null: false`, `default: %{}` idiom as `variables` above — a JSON
+  object keyed by `join_node_id` strings, serialised/deserialised via
+  `Letflow.Engine.SnapshotWriter.serialize_join_counters/1` /
+  `deserialize_join_counters/1`, never read/written directly as a raw map by
+  callers outside `Letflow.Engine`.
+
   ## No `tenant_id` column (Decision 0006 D2)
 
   This table carried `tenant_id` until Decision 0006 D2
@@ -133,6 +146,7 @@ defmodule Letflow.EventStore.InstanceProjection do
     field(:correlation_key, :string)
     field(:current_nodes, Letflow.EventStore.JSONArray, default: [])
     field(:variables, :map, default: %{})
+    field(:join_counters, :map, default: %{})
     field(:error_detail, :map)
     field(:completed_at, :utc_datetime_usec)
     field(:cancelled_at, :utc_datetime_usec)
@@ -166,6 +180,7 @@ defmodule Letflow.EventStore.InstanceProjection do
       :correlation_key,
       :current_nodes,
       :variables,
+      :join_counters,
       :parent_instance_id,
       :parent_token_id
     ])
@@ -188,6 +203,7 @@ defmodule Letflow.EventStore.InstanceProjection do
       :last_event_seq,
       :current_nodes,
       :variables,
+      :join_counters,
       :error_detail,
       :completed_at,
       :cancelled_at

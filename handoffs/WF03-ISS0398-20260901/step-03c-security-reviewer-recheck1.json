@@ -1,0 +1,66 @@
+{
+  "handoff_id": "WF03-ISS0398-20260901-step-03c-recheck1",
+  "run_id": "WF03-ISS0398-20260901",
+  "workflow_id": "WF-03",
+  "step": "3c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0398-20260901/step-03c-security-reviewer-recheck1.json",
+  "created_at": "2026-09-01T15:40:00Z",
+  "started_at": "2026-09-01T15:10:00Z",
+  "completed_at": "2026-09-01T15:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-051"],
+    "issue_ids": ["ISS-0398"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0398-20260901/step-03-elixir-dev-rework1.json",
+      "handoffs/WF03-ISS0398-20260901/step-02b-code-design-validator-recheck2.json",
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md",
+      "lib/letflow/engine/transition.ex",
+      "test/letflow/engine/parallel_gateway_test.exs",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"],
+    "branch_name": "fix/ISS-0398-walk-to-gateway-20260901"
+  },
+  "task": {
+    "description": "Re-check (recheck1) the real shipped rework of collect_leaf_gateways/3 (commit 9968fa3b) against INV-1..INV-8, re-verifying the prior BLOCKER INV-8 finding for real against the actual code (not the design doc's own trace) and against a fresh, independently-constructed adversarial stress case.",
+    "acceptance_criteria": [
+      "Scope test run against the real diff (git diff main...HEAD)",
+      "Each of INV-1..INV-8 assessed APPLIES/NOT-APPLICABLE with reasoning",
+      "INV-8 re-verified by reading the actual shipped collect_leaf_gateways/3, explore_branching_node/3, fold_outgoing_edges/4, close_scc_or_defer/5 and by independently re-running (not trusting) an adversarial stress case",
+      "Re-verify no tenant-isolation issue (zero Repo. calls, pure in-memory graph traversal)",
+      "Confirm error paths do not leak internal graph structure",
+      "Confirm scope is limited to transition.ex + its test file (+ expected bookkeeping)",
+      "Confirm ELIXIR-DEV did not silently work around the scheduler_req188_test.exs zero-diff guard"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: git diff main...HEAD --stat shows only lib/letflow/engine/transition.ex, test/letflow/engine/parallel_gateway_test.exs, lib/letflow/design/iss0398-walk-to-gateway-fix.md, and handoffs/WF03-ISS0398-20260901/*.json + handoffs/registry.json + handoffs/orchestrator.log changed. This is a tenant-data path (graph-traversal logic reachable from Engine.create/2 on a tenant-controlled process-definition graph), so INV review applies, not skipped.\n\nINV-1 (tenant isolation): NOT-APPLICABLE, re-confirmed. grep -n 'Repo\\.' lib/letflow/engine/transition.ex returns zero hits, same as the original review. Read the full shipped collect_leaf_gateways/3 (transition.ex:920-942), explore_branching_node/3 (955-975), fold_outgoing_edges/4 (981-1004), and close_scc_or_defer/5 (1013-1035) directly: every function operates purely on the definition_snapshot argument (an in-memory Graph.t()) and the threaded leaf_search_state() accumulator (memo/index/lowlink/stack/stack_set/next_index, all in-process data) -- no Ecto schema, migration, query, or re-fetch of tenant data anywhere in the new code. INV-1 does not apply.\nINV-2, INV-3(scripting), INV-5: NOT-APPLICABLE (S4/S5 not started; this diff adds no API response shaping, lookup-by-ID endpoint, or scripting sandbox).\nINV-4 (secrets by reference): APPLIES (live now). grep -rn 'System.get_env' and the hardcoded-secret heuristic grep against the diff's changed lines: zero hits. No config/secret-resolving code introduced. PASS.\nINV-6 (new data-access paths prove scoping): APPLIES as the meta-invariant this handoff itself discharges. PASS.\nINV-7 (no SQL string interpolation): APPLIES (live now). grep -rn 'Repo.query' lib/ priv/repo/migrations/ -- zero hits in transition.ex, unchanged from the original review. PASS.\nINV-8 (no unhandled crashes/DoS on realistic failure paths): APPLIES (live now) -- this is the invariant I originally FAILED; re-verified for real this time.\n\nINV-8 re-verification (the substantive check). Read the actual shipped code, not the design doc's trace: collect_leaf_gateways/3 (920-942) checks state.memo first (O(1) short-circuit for any already-closed SCC, including one closed by a PRIOR sibling branch's call, since memo survives across branches via find_matching_join/2's fold at 817-843), then state.stack_set for a live back-edge (returns immediately, no recursion, no leaf), then resolves the node: unresolved -> writes memo and returns finished; :PARALLEL_GATEWAY -> writes memo and returns finished (never pushed onto stack, confirmed at 934-936 -- returns before explore_branching_node's push at 960-967, so a PARALLEL_GATEWAY can never itself become an SCC member, exactly as the design requires for the nested-PARALLEL_GATEWAY exclusion boundary in section 2.3 of the design doc); otherwise explore_branching_node/3 assigns a fresh Tarjan index, pushes the node, folds sequentially over outgoing edges via fold_outgoing_edges/4 (which threads state through Enum.reduce, not an independent Enum.map -- confirmed at 987-1004, so no per-sibling state copying that could reintroduce the exponential blowup), and close_scc_or_defer/5 either commits the SAME local_leaves value to memo for every popped SCC member (1020-1031, when local_lowlink == own_index) or defers (1033-1035, leaving the node on stack for an ancestor to close later). I traced this against the CODE-DESIGN-VALIDATOR's cyclic counterexample (design doc section 2.4b) by hand against the actual line numbers and confirm the shipped code matches the validated design's SCC-closure mechanism exactly -- there is no code path in these four functions that bypasses state.memo or re-explores an already-finished node.\n\nIndependently re-ran (not trusted) two stress cases beyond what ELIXIR-DEV reported: (1) mix test test/letflow/engine/parallel_gateway_test.exs --trace: 12/12 passed, the shipped diamond_chain_graph(40) test measured 10.2ms on this run (ELIXIR-DEV reported 6.9ms -- consistent, ordinary run-to-run variance, not a discrepancy). (2) Wrote and ran an independent script (not derived from or copying the test file's own assertions, only reusing its published fixture-construction pattern) that builds diamond_chain_graph(165) -- 498 nodes/663 edges, deliberately pushed close to Graph's own @max_nodes=500 cap (graph.ex:158) rather than reusing the test's k=40 -- and calls Letflow.Engine.Transition.transition/3 directly end-to-end (not calling the private functions in isolation): resolved correctly in 40.6ms wall-clock. Also built and ran a second independent adversarial shape (a PARALLEL_GATEWAY split with 20 additional sibling edges all re-entering the SAME diamond-chain's gw1, 303 nodes/423 edges, to stress cross-branch memo reuse specifically under many siblings): resolved correctly in 11.7ms. Both scale consistent with O(nodes+edges), nowhere near the O(2^k) collapse the original BLOCKER finding demonstrated against iteration-1's code (which would put k=40 alone at ~10^12 calls, not 6.9ms, and k=165 would never terminate in any practical time). This closes my original BLOCKER: the memoization is genuinely applied, not accidentally bypassed in any code path, and the complexity is genuinely bounded.\n\nNo tenant-isolation issue (re-verified, item 2 of task): confirmed above under INV-1 -- zero Repo. calls, purely in-memory graph traversal, unchanged conclusion from the original review.\n\nError message leakage (item 3): {:error, :no_matching_join} (transition.ex:839/841) and its caller-side wrap {:error, {:no_matching_join_found, node.id}} (772-774, unchanged call site) still carry only the split node's own id, from the same tenant's own process definition already being evaluated in this call -- no cross-tenant data, no internal edges/nodes/memo-state dump, no stack trace. No new leakage surface introduced by the rework (leaf_search_state() and its Tarjan bookkeeping never cross the find_matching_join/2 boundary -- confirmed at 815-816's @spec, which returns only {:ok, id} | {:error, :no_matching_join}).\n\nScope (item 4): git diff main...HEAD --stat lists exactly lib/letflow/engine/transition.ex, test/letflow/engine/parallel_gateway_test.exs, lib/letflow/design/iss0398-walk-to-gateway-fix.md, and handoffs/WF03-ISS0398-20260901/*.json + handoffs/registry.json + handoffs/orchestrator.log. No migration, no other application file touched. Confirmed walk_to_gateway/3 and iteration-2's on_path-based signature are fully gone (grep for both returns zero hits) -- clean in-place replacement, not a second parallel implementation left behind.\n\nscheduler_req188_test.exs guard (item 5, flagged for REVIEWER, not a security finding): git diff main...HEAD -- test/letflow/scheduler_req188_test.exs is EMPTY -- ELIXIR-DEV did not touch, weaken, skip, or otherwise work around the 'lib/letflow/engine/transition.ex has zero diff against the base branch' guard at test/letflow/scheduler_req188_test.exs:432. ELIXIR-DEV's rework1 handoff (step-03-elixir-dev-rework1.json) documents this as an EXPECTED, pre-existing-on-this-branch full-suite failure (already broken by iteration 1's own earlier commit 5691a6a2, before this rework), correctly identifies it as REQ-188's own guard being over-scoped (asserting 'zero diff forever' rather than being scoped to REQ-188's own commit range), and explicitly leaves it unfixed for the proper owner to handle. This is the right call -- SECURITY-REVIEWER does not see anything here indicating ELIXIR-DEV silently disabled or gamed the guard. FLAGGING FOR REVIEWER: this guard now needs a deliberate, dated fix (most likely updating its baseline/scope with a comment explaining why transition.ex legitimately changed for ISS-0398, not simply deleting the guard) -- this is a REVIEWER/TEST-DESIGNER concern (test correctness / scope-creep-detection maintenance), not a security concern, and is explicitly out of scope for me to fix.\n\nAll INV-1..INV-8 applicable invariants pass. No BLOCKER findings. Routing to Step 3d REVIEWER.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0398-20260901/step-03c-security-reviewer-recheck1.json"
+    ],
+    "issues": [],
+    "next_action": "Route to Step 3d REVIEWER for idiom/supervision-integrity/scope-creep/decision-record-consistency review. REVIEWER should additionally take ownership of the test/letflow/scheduler_req188_test.exs 'zero diff against base branch' guard flagged above -- it is now failing for a legitimate, expected reason (this requirement's own valid change to transition.ex), and needs a deliberate, dated fix to its baseline/scope (likely routed to TEST-DESIGNER), not removal and not left silently red."
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "step": "3c",
+      "agent": "SECURITY-REVIEWER",
+      "result": "FAIL",
+      "timestamp": "2026-09-01T14:40:00Z"
+    },
+    {
+      "step": "3c",
+      "agent": "SECURITY-REVIEWER",
+      "result": "PASS",
+      "timestamp": "2026-09-01T15:40:00Z"
+    }
+  ]
+}

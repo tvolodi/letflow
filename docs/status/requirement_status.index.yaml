@@ -800,7 +800,7 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 33
+    entries: 34
     note: >
       Recounted to 32 after rebasing WF03-ISS0381-20260831 onto main, which
       by then included ORCH's retroactive-evidence-comment append (31) plus

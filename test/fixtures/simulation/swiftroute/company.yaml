@@ -1,0 +1,36 @@
+# Ported verbatim from R-Co tests/simulation/companies/swiftroute/company.yaml
+# for Letflow REQ-205 (S7 simulation harness). Actor IDs and all field values
+# are intentionally unchanged from R-Co originals so REQ-206/207/208 scenario
+# references (e.g. actor-swiftroute-lena) remain stable.
+---
+id: swiftroute
+name: SwiftRoute Ltd
+domain: last-mile-logistics
+size: small
+founded: 2019
+description: >
+  B2B courier and last-mile delivery operator serving urban retailers.
+  Runs a fleet of 40 vans and 12 bike couriers. Main revenue from
+  same-day and next-day delivery SLAs contracted with e-commerce shops.
+headquarters:
+  city: Berlin
+  country: DE
+timezone: Europe/Berlin
+currency: EUR
+locale: de-DE
+
+contacts:
+  ceo: alice.bauer@swiftroute.example
+  ops: ops@swiftroute.example
+
+integrations:
+  erp: none
+  crm: hubspot-starter
+  tracking: internal-gps
+
+bpm_config:
+  tenant_id: tenant-swiftroute-001
+  sla_defaults:
+    approval_hours: 4
+    escalation_hours: 8
+  notification_webhook: https://hooks.swiftroute.example/bpm

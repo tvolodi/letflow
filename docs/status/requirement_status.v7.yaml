@@ -869,3 +869,29 @@ history:
       metrics. New tables effect_completions + correlation_cursors (per-tenant,
       decision 0003-B). Gap sweeper on REQ-186 scheduler. Event types registered.
       All 18 ACs independently verified by RELEASE-VALIDATOR.
+
+  - req: REQ-205
+    event: done
+    agent: ORCH
+    at: "2026-09-01T01:52:35Z"
+    note: >
+      WF02-REQ205-20260901 done (queue task 382, GH#764/ISS-0388, stage S7).
+      S7 scenario-harness foundation implemented by ORCH directly on a host
+      with R-Co filesystem access, resolving ISS-0388 (which blocked REQ-206).
+      12 company/org/process YAML fixture files ported verbatim from
+      R-Co tests/simulation/companies/ into
+      test/fixtures/simulation/{swiftroute,vortex,meridian}/.
+      Letflow.Simulation.Seed and Letflow.Simulation.Runner added to
+      test/support/simulation/ using Letflow's own context modules
+      (no HTTP client, no Python subprocess). yaml_elixir ~> 2.9 added
+      as :test-only dep (yamerl/pure Erlang; REVIEWER sign-off recorded
+      in this PR). Graph translator converts R-Co's node types to Letflow
+      format, adds on_timeout edges, and injects HUMAN_TASK fallback edges
+      to pass Letflow.Definitions.Graph validation for all 8 process
+      definitions. 14 tests across 5 AC groups: AC-1 fixture existence
+      + actor_id verification, AC-2 seed_all provisions via Identity/
+      Definitions, AC-3 idempotency, AC-4 Runner end-to-end api step
+      (real Plug.Test HTTP, real DB query), AC-5 gui steps record
+      DEFERRED_TO_S8. mix compile --warnings-as-errors and 14/14 tests
+      pass; full suite pre-existing failures only (merge conflict in
+      tenant_fixture_test.exs, ISS-0065 forced-failure test).

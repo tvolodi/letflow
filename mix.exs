@@ -54,6 +54,13 @@ defmodule Letflow.MixProject do
       # step-02a handoff) -- REVIEWER sign-off must be recorded before this merges.
       {:telemetry, "~> 1.4"},
       {:stream_data, "~> 0.6", only: :test},
+      # REQ-205 (design req205-simulation-harness.md §YAML-DEP): adds YAML parsing for
+      # the simulation fixture files (company.yaml, org_structure.yaml, process_*.yaml)
+      # that Letflow.Simulation.Seed reads to provision test tenants/users/definitions.
+      # yaml_elixir 2.x uses yamerl (pure Erlang OTP app, no NIFs) -- zero new system
+      # dependencies. Flagged for REVIEWER sign-off per REQ-148/REQ-165 precedent for
+      # new top-level deps; REVIEWER sign-off recorded in this requirement's PR.
+      {:yaml_elixir, "~> 2.9", only: :test},
       {:ueberauth_oidcc, "~> 0.4"},
       {:lua, "~> 1.0"},
       {:wasmex, "~> 0.15.1"}

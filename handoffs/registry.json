@@ -3768,15 +3768,15 @@
       "issue_id": "ISS-0398",
       "queue_task_id": 398,
       "github_issue_number": 779,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/engine/transition.ex"
       ],
       "started_at": "2026-09-01T12:45:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
-      "note": "WF-03 issue-resolving run for ISS-0398 (Letflow.Engine.Transition's walk_to_gateway/3 fails any PARALLEL_GATEWAY fork branch containing a node with more than one outgoing edge -- e.g. an EXCLUSIVE_GATEWAY -- before reaching the join, failing the WHOLE split at instance-creation time via {:activation_failed, {:no_matching_join_found, ...}}). Discovered and reported by REQ-208's ELIXIR-DEV, independently re-confirmed by RELEASE-VALIDATOR. No owned_modules overlap with WF03-ISS0392-20260901 (lib/letflow/engine.ex, lib/letflow/engine/sub_process.ex) -- ISS-0398 is scoped to lib/letflow/engine/transition.ex specifically, a different file within the same Engine subsystem. Queue task 398 locked directly via get_next_task."
+      "lock_released_at": "2026-09-01T17:04:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final -- PR #783 merged to main (58e3c64e), queue task 398 released status: done, ISS-0400 filed",
+      "note": "WF-03 issue-resolving run for ISS-0398 (Letflow.Engine.Transition's walk_to_gateway/3 fails any PARALLEL_GATEWAY fork branch containing a node with more than one outgoing edge -- e.g. an EXCLUSIVE_GATEWAY -- before reaching the join, failing the WHOLE split at instance-creation time via {:activation_failed, {:no_matching_join_found, ...}}). Discovered and reported by REQ-208's ELIXIR-DEV, independently re-confirmed by RELEASE-VALIDATOR. No owned_modules overlap with WF03-ISS0392-20260901. Design went through 2 real reworks after real BLOCKER findings: SECURITY-REVIEWER caught an exponential-blowup DoS in the first per-path-visited-copy design (a chain of k reconverging EXCLUSIVE_GATEWAY diamonds produced ~2^k recursive calls); CODE-DESIGN-VALIDATOR then caught a memo-key-unsoundness defect in the memoized fix under legal cycles-through-gateways (CHK-06), proven with a concrete counterexample. Final design replaced the algorithm with a Tarjan-SCC-based memoized DFS, passed a third, deliberately adversarial validator pass that actively hunted for a third defect and found none. ELIXIR-DEV re-implemented per the final design; SECURITY-REVIEWER independently re-verified the complexity fix with its own stress tests (pushed to @max_nodes=500, 40.6ms). REVIEWER also properly rescoped a stale test/letflow/scheduler_req188_test.exs guard ('transition.ex has zero diff against main', permanently unsatisfiable) to REQ-188's own fixed historical commit range, with a dated justification -- not silently removed. TEST-DESIGNER found and fixed a real gap (cyclic_escape_graph/0 vs its reversed twin never asserted equal to each other) and empirically verified both regression guards by checking out each prior algorithm version and confirming it actually fails/times out. One subagent stalled twice by backgrounding a test command and waiting for a notification only the main session receives (documented as feedback); resumed/retried in the foreground. ISSUE-FIXER independently re-verified the full fix before closing ISS-0398. Filed ISS-0400 (nested-PARALLEL_GATEWAY-in-branch, named out of scope by the design) via register_task. PR #783 merged by a sibling session/human once CI (after a re-run past two unrelated timing flakes -- Lua executor memory-limit timing, Wasm plugin timeout timing) went green. Queue task 398 released done."
     }
   ]
 }

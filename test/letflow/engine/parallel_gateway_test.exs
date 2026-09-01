@@ -63,6 +63,206 @@ defmodule Letflow.Engine.ParallelGatewayTest do
     )
   end
 
+  # ISS-0398 regression fixture (lib/letflow/design/iss0398-walk-to-gateway-fix.md
+  # §4): a "split" PARALLEL_GATEWAY with 2 outgoing edges. Branch 0 is the
+  # original zero-hop shape (split -> join directly, kept as a control
+  # branch in the same fixture). Branch 1 passes through "gw", an
+  # EXCLUSIVE_GATEWAY with 2 outgoing edges, both of which reconverge on the
+  # same "join" node (the diamond shape from §2.4) -- this is the shape
+  # ISS-0398.yaml's own kyc-routing scenario has, and the one
+  # collect_leaf_gateways/3 must resolve where the old walk_to_gateway/3
+  # failed the whole split at instance-creation time.
+  defp branch_with_exclusive_gateway_graph do
+    graph(
+      [
+        node("split", :PARALLEL_GATEWAY),
+        node("gw", :EXCLUSIVE_GATEWAY),
+        node("route-a", :HUMAN_TASK),
+        node("route-b", :HUMAN_TASK),
+        node("join", :PARALLEL_GATEWAY),
+        node("e", :END)
+      ],
+      [
+        edge("e-split-0", "split", "join"),
+        edge("e-split-1", "split", "gw"),
+        edge("e-gw-a", "gw", "route-a"),
+        edge("e-gw-b", "gw", "route-b"),
+        edge("e-route-a-join", "route-a", "join"),
+        edge("e-route-b-join", "route-b", "join"),
+        edge("e-join-e", "join", "e")
+      ]
+    )
+  end
+
+  # ISS-0398 negative fixture (design doc §4): identical to
+  # branch_with_exclusive_gateway_graph/0's branch 1 except "route-b" dead-ends
+  # at a separate :END node "e2" instead of reconverging on "join". One of
+  # "gw"'s two paths reaches the real join, the other dead-ends -- the
+  # per-branch singleton-leaf-set rule (design doc §2.5) must still reject
+  # this branch as ambiguous, not accept it just because one of its paths
+  # happens to reach the right gateway.
+  defp ambiguous_branch_dead_ends_graph do
+    graph(
+      [
+        node("split", :PARALLEL_GATEWAY),
+        node("gw", :EXCLUSIVE_GATEWAY),
+        node("route-a", :HUMAN_TASK),
+        node("route-b", :HUMAN_TASK),
+        node("join", :PARALLEL_GATEWAY),
+        node("e", :END),
+        node("e2", :END)
+      ],
+      [
+        edge("e-split-0", "split", "join"),
+        edge("e-split-1", "split", "gw"),
+        edge("e-gw-a", "gw", "route-a"),
+        edge("e-gw-b", "gw", "route-b"),
+        edge("e-route-a-join", "route-a", "join"),
+        edge("e-route-b-dead", "route-b", "e2"),
+        edge("e-join-e", "join", "e")
+      ]
+    )
+  end
+
+  # ISS-0398 stress fixture (design doc §2.4a/§4, iteration 2's rework): a
+  # PARALLEL_GATEWAY "split" with 2 outgoing edges -- branch 0 is the
+  # zero-hop control branch (split -> join directly, same control shape as
+  # branch_with_exclusive_gateway_graph/0's own branch 0; out-degree 2 is
+  # what makes gateway_role/2 classify "split" as a real :split rather than
+  # :pass_through), branch 1 is a chain of `k` EXCLUSIVE_GATEWAY diamonds --
+  # gw_1..gw_k, each with two edges to b_i/c_i, both reconverging on
+  # gw_{i+1} (or on the branch's real "join" PARALLEL_GATEWAY node for
+  # gw_k). Branch 1 is the actual regression fixture for the
+  # exponential-blowup defect SECURITY-REVIEWER found in iteration 1: under
+  # the old per-path-copied-visited-set scheme this branch's call count is
+  # O(2^k); under the memoized-Tarjan-SCC scheme (this revision) it is
+  # O(k).
+  defp diamond_chain_graph(k) when is_integer(k) and k > 0 do
+    gateway_nodes = for i <- 1..k, do: node("gw#{i}", :EXCLUSIVE_GATEWAY)
+
+    route_nodes =
+      for i <- 1..k, letter <- ["b", "c"], do: node("#{letter}#{i}", :HUMAN_TASK)
+
+    nodes =
+      [node("split", :PARALLEL_GATEWAY)] ++
+        gateway_nodes ++ route_nodes ++ [node("join", :PARALLEL_GATEWAY), node("e", :END)]
+
+    split_edges = [edge("e-split-0", "split", "join"), edge("e-split-1", "split", "gw1")]
+
+    diamond_edges =
+      for i <- 1..k, letter <- ["b", "c"] do
+        route_id = "#{letter}#{i}"
+        target = if i == k, do: "join", else: "gw#{i + 1}"
+
+        [
+          edge("e-gw#{i}-#{route_id}", "gw#{i}", route_id),
+          edge("e-#{route_id}-next", route_id, target)
+        ]
+      end
+      |> List.flatten()
+
+    edges = split_edges ++ diamond_edges ++ [edge("e-join-e", "join", "e")]
+
+    graph(nodes, edges)
+  end
+
+  # ISS-0398 cyclic regression fixture (design doc §2.4b/§4, iteration 3's
+  # rework): a PARALLEL_GATEWAY "split" with 2 outgoing edges -- edge 0 ->
+  # "X" (reaching the cycle from outside), edge 1 -> "B" (a member of the
+  # cycle itself). "X" -> "GW" (EXCLUSIVE_GATEWAY) -> "C" -> "B"
+  # (EXCLUSIVE_GATEWAY, out-degree 2: "B" -> "GW" closes the cycle, legal
+  # per CHK-06 since both "B" and "GW" are gateway-typed; "B" -> "D" escapes
+  # it) -> "D" -> "JOIN" (PARALLEL_GATEWAY) -> "e" (:END). Both branches
+  # must resolve to the same {:gateway, "JOIN"} regardless of which one
+  # (the cycle-external entry or the cycle-internal entry) is evaluated
+  # first -- exactly the order-independence property a plain node-keyed
+  # memo cannot guarantee (§2.2.1).
+  defp cyclic_escape_graph do
+    graph(
+      [
+        node("split", :PARALLEL_GATEWAY),
+        node("X", :HUMAN_TASK),
+        node("GW", :EXCLUSIVE_GATEWAY),
+        node("C", :HUMAN_TASK),
+        node("B", :EXCLUSIVE_GATEWAY),
+        node("D", :HUMAN_TASK),
+        node("JOIN", :PARALLEL_GATEWAY),
+        node("e", :END)
+      ],
+      [
+        edge("e-split-0", "split", "X"),
+        edge("e-split-1", "split", "B"),
+        edge("e-x-gw", "X", "GW"),
+        edge("e-gw-c", "GW", "C"),
+        edge("e-c-b", "C", "B"),
+        edge("e-b-gw", "B", "GW"),
+        edge("e-b-d", "B", "D"),
+        edge("e-d-join", "D", "JOIN"),
+        edge("e-join-e", "JOIN", "e")
+      ]
+    )
+  end
+
+  # Same graph as cyclic_escape_graph/0, with the split node's edges_out
+  # list order swapped (edge 0 -> "B", edge 1 -> "X") -- forces
+  # find_matching_join/2's outer fold to evaluate the cycle-internal-entry
+  # branch before the cycle-external-entry branch, the reverse of
+  # cyclic_escape_graph/0's own order. Both fixtures must produce the exact
+  # same result (design doc §2.4b's "Order 1" vs. "Order 2").
+  defp cyclic_escape_graph_reversed_edges do
+    graph(
+      [
+        node("split", :PARALLEL_GATEWAY),
+        node("X", :HUMAN_TASK),
+        node("GW", :EXCLUSIVE_GATEWAY),
+        node("C", :HUMAN_TASK),
+        node("B", :EXCLUSIVE_GATEWAY),
+        node("D", :HUMAN_TASK),
+        node("JOIN", :PARALLEL_GATEWAY),
+        node("e", :END)
+      ],
+      [
+        edge("e-split-0", "split", "B"),
+        edge("e-split-1", "split", "X"),
+        edge("e-x-gw", "X", "GW"),
+        edge("e-gw-c", "GW", "C"),
+        edge("e-c-b", "C", "B"),
+        edge("e-b-gw", "B", "GW"),
+        edge("e-b-d", "B", "D"),
+        edge("e-d-join", "D", "JOIN"),
+        edge("e-join-e", "JOIN", "e")
+      ]
+    )
+  end
+
+  # ISS-0398 empty-aggregate regression fixture (design doc §2.2.1/§4): a
+  # PARALLEL_GATEWAY "split" with 2 outgoing edges, both entering the same
+  # escape-less cycle (out-degree 2 is what makes gateway_role/2 classify
+  # "split" as a real :split rather than :pass_through -- see
+  # diamond_chain_graph/1's own comment above) -- "A" (single edge) -> "B"
+  # (EXCLUSIVE_GATEWAY, single edge back to "A", closing a 2-node cycle with
+  # no escape edge anywhere in it -- legal per CHK-06 since "B" is
+  # gateway-typed). The SCC's aggregate leaves is the empty set (no escape
+  # edges, and the cycle's own back-edge contributes nothing per §2.2.2 step
+  # 2's semantic correction) -- a non-singleton, so both branches must fail
+  # to resolve, and find_matching_join/2's own reduce_while halts on the
+  # first one.
+  defp pure_cycle_no_escape_graph do
+    graph(
+      [
+        node("split", :PARALLEL_GATEWAY),
+        node("A", :HUMAN_TASK),
+        node("B", :EXCLUSIVE_GATEWAY)
+      ],
+      [
+        edge("e-split-0", "split", "A"),
+        edge("e-split-1", "split", "A"),
+        edge("e-a-b", "A", "B"),
+        edge("e-b-a", "B", "A")
+      ]
+    )
+  end
+
   # Runs the split dispatch once and returns {new_state, branch_ids} where
   # branch_ids is in edges_out declaration order (b0, b1, b2).
   defp do_split(g, initial_token_id \\ "t1") do
@@ -343,6 +543,148 @@ defmodule Letflow.Engine.ParallelGatewayTest do
       # left untouched.
       assert merge_events == []
       assert final_state.variables["x"] == "b"
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # ISS-0398 -- a fork branch containing a non-PARALLEL_GATEWAY branching
+  # node (an EXCLUSIVE_GATEWAY) before reaching its join must still resolve,
+  # per lib/letflow/design/iss0398-walk-to-gateway-fix.md §4.
+  # ---------------------------------------------------------------------
+
+  describe "transition/3 -- PARALLEL_GATEWAY split with an EXCLUSIVE_GATEWAY inside a branch (ISS-0398)" do
+    test "a branch that passes through an EXCLUSIVE_GATEWAY before reconverging on the join still resolves and splits successfully" do
+      g = branch_with_exclusive_gateway_graph()
+      state = instance_state([token("split", "t1")])
+
+      assert {:ok, new_state, [{:parallel_split, "t1", "split", branch_ids}]} =
+               Transition.transition(g, state, {:advance_token, "t1"})
+
+      assert length(branch_ids) == 2
+
+      assert %JoinCounter{} = counter = new_state.join_counters["join"]
+      assert counter.expected_from_branches == MapSet.new(branch_ids)
+
+      # Branch 1's new token lands on "gw" -- the split itself only ever
+      # advances each branch one hop to its own edge.target; the deeper
+      # subtree search is a pure lookahead and never advances any token.
+      assert Enum.map(new_state.tokens, & &1.node_id) |> Enum.sort() == ["gw", "join"]
+    end
+
+    test "a branch whose EXCLUSIVE_GATEWAY has one path reaching the join and another dead-ending still fails the whole split" do
+      g = ambiguous_branch_dead_ends_graph()
+      state = instance_state([token("split", "t1")])
+
+      assert {:error, {:no_matching_join_found, "split"}} =
+               Transition.transition(g, state, {:advance_token, "t1"})
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # ISS-0398 -- regression coverage for the exponential-blowup defect
+  # (design doc §2.4a/§4): a k-diamond EXCLUSIVE_GATEWAY chain must resolve
+  # correctly AND complete fast, not just "eventually".
+  # ---------------------------------------------------------------------
+
+  describe "transition/3 -- PARALLEL_GATEWAY split through a long EXCLUSIVE_GATEWAY diamond chain (ISS-0398 complexity regression)" do
+    test "a 40-diamond chain resolves correctly and completes well within a generous time budget" do
+      k = 40
+      g = diamond_chain_graph(k)
+      state = instance_state([token("split", "t1")])
+
+      {elapsed_us, result} =
+        :timer.tc(fn -> Transition.transition(g, state, {:advance_token, "t1"}) end)
+
+      assert {:ok, new_state, [{:parallel_split, "t1", "split", branch_ids}]} = result
+      assert length(branch_ids) == 2
+
+      assert %JoinCounter{} = counter = new_state.join_counters["join"]
+      assert counter.expected_from_branches == MapSet.new(branch_ids)
+
+      # Both branches ("join" directly, and "gw1" at the head of the chain)
+      # advance one hop each -- chain length doesn't change which node the
+      # branch resolves to, only how much work resolving it takes.
+      assert Enum.map(new_state.tokens, & &1.node_id) |> Enum.sort() == ["gw1", "join"]
+
+      # O(2^40) ~= 10^12 leaf-level calls under the old unmemoized scheme
+      # would be nowhere near this budget (would not finish in any
+      # practical time at all); O(k) fresh explorations under this
+      # revision's memoized Tarjan-SCC scheme finishes in microseconds. 2
+      # seconds is generous enough to avoid CI flakiness while still being
+      # far too tight for a reversion to O(2^k) behavior at k = 40 to sneak
+      # through.
+      assert elapsed_us < 2_000_000,
+             "expected diamond_chain_graph(#{k}) to resolve in well under 2s, took #{elapsed_us}us"
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # ISS-0398 -- regression coverage for the memo-key-unsoundness defect
+  # (design doc §2.2.1/§2.4b/§4): a cycle through a branching gateway node
+  # whose branching member also has an escape edge out of the cycle must
+  # resolve identically regardless of which cycle-adjacent branch is
+  # evaluated first.
+  # ---------------------------------------------------------------------
+
+  describe "transition/3 -- PARALLEL_GATEWAY split through a cycle with an internal escape edge (ISS-0398 memo-soundness regression)" do
+    test "cyclic_escape_graph/0 and its edge-order-reversed twin produce identical results" do
+      state_a = instance_state([token("split", "t1")])
+      state_b = instance_state([token("split", "t1")])
+
+      result_a = Transition.transition(cyclic_escape_graph(), state_a, {:advance_token, "t1"})
+
+      result_b =
+        Transition.transition(
+          cyclic_escape_graph_reversed_edges(),
+          state_b,
+          {:advance_token, "t1"}
+        )
+
+      assert {:ok, new_state_a, [{:parallel_split, "t1", "split", branch_ids_a}]} = result_a
+      assert {:ok, new_state_b, [{:parallel_split, "t1", "split", branch_ids_b}]} = result_b
+
+      assert length(branch_ids_a) == 2
+      assert length(branch_ids_b) == 2
+
+      assert %JoinCounter{} = counter_a = new_state_a.join_counters["JOIN"]
+      assert %JoinCounter{} = counter_b = new_state_b.join_counters["JOIN"]
+      assert counter_a.expected_from_branches == MapSet.new(branch_ids_a)
+      assert counter_b.expected_from_branches == MapSet.new(branch_ids_b)
+
+      # The branch entering directly at "B" (the cycle member) lands its
+      # new token on "B" itself in both fixtures -- the split only ever
+      # advances one hop per branch, regardless of what the deeper
+      # lookahead discovers.
+      assert "B" in Enum.map(new_state_a.tokens, & &1.node_id)
+      assert "B" in Enum.map(new_state_b.tokens, & &1.node_id)
+
+      # THE actual regression assertion for the memo-key-unsoundness defect
+      # (design doc §2.2.1/§2.4b): branch_id assignment in
+      # dispatch_parallel_split/4 is purely positional (token_id <> "/" <>
+      # index), independent of which node each edge targets, so
+      # branch_ids_a and branch_ids_b -- and therefore the two JoinCounters
+      # built from them -- are expected to be identical, byte-for-byte,
+      # regardless of which cycle-adjacent branch ("X"-entry or "B"-entry)
+      # find_matching_join/2's outer fold happens to evaluate first. A
+      # plain node-keyed memo (iteration 2's falsified scheme) could not
+      # guarantee this: §2.4b's own trace shows it produced a clean
+      # singleton value for "GW" under a "B"-first entry order but a
+      # two-element, non-singleton value under an "X"-first entry order --
+      # asserting only per-fixture success (as the two blocks above do)
+      # would not by itself distinguish "both orders happen to land on the
+      # same conclusion" from "both orders happen to independently fail or
+      # coincidentally agree." Comparing the two JoinCounters directly is
+      # the literal cross-order agreement check the design doc calls for.
+      assert Enum.sort(branch_ids_a) == Enum.sort(branch_ids_b)
+      assert counter_a == counter_b
+    end
+
+    test "a pure escape-less cycle (no gateway reachable) fails the whole split cleanly" do
+      g = pure_cycle_no_escape_graph()
+      state = instance_state([token("split", "t1")])
+
+      assert {:error, {:no_matching_join_found, "split"}} =
+               Transition.transition(g, state, {:advance_token, "t1"})
     end
   end
 end

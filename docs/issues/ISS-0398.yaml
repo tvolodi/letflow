@@ -45,4 +45,134 @@ source: >
   (recommendation_to_orch).
 queue_task_id: 398
 github_issue: 779
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0398-20260901
+resolved_at: "2026-09-01T16:20:00Z"
+resolution: >
+  Fixed by replacing `walk_to_gateway/3` (a linear single-outgoing-edge-only
+  chain walk) with `collect_leaf_gateways/3` in
+  `lib/letflow/engine/transition.ex`: a memoized, Tarjan-SCC-based DFS that
+  explores every path forward from a branch's origin (not just a single
+  strand), terminating each path at either a PARALLEL_GATEWAY node (a
+  success leaf) or a dead end (an unresolved node_id / zero-outgoing-edge
+  node), and requiring the full set of leaves reached to be a singleton
+  `{:gateway, id}` for the branch to resolve. `find_matching_join/2`'s
+  existing cross-branch agreement rule (every branch must land on the same
+  gateway id) is unchanged. Design doc:
+  `lib/letflow/design/iss0398-walk-to-gateway-fix.md`.
+
+  This went through 2 real BLOCKER-class reworks before landing, both
+  caught by independent adversarial review, not just the final PASS chain:
+
+  1. SECURITY-REVIEWER (step-03c, iteration 1) found an INV-8 exponential-
+     blowup DoS: the first broadened-traversal design copied a per-path
+     `visited` set across sibling branches instead of memoizing per
+     node_id, so a chain of k reconverging EXCLUSIVE_GATEWAY "diamonds"
+     (fully legal under existing CHK-01..CHK-19 structural checks and well
+     within @max_nodes=500/@max_edges=2000) triggered O(2^k) recursive
+     calls -- a tenant-authored, fully-valid process definition could hang
+     `Engine.create/2` synchronously. Routed back through CODE-DESIGNER
+     (the flaw was in the validated design's own algorithm, not an
+     implementation deviation) for a node_id-keyed-memoization redesign.
+
+  2. CODE-DESIGN-VALIDATOR (step-02b, iteration 2's re-check) found the
+     node_id-keyed-memoization fix was itself unsound under cycles: plain
+     DFS cycle detection "closes" a back-edge at whichever node is first
+     repeated on the *current* call chain, so a node inside a cycle that
+     also has its own escape edge could memoize two different (wrong)
+     leaf-sets depending on which cycle member the traversal happened to
+     enter through first -- non-deterministic correctness depending on
+     branch/sibling evaluation order. Fixed by re-deriving the scheme
+     around Tarjan strongly-connected-components: leaf-sets are memoized
+     per SCC (written once, atomically, at SCC closure when
+     `lowlink == index`), not per node, so every member of a cycle shares
+     the same aggregate leaf-set regardless of entry point. Independently
+     re-verified by a third, maximally rigorous CODE-DESIGN-VALIDATOR
+     re-check (step-02b-code-design-validator-recheck2) that constructed
+     its own adversarial cycle shapes (not just the counterexample that
+     found the defect) before passing.
+
+  Both defects were re-verified as genuinely fixed in the FINAL shipped
+  code (not just in an intermediate design iteration that was further
+  revised): SECURITY-REVIEWER's own recheck1
+  (step-03c-security-reviewer-recheck1.json) re-read the actual shipped
+  `collect_leaf_gateways/3`/`explore_branching_node/3`/
+  `fold_outgoing_edges/4`/`close_scc_or_defer/5` functions line-by-line
+  (not the design doc's prose), confirmed `fold_outgoing_edges/4` threads
+  state through `Enum.reduce` (not an independent `Enum.map` that would
+  reintroduce per-sibling state copying), and independently ran
+  `diamond_chain_graph(165)` (498/500 nodes, pushed deliberately close to
+  the structural-validator's own cap) end-to-end at 40.6ms plus a 20-way
+  wide-fanout cross-branch-memo-reuse shape at 11.7ms -- both consistent
+  with O(nodes+edges), nowhere near the O(2^k) collapse the original
+  BLOCKER demonstrated. This ISSUE-FIXER close-step independently re-read
+  the same four functions (transition.ex:817-1035) and confirms the
+  memoization (`state.memo` checked first, SCC-closure writing one shared
+  aggregate per component) and the sequential `Enum.reduce` fold are both
+  genuinely present in the code on this branch, not just described.
+
+  New regression coverage added to
+  `test/letflow/engine/parallel_gateway_test.exs` (spot-checked directly,
+  not just trusted from TEST-RUNNER's report): `branch_with_exclusive_gateway_graph/0`
+  (the literal reported symptom -- an EXCLUSIVE_GATEWAY inside a fork
+  branch before the join) now resolves and produces a correct JoinCounter;
+  `ambiguous_branch_dead_ends_graph/0` (one of the gateway's paths dead-
+  ends) still correctly fails the whole split; `diamond_chain_graph(40)`
+  (the exponential-blowup regression) resolves in low milliseconds, far
+  under a 2s budget; `cyclic_escape_graph/0` and its
+  edge-order-reversed twin `cyclic_escape_graph_reversed_edges/0` (the
+  memo-key-unsoundness regression) assert byte-identical JoinCounters
+  regardless of evaluation order; `pure_cycle_no_escape_graph/0` confirms
+  an escape-less cycle still cleanly fails. 12/12 tests in this file pass
+  (independently re-run by this ISSUE-FIXER close-step, not just cited
+  from the chain).
+
+  `test/letflow/scheduler_req188_test.exs`'s "transition.ex has zero diff
+  against the base branch" guard (line ~432) was rescoped by REVIEWER
+  (step-03d) from an unscoped "against main forever" assertion (which
+  ISS-0398's own legitimate change to transition.ex would permanently and
+  correctly fail, since it was never rescoped after REQ-188 itself merged)
+  to REQ-188's own historical commit range (`746a3ac0..77637268`) -- a
+  fixed, immutable historical fact re-derived and verified directly by
+  REVIEWER, not simply asserted. This ISSUE-FIXER close-step independently
+  re-confirmed `git diff --stat 746a3ac0..77637268 -- lib/letflow/engine/transition.ex`
+  is empty and re-ran the file (8/8 pass) -- this is a genuine fix to an
+  over-scoped guard, not a scope-widening workaround: it does not touch
+  what the guard actually protects (that REQ-188 itself never touched
+  transition.ex), it only stops the guard from firing forever against
+  unrelated future work.
+
+  Full-suite run (`mix letflow.check.test`) shows 2 pre-existing failures
+  in `Mix.Tasks.Letflow.CheckToolchainTest` (REQ-165's rust-pin checker,
+  lines ~289/~... ), both `:enoent` from `System.cmd("rustc", ...)`.
+  Independently re-confirmed unrelated to this diff: (1)
+  `git diff origin/main...HEAD --stat -- test/mix/tasks/letflow_check_toolchain_test.exs`
+  is empty -- the file is untouched by this branch; (2) this ISSUE-FIXER
+  close-step reproduced the identical `:enoent` failure directly by
+  running `mix test` in the same non-login-shell environment (only
+  `~/.asdf/shims` on PATH) that `mix test`/`mix letflow.check.test` runs
+  in on this host -- `rustc`/`cargo` exist only under `~/.cargo/bin`,
+  which is on PATH in an interactive login shell but not in the
+  non-login environment the test runner uses, so this is a pre-existing,
+  host-environment PATH gap (parallel to README.md's documented
+  `mix deps.get` no-network-access gap), not a regression from ISS-0398.
+
+  Diff scope independently re-confirmed via `git diff origin/main...HEAD
+  --stat`: exactly `lib/letflow/engine/transition.ex`,
+  `lib/letflow/design/iss0398-walk-to-gateway-fix.md`,
+  `test/letflow/engine/parallel_gateway_test.exs`,
+  `test/letflow/scheduler_req188_test.exs`, `test/specs/ISS-0398.md`,
+  `test/specs/REQ-188.md`, plus this run's own handoff/report bookkeeping
+  -- no unrelated file touched.
+
+  Follow-on (not part of this fix, named as an explicit non-goal in the
+  design doc's §2.3/§4 and REQ-051's own pre-existing OQ in
+  `lib/letflow/design/req051-parallel-gateway-split-join.md` §12.4): a
+  fork branch containing a NESTED PARALLEL_GATEWAY split/join pair fully
+  contained within one branch (before reaching the outer join) is still
+  out of scope -- `collect_leaf_gateways/3` treats the first
+  PARALLEL_GATEWAY reached on any path as a terminal leaf, so an inner
+  join could be mismatched for the outer split's join if such a graph
+  were ever constructed. Recommend ORCH file a new issue for this at Step
+  Final if one does not already exist, per the design doc's own
+  OQ-flagging convention.

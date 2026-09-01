@@ -1,0 +1,53 @@
+{
+  "handoff_id": "WF03-ISS0398-20260901-step-02",
+  "run_id": "WF03-ISS0398-20260901",
+  "workflow_id": "WF-03",
+  "step": "2",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0398-20260901/step-02-code-designer.json",
+  "created_at": "2026-09-01T12:53:30Z",
+  "started_at": "2026-09-01T12:53:30Z",
+  "completed_at": "2026-09-01T12:53:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-051"],
+    "issue_ids": ["ISS-0398"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0398-20260901/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/design/req051-parallel-gateway-split-join.md",
+      "test/letflow/engine/parallel_gateway_test.exs",
+      "docs/issues/ISS-0398.yaml"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"],
+    "branch_name": "fix/ISS-0398-walk-to-gateway-20260901"
+  },
+  "task": {
+    "description": "Design the fix for ISS-0398: broaden Letflow.Engine.Transition's walk_to_gateway/3 (private, transition.ex) from a linear single-outgoing-edge walk into a per-path reachability search, so a PARALLEL_GATEWAY fork branch containing a non-PARALLEL_GATEWAY branching node (e.g. EXCLUSIVE_GATEWAY) before its join no longer fails instance creation, while explicitly bounding the nested-PARALLEL_GATEWAY false-positive risk ISSUE-FIXER flagged. Design only -- no implementation code.",
+    "acceptance_criteria": [
+      "Exact termination/traversal algorithm specified precisely enough for ELIXIR-DEV to implement without further judgment calls, including the nested-PARALLEL_GATEWAY exclusion boundary",
+      "Every existing AC1-AC6 test in test/letflow/engine/parallel_gateway_test.exs walked through conceptually and confirmed unaffected",
+      "New test case specified (not implemented) for the ISS-0398 reported scenario (fork branch containing an EXCLUSIVE_GATEWAY before the join)",
+      "Explicit scope boundary: nested split/join-within-a-branch named as still genuinely unsupported after this fix, with instruction for ORCH to file a new follow-up issue at Step Final if not already covered (checked docs/issues/ -- not covered)",
+      "No silent deferral of resolvable open questions (REQ-051 section 12.4's upstream-CHK-rule question resolved as out of scope for this fix, not left dangling)",
+      "No implementation code in the design document"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/iss0398-walk-to-gateway-fix.md. Re-verified transition.ex's real walk_to_gateway/3 (lines 837-862), find_matching_join/2 (804-828), dispatch_parallel_split/4 (748-799), and gateway_role/2 (730-741) directly from source -- ISSUE-FIXER's line numbers confirmed accurate. Design replaces walk_to_gateway/3 with collect_leaf_gateways/3 (@spec Graph.t(), String.t(), MapSet.t(String.t()) -> MapSet.t(branch_leaf()), branch_leaf() :: {:gateway, String.t()} | :dead_end): a recursive per-path search where (1) a cycle-guard hit or unresolved node_id yields :dead_end, (2) a :PARALLEL_GATEWAY node is an immediate terminal leaf without inspecting its own outgoing edges -- this single clause is the entire nested-PARALLEL_GATEWAY exclusion boundary, since the new out-degree>1 broadening can only ever fire for non-PARALLEL_GATEWAY nodes, (3) zero outgoing edges yields :dead_end, (4) exactly one outgoing edge recurses unchanged from today's linear walk, (5) more than one outgoing edge (EXCLUSIVE_GATEWAY etc.) recurses into every target independently with visited threaded per-path (never merged across sibling edges -- worked example in section 2.4 shows why a shared/global visited set would falsely reject a legitimate reconverging diamond shape). find_matching_join/2 keeps its existing cross-branch agreement reduce_while unchanged, adding a new per-branch check: a branch resolves only if collect_leaf_gateways returns a singleton MapSet whose element is {:gateway, id} -- any dead end on any internal path, or disagreement between internal paths, still yields {:error, :no_matching_join} exactly as today. Section 3 walks three_branch_graph/0 (the fixture underlying all of AC1-AC6) through the new algorithm and shows step 4's broadening is dead code for every existing test case (each branch's target already IS the PARALLEL_GATEWAY join with zero hops, so step 3's terminal fires immediately, identical to today) -- no existing assertion needs to change. Section 4 specifies (not implements) a new positive test fixture branch_with_exclusive_gateway_graph/0 (one direct branch + one branch through a 2-edge EXCLUSIVE_GATEWAY whose both edges reconverge on the join) asserting the split now succeeds with the correct JoinCounter, plus a negative fixture ambiguous_branch_dead_ends_graph/0 (one EXCLUSIVE_GATEWAY edge reaches the join, the other reaches a dead-end :END) asserting {:error, {:no_matching_join_found, \"split\"}} is still returned. Section 5 resolves REQ-051 section 12.4's dangling upstream-CHK-rule open question explicitly as out of scope for this fix (not silently deferred): find_matching_join/2's existing error surfacing is judged sufficient; adding a structural CHK-* rule would duplicate this same subtree analysis at a different layer for a cosmetic error-timing improvement only, not required by ISS-0398's own ACs. Section 6 names the nested-PARALLEL_GATEWAY-within-a-branch case as genuinely unsupported after this fix (mirrors REQ-051 section 12.4's own precedent) and states, backed by a fresh grep of docs/issues/*.yaml for nested/block-structured/internal-branch patterns (no hits), that no existing issue covers it -- ORCH must file a new follow-up issue for it at this run's Step Final. Design document contains zero defmodule/defstruct/function-body code -- verified via grep, only bare @spec/@type lines and prose/worked-example pseudocode.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md"
+    ],
+    "issues": [
+      "Nested PARALLEL_GATEWAY split fully or partially contained within a fork branch, ahead of that branch's own join, remains unsupported after this fix (design doc section 2.3/section 6). No existing docs/issues/*.yaml entry covers it. ORCH should file a new issue at this run's Step Final, tagged engine/parallel-gateway/fork-join like ISS-0398, referencing this design's section 2.3/section 6 and REQ-051 section 12.4."
+    ],
+    "next_action": "ORCH routes to Step 2b CODE-DESIGN-VALIDATOR to gate this design (coverage of every ISS-0398 acceptance criterion, no implementation code, unambiguous enough for ELIXIR-DEV to build from) before ELIXIR-DEV implements at Step 3."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": []
+}

@@ -1,0 +1,58 @@
+{
+  "handoff_id": "WF03-ISS0398-20260901-step-04b",
+  "run_id": "WF03-ISS0398-20260901",
+  "workflow_id": "WF-03",
+  "step": "4b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0398-20260901/step-04b-test-design-validator.json",
+  "created_at": "2026-09-01T15:46:00Z",
+  "started_at": "2026-09-01T15:40:00Z",
+  "completed_at": "2026-09-01T15:46:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-051"],
+    "issue_ids": ["ISS-0398"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0398-20260901/step-04-test-designer.json",
+      "test/specs/ISS-0398.md",
+      "test/letflow/engine/parallel_gateway_test.exs",
+      "lib/letflow/engine/transition.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "fix/ISS-0398-walk-to-gateway-20260901"
+  },
+  "task": {
+    "description": "Independently re-verify TEST-DESIGNER's Step 4 coverage-verification pass over test/letflow/engine/parallel_gateway_test.exs: (1) the cyclic_escape_graph cross-order assertion is real and discriminating, (2) the empirical mutation claims (9/12, 10/12-with-timeout, 12/12 across the 3 prior code states) are reproducible, (3) the JoinCounter-vs-full-InstanceState-equality reasoning is correct by reading dispatch_parallel_split/4, (4) test isolation and no vacuous assertions, (5) run mix test and quote real output.",
+    "acceptance_criteria": [
+      "Cross-order cyclic_escape_graph assertion read directly and confirmed genuine (would fail on divergent outcomes)",
+      "At least one of the 3 prior-code-state mutations reproduced independently, not just trusted from the report",
+      "dispatch_parallel_split/4 read directly to confirm branch_id/JoinCounter order-invariance reasoning",
+      "Test isolation and non-vacuousness confirmed across all 12 tests",
+      "mix test test/letflow/engine/parallel_gateway_test.exs run synchronously by this validator, real output quoted",
+      "Working tree left clean (no leftover mutation) after validation"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Independently re-verified all of TEST-DESIGNER's Step 4 claims; none were taken on trust.\n\n1. Cross-order assertion (test/letflow/engine/parallel_gateway_test.exs:678-679): read directly. `assert Enum.sort(branch_ids_a) == Enum.sort(branch_ids_b)` and `assert counter_a == counter_b` compare fixture-A's outcome directly against fixture-B's outcome (cyclic_escape_graph/0 vs cyclic_escape_graph_reversed_edges/0). This is a real, non-vacuous cross-order comparison -- if the two fixtures produced divergent JoinCounters or branch_id sets (e.g. under a plain node-keyed memo bug), this assertion would fail. Gap from design doc SS2.4b is genuinely closed.\n\n2. JoinCounter-vs-full-state-equality reasoning: read dispatch_parallel_split/4 directly (lib/letflow/engine/transition.ex:748-798). Confirmed `derived_id = token.token_id <> \"/\" <> Integer.to_string(index)` is computed purely from `edges_out` position via `Enum.with_index/1`, never from `edge.target` -- so branch_ids (and the JoinCounter built from them: join_node_id, origin_token_id, expected_from_branches, empty received/cancelled sets) are provably order-of-target-independent, while `new_state.tokens` node placement legitimately differs between the two edge orders. TEST-DESIGNER's reasoning for why full InstanceState equality would be a false requirement is correct.\n\n3. Empirical mutation reproduction (independently performed, not copied from the report): confirmed clean tree (`git status --porcelain` empty) before starting. Checked out iteration 1's transition.ex (`git checkout 5691a6a2 -- lib/letflow/engine/transition.ex`) and ran only the diamond_chain_graph(40) test (`mix test test/letflow/engine/parallel_gateway_test.exs:590 --timeout 15000`). Result: `** (ExUnit.TimeoutError) test timed out after 15000ms`, with a stacktrace showing deep recursive `Enum.map`/`Enum.filter` nesting through `Letflow.Engine.Transition.collect_leaf_gateways/3` (transition.ex:863/878) -- structurally identical to TEST-DESIGNER's reported 60s-timeout failure, just observed at a shorter timeout for practicality. This independently confirms the exponential-blowup claim is real, not a coincidence or a copied claim. Restored via `git checkout HEAD -- lib/letflow/engine/transition.ex`; verified clean with `git status --porcelain lib/ test/` (empty output) before proceeding.\n\n4. Test isolation and non-vacuousness: read all 12 tests in the file end to end. All fixtures are plain parameterless (or k-parameterized) functions returning fresh %Graph{} literals; no module-level setup/shared mutable state; module stays `async: true`; no Letflow.Repo/Ecto.Sandbox dependency. Every assertion checks a specific outcome shape (exact {:ok,...}/{:error,...} tuples, exact JoinCounter fields, exact token placement) -- none merely assert 'doesn't crash'. No `@tag :skip` and no 'TODO: implement test' anywhere in the test file or in test/specs/ISS-0398.md (grep confirmed empty). No hardcoded secrets/connection strings (grep for password/secret/api_key/postgres:// confirmed empty).\n\n5. Final run, this validator's own execution against the shipped (restored) code:\n`mix test test/letflow/engine/parallel_gateway_test.exs` (after `source ~/.asdf/asdf.sh` to get mix/elixir on PATH) --\n```\nRunning ExUnit with seed: 313225, max_cases: 16\nExcluding tags: [:keycloak, :wasm_hang]\n\n............\nFinished in 0.5 seconds (0.5s async, 0.00s sync)\n\nResult: 12 passed\n```\nMatches TEST-DESIGNER's reported 12/12.\n\nAll 5 acceptance criteria hold. No gap found. Working tree confirmed clean (git status --porcelain lib/ test/ empty) both mid-validation (after the mutation revert) and at completion of this pass.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0398-20260901/step-04b-test-design-validator.json"
+    ],
+    "issues": [],
+    "next_action": "Route to Step 5 TEST-RUNNER to run the full suite (not just this file) and produce the structured pass/fail report."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": false,
+  "gate_history": [
+    {
+      "gate": "TEST-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-01T15:46:00Z",
+      "notes": "Independently reproduced the cross-order assertion's genuineness, the iteration-1 exponential-blowup timeout, and the dispatch_parallel_split/4 positional-branch_id reasoning; ran mix test directly with real quoted output (12 passed)."
+    }
+  ]
+}

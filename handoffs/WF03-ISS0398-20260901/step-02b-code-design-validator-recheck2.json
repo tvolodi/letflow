@@ -1,0 +1,92 @@
+{
+  "handoff_id": "WF03-ISS0398-20260901-step-02b-recheck2",
+  "run_id": "WF03-ISS0398-20260901",
+  "workflow_id": "WF-03",
+  "step": "2b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0398-20260901/step-02b-code-design-validator-recheck2.json",
+  "created_at": "2026-09-01T15:40:00Z",
+  "started_at": "2026-09-01T15:40:00Z",
+  "completed_at": "2026-09-01T15:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-051"],
+    "issue_ids": ["ISS-0398"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0398-20260901/step-02-code-designer-rework2.json",
+      "handoffs/WF03-ISS0398-20260901/step-02b-code-design-validator-recheck1.json",
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/definitions/graph.ex",
+      "test/letflow/engine/parallel_gateway_test.exs"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"],
+    "branch_name": "fix/ISS-0398-walk-to-gateway-20260901"
+  },
+  "task": {
+    "description": "Third, maximally rigorous full re-gate of CODE-DESIGNER's iteration-3 rework (lib/letflow/design/iss0398-walk-to-gateway-fix.md, replacing the second BLOCKER's node-keyed memo with SCC-granularity Tarjan-style memoization) after two prior distinct correctness/DoS failures on this same design.",
+    "acceptance_criteria": [
+      "Independently re-trace the exact prior counterexample (X -> GW -> C -> B, B -> GW back-edge, B -> D -> JOIN) under both entry orders using the new Tarjan algorithm, not by trusting the design's own §2.4b trace",
+      "Verify Tarjan-SCC correctness fundamentals for this rooted/restricted (single-branch-entry) usage, including whether restricting exploration to root-reachable nodes still yields complete/correct SCCs, and whether the aggregate escape-leaf computation is unambiguously defined",
+      "Check whether an SCC can legally contain a PARALLEL_GATEWAY node under CHK-06, and if so whether the terminal-leaf rule for PARALLEL_GATEWAY still applies correctly without being pulled into a shared aggregate",
+      "Re-verify the O(nodes + edges) complexity claim for the SCC-aware variant",
+      "Confirm the new regression fixtures (cyclic_escape_graph/0 + reversed-edges twin, pure_cycle_no_escape_graph/0) are unambiguous and meaningfully exercise the SCC logic",
+      "Re-confirm AC1-AC6 non-regression",
+      "Confirm no implementation code is present"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently hand-traced (not trusting the design's own §2.4b prose) the exact prior counterexample under both entry orders, symbol-by-symbol against §2.2.2's five-step algorithm: entering via X first (fresh memo) assigns index[X..B]=0..3, B's edge to GW hits step-2 (on-stack) contributing the empty set plus lowlink=1, B's edge to D->JOIN contributes {gateway,JOIN}, B stays open (lowlink 1 != index 3), the open state propagates up through C to GW where lowlink(1) == index[GW](1) closes the SCC {GW,C,B} with the single shared aggregate #{gateway,JOIN}; entering directly at B second then hits a step-1 memo hit on B itself, O(1), same value. Re-ran the whole trace with B evaluated first instead (fresh memo): B's edge to GW recurses fresh into GW->C->B, B is detected on its own stack (step 2, index 0), lowlink propagates back down to 0, B's edge to D->JOIN contributes the same leaf, B's own lowlink(0)==index[B](0) closes the SCC {B,GW,C} (same three members, same aggregate #{gateway,JOIN}); X evaluated second then gets a step-1 memo hit on GW. Both orders land on the byte-identical singleton in both member identity and value -- the prior defect is genuinely fixed, not just fixed for the literal counterexample as originally traced by CODE-DESIGNER (verified independently from first principles, not from trusting §2.4b's own narrative).\n\nActively hunted for a third distinct defect rather than stopping at re-confirming the second fix, per the assignment's explicit instruction to be skeptical:\n\n1. Constructed an independent adversarial cycle NOT in the design's own worked examples: a 3-member cycle A->B->C->A where B has an extra escape edge B->E1 and C has an extra escape edge C->E2 (two DISTINCT escape gateways from two DIFFERENT SCC members -- exactly the class recheck1's own issues[1] flagged as unresolved risk). Hand-traced entering at A with edge order [E1-then-C] and [C-then-E2 vs E2-then-C] at C, and separately entering directly at C with edges processed in both orders. In every variant the SCC {A,B,C} closes with the identical two-element aggregate #{E1,E2} regardless of entry point or internal edge-processing order -- correctly triggers §2.5's non-singleton rejection (a branch reaching two distinct real gateways depending on internal path is genuinely ambiguous, so failing is the right external outcome, and the point here is that the aggregate computed is complete and order-independent, not that it resolves to a match). No defect found.\n2. Verified the rooted/restricted-Tarjan concern directly: standard Tarjan's textbook proof relies on an outer 'for every unvisited node, start a new DFS' loop across the whole graph, but this design only ever roots a DFS at a specific branch-entry node, never restarting elsewhere. Worked out from first principles (not from the design's own citation, which only asserts the whole-graph property and does not explicitly address the single-rooted case) that this restriction is nonetheless sound for this specific use: if node M is in the same SCC as an already-visited node N, then by definition of mutual reachability M is reachable from N via forward edges, and since N was reached via a forward-only DFS from the branch root, the same forward DFS will necessarily reach M too when exploring N's own descendants. So a single-rooted forward DFS can never produce an incomplete SCC for any node it touches -- restricting to the branch-root-reachable subgraph is mathematically safe, it just never computes anything for the unreached remainder of the graph, which this design correctly never needs. This is a real property that holds, though I'd flag as a non-blocking documentation improvement that §2.2.1's citation of 'Tarjan/Kosaraju compute the same partition regardless of starting point' elides the distinction between whole-graph Tarjan and this single-rooted variant -- the underlying claim is true, but the given justification doesn't quite prove the specific case being relied on. Not failing on this: the algorithm specified in §2.2.2 is unambiguous, precise enough to implement without judgment calls, and I independently confirmed it is correct; the gap is in exposition rigor, not in the specified behavior.\n3. Checked the standard-Tarjan-fidelity of the specific lowlink-update rule the design uses for a ':finished' child (\"local_lowlink unchanged\") against the textbook algorithm, which updates lowlink using min(lowlink[v], lowlink[w]) unconditionally for tree edges. Verified algebraically that these are equivalent for this design's case: whenever a child returns ':finished' (either because it closed as its own separate SCC, or because it was already in memo from an earlier root), that child's own lowlink can never be lower than the current node's index (a property both of Tarjan's closure invariant for self-contained SCCs, and of the fact this design's memo only ever holds values from already-fully-closed SCCs) -- so skipping the update is a no-op, not a shortcut that loses information. No defect found.\n4. Checked whether an SCC can legally contain a PARALLEL_GATEWAY node: confirmed via graph.ex:156 that @gateway_types includes both :EXCLUSIVE_GATEWAY and :PARALLEL_GATEWAY, so CHK-06 does permit a cycle whose back-edge closes at a PARALLEL_GATEWAY endpoint (e.g. PG -> X -> PG). Traced this construction under §2.2.2: whether entered at X or directly at PG, step 4 fires the instant PG is looked up (checking the resolved node's own node_type, independent of how PG was reached), returning it as an immediate terminal leaf before ever inspecting PG's own outgoing edges -- so the traversal never follows the edge back out of PG regardless of entry point, meaning this 'graph-theoretically legal cycle' is structurally invisible to the algorithm; PG can never be pushed onto stack_set and therefore can never become an SCC member. Matches, and does not contradict, §2.3/§6's claims. No defect found.\n5. Verified the O(nodes+edges) bound holds by confirming (from the totality/termination argument in §2.2.3, independently re-derived) that every top-level branch call's own stack is provably fully unwound (empty) by the time it returns, since a root's lowlink can never be pushed below its own index (nothing has a lower index within that top-level call's fresh numbering) -- so every fresh (step-5) exploration started during one top-level branch is guaranteed memoized by that branch's return, meaning no node is ever explored fresh more than once across the whole sequence of a split's sibling branches, and the per-node/per-edge work is bounded as claimed.\n6. Confirmed regression fixtures are precise: cyclic_escape_graph/0 and its reversed-edges twin exactly instantiate the counterexample with the split's edges_out order swapped to force literal Order 1 vs Order 2, asserting full-result-tuple equality across both fixtures -- this is a genuine, mechanical order-independence regression test, not merely two independent pass/fail checks. pure_cycle_no_escape_graph/0 (A -> B -> A, both gateway-typed-legal per CHK-06) is unambiguously specified as resolving to an empty aggregate (non-singleton), correctly failing via the existing §2.5 rule -- independently hand-traced and confirmed this exact outcome.\n7. Re-confirmed AC1-AC6 non-regression: three_branch_graph/0 is acyclic with zero branching nodes inside any branch, so §2.2.2 steps 2 and 5's branching/back-edge logic are both dead code for this fixture (only steps 1/4 ever fire), leaving the byte-identical {:ok,\"join\"} outcome unaffected by this or any prior iteration's memoization scheme -- correctly and honestly noted by the design itself as unable to distinguish the iterations, which is exactly why the new cyclic fixtures exist.\n8. Grepped the full document for defmodule/defstruct/def/defp/function-body code fences: zero hits besides the one prose reference to those tokens in the document's own scope statement (line 12) -- only bare @spec/@type declarations and prose/pseudocode throughout, consistent with both prior passes on this specific axis.\n\nAdversarial cases explicitly tried and ruled out: (a) a cycle with two distinct escape gateways from two different SCC members, both entry points and both internal edge orderings; (b) direct entry at a mid-cycle member versus an outside-the-cycle member, for both the original 3-member SCC and the new 3-member SCC construction; (c) a 2-node self-contained cycle via a self-loop (X -> X plus an escape edge) to check the SCC-closure math at the degenerate single-node-SCC boundary; (d) a PARALLEL_GATEWAY node positioned as the gateway endpoint of a legal CHK-06 back-edge, checked from both possible entry points; (e) algebraic equivalence of the design's 'skip lowlink update for finished children' rule against the textbook Tarjan min-update rule. No third defect found in any of these. This design is sound and ready for implementation.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0398-20260901/step-02b-code-design-validator-recheck2.json"
+    ],
+    "issues": [
+      "Non-blocking documentation note for future reference (not required to be fixed before implementation, since §2.2.2's specified algorithm is unambiguous and independently verified correct): §2.2.1's soundness citation ('Tarjan/Kosaraju compute the same SCC partition regardless of starting point') is a true statement about whole-graph SCC decomposition with the standard 'restart DFS at every unvisited node' outer loop, but this design's traversal is a single-rooted variant (DFS only from one branch-entry node, no outer restart loop across unreached islands) and the design does not explicitly prove that restriction preserves SCC completeness for the reachable subgraph. This validator independently derived why it does hold (any node M in the same SCC as an already-visited node N is, by definition of mutual reachability, itself forward-reachable from N, so a purely forward single-rooted DFS can never produce an incomplete SCC for any node it touches) but the design's own exposition elides this specific point. Recommend CODE-DESIGNER fold this one-paragraph argument into §2.2.1 on the next natural touch of this document, purely for reader clarity -- not a gate condition."
+    ],
+    "next_action": "ROUTE to Step 3 ELIXIR-DEV to (re-)implement collect_leaf_gateways/3 and find_matching_join/2's leaf_search_state() threading per this design's §2.2/§2.5/§2.6, replacing iteration 2's already-partially-implemented /4 version (per context.artifacts_in's step-03-elixir-dev.json from the prior iteration) in place. After implementation, this run's step-03c SECURITY-REVIEWER must re-run both the INV-8 complexity check (against diamond_chain_graph/1) and a correctness check against the new cyclic fixtures (cyclic_escape_graph/0, cyclic_escape_graph_reversed_edges/0, pure_cycle_no_escape_graph/0), before REVIEWER's step-03d idiom/scope-creep check and TEST-DESIGNER's step for the fixtures specified in this design's §4."
+  },
+  "rework_count": 2,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "step": "2b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-01T12:55:25Z"
+    },
+    {
+      "step": "3c",
+      "agent": "SECURITY-REVIEWER",
+      "result": "FAIL",
+      "timestamp": "2026-09-01T14:40:00Z"
+    },
+    {
+      "step": "2",
+      "agent": "CODE-DESIGNER",
+      "result": "REWORKED",
+      "timestamp": "2026-09-01T14:55:00Z"
+    },
+    {
+      "step": "2b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "FAILED",
+      "timestamp": "2026-09-01T14:18:01Z"
+    },
+    {
+      "step": "2",
+      "agent": "CODE-DESIGNER",
+      "result": "REWORKED",
+      "timestamp": "2026-09-01T14:32:12Z"
+    },
+    {
+      "step": "2b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-01T15:40:00Z"
+    }
+  ]
+}

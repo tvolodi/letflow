@@ -1,0 +1,70 @@
+{
+  "handoff_id": "WF03-ISS0398-20260901-step-02-rework1",
+  "run_id": "WF03-ISS0398-20260901",
+  "workflow_id": "WF-03",
+  "step": "2",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0398-20260901/step-02-code-designer-rework1.json",
+  "created_at": "2026-09-01T14:55:00Z",
+  "started_at": "2026-09-01T14:55:00Z",
+  "completed_at": "2026-09-01T14:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-051"],
+    "issue_ids": ["ISS-0398"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0398-20260901/step-03c-security-reviewer.json",
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md",
+      "lib/letflow/engine/transition.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"],
+    "branch_name": "fix/ISS-0398-walk-to-gateway-20260901"
+  },
+  "task": {
+    "description": "Rework the design's algorithm (§2.2/§2.4) after SECURITY-REVIEWER FAILED it at Step 3c on a BLOCKER-severity INV-8 finding: the per-path visited-set-copy scheme collect_leaf_gateways/3 used at a branching node makes total call count exponential (O(2^k) for a chain of k reconverging EXCLUSIVE_GATEWAY diamonds), well within existing structural-validator limits (@max_nodes 500/@max_edges 2000). Replace with a node_id-keyed memoized DFS bounding total work to O(nodes + edges), re-verify AC1-AC6 non-regression and SECURITY-REVIEWER's own adversarial diamond-chain example concretely, and route to a fresh CODE-DESIGN-VALIDATOR pass before ELIXIR-DEV re-implements.",
+    "acceptance_criteria": [
+      "Memo key choice (node_id alone) explicitly justified: does a node's leaf-gateway set ever depend on which ancestor path reached it, and if not, why not",
+      "The 'currently on this path' cycle-detection set kept explicitly distinct in scope/lifetime from the memo cache of already-resolved results",
+      "Exact termination/correctness argument for why this bounds total work polynomially (O(nodes + edges)), not exponentially",
+      "AC1-AC6 non-regression re-verified against the new algorithm",
+      "SECURITY-REVIEWER's own adversarial chain-of-reconverging-diamonds example traced concretely for a small chain (k=3), showing call count is now bounded, not exponential",
+      "Design doc's §2.2 (algorithm) and §2.4 (worked examples) updated; every other section reviewed and either left as-is with an explicit 'no knock-on effect' statement, or updated where the memoization change has a genuine knock-on effect",
+      "No implementation code in the design document (bare @spec/@type lines only, no defmodule/defstruct/function bodies)"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Read the real shipped lib/letflow/engine/transition.ex (find_matching_join/2 lines 808-834, collect_leaf_gateways/3 lines 836-883) to confirm exactly what SECURITY-REVIEWER's finding described: at a branching node, `visited` is copied (MapSet.put(visited, node_id)) and passed identically to every sibling's independent Enum.map call, with no memoization keyed on node_id, so a shared downstream node is re-derived from scratch once per sibling path -- confirmed as the exact O(2^k) mechanism for a chain of k reconverging EXCLUSIVE_GATEWAY diamonds. Reworked lib/letflow/design/iss0398-walk-to-gateway-fix.md: added a top-of-document 'Iteration 2' note explaining the FAIL and what changed. Rewrote §2.2 into §2.2.1 (memo-key justification: a node's forward-reachable leaf-gateway set is a static property of node_id and the graph -- ancestry only matters for cycle detection, which graph.ex's CHK-06 confirms is a real structurally-legal shape (a cycle IS permitted through a gateway node), so cycle detection is kept as a separate, never-cached, per-live-call-chain `on_path` set, strictly distinct from a `memo` cache of node_id -> finished result written only once a node's own computation has fully returned -- proved a node is never simultaneously in both), §2.2.2 (the precise collect_leaf_gateways/4 traversal: memo hit first (O(1)), then on_path cycle check, then node lookup/gateway-terminal/branch-by-out-degree with sibling edges processed sequentially threading memo forward -- an Enum.map_reduce/fold shape, not independent Enum.map, since threading memo across siblings is the one structural change that fixes the defect), §2.2.3 (complexity argument: the 'compute fresh' body runs at most once per distinct node_id since every subsequent reference is an O(1) memo hit, bounding total work to O(nodes + edges)). §2.3 (nested-PARALLEL_GATEWAY exclusion) explicitly stated to have no knock-on effect (orthogonal concern: which node type terminates vs. how many times a node is computed) with only its step-number cross-references corrected. §2.4 kept the original single-diamond worked example (now showing memo transparently returns the identical result, with an explicit note that the memo hit is a pure performance win at this shallow depth, not yet a correctness-for-tractability requirement). Added new §2.4a tracing SECURITY-REVIEWER's own adversarial construction concretely for k=3 (three chained EXCLUSIVE_GATEWAY diamonds reconverging into the next diamond's own gateway, final PARALLEL_GATEWAY join) call-by-call: 10 fresh computations total (every one of the 10 distinct node ids, computed exactly once) plus 3 O(1) memo hits (one per `c_i` edge) -- not 2^3=8 independent leaf-level recursions compounding into 2^k growth; generalized to 3k+1 fresh computations for general k, so k=40 costs 121 fresh computations + 40 memo hits, nowhere near 2^40. Updated §2.5 (find_matching_join/2's agreement rule) to thread memo across sibling top-level branch calls too (a free further extension of the same fix, by the identical §2.2.1 argument), with on_path still resetting fresh per branch and memo resetting fresh only per split node (not shared across different split nodes, e.g. a nested PARALLEL_GATEWAY's own separate find_matching_join/2 call). Updated §2.6's signature/name note for the /3 -> /4 arity change, the new {result, memo} return shape, and flagged explicitly to ELIXIR-DEV/TEST-DESIGNER that a call site which unpacks {result, _memo} and discards it (always passing a fresh %{} onward) would silently regress back to the exponential defect -- 'does memo actually get reused across siblings' is the load-bearing property to verify. Updated §3's AC1-AC6 walkthrough to the new /4 call signature and step numbering, showing three_branch_graph/0's branches 1 and 2 now get memo hits on 'join' from branch 0's computation, with the resolved outcome unchanged (memo changes performance, not the answer) -- no AC1-AC6 test needs modification, confirmed unaffected. Added a new test-fixture spec to §4: diamond_chain_graph(k), a parameterized chain fixture per SECURITY-REVIEWER's explicit recommendation ('a chained-diamond stress fixture... enough to demonstrate super-linear blowup without literally hanging the test suite'), with node/edge-count formula (3k+3 nodes, 4k+2 edges) and three assertions (correctness unaffected by chain length; a wall-clock budget assertion as the actual regression check for the complexity defect itself, since pure correctness alone would also pass under the old O(2^k) algorithm for small k; join resolution target unaffected by chain length). Added an explicit 'no knock-on effect' statement to the end of §6 covering both §5 (no new CHK-* rule needed -- unaffected, since the memoization rework changes only how efficiently already-resolvable shapes are resolved, not which shapes are resolvable) and §6's own nested-PARALLEL_GATEWAY scope boundary (unaffected, same mechanism, same required follow-up issue). Verified zero defmodule/defstruct/function-body code fences remain in the document (grep confirms only bare @spec/@type lines and prose/pseudocode, consistent with prior PASS on this axis). Found and fixed one incidental notation typo (an extra closing brace in three MapSet-literal examples in §2.4a, `#{{:gateway,\"join\"}}}` -> `#{{:gateway,\"join\"}}`) introduced while drafting the new worked trace.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md"
+    ],
+    "issues": [],
+    "next_action": "ROUTE to Step 2b CODE-DESIGN-VALIDATOR for a fresh, full design re-gate (not a narrow diff-only recheck) given the severity of the original miss (a BLOCKER INV-8 algorithmic-complexity defect that passed the first design-validator gate undetected) -- validator should specifically re-check §2.2.1's memo-key-soundness argument, §2.2.3's and §2.4a's complexity claims (ideally by independently reasoning through a k=4 or k=5 chain rather than trusting this document's own k=3 trace), and that no implementation code crept into the newly added prose/pseudocode. Only after CODE-DESIGN-VALIDATOR PASSes should this route back to ELIXIR-DEV to re-implement collect_leaf_gateways/4 and find_matching_join/2's memo-threading, followed by a fresh SECURITY-REVIEWER pass (Step 3c) specifically re-running the INV-8 how-to-verify procedure against a real chained-diamond definition, before REVIEWER's Step 3d idiom/scope-creep check."
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "step": "2",
+      "agent": "CODE-DESIGNER",
+      "result": "PASS",
+      "timestamp": "2026-09-01T12:53:30Z"
+    },
+    {
+      "step": "3c",
+      "agent": "SECURITY-REVIEWER",
+      "result": "FAIL",
+      "timestamp": "2026-09-01T14:40:00Z"
+    },
+    {
+      "step": "2",
+      "agent": "CODE-DESIGNER",
+      "result": "REWORKED",
+      "timestamp": "2026-09-01T14:55:00Z"
+    }
+  ]
+}

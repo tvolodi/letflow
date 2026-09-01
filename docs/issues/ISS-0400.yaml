@@ -1,0 +1,35 @@
+id: ISS-0400
+title: "Engine collect_leaf_gateways/3 does not support a PARALLEL_GATEWAY nested inside a fork branch"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF03-ISS0398-20260901
+discovered_at: "2026-09-01T13:00:00Z"
+severity: MINOR
+tags: [engine, parallel-gateway, s7]
+description: >
+  ISS-0398 fixed Letflow.Engine.Transition.collect_leaf_gateways/3 (formerly
+  walk_to_gateway/3) to correctly traverse fork branches containing
+  non-PARALLEL_GATEWAY branching nodes (e.g. EXCLUSIVE_GATEWAY) via a
+  Tarjan-SCC memoized DFS. The fix design
+  (lib/letflow/design/iss0398-walk-to-gateway-fix.md, sections 2.3 and 4)
+  explicitly named a harder, distinct case as out of scope: a
+  PARALLEL_GATEWAY node nested INSIDE one branch of an outer
+  PARALLEL_GATEWAY split (i.e. a fork within a fork branch, before
+  reaching the outer join) is still unsupported -- the current algorithm
+  treats any PARALLEL_GATEWAY encountered as an immediate terminal leaf,
+  which is correct for preventing a nested split from being mistaken for
+  the outer join, but means a genuinely nested split/join pair inside a
+  branch cannot itself be resolved by the outer find_matching_join/2 call.
+
+  A future fix would need to recursively resolve the inner split/join
+  pair before treating its result as a single leaf for the outer search.
+affected_files:
+  - lib/letflow/engine/transition.ex
+related:
+  - ISS-0398
+  - REQ-051
+source: >
+  lib/letflow/design/iss0398-walk-to-gateway-fix.md (sections 2.3, 4),
+  handoffs/WF03-ISS0398-20260901/step-06-issue-fixer-close.json.
+queue_task_id: 400
+github_issue: 784
+status: open

@@ -1,0 +1,84 @@
+{
+  "handoff_id": "WF03-ISS0398-20260901-step-02-rework2",
+  "run_id": "WF03-ISS0398-20260901",
+  "workflow_id": "WF-03",
+  "step": "2",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0398-20260901/step-02-code-designer-rework2.json",
+  "created_at": "2026-09-01T14:32:12Z",
+  "started_at": "2026-09-01T14:32:12Z",
+  "completed_at": "2026-09-01T14:32:12Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-051"],
+    "issue_ids": ["ISS-0398"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0398-20260901/step-02b-code-design-validator-recheck1.json",
+      "handoffs/WF03-ISS0398-20260901/step-02-code-designer-rework1.json",
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/definitions/graph.ex",
+      "test/letflow/engine/parallel_gateway_test.exs"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"],
+    "branch_name": "fix/ISS-0398-walk-to-gateway-20260901"
+  },
+  "task": {
+    "description": "Rework the design's memoization scheme (§2.2/§2.4/§2.5/§2.6) after CODE-DESIGN-VALIDATOR FAILED it a second time at Step 2b recheck1 on a BLOCKER: iteration 2's plain node_id-keyed memoized DFS is unsound for graphs containing a legal cycle-through-a-gateway (CHK-06) whose branching cycle member also has an escape edge -- the validator's concrete counterexample (X -> GW -> C -> B, B -> GW closing the cycle, B -> D -> JOIN escaping it) showed memo['GW'] takes two different values depending on which of two sibling branches sharing memo is evaluated first, falsifying iteration 2's 'context-free by the time anything is written to memo' claim. Fix this for real (not a narrow patch around the one counterexample): re-derive the memoization scheme so cached values are provably order/entry-independent for any CHK-06-legal cycle shape, re-verify AC1-AC6 non-regression, the polynomial complexity bound, and diamond_chain_graph/1, and route to a fresh CODE-DESIGN-VALIDATOR full re-gate.",
+    "acceptance_criteria": [
+      "The exact counterexample graph (X -> GW -> C -> B, B -> GW back-edge, B -> D -> JOIN) traced concretely under both evaluation orders (X-branch first and B-branch first), showing identical memo values for GW/C/B in both orders",
+      "A corrected, non-circular soundness proof for why the new memo-key/granularity choice is genuinely order-independent for any legal cycle-through-a-gateway shape, not just the one counterexample",
+      "Complexity bound re-verified as still polynomial (O(nodes + edges)), not regressed back toward exponential",
+      "AC1-AC6 non-regression re-verified against the real three_branch_graph/0 fixture",
+      "diamond_chain_graph/1 stress fixture re-confirmed unaffected (or updated if the algorithm change touches it)",
+      "New regression-test fixture spec(s) precise enough for TEST-DESIGNER to implement, covering this exact defect class (order-dependence under a legal cycle-through-a-gateway with internal branching)",
+      "No implementation code in the design document (bare @spec/@type lines only, no defmodule/defstruct/function bodies)"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Read the validator's counterexample in full and independently hand-traced both evaluation orders under iteration 2's algorithm to confirm the defect mechanically before designing the fix: plain DFS cycle detection makes a back-edge 'close' at whichever node of a cycle is the first repeated node on the CURRENT call chain -- for the counterexample, entering via X (outside the cycle) lets the DFS reach B as a fresh node partway through GW's own subtree, so B's escape edge (B -> D -> JOIN) gets folded into GW's finished value (a 2-element ambiguous set, #{:dead_end, {:gateway,\"JOIN\"}}); entering directly at B closes the cycle back onto B itself before B's own out-degree fold ever runs a second time, so a naive re-derivation would only see a clean :dead_end for that edge. Confirmed this is not fixable by any reordering within the node-keyed scheme -- the defect is in the unit of memoization itself (independent per-node caching of values that are not actually independent, since they are facets of one indivisible cyclic component), not in the bookkeeping around it. Redesigned the memoization scheme in lib/letflow/design/iss0398-walk-to-gateway-fix.md around option 2 from the task brief's suggested directions: compute strongly connected components via a single Tarjan-style DFS pass (index/lowlink/stack/stack_set/next_index, bundled into a new leaf_search_state() type replacing iteration 2's separate on_path/memo pair), memoizing one aggregate escape-leaf value per SCC, written only at SCC closure (lowlink == index), shared identically by every member regardless of which member was the DFS entry point. This also fixed a latent semantic bug in iteration 2 that the validator's own single-order trace already exposed but did not flag as separate: a live cycle back-edge was contributing a spurious :dead_end element to the union even within one evaluation order; the corrected design (leaf_search_result() step 2) makes a back-edge contribute NO leaf at all (only a lowlink signal), so the counterexample's true, correct, order-independent answer for GW/C/B is the clean singleton #{{:gateway,\"JOIN\"}} in both orders, not a 2-element ambiguous set in either. Rewrote §2.2 (renamed collect_leaf_gateways/4 back to /3 with the new state-bundle argument; iteration 2's arity path was /3 -> /4, this revision is /4 -> /3 with a different state shape, called out explicitly in §2.6 so ELIXIR-DEV does not confuse the two /3s), §2.2.1 (corrected soundness proof via the SCC-closure invariant -- SCC membership is a structural graph property independent of DFS entry point, a standard graph-theory fact cited, not asserted without basis), §2.2.2 (the full five-step Tarjan-augmented traversal, precise enough to implement without further judgment calls), §2.2.3 (termination + the new invariant proof that every top-level branch call's stack is always fully unwound by the time it returns, justifying resetting index/lowlink/stack/stack_set per branch while keeping memo threaded -- root's own lowlink can never be pushed below its own index since a root has no ancestor to loop back into, so its closure check always fires). Re-confirmed §2.4 (single diamond) and §2.4a (k=3 diamond chain) as unaffected in substance (purely acyclic, no back-edge ever fires, every node is its own trivial singleton SCC) but rewrote their call-by-call notation to the new state/tag shape for consistency, catching and correcting the stale /4-arity call notation that would otherwise have been left inconsistent with the new §2.2.2. Added new §2.4b tracing the validator's exact counterexample under BOTH entry orders step-by-step (index/lowlink assignment, stack push/pop, closure decisions), showing memo['GW']=memo['C']=memo['B'] land on the byte-identical singleton #{{:gateway,\"JOIN\"}} in both orders -- the precise property iteration 2's proof claimed but the validator falsified. Updated §2.5 (find_matching_join/2's per-branch/cross-branch fold now threads leaf_search_state(), resetting index/lowlink/stack/stack_set/next_index but not memo between sibling branches -- explicitly flagged why a raw pass-through of the previous branch's full final state would be wrong: stale index numbering is meaningless across top-level calls) and §2.6 (signature note for ELIXIR-DEV, flagging the two load-bearing properties to verify together: memo survives across branches, index/lowlink/stack/stack_set reset). Re-verified §3's AC1-AC6 walkthrough against three_branch_graph/0 (acyclic, no branching node in any branch -- step 5's fold and step 2's on-stack case are both dead code for this fixture, so its outcome is provably unchanged by this revision, and explicitly noted it cannot by itself distinguish iteration 2's defect from this fix, which is why the new fixtures below exist). Added two new regression fixtures to §4: cyclic_escape_graph/0 and cyclic_escape_graph_reversed_edges/0 (the validator's exact counterexample shape, as a PARALLEL_GATEWAY split's two branches, with the split's own edges_out order swapped between the two fixtures to force the two literal evaluation orders traced in §2.4b -- assertions require both fixtures' full result tuples to be equal, which is the actual regression assertion for order-independence), plus a recommended (not required for ISS-0398's own AC) pure_cycle_no_escape_graph/0 covering the adjacent case of a cycle with zero escape edges, confirming the new empty-set-on-closure treatment still fails cleanly via §2.5's non-singleton rule. Updated §6's closing knock-on-effects statement to re-confirm §2.3's nested-PARALLEL_GATEWAY exclusion and §5's no-new-CHK-*-rule conclusion are both unaffected by this revision (PARALLEL_GATEWAY nodes are never pushed onto the SCC stack, so they remain immune to being pulled into a cycle's SCC exactly as before). Verified via grep that zero defmodule/defstruct/def/defp code fences exist anywhere in the document -- only bare @spec/@type declarations and prose/pseudocode, consistent with the prior PASS on this specific axis (check 7 in the recheck1 handoff already passed and this revision does not introduce any new code fences).",
+    "artifacts_out": [
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md"
+    ],
+    "issues": [],
+    "next_action": "ROUTE to Step 2b CODE-DESIGN-VALIDATOR for a third, maximally rigorous full re-gate -- this is the second BLOCKER-class correctness defect found in this design's algorithm (first was SECURITY-REVIEWER's exponential-blowup INV-8 finding on iteration 1, already fixed and re-verified; this is a distinct memo-key-soundness defect in iteration 2's fix for that, now addressed via SCC-keyed memoization in iteration 3). The validator should independently re-derive: (1) that the SCC-closure invariant in the revised §2.2.1/§2.2.3 genuinely holds for CHK-06's general cycle-through-a-gateway rule, not only for the one counterexample graph traced in §2.4b -- ideally by constructing an independent adversarial cycle shape of its own (e.g. a cycle with more than one distinct escape gateway, or a cycle spanning more than two branching nodes, both explicitly named as unresolved-by-this-gate risk areas in the recheck1 handoff's own issues[1]) and hand-tracing it under multiple entry orders; (2) that resetting index/lowlink/stack/stack_set (but not memo) between sibling branches in the revised §2.5 is actually sound and does not leak stale state; (3) that the complexity bound in §2.2.3 is still genuinely O(nodes + edges) and does not hide a hidden non-linear cost in the SCC-closure/stack-popping step; (4) that §2.4/§2.4a's acyclic worked examples are unaffected in outcome by the rewritten notation; (5) that no implementation code crept into the newly added §2.2.2/§2.4b prose/pseudocode. Only after CODE-DESIGN-VALIDATOR PASSes should this route to ELIXIR-DEV to (re-)implement collect_leaf_gateways/3 and find_matching_join/2's state-threading, followed by a fresh SECURITY-REVIEWER pass (Step 3c) re-running both the INV-8 complexity check and a correctness check against the new cyclic fixtures, before REVIEWER's Step 3d idiom/scope-creep check."
+  },
+  "rework_count": 2,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "step": "2",
+      "agent": "CODE-DESIGNER",
+      "result": "PASS",
+      "timestamp": "2026-09-01T12:53:30Z"
+    },
+    {
+      "step": "3c",
+      "agent": "SECURITY-REVIEWER",
+      "result": "FAIL",
+      "timestamp": "2026-09-01T14:40:00Z"
+    },
+    {
+      "step": "2",
+      "agent": "CODE-DESIGNER",
+      "result": "REWORKED",
+      "timestamp": "2026-09-01T14:55:00Z"
+    },
+    {
+      "step": "2b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "FAILED",
+      "timestamp": "2026-09-01T14:18:01Z"
+    },
+    {
+      "step": "2",
+      "agent": "CODE-DESIGNER",
+      "result": "REWORKED",
+      "timestamp": "2026-09-01T14:32:12Z"
+    }
+  ]
+}

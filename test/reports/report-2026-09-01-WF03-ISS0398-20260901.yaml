@@ -1,0 +1,121 @@
+# Test run report — WF-03 Step 5 (ISS-0398)
+# Written by TEST-RUNNER. RELEASE-VALIDATOR independently re-runs the suite
+# rather than trusting this report alone (core-directives.md).
+
+issue_id: ISS-0398
+requirement_ids: [REQ-051]
+workflow: WF-03
+step: 5
+agent: TEST-RUNNER
+run_id: WF03-ISS0398-20260901
+date_utc: 2026-09-01
+git:
+  branch: fix/ISS-0398-walk-to-gateway-20260901
+  commit: c060a0d0c5ee8bba759bc301ad7cc6e7d1db9fa6
+
+environment:
+  toolchain: local (asdf, Erlang/OTP 29 / Elixir 1.20.3)
+  postgres_container: letflow-1-postgres-1 (already running via docker compose, port from .env LETFLOW_DB_PORT=5463)
+  keycloak_container: letflow-1-keycloak-1 (already running)
+  note: >
+    All mix commands run synchronously in the foreground per explicit
+    instruction (no run_in_background, no Monitor). The full
+    `mix letflow.check.test` run exceeded the 10-minute single-Bash-call cap
+    (it ran ~23 minutes), so it was polled to completion via repeated
+    foreground Bash calls tailing its own log file (not via Monitor and not
+    by ending the turn to await a cross-turn notification) until the process
+    exited.
+
+verdict: PASS (2 known pre-existing environment-only failures, unrelated to this diff -- see below)
+
+checks:
+  targeted_test_1:
+    file: test/letflow/engine/parallel_gateway_test.exs
+    command: "mix test test/letflow/engine/parallel_gateway_test.exs"
+    result: PASS
+    summary_line_verbatim: "Result: 12 passed"
+    finished_line_verbatim: "Finished in 0.6 seconds (0.6s async, 0.00s sync)"
+    failures: 0
+
+  targeted_test_2:
+    file: test/letflow/scheduler_req188_test.exs
+    command: "mix test test/letflow/scheduler_req188_test.exs"
+    result: PASS
+    summary_line_verbatim: "Result: 8 passed"
+    finished_line_verbatim: "Finished in 5.6 seconds (0.00s async, 5.6s sync)"
+    failures: 0
+    note: "REVIEWER's guard-test rescoping (step-03d) confirmed still green."
+
+  compile_warnings_as_errors:
+    command: "mix compile --warnings-as-errors"
+    result: PASS
+    exit_code: 0
+    output: "(no output, exit 0 -- clean compile, zero warnings)"
+
+  diff_scope_check:
+    command: "git diff origin/main...HEAD --stat"
+    result: PASS
+    summary: >
+      23 files changed, 2695 insertions(+), 58 deletions(-). Touches only:
+      lib/letflow/engine/transition.ex, lib/letflow/design/iss0398-walk-to-gateway-fix.md,
+      test/letflow/engine/parallel_gateway_test.exs, test/letflow/scheduler_req188_test.exs,
+      test/specs/ISS-0398.md, test/specs/REQ-188.md (1 line), and handoffs/ under
+      WF03-ISS0398-20260901 plus handoffs/registry.json and handoffs/orchestrator.log.
+      Matches the expected scope exactly -- no unrelated files touched.
+
+  full_suite:
+    command: "mix letflow.check.test"
+    result: "PASS with 2 pre-existing environment-only failures (see analysis below)"
+    summary_line_verbatim: "Result: 3006/3008 passed (6/6 properties, 3000/3002 tests), 10 excluded"
+    failed_line_verbatim: "Failed: 2 tests"
+    finished_line_verbatim: "Finished in 1382.2 seconds (14.0s async, 1368.1s sync)"
+    mix_exit_message_verbatim: "** (Mix) mix letflow.check.test: FAILED -- underlying `mix test` run exited 2 (real test failure/error)."
+    failing_tests:
+      - name: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running"
+        module: Mix.Tasks.Letflow.CheckToolchainTest
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+        error: "** (ErlangError) Erlang error: :enoent"
+        stacktrace_verbatim: |
+          (elixir 1.20.3) lib/system.ex:1141: System.cmd("rustc", ["--version"], [stderr_to_stdout: true])
+          test/mix/tasks/letflow_check_toolchain_test.exs:69: Mix.Tasks.Letflow.CheckToolchainTest.running_rust_raw/0
+          test/mix/tasks/letflow_check_toolchain_test.exs:76: Mix.Tasks.Letflow.CheckToolchainTest.running_rust_version/0
+          test/mix/tasks/letflow_check_toolchain_test.exs:290: (test)
+      - name: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch"
+        module: Mix.Tasks.Letflow.CheckToolchainTest
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+        error: "** (ErlangError) Erlang error: :enoent"
+        stacktrace_verbatim: |
+          (elixir 1.20.3) lib/system.ex:1141: System.cmd("rustc", ["--version"], [stderr_to_stdout: true])
+          test/mix/tasks/letflow_check_toolchain_test.exs:69: Mix.Tasks.Letflow.CheckToolchainTest.running_rust_raw/0
+          test/mix/tasks/letflow_check_toolchain_test.exs:76: Mix.Tasks.Letflow.CheckToolchainTest.running_rust_version/0
+          test/mix/tasks/letflow_check_toolchain_test.exs:275: (test)
+    root_cause_analysis: >
+      Both failures are `:enoent` from `System.cmd("rustc", ["--version"], ...)`
+      -- this sandbox/checkout has no `rustc`/`cargo` installed at all
+      (`which rustc cargo` returns nothing). This is an environment gap, not a
+      regression: neither failing test is in test/mix/tasks/letflow_check_toolchain_test.exs
+      touched by this diff (confirmed absent from the diff --stat above), and
+      neither lib/letflow/engine/transition.ex nor the scheduler/gateway test
+      changes have anything to do with the Rust/NIF toolchain-pin checker
+      (REQ-165). README.md's Notes section documents a parallel, related gap
+      (`mix deps.get` has no network access in this sandbox) -- an absent
+      Rust toolchain is the same class of local-environment limitation, not
+      a code defect. Not fixed here: fixing it would mean installing rustc
+      into this sandbox (infra, out of scope for this diff) or weakening the
+      test to tolerate a missing toolchain (would defeat REQ-165's own
+      purpose). Flagging for ORCH/RELEASE-VALIDATOR rather than silently
+      waving it through.
+    scope_confirmation: >
+      Both targeted files for this fix (parallel_gateway_test.exs,
+      scheduler_req188_test.exs) are 100% green (12/12 and 8/8). No test
+      touched by, or logically related to, the ISS-0398 transition.ex change
+      failed. The 2 failures are isolated to an unrelated pre-existing
+      toolchain-pin checker test module.
+
+no_speculation_attestation: >
+  Every count and error above is quoted verbatim from real `mix test` /
+  `mix letflow.check.test` / `mix compile` output captured in this run
+  (git commit c060a0d0c5ee8bba759bc301ad7cc6e7d1db9fa6), not inferred or
+  assumed. Full raw log preserved at
+  /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/272542c3-4900-4f18-9bc0-54eaccf87cff/scratchpad/check_test_full.log
+  for this session (scratchpad, not committed).

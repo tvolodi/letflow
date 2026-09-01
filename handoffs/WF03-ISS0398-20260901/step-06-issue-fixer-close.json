@@ -1,0 +1,75 @@
+{
+  "handoff_id": "WF03-ISS0398-20260901-step-06",
+  "run_id": "WF03-ISS0398-20260901",
+  "workflow_id": "WF-03",
+  "step": "6",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0398-20260901/step-06-issue-fixer-close.json",
+  "created_at": "2026-09-01T16:25:00Z",
+  "started_at": "2026-09-01T16:16:00Z",
+  "completed_at": "2026-09-01T16:25:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-051"],
+    "issue_ids": ["ISS-0398"],
+    "artifacts_in": [
+      "docs/issues/ISS-0398.yaml",
+      "handoffs/WF03-ISS0398-20260901/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0398-20260901/step-02-code-designer.json",
+      "handoffs/WF03-ISS0398-20260901/step-02-code-designer-rework1.json",
+      "handoffs/WF03-ISS0398-20260901/step-02-code-designer-rework2.json",
+      "handoffs/WF03-ISS0398-20260901/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0398-20260901/step-02b-code-design-validator-recheck1.json",
+      "handoffs/WF03-ISS0398-20260901/step-02b-code-design-validator-recheck2.json",
+      "handoffs/WF03-ISS0398-20260901/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0398-20260901/step-03-elixir-dev-rework1.json",
+      "handoffs/WF03-ISS0398-20260901/step-03c-security-reviewer.json",
+      "handoffs/WF03-ISS0398-20260901/step-03c-security-reviewer-recheck1.json",
+      "handoffs/WF03-ISS0398-20260901/step-03d-reviewer.json",
+      "handoffs/WF03-ISS0398-20260901/step-04-test-designer.json",
+      "handoffs/WF03-ISS0398-20260901/step-04b-test-design-validator.json",
+      "handoffs/WF03-ISS0398-20260901/step-05-test-runner.json",
+      "lib/letflow/engine/transition.ex",
+      "test/letflow/engine/parallel_gateway_test.exs",
+      "test/letflow/scheduler_req188_test.exs"
+    ],
+    "branch_name": "fix/ISS-0398-walk-to-gateway-20260901"
+  },
+  "task": {
+    "description": "Independently re-verify (not just trust the PASS chain) that ISS-0398 is genuinely resolved, including both intermediate BLOCKER-class defects found along the way (INV-8 exponential blowup, memo-key-unsoundness-under-cycles), the scheduler_req188 guard rescoping, and the two full-suite rustc failures, then flip docs/issues/ISS-0398.yaml to resolved with a full resolution summary.",
+    "acceptance_criteria": [
+      "Original symptom re-read from ISS-0398.yaml and confirmed genuinely fixed by spot-checking the real branch_with_exclusive_gateway_graph/0 test and assertion, not just trusting the chain",
+      "Both intermediate BLOCKER defects (exponential blowup, memo-key unsoundness) independently confirmed fixed in the FINAL shipped code (transition.ex on this branch), not just in an intermediate design iteration",
+      "scheduler_req188_test.exs guard rescoping independently confirmed as a real, justified fix by reading REVIEWER's own reasoning and re-deriving the commit-range diff",
+      "Two full-suite rustc-ENOENT failures independently confirmed unrelated to this diff",
+      "docs/issues/ISS-0398.yaml updated to status: resolved with resolved_in_run/resolved_at/resolution, following ISS-0380/ISS-0381's convention",
+      "Handoff written per canonical schema, routing to Step Final (ORCH)"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Independently re-verified ISS-0398's resolution end-to-end rather than trusting the chain of PASSes. (1) Original symptom: re-read ISS-0398.yaml's description (walk_to_gateway/3 fails any fork branch containing a multi-outgoing-edge node before reaching its join) and spot-checked the real `branch_with_exclusive_gateway_graph/0` fixture and its test at test/letflow/engine/parallel_gateway_test.exs:75-95/556-572 -- the fixture is exactly the reported shape (a PARALLEL_GATEWAY split whose branch 1 passes through an EXCLUSIVE_GATEWAY 'gw' with two paths both reconverging on the join), and the test asserts a successful {:ok, ...} split with a correct JoinCounter. Independently ran this test myself (source ~/.asdf/asdf.sh && mix test test/letflow/engine/parallel_gateway_test.exs test/letflow/scheduler_req188_test.exs --trace): Result: 20 passed (12 + 8), matching TEST-RUNNER's own counts exactly, not merely re-quoting them. Also read the actual shipped `collect_leaf_gateways/3`/`explore_branching_node/3`/`fold_outgoing_edges/4`/`close_scc_or_defer/5` in lib/letflow/engine/transition.ex:817-1035 directly (not the design doc's prose) and confirmed it matches the described memoized-Tarjan-SCC algorithm exactly: state.memo checked first (O(1) short-circuit), a live back-edge (stack_set membership) returns immediately with no leaf, a PARALLEL_GATEWAY node is an immediate terminal never pushed onto the stack (so it can never become an SCC member -- the nested-PARALLEL_GATEWAY exclusion boundary holds), fold_outgoing_edges/4 threads state through Enum.reduce (not an independent Enum.map, which is exactly what would reintroduce the exponential blowup), and close_scc_or_defer/5 writes the same aggregate leaf-set to every popped SCC member only at closure (local_lowlink == own_index). This genuinely resolves the reported symptom.\n\n(2) Both intermediate BLOCKER defects re-confirmed fixed in the FINAL code, not an earlier iteration: the exponential-blowup fix (memoization keyed on node_id/SCC rather than a per-path-copied visited set) is directly visible in the code read above and in the diamond_chain_graph(40) test (parallel_gateway_test.exs:589-618), which I did not re-time myself but whose presence and assertion shape (2-second budget, explicit O(2^40) vs O(k) commentary) I verified matches SECURITY-REVIEWER's own recheck1 independent stress testing (diamond_chain_graph(165) at 498/500 nodes end-to-end in 40.6ms, a 20-way wide-fanout cross-branch-memo-reuse shape at 11.7ms -- both reported as freshly written and run by that reviewer, not derived from the test file's own assertions). The memo-key-unsoundness fix (SCC-keyed memoization, not node-keyed) is directly visible in close_scc_or_defer/5's write-once-per-SCC-closure logic, and is exercised by cyclic_escape_graph/0 + cyclic_escape_graph_reversed_edges/0 (parallel_gateway_test.exs:629-680), which assert byte-identical JoinCounters across both entry orders -- the literal counterexample CODE-DESIGN-VALIDATOR's recheck1 found and recheck2 independently re-derived from first principles with its own additional adversarial cycle shapes before passing. Both tests are part of the 12/12 I re-ran myself in item (1).\n\n(3) scheduler_req188_test.exs guard: read REVIEWER's own reasoning in step-03d-reviewer.json section 6 in full -- the original guard asserted `git diff --stat origin/main...HEAD -- transition.ex == \"\"` evaluated fresh forever against main, which was correct only as a one-time REQ-188-PR-scoped check and was never rescoped after REQ-188 merged, making it permanently unsatisfiable for any later legitimate transition.ex change. REVIEWER rescoped it to REQ-188's own historical commit range (746a3ac0..77637268). I independently re-derived this myself: `git cat-file -e` confirms both refs resolve, and `git diff --stat 746a3ac0..77637268 -- lib/letflow/engine/transition.ex` returns empty on this branch, confirming REQ-188 itself genuinely never touched transition.ex -- the fix preserves exactly what the guard was built to prove and only removes its incorrect 'against main forever' scope. This is a real, justified fix, not a scope-widening workaround. Re-ran test/letflow/scheduler_req188_test.exs myself: 8/8 passed.\n\n(4) The two full-suite failures: confirmed via `git diff origin/main...HEAD --stat -- test/mix/tasks/letflow_check_toolchain_test.exs` (empty -- file untouched by this diff) and by reproducing the identical failure myself. Ran `mix test test/mix/tasks/letflow_check_toolchain_test.exs` in the same non-login-shell environment mix runs in on this host (only ~/.asdf/shims on PATH): got the identical 2/34 failures, both `** (ErlangError) Erlang error: :enoent` from `System.cmd(\"rustc\", [\"--version\"], ...)`. Confirmed rustc/cargo exist on this host only under ~/.cargo/bin, which is present in an interactive login shell's PATH (bash -lc) but absent from the plain non-login PATH the test runner's mix invocation uses (which is only /home/tvolodi/.asdf/shims:/home/tvolodi/.asdf/bin:/usr/local/sbin:...) -- a genuine, reproducible, pre-existing host-environment PATH gap, not a regression from ISS-0398's diff. Also independently confirmed `mix compile --warnings-as-errors` is clean (no output, exit 0).\n\n(5) Diff scope independently re-confirmed via `git diff origin/main...HEAD --stat`: exactly lib/letflow/engine/transition.ex, lib/letflow/design/iss0398-walk-to-gateway-fix.md, test/letflow/engine/parallel_gateway_test.exs, test/letflow/scheduler_req188_test.exs, test/specs/ISS-0398.md, test/specs/REQ-188.md, plus this run's own handoff/report bookkeeping (25 files, 2881 insertions, 58 deletions) -- no unrelated file touched.\n\nUpdated docs/issues/ISS-0398.yaml to status: resolved with resolved_in_run: WF03-ISS0398-20260901, resolved_at, and a full resolution: field (following ISS-0380/ISS-0381's own convention) summarizing the shipped fix, both intermediate BLOCKER-class defects found and fixed (not just the final state), the scheduler_req188 guard rescoping, the rustc environment gap, the confirmed diff scope, and the still-open nested-PARALLEL_GATEWAY-within-a-branch follow-on named in the design doc's own §2.3/§4 as an explicit non-goal (mirroring REQ-051's own pre-existing OQ convention).",
+    "artifacts_out": [
+      "docs/issues/ISS-0398.yaml",
+      "handoffs/WF03-ISS0398-20260901/step-06-issue-fixer-close.json"
+    ],
+    "issues": [
+      "The nested-PARALLEL_GATEWAY-within-a-branch case remains an explicit, named non-goal of this fix (design doc §2.3/§4, and REQ-051 design doc §12.4's own original OQ) -- not a defect in this fix, but ORCH should confirm at Step Final whether a new tracking issue needs to be filed for it (ELIXIR-DEV's rework1 handoff already flagged this as still outstanding as of that step)."
+    ],
+    "next_action": "Route to Step Final (ORCH): ISS-0398 is genuinely resolved and docs/issues/ISS-0398.yaml has been flipped to status: resolved. ORCH should: (1) merge this branch once any remaining CI checks are green, (2) consider filing a new tracking issue for the nested-PARALLEL_GATEWAY-within-a-branch follow-on named in the design doc if one does not already exist, (3) note the rustc-not-on-PATH-in-non-login-shell environment gap for awareness (pre-existing, unrelated to this fix, parallel to the already-documented mix deps.get no-network-access gap)."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": false,
+  "gate_history": [
+    {
+      "gate": "ISSUE-FIXER",
+      "result": "PASS",
+      "timestamp": "2026-09-01T16:25:00Z",
+      "notes": "Independently re-verified the original symptom fix, both intermediate BLOCKER-class defects (exponential blowup, memo-key unsoundness) in the final shipped code, the scheduler_req188 guard rescoping, and the two pre-existing rustc-ENOENT full-suite failures. Re-ran parallel_gateway_test.exs + scheduler_req188_test.exs myself (20/20 pass) and reproduced the rustc ENOENT failure directly to confirm it is a host-environment PATH artifact, not a regression. docs/issues/ISS-0398.yaml flipped to resolved."
+    }
+  ]
+}

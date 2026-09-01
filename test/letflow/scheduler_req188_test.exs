@@ -2,7 +2,10 @@ defmodule Letflow.SchedulerReq188Test do
   @moduledoc """
   Tests for REQ-188 Part 1 -- `Letflow.Scheduler.maybe_rearm_timer/3` (SCH-07
   recurring timers) -- plus the moduledoc-deferral-statement and
-  `transition.ex`-untouched structural checks. See `test/specs/REQ-188.md` for
+  `transition.ex`-untouched-by-REQ-188's-own-commit-range structural checks
+  (see the dated UPDATE comment on that describe block: this guard is pinned
+  to REQ-188's own historical commit range, not a live check against the
+  current branch). See `test/specs/REQ-188.md` for
   the full acceptance-criterion -> test-case map and, importantly, the
   "Fixture strategy -- the gateway/loop graph" section explaining why firing a
   recurring timer more than once through the REAL, unmocked engine requires
@@ -425,33 +428,70 @@ defmodule Letflow.SchedulerReq188Test do
   end
 
   # ---------------------------------------------------------------------------------
-  # transition.ex is untouched by this requirement
+  # transition.ex was untouched BY REQ-188 ITSELF (historical scope-creep guard,
+  # pinned to REQ-188's own commit range -- see UPDATE below)
   # ---------------------------------------------------------------------------------
 
   describe "transition.ex is untouched by REQ-188" do
-    test "lib/letflow/engine/transition.ex has zero diff against the base branch" do
-      base_ref =
-        Enum.find(["origin/main", "main"], fn ref ->
-          match?(
-            {_, 0},
-            System.cmd("git", ["rev-parse", "--verify", ref], stderr_to_stdout: true)
-          )
-        end)
+    # UPDATE (WF03-ISS0398-20260901, REVIEWER, 2026-09-01): this test originally
+    # asserted `git diff --stat origin/main...HEAD -- lib/letflow/engine/transition.ex`
+    # was empty -- i.e. "the currently checked-out branch's diff against main touches
+    # zero lines in transition.ex," evaluated fresh on every future run. That phrasing
+    # was correct as a one-time scope-creep check for REQ-188's OWN PR (REQ-188 is a
+    # scheduler feature -- lib/letflow/scheduler.ex/timer.ex/poller.ex -- and had no
+    # legitimate reason to touch the engine's transition module; see
+    # test/specs/REQ-188.md's "transition.ex untouched" row), but it was never rescoped
+    # to REQ-188's own commit range after REQ-188 merged (commit 77637268, PR #731,
+    # 2026-08-30). Left as "against current main forever," it became permanently
+    # unsatisfiable for any later, legitimate change to transition.ex -- which is
+    # exactly what happened here: ISS-0398 (`lib/letflow/design/iss0398-walk-to-gateway-fix.md`)
+    # needed to fix a genuine defect in `find_matching_join/2`/`walk_to_gateway/3`
+    # (replaced with `collect_leaf_gateways/3`), went through three design-review
+    # rounds (two BLOCKER reworks: an INV-8 exponential-blowup finding, then a
+    # memo-key-soundness finding) plus a full SECURITY-REVIEWER pass
+    # (`handoffs/WF03-ISS0398-20260901/step-03c-security-reviewer-recheck1.json`, PASS)
+    # before reaching this gate -- this is legitimate engine work, not scope creep,
+    # and the guard's original rationale (catch REQ-188 itself touching transition.ex)
+    # was already fully and permanently discharged the moment REQ-188 merged.
+    #
+    # Fix: rescope the assertion to REQ-188's OWN historical commit range
+    # (`746a3ac0` -- REQ-188's merge-base parent -- through `77637268` -- REQ-188's own
+    # merge commit) instead of "base branch...HEAD". This is now a fixed, immutable
+    # historical fact (re-derived directly, not guessed: `git diff --stat
+    # 746a3ac0..77637268 -- lib/letflow/engine/transition.ex` returns empty) that can
+    # never again break for unrelated future work, while still proving what it was
+    # built to prove: REQ-188's own changes never touched transition.ex. If a future
+    # test-suite change needs a live "did MY current branch touch a file it shouldn't"
+    # check again, that belongs in a per-requirement/per-issue test (scoped to that
+    # work's own commit range or an explicit allowlist), not as a standing assertion
+    # against a shared file that gates all later work forever -- the next agent to hit
+    # this pattern should re-derive a fresh commit-range pin the same way, not restore
+    # the unscoped "against main" form.
+    test "lib/letflow/engine/transition.ex had zero diff across REQ-188's own commit range (746a3ac0..77637268)" do
+      req_188_base = "746a3ac0"
+      req_188_merge = "77637268"
 
-      assert base_ref,
-             "neither origin/main nor main resolved -- cannot verify transition.ex is untouched"
+      for ref <- [req_188_base, req_188_merge] do
+        assert match?(
+                 {_, 0},
+                 System.cmd("git", ["cat-file", "-e", ref], stderr_to_stdout: true)
+               ),
+               "REQ-188 commit range endpoint #{ref} is not resolvable in this repository " <>
+                 "(shallow clone/unshallow-history checkout?) -- cannot verify this historical guard"
+      end
 
       {output, 0} =
         System.cmd("git", [
           "diff",
           "--stat",
-          "#{base_ref}...HEAD",
+          "#{req_188_base}..#{req_188_merge}",
           "--",
           "lib/letflow/engine/transition.ex"
         ])
 
       assert output == "",
-             "expected zero diff against lib/letflow/engine/transition.ex, got:\n#{output}"
+             "REQ-188's own commit range (746a3ac0..77637268) unexpectedly touches " <>
+               "lib/letflow/engine/transition.ex:\n#{output}"
     end
   end
 end

@@ -1,0 +1,63 @@
+{
+  "handoff_id": "WF03-ISS0398-20260901-step-03d",
+  "run_id": "WF03-ISS0398-20260901",
+  "workflow_id": "WF-03",
+  "step": "3d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0398-20260901/step-03d-reviewer.json",
+  "created_at": "2026-09-01T15:55:00Z",
+  "started_at": "2026-09-01T15:45:00Z",
+  "completed_at": "2026-09-01T15:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-051"],
+    "issue_ids": ["ISS-0398"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0398-20260901/step-03c-security-reviewer-recheck1.json",
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md",
+      "lib/letflow/engine/transition.ex",
+      "test/letflow/engine/parallel_gateway_test.exs",
+      "lib/letflow/design/req051-parallel-gateway-split-join.md",
+      "test/letflow/scheduler_req188_test.exs",
+      "test/specs/REQ-188.md"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"],
+    "branch_name": "fix/ISS-0398-walk-to-gateway-20260901"
+  },
+  "task": {
+    "description": "Idiom/scope/decision-record hard-gate review (WF-03 Step 3d) of the shipped SCC-memoized collect_leaf_gateways/3 rework (commit 9968fa3b), plus a specific action item: resolve the scheduler_req188_test.exs 'transition.ex has zero diff' guard, which now legitimately fails because this fix has to touch transition.ex.",
+    "acceptance_criteria": [
+      "Idiom check of collect_leaf_gateways/3, explore_branching_node/3, fold_outgoing_edges/4, close_scc_or_defer/5, leaf_search_state()/leaf_search_result()",
+      "Supervision integrity unaffected (confirm no process/isolation change)",
+      "Type-safety gap check (informational, non-blocking)",
+      "Scope creep check via git diff origin/main...HEAD --stat",
+      "Decision-record consistency vs req051-parallel-gateway-split-join.md",
+      "Resolve (not punt) the scheduler_req188_test.exs guard",
+      "Run test/letflow/engine/parallel_gateway_test.exs synchronously and read real output"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "1. IDIOM CHECK (transition.ex:845-1035): idiomatic. collect_leaf_gateways/3 (920-942) uses a `cond`/`case` chain over exhaustive, mutually exclusive conditions (memo hit, on-stack, unresolved node, gateway terminal, otherwise) matching this file's existing style (e.g. dispatch_node/4's own clause-per-case-shape at lines 279-334). explore_branching_node/3 (957-975), fold_outgoing_edges/4 (983-1004), and close_scc_or_defer/5 (1020-1035) are small, single-purpose, pattern-matched private functions with one @spec each, consistent with the file's one-@spec-per-function convention (explicitly noted at line 272-275 for dispatch_node/4 and followed here too). fold_outgoing_edges/4 uses Enum.reduce (threading state sequentially) rather than Enum.map, which is exactly the choice the design doc calls out (§2.2.2) as necessary to avoid iteration-1's exponential-blowup defect -- a real case where 'idiomatic' and 'correct' coincide, not decorative style. close_scc_or_defer/5's guard clause (`when local_lowlink == own_index`) plus a catch-all second clause is idiomatic multi-clause dispatch, not a hand-rolled if/else. No GenServer/gen_statem concerns apply here -- this is pure, stateless (referentially transparent given its arguments) graph-traversal logic reachable only from Transition.transition/3, not a process boundary.\n\n2. SUPERVISION: not applicable / unaffected. Transition is a pure functional module (no process, no GenServer/gen_statem, no spawn) -- confirmed no supervision-relevant code was touched; Letflow.InstanceSupervisor and per-instance process isolation are untouched by this diff (git diff --stat confirms zero touches outside transition.ex/its test/design doc/handoff bookkeeping).\n\n3. TYPE-SAFETY (informational, non-blocking per REVIEWER's own charter): leaf_search_state() is a plain map with @type-documented shape rather than a defstruct -- consistent with this module's existing pattern of using bare maps for transient accumulators (matches evaluated_condition() at line 183 and gateway_role() atoms at 728, neither of which are structs either) since it never crosses a module boundary (confirmed at design doc line 633-634 and via grep: leaf_search_state never appears outside transition.ex). Not a scope-creep risk and not worth a struct promotion -- this accumulator is entirely internal, short-lived (one find_matching_join/2 call), and a struct would add ceremony without closing any realistic invalid-state gap (a malformed leaf_search_state() cannot be constructed by any external caller). No issue filed -- this does not rise to the bar of a class of invalid state a runtime error/property test would catch that a type change would prevent; it is correctly scoped as an internal accumulator.\n\n4. SCOPE CREEP: none found. `git diff --stat origin/main...HEAD` shows exactly: lib/letflow/engine/transition.ex, test/letflow/engine/parallel_gateway_test.exs, lib/letflow/design/iss0398-walk-to-gateway-fix.md, plus expected handoffs/WF03-ISS0398-20260901/*.json + handoffs/registry.json + handoffs/orchestrator.log bookkeeping. No new behaviour/macro/generic plumbing introduced beyond what ISS-0398 needs -- the Tarjan-SCC machinery is exactly as complex as CODE-DESIGN-VALIDATOR's own counterexample proved necessary (a plain node-keyed memo was independently shown unsound at Step 2b recheck1, not chosen speculatively), and the design doc explicitly declines to solve the nested-PARALLEL_GATEWAY case (§2.3, §4) rather than over-generalizing ahead of need. This is the opposite of scope creep -- it is the minimum machinery the validator's own adversarial finding required.\n\n5. DECISION-RECORD CONSISTENCY: confirmed against lib/letflow/design/req051-parallel-gateway-split-join.md. Section 3.3 (lines 261-282) is REQ-051's original find_matching_join/2 algorithm description, and section 12.4 (lines 631-639) explicitly names the 'block-structured-graph assumption' as a live, never-closed open question, deferring resolution to 'REQ-028/029's own CODE-DESIGNER' -- i.e. REQ-051 itself anticipated and authorized exactly this kind of follow-on fix, it does not forbid it. The ISS-0398 design closes that OQ only for the non-nested-PARALLEL_GATEWAY case (§2.3), explicitly leaving the nested-PARALLEL_GATEWAY case as a still-open, separately-named follow-on (§4) rather than silently deciding it either way -- this is consistent with, not contradictory to, REQ-051's own decision record and its OQ-flagging convention. No conflict with any docs/migration/decisions/ record either (this is pure Engine-internal graph-traversal logic, no framework/library choice involved).\n\n6. scheduler_req188_test.exs GUARD -- RESOLVED (real fix, not a punt). Found this branch's working tree already carried an uncommitted fix to test/letflow/scheduler_req188_test.exs and test/specs/REQ-188.md (presumably from an earlier, aborted attempt at this exact review step) -- read it in full and independently re-verified its correctness before adopting it as REVIEWER's own decision, rather than trusting it blindly. Root cause of why the guard exists: test/specs/REQ-188.md's own row states its purpose was to prove 'REQ-188 itself never touched transition.ex' (REQ-188 is a scheduler feature -- lib/letflow/scheduler.ex/timer.ex/poller.ex -- with no legitimate reason to touch the engine's transition module). The original test asserted this via `git diff --stat <base_ref>...HEAD -- transition.ex == \"\"` where base_ref resolved dynamically against origin/main/main -- i.e. it checked the CURRENTLY CHECKED OUT BRANCH's cumulative diff against main, evaluated fresh on every future run, forever, for every future branch. That phrasing was correct only for REQ-188's own PR; it was never rescoped to REQ-188's own commit range after REQ-188 merged (commit 77637268, PR #731, 2026-08-30), so it became permanently unsatisfiable for any later, legitimate change to transition.ex -- exactly what ISS-0398 (a genuine, 3-round-reviewed defect fix in transition.ex, PASSED by SECURITY-REVIEWER) now triggers. This is the guard's own bug (an unscoped 'against main forever' assertion), not evidence ISS-0398 did anything wrong. FIX APPLIED (already staged in the working tree, verified by me, now committed by this handoff): rescoped the assertion to REQ-188's OWN historical commit range (746a3ac0..77637268 -- confirmed both commits resolve via `git cat-file -e`, and confirmed by direct execution that `git diff --stat 746a3ac0..77637268 -- lib/letflow/engine/transition.ex` returns empty, i.e. REQ-188 itself genuinely never touched transition.ex). Added a dated UPDATE comment (2026-09-01, REVIEWER, WF03-ISS0398-20260901) in the test file explaining the original rationale, why it was permanently unsatisfiable, the fix, and explicit guidance for the next agent that hits this pattern (re-derive a fresh commit-range pin for that requirement, don't restore the unscoped 'against main' form). Updated test/specs/REQ-188.md's traceability row to match. Ran `mix test test/letflow/scheduler_req188_test.exs` myself (foreground): 8/8 passed, confirming the fix actually resolves the previously-red guard test, not merely edits its text.\n\n7. REGRESSION CHECK: ran `mix test test/letflow/engine/parallel_gateway_test.exs` myself (foreground, full output read): 12/12 passed (0.4s), matching SECURITY-REVIEWER's own recheck1 count. Also ran `mix compile --warnings-as-errors --force`: clean compile, zero warnings. Given SECURITY-REVIEWER's own recheck1 already ran extensive adversarial stress tests (diamond_chain_graph(165) at 498/500 nodes end-to-end, a 20-way wide-fanout variant, both re-verified independently against the real code), a full-suite re-run was judged disproportionate for an idiom/scope gate on top of that; the two targeted runs above (parallel_gateway_test.exs + the now-fixed scheduler_req188_test.exs) are sufficient additivity/regression evidence for this gate.\n\nNo BLOCKER or scope-creep findings. All four idiom questions and the decision-record check pass. Guard genuinely resolved, not punted.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0398-20260901/step-03d-reviewer.json",
+      "test/letflow/scheduler_req188_test.exs",
+      "test/specs/REQ-188.md"
+    ],
+    "issues": [],
+    "next_action": "Route to Step 4 TEST-DESIGNER to write/extend test specs and test code for the ISS-0398 fix, building on the existing test/letflow/engine/parallel_gateway_test.exs coverage (12 tests, all passing) and the now-fixed scheduler_req188_test.exs guard."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "step": "3d",
+      "agent": "REVIEWER",
+      "result": "PASS",
+      "timestamp": "2026-09-01T15:55:00Z"
+    }
+  ]
+}

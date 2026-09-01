@@ -96,7 +96,13 @@ defmodule Letflow.SecretsTest do
             name: name_from(reference)
           )
 
-        if byte_size(plaintext) > 0 do
+        # ISS-0403: a substring-containment check is only a meaningful leak signal once
+        # coincidental containment is astronomically unlikely. For a k-byte plaintext and an
+        # N-byte ciphertext, the expected number of coincidental matches is roughly
+        # N * (1/256)^k -- at k=1 that's ~2/256 for a 512-byte ciphertext (a real, observed
+        # CI failure), but at k>=8 it's below 1e-16 regardless of N here. 0 < byte_size < 8
+        # is skipped as statistically meaningless rather than a genuine leak check.
+        if byte_size(plaintext) >= 8 do
           refute String.contains?(stored.ciphertext, plaintext)
         end
 
@@ -107,6 +113,37 @@ defmodule Letflow.SecretsTest do
     defp name_from(reference) do
       ["sec:", "", "tenant", _tenant, _namespace, name] = String.split(reference, "/")
       name
+    end
+
+    test "ISS-0403 regression: a 1-byte plaintext does not trigger the containment refute" do
+      %{tenant_id: tenant_id} = provisioned_tenant("iss0403-short-plaintext")
+
+      # The exact byte value (186) that produced a real CI false positive
+      # (github.com/tvolodi/letflow's WF03-ISS0401-20260902 Step Final run,
+      # test/letflow/secrets_test.exs:85-103) before this fix -- any single-byte
+      # plaintext has a real chance of appearing somewhere in the stored ciphertext by
+      # coincidence, which is not a leak. Run several times to demonstrate the
+      # containment check is genuinely skipped (never coincidentally re-triggers), not
+      # merely lucky once.
+      for _ <- 1..20 do
+        plaintext = <<186>>
+
+        %{reference: reference} =
+          put!(tenant_id, %{name: unique_segment("iss0403"), plaintext: plaintext})
+
+        stored =
+          Repo.get_by!(Secret,
+            tenant_id: tenant_id,
+            namespace: "webhook",
+            name: name_from(reference)
+          )
+
+        # byte_size(plaintext) == 1 < 8, so the containment check must be skipped --
+        # asserting it would be flaky by design, not a real leak signal.
+        refute byte_size(plaintext) >= 8
+
+        assert {:ok, %{plaintext: ^plaintext}} = Secrets.resolve(reference, tenant_id: tenant_id)
+      end
     end
   end
 

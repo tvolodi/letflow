@@ -1478,8 +1478,20 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 4
+    entries: 6
     note: >
+      Composed to 6 by ORCH's Step-Final rebase of
+      feature/WF03-ISS0401-20260902 onto main, which by then included
+      WF02-REQ212-20260901's own Step-Final composition (REQ-211 +
+      ISS-0400's started+done + REQ-212 done, 4 entries) landing
+      concurrently with this run's own started+done event pair --
+      `grep -c "^  - req:" docs/status/requirement_status.v8.yaml` = 6
+      on-disk entries after the merge (1 REQ-211 + 2 ISS-0400 + 1 REQ-212
+      + 2 ISS-0401), no entry lost, per this note's own recount-every-time
+      rule rather than carrying forward either side's independently
+      computed "4". `wc`: 369 lines / 22384 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Incremented to 4 by ORCH's Step-Final rebase of
       feature/WF02-REQ212-20260901 onto main, which by then included a
       concurrent sibling session's WF03-ISS0400-20260901 run (2 entries:
@@ -1490,6 +1502,11 @@ volumes:
       the 1200-line/120000-byte roll ceiling, so no roll triggered. Closes
       GH#769/ISS-0390 in full (REQ-211 core + REQ-212 routes both done).
 
+      Incremented to 4 by ORCH's own WF03-ISS0401-20260902 started-event
+      append (Step 00) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v8.yaml` = 4 on-disk entries at that
+      run's own pre-rebase base, no rebase conflict on this file at that
+      point.
       Incremented to 3 by ORCH's own WF03-ISS0400-20260901 done-event
       append (Step Final) -- `grep -c "^  - req:"
       docs/status/requirement_status.v8.yaml` = 3 on-disk entries, no

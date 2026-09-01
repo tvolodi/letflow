@@ -108,7 +108,8 @@ defmodule Letflow.Repository.AttachmentsTest do
     test "hashes bytes independently, upserts repository_artifacts (with real content), and creates one instance_attachments row" do
       %{schema_name: schema} = provisioned_tenant()
 
-      assert {:ok, %Attachment{} = attachment} = Attachments.upload(upload_attrs(), prefix: schema)
+      assert {:ok, %Attachment{} = attachment} =
+               Attachments.upload(upload_attrs(), prefix: schema)
 
       assert attachment.file_name == "note.txt"
       assert attachment.content_type == "text/plain"

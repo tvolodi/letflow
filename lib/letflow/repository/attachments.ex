@@ -266,7 +266,8 @@ defmodule Letflow.Repository.Attachments do
   `content` column (design §4.3) -- this module never reads
   `repository_artifacts` itself, keeping this call cheap and single-table.
   """
-  @spec get(id :: String.t(), opts()) :: {:ok, Attachment.t()} | {:error, :invalid_id | :not_found}
+  @spec get(id :: String.t(), opts()) ::
+          {:ok, Attachment.t()} | {:error, :invalid_id | :not_found}
   def get(id, opts) when is_list(opts) do
     prefix = Keyword.fetch!(opts, :prefix)
 

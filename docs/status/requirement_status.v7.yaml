@@ -983,3 +983,24 @@ history:
       format. fixture_shape_test.exs updated to assert full actor_id sets.
       runner_test.exs + runner_template_and_outcomes_test.exs updated to
       expect ACTIVE (not COMPLETED). 25/25 tests pass. PR #766 merged.
+
+  - req: REQ-207
+    event: started
+    agent: ORCH
+    at: "2026-09-01T04:12:36Z"
+    note: >
+      WF02-REQ207-20260901 Step 00. Human-named issue (GH#756), queue task
+      384 locked directly via set_lock (depends_on: [382]/REQ-205, done).
+      REQ-205's own ISS-0382 blocker (real R-Co fixture actor_ids missing)
+      is now resolved by ISS-0388 (previous entry, this volume) -- the 12
+      real R-Co fixture files with correct actor_ids are in place, so
+      REQ-207's Vortex scenario YAMLs (vortex-production-order-above-threshold,
+      vortex-supplier-quality-deviation-critical,
+      vortex-supplier-quality-deviation-false-positive,
+      vortex-entity-list-filter-and-page) can resolve against real fixture
+      data. Also recovered this session from a stale local checkout that
+      was 13 commits behind origin/main and made REQ-199/REQ-205 look
+      still in-progress/pending when both were in fact already done and
+      merged (PR #761, PR for REQ-205) -- local main fast-forwarded before
+      this run started; no code or requirement state was actually stale,
+      only this checkout's view of it.

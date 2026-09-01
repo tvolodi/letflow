@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0392-20260901/step-03-rework1-elixir-dev.json",
   "created_at": "2026-09-01T10:46:44Z",
   "started_at": "2026-09-01T10:46:44Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-01T11:20:47Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -40,18 +40,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Implemented Revision 2 of lib/letflow/design/iss0392-multi-task-records-collision-fix.md exactly as specified -- the build-time skip/defer mechanism, not the mechanically-infeasible Revision 1 replace mechanism the prior attempt correctly stopped on. Confirmed current source matched the design's own line citations before editing (engine.ex:2412/2415 parent_instance_id binding and call site, engine.ex:2572-2592 build_task_activation_and_reconciliation_multi/3's body, sub_process.ex prepare_child_activation/4's child_initial_state.status shape) -- all matched, no drift from what CODE-DESIGN-VALIDATOR verified.\n\nChanges, both in lib/letflow/engine.ex only (no other file needed changes -- confirmed via git status --short after implementation, matching the design's own narrow scope claim in §2.5):\n\n1. build_complete_task_tail_multi/6's second clause (engine.ex, the {:advanced, ...} branch): immediately after parent_instance_id is bound, computes skip_task_activation? = Enum.any?(prepared_children, fn {_id, prepared} -> prepared.child_initial_state.status == :completed end), per design §2.2's predicate stated in prose. Threads it into build_task_activation_and_reconciliation_multi/3 -> /4 as the new 4th argument. No other part of the pipe changed.\n\n2. build_task_activation_and_reconciliation_multi/3 -> /4: gained skip_task_activation? :: boolean() as specified in design §2.5. Delegates the conditional to a new private helper, maybe_append_task_activation_multi/7 (two clauses, pattern-matched on the boolean), which either omits TaskActivation.append_multi_from_existing_records/6 entirely (skip_task_activation? true) or calls it exactly as before (false). Return type unchanged (bare Multi.t()). reconcile_token_records/5's own :token_reconciliation step is untouched, called unconditionally in both cases, matching design §2.4's 'only the task-activation sub-step is conditionally omitted' instruction.\n\nNo signature changed for append_sub_process_children_creation_multi/6, SubProcess.append_start_multi/7, maybe_chain_synchronous_completion/6, append_completion_multi/5, build_completion_write_steps/12, maybe_cascade_to_grandparent/6, or TaskActivation.append_multi_from_existing_records/6 -- all confirmed unchanged in the diff, matching design §2.5/§3.2's explicit withdrawal of Revision 1's five-function signature chain. This mechanism IS mechanically sound as implemented: the predicate is evaluated once, in plain Elixir, before either Multi step exists, so no Ecto.Multi step is ever built-then-replaced.\n\nVerification performed (not just inspection): wrote an ad-hoc throwaway test, scratch/iss0392_verify_fix_test.exs (deleted after running, NOT committed -- adapted directly from ISSUE-FIXER's own scratch/iss0392_repro_test.exs fixture, matching design §5's exact scenario: parent START->HUMAN_TASK('gate')->SUB_PROCESS('sp')->END, child START->END with no intervening task so it completes synchronously). Ran `mix test scratch/iss0392_verify_fix_test.exs`: 1 passed, 0 failures. Asserted and confirmed: Engine.complete_task/3 no longer raises (previously raised RuntimeError 'cannot merge Multi ... task_records'), returns {:ok, _}, the parent instance_projections row reaches status: :completed, and zero orphan :pending tasks rows remain for that instance -- i.e. call (1)'s step was never built, so there was no earlier-snapshot row to have inserted, exactly as design §5 point 6 predicts structurally (not merely arranged by timing).\n\nRegression check: `mix test test/letflow/engine_sub_process_test.exs test/letflow/engine_test.exs` -- 55 passed, 0 failures (72.6s). Full suite: `mix test` -- 3000 passed (6 properties, 2994 tests), 10 excluded, 0 failures (1503.6s), exit code 0. Async/queued SUB_PROCESS completion path (AC3) is unaffected by construction -- confirmed by design §4's own argument (a hop chain with only :active children never sets skip_task_activation? true) and empirically by the full suite passing with zero regressions across engine_sub_process_test.exs's existing async/queued-path test cases.\n\n`mix compile --warnings-as-errors`: clean, zero warnings. `mix format --check-formatted`: clean, no diff.\n\nCascade case (maybe_cascade_to_grandparent/6, design §3): correctly left untouched per the design -- its own build-time predicate cannot extend there (the ancestor lookup is execution-time-only via a locking DB read inside Multi.run/3), and CODE-DESIGN-VALIDATOR already independently verified this is a real mechanical limit, not a convenience deferral, and non-load-bearing for ISS-0392's own filed repro (single-level only). No implementation deviates from the approved design; nothing to flag in issues.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "branch_name": "feature/WF03-ISS0392-20260901",
+      "commit_sha_list": ["e30873f8"],
+      "remote_branch": "origin/feature/WF03-ISS0392-20260901",
+      "push_status": "ok",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER (touches a tenant-data write path in lib/letflow/engine.ex -- INV-4/INV-7/INV-8 apply) and then REVIEWER (idiom/OTP gate) per WF-03 Step 3's remaining gates, before TEST-DESIGNER. Do not treat this PASS as satisfying either gate."
   },
   "rework_count": 1,
   "max_rework": 3

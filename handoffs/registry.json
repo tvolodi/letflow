@@ -3814,15 +3814,15 @@
       "issue_id": "ISS-0401",
       "queue_task_id": 401,
       "github_issue_number": 785,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "test/letflow/repository/attachments_test.exs"
       ],
       "started_at": "2026-09-01T19:48:34Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED (including writing the local docs/issues/ISS-0401.yaml mirror record) -- dispatching Step 1 to ISSUE-FIXER",
-      "note": "WF-03 issue-resolving run for ISS-0401, self-filed by ORCH at the end of WF03-ISS0400-20260901's Step Final: test/letflow/repository/attachments_test.exs:392's function_exported?(Repository, :upsert_content, 6) assertion returns false despite the function genuinely existing at that arity (lib/letflow/repository.ex:251, confirmed via __info__(:functions) too). Independently reproduced against a throwaway worktree at pre-ISS-0400 main with zero diff overlap, so pre-existing/environmental. No owned_modules overlap with any other active run at dispatch time (registry scan)."
+      "lock_released_at": "2026-09-01T19:59:06Z",
+      "released_lock": true,
+      "last_known_step": "Step Final -- PR #790 squash-merged to main (7defecdd), queue task 401 released status: done, GH#785 closed. Fourth wasm_hang isolation-subprocess recurrence (ISS-0352) and a new SecretsTest property-test false-positive (short-plaintext coincidental containment, filed as ISS-0403/GH#791) both structurally cleared and did not block merge.",
+      "note": "WF-03 issue-resolving run for ISS-0401, self-filed by ORCH at the end of WF03-ISS0400-20260901's Step Final: test/letflow/repository/attachments_test.exs:392's function_exported?(Repository, :upsert_content, 6) assertion returns false despite the function genuinely existing at that arity (lib/letflow/repository.ex:251, confirmed via __info__(:functions) too). ISSUE-FIXER directly measured the root cause: function_exported?/3 checks the loaded-module table and returns false for a compiled-but-not-yet-loaded module (confirmed via :code.is_loaded/1 before/after), deterministic given test run order, not timing/parallelism-dependent. Qualified for ORCH's direct-action sizing rule (ORCHESTRATOR.md section 10, all six checks passed) -- ORCH applied the one-line Code.ensure_loaded?/1 guard fix directly, no CODE-DESIGNER/REVIEWER chain needed. Fail-then-pass proven directly (0/1 pre-fix via git stash, 1/1 post-fix, 5/5 reliable reruns). GH#785 closed with evidence comment. Queue task 401 released status: done."
     }
   ]
 }

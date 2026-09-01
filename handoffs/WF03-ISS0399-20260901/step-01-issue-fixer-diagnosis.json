@@ -1,0 +1,40 @@
+{
+  "handoff_id": "WF03-ISS0399-20260901-step-01",
+  "run_id": "WF03-ISS0399-20260901",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0399-20260901/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-01T17:10:00Z",
+  "started_at": "2026-09-01T17:06:55Z",
+  "completed_at": "2026-09-01T17:10:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-211", "REQ-212"],
+    "issue_ids": ["ISS-0399"],
+    "artifacts_in": [
+      "docs/issues/ISS-0399.yaml",
+      "lib/letflow/design/req211-instance-attachments-core.md",
+      "lib/letflow/repository/attachments.ex",
+      "docs/requirements.yaml"
+    ],
+    "branch_name": "fix/ISS-0399-attachment-content-scanning-20260901"
+  },
+  "task": {
+    "description": "Diagnose/scope ISS-0399: REQ-211's instance-attachment upload/download/list subsystem has no content-scanning/antivirus pipeline for uploaded bytes, per the deliberate deferral named in the design doc (§4.0 item 8 / AC9) and re-affirmed in the module's moduledoc. Determine whether real scanning-integration implementation work is appropriate now, or whether this should stay deferred pending an infrastructure decision."
+  },
+  "result": {
+    "status": "PASS",
+    "recommendation": "DO_NOT_IMPLEMENT_NOW",
+    "route_to": "ORCH",
+    "release_task": true,
+    "summary": "1) STATE CONFIRMED AGAINST SHIPPED CODE (not just the issue's prose): read lib/letflow/repository/attachments.ex in full. upload/2 (lines 155-202) computes byte_size independently via byte_size/1 over raw_bytes (never caller-trusted -- upload_attrs() has no size field at all), rejects with {:error, :file_too_large} at measured_byte_size > @max_upload_bytes = 26_214_400 (25 MiB, line 106) before any hashing/upsert/insert. content_type (upload_attrs, line 116) is accepted as a plain caller-declared string and stored as-is into both instance_attachments and repository_artifacts with zero magic-byte/MIME-sniffing validation anywhere in this module or its moduledoc's own INV-a (lines 22-31) -- this is an explicit, documented invariant, not an oversight. Every function (upload/list/get/delete) takes opts[:prefix] and derives tenant_id from it via TenantProvisioning.tenant_id_for_schema_name/1; tenant_id is never caller-supplied. All three of the issue's claims (tenant-scoped, 25 MiB cap, content_type never validated) are verified true against the real code, not just asserted by the issue.\n\n2) URGENCY ASSESSMENT: grepped lib/letflow for any caller of Attachments.upload/2 -- there are none. Checked docs/requirements.yaml's REQ-212 entry (the route layer: POST/GET/DELETE /api/v1/instances/:id/attachments) -- status: pending, impl_order 395, not yet implemented. REQ-211's own moduledoc scope boundary (line 9-11 of attachments.ex) states explicitly: 'this module covers only the instance_attachments schema/migration and these four functions. No route, no controller, no Plug module -- that is REQ-212.' Confirmed via grep of lib/letflow/router.ex and lib/letflow/routers/ that no attachment route exists yet at all. Conclusion: there is currently NO route of any kind -- trusted or untrusted -- that exposes this upload path to any caller, HTTP or otherwise. The issue's own claim ('not currently a blocking concern... before this subsystem is exposed to less-trusted upload sources... a scanning pass should be designed and added') is not just true but actually understates the current state: there is no exposed upload path at all yet, trusted or untrusted. Real urgency attaches to REQ-212 (when a route first exists) or to any later requirement that would expose upload to a public-facing/external-integration/less-trusted caller -- neither exists yet.\n\n3) INFRASTRUCTURE/DECISION-RECORD CHECK: grepped mix.exs deps (full list read) -- no scanning/AV library (no ClamAV client, no cloud-scanning SDK, nothing scan/malware/virus-related) exists anywhere in the dependency tree. Grepped docs/migration/decisions/ for clamav/antivirus/virus/content-scan/malware -- zero hits. No S0 (or any-stage) decision record establishes a scanning provider, self-hosted-vs-cloud choice, or budget for this. Per this project's own 'don't silently re-decide' rule (CLAUDE.md, core-directives.md), any real scanning integration is a new infrastructure choice (which engine/service: e.g. ClamAV daemon + clamd protocol vs. a cloud scanning API; synchronous inline scan vs. async post-upload quarantine-then-release; self-hosted vs. vendor cost) that has never been decided anywhere in this codebase's history. Implementing a fix now would mean CODE-DESIGNER either inventing that infrastructure decision unilaterally (contradicts the no-silent-redecision rule for a decision of this weight) or stalling on an unanswerable design question.\n\n4) RECOMMENDATION: do NOT route to CODE-DESIGNER now. This is a genuine deferred-scope item, not a live defect -- the design doc named it as a deliberate follow-up (§4.0 item 8), REVIEWER already signed off on the deferral at WF02-REQ211 step-02d, and the concrete trigger condition for real urgency (a route exposing upload to a less-trusted caller) does not exist yet -- REQ-212 (the only route surface currently planned) is itself scoped to authenticated tenant users via the existing AttachmentsManage-gated route, per its own requirements.yaml description, not a public/external-integration route. Recommend ORCH release queue task 399 back to open with a clarified note: (a) re-confirm this is correctly scoped as MINOR/deferred, not a blocking defect; (b) tie the real trigger to 'before any route/consumer exposes attachment upload to a less-trusted-than-authenticated-tenant-user caller (e.g. a public upload route, an external-integration ingest path)' -- REQ-212's currently-planned route does not meet that bar; (c) note explicitly that implementing this for real requires a new decision record (scanning provider choice, sync-vs-async scan placement, self-hosted vs. vendor) before CODE-DESIGNER can design it -- that decision should be raised as its own S0-level ADR proposal when a concrete trigger route is actually being built, not manufactured now against no real consumer. No code change is proposed or needed on this branch."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": []
+}

@@ -144,6 +144,57 @@ definition files specifically (`ISS-0388`'s resolution covered only the
 scenario YAMLs are self-authored/synthetic, disclosed in the design doc's
 own §0.2).
 
+**REQ-208 done (2026-09-01, WF02-REQ208-20260901).** All 3 Meridian
+Capital scenarios run via REQ-205's harness:
+`meridian-loan-origination-above-threshold` (real 3-way
+`PARALLEL_GATEWAY` fork confirmed created from real queried task state
+-- both non-KYC branches confirmed real, queried, PENDING `HUMAN_TASK`s
+-- then genuinely truncated on a real HTTP 500 reproducing a
+pre-existing Engine defect: `join_counters: %{}` is hardcoded
+unconditionally in `lib/letflow/engine.ex`'s `build_instance_state/3`
+(confirmed byte-for-byte identical on `origin/main` before this
+branch's work; root cause: REQ-054/SnapshotWriter serializes
+`join_counters` into `instance_state_snapshots`, but
+`Engine.complete_task/3`'s own state-rebuild hot path never reads it
+back), so no `PARALLEL_GATEWAY` split can currently converge across two
+separate task-completion HTTP calls), `meridian-loan-origination-below-
+threshold` (identical genuine reproduction), and `meridian-regulatory-
+compliance-review-bafin` (steps 1/2 real against real queried state;
+step 3 recorded BLOCKED citing REQ-206's already-filed `ISS-0389`
+advance-timer finding rather than a duplicate -- the report states this
+same gap now blocks scenarios in two different tenant batches).
+`Letflow.Simulation.Runner` extended additively with a new
+`:no_task_of_type` verification method (queries every task status, no
+filter -- confirmed non-vacuous via the BaFin scenario's own positive
+control asserting `:fail` against a task that DOES exist and is
+COMPLETED, not pending) and a new `:blocked` disposition (requires
+`blocked_by`, raises loudly if absent, same discipline as the
+pre-existing `:skip` branch); REQ-205's own simulation tests re-run
+unchanged, full `test/letflow/simulation/` at 28/28. RELEASE-VALIDATOR
+verdict: **ACCEPT WITH CAVEAT** -- AC1 and AC2 are recorded **PARTIALLY
+MET**, not blanket MET: the fork/task-creation portion of AC1 and the
+defect reproduction itself are genuinely verified (post-failure state
+re-queried and confirmed uncorrupted -- task still PENDING, instance
+still ACTIVE), but the committee-vote route, quorum 2-of-3, disbursement
+(AC1) and EO-002's negative committee-task assertion (AC2) are honestly
+reported as unverified rather than fabricated, since the defect
+truncates both scenarios before those paths become reachable -- not
+fixable within this test/test-support-only requirement's own scope
+(zero `lib/` files touched, confirmed by `git diff`). AC3/AC4/AC5/AC6
+all fully MET (AC4: REQ-199 independently re-confirmed `status: done` at
+execution time, no caveat needed). Two new Engine defects found and
+deferred to ORCH for filing at Step Final (per `ISSUE_QUEUE.md`,
+confirmed neither self-assigned an ISS id): (1) the `join_counters`
+defect above, BLOCKER severity, `affected_files`
+[`lib/letflow/engine.ex`, `lib/letflow/engine/transition.ex`],
+`related: [REQ-054, REQ-208]` -- a platform-wide gap blocking any future
+requirement needing a real cross-call parallel join; (2)
+`walk_to_gateway/3` fails a fork branch containing a multi-outgoing-edge
+node (e.g. an `EXCLUSIVE_GATEWAY`) before reaching its join, reproduced
+at `test/letflow/simulation/req208_meridian_test.exs` lines 117-134.
+Full detail:
+`handoffs/WF02-REQ208-20260901/release-validation-report-20260901.md`.
+
 ## Decisions
 
 None expected — this stage validates prior decisions rather than

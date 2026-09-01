@@ -1163,3 +1163,86 @@ history:
       committee-task assertion), regulatory-compliance-review-bafin (step 3
       BLOCKED on the same missing advance-timer endpoint REQ-206 already
       filed as ISS-0389 -- reference, do not file a duplicate).
+  - req: REQ-208
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-01T12:15:49Z"
+    note: >
+      WF02-REQ208-20260901 done (queue task 385, GH#757, stage S7).
+      Meridian's 3 simulation scenarios run via REQ-205's harness:
+      meridian-loan-origination-above-threshold (real 3-way PARALLEL_GATEWAY
+      fork confirmed via real queried task state, then truncated on the
+      real HTTP 500 reproducing a genuine pre-existing Engine defect --
+      `join_counters: %{}` hardcoded unconditionally in
+      lib/letflow/engine.ex's build_instance_state/3, confirmed byte-for-byte
+      identical on origin/main before this branch's work, root cause:
+      REQ-054/SnapshotWriter serializes join_counters but
+      Engine.complete_task/3's own state-rebuild hot path never reads it
+      back, so no PARALLEL_GATEWAY split can converge across two separate
+      task-completion HTTP calls today), meridian-loan-origination-below-
+      threshold (identical genuine reproduction), and meridian-regulatory-
+      compliance-review-bafin (steps 1/2 real against real queried state;
+      step 3 recorded BLOCKED citing REQ-206's already-filed ISS-0389
+      advance-timer finding rather than a duplicate, report states the same
+      gap now blocks scenarios in two different tenant batches). New
+      `:no_task_of_type` verification method (queries every task status, no
+      filter -- confirmed non-vacuous via the BaFin scenario's own positive
+      control on a COMPLETED, not pending, task) and new `:blocked`
+      disposition (requires blocked_by, raises loudly if absent) both
+      shipped additively to test/support/simulation/runner.ex; REQ-205's own
+      simulation tests re-run unchanged, full test/letflow/simulation/ at
+      28/28. RELEASE-VALIDATOR verdict: ACCEPT WITH CAVEAT -- AC1 and AC2
+      are recorded PARTIALLY MET, not blanket MET: the fork/task-creation
+      portion of AC1 and the defect-reproduction itself are genuinely
+      verified (both loan-origination tests confirm real PENDING HUMAN_TASKs
+      via direct Instances.get_by_id/2 + Tasks.list_tasks/2 queries, then
+      genuinely reproduce the join_counters HTTP 500 as the asserted closed
+      step disposition, with post-failure state re-queried and confirmed
+      uncorrupted), but the committee-vote route, quorum 2-of-3,
+      disbursement (AC1) and EO-002's negative committee-task assertion
+      (AC2) are honestly reported as unverified rather than fabricated,
+      since the defect truncates both scenarios before those paths are
+      reachable -- not fixable within this test/test-support-only
+      requirement's own scope (owned_modules: test/support/simulation,
+      test/fixtures/simulation/meridian, test/letflow/simulation; zero lib/
+      files touched, confirmed by git diff). AC3/AC4/AC5/AC6 all fully MET
+      (AC4: REQ-199 independently re-confirmed status: done at execution
+      time, no caveat needed). Two new Engine defects found and properly
+      deferred to ORCH for filing at Step Final (per ISSUE_QUEUE.md,
+      confirmed neither self-assigned an ISS id, confirmed zero
+      docs/issues/*.yaml matches for either term): (1) the join_counters
+      defect above, BLOCKER severity, affected_files
+      [lib/letflow/engine.ex, lib/letflow/engine/transition.ex], related
+      [REQ-054, REQ-208]; (2) walk_to_gateway/3 fails a fork branch
+      containing a multi-outgoing-edge node (e.g. EXCLUSIVE_GATEWAY) before
+      reaching its join, reproduced at
+      test/letflow/simulation/req208_meridian_test.exs lines 117-134. Full
+      detail: handoffs/WF02-REQ208-20260901/release-validation-report-20260901.md.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 7 CLOSED 2026-09-01.
+# This volume holds the complete requirement run history from 2026-08-30 through
+# 2026-09-01 (42 entries, lines 1-1220). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed under WF02-REQ208-20260901's Step 6
+# DOC-UPDATER append, which brought this file to 1220 lines -- over its declared
+# roll_rule ceiling (max_lines: 1200) -- confirmed via `wc -l` on the working-tree
+# file per this volume's own "WHEN THIS VOLUME IS FULL" procedure. Reads of this
+# volume are TARGETED reads only -- a line range or a pattern match, never a
+# whole-file read. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v8.yaml
+#
+# Why this file was closed: appending REQ-208's own done-event (WF02-REQ208-
+#20260901, Step 6) brought the on-disk count to 42 entries across 1220 lines --
+# over the roll ceiling. No entry above this footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none declared beyond what volumes 1-3 already
+# declare against themselves.
+# ─────────────────────────────────────────────────────────────────────────────

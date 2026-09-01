@@ -11999,7 +11999,7 @@ requirements:
   - id: REQ-211
     title: Instance-attachment schema and core upload/download/list context module (instance_attachments, no route)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 394  # letflow-queue task id, GH#774
     description: >

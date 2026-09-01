@@ -43,6 +43,19 @@ defmodule Letflow.Repository.Artifact do
   `changeset/2` is only ever used to build the attributes for a single
   `Repo.insert/2` call (with `on_conflict: :nothing` for the dedup-by-hash
   upsert), never for an update.
+
+  ## `content` column (REQ-211 addendum)
+
+  `content :binary` (Postgres `bytea`) was added by REQ-211's migration
+  addendum (`priv/repo/migrations/20260901000001_add_content_to_repository_artifacts.exs`,
+  design `lib/letflow/design/req211-instance-attachments-core.md` §2A) --
+  the actual raw content bytes this store's `content_hash` is computed over.
+  REQ-202's own shipped `create/2` computed the hash/byte_size from these
+  bytes but never persisted them anywhere; REQ-211 is this column's first
+  real writer (`Letflow.Repository.upsert_content/6`). This does not change
+  REQ-202's own acceptance criteria or `done` status -- see the migration's
+  own header comment for the full addendum rationale (why `bytea`, why
+  `null: false` needs no backfill).
   """
 
   use Ecto.Schema
@@ -53,13 +66,14 @@ defmodule Letflow.Repository.Artifact do
     field(:tenant_id, :binary_id)
     field(:content_type, :string)
     field(:byte_size, :integer)
+    field(:content, :binary)
 
     timestamps(updated_at: false)
   end
 
   @type t :: %__MODULE__{}
 
-  @required_fields [:content_hash, :tenant_id, :content_type, :byte_size]
+  @required_fields [:content_hash, :tenant_id, :content_type, :byte_size, :content]
 
   @doc """
   Structural insert changeset -- `Letflow.Repository.create/2` supplies

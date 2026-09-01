@@ -800,8 +800,17 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 38
+    entries: 39
     note: >
+      Incremented to 39 by WF02-REQ211-20260901 (DOC-UPDATER)'s own REQ-211
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 39 on-disk entries, no
+      rebase conflict on this file at the time it was written. 1098 lines /
+      65664 bytes, well under the 1200-line/120000-byte roll ceiling, so no
+      roll triggered. No started-event existed anywhere in this volume for
+      REQ-211 prior to this append; recorded as a gap in the done-event's
+      own note rather than fabricated here.
+
       Corrected to 38 during ORCH's Step-Final rebase of
       feature/WF02-REQ206-20260901 onto main: DOC-UPDATER's own commit
       (fe0b331a) had counted 37 on a branch that did not yet include

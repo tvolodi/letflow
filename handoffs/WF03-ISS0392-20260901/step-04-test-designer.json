@@ -1,0 +1,59 @@
+{
+  "handoff_id": "3990d49a-0fc6-4454-b2df-37fc33bffb08",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0392-20260901/step-04-test-designer.json",
+  "created_at": "2026-09-01T11:29:02Z",
+  "started_at": "2026-09-01T11:29:02Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0392-multi-task-records-collision-fix.md",
+      "docs/issues/ISS-0392.yaml",
+      "handoffs/WF03-ISS0392-20260901/step-03-rework1-elixir-dev.json",
+      "handoffs/WF03-ISS0392-20260901/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0392-20260901/step-03c-reviewer.json",
+      "lib/letflow/engine.ex",
+      "test/letflow/engine_sub_process_test.exs"
+    ],
+    "owned_modules": ["lib/letflow/engine.ex", "test/letflow/engine_sub_process_test.exs"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0392-20260901 (checkout/pull it first). Write the WF-03 regression test for ISS-0392 -- SECURITY-REVIEWER and REVIEWER have both PASSED the fix (commit e30873f8, entirely lib/letflow/engine.ex). This is a fix to EXISTING behavior (not a new module), so the fail-then-pass rule applies in its normal form, not the non-existence/mutation form: your test must be shown to FAIL against the pre-fix code and PASS against the current (fixed) code. ELIXIR-DEV's own ad-hoc throwaway verification (see step-03-rework1-elixir-dev.json's result.summary) already used this exact scenario successfully but did not commit it -- build the real, permanent regression test yourself, following the project's existing test conventions in test/letflow/engine_sub_process_test.exs (read its existing fixtures/helpers first, reuse what fits, e.g. the graph_child_two_step/0-style helper pattern noted at that file's lines 119-120 as NOT covering synchronous completion -- your new test is what finally closes that gap). Scenario per the design doc SS5: parent process START->HUMAN_TASK('gate')->SUB_PROCESS('sp')->END, spawned child process definition START->END (no intervening task, so it completes synchronously). Complete the gate task via Engine.complete_task/3 and assert: (a) it does NOT raise (pre-fix: raises RuntimeError 'cannot merge Multi... task_records'), (b) returns {:ok, _}, (c) the parent instance reaches :completed, (d) no orphan/duplicate task rows exist for the parent instance_id. To prove fail-then-pass for real: temporarily check out the pre-fix commit (the commit immediately before e30873f8 on this branch -- find it with git log), copy your new test file there via git show/git checkout <path> from your branch, run it, confirm it fails with the exact collision error, then return to the fix branch (git checkout feature/WF03-ISS0392-20260901 -- <path> or equivalent) and confirm it passes. State both results explicitly in your handoff. Do not modify or run pre-fix code permanently -- this is a verification step only, the working tree must end up back on the fix branch's own content.",
+    "acceptance_criteria": [
+      "test/specs/ISS-0392.md written: the scenario, the assertions, why each exists",
+      "Permanent test code committed under test/letflow/ (extending or adding to engine_sub_process_test.exs, matching existing project conventions)",
+      "Fail-then-pass explicitly verified: test run against the pre-fix commit fails with the exact filed RuntimeError, test run against the fix branch passes -- both results quoted in result.summary, not asserted",
+      "No test-local workaround reintroduced (e.g. do not use a HUMAN_TASK-child workaround pattern to dodge the synchronous-completion path the way REQ-207 did -- this test must exercise the exact synchronous-completion collision)",
+      "Existing tests in test/letflow/engine_sub_process_test.exs and test/letflow/engine_test.exs still pass alongside the new test",
+      "Working tree ends on feature/WF03-ISS0392-20260901 with no leftover pre-fix-commit artifacts"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

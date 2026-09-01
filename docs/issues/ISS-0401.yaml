@@ -1,0 +1,42 @@
+id: ISS-0401
+title: "test/letflow/repository/attachments_test.exs:392 fails on main independent of any specific branch -- function_exported?(Repository, :upsert_content, 6) returns false despite the function existing at arity 6"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0400-20260901
+discovered_at: "2026-09-01T18:18:40Z"
+severity: MINOR
+tags: [test-infra, repository, attachments]
+description: >
+  Discovered during WF03-ISS0400-20260901 Step Final full-suite run.
+  test/letflow/repository/attachments_test.exs:392-394 asserts
+  function_exported?(Repository, :upsert_content, 6), which fails (returns
+  false) even though lib/letflow/repository.ex:251 defines a public
+  upsert_content/6 with a matching @spec, and
+  Letflow.Repository.__info__(:functions) confirms upsert_content: 6 is
+  present in the compiled module.
+
+  Reproduced independently in a throwaway git worktree at main (no
+  ISS-0400 changes present, confirmed via git diff --name-only showing
+  zero overlap), so this is pre-existing/environmental, not caused by any
+  single branch.
+
+  Likely cause: function_exported?/3 requires the target module to
+  already be *loaded* into the VM (not merely compiled to a .beam on
+  disk) and returns false for a compiled-but-unloaded module, while
+  __info__(:functions) implicitly triggers a load -- worth checking
+  whether attachments_test.exs (or its test_helper.exs/ExUnit setup) is
+  missing a Code.ensure_loaded?/1 or similar before this assertion, or
+  whether some other test ordering/caching interaction is
+  unloading/never-loading Letflow.Repository before this specific test
+  runs.
+affected_files:
+  - test/letflow/repository/attachments_test.exs
+  - lib/letflow/repository.ex
+related:
+  - REQ-211
+  - ISS-0400
+source: >
+  handoffs/WF03-ISS0400-20260901/step-final (Step Final full-suite
+  triage), direct reproduction against a throwaway git worktree at main.
+queue_task_id: 401
+github_issue: 785
+status: open

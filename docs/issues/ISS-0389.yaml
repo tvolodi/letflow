@@ -1,0 +1,32 @@
+id: ISS-0389
+title: "Missing POST /api/v1/instances/:id/advance-timer endpoint"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ206-20260901
+discovered_at: "2026-09-01T04:07:00Z"
+severity: MINOR
+tags: [engine, timers, s7]
+description: >
+  REQ-206's shipment-ops-timeout-escalation scenario needed to advance a
+  simulated timer to trigger an escalation path, but no advance-timer
+  endpoint exists in lib/letflow/routers/. Confirmed by independent grep
+  (ELIXIR-DEV at implementation time, RELEASE-VALIDATOR re-confirming at
+  Step 5) -- zero matches for advance-timer/advance_timer anywhere in
+  lib/letflow/router.ex or lib/letflow/routers/. The scenario step ran with
+  disposition :skip/severity :minor as a documented fallback (steps 1/3 of
+  shipment-ops-timeout-escalation ran for real). Already referenced as a
+  blocking gap by REQ-208/209 per the run-history note for REQ-206's done
+  event.
+affected_files:
+  - lib/letflow/routers/
+  - lib/letflow/engine/
+related:
+  - REQ-206
+  - REQ-208
+  - REQ-209
+source: >
+  handoffs/WF02-REQ206-20260901/step-02a-elixir-dev.json (result.issues),
+  handoffs/WF02-REQ206-20260901/step-05-release-validator.json (independent
+  re-confirmation).
+queue_task_id: 389
+github_issue: 768
+status: open

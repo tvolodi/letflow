@@ -1,0 +1,66 @@
+{
+  "handoff_id": "WF02-REQ206-20260901-step-05",
+  "run_id": "WF02-REQ206-20260901",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ206-20260901/step-05-release-validator.json",
+  "created_at": "2026-09-01T05:56:17Z",
+  "started_at": "2026-09-01T05:56:17Z",
+  "completed_at": "2026-09-01T05:58:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [
+      "REQ-206"
+    ],
+    "issue_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ206-20260901/step-04-test-runner.json",
+      "docs/requirements.yaml#REQ-206",
+      "lib/letflow/design/req206-swiftroute-scenario-execution.md"
+    ],
+    "branch_name": "feature/WF02-REQ206-20260901"
+  },
+  "task": {
+    "description": "Independently re-verify REQ-206's 6 acceptance criteria before DOC-UPDATER marks it done. Re-run tests, re-check scenario fixture disclosure headers, re-confirm the Runner extension is additive, re-verify the two UNIMPLEMENTED findings, and confirm the R-Co scenario-corpus follow-up recommendation reaches ORCH."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All 6 REQ-206 acceptance criteria independently re-derived as genuinely met from real command output and source inspection, not from trusting step-02a/step-04's self-reports. One caveat carried forward for ORCH (not a blocker): the design-stage recommendation to file a follow-up issue mirroring ISS-0388 (port real R-Co tests/simulation/scenarios/*.yaml scenario content once R-Co access is available) exists only in lib/letflow/design/req206-swiftroute-scenario-execution.md and step-01/step-01b handoffs -- it was NOT carried into step-02a's result.issues or any later handoff. Re-elevated here so ORCH acts on it at Step 6/Final, same mechanism REQ-205's own RELEASE-VALIDATOR used for its AC1 caveat.",
+    "independent_verification": {
+      "toolchain": "asdf: elixir 1.20.3-otp-29 / erlang 29.0.5 (matches .tool-versions)",
+      "compile": "mix compile --warnings-as-errors --force -> 'Compiling 180 files (.ex) / Generated letflow app', exit 0, 0 warnings -- re-run myself, matches step-04's claim",
+      "req206_tests": "mix test test/letflow/simulation/req206_swiftroute_test.exs -> 'Result: 6 passed' in 8.1s -- re-run myself, real output, matches step-04's claim of 6/6",
+      "req205_pre_existing_tests_unaffected": "mix test test/letflow/simulation/runner_test.exs test/letflow/simulation/runner_template_and_outcomes_test.exs test/letflow/simulation/seed_idempotency_test.exs -> 'Result: 15 passed' (0 failures) -- re-run myself, confirms Runner's :skip/:unbuilt_feature extension did not regress REQ-205's own pre-existing simulation coverage. Also ran mix test test/fixtures/simulation/fixture_shape_test.exs (adjacent fixture-shape coverage) -- passed.",
+      "runner_diff_is_additive": "git diff origin/main...HEAD -- test/support/simulation/runner.ex reviewed line-by-line: every change is a new struct field with a safe default (unbuilt_feature: nil, disposition: :executed, severity: nil, notes: nil), a widened type union (:api | :gui -> + :skip), a new leading run/1 clause for unbuilt_feature that short-circuits before any existing logic, and a new :skip case branch in the step-dispatch cond/case. No existing branch's behavior was deleted or altered in a way the still-passing 15 pre-existing tests would not have caught.",
+      "advance_timer_grep": "grep -rn 'advance-timer|advance_timer' lib/letflow/router.ex lib/letflow/routers/ -> zero matches (exit 1), re-run myself independently of step-02a's claim -- confirms the AC3 finding is factually accurate as of this commit.",
+      "attachment_grep": "grep -rln 'attach|document' lib/letflow/routers/*.ex -> hits in 10 files, all manually inspected: every match is either 'problem document' (RFC 9457 error body terminology), 'documented' (doc comments), or SolutionPack's unrelated 'pack document'/'attaches variable schemas to a pre-existing [definition]' usage -- zero actual attachment/document-upload route or handler for shipment delivery notes. Confirms the AC4 finding is factually accurate.",
+      "scenario_yaml_disclosure_headers": "Read all 4 files under test/fixtures/simulation/swiftroute/scenarios/ -- each opens with a '# Synthetic --' header naming the exact unreachable R-Co source path and cross-referencing the design doc's §0, matching REQ-205's own established disclosure convention (verified against test/fixtures/simulation/swiftroute/company.yaml's '# Ported from R-Co ... (ISS-0388)' header for contrast -- the scenario files correctly use the synthetic-disclosure wording, not the ported wording, because the underlying scenario corpus is still unreachable, unlike the now-real company/org/process fixtures).",
+      "findings_reported_correctly": "step-02a-elixir-dev.json's result.issues carries exactly 2 entries: 'POST /api/v1/instances/:id/advance-timer does not exist' (severity MINOR, matches scenario's own documented SKIP/MINOR fallback) and 'No document/attachment API exists in Letflow or in R-Co's own src/' (severity MINOR) -- both with affected_files and evidence descriptions; neither fabricated (both independently re-confirmed by grep above) nor silently dropped.",
+      "ac_to_evidence_map": {
+        "AC1": "test 'swiftroute-tenant-onboarding-happy' in req206_swiftroute_test.exs (lines 245-309): asserts Identity.get_onboarding_by_hostname/1, tenant.status == :active, alice user + token creation against real DB state (EO-001..003-equivalent); asserts all 5 step_results are :deferred_to_s8 with detail containing 'S8'; asserts report.disposition == :executed; asserts File.exists?/1 on web/tests/e2e/pipelines/onboarding-wizard.pipeline.e2e.spec.ts to state the spec-exists-but-not-integrated distinction explicitly. Re-run: PASS.",
+        "AC2": "test 'swiftroute-shipment-high-value-happy' (lines 314-378): 5 real API steps (submit/lookup/complete via Runner against a running-in-test Letflow instance) all :ok; all 4 outcome_results asserted present with concrete evidence (assignee_ref, instance status COMPLETED, variables, audit_event) -- EO-1 permitted :pass or :fail per a documented Engine limitation (role-attributed task assignee_type == nil, design's settled-OQ-3) but always carries real observed evidence, satisfying AC2's 'recorded PASS or FAIL... with specific evidence' wording (AC2 does not require all 4 to be PASS). Re-run: PASS.",
+        "AC3": "test 'swiftroute-shipment-ops-timeout-escalation' (lines 383-426): step1 :ok, step2 :skip/severity :minor/detail contains 'advance-timer' (exact match to the scenario's documented fallback), step3 :ok; both instance_state outcome_results :pass. Missing-endpoint finding independently grep-confirmed above and present in step-02a's result.issues. Re-run: PASS.",
+        "AC4": "test 'swiftroute-shipment-attach-delivery-note' (lines 431-455): report.disposition == :unbuilt_feature, all three result lists empty (zero steps executed), notes cite 'partition_attach.zig' and 'iss501_storage_mode_routing.md' (the specific R-Co src/ paths checked) and 'No attachment/document-upload API'. Finding independently grep-confirmed above and present in step-02a's result.issues. Re-run: PASS.",
+        "AC5": "All 16 steps across the 4 scenarios accounted for with a closed disposition (5 deferred_to_s8 + 5 ok + [1 ok, 1 skip, 1 ok] + 0-of-5 via unbuilt_feature short-circuit) -- verified by reading all 4 test blocks; no step left unaddressed. Re-run: PASS.",
+        "AC6": "mix compile --warnings-as-errors --force and mix test test/letflow/simulation/req206_swiftroute_test.exs both re-run by RELEASE-VALIDATOR directly (not copied from step-04), real output quoted above. Re-run: PASS."
+      }
+    },
+    "caveat": {
+      "title": "R-Co scenario-corpus-porting follow-up (mirrors ISS-0388) present only in the design doc, not carried into any post-design handoff",
+      "detail": "lib/letflow/design/req206-swiftroute-scenario-execution.md (§0) and handoffs/WF02-REQ206-20260901/step-01-code-designer-rework1.json's recommendation_for_orch both explicitly recommend ORCH file a follow-up issue at Step 6/Final -- same shape as docs/issues/ISS-0388.yaml (discovered_by: RELEASE-VALIDATOR, tags: [fixture-porting, needs-r-co-access, s7], affected_files: the 4 scenario YAMLs under test/fixtures/simulation/swiftroute/scenarios/, related: [REQ-206]) -- so a future session/host with genuine R-Co filesystem access can port the real tests/simulation/scenarios/*.yaml scenario content, the same way ISS-0388 fixed REQ-205's company/org/process fixtures. Grepped step-02a/02c/02d/03/03b/04 for this recommendation: zero mentions past step-01b. It did not get lost through negligence -- REQ-205's own precedent (see handoffs/WF02-REQ205-20260831/release-validation-report-20260831.md) shows RELEASE-VALIDATOR itself, not ELIXIR-DEV, is this pipeline's established vehicle for surfacing this class of recommendation to ORCH at Step 6. Re-stating it here closes that gap rather than letting it fall through silently.",
+      "downstream_consequence_if_not_acted_on": "Without this follow-up issue filed, REQ-206's 4 scenario YAMLs remain self-authored synthetic content indefinitely (not a correctness problem for REQ-206 itself -- disclosed, structurally faithful, and does not block REQ-206 being done -- but a real content gap: REQ-207/REQ-208's Vortex/Meridian scenario corpora will face the identical unreachable-R-Co-scenario-corpus situation, and without this issue on record, that gap risks being silently re-discovered and re-justified from scratch by each of REQ-207/REQ-208 instead of being centrally tracked and resolved once.",
+      "does_this_block_marking_REQ-206_done": "No. Same reasoning as REQ-205's AC1 caveat: the requirement's mechanism, tests, and disclosure are all genuinely correct and independently verified; only the literal byte-for-byte R-Co scenario content is unavailable, and that unavailability is disclosed everywhere it appears (file headers, design doc, this report). ACCEPT WITH RECORDED CAVEAT.",
+      "action_requested_of_orch": "File a follow-up issue via letflow-queue at Step 6/Final mirroring docs/issues/ISS-0388.yaml's shape, per the design doc's §0 recommendation and step-01-code-designer-rework1.json's recommendation_for_orch field, and make it visible for REQ-207/REQ-208 to reference rather than re-deriving independently."
+    },
+    "artifacts_out": [
+      "handoffs/WF02-REQ206-20260901/release-validation-report-20260901.md"
+    ],
+    "next_action": "Route to DOC-UPDATER (Step 6) to flip REQ-206 status to done, record AC1-6 all PASS (no partial-met ACs, unlike REQ-205), and cross-reference this report's caveat and the requested ISS-0388-mirroring follow-up issue in the run-history event. ORCH should also file that follow-up issue at Step 6/Final per the design doc's own recommendation."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

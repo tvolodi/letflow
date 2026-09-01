@@ -800,8 +800,42 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 35
+    entries: 38
     note: >
+      Corrected to 38 during ORCH's Step-Final rebase of
+      feature/WF02-REQ206-20260901 onto main: DOC-UPDATER's own commit
+      (fe0b331a) had counted 37 on a branch that did not yet include
+      main's own intervening REQ-207-started append (commit fd3cbfa6,
+      "WF02-REQ207-20260901 Step 00"), landed on main while REQ-206's
+      branch was in flight. The rebase produced a genuine append-order
+      conflict in requirement_status.v7.yaml (REQ-207-started vs.
+      REQ-206-done, both legitimate, independent appends) -- resolved by
+      composing them chronologically (REQ-207 started 04:12:36Z before
+      REQ-206 done 05:59:58Z), losing neither entry. `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 38 on-disk entries after
+      the merge, well under the 1200-line/120000-byte roll ceiling, so no
+      roll triggered. This supersedes the 37-count note below, which was
+      correct only for DOC-UPDATER's own pre-rebase branch state. Also
+      fixed, in that same DOC-UPDATER commit (preserved through the
+      rebase), a genuine vocabulary defect
+      A5 caught in this CURRENT (not yet closed) volume: the intervening
+      ISS-0388 done-event append had recorded `req: ISS-0388`, a value with
+      zero precedent under this volume's own header (only `REQ-NNN` and
+      `SCOPE-CHANGE` are legal `req:` values; an issue id belongs in
+      `note:` under `req: SCOPE-CHANGE`). Per this volume's own header
+      ("A vocabulary defect in the CURRENT volume is FIXED in the working
+      tree before it is committed -- it can never be declared away here")
+      and test/docs/requirement_status_invariants_test.exs's A5 assertion,
+      this is corrected in place -- not the append-only rewrite the project
+      forbids, since only a CLOSED volume's entries are frozen against
+      correction. Changed `req: ISS-0388` to `req: SCOPE-CHANGE` on that
+      entry (line ~971); its `note:` already names ISS-0388 explicitly, so
+      no information was lost. `mix test
+      test/docs/requirement_status_invariants_test.exs` confirmed 20/20
+      passing after the fix (was 18/20 before, both A5 and A9 failing; A9
+      alone was already resolved by this run's own entries: count
+      increment above).
+
       Recounted to 35 after WF02-REQ205-20260831's own DOC-UPDATER done event
       appended. `grep -c "^  - req:" docs/status/requirement_status.v7.yaml`
       = 35 on-disk entries (`wc`: 969 lines / 56578 bytes, well under the

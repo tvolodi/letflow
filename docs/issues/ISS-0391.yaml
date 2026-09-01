@@ -1,0 +1,52 @@
+id: ISS-0391
+title: "Port real R-Co scenario YAML corpus for SwiftRoute/Vortex/Meridian (blocks fully-real REQ-206/207/208 runs)"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ206-20260901
+discovered_at: "2026-09-01T06:00:00Z"
+severity: MINOR
+tags: [fixture-porting, needs-r-co-access, s7]
+description: >
+  REQ-206 authored 4 disclosed-synthetic SwiftRoute scenario YAMLs under
+  test/fixtures/simulation/swiftroute/scenarios/ because R-Co's real
+  tests/simulation/scenarios/*.yaml corpus remains genuinely unreachable
+  from this sandbox -- confirmed by fresh ls/find at both the design stage
+  (2 CODE-DESIGNER reworks) and implementation stage, the same conclusion
+  ISS-0388 reached for the (different) fixture file set.
+
+  This is a DIFFERENT file set from what ISS-0388 already fixed: ISS-0388
+  ported test/fixtures/simulation/*/{company.yaml,org_structure.yaml,
+  process_*.yaml} (company/org/process fixtures -- already real, resolved
+  2026-09-01). This issue is about tests/simulation/scenarios/*.yaml (the
+  actual scenario definitions -- preconditions, steps, expected outcomes),
+  which is a separate R-Co source tree location and was never in ISS-0388's
+  scope.
+
+  A future session/host with real R-Co filesystem access should read
+  tests/simulation/scenarios/*.yaml directly and replace the current
+  synthetic scenario content verbatim under
+  test/fixtures/simulation/{swiftroute,vortex,meridian}/scenarios/, then
+  re-run REQ-206/207/208's test suites to confirm
+  Letflow.Simulation.Runner needs zero code changes -- the same pattern
+  ISS-0388 already proved for Seed/Runner against real fixture-shape data.
+
+  REQ-207/208 (Vortex/Meridian scenarios) will hit this identical
+  constraint and should reference this issue rather than each filing their
+  own duplicate follow-up.
+affected_files:
+  - test/fixtures/simulation/swiftroute/scenarios/
+  - test/fixtures/simulation/vortex/scenarios/
+  - test/fixtures/simulation/meridian/scenarios/
+related:
+  - REQ-206
+  - REQ-207
+  - REQ-208
+  - ISS-0388
+source: >
+  lib/letflow/design/req206-swiftroute-scenario-execution.md (section 0),
+  handoffs/WF02-REQ206-20260901/step-05-release-validator.json (recorded
+  non-blocking caveat -- this recommendation reached only the design doc
+  and step-01/step-01b handoffs, never a later handoff, until re-elevated
+  here for ORCH to act on at Step Final).
+queue_task_id: 391
+github_issue: 770
+status: open

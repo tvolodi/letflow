@@ -1,0 +1,116 @@
+# Synthetic — R-Co's tests/simulation/scenarios/swiftroute-shipment-high-value-happy.yaml is
+# unreachable from this sandbox (see lib/letflow/design/req206-swiftroute-scenario-execution.md §0);
+# structurally faithful to REQ-206's own requirement-text field-by-field account,
+# not a byte-for-byte port.
+#
+# Process: process_route_approval.yaml ("Shipment Approval").
+# EUR 750 declared_value exercises REQ-050's EXCLUSIVE_GATEWAY edge e3 (> 500 → ceo-approval).
+# 5 via: api steps (3 business steps + 2 task-lookup plumbing steps per design §3.2):
+#   1  — dispatcher submits instance (lena)
+#   2a — ops task lookup (marco)
+#   2b — ops manager approves task (marco)
+#   3a — ceo task lookup (alice-as-ceo)
+#   3b — ceo co-signs task (alice-as-ceo)
+# actors map is populated with real token/slug values at test setup time.
+id: swiftroute-shipment-high-value-happy
+company_id: swiftroute
+process_id: DEFINITION_NAME
+
+actors:
+  actor-swiftroute-lena: {}
+  actor-swiftroute-marco: {}
+  actor-swiftroute-alice: {}
+
+preconditions:
+  - check: process_definition_active
+    args:
+      name: DEFINITION_NAME
+      prefix: "TENANT_PREFIX"
+
+steps:
+  # Step 1 — dispatcher submits high-value shipment (declared_value: 750 > 500 threshold)
+  - via: api
+    action: "POST /api/v1/instances"
+    params:
+      definition_name: DEFINITION_NAME
+      initial_variables:
+        declared_value: 750
+    produces: instance
+    actor: actor-swiftroute-lena
+
+  # Step 2a — look up the pending ops task for this instance
+  - via: api
+    action: "GET /api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING"
+    produces: ops_task_list
+    actor: actor-swiftroute-marco
+
+  # Step 2b — ops manager approves
+  - via: api
+    action: "POST /api/v1/tasks/{{produces.ops_task_list.items.0.id}}/complete"
+    params:
+      ops_decision: approve
+    produces: ops_task_result
+    actor: actor-swiftroute-marco
+
+  # Step 3a — look up the pending CEO task
+  - via: api
+    action: "GET /api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING"
+    produces: ceo_task_list
+    actor: actor-swiftroute-alice
+
+  # Step 3b — CEO co-signs
+  - via: api
+    action: "POST /api/v1/tasks/{{produces.ceo_task_list.items.0.id}}/complete"
+    params:
+      ceo_decision: approve
+    produces: ceo_task_result
+    actor: actor-swiftroute-alice
+
+expected_outcomes:
+  # EO-1: task_assigned — ceo-approval HUMAN_TASK was created (proves e3 was taken, not e4)
+  # Note: assignee_type is nil for ROLE-attributed tasks (design §3.2 settled-OQ-3);
+  # the verifier checks assignee_type == "user", so outcome is :fail for ROLE tasks.
+  # The observed field nonetheless carries assignee_ref: "role-ceo" as evidence.
+  - id: EO-001
+    description: "CEO approval task was created and is assigned to role-ceo (proves CEL edge e3 was taken)"
+    verification:
+      method: task_assigned
+      args:
+        prefix: "TENANT_PREFIX"
+        task_ref: "{{produces.ceo_task_list.items.0.id}}"
+        expected_assignee_user_id: "role-ceo"
+
+  # EO-2: instance is COMPLETED after both approvals
+  - id: EO-002
+    description: "Instance status is COMPLETED after ops + CEO approval"
+    verification:
+      method: instance_state
+      args:
+        prefix: "TENANT_PREFIX"
+        instance_ref: "{{produces.instance.instance_id}}"
+        status: "COMPLETED"
+
+  # EO-3: instance variables include both decisions
+  - id: EO-003
+    description: "Instance variables include ops_decision and ceo_decision"
+    verification:
+      method: instance_state
+      args:
+        prefix: "TENANT_PREFIX"
+        instance_ref: "{{produces.instance.instance_id}}"
+        status: "COMPLETED"
+        variables:
+          declared_value: 750
+          ops_decision: approve
+          ceo_decision: approve
+
+  # EO-4: audit event confirms CEO task was completed
+  - id: EO-004
+    description: "Audit trail records CEO task completion"
+    verification:
+      method: audit_event
+      args:
+        prefix: "TENANT_PREFIX"
+        resource_type: task
+        resource_id: "{{produces.ceo_task_list.items.0.id}}"
+        event_type: "task.complete"

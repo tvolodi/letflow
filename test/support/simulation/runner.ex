@@ -33,7 +33,8 @@ defmodule Letflow.Simulation.Scenario do
             actors: %{},
             preconditions: [],
             steps: [],
-            expected_outcomes: []
+            expected_outcomes: [],
+            unbuilt_feature: nil
 
   @type precondition :: %{
           required(:check) => :process_definition_active | :no_pending_instances | :custom,
@@ -41,11 +42,13 @@ defmodule Letflow.Simulation.Scenario do
         }
 
   @type step :: %{
-          required(:via) => :api | :gui,
+          required(:via) => :api | :gui | :skip,
           required(:action) => String.t(),
           optional(:params) => map(),
           optional(:produces) => String.t(),
-          optional(:actor) => String.t()
+          optional(:actor) => String.t(),
+          optional(:severity) => :minor | :major | :blocker | nil,
+          optional(:note) => String.t() | nil
         }
 
   @type expected_outcome :: %{
@@ -62,7 +65,8 @@ defmodule Letflow.Simulation.Scenario do
           actors: %{optional(String.t()) => map()},
           preconditions: [precondition()],
           steps: [step()],
-          expected_outcomes: [expected_outcome()]
+          expected_outcomes: [expected_outcome()],
+          unbuilt_feature: %{reason: String.t()} | nil
         }
 end
 
@@ -75,15 +79,18 @@ defmodule Letflow.Simulation.RunReport do
   defstruct scenario_id: nil,
             precondition_results: [],
             step_results: [],
-            outcome_results: []
+            outcome_results: [],
+            disposition: :executed,
+            notes: nil
 
   @type precondition_result :: %{precondition: term(), outcome: :ok | :error, detail: term()}
 
   @type step_result :: %{
           step: Letflow.Simulation.Scenario.step(),
-          outcome: :ok | :error | :deferred_to_s8,
+          outcome: :ok | :error | :deferred_to_s8 | :skip,
           captured: map() | nil,
-          detail: term()
+          detail: term(),
+          severity: :minor | :major | :blocker | nil
         }
 
   @type outcome_result :: %{
@@ -96,7 +103,9 @@ defmodule Letflow.Simulation.RunReport do
           scenario_id: String.t(),
           precondition_results: [precondition_result()],
           step_results: [step_result()],
-          outcome_results: [outcome_result()]
+          outcome_results: [outcome_result()],
+          disposition: :executed | :unbuilt_feature,
+          notes: String.t() | nil
         }
 end
 
@@ -181,6 +190,18 @@ defmodule Letflow.Simulation.Runner do
   since the report's own contents carry the pass/fail information.
   """
   @spec run(Scenario.t()) :: {:ok, RunReport.t()} | {:error, term()}
+  def run(%Scenario{unbuilt_feature: %{reason: reason}} = scenario) do
+    {:ok,
+     %RunReport{
+       scenario_id: scenario.id,
+       disposition: :unbuilt_feature,
+       notes: reason,
+       precondition_results: [],
+       step_results: [],
+       outcome_results: []
+     }}
+  end
+
   def run(%Scenario{} = scenario) do
     with {:ok, precondition_results} <- run_preconditions(scenario) do
       if Enum.any?(precondition_results, &(&1.outcome == :error)) do
@@ -283,8 +304,30 @@ defmodule Letflow.Simulation.Runner do
               step: step,
               outcome: :deferred_to_s8,
               captured: nil,
+              severity: nil,
               detail:
                 "S8 frontend integration not started; see docs/migration/stage-7-simulation-uat-parity.md"
+            }
+
+            {acc ++ [result], produces}
+
+          :skip ->
+            severity =
+              case Map.get(step, :severity) do
+                nil ->
+                  raise ArgumentError,
+                        "step with via: :skip is missing a severity field: #{inspect(step)}"
+
+                s ->
+                  s
+              end
+
+            result = %{
+              step: step,
+              outcome: :skip,
+              captured: nil,
+              severity: severity,
+              detail: Map.get(step, :note) || "marked SKIP at scenario-authoring time"
             }
 
             {acc ++ [result], produces}
@@ -299,12 +342,13 @@ defmodule Letflow.Simulation.Runner do
   end
 
   defp run_api_step(step, scenario, produces) do
-    with {:ok, resolved_params} <- substitute_templates(Map.get(step, :params, %{}), produces),
+    with {:ok, resolved_action} <- substitute_templates(step.action, produces),
+         {:ok, resolved_params} <- substitute_templates(Map.get(step, :params, %{}), produces),
          {:ok, actor} <- resolve_actor(step, scenario) do
-      dispatch_api_step(step, resolved_params, actor, produces)
+      dispatch_api_step(%{step | action: resolved_action}, resolved_params, actor, produces)
     else
       {:error, reason} ->
-        {%{step: step, outcome: :error, captured: nil, detail: reason}, produces}
+        {%{step: step, outcome: :error, captured: nil, severity: nil, detail: reason}, produces}
     end
   end
 
@@ -343,7 +387,7 @@ defmodule Letflow.Simulation.Runner do
       captured = if Map.get(step, :produces), do: body, else: nil
       new_produces = maybe_store_produces(produces, Map.get(step, :produces), body)
 
-      {%{step: step, outcome: :ok, captured: captured, detail: body}, new_produces}
+      {%{step: step, outcome: :ok, captured: captured, severity: nil, detail: body}, new_produces}
     else
       body = decode_json_body(response_conn)
 
@@ -351,6 +395,7 @@ defmodule Letflow.Simulation.Runner do
          step: step,
          outcome: :error,
          captured: nil,
+         severity: nil,
          detail: %{status: response_conn.status, body: body}
        }, produces}
     end
@@ -451,6 +496,20 @@ defmodule Letflow.Simulation.Runner do
     case Map.fetch(value, key) do
       {:ok, next} -> walk_path(next, rest, dotted_path)
       :error -> {:error, {:unresolved_template, "produces." <> dotted_path}}
+    end
+  end
+
+  # Numeric string key on a list — supports {{produces.list_name.items.0.id}} style
+  defp walk_path(value, [key | rest], dotted_path) when is_list(value) do
+    case Integer.parse(key) do
+      {index, ""} when index >= 0 ->
+        case Enum.at(value, index) do
+          nil -> {:error, {:unresolved_template, "produces." <> dotted_path}}
+          element -> walk_path(element, rest, dotted_path)
+        end
+
+      _ ->
+        {:error, {:unresolved_template, "produces." <> dotted_path}}
     end
   end
 

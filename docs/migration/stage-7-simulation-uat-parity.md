@@ -77,6 +77,33 @@ cutover gate. Letflow never had two condition-evaluator implementations —
 `src/expr` only — so the corpus's remaining value is as golden-value
 regression coverage for `expr.ex`, not a live differential.
 
+**REQ-206 done (2026-09-01, WF02-REQ206-20260901).** All 4 SwiftRoute
+scenarios run via REQ-205's harness: `swiftroute-tenant-onboarding-happy`
+(all 5 steps `DEFERRED_TO_S8`, disposition `:executed`), `swiftroute-
+shipment-high-value-happy` (5 real API steps, all 4 expected outcomes
+evaluated against real queried state), `swiftroute-shipment-ops-timeout-
+escalation` (step 2 recorded `:skip`/severity `:minor` — the scenario's
+own documented fallback — because `POST /api/v1/instances/:id/advance-timer`
+does not exist in `Letflow.Router` today; steps 1 and 3 ran for real), and
+`swiftroute-shipment-attach-delivery-note` (disposition `:unbuilt_feature`,
+zero steps executed — no attachment/document-upload API exists in either
+Letflow or R-Co's own `src/`). `Letflow.Simulation.Runner` extended
+additively with the `:skip`/`:unbuilt_feature` dispositions to support
+these; REQ-205's own 15 pre-existing simulation tests re-run unchanged
+(15/15 pass) to confirm no regression. The 4 scenario YAMLs are disclosed-
+synthetic (each file's own header names the exact unreachable R-Co source
+path), matching REQ-205's established disclosure convention — RELEASE-
+VALIDATOR independently re-verified all 6 acceptance criteria and recorded
+a non-blocking caveat: the design doc's own recommendation to file a
+follow-up issue mirroring `ISS-0388` (port the real
+`tests/simulation/scenarios/*.yaml` scenario content once R-Co access is
+available) reached only the design doc and step-01 handoffs, not any
+later handoff — re-elevated for ORCH to act on at Step 6/Final. Two
+findings reported to ORCH: the missing `advance-timer` endpoint (already
+tracked, referenced by REQ-208/209) and the missing attachment/document
+subsystem. Full detail:
+`handoffs/WF02-REQ206-20260901/release-validation-report-20260901.md`.
+
 ## Decisions
 
 None expected — this stage validates prior decisions rather than

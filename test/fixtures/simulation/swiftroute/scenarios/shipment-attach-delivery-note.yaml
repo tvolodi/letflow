@@ -1,0 +1,52 @@
+# Synthetic — R-Co's tests/simulation/scenarios/swiftroute-shipment-attach-delivery-note.yaml is
+# unreachable from this sandbox (see lib/letflow/design/req206-swiftroute-scenario-execution.md §0);
+# structurally faithful to REQ-206's own requirement-text field-by-field account,
+# not a byte-for-byte port.
+#
+# UNBUILT_FEATURE: no document/attachment API exists in Letflow or in R-Co's own src/.
+# Runner.run/1's unbuilt_feature branch short-circuits before Phase 1 (preconditions) --
+# none of the 5 steps below are executed. The steps are retained so the fixture is
+# structurally complete for a future re-run once the feature exists.
+id: swiftroute-shipment-attach-delivery-note
+company_id: swiftroute
+process_id: swiftroute-shipment-document-attach
+
+unbuilt_feature:
+  reason: >
+    No attachment/document-upload API exists in Letflow (no attachment-related route
+    in any lib/letflow/routers/*.ex, verified) or in R-Co's own src/ (the only two
+    "attach"/"storage" hits, src/db/partition_attach.zig and
+    src/design/iss501_storage_mode_routing.md, are both unrelated to shipment
+    document attachments, per REQ-206's own requirement text) -- this is a scenario
+    describing a feature that does not exist as a real backend capability in either
+    codebase yet, not a Letflow gap against an existing R-Co feature.
+    See lib/letflow/design/req206-swiftroute-scenario-execution.md §0/§4.
+
+actors:
+  actor-swiftroute-lena: {}
+  actor-swiftroute-alice: {}
+
+preconditions: []
+
+steps:
+  - via: gui
+    action: "navigate to shipment detail page"
+    actor: actor-swiftroute-lena
+
+  - via: gui
+    action: "click Attach Document"
+    actor: actor-swiftroute-lena
+
+  - via: gui
+    action: "upload delivery note PDF"
+    actor: actor-swiftroute-lena
+
+  - via: gui
+    action: "submit document attachment"
+    actor: actor-swiftroute-lena
+
+  - via: gui
+    action: "verify delivery note listed on shipment"
+    actor: actor-swiftroute-alice
+
+expected_outcomes: []

@@ -1,0 +1,28 @@
+id: ISS-0390
+title: "Missing attachment/document-upload subsystem"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ206-20260901
+discovered_at: "2026-09-01T04:07:00Z"
+severity: MINOR
+tags: [engine, attachments, s7]
+description: >
+  REQ-206's shipment-attach-delivery-note scenario requires attaching a
+  document to a running instance, but no attachment/document-upload API
+  exists in Letflow (or in R-Co source, per ELIXIR-DEV's verification).
+  The scenario ran with disposition :unbuilt_feature (0 steps executed) via
+  the new Letflow.Simulation.Runner extension, rather than fabricating a
+  passing result. Confirmed by RELEASE-VALIDATOR's independent grep of all
+  attach|document matches across lib/letflow/ -- all hits are unrelated
+  (RFC 9457 problem documents, doc comments, SolutionPack pack documents).
+affected_files:
+  - lib/letflow/routers/
+  - lib/letflow/
+related:
+  - REQ-206
+source: >
+  handoffs/WF02-REQ206-20260901/step-02a-elixir-dev.json (result.issues),
+  handoffs/WF02-REQ206-20260901/step-05-release-validator.json (independent
+  re-confirmation).
+queue_task_id: 390
+github_issue: 769
+status: open

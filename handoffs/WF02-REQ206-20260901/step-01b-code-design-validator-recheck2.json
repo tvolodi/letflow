@@ -1,0 +1,87 @@
+{
+  "handoff_id": "WF02-REQ206-20260901-step-01b-recheck2",
+  "run_id": "WF02-REQ206-20260901",
+  "workflow_id": "WF-02",
+  "step": "step-01b-code-design-validator-recheck2",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "lib/letflow/design/req206-swiftroute-scenario-execution.md",
+  "created_at": "2026-09-01T10:05:00Z",
+  "started_at": "2026-09-01T09:40:00Z",
+  "completed_at": "2026-09-01T10:05:00Z",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "context": {
+    "requirement_id": "REQ-206",
+    "design_reviewed": "lib/letflow/design/req206-swiftroute-scenario-execution.md",
+    "commit_reviewed": "4f186169",
+    "handoff_reviewed": "handoffs/WF02-REQ206-20260901/step-01-code-designer-rework2.json",
+    "prior_gate_history": [
+      "step-01b-code-design-validator FAIL (literal Elixir code fences present)",
+      "step-01-code-designer-rework1 COMPLETED",
+      "step-01b-code-design-validator FAIL (commit 2e951cf2, OQ-1b/OQ-2/OQ-3 resolvable but deferred)",
+      "step-01-code-designer-rework2 COMPLETED (commit 4f186169)"
+    ]
+  },
+  "task": {
+    "description": "Second re-check: independently re-verify rework2's four settled-decision claims (OQ-1b, OQ-2, OQ-3, OQ-1) against real source files (not the rework's self-report), scan the entire design doc for literal implementation-code fences, and confirm all 6 acceptance criteria still map cleanly with no drift in the Runner-extension/execution-plan/finding-reporting/§0 sections that previously passed."
+  },
+  "result": {
+    "status": "PASS",
+    "independent_reverification": {
+      "OQ-1b": "CONFIRMED by reading lib/letflow/api/authorization.ex directly (lines 354-382). evaluate_access/2's cond clause gates :AllowWithRowFilter strictly on `endpoint == :TasksList and is_task_worker_only?(ctx.roles)`; every other endpoint that passes the permission check -- including :TasksComplete, which endpoint_policy_key/2 maps POST /tasks/:id/complete to -- falls through to `%AccessDecision{kind: :Allow, task_scope: :all}` unconditionally. The design's claim is exact.",
+      "OQ-2": "CONFIRMED by reading lib/letflow/routers/tasks.ex's handle_list/3 (lines 145-180) directly. Its `with` clause parses both `instance_id` (parse_instance_id_param/1, UUID-cast) and `status` (parse_status_param/1) query params and threads both into Tasks.list_tasks/2's filter map. GET /api/v1/tasks?instance_id=<uuid>&status=PENDING is real and matches the design's param names exactly.",
+      "OQ-3": "CONFIRMED by reading lib/letflow/engine/task_activation.ex's resolve_assignee/1 (lines 116-121) directly: `{Map.get(attributes, \"assignee_type\"), Map.get(attributes, \"role\")}` -- assignee_ref is node.attributes[\"role\"] verbatim, no transformation. Cross-checked against test/fixtures/simulation/swiftroute/process_route_approval.yaml directly: ops-review node carries `role: role-ops-manager`, ceo-approval node carries `role: role-ceo`, and the gateway conditions are `declared_value > 500` / `<= 500` exactly as the design states. The design's claim that scenario actor tokens need matching roles: claims is exact.",
+      "OQ-1": "CONFIRMED by reading test/fixtures/simulation/swiftroute/org_structure.yaml directly: 7 people (alice, marco, lena, tobias, jan, petra, hans), 4 groups (dept-mgmt: [alice], dept-ops: [marco, jan, petra], dept-dispatch: [lena, tobias], dept-finance: [hans]), no role-ceo group or distinct CEO person anywhere in the file. alice exists and is dept-mgmt's sole member, matching the design's choice of her as the CEO-role actor via a per-token grant (no fixture-file change)."
+    },
+    "code_fence_scan": "Scanned all 10 code fences in the file (line-pairs 22/26, 68/72, 115/118, 203/208, 241/243, 377/388, 398/408, 477/480, 588/606, 626/648) plus a repo-wide grep for `defmodule|defstruct|  def |  defp ` against the design file: zero matches. Fence contents are: shell/grep/find transcripts (§0), file-path listings (§1.1), one bare @spec-only signature line (§1.3's load!/1 -- permitted), YAML unbuilt_feature/finding-text content (§2.2, §3.3, §3.4), and a closed type-shape summary table (§2.3, e.g. `Scenario.step().via :: :api | :gui | :skip` -- type shapes, not code bodies). No defmodule/defstruct/full function body with a pipe chain appears anywhere in the document. The rework's self-reported self-correction (having caught and removed fenced `def evaluate_access`/`def resolve_assignee` bodies before commit) is verified true, not merely claimed.",
+    "supporting_checks": {
+      "onboarding_pipeline_spec_exists": "CONFIRMED: find web/tests/e2e/pipelines/ -iname 'onboarding-wizard*' -> web/tests/e2e/pipelines/onboarding-wizard.pipeline.e2e.spec.ts present, matching §3.1's claim.",
+      "attach_delivery_note_pipeline_spec_absent": "CONFIRMED: find web/tests/e2e/pipelines/ -iname '*attach*' -> no results, matching §3.4's claim.",
+      "no_attachment_route_exists": "CONFIRMED: grep -rln 'attach|upload|document' lib/letflow/routers/*.ex returns only false-positive hits (RFC 9457 'problem document', export/pack 'document' fields, an unrelated variable-schema-attach comment in solution_packs.ex) -- no real shipment-attachment route exists anywhere, matching §0/§3.4's claim exactly."
+    },
+    "acceptance_criteria_mapping": "All 6 ACs from docs/requirements.yaml's REQ-206 entry still map cleanly to concrete design elements per §4's table, unchanged by this rework except for §3.2's step-table update (now 1 POST/complete call per business step plus 2 lookup dispatches, still totaling within the declared step counts). No drift found in §0 (R-Co-reachability, previously verified and untouched this rework), §2 (Runner :skip/:unbuilt_feature extension, untouched), §3.1/§3.3/§3.4 (execution plans, untouched), or the ISSUE_QUEUE.md-shaped finding blocks in §3.3/§3.4 (untouched).",
+    "verdict": "PASS. All four settled-decision claims (OQ-1b, OQ-2, OQ-3, OQ-1) independently confirmed against real source, not trusted from the rework's self-report. No implementation code present. §5 correctly states no open questions remain. Design is unambiguous enough to build from -- routing to ELIXIR-DEV for Step 2a.",
+    "artifacts": [
+      "lib/letflow/design/req206-swiftroute-scenario-execution.md"
+    ],
+    "commit": null,
+    "branch": "feature/WF02-REQ206-20260901",
+    "pushed": null,
+    "_migrated_next_step": "ELIXIR-DEV"
+  },
+  "rework_count": 3,
+  "max_rework": 3,
+  "not_agent_attested": false,
+  "gate_history": [
+    {
+      "step": "step-01-code-designer",
+      "status": "COMPLETED"
+    },
+    {
+      "step": "step-01b-code-design-validator",
+      "status": "FAIL",
+      "reason": "literal Elixir code fences present"
+    },
+    {
+      "step": "step-01-code-designer-rework1",
+      "status": "COMPLETED"
+    },
+    {
+      "step": "step-01b-code-design-validator",
+      "status": "FAIL",
+      "commit": "2e951cf2",
+      "reason": "OQ-1b/OQ-2/OQ-3 resolvable this session but left as deferrals to ELIXIR-DEV"
+    },
+    {
+      "step": "step-01-code-designer-rework2",
+      "status": "COMPLETED",
+      "commit": "4f186169"
+    },
+    {
+      "step": "step-01b-code-design-validator-recheck2",
+      "status": "PASS",
+      "reason": "All four settled-decision claims (OQ-1b/OQ-2/OQ-3/OQ-1) independently re-verified against real source; no literal implementation code found; AC mapping and previously-passed sections unchanged."
+    }
+  ]
+}

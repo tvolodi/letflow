@@ -1,0 +1,64 @@
+{
+  "handoff_id": "WF02-REQ206-20260901-step-06",
+  "run_id": "WF02-REQ206-20260901",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ206-20260901/step-06-doc-updater.json",
+  "created_at": "2026-09-01T05:56:17Z",
+  "started_at": "2026-09-01T05:58:30Z",
+  "completed_at": "2026-09-01T06:01:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [
+      "REQ-206"
+    ],
+    "issue_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ206-20260901/step-05-release-validator.json",
+      "docs/requirements.yaml#REQ-206",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ206-20260901"
+  },
+  "task": {
+    "description": "Flip REQ-206 to done, append the run-history event, update stage-7's migration doc, and check whether the S7 activity-state live-drift test needs updating."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-206 flipped to status: done in docs/requirements.yaml. One done-event appended to the current run-history volume (v7). docs/migration/stage-7-simulation-uat-parity.md updated with a REQ-206-done paragraph mirroring the existing REQ-205 entry's style. Re-derived S7's activity state directly via Mix.Tasks.Letflow.CheckDeferralStaleness.audit/1 against the live docs/requirements.yaml content -- unchanged from REQ-205's own done-event (S7 was already active), so T-LIVE-ACTIVITY needed no update; confirmed via a real test run (57/57 passed). Also found and fixed, in the same commit, a genuine pre-existing vocabulary defect in the CURRENT (not yet closed) volume 7: an earlier ISS-0388 done-event had been recorded as `req: ISS-0388` (zero precedent -- only REQ-NNN/SCOPE-CHANGE are legal `req:` values), caught by test/docs/requirement_status_invariants_test.exs's A5 assertion (2 failures pre-fix: A5 + a transient A9 count-drift my own append separately resolved). Corrected to `req: SCOPE-CHANGE` (its `note:` already names ISS-0388, so no information lost) -- sanctioned by this volume's own header text, which explicitly requires fixing a current-volume vocabulary defect in the working tree before commit rather than declaring it away, unlike a closed/frozen volume's anomalies. Full invariants suite now 20/20 passing.",
+    "index_recount": {
+      "current_volume_before": "docs/status/requirement_status.v7.yaml, declared entries: 35 (already stale -- 36 actually on disk from an unrecorded ISS-0388 append)",
+      "grep_count_after_append": "grep -c \"^  - req:\" docs/status/requirement_status.v7.yaml = 37 on-disk entries",
+      "git_diff_numstat": "50 insertions, 1 deletion (the 1 deletion is the sanctioned req: ISS-0388 -> req: SCOPE-CHANGE vocabulary fix on the pre-existing entry; the append itself is insertion-only)",
+      "wc_after": "1034 lines / 60584 bytes, well under the 1200-line/120000-byte roll ceiling -- no roll triggered",
+      "index_updated_to": 37
+    },
+    "requirements_yaml_diff": "REQ-206 status: pending -> done (1 line changed, no other fields touched)",
+    "stage_doc_update": "docs/migration/stage-7-simulation-uat-parity.md: added a 'REQ-206 done (2026-09-01, WF02-REQ206-20260901)' paragraph before the ## Decisions section, covering all 4 scenario dispositions, the Runner extension, the 2 findings, and the re-elevated ISS-0388-mirroring follow-up-issue caveat for ORCH.",
+    "live_drift_check": {
+      "method": "MIX_ENV=test mix run -e calling Mix.Tasks.Letflow.CheckDeferralStaleness.audit/1 with File.read!(\"docs/requirements.yaml\") -- real command, real output, not assumed",
+      "result": "active: [S0, S1, S2, S3, S4, S5, S6, S7, S8, S9], inactive: [], violations: 0 -- identical to REQ-205's own already-recorded derivation, since S7 was already active before REQ-206",
+      "test_run": "mix test test/mix/tasks/letflow_check_deferral_staleness_test.exs -> Result: 57 passed",
+      "conclusion": "No update needed to T-LIVE-ACTIVITY's assertion or its UPDATE-comment history."
+    },
+    "invariants_test": {
+      "before_fix": "mix test test/docs/requirement_status_invariants_test.exs -> 18/20 passed (A5: on-disk `req: ISS-0388` not declared as a known anomaly and citing a non-closed volume, which A5 forbids declaring away; A9: v7 declared 35 vs 36 on disk, pre-existing drift from an earlier unrecorded append)",
+      "fix_applied": "changed the pre-existing entry's `req: ISS-0388` to `req: SCOPE-CHANGE` in docs/status/requirement_status.v7.yaml (note text already names ISS-0388); updated the index's declared entries: to 37 (matches this run's own append)",
+      "after_fix": "mix test test/docs/requirement_status_invariants_test.exs -> Result: 20 passed"
+    },
+    "acceptance_criteria_gap_check": "REQ-206's acceptance criteria named no docs/migration/stage-N-*.md file explicitly as a deliverable, but stage-7's own doc is the established convention (REQ-205 updated it) -- confirmed updated in this step, not left as a gap.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v7.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/migration/stage-7-simulation-uat-parity.md"
+    ],
+    "next_action": "Route to ORCH (Step Final). ORCH should: (1) file the follow-up issue mirroring docs/issues/ISS-0388.yaml per RELEASE-VALIDATOR's caveat (port real tests/simulation/scenarios/*.yaml content once R-Co access is available, referencing REQ-206 and made visible for REQ-207/REQ-208), (2) commit, push, and merge this branch once CI is green."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

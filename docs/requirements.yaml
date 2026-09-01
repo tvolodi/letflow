@@ -11714,7 +11714,7 @@ requirements:
   - id: REQ-207
     title: Run Vortex's 4 simulation scenarios against Letflow (production-order budget gate, supplier-deviation critical/false-positive compensation, entity list filter/page) and report per-scenario findings
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S7
     impl_order: 384  # letflow-queue task id, GH#756
     description: >
@@ -11782,7 +11782,7 @@ requirements:
   - id: REQ-208
     title: Run Meridian's 3 simulation scenarios against Letflow (large-loan committee quorum, small-loan standard authority, BaFin 21-day SLA regulatory escalation) and report per-scenario findings
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S7
     impl_order: 385  # letflow-queue task id, GH#757
     description: >

@@ -1,0 +1,66 @@
+{
+  "handoff_id": "WF02-REQ208-20260901-step-02c",
+  "run_id": "WF02-REQ208-20260901",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ208-20260901/step-02c-security-reviewer.json",
+  "created_at": "2026-09-01T11:18:09Z",
+  "started_at": "2026-09-01T11:05:00Z",
+  "completed_at": "2026-09-01T11:18:09Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-208"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ208-20260901/step-02a-elixir-dev.json",
+      "test/support/simulation/runner.ex",
+      "test/support/simulation/scenario_fixture.ex",
+      "test/fixtures/simulation/meridian/scenarios/loan-origination-above-threshold.yaml",
+      "test/fixtures/simulation/meridian/scenarios/loan-origination-below-threshold.yaml",
+      "test/fixtures/simulation/meridian/scenarios/regulatory-compliance-review-bafin.yaml",
+      "test/letflow/simulation/req208_meridian_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ208-20260901",
+    "commit_reviewed": "6b29040d"
+  },
+  "task": {
+    "description": "Step 2c security gate on REQ-208's diff (test/test-support/test-fixture code implementing the 3 Meridian scenario YAMLs and the new :no_task_of_type / :blocked verification/disposition primitives in the simulation harness). Verify scope test, then check every INV-1..INV-8 that applies.",
+    "acceptance_criteria": [
+      "Scope test run explicitly against the actual diff",
+      "Each applicable invariant (INV-1..INV-8) checked with its How-to-verify procedure and a recorded PASS/FAIL",
+      ":no_task_of_type verification method checked for cross-tenant query risk",
+      ":blocked disposition / blocked_by field checked for secret leakage or injection risk",
+      "Reported Engine join_counters defect assessed for security implications beyond plain correctness (DoS, internal-state exposure in error response)",
+      "General diff hygiene: no lib/ or migrations touched, no hardcoded secrets"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: diff touches test/support/simulation/runner.ex, test/support/simulation/scenario_fixture.ex, 3 new fixture YAMLs under test/fixtures/simulation/meridian/scenarios/, test/letflow/simulation/req208_meridian_test.exs, plus docs/handoff/design-doc bookkeeping. Confirmed via `git diff origin/main...HEAD --stat`: zero files under lib/ or priv/repo/migrations/ touched. No new API route, no response-shaping code for a tenant-scoped entity, no lookup-by-ID handler added -- this diff is test/test-support code exercising EXISTING lib/ endpoints, not adding or changing any. INV-1 does not apply for the same reason it did not for REQ-206/207 (no schema/migration/tenant-table change in this diff itself); this run does surface a real defect in already-shipped lib/letflow/engine.ex, addressed separately below since it is not part of this diff's own change set.\n\nInvariant-by-invariant: INV-1 (tenant schema/migration discipline) NOT-APPLICABLE -- no migration or schema file touched. INV-2/INV-3/INV-5 (S4/S5-staged invariants) NOT-APPLICABLE -- unaffected by this diff, consistent with current stage S7. INV-4 (no internal error detail leaked at the API boundary) APPLIES because this diff's own test assertions (req208_meridian_test.exs lines ~619, ~693) exercise a real HTTP 500 path and assert on the exact response body -- verified: `assert %{status: 500, body: %{\"status\" => 500, \"title\" => \"Internal Server Error\"}}` in both loan-origination tests. The internal error detail (`{:activation_failed, {:unknown_branch_id, _}}`) is confirmed NEVER present in the HTTP response body -- only in internal test comments/documentation describing what happened server-side. PASS. INV-7/INV-8 (checked against security-invariants.md's live text) APPLIES in the general sense of 'no secret/credential leakage in test fixtures or code' -- verified no hardcoded plaintext tokens, passwords, or credentials anywhere in the diff: all 7 Meridian actor tokens (lars/julia/thomas/ben/eva/marcus/claudia) are generated at test runtime via `Identity.create_token/3` with a per-test unique tenant schema, never literal strings. PASS.\n\n:no_task_of_type verification method (runner.ex ~line 592): queries `Tasks.list_tasks(%{page_size: 100, instance_id: instance_ref}, prefix: prefix)` where `prefix` comes from `fetch_prefix/1`, the SAME helper already used by every other verification method in this module (task_assigned, instance_state, audit_event, audit_event_ordering) and by preconditions -- itself sourced from `tenant_prefix!/1`, which resolves from the scenario's own precondition/expected_outcome tenant-prefix args (real Postgres schema prefix, matching the actor's own `tenant_slug`-derived schema at test setup). This is the identical tenant-scoping mechanism the harness has used since REQ-205/206/207 (which already passed SECURITY-REVIEWER); :no_task_of_type does not introduce a new or looser scoping path -- it queries the SAME instance's tasks across all statuses (deliberate, per the method's own doc comment, since EO-002's negative assertion must hold regardless of status), scoped to the SAME tenant prefix as every other query in this module. No cross-tenant read risk identified.\n\n:blocked disposition / blocked_by field: `blocked_by` is a plain string issue-id reference (e.g. \"ISS-0389\"), required and fail-loud via `ArgumentError` when absent (runner.ex ~line 341-350) -- same discipline as :skip's existing missing-severity check. It is concatenated into a `detail` string (`\"blocked; see \" <> blocked_by`) that is surfaced only in the in-process RunReport/YAML findings report (test/reports/req208-meridian-scenario-findings.yaml), never rendered in a web UI, never interpolated into a query, template, or shell command -- no injection surface. No secret or credential value is ever assigned to blocked_by in any of the 3 new scenario YAMLs (checked: only \"ISS-0389\" literal). Clean.\n\nEngine join_counters defect (lib/letflow/engine.ex, pre-existing, reported not fixed in this diff): assessed for security implications beyond correctness. (a) Internal-state exposure: NOT present -- confirmed above via INV-4 check, the API boundary maps the internal `{:activation_failed, {:unknown_branch_id, _}}` to a generic, no-detail 500 body; the diff's own header comments in both loan-origination YAMLs explicitly note this mapping ('mapped to INV-4's no-detail 500 at the API boundary'), i.e. ELIXIR-DEV already checked this against INV-4 before reporting. (b) DoS potential: the defect fires deterministically and only for the SAME tenant/process/instance that owns the PARALLEL_GATEWAY split -- it is a self-inflicted, same-tenant availability defect (any legitimate task completion on a fork branch always fails), not a mechanism by which one tenant could degrade another tenant's instances or the platform as a whole; report evidence (credit-memo-review task still PENDING, instance still ACTIVE at the same 2 nodes after the failed call) confirms no data corruption, consistent with a typed non-crashing failure rather than a crash loop or resource-exhaustion vector. No amplification path was found (repeating the failing call does not appear to leak resources beyond the single failed HTTP request/response cycle; nothing in the diff or referenced engine code suggests retry storms or unbounded work per call). Conclusion: this is correctly classified as a correctness/availability BLOCKER on the Engine's own scope (already filed as BLOCKER severity in step-02a's result.issues, routed to CODE-DESIGNER/ELIXIR-DEV territory for lib/letflow/engine.ex, not this diff) -- it does not rise to a distinct security invariant violation (no confidentiality breach, no cross-tenant reach, no injection) and does not need escalation beyond the correctness/availability framing ELIXIR-DEV already gave it. Recommend ORCH ensure this BLOCKER-severity Engine finding is queued as its own tracked issue promptly given its platform-wide reach (every PARALLEL_GATEWAY split with separate-call branch completions), separate from REQ-208's own disposition.\n\nGeneral hygiene: confirmed zero lib/ or priv/repo/migrations/ files in the diff (git diff --stat reviewed in full, 20 files changed, all under test/, docs/, handoffs/). No hardcoded secrets found in any of the 20 changed files (grepped for token/password/secret/Bearer literals; only dynamically-generated test tokens and doc-comment references found).\n\nOverall: no applicable invariant fails. Description in step-02a's handoff (join_counters defect, scenario truncation, disclosure discipline) independently confirmed to match the actual diff and its evidence.",
+    "invariant_checks": {
+      "INV-1": "NOT-APPLICABLE -- no migration, schema, or tenant-scoped table touched in this diff",
+      "INV-2": "NOT-APPLICABLE -- S4-staged, unaffected",
+      "INV-3": "NOT-APPLICABLE -- S4/S5-staged, unaffected",
+      "INV-4": "APPLIES -- PASS. Verified HTTP 500 response body is generic ({\"status\":500,\"title\":\"Internal Server Error\"}), no internal error detail (unknown_branch_id, activation_failed) leaked to the API boundary; confirmed by direct assertions in req208_meridian_test.exs",
+      "INV-5": "NOT-APPLICABLE -- S5-staged, unaffected",
+      "INV-6": "NOT-APPLICABLE -- no change relevant to this invariant's subject matter found in the diff",
+      "INV-7": "APPLIES -- PASS. No hardcoded secrets/credentials; all test tokens generated at runtime via Identity.create_token/3",
+      "INV-8": "APPLIES -- PASS. No secret-resolving config/env-var code touched or introduced"
+    },
+    "next_action": "Route to REVIEWER (Step 2d) for OTP-idiom/supervision/scope-creep/decision-record-consistency review. Recommend ORCH separately ensure the Engine join_counters BLOCKER (reported in step-02a result.issues) is queued as its own tracked issue given its platform-wide reach beyond REQ-208."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "gate": "SECURITY-REVIEWER",
+      "result": "PASS",
+      "at": "2026-09-01T11:18:09Z"
+    }
+  ],
+  "not_agent_attested": false
+}

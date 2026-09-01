@@ -1,0 +1,100 @@
+{
+  "handoff_id": "WF02-REQ208-20260901-step-06",
+  "run_id": "WF02-REQ208-20260901",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "DOC-UPDATER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ208-20260901/step-06-doc-updater.json",
+  "created_at": "2026-09-01T12:18:57Z",
+  "started_at": "2026-09-01T12:12:00Z",
+  "completed_at": "2026-09-01T12:18:57Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-208"],
+    "issue_ids": ["ISS-0389"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ208-20260901/step-05-release-validator.json",
+      "handoffs/WF02-REQ208-20260901/release-validation-report-20260901.md",
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v7.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ208-20260901",
+    "commit_reviewed": "6d21a8d8"
+  },
+  "task": {
+    "description": "DOC-UPDATER pass (WF-02 Step 6) for REQ-208: flip status to done, append the run-history event recording RELEASE-VALIDATOR's ACCEPT-WITH-CAVEAT verdict (AC1/AC2 PARTIALLY MET), roll the run-history volume since the append crossed its own line ceiling, confirm no change to S7's derived live-activity state, and update the stage-7 migration doc."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "REQ-208 flipped to status: done in docs/requirements.yaml. Appended one done-event to docs/status/requirement_status.v7.yaml recording: 3 Meridian scenarios run via REQ-205's harness; new :no_task_of_type verification method and :blocked disposition shipped additively to test/support/simulation/runner.ex; AC1/AC2 recorded PARTIALLY MET (fork/task-creation and defect-reproduction genuinely verified; committee-route/quorum/disbursement/EO-002-negative-assertion claims honestly reported unverified) due to a genuine pre-existing Engine defect -- join_counters: %{} hardcoded unconditionally in lib/letflow/engine.ex's build_instance_state/3, confirmed byte-for-byte identical on origin/main before this branch's work, root cause: REQ-054/SnapshotWriter serializes join_counters but Engine.complete_task/3's own state-rebuild hot path never reads it back; AC3/AC4/AC5/AC6 fully MET; two new Engine defects (join_counters BLOCKER, walk_to_gateway/3 multi-outgoing-edge fork-branch limitation) found and properly deferred to ORCH for filing at Step Final, confirmed via grep that neither is yet in docs/issues/*.yaml. This append (55 lines) crossed volume 7's own 1200-line roll ceiling (1220 lines post-append), so volume 7 was closed and volume 8 opened in the same commit per the index's roll_rule.on_exceed procedure. docs/migration/stage-7-simulation-uat-parity.md updated with a REQ-208-done paragraph matching REQ-205/206/207's own style (dispositions, the two new Engine findings, the AC1/AC2 caveat, RELEASE-VALIDATOR verdict).",
+    "requirements_yaml_change": "REQ-208 status: in_progress -> done (docs/requirements.yaml).",
+    "run_history_append": {
+      "volume_written_to": "docs/status/requirement_status.v7.yaml",
+      "entry": "req: REQ-208, event: done, agent: DOC-UPDATER, at: 2026-09-01T12:15:49Z",
+      "numstat_before_roll": "git diff --numstat docs/status/requirement_status.v7.yaml -> 55 insertions, 0 deletions (append-only confirmed)",
+      "recount_after_append": "grep -c \"^  - req:\" docs/status/requirement_status.v7.yaml -> 42 on-disk entries (was 41 before this append, per the index's own pre-existing note)",
+      "size_after_append": "wc -l docs/status/requirement_status.v7.yaml -> 1220 lines; wc -c -> 71927 bytes -- over the roll_rule max_lines: 1200 ceiling read from docs/status/requirement_status.index.yaml, bytes still under max_bytes: 120000",
+      "roll_performed": "Volume 7 closed: appended its closure footer (42 entries, 1220 frozen-prefix lines, 1248 total lines with footer, frozen_prefix_sha256 f7da0f6cf41fad2aeceb69dbd457e32c73dca22b5d94e9193a1e0b9a4909435d computed via `head -n 1220 docs/status/requirement_status.v7.yaml | sha256sum`). Volume 8 created (docs/status/requirement_status.v8.yaml) with volume 7's header text verbatim (volume number, opening date 2026-09-01, predecessor path updated), empty history: list. docs/status/requirement_status.index.yaml updated: volume 7 entry set status: closed with entries/lines/bytes_working_tree/frozen_prefix_lines/frozen_prefix_sha256/closure_note fields filled; volume 8 entry added with status: current, entries: 0."
+    },
+    "live_activity_drift_check": {
+      "method": "MIX_ENV=test mix run -e calling Mix.Tasks.Letflow.CheckDeferralStaleness.audit/1 could NOT be executed directly in this session's sandbox -- `mix`/`elixir` are absent from PATH entirely (confirmed: `which mix elixir erl asdf` all empty, no /usr/lib/elixir, only unrelated test-fixture fake-mix binaries under /tmp from a prior test run). This is stated honestly rather than fabricating a mix run, per core-directives' 'No speculation' rule. In place of executing it, re-derived the answer by reading the detector's own documented rule directly (lib/mix/tasks/letflow.check_deferral_staleness.ex, module doc, lines ~30-63): 'A stage is :active iff at least one requirement assigned to it -- excluding the requirement currently under test -- has a status in {done, in_progress, blocked}.' REQ-205, REQ-206 and REQ-207 (all stage S7) were already status: done in docs/requirements.yaml before this step ran (confirmed by their own already-landed done-events in requirement_status.v7.yaml and by the stage-7 doc's own pre-existing REQ-205/206/207-done paragraphs) -- S7 was therefore already :active under this rule prior to REQ-208's flip. Flipping REQ-208 (also stage S7) from in_progress to done adds a second/third/fourth already-true witness to the same disjunction; it cannot move S7 from inactive to active (it already was) nor can it remove S7 from active (removal never happens by definition -- see test file's own T-LIVE-ACTIVITY history: a stage only ever moves inactive -> active, never back). Conclusion: no change to the derived active/inactive stage sets from this step -- the test file's own most recent recorded derivation (REQ-205-done entry, 2026-08-31) already has active including S7 and inactive == [], and REQ-208's flip does not alter either set.",
+      "caveat": "This is a code-read-based derivation, not a re-run of the actual test/task, because the Elixir toolchain is unavailable in this sandbox session. Flagging as a gap for ORCH/TEST-RUNNER: if a toolchain-equipped session is available, `MIX_ENV=test mix test test/mix/tasks/letflow_check_deferral_staleness_test.exs` should still be run to confirm T-LIVE-ACTIVITY passes unchanged (expected: no diff from its last recorded derivation)."
+    },
+    "docs_updated": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v7.yaml",
+      "docs/status/requirement_status.v8.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/migration/stage-7-simulation-uat-parity.md"
+    ],
+    "acceptance_criteria_doc_check": "REQ-208's acceptance criteria named no docs/migration/decisions/*.md or specific stage-N file beyond the stage-7 doc itself (checked docs/requirements.yaml's REQ-208 entry in full) -- docs/migration/stage-7-simulation-uat-parity.md is the only migration doc in scope and has been updated with the REQ-208-done paragraph above.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v7.yaml",
+      "docs/status/requirement_status.v8.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/migration/stage-7-simulation-uat-parity.md",
+      "handoffs/WF02-REQ208-20260901/step-06-doc-updater.json"
+    ],
+    "next_action": "Route to ORCH (Step Final): merge feature/WF02-REQ208-20260901 once green, and file the two Engine-defect follow-up issues RELEASE-VALIDATOR/step-02a/stage-7 doc all flag as not-yet-filed -- (1) join_counters BLOCKER (lib/letflow/engine.ex build_instance_state/3, affected_files [lib/letflow/engine.ex, lib/letflow/engine/transition.ex], related [REQ-054, REQ-208]); (2) walk_to_gateway/3 multi-outgoing-edge fork-branch limitation (test/letflow/simulation/req208_meridian_test.exs lines 117-134). Also note for a toolchain-equipped session: re-run test/mix/tasks/letflow_check_deferral_staleness_test.exs to confirm the T-LIVE-ACTIVITY code-read-based derivation above (no change expected)."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "gate": "SECURITY-REVIEWER",
+      "result": "PASS",
+      "at": "2026-09-01T11:18:09Z"
+    },
+    {
+      "gate": "REVIEWER",
+      "result": "PASS",
+      "at": "2026-09-01T11:22:04Z"
+    },
+    {
+      "gate": "TEST-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "at": "2026-09-01T11:35:00Z"
+    },
+    {
+      "gate": "TEST-RUNNER",
+      "result": "COMPLETED",
+      "at": "2026-09-01T12:10:00Z"
+    },
+    {
+      "gate": "RELEASE-VALIDATOR",
+      "result": "COMPLETED (ACCEPT WITH CAVEAT)",
+      "at": "2026-09-01T13:10:00Z"
+    },
+    {
+      "gate": "DOC-UPDATER",
+      "result": "COMPLETED",
+      "at": "2026-09-01T12:18:57Z"
+    }
+  ],
+  "not_agent_attested": false
+}

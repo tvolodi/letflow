@@ -104,6 +104,97 @@ tracked, referenced by REQ-208/209) and the missing attachment/document
 subsystem. Full detail:
 `handoffs/WF02-REQ206-20260901/release-validation-report-20260901.md`.
 
+**REQ-207 done (2026-09-01, WF02-REQ207-20260901).** All 4 Vortex
+Manufacturing scenarios run via REQ-205's harness:
+`vortex-production-order-budget-threshold` (4 expected outcomes evaluated
+against real queried state, including `assignee_ref: role-controller`
+controller-approval routing on the budget-exceeded path — not a silent
+fallback to plain line-assignment), `vortex-supplier-quality-deviation-
+critical` (disposition `:executed`; a new `:audit_event_ordering`
+`Letflow.Simulation.Runner` verification method asserts two audit events'
+real `DateTime.compare/2` ordering rather than inferring order from final
+status — EO-001 quarantine-before-severity-escalation confirmed),
+`vortex-false-positive-compensation` (disposition `:executed`, confirmed
+reaching `end-false-positive` specifically, not merely `end-closed`), and
+`vortex-entity-list-filter-and-page` (disposition `BLOCKED_ON_DEPENDENCY`,
+citing the specific missing subsystem — `lib/letflow/entities.ex` and
+`entity_query.ex` do not exist, `Letflow.Router` still reserves them). A
+genuine AC3 coverage gap was found and fixed during design/test authoring:
+`lib/letflow/engine/transition.ex`'s `dispatch_end/3` unconditionally
+drops the completed token, so `activated_nodes` derived from remaining
+tokens is `[]` for every terminal END node alike and cannot by itself
+distinguish `end-false-positive` from `end-closed` — fixed with a
+structural cross-check against the seeded graph's own edge target instead.
+RELEASE-VALIDATOR independently re-verified all 6 acceptance criteria
+(own `scripts/test_parallel.sh` re-run, own reproduction of the AC3
+mutation check by editing the expected end-node id and confirming a
+genuine, non-vacuous failure, then reverting; own read of `transition.ex`
+confirming the structural cross-check is load-bearing) and PASSED. 2
+follow-up findings confirmed real, flagged for ORCH to file at Step Final:
+(1) a pre-existing Engine defect — `Ecto.Multi` `:task_records` key
+collision on synchronously-completing `SUB_PROCESS` children within the
+same hop-chain transaction, attributed to REQ-062, affecting
+`lib/letflow/engine.ex` / `lib/letflow/engine/sub_process.ex` (confirmed
+pre-existing: `git diff main...HEAD -- lib/` shows zero lines changed in
+either file); (2) OQ-5 — R-Co scenario-corpus reachability for the 4 real
+Vortex scenario YAMLs under `test/fixtures/simulation/vortex/scenarios/
+*.yaml`, same class as `ISS-0388` but not yet fixed for scenario-
+definition files specifically (`ISS-0388`'s resolution covered only the
+12 `company/org_structure/process_*.yaml` fixture files; this diff's 4
+scenario YAMLs are self-authored/synthetic, disclosed in the design doc's
+own §0.2).
+
+**REQ-208 done (2026-09-01, WF02-REQ208-20260901).** All 3 Meridian
+Capital scenarios run via REQ-205's harness:
+`meridian-loan-origination-above-threshold` (real 3-way
+`PARALLEL_GATEWAY` fork confirmed created from real queried task state
+-- both non-KYC branches confirmed real, queried, PENDING `HUMAN_TASK`s
+-- then genuinely truncated on a real HTTP 500 reproducing a
+pre-existing Engine defect: `join_counters: %{}` is hardcoded
+unconditionally in `lib/letflow/engine.ex`'s `build_instance_state/3`
+(confirmed byte-for-byte identical on `origin/main` before this
+branch's work; root cause: REQ-054/SnapshotWriter serializes
+`join_counters` into `instance_state_snapshots`, but
+`Engine.complete_task/3`'s own state-rebuild hot path never reads it
+back), so no `PARALLEL_GATEWAY` split can currently converge across two
+separate task-completion HTTP calls), `meridian-loan-origination-below-
+threshold` (identical genuine reproduction), and `meridian-regulatory-
+compliance-review-bafin` (steps 1/2 real against real queried state;
+step 3 recorded BLOCKED citing REQ-206's already-filed `ISS-0389`
+advance-timer finding rather than a duplicate -- the report states this
+same gap now blocks scenarios in two different tenant batches).
+`Letflow.Simulation.Runner` extended additively with a new
+`:no_task_of_type` verification method (queries every task status, no
+filter -- confirmed non-vacuous via the BaFin scenario's own positive
+control asserting `:fail` against a task that DOES exist and is
+COMPLETED, not pending) and a new `:blocked` disposition (requires
+`blocked_by`, raises loudly if absent, same discipline as the
+pre-existing `:skip` branch); REQ-205's own simulation tests re-run
+unchanged, full `test/letflow/simulation/` at 28/28. RELEASE-VALIDATOR
+verdict: **ACCEPT WITH CAVEAT** -- AC1 and AC2 are recorded **PARTIALLY
+MET**, not blanket MET: the fork/task-creation portion of AC1 and the
+defect reproduction itself are genuinely verified (post-failure state
+re-queried and confirmed uncorrupted -- task still PENDING, instance
+still ACTIVE), but the committee-vote route, quorum 2-of-3, disbursement
+(AC1) and EO-002's negative committee-task assertion (AC2) are honestly
+reported as unverified rather than fabricated, since the defect
+truncates both scenarios before those paths become reachable -- not
+fixable within this test/test-support-only requirement's own scope
+(zero `lib/` files touched, confirmed by `git diff`). AC3/AC4/AC5/AC6
+all fully MET (AC4: REQ-199 independently re-confirmed `status: done` at
+execution time, no caveat needed). Two new Engine defects found and
+deferred to ORCH for filing at Step Final (per `ISSUE_QUEUE.md`,
+confirmed neither self-assigned an ISS id): (1) the `join_counters`
+defect above, BLOCKER severity, `affected_files`
+[`lib/letflow/engine.ex`, `lib/letflow/engine/transition.ex`],
+`related: [REQ-054, REQ-208]` -- a platform-wide gap blocking any future
+requirement needing a real cross-call parallel join; (2)
+`walk_to_gateway/3` fails a fork branch containing a multi-outgoing-edge
+node (e.g. an `EXCLUSIVE_GATEWAY`) before reaching its join, reproduced
+at `test/letflow/simulation/req208_meridian_test.exs` lines 117-134.
+Full detail:
+`handoffs/WF02-REQ208-20260901/release-validation-report-20260901.md`.
+
 ## Decisions
 
 None expected — this stage validates prior decisions rather than

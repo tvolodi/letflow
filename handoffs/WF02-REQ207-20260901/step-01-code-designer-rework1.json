@@ -1,0 +1,73 @@
+{
+  "handoff_id": "step01-WF02-REQ207-20260901-rework1",
+  "run_id": "WF02-REQ207-20260901",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ207-20260901/step-01-code-designer-rework1.json",
+  "created_at": "2026-09-01T07:30:19Z",
+  "started_at": "2026-09-01T07:26:58Z",
+  "completed_at": "2026-09-01T07:30:19Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-207"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ207-20260901/step-00-git-setup.json",
+      "handoffs/WF02-REQ207-20260901/step-01-code-designer.json",
+      "handoffs/WF02-REQ207-20260901/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req207-vortex-scenario-execution.md",
+      "docs/requirements.yaml#REQ-207",
+      "test/support/simulation/runner.ex",
+      "test/support/simulation/scenario_fixture.ex"
+    ],
+    "branch_name": "feature/WF02-REQ207-20260901"
+  },
+  "task": {
+    "description": "Rework CODE-DESIGNER pass fixing the 2 BLOCKERs from step-01b's FAIL: (1) §4.1/§4.3's AC4 re-verification grep false-positived on 'identity' (claimed 0, actually returns 7); (2) §7 OQ-1 left open despite being resolvable (REQ-206 merged).",
+    "acceptance_criteria": [
+      "Section 4.1's grep pattern replaced with one that does not false-positive on 'identity', its real output quoted and verified",
+      "Section 4.3's evidence bullet text matches the corrected grep/finding",
+      "Section 7 OQ-1 marked RESOLVED/MOOT with REQ-206's merge commit cited and the dependency facts confirmed against real shipped code",
+      "No other section of the design touched",
+      "No implementation code (defmodule/defstruct/function bodies) introduced"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Both BLOCKERs fixed, nothing else touched. DEFECT A: replaced `grep -c \"title:.*[Ee]ntit\" docs/requirements.yaml` (real output today: 7, all false positives on 'identity' substring plus REQ-207's own title -- confirmed by independently running it) with `grep -n -B1 -iE \"title:.*\\bentit(y|ies)\\b\" docs/requirements.yaml`. Real output of the replacement, run this session: exactly 1 match -- `11714-  - id: REQ-207` / `11715:    title: Run Vortex's 4 simulation scenarios against Letflow (...entity list filter/page...) and report per-scenario findings` -- i.e. the sole match is REQ-207's own self-referential title (the -B1 id: line confirms it), not a claim by any other requirement. Section 4.1 now instructs the re-verifier to confirm the count is exactly 1 with id: REQ-207 on the preceding line as the 'no other requirement claims this subsystem' result, and to name/status-check any different or additional match. Section 4.3's evidence bullet (previously 'grep -c ... == 0') now reads the corrected command and its real 1-match/self-referential result. The underlying BLOCKED_ON_DEPENDENCY conclusion for AC4 is unchanged -- only the re-runnable verification command and its documented expected result were fixed. DEFECT B: §7 OQ-1 rewritten from an open question into 'OQ-1 -- RESOLVED/MOOT'. Independently confirmed this session: `git log main --oneline | grep -i REQ206` shows commit 2d068c79 ('REQ-206: SwiftRoute scenario execution (S7 simulation harness) (#767)'); `git merge-base --is-ancestor 2d068c79 HEAD` succeeds (exit 0) on this branch. Read the real shipped code directly (no git show against another branch needed): test/support/simulation/scenario_fixture.ex lines 40-41 show `@spec load!(path :: String.t()) :: Scenario.t()` / `def load!(path) do`; test/support/simulation/runner.ex line 45 shows `required(:via) => :api | :gui | :skip`. Both of §0.1's load-bearing dependencies are confirmed present. The design now states §0.1's fallback plan (ELIXIR-DEV stopping to ask ORCH for an inlined/duplicate YAML-load helper) is not exercised and does not apply -- ELIXIR-DEV should import/call ScenarioFixture.load!/1 and Runner/Scenario as normal already-merged REQ-205/206 dependencies with no fallback branching. Nothing else in the design was touched: §0 (except OQ-1's own paragraph in §7), §1-§6, §8, and OQ-2/3/4/5 are byte-identical to the prior iteration. Post-edit scan of the doc: 18 code fences, zero defmodule/defstruct/function-body matches (`grep -n 'defmodule\\|defstruct'` and `grep -n '  def '` both empty) -- no implementation code introduced.",
+    "artifacts_out": [
+      "lib/letflow/design/req207-vortex-scenario-execution.md"
+    ],
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for step-01b re-check (rework iteration 1)"
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-01T07:26:58Z",
+      "status": "FAIL",
+      "summary": "Dependency claims, audit_event_ordering novelty, no-implementation-code, and AC-mapping checks all PASS. Section 4.1's AC4 re-verification grep is factually unreliable (returns 7, not the claimed 0, due to \"identity\" substring collisions) and section 7's OQ-1 is left open despite being resolvable now that REQ-206 has merged to main.",
+      "issues": [
+        "Section 4.1/4.3 grep pattern false-positives on \"identity\"",
+        "Section 7 OQ-1 not marked resolved/moot despite REQ-206 merge"
+      ],
+      "next_action": "Rework CODE-DESIGNER"
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-01T07:30:19Z",
+      "status": "PENDING_REVALIDATION",
+      "summary": "CODE-DESIGNER rework: replaced the AC4 grep with a word-bounded pattern verified to return exactly 1 (REQ-207's own self-referential title, not another requirement's claim), updated §4.3's evidence text to match, and marked §7 OQ-1 RESOLVED/MOOT with REQ-206's merge commit (2d068c79) and the real ScenarioFixture.load!/1 / Runner :via vocabulary confirmed present on this branch.",
+      "issues": [],
+      "next_action": "CODE-DESIGN-VALIDATOR re-check"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+# Synthetic — R-Co's tests/simulation/scenarios/entity-list-filter-and-page.yaml is
+# unreachable from this sandbox (see lib/letflow/design/req207-vortex-scenario-execution.md §0.2);
+# structurally faithful to REQ-207's own requirement-text field-by-field account,
+# not a byte-for-byte port.
+#
+# Disposition: BLOCKED_ON_DEPENDENCY (design §0.5/§4). Letflow.Routers.Entities /
+# Letflow.Routers.EntityQuery (entities.zig / entity_query.zig, S5/S6) has not landed --
+# no route mounts it, no context module exists under lib/letflow/. This file is authored
+# for record-keeping/future re-execution once S5/S6 lands (structurally complete, 6
+# via: gui steps, pipeline_test field matching the requirement text's literal account) but
+# is NEVER loaded/run by test/letflow/simulation/req207_vortex_test.exs (design §4.3) --
+# calling ScenarioFixture.load!/1 or Runner.run/1 on it would either raise (no :api step
+# routes anywhere real) or require inventing a fictional endpoint. The disposition is
+# recorded as a hand-built report entry instead (design §4.3, §6).
+id: vortex-entity-list-filter-and-page
+company_id: vortex
+process_id: n/a
+pipeline_test: "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts"
+
+actors:
+  actor-vortex-felix: {}
+
+preconditions: []
+
+steps:
+  - via: gui
+    action: "navigate to entity list view for Supplier entity"
+    actor: actor-vortex-felix
+
+  - via: gui
+    action: "apply filter: category == 'raw-material'"
+    actor: actor-vortex-felix
+
+  - via: gui
+    action: "apply filter: status == 'active'"
+    actor: actor-vortex-felix
+
+  - via: gui
+    action: "sort by display_name ascending"
+    actor: actor-vortex-felix
+
+  - via: gui
+    action: "page to page 2 (page_size: 25)"
+    actor: actor-vortex-felix
+
+  - via: gui
+    action: "verify cost-figure field absent for a role without cost-figure visibility"
+    actor: actor-vortex-felix
+
+expected_outcomes:
+  - id: EO-001
+    description: "Entity list filter/sort/page and field-level authorization -- BLOCKED_ON_DEPENDENCY, see design §4.3"
+    verification:
+      method: instance_state
+      args:
+        prefix: "TENANT_PREFIX"
+        instance_ref: "n/a"
+        status: "BLOCKED_ON_DEPENDENCY"

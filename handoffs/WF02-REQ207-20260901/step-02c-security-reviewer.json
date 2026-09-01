@@ -1,0 +1,53 @@
+{
+  "handoff_id": "step02c-WF02-REQ207-20260901",
+  "run_id": "WF02-REQ207-20260901",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ207-20260901/step-02c-security-reviewer.json",
+  "created_at": "2026-09-01T07:53:16Z",
+  "started_at": "2026-09-01T07:53:16Z",
+  "completed_at": "2026-09-01T07:53:16Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-207"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ207-20260901/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "test/support/simulation/runner.ex",
+      "test/support/simulation/scenario_fixture.ex",
+      "test/letflow/simulation/req207_vortex_test.exs",
+      "test/fixtures/simulation/vortex/scenarios/*.yaml",
+      "test/reports/req207-vortex-scenario-findings.yaml",
+      "docs/anti-patterns.md"
+    ],
+    "branch_name": "feature/WF02-REQ207-20260901"
+  },
+  "task": {
+    "description": "Gate WF02-REQ207-20260901's implementation diff (commit f899274e) against security-invariants.md INV-1..INV-8 per WF-02 Step 2c.",
+    "acceptance_criteria": [
+      "Scope test performed explicitly against security-invariants.md's actual applicability language, not assumed",
+      "For every APPLIES invariant, the How-to-verify procedure is actually run and the result recorded",
+      "PASS only if no applicable invariant fails"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: this diff (git diff main...HEAD, commit 666327de) touches no lib/letflow/ or priv/repo/migrations/ file -- it is entirely test/test-support code (test/support/simulation/runner.ex, test/support/simulation/scenario_fixture.ex, test/letflow/simulation/req207_vortex_test.exs, test/fixtures/simulation/vortex/scenarios/*.yaml, test/reports/req207-vortex-scenario-findings.yaml) plus a docs/anti-patterns.md addition. security-invariants.md's applicability language is written per-invariant against concrete triggers (new/changed Ecto schema module or migration for INV-1; new API response type for INV-2; System.get_env/config/lib for INV-4; new lookup-by-ID endpoint for INV-5; Repo.query call sites for INV-7; lib/letflow/ error-handling paths for INV-8) -- none of which name 'exercises tenant data via HTTP/Repo calls from test code' as its own trigger. However this diff's test code does make real calls into Letflow's actual tenant-scoped write/read paths (Identity.create_token, Audit.list_entries with a resolved :prefix, TenantProvisioning.schema_name_for_tenant, real POST /api/v1/tasks/:id/complete per the ELIXIR-DEV finding) -- so rather than declaring blanket out-of-scope, each live invariant (INV-1, INV-4, INV-7, INV-8) was individually checked against what this diff's test code actually does, per the role file's explicit instruction not to skip the scope test.\n\nINV-1 (tenant data isolation): APPLIES to the extent this diff's test code performs tenant-scoped queries, even though it adds no new Ecto schema/migration itself. Verified: test/support/simulation/runner.ex's find_audit_entry/2 (used by both :audit_event and the new :audit_event_ordering) calls Audit.list_entries with query_params carrying prefix: prefix, and fetch_prefix/1 (runner.ex:663-668) reads that prefix from the scenario's own args map, which in the test module (req207_vortex_test.exs) is populated from schema_name -- itself obtained via TenantProvisioning.schema_name_for_tenant/1 (a real resolved schema, not a caller free-typed string) exactly as REQ-206's already-reviewed precedent does. No new business-table schema or migration is introduced by this diff. PASS -- (a) queries go through prefix-scoping via the existing Audit.list_entries contract, unchanged by this diff; (b)/(c) not applicable, no new table/migration.\n\nINV-2, INV-3, INV-5: NOT-APPLICABLE. No new API response type, no scripting/plugin runtime, no new lookup-by-ID endpoint introduced by this diff (S4/S5 not started).\n\nINV-4 (secrets by reference only): APPLIES (live). Ran both required greps scoped to this diff's files plus a repo-wide config/lib check (unchanged by this diff, confirming no regression): grep -rn \"System.get_env\" config/ lib/ -- unchanged from pre-existing state, no new hits from this diff. grep -rniE secret/token/password heuristic against test/fixtures/simulation/vortex/, test/letflow/simulation/req207_vortex_test.exs, test/support/simulation/runner.ex, test/support/simulation/scenario_fixture.ex -- zero hits. The test file's *_token variables (anna_token, sabine_token, etc.) hold plaintext values returned from Identity.create_token/3 at test-setup time, used immediately as in-memory scenario actor args, never logged/serialised/written to any handoff or report file -- confirmed test/reports/req207-vortex-scenario-findings.yaml contains no token material. PASS.\n\nINV-7 (no SQL string interpolation): APPLIES (live) -- this diff introduces one raw-SQL interpolation. grep -rn \"Repo.query\" lib/ priv/repo/migrations/ -- no new hits (diff touches neither). Diff-local check: test/letflow/simulation/req207_vortex_test.exs:423 -- Repo.query!(~s(DROP SCHEMA IF EXISTS \"#{schema_name}\" CASCADE)) in the test teardown helper. schema_name here is not caller/tenant-controlled input -- it is the value returned by TenantProvisioning.schema_name_for_tenant/1 for a schema this same test provisioned moments earlier (a resolved, server-generated identifier, not user input reaching the interpolation). Confirmed byte-identical in shape and origin to req206_swiftroute_test.exs:216's already-reviewed precedent (grep confirms both lines match verbatim pattern). No :prefix option exists for DROP SCHEMA in Ecto's query API, so raw SQL is the only mechanism available for this test-teardown operation, same as the established precedent. PASS.\n\nINV-8 (no unhandled crashes on realistic failure paths): APPLIES (live) -- runner.ex changes are on an I/O-touching path (Audit.list_entries results). grep -rn \"^\\s*{:ok, .*} = \" lib/letflow/ -- no hits from this diff (lib/ untouched). Manually reviewed the new verify_outcome/2 :audit_event_ordering clause and its fetch_ordering_side/2, find_audit_entry/2 helpers: all failure paths (missing 'first'/'second' arg, missing 'prefix' arg, Audit.list_entries error) route through a with/else chain to {:error, reason} and then to an explicit %{outcome: :fail, observed: {:error, reason}} result -- no bare {:ok, x} = pattern that can raise on a legitimate query failure. The refactor correctly preserves the existing :audit_event clause's discipline (verified via diff: the extracted find_audit_entry/2 body is a faithful move, not a behavior change) while adding the new method with the same discipline. PASS.\n\nINV-6 (meta-invariant, this handoff itself): satisfied by this document -- explicit statement of which of INV-1..INV-8 apply and why, per invariant.\n\nINV-9 (SSRF): NOT-APPLICABLE -- no outbound HTTP request construction from tenant-controlled URL input in this diff; Letflow.Webhooks/UrlValidator untouched.\n\ndocs/anti-patterns.md's 35-line addition is prose-only documentation of a prior sibling-session bookkeeping gap (missing handoff artifacts for an earlier step) -- no code, no security relevance.\n\nNo applicable invariant failed. All test-support tenant-data-touching code paths in this diff route through the same prefix-scoping mechanism and error-handling discipline already established and reviewed in REQ-206's precedent; no new mechanism, no new risk surface introduced.",
+    "independent_findings_review": {
+      "engine_defect_finding": "Reviewed ELIXIR-DEV's MAJOR finding (Ecto.Multi :task_records collision when a SUB_PROCESS child completes synchronously inside the parent's hop-chain transaction, attributed to REQ-062/lib/letflow/engine.ex + lib/letflow/engine/sub_process.ex). Confirmed this is a pre-existing platform defect, not introduced by this diff: the collision is in application code (lib/letflow/engine.ex, lib/letflow/engine/sub_process.ex) that this diff does not touch at all (confirmed via git diff main...HEAD -- lib/ returning no output). It is not itself a security issue -- it is a correctness/robustness defect (an Ecto.Multi key collision raising RuntimeError, surfaced as a 500 via Plug.Conn.WrapperError) rather than a tenant-isolation, secret-exposure, injection, or SSRF issue; none of INV-1..INV-9 characterize an intra-tenant transaction-composition bug wrapped in a 500 as a security defect on their own terms, since it does not cross a tenant boundary, leak a secret, or bypass an authorization check. It does, however, touch INV-8's general concern (an unhandled-crash-shaped failure mode) at one remove -- worth noting for REVIEWER/ORCH even though it does not fail INV-8 on this diff (the raising code is pre-existing and outside this diff's scope, so it cannot be graded against this diff's own INV-8 check). Agrees with ELIXIR-DEV's own characterization: should be escalated to ORCH as a filed follow-up issue against REQ-062's module -- not filed by this handoff (SECURITY-REVIEWER does not call the issue queue), reporting only.",
+      "workaround_isolation_check": "Independently examined whether the test-local workaround (giving the sub-process child a pending HUMAN_TASK instead of a synchronously-completing START->END graph) introduces any tenant-isolation risk of its own: it does not. The workaround only changes which of two already-existing, already-reviewed process-graph shapes a single-tenant test scenario exercises -- it adds no new query, no new prefix-handling, no new cross-tenant code path. The child instance is created, addressed, and torn down entirely within the same single provisioned tenant schema as the rest of the scenario (same schema_name, same teardown call). No independent security concern found beyond ELIXIR-DEV's own characterization.",
+      "oq5_finding": "MINOR, R-Co scenario-corpus reachability (OQ-5, same class as ISS-0388/ISS-0391). No security relevance -- this is a fixture-provenance/traceability gap (whether the 4 Vortex scenario YAMLs can be traced back to real R-Co source), not a data-exposure, injection, or secret-handling concern. Agrees with ELIXIR-DEV's characterization; no independent security angle found."
+    },
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -7,9 +7,9 @@
   "to_agent": "TEST-DESIGNER",
   "file": "handoffs/WF03-ISS0400-20260901/step-04-test-designer.json",
   "created_at": "2026-09-01T17:29:31Z",
-  "started_at": "2026-09-01T17:29:31Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-01T17:30:32Z",
+  "completed_at": "2026-09-01T17:35:17Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -35,19 +35,22 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "Not yet completed by the receiving agent.",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Implemented all 5 fixtures design section 4 specifies for ISS-0400 (fixture 1 nested_parallel_split_graph/0, fixture 2 nested_split_dead_end_graph/0 negative, fixture 3 nested_split_ancestor_back_edge_graph/0 -- CODE-DESIGN-VALIDATOR's own counterexample reproduced exactly, fixture 3b nested_split_ancestor_back_edge_no_escape_graph/0 negative twin, fixture 4 doubly_nested_parallel_split_graph/0 depth-2 confirmation) as 5 new describe blocks / 6 new tests in test/letflow/engine/parallel_gateway_test.exs, appended after the existing 12 ISS-0398 tests without modifying them. Wrote test/specs/ISS-0400.md with the criterion/test-case/rationale table. Fail-then-pass proof performed via a throwaway git worktree (git worktree add ../letflow-2-prefix-worktree 58e3c64e, main's pre-fix commit) with only the new test file copied in (lib/ left as pre-fix code, confirmed via git status --porcelain in the worktree showing only the test file modified). PRE-FIX run (worktree, mix test test/letflow/engine/parallel_gateway_test.exs, deps/build reused from the main tree via MIX_DEPS_PATH/MIX_BUILD_PATH since no network access for a second deps.get): 'Result: 13/18 passed, Failed: 5 tests' -- all 5 failures are the new ISS-0400 tests whose assertion is the actual regression: fixtures 1 (both tests), 3, and 4 fail with 'right: {:error, {:no_matching_join_found, \"outer_split\"}}' (the exact pre-fix symptom), and fixture 3b's negative case fails in the opposite direction (pre-fix code wrongly returns {:ok, ...} with a bogus JoinCounter registered under \"inner_split\" itself, instead of the correct clean failure) -- also a genuine discriminator, not a false positive. Fixture 2's negative test coincidentally already passed pre-fix (already an error there too, via a different mechanism -- expected and consistent with the design doc). The pre-existing 12 ISS-0398 tests + fixture 2 (13 total) pass unchanged in the pre-fix worktree, confirming isolation. POST-FIX run (this branch, HEAD, after worktree removed via git worktree remove ../letflow-2-prefix-worktree --force): 'Result: 18 passed' -- all 12 original + 6 new tests green. mix format --check-formatted test/letflow/engine/parallel_gateway_test.exs: exit 0, no output (clean). mix compile --warnings-as-errors --force: clean, zero warnings. git status --porcelain on the main tree after cleanup shows only the two intended files modified (the handoff itself and the test file) -- no lib/ changes, no worktree residue.",
+    "artifacts_out": [
+      "test/letflow/engine/parallel_gateway_test.exs",
+      "test/specs/ISS-0400.md"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0400-20260901",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF03-ISS0400-20260901",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Not yet dispatched"
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

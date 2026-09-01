@@ -263,6 +263,200 @@ defmodule Letflow.Engine.ParallelGatewayTest do
     )
   end
 
+  # ISS-0400 fixture 1 (lib/letflow/design/iss0400-nested-parallel-gateway-fix.md
+  # §4): a PARALLEL_GATEWAY "outer_split" with 2 outgoing edges. Branch 0 is
+  # the zero-hop control branch (outer_split -> outer_join directly). Branch
+  # 1 passes through "pre" then reaches "inner_split", itself a
+  # PARALLEL_GATEWAY split (out_degree 2, :split role per gateway_role/2) --
+  # inner_a/inner_b both reconverge on "inner_join" (PARALLEL_GATEWAY, :join
+  # role), which continues via "post" to the same "outer_join" branch 0
+  # reaches. This is ISSUE-FIXER's own repro 1 shape -- the core regression:
+  # collect_leaf_gateways/3 must recursively resolve "inner_split" via
+  # resolve_nested_split/3 and continue past "inner_join" rather than
+  # stopping and reporting "inner_split" itself as branch 1's leaf.
+  defp nested_parallel_split_graph do
+    graph(
+      [
+        node("outer_split", :PARALLEL_GATEWAY),
+        node("pre", :HUMAN_TASK),
+        node("inner_split", :PARALLEL_GATEWAY),
+        node("inner_a", :HUMAN_TASK),
+        node("inner_b", :HUMAN_TASK),
+        node("inner_join", :PARALLEL_GATEWAY),
+        node("post", :HUMAN_TASK),
+        node("outer_join", :PARALLEL_GATEWAY),
+        node("e", :END)
+      ],
+      [
+        edge("e-outer-0", "outer_split", "outer_join"),
+        edge("e-outer-1", "outer_split", "pre"),
+        edge("e-pre-inner", "pre", "inner_split"),
+        edge("e-inner-a", "inner_split", "inner_a"),
+        edge("e-inner-b", "inner_split", "inner_b"),
+        edge("e-a-join", "inner_a", "inner_join"),
+        edge("e-b-join", "inner_b", "inner_join"),
+        edge("e-join-post", "inner_join", "post"),
+        edge("e-post-outer", "post", "outer_join"),
+        edge("e-outer-e", "outer_join", "e")
+      ]
+    )
+  end
+
+  # ISS-0400 fixture 2 (design doc §4, negative case): identical to
+  # nested_parallel_split_graph/0's branch 1, except "inner_b" dead-ends at a
+  # separate :END node "e2" instead of reconverging on "inner_join" -- one of
+  # the nested split's own two branches dead-ends, so resolve_nested_split/3
+  # must propagate this as :dead_end (design §3.3) and correctly fail the
+  # *outer* branch, not partially succeed or crash.
+  defp nested_split_dead_end_graph do
+    graph(
+      [
+        node("outer_split", :PARALLEL_GATEWAY),
+        node("pre", :HUMAN_TASK),
+        node("inner_split", :PARALLEL_GATEWAY),
+        node("inner_a", :HUMAN_TASK),
+        node("inner_b", :HUMAN_TASK),
+        node("inner_join", :PARALLEL_GATEWAY),
+        node("post", :HUMAN_TASK),
+        node("outer_join", :PARALLEL_GATEWAY),
+        node("e", :END),
+        node("e2", :END)
+      ],
+      [
+        edge("e-outer-0", "outer_split", "outer_join"),
+        edge("e-outer-1", "outer_split", "pre"),
+        edge("e-pre-inner", "pre", "inner_split"),
+        edge("e-inner-a", "inner_split", "inner_a"),
+        edge("e-inner-b", "inner_split", "inner_b"),
+        edge("e-a-join", "inner_a", "inner_join"),
+        edge("e-b-dead", "inner_b", "e2"),
+        edge("e-join-post", "inner_join", "post"),
+        edge("e-post-outer", "post", "outer_join"),
+        edge("e-outer-e", "outer_join", "e")
+      ]
+    )
+  end
+
+  # ISS-0400 fixture 3 (design doc §4): CODE-DESIGN-VALIDATOR's own
+  # counterexample graph, reproduced exactly -- the shape that made
+  # iteration 1's reset-based resolve_nested_split/3 recurse forever, and
+  # that this revision's no-reset mechanism must resolve correctly and
+  # terminate. "outer_split" (PARALLEL_GATEWAY, out_degree 2): branch 0
+  # direct to "outer_join". Branch 1: outer_split -> "A" -> "inner_split"
+  # (PARALLEL_GATEWAY, out_degree 2, :split role) -- edge a: inner_split ->
+  # "ia" -> "A" (a LIVE BACK-EDGE to "A", the still-open ancestor leading
+  # into inner_split itself); edge b: inner_split -> "ib" -> "inner_join"
+  # (PARALLEL_GATEWAY, :join role) -> "post" -> "outer_join". Per design
+  # §3.2's worked trace: the SCC {A, inner_split, ia} closes as one unit at
+  # "A" (the true SCC root), and edge b's escape path supplies the real leaf
+  # value ("outer_join") that becomes every SCC member's shared memo entry.
+  defp nested_split_ancestor_back_edge_graph do
+    graph(
+      [
+        node("outer_split", :PARALLEL_GATEWAY),
+        node("A", :HUMAN_TASK),
+        node("inner_split", :PARALLEL_GATEWAY),
+        node("ia", :HUMAN_TASK),
+        node("ib", :HUMAN_TASK),
+        node("inner_join", :PARALLEL_GATEWAY),
+        node("post", :HUMAN_TASK),
+        node("outer_join", :PARALLEL_GATEWAY),
+        node("e", :END)
+      ],
+      [
+        edge("e-outer-0", "outer_split", "outer_join"),
+        edge("e-outer-1", "outer_split", "A"),
+        edge("e-a-inner", "A", "inner_split"),
+        edge("e-inner-ia", "inner_split", "ia"),
+        edge("e-inner-ib", "inner_split", "ib"),
+        edge("e-ia-back-a", "ia", "A"),
+        edge("e-ib-join", "ib", "inner_join"),
+        edge("e-join-post", "inner_join", "post"),
+        edge("e-post-outer", "post", "outer_join"),
+        edge("e-outer-e", "outer_join", "e")
+      ]
+    )
+  end
+
+  # ISS-0400 fixture 3b (design doc §4, negative twin of fixture 3): same
+  # shape as nested_split_ancestor_back_edge_graph/0, except edge b is
+  # replaced with a SECOND independent back-edge into "A" (inner_split -> ib
+  # -> A) instead of escaping to inner_join/post/outer_join. This keeps
+  # "inner_split" genuinely :split-classified (out_degree 2) while removing
+  # every escape from the cycle -- the SCC {A, inner_split, ia, ib} must
+  # close with an EMPTY aggregate leaf set (no edge in the SCC reaches a
+  # PARALLEL_GATEWAY terminal), a non-singleton-agreement failure per §2.5's
+  # unchanged rule, correctly failing the branch without crashing or hanging.
+  defp nested_split_ancestor_back_edge_no_escape_graph do
+    graph(
+      [
+        # outer_split's own two edges both enter the same escape-less SCC
+        # (mirrors pure_cycle_no_escape_graph/0's own "both edges into the
+        # cycle" convention above) -- out_degree 2 is only needed so
+        # outer_split's own gateway_role/2 classification is irrelevant to
+        # this fixture; find_matching_join/2's reduce_while fails on the
+        # first branch that doesn't resolve, and both branches here reach
+        # the same unresolvable SCC either way.
+        node("outer_split", :PARALLEL_GATEWAY),
+        node("A", :HUMAN_TASK),
+        node("inner_split", :PARALLEL_GATEWAY),
+        node("ia", :HUMAN_TASK),
+        node("ib", :HUMAN_TASK)
+      ],
+      [
+        edge("e-outer-0", "outer_split", "A"),
+        edge("e-outer-1", "outer_split", "A"),
+        edge("e-a-inner", "A", "inner_split"),
+        edge("e-inner-ia", "inner_split", "ia"),
+        edge("e-inner-ib", "inner_split", "ib"),
+        edge("e-ia-back-a", "ia", "A"),
+        edge("e-ib-back-a", "ib", "A")
+      ]
+    )
+  end
+
+  # ISS-0400 fixture 4 (design doc §4, arbitrary-depth confirmation):
+  # fixture 1's branch 1, except "inner_a" itself leads to a SECOND nested
+  # split/join pair ("inner2_split"/"inner2_join") before reaching
+  # "inner_join" -- confirms resolve_nested_split/3's recursion terminates
+  # and resolves correctly at depth 2, not only depth 1.
+  defp doubly_nested_parallel_split_graph do
+    graph(
+      [
+        node("outer_split", :PARALLEL_GATEWAY),
+        node("pre", :HUMAN_TASK),
+        node("inner_split", :PARALLEL_GATEWAY),
+        node("inner_a", :HUMAN_TASK),
+        node("inner_b", :HUMAN_TASK),
+        node("inner2_split", :PARALLEL_GATEWAY),
+        node("inner2_a", :HUMAN_TASK),
+        node("inner2_b", :HUMAN_TASK),
+        node("inner2_join", :PARALLEL_GATEWAY),
+        node("inner_join", :PARALLEL_GATEWAY),
+        node("post", :HUMAN_TASK),
+        node("outer_join", :PARALLEL_GATEWAY),
+        node("e", :END)
+      ],
+      [
+        edge("e-outer-0", "outer_split", "outer_join"),
+        edge("e-outer-1", "outer_split", "pre"),
+        edge("e-pre-inner", "pre", "inner_split"),
+        edge("e-inner-a", "inner_split", "inner_a"),
+        edge("e-inner-b", "inner_split", "inner_b"),
+        edge("e-a-inner2", "inner_a", "inner2_split"),
+        edge("e-inner2-a", "inner2_split", "inner2_a"),
+        edge("e-inner2-b", "inner2_split", "inner2_b"),
+        edge("e-inner2a-join2", "inner2_a", "inner2_join"),
+        edge("e-inner2b-join2", "inner2_b", "inner2_join"),
+        edge("e-join2-innerjoin", "inner2_join", "inner_join"),
+        edge("e-b-join", "inner_b", "inner_join"),
+        edge("e-join-post", "inner_join", "post"),
+        edge("e-post-outer", "post", "outer_join"),
+        edge("e-outer-e", "outer_join", "e")
+      ]
+    )
+  end
+
   # Runs the split dispatch once and returns {new_state, branch_ids} where
   # branch_ids is in edges_out declaration order (b0, b1, b2).
   defp do_split(g, initial_token_id \\ "t1") do
@@ -685,6 +879,169 @@ defmodule Letflow.Engine.ParallelGatewayTest do
 
       assert {:error, {:no_matching_join_found, "split"}} =
                Transition.transition(g, state, {:advance_token, "t1"})
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # ISS-0400 -- a PARALLEL_GATEWAY nested inside one branch of an outer
+  # PARALLEL_GATEWAY split, per
+  # lib/letflow/design/iss0400-nested-parallel-gateway-fix.md §4.
+  # ---------------------------------------------------------------------
+
+  describe "transition/3 -- PARALLEL_GATEWAY nested inside a fork branch (ISS-0400 fixture 1)" do
+    test "a nested split/join pair inside one branch resolves recursively and the outer split succeeds against the real outer join" do
+      g = nested_parallel_split_graph()
+      state = instance_state([token("outer_split", "t1")])
+
+      assert {:ok, new_state, [{:parallel_split, "t1", "outer_split", branch_ids}]} =
+               Transition.transition(g, state, {:advance_token, "t1"})
+
+      assert length(branch_ids) == 2
+
+      # Resolves against the real OUTER join -- never "inner_split" or
+      # "inner_join", which is exactly the defect ISS-0400 fixes: before the
+      # fix, this same call returned
+      # {:error, {:no_matching_join_found, "outer_split"}} because
+      # collect_leaf_gateways/3 reported "inner_split" itself as branch 1's
+      # leaf and never continued past it.
+      assert %JoinCounter{} = counter = new_state.join_counters["outer_join"]
+      assert counter.expected_from_branches == MapSet.new(branch_ids)
+      refute Map.has_key?(new_state.join_counters, "inner_split")
+      refute Map.has_key?(new_state.join_counters, "inner_join")
+
+      # The split itself only ever advances each branch one hop -- branch 1's
+      # token lands on "pre" (its own edge.target), not deeper into the
+      # subtree the lookahead search resolved. The deeper resolution is a
+      # pure lookahead and never advances any token.
+      assert Enum.map(new_state.tokens, & &1.node_id) |> Enum.sort() == ["outer_join", "pre"]
+    end
+
+    test "the nested split still functions as its own independently-dispatchable PARALLEL_GATEWAY split once a token actually reaches it" do
+      # Confirms design §4/§5's explicit boundary: this fix is scoped to the
+      # lookahead search find_matching_join/2 performs at outer-split
+      # activation time, and must not change dispatch_parallel_gateway/4's
+      # own runtime dispatch of the inner split when a token later actually
+      # arrives there.
+      g = nested_parallel_split_graph()
+      state = instance_state([token("outer_split", "t1")])
+
+      assert {:ok, state_after_split, [{:parallel_split, "t1", "outer_split", branch_ids}]} =
+               Transition.transition(g, state, {:advance_token, "t1"})
+
+      [branch_1_token] = Enum.filter(state_after_split.tokens, &(&1.node_id == "pre"))
+      branch_1_token_id = branch_1_token.token_id
+      assert branch_1_token_id in branch_ids
+
+      # "pre" is a :HUMAN_TASK -- {:advance_token, _} cannot move a token off
+      # it (dispatch_human_task/3's own "no automatic outgoing traversal"
+      # contract, this module's moduledoc). {:complete_task, _} is the
+      # caller's explicit "this task just completed" signal that actually
+      # advances it, via its single unconditioned outgoing edge, onto
+      # "inner_split".
+      assert {:ok, state_at_inner_split, []} =
+               Transition.transition(
+                 g,
+                 state_after_split,
+                 {:complete_task, branch_1_token_id}
+               )
+
+      assert Enum.any?(state_at_inner_split.tokens, &(&1.node_id == "inner_split"))
+
+      # Now dispatch the inner split for real -- it independently splits into
+      # its own 2 branches and registers its own JoinCounter under
+      # "inner_join", exactly as any other PARALLEL_GATEWAY split would.
+      assert {:ok, state_after_inner_split,
+              [{:parallel_split, ^branch_1_token_id, "inner_split", inner_branch_ids}]} =
+               Transition.transition(
+                 g,
+                 state_at_inner_split,
+                 {:advance_token, branch_1_token_id}
+               )
+
+      assert length(inner_branch_ids) == 2
+
+      assert %JoinCounter{} =
+               inner_counter = state_after_inner_split.join_counters["inner_join"]
+
+      assert inner_counter.expected_from_branches == MapSet.new(inner_branch_ids)
+    end
+  end
+
+  describe "transition/3 -- PARALLEL_GATEWAY nested split whose own inner branch dead-ends (ISS-0400 fixture 2, negative)" do
+    test "a nested split with one internal branch dead-ending fails the whole outer split cleanly" do
+      g = nested_split_dead_end_graph()
+      state = instance_state([token("outer_split", "t1")])
+
+      assert {:error, {:no_matching_join_found, "outer_split"}} =
+               Transition.transition(g, state, {:advance_token, "t1"})
+    end
+  end
+
+  describe "transition/3 -- PARALLEL_GATEWAY nested split whose own branch loops back to a still-open outer-walk ancestor (ISS-0400 fixture 3, CODE-DESIGN-VALIDATOR's counterexample)" do
+    test "the branch resolves successfully against the real outer join, and terminates, when a nested split's own branch loops back to the ancestor node that led into it" do
+      g = nested_split_ancestor_back_edge_graph()
+      state = instance_state([token("outer_split", "t1")])
+
+      # This is the direct regression assertion for the BLOCKER
+      # CODE-DESIGN-VALIDATOR found in iteration 1 of the design: under
+      # iteration 1's reset-based resolve_nested_split/3, this exact call
+      # never returned at all (unbounded recursion, per design §3.2's
+      # trace). Under this revision's no-reset mechanism, the SCC
+      # {A, inner_split, ia} closes as one unit at "A" and edge b's escape
+      # path (ib -> inner_join -> post -> outer_join) supplies the real leaf
+      # value. Completing at all, within the test's own normal execution
+      # (no explicit wall-clock budget needed here -- design §4's own
+      # fixture-3 note: any completion in bounded time already falsifies
+      # the non-termination failure mode), is itself part of what this test
+      # proves, not merely the returned value.
+      assert {:ok, new_state, [{:parallel_split, "t1", "outer_split", branch_ids}]} =
+               Transition.transition(g, state, {:advance_token, "t1"})
+
+      assert length(branch_ids) == 2
+
+      assert %JoinCounter{} = counter = new_state.join_counters["outer_join"]
+      assert counter.expected_from_branches == MapSet.new(branch_ids)
+      refute Map.has_key?(new_state.join_counters, "inner_split")
+      refute Map.has_key?(new_state.join_counters, "A")
+    end
+  end
+
+  describe "transition/3 -- PARALLEL_GATEWAY nested split whose own branch loops back with no escape (ISS-0400 fixture 3b, negative twin)" do
+    test "a nested split's branch that loops back to the ancestor with no escape edge anywhere in the cycle fails the whole outer split cleanly, without hanging" do
+      g = nested_split_ancestor_back_edge_no_escape_graph()
+      state = instance_state([token("outer_split", "t1")])
+
+      # The SCC {A, inner_split, ia, ib} closes with an EMPTY aggregate leaf
+      # set (no edge anywhere in the SCC reaches a PARALLEL_GATEWAY
+      # terminal) -- a non-singleton (empty-set) agreement failure per
+      # §2.5's unchanged rule. Same non-regression requirement as fixture 3:
+      # completing at all, without hanging, is part of what this test
+      # proves.
+      assert {:error, {:no_matching_join_found, "outer_split"}} =
+               Transition.transition(g, state, {:advance_token, "t1"})
+    end
+  end
+
+  describe "transition/3 -- PARALLEL_GATEWAY doubly-nested split (ISS-0400 fixture 4, arbitrary-depth confirmation)" do
+    test "a nested split whose own branch contains a second, deeper nested split still resolves recursively to the real outer join" do
+      g = doubly_nested_parallel_split_graph()
+      state = instance_state([token("outer_split", "t1")])
+
+      assert {:ok, new_state, [{:parallel_split, "t1", "outer_split", branch_ids}]} =
+               Transition.transition(g, state, {:advance_token, "t1"})
+
+      assert length(branch_ids) == 2
+
+      assert %JoinCounter{} = counter = new_state.join_counters["outer_join"]
+      assert counter.expected_from_branches == MapSet.new(branch_ids)
+
+      # Confirms memoization correctly threads through two levels of
+      # resolve_nested_split/3 recursion -- neither the depth-1 nor the
+      # depth-2 nested split's own id ever becomes a JoinCounter key.
+      refute Map.has_key?(new_state.join_counters, "inner_split")
+      refute Map.has_key?(new_state.join_counters, "inner2_split")
+      refute Map.has_key?(new_state.join_counters, "inner_join")
+      refute Map.has_key?(new_state.join_counters, "inner2_join")
     end
   end
 end

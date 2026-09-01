@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0392-20260901/step-02b-code-design-validator.json",
   "created_at": "2026-09-01T10:28:32Z",
   "started_at": "2026-09-01T10:28:32Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-01T10:41:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -38,18 +38,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Read lib/letflow/design/iss0392-multi-task-records-collision-fix.md in full directly (not from CODE-DESIGNER's summary), plus docs/issues/ISS-0392.yaml (note: this file has no literal `acceptance_criteria:` key -- grepped and confirmed empty match -- so the '3 acceptance criteria' referenced by this handoff and by step-02-code-designer.json's own acceptance_criteria are the ones CODE-DESIGNER itself named and gated against: AC1 'no more raising on sync-completing child', AC2 'regression test scenario named precisely', AC3 'async/queued path behavior unchanged'; the design doc's own SS4 heading literally cites 'ISS-0392 AC3', confirming this is the same numbering CODE-DESIGNER worked from). Also read step-01-issue-fixer.json and step-02-code-designer.json in full for grounding.\n\nCheck-by-check verdicts (per WF-02 Step 1b, reused by WF-03 Step 2):\n\nAC1 (no more raising on sync-completing child) -- PASS. SS2.2 defines a concrete gatekeeper TaskActivation.append_multi_from_existing_records_once/7 with a full @spec (params, return {Ecto.Multi.t(), MapSet.t(Ecto.UUID.t())}). SS2.4 refines skip-on-repeat to replace-on-repeat with an explicit, justified ordering rule (SS2.3's dominance argument: call (2)'s snapshot strictly dominates call (1)'s because load_parent_context/2 re-reads committed state rather than reusing an in-memory value). This is a concrete, non-deferred design element directly answering the collision.\n\nAC2 (regression test scenario named precisely) -- PASS. SS5 states the exact parent/child graph fixtures (START->HUMAN_TASK('gate')->SUB_PROCESS('sp')->END; child START->END), the exact call (Engine.complete_task/3 on the gate task), the pre-fix-must-raise assertion (exact error string/key shape) and post-fix-must-pass assertion (including a precise 'no orphan task row' content check, not just absence-of-crash), plus a second nested-cascade variant for multi-level coverage. Precise enough for TEST-DESIGNER to build directly without re-deriving the scenario.\n\nAC3 (async/queued path unchanged) -- PASS. SS4 is a dedicated section proving the no-op sibling clause of maybe_chain_synchronous_completion/7 returns {multi, claimed_instance_ids} completely unchanged -- arity changes only, behavior is shown identical before/after, with the exact code path gating this (child_initial_state.status == :completed) named.\n\nNo TBD/deferral language on anything an AC requires resolved -- PASS. Grepped the doc for TBD/deferred/'to be determined' -- zero true hits (all 'later' occurrences are snapshot-ordering prose, not deferred work). Four open questions (SS6) reviewed individually: OQ-1 (how the MapSet crosses a Multi.merge/2 callback boundary) -- both named options already satisfy the stated contract ('exactly one step, the most recently attempted one'); this is a mechanical/idiomatic-Ecto plumbing choice, not a behavioral ambiguity affecting any AC. OQ-2 (MapSet vs list) -- stated as behaviorally identical, non-load-bearing. OQ-3 (whether the gatekeeper needs its own unit test beyond SS5's integration scenario) -- a test-coverage judgment call for TEST-DESIGNER, not an unresolved fix behavior. OQ-4 (self-referential ancestor) -- SS3's own body already commits to a specific, justified answer (replace-by-recency resolves this correctly, with the dominance argument shown to hold at every level) BEFORE OQ-4 is raised; OQ-4 only asks whether this edge case deserves its own dedicated test, not whether the design's behavior for it is determined. None of the 4 OQs leaves an AC's actual behavior undetermined.\n\nNo real .ex/.exs implementation code -- PASS. Grepped the doc for 'def '/'defp ' -- zero matches. All code-shaped blocks are fenced @spec type signatures only, no function bodies.\n\nFunction signatures fully specified (name, arity, params, return shape, error shape) -- PASS. SS2.5 and SS3 give full @spec blocks for every changed function: build_task_activation_and_reconciliation_multi/3->/4, append_sub_process_children_creation_multi/6->/7, SubProcess.append_start_multi/7->/8, maybe_chain_synchronous_completion/6->/7, append_completion_multi/5->/6 (success return {:ok, Multi.t()} -> {:ok, {Multi.t(), MapSet.t()}}, error return {:error, ExecutionError.error_args()} explicitly stated unchanged), build_completion_write_steps/12->/13, maybe_cascade_to_grandparent/6->/7. SS2.5's closing paragraph explicitly states no function's error return shape changes and no function gains a new failure mode.\n\nCross-module dependencies listed -- PASS. Design names exact call sites and signature changes across Letflow.Engine, Letflow.Engine.SubProcess, and Letflow.Engine.TaskActivation, with line-number citations for each.\n\nMulti-level cascade (maybe_cascade_to_grandparent) explicitly addressed -- PASS. SS3 is a dedicated section: signature change to /7, the same replace-by-recency rule applied per-ancestor, an explicit argument for why one ancestor's step is never suppressed by another's (distinct instance_id => distinct MapSet member => distinct Multi key), and the self-referential-ancestor edge case analyzed rather than ignored (then correctly deferred to OQ-4 as a test-coverage question, not a behavior question).\n\nVERDICT: PASS. All checks pass; no gaps to route back to CODE-DESIGNER.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0392-20260901",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0392-20260901",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to ELIXIR-DEV (WF-03 Step 3) to implement per lib/letflow/design/iss0392-multi-task-records-collision-fix.md."
   },
   "rework_count": 0,
   "max_rework": 3

@@ -1,0 +1,54 @@
+{
+  "handoff_id": "c5b3a346-7889-4f60-8a3e-f5d108d23dbd",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0392-20260901/step-03b-security-reviewer.json",
+  "created_at": "2026-09-01T11:21:52Z",
+  "started_at": "2026-09-01T11:21:52Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0392-multi-task-records-collision-fix.md",
+      "docs/issues/ISS-0392.yaml",
+      "handoffs/WF03-ISS0392-20260901/step-03-rework1-elixir-dev.json"
+    ],
+    "owned_modules": ["lib/letflow/engine.ex"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0392-20260901 (checkout/pull it first). Run the security gate against this run's diff: git diff main...HEAD -- lib/. ELIXIR-DEV's change (commit e30873f8) is entirely within lib/letflow/engine.ex, touching build_complete_task_tail_multi/6 and build_task_activation_and_reconciliation_multi/3 (now /4) plus a new private helper maybe_append_task_activation_multi/7 -- a fix for an Ecto.Multi :task_records key collision (ISS-0392) that, when a SUB_PROCESS child completes synchronously, currently either raises a 500 (unfixed) or, per the fix, conditionally omits one of two duplicate task-activation Multi steps for the same instance_id. This IS a tenant-data write path per your scope test (task-record creation/reconciliation within a tenant-scoped hop-chain transaction). Run the scope test explicitly, then evaluate every one of INV-1 through INV-8 per security-invariants.md against the actual diff -- pay particular attention to whether the conditional omission of a task-activation step could ever cause a tenant's task record to be silently dropped/never-created (as opposed to correctly deferred to the other call site that supersedes it) for any real code path, since that would be a data-integrity/tenant-isolation concern even though the fix's OWN safety argument (design doc SS2.3-SS2.4) already claims this can't happen.",
+    "acceptance_criteria": [
+      "Scope test explicitly run and its verdict stated",
+      "Every one of INV-1..INV-8 given an explicit APPLIES/NOT-APPLICABLE verdict against the actual diff",
+      "Every APPLIES invariant's 'How to verify' procedure actually run, with PASS/FAIL recorded",
+      "Independently assessed whether the skip_task_activation? conditional could ever cause a real tenant's task-activation step to be dropped entirely (not just deferred) -- not merely trusting the design doc's own safety claim",
+      "Single FAIL on any applicable invariant terminates with status FAIL, no partial credit"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

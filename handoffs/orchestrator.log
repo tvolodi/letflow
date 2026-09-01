@@ -1586,3 +1586,16 @@
 2026-09-01T17:04:00Z | RUN_DONE | WF-03 | WF03-ISS0398-20260901 | ORCH -> - | ISS-0398 resolved -- walk_to_gateway/3 replaced with Tarjan-SCC-based collect_leaf_gateways/3. Two real BLOCKER defects found and fixed along the way (exponential-blowup DoS, memo-key unsoundness under legal cycles). scheduler_req188_test.exs guard rescoped, not silently removed. ISS-0400 filed (nested-PARALLEL_GATEWAY-in-branch follow-up). PR #783 merged at 58e3c64e. Queue task 398 released done.
 2026-09-01T17:05:00Z | DISPATCH | WF-03 | WF03-ISS0399-20260901 | ORCH -> ORCH | step-00-git-setup PASS. Queue task 399 locked via get_next_task. depends_on: [394/REQ-211] confirmed done. Branch fix/ISS-0399-attachment-content-scanning-20260901 created from main, pushed.
 2026-09-01T17:32:00Z | RUN_DONE | WF-03 | WF03-ISS0399-20260901 | ORCH -> - | ISS-0399 diagnosis-only: no implementation warranted (no exposed upload path yet, REQ-212 pending, no scanning-provider ADR exists). Scoping note added to docs/issues/ISS-0399.yaml. Queue task 399 released back to open, not done.
+2026-09-01T16:50:11Z | MERGE | WF-03 | WF03-ISS0398-20260901 | ORCH -> - | Merged sibling session's PR #783 (ISS-0398) as commit 58e3c64e -- all-green, unblocking WF03-ISS0400-20260901's own dependency on collect_leaf_gateways/3. Queue task 398 left locked (not force-released) pending confirmation the sibling session is dead.
+2026-09-01T16:50:58Z | STEP_COMPLETE | WF-03 | WF03-ISS0400-20260901 | ORCH -> ORCH | step-00-git-setup PASS. Queue task 400 locked via get_next_task (agent_id letflow-2-orch). Feature branch feature/WF03-ISS0400-20260901 created from main 58e3c64e, pushed.
+2026-09-01T16:52:03Z | DISPATCH | WF-03 | WF03-ISS0400-20260901 | ORCH -> ISSUE-FIXER | step-01-issue-fixer.json PENDING committed at dispatch time
+2026-09-01T17:02:13Z | DISPATCH | WF-03 | WF03-ISS0400-20260901 | ORCH -> CODE-DESIGN-VALIDATOR | step-02b-code-design-validator.json PENDING committed at dispatch time
+2026-09-01T17:05:26Z | REWORK | WF-03 | WF03-ISS0400-20260901/step-02-rework1-code-designer | ORCH -> CODE-DESIGNER | PENDING (rework 1/3, BLOCKER: resolve_nested_split/3 stack-reset non-termination on a live-cycle counterexample)
+2026-09-01T17:13:30Z | DISPATCH | WF-03 | WF03-ISS0400-20260901/step-02b-regate-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | PENDING (regate after design revision)
+2026-09-01T17:16:31Z | DISPATCH | WF-03 | WF03-ISS0400-20260901/step-03-elixir-dev | ORCH -> ELIXIR-DEV | PENDING
+2026-09-01T17:24:53Z | DISPATCH | WF-03 | WF03-ISS0400-20260901/step-03b-security-reviewer | ORCH -> SECURITY-REVIEWER | PENDING
+2026-09-01T17:27:12Z | DISPATCH | WF-03 | WF03-ISS0400-20260901/step-03c-reviewer | ORCH -> REVIEWER | PENDING
+2026-09-01T17:29:31Z | DISPATCH | WF-03 | WF03-ISS0400-20260901/step-04-test-designer | ORCH -> TEST-DESIGNER | PENDING
+2026-09-01T17:36:15Z | DISPATCH | WF-03 | WF03-ISS0400-20260901/step-04b-test-design-validator | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
+2026-09-01T17:39:11Z | DISPATCH | WF-03 | WF03-ISS0400-20260901/step-04c-test-runner | ORCH -> TEST-RUNNER | PENDING
+2026-09-01T18:01:14Z | DISPATCH | WF-03 | WF03-ISS0400-20260901/step-05-issue-fixer | ORCH -> ISSUE-FIXER | PENDING

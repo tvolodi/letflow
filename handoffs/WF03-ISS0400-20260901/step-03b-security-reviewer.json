@@ -1,0 +1,53 @@
+{
+  "handoff_id": "41e1ce42-6ab8-426d-986d-239068661a99",
+  "run_id": "WF03-ISS0400-20260901",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0400-20260901/step-03b-security-reviewer.json",
+  "created_at": "2026-09-01T17:24:53Z",
+  "started_at": "2026-09-01T17:24:53Z",
+  "completed_at": "2026-09-01T17:26:08Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/design/iss0400-nested-parallel-gateway-fix.md",
+      "handoffs/WF03-ISS0400-20260901/step-03-elixir-dev.json"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"]
+  },
+  "task": {
+    "description": "Security gate on the ISS-0400 fix in lib/letflow/engine/transition.ex (diff: git diff main...feature/WF03-ISS0400-20260901 -- lib/letflow/engine/transition.ex). This changes Letflow.Engine.Transition's gateway-dispatch/leaf-lookahead logic (collect_leaf_gateways/3, new resolve_nested_split/3), used at PARALLEL_GATEWAY split-node activation for every tenant's workflow instances -- a tenant-data path per this project's own security-invariants.md scope test. Score every invariant INV-1..INV-8 explicitly, APPLIES or NOT-APPLICABLE, same convention as every other gate in this pipeline. Pay particular attention to whether the new recursive resolve_nested_split/3 path could be driven by attacker/tenant-controlled workflow-definition content (a maliciously or accidentally deeply-nested PARALLEL_GATEWAY chain) into unbounded resource consumption -- this is exactly the DoS-shaped risk class ISS-0398's own design had to fix once already (a naive-visited-set-copy exponential blowup), and CODE-DESIGN-VALIDATOR's two gate passes on this design already checked this from a soundness/termination angle; your job is the security framing of the same mechanism -- is a workflow definition (which a tenant with definition-authoring rights fully controls) able to use this new code path to cause disproportionate resource consumption relative to the definition's own size, and is that bounded the same way ISS-0398's existing @max_nodes 500 bound already covers, or does nesting introduce a multiplicative cost the flat bound doesn't actually catch.",
+    "acceptance_criteria": [
+      "INV-1 through INV-8 each explicitly scored APPLIES/NOT-APPLICABLE with a verdict",
+      "The DoS/resource-consumption framing of the new resolve_nested_split/3 recursive path is explicitly assessed against tenant-controlled workflow-definition content, not just accepted from the design gate's own termination proof",
+      "Verdict is PASS or FAIL with issues at BLOCKER/MAJOR/MINOR severity, specific and actionable"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...feature/WF03-ISS0400-20260901 -- lib/letflow/engine/transition.ex against INV-1..INV-8. Scope test: this diff is pure in-memory graph-traversal logic inside Letflow.Engine.Transition (collect_leaf_gateways/3's PARALLEL_GATEWAY step-4 arm, new resolve_nested_split/3) -- no new/changed Ecto schema, migration, API route, response-shaping code, secret resolution, or lookup-by-ID handler. It does not touch any tenant-data-table/schema/migration path (INV-1's trigger condition), so INV-1 is NOT-APPLICABLE despite this diff being reachable from every tenant's workflow instances -- 'reachable from tenant input' and 'a tenant-scoped data-access path' are different tests, and this file's own scope test lists concrete triggers, none of which this diff hits. INV-1..INV-9 scored individually below.\n\nINV-1 (tenant data isolation): NOT-APPLICABLE. No Ecto schema/migration/query touched; transition.ex's diff is confined to a private in-memory graph walk over a Graph.t() struct already resolved into the calling process -- no :prefix-scoping question arises because no DB access occurs in the changed lines.\nINV-2 (server-side field authorisation): NOT-APPLICABLE. No API response type touched; S4 not started.\nINV-3 (untrusted runtime sandboxing): NOT-APPLICABLE. Not Lua/WASM scripting; S5 not started.\nINV-4 (secrets by reference only): NOT-APPLICABLE. grep for System.get_env/Repo.query/password/secret against lib/letflow/engine/transition.ex returns no hits; the diff resolves no secret material at all.\nINV-5 (not-found/forbidden indistinguishability): NOT-APPLICABLE. No lookup-by-ID endpoint; S4 not started.\nINV-6 (new data-access paths prove scoping): NOT-APPLICABLE as a distinct check -- this diff introduces no new data-access path (no schema/route/host-function); it is a new code path but not a new *data-access* path, so INV-6's own trigger condition is not met. This handoff itself is the meta-invariant's normal operation for this run, not an INV-6 finding.\nINV-7 (no SQL string interpolation): NOT-APPLICABLE. grep for Repo.query in the diff's file: no hits.\nINV-8 (no unhandled crashes on realistic failure paths): APPLIES, and is the invariant this diff's DoS-shaped risk actually falls under -- tenant-controlled workflow-definition content (a tenant with definition-authoring rights can construct arbitrarily nested PARALLEL_GATEWAY chains) drives resolve_nested_split/3's recursion, and unbounded resource consumption in a shared process from tenant-controlled input is exactly INV-8's 'one tenant's malformed input crashing/degrading a shared process' concern, applied to CPU/memory exhaustion rather than a raised exception. VERIFIED, independently re-derived rather than accepted from the design gate's own termination proof (per the handoff's explicit instruction):\n(1) Read resolve_nested_split/3 (transition.ex:1005-1035 on this branch) directly: it performs NO independent re-walk of the graph. Its own per-branch fold calls fold_outgoing_edges/4 verbatim (transition.ex:1085-1102) -- the exact same helper an ordinary branching node's sibling-edge fold already uses -- and its continuation step calls collect_leaf_gateways/3 verbatim (transition.ex:1020). Both entry points thread the caller's own single `state` (memo, index, lowlink, stack, stack_set, next_index) through unmodified -- confirmed by reading the function body, not merely the design doc's claim. This means every node resolve_nested_split/3 or its callees visit is subject to the SAME step-1 memo-hit and step-2 on-stack short-circuits as any other node in the one continuous Tarjan pass -- there is no second, independent traversal that could revisit already-explored subgraphs, which is the specific defect class (naive visited-set-copy causing O(2^k) blowup) ISS-0398 fixed once. Nesting a split therefore adds nodes to the SAME pass's node/edge budget, not a multiplicative factor per level.\n(2) close_scc_or_defer/5 (transition.ex:1118-1133), the function that closes an SCC once a node's local_lowlink == its own index, does an Enum.split_while over state.stack (O(stack depth), paid once per SCC closure) and writes memo entries by Map.put per SCC member -- no full-map copy, no operation whose cost scales with anything other than the SCC's own member count. This is the same closure mechanism ISS-0398 already relies on; resolve_nested_split/3 does not bypass or duplicate it.\n(3) Confirmed graph.ex:158/382 (`@max_nodes 500`, enforced by CHK-07 structural validation) is live and unmodified on this branch -- a workflow definition that exceeds 500 nodes is rejected before it ever reaches Transition.transition/3, so an attacker/tenant cannot present an unboundedly large definition to this code path at all. Given @max_nodes 500 and that gateway_role/2's :split classification requires out_degree > 1 (>=2 branches) plus at least one inner join node, nesting depth is bounded by construction to at most ~166 levels (design doc's own arithmetic, checked and correct: floor((500-1)/3) = 166) -- a small constant, not attacker-controllable past the existing structural cap.\n(4) Net conclusion, reached independently rather than by trusting the design doc's own termination section: nesting does NOT introduce a multiplicative cost the flat @max_nodes bound fails to catch. The recursion depth through resolve_nested_split/3 is itself bounded by the same node-count cap that already bounds the outer walk, and because every call resolve_nested_split/3 makes reuses the shared memoized/on-stack-aware machinery (not a fresh per-level state), total work stays O(nodes + edges) exactly as ISS-0398's existing bound already states -- confirmed by reading the actual fold/closure code, not by accepting the design doc's assertion. This closes the specific concern the task description raised: the new nested-split path is bounded the SAME way ISS-0398's fix already is, via the same @max_nodes structural cap plus the same shared-state memoization discipline, not a new or weaker bound.\nINV-9 (tenant-controlled outbound URL validation): NOT-APPLICABLE. No outbound HTTP request in this diff.\n\nNo BLOCKER, MAJOR, or MINOR issues found. Verdict: PASS -- route to REVIEWER next.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0400-20260901/step-03b-security-reviewer.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0400-20260901",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0400-20260901",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 3c) -- INV-1..INV-9 scored, no BLOCKER found, status PASS."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

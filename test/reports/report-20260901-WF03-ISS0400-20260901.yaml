@@ -1,0 +1,146 @@
+run_id: WF03-ISS0400-20260901
+workflow_id: WF-03
+step: "04c"
+agent: TEST-RUNNER
+generated_at: "2026-09-01T17:59:51Z"
+branch: feature/WF03-ISS0400-20260901
+commit: 31152e11
+
+compile_check:
+  command: "MIX_ENV=test mix compile --warnings-as-errors"
+  raw_output: "(no output -- clean compile, zero warnings)"
+  result: PASS
+
+command: scripts/test_parallel.sh
+mechanism: >
+  Full suite run as N parallel `mix test --partitions N` processes; each
+  partition's own ExUnit Result:/Failed: summary line parsed and summed into
+  one combined total. Exit 0 iff every partition's *parsed* count shows 0
+  failures (parsed count authoritative, not each partition's raw process
+  exit code).
+
+partition_count:
+  N: 4
+  source: explicit TEST_PARALLEL_N=4 override (ISS-0219's known-good value
+    for this host profile -- not left to nproc auto-derivation, to avoid
+    that issue's documented connection-pool-exhaustion crash mode).
+
+environment:
+  toolchain: local (Elixir/mix on PATH).
+  postgres: docker compose (letflow-2-postgres-1, letflow-2-keycloak-1) --
+    both containers already Running before this run (`docker compose up -d`
+    reported no state change). This workspace has its own untracked .env
+    (LETFLOW_DB_PORT=5472), isolating it from any sibling checkout's stack.
+
+result:
+  status: PASS
+  combined_tests: 3025
+  combined_properties: 6
+  combined_total: 3031
+  combined_passed: 3031
+  combined_failures: 0
+  per_partition:
+    - {partition: 1, tests: 722, properties: 3, failures: 0, exit: 0}
+    - {partition: 2, tests: 724, properties: 0, failures: 0, exit: 0}
+    - {partition: 3, tests: 737, properties: 2, failures: 0, exit: 0}
+    - {partition: 4, tests: 842, properties: 1, failures: 0, exit: 0}
+
+raw_output: |
+  test_parallel: N=4 (source: env override)
+  test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+  test_parallel: TEST_POOL_SIZE=21 (computed: N=4, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+  test_parallel: seeding 4 per-partition build paths from _build/test (sequential)
+  test_parallel: partition logs in /tmp/letflow_test_parallel.uIatyy
+  test_parallel: TEST_PARALLEL_GROUP=tp3527 (shared by all 4 partitions)
+  partition 1: 722 tests, 3 properties, 0 failures, exit 0
+  partition 2: 724 tests, 0 properties, 0 failures, exit 0
+  partition 3: 737 tests, 2 properties, 0 failures, exit 0
+  partition 4: 842 tests, 1 property, 0 failures, exit 0
+  ---
+  combined: 3025 tests, 6 properties, 0 failures (3031/3031 passed)
+
+iss_0400_targeted_check:
+  description: >
+    ExUnit partitioning does not print individual test names to the
+    partition logs, so the combined summary alone does not name which
+    partition drew test/letflow/engine/parallel_gateway_test.exs. To
+    directly confirm (not just infer from the 0-failure combined total)
+    that this branch's own changed test file passes on this commit, ran it
+    standalone immediately after the full-suite run, against the same live
+    Postgres/tenant infrastructure the full run just used.
+  command: "MIX_ENV=test mix test test/letflow/engine/parallel_gateway_test.exs"
+  raw_output: |
+    Excluding tags: [:keycloak, :wasm_hang]
+    ..................
+    Finished in 0.6 seconds (0.6s async, 0.00s sync)
+    Result: 18 passed
+  result: >
+    18/18 passed, 0 failures. Matches TEST-DESIGN-VALIDATOR's own
+    independently-reproduced fail-then-pass verdict (step-04b handoff).
+    Confirms this file's contribution to the 3031/3031 combined total both
+    standalone and inside the full parallel run.
+
+known_flake_classes_checked:
+  - id: ISS-0219
+    description: >
+      scripts/test_parallel.sh auto-derived N (nproc) can exceed a host's
+      Postgres/connection budget, crashing all partitions before any
+      result. Mitigated proactively by running with an explicit
+      TEST_PARALLEL_N=4 (the documented known-good value) rather than
+      nproc auto-derivation. Not encountered -- all 4 partitions completed
+      cleanly with real per-partition Result:/Failed: lines.
+  - id: ISS-0352
+    description: >
+      wasmex native-thread-pool exhaustion from genuinely-hung WASM guest
+      calls. Structurally contained since PR #691/#692's fix: all
+      permanently-hanging tests are tagged :wasm_hang and excluded from
+      the default mix test run (test/test_helper.exs), so
+      scripts/test_parallel.sh's partitions -- which run the default,
+      non-`--only wasm_hang` suite -- never touch a genuine hang. This
+      run's own partition logs show "Excluding tags: [:keycloak,
+      :wasm_hang]" is the standing exclusion in effect (confirmed on the
+      standalone parallel_gateway_test.exs run above; the same
+      test_helper.exs config applies to every partition). Not applicable
+      to this run: TEST-RUNNER's own procedure invokes
+      scripts/test_parallel.sh, not `mix letflow.check` (which is what
+      additionally runs the isolated `--only wasm_hang` subprocess where
+      ISS-0352's documented recurrence note manifested on 2026-09-01
+      against a different branch/PR #780). No WASM files are anywhere in
+      this branch's diff.
+  - id: ISS-0380
+    description: >
+      Native-thread survival on a hung Wasmex.start_link/1 instantiation
+      (ModuleRegistry). Unrelated code path -- module_registry.ex is not
+      touched by this branch and this issue's fix was doc-only, no test
+      behavior change. Not applicable.
+
+failure_attribution:
+  count: 0
+  note: >
+    Zero failures in the full-suite combined run (3031/3031 passed across
+    all 4 partitions) and zero failures in the targeted
+    parallel_gateway_test.exs standalone re-run (18/18 passed). Nothing to
+    attribute, nothing to file. No pre-existing/standing failures
+    reproduced on this branch at this commit. No triage against
+    docs/issues/ known-flake classes was needed beyond the proactive
+    TEST_PARALLEL_N=4 override, since no failure occurred to diagnose.
+
+diff_scope_reviewed:
+  - lib/letflow/engine/transition.ex
+  - test/letflow/engine/parallel_gateway_test.exs
+  note: >
+    Per handoffs/WF03-ISS0400-20260901/step-04c-test-runner.json's
+    context.artifacts_in, these are the only two files this branch
+    changes application/test-code-wise (git diff --stat main...HEAD also
+    shows design docs, spec docs, and handoff/status bookkeeping files --
+    no other .ex/.exs files). Both ran clean, standalone and inside the
+    combined full-suite run.
+
+working_tree:
+  note: >
+    Only this handoff file's IN_PROGRESS/COMPLETED transition and this
+    report file are new/modified relative to the branch tip pulled at the
+    start of this run -- no leftover test artifacts.
+
+verdict: PASS
+next_action: Route to ISSUE-FIXER (Step 5, close ISS-0400) per WF-03.

@@ -1,0 +1,57 @@
+{
+  "handoff_id": "b88e4857-addc-4163-83c5-dc8e5119dfaa",
+  "run_id": "WF03-ISS0400-20260901",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0400-20260901/step-04-test-designer.json",
+  "created_at": "2026-09-01T17:29:31Z",
+  "started_at": "2026-09-01T17:30:32Z",
+  "completed_at": "2026-09-01T17:35:17Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/design/iss0400-nested-parallel-gateway-fix.md",
+      "test/letflow/engine/parallel_gateway_test.exs",
+      "docs/issues/ISS-0400.yaml"
+    ],
+    "owned_modules": ["test/letflow/engine/parallel_gateway_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 4: write regression test(s) for the ISS-0400 fix (a PARALLEL_GATEWAY nested inside one branch of an outer PARALLEL_GATEWAY split, previously treated as an immediate terminal leaf by collect_leaf_gateways/3, causing the outer split's own join to be misresolved or rejected). This is a fix to EXISTING (if previously broken) behavior, not new-module code, so the fail-then-pass rule applies in the STANDARD form (not the mutation-testing variant for new modules): show the new test(s) FAIL against the pre-fix commit and PASS against the post-fix commit. Pre-fix commit is main (58e3c64e, which has ISS-0398's fix merged but not ISS-0400's) -- the ISS-0400 fix itself is on this branch at commit 28422ff9 onward. Use the design doc's own worked-trace graph shapes as your primary fixtures: the non-cyclic nested-split-then-continue trace (design section 3.2, first trace) and the cyclic ancestor-back-edge counterexample (design section 3.2, second trace -- this is the graph CODE-DESIGN-VALIDATOR itself constructed and traced twice, once to find the BLOCKER and once to confirm the fix; the design's own fixture 3 (nested_split_ancestor_back_edge_graph/0) and fixture 3b (its negative no-escape twin) in design section 4 are meant to become your actual ExUnit fixtures -- read section 4 in full and implement fixtures 3 and 3b as specified there, plus any other fixture from section 4 not yet present). Add these to test/letflow/engine/parallel_gateway_test.exs alongside the existing 12 ISS-0398 tests. State explicitly in your result how you confirmed the fail-then-pass property (which commit you ran the new tests against for each side, and the actual observed pass/fail outcome, quoting real test output).",
+    "acceptance_criteria": [
+      "New test(s) constructed from the design doc's own fixture 3 (nested split with an ancestor back-edge) and fixture 3b (its negative no-escape twin), per design section 4",
+      "New test(s) demonstrated to FAIL against the pre-fix commit (main, 58e3c64e) with real quoted output",
+      "New test(s) demonstrated to PASS against the post-fix commit (this branch) with real quoted output",
+      "Existing 12 ISS-0398 tests in the same file remain unchanged and still pass",
+      "mix format --check-formatted clean on the test file"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented all 5 fixtures design section 4 specifies for ISS-0400 (fixture 1 nested_parallel_split_graph/0, fixture 2 nested_split_dead_end_graph/0 negative, fixture 3 nested_split_ancestor_back_edge_graph/0 -- CODE-DESIGN-VALIDATOR's own counterexample reproduced exactly, fixture 3b nested_split_ancestor_back_edge_no_escape_graph/0 negative twin, fixture 4 doubly_nested_parallel_split_graph/0 depth-2 confirmation) as 5 new describe blocks / 6 new tests in test/letflow/engine/parallel_gateway_test.exs, appended after the existing 12 ISS-0398 tests without modifying them. Wrote test/specs/ISS-0400.md with the criterion/test-case/rationale table. Fail-then-pass proof performed via a throwaway git worktree (git worktree add ../letflow-2-prefix-worktree 58e3c64e, main's pre-fix commit) with only the new test file copied in (lib/ left as pre-fix code, confirmed via git status --porcelain in the worktree showing only the test file modified). PRE-FIX run (worktree, mix test test/letflow/engine/parallel_gateway_test.exs, deps/build reused from the main tree via MIX_DEPS_PATH/MIX_BUILD_PATH since no network access for a second deps.get): 'Result: 13/18 passed, Failed: 5 tests' -- all 5 failures are the new ISS-0400 tests whose assertion is the actual regression: fixtures 1 (both tests), 3, and 4 fail with 'right: {:error, {:no_matching_join_found, \"outer_split\"}}' (the exact pre-fix symptom), and fixture 3b's negative case fails in the opposite direction (pre-fix code wrongly returns {:ok, ...} with a bogus JoinCounter registered under \"inner_split\" itself, instead of the correct clean failure) -- also a genuine discriminator, not a false positive. Fixture 2's negative test coincidentally already passed pre-fix (already an error there too, via a different mechanism -- expected and consistent with the design doc). The pre-existing 12 ISS-0398 tests + fixture 2 (13 total) pass unchanged in the pre-fix worktree, confirming isolation. POST-FIX run (this branch, HEAD, after worktree removed via git worktree remove ../letflow-2-prefix-worktree --force): 'Result: 18 passed' -- all 12 original + 6 new tests green. mix format --check-formatted test/letflow/engine/parallel_gateway_test.exs: exit 0, no output (clean). mix compile --warnings-as-errors --force: clean, zero warnings. git status --porcelain on the main tree after cleanup shows only the two intended files modified (the handoff itself and the test file) -- no lib/ changes, no worktree residue.",
+    "artifacts_out": [
+      "test/letflow/engine/parallel_gateway_test.exs",
+      "test/specs/ISS-0400.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0400-20260901",
+      "commit_sha_list": ["05094608"],
+      "remote_branch": "origin/feature/WF03-ISS0400-20260901",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

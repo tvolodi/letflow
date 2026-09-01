@@ -1,0 +1,59 @@
+{
+  "handoff_id": "4e2ff571-7414-42c8-b432-6e16ab09558f",
+  "run_id": "WF03-ISS0400-20260901",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0400-20260901/step-04b-test-design-validator.json",
+  "created_at": "2026-09-01T17:36:15Z",
+  "started_at": "2026-09-01T17:36:15Z",
+  "completed_at": "2026-09-01T17:38:14Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/letflow/engine/parallel_gateway_test.exs",
+      "test/specs/ISS-0400.md",
+      "lib/letflow/design/iss0400-nested-parallel-gateway-fix.md",
+      "handoffs/WF03-ISS0400-20260901/step-04-test-designer.json",
+      "docs/issues/ISS-0400.yaml"
+    ],
+    "owned_modules": ["test/letflow/engine/parallel_gateway_test.exs"]
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's coverage for ISS-0400. TEST-DESIGNER reports a fail-then-pass proof via a throwaway git worktree at main (58e3c64e, pre-ISS-0400): 13/18 passed pre-fix (5 genuine failures matching the exact regression symptom), 18/18 passed post-fix. Do NOT accept this claim as reported -- independently reproduce at least the core discriminating case yourself: create your own throwaway git worktree at main (58e3c64e), copy only the new ISS-0400 test code (or the relevant describe blocks) into that pre-fix tree, run it, and confirm for yourself that it genuinely fails there with the same symptom TEST-DESIGNER reports, then confirm it passes on this branch. This is the standard 'apply the reported evidence yourself' rule for a fail-then-pass regression test (WF-03_issue_resolving.md's Step 4 section) -- accepting the reported pass counts is copying a claim, not validating one. Also verify: every acceptance criterion on step-04-test-designer.json's task block actually has a runnable test backing it (fixtures 1/2/3/3b/4 from design section 4), no skipped/pending coverage, fixtures are self-sufficient (no hidden dependency on test execution order or another test's side effects), and the existing 12 ISS-0398 tests are genuinely unchanged (diff them against main). Clean up any worktree you create when done.",
+    "acceptance_criteria": [
+      "At least one new ISS-0400 test independently re-run by you (not TEST-DESIGNER) against a fresh throwaway worktree at main (58e3c64e), confirmed to genuinely fail there with real quoted output",
+      "The same test independently re-run by you against this branch, confirmed to pass with real quoted output",
+      "Every one of design section 4's specified fixtures (1, 2, 3, 3b, 4) has a corresponding runnable test, none skipped",
+      "Fixtures confirmed self-sufficient (no shared mutable state, no execution-order dependency)",
+      "The existing 12 ISS-0398 tests are confirmed byte-identical to main's version (or explain any diff)",
+      "No worktree residue left behind",
+      "Verdict is PASS or FAIL with issues at BLOCKER/MAJOR/MINOR severity"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived TEST-DESIGNER's fail-then-pass claim rather than accepting it, and it holds exactly as reported. Diff check: `git diff 58e3c64e -- test/letflow/engine/parallel_gateway_test.exs` shows 357 insertions(+), 0 deletions, 0 modifications -- the existing 12 ISS-0398 tests are confirmed byte-identical to main's version, not merely 'unchanged in spirit'. Own throwaway worktree: `git worktree add ../letflow-2-iss0400-validator-worktree 58e3c64e` (main's pre-fix commit). Copied ONLY this branch's test/letflow/engine/parallel_gateway_test.exs into the worktree (git status --porcelain in the worktree confirmed exactly one file modified, lib/letflow/engine/transition.ex left as pristine pre-fix code). PRE-FIX run (worktree, `mix test test/letflow/engine/parallel_gateway_test.exs`, deps/build reused from the main tree via MIX_DEPS_PATH/MIX_BUILD_PATH since no network access for a second deps.get): self-observed 'Result: 13/18 passed, Failed: 5 tests' -- the same 5 ISS-0400 tests TEST-DESIGNER reported: fixture 1 (both tests), fixture 3, and fixture 4 fail with `right: {:error, {:no_matching_join_found, \"outer_split\"}}` (exact regression symptom); fixture 3b's negative case fails in the opposite direction with pre-fix code wrongly returning `{:ok, ...}` and a bogus JoinCounter registered under \"inner_split\" itself -- I read this failure output directly, not copied from TEST-DESIGNER's handoff. POST-FIX run (this branch, HEAD, worktree removed first via `git worktree remove ../letflow-2-iss0400-validator-worktree --force`): self-observed 'Result: 18 passed' -- all 12 original + 6 new tests green. `git worktree list` afterward shows only the main tree -- no residue. Fixture coverage: verified all 5 of design section 4's fixtures (1, 2, 3, 3b, 4) map to runnable, non-skipped tests by reading the test file's 5 new describe blocks directly against design doc lines 743-822 -- fixture 1 gets 2 tests (core regression + runtime-boundary), fixtures 2/3/3b/4 get 1 each, all present, none tagged :skip, no 'TODO: implement test' anywhere in the file (grepped, no matches). No hardcoded secrets/connection strings in the test file (grepped for password/secret/api_key/conn strings, no matches). Self-sufficiency: every fixture is a plain 0-arity function building a fresh %Graph{} literal, no setup/on_exit, no Ecto.Sandbox, async: true (same convention as the 12 ISS-0398 tests); ran the full file at --seed 1 and --seed 99999 (18 passed both times) and ran two ISS-0400 tests in isolation by line number (`mix test ...:892 ...:981`, 'Result: 2 passed, 16 excluded') to confirm no execution-order or cross-test dependency. mix format --check-formatted test/letflow/engine/parallel_gateway_test.exs: exit 0, clean. No gaps found; no rework needed.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0400-20260901/step-04b-test-design-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0400-20260901",
+      "commit_sha_list": ["6f0d1ab5"],
+      "remote_branch": "origin/feature/WF03-ISS0400-20260901",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

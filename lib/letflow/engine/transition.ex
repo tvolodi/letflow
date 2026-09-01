@@ -885,14 +885,21 @@ defmodule Letflow.Engine.Transition do
   # design doc §2.2-§2.2.3 -- memoized Tarjan-style single-pass DFS over
   # every path forward from `node_id`, returning the aggregate set of
   # leaves reachable: {:gateway, id} for every PARALLEL_GATEWAY node reached
-  # (an immediate terminal, never traversed past -- §2.3's
-  # nested-PARALLEL_GATEWAY exclusion boundary, entirely unaffected by the
-  # SCC machinery below since a PARALLEL_GATEWAY node is never pushed onto
-  # `stack`), :dead_end for every path that hits an unresolved node_id or a
-  # node with zero outgoing edges (e.g. :END). A live back-edge onto a node
-  # still on `stack` contributes no leaf at all (not even :dead_end) --
-  # it is evidence of "no new information from this edge," not a dead end;
-  # the SCC's real informational content is captured by its escape edges.
+  # that is a real join/pass-through (gateway_role/2 in [:join,
+  # :pass_through]) -- an immediate terminal, never traversed past, since a
+  # PARALLEL_GATEWAY node is never pushed onto `stack`. A PARALLEL_GATEWAY
+  # node classified :split is a *nested* split (design doc
+  # lib/letflow/design/iss0400-nested-parallel-gateway-fix.md §2.2/§2.3) --
+  # resolved recursively via resolve_nested_split/3, which "sees through" it
+  # to whatever lies past its own inner join, sharing this call's own
+  # leaf_search_state() in full, with no reset at that boundary. A
+  # :combined_unsupported PARALLEL_GATEWAY folds into :dead_end (design doc
+  # §2.2 point 4/§3.3). :dead_end also covers every path that hits an
+  # unresolved node_id or a node with zero outgoing edges (e.g. :END). A live
+  # back-edge onto a node still on `stack` contributes no leaf at all (not
+  # even :dead_end) -- it is evidence of "no new information from this
+  # edge," not a dead end; the SCC's real informational content is captured
+  # by its escape edges.
   #
   # Memoized per strongly connected component (SCC), not per node: when a
   # node's own fold finishes with `local_lowlink == index[node_id]`, it is
@@ -931,13 +938,104 @@ defmodule Letflow.Engine.Transition do
             leaves = MapSet.new([:dead_end])
             {:finished, leaves, put_leaf_memo(state, node_id, leaves)}
 
-          %Node{node_type: :PARALLEL_GATEWAY} ->
-            leaves = MapSet.new([{:gateway, node_id}])
-            {:finished, leaves, put_leaf_memo(state, node_id, leaves)}
+          %Node{node_type: :PARALLEL_GATEWAY} = gw_node ->
+            case gateway_role(definition_snapshot, gw_node) do
+              role when role in [:join, :pass_through] ->
+                leaves = MapSet.new([{:gateway, node_id}])
+                {:finished, leaves, put_leaf_memo(state, node_id, leaves)}
+
+              :split ->
+                own_index = state.next_index
+
+                state = %{
+                  state
+                  | index: Map.put(state.index, node_id, own_index),
+                    lowlink: Map.put(state.lowlink, node_id, own_index),
+                    stack: [node_id | state.stack],
+                    stack_set: MapSet.put(state.stack_set, node_id),
+                    next_index: own_index + 1
+                }
+
+                resolve_nested_split(definition_snapshot, gw_node, state)
+
+              :combined_unsupported ->
+                leaves = MapSet.new([:dead_end])
+                {:finished, leaves, put_leaf_memo(state, node_id, leaves)}
+            end
 
           %Node{} ->
             explore_branching_node(definition_snapshot, node_id, state)
         end
+    end
+  end
+
+  # design doc lib/letflow/design/iss0400-nested-parallel-gateway-fix.md §2.3,
+  # §3.2, §3.3 -- resolves a *nested* PARALLEL_GATEWAY split (gateway_role/2
+  # == :split) reached mid-flight, inside an already-open outer-walk call
+  # frame. Threads the exact, unmodified incoming `state` (all six
+  # leaf_search_state() fields -- memo *and* index/lowlink/stack/stack_set/
+  # next_index) into and back out of its own fold over `gw_node`'s own
+  # outgoing edges -- structurally the same fold fold_outgoing_edges/4
+  # already performs for any branching node's own sibling edges (§2.3), and
+  # in fact reuses that same helper rather than reimplementing it. There is
+  # NO reset of stack bookkeeping at this boundary, in either direction: this
+  # call is not a top-level find_matching_join/2 branch entry (whose own
+  # reset is safe only because §2.2.3 proves a top-level call's stack is
+  # always fully unwound by the time it returns) -- it is a mid-flight
+  # continuation of a walk already in progress, and resetting here would
+  # erase a still-open ancestor's own on-stack membership, breaking live
+  # back-edge detection into that ancestor (the exact BLOCKER
+  # CODE-DESIGN-VALIDATOR found in iteration 1 -- infinite recursion).
+  # reset_stack_bookkeeping/1 must never be called here or anywhere in the
+  # call chain this function drives.
+  #
+  # On agreement (gw_node's own branches singleton-agree on one finished
+  # {:gateway, inner_join_id}, modulo any number of live-back-edge {:open, _}
+  # branches contributing no leaf): does not stop at inner_join_id -- resolves
+  # its own single outgoing edge and recurses collect_leaf_gateways/3 on that
+  # edge's target, returning *that* call's result as-is (no repackaging).
+  # inner_join_id with zero outgoing edges, or gw_node's own branches failing
+  # to agree with nothing left open, folds to :dead_end (§3.3). Not memoized
+  # under gw_node.id directly (§3.1) -- every node this function resolves is
+  # memoized individually, under its own node_id, by the ordinary
+  # collect_leaf_gateways/3 calls this function makes; this function is a
+  # pure pass-through of already-computed, already-memoized results.
+  @spec resolve_nested_split(Graph.t(), Node.t(), leaf_search_state()) ::
+          {leaf_search_result(), MapSet.t(branch_leaf()), leaf_search_state()}
+  defp resolve_nested_split(definition_snapshot, %Node{} = gw_node, state) do
+    own_index = Map.fetch!(state.index, gw_node.id)
+    outgoing_edges = Enum.filter(definition_snapshot.edges, &(&1.source == gw_node.id))
+
+    {local_leaves, local_lowlink, state} =
+      fold_outgoing_edges(definition_snapshot, outgoing_edges, own_index, state)
+
+    case MapSet.to_list(local_leaves) do
+      [{:gateway, inner_join_id}] ->
+        {continuation_tag, continuation_leaves, state} =
+          case Enum.find(definition_snapshot.edges, &(&1.source == inner_join_id)) do
+            nil ->
+              {:finished, MapSet.new([:dead_end]), state}
+
+            edge ->
+              collect_leaf_gateways(definition_snapshot, edge.target, state)
+          end
+
+        propagated_lowlink =
+          case continuation_tag do
+            :finished -> local_lowlink
+            {:open, continuation_lowlink} -> min(local_lowlink, continuation_lowlink)
+          end
+
+        close_scc_or_defer(
+          gw_node.id,
+          own_index,
+          continuation_leaves,
+          propagated_lowlink,
+          state
+        )
+
+      _no_singleton_agreement ->
+        close_scc_or_defer(gw_node.id, own_index, MapSet.new([:dead_end]), local_lowlink, state)
     end
   end
 

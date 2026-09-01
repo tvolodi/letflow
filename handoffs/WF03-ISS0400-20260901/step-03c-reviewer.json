@@ -1,0 +1,54 @@
+{
+  "handoff_id": "25297a1b-20b9-41e6-879d-0307c3e3d9f3",
+  "run_id": "WF03-ISS0400-20260901",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0400-20260901/step-03c-reviewer.json",
+  "created_at": "2026-09-01T17:27:12Z",
+  "started_at": "2026-09-01T17:27:12Z",
+  "completed_at": "2026-09-01T17:38:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/design/iss0400-nested-parallel-gateway-fix.md",
+      "handoffs/WF03-ISS0400-20260901/step-03-elixir-dev.json"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"]
+  },
+  "task": {
+    "description": "Idiom/scope/supervision hard gate on the ISS-0400 fix (git diff main...feature/WF03-ISS0400-20260901 -- lib/letflow/engine/transition.ex). SECURITY-REVIEWER already PASSED this diff (INV-8 DoS/resource-consumption framing independently re-derived and cleared). Your check: is the implementation idiomatic OTP/Elixir, does resolve_nested_split/3's reuse of fold_outgoing_edges/4 and close_scc_or_defer/5 (rather than reimplementing similar logic) match this codebase's existing conventions, is there scope creep beyond what the approved design (lib/letflow/design/iss0400-nested-parallel-gateway-fix.md) actually specifies, and does anything here conflict with a standing decision record. ELIXIR-DEV's own handoff (step-03-elixir-dev.json) flags one explicit deviation from a literal reading of the design's prose (pushing the nested-split node onto the Tarjan stack before entering resolve_nested_split/3) that it resolved by following the design's own worked traces instead -- independently confirm that resolution is correct and consistent with the design's stated intent, not just accept ELIXIR-DEV's own justification. This file (lib/letflow/engine/transition.ex) is not a supervision-tree file, but confirm that classification yourself rather than assuming it from this description.",
+    "acceptance_criteria": [
+      "Idiom check: pattern matching, function organization, and error/return shapes consistent with the rest of transition.ex and this codebase's conventions",
+      "Confirmed no scope creep beyond what the approved design specifies",
+      "ELIXIR-DEV's flagged deviation (pushing the nested-split node onto the stack before resolve_nested_split/3, departing from a literal prose-only reading of design section 2.3 in favor of its worked traces) is independently checked against the design doc, not merely accepted",
+      "Confirmed this file is not a supervision-tree file (or flagged if it is)",
+      "No standing decision-record conflict",
+      "Verdict is PASS or FAIL with issues at BLOCKER/MAJOR/MINOR severity, specific and actionable"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Reviewed the diff (git diff main...feature/WF03-ISS0400-20260901 -- lib/letflow/engine/transition.ex) against the approved design (lib/letflow/design/iss0400-nested-parallel-gateway-fix.md) in full, and independently re-derived the one contested point rather than accepting ELIXIR-DEV's own justification. Deviation check: ELIXIR-DEV's handoff flags that it pushed the nested-split node onto the shared Tarjan stack (assigning it index/lowlink, pushing onto stack/stack_set) before entering resolve_nested_split/3, departing from a literal prose-only reading of design section 2.3. I read both worked traces in design section 3.2 directly. The non-cyclic trace: 'collect_leaf_gateways(g, inner_split, state): inner_split fresh (index = 1, pushed) -> step 4, gateway_role(inner_split): ... :split -> resolve_nested_split(g, inner_split_node, state) fires'. The cyclic (validator-counterexample) trace, step 2-3: 'A's single outgoing edge -> recurse into inner_split: fresh -- index[inner_split] = 1, ... pushed, stack = [inner_split, A] ... Step 4: gateway_role(inner_split) ... :split -> resolve_nested_split(...) fires with state exactly as it stands right now'. Both traces unambiguously assign an index and push the nested-split node onto stack/stack_set BEFORE resolve_nested_split/3 is entered, and the eventual closure check (local_lowlink == index[node_id]) in both traces (closing inner_split at index 1 in trace 1, closing A/inner_split/ia as one SCC at index 0 in trace 2) is only coherent against an index that was actually assigned and a node that was actually pushed. Section 2.3's prose is about NOT RESETTING stack/stack_set/index/lowlink/next_index at the resolve_nested_split/3 boundary -- it says nothing about skipping the push, and reading it as 'no push' would produce closure checks with no matching index, contradicting both traces line by line. The design doc states explicitly (Sources read, and repeated at the top of section 3.2) that these traces are 'load-bearing and re-derived, not merely illustrative.' ELIXIR-DEV's resolution is correct and required by the design, not scope creep or an unauthorized invention. Standard checks: (1) Idiom -- resolve_nested_split/3 mirrors explore_branching_node/3's existing shape (assign index, push, fold outgoing edges, close_scc_or_defer), differing only by the role-dispatch entry and the continuation-past-inner-join step the design specifies; pattern matching, @spec placement, and return-shape conventions (leaf_search_result(), MapSet.t(branch_leaf()), leaf_search_state() triple) are consistent with every other function in this module. (2) Reuse -- fold_outgoing_edges/4 and close_scc_or_defer/5 are called verbatim, no parallel/duplicate SCC-closure or edge-folding logic was written, matching design section 2.3's explicit instruction ('reused verbatim, not reimplemented') and section 3.1's open questions 1/4. (3) Scope -- diff is confined to the one %Node{node_type: :PARALLEL_GATEWAY} arm of collect_leaf_gateways/3 (dispatching via the existing gateway_role/2, itself unchanged) plus the one new private resolve_nested_split/3 whose @spec matches design section 2.3 verbatim; collect_leaf_gateways/3's own @spec/contract is untouched, so no call site needed to change. No abstractions, behaviours, or generic plumbing introduced beyond what the design specifies -- no scope creep. (4) Supervision -- verified directly (not assumed): grepped the file for use GenServer/gen_statem/Supervisor/DynamicSupervisor and found none; Letflow.Engine.Transition is a plain functional module with no process of its own, so this diff cannot affect Letflow.InstanceSupervisor's per-instance isolation. (5) Decision records -- checked docs/migration/decisions/0001 through 0016; none bear on internal graph-traversal/algorithm implementation, no conflict. Independently re-ran verification rather than trusting ELIXIR-DEV's reported numbers: mix compile --warnings-as-errors produced no output (clean); mix format --check-formatted lib/letflow/engine/transition.ex exited 0 (clean); mix test test/letflow/engine/parallel_gateway_test.exs -> 'Result: 12 passed', 0 failures. No BLOCKER, MAJOR, or MINOR issues found. No type-safety gap worth filing to docs/issues/ was identified beyond what ISS-0398's own design already covers (branch_leaf() stays a two-variant type by design, justified in section 2.1/3.3 of this same design doc, not an oversight).",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0400-20260901",
+      "commit_sha_list": ["8fa735c3"],
+      "remote_branch": "origin/feature/WF03-ISS0400-20260901",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

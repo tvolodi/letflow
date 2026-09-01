@@ -970,6 +970,7 @@ defmodule Letflow.Engine do
         :active,
         current_node_ids,
         initial_variables,
+        new_instance_state.join_counters,
         prefix
       )
     end)
@@ -1151,6 +1152,17 @@ defmodule Letflow.Engine do
   # surfaces as an Ecto.Changeset unique-constraint error, mapped here to
   # :duplicate_correlation_key (AC4); any other changeset failure is passed
   # through raw (create_error()'s Ecto.Changeset.t() catch-all clause).
+  #
+  # join_counters (ISS-0397 fix, extending the design's own §2.4 write-site
+  # fix to this Multi's own M1 insert, not only reconcile_projection/5):
+  # create/2's own initial hop-chain (activate/3, still pure/in-memory) can
+  # itself run a PARALLEL_GATEWAY split -- the exact shape both this file's
+  # own regression tests and the design doc's §5.1/§5.3 fixtures use (split
+  # immediately after START) -- leaving new_instance_state.join_counters
+  # non-empty at insert time. Persisting it here too (not just on later
+  # reconcile_projection/5 calls) closes the same INV-EE48-7 gap for a
+  # cohort opened during create/2 itself, which reconcile_projection/5 alone
+  # cannot cover since it is never called from create/2's own Multi.
   defp insert_instance_projection(
          repo,
          instance_id,
@@ -1159,6 +1171,7 @@ defmodule Letflow.Engine do
          status,
          current_node_ids,
          initial_variables,
+         join_counters,
          prefix
        ) do
     attrs = %{
@@ -1167,7 +1180,8 @@ defmodule Letflow.Engine do
       definition_id: definition.id,
       correlation_key: correlation_key,
       current_nodes: current_node_ids,
-      variables: initial_variables
+      variables: initial_variables,
+      join_counters: SnapshotWriter.serialize_join_counters(join_counters)
     }
 
     %InstanceProjection{}
@@ -1807,9 +1821,18 @@ defmodule Letflow.Engine do
     |> Enum.map(&%Token{token_id: to_string(&1.token_id), node_id: &1.node_id, branch_id: nil})
   end
 
-  # §6.5 -- assembling the seed InstanceState.t(). join_counters is always
-  # %{} (design doc §6.5, §11 INV-EE48-7, MAJOR OQ-3): no table persists
-  # JoinCounter state across calls today.
+  # §6.5 -- assembling the seed InstanceState.t(). join_counters is read from
+  # the same `%InstanceProjection{}` struct fetch_and_lock_instance_projection/3
+  # (M2) already locked earlier in this same transaction (ISS-0397 fix,
+  # lib/letflow/design/iss0397-join-counters-fix.md §2.5) -- NOT a second,
+  # independent, unlocked Repo read, and NOT a read of the periodic
+  # `instance_state_snapshots` table (SnapshotWriter.latest_snapshot/2,
+  # which is a crash-recovery artifact current only as of up to `interval`
+  # events ago -- reading it here would silently reintroduce staleness,
+  # exactly what INV-EE48-7 forbids). This closes REQ-048 design doc's own
+  # MAJOR OQ-3 / INV-EE48-7 gap: a cross-call PARALLEL_GATEWAY join (split
+  # committed by one complete_task/3 call, join reached by a later, separate
+  # call) can now durably observe the cohort the split opened.
   defp build_instance_state(
          %InstanceProjection{} = projection,
          active_tokens,
@@ -1821,7 +1844,7 @@ defmodule Letflow.Engine do
       tokens: active_tokens,
       variables: projection.variables,
       pending_task_nodes: pending_task_tokens,
-      join_counters: %{}
+      join_counters: SnapshotWriter.deserialize_join_counters(projection.join_counters)
     }
   end
 
@@ -2818,6 +2841,20 @@ defmodule Letflow.Engine do
   # M10 -- projection reconciliation (design doc §8.3). last_event_seq is not
   # set here -- EventStore.append/2's own update_projection/3 (M9's own
   # nested Multi) already advances it as part of the :event step above.
+  #
+  # join_counters is persisted unconditionally on every call (ISS-0397 fix,
+  # lib/letflow/design/iss0397-join-counters-fix.md §2.4) -- not just calls
+  # that touched a gateway: a hop-chain with no outstanding cohort serialises
+  # an empty map, which is both correct and idempotent against the column's
+  # own `%{}` default. This function is shared between
+  # build_complete_task_tail_multi/6's success tail and
+  # persist_timer_fired_advance/7's own `:projection` Multi step -- both
+  # already pass the fully-dispatched `final_instance_state` whose
+  # `.join_counters` Transition.transition/3's hop-chain may have just
+  # mutated, so fixing this one function covers both call sites. No new
+  # Repo call, no new lock: this is one more field on the UPDATE this
+  # transaction was already issuing against the row fetch_and_lock_instance_projection/3
+  # (M2) locked earlier.
   defp reconcile_projection(
          repo,
          %InstanceProjection{} = projection,
@@ -2828,7 +2865,8 @@ defmodule Letflow.Engine do
     attrs = %{
       status: final_instance_state.status,
       current_nodes: Enum.map(final_instance_state.tokens, & &1.node_id),
-      variables: final_instance_state.variables
+      variables: final_instance_state.variables,
+      join_counters: SnapshotWriter.serialize_join_counters(final_instance_state.join_counters)
     }
 
     attrs =

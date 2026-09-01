@@ -43,6 +43,7 @@ defmodule Letflow.Engine.TimerWiringTest do
   alias Letflow.Definitions
   alias Letflow.Engine
   alias Letflow.Engine.Reconstruction
+  alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.Engine.TaskActivation
   alias Letflow.Engine.TokenRecord
   alias Letflow.EventStore.Event
@@ -101,6 +102,17 @@ defmodule Letflow.Engine.TimerWiringTest do
       %{
         actor_id: Ecto.UUID.generate(),
         idempotency_key: unique_name("req187-cancel")
+      },
+      overrides
+    )
+  end
+
+  defp complete_attrs(overrides \\ %{}) do
+    Map.merge(
+      %{
+        output_variables: %{},
+        actor_id: Ecto.UUID.generate(),
+        idempotency_key: unique_name("req187-complete")
       },
       overrides
     )
@@ -206,6 +218,45 @@ defmodule Letflow.Engine.TimerWiringTest do
         %{"id" => "e2", "source" => "split", "target" => "tmr_a"},
         %{"id" => "e3", "source" => "split", "target" => "tmr_b"},
         %{"id" => "e4", "source" => "tmr_a", "target" => "join"},
+        %{"id" => "e5", "source" => "tmr_b", "target" => "join"},
+        %{"id" => "e6", "source" => "join", "target" => "end"}
+      ]
+    }
+  end
+
+  # START -> PARALLEL_GATEWAY(split) -> HUMAN_TASK(a) / TIMER(b) -> PARALLEL_GATEWAY(join) -> END.
+  # ISS-0397 timer-fire parity fixture (design doc §5.3): unlike
+  # graph_multi_timer_parallel/0 above, only ONE branch is a :TIMER node, so
+  # create/2's own single hop-chain arms exactly one pending timer (no
+  # prepare_timer_arms/4 multi-timer guard involved) and leaves task_a
+  # genuinely PENDING -- letting a real complete_task/3 call open the join
+  # cohort and a real, separate advance_after_timer_fired/3 call (via
+  # Scheduler.poll_and_fire/1) close it, exercising reconcile_projection/5's
+  # shared write path and build_instance_state/3's shared read path from the
+  # timer-fire side.
+  defp graph_parallel_split_task_and_timer(duration) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "split", "node_type" => "PARALLEL_GATEWAY"},
+        %{
+          "id" => "task_a",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "approver_a"}
+        },
+        %{
+          "id" => "tmr_b",
+          "node_type" => "TIMER",
+          "attributes" => %{"duration_iso8601" => duration}
+        },
+        %{"id" => "join", "node_type" => "PARALLEL_GATEWAY"},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "split"},
+        %{"id" => "e2", "source" => "split", "target" => "task_a"},
+        %{"id" => "e3", "source" => "split", "target" => "tmr_b"},
+        %{"id" => "e4", "source" => "task_a", "target" => "join"},
         %{"id" => "e5", "source" => "tmr_b", "target" => "join"},
         %{"id" => "e6", "source" => "join", "target" => "end"}
       ]
@@ -721,6 +772,70 @@ defmodule Letflow.Engine.TimerWiringTest do
       assert replayed.status == :active
       assert [replayed_token] = replayed.tokens
       assert replayed_token.node_id == "task"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0397 -- join_counters persistence parity between complete_task/3 and
+  # advance_after_timer_fired/3 (design doc
+  # lib/letflow/design/iss0397-join-counters-fix.md §5.3). Both call
+  # reconcile_projection/5 (M10) and build_instance_state/3 (M3), so a cohort
+  # opened by a real, separate complete_task/3 call must be durably readable
+  # (and closeable) by a real, separate advance_after_timer_fired/3 call --
+  # the exact cross-call shape the pre-fix hardcoded `join_counters: %{}`
+  # broke.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0397: a join cohort opened by complete_task/3 is durably closed by advance_after_timer_fired/3" do
+    test "task branch completes first (separate call), timer branch fires (separate call), join fires exactly once" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_parallel_split_task_and_timer("P0D"))
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      [task_a] = Repo.all(EngineTask, prefix: schema_name)
+      assert task_a.node_id == "task_a"
+      assert task_a.status == :pending
+
+      assert [%Timer{node_id: "tmr_b", status: "pending"}] =
+               timers_for(schema_name, instance_id)
+
+      # First, separate call: completes the HUMAN_TASK branch. The join has
+      # not fired yet (one branch still outstanding on the TIMER side) --
+      # the instance stays :active, and the cohort's `received_from_branches`
+      # entry for this branch must be durably persisted on
+      # instance_projections.join_counters (ISS-0397 fix), not merely held
+      # in this call's own in-memory InstanceState.
+      assert {:ok, complete_result} =
+               Engine.complete_task(task_a.id, complete_attrs(), prefix: schema_name)
+
+      assert complete_result.instance_status == :active
+
+      projection_after_task = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
+      assert projection_after_task.status == :active
+      assert map_size(projection_after_task.join_counters) == 1
+      [{_join_node_id, cohort_after_task}] = Map.to_list(projection_after_task.join_counters)
+      assert cohort_after_task["received_from_branches"] != []
+
+      # Second, separate call: the TIMER branch fires via Scheduler's real
+      # poll-and-fire path, re-entering advance_after_timer_fired/3. Before
+      # the ISS-0397 fix, build_instance_state/3 hardcoded `join_counters:
+      # %{}` here, so this call's own dispatch would never find the cohort
+      # the first call opened -- `dispatch_parallel_join/4`'s
+      # `{:error, {:unknown_branch_id, _}}` guard. With the fix, this call
+      # reads the same durably-persisted cohort and the join fires.
+      assert %{fired: 1} = Scheduler.poll_and_fire(schema_name)
+
+      final_projection = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
+      assert final_projection.status == :completed
+      assert final_projection.join_counters == %{}
+
+      final_tasks = Repo.all(EngineTask, prefix: schema_name)
+      assert [%EngineTask{status: :completed}] = final_tasks
+
+      [final_timer] = timers_for(schema_name, instance_id)
+      assert final_timer.status == "fired"
     end
   end
 end

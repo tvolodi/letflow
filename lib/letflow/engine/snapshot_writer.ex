@@ -236,7 +236,7 @@ defmodule Letflow.Engine.SnapshotWriter do
       "tokens" => Enum.map(instance_state.tokens, &token_to_map/1),
       "variables" => instance_state.variables,
       "pending_task_nodes" => Enum.map(instance_state.pending_task_nodes, &token_to_map/1),
-      "join_counters" => Map.new(instance_state.join_counters, &join_counter_entry_to_map/1)
+      "join_counters" => serialize_join_counters(instance_state.join_counters)
     }
   end
 
@@ -247,6 +247,31 @@ defmodule Letflow.Engine.SnapshotWriter do
       "branch_id" => token.branch_id,
       "waiting_child_instance_id" => token.waiting_child_instance_id
     }
+  end
+
+  # ---------------------------------------------------------------------
+  # ISS-0397 (design doc §2.3) -- the JoinCounter.t() <-> plain-map codec,
+  # promoted from private helpers inlined in serialize_state/1 /
+  # deserialize_state/2 to public functions so Letflow.Engine can reuse the
+  # exact same, already-REQ-054-reviewed format to persist join_counters on
+  # `instance_projections` on every complete_task/3 / advance_after_timer_fired/3
+  # call, not just this module's own periodic (every-`interval`-events)
+  # snapshot writes. Calling these two functions is NOT the same as calling
+  # this module's own take_snapshot/4 / maybe_take_snapshot/4 / latest_snapshot/2
+  # -- Letflow.Engine never reads or writes the `instance_state_snapshots`
+  # table itself; it calls only these pure map-shape functions.
+  # ---------------------------------------------------------------------
+
+  @doc """
+  Serialises a `JoinCounter.t()` cohort map (keyed by `join_node_id`) to a
+  plain, JSON-encodable map -- the exact format `instance_state_snapshots`
+  already stores its own `"join_counters"` key in (design doc §2.3), reused
+  verbatim by `Letflow.Engine.reconcile_projection/5` (ISS-0397) to persist
+  `instance_projections.join_counters`. Pure, no `Ecto`/`Repo` dependency.
+  """
+  @spec serialize_join_counters(%{optional(String.t()) => JoinCounter.t()}) :: map()
+  def serialize_join_counters(join_counters) do
+    Map.new(join_counters, &join_counter_entry_to_map/1)
   end
 
   defp join_counter_entry_to_map({join_node_id, %JoinCounter{} = counter}) do
@@ -260,6 +285,18 @@ defmodule Letflow.Engine.SnapshotWriter do
      }}
   end
 
+  @doc """
+  Inverse of `serialize_join_counters/1` -- deserialises a plain map (as
+  read back from either `instance_state_snapshots.state["join_counters"]` or
+  `instance_projections.join_counters`, ISS-0397) to a
+  `%{optional(String.t()) => JoinCounter.t()}` cohort map. Pure, no
+  `Ecto`/`Repo` dependency.
+  """
+  @spec deserialize_join_counters(map()) :: %{optional(String.t()) => JoinCounter.t()}
+  def deserialize_join_counters(join_counters) do
+    Map.new(join_counters, &join_counter_entry_from_map/1)
+  end
+
   defp deserialize_state(instance_id, %{} = state) do
     %InstanceState{
       instance_id: instance_id,
@@ -267,7 +304,7 @@ defmodule Letflow.Engine.SnapshotWriter do
       tokens: Enum.map(Map.fetch!(state, "tokens"), &token_from_map/1),
       variables: Map.fetch!(state, "variables"),
       pending_task_nodes: Enum.map(Map.fetch!(state, "pending_task_nodes"), &token_from_map/1),
-      join_counters: Map.new(Map.fetch!(state, "join_counters"), &join_counter_entry_from_map/1)
+      join_counters: deserialize_join_counters(Map.fetch!(state, "join_counters"))
     }
   end
 

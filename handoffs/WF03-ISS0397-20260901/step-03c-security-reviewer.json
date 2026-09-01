@@ -1,0 +1,97 @@
+{
+  "handoff_id": "WF03-ISS0397-20260901-step-03c",
+  "run_id": "WF03-ISS0397-20260901",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0397-20260901/step-03c-security-reviewer.json",
+  "created_at": "2026-09-01T19:08:28Z",
+  "started_at": "2026-09-01T19:04:43Z",
+  "completed_at": "2026-09-01T19:08:28Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-048", "REQ-054", "REQ-208", "REQ-051", "REQ-052"],
+    "issue_ids": ["ISS-0397"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0397-join-counters-fix.md",
+      "handoffs/WF03-ISS0397-20260901/step-03-elixir-dev.json"
+    ],
+    "artifacts_reviewed": [
+      "priv/repo/migrations/20260901030001_add_join_counters_to_instance_projections.exs",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/snapshot_writer.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/iss0397_join_counters_test.exs",
+      "test/letflow/engine/timer_wiring_test.exs",
+      "test/letflow/engine/snapshot_writer_test.exs",
+      "test/letflow/simulation/req208_meridian_test.exs",
+      "docs/anti-patterns.md"
+    ],
+    "branch_name": "fix/ISS-0397-join-counters-20260901",
+    "diff_base": "origin/main...HEAD (commit 31444783)"
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER gate (WF-03 Step 3c) on ELIXIR-DEV's ISS-0397 implementation against docs/agents/instructions/security-invariants.md INV-1..INV-8, with specific scrutiny of the create/2 M1 insert_instance_projection/8 extension beyond the gate-approved design's literal text.",
+    "acceptance_criteria": [
+      "Every INV-1..INV-8 assessed APPLIES/NOT-APPLICABLE against the real diff, with verification recorded for each APPLIES invariant",
+      "Migration reviewed: tenant-scoped, reversible, default-backfill safety for live rows",
+      "No cross-tenant read/write introduced",
+      "Genuine concurrent Task.async regression test confirmed to exercise real concurrency",
+      "cancel_instance/3 confirmed untouched (REQ-052 coordination note is a flag only, not a silent code change)",
+      "create/2 extension assessed: same mechanism as approved design or new risk; scope-creep check"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "invariant_assessment": {
+      "INV-1_tenant_data_isolation": {
+        "verdict": "APPLIES",
+        "finding": "PASS -- (a) all new read/write sites use prefix-scoped Repo/Multi calls: reconcile_projection/5's repo.update via the Multi already inside the tenant-schema transaction, insert_instance_projection/8's repo.insert(prefix: prefix), build_instance_state/3 reads only the already-locked/already-prefix-scoped %InstanceProjection{} struct (no new Repo call at all). (b) migration is an ALTER on the existing tenant-scoped instance_projections table, guarded by `if prefix() do`, registered in both halves (migration file + Letflow.TenantProvisioning.@tenant_scoped_migration_manifest at tenant_provisioning.ex line ~485) -- confirmed by reading the diff, not the table is not left reachable in public. (c) instance_projections carries no tenant_id column at all (Decision 0006 D2, restated in the schema moduledoc) -- (c) not applicable to this table."
+      },
+      "INV-2_field_authorisation": {"verdict": "NOT-APPLICABLE", "finding": "No API response-shaping code touched; S4 not started."},
+      "INV-3_sandboxing": {"verdict": "NOT-APPLICABLE", "finding": "No scripting/plugin path touched; S5 not started."},
+      "INV-4_secrets": {
+        "verdict": "APPLIES",
+        "finding": "PASS -- migration resolves nothing secret; grep for Repo.query and hardcoded-secret heuristics against every changed lib/priv file returned zero hits. No secret material threaded through join_counters/InstanceProjection at all (pure JSON-object cohort-tracking data)."
+      },
+      "INV-5_not_found_forbidden": {"verdict": "NOT-APPLICABLE", "finding": "No lookup-by-ID API endpoint touched; S4 not started."},
+      "INV-6_new_paths_prove_scoping": {"verdict": "APPLIES", "finding": "PASS -- satisfied by this handoff itself: this file states which invariants apply and how each was verified."},
+      "INV-7_no_sql_interpolation": {
+        "verdict": "APPLIES",
+        "finding": "PASS -- migration uses pure Ecto DSL (`alter table(...) do add :join_counters, :map, ... end`), no Repo.query/raw SQL anywhere in the diff. grep -rn \"Repo.query\" against every changed lib/priv file returned zero hits (the one Repo.query! hit found in test/letflow/engine/snapshot_writer_test.exs's drop_schema!/1 helper is pre-existing code, not part of this diff -- confirmed via `git diff origin/main...HEAD` on that file, the added hunk is a pure in-memory codec test with zero Repo/DB use)."
+      },
+      "INV-8_no_unhandled_crashes": {
+        "verdict": "APPLIES",
+        "finding": "PASS -- grep for the bare-match heuristic against lib/letflow/engine.ex found only pre-existing lines (none of them are new lines in this diff, confirmed via `git diff ... | grep '^+.*{:ok, .*} = '` returning empty). No new bare pattern-match-that-can-raise introduced on any external-I/O/tenant-input path by this change."
+      }
+    },
+    "migration_review": "Additive-only, single `add :join_counters, :map, null: false, default: %{}` column matching the already-shipped `variables` column idiom verbatim. `null: false, default: %{}` is safe against the design's own claim (re-confirmed by reading insert_instance_projection/8's own call site) that instance_projections has had live writers via create/2 since REQ-045 -- a DB-level default backfills every existing row atomically as part of the ALTER, no separate backfill migration needed for a scalar default. Tenant-scoped `if prefix() do` guard present; registered in TenantProvisioning's manifest (both the tuple entry and the migration's own guard, confirmed present). ELIXIR-DEV's own handoff attests migrate/rollback/migrate all ran clean in-session -- not independently re-run here (mix is not available in this review sandbox's PATH, confirmed: `which mix`/`type mix` both fail, no asdf/mise shims found) -- this is a toolchain gap in this review environment, not a finding against the change; flagging per core-directives rather than fabricating a run.",
+    "tenant_isolation_review": "No cross-tenant read/write introduced. build_instance_state/3's new read is not a second Repo call at all -- it reads projection.join_counters off the exact %InstanceProjection{} struct already passed in as an argument (the one fetch_and_lock_instance_projection/3 locked earlier in the same transaction), confirmed by reading the function body: no repo/prefix argument exists on build_instance_state/3's signature, so there is no code path by which it could read a different tenant's or a different instance's row.",
+    "concurrency_test_review": "test/letflow/iss0397_join_counters_test.exs's 'concurrent sibling-branch completion' test (lines ~224-298) uses Elixir.Task.async/1 (two genuinely independent BEAM processes) + Elixir.Task.await_many/2, against a tenant provisioned via TenantFixture.provisioned_tenant!/1 which calls Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto) (confirmed by reading test/support/tenant_fixture.ex line 191) -- :auto mode gives each spawned Task its own real Postgres connection rather than serializing them under shared sandbox ownership, so this is genuine concurrent execution on two distinct task_ids of the same instance, not two sequential calls dressed up. Assertions correctly avoid asserting which branch wins the M2 lock race (non-deterministic), only asserting the outcome (exactly one :completed, one :active, join_counters == %{} after both commit, both tasks :completed) -- matches the design's own §3.3/§5.2 correctness argument exactly. Not independently executed in this review sandbox (mix unavailable, see migration_review note); ELIXIR-DEV's handoff attests 2/2 passes across 3 repeated runs plus a full-suite run showing 3031/3033 passing with the only 2 failures being a pre-existing, unrelated rustc-toolchain gap.",
+    "create2_extension_assessment": {
+      "verdict": "IN-FAMILY, NOT SCOPE CREEP -- concur with ELIXIR-DEV's own self-flag",
+      "q1_same_mechanism": "Yes, genuinely the same mechanism: same field (join_counters), same codec (SnapshotWriter.serialize_join_counters/1, the identical public function reconcile_projection/5 now calls), no new lock, no new table, no new transaction boundary. insert_instance_projection/8 is called from persist/12's own pre-existing Multi.run(:instance_projection, ...) step (engine.ex ~956-976) -- a Multi step that already existed and already inserted this same InstanceProjection row for every other column (status, current_nodes, variables); this change adds one more field to an attrs map an INSERT was already going to issue, exactly the same shape as reconcile_projection/5's own change to an UPDATE it was already going to issue.",
+      "q2_locking_discipline": "Different code path, correctly so, and the design's concurrency argument does not need to apply to it. insert_instance_projection/8 runs inside a plain repo.insert(prefix: prefix) against a freshly-generated instance_id -- confirmed by reading persist/12's Multi.run(:instance_projection, ...) step and insert_instance_projection/8's body: this is instance creation, definitionally a brand-new row with no pre-existing sibling row for a concurrent transaction to race on (no other transaction can hold or contend for a FOR UPDATE lock on a row that does not exist until this INSERT commits). The design's §3.1-§3.3 concurrency argument is built entirely around fetch_and_lock_instance_projection/3's FOR UPDATE on an EXISTING row across separate complete_task/3/advance_after_timer_fired/3 calls -- that argument is simply inapplicable here, not violated, because create/2 is single-writer-by-construction for this row at this point in time. No new race is introduced by this extension.",
+      "q3_scope_check": "Confirmed narrowly targeted: the only behavioral change is threading new_instance_state.join_counters (a value create/2's own hop-chain already computed in memory via the same Transition.transition/3 pure call the rest of the design already relies on) into the same INSERT's attrs map via the same serialize_join_counters/1 call. No new table, no new endpoint, no new external surface, no change to create/2's return shape or error handling. Directly closes ISS-0397's reported symptom for the one hop-chain shape (split immediately after START, within create/2's own initial dispatch) that the design's own §5.1/§5.3 test fixtures already exercise and that ELIXIR-DEV's regression test caught failing pre-fix (map_size(join_counters) == 0 immediately after Engine.create/2). Documented transparently: flagged in the ELIXIR-DEV handoff's routing note, in an engine.ex code comment at the call site, and in a new docs/anti-patterns.md entry -- not silently added.",
+      "recommendation_for_reviewer": "REVIEWER should confirm from an OTP-idiom/design-process-integrity angle that this warrants only a rework-note (anti-patterns entry, already added) rather than sending the design doc itself back for a rework cycle -- SECURITY-REVIEWER's own assessment is that a design-rework cycle is not warranted here since the fix is mechanically identical to the approved design, but that call also sits partly in REVIEWER's lane (scope-creep/process-integrity gate)."
+    },
+    "req052_coordination_check": "Confirmed cancel_instance/3 and cancel_instance_projection/4 are untouched: `git diff origin/main...HEAD -- lib/letflow/engine.ex | grep 'cancel_instance'` returns zero hits. ELIXIR-DEV correctly left REQ-052's decision-record-drift observation (its cited blocker -- 'the join-counters persistence gap' -- is now gone) as a flag for ORCH in its own handoff routing note rather than unilaterally wiring {:cancel_branch, _} through cancel_instance/3. No action needed from SECURITY-REVIEWER beyond confirming the non-change; this is an ORCH/decision-record item, not a security defect.",
+    "hygiene_check": "No secrets in any changed file. No scope creep beyond ISS-0397 plus the one flagged in-family create/2 extension (the req208_meridian_test.exs rewrite is a necessary consequence of the fix changing prior-broken assertions to now-correct ones, and its own incidentally-found task-ordering issue is documented in-place, not silently introduced as unrelated behavior).",
+    "summary": "PASS. All applicable invariants (INV-1, INV-4, INV-6, INV-7, INV-8) verified against the real diff with no findings. INV-2/3/5 correctly NOT-APPLICABLE (pre-S4/S5). The create/2 insert_instance_projection/8 extension beyond the design's literal text is genuinely in-family: same field, same codec, no new lock/table/transaction boundary, and the design's concurrency argument simply does not need to apply to a fresh-row INSERT with no concurrent sibling. Routing to REVIEWER (Step 3d) for OTP-idiom/scope-creep/decision-record-consistency review, with explicit attention requested on the create/2 extension (assessed above) and the still-open REQ-052 decision-record-drift flag (an ORCH item, not a REVIEWER action item, but relevant context).",
+    "routing": "Route to Step 3d REVIEWER."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": [
+    {
+      "gate": "SECURITY-REVIEWER",
+      "status": "PASS",
+      "at": "2026-09-01T19:08:28Z"
+    }
+  ]
+}

@@ -302,6 +302,54 @@ defmodule Letflow.Engine.SnapshotWriterTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # ISS-0397 -- serialize_join_counters/1 / deserialize_join_counters/1 (design doc
+  # §5.4), promoted from private helpers inlined in serialize_state/1 /
+  # deserialize_state/2 (still exercised end-to-end by AC2 above) to public
+  # functions so Letflow.Engine can reuse the exact same codec to persist
+  # `instance_projections.join_counters`. Pure, single-process, no Repo/DB --
+  # confirms the promoted, now-public functions behave identically to the
+  # already-AC2-tested inline logic they replace.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0397 -- serialize_join_counters/1 / deserialize_join_counters/1 round trip" do
+    test "round-trips a join_counters map with non-empty expected/received/cancelled MapSets" do
+      join_counters = %{
+        "join1" => %JoinCounter{
+          join_node_id: "join1",
+          origin_token_id: Ecto.UUID.generate(),
+          expected_from_branches: MapSet.new(["b1", "b2", "b3"]),
+          received_from_branches: MapSet.new(["b1"]),
+          cancelled_branches: MapSet.new(["b3"])
+        }
+      }
+
+      serialized = SnapshotWriter.serialize_join_counters(join_counters)
+
+      assert %{
+               "join1" => %{
+                 "join_node_id" => "join1",
+                 "origin_token_id" => origin_token_id,
+                 "expected_from_branches" => expected,
+                 "received_from_branches" => received,
+                 "cancelled_branches" => cancelled
+               }
+             } = serialized
+
+      assert origin_token_id == join_counters["join1"].origin_token_id
+      assert Enum.sort(expected) == ["b1", "b2", "b3"]
+      assert received == ["b1"]
+      assert cancelled == ["b3"]
+
+      assert SnapshotWriter.deserialize_join_counters(serialized) == join_counters
+    end
+
+    test "round-trips an empty join_counters map (no outstanding cohort)" do
+      assert SnapshotWriter.serialize_join_counters(%{}) == %{}
+      assert SnapshotWriter.deserialize_join_counters(%{}) == %{}
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # AC3 -- maybe_take_snapshot/4 cadence: default 1000, and configurable.
   # ---------------------------------------------------------------------------------
 

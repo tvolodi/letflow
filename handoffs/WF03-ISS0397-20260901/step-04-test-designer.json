@@ -1,0 +1,90 @@
+{
+  "handoff_id": "WF03-ISS0397-20260901-step-04",
+  "run_id": "WF03-ISS0397-20260901",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0397-20260901/step-04-test-designer.json",
+  "created_at": "2026-09-01T19:20:08Z",
+  "started_at": "2026-09-01T19:08:00Z",
+  "completed_at": "2026-09-01T19:20:08Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-048", "REQ-054", "REQ-208", "REQ-051", "REQ-052"],
+    "issue_ids": ["ISS-0397"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0397-join-counters-fix.md",
+      "handoffs/WF03-ISS0397-20260901/step-03d-reviewer.json"
+    ],
+    "artifacts_reviewed": [
+      "test/letflow/iss0397_join_counters_test.exs",
+      "test/letflow/engine/timer_wiring_test.exs",
+      "test/letflow/engine/snapshot_writer_test.exs",
+      "test/letflow/simulation/req208_meridian_test.exs",
+      "lib/letflow/engine.ex (build_instance_state/3, insert_instance_projection/8, persist/12)"
+    ],
+    "branch_name": "fix/ISS-0397-join-counters-20260901",
+    "diff_base": "origin/main...HEAD (commit 31444783)"
+  },
+  "task": {
+    "description": "WF-03 Step 4 coverage-verification pass on ELIXIR-DEV's already-written ISS-0397 test coverage (REVIEWER PASS at Step 3d). Map every design §5 test spec to its actual implementing test, perform an independent mutation check on build_instance_state/3 (the load-bearing regression test), confirm the create/2 insert_instance_projection/8 extension has its own distinct coverage (not merely inherited), confirm test isolation, and re-run the full targeted suite.",
+    "acceptance_criteria": [
+      "Design doc §5.1-§5.4 each mapped to an actual test in the four target files",
+      "Mutation of build_instance_state/3's join_counters read (reverted to hardcoded %{}) shown to fail the concurrent Task.async test with real evidence of the old bug, then cleanly reverted with the revert verified",
+      "create/2's insert_instance_projection/8 extension confirmed to have its own, non-inherited test assertion",
+      "Test isolation (unique tenant fixtures, no shared mutable state) confirmed",
+      "Full targeted suite re-run with real, quoted output"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "coverage_mapping": {
+      "design_5.1_serial_cross_call_happy_path": "test/letflow/iss0397_join_counters_test.exs, describe 'serial cross-call join: complete_task/3 called twice, as two separate top-level invocations' -- matches design steps 1-3 exactly (create/2, first separate complete_task/3 on task_a asserting :active + partial cohort, second separate complete_task/3 on task_b asserting :completed + deleted cohort). Point 4 (negative-control note) satisfied via in-code comment (lines 192-201) rather than a live pre-fix re-run, per the design's own wording ('should note this... without needing to check out the pre-fix revision') -- and independently corroborated by this step's own mutation test below, which is a live re-derivation of exactly that negative control against the concurrent variant.",
+      "design_5.2_concurrent_task_async": "test/letflow/iss0397_join_counters_test.exs, describe 'concurrent sibling-branch completion' -- real Task.async/await_many over two separate Postgres connections (provisioned_tenant! sets Sandbox.mode :auto), asserts exactly one :completed / one :active outcome, join_counters == %{} after both commit, both tasks :completed. This is the load-bearing test verified by mutation (see mutation_check below).",
+      "design_5.3_timer_fire_parity": "test/letflow/engine/timer_wiring_test.exs, describe 'ISS-0397: a join cohort opened by complete_task/3 is durably closed by advance_after_timer_fired/3' -- HUMAN_TASK branch completes via a separate complete_task/3 call, TIMER branch fires via a separate Scheduler.poll_and_fire/1 call (re-entering advance_after_timer_fired/3), asserting the cross-function-pair persistence parity design doc §5.3 calls for.",
+      "design_5.4_codec_round_trip": "test/letflow/engine/snapshot_writer_test.exs, describe 'ISS-0397 -- serialize_join_counters/1 / deserialize_join_counters/1 round trip' -- pure single-process test round-tripping a non-empty JoinCounter map (all three MapSet fields populated) plus a separate empty-map edge case. Correctly placed in the existing SnapshotWriter test file per the design's stated preference against duplicate test files.",
+      "req208_meridian_test.exs": "Both previously-broken scenario tests (loan-origination-above/below-threshold) updated to assert the now-successful second, separate complete_task/3 call instead of the pre-fix HTTP 500 -- confirmed via `git diff origin/main...HEAD` that the old CRITICAL FINDING moduledoc section was replaced with a 'FIXED by ISS-0397' section preserving the original defect's history rather than erasing it, and both test names/bodies changed from 'reproduces the join_counters defect (real HTTP 500)' to 'now advances the join cohort (ISS-0397)'."
+    },
+    "mutation_check": {
+      "target": "lib/letflow/engine.ex, build_instance_state/3 (~line 1847): mutated `join_counters: SnapshotWriter.deserialize_join_counters(projection.join_counters)` back to the pre-fix hardcoded `join_counters: %{}`",
+      "method": "In-place edit (not a worktree), per WF-03's 'apply in place, then git checkout --, verify' technique. Ran `mix test test/letflow/iss0397_join_counters_test.exs` against the mutant only (both fixtures in that one file), then reverted via a direct re-edit restoring the exact original line, then re-ran the full 4-file targeted suite.",
+      "mutant_result": "0/2 passed. Both the serial test and the concurrent test failed. The concurrent test's failure is the load-bearing evidence: `match (=) failed ... left: [branch_a: {:ok, _}, branch_b: {:ok, _}] ... right: [branch_a: {:error, {:activation_failed, {:unknown_branch_id, \"<uuid>/0\"}}}, branch_b: {:error, {:activation_failed, {:unknown_branch_id, \"<uuid>/1\"}}}]` -- this is the exact `{:unknown_branch_id, _}` failure mode the design doc's §1 and the test file's own comments predict for the pre-fix hardcoded `%{}`, reproduced live by this mutation, not merely asserted from documentation.",
+      "revert_verification": "Reverted `build_instance_state/3`'s body to the original `join_counters: SnapshotWriter.deserialize_join_counters(projection.join_counters)` line. `git status --porcelain` returned EMPTY (confirmed via `git diff --stat lib/letflow/engine.ex` showing no output before revert-check and `git status --porcelain` after). Full targeted suite re-run post-revert: `mix test test/letflow/iss0397_join_counters_test.exs test/letflow/engine/timer_wiring_test.exs test/letflow/engine/snapshot_writer_test.exs test/letflow/simulation/req208_meridian_test.exs` -- Result: 36 passed, 0 failures.",
+      "note": "This is a fix to pre-existing behavior (build_instance_state/3 already existed, just hardcoded a wrong value), not a case of 'the code under test did not exist' -- so the standard fail-then-pass rule applies (already satisfied by ELIXIR-DEV/REVIEWER's own prior runs) and this mutation is an independent re-derivation of that same evidence for this gate, not the WF-03 non-existence-exception procedure (which does not apply here)."
+    },
+    "create2_extension_coverage_check": {
+      "verdict": "PASS -- genuinely distinct, non-inherited coverage exists",
+      "finding": "Confirmed by reading engine.ex directly (persist/12, ~line 965): create/2's Multi.run(:instance_projection, ...) step calls insert_instance_projection/8 with `new_instance_state.join_counters` as its 8th argument -- a write site distinct from reconcile_projection/5 (which every other write-site test in this suite exercises via complete_task/3 or advance_after_timer_fired/3). test/letflow/iss0397_join_counters_test.exs's serial test asserts `projection_after_create` (read immediately after Engine.create/2, before any complete_task call) has a join cohort with `expected_from_branches` length 2 and empty `received_from_branches` (lines 165-170) -- this is a direct assertion on insert_instance_projection/8's own write, not an assertion reachable only via reconcile_projection/5's later update. No gap found; no test change needed for this item."
+    },
+    "test_isolation_check": {
+      "verdict": "PASS",
+      "finding": "All four files use TenantFixture.provisioned_tenant!/1 (or the equivalent local insert_tenant!+provision_tenant_schema+replay_migrations sequence in snapshot_writer_test.exs) with a unique per-test-run slug/schema, each with its own on_exit teardown dropping the tenant schema. Definition names, idempotency keys, and actor_ids are all generated via System.unique_integer/1 or Ecto.UUID.generate/0 helpers (unique_name/1, unique_idempotency_key/1) -- no hardcoded ids shared across tests or across the concurrent Task.async pair. All four files declare `async: false` consistently (matching every other tenant-fixture-using file in this codebase), and the concurrent test explicitly sets Sandbox.mode :auto (not the default per-process :manual sandbox) so the two Task.async calls are a genuine cross-connection race, not artificially serialized by shared sandbox ownership. No shared mutable state found between tests or between files."
+    },
+    "test_run": {
+      "command": "mix test test/letflow/iss0397_join_counters_test.exs test/letflow/engine/timer_wiring_test.exs test/letflow/engine/snapshot_writer_test.exs test/letflow/simulation/req208_meridian_test.exs",
+      "output_tail": "Finished in 31.2 seconds (0.00s async, 31.2s sync)\nResult: 36 passed",
+      "result": "36 passed, 0 failures"
+    },
+    "test_changes_made": "None. Coverage was already adequate: every design §5 test spec item maps to a real, non-vacuous test; the load-bearing concurrent regression test was independently confirmed sensitive to the actual defect via mutation (0/2 pass on the mutant, 36/36 pass after clean revert); the create/2 write-site extension has its own distinct assertion, not inherited coverage. No files under lib/ or test/ were left modified by this step (git status --porcelain empty, confirmed after the mutation revert).",
+    "summary": "PASS -- no gap found. Design doc §5.1-§5.4 all mapped to real tests across the four target files (plus req208_meridian_test.exs updated correctly to assert the fixed, not broken, behavior). Independently mutated build_instance_state/3's join_counters read back to the pre-fix hardcoded %{} in-place, confirmed the concurrent Task.async regression test (and the serial test) fail with the exact real {:unknown_branch_id, _} evidence of the old bug (0/2 passed), then reverted cleanly and verified via git status --porcelain (empty) and a full green re-run (36 passed, 0 failures). The create/2 insert_instance_projection/8 extension (REVIEWER's Step 3d in-family finding) has its own distinct assertion on projection_after_create immediately following Engine.create/2, not merely inherited from the reconcile_projection/5-based write-site tests. Test isolation (unique tenant schemas, unique idempotency keys/actor ids, no shared mutable state, real cross-connection concurrency via Sandbox.mode :auto) confirmed. No test code changes were necessary.",
+    "routing": "Route to Step 4b TEST-DESIGN-VALIDATOR."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": [
+    {
+      "gate": "SECURITY-REVIEWER",
+      "status": "PASS",
+      "at": "2026-09-01T19:08:28Z"
+    },
+    {
+      "gate": "REVIEWER",
+      "status": "PASS",
+      "at": "2026-09-01T19:15:16Z"
+    }
+  ]
+}

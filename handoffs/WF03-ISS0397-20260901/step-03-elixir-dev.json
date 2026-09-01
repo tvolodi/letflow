@@ -1,0 +1,70 @@
+{
+  "handoff_id": "WF03-ISS0397-20260901-step-03",
+  "run_id": "WF03-ISS0397-20260901",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0397-20260901/step-03-elixir-dev.json",
+  "created_at": "2026-09-01T19:04:43Z",
+  "started_at": "2026-09-01T17:24:20Z",
+  "completed_at": "2026-09-01T19:04:43Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-048", "REQ-054", "REQ-208", "REQ-051", "REQ-052"],
+    "issue_ids": ["ISS-0397"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0397-join-counters-fix.md",
+      "handoffs/WF03-ISS0397-20260901/step-02b-code-design-validator.json"
+    ],
+    "artifacts_out": [
+      "priv/repo/migrations/20260901030001_add_join_counters_to_instance_projections.exs",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/snapshot_writer.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/iss0397_join_counters_test.exs",
+      "test/letflow/engine/timer_wiring_test.exs",
+      "test/letflow/engine/snapshot_writer_test.exs",
+      "test/letflow/simulation/req208_meridian_test.exs",
+      "docs/anti-patterns.md"
+    ],
+    "branch_name": "fix/ISS-0397-join-counters-20260901"
+  },
+  "task": {
+    "description": "Implement the gate-approved design (lib/letflow/design/iss0397-join-counters-fix.md) exactly: migration adding instance_projections.join_counters, schema field, write site (reconcile_projection/5) and read site (build_instance_state/3) fixes, SnapshotWriter codec promotion, and the design's own specified test coverage (serial cross-call happy path, genuine concurrent Task.async regression test, timer-fire parity test, codec round-trip unit test).",
+    "acceptance_criteria": [
+      "Migration adds join_counters (:map, null: false, default: %{}) to instance_projections, tenant-scoped guard, registered in TenantProvisioning manifest, reversible",
+      "InstanceProjection schema/changesets cast :join_counters (insert_changeset and update_changeset), not required",
+      "reconcile_projection/5 persists join_counters unconditionally on every call (shared by complete_task/3 and advance_after_timer_fired/3)",
+      "build_instance_state/3 reads join_counters from the already-locked InstanceProjection struct instead of hardcoding %{}",
+      "SnapshotWriter.serialize_join_counters/1 and deserialize_join_counters/1 promoted to public, reused by both the periodic snapshot path and the new persistence path",
+      "Serial two-call happy path test, genuine concurrent Task.async/Task.await_many regression test, timer-fire parity test, and codec round-trip unit test all implemented and passing",
+      "mix compile --warnings-as-errors, mix format --check-formatted, and the full mix test suite all pass with no new failures"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Implemented the ISS-0397 design as specified, plus one necessary extension beyond the design's own written scope (flagged explicitly below, not silently added). (1) Migration priv/repo/migrations/20260901030001_add_join_counters_to_instance_projections.exs: adds join_counters (:map, null: false, default: %{}) to instance_projections, tenant-scoped `if prefix() do` guard, registered in Letflow.TenantProvisioning.@tenant_scoped_migration_manifest. Verified: applies cleanly (mix ecto.migrate), rolls back and re-applies cleanly (mix ecto.rollback --step 1 && mix ecto.migrate) -- additive/reversible per the self-review checklist. (2) Letflow.EventStore.InstanceProjection: added field(:join_counters, :map, default: %{}) to the schema, cast (not required) in both insert_changeset/2 and update_changeset/2, moduledoc note added documenting the new column. (3) Write site: reconcile_projection/5 (engine.ex ~2821) now includes `join_counters: SnapshotWriter.serialize_join_counters(final_instance_state.join_counters)` in its attrs map unconditionally, on the same UPDATE this function already issues against the M2-locked row -- confirmed shared by build_complete_task_tail_multi/6's success tail and persist_timer_fired_advance/7's own :projection Multi step, per the design. (4) Read site: build_instance_state/3 (engine.ex ~1813) now reads `SnapshotWriter.deserialize_join_counters(projection.join_counters)` from the already-locked %InstanceProjection{} struct instead of hardcoding %{}. (5) SnapshotWriter: join_counter_entry_to_map/1 and join_counter_entry_from_map/1's Map.new(...) call sites promoted to two new public functions, serialize_join_counters/1 and deserialize_join_counters/1, with @doc/@spec; serialize_state/1 and deserialize_state/2 now delegate to them (unchanged behavior). (6) NECESSARY EXTENSION BEYOND THE DESIGN'S WRITTEN SCOPE, found by running the design's own §5.1 test fixture for real, not assumed: the design's write-site enumeration (§2.4) named only reconcile_projection/5, but Engine.create/2 has its own, separate M1 insert (insert_instance_projection/8, called from persist/12's Multi) that also builds an instance_projections row from a freshly-dispatched InstanceState.t() -- and never mentioned join_counters at all. A PARALLEL_GATEWAY split reachable within create/2's own initial hop-chain (exactly the shape the design's own §5.1/§5.3 fixtures use: split immediately after START) left that row's join_counters silently defaulted to %{} at insert time, with no later call ever correcting it -- confirmed by running the new regression test, which failed with map_size(join_counters) == 0 immediately after Engine.create/2, before either complete_task/3 call ran. Fixed by threading new_instance_state.join_counters through insert_instance_projection/8's own attrs (same SnapshotWriter.serialize_join_counters/1 call as the design's own write site). This is a strict within-family extension of the same fix (same field, same struct, same serialization codec, no new lock/table/decision) -- documented in a new docs/anti-patterns.md entry ('A gate-approved design fixing a shared write function missed a sibling write path constructing the same state independently') and flagged here explicitly per core-directives.md's 'build from the design, don't invent a different shape' rule -- REVIEWER should confirm this extension is in-family rather than scope creep. (7) Tests: test/letflow/iss0397_join_counters_test.exs (new file) -- serial cross-call happy path (create/2's split cohort observed and closed across two separate complete_task/3 calls) and a genuine concurrent regression test (two real Task.async/Task.await_many complete_task/3 calls on two distinct task_ids of the same instance, TenantFixture's Sandbox :auto mode -- real separate Postgres connections, not two sequential calls dressed up; asserted stable across 3 repeated runs). test/letflow/engine/timer_wiring_test.exs -- new 'ISS-0397' describe block: a cohort opened by a real complete_task/3 call is durably closed by a real, separate advance_after_timer_fired/3 call (via Scheduler.poll_and_fire/1), exercising reconcile_projection/5's and build_instance_state/3's shared paths from the timer-fire side. test/letflow/engine/snapshot_writer_test.exs -- new 'ISS-0397' describe block: pure, single-process round-trip test for serialize_join_counters/1/deserialize_join_counters/1 (non-empty and empty cases), sibling to the existing AC2 describe block that already exercises the same codec end-to-end via take_snapshot/4+latest_snapshot/2. test/letflow/simulation/req208_meridian_test.exs -- UPDATED (not new): its two loan-origination scenario tests previously asserted the pre-fix HTTP 500 as their own disposition (explicitly anticipated by the design's own §5.1 point 4 and this file's own moduledoc); post-fix these calls now succeed, so both tests' assertions were rewritten to match the real, now-correct behavior (moduledoc's own 'CRITICAL FINDING' section updated to a 'FIXED by ISS-0397' note rather than silently deleted, per this project's history-preservation discipline). While rewriting, found and fixed a latent, pre-existing, ISS-0397-unrelated test/scenario issue: GET /api/v1/tasks orders PENDING tasks by inserted_at DESC, so `items.0` is actually the risk-assessment task, not credit-memo-review as the YAML/step names assumed -- never observable pre-fix since the call 500'd regardless of which task was targeted; now documented explicitly in the test's own comments. (8) Verification, all run synchronously/foreground in this session: `mix ecto.migrate`/`mix ecto.rollback --step 1`/`mix ecto.migrate` all clean; `mix compile --warnings-as-errors` clean (no output); `mix format --check-formatted` clean (no diff); the new ISS-0397 regression test file run 3 times in a row, 2/2 passed each time; `mix letflow.check.test` (full suite, run to completion, polled via repeated blocking foreground kill-0 checks rather than backgrounding/waiting on a cross-turn notification, per core-directives) FAILED on its first run with 4 failures: 2 were the req208_meridian_test.exs tests asserting pre-fix behavior (fixed, see above, now pass), 2 were `Mix.Tasks.Letflow.CheckToolchainTest`'s 'rust pin' tests, confirmed via a targeted re-run to fail with `** (ErlangError) Erlang error: :enoent` on `System.cmd(\"rustc\", [\"--version\"], ...)` -- rustc is simply not installed in this sandbox, entirely unrelated to this change, a pre-existing environment gap. A full `mix test` re-run after the req208 fix (1497s/1532s wall time both runs, ~3033 tests) shows exactly those same 2 rust-toolchain failures and zero others -- confirmed via `grep -n \"^\\s*[0-9])\"` against the full captured log, not truncated tail output. Result: 3031/3033 passed (10 excluded), the only 2 failures pre-existing and environment-caused.",
+    "files_changed": [
+      "priv/repo/migrations/20260901030001_add_join_counters_to_instance_projections.exs",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/snapshot_writer.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/iss0397_join_counters_test.exs",
+      "test/letflow/engine/timer_wiring_test.exs",
+      "test/letflow/engine/snapshot_writer_test.exs",
+      "test/letflow/simulation/req208_meridian_test.exs",
+      "docs/anti-patterns.md"
+    ],
+    "commit": "31444783",
+    "routing": "Route to Step 3c SECURITY-REVIEWER: this change touches a migration (new column on a tenant-scoped table) and Engine internals on a tenant-data path (instance_projections read/write inside complete_task/3, advance_after_timer_fired/3, and create/2's own persist path) -- both tenant-data-path-adjacent per docs/agents/instructions/security-invariants.md, hard gate before REVIEWER. Flag for SECURITY-REVIEWER's and REVIEWER's attention: (a) the create/2 M1 write-site extension beyond the design's own literal text (item 6 above) -- confirm it's in-family, not scope creep needing a design rework cycle; (b) the design's own §6 coordination note (unchanged/unactioned by this implementation): REQ-052's cancel_instance/3 decision record cited 'the join-counters persistence gap' as its reason for not wiring {:cancel_branch, _} -- that cited blocker is now gone, but cancel_instance/3 itself was deliberately not touched by this fix (out of scope); this is a decision-record-drift flag for ORCH, not something ELIXIR-DEV resolved unilaterally. Not a REVIEWER bypass -- routing to SECURITY-REVIEWER first per the standard WF-02/WF-03 gate order, REVIEWER after."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": []
+}

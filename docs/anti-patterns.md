@@ -2382,3 +2382,39 @@ project's currently-documented equivalent) yourself before concluding a check ca
 A negative result from one un-sourced shell is not evidence the toolchain is absent from the
 sandbox; multiple agents in this exact session, in the exact same environment, ran `mix`
 successfully throughout.
+
+## A gate-approved design fixing a shared write function missed a sibling write path constructing the same state independently
+
+**What happened.** ISS-0397's design (`lib/letflow/design/iss0397-join-counters-fix.md`,
+gate-approved by CODE-DESIGN-VALIDATOR) correctly identified `reconcile_projection/5` as the
+one function shared by `complete_task/3`'s and `advance_after_timer_fired/3`'s own
+`Ecto.Multi` write sites for `instance_projections`, and fixed it to persist
+`join_counters`. It did not notice that `Letflow.Engine.create/2` has its OWN, separate M1
+insert (`insert_instance_projection/8`) that also builds an `instance_projections` row from a
+freshly-dispatched `InstanceState.t()` — and that a `PARALLEL_GATEWAY` split reachable within
+`create/2`'s own initial hop-chain (the exact shape the design's own §5.1/§5.3 test fixtures
+use: split immediately after `START`) leaves that row's `join_counters` silently defaulted to
+`%{}` at insert time, with no later call ever correcting it. Caught only because
+ELIXIR-DEV ran the newly-written regression test for real before considering the fix done —
+the test failed with `map_size(join_counters) == 0`, not the expected `1`, immediately after
+`Engine.create/2`, before either `complete_task/3` call ran.
+
+**Why this is easy to miss.** The design's own source list (§0) enumerated every function
+that *reads* `InstanceState.join_counters` and every function that *writes* it back to
+`instance_projections` via `reconcile_projection/5` — but `create/2`'s insert path builds an
+`instance_projections` row through a structurally different function
+(`insert_instance_projection/8`, called from `persist/12`'s own Multi, never
+`reconcile_projection/5`) that happens to construct the *same kind* of row from the *same
+kind* of `InstanceState.t()`. Grepping/reading for "every call site that touches
+`join_counters`" naturally follows already-known references to the field; it does not
+surface a write site that never mentioned `join_counters` at all because that's precisely the
+bug — the field was never being written there.
+
+**Correct alternative.** When a design fixes a hardcoded/defaulted value read from or written
+to a shared struct, grep for every OTHER place that constructs the same struct type from
+scratch (here: every call site that builds an `instance_projections` row, not just the ones
+already named for handling the field in question) — not just every existing reference to the
+field being fixed. Then verify with a real, running regression test that exercises the
+specific scenario the fix's own test fixtures use (here: a split immediately after `START`,
+inside `create/2`'s own hop-chain) before considering a design's write-site enumeration
+complete, even one that has already passed CODE-DESIGN-VALIDATOR.

@@ -1,0 +1,34 @@
+id: ISS-0402
+title: "REQ-052's cancel_instance/3 never wires {:cancel_branch, _} -- its cited blocker (join-counters persistence gap) is now closed by ISS-0397"
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0397-20260901
+discovered_at: "2026-09-01T19:50:00Z"
+severity: MINOR
+tags: [engine, cancellation, follow-up]
+description: >
+  lib/letflow/design/req052-instance-cancellation.md section 4/OQ-2
+  explicitly cites "the join-counters persistence gap" as the reason
+  Letflow.Engine.cancel_instance/3 never wires up a {:cancel_branch, _}
+  cancellation mode for individual PARALLEL_GATEWAY fork branches (only
+  whole-instance cancellation is implemented). ISS-0397 (fixed,
+  WF03-ISS0397-20260901) closed that exact gap by persisting
+  join_counters durably on instance_projections. cancel_instance/3
+  itself was deliberately left untouched by ISS-0397's fix -- this is a
+  distinct, not-yet-scoped follow-up: revisit REQ-052's own OQ-2 now
+  that its stated blocker no longer exists, and decide whether
+  branch-level cancellation should be designed and implemented, or
+  whether the original design's reasoning has a second, independent
+  reason to leave it unimplemented that OQ-2's text does not fully
+  capture.
+affected_files:
+  - lib/letflow/engine.ex
+  - lib/letflow/design/req052-instance-cancellation.md
+related:
+  - ISS-0397
+  - REQ-052
+source: >
+  lib/letflow/design/req052-instance-cancellation.md (section 4, OQ-2),
+  handoffs/WF03-ISS0397-20260901/step-06-issue-fixer-close.json.
+queue_task_id: 402
+github_issue: 789
+status: open

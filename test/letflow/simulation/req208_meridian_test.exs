@@ -3,48 +3,39 @@ defmodule Letflow.Simulation.Req208MeridianTest do
   REQ-208 acceptance criteria: 3 Meridian scenario YAMLs run through
   `Letflow.Simulation.Runner`.
 
-  ## CRITICAL FINDING, discovered this session, blocking full AC1/AC2 verification
-  (reported via `result.issues` at handoff time -- a NEW finding, not covered by
-  ISS-0388..0393; ELIXIR-DEV does not self-assign an issue id per
-  `docs/agents/protocols/ISSUE_QUEUE.md`)
+  ## FIXED by ISS-0397 (2026-09-01) -- formerly a CRITICAL FINDING blocking full
+  AC1/AC2 verification; superseding note added rather than deleting the
+  original finding, per this project's discipline of not silently erasing a
+  documented defect's own history
 
   `Letflow.Engine.complete_task/3`'s real, per-call state-rebuild
-  (`lib/letflow/engine.ex`'s `build_instance_state/3`) hardcodes
-  `join_counters: %{}` on EVERY call -- confirmed by that function's own code
-  comment ("§6.5, §11 INV-EE48-7, MAJOR OQ-3): no table persists JoinCounter
-  state across calls today") and independently reproduced this session against a
-  real running instance (`Letflow.Engine.create/2` for the initial split, then a
-  SEPARATE `Letflow.Engine.complete_task/3` call for the first branch's own
-  completion -- real HTTP 500, `{:error, {:activation_failed,
-  {:unknown_branch_id, _}}}` internally). A `PARALLEL_GATEWAY` join can
-  therefore only ever fire within the SAME hop-chain call as its own split --
-  the instant a real, separate HTTP call (any HUMAN_TASK completion on any
-  branch) tries to route through the join, it fails. REQ-054 (SnapshotWriter,
-  `status: done`) DOES serialize `join_counters` correctly into
-  `instance_state_snapshots` -- but `Engine.complete_task/3`'s own hot path
-  never reads that table; it always rebuilds state fresh from `tokens`/`tasks`
-  directly (`lib/letflow/engine.ex`'s `build_snapshot_and_state/4`). This is a
-  genuine, pre-existing platform BLOCKER affecting every process with a
-  `PARALLEL_GATEWAY` split whose branches require separate task completions --
-  not introduced by, or fixable within, REQ-208's own scope (this is Engine-core
-  work, its own CODE-DESIGNER-sized task, same "does not build a native
-  quorum-counting node type in `Letflow.Engine`" scope boundary the design
-  itself already drew for a related but distinct reason at §2.2 of its scope
-  discipline).
+  (`lib/letflow/engine.ex`'s `build_instance_state/3`) used to hardcode
+  `join_counters: %{}` on EVERY call, confirmed reproduced against a real
+  running instance in the session that wrote this test (`Letflow.Engine.create/2`
+  for the initial split, then a SEPARATE `Letflow.Engine.complete_task/3` call
+  for the first branch's own completion -- real HTTP 500,
+  `{:error, {:activation_failed, {:unknown_branch_id, _}}}` internally). A
+  `PARALLEL_GATEWAY` join could therefore only ever fire within the SAME
+  hop-chain call as its own split. **ISS-0397**
+  (`lib/letflow/design/iss0397-join-counters-fix.md`) fixed this by adding a
+  durable `instance_projections.join_counters` column, read/written under the
+  same `FOR UPDATE` lock `complete_task/3`/`advance_after_timer_fired/3` already
+  hold on that row -- a join cohort opened by one call is now durably readable
+  (and closeable) by a later, separate call. The two tests below were updated
+  accordingly (see each `describe` block's own comments) to assert the now-real,
+  now-successful second-call behavior instead of the pre-fix HTTP 500 -- they no
+  longer reproduce a defect, they lock in its fix.
 
-  **Consequence:** `meridian-loan-origination-above-threshold` and
-  `meridian-loan-origination-below-threshold` cannot be exercised past their
-  first parallel-branch task completion. Both scenario YAMLs were truncated
-  (their own header comments explain this) to the steps that DO run for real
-  (instance creation, forking 3 real parallel tracks; the first branch's task
-  lookup; the first branch's task completion, which reproduces the defect) --
-  fabricating a passing result for steps that cannot actually execute would
-  violate `core-directives.md`'s "No speculation." AC1/AC2's own fuller claims
-  (quorum, disbursement, EO-002's negative assertion) are NOT verified by this
-  run; this is stated explicitly in the report (§6) rather than silently
-  assumed to hold, matching the same "report an in-flight caveat rather than
-  proceeding as if the dependency were closed" discipline REQ-208's own
-  requirement text already establishes for AC4/REQ-199.
+  **Still NOT fully verified by this file, unchanged by ISS-0397:** AC1/AC2's
+  own fuller claims (full quorum across all 3 branches through to disbursement,
+  EO-002's negative assertion) remain out of reach of a real end-to-end run --
+  `disburse-loan`/`credit-committee-vote`/`l1-approval` sit behind
+  `SERVICE_TASK` nodes this engine does not yet dispatch (§0.8/§3 below, a
+  platform-wide gap REQ-206/207 already found, unrelated to ISS-0397). This is
+  stated explicitly in the report (§6) rather than silently assumed to hold,
+  matching the same "report an in-flight caveat rather than proceeding as if
+  the dependency were closed" discipline REQ-208's own requirement text
+  already establishes for AC4/REQ-199.
 
   ## SERVICE_TASK limitation (design §0.8/§3, same platform-wide gap REQ-206/207
   already found)
@@ -555,7 +546,7 @@ defmodule Letflow.Simulation.Req208MeridianTest do
   # ─── AC1: meridian-loan-origination-above-threshold ──────────────────────
 
   describe "meridian-loan-origination-above-threshold" do
-    test "3 parallel tracks fork for real; first branch completion reproduces the join_counters defect (real HTTP 500)",
+    test "3 parallel tracks fork for real; a separate branch-completion call now advances the join cohort (ISS-0397)",
          %{schema_name: schema_name, actors: actors, definitions: %{loan: definition}} do
       scenario_raw =
         ScenarioFixture.load!(Path.join(@scenarios_dir, "loan-origination-above-threshold.yaml"))
@@ -577,57 +568,69 @@ defmodule Letflow.Simulation.Req208MeridianTest do
       assert step1.outcome == :ok, "step 1 (POST /instances) failed — #{inspect(step1.detail)}"
       assert %{"instance_id" => _, "status" => "ACTIVE"} = step1.captured
 
-      # AC1's own "3 parallel assessment tracks confirmed created from real queried
-      # task state" -- THIS part is real and does hold: the split itself happens
-      # within instance-creation's own single hop-chain, so join_counters being
-      # reset on the NEXT call (see the moduledoc's critical finding) has no
-      # bearing on it yet. 2 real HUMAN_TASKs are the concrete evidence here
-      # (credit-memo-review, risk-assessment); the KYC/AML track is the immediate,
-      # unconditioned edge straight to assessment-join (test module's own
-      # @simple_loan_origination_graph comment).
-      {:ok, projection_after_step1} = Instances.get_by_id(instance_id, prefix: schema_name)
+      assert step2a.outcome == :ok, "step 2a (GET credit-memo lookup) — #{inspect(step2a.detail)}"
 
-      assert "credit-memo-review" in projection_after_step1.current_nodes
-      assert "risk-assessment" in projection_after_step1.current_nodes
-
-      {:ok, %{items: pending_after_step1}} =
+      # AC1's own "3 parallel assessment tracks confirmed created from real
+      # queried task state" -- real: the split itself happens within
+      # instance-creation's own single hop-chain, so both real HUMAN_TASKs
+      # (credit-memo-review, risk-assessment) exist as task rows from that
+      # point on regardless of what happens next; the KYC/AML track is the
+      # immediate, unconditioned edge straight to assessment-join (test
+      # module's own @simple_loan_origination_graph comment). Queried here
+      # (by task existence, any status) rather than right after step1's own
+      # `captured` map, because `Runner.run/1` executes this scenario's
+      # entire step list -- including step 2b below -- before returning; a
+      # query issued only after `Runner.run/1` returns necessarily observes
+      # state as of the LAST step, not step 1's own (pre-ISS-0397 this
+      # distinction never mattered here since step 2b always rolled back).
+      {:ok, %{items: all_tasks}} =
         Letflow.Tasks.list_tasks(
-          %{instance_id: instance_id, status: :pending, page_size: 10},
+          %{instance_id: instance_id, page_size: 10},
           prefix: schema_name
         )
 
-      pending_node_ids_after_step1 =
-        Enum.map(pending_after_step1, fn {task, _form_version} -> task.node_id end)
+      all_task_node_ids = Enum.map(all_tasks, fn {task, _form_version} -> task.node_id end)
+      assert "credit-memo-review" in all_task_node_ids
+      assert "risk-assessment" in all_task_node_ids
 
-      assert "credit-memo-review" in pending_node_ids_after_step1
-      assert "risk-assessment" in pending_node_ids_after_step1
-
-      assert step2a.outcome == :ok, "step 2a (GET credit-memo lookup) — #{inspect(step2a.detail)}"
-
-      # Step 2b reproduces the critical finding (moduledoc, top): a real, separate
-      # HTTP call completing one parallel branch cannot route through
-      # assessment-join, since Engine.complete_task/3's freshly-rebuilt
-      # InstanceState always has join_counters: %{}. This is a REAL HTTP 500
-      # (INV-4's no-detail internal-error problem body), not a harness
-      # malfunction -- asserted explicitly here as the actual, reproducible
-      # platform behavior this run discovered.
-      assert step2b.outcome == :error,
-             "step 2b (POST credit-memo complete) was expected to reproduce the " <>
-               "join_counters-not-persisted-across-calls defect (real HTTP 500); " <>
+      # NOTE on `items.0` (found while updating this test for ISS-0397, not new
+      # behavior it introduced): `GET /api/v1/tasks?...status=PENDING` orders by
+      # `inserted_at DESC, id DESC` (Letflow.Tasks.list_tasks/2) -- since
+      # credit-memo-review is inserted before risk-assessment within create/2's
+      # own hop-chain, `items.0` is actually the risk-assessment task, not
+      # credit-memo-review as this scenario's own YAML/step names assume. This
+      # was never observable pre-fix (step 2b 500'd regardless of which task was
+      # targeted) -- now that the call succeeds, the real task identity matters
+      # and is asserted explicitly below rather than left to the (incorrect)
+      # naming.
+      #
+      # Step 2b -- pre-ISS-0397, this reproduced the join_counters defect: a
+      # real, separate HTTP call completing one parallel branch could not route
+      # through assessment-join, since Engine.complete_task/3's freshly-rebuilt
+      # InstanceState always had join_counters: %{}. Post-fix, this call reads
+      # the durably-persisted cohort create/2's own split left behind
+      # (instance_projections.join_counters) and succeeds: one of the 3 expected
+      # branches (this one) is now received, two remain outstanding (the join
+      # does not fire yet).
+      assert step2b.outcome == :ok,
+             "step 2b (POST task complete) was expected to succeed now that " <>
+               "ISS-0397 durably persists join_counters across calls; " <>
                "instead got outcome #{inspect(step2b.outcome)}, detail: #{inspect(step2b.detail)}"
 
-      assert %{status: 500, body: %{"status" => 500, "title" => "Internal Server Error"}} =
-               step2b.detail
+      assert %{"instance_status" => "ACTIVE"} = step2b.detail
 
-      # No expected_outcomes in this scenario's YAML (nothing past this point can be
-      # verified for real) -- AC5's "closed disposition, no step left unaddressed"
-      # is satisfied by every one of these 3 steps having a real, asserted outcome.
+      # No expected_outcomes in this scenario's YAML (full quorum/disbursement
+      # verification is out of reach of a real run, moduledoc) -- AC5's "closed
+      # disposition, no step left unaddressed" is satisfied by every one of
+      # these 3 steps having a real, asserted outcome.
       assert report.outcome_results == []
 
-      # Real-state evidence the failed call left no partial corruption (INV-EE48-7's
-      # own "typed, non-crashing failure, not silent data corruption" -- the whole
-      # Ecto.Multi rolled back): the credit-memo-review task is still PENDING, the
-      # instance is still ACTIVE, at the same 2 nodes as right after step 1.
+      # Real-state evidence the join cohort advanced correctly, one branch at a
+      # time: risk-assessment is now COMPLETED (no longer pending), and the
+      # assessment-join cohort still durably tracks credit-memo-review and the
+      # KYC/AML branch as outstanding -- current_nodes narrows to
+      # credit-memo-review alone (the join has not fired: 2 of 3 branches
+      # received).
       {:ok, %{items: pending_after_step2b}} =
         Letflow.Tasks.list_tasks(
           %{instance_id: instance_id, status: :pending, page_size: 10},
@@ -637,21 +640,24 @@ defmodule Letflow.Simulation.Req208MeridianTest do
       pending_node_ids_after_step2b =
         Enum.map(pending_after_step2b, fn {task, _form_version} -> task.node_id end)
 
-      assert "credit-memo-review" in pending_node_ids_after_step2b,
-             "Expected the failed complete call to have rolled back entirely (no " <>
-               "partial commit), leaving credit-memo-review still PENDING"
+      assert pending_node_ids_after_step2b == ["credit-memo-review"],
+             "Expected only credit-memo-review still PENDING after risk-assessment's " <>
+               "own branch completed and joined into the still-outstanding cohort"
 
       {:ok, final_projection} = Instances.get_by_id(instance_id, prefix: schema_name)
       assert final_projection.status == :active
-      assert "credit-memo-review" in final_projection.current_nodes
-      assert "risk-assessment" in final_projection.current_nodes
+      assert final_projection.current_nodes == ["credit-memo-review"]
+
+      assert %{"assessment-join" => cohort} = final_projection.join_counters
+      assert length(cohort["received_from_branches"]) == 2
+      assert length(cohort["expected_from_branches"]) == 3
     end
   end
 
   # ─── AC2: meridian-loan-origination-below-threshold ──────────────────────
 
   describe "meridian-loan-origination-below-threshold" do
-    test "3 parallel tracks fork for real; first branch completion reproduces the SAME join_counters defect",
+    test "3 parallel tracks fork for real; second, separate task-completion call now succeeds (ISS-0397)",
          %{schema_name: schema_name, actors: actors, definitions: %{loan: definition}} do
       scenario_raw =
         ScenarioFixture.load!(Path.join(@scenarios_dir, "loan-origination-below-threshold.yaml"))
@@ -673,32 +679,44 @@ defmodule Letflow.Simulation.Req208MeridianTest do
       assert step1.outcome == :ok, "step 1 (POST /instances) failed — #{inspect(step1.detail)}"
       assert %{"instance_id" => _, "status" => "ACTIVE"} = step1.captured
 
-      {:ok, projection_after_step1} = Instances.get_by_id(instance_id, prefix: schema_name)
-      assert "credit-memo-review" in projection_after_step1.current_nodes
-      assert "risk-assessment" in projection_after_step1.current_nodes
-
       assert step2a.outcome == :ok, "step 2a (GET credit-memo lookup) — #{inspect(step2a.detail)}"
 
-      # Same defect as the above-threshold scenario (moduledoc, top) -- this
-      # scenario's own graph is identical up to this point, so it reproduces
-      # identically. EO-002's own literal design point (no committee-vote task
-      # exists) cannot be verified via the intended full end-to-end run either,
-      # since the run cannot progress past this call -- stated explicitly here,
-      # not silently assumed to still hold.
-      assert step2b.outcome == :error,
-             "step 2b (POST credit-memo complete) was expected to reproduce the " <>
-               "join_counters-not-persisted-across-calls defect (real HTTP 500); " <>
+      # Same "3 real HUMAN_TASKs created" evidence as the above-threshold test
+      # above -- queried by existence (any status), not "still pending", since
+      # `Runner.run/1` already executed step 2b (below) by the time this
+      # returns (see that test's own comment on why).
+      {:ok, %{items: all_tasks}} =
+        Letflow.Tasks.list_tasks(
+          %{instance_id: instance_id, page_size: 10},
+          prefix: schema_name
+        )
+
+      all_task_node_ids = Enum.map(all_tasks, fn {task, _form_version} -> task.node_id end)
+      assert "credit-memo-review" in all_task_node_ids
+      assert "risk-assessment" in all_task_node_ids
+
+      # Same fix as the above-threshold scenario (moduledoc, top) -- this
+      # scenario's own graph is identical up to this point, so it behaves
+      # identically post-fix. EO-002's own literal design point (no
+      # committee-vote task exists) still cannot be verified via a full
+      # end-to-end run (SERVICE_TASK dispatch gap, unrelated to ISS-0397) --
+      # stated explicitly here, not silently assumed to hold.
+      assert step2b.outcome == :ok,
+             "step 2b (POST task complete) was expected to succeed now that " <>
+               "ISS-0397 durably persists join_counters across calls; " <>
                "instead got outcome #{inspect(step2b.outcome)}, detail: #{inspect(step2b.detail)}"
 
-      assert %{status: 500, body: %{"status" => 500, "title" => "Internal Server Error"}} =
-               step2b.detail
+      assert %{"instance_status" => "ACTIVE"} = step2b.detail
 
       assert report.outcome_results == []
 
       {:ok, final_projection} = Instances.get_by_id(instance_id, prefix: schema_name)
       assert final_projection.status == :active
-      assert "credit-memo-review" in final_projection.current_nodes
-      assert "risk-assessment" in final_projection.current_nodes
+      assert final_projection.current_nodes == ["credit-memo-review"]
+
+      assert %{"assessment-join" => cohort} = final_projection.join_counters
+      assert length(cohort["received_from_branches"]) == 2
+      assert length(cohort["expected_from_branches"]) == 3
     end
   end
 

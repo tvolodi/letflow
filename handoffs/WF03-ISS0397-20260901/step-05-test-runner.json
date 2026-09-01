@@ -1,0 +1,112 @@
+{
+  "handoff_id": "WF03-ISS0397-20260901-step-05",
+  "run_id": "WF03-ISS0397-20260901",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0397-20260901/step-05-test-runner.json",
+  "created_at": "2026-09-01T20:05:00Z",
+  "started_at": "2026-09-01T19:26:00Z",
+  "completed_at": "2026-09-01T20:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-048", "REQ-054", "REQ-208", "REQ-051", "REQ-052"],
+    "issue_ids": ["ISS-0397"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0397-20260901/step-04b-test-design-validator.json",
+      "test/letflow/iss0397_join_counters_test.exs",
+      "test/letflow/engine/timer_wiring_test.exs",
+      "test/letflow/engine/snapshot_writer_test.exs",
+      "test/letflow/simulation/req208_meridian_test.exs"
+    ],
+    "branch_name": "fix/ISS-0397-join-counters-20260901",
+    "diff_base": "origin/main...HEAD"
+  },
+  "task": {
+    "description": "WF-03 Step 5: run the full suite and mix compile --warnings-as-errors, and quote real output, ahead of WF-03's close step.",
+    "acceptance_criteria": [
+      "All new ISS-0397 tests pass (4 target files)",
+      "mix compile --warnings-as-errors exits 0",
+      "Migration applies cleanly",
+      "No NEW failures introduced vs. the pre-existing baseline",
+      "Run the full suite (scripts/test_parallel.sh and mix letflow.check.test) synchronously and quote real output"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "environment_setup": "git fetch origin && git checkout fix/ISS-0397-join-counters-20260901 && git pull --ff-only -- already up to date, no new upstream commits. docker compose ps confirmed letflow-1-postgres-1 and letflow-1-keycloak-1 already Up (healthy); .env sets LETFLOW_DB_PORT=5463, used automatically by Ecto per README.",
+    "compile_check": {
+      "command": "mix deps.get && mix clean && mix compile --warnings-as-errors",
+      "output": "Compiling 182 files (.ex)\nGenerated letflow app",
+      "exit_code": 0,
+      "result": "Clean full recompile, 0 warnings, 0 errors."
+    },
+    "migration_check": {
+      "finding": "priv/repo/migrations/20260901030001_add_join_counters_to_instance_projections.exs is present in the branch. The project's `test` mix alias runs ecto.create/ecto.migrate --quiet automatically before every test run (confirmed in scripts/test_parallel.sh's own doc comment and observed directly: every test run below queried the `join_counters` column on `instance_projections` successfully, e.g. `SELECT ... i0.\"join_counters\" ... FROM instance_projections`), so the migration applied cleanly with no separate manual step needed.",
+      "result": "Confirmed clean apply."
+    },
+    "targeted_suite_run": {
+      "command": "mix test test/letflow/iss0397_join_counters_test.exs test/letflow/engine/timer_wiring_test.exs test/letflow/engine/snapshot_writer_test.exs test/letflow/simulation/req208_meridian_test.exs",
+      "output": "Finished in 32.0 seconds (0.00s async, 32.0s sync)\nResult: 36 passed",
+      "result": "36 passed, 0 failures. Matches TEST-DESIGNER/TEST-DESIGN-VALIDATOR's claimed counts."
+    },
+    "full_parallel_suite_run": {
+      "command": "scripts/test_parallel.sh",
+      "output": "test_parallel: N=8 (source: nproc)\npartition 1: 309 tests, 0 properties, 0 failures, exit 0\npartition 2: 377 tests, 3 properties, 1 failures, exit 2\npartition 3: 392 tests, 0 properties, 0 failures, exit 0\npartition 4: 518 tests, 2 properties, 0 failures, exit 0\npartition 5: 470 tests, 0 properties, 0 failures, exit 0\npartition 6: 360 tests, 0 properties, 0 failures, exit 0\npartition 7: 358 tests, 0 properties, 0 failures, exit 0\npartition 8: 240 tests, 1 property, 2 failures, exit 2\n---\ncombined: 3024 tests, 6 properties, 3 failures (3027/3030 passed)",
+      "failure_triage": [
+        {
+          "test": "Letflow.SecretsTest property AC1: put/2 followed by resolve/2 round-trips the plaintext; ciphertext never contains it (test/letflow/secrets_test.exs:85)",
+          "error": "Failed with generated values (after 19 successful runs): Clause: plaintext <- StreamData.binary(min_length: 0, max_length: 512); Generated: \"\\e\". Expected false or nil, got true. code: refute String.contains?(stored.ciphertext, plaintext)",
+          "diagnosis": "PRE-EXISTING FLAKE, unrelated to ISS-0397. test/letflow/secrets_test.exs and lib/letflow/secrets.ex are both untouched by this branch's diff (confirmed via git diff origin/main...HEAD --stat). A short single-byte generated plaintext (\"\\e\", 0x1B) coincidentally recurred inside the random ciphertext bytes by chance -- a known false-positive shape for a `refute String.contains?/2` property test with very short generated inputs. Re-ran `mix test test/letflow/secrets_test.exs` in isolation immediately after: `Result: 10 passed (1 property, 9 tests)` -- passed cleanly with a different random seed/shrink path, confirming flakiness rather than a real regression.",
+          "verdict": "NOT a new failure caused by this branch. Pre-existing property-test flake."
+        },
+        {
+          "test": "Mix.Tasks.Letflow.CheckToolchainTest \"a mismatched rust pin reports a MISMATCH row naming expected and running\" and \"a matching rust pin reports OK with no mismatch\" (test/mix/tasks/letflow_check_toolchain_test.exs:274,289)",
+          "error": "** (ErlangError) Erlang error: :enoent at System.cmd(\"rustc\", [\"--version\"], ...) -- rustc binary not found in this environment's PATH.",
+          "diagnosis": "PRE-EXISTING ENVIRONMENT LIMITATION, unrelated to ISS-0397. test/mix/tasks/letflow_check_toolchain_test.exs is completely untouched by this branch (git diff origin/main...HEAD -- <file> is empty; file was last touched by main commit 0aa95935, REQ-165). Confirmed directly: `which rustc` and `asdf which rustc` both fail -- no Rust toolchain is installed in this test-runner's environment at all. Re-ran `mix test test/mix/tasks/letflow_check_toolchain_test.exs` in isolation: same 2 failures, same :enoent, reproducibly -- this is a deterministic environment gap (no rustc installed here), not something ISS-0397's changes touch or could have caused.",
+          "verdict": "NOT a new failure caused by this branch. Pre-existing environment limitation (missing rustc toolchain in this sandbox)."
+        }
+      ]
+    },
+    "full_serial_suite_run": {
+      "command": "mix letflow.check.test (run synchronously in the foreground; the Bash tool auto-moved the long-running shell to background after its own 590-600s internal cap, so this agent blocked on the underlying OS PID with `while kill -0 <pid>; do sleep 15; done` across two chained calls rather than relying on any cross-turn notification, then read the completed output file directly)",
+      "output": "Finished in 1532.9 seconds (14.7s async, 1518.1s sync)\nResult: 3031/3033 passed (6/6 properties, 3025/3027 tests), 10 excluded\nFailed: 2 tests\n** (Mix) mix letflow.check.test: FAILED -- underlying `mix test` run exited 2 (real test failure/error).",
+      "failure_triage": "Re-ran test/mix/tasks/letflow_check_toolchain_test.exs alone immediately after to identify which 2 of the 3033 failed (the tail-captured output truncated the interleaved per-test failure blocks): same 2 rust-pin :enoent failures as in the parallel run above, same root cause (no rustc installed in this environment), same file untouched by this branch. The SecretsTest property flake did not recur in this run's particular seed -- consistent with it being a genuine intermittent flake rather than a deterministic failure.",
+      "note": "mix letflow.check.test's own exit reflects the underlying mix test exit 2, which is expected/correct behavior for a task whose job is to surface real failures -- it is not evidence of a bug in the check task itself. The 2 failures are the same pre-existing rustc-toolchain-absent environment gap identified above, not new."
+    },
+    "scope_check": {
+      "command": "git diff origin/main...HEAD --stat",
+      "result": "22 files changed: lib/letflow/engine.ex, lib/letflow/engine/snapshot_writer.ex, lib/letflow/event_store/instance_projection.ex, lib/letflow/tenant_provisioning.ex, priv/repo/migrations/20260901030001_add_join_counters_to_instance_projections.exs, the 4 new/changed test files, lib/letflow/design/iss0397-join-counters-fix.md, docs/anti-patterns.md, and handoffs/registry.json plus this run's own handoff files. Neither failing test file (test/letflow/secrets_test.exs, test/mix/tasks/letflow_check_toolchain_test.exs) appears in this diff."
+    },
+    "summary": "PASS. mix compile --warnings-as-errors: clean, 0 warnings/errors, exit 0. Migration 20260901030001_add_join_counters_to_instance_projections.exs applies cleanly (verified via successful join_counters column queries throughout every test run). Targeted 4-file ISS-0397 suite: 36/36 passed. Full parallel suite (scripts/test_parallel.sh): 3027/3030 passed, 3 failures -- all 3 independently triaged and confirmed pre-existing/unrelated to this branch's diff (1 flaky StreamData property test in secrets_test.exs that passed cleanly on immediate re-run; 2 deterministic rustc-toolchain-absent environment failures in letflow_check_toolchain_test.exs, a file this branch never touches, reproduced identically in isolation). Full serial suite (mix letflow.check.test, run synchronously to completion over ~25.5 minutes): 3031/3033 passed, 2 failures -- the same rust-pin :enoent failures, same root cause. No new failure introduced by ISS-0397's fix or its tests. No genuine regression found; no rework needed.",
+    "routing": "Route to Step 6 ISSUE-FIXER (WF-03 close step) with a recommendation that ISS-0397 itself is verified fixed and this run's only outstanding non-blocking findings are: (1) a pre-existing flaky property test in test/letflow/secrets_test.exs unrelated to this issue, worth a future hardening pass (e.g. excluding trivially-short generated plaintexts prone to substring collision), and (2) this sandbox environment has no rustc installed, so test/mix/tasks/letflow_check_toolchain_test.exs's rust-pin tests cannot pass here regardless of branch -- an environment gap, not a code defect."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": [
+    {
+      "gate": "SECURITY-REVIEWER",
+      "status": "PASS",
+      "at": "2026-09-01T19:08:28Z"
+    },
+    {
+      "gate": "REVIEWER",
+      "status": "PASS",
+      "at": "2026-09-01T19:15:16Z"
+    },
+    {
+      "gate": "TEST-DESIGN-VALIDATOR",
+      "status": "PASS",
+      "at": "2026-09-01T19:25:33Z"
+    },
+    {
+      "gate": "TEST-RUNNER",
+      "status": "PASS",
+      "at": "2026-09-01T20:05:00Z"
+    }
+  ]
+}

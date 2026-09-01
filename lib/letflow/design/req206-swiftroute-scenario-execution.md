@@ -25,29 +25,77 @@ find / -maxdepth 3 -iname "*R-Co*" / "*ai-dala*" -> no checkout found (only an u
   /app/ai-dala-news docker-compose tree, not the R-Co source repository)
 ```
 
-REQ-205's own shipped handoff (`handoffs/WF02-REQ205-20260831/step-01-code-designer.json`,
-its `result` disposition text) records the identical constraint for that session and
-explains the consequence: `test/fixtures/simulation/{swiftroute,vortex,meridian}/*.yaml`
-were **not** ported byte-for-byte from R-Co (AC1's literal text), because R-Co's
-`tests/simulation/companies/` tree was unreachable from that sandbox too — they are
-**self-authored synthetic fixtures**, each carrying a header comment stating this,
-that exercise the identical shapes (`company.yaml`/`org_structure.yaml`/`process_*.yaml`)
-the design specifies. There is no evidence in `handoffs/` of any sibling session having
-gained *new* R-Co access since — the "sibling session apparently gained R-Co access...
-per ISS-0388" framing in this run's own task description is a misreading: `ISS-0388` is
-cited only as a **provenance comment** inside the already-ported synthetic fixture
-files (`# Ported from R-Co tests/simulation/companies/swiftroute/company.yaml
-(ISS-0388)`), not as evidence of a session that actually read R-Co's filesystem. No
-`docs/issues/ISS-0388.yaml` record exists in this repo, and no handoff shows an `ls`/`find`
-against R-Co succeeding. **Conclusion for this requirement: R-Co's real
-`tests/simulation/scenarios/*.yaml` corpus is equally unreachable here.** The 4
-SwiftRoute scenario YAMLs this requirement needs must be **self-authored synthetic
-fixtures**, structurally faithful to the requirement description's own field-by-field
-account (step counts, `via` values, the EUR 750/500 threshold, the missing-endpoint
-note, the missing pipeline_test path) — same disposition REQ-205 already established
-and disclosed, not a new compromise invented here. Every ported/authored scenario file
-carries a header comment stating this explicitly, matching the company/org/process
-fixtures' own convention.
+**Correction (this rework, verified independently this session — see below):** an
+earlier draft of this section claimed the company/org/process fixtures were *still*
+synthetic and that no `ISS-0388` record existed in this repo. Both claims were wrong,
+and this session re-verified the correction firsthand rather than taking ORCH's word
+for it:
+
+- `docs/issues/ISS-0388.yaml` **does exist** on this branch (present on `main` before
+  this feature branch was even cut). Its `status` is `resolved`, and its `resolution`
+  field states: fixed by a sibling session with genuine R-Co filesystem access
+  (commit `f7ffbeb6`, PR #766, merged); all 12 fixture files under
+  `test/fixtures/simulation/{swiftroute,vortex,meridian}/` were replaced with real
+  content ported verbatim from R-Co's `tests/simulation/companies/` tree — real
+  `display_name`s, all real people/`actor_id`s (7 swiftroute, 9 vortex, 10 meridian)
+  matching R-Co's actual org structure, and real process graphs translated to
+  Letflow-native format. `Letflow.Simulation.Seed`/`Runner` needed zero code changes.
+- `git log -1 --format="%an <%ae>%n%s" f7ffbeb6` confirms the commit exists in this
+  repo's history and is authored `Vladimir Titenko <tvolodi@gmail.com>` — the human
+  user's own git identity (note "tvolo", the literal username in R-Co's own
+  filesystem path `c:\Users\tvolo\dev\ai-dala\R-Co\` cited throughout this project),
+  not any `Claude (letflow-workspace)` agent identity — a genuinely different signal
+  from an agent fabricating provenance inside a sandbox, consistent with a sibling
+  session running with real R-Co filesystem access.
+- `git show f7ffbeb6 --stat` and the diff content of
+  `test/fixtures/simulation/swiftroute/org_structure.yaml` confirm the commit message's
+  specific, falsifiable claim: swiftroute's `org_structure.yaml` now lists exactly 7
+  real-looking people (`actor-swiftroute-{alice,marco,lena,tobias,jan,petra,hans}`)
+  under 4 groups, replacing what ISS-0388's own description calls a "2-person
+  synthetic stub" — matching the "7 swiftroute, 9 vortex, 10 meridian" counts in both
+  the commit message and ISS-0388's `resolution` field.
+
+**Conclusion: REQ-205's company/org/process fixtures under
+`test/fixtures/simulation/{swiftroute,vortex,meridian}/` are no longer synthetic —
+ISS-0388 (a follow-up issue REQ-205's own RELEASE-VALIDATOR filed for exactly this
+gap) got them replaced with real R-Co-ported content, on a different host/session
+than the one that authored this design.** This does **not** extend to R-Co's real
+`tests/simulation/scenarios/*.yaml` corpus — the 4 SwiftRoute *scenario* files this
+requirement (REQ-206) itself needs are a different file set (scenario definitions,
+not company/org/process fixtures) and remain independently verified unreachable from
+*this* sandbox session:
+
+```
+ls "c:\Users\tvolo\dev\ai-dala\R-Co" -> No such file or directory (this session)
+find / -maxdepth 3 -iname "*R-Co*" / "*ai-dala*" -> no checkout found (only an unrelated
+  /app/ai-dala-news docker-compose tree, not the R-Co source repository)
+```
+
+**Conclusion for this requirement stands as before despite the §0 correction above:**
+R-Co's real `tests/simulation/scenarios/*.yaml` corpus is unreachable from this
+session. The 4 SwiftRoute scenario YAMLs this requirement needs must be
+**self-authored synthetic fixtures**, structurally faithful to the requirement
+description's own field-by-field account (step counts, `via` values, the EUR 750/500
+threshold, the missing-endpoint note, the missing pipeline_test path) — the same
+disposition REQ-205 originally established and disclosed for its own fixtures (before
+ISS-0388 later fixed those), not a new compromise invented here. Every authored
+scenario file carries a header comment stating this explicitly, matching the
+company/org/process fixtures' original convention (now superseded for those files by
+ISS-0388's real content, but still the right convention for content that is, in fact,
+still synthetic).
+
+**Recommendation — file a follow-up issue mirroring ISS-0388 exactly:** the same gap
+ISS-0388 closed for the company/org/process fixtures still applies to this
+requirement's 4 scenario YAML files. This design recommends ORCH file a follow-up
+issue (same shape as `docs/issues/ISS-0388.yaml`: `discovered_by:
+RELEASE-VALIDATOR`, `severity: BLOCKER` or `MAJOR`, `tags: [fixture-porting,
+needs-r-co-access, s7]`, `affected_files` listing the 4 scenario YAMLs under
+`test/fixtures/simulation/swiftroute/scenarios/`, `related: [REQ-206]`) at Step
+6/Step Final of this run, so a future session/host with genuine R-Co filesystem
+access can port the real
+`tests/simulation/scenarios/{tenant-onboarding-happy,shipment-high-value-happy,
+shipment-ops-timeout-escalation,shipment-attach-delivery-note}.yaml`-equivalent
+content later, exactly as ISS-0388 did for the 12 company/org/process files.
 
 **Real routes confirmed by reading `lib/letflow/plugs/api_pipeline.ex` and the routers
 under `lib/letflow/routers/*.ex` this session** (mounted under `/api/v1` by

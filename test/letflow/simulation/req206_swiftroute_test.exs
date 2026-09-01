@@ -50,30 +50,60 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
   @simple_approval_graph %{
     "nodes" => [
       %{"id" => "start", "node_type" => "START"},
-      %{"id" => "ops-review", "node_type" => "HUMAN_TASK",
-        "attributes" => %{"role" => "role-ops-manager"}},
+      %{
+        "id" => "ops-review",
+        "node_type" => "HUMAN_TASK",
+        "attributes" => %{"role" => "role-ops-manager"}
+      },
       %{"id" => "ceo-approval-gate", "node_type" => "EXCLUSIVE_GATEWAY"},
-      %{"id" => "ceo-approval", "node_type" => "HUMAN_TASK",
-        "attributes" => %{"role" => "role-ceo"}},
+      %{
+        "id" => "ceo-approval",
+        "node_type" => "HUMAN_TASK",
+        "attributes" => %{"role" => "role-ceo"}
+      },
       %{"id" => "end-approved", "node_type" => "END"},
       %{"id" => "end-rejected", "node_type" => "END"}
     ],
     "edges" => [
       %{"id" => "e0", "source" => "start", "target" => "ops-review"},
-      %{"id" => "e1", "source" => "ops-review", "target" => "ceo-approval-gate",
-        "condition" => "variables.ops_decision == 'approve'"},
-      %{"id" => "e2", "source" => "ops-review", "target" => "end-rejected",
-        "condition" => "variables.ops_decision == 'reject'"},
+      %{
+        "id" => "e1",
+        "source" => "ops-review",
+        "target" => "ceo-approval-gate",
+        "condition" => "variables.ops_decision == 'approve'"
+      },
+      %{
+        "id" => "e2",
+        "source" => "ops-review",
+        "target" => "end-rejected",
+        "condition" => "variables.ops_decision == 'reject'"
+      },
       # on_timeout fallback for ops-review
       %{"id" => "fallback-ops-review", "source" => "ops-review", "target" => "end-rejected"},
-      %{"id" => "e3", "source" => "ceo-approval-gate", "target" => "ceo-approval",
-        "condition" => "variables.declared_value > 500"},
-      %{"id" => "e4", "source" => "ceo-approval-gate", "target" => "end-approved",
-        "condition" => "variables.declared_value <= 500"},
-      %{"id" => "e5", "source" => "ceo-approval", "target" => "end-approved",
-        "condition" => "variables.ceo_decision == 'approve'"},
-      %{"id" => "e6", "source" => "ceo-approval", "target" => "end-rejected",
-        "condition" => "variables.ceo_decision == 'reject'"},
+      %{
+        "id" => "e3",
+        "source" => "ceo-approval-gate",
+        "target" => "ceo-approval",
+        "condition" => "variables.declared_value > 500"
+      },
+      %{
+        "id" => "e4",
+        "source" => "ceo-approval-gate",
+        "target" => "end-approved",
+        "condition" => "variables.declared_value <= 500"
+      },
+      %{
+        "id" => "e5",
+        "source" => "ceo-approval",
+        "target" => "end-approved",
+        "condition" => "variables.ceo_decision == 'approve'"
+      },
+      %{
+        "id" => "e6",
+        "source" => "ceo-approval",
+        "target" => "end-rejected",
+        "condition" => "variables.ceo_decision == 'reject'"
+      },
       # on_timeout fallback for ceo-approval
       %{"id" => "timeout-ceo-approval", "source" => "ceo-approval", "target" => "end-rejected"}
     ]
@@ -129,7 +159,8 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
     simple_approval_attrs = %{
       name: simple_approval_name,
       version: "1.0",
-      description: "REQ-206 test-local process: exercises CEL EXCLUSIVE_GATEWAY branch without SERVICE_TASKs.",
+      description:
+        "REQ-206 test-local process: exercises CEL EXCLUSIVE_GATEWAY branch without SERVICE_TASKs.",
       graph: @simple_approval_graph,
       created_by: alice.id
     }
@@ -198,12 +229,13 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
   # Replaces "TENANT_PREFIX" in precondition/outcome args, "DEFINITION_NAME" in
   # process_id and step params, with the real test-time values.
   defp patch_scenario(scenario, schema_name: schema_name, definition_name: defn, actors: actors) do
-    %{scenario |
-      process_id: defn,
-      actors: actors,
-      preconditions: patch_preconditions(scenario.preconditions, schema_name, defn),
-      steps: patch_step_params(scenario.steps, defn),
-      expected_outcomes: patch_outcome_prefix(scenario.expected_outcomes, schema_name)
+    %{
+      scenario
+      | process_id: defn,
+        actors: actors,
+        preconditions: patch_preconditions(scenario.preconditions, schema_name, defn),
+        steps: patch_step_params(scenario.steps, defn),
+        expected_outcomes: patch_outcome_prefix(scenario.expected_outcomes, schema_name)
     }
   end
 
@@ -268,7 +300,9 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
       assert alice != nil, "alice user not found for username #{alice_username}"
 
       assert {:ok, _} =
-               Identity.create_token(alice.id, %{roles: ["PROCESS_OPERATOR"]}, prefix: schema_name)
+               Identity.create_token(alice.id, %{roles: ["PROCESS_OPERATOR"]},
+                 prefix: schema_name
+               )
 
       # Load YAML; patch with real actors and prefix
       scenario_raw =
@@ -277,8 +311,7 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
       scenario = %{
         scenario_raw
         | actors: Map.take(actors, ["actor-swiftroute-alice"]),
-          expected_outcomes:
-            patch_outcome_prefix(scenario_raw.expected_outcomes, schema_name)
+          expected_outcomes: patch_outcome_prefix(scenario_raw.expected_outcomes, schema_name)
       }
 
       assert {:ok, report} = Runner.run(scenario)
@@ -421,6 +454,7 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
 
       # Both expected_outcomes: instance ACTIVE (1 before skip, 1 after)
       assert length(report.outcome_results) == 2
+
       assert Enum.all?(report.outcome_results, &(&1.outcome == :pass)),
              "Expected both instance_state outcomes to PASS; got: #{inspect(Enum.map(report.outcome_results, & &1.outcome))}"
     end
@@ -431,9 +465,7 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
   describe "swiftroute-shipment-attach-delivery-note" do
     test "disposition :unbuilt_feature; zero steps executed; R-Co evidence in notes", _ctx do
       scenario =
-        ScenarioFixture.load!(
-          Path.join(@scenarios_dir, "shipment-attach-delivery-note.yaml")
-        )
+        ScenarioFixture.load!(Path.join(@scenarios_dir, "shipment-attach-delivery-note.yaml"))
 
       assert {:ok, report} = Runner.run(scenario)
 

@@ -50,3 +50,14 @@ source: >
 queue_task_id: 391
 github_issue: 770
 status: open
+duplicate_note: >
+  REQ-207's own RELEASE-VALIDATOR independently filed ISS-0393 (GH#773,
+  queue task 393) covering this exact same gap (plus explicitly extending
+  it to Meridian/REQ-208 and to REQ-207's own synthetic Vortex scenarios),
+  without cross-referencing this issue -- discovered when ORCH pulled task
+  393 via get_next_task. Not merged/closed as an exact duplicate since
+  ISS-0393's acceptance criteria are a superset (it also requires updating
+  REQ-206/207's design docs to remove the synthetic-fixture disclosure once
+  real content lands, which this issue does not state). Whichever of the
+  two a future session/host with real R-Co access picks up first should
+  close the other as resolved-via-duplicate, citing the one actually done.

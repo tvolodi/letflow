@@ -53,7 +53,7 @@ defmodule Letflow.Simulation.Scenario do
 
   @type expected_outcome :: %{
           required(:verification) => %{
-            method: :task_assigned | :instance_state | :audit_event,
+            method: :task_assigned | :instance_state | :audit_event | :audit_event_ordering,
             args: map()
           }
         }
@@ -561,6 +561,61 @@ defmodule Letflow.Simulation.Runner do
   end
 
   defp verify_outcome(%{verification: %{method: :audit_event, args: args}} = expected, produces) do
+    case find_audit_entry(args, produces) do
+      {:ok, matching} ->
+        outcome = if matching, do: :pass, else: :fail
+        %{expected_outcome: expected, outcome: outcome, observed: %{matching_entry: matching}}
+
+      {:error, reason} ->
+        %{expected_outcome: expected, outcome: :fail, observed: {:error, reason}}
+    end
+  end
+
+  # REQ-207 design §3.2 -- new 4th verification.method. Resolves "first" and
+  # "second" each via the same audit_event lookup logic as the clause above
+  # (find_audit_entry/2, shared rather than duplicated), then compares real
+  # queried `timestamp` fields. :pass iff both entries were found AND
+  # first.timestamp < second.timestamp; :fail otherwise, with `observed`
+  # always carrying both real entries (or nil for whichever was not found) --
+  # same "always carry real queried state, never infer PASS from absence of
+  # error" discipline the other three methods already follow.
+  defp verify_outcome(
+         %{verification: %{method: :audit_event_ordering, args: args}} = expected,
+         produces
+       ) do
+    with {:ok, first_args} <- fetch_ordering_side(args, "first"),
+         {:ok, second_args} <- fetch_ordering_side(args, "second"),
+         {:ok, first_entry} <- find_audit_entry(first_args, produces),
+         {:ok, second_entry} <- find_audit_entry(second_args, produces) do
+      outcome =
+        if first_entry && second_entry &&
+             DateTime.compare(first_entry.timestamp, second_entry.timestamp) == :lt,
+           do: :pass,
+           else: :fail
+
+      %{
+        expected_outcome: expected,
+        outcome: outcome,
+        observed: %{first: first_entry, second: second_entry}
+      }
+    else
+      {:error, reason} ->
+        %{expected_outcome: expected, outcome: :fail, observed: {:error, reason}}
+    end
+  end
+
+  defp fetch_ordering_side(args, key) do
+    case Map.fetch(args, key) do
+      {:ok, side_args} when is_map(side_args) -> {:ok, side_args}
+      _other -> {:error, {:missing_arg, key}}
+    end
+  end
+
+  # Shared audit_event lookup: template-substituted resource_id/resource_type,
+  # real Audit.list_entries/1 query, first matching row by action/resource_id/
+  # resource_type. Used by both the :audit_event and :audit_event_ordering
+  # verify_outcome/2 clauses above.
+  defp find_audit_entry(args, produces) do
     with {:ok, prefix} <- fetch_prefix(args),
          {:ok, resource_id} <- resolve_optional_ref(args, "resource_id", produces),
          {:ok, resource_type} <- resolve_optional_ref(args, "resource_type", produces) do
@@ -574,17 +629,9 @@ defmodule Letflow.Simulation.Runner do
       }
 
       case Audit.list_entries(query_params) do
-        {:ok, %{items: items}} ->
-          matching = Enum.find(items, &(&1.action == expected_action))
-          outcome = if matching, do: :pass, else: :fail
-          %{expected_outcome: expected, outcome: outcome, observed: %{matching_entry: matching}}
-
-        {:error, reason} ->
-          %{expected_outcome: expected, outcome: :fail, observed: {:error, reason}}
+        {:ok, %{items: items}} -> {:ok, Enum.find(items, &(&1.action == expected_action))}
+        {:error, reason} -> {:error, reason}
       end
-    else
-      {:error, reason} ->
-        %{expected_outcome: expected, outcome: :fail, observed: {:error, reason}}
     end
   end
 

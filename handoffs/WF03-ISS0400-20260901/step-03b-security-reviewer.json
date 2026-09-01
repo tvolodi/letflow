@@ -1,0 +1,51 @@
+{
+  "handoff_id": "41e1ce42-6ab8-426d-986d-239068661a99",
+  "run_id": "WF03-ISS0400-20260901",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0400-20260901/step-03b-security-reviewer.json",
+  "created_at": "2026-09-01T17:24:53Z",
+  "started_at": "2026-09-01T17:24:53Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/design/iss0400-nested-parallel-gateway-fix.md",
+      "handoffs/WF03-ISS0400-20260901/step-03-elixir-dev.json"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"]
+  },
+  "task": {
+    "description": "Security gate on the ISS-0400 fix in lib/letflow/engine/transition.ex (diff: git diff main...feature/WF03-ISS0400-20260901 -- lib/letflow/engine/transition.ex). This changes Letflow.Engine.Transition's gateway-dispatch/leaf-lookahead logic (collect_leaf_gateways/3, new resolve_nested_split/3), used at PARALLEL_GATEWAY split-node activation for every tenant's workflow instances -- a tenant-data path per this project's own security-invariants.md scope test. Score every invariant INV-1..INV-8 explicitly, APPLIES or NOT-APPLICABLE, same convention as every other gate in this pipeline. Pay particular attention to whether the new recursive resolve_nested_split/3 path could be driven by attacker/tenant-controlled workflow-definition content (a maliciously or accidentally deeply-nested PARALLEL_GATEWAY chain) into unbounded resource consumption -- this is exactly the DoS-shaped risk class ISS-0398's own design had to fix once already (a naive-visited-set-copy exponential blowup), and CODE-DESIGN-VALIDATOR's two gate passes on this design already checked this from a soundness/termination angle; your job is the security framing of the same mechanism -- is a workflow definition (which a tenant with definition-authoring rights fully controls) able to use this new code path to cause disproportionate resource consumption relative to the definition's own size, and is that bounded the same way ISS-0398's existing @max_nodes 500 bound already covers, or does nesting introduce a multiplicative cost the flat bound doesn't actually catch.",
+    "acceptance_criteria": [
+      "INV-1 through INV-8 each explicitly scored APPLIES/NOT-APPLICABLE with a verdict",
+      "The DoS/resource-consumption framing of the new resolve_nested_split/3 recursive path is explicitly assessed against tenant-controlled workflow-definition content, not just accepted from the design gate's own termination proof",
+      "Verdict is PASS or FAIL with issues at BLOCKER/MAJOR/MINOR severity, specific and actionable"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "Not yet completed by the receiving agent.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0400-20260901",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0400-20260901",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Not yet dispatched"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

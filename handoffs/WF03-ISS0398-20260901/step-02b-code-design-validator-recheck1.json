@@ -1,0 +1,81 @@
+{
+  "handoff_id": "WF03-ISS0398-20260901-step-02b-recheck1",
+  "run_id": "WF03-ISS0398-20260901",
+  "workflow_id": "WF-03",
+  "step": "2b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0398-20260901/step-02b-code-design-validator-recheck1.json",
+  "created_at": "2026-09-01T14:18:01Z",
+  "started_at": "2026-09-01T14:18:01Z",
+  "completed_at": "2026-09-01T14:18:01Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-051"],
+    "issue_ids": ["ISS-0398"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0398-20260901/step-02-code-designer-rework1.json",
+      "handoffs/WF03-ISS0398-20260901/step-03c-security-reviewer.json",
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/definitions/graph.ex",
+      "test/letflow/engine/parallel_gateway_test.exs"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"],
+    "branch_name": "fix/ISS-0398-walk-to-gateway-20260901"
+  },
+  "task": {
+    "description": "FULL re-gate (not a narrow diff check) of CODE-DESIGNER's rework-1 design (lib/letflow/design/iss0398-walk-to-gateway-fix.md, commit eabb93b8) after SECURITY-REVIEWER's BLOCKER INV-8 finding on the original design. Independently re-verify memo-key soundness, the complexity bound, on_path/memo separation, AC1-AC6 non-regression, the new diamond_chain_graph/1 stress-fixture spec, and absence of implementation code.",
+    "acceptance_criteria": [
+      "Memo-key-alone (node_id) soundness independently re-derived against graph.ex's real CHK-06 cycle rule, not accepted from the design's own §2.2.1 argument",
+      "§2.4a's k=3 complexity trace independently recomputed, and reasoned about for general k",
+      "on_path vs memo separation confirmed not to hide a real cycle",
+      "AC1-AC6 re-verified unaffected against the real three_branch_graph/0 fixture",
+      "diamond_chain_graph/1 stress-fixture spec precise enough for TEST-DESIGNER to implement as a genuine regression test for the exact INV-8 defect class",
+      "No implementation code in the design document"
+    ]
+  },
+  "result": {
+    "status": "FAILED",
+    "summary": "Checks 1 (read real collect_leaf_gateways/3, transition.ex:836-883) and 7 (no implementation code -- grepped the whole document for defmodule/defstruct/def/defp, zero hits besides the one prose reference to those tokens in the document's own scope statement) both pass; the still-shipped algorithm matches exactly what the rework's own 'Iteration 2' note (lines 16-28) and design-designer summary describe as the O(2^k) defect being replaced, confirming the starting point is understood correctly.\n\nHowever, check 2 (memo-key soundness) FAILS with a concrete counterexample, and this is a second BLOCKER of the same class SECURITY-REVIEWER found in iteration 1 -- a correctness defect this time, not a performance one.\n\nSECOND BLOCKER -- memo keyed on node_id alone is UNSOUND for any graph containing a legitimate cycle-through-a-gateway (a structurally-legal shape CHK-06 explicitly permits: lib/letflow/definitions/graph.ex lines 552-556 and 644-661 -- 'a cycle is permitted iff at least one endpoint of the closing back-edge is a gateway node', confirmed by reading check_cycles/1 and dfs_visit/6 directly, not accepted from the design's citation of it). Section 2.2.1's central claim -- 'a node's own computation... is a static property of the graph and node_id... by the time anything is written to memo, it is guaranteed context-free' -- is disproved by direct hand-trace, not merely questioned:\n\nConstruction: nodes X (single edge -> GW), GW (:EXCLUSIVE_GATEWAY, single edge -> C), C (single edge -> B), B (:EXCLUSIVE_GATEWAY, out-degree 2: B -> GW [closing the cycle GW->C->B->GW, legal per CHK-06 since B and GW are both gateway-typed] and B -> D), D (single edge -> JOIN), JOIN (:PARALLEL_GATEWAY, real target, single edge -> an END node). A split node has two branches: branch1 -> X (reaching GW only via X, i.e. WITHOUT B as an ancestor), branch2 -> B (reaching GW WITH B as an ancestor, since B is the branch root). This graph passes CHK-04 (every non-terminal node has >=1 in/out edge) and CHK-06 (the only cycle's back-edge closes on B, a gateway node) cleanly -- it is exactly the kind of tenant-authored, structurally-valid shape this design's own §2.4a trace exists to reason about.\n\nTracing per §2.2.2's own rules, branch1 (X) evaluated FIRST (memo starts {} per §2.5): collect(X)->collect(GW,on_path={X})->collect(C,on_path={X,GW})->collect(B,on_path={X,GW,C}) -- B is FRESH here (not an ancestor of itself in this entry), so B does its own out-degree-2 fold: edge B->GW hits GW already in on_path={X,GW,C,B} -> cycle -> :dead_end (uncached, per step 2's own rule); edge B->D reaches D->JOIN fresh -> {:gateway,\"JOIN\"} (cached). B's own result = union(:dead_end, {:gateway,\"JOIN\"}) = a 2-element ambiguous set, cached under memo[\"B\"]. Unwinding: memo[\"C\"] = same 2-element set, and -- critically -- memo[\"GW\"] = same 2-element set too (GW's own single-edge chain just forwards C's/B's result). So after branch1 finishes, memo[\"GW\"] is a 2-ELEMENT set.\n\nNow evaluate branch2 (B) directly, WITH this memo carried forward per §2.5's cross-branch threading (the exact mechanism this rework added): collect(B,on_path=∅,memo={...,\"GW\": 2-elem,...}) -- B is fresh (on_path empty), out-degree 2: edge B->GW is now a MEMO HIT (step 1 fires before on_path is even consulted) -- returns the cached 2-element set for GW *without recursing*, even though B is the direct entry point this time and the ground-truth (iteration-1, unmemoized) answer for 'B->GW->C->B' entered THIS way is a clean singleton :dead_end (B is its own ancestor on this path, so the cycle trips cleanly with no escape contribution mixed in from this edge alone -- the escape only enters through B's OTHER edge, B->D, in the correct computation). The memo hit substitutes GW's iteration1-context-dependent cached value (2-elem, computed under X's ancestry) for what should have been a fresh, direct dead_end computation under B's own ancestry. In this specific topology the final union for B still lands on the same 2-element set by coincidence (because {:gateway,\"JOIN\"} was already one of the two elements being substituted in), so the externally-visible {:error,:no_matching_join} outcome for both branches happens to match in this instance -- but the mechanism demonstrated is real and general: memo[\"GW\"] observably takes two DIFFERENT values (:dead_end if B is evaluated first with fresh memo, vs a 2-element set if X is evaluated first) for the exact same static node and the exact same static graph, purely as a function of branch evaluation ORDER. This directly falsifies §2.2.1's soundness proof ('the finished result... is a static property of the graph and node_id... ancestry plays no role') -- ancestry (specifically, which top-level branch was folded first over the shared `memo` per §2.5) demonstrably does change what gets cached under a given node_id. Whether this always self-heals to the same final top-level answer (as it happened to in this minimal 2-escape-edge example) or can be made to flip a genuinely ambiguous branch into a false {:ok, wrong_gateway} match, or a genuinely resolvable branch into a false {:error,:no_matching_join}, in a richer topology (e.g. an SCC with more than one distinct escape gateway, or a cycle spanning more than 2 branching nodes) was not fully resolved in the time available for this gate -- but it does not need to be, to fail this check: the design's own stated acceptance criterion is that the memo key is CONTEXT-FREE by the time it is written, and I have a concrete, checkable trace showing it is not, for a graph shape CHK-06 explicitly legalizes. A memoization scheme whose correctness argument is false for a legal input class is a design defect regardless of whether this reviewer additionally proves the worst-case externally-visible symptom.\n\nThis needs to go back through CODE-DESIGNER, not ELIXIR-DEV: the flaw is in the design's own §2.2.1 memo-key argument (the mechanism, not an implementation slip), the same relationship SECURITY-REVIEWER's iteration-1 finding had to the design. Naive memoized DFS keyed on node_id alone is a well-known-unsound technique for reachability-style fixpoints over graphs containing cycles outside a DAG; a durable fix likely needs either (a) computing strongly-connected components first (e.g. via the same DFS-with-on_path-stack machinery, Tarjan-style) and memoizing at SCC granularity so every node in one SCC shares one jointly-computed, order-independent value, or (b) some other construction that CODE-DESIGNER justifies as genuinely order-independent for this exact shape -- not prescribing the fix per this role's mandate not to redesign, only naming the defect and a plausible direction.\n\nChecks 3 (complexity bound), 4 (on_path/memo separation for the non-cyclic case), 5 (AC1-AC6 non-regression against the real three_branch_graph/0 fixture, which contains no cycles and is therefore unaffected by this specific defect), and 6 (diamond_chain_graph/1 stress-fixture spec, which is also acyclic-per-diamond and so does not exercise this defect either) were reviewed and did not independently surface further issues -- but per this workflow's 'FAIL immediately on any check failure -- no partial credit' rule, the single BLOCKER above is sufficient and complete grounds for FAILED regardless of those other checks passing. Recommend CODE-DESIGNER's rework-2 also add a cyclic-chain stress/correctness fixture alongside diamond_chain_graph/1 (a cycle-through-gateway shape, per this handoff's counterexample) so this defect class gets its own regression coverage once fixed, mirroring how diamond_chain_graph/1 exists specifically because SECURITY-REVIEWER's iteration-1 finding needed one.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0398-20260901/step-02b-code-design-validator-recheck1.json"
+    ],
+    "issues": [
+      "BLOCKER: lib/letflow/design/iss0398-walk-to-gateway-fix.md §2.2.1's memo-key-soundness argument is false for graphs containing a cycle-through-a-gateway node (a shape CHK-06, lib/letflow/definitions/graph.ex lines 552-556/644-661, explicitly permits as structurally legal). Concrete counterexample in result.summary: node GW's cached memo value differs (a clean :dead_end singleton vs. a 2-element ambiguous set) depending purely on which of two sibling top-level branches (sharing `memo` per this rework's own §2.5 cross-branch threading) is evaluated first. This falsifies 'by the time anything is written to memo, it is guaranteed context-free' and is not merely a missing edge-case discussion -- it is a demonstrated, checkable defect in the design's own worked reasoning.",
+      "The design's §2.4/§2.4a worked examples only cover acyclic diamond shapes (paths reconverge but never loop back to an ancestor) -- neither traces a graph containing a genuine cycle through a branching gateway, which is exactly the shape CHK-06 anticipates and the shape this counterexample uses. A future rework's worked-example set should include at least one such case.",
+      "Not fully resolved by this gate (named honestly, not silently dropped): whether the order-dependent memo pollution demonstrated here can be extended to produce an externally-visible false {:ok, wrong_gateway} match or false {:error, :no_matching_join} regression for a graph that iteration-1's (correct, if slow) per-path semantics would have resolved differently. The gate does not require resolving this to FAIL -- the falsified soundness proof is sufficient -- but CODE-DESIGNER's rework-2 should address it directly rather than re-asserting node-id-alone soundness without a corrected proof."
+    ],
+    "next_action": "Rework CODE-DESIGNER: revise lib/letflow/design/iss0398-walk-to-gateway-fix.md's memoization scheme so cached values are provably order/entry-independent for graphs containing a legal cycle-through-a-gateway (CHK-06), e.g. by memoizing at strongly-connected-component granularity rather than per-node, or by another construction with a corrected, non-circular soundness proof -- then add a cyclic-chain worked example (alongside the existing acyclic diamond examples) tracing it concretely, and route back to a fresh CODE-DESIGN-VALIDATOR full re-gate before this returns to ELIXIR-DEV for re-implementation and a fresh SECURITY-REVIEWER pass."
+  },
+  "rework_count": 2,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "step": "2b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-01T12:55:25Z"
+    },
+    {
+      "step": "3c",
+      "agent": "SECURITY-REVIEWER",
+      "result": "FAIL",
+      "timestamp": "2026-09-01T14:40:00Z"
+    },
+    {
+      "step": "2",
+      "agent": "CODE-DESIGNER",
+      "result": "REWORKED",
+      "timestamp": "2026-09-01T14:55:00Z"
+    },
+    {
+      "step": "2b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "FAILED",
+      "timestamp": "2026-09-01T14:18:01Z"
+    }
+  ]
+}

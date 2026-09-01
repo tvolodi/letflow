@@ -657,6 +657,26 @@ defmodule Letflow.Engine.ParallelGatewayTest do
       # lookahead discovers.
       assert "B" in Enum.map(new_state_a.tokens, & &1.node_id)
       assert "B" in Enum.map(new_state_b.tokens, & &1.node_id)
+
+      # THE actual regression assertion for the memo-key-unsoundness defect
+      # (design doc §2.2.1/§2.4b): branch_id assignment in
+      # dispatch_parallel_split/4 is purely positional (token_id <> "/" <>
+      # index), independent of which node each edge targets, so
+      # branch_ids_a and branch_ids_b -- and therefore the two JoinCounters
+      # built from them -- are expected to be identical, byte-for-byte,
+      # regardless of which cycle-adjacent branch ("X"-entry or "B"-entry)
+      # find_matching_join/2's outer fold happens to evaluate first. A
+      # plain node-keyed memo (iteration 2's falsified scheme) could not
+      # guarantee this: §2.4b's own trace shows it produced a clean
+      # singleton value for "GW" under a "B"-first entry order but a
+      # two-element, non-singleton value under an "X"-first entry order --
+      # asserting only per-fixture success (as the two blocks above do)
+      # would not by itself distinguish "both orders happen to land on the
+      # same conclusion" from "both orders happen to independently fail or
+      # coincidentally agree." Comparing the two JoinCounters directly is
+      # the literal cross-order agreement check the design doc calls for.
+      assert Enum.sort(branch_ids_a) == Enum.sort(branch_ids_b)
+      assert counter_a == counter_b
     end
 
     test "a pure escape-less cycle (no gateway reachable) fails the whole split cleanly" do

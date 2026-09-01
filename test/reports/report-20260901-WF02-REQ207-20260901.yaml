@@ -1,0 +1,109 @@
+run_id: WF02-REQ207-20260901
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+generated_at: "2026-09-01T08:16:26Z"
+branch: feature/WF02-REQ207-20260901
+commit: 31d8c6c3
+
+command: scripts/test_parallel.sh
+mechanism: >
+  Full suite run as N parallel `mix test --partitions N` processes; each
+  partition's own ExUnit Result:/Failed: summary line parsed and summed into
+  one combined total. Exit 0 iff every partition's *parsed* count shows 0
+  failures (parsed count authoritative, not each partition's raw process
+  exit code).
+
+partition_count:
+  N: 16
+  source: nproc
+  note: >
+    $TEST_PARALLEL_N was unset in this shell (confirmed via `echo
+    "TEST_PARALLEL_N=$TEST_PARALLEL_N"` -> empty), and `nproc` returned 16,
+    matching the script's own log line "N=16 (source: nproc)".
+
+environment:
+  toolchain: local (Elixir at /c/Program Files/Elixir/bin/elixir, mix at
+    /c/Program Files/Elixir/bin/mix) -- no Docker fallback needed.
+  postgres: docker compose (letflow-2-postgres-1), host port 5472 per this
+    workspace's untracked .env (LETFLOW_DB_PORT=5472) -- distinct from the
+    sibling letflow workspace's 5462, no container-sharing collision.
+  containers_brought_up: [letflow-2-postgres-1, letflow-2-keycloak-1]
+
+result:
+  status: PASS
+  combined_tests: 2991
+  combined_properties: 6
+  combined_total: 2997
+  combined_passed: 2997
+  combined_failures: 0
+  per_partition:
+    - {partition: 1,  tests: 156, properties: 0, failures: 0, exit: 0}
+    - {partition: 2,  tests: 161, properties: 0, failures: 0, exit: 0}
+    - {partition: 3,  tests: 244, properties: 0, failures: 0, exit: 0}
+    - {partition: 4,  tests: 282, properties: 0, failures: 0, exit: 0}
+    - {partition: 5,  tests: 104, properties: 0, failures: 0, exit: 0}
+    - {partition: 6,  tests: 163, properties: 0, failures: 0, exit: 0}
+    - {partition: 7,  tests: 246, properties: 0, failures: 0, exit: 0}
+    - {partition: 8,  tests: 177, properties: 1, failures: 0, exit: 0}
+    - {partition: 9,  tests: 179, properties: 0, failures: 0, exit: 0}
+    - {partition: 10, tests: 271, properties: 0, failures: 0, exit: 0}
+    - {partition: 11, tests: 185, properties: 2, failures: 0, exit: 0}
+    - {partition: 12, tests: 205, properties: 0, failures: 0, exit: 0}
+    - {partition: 13, tests: 248, properties: 0, failures: 0, exit: 0}
+    - {partition: 14, tests: 162, properties: 0, failures: 0, exit: 0}
+    - {partition: 15, tests: 97,  properties: 2, failures: 0, exit: 0}
+    - {partition: 16, tests: 111, properties: 1, failures: 0, exit: 0}
+
+raw_output: |
+  test_parallel: N=16 (source: nproc)
+  test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+  test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+  test_parallel: seeding 16 per-partition build paths from _build/test (sequential)
+  test_parallel: partition logs in /tmp/letflow_test_parallel.SbQCqk
+  test_parallel: TEST_PARALLEL_GROUP=tp10 (shared by all 16 partitions)
+  partition 1: 156 tests, 0 properties, 0 failures, exit 0
+  partition 2: 161 tests, 0 properties, 0 failures, exit 0
+  partition 3: 244 tests, 0 properties, 0 failures, exit 0
+  partition 4: 282 tests, 0 properties, 0 failures, exit 0
+  partition 5: 104 tests, 0 properties, 0 failures, exit 0
+  partition 6: 163 tests, 0 properties, 0 failures, exit 0
+  partition 7: 246 tests, 0 properties, 0 failures, exit 0
+  partition 8: 177 tests, 1 property, 0 failures, exit 0
+  partition 9: 179 tests, 0 properties, 0 failures, exit 0
+  partition 10: 271 tests, 0 properties, 0 failures, exit 0
+  partition 11: 185 tests, 2 properties, 0 failures, exit 0
+  partition 12: 205 tests, 0 properties, 0 failures, exit 0
+  partition 13: 248 tests, 0 properties, 0 failures, exit 0
+  partition 14: 162 tests, 0 properties, 0 failures, exit 0
+  partition 15: 97 tests, 2 properties, 0 failures, exit 0
+  partition 16: 111 tests, 1 property, 0 failures, exit 0
+  ---
+  combined: 2991 tests, 6 properties, 0 failures (2997/2997 passed)
+
+failure_attribution:
+  count: 0
+  note: >
+    No failures observed this run. The two previously-reported Windows
+    grep :enoent failures (Lua SandboxTest, WASM HostApiTest) attributed as
+    pre-existing on REQ-199's run did NOT reproduce here -- consistent with
+    that class being intermittent/environmental, not a standing failure.
+    Nothing to attribute, nothing to file.
+
+diff_scope_reviewed:
+  - test/support/simulation/runner.ex
+  - test/support/simulation/scenario_fixture.ex
+  - test/letflow/simulation/req207_vortex_test.exs
+  - test/fixtures/simulation/vortex/scenarios/entity-list-filter-and-page.yaml
+  - test/fixtures/simulation/vortex/scenarios/production-order-above-threshold.yaml
+  - test/fixtures/simulation/vortex/scenarios/supplier-quality-deviation-critical.yaml
+  - test/fixtures/simulation/vortex/scenarios/supplier-quality-deviation-false-positive.yaml
+  - lib/letflow/design/req207-vortex-scenario-execution.md
+  note: >
+    All in-branch executable-surface files ran clean within the full suite
+    (req207_vortex_test.exs's 4 describe blocks execute across whichever
+    partition drew them; no partition reported a failure, so this file's
+    tests are confirmed passing as part of the combined 2997/2997).
+
+verdict: PASS
+next_action: Route to RELEASE-VALIDATOR

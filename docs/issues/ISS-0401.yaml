@@ -39,4 +39,30 @@ source: >
   triage), direct reproduction against a throwaway git worktree at main.
 queue_task_id: 401
 github_issue: 785
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0401-20260902
+resolved_at: "2026-09-01T19:58:39Z"
+resolution: >
+  Root cause (directly measured by ISSUE-FIXER, not guessed):
+  Letflow.Repository is genuinely compiled with upsert_content/6 exported
+  (confirmed via the .beam file's own export table), but is not yet
+  loaded into the BEAM process's code table at the moment
+  attachments_test.exs:392 runs standalone -- function_exported?/3 checks
+  the loaded-module table and returns false for a compiled-but-unloaded
+  module; it does not trigger a load as a side effect.
+  __info__(:functions) appearing to "fix" it in ad-hoc checks was
+  incidental (other code executed first happened to load the module),
+  not a property of __info__ itself. Confirmed deterministic given
+  which tests ran before it in the same process, not a timing/parallelism
+  flake. Fix: added a Code.ensure_loaded?(Repository) guard immediately
+  before the assertion in the one affected test
+  (test/letflow/repository/attachments_test.exs:392-397). Qualified for
+  ORCH's direct-action sizing rule (docs/agents/ORCHESTRATOR.md section
+  10): exactly one file changed, no new public function/module/@spec, no
+  migration, not a supervision-tree file, not a tenant-data path, and the
+  test's own asserted expected value is unchanged (still asserts
+  upsert_content/6 is exported -- only the reliability of observing that
+  improves). Fail-then-pass proven directly: 0/1 passed pre-fix (via
+  git stash), 1/1 passed post-fix, reliably reproduced 5/5 standalone
+  reruns; full attachments_test.exs file 18/18 passed post-fix. No design
+  gate or reviewer chain was needed given the sizing-rule qualification.

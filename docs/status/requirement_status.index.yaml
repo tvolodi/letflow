@@ -1478,8 +1478,12 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 1
+    entries: 2
     note: >
+      Incremented to 2 by ORCH's own WF03-ISS0400-20260901 started-event
+      append (Step 00) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v8.yaml` = 2 on-disk entries, no
+      rebase conflict on this file.
       Incremented to 1 by ORCH's Step-Final rebase of
       feature/WF02-REQ211-20260901 onto main, appending REQ-211's own
       done-event (originally written into the just-closed volume 7 before

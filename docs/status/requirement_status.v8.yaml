@@ -221,3 +221,22 @@ history:
       that a concurrent merge later rolls out from under it. `grep -c "^  -
       req:" docs/status/requirement_status.v8.yaml` = 1 on-disk entry, the
       first in this volume.
+
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-01T16:50:58Z"
+    note: >
+      WF03-ISS0400-20260901 started (queue task 400, GH#784). ISS-0400:
+      Engine collect_leaf_gateways/3 does not support a PARALLEL_GATEWAY
+      nested inside a fork branch -- explicitly named out-of-scope by
+      ISS-0398's own fix design. Before branching, found ISS-0398's fix
+      (PR #783, a sibling session's completed WF-03 run, all CI green,
+      mergeable, not a draft, no blocking reviews) still open and unmerged
+      with queue task 398 locked by a different agent_id (409 on
+      set_lock) -- ISS-0400's own base (collect_leaf_gateways/3) did not
+      exist on main. Squash-merged PR #783 directly (commit 58e3c64e)
+      rather than duplicate or block indefinitely, per this operator's
+      sibling-session discretion rule; did NOT force-release task 398's
+      lock, left to that session's own Step Final. Branched
+      feature/WF03-ISS0400-20260901 from the updated main (58e3c64e).

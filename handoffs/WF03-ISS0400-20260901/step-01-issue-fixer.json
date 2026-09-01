@@ -1,0 +1,54 @@
+{
+  "handoff_id": "4ed34a97-f8dc-4dbc-9813-16c0fc35f1d7",
+  "run_id": "WF03-ISS0400-20260901",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0400-20260901/step-01-issue-fixer.json",
+  "created_at": "2026-09-01T16:52:03Z",
+  "started_at": "2026-09-01T16:52:03Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0400.yaml",
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md",
+      "lib/letflow/engine/transition.ex",
+      "test/letflow/engine/parallel_gateway_test.exs"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"]
+  },
+  "task": {
+    "description": "Step 0.5 (registry lookup) and Step 1 (diagnose) for ISS-0400, per WF-03. ISS-0400's own record (docs/issues/ISS-0400.yaml) already names the affected function (Letflow.Engine.Transition.collect_leaf_gateways/3), the affected file, and the mechanism (a PARALLEL_GATEWAY node is currently always treated as an immediate terminal leaf during the Tarjan-SCC memoized DFS walk, which is correct for the outer split's own join search but means a genuinely nested PARALLEL_GATEWAY split/join pair inside one branch of an outer split cannot be resolved -- the outer find_matching_join/2 call has no way to first resolve the inner pair and treat its result as a single leaf). Do not take that description as sufficient on its own (No Speculation, HANDOFF_PROTOCOL.md section 1.1): reproduce the failure directly -- construct or locate a graph fixture with a PARALLEL_GATEWAY nested inside one branch of an outer PARALLEL_GATEWAY split (before that branch reaches the outer join), run it through the current collect_leaf_gateways/3 / find_matching_join/2 path, and confirm the actual failure mode (which error, or which silent-wrong-answer, results) rather than assuming the yaml's prose is exactly right. Then produce a root-cause diagnosis: which function needs to change, what invariant is missing, and what shape a fix needs (e.g. does the outer walk need to recursively resolve an inner split/join pair before treating its result as one leaf, and if so what does 'resolve' mean precisely -- a recursive call to the same join-finding logic, scoped to the inner PARALLEL_GATEWAY's own reachable subgraph). Do NOT implement the fix. Step 0.5: also check docs/issues/*.yaml for any other resolved entry describing the same or a closely related symptom (ISS-0398 itself is the obvious related entry, already linked -- read its own resolution and design doc so the diagnosis doesn't duplicate work) before writing the diagnosis.",
+    "acceptance_criteria": [
+      "The failure is reproduced directly against real code (a real test run or repro script quoting real output), not inferred from ISS-0400.yaml's prose alone",
+      "Root cause is stated in terms of the specific function(s) and the specific missing invariant/logic gap, not a restatement of the symptom",
+      "The diagnosis states what shape a fix needs to take, without writing implementation code",
+      "docs/issues/*.yaml resolved entries were checked for a prior match before concluding this is a new root cause",
+      "result.next_action names CODE-DESIGNER as the next step"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "Not yet completed by the receiving agent.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0400-20260901",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0400-20260901",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Not yet dispatched"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,56 @@
+{
+  "handoff_id": "421a05b0-fd77-476b-b8f3-0b6650172eb7",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0392-20260901/step-01-issue-fixer.json",
+  "created_at": "2026-09-01T10:19:27Z",
+  "started_at": "2026-09-01T10:19:27Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0392.yaml",
+      "handoffs/WF03-ISS0392-20260901/step-00-git-setup.json",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/sub_process.ex"
+    ],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/engine/sub_process.ex"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0392-20260901 (already checked out by Step 00; confirm with git branch --show-current before starting). Run WF-03 Steps 0.5 and 1 together for docs/issues/ISS-0392.yaml (GitHub issue #772). Read the full ISS-0392.yaml record first -- it already contains a detailed root-cause narrative from the discovering run (WF02-REQ207-20260901's ELIXIR-DEV/SECURITY-REVIEWER/RELEASE-VALIDATOR), but per WF-03_issue_resolving.md Step 1 and HANDOFF_PROTOCOL.md Section1.1 you must NOT take that narrative's word for it -- independently confirm it against the actual current source in lib/letflow/engine.ex and lib/letflow/engine/sub_process.ex on this branch, and where feasible, reproduce the failure directly (e.g. a throwaway iex/mix run exercising append_sub_process_children_creation_multi/5 or the SubProcess.append_start_multi/7 synchronous-completion branch against a real Ecto.Multi, or a minimal ExUnit test in a scratch file you do not commit, to observe the actual RuntimeError). Step 0.5: search docs/issues/*.yaml for a status: resolved entry with matching symptoms (Ecto.Multi key collision, task_records, SUB_PROCESS synchronous completion) -- state in your result whether a prior match was found. Step 1: trace to root cause -- name the exact function(s), the exact Ecto.Multi key that collides, why the collision occurs specifically when the child graph completes synchronously (vs. the async/queued path), and why no existing test caught this. Do NOT implement a fix -- your result.summary must contain the diagnosis in enough detail that CODE-DESIGNER can design a fix without re-diagnosing, per WF-03's own text. Claim this handoff by setting status to IN_PROGRESS. Complete normally (COMPLETED/FAILED, result filled in, git_evidence if you made any commits) per HANDOFF_PROTOCOL.md when done -- do not touch started_at or task.",
+    "acceptance_criteria": [
+      "Step 0.5 registry lookup explicitly stated in result.summary (match found or not, and why)",
+      "Root cause independently confirmed against current lib/letflow/engine.ex and lib/letflow/engine/sub_process.ex source (cite exact function names and line context), not merely restated from ISS-0392.yaml's narrative",
+      "The failure is reproduced directly (real command run, real output quoted) rather than diagnosed from prose alone -- state exactly what was run and what was observed",
+      "result.summary states precisely what a fix needs to change (which Multi construction path must avoid the {:task_records, parent_instance_id} key collision) without prescribing exact code, since CODE-DESIGNER owns the design",
+      "No fix implemented in this step; next_action routes to CODE-DESIGNER"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

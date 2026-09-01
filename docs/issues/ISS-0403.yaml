@@ -1,0 +1,38 @@
+id: ISS-0403
+title: "Letflow.SecretsTest property round-trip test has a false-positive failure mode for 1-byte plaintexts -- refute String.contains?(ciphertext, plaintext) is not a valid invariant at byte_size 1"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0401-20260902
+discovered_at: "2026-09-01T20:51:23Z"
+severity: MINOR
+tags: [test-infra, secrets, property-test]
+description: >
+  Discovered during WF03-ISS0401-20260902 Step Final CI run (33556183399),
+  test/letflow/secrets_test.exs:85-103's property test failed after 6
+  successful runs with a generated 1-byte plaintext (decimal value 186):
+  "refute String.contains?(stored.ciphertext, plaintext)" failed because
+  the ciphertext coincidentally contained that exact byte somewhere in
+  its bytes -- expected, not a security defect.
+
+  For a 1-byte plaintext, any sufficiently long random-looking ciphertext
+  has a real (~1/256 per byte position) chance of containing that exact
+  byte purely by chance, regardless of encryption correctness; the
+  assertion conflates "ciphertext does not leak the plaintext" with
+  "ciphertext never coincidentally contains any single byte equal to the
+  plaintext", which are different properties once byte_size(plaintext)
+  gets small enough.
+
+  The test already special-cases byte_size(plaintext) > 0 to skip the
+  check for empty plaintext, but does not exclude single-byte (or
+  otherwise short) plaintexts where coincidental containment becomes
+  statistically likely rather than a meaningful leak signal.
+affected_files:
+  - test/letflow/secrets_test.exs
+related:
+  - WF03-ISS0401-20260902
+source: >
+  CI run https://github.com/tvolodi/letflow/actions/runs/33556183399
+  (test/letflow/secrets_test.exs:85, property "round trip" failure),
+  handoffs/WF03-ISS0401-20260902/ Step Final triage.
+queue_task_id: 403
+github_issue: 791
+status: open

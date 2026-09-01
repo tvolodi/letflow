@@ -1053,3 +1053,55 @@ history:
       test/mix/tasks/letflow_check_deferral_staleness_test.exs run (57/57
       passed), so T-LIVE-ACTIVITY's assertion needed no update. Full detail:
       handoffs/WF02-REQ206-20260901/release-validation-report-20260901.md.
+  - req: REQ-207
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-01T08:35:15Z"
+    note: >
+      WF02-REQ207-20260901 done (queue task 384, stage S7). All 4 Vortex
+      Manufacturing simulation scenarios run via REQ-205's harness:
+      vortex-production-order-budget-threshold (4 expected outcomes
+      evaluated against real queried state, including
+      assignee_ref: role-controller controller-approval routing on the
+      budget-exceeded path -- not a silent fallback to plain
+      line-assignment), vortex-supplier-quality-deviation-critical
+      (disposition :executed, with the new :audit_event_ordering Runner
+      verification method added to assert two audit events'
+      real DateTime.compare/2 ordering rather than inferring order from
+      final status -- EO-001 quarantine-before-severity-escalation
+      confirmed), vortex-false-positive-compensation (disposition
+      :executed, confirmed reaching end-false-positive specifically, not
+      merely end-closed -- see AC3 gap below), and
+      vortex-entity-list-filter-and-page (disposition
+      BLOCKED_ON_DEPENDENCY, citing the specific missing subsystem:
+      lib/letflow/entities.ex and entity_query.ex do not exist,
+      Letflow.Router still reserves them). AC3 gap TEST-DESIGNER found and
+      fixed: lib/letflow/engine/transition.ex's dispatch_end/3
+      unconditionally drops the completed token via Enum.reject, so
+      activated_nodes derived from remaining tokens is [] for EVERY
+      terminal END node alike -- activated_nodes alone cannot distinguish
+      end-false-positive from end-closed. Fixed with a structural
+      cross-check against the seeded graph's own edge target instead of
+      relying on activated_nodes. RELEASE-VALIDATOR independently
+      re-verified all 6 acceptance criteria against real re-derived
+      evidence (own scripts/test_parallel.sh re-run; own reproduction of
+      the AC3 mutation check by editing the expected end-node id and
+      confirming a genuine, non-vacuous test failure, then reverting; own
+      read of transition.ex confirming the structural cross-check is
+      load-bearing, not redundant) and PASSED. 2 follow-up findings
+      confirmed real and flagged for ORCH to file at Step Final: (1)
+      pre-existing Engine defect, Ecto.Multi :task_records key collision
+      on synchronously-completing SUB_PROCESS children within the same
+      hop-chain transaction, attributed to REQ-062, affecting
+      lib/letflow/engine.ex / lib/letflow/engine/sub_process.ex (confirmed
+      via git diff main...HEAD -- lib/ showing zero lines changed in
+      either file); (2) OQ-5, R-Co scenario-corpus reachability for the 4
+      real Vortex scenario YAMLs under
+      test/fixtures/simulation/vortex/scenarios/*.yaml, same class as
+      ISS-0388 but not yet fixed for scenario-definition files
+      specifically (ISS-0388's resolution covered only the 12
+      company/org_structure/process_*.yaml fixture files, not the
+      scenario-definition YAMLs; this diff's 4 scenario YAMLs are
+      self-authored/synthetic, disclosed in the design doc's own
+      §0.2). docs/migration/stage-7-simulation-uat-parity.md updated to
+      record REQ-207 done.

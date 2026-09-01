@@ -11714,7 +11714,7 @@ requirements:
   - id: REQ-207
     title: Run Vortex's 4 simulation scenarios against Letflow (production-order budget gate, supplier-deviation critical/false-positive compensation, entity list filter/page) and report per-scenario findings
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S7
     impl_order: 384  # letflow-queue task id, GH#756
     description: >

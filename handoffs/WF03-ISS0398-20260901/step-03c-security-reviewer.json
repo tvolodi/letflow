@@ -1,0 +1,60 @@
+{
+  "handoff_id": "WF03-ISS0398-20260901-step-03c",
+  "run_id": "WF03-ISS0398-20260901",
+  "workflow_id": "WF-03",
+  "step": "3c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0398-20260901/step-03c-security-reviewer.json",
+  "created_at": "2026-09-01T14:40:00Z",
+  "started_at": "2026-09-01T14:20:00Z",
+  "completed_at": "2026-09-01T14:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-051"],
+    "issue_ids": ["ISS-0398"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0398-20260901/step-03-elixir-dev.json",
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md",
+      "lib/letflow/engine/transition.ex",
+      "test/letflow/engine/parallel_gateway_test.exs",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"],
+    "branch_name": "fix/ISS-0398-walk-to-gateway-20260901"
+  },
+  "task": {
+    "description": "Hard-gate ELIXIR-DEV's replacement of walk_to_gateway/3 with collect_leaf_gateways/3 in lib/letflow/engine/transition.ex against INV-1..INV-8 (docs/agents/instructions/security-invariants.md) before REVIEWER's idiom/scope-creep pass.",
+    "acceptance_criteria": [
+      "Scope test run against the real diff (git diff origin/main...HEAD)",
+      "Each of INV-1..INV-8 assessed APPLIES/NOT-APPLICABLE with reasoning, not defaulted",
+      "Each APPLIES invariant's How-to-verify procedure actually run, not assumed",
+      "DoS/resource-exhaustion characteristics of the new recursive algorithm specifically checked against a hostile, structurally-valid process definition, not just the design doc's own worked examples"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Scope test: diff touches lib/letflow/engine/transition.ex (a lookup/traversal handler operating on a tenant-scoped process definition's graph, used at instance-creation time via Letflow.Engine.create/2) and test/letflow/engine/parallel_gateway_test.exs. This IS a tenant-data path per the handoff test (graph-walking logic reachable from instance-creation on a tenant-controlled process-definition graph), so the scope test is satisfied and INV review applies -- not skipped.\n\nINV-1 (tenant isolation): NOT-APPLICABLE-but-checked. grep -n 'Repo\\.' lib/letflow/engine/transition.ex returns zero hits -- the whole module, including collect_leaf_gateways/3 and find_matching_join/2, operates purely on the `definition_snapshot` (a Graph.t() struct: in-memory nodes/edges lists) passed in as an argument by the caller, never re-fetching or re-scoping tenant data itself. No new Ecto schema, migration, or query added. INV-1 does not apply to this diff.\nINV-2, INV-3, INV-5: NOT-APPLICABLE (S4/S5 not started, per file's own applicability note; this diff adds no API response shaping or lookup-by-ID endpoint).\nINV-4 (secrets by reference): APPLIES (live now, checked on every diff). grep -rn 'System.get_env' and the hardcoded-secret heuristic grep produce zero hits inside the changed lines; the diff introduces no config/secret-resolving code at all. PASS.\nINV-6 (new data-access paths prove scoping): APPLIES as the meta-invariant this handoff itself discharges -- addressed by this document.\nINV-7 (no SQL string interpolation): APPLIES (live now). grep -rn 'Repo.query' lib/ priv/repo/migrations/ -- zero hits in the changed file; transition.ex has never used raw SQL. PASS.\nINV-8 (no unhandled crashes / DoS on realistic failure paths): APPLIES (live now) -- this is where the review fails.\n\nINV-8 FAIL -- exponential-blowup DoS via a structurally-valid, tenant-authored process definition. collect_leaf_gateways/3 (transition.ex, replacing walk_to_gateway/3) recurses into EVERY outgoing edge of a branching (out-degree>1) node and takes MapSet.union/2 of the results (§2.2 step 4, third bullet of the design doc). The design's own totality/termination argument (§2.2, final paragraph) only bounds recursion DEPTH along any single path (via the per-path `visited` set, which strictly grows and is bounded by node count) -- it does NOT bound the number of recursive calls made overall, because `visited` is copied (not memoized/shared) across sibling branches, so the same downstream node is independently re-explored once per incoming path that reaches it. Chaining k 'diamonds' in series (each an EXCLUSIVE_GATEWAY with 2 outgoing edges that reconverge on a shared node, which is itself the next EXCLUSIVE_GATEWAY) produces 2^k independent recursive traversals of the tail beyond diamond k, since collect_leaf_gateways/3 has no memoization keyed on node_id alone -- only the per-path visited set, which differs across sibling calls and therefore cannot collapse them.\n\nConfirmed this is buildable within the existing structural-validator limits (lib/letflow/definitions/graph.ex: @max_nodes 500 line 158, @max_edges 2000 line 159; CHK-04's connectivity check (check_isolated_nodes/1, lines 504-546) only requires >=1 incoming/outgoing edge per non-START/END node -- it does not cap incoming-edge count, so a node can legally be both the reconvergence point of one diamond and the EXCLUSIVE_GATEWAY source of the next; CHK-06's cycle check permits this because the graph stays acyclic; CHK-13 only requires non-default EXCLUSIVE_GATEWAY edges to carry a condition, which a tenant fully controls). A chain of ~40 such diamonds (using roughly 3 nodes + 4 edges per stage, well inside the 500-node/2000-edge caps) inside a single PARALLEL_GATEWAY fork branch yields on the order of 2^40 (~10^12) recursive collect_leaf_gateways/3 calls triggered synchronously inside Engine.create/2 -- a tenant-controlled process-definition upload that passes every existing CHK-01..CHK-19 structural check but makes instance creation for that definition computationally infeasible (effectively hangs the calling process/scheduler). This is exactly the DoS/resource-exhaustion class INV-8 exists to catch (\"a bare pattern match / unbounded computation on tenant-controlled data ... can degrade other tenants' in-flight work\") -- Engine.create/2 is not a supervised, expected-to-crash-and-restart-cleanly boundary for this failure mode; it is a synchronous computation blowing up, not a deliberate let-it-crash isolation point, so the exception carved out for per-instance gen_statem crashes does not cover it.\n\nThis is a genuine defect in the shipped algorithm (and in the design doc's own algorithm, lib/letflow/design/iss0398-walk-to-gateway-fix.md §2.2/§2.4, which only worked through a single non-chained diamond and did not consider chained/nested diamonds sharing reconvergence nodes) -- not a test-coverage gap. The existing parallel_gateway_test.exs fixtures (three_branch_graph/0, branch_with_exclusive_gateway_graph/0, ambiguous_branch_dead_ends_graph/0) are all single-diamond-or-shallower and do not exercise this at all, so mix test gives no signal on it.\n\nINV-8 is BLOCKER severity per security-invariants.md's own statement (\"every invariant is BLOCKER severity, there is no partial credit\") -- this single FAIL terminates the review with overall status FAIL regardless of INV-1/4/6/7 passing cleanly.\n\nRecommended direction (not prescribing the fix, per SECURITY-REVIEWER's forbidden-from-rewriting-code mandate): collapse the per-path visited-set-copy-per-sibling scheme to a memoized DFS keyed on node_id alone -- since a node's own leaf-set outcome does not actually depend on which path reached it (only cycle detection does), use the classic DAG memoized-DFS pattern (a 'currently on this path' set purely for cycle detection, distinct from a separate node_id-keyed memo cache of already-fully-resolved leaf-sets reused across sibling branches) to bound total work to O(nodes + edges) instead of O(2^branching-nodes). This needs to go back through CODE-DESIGNER since the flaw originates in the design doc's own algorithm (§2.2/§2.4), not just ELIXIR-DEV's implementation of it -- ELIXIR-DEV implemented the design faithfully; the design itself is unsound on this axis. Routing to ELIXIR-DEV per this handoff's mechanics, but flagging for ORCH that a design-doc revision (and a fresh CODE-DESIGN-VALIDATOR pass) is the likely correct path, not a direct code patch that silently diverges from the validated design.\n\nINV-3 (scope creep / lib-touch check, requested in the ORCH prompt as item 4): confirmed clean -- git diff origin/main...HEAD --name-only shows only lib/letflow/engine/transition.ex and test/letflow/engine/parallel_gateway_test.exs as code changes; lib/letflow/design/iss0398-walk-to-gateway-fix.md and handoffs/*/registry.json/orchestrator.log are documentation/bookkeeping, not application code. No migration, no other tenant-data-path file touched.\n\nError-message leakage (ORCH prompt item 3): {:error, :no_matching_join} and its caller-side wrap {:error, {:no_matching_join_found, node.id}} (unchanged call site, transition.ex ~772-774) carry only the split node's own id from the SAME tenant's own process definition already being evaluated -- no cross-tenant data, no internal graph/edge dump, consistent with the pattern already confirmed for REQ-208. No new leakage introduced by this diff. This item alone would PASS but does not rescue the overall FAIL from the INV-8 finding above.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0398-20260901/step-03c-security-reviewer.json"
+    ],
+    "issues": [
+      "BLOCKER (INV-8): collect_leaf_gateways/3's per-branch recursion has no memoization keyed on node_id, only a per-path-copied visited set used purely for cycle detection. A chain of k reconverging EXCLUSIVE_GATEWAY 'diamonds' (structurally valid under existing CHK-01..CHK-19 checks and well within @max_nodes=500/@max_edges=2000, lib/letflow/definitions/graph.ex lines 158-159) triggers O(2^k) recursive calls, making Engine.create/2 computationally infeasible for a tenant-authored process definition that fully passes structural validation -- an unbounded-computation DoS distinct from (and not covered by) the per-instance gen_statem crash-isolation model INV-8 exempts.",
+      "The unsoundness originates in the design doc itself (lib/letflow/design/iss0398-walk-to-gateway-fix.md §2.2 step 4 / §2.4's worked example), which only traces a single non-chained diamond and never considers chained/shared-reconvergence diamonds -- ELIXIR-DEV implemented the design faithfully, so a durable fix likely needs to route back through CODE-DESIGNER (revise the algorithm to memoize per node_id) and a fresh CODE-DESIGN-VALIDATOR pass, not just a direct ELIXIR-DEV patch that would silently diverge from the already-validated design document.",
+      "New test coverage should include a chained-diamond stress fixture (e.g. 10-20 diamonds, enough to demonstrate super-linear blowup without literally hanging the test suite) once the fix lands, so this defect class has a regression test -- not added here since SECURITY-REVIEWER does not write code."
+    ],
+    "next_action": "Route back to ELIXIR-DEV (and, per this handoff's finding, ORCH should loop CODE-DESIGNER + CODE-DESIGN-VALIDATOR back in first, since the flaw is in the validated design's own algorithm, not an implementation deviation from it) to redesign collect_leaf_gateways/3 with node_id-keyed memoization bounding total work to O(nodes+edges), then resubmit for a fresh SECURITY-REVIEWER pass before REVIEWER's Step 3d idiom/scope-creep check."
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "step": "3c",
+      "agent": "SECURITY-REVIEWER",
+      "result": "FAIL",
+      "timestamp": "2026-09-01T14:40:00Z"
+    }
+  ]
+}

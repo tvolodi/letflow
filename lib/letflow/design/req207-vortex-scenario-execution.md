@@ -575,16 +575,35 @@ rather than trusting ORCH's prior claim) run the same three-part check:
 1. `grep -n "Entities\|EntityQuery" lib/letflow/router.ex` — confirm both remain in
    the reserved/unbuilt section of the router-inventory table (not merely present in
    a comment, but not mounted by an actual `forward`/route dispatch).
-2. `grep -c "title:.*[Ee]ntit" docs/requirements.yaml` — confirm this returns 0 (no
-   requirement id has claimed this subsystem yet). If this ever returns nonzero,
-   name the specific `REQ-NNN` id and check its `status:` field: `done` → the
-   subsystem has landed, follow §4.2's "if landed" branch instead; any other status
-   (`pending`/`in_progress`) → still not landed (a requirement existing but not
-   `done` does not mean the capability exists yet), continue with
-   BLOCKED_ON_DEPENDENCY, but now naming the specific in-flight `REQ-NNN` rather than
-   "no requirement exists" — this refinement matters for ORCH's own tracking (a
-   blocked-on-a-named-in-flight-requirement is different bookkeeping than
-   blocked-on-nothing-scheduled-yet).
+2. `grep -n -B1 -iE "title:.*\bentit(y|ies)\b" docs/requirements.yaml` — a
+   word-bounded pattern (`\bentit(y|ies)\b`) that matches only the literal word
+   "entity"/"entities" in a `title:` line, deliberately **not** the bare substring
+   `entit` (which false-positives on "identity" — `grep -c "title:.*[Ee]ntit"
+   docs/requirements.yaml` returns 7 today: 6 unrelated `identity`-subsystem
+   requirement titles plus this line below, none an actual entity/entity-query
+   claimant — that broader pattern must not be used as the re-runnable check).
+   Run today: exactly **one** match,
+   ```
+   11714-  - id: REQ-207
+   11715:    title: Run Vortex's 4 simulation scenarios against Letflow (production-order
+   budget gate, supplier-deviation critical/false-positive compensation, entity list
+   filter/page) and report per-scenario findings
+   ```
+   — the `-B1` line shows this sole match's `id:` is `REQ-207` itself
+   (self-referential: this requirement's own title mentions "entity list
+   filter/page" because AC4 is about entities, not because REQ-207 claims to build
+   the subsystem). **Confirm the count is exactly 1 and that its preceding `id:`
+   line is `REQ-207`** — that is the "no other requirement claims this subsystem"
+   result. If a re-run ever shows a count greater than 1, or the same count of 1 but
+   with a *different* `id:` on the `-B1` line (i.e. REQ-207's own title no longer
+   the sole match, or an additional match appeared), name that other `REQ-NNN` id
+   and check its `status:` field: `done` → the subsystem has landed, follow §4.2's
+   "if landed" branch instead; any other status (`pending`/`in_progress`) → still
+   not landed (a requirement existing but not `done` does not mean the capability
+   exists yet), continue with BLOCKED_ON_DEPENDENCY, but now naming the specific
+   in-flight `REQ-NNN` rather than "no requirement exists" — this refinement matters
+   for ORCH's own tracking (a blocked-on-a-named-in-flight-requirement is different
+   bookkeeping than blocked-on-nothing-scheduled-yet).
 3. `find lib/letflow -iname "entities.ex" -o -iname "entity_query.ex"` (or
    equivalent `Glob`) — confirm no context module exists under `lib/letflow/`.
 
@@ -628,7 +647,7 @@ despite this one never touching `Runner`:
   missing_subsystem: "Letflow.Routers.Entities / Letflow.Routers.EntityQuery (entities.zig / entity_query.zig, S5/S6)",
   evidence: [
     "lib/letflow/router.ex: both Entities/EntityQuery rows in reserved/unbuilt section (not mounted)",
-    "docs/requirements.yaml: no title: entry names an entity/entity-query requirement (grep -c \"title:.*[Ee]ntit\" == 0)",
+    "docs/requirements.yaml: the only title: match for word-bounded entity/entities is REQ-207's own self-referential title (grep -n -B1 -iE \"title:.*\\\\bentit(y|ies)\\\\b\" docs/requirements.yaml -> exactly 1 match, id: REQ-207)",
     "no lib/letflow/entities.ex or entity_query.ex context module exists"
   ],
   steps_executed: 0,
@@ -739,11 +758,24 @@ design-doc-vs-implementation boundary in this project).
 
 ## §7 — Open questions (explicit, not silently resolved)
 
-- **OQ-1**: whether REQ-206 has merged to `main` by the time REQ-207's Step 2a
-  begins. §0.1 states the assumed-merged design and the fallback if not — ELIXIR-DEV
-  must check `git log main --oneline | grep -i REQ206` (or
-  `test/support/simulation/scenario_fixture.ex`'s existence) before starting, not
-  assume either way.
+- **OQ-1 — RESOLVED/MOOT** (rework 1, this session): the question was whether
+  REQ-206 has merged to `main` by the time REQ-207's Step 2a begins. Independently
+  confirmed this session: REQ-206 **has merged** — commit `2d068c79` ("REQ-206:
+  SwiftRoute scenario execution (S7 simulation harness) (#767)") is an ancestor of
+  `main` and of this branch (`git log main --oneline | grep -i REQ206` shows it;
+  `git merge-base --is-ancestor 2d068c79 HEAD` succeeds). Both of §0.1's
+  load-bearing dependencies are confirmed present in the real, shipped code on this
+  branch, read directly (no `git show` against another branch needed anymore):
+  `test/support/simulation/scenario_fixture.ex:40-41` —
+  `@spec load!(path :: String.t()) :: Scenario.t()` / `def load!(path) do`; and
+  `test/support/simulation/runner.ex:45` —
+  `required(:via) => :api | :gui | :skip` — the `:skip`/`:unbuilt_feature`
+  vocabulary extension is real. **§0.1's fallback plan (ELIXIR-DEV stopping to ask
+  ORCH for an inlined/duplicate YAML-load helper) is therefore not exercised and
+  does not apply.** ELIXIR-DEV should import and call
+  `Letflow.Simulation.ScenarioFixture.load!/1` and the `Runner`/`Scenario` module as
+  normal REQ-205/206-shipped dependencies already on `main` — no fallback-plan
+  branching, no re-derivation of this finding needed at implementation time.
 - **OQ-2**: whether `Letflow.Instances` (or `Letflow.Engine`) exposes a
   parent-instance-id-scoped lookup for a spawned sub-process's child instance, or
   whether the child instance id must be resolved via the parent token's own

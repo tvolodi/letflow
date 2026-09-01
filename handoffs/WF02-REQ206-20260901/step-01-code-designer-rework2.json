@@ -61,9 +61,9 @@
     ],
     "commit": "4f18616963cd32cadbf43be4418e971c2486e04d",
     "branch": "feature/WF02-REQ206-20260901",
-    "pushed": true
+    "pushed": true,
+    "_migrated_next_step": "CODE-DESIGN-VALIDATOR"
   },
-  "next_step": "CODE-DESIGN-VALIDATOR",
   "rework_count": 3,
   "max_rework": 3,
   "not_agent_attested": false,

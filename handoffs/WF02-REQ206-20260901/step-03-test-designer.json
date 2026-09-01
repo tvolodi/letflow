@@ -47,13 +47,15 @@
         "ac": "AC4 (source evidence)",
         "verdict": "non-trivial — assert empty list, would fail if attachment routes added"
       }
-    ]
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)"
   },
-  "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
-    "requirement_ids": ["REQ-206"],
+    "requirement_ids": [
+      "REQ-206"
+    ],
     "issue_ids": [],
     "artifacts_in": [
       "handoffs/WF02-REQ206-20260901/step-02a-elixir-dev.json",

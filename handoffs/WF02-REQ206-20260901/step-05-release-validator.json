@@ -13,7 +13,9 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
-    "requirement_ids": ["REQ-206"],
+    "requirement_ids": [
+      "REQ-206"
+    ],
     "issue_ids": [],
     "artifacts_in": [
       "handoffs/WF02-REQ206-20260901/step-04-test-runner.json",
@@ -55,11 +57,10 @@
       "action_requested_of_orch": "File a follow-up issue via letflow-queue at Step 6/Final mirroring docs/issues/ISS-0388.yaml's shape, per the design doc's §0 recommendation and step-01-code-designer-rework1.json's recommendation_for_orch field, and make it visible for REQ-207/REQ-208 to reference rather than re-deriving independently."
     },
     "artifacts_out": [
-      "handoffs/WF02-REQ206-20260901/step-05-release-validator.json",
       "handoffs/WF02-REQ206-20260901/release-validation-report-20260901.md"
-    ]
+    ],
+    "next_action": "Route to DOC-UPDATER (Step 6) to flip REQ-206 status to done, record AC1-6 all PASS (no partial-met ACs, unlike REQ-205), and cross-reference this report's caveat and the requested ISS-0388-mirroring follow-up issue in the run-history event. ORCH should also file that follow-up issue at Step 6/Final per the design doc's own recommendation."
   },
-  "next_action": "Route to DOC-UPDATER (Step 6) to flip REQ-206 status to done, record AC1-6 all PASS (no partial-met ACs, unlike REQ-205), and cross-reference this report's caveat and the requested ISS-0388-mirroring follow-up issue in the run-history event. ORCH should also file that follow-up issue at Step 6/Final per the design doc's own recommendation.",
   "rework_count": 0,
   "max_rework": 3
 }

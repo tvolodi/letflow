@@ -1,8 +1,6 @@
 {
   "run_id": "WF02-REQ206-20260901",
   "step": "step-01-code-designer",
-  "agent_id": "CODE-DESIGNER",
-  "timestamp": "2026-09-01T03:05:15Z",
   "status": "COMPLETED",
   "context": {
     "requirement_id": "REQ-206",
@@ -21,6 +19,8 @@
     "artifacts": [
       "lib/letflow/design/req206-swiftroute-scenario-execution.md"
     ],
-    "issues": []
+    "issues": [],
+    "_migrated_agent_id": "CODE-DESIGNER",
+    "_migrated_timestamp": "2026-09-01T03:05:15Z"
   }
 }

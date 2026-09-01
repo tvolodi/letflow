@@ -1,8 +1,6 @@
 {
   "run_id": "WF02-REQ206-20260901",
   "step": "step-01-code-designer-rework1",
-  "agent_id": "CODE-DESIGNER",
-  "timestamp": "2026-09-01T07:30:00Z",
   "status": "COMPLETED",
   "context": {
     "requirement_id": "REQ-206",
@@ -14,7 +12,9 @@
       "lib/letflow/design/req206-swiftroute-scenario-execution.md"
     ],
     "issues": [],
-    "recommendation_for_orch": "File a follow-up issue at Step 6/Step Final mirroring docs/issues/ISS-0388.yaml's exact shape, to port the real R-Co tests/simulation/scenarios/{tenant-onboarding-happy,shipment-high-value-happy,shipment-ops-timeout-escalation,shipment-attach-delivery-note}.yaml-equivalent content once a session/host with genuine R-Co filesystem access is available."
-  },
-  "next_step": "CODE-DESIGN-VALIDATOR"
+    "recommendation_for_orch": "File a follow-up issue at Step 6/Step Final mirroring docs/issues/ISS-0388.yaml's exact shape, to port the real R-Co tests/simulation/scenarios/{tenant-onboarding-happy,shipment-high-value-happy,shipment-ops-timeout-escalation,shipment-attach-delivery-note}.yaml-equivalent content once a session/host with genuine R-Co filesystem access is available.",
+    "_migrated_agent_id": "CODE-DESIGNER",
+    "_migrated_next_step": "CODE-DESIGN-VALIDATOR",
+    "_migrated_timestamp": "2026-09-01T07:30:00Z"
+  }
 }

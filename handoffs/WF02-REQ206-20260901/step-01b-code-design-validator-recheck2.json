@@ -47,9 +47,9 @@
     ],
     "commit": null,
     "branch": "feature/WF02-REQ206-20260901",
-    "pushed": null
+    "pushed": null,
+    "_migrated_next_step": "ELIXIR-DEV"
   },
-  "next_step": "ELIXIR-DEV",
   "rework_count": 3,
   "max_rework": 3,
   "not_agent_attested": false,

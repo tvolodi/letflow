@@ -67,13 +67,15 @@
         "status": "PASS",
         "evidence": "mix compile --warnings-as-errors --force: 'Compiling 197 files (.ex) / Generated letflow app' (0 warnings). mix test test/letflow/simulation/: 'Finished in 41.5 seconds / Result: 21 passed' (6 new + 15 existing, 0 failures)."
       }
-    }
+    },
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)"
   },
-  "next_action": "Route to SECURITY-REVIEWER (Step 2c)",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
-    "requirement_ids": ["REQ-206"],
+    "requirement_ids": [
+      "REQ-206"
+    ],
     "issue_ids": [],
     "artifacts_in": [
       "lib/letflow/design/req206-swiftroute-scenario-execution.md",

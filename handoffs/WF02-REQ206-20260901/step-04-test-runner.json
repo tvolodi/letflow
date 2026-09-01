@@ -13,7 +13,9 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
-    "requirement_ids": ["REQ-206"],
+    "requirement_ids": [
+      "REQ-206"
+    ],
     "issue_ids": [],
     "artifacts_in": [
       "handoffs/WF02-REQ206-20260901/step-03b-test-design-validator.json"
@@ -31,9 +33,9 @@
     "compile_result": "Compiling 180 files (.ex) / Generated letflow app -- exit 0, 0 warnings",
     "artifacts_out": [
       "test/reports/report-2026-09-01-WF02-REQ206-20260901.yaml"
-    ]
+    ],
+    "next_action": "Route to RELEASE-VALIDATOR (Step 5)"
   },
-  "next_action": "Route to RELEASE-VALIDATOR (Step 5)",
   "rework_count": 0,
   "max_rework": 3
 }

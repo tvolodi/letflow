@@ -13,7 +13,9 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
-    "requirement_ids": ["REQ-206"],
+    "requirement_ids": [
+      "REQ-206"
+    ],
     "issue_ids": [],
     "artifacts_in": [
       "handoffs/WF02-REQ206-20260901/step-03-test-designer.json",
@@ -127,7 +129,7 @@
       }
     ],
     "always_pass_check": "No always-pass tests. Every test has a genuine FAIL condition: AC1 would fail if hostname not found or tenant status != :active; AC2 would fail if any step outcome != :ok or EO-2/3/4 != :pass; AC3 would fail if step2.outcome != :skip or step2.severity != :minor; AC4 would fail if disposition != :unbuilt_feature or notes missing R-Co evidence.",
-    "mix_test_output": "mix test test/letflow/simulation/req206_swiftroute_test.exs\n\nFinished in 15.0 seconds (0.00s async, 15.0s sync)\n\nResult: 6 passed"
-  },
-  "next_action": "Route to TEST-RUNNER (Step 4)"
+    "mix_test_output": "mix test test/letflow/simulation/req206_swiftroute_test.exs\n\nFinished in 15.0 seconds (0.00s async, 15.0s sync)\n\nResult: 6 passed",
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  }
 }

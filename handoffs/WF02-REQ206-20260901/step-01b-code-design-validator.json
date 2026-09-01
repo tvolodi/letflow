@@ -1,8 +1,6 @@
 {
   "run_id": "WF02-REQ206-20260901",
   "step": "step-01b-code-design-validator",
-  "agent_id": "CODE-DESIGN-VALIDATOR",
-  "timestamp": "2026-09-01T09:15:00Z",
   "status": "FAILED",
   "context": {
     "requirement_id": "REQ-206",
@@ -36,9 +34,11 @@
       "lib/letflow/design/req206-swiftroute-scenario-execution.md OQ-2: resolve now. lib/letflow/routers/tasks.ex's handle_list/3 confirms `GET /api/v1/tasks?instance_id=<uuid>` (optionally filterable further) is the real task-lookup-by-instance mechanism. Specify this exact call in §3.2 in place of the open question.",
       "lib/letflow/design/req206-swiftroute-scenario-execution.md OQ-3: resolve now. lib/letflow/engine/task_activation.ex's resolve_assignee/1 shows assignee_ref for a role-attributed HUMAN_TASK is exactly the node's `role` attribute string verbatim (e.g. \"role-ceo\"); lib/letflow/tasks.ex's ROLE-scope clause confirms an actor's granted roles list must contain that identical string. Specify the exact roles: value each scenario actor's create_token/3 call needs (e.g. the ops/CEO actors carry \"role-ops-manager\"/\"role-ceo\" respectively, matching process_route_approval.yaml's node role attributes verbatim) in place of the open question.",
       "lib/letflow/design/req206-swiftroute-scenario-execution.md OQ-1: should-fix, not independently blocking. Pick and record one option (reusing dept-mgmt's sole member, Alice, as the CEO-role actor is the lower-risk default since it needs no fixture change) rather than leaving the choice open for ELIXIR-DEV."
-    ]
+    ],
+    "_migrated_agent_id": "CODE-DESIGN-VALIDATOR",
+    "_migrated_next_step": "CODE-DESIGNER",
+    "_migrated_timestamp": "2026-09-01T09:15:00Z"
   },
-  "next_step": "CODE-DESIGNER",
   "rework_count": 2,
   "max_rework": 3
 }

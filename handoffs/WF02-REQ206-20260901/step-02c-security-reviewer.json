@@ -12,7 +12,9 @@
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
-    "requirement_ids": ["REQ-206"],
+    "requirement_ids": [
+      "REQ-206"
+    ],
     "issue_ids": [],
     "artifacts_in": [
       "handoffs/WF02-REQ206-20260901/step-02a-elixir-dev.json",
@@ -83,7 +85,7 @@
         "rationale": "No outbound HTTP requests added; the harness dispatches through Letflow.Router.call/2 (in-process Plug.Test, no network), and no webhook subscription or URL-resolution path was added."
       }
     ],
-    "issues": []
-  },
-  "next_action": "Route to REVIEWER (Step 2d)"
+    "issues": [],
+    "next_action": "Route to REVIEWER (Step 2d)"
+  }
 }

@@ -1,0 +1,103 @@
+{
+  "handoff_id": "WF03-ISS0397-20260901-step-03d",
+  "run_id": "WF03-ISS0397-20260901",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0397-20260901/step-03d-reviewer.json",
+  "created_at": "2026-09-01T19:15:16Z",
+  "started_at": "2026-09-01T19:08:28Z",
+  "completed_at": "2026-09-01T19:15:16Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-048", "REQ-054", "REQ-208", "REQ-051", "REQ-052"],
+    "issue_ids": ["ISS-0397"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0397-join-counters-fix.md",
+      "handoffs/WF03-ISS0397-20260901/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0397-20260901/step-03c-security-reviewer.json"
+    ],
+    "artifacts_reviewed": [
+      "priv/repo/migrations/20260901030001_add_join_counters_to_instance_projections.exs",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/snapshot_writer.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/iss0397_join_counters_test.exs",
+      "test/letflow/engine/timer_wiring_test.exs",
+      "test/letflow/engine/snapshot_writer_test.exs",
+      "test/letflow/simulation/req208_meridian_test.exs",
+      "docs/anti-patterns.md"
+    ],
+    "branch_name": "fix/ISS-0397-join-counters-20260901",
+    "diff_base": "origin/main...HEAD (commit 31444783)"
+  },
+  "task": {
+    "description": "REVIEWER gate (WF-03 Step 3d) on ELIXIR-DEV's ISS-0397 implementation: idiomatic OTP/Elixir usage, supervision integrity, scope-creep assessment of the create/2 insert_instance_projection/8 extension beyond the design's literal text, and decision-record consistency for the REQ-052 coordination note. Hard gate before TEST-DESIGNER.",
+    "acceptance_criteria": [
+      "New/changed Elixir code (migration, schema changes, reconcile_projection/5, build_instance_state/3, insert_instance_projection/8, promoted codec functions) checked for idiomatic consistency with engine.ex's existing style",
+      "create/2 extension independently re-assessed against the real code, not taken on SECURITY-REVIEWER's characterization alone",
+      "cancel_instance/3 confirmed genuinely untouched by this diff (REQ-052 coordination note left as a flag, not silently resolved or ignored)",
+      "New docs/anti-patterns.md entry read and confirmed accurate/fair to CODE-DESIGNER, not overstated",
+      "Full targeted test suite (iss0397_join_counters_test.exs, timer_wiring_test.exs, snapshot_writer_test.exs, req208_meridian_test.exs) independently re-run and confirmed green",
+      "Broader test/letflow/engine/ suite run to confirm no other Engine test regressed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "idiom_check": {
+      "verdict": "PASS -- idiomatic, matches engine.ex's existing conventions exactly",
+      "findings": [
+        "Migration (priv/repo/migrations/20260901030001_...): pure Ecto DSL `alter table(...) do add :join_counters, :map, null: false, default: %{} end`, wrapped in the same `if prefix() do` tenant-scoping guard every other tenant-scoped migration in this repo uses (confirmed by diffing against 20260818110001's own :variables column addition -- identical idiom, verbatim). Registered in both halves: the migration file's own guard and Letflow.TenantProvisioning.@tenant_scoped_migration_manifest (tenant_provisioning.ex line ~485-486). No index added, correctly justified (never queried by column value, always accessed via the instance_id primary key).",
+        "InstanceProjection schema: `field(:join_counters, :map, default: %{})` added alongside :variables using the identical pattern; cast (not required) in both insert_changeset/2 and update_changeset/2 -- correct, since a call untouched by gateway state should not be forced to supply the key, and Ecto's cast/3 leaves an absent key's existing column value unchanged, matching how error_detail/completed_at/cancelled_at already behave in the same changeset.",
+        "reconcile_projection/5: one more key added to an attrs map this function was already building and already passing through update_changeset/2 -- no new Repo call, no new changeset, no new Multi step. Matches the existing status/current_nodes/variables idiom in the same function body exactly.",
+        "build_instance_state/3: the hardcoded join_counters: %{} literal is replaced by a deserialize call reading a field off a struct argument the function already receives -- no new argument added to the function signature (confirmed: still (%InstanceProjection{}, active_tokens, pending_task_tokens)), consistent with the function's existing pattern of reading projection.variables one line below.",
+        "insert_instance_projection/8: cleanly extends the existing private function's own parameter list and attrs map with one more positional argument and one more key, following the exact same shape as every other field already in that attrs map (definition_id, correlation_key, current_nodes, variables). The new parameter is placed adjacent to the other InstanceState-derived values (current_node_ids, initial_variables) rather than appended at the end out of order -- good placement discipline.",
+        "SnapshotWriter.serialize_join_counters/1 / deserialize_join_counters/1: correctly promoted from private helper expressions to public functions with @doc/@spec, and the two original call sites (serialize_state/1, deserialize_state/2) were changed to delegate to the new public functions rather than duplicating the logic -- avoids exactly the code-duplication/drift risk the design's own §2.3 flagged as its reason for this approach. No behavior change to the periodic-snapshot path (confirmed: same Map.new/2 + same private entry-conversion helpers underneath, just extracted).",
+        "Code comments at every changed call site explicitly distinguish 'reads from the already-locked struct in memory' from 'reads the periodic instance_state_snapshots table' -- this is the exact confusion the design's own §2.3 warned a future reader could make, and ELIXIR-DEV addressed it in-line rather than leaving it only in the design doc."
+      ]
+    },
+    "supervision_check": {
+      "verdict": "PASS -- not applicable, no supervision-tree changes",
+      "finding": "This change touches no process boundaries: no new GenServer/gen_statem, no new spawn, no change to Letflow.InstanceSupervisor or any supervised child spec. All new code is either (a) pure functions (SnapshotWriter's codec) or (b) additional Ecto.Multi steps/attrs-map keys inside transactions that already existed. Per-instance process isolation is unaffected."
+    },
+    "create2_extension_independent_reassessment": {
+      "verdict": "CONCUR -- in-family, not scope creep, confirmed from the actual code (not from SECURITY-REVIEWER's characterization alone)",
+      "reasoning": "Read persist/12's Multi.run(:instance_projection, ...) step directly (engine.ex ~940-976): insert_instance_projection/8 is called from a Multi step that already existed and already built an attrs map for a plain repo.insert(prefix: prefix) against instance_id -- a freshly-generated UUID with no possible pre-existing sibling row. No FOR UPDATE lock is taken or needed here because nothing can race an INSERT of a row that does not yet exist; the design's §3.1-§3.3 concurrency argument (built around fetch_and_lock_instance_projection/3's FOR UPDATE on an EXISTING row across SEPARATE complete_task/3/advance_after_timer_fired/3 calls) is simply a different scenario, not one this extension has to satisfy or that it contradicts. The extension reuses the exact same codec (SnapshotWriter.serialize_join_counters/1) already approved for reconcile_projection/5, adds no new table, no new lock, no new external surface, and does not change insert_instance_projection/8's or create/2's return shape. It closes the same INV-EE48-7 gap for a hop-chain shape (split reachable within create/2's own initial dispatch) the design's own §5.1/§5.3 fixtures already exercise -- this is filling in a write site the design's enumeration missed, not building ahead of what the requirement needs. Disclosed transparently in the ELIXIR-DEV handoff, in an in-code comment at the call site, and in a new anti-patterns.md entry -- not silently added. PASS: no design-rework cycle needed."
+    },
+    "req052_decision_record_check": {
+      "verdict": "PASS -- confirmed genuinely untouched, flag correctly left open rather than resolved or dropped",
+      "finding": "`git diff origin/main...HEAD -- lib/letflow/engine.ex | grep -n cancel_instance` returns zero hits -- re-run independently in this review, not taken on SECURITY-REVIEWER's word. cancel_instance/3 and cancel_instance_projection/4 are byte-for-byte unchanged by this diff. The design doc's §6 and the ELIXIR-DEV/SECURITY-REVIEWER handoffs all correctly frame REQ-052's cited blocker ('the join-counters persistence gap') as now removed in fact, while explicitly declining to re-wire {:cancel_branch, _} through cancel_instance/3 themselves -- that remains an open decision-record-drift question for ORCH, not something this pipeline stage silently resolved in either direction. This is exactly the discipline core-directives.md requires when a decision record's premise changes: surface it, do not auto-resolve it."
+    },
+    "anti_patterns_entry_check": {
+      "verdict": "PASS -- accurate, fair to CODE-DESIGNER, not overstated",
+      "finding": "The new docs/anti-patterns.md entry ('A gate-approved design fixing a shared write function missed a sibling write path constructing the same state independently') correctly describes the mechanism of the gap: the design's own source list (§0) enumerated call sites that already referenced join_counters, and a write site that never mentioned the field at all (because that was the bug) was naturally invisible to that search strategy. It does not blame CODE-DESIGNER for a process failure -- it frames the miss as an inherent limitation of grepping for existing references to a field rather than for every site that constructs the same struct type from scratch, and proposes that as the general lesson. It credits catching the gap to actually running the regression test, not to review. Severity is not overstated: it correctly notes this was caught before the fix was considered done, within the same implementation pass, with no user-visible impact and no released defect. This is a fair, calibrated entry."
+    },
+    "test_verification": {
+      "targeted_suite": "Re-run independently in this review session (not trusted from ELIXIR-DEV's or ORCH's prior reports): `mix test test/letflow/iss0397_join_counters_test.exs test/letflow/engine/timer_wiring_test.exs test/letflow/engine/snapshot_writer_test.exs test/letflow/simulation/req208_meridian_test.exs` -- Result: 36 passed, 0 failures.",
+      "broader_engine_suite": "Re-run independently: `mix test test/letflow/engine/` -- Result: 901 passed (1 property, 900 tests), 7 excluded, 0 failures. No other Engine test regressed."
+    },
+    "type_safety_observation": "No new class of invalid state was introduced that a @type/struct/Ecto.Enum change would make unrepresentable and that isn't already covered by the existing anti-patterns entry and the concurrent regression test -- join_counters is a plain :map column, same representational looseness as the already-shipped :variables column, not a new gap this change introduces. No new type-safety issue filed.",
+    "scope_creep_check": "No abstractions (behaviours, macros, generic plumbing) introduced ahead of what ISS-0397 needs. The SnapshotWriter codec promotion is a narrow refactor (two named functions extracted from existing inline expressions, delegated to by their original call sites) explicitly justified by the design (§2.3) to avoid duplicating an already-reviewed format -- not new framework machinery. The create/2 extension (assessed above) is in-family. No other scope expansion found.",
+    "summary": "PASS. All new/changed code (migration, schema, reconcile_projection/5, build_instance_state/3, insert_instance_projection/8, promoted SnapshotWriter codec functions) is idiomatic and consistent with engine.ex's existing conventions -- same attrs-map-into-changeset pattern, same tenant-scoped-migration idiom, no new Repo calls or locks introduced. No supervision-tree change; per-instance process isolation unaffected. Independently re-verified (not merely concurred with SECURITY-REVIEWER) that the create/2 insert_instance_projection/8 extension is in-family: same field, same codec, no new lock, and the design's concurrency argument is simply inapplicable to a fresh-row INSERT with no concurrent sibling to race. cancel_instance/3 confirmed genuinely untouched by direct diff/grep. The new anti-patterns.md entry accurately and fairly describes the design gap without overstating its severity or unfairly blaming CODE-DESIGNER. Targeted suite (36 tests) and the broader test/letflow/engine/ suite (901 tests) both re-run independently in this review session with zero failures. Routing to TEST-DESIGNER (Step 4) for coverage validation; no rework needed.",
+    "routing": "Route to Step 4 TEST-DESIGNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": [
+    {
+      "gate": "SECURITY-REVIEWER",
+      "status": "PASS",
+      "at": "2026-09-01T19:08:28Z"
+    },
+    {
+      "gate": "REVIEWER",
+      "status": "PASS",
+      "at": "2026-09-01T19:15:16Z"
+    }
+  ]
+}

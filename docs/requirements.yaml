@@ -11640,7 +11640,7 @@ requirements:
   - id: REQ-206
     title: Run SwiftRoute's 4 simulation scenarios against Letflow (tenant onboarding, high-value shipment, timeout escalation, delivery-note attachment) and report per-scenario findings
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S7
     impl_order: 383  # letflow-queue task id, GH#755
     description: >

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0392-20260901/step-final-git-merge.json",
   "created_at": "2026-09-01T12:00:19Z",
   "started_at": "2026-09-01T12:00:19Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-09-01T15:45:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -39,18 +39,28 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "summary": "Rebased feature/WF03-ISS0392-20260901 onto origin/main (no conflicts, no-op first time; a second rebase was required after origin/main advanced again with PR #777 mid-step, also no conflicts). mix format --check-formatted, mix compile --warnings-as-errors, and mix test (3005 passed, 6 properties + 2999 tests, 10 excluded, 0 failed) all re-verified clean after the final rebase. Pushed with a plain push first time (rebase was no-op) and --force-with-lease the second time (rebase replayed commits), per protocol -- both as expected, not pre-emptive. Opened PR #780. CI ran 4 backend job instances across the branch's commits (duplicate push+pull_request triggers each time): one full end-to-end pass, and three failures -- all three failures were exclusively in the isolated `mix test --only wasm_hang` CI subprocess (host_api_write_test.exs:449 and/or plugin_handler_test.exs:354 hitting ExUnit's 60000ms timeout), never in the main suite, which passed clean (0 failures) in all 4 backend runs. Structurally attributed as NOT caused by this branch: the diff touches only lib/letflow/engine.ex plus ISS-0392 test/doc/handoff files (confirmed via git diff origin/main...HEAD --stat), never any WASM/plugin_handler code; this is a recurrence of the pre-existing, previously-documented wasmex native-thread-pool-exhaustion flake (ISS-0352/ISS-0380), now manifesting inside the isolation subprocess ISS-0352's own fix introduced. Recorded as a recurrence note directly in docs/issues/ISS-0352.yaml (commit dcb17df8, included in the merged PR). Merged via gh pr merge --squash --delete-branch (confirmed MERGED, merge commit 22868719). Local cleanup complete: on main, pulled --ff-only (already up to date via the merge's own local fast-forward), local and remote feature branches both gone, working tree clean.",
+    "artifacts_out": [
+      "branch: feature/WF03-ISS0392-20260901 (squash-merged into main as commit 22868719, branch deleted)",
+      "docs/issues/ISS-0352.yaml (recurrence note)"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Recurring CI flake (ISS-0352/ISS-0380 mechanism): the isolated `mix test --only wasm_hang` subprocess intermittently times out (host_api_write_test.exs:449, plugin_handler_test.exs:354) on a busy/small CI runner, independent of any branch's own diff -- observed on 3 of 4 backend CI runs against this PR's commits, while the main suite and one full run of the isolated subprocess passed clean every time. Not fixed here (out of this fix's scope; the pre-existing issue record already tracks the underlying mechanism and the still-open deeper fix, ISS-0352's candidate_scope (c) -- an operator-configurable cap on concurrent WASM invocations). Filed as a recurrence note in docs/issues/ISS-0352.yaml rather than a new issue, since it is the same documented mechanism, not a new defect."
+      }
+    ],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
-      "pr_url": null,
-      "pr_create_error": null
+      "branch_name": "feature/WF03-ISS0392-20260901",
+      "commit_sha_list": ["18d0f5ae", "dcb17df8"],
+      "remote_branch": "origin/feature/WF03-ISS0392-20260901 (deleted post-merge)",
+      "push_status": "pushed (plain, then --force-with-lease after a second rebase)",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/780",
+      "pr_create_error": null,
+      "merge_commit_sha": "22868719",
+      "merge_status": "MERGED"
     },
-    "next_action": ""
+    "next_action": "ORCH marks run COMPLETED and releases owned_modules lock for lib/letflow/engine.ex and lib/letflow/engine/sub_process.ex"
   },
   "rework_count": 0,
   "max_rework": 3

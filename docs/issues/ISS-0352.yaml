@@ -94,6 +94,30 @@ resolution: >
   short-lived process instead of touching any other test's pool. Both
   subprocess exit codes gate the task's own exit code.
 
+  Recurrence note (2026-09-01, WF03-ISS0392-20260901 Step Final, PR #780):
+  the isolated `mix test --only wasm_hang` subprocess itself timed out --
+  `host_api_write_test.exs:449` ("write_variable: discard on every failure
+  arm... REQ-170's wall-clock timeout abandons the staged write") hit
+  ExUnit's 60000ms per-test timeout, `Result: 6/7 passed, 3005 excluded`,
+  on CI run 33509028083. Structurally cleared as NOT attributable to
+  WF03-ISS0392-20260901's branch: that branch's diff touches only
+  `lib/letflow/engine.ex` and ISS-0392 test/doc/handoff files (confirmed via
+  `git diff origin/main...HEAD --stat`), never any WASM/plugin_handler code;
+  and the SAME commit's sibling duplicate CI run (33508992924, triggered by
+  the same push) ran the identical isolated `:wasm_hang` suite and passed
+  clean in ~24s (`Result: 7 passed, 3005 excluded`). Confirms this is the
+  same runner-variance-dependent pool-exhaustion mechanism this issue
+  already documents, now manifesting inside the isolation subprocess this
+  issue's own fix introduced rather than cascading into the main suite --
+  the residual risk this record already flagged (line "nothing prevents a
+  future WASM test file... from tipping the same pool into exhaustion
+  again") was not eliminated, only moved. Did not block PR #780's merge per
+  GIT_MERGE.md's precondition ("green means no failure attributable to this
+  branch") and core-directives.md's structural-attribution rule. Left
+  `status: resolved` as-is since PR #691's specific defect remains fixed;
+  the deeper OQ-5 cap (`candidate_scope_for_whoever_picks_this_up` (c)
+  above) is still the only structural fix for this recurrence class.
+
   Verified locally end-to-end before push: main suite (wasm_hang excluded)
   -- `Result: 113 passed, 6 excluded` in 0.6s; isolated `--only wasm_hang`
   run -- `Result: 6 passed, 2407 excluded` in 10.4s; full `mix

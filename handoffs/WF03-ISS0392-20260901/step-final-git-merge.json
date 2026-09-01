@@ -1,0 +1,57 @@
+{
+  "handoff_id": "22f479d3-f366-49b5-b8cd-7f4e2223959c",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0392-20260901/step-final-git-merge.json",
+  "created_at": "2026-09-01T12:00:19Z",
+  "started_at": "2026-09-01T12:00:19Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/issues/ISS-0392.yaml",
+      "handoffs/WF03-ISS0392-20260901/step-04c-test-runner.json",
+      "handoffs/WF03-ISS0392-20260901/step-05-issue-fixer.json"
+    ],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/engine/sub_process.ex"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0392-20260901 (checkout/pull it first). Run GIT_MERGE.md's procedure exactly, in full, to merge this WF-03 fix branch to main. Every gate is already green: CODE-DESIGN-VALIDATOR PASS (regate, step-02b-regate), SECURITY-REVIEWER PASS (step-03b), REVIEWER PASS (step-03c), TEST-DESIGN-VALIDATOR PASS (step-04b), TEST-RUNNER full-suite PASS 2999/2999 zero failures (step-04c), ISSUE-FIXER Step 5 PASS -- ISS-0392.yaml resolved and GitHub issue #772 closed with evidence comment (step-05). Stage/commit any remaining uncommitted files, rebase onto origin/main, re-run format/compile/test after rebase per the protocol, push (handle non-fast-forward per the protocol's step 6 guidance -- expect it, since this branch has been open a while and other work has likely merged to main since), create the PR with title 'fix: ISS-0392 Ecto.Multi :task_records key collision on synchronous SUB_PROCESS completion [WF03-ISS0392-20260901]', wait for CI (backend + frontend jobs) to report green (attribution-based, per core-directives.md -- not zero-failures), then merge with gh pr merge --squash --delete-branch, and do the mandatory local cleanup (return to main, pull --ff-only, verify clean).",
+    "acceptance_criteria": [
+      "Branch rebased onto current origin/main; any conflicts resolved per GIT_MERGE.md's conflict-handling rules (or none arise)",
+      "mix format --check-formatted, mix compile --warnings-as-errors, and mix test all re-run and reported after rebase, with any failures structurally attributed per core-directives.md",
+      "Branch pushed (force-with-lease only if a plain push is actually rejected, never pre-emptively)",
+      "PR created with the required body sections (Summary/Requirements/Validation/Handoffs), the mix test line carrying real counts and attribution route -- not a bare PASS",
+      "CI backend + frontend jobs confirmed green (attribution-based) before merging",
+      "gh pr merge --squash --delete-branch exits 0 (or the worktree-variant/PARTIAL fallback correctly applied and reported)",
+      "Local cleanup complete: on main, pulled --ff-only, clean working tree, branch deleted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

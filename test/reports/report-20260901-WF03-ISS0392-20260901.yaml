@@ -1,0 +1,132 @@
+run_id: WF03-ISS0392-20260901
+workflow_id: WF-03
+step: "04c"
+agent: TEST-RUNNER
+generated_at: "2026-09-01T11:56:40Z"
+branch: feature/WF03-ISS0392-20260901
+commit: 576f222a
+
+command: scripts/test_parallel.sh
+mechanism: >
+  Full suite run as N parallel `mix test --partitions N` processes; each
+  partition's own ExUnit Result:/Failed: summary line parsed and summed into
+  one combined total. Exit 0 iff every partition's *parsed* count shows 0
+  failures (parsed count authoritative, not each partition's raw process
+  exit code).
+
+partition_count:
+  N: 16
+  source: nproc
+
+environment:
+  toolchain: local (Elixir/mix on PATH) -- no Docker fallback needed for the
+    toolchain itself.
+  postgres: docker compose (letflow-2-postgres-1, letflow-2-keycloak-1) --
+    both containers already Running before this run (`docker compose up -d`
+    reported no state change).
+
+result:
+  status: PASS
+  combined_tests: 2993
+  combined_properties: 6
+  combined_total: 2999
+  combined_passed: 2999
+  combined_failures: 0
+  per_partition:
+    - {partition: 1,  tests: 156, properties: 0, failures: 0, exit: 0}
+    - {partition: 2,  tests: 161, properties: 0, failures: 0, exit: 0}
+    - {partition: 3,  tests: 246, properties: 0, failures: 0, exit: 0}
+    - {partition: 4,  tests: 282, properties: 0, failures: 0, exit: 0}
+    - {partition: 5,  tests: 104, properties: 0, failures: 0, exit: 0}
+    - {partition: 6,  tests: 163, properties: 0, failures: 0, exit: 0}
+    - {partition: 7,  tests: 246, properties: 0, failures: 0, exit: 0}
+    - {partition: 8,  tests: 177, properties: 1, failures: 0, exit: 0}
+    - {partition: 9,  tests: 179, properties: 0, failures: 0, exit: 0}
+    - {partition: 10, tests: 271, properties: 0, failures: 0, exit: 0}
+    - {partition: 11, tests: 185, properties: 2, failures: 0, exit: 0}
+    - {partition: 12, tests: 205, properties: 0, failures: 0, exit: 0}
+    - {partition: 13, tests: 248, properties: 0, failures: 0, exit: 0}
+    - {partition: 14, tests: 162, properties: 0, failures: 0, exit: 0}
+    - {partition: 15, tests: 97,  properties: 2, failures: 0, exit: 0}
+    - {partition: 16, tests: 111, properties: 1, failures: 0, exit: 0}
+
+raw_output: |
+  test_parallel: N=16 (source: nproc)
+  test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+  test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+  test_parallel: seeding 16 per-partition build paths from _build/test (sequential)
+  test_parallel: partition logs in /tmp/letflow_test_parallel.hKcrJD
+  test_parallel: TEST_PARALLEL_GROUP=tp2310 (shared by all 16 partitions)
+  partition 1: 156 tests, 0 properties, 0 failures, exit 0
+  partition 2: 161 tests, 0 properties, 0 failures, exit 0
+  partition 3: 246 tests, 0 properties, 0 failures, exit 0
+  partition 4: 282 tests, 0 properties, 0 failures, exit 0
+  partition 5: 104 tests, 0 properties, 0 failures, exit 0
+  partition 6: 163 tests, 0 properties, 0 failures, exit 0
+  partition 7: 246 tests, 0 properties, 0 failures, exit 0
+  partition 8: 177 tests, 1 property, 0 failures, exit 0
+  partition 9: 179 tests, 0 properties, 0 failures, exit 0
+  partition 10: 271 tests, 0 properties, 0 failures, exit 0
+  partition 11: 185 tests, 2 properties, 0 failures, exit 0
+  partition 12: 205 tests, 0 properties, 0 failures, exit 0
+  partition 13: 248 tests, 0 properties, 0 failures, exit 0
+  partition 14: 162 tests, 0 properties, 0 failures, exit 0
+  partition 15: 97 tests, 2 properties, 0 failures, exit 0
+  partition 16: 111 tests, 1 property, 0 failures, exit 0
+  ---
+  combined: 2993 tests, 6 properties, 0 failures (2999/2999 passed)
+
+iss_0392_regression_check:
+  description: >
+    ExUnit partitioning does not print individual test names to the
+    partition logs (debug-level SQL only, dots for progress), so the
+    combined summary alone does not name which partition drew
+    test/letflow/engine_sub_process_test.exs. To confirm specifically (not
+    just infer from the 0-failure combined total) that the new ISS-0392
+    tests passed within this branch's current state, ran the file directly
+    on the same commit (576f222a) immediately after the full-suite run,
+    against the same live Postgres/tenant infrastructure the full run just
+    used.
+  command: "MIX_ENV=test mix test test/letflow/engine_sub_process_test.exs"
+  raw_output: |
+    Finished in 20.5 seconds (0.00s async, 20.5s sync)
+    Result: 15 passed
+  result: >
+    15/15 passed, 0 failures -- the 13 pre-existing REQ-062/ISS-0067 tests
+    plus both new ISS-0392 tests ("single-level: gate completion cascades
+    through synchronous child completion, no raise, no orphan task row" and
+    "multi-level cascade: two synchronous SUB_PROCESS completions in one
+    transaction, distinct instance_ids never collide"). Matches
+    TEST-DESIGN-VALIDATOR's own independently-reproduced post-fix count
+    (step-04b handoff: "15 passed") exactly. Confirms the regression tests
+    pass both standalone and as part of the full 2999/2999-passing combined
+    run (the combined run's 0 combined_failures is consistent with, and this
+    targeted re-run directly confirms, this file's own contribution to that
+    total).
+
+failure_attribution:
+  count: 0
+  note: >
+    Zero failures in the full-suite combined run (2999/2999 passed across
+    all 16 partitions) and zero failures in the targeted
+    engine_sub_process_test.exs re-run (15/15 passed). Nothing to attribute,
+    nothing to file. No pre-existing/standing failures reproduced on this
+    branch at this commit.
+
+diff_scope_reviewed:
+  - lib/letflow/engine.ex
+  - test/letflow/engine_sub_process_test.exs
+  note: >
+    Per test/specs/ISS-0392.md, the fix (commit e30873f8) touches only
+    lib/letflow/engine.ex; the regression tests live entirely in
+    test/letflow/engine_sub_process_test.exs (owned_modules for this run).
+    Both ran clean, both standalone and inside the combined full-suite run.
+
+working_tree:
+  note: >
+    Only this handoff file's own IN_PROGRESS/COMPLETED transition and this
+    report file are new/modified relative to the branch tip pulled at the
+    start of this run -- no leftover test artifacts.
+
+verdict: PASS
+next_action: Route to next WF-03 step (Close Issue / RELEASE-VALIDATOR path per WF-03).

@@ -281,6 +281,27 @@ defmodule Letflow.EngineSubProcessTest do
     }
   end
 
+  # ISS-0392: a synchronously-completing child -- START -> END, no intervening task at
+  # all. Deliberately the ONLY graph in this file with no HUMAN_TASK node: every other
+  # child helper (graph_child_two_step/0 above) exists precisely so its own completion
+  # must be independently driven, but ISS-0392's collision only fires when
+  # prepare_child_activation/4 drives the child to InstanceState.status == :completed
+  # synchronously, inside the SAME transaction as the parent hop chain that spawned it
+  # (design doc iss0392-multi-task-records-collision-fix.md §5, point 2) -- a graph with
+  # any pending task in it would leave the child :active instead, never exercising the
+  # collision this test proves fixed.
+  defp graph_child_immediate do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "end"}
+      ]
+    }
+  end
+
   defp start_attrs(definition, overrides \\ %{}) do
     Map.merge(
       %{
@@ -324,6 +345,17 @@ defmodule Letflow.EngineSubProcessTest do
     EngineTask
     |> where([t], t.instance_id == ^instance_id and t.status == :pending)
     |> Repo.one!(prefix: schema_name)
+  end
+
+  # ISS-0392: ALL task rows for an instance, any status -- not just :pending. The
+  # collision-fix's own "no orphan row" claim (design doc §5 point 6) is about a task row
+  # that should never have been INSERTed at all (call (1)'s now-skipped step), not about
+  # a pending-vs-completed status distinction, so this deliberately doesn't filter by
+  # status the way pending_task_for_instance!/2 does.
+  defp all_tasks_for_instance(schema_name, instance_id) do
+    EngineTask
+    |> where([t], t.instance_id == ^instance_id)
+    |> Repo.all(prefix: schema_name)
   end
 
   defp sub_process_completed_events(schema_name, instance_id) do
@@ -972,6 +1004,208 @@ defmodule Letflow.EngineSubProcessTest do
       parent_token_after = Repo.get!(TokenRecord, gate_token.id, prefix: schema_name)
       assert parent_token_after.status == :waiting
       assert parent_token_after.waiting_child_instance_id == child.instance_id
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0392 -- Ecto.Multi :task_records key collision when a SUB_PROCESS child
+  # completes synchronously in the same hop-chain transaction as the parent task that
+  # spawned it. See lib/letflow/design/iss0392-multi-task-records-collision-fix.md §5
+  # for the exact scenario this reproduces, and test/specs/ISS-0392.md for why each
+  # assertion below exists. This closes engine_sub_process_test.exs's own documented gap
+  # (graph_child_two_step/0's comment at the top of this file, "Deliberately does NOT
+  # complete synchronously") -- every other test in this file drives a child that stays
+  # :active pending its own task; this is the first test in the file whose child
+  # completes inside the SAME transaction as the parent's hop chain.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0392 -- a synchronously-completing SUB_PROCESS child no longer collides on {:task_records, parent_instance_id}" do
+    test "single-level: gate completion cascades through synchronous child completion, no raise, no orphan task row" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # START -> END, no intervening task -- prepare_child_activation/4 drives this
+      # child to InstanceState.status == :completed synchronously, before any Multi
+      # step for it exists (design doc §5 point 2).
+      child_def = active_definition!(schema_name, graph_child_immediate())
+
+      # START -> HUMAN_TASK("gate") -> SUB_PROCESS("sp") -> END. "end" is a terminal
+      # node with nothing after "sp" -- deliberately, so the collision-fix's dominance
+      # argument (design doc §2.3/§5 point 6) is observable as "no orphan task row"
+      # rather than needing a positive-content assertion about a node that doesn't
+      # exist in this graph.
+      parent_def =
+        active_definition!(
+          schema_name,
+          graph_parent_task_then_subprocess_no_split(child_def.name)
+        )
+
+      assert {:ok, created} = Engine.create(start_attrs(parent_def), prefix: schema_name)
+      gate_task = pending_task_for_instance!(schema_name, created.instance_id)
+
+      before_task_count = length(all_tasks_for_instance(schema_name, created.instance_id))
+
+      # Pre-fix: this call raised RuntimeError "cannot merge Multi; ... task_records: "
+      # (ISS-0392's own filed repro). Post-fix: {:ok, _}, no raise.
+      assert {:ok, result} =
+               Engine.complete_task(gate_task.id, complete_attrs(), prefix: schema_name)
+
+      # complete_task/3's own returned instance_status reflects final_instance_state --
+      # the PRE-cascade snapshot from call (1)'s own transition (engine.ex
+      # interpret_complete_result/1, :advanced clause), evaluated before the child's
+      # synchronous completion cascades back into the parent. It is therefore still
+      # :active here regardless of the fix -- this is not itself a collision symptom,
+      # so it is asserted (not skipped) precisely to document that the persisted
+      # PROJECTION below, not this return value, is where the fix's dominance argument
+      # (design doc §2.3) becomes observable.
+      assert result.instance_status == :active
+
+      # The gate task's own hop chain reaches SUB_PROCESS("sp"), spawns the child, the
+      # child completes synchronously inside the same transaction, and that completion
+      # chains back into the parent (sub_process_completed) -- which itself advances
+      # the parent straight to END (design doc §2.3's dominance argument: call (2)'s
+      # diff, evaluated AFTER the child's completion, strictly dominates call (1)'s).
+      # This IS observable on the persisted projection, which reconcile_projection/4
+      # writes from the further-advanced state produced by the cascade, not from
+      # final_instance_state alone.
+      parent_projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
+      assert parent_projection.status == :completed
+
+      # child.status itself is NOT asserted :completed here: insert_child_instance_
+      # projection/8 (sub_process.ex:520-544) hardcodes status: :active at insert time
+      # regardless of child_initial_state.status, and no later step in this hop chain
+      # updates the child's own projection row afterwards -- this is pre-existing
+      # behavior, orthogonal to ISS-0392's own scope (the collision and its fix are
+      # both about the PARENT's {:task_records, parent_instance_id} Multi step, not
+      # the child's projection row) and not something design doc §5 asks this test to
+      # assert. child_final_state.status == :completed (verified indirectly below via
+      # the SUB_PROCESS_COMPLETED event, which only fires on that status) is what
+      # actually drives the collision and the parent's own advance to :completed.
+      child = child_projection!(schema_name, created.instance_id)
+      assert child.parent_instance_id == created.instance_id
+
+      # No orphan/duplicate task row: call (1)'s {:task_records, parent_instance_id}
+      # step is never built when this scenario's predicate is true (design doc §2.2),
+      # so there is no earlier-snapshot pending_task_nodes row for it to have inserted
+      # in the first place -- this is a structural guarantee, not a race outcome, per
+      # §5 point 6's own closing note. The gate task itself is the only row that ever
+      # existed for this instance; completing it does not insert a second row.
+      after_tasks = all_tasks_for_instance(schema_name, created.instance_id)
+      assert length(after_tasks) == before_task_count
+      assert Enum.map(after_tasks, & &1.id) == [gate_task.id]
+
+      assert [sp_event] = sub_process_completed_events(schema_name, created.instance_id)
+      assert sp_event.payload["child_instance_id"] == child.instance_id
+    end
+
+    test "multi-level cascade: two synchronous SUB_PROCESS completions in one transaction, distinct instance_ids never collide" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # Level 0 (innermost) child: START -> END, synchronous.
+      innermost_child_def = active_definition!(schema_name, graph_child_immediate())
+
+      # Level 1 (middle): START -> HUMAN_TASK("gate") -> SUB_PROCESS("sp") -> END. This
+      # is itself the "child" of the outer grandparent below -- when spawned as a
+      # child, it has no pending HUMAN_TASK reached yet by its OWN activation (its
+      # first node is "start", not "gate"), so it does not complete synchronously on
+      # spawn; it becomes the outer SUB_PROCESS's :active, waiting child. What DOES
+      # cascade synchronously is this middle instance's own eventual completion, once
+      # ITS "gate" task is completed independently -- see the outer flow below.
+      middle_def =
+        active_definition!(
+          schema_name,
+          graph_parent_task_then_subprocess_no_split(innermost_child_def.name)
+        )
+
+      # Level 2 (outer/grandparent): START -> HUMAN_TASK("outer_gate") ->
+      # SUB_PROCESS("outer_sp") -> END, "outer_sp" pointing at the middle definition.
+      outer_def =
+        active_definition!(
+          schema_name,
+          graph_parent_task_then_subprocess_no_split(middle_def.name)
+        )
+
+      assert {:ok, outer_created} = Engine.create(start_attrs(outer_def), prefix: schema_name)
+      outer_gate_task = pending_task_for_instance!(schema_name, outer_created.instance_id)
+
+      # Completing "outer_gate" spawns the middle instance as outer_sp's child. The
+      # middle instance's own first node is "start" -> "gate" (a HUMAN_TASK), so it
+      # does NOT complete synchronously here -- it is left :active, waiting on its own
+      # "gate" task. This single hop chain therefore does NOT yet exercise the
+      # collision (only one instance_id, outer_created.instance_id, is a candidate for
+      # the predicate, and the middle child's own prepared_children entry has
+      # child_initial_state.status == :active, not :completed) -- confirms the
+      # baseline (pre-existing, already-passing) async/queued path is unaffected.
+      assert {:ok, outer_after_spawn} =
+               Engine.complete_task(outer_gate_task.id, complete_attrs(), prefix: schema_name)
+
+      assert outer_after_spawn.instance_status == :active
+
+      middle_instance = child_projection!(schema_name, outer_created.instance_id)
+      assert middle_instance.status == :active
+
+      middle_gate_task = pending_task_for_instance!(schema_name, middle_instance.instance_id)
+
+      before_outer_tasks = length(all_tasks_for_instance(schema_name, outer_created.instance_id))
+
+      before_middle_tasks =
+        length(all_tasks_for_instance(schema_name, middle_instance.instance_id))
+
+      # Completing the middle instance's own "gate" task is the hop chain that
+      # actually cascades: it spawns the innermost child (synchronous completion,
+      # collides on {:task_records, middle_instance.instance_id} -- this IS §2's
+      # first-level predicate firing, for the middle instance), which chains the
+      # middle instance to :completed, which in turn fires
+      # maybe_cascade_to_grandparent/6's :completed clause and chains the OUTER
+      # (grandparent) instance to :completed too, appending a SECOND, independently-
+      # keyed {:task_records, outer_created.instance_id} step. Per design doc §3.2,
+      # these two instance_ids are distinct by construction, so the second append
+      # never collides with anything regardless of the fix -- this variant is expected
+      # to pass post-fix purely because distinct keys never collide (§5 point 7).
+      assert {:ok, middle_result} =
+               Engine.complete_task(middle_gate_task.id, complete_attrs(), prefix: schema_name)
+
+      # Same pre-cascade-snapshot caveat as the single-level test above:
+      # middle_result.instance_status reflects the middle instance's own
+      # final_instance_state from call (1) (gate -> sp, :active/waiting), evaluated
+      # before the innermost child's synchronous completion cascades. The persisted
+      # projections below are where both cascaded completions actually show up.
+      assert middle_result.instance_status == :active
+
+      middle_projection =
+        Repo.get!(InstanceProjection, middle_instance.instance_id, prefix: schema_name)
+
+      assert middle_projection.status == :completed
+
+      outer_projection =
+        Repo.get!(InstanceProjection, outer_created.instance_id, prefix: schema_name)
+
+      assert outer_projection.status == :completed
+
+      # Same pre-existing-behavior caveat as the single-level test: the innermost
+      # child's own projection row is hardcoded status: :active at insert time
+      # (sub_process.ex:520-544's insert_child_instance_projection/8), not updated
+      # afterwards -- orthogonal to ISS-0392's scope. Only its parent linkage is
+      # asserted here; both cascaded completions are observed on the middle/outer
+      # projections above.
+      innermost_child = child_projection!(schema_name, middle_instance.instance_id)
+      assert innermost_child.parent_instance_id == middle_instance.instance_id
+
+      # No orphan task row at either cascading level -- same structural guarantee as
+      # the single-level test, now confirmed at two distinct instance_ids in the same
+      # transaction.
+      after_outer_tasks = all_tasks_for_instance(schema_name, outer_created.instance_id)
+      assert length(after_outer_tasks) == before_outer_tasks
+      assert Enum.map(after_outer_tasks, & &1.id) == [outer_gate_task.id]
+
+      after_middle_tasks = all_tasks_for_instance(schema_name, middle_instance.instance_id)
+      assert length(after_middle_tasks) == before_middle_tasks
+      assert Enum.map(after_middle_tasks, & &1.id) == [middle_gate_task.id]
+
+      assert [_outer_sp_event] =
+               sub_process_completed_events(schema_name, outer_created.instance_id)
+
+      assert [_middle_sp_event] =
+               sub_process_completed_events(schema_name, middle_instance.instance_id)
     end
   end
 end

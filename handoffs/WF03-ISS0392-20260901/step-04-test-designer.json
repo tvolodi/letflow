@@ -1,0 +1,62 @@
+{
+  "handoff_id": "3990d49a-0fc6-4454-b2df-37fc33bffb08",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0392-20260901/step-04-test-designer.json",
+  "created_at": "2026-09-01T11:29:02Z",
+  "started_at": "2026-09-01T11:29:02Z",
+  "completed_at": "2026-09-01T11:42:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0392-multi-task-records-collision-fix.md",
+      "docs/issues/ISS-0392.yaml",
+      "handoffs/WF03-ISS0392-20260901/step-03-rework1-elixir-dev.json",
+      "handoffs/WF03-ISS0392-20260901/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0392-20260901/step-03c-reviewer.json",
+      "lib/letflow/engine.ex",
+      "test/letflow/engine_sub_process_test.exs"
+    ],
+    "owned_modules": ["lib/letflow/engine.ex", "test/letflow/engine_sub_process_test.exs"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0392-20260901 (checkout/pull it first). Write the WF-03 regression test for ISS-0392 -- SECURITY-REVIEWER and REVIEWER have both PASSED the fix (commit e30873f8, entirely lib/letflow/engine.ex). This is a fix to EXISTING behavior (not a new module), so the fail-then-pass rule applies in its normal form, not the non-existence/mutation form: your test must be shown to FAIL against the pre-fix code and PASS against the current (fixed) code. ELIXIR-DEV's own ad-hoc throwaway verification (see step-03-rework1-elixir-dev.json's result.summary) already used this exact scenario successfully but did not commit it -- build the real, permanent regression test yourself, following the project's existing test conventions in test/letflow/engine_sub_process_test.exs (read its existing fixtures/helpers first, reuse what fits, e.g. the graph_child_two_step/0-style helper pattern noted at that file's lines 119-120 as NOT covering synchronous completion -- your new test is what finally closes that gap). Scenario per the design doc SS5: parent process START->HUMAN_TASK('gate')->SUB_PROCESS('sp')->END, spawned child process definition START->END (no intervening task, so it completes synchronously). Complete the gate task via Engine.complete_task/3 and assert: (a) it does NOT raise (pre-fix: raises RuntimeError 'cannot merge Multi... task_records'), (b) returns {:ok, _}, (c) the parent instance reaches :completed, (d) no orphan/duplicate task rows exist for the parent instance_id. To prove fail-then-pass for real: temporarily check out the pre-fix commit (the commit immediately before e30873f8 on this branch -- find it with git log), copy your new test file there via git show/git checkout <path> from your branch, run it, confirm it fails with the exact collision error, then return to the fix branch (git checkout feature/WF03-ISS0392-20260901 -- <path> or equivalent) and confirm it passes. State both results explicitly in your handoff. Do not modify or run pre-fix code permanently -- this is a verification step only, the working tree must end up back on the fix branch's own content.",
+    "acceptance_criteria": [
+      "test/specs/ISS-0392.md written: the scenario, the assertions, why each exists",
+      "Permanent test code committed under test/letflow/ (extending or adding to engine_sub_process_test.exs, matching existing project conventions)",
+      "Fail-then-pass explicitly verified: test run against the pre-fix commit fails with the exact filed RuntimeError, test run against the fix branch passes -- both results quoted in result.summary, not asserted",
+      "No test-local workaround reintroduced (e.g. do not use a HUMAN_TASK-child workaround pattern to dodge the synchronous-completion path the way REQ-207 did -- this test must exercise the exact synchronous-completion collision)",
+      "Existing tests in test/letflow/engine_sub_process_test.exs and test/letflow/engine_test.exs still pass alongside the new test",
+      "Working tree ends on feature/WF03-ISS0392-20260901 with no leftover pre-fix-commit artifacts"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/specs/ISS-0392.md and extended test/letflow/engine_sub_process_test.exs with a new describe block ('ISS-0392 -- a synchronously-completing SUB_PROCESS child no longer collides on {:task_records, parent_instance_id}') containing 2 new tests, plus one new fixture helper graph_child_immediate/0 (START -> END, no intervening task -- the ONLY child graph in this file with no HUMAN_TASK, deliberately, so it exercises the synchronous-completion path every other helper in this file avoids) and one new query helper all_tasks_for_instance/2 (all task rows for an instance, any status, for the orphan-row assertion).\n\nTest 1 (line 1023, 'single-level'): reproduces ISS-0392's exact filed scenario per design doc iss0392-multi-task-records-collision-fix.md SS5 -- parent START->HUMAN_TASK('gate')->SUB_PROCESS('sp')->END (reused existing graph_parent_task_then_subprocess_no_split/1), child START->END (new graph_child_immediate/0). Completes 'gate' via Engine.complete_task/3 and asserts: no raise, {:ok, result} returned, the PERSISTED parent projection reaches :completed (result.instance_status itself is :active -- documented in both the test's own comments and the spec as reflecting the pre-cascade final_instance_state snapshot, not a collision symptom), no orphan/duplicate task row (task-row count for the parent instance unchanged before/after, exactly the original gate task survives), and exactly one SUB_PROCESS_COMPLETED event naming the right child.\n\nTest 2 (line 1100, 'multi-level cascade'): design doc SS5 point 7's second scenario -- an outer/grandparent instance whose own SUB_PROCESS points at the step-1 parent definition, cascading through maybe_cascade_to_grandparent/6's :completed clause. Confirms the fix doesn't regress the already-non-colliding (distinct-instance_id) multi-level path, with the same no-orphan-row assertions checked independently at both cascading instance_ids.\n\nOne deliberate coverage gap flagged (not asserted, not silently dropped): the child's own InstanceProjection.status is never asserted :completed in either test, because insert_child_instance_projection/8 (sub_process.ex:520-544) hardcodes status: :active at insert time regardless of child_initial_state.status, and nothing later in this hop chain updates that row -- pre-existing behavior orthogonal to ISS-0392's own scope (the collision and fix are both about the PARENT's Multi step). Documented in test/specs/ISS-0392.md's own 'Deliberately not asserted' note rather than filed as a new issue -- diagnosing whether it's worth fixing is ISSUE-FIXER's call.\n\nAlso deliberately NOT added: a third test for design doc SS6 OQ-2's self-ancestor multi-level collision case (an instance being its own multi-level SUB_PROCESS ancestor) -- the design doc itself flags this as unresolved/not-confirmed-reachable and defers the in-scope/out-of-scope call to ORCH/TEST-DESIGNER; test/specs/ISS-0392.md's own 'Why these two cases, not more' section states the reasoning and recommends filing it as a separate follow-up issue if judged worth closing, rather than speculatively growing this regression test.\n\nFAIL-THEN-PASS VERIFIED FOR REAL (not asserted) via a temporary `git worktree add ../letflow-2-prefix-scratch cc662129` (cc662129 = the commit immediately before fix commit e30873f8 on this branch, confirmed via `git log --oneline e30873f8~3..e30873f8`), with the new test file copied in via `git show stash@{0}:test/letflow/engine_sub_process_test.exs > <worktree>/test/letflow/engine_sub_process_test.exs` (the fix-branch test-file edits were stashed first so the main working tree stayed clean during the worktree detour), `.env` copied for DB config, `mix deps.get && mix compile` run clean in the worktree, then:\n\nPre-fix (cc662129), test 1: `mix test test/letflow/engine_sub_process_test.exs:1023` -> '** (RuntimeError) cannot merge Multi; the following operations were found in both Ecto.Multi: [task_records: \"69139601-c223-4e13-8eba-c1d5597ba810\"]' at lib/letflow/engine.ex:1594 Letflow.Engine.run_complete_task/6, test line 1050. Result: 0/1 passed, 14 excluded.\n\nPre-fix (cc662129), test 2: `mix test test/letflow/engine_sub_process_test.exs:1100` -> '** (RuntimeError) cannot merge Multi; the following operations were found in both Ecto.Multi: [task_records: \"0160fae5-51fe-4c30-afb6-52a0eb13e02e\"]'. Result: 0/1 passed, 14 excluded.\n\nBoth match the exact filed RuntimeError/'cannot merge Multi'/task_records: shape from docs/issues/ISS-0392.yaml.\n\nWorktree then removed (`git worktree remove ../letflow-2-prefix-scratch --force`, scratch directory confirmed deleted), stash popped back onto feature/WF03-ISS0392-20260901 (`git stash pop`), `git status --short` confirmed only the intended test/letflow/engine_sub_process_test.exs modification remained -- no leftover pre-fix-commit artifacts.\n\nPost-fix (feature/WF03-ISS0392-20260901, this branch, current HEAD c21d92cb): `mix test test/letflow/engine_sub_process_test.exs` -> 'Finished in 21.6 seconds (0.00s async, 21.6s sync), Result: 15 passed' (13 pre-existing REQ-062/ISS-0067 tests + 2 new ISS-0392 tests, zero failures). `mix test test/letflow/engine_sub_process_test.exs test/letflow/engine_test.exs` -> 'Finished in 59.2 seconds, Result: 57 passed' -- zero regression in either owned_modules test file. `mix format --check-formatted test/letflow/engine_sub_process_test.exs` -> clean, no diff. `mix compile --warnings-as-errors` -> clean, zero warnings.\n\nNo test-local workaround reintroduced: graph_child_immediate/0 is a genuine START->END graph with zero HUMAN_TASK nodes, so the child completes synchronously exactly as ISS-0392's own repro does -- the opposite of REQ-207's own HUMAN_TASK-child workaround, which exists specifically to AVOID triggering this code path.",
+    "artifacts_out": [
+      "test/specs/ISS-0392.md",
+      "test/letflow/engine_sub_process_test.exs"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0392-20260901",
+      "commit_sha_list": ["8ca68a54"],
+      "remote_branch": "origin/feature/WF03-ISS0392-20260901",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (hard gate on this handoff's coverage) per WF-03 Step 4's remaining gate, then TEST-RUNNER, then RELEASE-VALIDATOR. Do not treat this PASS as satisfying TEST-DESIGN-VALIDATOR."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

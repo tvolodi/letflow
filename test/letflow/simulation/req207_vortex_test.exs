@@ -808,6 +808,45 @@ defmodule Letflow.Simulation.Req207VortexTest do
       {:ok, projection} = Letflow.Instances.get_by_id(instance_id, prefix: schema_name)
       assert projection.status == :completed
       assert projection.current_nodes == []
+
+      # Structural cross-check closing the gap left by activated_nodes == [] alone:
+      # empty activated_nodes is consistent with EITHER a same-node-count-of-hops route
+      # to end-false-positive OR a (bugged) direct route to end-closed -- no persisted
+      # event anywhere in this codebase records the literal target END node id
+      # (confirmed this session: grepped every event_type: "..." append site under
+      # lib/letflow/ -- none carries a target-node field; dispatch_end/3 discards
+      # token.node_id, the one place it briefly holds the real END id, without
+      # recording it). The seeded graph (`@simple_supplier_deviation_graph`, this
+      # module) is itself the ground truth for which literal node a given edge/condition
+      # leads to, since it's the actual definition the instance ran against -- so assert
+      # directly against it, not against a separately-typed literal, closing the loop:
+      # this run took the `false_positive == true` edge (the only variable set on this
+      # scenario's instance, `false_positive: true` with no `severity` -- confirmed
+      # above via eo2's variables assertion) out of `false-positive-check`, and that
+      # edge's own recorded target is the literal string "end-false-positive", never
+      # "end-closed". A future edit that pointed the `false_positive == true` edge at
+      # "end-closed" instead would flip this assertion, even though activated_nodes
+      # would still read [] either way.
+      false_positive_edge =
+        Enum.find(@simple_supplier_deviation_graph["edges"], fn edge ->
+          edge["source"] == "false-positive-check" and
+            edge["condition"] == "variables.false_positive == true"
+        end)
+
+      assert false_positive_edge != nil,
+             "Expected the seeded graph to declare an edge out of false-positive-check " <>
+               "conditioned on variables.false_positive == true"
+
+      assert false_positive_edge["target"] == "end-false-positive",
+             "Expected the false_positive == true edge to target end-false-positive " <>
+               "specifically, not end-closed (both are END nodes in this graph, and " <>
+               "activated_nodes == [] alone cannot distinguish them); observed target: " <>
+               inspect(false_positive_edge["target"])
+
+      refute false_positive_edge["target"] == "end-closed",
+             "The false_positive == true edge must not target end-closed -- that is " <>
+               "the critical scenario's own terminal node and AC3's whole point is " <>
+               "that these two scenarios reach genuinely distinct terminal states"
     end
   end
 

@@ -1,0 +1,98 @@
+{
+  "handoff_id": "WF03-ISS0397-20260901-step-04b",
+  "run_id": "WF03-ISS0397-20260901",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0397-20260901/step-04b-test-design-validator.json",
+  "created_at": "2026-09-01T19:25:33Z",
+  "started_at": "2026-09-01T19:19:00Z",
+  "completed_at": "2026-09-01T19:25:33Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-048", "REQ-054", "REQ-208", "REQ-051", "REQ-052"],
+    "issue_ids": ["ISS-0397"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0397-20260901/step-04-test-designer.json",
+      "test/letflow/iss0397_join_counters_test.exs",
+      "test/letflow/engine/timer_wiring_test.exs",
+      "test/letflow/engine/snapshot_writer_test.exs",
+      "test/letflow/simulation/req208_meridian_test.exs"
+    ],
+    "branch_name": "fix/ISS-0397-join-counters-20260901",
+    "diff_base": "origin/main...HEAD (commit 31444783)"
+  },
+  "task": {
+    "description": "WF-03 Step 4b independent re-verification of TEST-DESIGNER's coverage-verification pass (step-04, commit 306823bf). Independently reproduce the claimed mutation of build_instance_state/3, confirm the create/2 insert_instance_projection/8 extension has its own distinct assertion, confirm test-isolation claims, and re-run the full targeted suite plus a broader Engine regression check.",
+    "acceptance_criteria": [
+      "Independently mutate build_instance_state/3's join_counters read back to hardcoded %{}, run test/letflow/iss0397_join_counters_test.exs, and confirm it fails with the exact {:unknown_branch_id, _} evidence claimed",
+      "Revert via git checkout -- lib/letflow/engine.ex and confirm git status --porcelain is empty, then re-run to confirm green",
+      "Confirm the projection_after_create assertion gives insert_instance_projection/8 its own distinct, non-inherited coverage",
+      "Confirm test isolation (unique tenant schemas, Sandbox.mode :auto for genuine concurrency) by reading the setup code directly",
+      "Run the full targeted 4-file suite and quote real output",
+      "Run mix test test/letflow/engine/ to confirm no Engine regression"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "mutation_reproduction": {
+      "method": "Edited lib/letflow/engine.ex build_instance_state/3 in place: replaced `join_counters: SnapshotWriter.deserialize_join_counters(projection.join_counters)` with `join_counters: %{}` (the pre-fix hardcoded value). Ran `mix test test/letflow/iss0397_join_counters_test.exs` against the mutant.",
+      "result": "0/2 passed, matching TEST-DESIGNER's claim exactly. The concurrent test failed with: `match (=) failed ... left: [branch_a: {:ok, _}, branch_b: {:ok, _}] ... right: [branch_a: {:error, {:activation_failed, {:unknown_branch_id, \"c50355d3-9055-4e33-b581-ba800de5bb4c/0\"}}}, branch_b: {:error, {:activation_failed, {:unknown_branch_id, \"c50355d3-9055-4e33-b581-ba800de5bb4c/1\"}}}]`. The serial test also failed. This is the exact error class the design doc and test comments predict for the pre-fix hardcoded %{}.",
+      "revert": "Reverted via `git checkout -- lib/letflow/engine.ex`. `git status --porcelain` returned EMPTY (verified directly, quoted in my own run, not copied from TEST-DESIGNER's report).",
+      "post_revert_targeted_run": "`mix test test/letflow/iss0397_join_counters_test.exs test/letflow/engine/timer_wiring_test.exs test/letflow/engine/snapshot_writer_test.exs test/letflow/simulation/req208_meridian_test.exs` -> `Finished in 31.1 seconds (0.00s async, 31.1s sync)` / `Result: 36 passed`. Matches TEST-DESIGNER's claimed 36/36.",
+      "note": "This is an independent re-derivation, not a copy of TEST-DESIGNER's reported counts -- I applied the mutation myself, observed the failure output myself, reverted myself, and re-ran myself. build_instance_state/3 pre-existed and was merely hardcoded wrong (not a case of 'the code under test did not exist'), so the WF-03 non-existence-exception mutant-isolation requirement does not additionally apply here, but I performed the mutation check anyway per this gate's own task."
+    },
+    "create2_extension_coverage_check": {
+      "verdict": "CONFIRMED",
+      "finding": "Read test/letflow/iss0397_join_counters_test.exs lines 165-170 directly: `projection_after_create = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)` is fetched immediately after `Engine.create/2` returns, before any `complete_task/3` call. The assertions `length(cohort_after_create[\"expected_from_branches\"]) == 2` and `cohort_after_create[\"received_from_branches\"] == []` can only be satisfied by insert_instance_projection/8's own write inside create/2's Multi (engine.ex persist/12, ~line 965) -- reconcile_projection/5 (the write site every other test in the suite exercises via complete_task/3 or advance_after_timer_fired/3) is never reached at this point in the test. This is genuine, non-inherited coverage of the create/2 extension."
+    },
+    "test_isolation_check": {
+      "verdict": "CONFIRMED",
+      "finding": "Read all three files' setup code directly. iss0397_join_counters_test.exs and timer_wiring_test.exs both use TenantFixture.provisioned_tenant!/1 with a unique slug_prefix and System.unique_integer/1-based unique_name/1 helper for all definition names/idempotency keys/actor ids -- no hardcoded shared ids. snapshot_writer_test.exs provisions its own tenant directly (insert_tenant! + provision_tenant_schema + replay_migrations) with a unique slug via TenantSlugFixture.unique_slug/1, and its provisioned_tenant/0 helper calls `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` at line 53 -- confirmed directly, not taken on faith. The concurrent test in iss0397_join_counters_test.exs (lines 242-262) launches two genuine Elixir.Task.async processes each calling Engine.complete_task/3 on its own separate connection under :auto sandbox mode, which is real cross-connection concurrency, not two sequential calls. All three files use `async: false` and independent on_exit teardown (schema drop / tenant delete). No shared mutable state found. Tests are self-sufficient -- each test provisions its own tenant/definition/instance from scratch."
+    },
+    "targeted_suite_run": {
+      "command": "mix test test/letflow/iss0397_join_counters_test.exs test/letflow/engine/timer_wiring_test.exs test/letflow/engine/snapshot_writer_test.exs test/letflow/simulation/req208_meridian_test.exs",
+      "output": "Finished in 31.1 seconds (0.00s async, 31.1s sync)\nResult: 36 passed",
+      "result": "36 passed, 0 failures"
+    },
+    "broader_engine_regression_check": {
+      "command": "mix test test/letflow/engine/",
+      "output": "Finished in 122.2 seconds (5.4s async, 116.7s sync)\nResult: 901 passed (1 property, 900 tests), 7 excluded",
+      "result": "901 passed, 0 failures, 7 excluded (pre-existing exclusions unrelated to ISS-0397; no new skips introduced by this fix). No Engine regression."
+    },
+    "acceptance_criteria_check": [
+      "Design doc s5.1-s5.4 each mapped to a real, non-vacuous test in the four target files -- confirmed by direct reading, matches TEST-DESIGNER's mapping.",
+      "No @tag :skip on any MUST-covering test in the reviewed files -- confirmed, none found.",
+      "No 'TODO: implement test' left in any spec or test file -- confirmed, none found.",
+      "Test fixtures use unique tenant schemas / unique ids, no shared hardcoded state -- confirmed.",
+      "Tests are self-sufficient, no test depends on another having run first -- confirmed, each test provisions its own tenant/instance.",
+      "No hardcoded secrets/connection strings -- confirmed, none found in any of the three files."
+    ],
+    "test_changes_made": "None -- no gap found, no rework needed.",
+    "summary": "PASS. Independently reproduced TEST-DESIGNER's mutation of build_instance_state/3 (join_counters read reverted to hardcoded %{}): 0/2 tests passed against the mutant, with the concurrent test's failure matching the exact {:activation_failed, {:unknown_branch_id, _}} evidence claimed. Reverted via git checkout --, confirmed git status --porcelain empty, and re-ran the 4-file targeted suite fresh: 36 passed, 0 failures, matching TEST-DESIGNER's claim exactly (not copied -- independently observed). Confirmed by direct reading that the projection_after_create assertion in iss0397_join_counters_test.exs exercises insert_instance_projection/8's own write site distinctly from reconcile_projection/5. Confirmed test isolation directly: unique tenant schemas/ids across all three files, Sandbox.mode :auto set explicitly in snapshot_writer_test.exs's provisioned_tenant/0, and genuine cross-connection Task.async concurrency in the ISS-0397 concurrent test. Ran mix test test/letflow/engine/ as a broader regression check: 901 passed, 0 failures, 7 pre-existing exclusions -- no Engine regression introduced by this fix or its tests. No gaps found; no rework required.",
+    "routing": "Route to Step 5 TEST-RUNNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": [
+    {
+      "gate": "SECURITY-REVIEWER",
+      "status": "PASS",
+      "at": "2026-09-01T19:08:28Z"
+    },
+    {
+      "gate": "REVIEWER",
+      "status": "PASS",
+      "at": "2026-09-01T19:15:16Z"
+    },
+    {
+      "gate": "TEST-DESIGN-VALIDATOR",
+      "status": "PASS",
+      "at": "2026-09-01T19:25:33Z"
+    }
+  ]
+}

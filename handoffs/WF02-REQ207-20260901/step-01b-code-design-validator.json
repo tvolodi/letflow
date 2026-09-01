@@ -1,0 +1,80 @@
+{
+  "handoff_id": "step01b-WF02-REQ207-20260901",
+  "run_id": "WF02-REQ207-20260901",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ207-20260901/step-01b-code-design-validator.json",
+  "created_at": "2026-09-01T07:26:58Z",
+  "started_at": "2026-09-01T07:26:58Z",
+  "completed_at": "2026-09-01T07:26:58Z",
+  "status": "FAILED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-207"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ207-20260901/step-00-git-setup.json",
+      "handoffs/WF02-REQ207-20260901/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req207-vortex-scenario-execution.md",
+      "docs/requirements.yaml#REQ-207",
+      "lib/letflow/design/req206-swiftroute-scenario-execution.md",
+      "test/support/simulation/runner.ex",
+      "test/support/simulation/scenario_fixture.ex",
+      "lib/letflow/router.ex"
+    ],
+    "branch_name": "feature/WF02-REQ207-20260901"
+  },
+  "task": {
+    "description": "First-ever real CODE-DESIGN-VALIDATOR pass on lib/letflow/design/req207-vortex-scenario-execution.md (787 lines). Prior 'Step 1b' activity for this run was only a claimed-but-never-produced log entry -- treated as never having happened, per ORCH's handoff. Independently verify: (1) REQ-206 dependency claims (ScenarioFixture.load!/1, :skip/:unbuilt_feature vocabulary) now genuinely exist in merged REQ-206 code; (2) AC4's BLOCKED_ON_DEPENDENCY claim (entity/entity-query subsystem not landed); (3) the new :audit_event_ordering verification method is genuinely new and design-only; (4) no implementation code anywhere in the doc; (5) full AC-to-design mapping; (6) §7 open questions against the no-silent-deferral standard, specifically whether OQ-1 is now moot since REQ-206 has merged.",
+    "acceptance_criteria": [
+      "Runner.ex/ScenarioFixture.ex dependency claims independently confirmed against real merged code",
+      "AC4 disposition independently re-verified (router.ex, requirements.yaml grep, lib/letflow/entities.ex absence)",
+      "audit_event_ordering confirmed new and specified as design only, not shipped code",
+      "zero implementation code (defmodule/defstruct/function bodies) in the design doc",
+      "every REQ-207 acceptance criterion mapped to a concrete design element",
+      "OQ-1 checked for mootness now that REQ-206 has merged, per project no-silent-deferral precedent"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Checks 1, 3, 4, 5 PASS; checks 2 and 6 surface two genuine, independently-verified defects -- FAILing per this gate's no-partial-credit rule. (1) PASS: this branch now has REQ-206 merged as an ancestor (git log main shows 2d068c79 'REQ-206: SwiftRoute scenario execution (S7 simulation harness) (#767)'; test/support/simulation/{runner.ex,scenario_fixture.ex} exist on this branch). Read runner.ex directly: line 45 `required(:via) => :api | :gui | :skip`, line 107/197 `disposition: :executed | :unbuilt_feature`, lines 314-327 the `:skip` step-execution clause -- REQ-206's vocabulary extension is real and matches what design section 0.1 assumed. Read scenario_fixture.ex: line 40-41 `@spec load!(path :: String.t()) :: Scenario.t()` / `def load!(path) do` -- the function the design imports and calls (never re-implements) genuinely exists. Design's OQ-1 fallback branch is therefore not needed (see defect 2 below on why the doc must still say so). (3) PASS: grepped test/support/simulation/ and lib/letflow/ for `audit_event_ordering` -- the ONLY hits are inside the design doc itself; it is genuinely new, not already shipped by REQ-205/206. Its spec (section 3.2) is signature/type-shape/prose only (`Scenario.expected_outcome().verification.method :: ... | :audit_event_ordering`, an `args` map shape, and a prose description of verify_outcome/2's new clause) -- no function body. (4) PASS: grepped every code fence in the doc (19 fences) for `defmodule`/`defstruct`/`def `/`def(` -- zero matches anywhere in the document. The two map-literal fences (report entry at lines 624-637, section 6's YAML report) are data shapes, not implementation; the test-module-structure fence (lines 666-687) is a prose skeleton (`test \"...\" -- <description>`), not real ExUnit code. (5) PASS: section 8's table maps all 6 of docs/requirements.yaml's real REQ-207 acceptance_criteria (verified by reading the live yaml entries at lines 11773-11779) to concrete design sections -- no TBD, no criterion left unmapped. DEFECT A (blocks check 2): section 4.1 step 2 specifies `grep -c \"title:.*[Ee]ntit\" docs/requirements.yaml` and states 'confirm this returns 0'. Independently ran this exact command: it returns 7, not 0 -- `grep -n \"title:.*[Ee]ntit\" docs/requirements.yaml` shows all 7 matches are false positives from the substring \"entit\" occurring inside \"identity\" (6 unrelated identity-subsystem requirement titles at lines 789/3446/4120/4158/4192/4240) plus REQ-207's own title (line 11715, self-referential, not a claim by another requirement). The underlying conclusion (no requirement claims the entity/entity-query subsystem) is still correct -- section 0.5's broader, manually-filtered `grep -n -i \"entit\"` pass got this right -- but section 4.1 is explicitly documented as 'a concrete, re-runnable procedure' that ELIXIR-DEV must re-run at implementation time without re-deriving from this design doc's prior finding. As specified, a literal re-run returns nonzero, which per section 4.1's own branching logic ('If this ever returns nonzero, name the specific REQ-NNN id and check its status field') forces the re-verifier to pick one of 7 unrelated identity-titled requirements and misreport it as an in-flight claimant of the entity/entity-query subsystem in the BLOCKED_ON_DEPENDENCY report -- exactly the kind of implementation-time ambiguity this gate exists to catch before it reaches ELIXIR-DEV. The same wrong claim (\"grep -c ... == 0\") is also baked into section 4.3's hand-built report-entry evidence text (line 631), so it isn't an isolated typo -- it propagates into the artifact ELIXIR-DEV would ship. Section 4.1's grep needs a word-bounded pattern that does not match \"identity\" (e.g. requiring the literal word \"entity\"/\"entities\", not any occurrence of the substring \"entit\") before this design is re-verifiable as claimed. DEFECT B (blocks check 6): section 7's OQ-1 is still framed as an open, unresolved question -- 'whether REQ-206 has merged to main by the time REQ-207's Step 2a begins... ELIXIR-DEV must check git log main --oneline | grep -i REQ206 ... before starting, not assume either way.' Independently confirmed this session: REQ-206 HAS merged to main (commit 2d068c79, ancestor of this branch, confirmed above under check 1) -- the merge happened after this design session authored section 0.1's 'not yet merged' finding (this branch's own git log shows the design-session commit a1418158 'step-01 PASS -- defer step-02a pending REQ-206 merge' predates 2d068c79). This project's own established standard -- cited explicitly in this gate's brief, and the precedent is REQ-206's own OQ-1/1b/2/3 rework -- prohibits silently leaving open a question that is now resolvable from material already available in this same session (a single `git log` call, which I ran, settles it). The design doc must be updated to state OQ-1 is now RESOLVED/MOOT (REQ-206 has merged; ScenarioFixture.load!/1 and the :skip/:unbuilt_feature vocabulary are confirmed present on this branch per check 1 above; section 0.1's fallback-plan branch is not exercised), not left as a live open question for ELIXIR-DEV to re-derive from scratch.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "id": null,
+        "severity": "BLOCKER",
+        "title": "Section 4.1's AC4 re-verification grep is unreliable -- false-positives on \"identity\", contradicting its own stated 0 result",
+        "detail": "`grep -c \"title:.*[Ee]ntit\" docs/requirements.yaml` returns 7 today, not the 0 that section 4.1 (and section 4.3's evidence bullet, line 631) states it should return. All 7 matches are substring collisions with \"identity\" (6 unrelated requirement titles) plus REQ-207's own self-referential title -- none names an entity/entity-query subsystem requirement, so the underlying BLOCKED_ON_DEPENDENCY conclusion is still correct, but the exact command specified as the re-runnable check is not fit for purpose: a literal re-run at implementation time returns nonzero and, per section 4.1's own branching logic, would force naming one of the 7 unrelated identity-titled requirements as an in-flight claimant. Fix: use a word-bounded pattern that matches only the literal word \"entity\"/\"entities\" (not any substring occurrence of \"entit\"), re-verify it returns 0 against the live docs/requirements.yaml, and update section 4.3's evidence bullet text to match.",
+        "affected_requirement": "REQ-207"
+      },
+      {
+        "id": null,
+        "severity": "BLOCKER",
+        "title": "Section 7 OQ-1 left open despite being resolvable now -- REQ-206 has merged to main",
+        "detail": "Section 7's OQ-1 states 'whether REQ-206 has merged to main by the time REQ-207's Step 2a begins' as an open question for ELIXIR-DEV to check. Independently confirmed this session: REQ-206 merged to main at commit 2d068c79 (ancestor of this branch), after this design session's own 'not yet merged' finding (section 0.1) was written. Per this project's no-silent-deferral standard for open questions resolvable from material already available (precedent: REQ-206's own OQ-1/1b/2/3 rework), this must be updated to state OQ-1 is RESOLVED/MOOT -- REQ-206 has merged, its ScenarioFixture.load!/1 and :skip/:unbuilt_feature additions are confirmed present on this branch, and section 0.1's fallback plan (ELIXIR-DEV stopping to ask ORCH for an inlined YAML-load helper) is not needed.",
+        "affected_requirement": "REQ-207"
+      }
+    ],
+    "next_action": "Rework CODE-DESIGNER -- 2 BLOCKERs above (section 4.1/4.3 grep pattern fix; section 7 OQ-1 mootness update), rework iteration 1"
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-01T07:26:58Z",
+      "status": "FAIL",
+      "summary": "Dependency claims, audit_event_ordering novelty, no-implementation-code, and AC-mapping checks all PASS. Section 4.1's AC4 re-verification grep is factually unreliable (returns 7, not the claimed 0, due to \"identity\" substring collisions) and section 7's OQ-1 is left open despite being resolvable now that REQ-206 has merged to main.",
+      "issues": [
+        "Section 4.1/4.3 grep pattern false-positives on \"identity\"",
+        "Section 7 OQ-1 not marked resolved/moot despite REQ-206 merge"
+      ],
+      "next_action": "Rework CODE-DESIGNER"
+    }
+  ]
+}

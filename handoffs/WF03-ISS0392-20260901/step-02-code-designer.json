@@ -1,0 +1,56 @@
+{
+  "handoff_id": "f165e907-0b2a-41da-aa83-ff494140e396",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0392-20260901/step-02-code-designer.json",
+  "created_at": "2026-09-01T10:23:32Z",
+  "started_at": "2026-09-01T10:23:32Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0392.yaml",
+      "handoffs/WF03-ISS0392-20260901/step-01-issue-fixer.json",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/sub_process.ex",
+      "lib/letflow/engine/task_activation.ex"
+    ],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/engine/sub_process.ex"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0392-20260901 (checkout/pull it first). Read step-01-issue-fixer.json's result.summary in full -- ISSUE-FIXER's independently-confirmed diagnosis is your starting point, not ISS-0392.yaml's own narrative (though you may also read that record). Design a fix for the Ecto.Multi :task_records key collision. The collision: build_complete_task_tail_multi/6 (lib/letflow/engine.ex) unconditionally appends TaskActivation.append_multi_from_existing_records(parent_instance_id, ...) keyed {:task_records, parent_instance_id} at engine.ex:2415, then (when the hop chain enters a SUB_PROCESS node) calls through to SubProcess.append_start_multi/7 (lib/letflow/engine/sub_process.ex), whose maybe_chain_synchronous_completion/6 :completed clause (sub_process.ex:481-508, firing ONLY on a synchronously-completing child graph) calls build_completion_write_steps/12 which appends ANOTHER TaskActivation.append_multi_from_existing_records(parent_instance_id, ...) at sub_process.ex:966-972 -- keyed identically, causing Ecto.Multi.merge_results/3 to raise. This must also correctly handle maybe_cascade_to_grandparent/6 (sub_process.ex:1003+), which recurses this same append pattern per distinct ancestor instance_id in a multi-level SUB_PROCESS nesting -- each ancestor's OWN collision must be prevented without suppressing a distinct ancestor's legitimate step. Produce a design (no implementation code) in lib/letflow/design/iss0392-multi-task-records-collision-fix.md covering: (1) the exact mechanism the fix uses to avoid appending {:task_records, X} twice for the same X within one Multi -- e.g. a signature/contract change to accept the already-built Multi and skip/merge the duplicate step, or a check-before-append; state which of the involved functions' signatures change and how (name, new/changed params, return shape) -- no function bodies; (2) how the fix preserves the async/queued SUB_PROCESS completion path's existing behavior unchanged (ISS-0392's AC3); (3) how a multi-level cascade (grandparent, great-grandparent, ...) is handled so each ancestor's step is added exactly once; (4) the exact collision-triggering scenario the regression test must reproduce (a synchronously-completing START->END child graph spawned mid-hop-chain) so TEST-DESIGNER can build it directly from your design; (5) any open questions, listed explicitly rather than silently resolved by guessing.",
+    "acceptance_criteria": [
+      "Design lives at lib/letflow/design/iss0392-multi-task-records-collision-fix.md, no function bodies/implementation code",
+      "Design maps to ISS-0392's 3 acceptance criteria exactly (no more raising on sync-completing child; regression test scenario named precisely; async/queued path behavior unchanged) with a concrete design element for each",
+      "Design states which function signatures change (if any) with exact new/changed parameter and return shapes",
+      "Design explicitly addresses the multi-level cascade case (maybe_cascade_to_grandparent/6) so it is not silently left ambiguous",
+      "No TBD/deferral language on anything CODE-DESIGN-VALIDATOR would treat as an unresolved acceptance criterion -- open questions are listed as such explicitly, not hidden"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

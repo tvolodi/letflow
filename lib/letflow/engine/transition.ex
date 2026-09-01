@@ -804,21 +804,30 @@ defmodule Letflow.Engine.Transition do
   # set is a singleton {:gateway, id} (any dead end, or any internal
   # disagreement between its own paths, fails the branch). Cross-branch
   # agreement (every branch must resolve to the *same* gateway id) is
-  # unchanged from the original design (req051 §3.3).
+  # unchanged from the original design (req051 §3.3). Threads a single
+  # leaf_search_state() across the split node's sibling branches: `memo`
+  # genuinely survives from one branch to the next (§2.2.3 proves this is
+  # always safe -- a top-level call's own Tarjan stack is always fully
+  # unwound by the time it returns), while `index`/`lowlink`/`stack`/
+  # `stack_set`/`next_index` are reset to empty/`0` before every branch (a
+  # previous branch's index numbering is meaningless to a fresh top-level
+  # call).
   @spec find_matching_join(Graph.t(), Node.t()) ::
           {:ok, join_node_id :: String.t()} | {:error, :no_matching_join}
   defp find_matching_join(definition_snapshot, node) do
     edges_out = Enum.filter(definition_snapshot.edges, &(&1.source == node.id))
 
     edges_out
-    |> Enum.reduce_while({:ok, nil}, fn edge, {:ok, acc_join_id} ->
-      leaves = collect_leaf_gateways(definition_snapshot, edge.target, MapSet.new())
+    |> Enum.reduce_while({:ok, nil, fresh_leaf_search_state()}, fn edge,
+                                                                   {:ok, acc_join_id, state} ->
+      state = reset_stack_bookkeeping(state)
+      {_tag, leaves, state} = collect_leaf_gateways(definition_snapshot, edge.target, state)
 
       case MapSet.to_list(leaves) do
         [{:gateway, gateway_id}] ->
           cond do
-            acc_join_id == nil -> {:cont, {:ok, gateway_id}}
-            acc_join_id == gateway_id -> {:cont, {:ok, acc_join_id}}
+            acc_join_id == nil -> {:cont, {:ok, gateway_id, state}}
+            acc_join_id == gateway_id -> {:cont, {:ok, acc_join_id, state}}
             true -> {:halt, {:error, :no_matching_join}}
           end
 
@@ -827,59 +836,202 @@ defmodule Letflow.Engine.Transition do
       end
     end)
     |> case do
-      {:ok, nil} -> {:error, :no_matching_join}
-      {:ok, gateway_id} -> {:ok, gateway_id}
+      {:ok, nil, _state} -> {:error, :no_matching_join}
+      {:ok, gateway_id, _state} -> {:ok, gateway_id}
       {:error, :no_matching_join} -> {:error, :no_matching_join}
     end
   end
 
   @type branch_leaf :: {:gateway, String.t()} | :dead_end
 
-  # design doc §2.2-2.4 -- explores every path forward from `node_id`,
-  # returning the set of leaves reached: {:gateway, id} for every
-  # PARALLEL_GATEWAY node reached (a terminal, never traversed past --
-  # §2.3's nested-PARALLEL_GATEWAY exclusion boundary), :dead_end for every
-  # path that hits a cycle, an unresolved node_id, or a node with zero
-  # outgoing edges (e.g. :END). At a branching node (out-degree > 1, in
-  # practice an EXCLUSIVE_GATEWAY), `visited` is copied -- not merged or
-  # threaded -- across sibling edges, so two paths that both pass through a
-  # shared downstream node (a diamond reconvergence) don't falsely trip each
-  # other's cycle guard (§2.4). Total and terminating: `visited` strictly
-  # grows along any single path, and the node set is finite.
-  @spec collect_leaf_gateways(Graph.t(), String.t(), MapSet.t(String.t())) ::
-          MapSet.t(branch_leaf())
-  defp collect_leaf_gateways(definition_snapshot, node_id, visited) do
-    if MapSet.member?(visited, node_id) do
-      MapSet.new([:dead_end])
-    else
-      case find_node(definition_snapshot.nodes, node_id) do
-        nil ->
-          MapSet.new([:dead_end])
+  @typedoc """
+  design doc §2.2.2 -- the memoized-Tarjan-SCC-DFS accumulator threaded
+  through `collect_leaf_gateways/3`. `memo` is the only field that survives
+  across sibling top-level branch calls (`find_matching_join/2`'s own fold);
+  `index`/`lowlink`/`stack`/`stack_set`/`next_index` are Tarjan's own
+  single-pass bookkeeping, reset to empty/`0` at the start of every
+  top-level branch call.
+  """
+  @type leaf_search_state :: %{
+          memo: %{optional(String.t()) => MapSet.t(branch_leaf())},
+          index: %{optional(String.t()) => non_neg_integer()},
+          lowlink: %{optional(String.t()) => non_neg_integer()},
+          stack: [String.t()],
+          stack_set: MapSet.t(String.t()),
+          next_index: non_neg_integer()
+        }
 
-        %Node{node_type: :PARALLEL_GATEWAY, id: gateway_id} ->
-          MapSet.new([{:gateway, gateway_id}])
+  @typedoc """
+  design doc §2.2.2 -- `:finished` means `node_id`'s SCC has closed and its
+  aggregate leaf set is final (safe to memoize/reuse forever); `{:open,
+  lowlink}` means `node_id` is still on the Tarjan stack (part of a
+  not-yet-closed SCC further up the call chain), carrying the lowest `index`
+  reachable so far so the caller can fold it into its own `local_lowlink`.
+  """
+  @type leaf_search_result :: :finished | {:open, lowlink :: non_neg_integer()}
 
-        %Node{} = current_node ->
-          case Enum.filter(definition_snapshot.edges, &(&1.source == current_node.id)) do
-            [] ->
-              MapSet.new([:dead_end])
+  @spec fresh_leaf_search_state() :: leaf_search_state()
+  defp fresh_leaf_search_state do
+    %{memo: %{}, index: %{}, lowlink: %{}, stack: [], stack_set: MapSet.new(), next_index: 0}
+  end
 
-            [single_edge] ->
-              collect_leaf_gateways(
-                definition_snapshot,
-                single_edge.target,
-                MapSet.put(visited, node_id)
-              )
+  # §2.2.2/§2.5 -- resets Tarjan's own per-top-level-call bookkeeping while
+  # carrying `memo` (the only cross-branch-safe field) forward unchanged.
+  @spec reset_stack_bookkeeping(leaf_search_state()) :: leaf_search_state()
+  defp reset_stack_bookkeeping(state) do
+    %{state | index: %{}, lowlink: %{}, stack: [], stack_set: MapSet.new(), next_index: 0}
+  end
 
-            outgoing_edges ->
-              next_visited = MapSet.put(visited, node_id)
+  # design doc §2.2-§2.2.3 -- memoized Tarjan-style single-pass DFS over
+  # every path forward from `node_id`, returning the aggregate set of
+  # leaves reachable: {:gateway, id} for every PARALLEL_GATEWAY node reached
+  # (an immediate terminal, never traversed past -- §2.3's
+  # nested-PARALLEL_GATEWAY exclusion boundary, entirely unaffected by the
+  # SCC machinery below since a PARALLEL_GATEWAY node is never pushed onto
+  # `stack`), :dead_end for every path that hits an unresolved node_id or a
+  # node with zero outgoing edges (e.g. :END). A live back-edge onto a node
+  # still on `stack` contributes no leaf at all (not even :dead_end) --
+  # it is evidence of "no new information from this edge," not a dead end;
+  # the SCC's real informational content is captured by its escape edges.
+  #
+  # Memoized per strongly connected component (SCC), not per node: when a
+  # node's own fold finishes with `local_lowlink == index[node_id]`, it is
+  # its SCC's root, and every member popped off `stack` at that point
+  # (including itself) shares the *same* aggregate `local_leaves` value in
+  # `memo` -- this is what makes the scheme sound under cycles-through-
+  # gateways (§2.2.1): a plain node-keyed memo can give two different
+  # callers two different values for the same node depending on which cycle
+  # member was entered first, because plain DFS cycle detection "closes" a
+  # back-edge at whichever node happens to be first-repeated on the
+  # *current* call chain. SCC-keyed memoization is order-independent by
+  # construction because Tarjan never closes (and therefore never writes to
+  # `memo`) an SCC until every node reachable back into it has already been
+  # explored, so the aggregate value written is always the complete union of
+  # every escape edge in the component, never one entry point's partial view.
+  #
+  # Total (never raises) and terminates in O(nodes + edges) (§2.2.3): `memo`
+  # is checked first (O(1) short-circuit for any node whose SCC has already
+  # closed, even under an earlier top-level branch call), `stack` grows by
+  # at most one element per fresh exploration, and every node is explored
+  # fresh at most once across the whole sequence of a split node's sibling
+  # branches.
+  @spec collect_leaf_gateways(Graph.t(), String.t(), leaf_search_state()) ::
+          {leaf_search_result(), MapSet.t(branch_leaf()), leaf_search_state()}
+  defp collect_leaf_gateways(definition_snapshot, node_id, state) do
+    cond do
+      Map.has_key?(state.memo, node_id) ->
+        {:finished, Map.fetch!(state.memo, node_id), state}
 
-              outgoing_edges
-              |> Enum.map(&collect_leaf_gateways(definition_snapshot, &1.target, next_visited))
-              |> Enum.reduce(&MapSet.union/2)
-          end
-      end
+      MapSet.member?(state.stack_set, node_id) ->
+        {{:open, Map.fetch!(state.index, node_id)}, MapSet.new(), state}
+
+      true ->
+        case find_node(definition_snapshot.nodes, node_id) do
+          nil ->
+            leaves = MapSet.new([:dead_end])
+            {:finished, leaves, put_leaf_memo(state, node_id, leaves)}
+
+          %Node{node_type: :PARALLEL_GATEWAY} ->
+            leaves = MapSet.new([{:gateway, node_id}])
+            {:finished, leaves, put_leaf_memo(state, node_id, leaves)}
+
+          %Node{} ->
+            explore_branching_node(definition_snapshot, node_id, state)
+        end
     end
+  end
+
+  @spec put_leaf_memo(leaf_search_state(), String.t(), MapSet.t(branch_leaf())) ::
+          leaf_search_state()
+  defp put_leaf_memo(state, node_id, leaves) do
+    %{state | memo: Map.put(state.memo, node_id, leaves)}
+  end
+
+  # §2.2.2 step 5 -- a real branching/chaining node (not a memo hit, not
+  # on-stack, not a PARALLEL_GATEWAY): assigns it a fresh Tarjan index,
+  # pushes it onto the stack, folds sequentially (threading `state`, never
+  # an independent Enum.map) over its own outgoing edges, then runs the
+  # SCC-closure check.
+  @spec explore_branching_node(Graph.t(), String.t(), leaf_search_state()) ::
+          {leaf_search_result(), MapSet.t(branch_leaf()), leaf_search_state()}
+  defp explore_branching_node(definition_snapshot, node_id, state) do
+    own_index = state.next_index
+
+    state = %{
+      state
+      | index: Map.put(state.index, node_id, own_index),
+        lowlink: Map.put(state.lowlink, node_id, own_index),
+        stack: [node_id | state.stack],
+        stack_set: MapSet.put(state.stack_set, node_id),
+        next_index: own_index + 1
+    }
+
+    outgoing_edges = Enum.filter(definition_snapshot.edges, &(&1.source == node_id))
+
+    {local_leaves, local_lowlink, state} =
+      fold_outgoing_edges(definition_snapshot, outgoing_edges, own_index, state)
+
+    close_scc_or_defer(node_id, own_index, local_leaves, local_lowlink, state)
+  end
+
+  # Zero outgoing edges is a true terminal (:END-shaped dead end, no cycle
+  # involved) -- local_lowlink stays own_index, since an edge-less node can
+  # never be part of a larger SCC. One or more edges: sequential fold,
+  # unioning every edge's leaves and taking the min lowlink seen.
+  @spec fold_outgoing_edges(Graph.t(), [Graph.Edge.t()], non_neg_integer(), leaf_search_state()) ::
+          {MapSet.t(branch_leaf()), non_neg_integer(), leaf_search_state()}
+  defp fold_outgoing_edges(_definition_snapshot, [], own_index, state) do
+    {MapSet.new([:dead_end]), own_index, state}
+  end
+
+  defp fold_outgoing_edges(definition_snapshot, outgoing_edges, own_index, state) do
+    Enum.reduce(outgoing_edges, {MapSet.new(), own_index, state}, fn edge,
+                                                                     {leaves_acc, lowlink_acc,
+                                                                      state} ->
+      {tag, edge_leaves, state} =
+        collect_leaf_gateways(definition_snapshot, edge.target, state)
+
+      leaves_acc = MapSet.union(leaves_acc, edge_leaves)
+
+      lowlink_acc =
+        case tag do
+          :finished -> lowlink_acc
+          {:open, child_lowlink} -> min(lowlink_acc, child_lowlink)
+        end
+
+      {leaves_acc, lowlink_acc, state}
+    end)
+  end
+
+  # §2.2.2's closure check: if local_lowlink == own_index, node_id is its
+  # SCC's root -- pop the stack down through and including node_id, write
+  # the *same* local_leaves aggregate to memo for every popped member (the
+  # property that makes this scheme order-independent), and report
+  # :finished. Otherwise node_id is part of a larger SCC still being
+  # discovered further up the call chain -- leave it on the stack, do not
+  # write memo yet, and report {:open, local_lowlink}.
+  @spec close_scc_or_defer(
+          String.t(),
+          non_neg_integer(),
+          MapSet.t(branch_leaf()),
+          non_neg_integer(),
+          leaf_search_state()
+        ) :: {leaf_search_result(), MapSet.t(branch_leaf()), leaf_search_state()}
+  defp close_scc_or_defer(node_id, own_index, local_leaves, local_lowlink, state)
+       when local_lowlink == own_index do
+    {above, [^node_id | rest_stack]} = Enum.split_while(state.stack, &(&1 != node_id))
+    scc_members = [node_id | above]
+
+    memo = Enum.reduce(scc_members, state.memo, &Map.put(&2, &1, local_leaves))
+    stack_set = Enum.reduce(scc_members, state.stack_set, &MapSet.delete(&2, &1))
+
+    state = %{state | memo: memo, stack: rest_stack, stack_set: stack_set}
+
+    {:finished, local_leaves, state}
+  end
+
+  defp close_scc_or_defer(_node_id, _own_index, local_leaves, local_lowlink, state) do
+    {{:open, local_lowlink}, local_leaves, state}
   end
 
   # --- JOIN (design doc §4, EE-07 AC1-AC3, AC5) -------------------------------

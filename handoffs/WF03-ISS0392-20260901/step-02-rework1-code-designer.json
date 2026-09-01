@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0392-20260901/step-02-rework1-code-designer.json",
   "created_at": "2026-09-01T10:38:37Z",
   "started_at": "2026-09-01T10:38:37Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-01T10:43:06Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -41,18 +41,20 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Revised lib/letflow/design/iss0392-multi-task-records-collision-fix.md (Revision 2) in place. Independently re-verified ELIXIR-DEV's infeasibility finding by reading deps/ecto/lib/ecto/multi.ex myself (__apply__/4 :851-858, apply_operations/5 :875-881, apply_operation/5's :merge clause :883-892, merge_results/3 :944-955): confirmed all Multi operations are composed (build phase, pure data, no callback runs) before any of them execute (execution phase, single Enum.reduce in composed order) -- there is no primitive that removes/replaces an already-composed step, and by the time call (2)'s Multi.merge/2 callback could run, call (1)'s :run step for the same key has already executed. Also re-read lib/letflow/engine.ex:2280-2630 and lib/letflow/engine/sub_process.ex:270-1080 directly (not from memory of Revision 1) to re-derive the fix rather than patch the old text. New mechanism (build-time skip/defer, replacing Revision 1's infeasible runtime-replace): build_complete_task_tail_multi/6 already destructures prepared_children from its own function head (engine.ex:2399) before it calls build_task_activation_and_reconciliation_multi/3 (call 1, engine.ex:2415) -- each prepared_children entry's prepared.child_initial_state.status is known in plain Elixir, zero DB interaction, at that exact point. Confirmed every synchronously-completing entry always targets the SAME instance_id as call (1) (parent_token_record_id is resolved from original_active_tokens, the completing instance's own live tokens; maybe_chain_synchronous_completion's parent_token is fetched by that same id). So the design now computes one boolean predicate (true iff any prepared_children entry has child_initial_state.status == :completed) before call (1) is ever built, and when true, omits call (1)'s {:task_records, parent_instance_id} sub-step entirely (its separate :token_reconciliation step is unaffected), leaving call (2) -- appended later in the same pipe -- as the sole appender of that key. This is mechanically achievable because it never requires un-executing a step: the decision is made before either step is composed into the Multi. Signature surface shrinks sharply versus Revision 1: only build_task_activation_and_reconciliation_multi/3 changes (->/4, adds skip_task_activation?: boolean(), return type unchanged as bare Multi.t()) -- append_sub_process_children_creation_multi/6, SubProcess.append_start_multi/7, maybe_chain_synchronous_completion/6, append_completion_multi/5, build_completion_write_steps/12, maybe_cascade_to_grandparent/6 all keep their current, already-implemented signatures; Revision 1's MapSet-accumulator threading and the _once/7 gatekeeper function are withdrawn entirely (OQ-1/OQ-2 from Revision 1, both about threading that accumulator through Multi.merge/2 callback boundaries, are dropped as inapplicable). SS3 (cascade) re-examined: the build-time predicate does NOT extend to maybe_cascade_to_grandparent/6, because whether a further ancestor exists is only discoverable via find_waiting_parent_token/3's own locking DB read, issued from inside a Multi.run step at Multi-EXECUTION time, not build time -- no plain-Elixir data exists beforehand to gate it. Concluded this is fine for the normal multi-level case (each ancestor's instance_id is distinct by construction, so distinct Multi keys never collide regardless of mechanism), and that the only unresolved gap -- a deeper ancestor instance_id coinciding with one already claimed earlier in the same transaction (self-ancestor reuse) -- is not preventable by ANY mechanism this design could specify (neither Revision 1's infeasible replace nor this revision's build-time skip reaches a collision only discoverable several Multi.merge/2 levels deep), so it is carried forward as an explicit open question (OQ-2, renumbered from Revision 1's OQ-4), not silently declared solved. AC1/AC2/AC3 (CODE-DESIGNER's own framing, confirmed via step-02b-code-design-validator.json's summary: AC1 = no more raising on sync-completing child, AC2 = regression test scenario named precisely, AC3 = async/queued path unchanged) still each map to concrete design elements: AC1 via SS2.2-2.4's verified-achievable mechanism, AC2 via SS5 (unchanged from Revision 1 -- the scenario tests observable behavior, not internal mechanism), AC3 via SS4 (unchanged conclusion, restated under the new predicate). No implementation code added -- grepped the revised file for 'def '/'defp '/fenced code blocks containing a function body: only @spec-shaped signature blocks remain (same convention Revision 1 used and CODE-DESIGN-VALIDATOR already accepted); the one prose formula from an early draft was rewritten to plain English specifically to avoid any appearance of a function body. Open questions (SS6) re-reviewed: Revision 1's OQ-1 and OQ-2 dropped (inapplicable under the new mechanism); OQ-3 carried forward renumbered as OQ-1 (whether the predicate needs its own unit test beyond SS5's integration scenario); OQ-4 carried forward renumbered as OQ-2 (self-ancestor-reuse edge case, unresolved by any mechanism, not newly introduced by this revision).",
+    "artifacts_out": [
+      "lib/letflow/design/iss0392-multi-task-records-collision-fix.md"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0392-20260901",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0392-20260901",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to re-validate the revised design before this returns to ELIXIR-DEV for implementation."
   },
   "rework_count": 1,
   "max_rework": 3

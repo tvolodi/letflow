@@ -967,3 +967,19 @@ history:
       results/etc.) inside their `context` block instead of `task`/`result`
       -- pre-existing schema drift, not corrected here since this DOC-UPDATER
       step does not own those files; flagged to ORCH.
+
+  - req: ISS-0388
+    event: done
+    agent: ORCH
+    at: "2026-09-01T02:08:35Z"
+    note: >
+      ISS-0388 resolved (GH#764, GH#766). Ported 12 R-Co simulation
+      fixture files verbatim to test/fixtures/simulation/ in Letflow's
+      simplified seed schema. company.yaml: real display_name values.
+      org_structure.yaml: all real R-Co people (7/9/10 per company) with
+      correct actor_ids -- actor-swiftroute-alice, actor-vortex-anna,
+      actor-meridian-thomas etc. now present for REQ-206/207/208 scenarios.
+      process_*.yaml: real R-Co process graphs translated to Letflow-native
+      format. fixture_shape_test.exs updated to assert full actor_id sets.
+      runner_test.exs + runner_template_and_outcomes_test.exs updated to
+      expect ACTIVE (not COMPLETED). 25/25 tests pass. PR #766 merged.

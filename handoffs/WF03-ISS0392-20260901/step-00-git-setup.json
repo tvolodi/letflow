@@ -1,0 +1,48 @@
+{
+  "handoff_id": "e775725e-aa7f-4e22-b5e1-e9e09db49a1e",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0392-20260901/step-00-git-setup.json",
+  "created_at": "2026-09-01T10:17:24Z",
+  "started_at": "2026-09-01T10:17:24Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/issues/ISS-0392.yaml", "docs/agents/protocols/GIT_SETUP.md"],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/engine/sub_process.ex"]
+  },
+  "task": {
+    "description": "Run GIT_SETUP.md's procedure exactly (this checkout is a single worktree, not the worktree variant -- confirmed via `git worktree list` returning exactly one entry) for this WF-03 issue-resolving run. This is Step 00 of WF-03 for docs/issues/ISS-0392.yaml (GitHub issue #772, queue task 392, already locked to this run by ORCH). Branch name: feature/WF03-ISS0392-20260901. Do not touch any file content yet -- this step only creates and pushes the branch as the coordination signal. Claim this handoff by setting status to IN_PROGRESS only; complete it normally (status COMPLETED/FAILED, result filled in) when done, per HANDOFF_PROTOCOL.md.",
+    "acceptance_criteria": [
+      "git pull --ff-only origin main exited 0 before branching",
+      "git branch --show-current outputs feature/WF03-ISS0392-20260901",
+      "git push -u origin feature/WF03-ISS0392-20260901 exited 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

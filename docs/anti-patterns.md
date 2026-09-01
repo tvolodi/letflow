@@ -2276,3 +2276,54 @@ those are two different claims and a session can satisfy one without the other. 
 gap is found, reconstruct the missing handoff(s) from git history and the log's own
 entries (never invent facts not already evidenced) rather than either re-running the step
 from scratch (duplicating already-real work) or silently proceeding without the artifact.
+
+## A documented design-doc OQ flagging a real Engine gap can survive its own "future
+## requirement" untouched, because unit tests exercise the wrong layer
+
+**What happened.** REQ-208 (S7, Meridian committee-quorum/parallel-fork-join scenarios)
+needed a real `PARALLEL_GATEWAY` split whose branches (`credit-memo-review`,
+`risk-assessment`, both real `HUMAN_TASK`s) converge at a join, completed via two
+*separate* `POST /api/v1/tasks/:id/complete` HTTP calls (one actor per branch, at
+different times -- the ordinary real-world shape). The first branch's completion failed
+with a real HTTP 500 every time, `{:error, {:activation_failed, {:unknown_branch_id,
+_}}}` internally. Root cause: `lib/letflow/engine.ex`'s `build_instance_state/3`
+hardcodes `join_counters: %{}` on every call -- confirmed by that function's own code
+comment, which cites `lib/letflow/design/req048-task-completion.md`'s own §13 "OQ-3
+(MAJOR)": *"no table persists join-counter state today ... deferred to whichever
+requirement first persists join-counter state (REQ-053/054 territory)."* REQ-054
+(SnapshotWriter) later shipped `status: done` and DOES serialize `join_counters`
+correctly into `instance_state_snapshots` (`lib/letflow/engine/snapshot_writer.ex`) --
+but `Engine.complete_task/3`'s own hot path (`build_snapshot_and_state/4` ->
+`build_instance_state/3`) never reads that table at all; it always rebuilds state fresh
+from `tokens`/`tasks` directly, with `join_counters` left at the same hardcoded `%{}`.
+The OQ was never actually closed, just designed-around one layer over.
+
+**Why S3's own unit tests didn't catch this.** `test/letflow/engine/parallel_gateway_test.exs`
+(REQ-051, "done", one of the most directly relevant test files in the whole codebase to
+this defect) calls `Transition.transition/3` directly, in-memory, across a sequence of
+calls *within one Elixir test process* -- the `join_counters` map genuinely does persist
+there, because it's just a local variable threaded through direct function calls, not
+reconstructed per call the way a real `POST` request's own `Engine.complete_task/3`
+invocation reconstructs `InstanceState` fresh from the database every time. A green,
+passing `parallel_gateway_test.exs` is therefore evidence that `Transition`'s *own join
+logic* is correct, and is NOT evidence that a join can fire across two separate real API
+calls -- those are different claims, and nothing in the existing test suite exercises the
+second one. This is the same shape of gap `docs/anti-patterns.md`'s "inheriting a claim
+from a record instead of re-deriving it from the source" entry warns about, one level
+removed: here the record (a design doc's own MAJOR OQ, explicitly deferred to a named
+future requirement) was correct and specific, and the future requirement genuinely
+landed -- it just solved a different half of the problem than the OQ described, and
+nothing forced a re-check that the OQ's own literal failure mode (`{:unknown_branch_id,
+_}`) was gone.
+
+**Correct alternative.** When a design doc's own OQ says "deferred to REQ-NNN," landing
+REQ-NNN is not itself proof the OQ is closed -- re-read the OQ's own literal failure
+mode/error tuple and confirm a *new* test reproduces the original failing call path (not
+just a new unit test of REQ-NNN's own added code in isolation) before treating the gap as
+resolved. More generally: a unit test that calls an internal function (`Transition.transition/3`)
+directly, across multiple calls in one process, is not equivalent evidence to a test that
+drives the same logic through the real, per-request state-reconstruction path
+(`Engine.complete_task/3`, which rebuilds `InstanceState` from the database on every
+call) — the first proves the algorithm; only the second proves the request path. Treat
+"S3 unit-tested it" as a claim about the algorithm, not about the wire-level behavior,
+when the two paths reconstruct state differently.

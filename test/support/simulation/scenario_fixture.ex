@@ -18,7 +18,7 @@ defmodule Letflow.Simulation.ScenarioFixture do
 
   alias Letflow.Simulation.Scenario
 
-  @via_atoms %{"api" => :api, "gui" => :gui, "skip" => :skip}
+  @via_atoms %{"api" => :api, "gui" => :gui, "skip" => :skip, "blocked" => :blocked}
   @severity_atoms %{"MINOR" => :minor, "MAJOR" => :major, "BLOCKER" => :blocker}
   @check_atoms %{
     "process_definition_active" => :process_definition_active,
@@ -29,7 +29,8 @@ defmodule Letflow.Simulation.ScenarioFixture do
     "task_assigned" => :task_assigned,
     "instance_state" => :instance_state,
     "audit_event" => :audit_event,
-    "audit_event_ordering" => :audit_event_ordering
+    "audit_event_ordering" => :audit_event_ordering,
+    "no_task_of_type" => :no_task_of_type
   }
 
   @doc """
@@ -81,6 +82,7 @@ defmodule Letflow.Simulation.ScenarioFixture do
     step = maybe_put(step, :produces, Map.get(raw, "produces"))
     step = maybe_put(step, :actor, Map.get(raw, "actor"))
     step = maybe_put(step, :note, Map.get(raw, "note"))
+    step = maybe_put(step, :blocked_by, Map.get(raw, "blocked_by"))
 
     case Map.get(raw, "severity") do
       nil ->

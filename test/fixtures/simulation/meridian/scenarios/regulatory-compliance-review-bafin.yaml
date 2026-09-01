@@ -1,0 +1,68 @@
+# Synthetic — R-Co's tests/simulation/scenarios/regulatory-compliance-review-bafin.yaml
+# is unreachable from this sandbox (see
+# lib/letflow/design/req208-meridian-scenario-execution.md §0.3; tracked by ISS-0393,
+# not a new issue); structurally faithful to REQ-208's own requirement-text
+# field-by-field account, not a byte-for-byte port.
+#
+# Process: process_policy_binding.yaml ("Regulatory Compliance Review"), test-local
+# simplified graph (@simple_regulatory_review_graph, design §3.2). Steps 1/2 run for
+# real against real queried state; step 3 (the timer-advance step) is recorded
+# BLOCKED, citing ISS-0389 (POST /api/v1/instances/:id/advance-timer does not exist
+# -- the SAME gap REQ-206 already found), not filed as a duplicate. Unlike REQ-206's
+# shipment-timeout-escalation scenario, this scenario's own YAML documents no
+# SKIP/MINOR fallback for the missing endpoint -- BaFin regulatory-notice filing on
+# SLA breach is this scenario's entire point and is unreachable without it. Recorded
+# BLOCKED, not SKIP (design §2.1's rationale).
+id: meridian-regulatory-compliance-review-bafin
+company_id: meridian
+process_id: DEFINITION_NAME
+
+actors:
+  actor-meridian-claudia: {}
+
+preconditions:
+  - check: process_definition_active
+    args:
+      name: DEFINITION_NAME
+      prefix: "TENANT_PREFIX"
+
+steps:
+  # Step 1 — compliance officer starts the periodic BaFin-mandated review
+  - via: api
+    action: "POST /api/v1/instances"
+    params:
+      definition_name: DEFINITION_NAME
+      initial_variables: {}
+    produces: instance
+    actor: actor-meridian-claudia
+
+  # Step 2a — look up the pending evidence-collection task
+  - via: api
+    action: "GET /api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING"
+    produces: evidence_task_list
+    actor: actor-meridian-claudia
+
+  # Step 2b — compliance officer collects evidence, real transition to
+  # risk-evaluation (edge e1)
+  - via: api
+    action: "POST /api/v1/tasks/{{produces.evidence_task_list.items.0.id}}/complete"
+    params:
+      output_variables: {}
+    produces: evidence_result
+    actor: actor-meridian-claudia
+
+  # Step 3 — UAT-RUNNER would advance the timer boundary on the risk-evaluation
+  # node (POST /api/v1/instances/{instance_id}/advance-timer) to trigger the BaFin
+  # regulatory-notice filing on SLA breach. That endpoint does not exist.
+  - via: blocked
+    blocked_by: "ISS-0389"
+    note: >
+      POST /api/v1/instances/:id/advance-timer does not exist -- grep of
+      lib/letflow/router.ex and lib/letflow/routers/*.ex, zero matches, per
+      lib/letflow/design/req208-meridian-scenario-execution.md §0.4. Unlike
+      REQ-206's shipment-timeout-escalation scenario, this scenario's own YAML
+      documents no SKIP/MINOR fallback for the missing endpoint -- BaFin
+      regulatory-notice filing on SLA breach is this scenario's entire point and
+      is unreachable without it. Recorded BLOCKED, not SKIP.
+
+expected_outcomes: []

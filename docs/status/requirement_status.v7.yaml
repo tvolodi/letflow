@@ -1220,7 +1220,7 @@ history:
       detail: handoffs/WF02-REQ208-20260901/release-validation-report-20260901.md.
 
 # ─────────────────────────────────────────────────────────────────────────────
-# VOLUME 7 CLOSED 2026-09-01.
+# VOLUME 7 — CLOSED 2026-09-01. DO NOT APPEND TO THIS FILE.
 # This volume holds the complete requirement run history from 2026-08-30 through
 # 2026-09-01 (42 entries, lines 1-1220). It is frozen: every line above this
 # comment is preserved byte-for-byte. Closed under WF02-REQ208-20260901's Step 6

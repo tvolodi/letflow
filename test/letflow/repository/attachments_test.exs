@@ -393,6 +393,10 @@ defmodule Letflow.Repository.AttachmentsTest do
 
   describe "Repository.upsert_content/6 (option (a) shared upsert path)" do
     test "is a public function on Letflow.Repository" do
+      # function_exported?/3 checks the loaded-module table, not the compiled
+      # .beam on disk -- Repository may not yet be loaded if no earlier test
+      # in this run has touched it (ISS-0401).
+      Code.ensure_loaded?(Repository)
       assert function_exported?(Repository, :upsert_content, 6)
     end
   end

@@ -546,6 +546,16 @@ queried state):**
    three parallel assessment tracks are confirmed created from real queried task
    state" (AC1's literal wording), run against the real `PARALLEL_GATEWAY` split
    §0.8 confirmed is shipped, not inferred from the scenario eventually completing.
+   **Corroborating `instance_state` check (OQ-1-resolved addition, not a
+   replacement):** since AC1's own wording specifically requires "confirmed created
+   from *real queried task state*," the task-list query above remains the
+   AC-literal mechanism; alongside it, `Instances.get_by_id/2`'s returned
+   `InstanceProjection.current_nodes` (a `jsonb` array of active node-id strings —
+   §9 OQ-1) taken right after step 1 should also contain `"credit-memo-review"` and
+   `"risk-assessment"` (and `"kyc-manual-review"` when applicable) — direct,
+   position-level corroboration that the `PARALLEL_GATEWAY` split produced 3 live
+   token positions simultaneously, not merely that 3 task rows happen to exist.
+
 2. `task_assigned` — the `credit-committee-vote` `HUMAN_TASK` (not `l1-approval`) was
    actually created, `assignee_ref == "role-committee-member"` — direct evidence
    `authority-routing`'s `> 500000` edge was taken. This is the scenario's "the
@@ -615,12 +625,25 @@ plus outcome verification, lookup dispatches folded in as plumbing.
 against real queried state"):**
 
 1. `instance_state` — instance is `ACTIVE` (not errored, not terminal) immediately
-   after step 1.
-2. `task_assigned`-style check — the `risk-evaluation` `HUMAN_TASK` (role
-   `role-risk-manager`) exists and is `PENDING` after step 2 completes
-   `evidence-collection` — real evidence that `e1` fired and the instance is
-   genuinely paused exactly at the node whose timer boundary step 3 would need to
-   advance, not merely "step 2 didn't error." This is the concrete state step 3's
+   after step 1, **and** (OQ-1-resolved addition) `current_nodes` (the
+   `InstanceProjection` field `Instances.get_by_id/2` returns — §9 OQ-1) contains
+   `"evidence-collection"` — direct evidence the instance is paused exactly there,
+   not inferred from task existence.
+2. **`instance_state` (primary mechanism, superseding the task-list-inference
+   workaround originally proposed here) —** the `Instances.get_by_id/2` projection's
+   `current_nodes` field contains `"risk-evaluation"` after step 2 completes
+   `evidence-collection` — direct, real-queried-state evidence (per
+   `InstanceProjection`'s schema/moduledoc, `current_nodes` is a `jsonb` array of
+   active token node-id strings, populated by the engine on every transition; see
+   §9 OQ-1) that `e1` fired and the instance is genuinely paused exactly at the
+   node whose timer boundary step 3 would need to advance — strictly more direct
+   than inferring instance position from task existence, since it reads the
+   instance's own position field rather than a downstream side-effect of it.
+   Kept alongside (not replacing) a `task_assigned`-style check — the
+   `risk-evaluation` `HUMAN_TASK` (role `role-risk-manager`) exists and is
+   `PENDING` — which remains necessary for its own distinct evidence (that a real
+   task row was created and assigned to the correct role; `current_nodes` alone
+   does not prove a task exists). Together these are the concrete state step 3's
    `:blocked` disposition is blocked *from progressing past* — stated as evidence,
    not assumed.
 
@@ -817,18 +840,33 @@ No acceptance criterion is left with a "TBD" design element.
 
 ## §9 — Open questions (explicit, not silently resolved)
 
-- **OQ-1**: whether `Letflow.Instances.get_by_id/2`'s projection exposes the
-  currently-`ACTIVE` instance's *current node* directly (useful for §4.3 step 1's
-  "instance is genuinely paused at evidence-collection" style checks) or whether
-  this must be inferred from the task list alone (which node has a `PENDING` task).
-  This design uses the task-list-based inference throughout (§4.1-4.3's
-  `task_assigned`-style checks) specifically because it does not assume a
-  current-node projection field exists without having read
-  `lib/letflow/instances.ex`'s actual struct this session — ELIXIR-DEV confirms
-  at implementation time whether a more direct field is available and may use it
-  in preference to the task-list inference if so, without needing a design rework
-  (the inference-based checks stay correct either way, just possibly less direct
-  than necessary).
+- **OQ-1 — RESOLVED (independently confirmed this session by direct read, not
+  deferred):** `Letflow.Instances.get_by_id/2` (`lib/letflow/instances.ex:53`)
+  returns `{:ok, %InstanceProjection{}}`, and `InstanceProjection`
+  (`lib/letflow/event_store/instance_projection.ex:134`) declares
+  `field(:current_nodes, Letflow.EventStore.JSONArray, default: [])` — a `jsonb`
+  column holding a JSON array, per the schema's own moduledoc (lines 34-56):
+  "`current_nodes` is a `jsonb` column holding a JSON **array** ... 'active token
+  positions'." The engine populates it directly: on instance creation
+  (`lib/letflow/engine.ex` around line 1169, `current_nodes: current_node_ids` in
+  the `insert_changeset/2` attrs), and on every subsequent transition/completion
+  (around lines 1371 and 2763, `current_nodes: Enum.map(final_instance_state.tokens,
+  & &1.node_id)`). So `Instances.get_by_id/2`'s returned struct's `current_nodes`
+  field — a list of node-id strings — directly answers "is the instance paused at
+  node X," strictly more direct than the task-list-inference workaround this
+  design originally proposed throughout §4.1-4.3. §4.1's outcome 1 and §4.3's
+  step-1/step-2 verifications (§4) are updated above to use `current_nodes`
+  directly (as corroborating evidence in §4.1, since AC1's own wording requires
+  the task-list query as the AC-literal mechanism there; as the primary mechanism
+  in §4.3, superseding the task-list-inference workaround, since AC3's wording has
+  no such task-list-specific requirement) — the task-list/`task_assigned`-style
+  checks are kept alongside `current_nodes` wherever they carry their own distinct
+  evidence (task existence, role assignment) that `current_nodes` cannot express
+  on its own. No knock-on change to §2 (the `:blocked`/`:no_task_of_type`
+  additions are unaffected — neither depends on how "paused at node X" is
+  verified), §3 (graph shapes unchanged), §6/§7 (report format/follow-up issue
+  unaffected), or §8 (the AC map's cited sections/elements are unchanged, only
+  their internal verification mechanism is strengthened).
 - **OQ-2**: the exact `Ecto.Enum` string R-Co's real fixture would use for
   `risk_rating`'s `!= 'unacceptable'` condition's *positive* values (this design
   uses `"acceptable"` at §4.1/§4.2's step 3b, a plausible value satisfying the
@@ -845,6 +883,11 @@ No acceptance criterion is left with a "TBD" design element.
   `:no_task_of_type` check's `items` list without anyone having decided that was
   acceptable).
 
-Every open question above is a genuinely deferred implementation-time fact-check
-(reading a real struct, confirming a page-size margin), not a silently-skipped
-design decision — every acceptance criterion has a concrete design element per §8.
+OQ-1 is resolved above, not deferred — it was reachable from material this design
+session already had open. OQ-2 and OQ-3 remain genuinely deferred: OQ-2 depends on
+an R-Co-corpus fact §0.3 already confirmed is unreachable this session (and is
+non-blocking regardless, since any non-`"unacceptable"` string satisfies the
+condition as written); OQ-3 is an implementation-time margin check (confirming a
+page-size headroom against this requirement's own small, already-bounded task
+counts), not a design unknown. Neither is a silently-skipped design decision, and
+every acceptance criterion still has a concrete design element per §8.

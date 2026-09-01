@@ -1,0 +1,56 @@
+{
+  "handoff_id": "8cddde72-d61f-4bba-9258-d75cf1b9845a",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0392-20260901/step-04c-test-runner.json",
+  "created_at": "2026-09-01T11:47:58Z",
+  "started_at": "2026-09-01T11:47:58Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/specs/ISS-0392.md",
+      "test/letflow/engine_sub_process_test.exs",
+      "docs/issues/ISS-0392.yaml",
+      "handoffs/WF03-ISS0392-20260901/step-04b-test-design-validator.json"
+    ],
+    "owned_modules": ["test/letflow/engine_sub_process_test.exs"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0392-20260901 (checkout/pull it first). Run the full test suite per your standard procedure (docker compose up -d, then scripts/test_parallel.sh) and report real, complete pass/fail totals across all partitions -- not a single partition's log. This run's fix (ISS-0392, an Ecto.Multi :task_records key collision) and its new regression test (test/letflow/engine_sub_process_test.exs's 'ISS-0392' describe block) have already passed CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, and TEST-DESIGN-VALIDATOR -- your job is the full-suite run, not re-litigating those gates. If any failures appear, attribute them structurally per core-directives.md's 'Failure Attribution Is Structural, Never By Count-Matching' -- this project's suite carries a standing set of pre-existing failures, so a non-zero failure count is not automatically a FAIL; only a failure attributable to this branch's diff is. Write test/reports/report-<date>-WF03-ISS0392-20260901.yaml with the real counts and output per WF-02 Step 4's report format.",
+    "acceptance_criteria": [
+      "docker compose up -d run, DB available",
+      "scripts/test_parallel.sh run to completion, real combined pass/fail totals across all partitions quoted",
+      "Any failures explicitly attributed (structurally, per core-directives.md) as either pre-existing/unattributable-to-this-branch, or a real regression from this branch's diff",
+      "The new ISS-0392 regression tests specifically confirmed passing in the full-suite run (not just in isolation)",
+      "test/reports/report-<date>-WF03-ISS0392-20260901.yaml written with real counts and output",
+      "Run as a normal foreground blocking call -- no backgrounding, no Monitor, however long it takes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

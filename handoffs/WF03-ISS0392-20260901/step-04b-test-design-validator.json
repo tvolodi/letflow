@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0392-20260901/step-04b-test-design-validator.json",
   "created_at": "2026-09-01T11:42:32Z",
   "started_at": "2026-09-01T11:42:32Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-01T11:47:07Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -38,18 +38,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Read test/specs/ISS-0392.md and the full new 'ISS-0392' describe block in test/letflow/engine_sub_process_test.exs (lines 1010-1210), plus graph_child_immediate/0 (lines 284-303) and all_tasks_for_instance/2 (lines 350-359) directly, not just the handoff's paraphrase.\n\nCOVERAGE: Both design-doc §5 scenarios have a runnable test. Test 1 (line 1023, single-level) asserts: no raise, {:ok, result} return, result.instance_status == :active (documented pre-cascade-snapshot caveat, not a fix claim), the PERSISTED parent projection reaches :completed (this is where the fix's dominance argument is actually observable -- reconcile_projection/4 writing from the post-cascade state), no orphan/duplicate task row (task-row count and exact row-id list unchanged before/after -- a structural assertion on the fix's own mechanism: call 1's Multi step is never built at all when the predicate fires, so there's no earlier-snapshot row to have inserted), and exactly one SUB_PROCESS_COMPLETED event naming the right child. Test 2 (line 1100, multi-level) confirms the fix doesn't regress the already-non-colliding distinct-instance_id cascade, with the same no-orphan-row assertions independently checked at both the middle and outer instance_ids. These are real, specific assertions on persisted DB state (InstanceProjection.status, exact task-row id lists, event rows) that a wrong fix (e.g. one that merely swallowed the RuntimeError, or one that built the skip-step for the wrong instance_id) would fail -- not merely 'does not raise'. The one deliberate non-assertion (child's own InstanceProjection.status) is explicitly documented in both the spec and inline test comments as pre-existing, orthogonal behavior (insert_child_instance_projection/8 hardcodes :active), not a silently dropped criterion.\n\nQUALITY CHECKS: grep for '@tag :skip' and 'TODO' across both test/letflow/engine_sub_process_test.exs and test/specs/ISS-0392.md returned zero matches. Fixtures self-sufficient: provisioned_tenant/0 (line 57) creates a fresh Ecto.Adapters.SQL.Sandbox.mode(:auto) tenant + provisioned schema per call via insert_tenant!/0 (unique slug via Letflow.TenantSlugFixture.unique_slug/1) with an on_exit callback that drops the schema and deletes the tenant/registration rows -- no shared mutable state, no cross-test ordering dependency, matches the same pattern already used by every other describe block in this file and by engine_complete_task_test.exs. complete_attrs/1 and start_attrs/2 generate a fresh Ecto.UUID actor_id and a unique_idempotency_key/1 per call. No hardcoded secrets/connection strings found in the new code (grepped the diff region; DB config comes from .env / Mix config as everywhere else in the suite).\n\nFAIL-THEN-PASS INDEPENDENTLY REPRODUCED (not re-reading TEST-DESIGNER's claim): created a throwaway worktree at the pre-fix commit -- `git worktree add ../letflow-2-tdv-prefix-scratch cc662129` (cc662129 confirmed via `git log --oneline e30873f8~3..e30873f8` as the immediate parent of fix commit e30873f8, matching test/specs/ISS-0392.md's own citation) -- copied ONLY the fix-branch's test file in via `git show feature/WF03-ISS0392-20260901:test/letflow/engine_sub_process_test.exs > ../letflow-2-tdv-prefix-scratch/test/letflow/engine_sub_process_test.exs` and .env for DB config, ran `mix deps.get` and `mix compile` clean (0 warnings), then:\n\nPre-fix (cc662129) `mix test test/letflow/engine_sub_process_test.exs:1023`:\n'** (RuntimeError) cannot merge Multi; the following operations were found in both Ecto.Multi: [task_records: \"a8096b70-ff78-4c19-8a60-852122590804\"]\\ncode: Engine.complete_task(gate_task.id, complete_attrs(), prefix: schema_name)\\n... (letflow 0.1.0) lib/letflow/engine.ex:1594: Letflow.Engine.run_complete_task/6\\ntest/letflow/engine_sub_process_test.exs:1050: (test)\\nResult: 0/1 passed, 14 excluded'\n\nPre-fix (cc662129) `mix test test/letflow/engine_sub_process_test.exs:1100`: same RuntimeError/'cannot merge Multi'/task_records: shape, at test/letflow/engine_sub_process_test.exs:1165, 'Result: 0/1 passed, 14 excluded'.\n\nBoth independently reproduce the exact filed RuntimeError shape from docs/issues/ISS-0392.yaml, at the correct lib/letflow/engine.ex:1594 call site, on a worktree I built myself rather than trusting TEST-DESIGNER's quoted output.\n\nWorktree removed: `git worktree remove ../letflow-2-tdv-prefix-scratch --force`; confirmed the directory no longer exists and `git worktree list` shows only the main checkout.\n\nPost-fix, on feature/WF03-ISS0392-20260901 itself (no worktree, the actual branch checkout): `mix test test/letflow/engine_sub_process_test.exs` -> 'Finished in 18.0 seconds (0.00s async, 18.0s sync), Result: 15 passed'. `mix test test/letflow/engine_sub_process_test.exs test/letflow/engine_test.exs` -> 'Result: 57 passed' -- zero regressions in either owned_modules-adjacent file.\n\nWORKING TREE CONFIRMED CLEAN: `git status --short` after all verification shows only this handoff file's own IN_PROGRESS/COMPLETED edits (M handoffs/WF03-ISS0392-20260901/step-04b-test-design-validator.json) -- no leftover pre-fix-commit artifacts, no stray worktree directory, still on feature/WF03-ISS0392-20260901.\n\nVERDICT: PASS. All six acceptance criteria independently verified.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0392-20260901",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0392-20260901",
+      "push_status": "ok",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-RUNNER (WF-03 Step 4's remaining gate before Step 5/Close Issue)."
   },
   "rework_count": 0,
   "max_rework": 3

@@ -1,0 +1,57 @@
+{
+  "handoff_id": "b8d291c5-acc7-4175-bc3a-2f04a2712f68",
+  "run_id": "WF03-ISS0400-20260901",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0400-20260901/step-02b-code-design-validator.json",
+  "created_at": "2026-09-01T17:02:13Z",
+  "started_at": "2026-09-01T17:02:13Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0400-nested-parallel-gateway-fix.md",
+      "handoffs/WF03-ISS0400-20260901/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0400-20260901/step-02-code-designer.json",
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md",
+      "lib/letflow/engine/transition.ex"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"]
+  },
+  "task": {
+    "description": "Hard gate on lib/letflow/design/iss0400-nested-parallel-gateway-fix.md, CODE-DESIGNER's fix design for ISS-0400. This design's own risk class is explicitly the same one that produced TWO real BLOCKER-severity catches on the immediately-preceding, closely-related ISS-0398 design (a naive-visited-set DoS-shaped exponential blowup, and a memo-key-unsoundness defect under legal cycles) -- read lib/letflow/design/iss0398-walk-to-gateway-fix.md's own account of both catches before gating this one, and adversarially re-derive whether this design's memo-sharing/pass-through claim (no new memo entry written under the nested split's own node_id) actually holds, rather than accepting the design doc's own worked trace as sufficient. Specifically interrogate: (1) does resolve_nested_split/3, as specified, genuinely never introduce a fresh memo key that could suffer the same unsoundness ISS-0398's own memo-key catch found, under some cyclic or deeply-nested graph shape the design's own worked example doesn't cover; (2) is the termination argument for arbitrary nesting depth actually sound, not just plausible, given graph.ex's @max_nodes 500 bound cited as the ceiling; (3) does the design's claim that all existing ISS-0398 fixtures are unaffected (zero :split-role PARALLEL_GATEWAY nodes) actually check out against the real fixture files, not just asserted; (4) is the :dead_end failure-propagation choice for inner-split-resolution-failure actually correct across every call site that pattern-matches on collect_leaf_gateways/3's return shape, not just the ones the design doc discusses. Standard WF-02 Step 1b design-gate checks also apply in full (every acceptance criterion mapped to a concrete design element, no TBD/deferral language, no .ex function bodies present, all cross-module deps named).",
+    "acceptance_criteria": [
+      "Every acceptance criterion on step-02-code-designer.json's task block is independently verified against a concrete design element, not accepted from CODE-DESIGNER's own summary",
+      "The memo-key-soundness claim is adversarially re-derived against at least one graph shape not already covered by the design doc's own worked trace, specifically hunting for a recurrence of ISS-0398's own memo-key-unsoundness defect class",
+      "The nesting-depth termination argument is checked against graph.ex's actual @max_nodes bound, not merely cited",
+      "The 'zero :split-role PARALLEL_GATEWAY nodes in existing fixtures' non-regression claim is verified by actually reading the fixture files, not accepted as stated",
+      "Every call site of collect_leaf_gateways/3 (or of find_matching_join/2, whichever changes) is checked against the :dead_end propagation choice for correctness",
+      "No .ex implementation bodies present in the design doc",
+      "Verdict is PASS or FAIL with every issue at BLOCKER/MAJOR/MINOR severity named specifically, not a general impression"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "Not yet completed by the receiving agent.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0400-20260901",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0400-20260901",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Not yet dispatched"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

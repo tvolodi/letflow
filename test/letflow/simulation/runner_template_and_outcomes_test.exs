@@ -151,7 +151,8 @@ defmodule Letflow.Simulation.RunnerTemplateAndOutcomesTest do
             args: %{
               "prefix" => schema_name,
               "instance_ref" => "{{produces.second.instance_id}}",
-              "status" => "COMPLETED"
+              # Real R-Co process stays ACTIVE (paused at HUMAN_TASK)
+              "status" => "ACTIVE"
             }
           }
         }

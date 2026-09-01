@@ -1,14 +1,88 @@
-# SYNTHETIC FIXTURE -- NOT ported from R-Co. See company.yaml in this directory.
-name: swiftroute-route-approval
-version: "1.0.0"
-description: Synthetic START -> END process (synchronous completion) for the runner's minimal api-via smoke scenario.
+# Ported from R-Co tests/simulation/companies/swiftroute/process_shipment_approval.yaml (ISS-0388).
+# Filename kept as process_route_approval.yaml to avoid breaking runner_test.exs references.
+# Graph translated from R-Co's YAML node/edge format to Letflow's native graph schema.
+name: Shipment Approval
+version: "1.0"
+description: >
+  Sequential approval chain for high-value or non-standard shipments.
+  Dispatcher raises the request; Operations Manager reviews; if value
+  exceeds 500 the CEO must co-sign. Exercises: sequential chain + CEL
+  conditional branch.
 graph:
   nodes:
     - id: start
       node_type: START
-    - id: end
+    - id: ops-review
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-ops-manager
+    - id: ceo-approval-gate
+      node_type: EXCLUSIVE_GATEWAY
+    - id: ceo-approval
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-ceo
+    - id: release-shipment
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/shipments/{shipment_id}/release
+        timeout_ms: 300000
+    - id: auto-reject
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/shipments/{shipment_id}/reject
+        timeout_ms: 300000
+    - id: notify-requester
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /webhooks/notify
+        timeout_ms: 300000
+    - id: end-approved
+      node_type: END
+    - id: end-rejected
       node_type: END
   edges:
-    - id: e1
+    - id: e0
       source: start
-      target: end
+      target: ops-review
+    - id: e1
+      source: ops-review
+      target: ceo-approval-gate
+      condition: "variables.ops_decision == 'approve'"
+    - id: e2
+      source: ops-review
+      target: notify-requester
+      condition: "variables.ops_decision == 'reject'"
+    # fallback for ops-review (timeout path; escalate-to-ceo not in graph)
+    - id: fallback-ops-review
+      source: ops-review
+      target: notify-requester
+    - id: e3
+      source: ceo-approval-gate
+      target: ceo-approval
+      condition: "variables.declared_value > 500"
+    - id: e4
+      source: ceo-approval-gate
+      target: release-shipment
+      condition: "variables.declared_value <= 500"
+    - id: e5
+      source: ceo-approval
+      target: release-shipment
+      condition: "variables.ceo_decision == 'approve'"
+    - id: e6
+      source: ceo-approval
+      target: auto-reject
+      condition: "variables.ceo_decision == 'reject'"
+    # on_timeout for ceo-approval (also acts as fallback)
+    - id: timeout-ceo-approval
+      source: ceo-approval
+      target: auto-reject
+    - id: e7
+      source: release-shipment
+      target: end-approved
+    - id: e8
+      source: auto-reject
+      target: end-rejected
+    - id: e9
+      source: notify-requester
+      target: end-rejected

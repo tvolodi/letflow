@@ -1,21 +1,96 @@
-# SYNTHETIC FIXTURE -- NOT ported from R-Co. See company.yaml in this directory.
-name: swiftroute-shipment-dispatch
-version: "1.0.0"
-description: Synthetic START -> HUMAN_TASK -> END process for scenario harness smoke coverage.
+# Ported from R-Co tests/simulation/companies/swiftroute/process_incident_report.yaml (ISS-0388).
+# Filename kept as process_shipment_dispatch.yaml to avoid breaking test references.
+# Graph translated from R-Co's YAML node/edge format to Letflow's native graph schema.
+name: Driver Incident Report
+version: "1.0"
+description: >
+  Driver submits a field incident (accident, cargo damage, theft).
+  Ops assessment and finance estimate run in parallel. Exercises:
+  parallel fork/join, timer escalation.
 graph:
   nodes:
     - id: start
       node_type: START
-    - id: dispatch_task
+    - id: injury-check
+      node_type: EXCLUSIVE_GATEWAY
+    - id: safety-notification
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /webhooks/safety-alert
+        timeout_ms: 300000
+    - id: parallel-fork
+      node_type: PARALLEL_GATEWAY
+    - id: ops-assessment
       node_type: HUMAN_TASK
       attributes:
-        role: dispatcher
+        role: role-ops-manager
+    - id: finance-estimate
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-accountant
+    - id: ops-auto-close
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/incidents/{incident_id}/ops-timeout
+        timeout_ms: 300000
+    - id: finance-auto-close
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/incidents/{incident_id}/finance-timeout
+        timeout_ms: 300000
+    - id: parallel-join
+      node_type: PARALLEL_GATEWAY
+    - id: case-summary
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/incidents/{incident_id}/close
+        timeout_ms: 300000
     - id: end
       node_type: END
   edges:
-    - id: e1
+    - id: e0
       source: start
-      target: dispatch_task
+      target: injury-check
+    - id: e1
+      source: injury-check
+      target: safety-notification
+      condition: "variables.injury_involved == true"
     - id: e2
-      source: dispatch_task
+      source: injury-check
+      target: parallel-fork
+      condition: "variables.injury_involved == false"
+    - id: e3
+      source: safety-notification
+      target: parallel-fork
+    - id: e4
+      source: parallel-fork
+      target: ops-assessment
+    - id: e5
+      source: parallel-fork
+      target: finance-estimate
+    - id: e6
+      source: ops-assessment
+      target: parallel-join
+    # on_timeout: ops-auto-close
+    - id: timeout-ops-assessment
+      source: ops-assessment
+      target: ops-auto-close
+    - id: e7
+      source: ops-auto-close
+      target: parallel-join
+    - id: e8
+      source: finance-estimate
+      target: parallel-join
+    # on_timeout: finance-auto-close
+    - id: timeout-finance-estimate
+      source: finance-estimate
+      target: finance-auto-close
+    - id: e9
+      source: finance-auto-close
+      target: parallel-join
+    - id: e10
+      source: parallel-join
+      target: case-summary
+    - id: e11
+      source: case-summary
       target: end

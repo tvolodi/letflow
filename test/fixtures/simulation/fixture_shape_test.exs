@@ -27,10 +27,42 @@ defmodule Letflow.Simulation.FixtureShapeTest do
     "meridian" => %{"slug" => "meridian", "hostname" => "meridian.simulation.test"}
   }
 
+  # Real R-Co actor_ids ported verbatim (ISS-0388). Every actor referenced by
+  # REQ-206/207/208 scenario YAMLs must appear in the corresponding company's
+  # org_structure.yaml -- these lists are the stable references for that contract.
   @actor_ids %{
-    "swiftroute" => ["actor-swiftroute-lena", "actor-swiftroute-marco"],
-    "vortex" => ["actor-vortex-nia", "actor-vortex-omar"],
-    "meridian" => ["actor-meridian-priya", "actor-meridian-sam"]
+    "swiftroute" => [
+      "actor-swiftroute-alice",
+      "actor-swiftroute-marco",
+      "actor-swiftroute-lena",
+      "actor-swiftroute-tobias",
+      "actor-swiftroute-jan",
+      "actor-swiftroute-petra",
+      "actor-swiftroute-hans"
+    ],
+    "vortex" => [
+      "actor-vortex-dirk",
+      "actor-vortex-sabine",
+      "actor-vortex-karl",
+      "actor-vortex-nina",
+      "actor-vortex-felix",
+      "actor-vortex-anna",
+      "actor-vortex-max",
+      "actor-vortex-claudia",
+      "actor-vortex-stefan"
+    ],
+    "meridian" => [
+      "actor-meridian-eva",
+      "actor-meridian-thomas",
+      "actor-meridian-julia",
+      "actor-meridian-ben",
+      "actor-meridian-sophie",
+      "actor-meridian-lars",
+      "actor-meridian-miriam",
+      "actor-meridian-oliver",
+      "actor-meridian-claudia",
+      "actor-meridian-marcus"
+    ]
   }
 
   for company <- ["swiftroute", "vortex", "meridian"] do

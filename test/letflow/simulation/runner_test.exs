@@ -123,7 +123,8 @@ defmodule Letflow.Simulation.RunnerTest do
             args: %{
               "prefix" => schema_name,
               "instance_ref" => "{{produces.instance.instance_id}}",
-              "status" => "COMPLETED"
+              # Real R-Co process pauses at HUMAN_TASK, instance is ACTIVE not COMPLETED
+              "status" => "ACTIVE"
             }
           }
         }
@@ -134,10 +135,10 @@ defmodule Letflow.Simulation.RunnerTest do
 
     assert [%{outcome: :ok}] = report.precondition_results
     assert [%{outcome: :ok, captured: captured}] = report.step_results
-    assert %{"instance_id" => _id, "status" => "COMPLETED"} = captured
+    assert %{"instance_id" => _id, "status" => "ACTIVE"} = captured
 
     assert [%{outcome: :pass, observed: observed}] = report.outcome_results
-    assert observed.status == "COMPLETED"
+    assert observed.status == "ACTIVE"
   end
 
   test "AC5: a via: gui step is recorded DEFERRED_TO_S8, never run, never dropped", %{
@@ -168,7 +169,8 @@ defmodule Letflow.Simulation.RunnerTest do
             args: %{
               "prefix" => schema_name,
               "instance_ref" => "{{produces.instance.instance_id}}",
-              "status" => "COMPLETED"
+              # Real R-Co process pauses at HUMAN_TASK, instance is ACTIVE not COMPLETED
+              "status" => "ACTIVE"
             }
           }
         }

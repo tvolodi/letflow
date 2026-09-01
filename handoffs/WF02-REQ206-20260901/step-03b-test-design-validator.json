@@ -1,0 +1,34 @@
+{
+  "handoff_id": "WF02-REQ206-20260901-step-03b",
+  "run_id": "WF02-REQ206-20260901",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ206-20260901/step-03b-test-design-validator.json",
+  "created_at": "2026-09-01T04:15:53Z",
+  "started_at": "2026-09-01T04:15:53Z",
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-206"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ206-20260901/step-03-test-designer.json",
+      "test/letflow/simulation/req206_swiftroute_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ206-20260901",
+    "requirement_text": "Run REQ-205's harness against SwiftRoute's 4 scenario YAMLs. 6 tests in req206_swiftroute_test.exs."
+  },
+  "task": {
+    "description": "Independently verify that test/letflow/simulation/req206_swiftroute_test.exs covers all 6 acceptance criteria for REQ-206. Do NOT rely on TEST-DESIGNER's mapping — read the test file yourself and map each test to its AC. Run mix test test/letflow/simulation/req206_swiftroute_test.exs independently and quote the output. Verify: (1) each of AC1..AC6 has a test, (2) no test is always-pass (has a genuine FAIL condition), (3) AC2's high-value-happy test asserts all 4 expected_outcomes with real queried state, (4) AC3's ops-timeout-escalation test asserts step 2 outcome :skip with severity :minor, (5) AC4's attach-delivery-note test asserts disposition :unbuilt_feature with zero steps executed. Return PASS or FAIL.",
+    "acceptance_criteria": [
+      "All 6 ACs independently verified with specific test names and assertion evidence",
+      "mix test output quoted from a live run",
+      "No always-pass tests"
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

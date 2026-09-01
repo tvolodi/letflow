@@ -1,0 +1,58 @@
+{
+  "handoff_id": "abe32373-7b09-47f1-afce-fd4487989654",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0392-20260901/step-03-elixir-dev.json",
+  "created_at": "2026-09-01T10:30:55Z",
+  "started_at": "2026-09-01T10:30:55Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0392-multi-task-records-collision-fix.md",
+      "docs/issues/ISS-0392.yaml",
+      "handoffs/WF03-ISS0392-20260901/step-01-issue-fixer.json",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/sub_process.ex",
+      "lib/letflow/engine/task_activation.ex"
+    ],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/engine/sub_process.ex"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0392-20260901 (checkout/pull it first). Implement the fix per lib/letflow/design/iss0392-multi-task-records-collision-fix.md exactly -- it is CODE-DESIGN-VALIDATOR-approved (PASS, see step-02b-code-design-validator.json). Build from the design's own specified mechanism: a replace-on-repeat gatekeeper (new TaskActivation.append_multi_from_existing_records_once/7) threading a claimed-instance-ids accumulator alongside the Ecto.Multi through build_task_activation_and_reconciliation_multi, append_sub_process_children_creation_multi, SubProcess.append_start_multi, maybe_chain_synchronous_completion, append_completion_multi, build_completion_write_steps, and maybe_cascade_to_grandparent -- per the design doc's SS2-SS3 signature changes. Do not invent a different mechanism than the approved design; if you find the design is actually wrong or ambiguous once you're implementing it, stop and report that as a FAIL/issue rather than silently diverging. This closes ISS-0392 (Ecto.Multi :task_records key collision when a SUB_PROCESS child completes synchronously in the same hop-chain transaction). Do NOT write the regression test yourself -- TEST-DESIGNER owns that at Step 4; you may run an ad-hoc/throwaway check to confirm your own fix works, but the committed regression test is a separate step. Route your own output to SECURITY-REVIEWER next (this touches lib/letflow/engine.ex and lib/letflow/engine/sub_process.ex, both tenant-data paths per security-invariants.md), then REVIEWER -- do not skip either gate or mark your own handoff as satisfying them.",
+    "acceptance_criteria": [
+      "Implementation matches the approved design's signature changes exactly (function names/arities/param and return shapes as specified in SS2.5 and SS3 of the design doc)",
+      "A synchronously-completing SUB_PROCESS child no longer raises Ecto.Multi.merge_results/3's key-collision RuntimeError (verify with an ad-hoc/throwaway check before finishing, not just by inspection)",
+      "The async/queued SUB_PROCESS completion path's existing behavior is unchanged (no existing test in test/letflow/engine_sub_process_test.exs or test/letflow/engine_test.exs regresses)",
+      "mix compile --warnings-as-errors passes",
+      "mix format --check-formatted passes",
+      "No implementation deviates from the approved design without being flagged explicitly as an issue in result.issues"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

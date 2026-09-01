@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0392-20260901/step-02-code-designer.json",
   "created_at": "2026-09-01T10:23:32Z",
   "started_at": "2026-09-01T10:23:32Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-01T10:27:35Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -38,18 +38,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Design lives at lib/letflow/design/iss0392-multi-task-records-collision-fix.md (design/prose only, no .ex bodies -- grepped the file for 'def ' followed by a `do` block spanning real logic and found none; the fenced @spec blocks are type signatures only). Read ISSUE-FIXER's full diagnosis (step-01-issue-fixer.json result.summary) plus lib/letflow/engine.ex:2380-2600, lib/letflow/engine/sub_process.ex (moduledoc, :380-519, :695-1063), and lib/letflow/engine/task_activation.ex in full directly -- not from the diagnosis prose alone -- and confirmed the exact call sites, key shapes and existing moduledoc rationale ('namespaced by instance_id ... so calls for DIFFERENT instance_ids can coexist', task_activation.ex:233-240) that the fix extends. Mechanism (design SS2): a new gatekeeper, TaskActivation.append_multi_from_existing_records_once/7, taking/returning an explicit MapSet.t(Ecto.UUID.t()) claimed-instance-ids accumulator threaded alongside the Multi through every function on the path from build_complete_task_tail_multi/6 down to the two existing append_multi_from_existing_records/6 call sites (engine.ex:2584, sub_process.ex:966-972) -- both direct calls are replaced with the gatekeeper. On a same-instance_id repeat within one transaction the gatekeeper REPLACES the earlier {:task_records, instance_id} step with the later one rather than skipping it, per SS2.3's dominance argument (the later, sub-process-completion-path call's previous_pending_task_nodes/new_instance_state snapshot strictly dominates the earlier hop-chain-only call's, because load_parent_context/2 re-reads the parent's current committed row state -- sub_process.ex:719 -- rather than reusing any in-memory value the earlier call had). Signature changes (SS2.5, all no-body @specs in the design doc): build_task_activation_and_reconciliation_multi/3->/4, append_sub_process_children_creation_multi/6->/7, SubProcess.append_start_multi/7->/8, maybe_chain_synchronous_completion/6->/7, append_completion_multi/5->/6 (success return changes {:ok, Multi.t()} -> {:ok, {Multi.t(), MapSet.t()}}), build_completion_write_steps/12->/13, maybe_cascade_to_grandparent/6->/7 -- every one gains one added claimed_instance_ids parameter and changes its Multi.t() return to a {Multi.t(), MapSet.t()} pair (error returns unchanged). append_multi_from_existing_records/6 itself (the fixed-atom-key variant used by Engine.create/2) is explicitly left unmodified. Cascade (SS3): maybe_cascade_to_grandparent/7 is covered by the same replace-by-recency rule -- each ancestor's instance_id is a distinct MapSet member/Multi key by construction (find_waiting_parent_token/3 resolves one specific ancestor per level), so one ancestor's step is never suppressed by another's; a same-instance-as-its-own-ancestor edge case is analyzed (SS3) and shown to still resolve correctly under 'most recently attempted wins', then explicitly flagged as OQ-4 since it may be unreachable under current graph validation and is not in ISS-0392's filed scope. Async/queued path (AC3, SS4): the no-op sibling clause of maybe_chain_synchronous_completion/7 (sub_process.ex:510-518 today) is shown to return {multi, claimed_instance_ids} completely unchanged -- arity changes but behavior is provably identical, since the whole fix is confined to the :completed-matching clause's downstream calls. Regression scenario (SS5): exact fixture (parent START->HUMAN_TASK('gate')->SUB_PROCESS('sp')->END, child START->END with no task) matching ISSUE-FIXER's own scratch/iss0392_repro_test.exs shape, pre-fix-must-raise / post-fix-must-succeed stated explicitly per WF-03's fail-then-pass rule, plus a second nested-cascade variant (outer SUB_PROCESS wrapping the first fixture as its own child) for multi-level coverage. Four open questions listed explicitly in SS6 (OQ-1: how the MapSet crosses a Multi.merge/2 callback boundary, given Ecto constrains that callback to return a bare Multi.t() -- two legitimate resolutions named, left to ELIXIR-DEV/REVIEWER; OQ-2: MapSet vs plain list for the accumulator, left to ELIXIR-DEV's judgment as behaviorally equivalent; OQ-3: whether the gatekeeper's replace behavior needs its own unit test beyond SS5's integration scenario, left to TEST-DESIGNER/TEST-DESIGN-VALIDATOR; OQ-4: the self-referential-ancestor edge case, flagged rather than assumed in or out of scope) -- none resolved by silent guessing, all named so ELIXIR-DEV/TEST-DESIGNER cannot discover an unstated assumption mid-build.",
+    "artifacts_out": ["lib/letflow/design/iss0392-multi-task-records-collision-fix.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0392-20260901",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (WF-03 Step 2 gate)."
   },
   "rework_count": 0,
   "max_rework": 3

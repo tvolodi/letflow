@@ -1,0 +1,60 @@
+{
+  "handoff_id": "WF03-ISS0398-20260901-step-02b",
+  "run_id": "WF03-ISS0398-20260901",
+  "workflow_id": "WF-03",
+  "step": "2b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0398-20260901/step-02b-code-design-validator.json",
+  "created_at": "2026-09-01T12:55:25Z",
+  "started_at": "2026-09-01T12:55:25Z",
+  "completed_at": "2026-09-01T12:55:25Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-051"],
+    "issue_ids": ["ISS-0398"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0398-20260901/step-02-code-designer.json",
+      "handoffs/WF03-ISS0398-20260901/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md",
+      "lib/letflow/engine/transition.ex",
+      "test/letflow/engine/parallel_gateway_test.exs",
+      "lib/letflow/design/req051-parallel-gateway-split-join.md"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"],
+    "branch_name": "fix/ISS-0398-walk-to-gateway-20260901"
+  },
+  "task": {
+    "description": "Hard-gate CODE-DESIGNER's fix design (lib/letflow/design/iss0398-walk-to-gateway-fix.md) for ISS-0398 before ELIXIR-DEV implements. Independently re-verify every load-bearing claim against the real source and real test fixtures rather than trusting the design's or ISSUE-FIXER's self-report.",
+    "acceptance_criteria": [
+      "Core algorithm (collect_leaf_gateways/3) specified precisely enough for ELIXIR-DEV to implement without further judgment calls",
+      "Nested-PARALLEL_GATEWAY exclusion boundary correctly stated and independently re-derived as sound",
+      "Per-path visited-set threading justified by a correct worked example (diamond shape), independently re-traced",
+      "AC1-AC6 non-regression independently re-traced against real transition.ex and real three_branch_graph/0 fixture, not just accepted from the design's narrative",
+      "New positive/negative test specs correctly exercise the new code path, not vacuously",
+      "REQ-051 12.4 OQ resolution and new follow-up-issue recommendation independently grounded against the real REQ-051 design doc and a fresh grep of docs/issues/",
+      "No implementation code present in the design document"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified all seven checks against real source, not the design's self-report. (1) Read the real lib/letflow/engine/transition.ex lines 720-862: gateway_role/2 (730-741), dispatch_parallel_split/4 (748-799), find_matching_join/2 (804-828), walk_to_gateway/3 (830-862) -- design's line numbers and clause structure are accurate. collect_leaf_gateways/3's @spec (Graph.t(), String.t(), MapSet.t(String.t()) -> MapSet.t(branch_leaf())), the branch_leaf type, and the 4-step traversal (cycle check / node lookup / PARALLEL_GATEWAY terminal / out-degree case split) are stated with no open judgment calls left for ELIXIR-DEV -- every branch of the out-degree case (0, 1, >1) has an exact return value spec. (2) Re-derived the nested-PARALLEL_GATEWAY exclusion myself: since step 3's PARALLEL_GATEWAY-terminal check always fires before step 4's broadened out-degree logic can be reached, and a PARALLEL_GATEWAY node's own further edges are never inspected, a nested split's leaf value is always {:gateway, nested_split_id} -- distinct from the branch's real join id in the normal (non-degenerate) case, so the per-branch/cross-branch agreement rule (2.5) rejects it as {:error, :no_matching_join} rather than silently mismatching a JoinCounter cohort. This is the correct, minimal boundary and matches ISSUE-FIXER's own risk framing. The one named residual (a branch that is a bare single-edge chain straight into a nested split with zero other branching) is honestly disclosed as pre-existing, unchanged behavior, not newly introduced. (3) Manually re-traced the diamond example (A -> gw(EXCLUSIVE_GATEWAY) -> {B,C} -> D -> join) by hand: with per-path visited sets ({A,gw,B} vs {A,gw,C}), both sibling recursions reach D independently without tripping the cycle guard, union = singleton {{:gateway,\"join\"}} -- correct. Confirmed that a shared/global visited set would incorrectly have the second sibling find D already visited and wrongly return :dead_end -- the design's justification for per-path (not merged) visited threading holds. (4) Read the real three_branch_graph/0 fixture (parallel_gateway_test.exs lines 50-64) and manually traced AC1 and AC4 through both OLD walk_to_gateway/3 and NEW collect_leaf_gateways/3: each of the 3 split edges targets \"join\" directly, so both old code (PARALLEL_GATEWAY clause fires immediately, {:ok,\"join\"}) and new code (step 3 fires immediately, singleton {{:gateway,\"join\"}}, per-branch check resolves to \"join\") produce byte-for-byte identical {:ok,\"join\"} results with zero hops -- step 4's broadened out-degree logic is never reached for this fixture, confirming the design's 'dead code for all existing tests' claim is genuinely true, not just asserted. AC1's JoinCounter/branch_ids assertions and AC4's all-cancelled path both depend only on this same find_matching_join/2 return value plus unchanged downstream dispatch_parallel_join/4 logic, so both are unaffected. (5) Read the new test specs (section 4): branch_with_exclusive_gateway_graph/0 genuinely exercises the new out-degree>1 union-of-siblings path (an EXCLUSIVE_GATEWAY with 2 edges reconverging on the join, the exact ISS-0398/kyc-routing shape) with a meaningful positive assertion (split now succeeds, correct JoinCounter, correct token placement on \"gw\"). ambiguous_branch_dead_ends_graph/0 genuinely exercises the per-branch singleton-rejection rule with a mixed dead-end/gateway leaf set, asserting the fix still correctly errors on genuine ambiguity -- neither spec is vacuous. (6) Read lib/letflow/design/req051-parallel-gateway-split-join.md sections 3.3 (lines 261-282) and 12.4 (lines 631-639) directly -- the design's quotations of both sections are verbatim-accurate, and its characterization (a named, never-closed OQ, not a hidden bug) is correctly grounded. Independently re-ran the design's own claimed grep (grep -rli 'nested.*parallel|block-structured|internal.*branch' docs/issues/*.yaml) -- zero hits, confirming no existing issue covers the nested-PARALLEL_GATEWAY-within-a-branch case, so the follow-up-issue recommendation in section 6 is warranted and not a duplicate. (7) Scanned the entire design document for defmodule/defstruct/def/defp -- zero hits (only bare @spec/@type declarations and prose/worked-example traces), confirming no implementation code is present. All seven checks hold under independent re-derivation. No defects found; the design is unambiguous enough for ELIXIR-DEV to implement without further judgment calls.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0398-20260901/step-02b-code-design-validator.json"
+    ],
+    "issues": [],
+    "next_action": "ORCH routes to Step 3 ELIXIR-DEV to implement collect_leaf_gateways/3 (replacing walk_to_gateway/3) and the updated find_matching_join/2 per lib/letflow/design/iss0398-walk-to-gateway-fix.md sections 2.1-2.6, in lib/letflow/engine/transition.ex. Carry forward to this run's Step Final the design's section 6 recommendation that ORCH file a new follow-up issue for the nested-PARALLEL_GATEWAY-within-a-branch case (no existing docs/issues/ entry covers it, confirmed independently above)."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "step": "2b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-01T12:55:25Z"
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "handoff_id": "WF03-ISS0397-20260901-step-02b",
+  "run_id": "WF03-ISS0397-20260901",
+  "workflow_id": "WF-03",
+  "step": "2b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0397-20260901/step-02b-code-design-validator.json",
+  "created_at": "2026-09-01T17:28:57Z",
+  "started_at": "2026-09-01T17:28:57Z",
+  "completed_at": "2026-09-01T17:28:57Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-048", "REQ-054", "REQ-208", "REQ-051", "REQ-052"],
+    "issue_ids": ["ISS-0397"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0397-20260901/step-02-code-designer.json",
+      "handoffs/WF03-ISS0397-20260901/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/design/iss0397-join-counters-fix.md",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/snapshot_writer.ex",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/engine/join_counter.ex",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/design/req052-instance-cancellation.md",
+      "priv/repo/migrations/20260818110001_alter_instance_projections_add_engine_columns.exs",
+      "docs/issues/ISS-0396.yaml",
+      "test/letflow/engine_cancel_instance_test.exs",
+      "test/letflow/engine/reconstruction_test.exs"
+    ],
+    "branch_name": "fix/ISS-0397-join-counters-20260901"
+  },
+  "task": {
+    "description": "Hard-gate CODE-DESIGNER's fix design (lib/letflow/design/iss0397-join-counters-fix.md) for ISS-0397 before ELIXIR-DEV implements. Independently re-verify every load-bearing claim against the real source rather than trusting the design's or ISSUE-FIXER's self-report, with ISS-0398-level skepticism (2 real BLOCKER reworks on that comparable design) and an adversarial concurrency check beyond the design's own two-branch walkthrough.",
+    "acceptance_criteria": [
+      "New instance_projections.join_counters column does not already exist, and its :map/jsonb null:false default:%{} spec genuinely matches the existing :variables column idiom",
+      "reconcile_projection/5 confirmed genuinely shared by complete_task/3's success tail and advance_after_timer_fired/3's tail by reading both call sites directly",
+      "build_instance_state/3 confirmed to read from the exact same locked struct fetch_and_lock_instance_projection/3 returned in the same transaction, no intervening unlocked re-fetch",
+      "Concurrency correctness argument re-derived independently, including an adversarial interleaving not in the design's own two-branch example (third branch racing in, and read-vs-lock-acquire timing)",
+      "Migration correctness: instance_projections plausibly non-empty in deployed environments, DB-level default mandatory, migration spec correct",
+      "REQ-052's citation of the join-counters persistence gap independently re-read and confirmed genuinely removed, with the design correctly treating this as a coordination note rather than scope creep or silent inconsistency",
+      "Concurrent Task.async/Task.await_many test design genuinely stresses lock ordering, not two sequential calls dressed up as concurrent; codec round-trip and timer-parity tests meaningfully distinct",
+      "No implementation code present in the design document",
+      "ISS-0396 zero-overlap claim independently re-verified against the real issue text and real touched functions"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified all nine checks against the real source, not the design's or ISSUE-FIXER's self-report. (1) grep of lib/letflow/event_store/instance_projection.ex confirms no join_counters field exists today; the schema's real :variables field is `field(:variables, :map, default: %{})` and the real migration 20260818110001 adds it via `add :variables, :map, null: false, default: %{}` -- the design's proposed `add :join_counters, :map, null: false, default: %{}` is byte-for-byte the same idiom, not an approximation. (2) Read engine.ex directly: run_complete_task/6's Multi.merge calls build_complete_task_tail_multi/6, whose success clause (~2471-2479) has a `Multi.run(:projection, ...)` calling `reconcile_projection(repo, normalized_changes.instance_projection, final_instance_state, completed_at, prefix)`; advance_after_timer_fired/3's persist_timer_fired_advance/7 (~2007-2009) independently has its own `Multi.run(:projection, ...)` calling `reconcile_projection(inner_repo, projection, final_instance_state, now, prefix)` -- same function, same arity, same attrs-building body at line 2821, confirmed shared. (3) Read build_snapshot_and_state/4 (~1721-1739): it receives `projection` as an argument from the Multi's own `:instance_projection` change (the exact struct fetch_and_lock_instance_projection/3 returned under FOR UPDATE at M2) and passes it straight into build_instance_state(projection, active_tokens, pending_task_tokens) at line 1728 with zero intervening Repo calls -- build_instance_state/3 itself (line 1813) takes no repo/prefix argument at all, structurally foreclosing any second read. Same pattern confirmed for build_snapshot_and_state_for_timer/4 (~1869-1892) feeding the identical shared build_instance_state/3. (4) Re-derived the concurrency argument myself, going beyond the design's own two-branch walkthrough: (a) third-branch-races-in case -- fetch_and_lock_instance_projection/3's lock is scoped by instance_id (`where([p], p.instance_id == ^instance_id)`), not by task_id or join_node_id, so a third concurrent complete_task/3 call on any task of the same instance is forced through the identical M2 serialization point; the join_outcome/1 logic (transition.ex ~1074-1091) computes `still_outstanding` from the full expected/received/cancelled sets, so a 3-way join correctly stays :wait until all three arrive regardless of arrival order -- the row-lock architecture generalizes to N branches without any change, it is not a two-branch-only argument as written. (b) read-vs-lock-acquire-timing case -- the only reader that feeds Transition.transition/3 is build_instance_state/3, and it is only ever called after the SAME transaction's own fetch_and_lock_instance_projection/3 has already acquired the row's FOR UPDATE lock (confirmed by the M1->M2->M3 Multi.run ordering in run_complete_task/6, ~1546-1552); a transaction cannot reach that point until any prior lock-holder has committed or rolled back, so there is no code path where this read observes a mid-flight, uncommitted write. Any other, non-locking reader of instance_projections (outside this fix's scope) would see ordinary MVCC snapshot staleness, not a violation of the join-firing exactly-once property, since no other code path feeds join_counters into Transition. Both adversarial cases hold; found no defect. (5) Confirmed instance_projections plausibly carries live rows in deployed environments: create/2 has been the row-inserting call site since REQ-045 shipped and is the normal per-instance-creation path, unlike the REQ-023-era migration 20260818110001 whose own header explicitly recorded 'no shipped requirement populates instance_projections rows yet' as a now-historical precondition -- that precondition genuinely does not hold today, so the design's claim that a DB-level default is mandatory (not merely stylistic) is correct, and the migration spec (`add :join_counters, :map, null: false, default: %{}`, tenant-scoped guard, manifest registration) matches this codebase's own established addendum-migration idiom. (6) Read req052-instance-cancellation.md directly: its 'OQ-2 (MAJOR) -- RESOLVED 2026-08-22, GH#326' section and its cross-reference table (line 672) state verbatim 'the join-counters persistence gap makes driving {:cancel_branch, _} here a no-op today' as the explicit reason cancel_instance/3 does not call Transition.transition/3. This fix's own change set (build_instance_state/3, reconcile_projection/5, SnapshotWriter, InstanceProjection) never touches cancel_instance/3 or cancel_instance_projection/4 (confirmed by reading run_cancel_instance/5 at engine.ex ~3002 and cancel_instance_projection/4 at ~3223, neither named in this design's diff) -- so the design correctly does not silently expand scope to also wire {:cancel_branch, _}, while also correctly flagging (design §6) that REQ-052's own cited premise is now stale, for REVIEWER/ORCH to decide, rather than silently leaving the decision record inconsistent or silently re-deciding it. (7) Confirmed test-design adequacy: the cited concurrent-test precedent (engine_cancel_instance_test.exs's real AC4 'run concurrently, not sequentially' block, lines 373-399) genuinely uses `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` plus real `Elixir.Task.async/1` + `Elixir.Task.await_many/2` with two independent Postgres connections, not shared-sandbox-serialized sequential calls -- this is a real precedent for genuine concurrency, not a misremembered one. The design's own §5.2 test spec follows this shape exactly (Sandbox :auto mode, two Task.async calls with no artificial delay, joint assertion on the pair of results without assuming which one wins the lock race) and would genuinely exercise the M2 lock-serialization path, not two calls dressed up as concurrent. The §5.1 serial baseline, §5.3 timer-parity test, and §5.4 codec round-trip unit test are meaningfully distinct in what they exercise (cross-call persistence without concurrency; the shared reconcile_projection/5 write path via a different caller; and pure serialize/deserialize correctness in isolation) -- no redundancy found. (8) Scanned the entire design document for defmodule/defstruct and full function bodies: zero hits -- every code fence is a bare @spec/@type declaration, a single-expression attrs snippet, or a `field(...)` schema-declaration line quoted for context, consistent with 'signatures/shapes only.' (9) Read docs/issues/ISS-0396.yaml directly: its defect is an Ecto.Multi :task_records step-key collision inside build_complete_task_tail_multi/6's SUB_PROCESS-child-completion-cascade branch (append_sub_process_children_creation_multi/6 / append_sub_process_completion_cascade_multi/6), confirmed via direct read of engine.ex ~2480-2493 to sit structurally after this fix's own :projection step (~2471-2479), not overlapping it, and touching none of this fix's four changed surfaces (build_instance_state/3, reconcile_projection/5, SnapshotWriter, InstanceProjection schema) -- non-overlap independently re-derived, not merely cited. No defect found across any of the nine checks; the design is unambiguous enough for ELIXIR-DEV to implement without further judgment calls.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0397-20260901/step-02b-code-design-validator.json"
+    ],
+    "issues": [],
+    "routing": "Route to Step 3 ELIXIR-DEV to implement lib/letflow/design/iss0397-join-counters-fix.md: the new instance_projections.join_counters column + migration (§4), InstanceProjection schema/changeset changes (§2.2), SnapshotWriter.serialize_join_counters/1 and deserialize_join_counters/1 promoted to public (§2.3), the reconcile_projection/5 write-site change (§2.4), and the build_instance_state/3 read-site change (§2.5), on branch fix/ISS-0397-join-counters-20260901. Carry forward to TEST-DESIGNER the design's §5 test specs (serial cross-call happy path, genuine concurrent Task.async/Task.await_many sibling-branch test, timer-fire parity test, codec round-trip unit test) and to ORCH the design's §6 coordination note (REQ-052's OQ-2 premise is now stale -- a decision-record question for REVIEWER/ORCH, not resolved by this fix)."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": [
+    {
+      "step": "2b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-01T17:28:57Z"
+    }
+  ]
+}

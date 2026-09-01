@@ -1,0 +1,137 @@
+# Synthetic — R-Co's tests/simulation/scenarios/supplier-quality-deviation-critical.yaml is
+# unreachable from this sandbox (see lib/letflow/design/req207-vortex-scenario-execution.md §0.2);
+# structurally faithful to REQ-207's own requirement-text field-by-field account,
+# not a byte-for-byte port.
+#
+# Process: process_work_order.yaml ("Supplier Quality Deviation"), test-local simplified
+# graph (@simple_supplier_deviation_graph, design §2.2 -- SERVICE_TASK nodes elided/replaced,
+# quarantine-batch substituted to a HUMAN_TASK so EO-001's audit-event ordering claim has
+# real, timestamped task.create/task.complete evidence to compare, SUB_PROCESS kept real).
+# false_positive: false, severity: 'critical' exercises severity-routing's 'critical' edge
+# into corrective-action-subprocess (a real, dispatchable SUB_PROCESS node, §0.3).
+# 5 via: api steps (3 business steps + 2 task-lookup plumbing steps per design §3.2):
+#   1  — batch quarantined, instance start (karl)
+#   2a — quarantine-batch task lookup (karl)
+#   2b — quarantine-batch complete (karl)
+#   3a — severity-classification task lookup (nina)
+#   3b — severity-classification complete: CRITICAL, not false positive (nina)
+# actors map is populated with real token/slug values at test setup time.
+id: vortex-supplier-quality-deviation-critical
+company_id: vortex
+process_id: DEFINITION_NAME
+
+actors:
+  actor-vortex-karl: {}
+  actor-vortex-nina: {}
+
+preconditions:
+  - check: process_definition_active
+    args:
+      name: DEFINITION_NAME
+      prefix: "TENANT_PREFIX"
+
+steps:
+  # Step 1 — batch quarantined, instance start
+  - via: api
+    action: "POST /api/v1/instances"
+    params:
+      definition_name: DEFINITION_NAME
+      initial_variables:
+        batch_ref: "BATCH-9911"
+    produces: instance
+    actor: actor-vortex-karl
+
+  # Step 2a — look up the pending quarantine-batch task (HUMAN_TASK substitute, §2.2)
+  - via: api
+    action: "GET /api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING"
+    produces: quarantine_task_list
+    actor: actor-vortex-karl
+
+  # Step 2b — quality-manager completes quarantine-batch
+  - via: api
+    action: "POST /api/v1/tasks/{{produces.quarantine_task_list.items.0.id}}/complete"
+    params: {}
+    produces: quarantine_task_result
+    actor: actor-vortex-karl
+
+  # Step 3a — look up the pending severity-classification task
+  - via: api
+    action: "GET /api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING"
+    produces: severity_task_list
+    actor: actor-vortex-nina
+
+  # Step 3b — quality manager classifies severity: CRITICAL, not a false positive
+  - via: api
+    action: "POST /api/v1/tasks/{{produces.severity_task_list.items.0.id}}/complete"
+    params:
+      false_positive: false
+      severity: critical
+    produces: severity_task_result
+    actor: actor-vortex-nina
+
+expected_outcomes:
+  # EO-1: task_assigned — severity-classification HUMAN_TASK was created
+  - id: EO-001-task-assigned
+    description: "Severity-classification task was created and is assigned to role-quality-manager"
+    verification:
+      method: task_assigned
+      args:
+        prefix: "TENANT_PREFIX"
+        task_ref: "{{produces.severity_task_list.items.0.id}}"
+        expected_assignee_user_id: "role-quality-manager"
+
+  # EO-2: instance reaches end-closed (via corrective-action-subprocess)
+  - id: EO-002
+    description: "Instance status is COMPLETED, reaching end-closed via the critical/sub-process branch"
+    verification:
+      method: instance_state
+      args:
+        prefix: "TENANT_PREFIX"
+        instance_ref: "{{produces.instance.instance_id}}"
+        status: "COMPLETED"
+
+  # EO-3: instance variables carry the critical classification
+  - id: EO-003
+    description: "Instance variables include false_positive: false and severity: critical"
+    verification:
+      method: instance_state
+      args:
+        prefix: "TENANT_PREFIX"
+        instance_ref: "{{produces.instance.instance_id}}"
+        status: "COMPLETED"
+        variables:
+          batch_ref: "BATCH-9911"
+          false_positive: false
+          severity: critical
+
+  # EO-4: sub-process spawn — a real child instance exists (§0.3, corrective-action-subprocess
+  # is dispatchable). Resolved test-side via InstanceProjection.parent_instance_id (OQ-2), not
+  # via a scenario-YAML-declared verification method (no by-parent lookup is exposed through
+  # Runner's verification.method vocabulary; asserted directly in the test module instead).
+  - id: EO-004-sub-process-spawn
+    description: "corrective-action-subprocess spawned a real, non-nil-status child instance (verified directly in the test module via InstanceProjection.parent_instance_id, not through this YAML's own verification block)"
+    verification:
+      method: instance_state
+      args:
+        prefix: "TENANT_PREFIX"
+        instance_ref: "{{produces.instance.instance_id}}"
+        status: "COMPLETED"
+
+  # EO-001 (requirement text's own numbering): audit-event ORDERING, not mere existence.
+  # quarantine-batch's task.create audit row must precede severity-classification's
+  # task.create audit row -- verified via the new :audit_event_ordering method (design §3.2).
+  - id: EO-001-ordering
+    description: "quarantine-batch task.create audit event precedes severity-classification task.create audit event (real timestamp comparison, not inferred from step order)"
+    verification:
+      method: audit_event_ordering
+      args:
+        first:
+          prefix: "TENANT_PREFIX"
+          resource_type: task
+          resource_id: "{{produces.quarantine_task_list.items.0.id}}"
+          event_type: "task.create"
+        second:
+          prefix: "TENANT_PREFIX"
+          resource_type: task
+          resource_id: "{{produces.severity_task_list.items.0.id}}"
+          event_type: "task.create"

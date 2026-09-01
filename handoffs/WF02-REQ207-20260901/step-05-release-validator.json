@@ -1,0 +1,72 @@
+{
+  "handoff_id": "step05-WF02-REQ207-20260901",
+  "run_id": "WF02-REQ207-20260901",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ207-20260901/step-05-release-validator.json",
+  "created_at": "2026-09-01T08:32:22Z",
+  "started_at": "2026-09-01T08:16:26Z",
+  "completed_at": "2026-09-01T08:32:22Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-207"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ207-20260901/step-04-test-runner.json",
+      "handoffs/WF02-REQ207-20260901/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ207-20260901/step-02d-reviewer.json",
+      "handoffs/WF02-REQ207-20260901/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-207 entry)",
+      "test/letflow/simulation/req207_vortex_test.exs",
+      "test/reports/req207-vortex-scenario-findings.yaml",
+      "test/support/simulation/runner.ex",
+      "test/support/simulation/scenario_fixture.ex",
+      "lib/letflow/design/req207-vortex-scenario-execution.md"
+    ],
+    "branch_name": "feature/WF02-REQ207-20260901",
+    "commit_checked": "4b073f72"
+  },
+  "task": {
+    "description": "Independently re-verify REQ-207's 6 acceptance criteria against real code/test/state (not TEST-RUNNER's report), re-run scripts/test_parallel.sh myself, and sanity-check the two follow-up findings flagged for ORCH to file at Step Final.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh re-run independently, foreground, blocking",
+      "Each of REQ-207's 6 ACs verified against real queried state/code, not prior reports",
+      "AC3's mutation check independently reproduced, not copied",
+      "Two follow-up findings sanity-checked (REQ-062 pre-existing defect, OQ-5 scenario reachability)",
+      "Status files checked for staleness"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived all 6 REQ-207 acceptance criteria against real code and real queried state -- did not read TEST-RUNNER's or any prior step's report as evidence, only as a pointer to what to re-check.\n\nRE-RUN 1 (own full-suite run, scripts/test_parallel.sh, foreground/blocking, N=16 via nproc): combined 2745 tests + 6 properties, 6 failures (2751 total parsed; partition 7 aborted with 0 tests, no Result: line). This differs from TEST-RUNNER's 2997/2997-0-failures run taken ~15 minutes earlier -- per core-directives.md this difference is neither confirmation nor regression on its own; structurally attributed instead of count-matched.\n\nFailure attribution (route 1 + route 3, both satisfied): all 6 failures plus partition 7's abort trace to ONE mechanism -- Postgres connection-pool exhaustion at partition-launch time (13:19:04-13:19:15Z), evidenced directly: partitions 6/7/15 logs show repeated 'FATAL 53300 (too_many_connections)' (measured: max_connections=100 on the container, script's own TEST_POOL_SIZE=5 x 16 partitions = 80 pool connections plus Ecto bootstrap/migration bursts at the same instant); partition 14's 3 failures are TenantSchemaReaperTest's own ISS-0110 concurrent-invocation liveness guard correctly detecting and deferring ('another mix test invocation ... is currently connected', its own log line) because this run's 16 partitions share one TEST_PARALLEL_GROUP -- exactly the condition that test asserts around, so its assertions read 0 instead of >=1. Route 1: `git diff --name-only main...HEAD` (25 files, all under handoffs/, docs/, lib/letflow/design/, test/) contains NONE of the four failing files (onboarding_scope_extension_test.exs, tenant_schema_reaper_test.exs, fixture_loader_test.exs) or any lib/ code they exercise. Route 3 measurement: re-ran all 3 failing files serially in isolation (`mix test test/letflow/routers/onboarding_scope_extension_test.exs test/support/tenant_schema_reaper_test.exs test/letflow/sandbox_pool/fixture_loader_test.exs --seed 0`) -- Result: 14 passed, 0 failures, confirming the failure only manifests under the parallel-launch connection-burst condition and is not a real defect these tests catch. Post-run pg_stat_activity showed only 6 active connections (not a leak, a transient startup spike). Called pre-existing/environmental per route 1+3, not this run's problem; not filed as a new REQ-207 defect.\n\nAC1 (production-order-above-threshold, 4 expected outcomes incl. controller-approval routing): read test/letflow/simulation/req207_vortex_test.exs:510-568 directly. All 4 outcome_results individually asserted; EO-1 asserts `%{assignee_ref: \"role-controller\"}` on the real observed task (lines 557-558) -- this is the real controller-approval routing check, not a silent skip to line-assignment (assign-line is the SERVICE_TASK further down the same graph, only reached via the budget-approval edge). Re-ran this test module myself: `Result: 4 passed`. CONFIRMED.\n\nAC2 (supplier-quality-deviation-critical, EO-001 ordering by REAL timestamp comparison): read lines 632-642 -- `assert %{first: %{timestamp: first_ts}, second: %{timestamp: second_ts}} = eo_ordering.observed` followed by `assert DateTime.compare(first_ts, second_ts) == :lt`, a real DateTime comparison of two destructured timestamps from actual queried audit events, not inferred from final status. Independently confirmed (own re-run, part of the 4-passed result above) and cross-checked against test/reports/req207-vortex-scenario-findings.yaml's own eo_001_ordering block (quarantine 07:48:54.330000Z precedes severity 07:48:54.417000Z, ordering_holds: true) -- consistent, not merely copied. CONFIRMED.\n\nAC3 (false-positive reaches end-false-positive SPECIFICALLY, not end-closed, verified by querying the actual end node): read lines 716-850. I independently reproduced the mutation check myself (not trusting TEST-DESIGN-VALIDATOR's report of having done it): edited line 840 from `end-false-positive` to `end-closed`, re-ran `mix test test/letflow/simulation/req207_vortex_test.exs --seed 0` -- got `Result: 3/4 passed, Failed: 1 test`, with the failure quoting exactly the AC3 assertion at line 840 and 'observed target: \"end-false-positive\"' -- a genuine, non-vacuous, data-driven mismatch (not a crash). Reverted the edit, confirmed `git status --porcelain test/ lib/` was empty, re-ran again -- `Result: 4 passed`. Also independently read lib/letflow/engine/transition.ex:373-379 (dispatch_end/3) myself: it unconditionally drops the completed token via Enum.reject, so activated_nodes (derived from remaining tokens at lib/letflow/engine.ex:2724 and lib/letflow/engine/sub_process.ex:1198) is [] for EVERY terminal END node alike -- confirming activated_nodes alone genuinely cannot distinguish end-false-positive from end-closed, which is exactly why the test's structural cross-check against the seeded graph's own edge target (lines 830-849) is load-bearing and not redundant. CONFIRMED, independently.\n\nAC4 (entity-list disposition BLOCKED_ON_DEPENDENCY, not UNBUILT_FEATURE, citing the specific missing subsystem, live re-runnable checks): read lines 855-935 -- 3 signals, all live at test-run time (File.read!/Regex.match?/File.exists? against real lib/letflow/router.ex, docs/requirements.yaml, and lib/letflow/ directory contents), none hardcoded booleans. Independently re-ran the file existence checks myself outside the test: confirmed lib/letflow/entities.ex and entity_query.ex genuinely do not exist, router.ex still references Letflow.Routers.Entities/EntityQuery in its reserved section. CONFIRMED.\n\nAC5 (report states closed disposition for all 4 scenarios, no gaps): read test/reports/req207-vortex-scenario-findings.yaml directly myself (not from a prior step's restatement) -- all 4 scenario ids present, each carries a disposition field (EXECUTED x3, BLOCKED_ON_DEPENDENCY x1), no gaps, no scenario or step left unaddressed. CONFIRMED.\n\nAC6 (mix test and mix compile --warnings-as-errors both pass, real output): re-ran both myself. `mix test test/letflow/simulation/req207_vortex_test.exs --seed 0` -> Result: 4 passed. `mix compile --warnings-as-errors` -> clean, no output, exit 0 (implicit success, no errors emitted). CONFIRMED. Full-suite re-run's 6 failures (see above) are structurally attributed as pre-existing/environmental, not attributable to REQ-207's diff or to this AC's own target module.\n\nStatus-file staleness check: docs/requirements.yaml's REQ-207 entry still reads status: in_progress (correct pre-DOC-UPDATER state). docs/status/requirement_status.index.yaml names volume 7 as current; docs/status/requirement_status.v7.yaml (current volume, read directly) carries only a single 'started' event for REQ-207 (2026-09-01T04:12:36Z, ORCH, Step 00) -- no premature 'done'/'verified' entry exists. No staleness found.\n\nFollow-up finding #1 (pre-existing Engine defect, Ecto.Multi :task_records key collision on synchronously-completing SUB_PROCESS children, attributed to REQ-062): independently confirmed via `git diff main...HEAD -- lib/` -- the ONLY lib/ change in this entire diff is a new file, lib/letflow/design/req207-vortex-scenario-execution.md (a design doc, not code); zero lines changed in lib/letflow/engine.ex or lib/letflow/engine/sub_process.ex, the two files the defect implicates. Genuinely pre-existing, not introduced by this diff. REAL and worth ORCH filing.\n\nFollow-up finding #2 (OQ-5, R-Co scenario-corpus reachability for the 4 real Vortex scenario YAMLs, same class as ISS-0388 but not yet fixed for scenario files specifically): read docs/issues/ISS-0388.yaml directly -- confirmed its resolution (commit f7ffbeb6, PR #766) covered only the 12 company/org_structure/process_*.yaml fixture files under test/fixtures/simulation/{swiftroute,vortex,meridian}/, NOT the scenario-definition YAMLs (vortex-production-order-above-threshold.yaml etc.) that live in R-Co's tests/simulation/scenarios/ tree. Read the design doc's §0.2 directly: it explicitly states R-Co's tests/simulation/scenarios/*.yaml corpus remains unreachable from this sandbox, and the 4 Vortex scenario YAMLs shipped in this diff are self-authored/synthetic (structurally faithful to REQ-207's own requirement-text field-by-field account, not byte-for-byte ports) -- a distinct, genuine, currently-unfiled gap in the same family as ISS-0388/ISS-0391 but for a different file set. REAL and worth ORCH filing.\n\nNo blocking issues found. All 6 ACs independently confirmed against real code/state. Full-suite failures this run are structurally pre-existing/environmental (connection-pool exhaustion + expected concurrent-invocation self-defense), not a regression this diff introduced.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "title": "scripts/test_parallel.sh at N=16 against this workspace's Postgres (max_connections=100) produces transient connection-pool-exhaustion failures at partition-launch time",
+        "detail": "Own re-run this step: 6 failures + 1 aborted partition, all traced to FATAL 53300 too_many_connections in a ~10s startup burst, plus TenantSchemaReaperTest's own ISS-0110 concurrent-invocation guard correctly self-deferring. Not this run's defect (all 3 non-reaper failing files re-ran clean in isolation), but the test_parallel.sh N-vs-max_connections sizing is worth revisiting since it recurs run to run with a differing failure set each time (matches core-directives.md's documented dominant-failure-class precedent). Flagging per 'never resolve a conflict silently' -- not filing myself, noting for ORCH."
+      }
+    ],
+    "follow_up_findings_confirmed": [
+      {
+        "title": "Pre-existing Engine defect: Ecto.Multi :task_records key collision on synchronously-completing SUB_PROCESS children (REQ-062)",
+        "confirmed": true,
+        "evidence": "git diff main...HEAD -- lib/ contains only a new design-doc file; zero lines changed in lib/letflow/engine.ex or lib/letflow/engine/sub_process.ex"
+      },
+      {
+        "title": "OQ-5: R-Co scenario-corpus reachability for the 4 real Vortex scenario YAMLs, same class as ISS-0388, not yet fixed for scenario files",
+        "confirmed": true,
+        "evidence": "docs/issues/ISS-0388.yaml's resolution covers only company/org_structure/process_*.yaml (12 files); design doc §0.2 confirms tests/simulation/scenarios/*.yaml remains unreachable and this diff's 4 scenario YAMLs are self-authored/synthetic, not byte-for-byte R-Co ports"
+      }
+    ],
+    "next_action": "Route to DOC-UPDATER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

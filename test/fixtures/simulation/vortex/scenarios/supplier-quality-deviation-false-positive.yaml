@@ -1,0 +1,110 @@
+# Synthetic — R-Co's tests/simulation/scenarios/supplier-quality-deviation-false-positive.yaml is
+# unreachable from this sandbox (see lib/letflow/design/req207-vortex-scenario-execution.md §0.2);
+# structurally faithful to REQ-207's own requirement-text field-by-field account,
+# not a byte-for-byte port.
+#
+# Process: process_work_order.yaml ("Supplier Quality Deviation"), the SAME test-local
+# simplified graph (@simple_supplier_deviation_graph, design §2.2) and same seeded
+# definition as supplier-quality-deviation-critical.yaml -- both scenarios run against
+# the same process definition, per the requirement text.
+# false_positive: true routes false-positive-check directly to end-false-positive,
+# a terminal state distinct from the critical scenario's end-closed.
+# `severity` is deliberately omitted from step 2b's output_variables -- the
+# false-positive-check gateway's routing depends only on false_positive, not severity
+# (severity-routing, the downstream gateway that reads severity, is never reached on
+# this path -- design §3.3 note).
+# 4 via: api steps (2 business steps + 2 task-lookup plumbing steps per design §3.3):
+#   1  — batch quarantined, instance start (karl)
+#   1b — quarantine-batch task lookup+complete (karl)
+#   2a — severity-classification task lookup (nina)
+#   2b — severity-classification complete: false positive (nina)
+# actors map is populated with real token/slug values at test setup time.
+id: vortex-supplier-quality-deviation-false-positive
+company_id: vortex
+process_id: DEFINITION_NAME
+
+actors:
+  actor-vortex-karl: {}
+  actor-vortex-nina: {}
+
+preconditions:
+  - check: process_definition_active
+    args:
+      name: DEFINITION_NAME
+      prefix: "TENANT_PREFIX"
+
+steps:
+  # Step 1 — batch quarantined, instance start
+  - via: api
+    action: "POST /api/v1/instances"
+    params:
+      definition_name: DEFINITION_NAME
+      initial_variables:
+        batch_ref: "BATCH-9912"
+    produces: instance
+    actor: actor-vortex-karl
+
+  # Step 1b (task-lookup plumbing) — look up the pending quarantine-batch task
+  - via: api
+    action: "GET /api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING"
+    produces: quarantine_task_list
+    actor: actor-vortex-karl
+
+  # Step 1b (continued) — quality-manager completes quarantine-batch
+  - via: api
+    action: "POST /api/v1/tasks/{{produces.quarantine_task_list.items.0.id}}/complete"
+    params: {}
+    produces: quarantine_task_result
+    actor: actor-vortex-karl
+
+  # Step 2a — look up the pending severity-classification task
+  - via: api
+    action: "GET /api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING"
+    produces: severity_task_list
+    actor: actor-vortex-nina
+
+  # Step 2b — quality manager marks false positive (severity omitted, not evaluated on this path)
+  - via: api
+    action: "POST /api/v1/tasks/{{produces.severity_task_list.items.0.id}}/complete"
+    params:
+      false_positive: true
+    produces: severity_task_result
+    actor: actor-vortex-nina
+
+expected_outcomes:
+  # EO-1: instance reaches end-false-positive, COMPLETED
+  - id: EO-001
+    description: "Instance status is COMPLETED, reaching end-false-positive"
+    verification:
+      method: instance_state
+      args:
+        prefix: "TENANT_PREFIX"
+        instance_ref: "{{produces.instance.instance_id}}"
+        status: "COMPLETED"
+
+  # EO-2: instance variables carry the false_positive classification
+  - id: EO-002
+    description: "Instance variables include false_positive: true"
+    verification:
+      method: instance_state
+      args:
+        prefix: "TENANT_PREFIX"
+        instance_ref: "{{produces.instance.instance_id}}"
+        status: "COMPLETED"
+        variables:
+          batch_ref: "BATCH-9912"
+          false_positive: true
+
+  # EO-3: terminal-node identity -- resolved test-side via the severity-classification
+  # task's own TASK_COMPLETED event payload (OQ-3, see test module moduledoc for why
+  # InstanceProjection.current_nodes cannot distinguish terminal END nodes), not
+  # through this YAML's own verification block (Runner's instance_state method has no
+  # "which node" arg).
+  - id: EO-003-terminal-node
+    description: "Instance's current_nodes is exactly [\"end-false-positive\"], distinct from end-closed (verified directly in the test module via InstanceProjection.current_nodes, not through this YAML's own verification block)"
+    verification:
+      method: instance_state
+      args:
+        prefix: "TENANT_PREFIX"
+        instance_ref: "{{produces.instance.instance_id}}"
+        status: "COMPLETED"

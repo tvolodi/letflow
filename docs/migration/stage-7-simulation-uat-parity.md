@@ -104,6 +104,46 @@ tracked, referenced by REQ-208/209) and the missing attachment/document
 subsystem. Full detail:
 `handoffs/WF02-REQ206-20260901/release-validation-report-20260901.md`.
 
+**REQ-207 done (2026-09-01, WF02-REQ207-20260901).** All 4 Vortex
+Manufacturing scenarios run via REQ-205's harness:
+`vortex-production-order-budget-threshold` (4 expected outcomes evaluated
+against real queried state, including `assignee_ref: role-controller`
+controller-approval routing on the budget-exceeded path — not a silent
+fallback to plain line-assignment), `vortex-supplier-quality-deviation-
+critical` (disposition `:executed`; a new `:audit_event_ordering`
+`Letflow.Simulation.Runner` verification method asserts two audit events'
+real `DateTime.compare/2` ordering rather than inferring order from final
+status — EO-001 quarantine-before-severity-escalation confirmed),
+`vortex-false-positive-compensation` (disposition `:executed`, confirmed
+reaching `end-false-positive` specifically, not merely `end-closed`), and
+`vortex-entity-list-filter-and-page` (disposition `BLOCKED_ON_DEPENDENCY`,
+citing the specific missing subsystem — `lib/letflow/entities.ex` and
+`entity_query.ex` do not exist, `Letflow.Router` still reserves them). A
+genuine AC3 coverage gap was found and fixed during design/test authoring:
+`lib/letflow/engine/transition.ex`'s `dispatch_end/3` unconditionally
+drops the completed token, so `activated_nodes` derived from remaining
+tokens is `[]` for every terminal END node alike and cannot by itself
+distinguish `end-false-positive` from `end-closed` — fixed with a
+structural cross-check against the seeded graph's own edge target instead.
+RELEASE-VALIDATOR independently re-verified all 6 acceptance criteria
+(own `scripts/test_parallel.sh` re-run, own reproduction of the AC3
+mutation check by editing the expected end-node id and confirming a
+genuine, non-vacuous failure, then reverting; own read of `transition.ex`
+confirming the structural cross-check is load-bearing) and PASSED. 2
+follow-up findings confirmed real, flagged for ORCH to file at Step Final:
+(1) a pre-existing Engine defect — `Ecto.Multi` `:task_records` key
+collision on synchronously-completing `SUB_PROCESS` children within the
+same hop-chain transaction, attributed to REQ-062, affecting
+`lib/letflow/engine.ex` / `lib/letflow/engine/sub_process.ex` (confirmed
+pre-existing: `git diff main...HEAD -- lib/` shows zero lines changed in
+either file); (2) OQ-5 — R-Co scenario-corpus reachability for the 4 real
+Vortex scenario YAMLs under `test/fixtures/simulation/vortex/scenarios/
+*.yaml`, same class as `ISS-0388` but not yet fixed for scenario-
+definition files specifically (`ISS-0388`'s resolution covered only the
+12 `company/org_structure/process_*.yaml` fixture files; this diff's 4
+scenario YAMLs are self-authored/synthetic, disclosed in the design doc's
+own §0.2).
+
 ## Decisions
 
 None expected — this stage validates prior decisions rather than

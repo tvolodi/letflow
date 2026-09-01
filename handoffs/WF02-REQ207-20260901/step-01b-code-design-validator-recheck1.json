@@ -1,0 +1,84 @@
+{
+  "handoff_id": "step01b-WF02-REQ207-20260901-recheck1",
+  "run_id": "WF02-REQ207-20260901",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ207-20260901/step-01b-code-design-validator-recheck1.json",
+  "created_at": "2026-09-01T07:33:58Z",
+  "started_at": "2026-09-01T07:33:58Z",
+  "completed_at": "2026-09-01T07:33:58Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-207"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ207-20260901/step-00-git-setup.json",
+      "handoffs/WF02-REQ207-20260901/step-01-code-designer.json",
+      "handoffs/WF02-REQ207-20260901/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ207-20260901/step-01-code-designer-rework1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req207-vortex-scenario-execution.md",
+      "docs/requirements.yaml#REQ-207",
+      "test/support/simulation/runner.ex",
+      "test/support/simulation/scenario_fixture.ex"
+    ],
+    "branch_name": "feature/WF02-REQ207-20260901"
+  },
+  "task": {
+    "description": "Independent re-check (rework iteration 1) of CODE-DESIGNER's rework1 (commit 75c8e9a0) claiming both prior BLOCKERs fixed: (1) section 4.1/4.3's AC4 re-verification grep false-positived on 'identity' (claimed 0, actually returned 7); (2) section 7 OQ-1 left open despite REQ-206 having merged. This pass does not trust either the rework's self-report or a pre-existing step-01b-code-design-validator-recheck1.json found already committed on this branch at commit 5ec70218 (which made the same PASS claim) -- every command below was re-run in this session against the live repo state, not copied from either record.",
+    "acceptance_criteria": [
+      "New grep pattern `grep -n -B1 -iE \"title:.*\\bentit(y|ies)\\b\" docs/requirements.yaml` independently re-run and confirmed to return exactly 1 match whose preceding id: line is REQ-207",
+      "Every OQ-1 mention in the doc (grepped for \"OQ-1\", not assumed to be a single location) checked for stale open-question framing",
+      "REQ-206 merge independently re-verified via git log and git merge-base --is-ancestor",
+      "ScenarioFixture.load!/1 and Runner's :via :api|:gui|:skip vocabulary independently re-read at their cited line numbers",
+      "Zero implementation code, AC-to-design mapping, audit_event_ordering novelty, and dependency claims re-confirmed as a lighter sanity pass"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Both original BLOCKERs are genuinely closed. Independently re-derived, not copied from the rework's self-report or from the pre-existing step-01b-code-design-validator-recheck1.json already committed at 5ec70218 (that file made the same claim; treated as an unverified record per core-directives.md's handoff-factual-premises rule, not as evidence). BLOCKER 1 (AC4 grep): ran `grep -n -B1 -iE \"title:.*\\bentit(y|ies)\\b\" docs/requirements.yaml` myself against the live file -- exactly 1 match: `11714-  - id: REQ-207` / `11715:    title: Run Vortex's 4 simulation scenarios against Letflow (production-order budget gate, supplier-deviation critical/false-positive compensation, entity list filter/page) and report per-scenario findings`. Also ran `grep -c -iE \"title:.*\\bentit(y|ies)\\b\" docs/requirements.yaml` -> 1, confirming no double-count. The command is well-formed and re-runnable verbatim by a future reader (word-bounded \\bentit(y|ies)\\b, no longer the bare-substring \\\"entit\\\" pattern that false-positived on 'identity'). Section 4.1 (lines 578-606) states the corrected command, its exact expected output (the 11714/11715 block), and correctly identifies the match as REQ-207's own self-referential title via the -B1 id: line -- not a claim by another requirement. Section 4.3's evidence bullet (line 650) quotes the same corrected command and the same '1 match, id: REQ-207' result -- no stale reference to the old grep -c/claimed-0 wording remains anywhere (grepped the whole doc for 'grep -c' and for the literal string '[Ee]ntit' -- zero matches outside the one explanatory aside at line 581-584 that exists specifically to document why the old pattern is wrong, not to specify it as the check). BLOCKER 2 (OQ-1): grepped the whole doc for 'OQ-1' -- 3 locations, all checked: (a) line 57, §0.1 -- historical/forward-referencing prose ('this design is authored *as if* REQ-206 has already merged... Open question OQ-1 (§7) states the fallback plan explicitly if REQ-206 has *still* not merged') -- this is explaining the design's original reasoning and correctly points to §7, not itself asserting OQ-1 is currently open; (b) line 476, §3.2 -- 'see §5's open question OQ-1' -- this is a genuine section-number error (OQ-1 actually lives in §7, not §5; §5 is 'Test module structure', confirmed via `grep -n '^## §'` listing all 9 section headers) but it is PRE-EXISTING: diffed against the original FAILed version (`git show 4da89496:lib/letflow/design/req207-vortex-scenario-execution.md`) and the identical line/wording was already present before rework1 touched anything, so it is not a regression introduced by this rework and does not misstate OQ-1's resolution status (it misnumbers the section, it does not claim OQ-1 is open) -- filed as a MINOR issue below rather than a BLOCKER, consistent with 'never resolve a conflict silently' but not grounds to fail rework that fixed the actual two named defects; (c) line 761, §7 -- 'OQ-1 -- RESOLVED/MOOT (rework 1, this session)' with the full resolution: REQ-206 merge commit 2d068c79 named, both dependency facts re-confirmed, explicit statement that §0.1's fallback plan 'is therefore not exercised and does not apply'. All 3 locations checked; none reads as a live, unresolved open question. Independently re-ran `git log main --oneline | grep -i REQ-206` -- shows `2d068c79 REQ-206: SwiftRoute scenario execution (S7 simulation harness) (#767)`. Independently ran `git merge-base --is-ancestor 2d068c79 HEAD` -- exit 0 (is ancestor of this branch's HEAD). Independently read test/support/simulation/scenario_fixture.ex lines 40-41 directly: `@spec load!(path :: String.t()) :: Scenario.t()` / `def load!(path) do` -- confirmed present exactly as cited. Independently read test/support/simulation/runner.ex (this file, despite its path name, defines `Letflow.Simulation.Scenario`) lines 44-52: `@type step :: %{required(:via) => :api | :gui | :skip, ...}` -- line 45 confirmed, the :skip vocabulary extension is real and matches the citation. SANITY RE-CHECKS (lighter, since these already passed the first gate): grepped the 819-line doc for `defmodule`/`defstruct` and for `^\\s*def ` -- zero matches, no implementation code introduced or remaining (22 code-fence delimiters / 11 fences, consistent with the prior pass's count after accounting for the rework's added fences). Grepped lib/letflow, test/support, test/letflow for `audit_event_ordering` outside the design doc -- zero matches, still genuinely new/unshipped. Read the live docs/requirements.yaml REQ-207 entry directly (lines 11713-11774): all 6 real acceptance_criteria strings match section 8's AC1-AC6 mapping table 1:1, no TBD, no criterion unmapped. Dependency claims (ScenarioFixture.load!/1, Runner's via vocabulary) independently confirmed above under BLOCKER 2. No new gaps found; the design is APPROVED.",
+    "artifacts_out": [
+      "lib/letflow/design/req207-vortex-scenario-execution.md"
+    ],
+    "issues": [
+      {
+        "id": null,
+        "severity": "MINOR",
+        "title": "Section 3.2 (line 476) cites 'see §5's open question OQ-1' but OQ-1 actually lives in §7 -- pre-existing section-number error, not introduced by this rework",
+        "detail": "`grep -n '^## §'` shows §5 is 'Test module structure' and §7 is 'Open questions'. Line 476's cross-reference should read '§7's open question OQ-1'. Confirmed via `git show 4da89496:...` that this exact line was already wrong before rework1 (not a regression from this rework, and not one of the two BLOCKERs this recheck was scoped to). It does not misstate OQ-1's resolution status -- a reader following it to the (wrong) section number would simply need to look at §7 instead, where OQ-1 is correctly marked RESOLVED/MOOT. Not blocking this gate; recorded so it gets fixed at the source rather than silently carried forward again.",
+        "affected_requirement": "REQ-207"
+      }
+    ],
+    "next_action": "Route to ELIXIR-DEV (2a) and/or FRONTEND-DEV (2b)"
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-01T07:26:58Z",
+      "status": "FAIL",
+      "summary": "Dependency claims, audit_event_ordering novelty, no-implementation-code, and AC-mapping checks all PASS. Section 4.1's AC4 re-verification grep is factually unreliable (returns 7, not the claimed 0, due to \"identity\" substring collisions) and section 7's OQ-1 is left open despite being resolvable now that REQ-206 has merged to main.",
+      "issues": [
+        "Section 4.1/4.3 grep pattern false-positives on \"identity\"",
+        "Section 7 OQ-1 not marked resolved/moot despite REQ-206 merge"
+      ],
+      "next_action": "Rework CODE-DESIGNER"
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-01T07:33:58Z",
+      "status": "PASS",
+      "summary": "Both BLOCKERs independently re-verified as fixed against the real repo state in this session (grep re-run with a fresh -c cross-check, git log/merge-base re-run, both cited source lines re-read directly). One pre-existing MINOR section-cross-reference defect found (line 476, §5 vs §7) and reported for fix-at-source, not blocking. Design APPROVED.",
+      "issues": [
+        "MINOR: line 476 cites §5 for OQ-1, should be §7 (pre-existing, not a rework regression)"
+      ],
+      "next_action": "Route to Step 2a ELIXIR-DEV"
+    }
+  ]
+}

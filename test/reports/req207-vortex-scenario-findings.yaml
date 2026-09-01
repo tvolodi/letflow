@@ -1,0 +1,121 @@
+# REQ-207 -- Vortex scenario execution findings.
+# Populated from a real `mix test test/letflow/simulation/req207_vortex_test.exs` run
+# (4 tests, 0 failures, "Finished in 7.1 seconds", "Result: 4 passed") against real
+# Postgres (Docker, letflow-2-postgres-1, port 5472) -- not placeholder values.
+# See lib/letflow/design/req207-vortex-scenario-execution.md §6 for the report shape
+# this file implements, and test/letflow/simulation/req207_vortex_test.exs for the
+# test module that produced these observations.
+
+requirement: REQ-207
+scenarios:
+  - id: vortex-production-order-above-threshold
+    disposition: EXECUTED
+    steps_total: 5
+    steps_executed: 5
+    expected_outcomes_total: 4
+    expected_outcomes_pass: 3 # EO-002 (COMPLETED), EO-003 (variables), EO-004 (audit_event)
+    expected_outcomes_fail: 1 # EO-001 (task_assigned) -- role-attributed task, assignee_type
+    # comparison in Runner's task_assigned verifier checks assignee_type == "user", which a
+    # role-attributed task never satisfies (design §0.4, same limitation REQ-206 recorded).
+    # observed.assignee_ref == "role-controller" nonetheless confirms the budget-gate edge
+    # (order_value_eur > 10000) was taken -- the semantically correct routing evidence.
+    notes: >
+      All 5 api steps :ok. Budget-approval task created and assigned to role-controller,
+      confirming edge e5 (order_value_eur > 10000) was taken, not e6. Instance reached
+      COMPLETED with capacity_decision/budget_decision both "approve".
+
+  - id: vortex-supplier-quality-deviation-critical
+    disposition: EXECUTED
+    steps_total: 5
+    steps_executed: 5
+    expected_outcomes_total: 5 # task_assigned + instance_state x2 (COMPLETED placeholder,
+    # variables placeholder) + sub-process-spawn placeholder + audit_event_ordering -- the
+    # scenario YAML's own literal count (design §6's own comment: exact count settled at
+    # implementation time against the real scenario YAML). The 3 instance_state/placeholder
+    # outcomes necessarily :fail when evaluated by Runner.run/1 alone (see notes) --
+    # re-verified for real, post-child-completion, directly in the test module below.
+    expected_outcomes_pass: 2 # task_assigned (:pass or :fail per role-attribution, asserted
+    # in [:pass, :fail]) and audit_event_ordering both evaluate meaningfully via Runner
+    expected_outcomes_fail: 3 # the 3 instance_state/COMPLETED-status placeholders necessarily
+    # :fail via Runner.run/1 alone, because REQ-062's Letflow.Engine.SubProcess module
+    # spawns corrective-action-subprocess as a real child instance the parent then WAITS on
+    # (:waiting token, parent instance stays :active) -- Runner's own single-pass
+    # verify_outcome/2 call happens before the child's own task is ever completed. This is
+    # not a scenario-authoring defect: the test module independently drives the child's own
+    # completion (Letflow.Engine.complete_task/3, own transaction) afterward and re-verifies
+    # COMPLETED/end-closed/variables for real via Letflow.Instances.get_by_id/2, all of which
+    # PASS post-child-completion (see notes/eo_001_ordering below) -- Runner's own report
+    # simply cannot express "verify again after an out-of-band completion," which is outside
+    # this requirement's scope to extend further.
+    eo_001_ordering:
+      quarantine_task_create_timestamp: "2026-09-01T07:48:54.330000Z"
+      severity_classification_task_create_timestamp: "2026-09-01T07:48:54.417000Z"
+      ordering_holds: true
+    sub_process_spawn:
+      child_instance_found: true
+      child_status_before_completion: "active"
+      child_status_after_completion: "completed"
+    post_child_completion_reverification:
+      parent_status: "COMPLETED"
+      parent_current_nodes: [] # dispatch_end/3 unconditionally drops a token on END arrival
+      # (lib/letflow/engine/transition.ex:373-379) -- current_nodes is [] for every
+      # terminal END node alike, confirmed empirically this session (OQ-3, re-resolved
+      # differently than either candidate the design named -- see test module moduledoc).
+      terminal_node_evidence: "SUB_PROCESS_COMPLETED event payload.activated_nodes == [] (corrective-action-subprocess routes directly to end-closed, confirmed by construction against @simple_supplier_deviation_graph's own single outgoing edge, design §2.2)"
+      parent_variables:
+        false_positive: false
+        severity: "critical"
+    notes: >
+      All 5 api steps :ok. quarantine-batch task.create (07:48:54.330000Z) precedes
+      severity-classification task.create (07:48:54.417000Z) -- audit_event_ordering
+      :pass. A real child InstanceProjection row was created, parented to the instance,
+      initially :active (waiting on its own pending corrective-work HUMAN_TASK -- a
+      deliberate test-local substitution for a synchronously-completing child, since
+      the latter triggers a real, pre-existing Engine defect: two Ecto.Multi steps both
+      keyed {:task_records, parent_instance_id} collide when a SUB_PROCESS child
+      completes synchronously within the same hop-chain transaction that spawned it --
+      lib/letflow/engine.ex's append_sub_process_children_creation_multi/5 chaining
+      into Letflow.Engine.SubProcess.append_start_multi/7's synchronous-completion
+      branch. Flagged for REVIEWER/a follow-up issue; out of this requirement's scope
+      to fix REQ-062's own shipped code). Driving the child's own task completion
+      independently (Letflow.Engine.complete_task/3) cascades the parent's own
+      completion for real: parent reaches COMPLETED, corrective-action-subprocess's
+      SUB_PROCESS_COMPLETED event shows activated_nodes == [] (direct route to
+      end-closed, the graph's only outgoing edge from that node), variables carry
+      false_positive: false / severity: critical.
+
+  - id: vortex-supplier-quality-deviation-false-positive
+    disposition: EXECUTED
+    steps_total: 5 # 1 (instance start) + quarantine lookup/complete pair + severity
+    # lookup/complete pair -- design §3.3's own step table
+    steps_executed: 5
+    expected_outcomes_total: 3
+    expected_outcomes_pass: 3
+    expected_outcomes_fail: 0
+    terminal_node: "end-false-positive" # confirmed by construction: false-positive-check's
+    # false_positive == true edge routes directly to end-false-positive
+    # (@simple_supplier_deviation_graph, design §2.2) -- never end-closed
+    terminal_node_evidence: "severity-classification task's own TASK_COMPLETED event payload.activated_nodes == [] (direct route to end-false-positive, no intervening real node) -- distinct from the critical scenario's own severity-classification completion, where activated_nodes == [\"corrective-action-subprocess\"] before that node's own later completion; OQ-3 re-resolved this way since InstanceProjection.current_nodes is [] for every terminal END node alike, unable to distinguish end-false-positive from end-closed on its own"
+    notes: >
+      All 5 api steps :ok. Instance reached COMPLETED with false_positive: true.
+      severity-classification's own TASK_COMPLETED event shows activated_nodes == []
+      (Postgres row observed this run, sequence_number 3 on that instance's stream),
+      confirming the token reached end-false-positive directly with no intervening
+      real node -- distinct from the critical scenario's severity-classification
+      completion event, whose own activated_nodes was ["corrective-action-subprocess"]
+      (non-terminal at that point in the hop chain).
+
+  - id: vortex-entity-list-filter-and-page
+    disposition: BLOCKED_ON_DEPENDENCY
+    missing_subsystem: "Letflow.Routers.Entities / Letflow.Routers.EntityQuery (entities.zig / entity_query.zig, S5/S6)"
+    steps_total: 6
+    steps_executed: 0
+    evidence:
+      - "lib/letflow/router.ex: both Entities/EntityQuery rows in reserved/unbuilt section (not mounted) -- re-verified live this run via File.read!/String.contains?"
+      - "docs/requirements.yaml: exactly 1 title: match for word-bounded entity/entities (Regex /title:.*\\bentit(y|ies)\\b/i), preceding id: line is REQ-207 itself (self-referential) -- re-verified live this run"
+      - "no lib/letflow/entities.ex or entity_query.ex context module exists -- re-verified live this run via File.exists?"
+    notes: >
+      All 3 signals concur, re-verified live inside the test (not inherited from the
+      design session's own finding) -- BLOCKED_ON_DEPENDENCY. The scenario YAML is
+      authored and ScenarioFixture.load!/1-parseable (6 via: gui steps,
+      pipeline_test field) for record-keeping, but Runner.run/1 is never called on it.

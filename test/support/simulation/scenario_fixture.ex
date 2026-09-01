@@ -28,7 +28,8 @@ defmodule Letflow.Simulation.ScenarioFixture do
   @method_atoms %{
     "task_assigned" => :task_assigned,
     "instance_state" => :instance_state,
-    "audit_event" => :audit_event
+    "audit_event" => :audit_event,
+    "audit_event_ordering" => :audit_event_ordering
   }
 
   @doc """

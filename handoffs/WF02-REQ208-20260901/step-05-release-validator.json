@@ -1,0 +1,129 @@
+{
+  "handoff_id": "WF02-REQ208-20260901-step-05",
+  "run_id": "WF02-REQ208-20260901",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ208-20260901/step-05-release-validator.json",
+  "created_at": "2026-09-01T13:10:00Z",
+  "started_at": "2026-09-01T12:15:00Z",
+  "completed_at": "2026-09-01T13:10:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-208"],
+    "issue_ids": ["ISS-0389"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/req208-meridian-scenario-execution.md",
+      "test/support/simulation/runner.ex",
+      "test/support/simulation/scenario_fixture.ex",
+      "test/fixtures/simulation/meridian/scenarios/loan-origination-above-threshold.yaml",
+      "test/fixtures/simulation/meridian/scenarios/loan-origination-below-threshold.yaml",
+      "test/fixtures/simulation/meridian/scenarios/regulatory-compliance-review-bafin.yaml",
+      "test/letflow/simulation/req208_meridian_test.exs",
+      "test/reports/req208-meridian-scenario-findings.yaml",
+      "lib/letflow/engine.ex",
+      "docs/issues/ISS-0389.yaml",
+      "handoffs/WF02-REQ208-20260901/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ208-20260901/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ208-20260901/step-02d-reviewer.json",
+      "handoffs/WF02-REQ208-20260901/step-03-test-designer.json",
+      "handoffs/WF02-REQ208-20260901/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ208-20260901/step-04-test-runner.json"
+    ],
+    "branch_name": "feature/WF02-REQ208-20260901",
+    "commit_reviewed": "70265e7b",
+    "requirement_text": "REQ-208 -- S7: Run Meridian's 3 simulation scenarios against Letflow (large-loan committee quorum, small-loan standard authority, BaFin 21-day SLA regulatory escalation) and report per-scenario findings. See docs/requirements.yaml id: REQ-208 for full text and 6 acceptance_criteria.",
+    "acceptance_criteria": [
+      "AC1: meridian-loan-origination-above-threshold runs end to end: all three parallel assessment tracks confirmed created from real queried task state, committee-vote route confirmed taken, quorum 2-of-3 confirmed reached, disbursement completes on end-disbursed",
+      "AC2: meridian-loan-origination-below-threshold runs end to end and EO-002's negative assertion (no committee-vote task exists) verified by querying real task state",
+      "AC3: meridian-regulatory-compliance-review-bafin's steps 1/2 run for real; step 3 recorded BLOCKED citing REQ-206's already-filed advance-timer finding, report states the same gap blocks two tenant batches",
+      "AC4: report states explicitly whether REQ-199 was status: done at execution time, with material caveat if not",
+      "AC5: report states a closed disposition for every one of the 3 scenarios -- no step or scenario left unaddressed",
+      "AC6: mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR pass (WF-02 Step 5) for REQ-208 -- independently re-verify all 6 acceptance criteria against current source and re-run tests, and make the primary AC1/AC2 accept/reject decision on the join_counters Engine-defect gap (ELIXIR-DEV's own report: both loan-origination scenarios truncated due to a genuine, pre-existing Engine defect -- join_counters: %{} hardcoded in build_instance_state/3, causing a real HTTP 500 on any separate-call PARALLEL_GATEWAY join completion)."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "verdict": "ACCEPT WITH CAVEAT -- all 6 ACs genuinely addressed; AC1/AC2 recorded PARTIALLY MET, not blanket PASS",
+    "tests_reverified_independently": {
+      "req208_own_tests": "Re-ran myself: mix test test/letflow/simulation/req208_meridian_test.exs -> 'Result: 3 passed' (4.8s). Matches step-04's claim, re-derived not copied.",
+      "req205_206_207_208_combined": "Re-ran myself: mix test test/letflow/simulation/ -> 'Result: 28 passed'. Confirms additivity, re-derived not copied.",
+      "mix_compile": "Re-ran myself: mix compile --warnings-as-errors --force -> 'Compiling 197 files (.ex)' / 'Generated letflow app', exit 0.",
+      "rustc_toolchain_absence": "Independently re-confirmed `which rustc` returns empty/exit 1 in this sandbox -- the 2 pre-existing CheckToolchainTest failures TEST-RUNNER reported are real and environmental, matching its report. Did not re-run the full 3000-test scripts/test_parallel.sh myself given TEST-RUNNER ran it twice on this exact commit within the last few hours with consistent results (only that identical pre-existing pair failing); independently re-confirmed the environmental root cause instead of re-running the full 24-minute suite for a third identical result.",
+      "diff_scope_check": "Re-ran myself: git diff origin/main...HEAD --stat -- 27 files changed, none is lib/letflow/engine.ex, test/mix/tasks/letflow_check_toolchain_test.exs, or lib/mix/tasks/letflow.check_toolchain.ex."
+    },
+    "ac1_ac2_decision": {
+      "verdict": "ACCEPT WITH CAVEAT -- does not block REQ-208 being marked done, but AC1/AC2 must be recorded PARTIALLY MET",
+      "defect_reverified_independently": "Read lib/letflow/engine.ex's build_instance_state/3 (~line 1813) directly: join_counters: %{} hardcoded unconditionally, with a code comment matching ELIXIR-DEV's citation exactly ('design doc §6.5, §11 INV-EE48-7, MAJOR OQ-3: no table persists JoinCounter state across calls today'). Confirmed via `git show origin/main:lib/letflow/engine.ex | grep join_counters` that this is byte-for-byte identical on origin/main before this branch's work -- genuinely pre-existing, not a regression this branch introduced or is disguising.",
+      "test_file_reverified_directly": "Read test/letflow/simulation/req208_meridian_test.exs in full (830 lines), not just its moduledoc summary. Both loan-origination tests genuinely dispatch a real 3-way PARALLEL_GATEWAY fork via real HTTP (Runner.run/1 through Letflow.Router), confirm both non-KYC branches as real PENDING HUMAN_TASKs via direct Instances.get_by_id/2 + Tasks.list_tasks/2 queries (not inferred from the create-instance response alone), then assert the SECOND, separate complete_task call genuinely returns a real HTTP 500 reproducing the defect -- asserted as the closed disposition for that step (outcome == :error), never faked as :ok. Post-failure state is re-queried and confirmed uncorrupted (task still PENDING, instance still ACTIVE). report.outcome_results == [] is asserted explicitly rather than silently omitted.",
+      "scenario_yaml_headers_reverified": "Read both loan-origination scenario YAML headers directly -- both disclose the identical root cause, error tuple, and truncation consequence, matching the test moduledoc and step-02a's result.issues[0] word-for-word on the facts.",
+      "scope_boundary_confirmed": "step-02a's context.owned_modules for this run: test/support/simulation, test/fixtures/simulation/meridian, test/letflow/simulation -- test/test-support-only. git diff origin/main...HEAD --stat confirms zero lib/ files touched. Fixing Engine.complete_task/3's state-rebuild to persist/reload join_counters across calls is Engine-core work, its own CODE-DESIGNER-sized requirement -- not fixable within REQ-208's own scope.",
+      "reasoning": "1) Defect is real, independently reproduced by me (not trusted from any report), and genuinely pre-existing (confirmed on origin/main). 2) Not fixable within this test-execution-only requirement's scope. 3) The gap was not silently absorbed as a pass -- both scenarios were genuinely truncated, and the failure itself is asserted as the real, closed disposition, satisfying AC5 even where AC1/AC2's fuller claims are honestly reported unverified. 4) Three-level disclosure (scenario YAML headers, test file comments, step-02a result.issues) is genuinely internally consistent, independently re-checked by me. 5) Discovering this defect is exactly the class of correctness-gate finding S7 exists to produce -- treating that discovery as grounds for FAIL would penalize the run for doing its job. A genuine FAIL would require: the defect being fixable in-scope and left unfixed, inconsistent/fabricated disclosure, or the truncated tests silently claiming success past the failure point -- none of which hold.",
+      "precedent_cited": "Same discipline REQ-205's RELEASE-VALIDATOR applied to its own AC1 gap (handoffs/WF02-REQ205-20260831/step-05-release-validator.json's ac1_decision) and REQ-206/207's RELEASE-VALIDATORs applied to their own scenario-corpus/Engine-defect caveats -- ACCEPT WITH RECORDED CAVEAT, PARTIALLY MET on the specific AC, not a blanket pass, with the gap surfaced for ORCH follow-up rather than silently absorbed."
+    },
+    "no_task_of_type_non_vacuousness": {
+      "method": "Read test/support/simulation/runner.ex's :no_task_of_type clause (~line 592) directly. Confirmed Tasks.list_tasks/2 is called with NO status filter (queries every status, per design). Re-ran the BaFin test myself (part of the 3/3 above): EO-NO-TASK-002's positive control targets evidence-collection, a task that DOES exist and is COMPLETED (not pending) at query time, and asserts :fail -- a status-blind bug (e.g. checking only :pending) would wrongly return :pass here. Confirmed non-vacuous by reading the implementation and by an independent test re-run, consistent with TEST-DESIGN-VALIDATOR's earlier mutation reproduction."
+    },
+    "blocked_disposition_reverified": {
+      "runner_implementation": "test/support/simulation/runner.ex ~line 349: :blocked branch requires blocked_by, raises ArgumentError loudly if absent (same discipline as :skip's missing-severity check).",
+      "iss_0389_confirmed_real_and_correctly_referenced": "Read docs/issues/ISS-0389.yaml directly: id ISS-0389, title 'Missing POST /api/v1/instances/:id/advance-timer endpoint', discovered_by ELIXIR-DEV in WF02-REQ206-20260901, related: [REQ-206, REQ-208, REQ-209], status: open. Confirmed this is the correct, already-filed, non-duplicate issue -- REQ-208's BaFin scenario references it rather than filing a duplicate."
+    },
+    "engine_defect_escalation_confirmed": {
+      "level_1_scenario_yaml_headers": "Confirmed present in both loan-origination scenario YAML headers, read directly.",
+      "level_2_test_file_comments": "Confirmed present in req208_meridian_test.exs's moduledoc (lines 6-47) and both test bodies' inline comments (lines 607-617, 682-691).",
+      "level_3_step02a_result_issues": "Confirmed step-02a-elixir-dev.json's result.issues[0] carries BLOCKER severity, full root-cause citation, affected_files, and the 'not fixable within REQ-208's own scope' framing.",
+      "not_yet_filed_as_queue_issue_confirmed": "Grepped docs/issues/*.yaml for join_counters and walk_to_gateway: zero matches -- neither of this run's two new Engine findings (join_counters BLOCKER, walk_to_gateway multi-outgoing-edge fork-branch limitation) has been filed as an issue yet. Confirmed ELIXIR-DEV/SECURITY-REVIEWER/REVIEWER all correctly deferred filing to ORCH per ISSUE_QUEUE.md rather than self-assigning an ISS id -- step-02c independently assesses the join_counters finding for security implications (concludes correctness/availability only) and explicitly recommends ORCH queue it; step-02d confirms the 3-level disclosure is internally consistent. Convention followed correctly, not violated."
+    },
+    "ac_to_evidence_map": {
+      "AC1": "PARTIALLY MET -- req208_meridian_test.exs:557-648, real 3-way fork + real task creation confirmed via direct queries; real reproduction of the join_counters defect on the first branch completion, asserted as closed step disposition; committee route/quorum/disbursement claims honestly reported unverified, not fabricated. Re-run: passed as part of 3/3.",
+      "AC2": "PARTIALLY MET -- req208_meridian_test.exs:653-703, identical genuine reproduction; EO-002's negative assertion cannot be exercised on this truncated path, honestly reported unverified (not silently assumed). The :no_task_of_type primitive itself is separately confirmed non-vacuous via the BaFin scenario. Re-run: passed as part of 3/3.",
+      "AC3": "MET -- req208_meridian_test.exs:707-829, steps 1/2 real against real queried state (current_nodes, real PENDING task with correct assignee_ref); step 3 :blocked/blocked_by ISS-0389/severity :blocker/captured nil, ISS-0389 confirmed correct and non-duplicate; cross-tenant-blocking statement present in findings report. Re-run: passed as part of 3/3.",
+      "AC4": "MET -- docs/requirements.yaml REQ-199 entry re-confirmed status: done directly (grep, this session). Material caveat genuinely present in test/reports/req208-meridian-scenario-findings.yaml's req_199_caveat field, correctly strengthened (not weakened) by this run's own finding.",
+      "AC5": "MET -- all 3 scenarios' every step carries a closed, real disposition (above-threshold 3/3: ok/ok/error; below-threshold 3/3: ok/ok/error; BaFin 4/4: ok/ok/ok/blocked), verified by reading all 3 test blocks directly.",
+      "AC6": "MET -- mix compile --warnings-as-errors --force and mix test test/letflow/simulation/req208_meridian_test.exs re-run directly by RELEASE-VALIDATOR (not copied from step-04); mix test test/letflow/simulation/ (28/28) re-run directly; toolchain absence independently re-confirmed."
+    },
+    "artifacts_out": [
+      "handoffs/WF02-REQ208-20260901/release-validation-report-20260901.md"
+    ],
+    "doc_updater_instructions": "Record REQ-208 status as done, but its acceptance-criteria record must show AC1 and AC2 as PARTIALLY MET (fork/task-creation and defect-reproduction genuinely verified; committee-route/quorum/disbursement/EO-002-negative-assertion claims NOT verified due to the join_counters Engine defect), not a blanket 'all 6 ACs met.' The status-history event must state this caveat explicitly and reference handoffs/WF02-REQ208-20260901/release-validation-report-20260901.md.",
+    "recommendation_to_orch": "File a new BLOCKER-severity issue for Engine.complete_task/3's build_instance_state/3 hardcoding join_counters: %{} on every call (lib/letflow/engine.ex ~line 1824, root cause: REQ-054/SnapshotWriter serializes join_counters but complete_task/3's hot path never reads it back) -- affected_files: [lib/letflow/engine.ex, lib/letflow/engine/transition.ex], related: [REQ-054, REQ-208]. This is a platform-wide gap (every PARALLEL_GATEWAY split whose branches require separate task completions across two Letflow.Engine.complete_task/3 calls cannot converge), not a REQ-208-only concern -- should gate any future requirement needing a real cross-call parallel join. Also file or fold in ELIXIR-DEV's second finding: walk_to_gateway/3 fails a fork branch containing a multi-outgoing-edge node (e.g. EXCLUSIVE_GATEWAY) before reaching its join (test/letflow/simulation/req208_meridian_test.exs lines 117-134 document the concrete reproduction). Neither finding has been filed as a docs/issues/*.yaml entry yet (confirmed by grep) -- correctly left for ORCH to file, per ISSUE_QUEUE.md.",
+    "next_action": "Route to DOC-UPDATER (Step 6): flip REQ-208 to done with AC1/AC2 recorded as PARTIALLY MET per doc_updater_instructions above; ORCH to file the join_counters and walk_to_gateway Engine-defect follow-up issues per recommendation_to_orch."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "gate": "SECURITY-REVIEWER",
+      "result": "PASS",
+      "at": "2026-09-01T11:18:09Z"
+    },
+    {
+      "gate": "REVIEWER",
+      "result": "PASS",
+      "at": "2026-09-01T11:22:04Z"
+    },
+    {
+      "gate": "TEST-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "at": "2026-09-01T11:35:00Z"
+    },
+    {
+      "gate": "TEST-RUNNER",
+      "result": "COMPLETED",
+      "at": "2026-09-01T12:10:00Z"
+    },
+    {
+      "gate": "RELEASE-VALIDATOR",
+      "result": "COMPLETED (ACCEPT WITH CAVEAT)",
+      "at": "2026-09-01T13:10:00Z"
+    }
+  ],
+  "not_agent_attested": false
+}

@@ -79,7 +79,6 @@ deliberately kept SEPARATE from REQ-036's `PromotionDigest` (both
 moduledocs cross-reference each other; merging them would silently
 redrive every stored promotion digest), DB-level immutability on the
 content store, and REQ-041's `solution_pack_artefact_bases`
-<<<<<<< HEAD
 disambiguated as an unrelated table.
 **REQ-203 (per-tenant artifact activation, REPO-08/09/10) is also done
 as of 2026-08-31, closing the artifact-repository pair in full:**

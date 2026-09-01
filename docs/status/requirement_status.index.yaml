@@ -798,10 +798,39 @@ volumes:
 
   - volume: 7
     path: docs/status/requirement_status.v7.yaml
-    status: current
+    status: closed
     opened: 2026-08-30
-    entries: 40
+    closed: 2026-09-01
+    entries: 42
+    lines: 1220
+    bytes_working_tree: 71927
+    # SHA-256 of lines 1..1220 with CRLF normalised to LF, i.e. the frozen prefix.
+    # The hashed stream terminates EVERY line with a single \n, including the
+    # last, so it ends in \n. Exact definition and reference implementations:
+    # lib/letflow/design/iss-0119-status-file-readability.md §8.
+    # Asserted unchanged by test/docs/requirement_status_invariants_test.exs.
+    frozen_prefix_lines: 1220
+    frozen_prefix_sha256: "f7da0f6cf41fad2aeceb69dbd457e32c73dca22b5d94e9193a1e0b9a4909435d"
+    closure_note: >
+      Closed under WF02-REQ208-20260901's Step 6 DOC-UPDATER append at 1220
+      lines / 71927 bytes / 42 entries -- over its own declared roll_rule
+      ceiling (max_lines: 1200), confirmed via `wc -l` per this volume's own
+      "WHEN THIS VOLUME IS FULL" procedure. `git diff --numstat` on this file
+      across this append showed insertions-only (0 deletions). Successor:
+      docs/status/requirement_status.v8.yaml.
     note: >
+      Incremented to 42 by WF02-REQ208-20260901 (DOC-UPDATER)'s own REQ-208
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v7.yaml` = 42 on-disk entries, no rebase
+      conflict on this file at the time it was written. This append crossed
+      the roll ceiling (1220 lines), so this volume was closed and volume 8
+      opened in the same commit per this index's `roll_rule.on_exceed`
+      procedure.
+
+      Incremented to 41 after WF02-REQ208-20260901's own started-event
+      append (Step 00). `grep -c "^  - req:" docs/status/requirement_status.v7.yaml`
+      = 41 on-disk entries; `wc -l` = 1165 lines, under the 1200-line roll
+      ceiling. This supersedes the 40-count note below.
       Incremented to 40 by WF02-REQ207-20260901 (ORCH)'s own Step Final
       SCOPE-CHANGE done-event append -- `grep -c "^  - req:"
       docs/status/requirement_status.v7.yaml` = 40 on-disk entries, no
@@ -1444,6 +1473,19 @@ volumes:
       WF02-REQ171-20260828) -- `grep -c "^  - req:"
       docs/status/requirement_status.v6.yaml` = 1 on-disk entry, the first
       in this newly-opened volume.
+
+  - volume: 8
+    path: docs/status/requirement_status.v8.yaml
+    status: current
+    opened: 2026-09-01
+    entries: 0
+    note: >
+      Opened by WF02-REQ208-20260901's own Step 6 DOC-UPDATER roll, successor
+      to volume 7. Created with volume 7's header text verbatim (volume
+      number, opening date and predecessor path updated) and an empty
+      `history:` list, per this index's `roll_rule.on_exceed` procedure.
+      `entries:` will be incremented per HOW-TO-APPEND step 6 as real
+      appends land.
 
 
 known_anomalies:

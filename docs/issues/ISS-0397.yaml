@@ -1,0 +1,40 @@
+id: ISS-0397
+title: "Engine build_instance_state/3 hardcodes join_counters: %{}, breaking PARALLEL_GATEWAY joins across separate calls"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ208-20260901
+discovered_at: "2026-09-01T10:00:00Z"
+severity: MAJOR
+tags: [engine, parallel-gateway, s7]
+description: >
+  REQ-208's Meridian committee-quorum/parallel-fork-join scenarios found
+  that Letflow.Engine.complete_task/3 rebuilds instance state per call via
+  build_instance_state/3, which hardcodes join_counters: %{}. A
+  PARALLEL_GATEWAY join can therefore only fire within the same hop-chain
+  as its own split -- any real, separate-call HUMAN_TASK completion on a
+  fork branch fails with a real HTTP 500 (generic body, no internal detail
+  leaked -- confirmed by SECURITY-REVIEWER, INV-4 clean). This is a
+  genuine correctness/availability defect, not a security-invariant
+  violation. Already flagged as MAJOR OQ-3 in REQ-048's own design doc,
+  never actually closed by REQ-054.
+
+  REQ-208's two loan-origination scenarios (above/below threshold) were
+  honestly truncated at the point this defect bites, with real
+  reproduction evidence (HTTP 500, post-failure state-integrity checks)
+  asserted in test/letflow/simulation/req208_meridian_test.exs rather than
+  a fabricated pass. RELEASE-VALIDATOR independently confirmed
+  join_counters: %{} is byte-for-byte identical on main (genuinely
+  pre-existing, not a regression this branch introduced) and accepted
+  REQ-208 with AC1/AC2 recorded PARTIALLY MET as a result.
+affected_files:
+  - lib/letflow/engine.ex
+related:
+  - REQ-208
+  - REQ-048
+  - REQ-054
+source: >
+  handoffs/WF02-REQ208-20260901/step-02a-elixir-dev.json (result.issues),
+  handoffs/WF02-REQ208-20260901/step-05-release-validator.json (independent
+  re-confirmation, ACCEPT-WITH-CAVEAT decision).
+queue_task_id: 397
+github_issue: 778
+status: open

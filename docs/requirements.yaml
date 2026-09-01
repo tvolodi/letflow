@@ -11782,7 +11782,7 @@ requirements:
   - id: REQ-208
     title: Run Meridian's 3 simulation scenarios against Letflow (large-loan committee quorum, small-loan standard authority, BaFin 21-day SLA regulatory escalation) and report per-scenario findings
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S7
     impl_order: 385  # letflow-queue task id, GH#757
     description: >

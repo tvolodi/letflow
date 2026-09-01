@@ -1,0 +1,48 @@
+id: ISS-0398
+title: "Engine walk_to_gateway/3 fails a fork branch containing any multi-outgoing-edge node before reaching its PARALLEL_GATEWAY join"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ208-20260901
+discovered_at: "2026-09-01T10:00:00Z"
+severity: MAJOR
+tags: [engine, parallel-gateway, fork-join, s7]
+description: >
+  REQ-208's Meridian committee-quorum scenario design proposed a
+  PARALLEL_GATEWAY fork branch containing an EXCLUSIVE_GATEWAY
+  (kyc-routing, 3 outgoing edges) before reaching the join. Empirically,
+  this does not activate: `Letflow.Engine.create/2` returns
+  `{:error, {:activation_failed, {:no_matching_join_found,
+  "parallel-assessment-fork"}}}` -- confirmed by direct reproduction
+  against a real running instance.
+
+  Reading `lib/letflow/engine/transition.ex`'s `find_matching_join/2` and
+  `walk_to_gateway/3` (REQ-051's own fork/join implementation) shows every
+  fork branch must be a chain of SINGLE-outgoing-edge nodes until it
+  reaches the PARALLEL_GATEWAY join -- a node with more than one outgoing
+  edge makes `walk_to_gateway/3` return `:error` before ever reaching the
+  join, which fails the WHOLE split (not just that one branch) at
+  instance-creation time. This is a genuine, previously-undocumented
+  Engine limitation, distinct from the SERVICE_TASK-not-dispatched gap
+  REQ-206/207/208's design docs already record, and distinct from the
+  join_counters defect (ISS-0397) -- this one blocks instance CREATION,
+  ISS-0397 blocks join COMPLETION.
+
+  Worked around test-locally for REQ-208 (the KYC/AML branch was
+  simplified to a single unconditioned edge straight to the join, since
+  both scenarios' own `kyc_status: "clear"` value would have taken the
+  routing gateway's `== 'clear'` edge straight to the join anyway) --
+  documented in the test module's own comments, not silently glossed over.
+affected_files:
+  - lib/letflow/engine/transition.ex
+related:
+  - REQ-208
+  - REQ-051
+  - ISS-0397
+source: >
+  test/letflow/simulation/req208_meridian_test.exs (lines 117-134, direct
+  reproduction and analysis),
+  handoffs/WF02-REQ208-20260901/step-02a-elixir-dev.json (result.issues),
+  handoffs/WF02-REQ208-20260901/step-05-release-validator.json
+  (recommendation_to_orch).
+queue_task_id: 398
+github_issue: 779
+status: open

@@ -1,0 +1,94 @@
+# Synthetic — R-Co's tests/simulation/scenarios/loan-origination-above-threshold.yaml is
+# unreachable from this sandbox (see
+# lib/letflow/design/req208-meridian-scenario-execution.md §0.3; tracked by ISS-0393,
+# not a new issue); structurally faithful to REQ-208's own requirement-text
+# field-by-field account, not a byte-for-byte port.
+#
+# Process: process_claim_intake.yaml ("Loan Origination"), test-local simplified graph
+# (@simple_loan_origination_graph, test/letflow/simulation/req208_meridian_test.exs --
+# SERVICE_TASK nodes elided/replaced per design §3.1).
+#
+# CRITICAL ELIXIR-DEV FINDING, over the design's own §3.1/§4.1 plan (full detail in the
+# test module's own comment above @simple_loan_origination_graph, and in this run's
+# result.issues -- a NEW finding, not covered by ISS-0388..0393, reported to ORCH for
+# allocation since ELIXIR-DEV does not self-assign issue ids per ISSUE_QUEUE.md):
+# `Letflow.Engine.complete_task/3`'s real, per-call state-rebuild
+# (`lib/letflow/engine.ex`'s `build_instance_state/3`) hardcodes `join_counters: %{}`
+# on EVERY call -- confirmed by direct code comment there ("§6.5, §11 INV-EE48-7, MAJOR
+# OQ-3): no table persists JoinCounter state across calls today") and independently
+# reproduced this session against a real running instance. This means a
+# `PARALLEL_GATEWAY` join can only ever fire within the SAME hop-chain call as its own
+# split -- the instant a real, separate HTTP call (a HUMAN_TASK completion on one
+# branch) tries to route through the join, it fails with a real HTTP 500
+# (`{:error, {:activation_failed, {:unknown_branch_id, _}}}` internally, mapped to
+# INV-4's no-detail 500 at the API boundary). REQ-054 (SnapshotWriter, status: done)
+# DOES serialize join_counters correctly into `instance_state_snapshots` -- but
+# `Engine.complete_task/3`'s own hot path never reads that table at all; it always
+# rebuilds state fresh from `tokens`/`tasks` directly. This is a genuine, pre-existing,
+# previously-undocumented-as-a-tracked-issue platform BLOCKER affecting every process
+# with a PARALLEL_GATEWAY split whose branches require separate task completions --
+# not something introduced or fixable within REQ-208's own scope (fixing it is
+# Engine-core work, its own CODE-DESIGNER-sized task).
+#
+# CONSEQUENCE FOR THIS SCENARIO: steps past the first parallel-branch task completion
+# cannot be exercised for real. This scenario therefore runs for real only through the
+# point that reproduces the defect (steps 1/2a/2b), rather than fabricating a
+# passing result for steps that cannot actually execute. See the test module's own
+# describe block for the full real-state verification (current_nodes/task-list
+# evidence both before and after the failed call, confirming the failure is clean --
+# no partial commit, matching INV-EE48-7's own "typed, non-crashing failure, not
+# silent data corruption" characterization).
+#
+# requested_amount_eur: 750000 (> 500000 threshold) would have forced authority-routing's
+# credit-committee-vote branch, never l1-approval -- this routing logic itself is never
+# reached given the finding above.
+id: meridian-loan-origination-above-threshold
+company_id: meridian
+process_id: DEFINITION_NAME
+
+actors:
+  actor-meridian-lars: {}
+  actor-meridian-julia: {}
+
+preconditions:
+  - check: process_definition_active
+    args:
+      name: DEFINITION_NAME
+      prefix: "TENANT_PREFIX"
+
+steps:
+  # Step 1 — relationship manager submits large loan application. Real: forks 3
+  # parallel assessment tracks (credit-memo-review, risk-assessment, and the
+  # KYC/AML track's immediate edge straight to assessment-join) in one hop-chain.
+  - via: api
+    action: "POST /api/v1/instances"
+    params:
+      definition_name: DEFINITION_NAME
+      initial_variables:
+        requested_amount_eur: 750000
+    produces: instance
+    actor: actor-meridian-lars
+
+  # Step 2a — look up the pending credit-memo-review task. Real.
+  - via: api
+    action: "GET /api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING"
+    produces: credit_memo_task_list
+    actor: actor-meridian-julia
+
+  # Step 2b — credit manager reviews credit memo. Real dispatch -- this is the exact
+  # call that reproduces the join_counters-not-persisted-across-calls defect (see
+  # header): the hop-chain from credit-memo-review attempts to route through
+  # assessment-join (a real PARALLEL_GATEWAY join, in-degree 3), and
+  # Engine.complete_task/3's freshly-rebuilt InstanceState has join_counters: %{},
+  # so Transition.dispatch_parallel_join/4 cannot recognize this branch's arrival.
+  # Real HTTP 500, asserted explicitly in the test module (not treated as a harness
+  # malfunction -- this is real, reproducible platform behavior).
+  - via: api
+    action: "POST /api/v1/tasks/{{produces.credit_memo_task_list.items.0.id}}/complete"
+    params:
+      output_variables:
+        credit_decision: pass
+    produces: credit_memo_result
+    actor: actor-meridian-julia
+
+expected_outcomes: []

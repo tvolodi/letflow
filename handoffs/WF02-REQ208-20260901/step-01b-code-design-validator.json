@@ -1,0 +1,55 @@
+{
+  "handoff_id": "step01b-WF02-REQ208-20260901",
+  "run_id": "WF02-REQ208-20260901",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ208-20260901/step-01b-code-design-validator.json",
+  "created_at": "2026-09-01T10:41:00Z",
+  "started_at": "2026-09-01T11:05:00Z",
+  "completed_at": "2026-09-01T11:40:00Z",
+  "status": "FAILED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-208"],
+    "issue_ids": ["ISS-0389", "ISS-0393"],
+    "artifacts_in": [
+      "lib/letflow/design/req208-meridian-scenario-execution.md",
+      "docs/requirements.yaml#REQ-208",
+      "lib/letflow/design/req206-swiftroute-scenario-execution.md",
+      "lib/letflow/design/req207-vortex-scenario-execution.md",
+      "test/support/simulation/runner.ex",
+      "lib/letflow/instances.ex",
+      "lib/letflow/event_store/instance_projection.ex"
+    ],
+    "branch_name": "feature/WF02-REQ208-20260901"
+  },
+  "task": {
+    "description": "Hard-gate review of lib/letflow/design/req208-meridian-scenario-execution.md against REQ-208's 6 acceptance criteria, no-implementation-code discipline, and the two novel design additions (:blocked step disposition, :no_task_of_type verification method)."
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Checks 1-8 PASS on independent re-verification. Check 9 (open-questions resolvability) FAILs. (1) PASS: test/fixtures/simulation/meridian/process_claim_intake.yaml and process_policy_binding.yaml are real, read directly this session -- process_claim_intake.yaml:9 states 'Credit Committee (multi-voter, mapped to HUMAN_TASK)' verbatim, matching §0.6's citation; process_policy_binding.yaml:3 'name: Regulatory Compliance Review' matches §0.2's citation. (2) PASS: `grep -rn \"quorum\\|multi.voter\\|MULTI_VOTER\" lib/letflow/ --include=*.ex` independently re-run, zero matches -- confirms no native quorum primitive exists; the design's pre-tallied output_variables resolution is an accurate description of a real gap, not an invented one. (3) PASS: read the real `verify_outcome/2`'s `:task_assigned` clause in test/support/simulation/runner.ex:521-539 directly -- it resolves `args.\"task_ref\"` via `resolve_ref/3` then calls `Tasks.get_task/2` on that id; there is no absence-asserting path, confirming `:no_task_of_type` is genuinely new design surface, not a restated existing capability. (4) PASS: grepped the real Runner/Scenario source (test/support/simulation/runner.ex) for BLOCKED-shaped values -- `RunReport.step_result().outcome` is `:ok | :error | :deferred_to_s8 | :skip` (line 90), `Scenario.step().via` is `:api | :gui | :skip` (line 45); no BLOCKED-shaped disposition exists in shipped code. REQ-207's own `BLOCKED_ON_DEPENDENCY` is a distinct, scenario-level disposition value (`RunReport.disposition`), not a step-level `via`/`outcome` value, so no clash. The design's `:blocked` addition is specified as types/table/algorithm-in-prose only (§2.1) -- no function body. (5) PASS: `docs/requirements.yaml` REQ-199 entry confirmed `status: done`, stage S6 (independently re-read, not inherited). Read the real `Letflow.Simulation.Runner.run_steps/1` (test/support/simulation/runner.ex:298-342) directly: `Enum.reduce` over `scenario.steps` dispatching one `:api`/`:gui`/`:skip` step at a time -- confirmed sequential, no concurrent dispatch mechanism exists in the harness. The design's §0.5 caveat is accurate. (6) PASS: read docs/issues/ISS-0389.yaml and ISS-0393.yaml in full -- both already list REQ-208 in `related`, both `status: open`; the design's §0.3/§0.4 cite them by id and file no duplicate. (7) PASS: grepped every code fence in the design doc for `defmodule`/`defstruct`/`def `/`defp ` -- zero matches across all 29 fences; all are shell/grep transcripts, YAML snippets, type-signature tables, or prose skeletons, consistent with the handoff's own claim that one earlier defp-shaped fence was rewritten before commit. (8) PASS: mapped all 6 real `docs/requirements.yaml` REQ-208 acceptance_criteria to §8's table -- each has a concrete, non-TBD design element (§3.1/§4.1 for AC1, §2.2/§4.2 for AC2, §2.1/§3.2/§4.3 for AC3, §0.5/§6/§7 for AC4, §2.3/§4.1-4.3/§6 for AC5, noted as implementation-phase for AC6). (9) FAIL, applying this project's own established standard from REQ-206's step-01b FAIL (handoffs/WF02-REQ206-20260901/step-01b-code-design-validator.json: 'deferral is not acceptable when the design stage could reasonably resolve the question from material already reachable in the same session' -- there, OQ-1b/OQ-2/OQ-3 failed the gate specifically because they were resolvable by reading short files directly adjacent to ones the design already cited). REQ-208's own §9 OQ-1 fails this identical test: the design defers 'whether Letflow.Instances.get_by_id/2's projection exposes the currently-ACTIVE instance's current node directly' to ELIXIR-DEV, framing it as an unknown requiring implementation-time discovery -- but `Letflow.Instances.get_by_id/2` (lib/letflow/instances.ex:53) is a function the design's own §0.7/Runner-moduledoc citations already rely on directly for the `:instance_state` verification method, and its return type `InstanceProjection.t()` is defined a few lines away in lib/letflow/event_store/instance_projection.ex, whose own moduledoc (lines 34-56) states in so many words: `current_nodes` is a jsonb array holding 'active token positions' -- i.e. a direct, already-shipped, already-documented current-node-position field exists on exactly the struct `Instances.get_by_id/2` returns. This is not a genuinely unknowable fact deferred to implementation (contrast §9 OQ-2, which correctly defers an R-Co-corpus-only fact per ISS-0393's confirmed unreachability) -- it was one grep/one file-read away from the same session that already opened `lib/letflow/instances.ex` for other purposes. §4.3 step 2's verification ('risk-evaluation HUMAN_TASK exists and is PENDING' as an inferred proxy for 'instance genuinely paused at risk-evaluation') should instead be designed directly against `current_nodes` containing 'risk-evaluation' -- strictly more direct evidence of AC3's own wording ('real queried state'), and equally applicable to §4.1's task-existence checks. OQ-2 and OQ-3 are correctly left open (OQ-2: genuinely unreachable R-Co-corpus fact per ISS-0393, non-blocking since any non-'unacceptable' string satisfies the condition; OQ-3: already answered within its own bullet, flagged only for future-scenario awareness, not a live open question) -- only OQ-1 is the defect.",
+    "issues": [
+      "lib/letflow/design/req208-meridian-scenario-execution.md §9 OQ-1: resolve now, not at implementation time. Read lib/letflow/event_store/instance_projection.ex's InstanceProjection schema (already the return type of Instances.get_by_id/2, which this design already relies on for every :instance_state check) -- its moduledoc states current_nodes is a jsonb array of 'active token positions', i.e. a direct current-node field exists and does not need task-list inference. Update §4.1/§4.2/§4.3 to verify current node position via current_nodes (e.g. asserting 'risk-evaluation' in Map.get(projection, :current_nodes) or the equivalent field access) as the primary or additional mechanism for 'instance is genuinely paused at node X' claims, in place of (or alongside) the task-list-inference workaround the design adopted only because it assumed this field's existence was unverified. Remove OQ-1 once resolved; state the resolution explicitly per this project's no-silent-deferral standard (docs/anti-patterns.md; REQ-206 step-01b precedent)."
+    ],
+    "routing_note": "Routes back to CODE-DESIGNER (Step 01, iteration 2) to resolve §9 OQ-1 by reading lib/letflow/event_store/instance_projection.ex directly and updating §4.1-4.3's instance-position verification design accordingly. All other checks (1-8) passed and do not need rework unless resolving OQ-1 causes a knock-on change to §3/§4's step tables."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-01T11:40:00Z",
+      "status": "FAIL",
+      "summary": "Checks 1-8 PASS (fixtures real, no native quorum primitive, task_assigned cannot express absence, no existing BLOCKED disposition, REQ-199 done + sequential-dispatch caveat accurate, ISS-0389/ISS-0393 referenced not duplicated, no implementation code, all 6 ACs mapped). Check 9 FAILs: §9 OQ-1 (current-node lookup mechanism) is resolvable now by reading lib/letflow/event_store/instance_projection.ex (InstanceProjection.current_nodes, already the return type of a function this design already relies on) -- deferring it to ELIXIR-DEV repeats the exact class of gate failure REQ-206's own step-01b review established as non-negotiable.",
+      "issues": [
+        "§9 OQ-1 not resolved despite being reachable from material already cited in the design session"
+      ],
+      "next_action": "Rework CODE-DESIGNER"
+    }
+  ],
+  "not_agent_attested": false
+}

@@ -1,0 +1,173 @@
+# REQ-208 -- Meridian scenario execution findings.
+# Populated from a real `mix test test/letflow/simulation/req208_meridian_test.exs`
+# run (3 tests, 0 failures, "Result: 3 passed") against real Postgres (Docker,
+# letflow-1-postgres-1, port 5463) -- not placeholder values.
+# mix compile --warnings-as-errors --force: "Compiling 180 files (.ex) / Generated
+# letflow app" (0 warnings). mix letflow.check.test (full suite, 2997 tests + 6
+# properties): "Result: 3000/3003 passed (6/6 properties, 2994/2997 tests), 10
+# excluded" / "Failed: 3 tests" -- all 3 failures independently re-run in isolation
+# and confirmed PRE-EXISTING, environmental, unrelated to REQ-208's own change set
+# (test/support/simulation/*, test/fixtures/simulation/meridian/*,
+# test/letflow/simulation/req208_meridian_test.exs): (1)
+# test/letflow/engine/lua/executor_test.exs's REQ-156 timing-comparison test is
+# flaky under full-suite system load -- re-run alone, 48/48 passed; (2/3)
+# test/mix/tasks/letflow_check_toolchain_test.exs's 2 "rust pin" tests fail with
+# System.cmd("rustc", ...) :enoent because this sandbox has no `rustc` binary on
+# PATH at all (confirmed: `which rustc` -> not found) -- an environment-provisioning
+# fact, not a REQ-208 regression; re-run alone, same 2/34 failures, same root cause.
+# Same "verified not a real regression, reproduced identically outside this run's
+# own change set" disposition ISS-0068 already established for this class of
+# finding. See lib/letflow/design/req208-meridian-scenario-execution.md §6 for the
+# report shape this file was originally meant to implement -- ACTUAL EXECUTION
+# DIVERGED SUBSTANTIALLY from that shape for AC1/AC2, per the critical finding
+# below. This report states that divergence explicitly rather than forcing the
+# design's original placeholders to look green.
+
+requirement: REQ-208
+
+critical_finding: >
+  Letflow.Engine.complete_task/3's real, per-call state-rebuild
+  (lib/letflow/engine.ex's build_instance_state/3) hardcodes join_counters: %{} on
+  EVERY call (confirmed by that function's own code comment: "join_counters is
+  always %{} (design doc §6.5, §11 INV-EE48-7, MAJOR OQ-3): no table persists
+  JoinCounter state across calls today"), and independently reproduced this
+  session against a real running instance. A PARALLEL_GATEWAY join can therefore
+  only ever fire within the SAME hop-chain call as its own split -- the instant a
+  real, separate HTTP call (any HUMAN_TASK completion on any branch) tries to
+  route through the join, it fails with a real HTTP 500
+  ({:error, {:activation_failed, {:unknown_branch_id, _}}} internally, mapped to
+  INV-4's no-detail 500 at the API boundary). REQ-054 (SnapshotWriter, status:
+  done) DOES serialize join_counters correctly into instance_state_snapshots --
+  but Engine.complete_task/3's own hot path never reads that table at all; it
+  always rebuilds state fresh from tokens/tasks directly. This is a genuine,
+  pre-existing platform BLOCKER affecting every process with a PARALLEL_GATEWAY
+  split whose branches require separate task completions -- not introduced by,
+  or fixable within, REQ-208's own scope. Reported via this run's handoff
+  result.issues (new finding, not covered by ISS-0388..0393; ELIXIR-DEV does not
+  self-assign an issue id per docs/agents/protocols/ISSUE_QUEUE.md).
+
+req_199_status_at_execution: done   # AC4's own explicit statement, re-verified this
+                                     # session from docs/requirements.yaml directly
+req_199_caveat: >
+  REQ-199 (status: done) protects out-of-band effect completions re-entering the
+  engine in order (ORD-01..04). This is now MOOT for the parallel-fork/join shape
+  specifically, not merely under-exercised: the critical_finding above means no
+  scenario in this codebase can currently drive a PARALLEL_GATEWAY join to fire
+  across two separate task-completion calls at all, so there is no in-flight
+  concurrent-completion scenario for ORD-01/02/03 to protect on this path yet --
+  a stronger statement than the design's own §0.5 anticipated (design assumed the
+  join would fire correctly under sequential one-at-a-time completions, merely
+  not proving it holds under genuinely concurrent completions; this run found the
+  sequential case itself does not work end-to-end across calls). See design
+  §0.5/§7 -- reported as a follow-up-issue-worthy finding.
+
+scenarios:
+  - id: meridian-loan-origination-above-threshold
+    disposition: PARTIALLY_EXECUTED_BLOCKED_BY_ENGINE_DEFECT
+    steps_total: 3          # truncated from the design's originally-planned 9 -- see
+                             # critical_finding; scenario YAML's own header comment
+                             # discloses this truncation
+    steps_executed: 3       # all 3 steps DID run for real: step 1 (create, forks 3
+                             # real parallel tracks) :ok, step 2a (task lookup) :ok,
+                             # step 2b (task complete) :error (real HTTP 500,
+                             # reproducing the defect -- this IS the scenario's own
+                             # real, closed disposition for that step, not a skipped
+                             # or unaddressed one)
+    expected_outcomes_total: 0   # none of AC1's original 5 formal expected_outcomes
+                                  # (committee-vote task_assigned, no_task_of_type,
+                                  # quorum instance_state, COMPLETED instance_state,
+                                  # audit_event) can be verified -- none of the graph
+                                  # positions/variables/events they depend on are
+                                  # ever reached
+    expected_outcomes_pass: 0
+    expected_outcomes_fail: 0
+    real_state_verified:
+      three_parallel_tracks_created: true   # step 2a's own captured GET /tasks
+                                             # response confirms a real
+                                             # credit-memo-review HUMAN_TASK
+                                             # existed; risk-assessment's own real
+                                             # PENDING task is separately confirmed
+                                             # via a direct Tasks.list_tasks/2 query
+                                             # right after step 1
+      committee_vote_route_taken: not_reachable
+      quorum_2_of_3: not_reachable
+      disbursement_completed: not_reachable
+      no_partial_corruption_after_failed_call: true  # credit-memo-review task
+                                                       # still PENDING, instance
+                                                       # still ACTIVE, at the same
+                                                       # 2 nodes as right after
+                                                       # step 1 -- confirmed by
+                                                       # direct query after the
+                                                       # failed step 2b call
+    notes: >
+      Step 1 real, :ok -- forks 3 real parallel assessment tracks in one hop-chain
+      (credit-memo-review, risk-assessment both real PENDING HUMAN_TASKs; the
+      KYC/AML track is an immediate, unconditioned edge straight to
+      assessment-join in this test-local simplified graph, per an ELIXIR-DEV
+      finding distinct from the critical_finding above -- see
+      test/letflow/simulation/req208_meridian_test.exs's own comment above
+      @simple_loan_origination_graph: kyc-routing, an EXCLUSIVE_GATEWAY with 3
+      outgoing edges, cannot survive mid-branch in this Engine's real fork/join
+      implementation, {:no_matching_join_found} otherwise). Step 2a real, :ok.
+      Step 2b real, :error (HTTP 500) -- reproduces the critical_finding. AC1's
+      own fuller claims (committee route, quorum, disbursement) are NOT verified
+      by this run.
+
+  - id: meridian-loan-origination-below-threshold
+    disposition: PARTIALLY_EXECUTED_BLOCKED_BY_ENGINE_DEFECT
+    steps_total: 3          # truncated from the design's originally-planned 11
+    steps_executed: 3       # step 1 :ok, step 2a :ok, step 2b :error (same defect)
+    expected_outcomes_total: 0
+    expected_outcomes_pass: 0
+    expected_outcomes_fail: 0
+    eo_002_negative_assertion:
+      committee_vote_task_found: not_verifiable   # EO-002's own literal design
+                                                    # point (no committee-vote task
+                                                    # exists) cannot be checked via
+                                                    # the intended full run --
+                                                    # stated explicitly, not
+                                                    # silently assumed to still hold
+    notes: >
+      Same shape and same root cause as meridian-loan-origination-above-threshold
+      (its graph is identical up to the point of failure) -- step 2b's real HTTP
+      500 reproduces the identical critical_finding.
+
+  - id: meridian-regulatory-compliance-review-bafin
+    disposition: EXECUTED   # scenario-level disposition unchanged from the design's
+                             # own plan -- unlike the two loan-origination scenarios,
+                             # this one's own graph never touches a PARALLEL_GATEWAY,
+                             # so the critical_finding does not affect it; only
+                             # step 4 (originally numbered step 3 in the design,
+                             # renumbered here since the real scenario has 2 real
+                             # api dispatches -- lookup + complete -- for its own
+                             # step 2) is :blocked
+    steps_total: 4           # 1 (create) + 2 (evidence-collection lookup/complete)
+                              # + 1 (blocked) -- design's own literal "3 steps"
+                              # count folds the lookup/complete pair into one
+                              # business step, same convention as every other
+                              # scenario in this codebase
+    steps_executed: 3
+    steps_blocked: 1
+    blocked_step:
+      index: 4
+      blocked_by: "ISS-0389"
+    cross_tenant_finding: >
+      Same missing advance-timer capability now confirmed blocking scenarios in
+      two independent tenants (SwiftRoute/REQ-206, Meridian/REQ-208) -- see
+      design §4.3.
+    real_state_verified:
+      step_1_active_at_evidence_collection: true   # confirmed via step 2a's own
+                                                     # captured GET /tasks response
+                                                     # (node_id "evidence-collection")
+                                                     # -- see the test module's own
+                                                     # comment on why a live query
+                                                     # after the full run cannot
+                                                     # show this (Runner.run/1 has
+                                                     # already advanced the instance
+                                                     # past this point by the time
+                                                     # the test body runs)
+      step_2_active_at_risk_evaluation: true        # confirmed via a live
+                                                     # Instances.get_by_id/2 query
+                                                     # after the full run --
+                                                     # current_nodes == ["risk-evaluation"]
+      risk_evaluation_task_pending_role_risk_manager: true

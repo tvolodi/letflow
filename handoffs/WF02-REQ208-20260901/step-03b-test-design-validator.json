@@ -1,0 +1,75 @@
+{
+  "handoff_id": "WF02-REQ208-20260901-step-03b",
+  "run_id": "WF02-REQ208-20260901",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ208-20260901/step-03b-test-design-validator.json",
+  "created_at": "2026-09-01T11:35:00Z",
+  "started_at": "2026-09-01T11:30:00Z",
+  "completed_at": "2026-09-01T11:35:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-208"],
+    "issue_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ208-20260901/step-03-test-designer.json",
+      "test/specs/REQ-208.md",
+      "test/letflow/simulation/req208_meridian_test.exs",
+      "docs/requirements.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ208-20260901",
+    "commit_reviewed": "296bb23f"
+  },
+  "task": {
+    "description": "Hard-gate independent re-verification of TEST-DESIGNER's coverage-verification pass over test/letflow/simulation/req208_meridian_test.exs: AC-to-test mapping against docs/requirements.yaml's real REQ-208 acceptance_criteria, non-vacuousness of the new :no_task_of_type verification method via self-performed mutation, reality of :blocked/blocked_by/HTTP-500 assertions, fixture isolation, and additivity against REQ-205/206/207's own tests.",
+    "acceptance_criteria": [
+      "Every real AC in docs/requirements.yaml REQ-208 entry mapped to genuine test evidence, read directly from test assertions (not trusted from the spec table alone)",
+      ":no_task_of_type mutation independently reproduced by the validator (not merely re-reading TEST-DESIGNER's claim), with matching failure evidence, then cleanly reverted and confirmed via git status",
+      ":blocked/blocked_by/severity/captured and HTTP-500 evidence confirmed as real, individually-asserted checks against actual Runner.run/1 return values",
+      "Fixture isolation confirmed: setup (not setup_all), unique per-test tenant, no shared mutable state, no hardcoded secrets",
+      "test/letflow/simulation/ suite (REQ-205/206/207/208) re-run by the validator and confirmed green"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified TEST-DESIGNER's Step 3 coverage-verification pass; all claims held up under direct re-derivation, not just re-reading the self-report. (1) AC-to-test mapping: read docs/requirements.yaml's real REQ-208 entry (lines 11782-11847, 6 ACs) and cross-checked each against the actual test file's assertions rather than trusting test/specs/REQ-208.md's table. AC1/AC2's fuller end-to-end claims (committee route, quorum, disbursement, EO-002 full-run negative assertion) are honestly reported as unreachable due to a genuine, already-filed platform defect (Letflow.Engine.build_instance_state/3 hardcodes join_counters: %{} on every call, so a PARALLEL_GATEWAY join cannot fire across separate HTTP calls) -- confirmed the test itself (lines 557-703) asserts the real, reproducible HTTP 500 (step2b.outcome == :error, real 500 body) and real post-failure state integrity (credit-memo-review still PENDING, instance still ACTIVE at the same 2 nodes), not a stub or inferred result. AC3's :blocked/blocked_by/severity/captured are each individually asserted (lines 784-789) against a real Runner.run/1 return value, cross-checked against the scenario YAML's own blocked_by: 'ISS-0389' and runner.ex's :blocked dispatch clause. AC4/AC5 are report-content claims (test/reports/req208-meridian-scenario-findings.yaml), consistent with REQ-205/206/207's own precedent for this AC class. AC6 independently re-run (see below). (2) :no_task_of_type non-vacuousness: independently reproduced the mutation myself, not trusting TEST-DESIGNER's report -- edited test/support/simulation/runner.ex's :no_task_of_type clause (lines 598-617) to force outcome: :pass unconditionally, re-ran mix test test/letflow/simulation/req208_meridian_test.exs, got Result: 2/3 passed with the BaFin test failing exactly at EO-NO-TASK-002 ('expected :no_task_of_type(evidence-collection) to FAIL ... observed: [{\"risk-evaluation\", :pending}, {\"evidence-collection\", :completed}]') -- real, non-fabricated observed evidence, matching the self-report's claim exactly. Reverted via git checkout -- test/support/simulation/runner.ex; confirmed git status --porcelain test/support/simulation/runner.ex is empty; re-ran and confirmed Result: 3 passed. (3) :blocked/blocked_by/HTTP-500: confirmed real and individually-asserted, quoted above -- not present-but-unused fields. (4) Fixture isolation: setup block (line 333, not setup_all) generates a fresh unique tenant slug per test via Letflow.TenantSlugFixture.unique_slug('req208'); per-test tokens via Identity.create_token/3; on_exit teardown drops the tenant schema/rows per test. Grepped the test file for DateTime.utc_now, :rand., System.os_time, setup_all, password, secret, postgres:// -- zero matches. (5) Additivity: ran mix test test/letflow/simulation/ myself -- Result: 28 passed, no failures (REQ-205/206/207/208 combined). Also ran mix compile --warnings-as-errors --force (exit 0, clean, 180 files) and mix format --check-formatted (exit 0, clean). No gaps found; TEST-DESIGNER's self-report is accurate and independently corroborated.",
+    "verification_performed": {
+      "mix_test_req208_baseline": "Result: 3 passed",
+      "mutation_applied_by_validator": "runner.ex :no_task_of_type clause forced to `outcome = :pass` unconditionally (validator's own edit, independent of TEST-DESIGNER's session)",
+      "mix_test_req208_under_mutation": "Result: 2/3 passed -- BaFin test failed exactly at EO-NO-TASK-002 assertion with real observed evidence, matching the self-report's claim",
+      "revert_verification": "git checkout -- test/support/simulation/runner.ex; git status --porcelain test/support/simulation/runner.ex -> empty (confirmed clean)",
+      "mix_test_req208_after_revert": "Result: 3 passed",
+      "mix_test_simulation_all": "Result: 28 passed (test/letflow/simulation/, REQ-205/206/207/208 combined, additivity independently confirmed)",
+      "mix_compile_warnings_as_errors": "exit 0, clean, 180 files compiled",
+      "mix_format_check_formatted": "exit 0, clean",
+      "secret_and_isolation_grep": "grep for DateTime.utc_now|:rand.|System.os_time|setup_all|password|secret|postgres:// over req208_meridian_test.exs -- zero matches"
+    },
+    "artifacts_out": [],
+    "commit": null,
+    "next_action": "Route to TEST-RUNNER (Step 4) to run the full suite and produce the structured pass/fail report per WF-02."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "gate": "SECURITY-REVIEWER",
+      "result": "PASS",
+      "at": "2026-09-01T11:18:09Z"
+    },
+    {
+      "gate": "REVIEWER",
+      "result": "PASS",
+      "at": "2026-09-01T11:22:04Z"
+    },
+    {
+      "gate": "TEST-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "at": "2026-09-01T11:35:00Z"
+    }
+  ],
+  "not_agent_attested": false
+}

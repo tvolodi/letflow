@@ -1,0 +1,67 @@
+# Synthetic — R-Co's tests/simulation/scenarios/loan-origination-below-threshold.yaml is
+# unreachable from this sandbox (see
+# lib/letflow/design/req208-meridian-scenario-execution.md §0.3; tracked by ISS-0393,
+# not a new issue); structurally faithful to REQ-208's own requirement-text
+# field-by-field account, not a byte-for-byte port.
+#
+# Process: process_claim_intake.yaml ("Loan Origination"), SAME test-local simplified
+# graph (@simple_loan_origination_graph, test/letflow/simulation/req208_meridian_test.exs)
+# and SAME seeded definition as loan-origination-above-threshold.yaml -- only
+# requested_amount_eur differs.
+#
+# SAME CRITICAL ELIXIR-DEV FINDING as loan-origination-above-threshold.yaml's own
+# header comment (full detail there, and in the test module's own comment above
+# @simple_loan_origination_graph, and in this run's result.issues): `Engine.
+# complete_task/3` cannot route a real, separate-call HUMAN_TASK completion through a
+# PARALLEL_GATEWAY join (join_counters: %{} always, per lib/letflow/engine.ex's own
+# documented MAJOR OQ-3 / INV-EE48-7). This scenario's own credit-memo-review/
+# risk-assessment fork hits the SAME defect at the SAME point as the above-threshold
+# scenario -- EO-002's own literal design point (no committee-vote task exists) can
+# therefore not be verified via the intended full end-to-end run either, since the run
+# cannot progress past the first parallel-branch completion. Runs for real through
+# steps 1/2a/2b (the point that reproduces the defect), same disposition as the
+# above-threshold scenario.
+id: meridian-loan-origination-below-threshold
+company_id: meridian
+process_id: DEFINITION_NAME
+
+actors:
+  actor-meridian-lars: {}
+  actor-meridian-julia: {}
+
+preconditions:
+  - check: process_definition_active
+    args:
+      name: DEFINITION_NAME
+      prefix: "TENANT_PREFIX"
+
+steps:
+  # Step 1 — relationship manager submits small loan application. Real: forks 3
+  # parallel assessment tracks in one hop-chain (same shape as above-threshold).
+  - via: api
+    action: "POST /api/v1/instances"
+    params:
+      definition_name: DEFINITION_NAME
+      initial_variables:
+        requested_amount_eur: 50000
+    produces: instance
+    actor: actor-meridian-lars
+
+  # Step 2a — look up the pending credit-memo-review task. Real.
+  - via: api
+    action: "GET /api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING"
+    produces: credit_memo_task_list
+    actor: actor-meridian-julia
+
+  # Step 2b — credit manager reviews credit memo. Real dispatch, reproduces the same
+  # join_counters-not-persisted-across-calls defect as the above-threshold scenario
+  # (see header). Real HTTP 500, asserted explicitly in the test module.
+  - via: api
+    action: "POST /api/v1/tasks/{{produces.credit_memo_task_list.items.0.id}}/complete"
+    params:
+      output_variables:
+        credit_decision: pass
+    produces: credit_memo_result
+    actor: actor-meridian-julia
+
+expected_outcomes: []

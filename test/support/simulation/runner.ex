@@ -42,18 +42,24 @@ defmodule Letflow.Simulation.Scenario do
         }
 
   @type step :: %{
-          required(:via) => :api | :gui | :skip,
+          required(:via) => :api | :gui | :skip | :blocked,
           required(:action) => String.t(),
           optional(:params) => map(),
           optional(:produces) => String.t(),
           optional(:actor) => String.t(),
           optional(:severity) => :minor | :major | :blocker | nil,
-          optional(:note) => String.t() | nil
+          optional(:note) => String.t() | nil,
+          optional(:blocked_by) => String.t() | nil
         }
 
   @type expected_outcome :: %{
           required(:verification) => %{
-            method: :task_assigned | :instance_state | :audit_event | :audit_event_ordering,
+            method:
+              :task_assigned
+              | :instance_state
+              | :audit_event
+              | :audit_event_ordering
+              | :no_task_of_type,
             args: map()
           }
         }
@@ -87,10 +93,11 @@ defmodule Letflow.Simulation.RunReport do
 
   @type step_result :: %{
           step: Letflow.Simulation.Scenario.step(),
-          outcome: :ok | :error | :deferred_to_s8 | :skip,
+          outcome: :ok | :error | :deferred_to_s8 | :skip | :blocked,
           captured: map() | nil,
           detail: term(),
-          severity: :minor | :major | :blocker | nil
+          severity: :minor | :major | :blocker | nil,
+          blocked_by: String.t() | nil
         }
 
   @type outcome_result :: %{
@@ -305,6 +312,7 @@ defmodule Letflow.Simulation.Runner do
               outcome: :deferred_to_s8,
               captured: nil,
               severity: nil,
+              blocked_by: nil,
               detail:
                 "S8 frontend integration not started; see docs/migration/stage-7-simulation-uat-parity.md"
             }
@@ -327,7 +335,35 @@ defmodule Letflow.Simulation.Runner do
               outcome: :skip,
               captured: nil,
               severity: severity,
+              blocked_by: nil,
               detail: Map.get(step, :note) || "marked SKIP at scenario-authoring time"
+            }
+
+            {acc ++ [result], produces}
+
+          # REQ-208 design §2.1 -- distinct from :skip: a genuinely blocking,
+          # undocumented gap (no scenario-authored fallback), always :blocker
+          # severity (fixed here, never author-supplied), never dispatched over
+          # HTTP. `blocked_by` is required and fail-loud when absent, same
+          # discipline :skip's missing-severity check already established.
+          :blocked ->
+            blocked_by =
+              case Map.get(step, :blocked_by) do
+                nil ->
+                  raise ArgumentError,
+                        "step with via: :blocked is missing a blocked_by field: #{inspect(step)}"
+
+                b ->
+                  b
+              end
+
+            result = %{
+              step: step,
+              outcome: :blocked,
+              captured: nil,
+              severity: :blocker,
+              blocked_by: blocked_by,
+              detail: Map.get(step, :note) || "blocked; see " <> blocked_by
             }
 
             {acc ++ [result], produces}
@@ -348,7 +384,14 @@ defmodule Letflow.Simulation.Runner do
       dispatch_api_step(%{step | action: resolved_action}, resolved_params, actor, produces)
     else
       {:error, reason} ->
-        {%{step: step, outcome: :error, captured: nil, severity: nil, detail: reason}, produces}
+        {%{
+           step: step,
+           outcome: :error,
+           captured: nil,
+           severity: nil,
+           blocked_by: nil,
+           detail: reason
+         }, produces}
     end
   end
 
@@ -387,7 +430,14 @@ defmodule Letflow.Simulation.Runner do
       captured = if Map.get(step, :produces), do: body, else: nil
       new_produces = maybe_store_produces(produces, Map.get(step, :produces), body)
 
-      {%{step: step, outcome: :ok, captured: captured, severity: nil, detail: body}, new_produces}
+      {%{
+         step: step,
+         outcome: :ok,
+         captured: captured,
+         severity: nil,
+         blocked_by: nil,
+         detail: body
+       }, new_produces}
     else
       body = decode_json_body(response_conn)
 
@@ -396,6 +446,7 @@ defmodule Letflow.Simulation.Runner do
          outcome: :error,
          captured: nil,
          severity: nil,
+         blocked_by: nil,
          detail: %{status: response_conn.status, body: body}
        }, produces}
     end
@@ -538,6 +589,33 @@ defmodule Letflow.Simulation.Runner do
     end
   end
 
+  # REQ-208 design §2.2 -- new 5th verification.method. `:task_assigned`
+  # requires an already-resolved `task_ref`; there is none for "a task of
+  # this type was never created" (EO-002's own negative-assertion point).
+  # Queries the instance's real task list across EVERY status (deliberate --
+  # absence must hold regardless of status, not merely PENDING), never
+  # inferring PASS from an unresolved template or a not-found error.
+  defp verify_outcome(
+         %{verification: %{method: :no_task_of_type, args: args}} = expected,
+         produces
+       ) do
+    with {:ok, instance_ref} <- resolve_ref(args, "instance_ref", produces),
+         {:ok, prefix} <- fetch_prefix(args),
+         {:ok, node_id} <- fetch_required(args, "node_id"),
+         {:ok, %{items: items}} <-
+           Tasks.list_tasks(%{page_size: 100, instance_id: instance_ref}, prefix: prefix) do
+      observed = Enum.map(items, fn {task, _form_version} -> {task.node_id, task.status} end)
+
+      outcome =
+        if Enum.any?(observed, fn {n, _status} -> n == node_id end), do: :fail, else: :pass
+
+      %{expected_outcome: expected, outcome: outcome, observed: observed}
+    else
+      {:error, reason} ->
+        %{expected_outcome: expected, outcome: :fail, observed: {:error, reason}}
+    end
+  end
+
   defp verify_outcome(
          %{verification: %{method: :instance_state, args: args}} = expected,
          produces
@@ -664,6 +742,15 @@ defmodule Letflow.Simulation.Runner do
     case Map.fetch(args, "prefix") do
       {:ok, prefix} -> {:ok, prefix}
       :error -> {:error, {:missing_arg, "prefix"}}
+    end
+  end
+
+  # Shared required-arg fetch (REQ-208's :no_task_of_type's "node_id") -- same
+  # {:error, {:missing_arg, key}} shape as fetch_prefix/1, generalized to any key.
+  defp fetch_required(args, key) do
+    case Map.fetch(args, key) do
+      {:ok, value} -> {:ok, value}
+      :error -> {:error, {:missing_arg, key}}
     end
   end
 

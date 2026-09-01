@@ -1,0 +1,56 @@
+{
+  "handoff_id": "23d1a230-23e8-4169-a567-7d94588088dd",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0392-20260901/step-02b-code-design-validator.json",
+  "created_at": "2026-09-01T10:28:32Z",
+  "started_at": "2026-09-01T10:28:32Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0392-multi-task-records-collision-fix.md",
+      "docs/issues/ISS-0392.yaml",
+      "handoffs/WF03-ISS0392-20260901/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0392-20260901/step-02-code-designer.json"
+    ],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/engine/sub_process.ex"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0392-20260901 (checkout/pull it first). Hard-gate CODE-DESIGNER's fix design at lib/letflow/design/iss0392-multi-task-records-collision-fix.md, read directly (not from its summary). This is a WF-03 issue fix design, not a requirement -- so validate it against docs/issues/ISS-0392.yaml's own 3 acceptance_criteria (read that file directly for the exact text) instead of docs/requirements.yaml. For each of the 3 ACs, verify a concrete design element exists, with no TBD/deferral language on anything the AC requires resolved. Verify: every changed function signature is fully specified (name, arity, param types/shapes, return shape, error shape) with no real .ex/.exs implementation code anywhere in the doc; cross-module dependencies are listed; the multi-level cascade case (maybe_cascade_to_grandparent) is addressed, not left ambiguous; the regression-test scenario is precise enough for TEST-DESIGNER to build directly from it; open questions are listed explicitly as open (not silently resolved) and none of them is actually load-bearing for meeting an acceptance criterion -- an OQ that leaves an AC's behavior ambiguous is a FAIL, not a legitimate open question. FAIL immediately and completely on any single failed check, per WF-02 Step 1b's own rule (which WF-03 Step 2 reuses).",
+    "acceptance_criteria": [
+      "All 3 of ISS-0392.yaml's acceptance_criteria entries map to a concrete design element, verified by you reading the design doc directly",
+      "No TBD/deferral language on anything an AC requires resolved",
+      "No real .ex/.exs implementation code (bodies) anywhere in the design doc -- signatures/type shapes only",
+      "Every changed function signature fully specified: name, arity, params, return shape, error shape",
+      "Multi-level cascade (maybe_cascade_to_grandparent) explicitly addressed, not ambiguous",
+      "None of the design's stated open questions leaves an AC's actual behavior undetermined"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -788,7 +788,40 @@ defmodule Letflow.Simulation.Req208MeridianTest do
       assert step3.severity == :blocker
       assert step3.captured == nil
 
-      assert length(report.outcome_results) == 0
+      # TEST-DESIGNER coverage-verification addition (this session): the
+      # :no_task_of_type verification method (design §2.2, EO-002's own
+      # negative-assertion primitive) was implemented by ELIXIR-DEV but never
+      # actually exercised anywhere -- both loan-origination scenarios were
+      # truncated before EO-002 could run (join_counters BLOCKER, see moduledoc).
+      # Exercised here instead, on real queried state unaffected by that defect
+      # (this scenario has no PARALLEL_GATEWAY), so the new verification method's
+      # own logic gets real coverage rather than shipping untested.
+      assert length(report.outcome_results) == 2
+      [eo_no_task_absent, eo_no_task_present] = report.outcome_results
+
+      # EO-NO-TASK-001: findings-sign-off is never reached on this scenario's
+      # exercised path -- genuine :pass (real absence, not an unresolved
+      # template or a not-found error mistaken for absence).
+      assert eo_no_task_absent.outcome == :pass,
+             "expected :no_task_of_type(findings-sign-off) to PASS (real absence) — " <>
+               "observed: #{inspect(eo_no_task_absent.observed)}"
+
+      refute Enum.any?(eo_no_task_absent.observed, fn {node_id, _status} ->
+               node_id == "findings-sign-off"
+             end)
+
+      # EO-NO-TASK-002: negative control proving EO-NO-TASK-001 is not vacuously
+      # true. evidence-collection DOES exist (COMPLETED by step 2b) -- queried
+      # across every status, per design §2.2's "absence must hold regardless of
+      # status" rule, so a status-blind implementation bug (e.g. only checking
+      # :pending) cannot silently pass here. Real :fail expected.
+      assert eo_no_task_present.outcome == :fail,
+             "expected :no_task_of_type(evidence-collection) to FAIL (task genuinely " <>
+               "exists, COMPLETED) — observed: #{inspect(eo_no_task_present.observed)}"
+
+      assert Enum.any?(eo_no_task_present.observed, fn {node_id, _status} ->
+               node_id == "evidence-collection"
+             end)
 
       {:ok, final_projection} = Instances.get_by_id(instance_id, prefix: schema_name)
       assert final_projection.status == :active

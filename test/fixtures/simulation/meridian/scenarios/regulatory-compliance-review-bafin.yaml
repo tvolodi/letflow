@@ -65,4 +65,40 @@ steps:
       regulatory-notice filing on SLA breach is this scenario's entire point and
       is unreachable without it. Recorded BLOCKED, not SKIP.
 
-expected_outcomes: []
+expected_outcomes:
+  # EO-001-support: TEST-DESIGNER coverage-verification addition (this session).
+  # The :no_task_of_type verification method (design §2.2, EO-002's own negative-
+  # assertion primitive) was implemented by ELIXIR-DEV but never actually exercised
+  # by either loan-origination scenario -- both were truncated before EO-002 could
+  # run, per the join_counters BLOCKER (see test module moduledoc). Exercising it
+  # here, on real queried state that is NOT blocked by that defect (this scenario
+  # has no PARALLEL_GATEWAY), closes that coverage gap without fabricating a pass
+  # on the loan scenarios' own unreachable claim.
+  #
+  # This first check is a genuine, real absence: findings-sign-off is never
+  # reached by this scenario's exercised path (blocked at step 3, before
+  # severity-routing) -- verified as :pass.
+  - id: EO-NO-TASK-001
+    description: "No findings-sign-off task exists at any point on this scenario's exercised path"
+    verification:
+      method: no_task_of_type
+      args:
+        prefix: "TENANT_PREFIX"
+        instance_ref: "{{produces.instance.instance_id}}"
+        node_id: findings-sign-off
+
+  # This second check is the real negative control proving the first isn't
+  # vacuous: evidence-collection DOES exist (step 2b completes it, so it is
+  # COMPLETED rather than PENDING -- deliberately checked with no status filter,
+  # per design §2.2's "absence must hold regardless of status" rule) -- verified
+  # as :fail. If :no_task_of_type were buggy (e.g. always returning :pass, or
+  # only checking PENDING-status tasks), EO-NO-TASK-002 below would wrongly
+  # report :pass instead of :fail.
+  - id: EO-NO-TASK-002
+    description: "evidence-collection DOES exist (COMPLETED) -- negative control proving EO-NO-TASK-001 is not vacuous"
+    verification:
+      method: no_task_of_type
+      args:
+        prefix: "TENANT_PREFIX"
+        instance_ref: "{{produces.instance.instance_id}}"
+        node_id: evidence-collection

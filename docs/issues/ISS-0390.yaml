@@ -19,10 +19,20 @@ affected_files:
   - lib/letflow/
 related:
   - REQ-206
+  - REQ-211
+  - REQ-212
 source: >
   handoffs/WF02-REQ206-20260901/step-02a-elixir-dev.json (result.issues),
   handoffs/WF02-REQ206-20260901/step-05-release-validator.json (independent
   re-confirmation).
+resolution: >
+  Closed by REQ-211 (instance-attachment schema and core context module,
+  queue task 394, GH#774, PR #782, merged) and REQ-212 (instance-attachment
+  route surface, queue task 395, GH#775, PR #787, merged). Both halves
+  independently passed the full pipeline (design validation, security
+  review, idiom review, mutation-tested test coverage, release validation)
+  with zero unresolved findings. Queue task 390 released status: done at
+  2026-09-01T19:55:15Z (ORCH, Step Final for REQ-212).
 queue_task_id: 390
 github_issue: 769
-status: open
+status: resolved

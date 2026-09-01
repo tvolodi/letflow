@@ -1143,3 +1143,23 @@ history:
       shared branch. No conflicting content ever landed; both instances
       resolved cleanly with no ORCH intervention needed beyond noting it
       here per the standing concurrent-session reporting convention.
+
+  - req: REQ-208
+    event: started
+    agent: ORCH
+    at: "2026-09-01T09:47:00Z"
+    note: >
+      WF02-REQ208-20260901 Step 00. Queue task 385 locked directly via
+      set_lock (bypassing get_next_task, which was persistently returning
+      ISS-0393 -- the newest open issue, genuinely blocked on unreachable
+      R-Co filesystem access -- ahead of any requirement task via LIFO
+      ordering; released back to open without status each time rather than
+      fabricating a fix). depends_on: [382, 372] both confirmed done
+      (REQ-205, REQ-199) before locking. Feature branch
+      feature/WF02-REQ208-20260901 created from main at 7f9e4ac3, pushed.
+      Runs REQ-205's harness against Meridian's 3 scenario YAMLs:
+      loan-origination-above-threshold (committee quorum), 
+      loan-origination-below-threshold (standard L1/L2 chain, negative
+      committee-task assertion), regulatory-compliance-review-bafin (step 3
+      BLOCKED on the same missing advance-timer endpoint REQ-206 already
+      filed as ISS-0389 -- reference, do not file a duplicate).

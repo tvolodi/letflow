@@ -800,8 +800,12 @@ volumes:
     path: docs/status/requirement_status.v7.yaml
     status: current
     opened: 2026-08-30
-    entries: 40
+    entries: 41
     note: >
+      Incremented to 41 after WF02-REQ208-20260901's own started-event
+      append (Step 00). `grep -c "^  - req:" docs/status/requirement_status.v7.yaml`
+      = 41 on-disk entries; `wc -l` = 1165 lines, under the 1200-line roll
+      ceiling. This supersedes the 40-count note below.
       Incremented to 40 by WF02-REQ207-20260901 (ORCH)'s own Step Final
       SCOPE-CHANGE done-event append -- `grep -c "^  - req:"
       docs/status/requirement_status.v7.yaml` = 40 on-disk entries, no

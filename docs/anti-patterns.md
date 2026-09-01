@@ -2327,3 +2327,58 @@ drives the same logic through the real, per-request state-reconstruction path
 call) — the first proves the algorithm; only the second proves the request path. Treat
 "S3 unit-tested it" as a claim about the algorithm, not about the wire-level behavior,
 when the two paths reconstruct state differently.
+
+## A volume-closure footer missing the exact "VOLUME N — CLOSED" marker format silently fails the A7 invariant
+
+**What happened.** WF02-REQ208-20260901's DOC-UPDATER closed
+`docs/status/requirement_status.v7.yaml` (crossed the 1200-line roll ceiling) and wrote a
+closure footer that read every prior closed volume's *content* convention correctly (frozen
+byte range, "why closed" prose, pointer to the new current volume) but wrote the marker line
+itself as `# VOLUME 7 CLOSED 2026-09-01.` — omitting the em-dash every other closed volume's
+marker uses (`# VOLUME N — CLOSED <date>. DO NOT APPEND TO THIS FILE.`). `test/support/
+status_history.ex`'s `closure_footer/1` locates a volume's footer via
+`Regex.match?(~r/VOLUME \d+ .* CLOSED/u, line)` — that pattern requires *something* between
+the volume number and `CLOSED`; the bare `VOLUME 7 CLOSED` has nothing there, so the regex
+never matched and `closure_footer/1` returned `nil` for a volume that visibly has a footer to
+a human reader. `test/docs/requirement_status_invariants_test.exs`'s A7 assertion ("every
+closed volume's footer names the next volume") consequently failed with `:no_closure_footer`
+— caught only because a later ORCH session ran the full invariants suite before Step Final,
+not because DOC-UPDATER's own work ran it (the reworked session that closed the volume
+reported "mix/elixir not present in this sandbox" and never ran the test at all — see the
+separate entry below on verifying that exact claim before trusting it).
+
+**Why this is easy to miss.** The footer content itself was substantively correct — the
+volume really was over its ceiling, the "why closed" reasoning was accurate, the new current
+volume was correctly named in prose. Only the single marker LINE'S punctuation was wrong, and
+nothing about reading the file makes that omission look wrong to a human — the sentence
+reads fine either way. The defect is only visible to the regex the test actually runs.
+
+**Correct alternative.** When closing a volume, copy the marker line's exact punctuation from
+the most recently closed volume's own footer (`grep -n "CLOSED" docs/status/
+requirement_status.v*.yaml`) rather than composing it from the surrounding prose's memory of
+the convention. After writing a closure footer, always run
+`mix test test/docs/requirement_status_invariants_test.exs` for real before considering the
+volume-roll step done — this is exactly the kind of one-character-of-punctuation defect that
+"the prose reads correctly" review cannot catch but the invariant test catches immediately.
+
+## Trusting a subagent's "toolchain not available" claim without independently checking it
+
+**What happened.** WF02-REQ208-20260901's DOC-UPDATER reported "mix/elixir are not present
+in this sandbox at all (confirmed via which/filesystem search)" and used that to justify not
+running the live-drift test it should have run, reasoning from the detector's documented
+rule in prose instead. A later ORCH session sourced `~/.asdf/asdf.sh` in the same repository
+checkout and ran `mix test` successfully within seconds — the toolchain was fully present the
+whole time; the subagent's shell simply never sourced asdf before checking. The prose-based
+reasoning happened to reach the same correct conclusion this time (S7 was already active, no
+change needed), but the underlying practice — accepting "the tool isn't available" as a
+justification for skipping a real check, from one shell session's unverified negative result
+— is exactly backwards from this project's "run it, don't reason about whether it would pass"
+discipline, and this session's own established recipe for the toolchain (`source
+~/.asdf/asdf.sh 2>/dev/null` before any `mix`/`elixir` invocation) was not applied.
+
+**Correct alternative.** Before accepting any "the toolchain isn't available here" claim —
+your own or a sibling's — try `source ~/.asdf/asdf.sh 2>/dev/null; which mix` (or the
+project's currently-documented equivalent) yourself before concluding a check cannot be run.
+A negative result from one un-sourced shell is not evidence the toolchain is absent from the
+sandbox; multiple agents in this exact session, in the exact same environment, ran `mix`
+successfully throughout.

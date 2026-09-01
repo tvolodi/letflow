@@ -3751,16 +3751,16 @@
       "requirement_id": "REQ-208",
       "queue_task_id": 385,
       "github_issue_number": 757,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "test/letflow/simulation",
         "test/support/simulation/runner.ex"
       ],
       "started_at": "2026-09-01T09:47:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to CODE-DESIGNER",
-      "note": "Locked task 385 directly via set_lock, bypassing get_next_task -- it was persistently returning ISS-0393 (newest open issue, genuinely blocked on unreachable R-Co filesystem access) ahead of any requirement task via LIFO ordering; released ISS-0393 back to open without status each time rather than fabricating a fix. depends_on: [382 (REQ-205), 372 (REQ-199)], both confirmed done before locking. Runs REQ-205's harness against Meridian's 3 scenario YAMLs: loan-origination-above-threshold (committee quorum 2-of-3, three parallel assessment tracks), loan-origination-below-threshold (standard L1/L2 chain, negative committee-task assertion), regulatory-compliance-review-bafin (step 3 BLOCKED on the same missing advance-timer endpoint already filed as ISS-0389 -- reference, do not duplicate-file)."
+      "lock_released_at": "2026-09-01T12:44:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final -- PR #777 squash-merged to main (69f508c3), queue task 385 released status: done, ISS-0397/0398 filed",
+      "note": "Locked task 385 directly via set_lock, bypassing get_next_task -- it was persistently returning ISS-0393 (newest open issue, genuinely blocked on unreachable R-Co filesystem access) ahead of any requirement task via LIFO ordering; released ISS-0393 back to open without status each time rather than fabricating a fix. depends_on: [382 (REQ-205), 372 (REQ-199)], both confirmed done before locking. Ran REQ-205's harness against Meridian's 3 scenario YAMLs: loan-origination-above-threshold (committee quorum 2-of-3, three parallel assessment tracks), loan-origination-below-threshold (standard L1/L2 chain, negative committee-task assertion), regulatory-compliance-review-bafin (step 3 BLOCKED on the missing advance-timer endpoint already filed as ISS-0389). Design reworked once (OQ-1 resolved via Instances.get_by_id/2's current_nodes field, same no-silent-deferral standard enforced on REQ-206/207). Implementation shipped :no_task_of_type verification method and :blocked disposition additively; discovered and honestly reported two new pre-existing Engine defects (join_counters: %{} hardcoded in build_instance_state/3 breaking cross-call PARALLEL_GATEWAY joins; walk_to_gateway/3 failing any fork branch with a multi-outgoing-edge node) rather than fabricating passing results -- both loan-origination scenarios truncated at the real defect boundary with HTTP-500 reproduction evidence asserted for real. TEST-DESIGNER found and fixed a genuine coverage gap (:no_task_of_type never exercised), verified non-vacuous via a real reverted mutation, independently reproduced by TEST-DESIGN-VALIDATOR. RELEASE-VALIDATOR ACCEPT-WITH-CAVEAT: AC1/AC2 PARTIALLY MET, AC3-6 fully MET. Step Final also fixed: a registry.json interleaving conflict during rebase (reconstructed cleanly via git show + set-diff, no content lost), a volume-7-closure footer marker missing its em-dash separator (broke the A7 invariant, caught before merge), and a pre-existing stray '<<<<<<< HEAD' marker on docs/migration/stage-6-operational-cross-cutting.md left by an earlier sibling merge. Filed ISS-0397 (join_counters, MAJOR) and ISS-0398 (walk_to_gateway, MAJOR) via register_task."
     }
   ]
 }

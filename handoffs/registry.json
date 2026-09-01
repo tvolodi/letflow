@@ -3735,16 +3735,16 @@
       "requirement_id": "ISS-0392",
       "queue_task_id": 392,
       "github_issue_number": 772,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/engine.ex",
         "lib/letflow/engine/sub_process.ex"
       ],
       "started_at": "2026-09-01T10:17:24Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 GIT SETUP dispatched to ELIXIR-DEV (PENDING)",
-      "note": "WF-03 issue-resolving run for ISS-0392 (Ecto.Multi :task_records key collision when a SUB_PROCESS child completes synchronously in the same hop-chain transaction), discovered during WF02-REQ207-20260901. Directly named by the user (not queue-selected); queue task 392 locked via set_lock before Step 00 per ORCHESTRATOR.md Section1's directly-named-issue exception. No owned_modules conflict found against any other active run at dispatch time (registry scan)."
+      "lock_released_at": "2026-09-01T15:41:18Z",
+      "released_lock": true,
+      "last_known_step": "Step Final PASS -- PR #780 merged as commit 22868719 (squash), local main clean at 3327da5a. Queue task 392 released status:done before Step Final dispatch, per WF-03 Step 5's same-turn release rule. GH#772 closed with evidence comment. Follow-up ISS-0396 (GH#776, task 396) filed for the distinct 2+-concurrent-synchronous-children collision class and left open.",
+      "note": "WF-03 issue-resolving run for ISS-0392 (Ecto.Multi :task_records key collision when a SUB_PROCESS child completes synchronously in the same hop-chain transaction), discovered during WF02-REQ207-20260901. Directly named by the user (not queue-selected); queue task 392 locked via set_lock before Step 00 per ORCHESTRATOR.md Section1's directly-named-issue exception. No owned_modules conflict found against any other active run at dispatch time (registry scan). Design gate FAILED once (rework 1/3): CODE-DESIGNER's original mechanism (runtime replace-on-repeat of an already-built Ecto.Multi step) was found by ELIXIR-DEV to be mechanically infeasible against real Ecto.Multi semantics (steps execute in strict append order; Multi.merge/2 only evaluates at transaction-execution time, after an earlier same-key step has already run) -- correctly caught rather than implemented broken. CODE-DESIGNER revised to a build-time skip/defer mechanism (using prepared_children's already-known child_initial_state.status, decided before either Multi step is built), independently re-verified against Ecto.Multi's actual source by the re-gate CODE-DESIGN-VALIDATOR pass, then implemented cleanly by ELIXIR-DEV (commit e30873f8) with zero further rework. All gates PASS: SECURITY-REVIEWER (INV-1/4/6/7/8), REVIEWER (idiom/scope, confirmed in-code rationale comments present), TEST-DESIGNER's fail-then-pass regression test (test/letflow/engine_sub_process_test.exs 'ISS-0392' describe block) independently re-reproduced by TEST-DESIGN-VALIDATOR via a throwaway worktree at the pre-fix commit, TEST-RUNNER full-suite 2999/2999 zero failures. ISS-0392.yaml resolved, GH#772 closed with the required evidence comment. Independently re-verified by ORCH post-merge: read docs/issues/ISS-0392.yaml on main (status: resolved, full resolution note), grepped lib/letflow/engine.ex on main for skip_task_activation? (present), confirmed GH#772 CLOSED and GH#776 OPEN via gh issue view, confirmed the regression test and report file present on main. Step Final itself required a second rebase mid-step (origin/main advanced again with PR #777/REQ-208) -- handled cleanly, no conflicts either time. One MINOR pre-existing CI flake (ISS-0352/ISS-0380's wasm_hang isolation-subprocess timeout mechanism) recurred on 3 of 4 backend CI runs against this PR's commits, structurally attributed as not caused by this branch's diff (which touches only lib/letflow/engine.ex) and recorded as a recurrence note in docs/issues/ISS-0352.yaml rather than blocking the merge."
     },
     {
       "run_id": "WF02-REQ208-20260901",

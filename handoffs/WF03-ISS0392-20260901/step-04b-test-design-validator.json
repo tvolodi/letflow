@@ -1,0 +1,56 @@
+{
+  "handoff_id": "8d0dc6cb-7691-45d0-b628-af40d49c2860",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0392-20260901/step-04b-test-design-validator.json",
+  "created_at": "2026-09-01T11:42:32Z",
+  "started_at": "2026-09-01T11:42:32Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/specs/ISS-0392.md",
+      "test/letflow/engine_sub_process_test.exs",
+      "docs/issues/ISS-0392.yaml",
+      "handoffs/WF03-ISS0392-20260901/step-04-test-designer.json"
+    ],
+    "owned_modules": ["test/letflow/engine_sub_process_test.exs"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0392-20260901 (checkout/pull it first). Gate TEST-DESIGNER's regression test for ISS-0392. Read test/specs/ISS-0392.md and test/letflow/engine_sub_process_test.exs directly (the new 'ISS-0392' describe block and its two tests, plus the new graph_child_immediate/0 fixture and all_tasks_for_instance/2 helper). This is a fix to EXISTING behavior, not a new module -- so the mandatory-mutation procedure does NOT apply here; instead you must independently verify the fail-then-pass claim yourself rather than trusting TEST-DESIGNER's reported results. Find the pre-fix commit (immediately before e30873f8 on this branch) and the fix commit, and re-run the fail-then-pass check yourself: get the new test running against pre-fix lib/letflow/engine.ex (a throwaway git worktree is the preferred isolation technique, matching what TEST-DESIGNER itself used) and confirm it independently fails with the same RuntimeError; then confirm it passes on the fix branch. Also verify: both new tests target real acceptance-relevant behavior (not just 'does not raise' -- check the parent-completed and no-orphan-task assertions are real and would catch a wrong fix); no @tag :skip; no TODO left in the spec; fixtures are self-sufficient (unique per-test tenant/process data, no shared mutable state, don't require another test to have run first); no hardcoded secrets/connection strings. Also independently confirm the working tree is currently clean on feature/WF03-ISS0392-20260901 with no leftover artifacts from either your own verification or TEST-DESIGNER's.",
+    "acceptance_criteria": [
+      "Every criterion in test/specs/ISS-0392.md has at least one runnable test",
+      "No @tag :skip on any MUST-covering test; no TODO left in the spec",
+      "Test fixtures self-sufficient: unique per-test data, no shared mutable state, no test-ordering dependency",
+      "No hardcoded secrets/connection strings",
+      "Fail-then-pass INDEPENDENTLY reproduced by you (not merely re-reading TEST-DESIGNER's claim) -- quote your own real pre-fix failure output and post-fix pass output",
+      "Working tree confirmed clean on feature/WF03-ISS0392-20260901 after your own verification, with any throwaway worktree/checkout you used fully removed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

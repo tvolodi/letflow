@@ -37,4 +37,72 @@ source: >
   re-confirmation, ACCEPT-WITH-CAVEAT decision).
 queue_task_id: 397
 github_issue: 778
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0397-20260901
+resolved_at: "2026-09-01T18:40:00Z"
+resolution: >
+  Fixed by persisting join_counters durably on instance_projections
+  (new column, migration 20260901030001_add_join_counters_to_instance_projections.exs,
+  tenant-scoped, registered in Letflow.TenantProvisioning's manifest) instead
+  of rebuilding it as %{} on every call. Letflow.EventStore.InstanceProjection
+  gained a join_counters :map field (cast, not required, default %{}).
+  reconcile_projection/5 (the write site shared by complete_task/3's success
+  tail and advance_after_timer_fired/3's own :projection Multi step) now
+  writes SnapshotWriter.serialize_join_counters/1 on every update;
+  build_instance_state/3 (the read site) now deserializes it from the
+  already-locked InstanceProjection row instead of hardcoding %{}.
+  Verified genuinely fixed, not just claimed: the real concurrent regression
+  test (test/letflow/iss0397_join_counters_test.exs, "concurrent
+  sibling-branch completion" describe block) runs two Task.async/
+  Task.await_many Engine.complete_task/3 calls on two distinct task_ids of
+  the same instance over real separate Postgres connections (TenantFixture's
+  :auto sandbox mode) and asserts both calls succeed, exactly one observes
+  instance_status: :completed, and the final instance_projections row's
+  join_counters is %{} (fired and deleted cleanly, not a lost-update partial
+  entry) -- re-read directly during this close step, assertions confirmed
+  present and matching the claim.
+
+  ELIXIR-DEV found and fixed one additional in-family gap beyond the
+  original design's own written scope: Engine.create/2 has its own separate
+  M1 insert (insert_instance_projection/8, called from persist/12's own
+  Multi) that builds a fresh instance_projections row independently of
+  reconcile_projection/5, and never threaded join_counters at all -- so a
+  PARALLEL_GATEWAY split reachable within create/2's own initial hop-chain
+  left that row's cohort silently defaulted to %{} at insert time, with
+  no later call ever correcting it. Fixed by threading
+  new_instance_state.join_counters through insert_instance_projection/8's
+  own attrs using the same SnapshotWriter.serialize_join_counters/1 codec.
+  Confirmed genuinely shipped and tested during this close step by reading
+  the real insert_instance_projection/8 code (lib/letflow/engine.ex, defp
+  around line 1166 -- attrs map includes
+  `join_counters: SnapshotWriter.serialize_join_counters(join_counters)`)
+  and the real test/letflow/iss0397_join_counters_test.exs
+  "projection_after_create" assertion (serial cross-call join describe
+  block): right after Engine.create/2 alone, before either complete_task/3
+  call runs, the persisted projection already has a non-empty join cohort
+  (expected_from_branches length 2, received_from_branches empty) --
+  disproving the pre-fix map_size(join_counters) == 0 defect at the create/2
+  write site specifically, not just at the complete_task/3 write site the
+  original design named.
+
+  TEST-RUNNER's 3 pre-existing test failures (2 rustc-ENOENT toolchain tests
+  in test/mix/tasks/letflow_check_toolchain_test.exs, 1 StreamData property
+  flake in test/letflow/secrets_test.exs) are confirmed genuinely unrelated:
+  `git diff origin/main...HEAD --stat -- test/letflow/secrets_test.exs
+  test/mix/tasks/letflow_check_toolchain_test.exs` is empty -- neither file
+  appears anywhere in this branch's 23-file diff against origin/main.
+
+  REQ-052/cancel_instance/3 coordination note left correctly as a flag, not
+  silently resolved: lib/letflow/design/req052-instance-cancellation.md's
+  own §4 (and OQ-2's RESOLVED note, GH#326) cites "the join-counters
+  persistence gap req048's own OQ-3 already discloses" as its stated reason
+  for not driving {:cancel_branch, branch_id} through Transition in
+  cancel_instance/3. That cited blocker is now genuinely gone -- join_counters
+  is durably persisted and correctly read back on every path. cancel_instance/3
+  itself was deliberately left untouched by this fix (out of scope for
+  ISS-0397, a real design decision about how to reconstruct a
+  cancellation-scoped join_counters view, not a trivial follow-on). This is
+  now stale as a blocker citation and should be revisited as a candidate
+  follow-on requirement if REQ-051's {:cancel_branch, _} coverage is ever
+  prioritized -- flagging here for a future session rather than resolving it
+  unilaterally.

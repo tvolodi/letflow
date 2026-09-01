@@ -1,0 +1,73 @@
+{
+  "handoff_id": "WF03-ISS0397-20260901-step-06",
+  "run_id": "WF03-ISS0397-20260901",
+  "workflow_id": "WF-03",
+  "step": "6",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0397-20260901/step-06-issue-fixer-close.json",
+  "created_at": "2026-09-01T18:40:00Z",
+  "started_at": "2026-09-01T18:15:00Z",
+  "completed_at": "2026-09-01T18:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-048", "REQ-054", "REQ-208", "REQ-052"],
+    "issue_ids": ["ISS-0397"],
+    "artifacts_in": [
+      "docs/issues/ISS-0397.yaml",
+      "handoffs/WF03-ISS0397-20260901/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0397-20260901/step-02-code-designer.json",
+      "handoffs/WF03-ISS0397-20260901/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0397-20260901/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0397-20260901/step-03c-security-reviewer.json",
+      "handoffs/WF03-ISS0397-20260901/step-03d-reviewer.json",
+      "handoffs/WF03-ISS0397-20260901/step-04-test-designer.json",
+      "handoffs/WF03-ISS0397-20260901/step-04b-test-design-validator.json",
+      "handoffs/WF03-ISS0397-20260901/step-05-test-runner.json",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/snapshot_writer.ex",
+      "lib/letflow/event_store/instance_projection.ex",
+      "priv/repo/migrations/20260901030001_add_join_counters_to_instance_projections.exs",
+      "test/letflow/iss0397_join_counters_test.exs",
+      "test/letflow/simulation/req208_meridian_test.exs",
+      "lib/letflow/design/req052-instance-cancellation.md"
+    ],
+    "branch_name": "fix/ISS-0397-join-counters-20260901"
+  },
+  "task": {
+    "description": "Independently re-verify (not just trust the PASS chain) that ISS-0397 is genuinely resolved: the original hardcoded join_counters: %{} symptom, the in-family create/2 extension ELIXIR-DEV found and fixed beyond the design's own written scope, the 3 pre-existing/unrelated test failures TEST-RUNNER found, and the REQ-052/cancel_instance/3 coordination note's correct disposition -- then flip docs/issues/ISS-0397.yaml to resolved with a full resolution summary.",
+    "acceptance_criteria": [
+      "Original symptom re-read from ISS-0397.yaml and confirmed genuinely fixed by reading the real concurrent regression test and its assertion, not just trusting the chain",
+      "create/2 extension (insert_instance_projection/8) independently confirmed genuinely shipped and tested by reading the real code and the real projection_after_create test assertion",
+      "The 3 pre-existing test failures (2 rustc-ENOENT, 1 SecretsTest flake) independently confirmed unrelated via git diff origin/main...HEAD --stat",
+      "REQ-052/cancel_instance/3 coordination note confirmed correctly left as a flag (not silently resolved), and confirmed now genuinely stale",
+      "docs/issues/ISS-0397.yaml updated to status: resolved with resolved_in_run/resolved_at/resolution, following ISS-0380/ISS-0381/ISS-0398's convention",
+      "Handoff written per canonical schema, routing to Step Final (ORCH)"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Independently re-verified ISS-0397's resolution end-to-end rather than trusting the chain of PASSes. (1) Original symptom: re-read ISS-0397.yaml's description (Engine.build_instance_state/3 hardcoded join_counters: %{} on every call, so a PARALLEL_GATEWAY join could only fire within the same hop-chain as its own split) and read the real concurrent regression test directly: test/letflow/iss0397_join_counters_test.exs, describe 'concurrent sibling-branch completion: two Task.async complete_task/3 calls racing on the same instance' (lines ~224-289). It genuinely races two Task.async/Task.await_many Engine.complete_task/3 calls on two distinct task_ids of the same instance over real separate Postgres connections (TenantFixture's provisioned_tenant!/1 sets sandbox :auto, not :manual, per the test's own comment at line ~236), and asserts both calls succeed ({:ok, _} for both branches), exactly one observes instance_status: :completed and the other :active, and the final instance_projections row's join_counters is %{} (fired and deleted cleanly, not a lost-update partial entry) -- this is the exact cross-call join scenario the original defect broke, and the assertions genuinely test it, not a restated pre-fix expectation.\n\n(2) create/2 extension: read the real lib/letflow/engine.ex code directly, not just ELIXIR-DEV's handoff prose. persist/12's Multi calls insert_instance_projection/8 (defp around line 1166), whose attrs map includes `join_counters: SnapshotWriter.serialize_join_counters(join_counters)`, and the caller at line ~965 passes `new_instance_state.join_counters` -- confirming the fix threads the freshly-dispatched state's own join_counters through create/2's own M1 insert, not just reconcile_projection/5's later updates. Read the real test/letflow/iss0397_join_counters_test.exs 'serial cross-call join' describe block (lines 150-175): `projection_after_create = Repo.get!(InstanceProjection, instance_id, ...)` is asserted `status == :active` and its sole join cohort has `expected_from_branches` length 2 and `received_from_branches == []` -- read directly after Engine.create/2 alone, before either complete_task/3 call runs. This genuinely disproves the pre-fix map_size(join_counters) == 0 defect at the create/2 write site specifically, confirming the extension is shipped and tested, not just mentioned in a handoff.\n\n(3) Pre-existing failures: ran `git diff origin/main...HEAD --stat -- test/letflow/secrets_test.exs test/mix/tasks/letflow_check_toolchain_test.exs` myself -- empty output, confirming neither file appears anywhere in this branch's diff against origin/main. Cross-checked against the full `git diff origin/main...HEAD --stat` (23 files: migration, engine.ex, snapshot_writer.ex, instance_projection.ex, tenant_provisioning.ex, 4 new/changed test files, design doc, anti-patterns.md, handoff/registry bookkeeping) -- neither flagged file is present. Confirms TEST-RUNNER's triage (2 rustc-ENOENT toolchain tests, 1 SecretsTest StreamData property flake) is genuinely unrelated to this branch's changes.\n\n(4) REQ-052 coordination note: read lib/letflow/design/req052-instance-cancellation.md's own §4 and OQ-2 (RESOLVED 2026-08-22, GH#326) directly. It explicitly cites 'the join-counters persistence gap req048's own OQ-3 already discloses' (line 608, also referenced at lines 285-294) as the stated reason cancel_instance/3 does not drive {:cancel_branch, branch_id} through Transition. That cited blocker (join_counters never persisted, always %{}) is now genuinely gone -- confirmed by (1) and (2) above: join_counters is durably persisted on instance_projections and correctly read back on every write/read path (reconcile_projection/5, build_instance_state/3, and now insert_instance_projection/8). ELIXIR-DEV correctly did NOT touch cancel_instance/3 itself (flagged in step-03-elixir-dev.json's routing as 'a decision-record-drift flag for ORCH, not something ELIXIR-DEV resolved unilaterally') -- confirmed this is the right disposition: wiring {:cancel_branch, _} through cancel_instance/3 is real, scoped design work (how to reconstruct a cancellation-scoped join_counters view) that does not belong bundled into a join-counters-persistence bugfix. The note was correctly left as a flag, not silently resolved, and is now genuinely stale as a blocker citation.\n\n(5) Updated docs/issues/ISS-0397.yaml to status: resolved with resolved_in_run: WF03-ISS0397-20260901, resolved_at, and a full resolution: field (following ISS-0380/ISS-0381/ISS-0398's own convention) summarizing the shipped fix (persisted join_counters column + read/write site changes), the create/2 in-family extension found and fixed along the way, the 3 pre-existing/unrelated test failures, and the REQ-052/cancel_instance/3 staleness note as a named follow-on for a future session.",
+    "artifacts_out": [
+      "docs/issues/ISS-0397.yaml",
+      "handoffs/WF03-ISS0397-20260901/step-06-issue-fixer-close.json"
+    ],
+    "issues": [
+      "REQ-052's cancel_instance/3 no longer has a real blocker for wiring {:cancel_branch, branch_id} through Transition (the join-counters persistence gap it cited is now closed), but this fix deliberately did not wire it -- ORCH should consider whether a new requirement/issue should be filed to revisit cancel_instance/3's scope, per lib/letflow/design/req052-instance-cancellation.md §4's own citation now being stale. Not blocking this close."
+    ],
+    "next_action": "Route to Step Final (ORCH): ISS-0397 is genuinely resolved and docs/issues/ISS-0397.yaml has been flipped to status: resolved. ORCH should: (1) merge this branch once any remaining CI checks are green, (2) consider filing a new tracking issue/requirement for revisiting cancel_instance/3's {:cancel_branch, _} wiring now that REQ-052's cited join-counters blocker is closed, (3) note the pre-existing rustc-not-installed and SecretsTest StreamData flake as unrelated, already-known environment/flake gaps requiring no action here."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": false,
+  "gate_history": [
+    {
+      "gate": "ISSUE-FIXER",
+      "result": "PASS",
+      "timestamp": "2026-09-01T18:40:00Z",
+      "notes": "Independently re-verified the original symptom fix by reading the real concurrent regression test, the create/2 extension by reading the real insert_instance_projection/8 code and projection_after_create test assertion, the 3 pre-existing test failures' unrelatedness via git diff --stat, and the REQ-052 coordination note's correct as-flag disposition by reading the design doc's own citation. docs/issues/ISS-0397.yaml flipped to resolved."
+    }
+  ]
+}

@@ -3713,6 +3713,22 @@
       "released_lock": true,
       "last_known_step": "Step Final -- PR #767 merged to main (2d068c79), queue task 383 released status: done, ISS-0389/0390/0391 filed",
       "note": "Unblocked by ISS-0388's real fixture port (fix/ISS-0388-real-rco-fixtures-20260901, PR #766, merged by a sibling session with R-Co access). Ran REQ-205's harness against SwiftRoute's 4 real R-Co scenario YAMLs: tenant-onboarding-happy (gui-heavy, DEFERRED_TO_S8), shipment-high-value-happy (all api, real end-to-end), shipment-ops-timeout-escalation (step 2 SKIP/MINOR -- advance-timer endpoint doesn't exist, findable via grep, reported not built), shipment-attach-delivery-note (UNBUILT_FEATURE -- no attachment API in Letflow or R-Co, zero steps executed). Design went through 2 CODE-DESIGNER reworks (§0 factual fix + OQ-1/1b/2/3 resolution) and 2 CODE-DESIGN-VALIDATOR checks before PASS. Session resumed after stale queue lock (force-released, no active-session evidence); resumed again after a second session rate-limit checkpoint at Step 4 (TEST-RUNNER). ELIXIR-DEV's own independently-built duplicate implementation was discarded unpushed after a sibling-session collision was detected -- see docs/anti-patterns.md. RELEASE-VALIDATOR PASSED all 6 ACs; DOC-UPDATER flipped REQ-206 to done. Step Final: rebased onto main (resolved a run-history append-order conflict against REQ-207's own started-event), fixed 13 lint_handoffs H3 violations (non-schema top-level keys next_action/agent_id/timestamp/next_step folded into result) and 2 ARTIFACTS_OUT_SELF_REF warnings, fixed a mix format violation, filed ISS-0389 (missing advance-timer endpoint), ISS-0390 (missing attachment/document subsystem), and ISS-0391 (R-Co scenario-corpus port, mirrors ISS-0388) via register_task. PR #767 merged by a sibling session/human once CI went green. Queue task 383 released status: done."
+    },
+    {
+      "run_id": "WF02-REQ207-20260901",
+      "requirement_id": "REQ-207",
+      "queue_task_id": 384,
+      "github_issue_number": 756,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "test/letflow/simulation",
+        "test/support/simulation/runner.ex"
+      ],
+      "started_at": "2026-09-01T04:12:36Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 01 CODE-DESIGNER PASS (commit 7d0494b8) -- Step 2a deferred pending REQ-206 merge, now resolved (REQ-206 merged to main at 2d068c79)",
+      "note": "Design doc lib/letflow/design/req207-vortex-scenario-execution.md, authored while REQ-206 was still unmerged (read via git show origin/feature/WF02-REQ206-20260901). owned_modules overlap with WF02-REQ206-20260901 on test/support/simulation/runner.ex caused ORCH to defer Step 2a per ORCHESTRATOR.md Section7 -- REQ-206 has since reached Step Final and merged, so the blocker is resolved. RECONSTRUCTION NOTE: the originating session's handoffs/orchestrator.log recorded step-00/step-01 completion and a claim that step-01b (CODE-DESIGN-VALIDATOR) 'will resume now', but neither a handoffs/WF02-REQ207-20260901/ directory nor this registry entry existed on disk -- both were reconstructed by a later ORCH session from git history and the log's own real entries, not invented. Step 1b's claimed resumption left no commit or handoff artifact anywhere, so it is treated as NOT actually having happened and is being dispatched for real. See docs/anti-patterns.md for the new entry this gap prompted."
     }
   ]
 }

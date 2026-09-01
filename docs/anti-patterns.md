@@ -2241,3 +2241,38 @@ before a push/PR -- the existing entries already recommend this for the top-leve
 enum specifically; this occurrence shows the same discipline is needed for the
 context-vs-task/result shape distinction too, and that "no concurrent writer" is not a
 reason to expect schema drift to be absent.
+
+## Orchestrator log claims progress with no corresponding handoff artifact or registry entry
+
+**What happened.** WF02-REQ207-20260901's originating session appended four real,
+timestamped entries to `handoffs/orchestrator.log` (STEP_COMPLETE for Step 00, DISPATCH
+and STEP_COMPLETE for Step 01 CODE-DESIGNER, and a DEFER_RUN entry stating Step 1b would
+"resume now") and committed real artifacts for some of that work (the feature branch, the
+actual design doc at `lib/letflow/design/req207-vortex-scenario-execution.md`, commit
+`7d0494b8`) -- but never created `handoffs/WF02-REQ207-20260901/` at all, and never added
+a `handoffs/registry.json` entry for the run_id. A later ORCH session picking this run back
+up at REQ-206's Step Final found the log narrating a fully-formed pipeline (queue lock,
+branch, design PASS, validator "resuming") with zero corresponding JSON handoff files and
+no registry row -- meaning `mix letflow.lint_handoffs`'s own H5 registry-coverage check
+would never have caught this either, since H5 only diffs run_ids that exist in *at least
+one* of the two places against each other, and this run_id existed in neither.
+
+**Why this is a distinct case from the other handoff-drift entries above.** Those entries
+are about a handoff *existing* with the wrong shape (wrong top-level keys, wrong `status`
+enum, wrong file schema). This is about a handoff step being *narrated in prose* with real
+timestamps and real git commits as corroborating evidence, while the actual per-step JSON
+artifact the schema requires was never written at all. The log entry alone reads as
+credible completed work -- it cites a real commit hash, a real dependency check, a real
+file path -- which makes it easy to trust at face value rather than checking for the JSON
+file the log entry claims to summarize.
+
+**Correct alternative.** Before trusting any orchestrator.log entry (yours or a sibling
+session's) as evidence a step completed, confirm the handoff JSON file it should have
+produced actually exists on disk, and confirm `handoffs/registry.json` carries a row for
+the run_id (not just relying on H5's on-disk-vs-registry diff, since a run_id absent from
+*both* never surfaces there). A log entry citing a real commit is real evidence that *code*
+was written, but is not itself evidence that the *handoff artifact* for that step exists --
+those are two different claims and a session can satisfy one without the other. When the
+gap is found, reconstruct the missing handoff(s) from git history and the log's own
+entries (never invent facts not already evidenced) rather than either re-running the step
+from scratch (duplicating already-real work) or silently proceeding without the artifact.

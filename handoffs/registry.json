@@ -3711,8 +3711,8 @@
       "started_at": "2026-09-01T02:57:49Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 01b recheck2 PASS (commit 3360b30c) -- dispatching Step 2a to ELIXIR-DEV",
-      "note": "Unblocked by ISS-0388's real fixture port (fix/ISS-0388-real-rco-fixtures-20260901, PR #766, merged by a sibling session with R-Co access). Runs REQ-205's harness against SwiftRoute's 4 real R-Co scenario YAMLs: tenant-onboarding-happy (gui-heavy, DEFERRED_TO_S8), shipment-high-value-happy (all api, real end-to-end), shipment-ops-timeout-escalation (step 2 SKIP/MINOR -- advance-timer endpoint doesn't exist, findable via grep, reported not built), shipment-attach-delivery-note (UNBUILT_FEATURE -- no attachment API in Letflow or R-Co, zero steps executed). Design went through 2 CODE-DESIGNER reworks (§0 factual fix + OQ-1/1b/2/3 resolution) and 2 CODE-DESIGN-VALIDATOR checks before PASS. This session resumed after stale queue lock (force-released, no active-session evidence)."
+      "last_known_step": "Step 04 TEST-RUNNER PENDING (commit dc5141d4) -- all prior steps PASS: 2a ELIXIR-DEV (7bd75cb5), 2c SECURITY-REVIEWER (00e82541), 2d REVIEWER (f3e89126), 3 TEST-DESIGNER (d01aa613), 3b TEST-DESIGN-VALIDATOR (d626b8d3)",
+      "note": "Unblocked by ISS-0388's real fixture port (fix/ISS-0388-real-rco-fixtures-20260901, PR #766, merged by a sibling session with R-Co access). Runs REQ-205's harness against SwiftRoute's 4 real R-Co scenario YAMLs: tenant-onboarding-happy (gui-heavy, DEFERRED_TO_S8), shipment-high-value-happy (all api, real end-to-end), shipment-ops-timeout-escalation (step 2 SKIP/MINOR -- advance-timer endpoint doesn't exist, findable via grep, reported not built), shipment-attach-delivery-note (UNBUILT_FEATURE -- no attachment API in Letflow or R-Co, zero steps executed). Design went through 2 CODE-DESIGNER reworks (§0 factual fix + OQ-1/1b/2/3 resolution) and 2 CODE-DESIGN-VALIDATOR checks before PASS. This session resumed after stale queue lock (force-released, no active-session evidence). SESSION-RATE-LIMITED at Step 4 dispatch; next session resumes TEST-RUNNER."
     }
   ]
 }

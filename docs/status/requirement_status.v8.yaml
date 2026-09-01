@@ -320,3 +320,50 @@ history:
       immediately after the "S6 is now complete" sentence (not an edit to
       it) naming REQ-211/REQ-212 as a later-discovered subsystem in the
       same stage.
+
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-01T19:48:34Z"
+    note: >
+      WF03-ISS0401-20260902 started (queue task 401, GH#785). ISS-0401:
+      test/letflow/repository/attachments_test.exs:392's
+      function_exported?(Repository, :upsert_content, 6) assertion returns
+      false despite upsert_content/6 genuinely existing at that arity
+      (confirmed via lib/letflow/repository.ex:251 and
+      Letflow.Repository.__info__(:functions)) -- self-filed by ORCH at the
+      end of WF03-ISS0400-20260901's Step Final, after independently
+      reproducing the failure in a throwaway worktree at pre-ISS-0400 main
+      with zero diff overlap. Claimed via get_next_task (agent_id
+      tvolodi-orch). Wrote docs/issues/ISS-0401.yaml (the local mirror
+      record did not exist yet -- only registered via the queue API
+      directly during the prior run). Branched
+      feature/WF03-ISS0401-20260902 from main (5ac81bab).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-01T19:58:39Z"
+    note: >
+      WF03-ISS0401-20260902 done -- ISS-0401 resolved (queue task 401,
+      GH#785 closed). ISSUE-FIXER directly measured the root cause:
+      Letflow.Repository is genuinely compiled with upsert_content/6
+      exported, but not yet loaded into the BEAM process's code table at
+      the moment attachments_test.exs:392 runs standalone --
+      function_exported?/3 checks the loaded-module table and returns
+      false for a compiled-but-unloaded module, with no load side effect
+      of its own. Confirmed deterministic given test run order within one
+      process, not a parallelism/timing flake. ORCH applied the fix
+      directly under the direct-action sizing rule
+      (docs/agents/ORCHESTRATOR.md section 10 -- all six checks pass:
+      exactly one file, no new public function/module/@spec, no
+      migration, not a supervision-tree file, not a tenant-data path, no
+      test's own asserted expected value changes): added a
+      Code.ensure_loaded?(Repository) guard immediately before the
+      assertion in test/letflow/repository/attachments_test.exs:392-397.
+      Fail-then-pass proven directly: 0/1 passed pre-fix (via git stash),
+      1/1 passed post-fix, reliably reproduced 5/5 standalone reruns; full
+      attachments_test.exs file 18/18 passed post-fix; full suite
+      3031/3031 clean. No CODE-DESIGNER/REVIEWER chain was needed given
+      the sizing-rule qualification. GH#785 closed with evidence comment.
+      Queue task 401 released status: done.

@@ -159,3 +159,29 @@ resolution: >
   #786/ISS-0400) all pointing at the same unresolved residual risk --
   the deeper OQ-5 cap (`candidate_scope_for_whoever_picks_this_up` (c)
   above) is increasingly the load-bearing fix, not an optional follow-up.
+
+  Recurrence note (2026-09-01, WF03-ISS0401-20260902 Step Final, PR #790):
+  fourth recurrence. The isolated `mix test --only wasm_hang` subprocess
+  failed 1 of 7 on CI run 33554788006 -- `plugin_handler_test.exs:457`
+  ("REQ-170 AC4: the shorter configured timeout_ms binds sooner")
+  hit ExUnit's 60000ms per-test timeout waiting on
+  `PluginInterface.invoke/3`, `Result: 6/7 passed, 3050 excluded`. Main
+  suite unaffected: `Result: 3047 passed (6 properties, 3041 tests), 10
+  excluded` on the same run. Structurally cleared as NOT attributable to
+  WF03-ISS0401-20260902's branch: that branch's diff touches only
+  `test/letflow/repository/attachments_test.exs` (a
+  `Code.ensure_loaded?/1` guard addition) plus ISS-0401 doc/handoff files
+  and REQ-211/REQ-212 files composed in by the rebase (confirmed via
+  `git diff main...HEAD --stat`), never any WASM/plugin_handler code; and
+  the SAME commit's sibling duplicate CI run (33554808704) ran the
+  identical isolated `:wasm_hang` suite and passed clean (`mix
+  letflow.check.test: OK -- isolated :wasm_hang run also passed clean`).
+  Same runner-variance-dependent pool-exhaustion mechanism, now on its
+  fourth independent recurrence (PR #691, PR #780/ISS-0392, PR
+  #786/ISS-0400, PR #790/ISS-0401), each still fully contained to the
+  isolated subprocess with the main suite unaffected every time. Did not
+  block PR #790's merge per the same precondition. Left `status: resolved`
+  as-is per the established reasoning -- the deeper OQ-5 cap remains the
+  only structural fix, and four independent recurrences in five days is
+  itself evidence that fix should be prioritized rather than continuing
+  to be deferred as a candidate follow-up.

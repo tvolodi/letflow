@@ -1,0 +1,499 @@
+defmodule Letflow.Simulation.Req206SwiftrouteTest do
+  @moduledoc """
+  REQ-206 acceptance criteria: 4 SwiftRoute scenario YAMLs executed through
+  `Letflow.Simulation.Runner`, each returning a closed disposition:
+  DEFERRED_TO_S8 (onboarding-happy), PASS/FAIL (shipment-high-value-happy),
+  SKIP/MINOR (ops-timeout-escalation step 2), UNBUILT_FEATURE (attach-delivery-note).
+
+  ## Spec-exists-but-not-integrated distinction (AC1)
+  `web/tests/e2e/pipelines/onboarding-wizard.pipeline.e2e.spec.ts` EXISTS in this
+  repo's `web/` tree. All 5 onboarding steps are still `:deferred_to_s8` because
+  S8 frontend-Letflow integration has NOT started — "spec exists" ≠ "integration
+  exists." This distinction is asserted explicitly below.
+
+  ## SERVICE_TASK limitation (affects shipment-high-value-happy)
+  `Letflow.Engine` does not yet dispatch SERVICE_TASK nodes
+  (`{:error, {:activation_failed, {:node_type_not_yet_implemented, ...}}}`). The
+  full `process_route_approval.yaml` has SERVICE_TASKs after CEO approval. A
+  test-local simplified process (`SimpleShipmentApproval`) replaces SERVICE_TASK
+  nodes with direct END edges so `complete_task/3` succeeds end-to-end.
+
+  ## Two UNIMPLEMENTED findings — reported to ORCH via result.issues (not filed here)
+  1. POST /api/v1/instances/:id/advance-timer absent (grep-confirmed, zero matches)
+  2. No document/attachment API in Letflow or R-Co src/
+
+  Real Postgres, `async: false` — tenant provisioning needs `Sandbox.mode(:auto)`.
+  """
+
+  use Letflow.DataCase, async: false
+
+  import Ecto.Query, only: [from: 2]
+
+  alias Ecto.Adapters.SQL.Sandbox
+  alias Letflow.Identity
+  alias Letflow.Identity.OnboardingRecord
+  alias Letflow.Identity.Tenant
+  alias Letflow.Repo
+  alias Letflow.Simulation.Runner
+  alias Letflow.Simulation.ScenarioFixture
+  alias Letflow.Simulation.Seed
+  alias Letflow.TenantProvisioning
+  alias Letflow.TenantProvisioning.Registration
+
+  @fixtures_dir Path.expand("../../fixtures/simulation/swiftroute", __DIR__)
+  @scenarios_dir Path.join(@fixtures_dir, "scenarios")
+
+  # Simplified process for the high-value-happy scenario: avoids SERVICE_TASK nodes
+  # (not yet implemented in Engine; process_route_approval.yaml has release-shipment
+  # and auto-reject SERVICE_TASKs that would cause complete_task/3 to return
+  # {:error, {:instance_execution_error, ...}} instead of {:ok, ...}).
+  @simple_approval_graph %{
+    "nodes" => [
+      %{"id" => "start", "node_type" => "START"},
+      %{"id" => "ops-review", "node_type" => "HUMAN_TASK",
+        "attributes" => %{"role" => "role-ops-manager"}},
+      %{"id" => "ceo-approval-gate", "node_type" => "EXCLUSIVE_GATEWAY"},
+      %{"id" => "ceo-approval", "node_type" => "HUMAN_TASK",
+        "attributes" => %{"role" => "role-ceo"}},
+      %{"id" => "end-approved", "node_type" => "END"},
+      %{"id" => "end-rejected", "node_type" => "END"}
+    ],
+    "edges" => [
+      %{"id" => "e0", "source" => "start", "target" => "ops-review"},
+      %{"id" => "e1", "source" => "ops-review", "target" => "ceo-approval-gate",
+        "condition" => "variables.ops_decision == 'approve'"},
+      %{"id" => "e2", "source" => "ops-review", "target" => "end-rejected",
+        "condition" => "variables.ops_decision == 'reject'"},
+      # on_timeout fallback for ops-review
+      %{"id" => "fallback-ops-review", "source" => "ops-review", "target" => "end-rejected"},
+      %{"id" => "e3", "source" => "ceo-approval-gate", "target" => "ceo-approval",
+        "condition" => "variables.declared_value > 500"},
+      %{"id" => "e4", "source" => "ceo-approval-gate", "target" => "end-approved",
+        "condition" => "variables.declared_value <= 500"},
+      %{"id" => "e5", "source" => "ceo-approval", "target" => "end-approved",
+        "condition" => "variables.ceo_decision == 'approve'"},
+      %{"id" => "e6", "source" => "ceo-approval", "target" => "end-rejected",
+        "condition" => "variables.ceo_decision == 'reject'"},
+      # on_timeout fallback for ceo-approval
+      %{"id" => "timeout-ceo-approval", "source" => "ceo-approval", "target" => "end-rejected"}
+    ]
+  }
+
+  setup do
+    Sandbox.mode(Letflow.Repo, :auto)
+
+    unique = Letflow.TenantSlugFixture.unique_slug("req206")
+
+    company = %{
+      "slug" => unique,
+      "display_name" => "SwiftRoute Ltd",
+      "hostname" => unique <> ".simulation.test"
+    }
+
+    {:ok, %{tenant: tenant}} = Seed.seed_company(company)
+    {:ok, schema_name} = TenantProvisioning.schema_name_for_tenant(tenant.id)
+
+    # Load org structure and make usernames unique per test run
+    {:ok, org_structure} =
+      YamlElixir.read_from_file(Path.join(@fixtures_dir, "org_structure.yaml"))
+
+    org_structure =
+      update_in(org_structure["people"], fn people ->
+        Enum.map(people, fn person ->
+          Map.update!(person, "username", &(&1 <> "-" <> unique))
+        end)
+      end)
+
+    {:ok, users} = Seed.seed_users(org_structure, tenant)
+
+    # Map actor_id → seeded User.t() (people and users are in fixture order)
+    users_by_actor_id =
+      org_structure["people"]
+      |> Enum.zip(users)
+      |> Map.new(fn {person, user} -> {Map.fetch!(person, "actor_id"), user} end)
+
+    alice = Map.fetch!(users_by_actor_id, "actor-swiftroute-alice")
+    lena = Map.fetch!(users_by_actor_id, "actor-swiftroute-lena")
+    marco = Map.fetch!(users_by_actor_id, "actor-swiftroute-marco")
+
+    # Seed shipment-dispatch process (for ops-timeout-escalation scenario)
+    {:ok, dispatch_fixture} =
+      YamlElixir.read_from_file(Path.join(@fixtures_dir, "process_shipment_dispatch.yaml"))
+
+    dispatch_fixture = Map.update!(dispatch_fixture, "name", &(&1 <> "-" <> unique))
+    {:ok, definition_dispatch} = Seed.seed_process(dispatch_fixture, tenant, alice.id)
+
+    # Seed simplified approval process (no SERVICE_TASKs; for high-value-happy)
+    simple_approval_name = "SimpleShipmentApproval-" <> unique
+
+    simple_approval_attrs = %{
+      name: simple_approval_name,
+      version: "1.0",
+      description: "REQ-206 test-local process: exercises CEL EXCLUSIVE_GATEWAY branch without SERVICE_TASKs.",
+      graph: @simple_approval_graph,
+      created_by: alice.id
+    }
+
+    {:ok, definition_approval} =
+      case Letflow.Definitions.get_active_by_name(simple_approval_name, prefix: schema_name) do
+        {:ok, d} ->
+          {:ok, d}
+
+        {:error, :not_found} ->
+          with {:ok, d} <- Letflow.Definitions.create(simple_approval_attrs, prefix: schema_name),
+               {:ok, %{definition: activated}} <-
+                 Letflow.Definitions.activate(d.id, prefix: schema_name) do
+            {:ok, activated}
+          end
+      end
+
+    # Create actor tokens (PROCESS_OPERATOR role: allows POST /instances +
+    # POST /tasks/:id/complete + GET /tasks with task_scope :all, not row-filtered)
+    {:ok, %{plaintext: lena_token}} =
+      Identity.create_token(lena.id, %{roles: ["PROCESS_OPERATOR"]}, prefix: schema_name)
+
+    {:ok, %{plaintext: marco_token}} =
+      Identity.create_token(marco.id, %{roles: ["PROCESS_OPERATOR"]}, prefix: schema_name)
+
+    {:ok, %{plaintext: alice_token}} =
+      Identity.create_token(alice.id, %{roles: ["PROCESS_OPERATOR"]}, prefix: schema_name)
+
+    actors = %{
+      "actor-swiftroute-lena" => %{"token" => lena_token, "tenant_slug" => unique},
+      "actor-swiftroute-marco" => %{"token" => marco_token, "tenant_slug" => unique},
+      "actor-swiftroute-alice" => %{"token" => alice_token, "tenant_slug" => unique}
+    }
+
+    on_exit(fn -> teardown(unique) end)
+
+    %{
+      tenant: tenant,
+      schema_name: schema_name,
+      unique: unique,
+      actors: actors,
+      definitions: %{
+        approval: definition_approval,
+        dispatch: definition_dispatch
+      }
+    }
+  end
+
+  defp teardown(slug) do
+    case Identity.get_tenant_by_slug(slug) do
+      {:ok, tenant} ->
+        case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+          {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+          {:error, _reason} -> :ok
+        end
+
+        Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
+        Repo.delete_all(from(o in OnboardingRecord, where: o.tenant_id == ^tenant.id))
+        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+
+      {:error, :not_found} ->
+        :ok
+    end
+  end
+
+  # Replaces "TENANT_PREFIX" in precondition/outcome args, "DEFINITION_NAME" in
+  # process_id and step params, with the real test-time values.
+  defp patch_scenario(scenario, schema_name: schema_name, definition_name: defn, actors: actors) do
+    %{scenario |
+      process_id: defn,
+      actors: actors,
+      preconditions: patch_preconditions(scenario.preconditions, schema_name, defn),
+      steps: patch_step_params(scenario.steps, defn),
+      expected_outcomes: patch_outcome_prefix(scenario.expected_outcomes, schema_name)
+    }
+  end
+
+  defp patch_preconditions(preconditions, schema_name, defn) do
+    Enum.map(preconditions, fn p ->
+      args = Map.get(p, :args, %{})
+
+      args =
+        args
+        |> Map.put("prefix", schema_name)
+        |> then(fn a ->
+          if Map.get(a, "name") == "DEFINITION_NAME", do: Map.put(a, "name", defn), else: a
+        end)
+
+      Map.put(p, :args, args)
+    end)
+  end
+
+  defp patch_step_params(steps, defn) do
+    Enum.map(steps, fn step ->
+      case Map.get(step, :params) do
+        %{"definition_name" => "DEFINITION_NAME"} = params ->
+          Map.put(step, :params, Map.put(params, "definition_name", defn))
+
+        _ ->
+          step
+      end
+    end)
+  end
+
+  defp patch_outcome_prefix(outcomes, schema_name) do
+    Enum.map(outcomes, fn outcome ->
+      put_in(outcome, [:verification, :args, "prefix"], schema_name)
+    end)
+  end
+
+  # ─── AC1: swiftroute-tenant-onboarding-happy ────────────────────────────
+
+  describe "swiftroute-tenant-onboarding-happy" do
+    test "EO-001..003 verified via Seed; all 5 gui steps recorded DEFERRED_TO_S8", %{
+      schema_name: schema_name,
+      actors: actors,
+      unique: unique
+    } do
+      hostname = unique <> ".simulation.test"
+
+      # EO-001: onboarding record retrievable by hostname
+      assert {:ok, onboarding} = Identity.get_onboarding_by_hostname(hostname)
+      assert onboarding.slug == unique
+
+      # EO-002: tenant slug/hostname registered, status :active (not :migrating)
+      assert {:ok, tenant} = Identity.get_tenant_by_slug(unique)
+      assert tenant.status == :active
+
+      # EO-003: admin user (alice) exists and can authenticate
+      alice_username = "alice.bauer-" <> unique
+
+      assert {:ok, %{users: users}} =
+               Identity.list_users(%{search: alice_username, page_size: 10}, prefix: schema_name)
+
+      alice = Enum.find(users, &(&1.username == alice_username))
+      assert alice != nil, "alice user not found for username #{alice_username}"
+
+      assert {:ok, _} =
+               Identity.create_token(alice.id, %{roles: ["PROCESS_OPERATOR"]}, prefix: schema_name)
+
+      # Load YAML; patch with real actors and prefix
+      scenario_raw =
+        ScenarioFixture.load!(Path.join(@scenarios_dir, "tenant-onboarding-happy.yaml"))
+
+      scenario = %{
+        scenario_raw
+        | actors: Map.take(actors, ["actor-swiftroute-alice"]),
+          expected_outcomes:
+            patch_outcome_prefix(scenario_raw.expected_outcomes, schema_name)
+      }
+
+      assert {:ok, report} = Runner.run(scenario)
+
+      # All 5 steps :deferred_to_s8 (all via: gui)
+      assert length(report.step_results) == 5
+      assert Enum.all?(report.step_results, &(&1.outcome == :deferred_to_s8))
+      assert Enum.all?(report.step_results, &(&1.captured == nil))
+      assert Enum.all?(report.step_results, &(&1.detail =~ "S8"))
+
+      # disposition :executed (not :unbuilt_feature — the feature exists, it's just deferred)
+      assert report.disposition == :executed
+
+      # Spec-exists-but-not-integrated: the Playwright spec IS present in web/,
+      # but S8 integration has not started. This distinction is stated explicitly here
+      # per AC1, not derived from Runner's output (Runner's :deferred_to_s8 detail
+      # string is factually accurate for this case regardless of spec presence).
+      spec_path =
+        Path.expand(
+          "../../../web/tests/e2e/pipelines/onboarding-wizard.pipeline.e2e.spec.ts",
+          __DIR__
+        )
+
+      assert File.exists?(spec_path),
+             "Expected onboarding-wizard Playwright spec at #{spec_path} " <>
+               "(spec-exists-but-not-integrated: present but S8 frontend-Letflow " <>
+               "integration not started)"
+    end
+  end
+
+  # ─── AC2: swiftroute-shipment-high-value-happy ──────────────────────────
+
+  describe "swiftroute-shipment-high-value-happy" do
+    test "dispatcher -> ops-approve -> CEO co-sign; 4 expected_outcomes with evidence", %{
+      schema_name: schema_name,
+      actors: actors,
+      definitions: %{approval: definition}
+    } do
+      scenario_raw =
+        ScenarioFixture.load!(Path.join(@scenarios_dir, "shipment-high-value-happy.yaml"))
+
+      scenario =
+        patch_scenario(scenario_raw,
+          schema_name: schema_name,
+          definition_name: definition.name,
+          actors: actors
+        )
+
+      assert {:ok, report} = Runner.run(scenario)
+
+      # 5 steps: 1 submit + 2 task-lookup + 2 complete (3 business steps, design §3.2)
+      assert length(report.step_results) == 5
+      [step1, step2a, step2b, step3a, step3b] = report.step_results
+
+      assert step1.outcome == :ok,
+             "step 1 (POST /instances) failed — detail: #{inspect(step1.detail)}"
+
+      assert %{"instance_id" => _, "status" => "ACTIVE"} = step1.captured
+
+      assert step2a.outcome == :ok,
+             "step 2a (GET /tasks ops-lookup) failed — detail: #{inspect(step2a.detail)}"
+
+      assert step2b.outcome == :ok,
+             "step 2b (POST /tasks ops-complete) failed — detail: #{inspect(step2b.detail)}"
+
+      assert step3a.outcome == :ok,
+             "step 3a (GET /tasks ceo-lookup) failed — detail: #{inspect(step3a.detail)}"
+
+      assert step3b.outcome == :ok,
+             "step 3b (POST /tasks ceo-complete) failed — detail: #{inspect(step3b.detail)}"
+
+      # 4 expected_outcomes — each evaluated PASS or FAIL with concrete evidence (AC2)
+      assert length(report.outcome_results) == 4
+      [eo1, eo2, eo3, eo4] = report.outcome_results
+
+      # EO-1: task_assigned — CEO task assignee evidence
+      # current verifier checks assignee_type == "user"; ROLE-attributed tasks have
+      # assignee_type == nil (Engine §4.3, design settled-OQ-3), so outcome is :fail.
+      # The observed field still carries the assignee evidence (assignee_ref: "role-ceo").
+      assert eo1.outcome in [:pass, :fail],
+             "EO-1 task_assigned result must be :pass or :fail"
+
+      assert %{assignee_ref: "role-ceo"} = eo1.observed,
+             "Expected CEO task assignee_ref to be 'role-ceo'; observed: #{inspect(eo1.observed)}"
+
+      # EO-2: instance COMPLETED after full approval chain
+      assert eo2.outcome == :pass,
+             "EO-2 instance_state (COMPLETED) failed — observed: #{inspect(eo2.observed)}"
+
+      # EO-3: instance variables carry both decisions
+      assert eo3.outcome == :pass,
+             "EO-3 instance_state (variables) failed — observed: #{inspect(eo3.observed)}"
+
+      # EO-4: audit event for CEO task completion
+      assert eo4.outcome == :pass,
+             "EO-4 audit_event (task.complete) failed — observed: #{inspect(eo4.observed)}"
+    end
+  end
+
+  # ─── AC3: swiftroute-shipment-ops-timeout-escalation ────────────────────
+
+  describe "swiftroute-shipment-ops-timeout-escalation" do
+    test "step 1 :ok, step 2 :skip/:minor (advance-timer absent), step 3 :ok", %{
+      schema_name: schema_name,
+      actors: actors,
+      definitions: %{approval: definition}
+    } do
+      scenario_raw =
+        ScenarioFixture.load!(Path.join(@scenarios_dir, "shipment-ops-timeout-escalation.yaml"))
+
+      scenario =
+        patch_scenario(scenario_raw,
+          schema_name: schema_name,
+          definition_name: definition.name,
+          actors: actors
+        )
+
+      assert {:ok, report} = Runner.run(scenario)
+
+      assert length(report.step_results) == 3
+      [step1, step2, step3] = report.step_results
+
+      # Step 1: instance started (api)
+      assert step1.outcome == :ok,
+             "step 1 (POST /instances) failed — detail: #{inspect(step1.detail)}"
+
+      # Step 2: SKIP/MINOR — advance-timer endpoint absent (grep-confirmed)
+      assert step2.outcome == :skip,
+             "step 2 expected :skip, got #{inspect(step2.outcome)}"
+
+      assert step2.severity == :minor,
+             "step 2 expected severity :minor, got #{inspect(step2.severity)}"
+
+      assert step2.captured == nil
+      assert step2.detail =~ "advance-timer"
+
+      # Step 3: instance still ACTIVE (harness coherent despite step 2 SKIP)
+      assert step3.outcome == :ok,
+             "step 3 (GET /instances) failed — detail: #{inspect(step3.detail)}"
+
+      # Both expected_outcomes: instance ACTIVE (1 before skip, 1 after)
+      assert length(report.outcome_results) == 2
+      assert Enum.all?(report.outcome_results, &(&1.outcome == :pass)),
+             "Expected both instance_state outcomes to PASS; got: #{inspect(Enum.map(report.outcome_results, & &1.outcome))}"
+    end
+  end
+
+  # ─── AC4: swiftroute-shipment-attach-delivery-note ──────────────────────
+
+  describe "swiftroute-shipment-attach-delivery-note" do
+    test "disposition :unbuilt_feature; zero steps executed; R-Co evidence in notes", _ctx do
+      scenario =
+        ScenarioFixture.load!(
+          Path.join(@scenarios_dir, "shipment-attach-delivery-note.yaml")
+        )
+
+      assert {:ok, report} = Runner.run(scenario)
+
+      # UNBUILT_FEATURE: no preconditions, steps, or outcomes evaluated
+      assert report.disposition == :unbuilt_feature
+      assert report.precondition_results == []
+      assert report.step_results == []
+      assert report.outcome_results == []
+
+      # Notes carry the R-Co src/ path evidence
+      assert report.notes =~ "partition_attach.zig",
+             "Expected R-Co path evidence 'partition_attach.zig' in notes: #{inspect(report.notes)}"
+
+      assert report.notes =~ "iss501_storage_mode_routing.md",
+             "Expected R-Co path evidence 'iss501_storage_mode_routing.md' in notes: #{inspect(report.notes)}"
+
+      assert report.notes =~ "No attachment/document-upload API",
+             "Expected finding summary in notes: #{inspect(report.notes)}"
+    end
+  end
+
+  # ─── UNIMPLEMENTED findings — machine-verifiable source evidence ────────
+
+  describe "UNIMPLEMENTED findings (source evidence for result.issues)" do
+    test "advance-timer endpoint absent from Letflow.Router and Routers.Instances" do
+      # AC3: source evidence that POST /api/v1/instances/:id/advance-timer does not exist.
+      # Scenario's own note field cites this; this test makes it machine-verifiable.
+      router_content =
+        File.read!(Path.expand("../../../lib/letflow/router.ex", __DIR__))
+
+      instances_content =
+        File.read!(Path.expand("../../../lib/letflow/routers/instances.ex", __DIR__))
+
+      refute String.contains?(router_content, "advance-timer"),
+             "Found 'advance-timer' in router.ex — UNIMPLEMENTED finding is no longer accurate"
+
+      refute String.contains?(instances_content, "advance_timer"),
+             "Found 'advance_timer' in instances.ex — UNIMPLEMENTED finding is no longer accurate"
+    end
+
+    test "no attachment/document-upload routes in any lib/letflow/routers/ file" do
+      # AC4: source evidence that no attachment API exists in Letflow.
+      routers_dir = Path.expand("../../../lib/letflow/routers", __DIR__)
+
+      router_files = File.ls!(routers_dir) |> Enum.filter(&String.ends_with?(&1, ".ex"))
+
+      attachment_matches =
+        Enum.flat_map(router_files, fn file ->
+          content = File.read!(Path.join(routers_dir, file))
+
+          if String.contains?(content, "attachment") or
+               (String.contains?(content, "upload") and String.contains?(content, "shipment")) do
+            [file]
+          else
+            []
+          end
+        end)
+
+      assert attachment_matches == [],
+             "Found unexpected attachment/upload route references in: #{inspect(attachment_matches)}"
+    end
+  end
+end

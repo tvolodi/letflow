@@ -1,0 +1,49 @@
+# Synthetic — R-Co's tests/simulation/scenarios/swiftroute-tenant-onboarding-happy.yaml is
+# unreachable from this sandbox (see lib/letflow/design/req206-swiftroute-scenario-execution.md §0);
+# structurally faithful to REQ-206's own requirement-text field-by-field account,
+# not a byte-for-byte port. All 5 steps are via: gui in R-Co's actual YAML
+# (per the requirement text: "steps 1-3 use via: gui explicitly, step 4-5 also gui").
+# Marked deferred_to_s8: true at the scenario level: the onboarding-wizard Playwright spec
+# exists at web/tests/e2e/pipelines/onboarding-wizard.pipeline.e2e.spec.ts (confirmed by
+# find at implementation time) but S8 frontend-Letflow integration has not started --
+# "spec exists" ≠ "integration exists." Runner's existing :deferred_to_s8 detail string is
+# factually accurate for this case without modification.
+id: swiftroute-tenant-onboarding-happy
+company_id: swiftroute
+process_id: swiftroute-tenant-onboarding-wizard
+deferred_to_s8: true
+actors:
+  actor-swiftroute-alice: {}
+
+preconditions: []
+
+steps:
+  - via: gui
+    action: "navigate to onboarding wizard"
+    actor: actor-swiftroute-alice
+
+  - via: gui
+    action: "provision new realm for SwiftRoute"
+    actor: actor-swiftroute-alice
+
+  - via: gui
+    action: "create initial admin user"
+    actor: actor-swiftroute-alice
+
+  - via: gui
+    action: "configure tenant slug and hostname"
+    actor: actor-swiftroute-alice
+
+  - via: gui
+    action: "activate realm and verify admin login"
+    actor: actor-swiftroute-alice
+
+expected_outcomes:
+  - id: EO-001
+    description: "Onboarding completed — record retrievable by hostname"
+    verification:
+      method: instance_state
+      args:
+        prefix: "TENANT_PREFIX"
+        instance_ref: "n/a"
+        status: "DEFERRED_TO_S8"

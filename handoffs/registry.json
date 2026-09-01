@@ -3784,13 +3784,13 @@
       "issue_id": "ISS-0399",
       "queue_task_id": 399,
       "github_issue_number": 781,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [],
       "started_at": "2026-09-01T17:05:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
-      "note": "WF-03 issue-resolving run for ISS-0399: REQ-211's instance-attachment upload/download/list subsystem has no content-scanning/antivirus pipeline for uploaded bytes, named as a deferred follow-up in REQ-211's own design (SS4.0 item 8) and confirmed by REVIEWER. Not currently a blocking concern per the issue's own text (tenant-scoped, size-capped at 25 MiB, content_type never trusted) -- filed to make the deferral a real tracked issue rather than only moduledoc prose. depends_on: [394 (REQ-211)], confirmed done before locking. owned_modules not yet known -- ISSUE-FIXER's diagnosis will determine actual scope (likely a new scanning integration module plus config/decision-record work, not a small patch)."
+      "lock_released_at": "2026-09-01T17:32:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final -- ISSUE-FIXER diagnosis complete, no implementation warranted; queue task 399 released back to open (not done), docs/issues/ISS-0399.yaml annotated with scoping_note",
+      "note": "WF-03 issue-resolving run for ISS-0399: REQ-211's instance-attachment upload/download/list subsystem has no content-scanning/antivirus pipeline for uploaded bytes, named as a deferred follow-up in REQ-211's own design (SS4.0 item 8) and confirmed by REVIEWER. ISSUE-FIXER diagnosed rather than routing to CODE-DESIGNER: confirmed via real source read that no caller of Attachments.upload/2 exists anywhere in lib/letflow/ yet -- REQ-212 (the route layer that would expose this) is still status: pending, no router entry exists -- so there is currently no exposed upload path at all, even less urgent than the issue's own framing. No scanning/AV dependency in mix.exs and no decision record in docs/migration/decisions/ addresses provider choice -- per this project's 'don't silently re-decide' rule, real implementation needs a new ADR-level decision first, not an improvised CODE-DESIGNER pass. Correctly did NOT force a design; released the queue task back to open (not done, since the underlying gap is real and untouched) with a clarified scope note on the real urgency trigger (a future route exposing upload to a less-trusted caller). This run completed its own diagnosis job cleanly, which is why it's marked COMPLETED here even though the underlying issue stays open."
     }
   ]
 }

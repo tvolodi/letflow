@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0399-20260901-step-final",
+  "run_id": "WF03-ISS0399-20260901",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0399-20260901/step-final-orch.json",
+  "created_at": "2026-09-01T17:32:00Z",
+  "started_at": "2026-09-01T17:32:00Z",
+  "completed_at": "2026-09-01T17:32:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0399"],
+    "artifacts_in": ["handoffs/WF03-ISS0399-20260901/step-01-issue-fixer-diagnosis.json"],
+    "branch_name": "fix/ISS-0399-attachment-content-scanning-20260901"
+  },
+  "task": {
+    "description": "Close out WF03-ISS0399-20260901: no implementation was warranted per ISSUE-FIXER's diagnosis, so release the queue task and record the scoping decision rather than merging a PR."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "ISSUE-FIXER concluded (Step 1) that real implementation should NOT proceed now: no caller of Attachments.upload/2 exists anywhere in lib/letflow/, REQ-212 (the exposing route layer) is still pending, and no scanning-provider decision record exists -- per this project's no-silent-re-decide rule, this needs a new ADR before design work, not an improvised CODE-DESIGNER pass. Updated docs/issues/ISS-0399.yaml with a scoping_note documenting this finding and the real urgency trigger (a future route exposing upload to a less-trusted caller). Released queue task 399 WITHOUT a status (left open, not done -- the underlying gap is real and untouched, only its scope/urgency was clarified). No code changes; no PR opened, since there is nothing to merge.",
+    "artifacts_out": ["docs/issues/ISS-0399.yaml"]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

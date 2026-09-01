@@ -1,0 +1,102 @@
+{
+  "handoff_id": "WF03-ISS0398-20260901-step-03-rework1",
+  "run_id": "WF03-ISS0398-20260901",
+  "workflow_id": "WF-03",
+  "step": "3",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0398-20260901/step-03-elixir-dev-rework1.json",
+  "created_at": "2026-09-01T15:21:01Z",
+  "started_at": "2026-09-01T14:44:00Z",
+  "completed_at": "2026-09-01T15:21:01Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-051"],
+    "issue_ids": ["ISS-0398"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md",
+      "handoffs/WF03-ISS0398-20260901/step-02b-code-design-validator-recheck2.json",
+      "handoffs/WF03-ISS0398-20260901/step-03c-security-reviewer.json",
+      "handoffs/WF03-ISS0398-20260901/step-03-elixir-dev.json",
+      "lib/letflow/engine/transition.ex",
+      "test/letflow/engine/parallel_gateway_test.exs"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"],
+    "branch_name": "fix/ISS-0398-walk-to-gateway-20260901"
+  },
+  "task": {
+    "description": "Re-implement Letflow.Engine.Transition.collect_leaf_gateways/3 from scratch per iteration 3 of lib/letflow/design/iss0398-walk-to-gateway-fix.md (now CODE-DESIGN-VALIDATOR PASS after two rounds of rework) -- replacing the prior exponential-blowup implementation with a memoized Tarjan-SCC single-pass DFS (index/lowlink/stack/stack_set/next_index bundled in a leaf_search_state()), correcting the memo-key-unsoundness BLOCKER the validator found in the plain node-keyed scheme (memo value for a node on a cycle depended on which cycle member was entered first). find_matching_join/2 rewritten to thread the whole leaf_search_state() across sibling branches (memo survives, index/lowlink/stack/stack_set/next_index reset per branch).",
+    "acceptance_criteria": [
+      "collect_leaf_gateways/3 (arity 3, not iteration 2's /4) implements design doc §2.2.2's exact five-step algorithm: memo hit, on-stack (empty-set contribution), node-lookup-fails terminal, PARALLEL_GATEWAY immediate terminal (never pushed onto stack), and the branching-node explore/fold/SCC-closure-check step",
+      "SCC closure (§2.2.2's closure check, local_lowlink == index[node_id]) writes one shared aggregate leaf value to memo for every popped SCC member",
+      "find_matching_join/2 threads leaf_search_state() across sibling branches per §2.5: memo carried forward, index/lowlink/stack/stack_set/next_index reset to empty/0 between branches",
+      "PARALLEL_GATEWAY-immediate-terminal rule (§2.3) preserved exactly, short-circuited before any stack push",
+      "AC1-AC6 (three_branch_graph/0) and the iteration-1 ISS-0398 fixtures (branch_with_exclusive_gateway_graph/0, ambiguous_branch_dead_ends_graph/0) pass unchanged",
+      "New fixtures added per §4: diamond_chain_graph/1 (parameterized stress fixture, run at a k large enough to genuinely demonstrate the fix), cyclic_escape_graph/0 + cyclic_escape_graph_reversed_edges/0 (asserting identical results across both edge orders), pure_cycle_no_escape_graph/0 (empty-aggregate case)",
+      "mix compile --warnings-as-errors and mix letflow.check.test run to completion with real quoted output",
+      "mix format clean"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Replaced the iteration-1/2 collect_leaf_gateways implementation in lib/letflow/engine/transition.ex in place with the design's SCC-aware algorithm: added leaf_search_state()/leaf_search_result() @type declarations, fresh_leaf_search_state/0, reset_stack_bookkeeping/1, put_leaf_memo/3, and split the traversal into collect_leaf_gateways/3 (steps 1-4: memo hit, on-stack empty-set contribution, unresolved-node terminal, PARALLEL_GATEWAY immediate terminal -- never pushed onto stack, so it can never be pulled into an SCC), explore_branching_node/3 (step 5's index/lowlink assignment and stack push), fold_outgoing_edges/4 (the sequential state-threaded fold over outgoing edges, unioning leaves and folding min(lowlink)), and close_scc_or_defer/5 (the closure check: local_lowlink == own_index pops the stack down through and including node_id and writes the SAME local_leaves aggregate to memo for every popped member; otherwise returns {:open, local_lowlink} leaving the node on stack). find_matching_join/2's outer Enum.reduce_while now threads {:ok, acc_join_id, state} instead of {:ok, acc_join_id}, calling reset_stack_bookkeeping/1 before each branch's collect_leaf_gateways/3 call so memo survives across branches while index/lowlink/stack/stack_set/next_index reset to empty/0, matching §2.5 exactly. The private moduledoc comment above collect_leaf_gateways/3 was rewritten to describe the memoized-Tarjan-SCC-DFS behavior (order-independence via SCC-closure, not per-node memoization) rather than iteration 1/2's stale description.\n\nAdded to test/letflow/engine/parallel_gateway_test.exs: diamond_chain_graph/1 (a 2-outgoing-edge split -- branch 0 is the zero-hop control branch straight to \"join\" so gateway_role/2 classifies \"split\" as a real :split (out-degree > 1), branch 1 is a parameterized chain of k EXCLUSIVE_GATEWAY diamonds reconverging on \"join\"), run at k=40 (nodes/edges = 123/162, comfortably inside @max_nodes 500/@max_edges 2000) with a wall-clock assertion under a 2-second budget -- actual measured time was 6.9ms for k=40 (O(2^40) ~= 10^12 calls under the old unmemoized scheme would never complete in any practical time; this revision's O(nodes+edges) scheme is essentially instant). cyclic_escape_graph/0 and cyclic_escape_graph_reversed_edges/0 (the exact X->GW->C->B(->GW cycles, ->D escapes)->JOIN counterexample from design doc §2.4b, with the split's edges_out order swapped in the twin) -- both fixtures assert full-result-tuple-equivalent outcomes (both resolve to {:ok, ..., [{:parallel_split, ...}]} with 2 branch_ids and a JoinCounter on the real \"JOIN\" node), confirming order-independence holds in practice, not just in the design's own hand-trace. pure_cycle_no_escape_graph/0 (a 2-node A<->B escape-less cycle, split given 2 duplicate edges into the cycle so it classifies as a real :split) asserts {:error, {:no_matching_join_found, \"split\"}} -- the empty-aggregate case.\n\nVerification commands run to completion, real output quoted below:\n\n$ mix compile --warnings-as-errors\n(clean compile, zero warnings, zero errors)\n\n$ mix format --check-formatted\n(exit 0, no diff)\n\n$ mix test test/letflow/engine/parallel_gateway_test.exs --trace\nRunning ExUnit with seed: 173370, max_cases: 16\nExcluding tags: [:keycloak, :wasm_hang]\n............\nFinished in 0.5 seconds (0.5s async, 0.00s sync)\nResult: 12 passed\n(includes the new 40-diamond-chain test at 6.9ms measured wall-clock, both cyclic_escape_graph order-independence assertions, and the pure-cycle empty-aggregate case, plus AC1-AC6 and both iteration-1 ISS-0398 fixtures unchanged)\n\n$ mix letflow.check.test (full suite)\nFinished in 1320.4 seconds (15.4s async, 1305.0s sync)\nResult: 2993/3008 passed (6/6 properties, 2987/3002 tests), 10 excluded\nFailed: 15 tests\n\nOf the 15 full-suite failures, 14 are pre-existing environmental/order-dependent flakiness entirely unrelated to this change (Letflow.TenantSchemaReaperTest concurrent-invocation liveness x2, Letflow.Scheduler.PollerTest AC5 retention-guard timing x2, Letflow.ServiceCatalogTest AC6/AC7 referential-guard tests x5, Letflow.SandboxPoolTest provisioning-mailbox timing, Mix.Tasks.Letflow.CheckToolchainTest rust-pin tests x2) -- confirmed by re-running exactly those 5 test files in isolation immediately afterward: all 62 tests passed cleanly (mix test test/letflow/tenant_schema_reaper_test.exs test/letflow/scheduler/poller_test.exs test/letflow/service_catalog_test.exs test/letflow/sandbox_pool_test.exs test/mix/tasks/letflow/check_toolchain_test.exs -> \"Finished in 43.1 seconds ... Result: 62 passed\"), proving these are full-suite-load/timing artifacts (DB schema-drop races, wall-clock-budget assertions under contention, rust-toolchain-check races), not regressions from this commit.\n\nThe 15th failure IS caused by this change and is EXPECTED, not a defect: Letflow.SchedulerReq188Test \"lib/letflow/engine/transition.ex has zero diff against the base branch\" (test/letflow/scheduler_req188_test.exs:432) literally asserts `git diff --stat origin/main...HEAD -- lib/letflow/engine/transition.ex` is empty. This guard was written when REQ-188 shipped to confirm THAT requirement didn't touch transition.ex, but it is written as a permanent \"zero diff against main forever\" assertion rather than being scoped to REQ-188's own commit range -- it was ALREADY broken on this branch before this rework, by iteration 1's own commit 5691a6a2 (\"fix(ISS-0398): broaden walk_to_gateway into collect_leaf_gateways...\"), which already touched transition.ex; confirmed via `git log --oneline -- lib/letflow/engine/transition.ex` showing 5691a6a2 predates this rework's own commit. Re-ran test/letflow/engine/ plus this one test file together in isolation to confirm it is the ONLY real failure and everything else in the engine suite is green: \"Finished in 120.8 seconds ... Result: 905/906 passed (1/1 property, 904/905 tests), 7 excluded, Failed: 1 test\" (the transition.ex-diff guard). Flagging for REVIEWER: this test's premise (any future legitimate change to transition.ex will always fail it) is now structurally obsolete given ISS-0398's whole purpose is exactly such a change; recommend either scoping it to a specific historical commit range or retiring it, but that edit is TEST-DESIGNER/test-file territory, not something ELIXIR-DEV silently changed here.",
+    "artifacts_out": [
+      "lib/letflow/engine/transition.ex",
+      "test/letflow/engine/parallel_gateway_test.exs",
+      "handoffs/WF03-ISS0398-20260901/step-03-elixir-dev-rework1.json"
+    ],
+    "issues": [
+      "test/letflow/scheduler_req188_test.exs's 'transition.ex has zero diff against the base branch' guard (line 432) is now permanently unsatisfiable for any legitimate future change to transition.ex -- it was already broken by iteration 1's commit 5691a6a2 before this rework touched the file at all. Not fixed here (test-file ownership boundary); flagged for REVIEWER/TEST-DESIGNER to retire or rescope.",
+      "docs/issues/ nested-PARALLEL_GATEWAY-within-a-branch follow-on named in design doc §6 still needs to be filed by ORCH at this run's Step Final -- not yet done as of this handoff."
+    ],
+    "next_action": "ROUTE to Step 3c SECURITY-REVIEWER for a fresh review -- must re-verify (1) the INV-8 complexity fix against diamond_chain_graph/1's actual O(nodes+edges) behavior (not just re-trust the design doc's own complexity argument), and (2) the memo-key-unsoundness correctness fix against cyclic_escape_graph/0 + its reversed-edges twin + pure_cycle_no_escape_graph/0, independently re-tracing the SCC-closure logic in the actual implemented code (not the design doc's prose) the same way CODE-DESIGN-VALIDATOR's recheck2 independently re-traced the design. After SECURITY-REVIEWER PASS, routes to Step 3d REVIEWER for OTP-idiom/scope-creep review, then TEST-DESIGNER for any additional coverage."
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "step": "2b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-01T12:55:25Z"
+    },
+    {
+      "step": "3c",
+      "agent": "SECURITY-REVIEWER",
+      "result": "FAIL",
+      "timestamp": "2026-09-01T14:40:00Z"
+    },
+    {
+      "step": "2",
+      "agent": "CODE-DESIGNER",
+      "result": "REWORKED",
+      "timestamp": "2026-09-01T14:55:00Z"
+    },
+    {
+      "step": "2b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "FAILED",
+      "timestamp": "2026-09-01T14:18:01Z"
+    },
+    {
+      "step": "2",
+      "agent": "CODE-DESIGNER",
+      "result": "REWORKED",
+      "timestamp": "2026-09-01T14:32:12Z"
+    },
+    {
+      "step": "2b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-01T15:40:00Z"
+    },
+    {
+      "step": "3",
+      "agent": "ELIXIR-DEV",
+      "result": "REWORKED",
+      "timestamp": "2026-09-01T15:21:01Z"
+    }
+  ]
+}

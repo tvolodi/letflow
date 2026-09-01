@@ -1,0 +1,57 @@
+{
+  "handoff_id": "2c971936-c867-4bba-9b05-affb471e22f2",
+  "run_id": "WF03-ISS0400-20260901",
+  "workflow_id": "WF-03",
+  "step": "02b-regate",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0400-20260901/step-02b-regate-code-design-validator.json",
+  "created_at": "2026-09-01T17:13:30Z",
+  "started_at": "2026-09-01T17:13:30Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0400-nested-parallel-gateway-fix.md",
+      "handoffs/WF03-ISS0400-20260901/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0400-20260901/step-02-code-designer.json",
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md",
+      "lib/letflow/engine/transition.ex"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"]
+  },
+  "task": {
+    "description": "RE-GATE after design revision. This is the same design doc you FAILED at BLOCKER severity in your prior pass (step-02b-code-design-validator.json) -- read your own prior finding in full again, then read the revised lib/letflow/design/iss0400-nested-parallel-gateway-fix.md fresh, focusing on section 2.3 (resolve_nested_split/3's mechanism, now claimed to share rather than reset Tarjan stack state), section 3.2 (a new worked trace claimed to walk through your own exact counterexample graph step by step), and section 3.3 (claimed to no longer contradict 2.3). Do not accept CODE-DESIGNER's claim that the revised trace is correct -- independently re-derive it yourself against your own counterexample graph (outer_split -> A -> inner_split, branch ia -> A back-edge, branch ib -> inner_join -> post -> outer_join, exactly as you specified it in your prior FAIL), tracing the REVISED algorithm (no reset at the resolve_nested_split/3 boundary, full state sharing) step by step to confirm it actually terminates and actually detects the back-edge to A correctly this time. Also check whether the new state-sharing mechanism reopens either of the two defect classes ISS-0398's own design already fixed once (naive-visited-set-copy DoS blowup; memo-key unsoundness under legal cycles) via some new angle the removal of the reset might introduce -- sharing more state is not automatically safe merely because resetting less state was the fix. Also verify the design doc's own §2.3/§3.3 contradiction is genuinely gone, not merely reworded to appear reconciled. Re-check the design's new fixture 3 (nested_split_ancestor_back_edge_graph/0) and its stated negative twin (fixture 3b) actually match the graph shape they claim to test. Every other acceptance criterion from the original gate (memo-key soundness for the non-cyclic case, @max_nodes arithmetic, zero-split-role-fixtures claim, :dead_end propagation, no .ex bodies) was already verified sound in your prior pass and does not need re-verification unless this revision touched those sections -- check whether it did (per CODE-DESIGNER's own summary, sections 3.4/6/7 were also updated to match) and re-verify only what changed.",
+    "acceptance_criteria": [
+      "The revised resolve_nested_split/3 mechanism (state-sharing, no reset) is independently re-traced against your own exact counterexample graph from the prior FAIL, confirming genuine termination and correct back-edge detection -- not accepted from CODE-DESIGNER's own trace",
+      "The revised mechanism is checked against both defect classes ISS-0398's own design already fixed (naive-visited-set DoS, memo-key unsoundness) for whether increased state-sharing reopens either from a new angle",
+      "The prior section 2.3/3.3 internal contradiction is confirmed genuinely resolved, not just reworded",
+      "Sections 3.4/6/7 (or any other section CODE-DESIGNER's own summary says it touched) are re-checked for consistency with the revised mechanism",
+      "New fixtures 3 and 3b are checked against the graph shapes they claim to represent",
+      "No .ex implementation bodies present in the design doc",
+      "Verdict is PASS or FAIL with every issue at BLOCKER/MAJOR/MINOR severity named specifically"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "Not yet completed by the receiving agent.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0400-20260901",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0400-20260901",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Not yet dispatched"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

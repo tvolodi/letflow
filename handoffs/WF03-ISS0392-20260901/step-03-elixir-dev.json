@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0392-20260901/step-03-elixir-dev.json",
   "created_at": "2026-09-01T10:30:55Z",
   "started_at": "2026-09-01T10:30:55Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-01T11:15:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -39,19 +39,30 @@
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "Did not implement the design's §2.4 mechanism -- stopped and reverted after confirming, via source-read of deps/ecto/lib/ecto/multi.ex and a throwaway Elixir check, that the design's specified 'replace-on-repeat' gatekeeper is not mechanically achievable as written. No code changes remain (git diff on all 3 owned/read files is empty). See result.issues[0] for the full technical finding and two concrete resolution options for CODE-DESIGNER.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "severity": "BLOCKING",
+        "type": "design_mechanism_infeasible",
+        "location": "lib/letflow/design/iss0392-multi-task-records-collision-fix.md §2.4 (\"Superseding mechanism: build call (1) unconditionally, let call (2) REPLACE it\")",
+        "summary": "The design's core collision-avoidance mechanism -- build call (1)'s {:task_records, instance_id} Ecto.Multi.run step unconditionally, then have call (2) 'remove and replace' it later when a collision is detected -- cannot work, because Ecto.Multi.run steps execute strictly in append order (a linear Enum.reduce over the operations list, deps/ecto/lib/ecto/multi.ex:875-880) and call (2) only exists inside a Multi.merge/2 callback that Ecto evaluates lazily, at transaction-EXECUTION time (apply_operation's {:merge, ...} clause, multi.ex:883-892), strictly AFTER call (1)'s own Multi.run step has already executed and its INSERT has already run against the (still-open) transaction. By the time call (2)'s merge callback runs and could detect 'this instance_id is already claimed,' call (1)'s tasks row(s) already exist -- there is no Multi operation that un-executes an already-run step. Ecto.Multi.delete/2 (the API the design leaves as an 'implementation detail ELIXIR-DEV resolves') is also not the right primitive regardless: it is Multi.delete/3,4 (delete a struct/changeset AS a write operation), not a step-removal function -- confirmed via mix compile warning ('Ecto.Multi.delete/2 is undefined or private') when I prototyped the design's literal instruction. I also confirmed empirically (throwaway script, Multi.new() |> Multi.run({:task_records, \"X\"}, ...) |> Multi.merge(fn _ -> ... end) |> Multi.to_list()) that operation order is [{:task_records, \"X\"}, :merge] as expected -- call 1 is composed, and will therefore execute, strictly before call 2's merge callback.",
+        "why_this_blocks_the_literal_design": "Section 2.3 requires call (2) to be authoritative (its snapshot strictly dominates call (1)'s), and §2.4 tries to achieve that via a post-hoc replace. Since replace-after-execution is impossible, the only way to make call (2) authoritative is to prevent call (1)'s static step from running in the first place whenever call (2) will supersede it for the same instance_id -- i.e. a build-time skip/defer, not a build-time-unconditional/runtime-replace.",
+        "concrete_finding_for_call_1_specifically": "child_initial_state.status (whether a SUB_PROCESS child will complete synchronously) is already known in plain Elixir, before any Multi exists at all: prepare_sub_process_children_for_completion/8 (engine.ex:2291-2343) runs prepare_child_activation/4 for every prepared child and produces prepared_children -- carrying each child's child_initial_state.status -- as part of changes.transition, BEFORE build_complete_task_tail_multi/6 (which builds call 1 at engine.ex:2414-2415, then calls append_sub_process_children_creation_multi/6 which can trigger call 2 later at line 2461) is ever invoked. So for the first-level collision (the one ISS-0392's own repro exercises, and the only one reachable outside the OQ-4 self-ancestor edge case), it IS possible to know at build time, before appending call (1)'s step, that a same-instance_id call (2) will happen later in this same transaction -- by checking prepared_children for any entry whose child_initial_state.status == :completed. A workable fix shape (not implemented -- this is a design question, not mine to silently decide) would defer/skip building call (1)'s static {:task_records, parent_instance_id} step whenever that condition holds, letting call (2)'s (the synchronous completion cascade's) own step be the only one appended for that instance_id -- which is exactly '§2.3's dominance argument' but achieved by build-time omission rather than runtime replacement.",
+        "cascade_case_note": "For nested cascade levels beyond the first (maybe_cascade_to_grandparent), a genuine build-time-before-either-executes collision is NOT generally reachable this same way, because each cascade level's own 'call 1 vs call 2 for the same instance_id' can only collide if that ancestor instance_id also happens to equal the top-level parent_instance_id (the design's own OQ-4, 'instance reuse as its own ancestor' -- already flagged by CODE-DESIGNER as possibly out of scope). The core, always-reachable bug (ISS-0392's actual repro) is the first-level case above; OQ-4 remains an open question, not newly created by this finding.",
+        "recommendation": "Route back to CODE-DESIGNER (not ELIXIR-DEV) to revise §2.4's mechanism to a build-time skip (using prepared_children's already-known child_initial_state.status to decide, before building call 1, whether to defer parent_instance_id's task-activation step to call 2) rather than a runtime replace, then back through CODE-DESIGN-VALIDATOR before this reaches ELIXIR-DEV again. No implementation code was kept from this run -- git diff is empty on all owned/read files."
+      }
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0392-20260901",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGNER for a revised §2.4 mechanism (build-time skip using prepared_children.child_initial_state.status rather than a runtime Multi-step replace), then CODE-DESIGN-VALIDATOR, before returning to ELIXIR-DEV. Do NOT route to SECURITY-REVIEWER or REVIEWER -- no implementation code exists to review."
   },
   "rework_count": 0,
   "max_rework": 3

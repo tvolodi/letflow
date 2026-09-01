@@ -9,7 +9,7 @@
   "created_at": "2026-09-01T18:01:14Z",
   "started_at": "2026-09-01T18:01:14Z",
   "completed_at": null,
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -33,19 +33,19 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "Not yet completed by the receiving agent.",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Step 5 close. All upstream gates for this run confirmed PASS per the handoff context: diagnosis (step-01), design (step-02, PASS after 1 rework catching a real BLOCKER, re-gate PASS), implementation (step-03, PASS), SECURITY-REVIEWER (step-03b, PASS), REVIEWER (step-03c, PASS), TEST-DESIGNER's fail-then-pass regression test (step-04, PASS -- 13/18 pre-fix, 18/18 post-fix, both independently reproduced by TEST-DESIGN-VALIDATOR in step-04b), TEST-RUNNER full suite (step-04c, PASS, 3031/3031). This outcome supports status: resolved -- root cause genuinely removed, not merely instrumented or a no_defect verdict. Actions taken: (1) docs/issues/ISS-0400.yaml updated to status: resolved, resolved_in_run: WF03-ISS0400-20260901, resolved_at: 2026-09-01T18:01:54Z (real UTC timestamp from clock). (2) GH#784 closed via `gh issue close 784 --comment` using the exact 'resolved' template from WF-03_issue_resolving.md Step 5: \"Fixed in WF03-ISS0400-20260901. See docs/issues/ISS-0400.yaml and the regression test at test/letflow/engine/parallel_gateway_test.exs.\" -- verified post-close via `gh issue view 784 --json state,comments`: state CLOSED, last comment matches verbatim. No claims made beyond what this run actually did.",
+    "artifacts_out": ["docs/issues/ISS-0400.yaml"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0400-20260901",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF03-ISS0400-20260901",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Not yet dispatched"
+    "next_action": "Route to Step Final"
   },
   "rework_count": 0,
   "max_rework": 3

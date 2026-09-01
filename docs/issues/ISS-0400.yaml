@@ -32,4 +32,6 @@ source: >
   handoffs/WF03-ISS0398-20260901/step-06-issue-fixer-close.json.
 queue_task_id: 400
 github_issue: 784
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0400-20260901
+resolved_at: "2026-09-01T18:01:54Z"

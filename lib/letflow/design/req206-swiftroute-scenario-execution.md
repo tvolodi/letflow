@@ -175,18 +175,24 @@ co-sign) — see §2.2's expected outcomes.
 this session)** does not require a prior `claim_task/3` call — it checks the task is
 `:pending` and applies output variables directly, with `actor_id` recorded from
 `attrs` for audit purposes only, not as an assignment precondition in the snippet read
-this session. This licenses each of `swiftroute-shipment-high-value-happy`'s "ops
-approve"/"CEO co-sign" scenario steps to be **one** `POST /tasks/:id/complete` call
-each (matching the scenario's own 3-step count: submit, ops-approve, ceo-co-sign) —
-**flagged as OQ-1 below**, since the router's `:TasksComplete` authorization policy
-(evaluated before `Engine.complete_task/3` is reached) was not read in full this
-session and may itself require the caller to be the task's current assignee; if so,
-each of those two steps needs a `claim` dispatch before its `complete` dispatch,
-making the scenario 5 HTTP dispatches, still reported as "3 steps" at the
-scenario-YAML level (a step's `action` field is one HTTP call in REQ-205's Scenario
-struct — nothing prevents authoring a scenario step as an ordered pair internally
-represented as two Scenario `step()` entries sharing the same logical intent, if
-ELIXIR-DEV confirms claim is required).
+this session.
+
+**Settled (was OQ-1b) — claim is NOT required before complete, confirmed by reading
+`lib/letflow/api/authorization.ex`'s `evaluate_access/2` this session:** its
+`:AllowWithRowFilter` branch is reached only `if endpoint == :TasksList and
+is_task_worker_only?(ctx.roles)`; every other endpoint that passes the permission
+check (including `:TasksComplete`) falls through to
+`%AccessDecision{kind: :Allow, task_scope: :all}` unconditionally — no row filter, no
+assignee check, at the authorization layer. `POST /tasks/:id/complete` maps to the
+`:TasksComplete` policy key (per `endpoint_policy_key/2`'s clause for that route), so
+it is never subject to the row-filter branch at all. Combined with the
+already-confirmed fact that `Engine.complete_task/3` itself applies no assignee
+precondition either, this **definitively settles** the question: claim does **not**
+need to precede complete under current code. Each of
+`swiftroute-shipment-high-value-happy`'s "ops approve"/"CEO co-sign" scenario steps is
+**exactly one** `POST /tasks/:id/complete` call (matching the scenario's own literal
+3-step count: submit, ops-approve, ceo-co-sign — 3 business-level HTTP dispatches
+total, not 5). §3.2 below is authored on this basis.
 
 ---
 
@@ -483,11 +489,60 @@ Uses `process_route_approval.yaml` (already ported, §0). 3 `via: api` steps, al
 dispatched for real through `Letflow.Router.call/2` exactly as `runner_test.exs`'s
 existing AC4 smoke test already demonstrates the mechanism for:
 
+**Settled (was OQ-2) — the instance-scoped task lookup, confirmed by reading
+`lib/letflow/routers/tasks.ex`'s `handle_list/3` this session:** its `with` clause
+parses an `instance_id` query param (`parse_instance_id_param(Map.get(query,
+"instance_id"))`) and passes it straight through to `Tasks.list_tasks/2`'s filter
+map, alongside an equally-supported `status` param. `GET /api/v1/tasks?
+instance_id=<uuid>` (optionally combined with `&status=PENDING`) is therefore the
+real, already-implemented mechanism for "the task currently pending on instance X."
+Each of steps 2/3 below is an ordered pair of Scenario `step()` entries: a `GET
+/api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING` lookup
+(`produces: "ops_task"` / `"ceo_task"`, captured field is the response's matching
+task's `id`), followed by the `POST .../complete` dispatch shown below — both real
+`via: api` steps, no `claim` dispatch needed (settled above).
+
+**Settled (was OQ-3) — the `roles:` claim value each actor's token needs, confirmed
+by reading `lib/letflow/engine/task_activation.ex`'s `resolve_assignee/1` this
+session:** that function returns `{Map.get(attributes, "assignee_type"), Map.get(attributes,
+"role")}` — for a `role:`-attributed `HUMAN_TASK` node, `assignee_ref` is
+`node.attributes["role"]` verbatim, the literal role-attribute string written in the
+process YAML (`process_route_approval.yaml`'s `ops-review` node carries `role:
+role-ops-manager`, its `ceo-approval` node carries `role: role-ceo`). `Letflow.Tasks`'s
+`assignee_type == "ROLE"` claim/complete-scope resolution matches an actor's granted
+roles list against that identical string. This settles the exact token shape: each
+scenario actor's `Letflow.Identity.create_token/3` call at test `setup` time must
+include the process node's exact role string in its `roles:` list — the ops-approve
+actor's token carries `roles: ["role-ops-manager"]`, the CEO-co-sign actor's token
+carries `roles: ["role-ceo"]` — no other string authorizes claim/complete against
+that `assignee_ref`.
+
+**Settled (was OQ-1, should-fix) — no distinct CEO actor in `org_structure.yaml`:**
+confirmed by reading `test/fixtures/simulation/swiftroute/org_structure.yaml` this
+session — it lists exactly 4 groups (`dept-mgmt: [alice]`, `dept-ops: [marco, jan,
+petra]`, `dept-dispatch: [lena, tobias]`, `dept-finance: [hans]`), no `role-ceo`
+group or distinct CEO person. Per REQ-205's fixture-freeze convention (`org_structure.yaml`
+is otherwise untouched by this requirement, §1.1), this design resolves the choice
+rather than deferring it: `actor-swiftroute-alice` (dept-mgmt's sole member) is used
+as the CEO-role actor, granted `roles: ["role-ceo"]` at token-creation time in
+addition to (or instead of, since roles are per-token not per-org-fixture) whatever
+`dept-mgmt` role she'd otherwise carry — this needs no `org_structure.yaml` change,
+since role grants live in the scenario test's `create_token/3` call, not in the
+fixture file itself.
+
 | Step | Actor | `action` | `params` (post-template-substitution) | `produces` |
 |---|---|---|---|---|
 | 1 (dispatcher submit) | `actor-swiftroute-lena` (dept-dispatch, per `org_structure.yaml`) | `POST /api/v1/instances` | `{"definition_name": "<seeded name>", "initial_variables": {"declared_value": 750}}` | `"instance"` |
-| 2 (ops approve) | `actor-swiftroute-marco` (dept-ops) | `POST /api/v1/tasks/{{produces.ops_task.task_id}}/complete` (task id resolved via a preceding `GET /api/v1/tasks?instance_id=...` lookup step, or a `precondition`/helper — see OQ-2 below) | `{"output_variables": {"ops_decision": "approve"}}` | `"ops_task_result"` |
-| 3 (CEO co-sign) | `actor-swiftroute-alice` (dept-mgmt — this fixture's `org_structure.yaml` has no distinct `role-ceo` actor; §0's OQ-1 flags this as needing ELIXIR-DEV to either reuse `dept-mgmt`'s member or add one) | `POST /api/v1/tasks/{{produces.ceo_task.task_id}}/complete` | `{"output_variables": {"ceo_decision": "approve"}}` | `"ceo_task_result"` |
+| 2a (ops task lookup) | `actor-swiftroute-marco` (dept-ops, token `roles: ["role-ops-manager"]`) | `GET /api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING` | n/a | `"ops_task"` |
+| 2b (ops approve) | `actor-swiftroute-marco` | `POST /api/v1/tasks/{{produces.ops_task.id}}/complete` | `{"output_variables": {"ops_decision": "approve"}}` | `"ops_task_result"` |
+| 3a (CEO task lookup) | `actor-swiftroute-alice` (dept-mgmt, token `roles: ["role-ceo"]` — see settled-OQ-1 above) | `GET /api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING` | n/a | `"ceo_task"` |
+| 3b (CEO co-sign) | `actor-swiftroute-alice` | `POST /api/v1/tasks/{{produces.ceo_task.id}}/complete` | `{"output_variables": {"ceo_decision": "approve"}}` | `"ceo_task_result"` |
+
+The scenario's own "3 steps" (submit, ops-approve, ceo-co-sign) still holds at the
+scenario-YAML/business-narrative level — each business step is one `POST .../complete`
+dispatch, exactly as settled above; the lookup dispatches (2a/3a) are Runner-level
+plumbing to resolve a `task_id`, not additional business steps, matching REQ-205's own
+`produces`/template-substitution mechanism for chaining dependent HTTP calls.
 
 **All 4 `expected_outcomes` (AC2's literal count), each `PASS`/`FAIL` against real
 queried state:**
@@ -511,15 +566,6 @@ queried state:**
    per REQ-205 §6's `audit_event` method) — "each recorded PASS or FAIL with the
    specific evidence" (AC2) is satisfied by `outcome_result.observed` carrying the
    matched audit row (or its absence).
-
-**OQ-2 (new, this design):** the exact HTTP call needed to resolve a just-created
-`HUMAN_TASK`'s `task_id` for use in a later step's `action` path
-(`POST /api/v1/tasks/:id/complete`) is not pinned down here — `GET /api/v1/tasks?
-instance_id=...` (via `Letflow.Routers.Tasks`'s `GET /` route, confirmed present in
-§0) is the evident candidate, filtered further by `status: pending` if the list route
-supports it, but the exact query-param names/response shape are not re-derived from
-source in this design session. ELIXIR-DEV confirms against `lib/letflow/routers/
-tasks.ex`'s real `GET /` handler before authoring step 2/3's `action`/`params`.
 
 ### 3.3 `swiftroute-shipment-ops-timeout-escalation` (AC3)
 
@@ -616,38 +662,35 @@ affected_files:
 
 ---
 
-## §5 — Open questions (explicit, not silently resolved)
+## §5 — Formerly-open questions, now settled (no open questions remain)
 
-- **OQ-1**: `org_structure.yaml`'s swiftroute fixture (ported under REQ-205) has
-  `dept-mgmt` (Alice), `dept-ops` (Marco/Jan/Petra), `dept-dispatch` (Lena/Tobias),
-  `dept-finance` (Hans) — **no actor is named for a distinct CEO role** the way
-  `process_route_approval.yaml`'s `ceo-approval` `HUMAN_TASK` (`role: role-ceo`)
-  needs. ELIXIR-DEV decides, at implementation time: reuse `dept-mgmt`'s sole member
-  (Alice) as the CEO-role actor (simplest, no fixture change), or add a `role-ceo`
-  actor/group to `org_structure.yaml` (a fixture change beyond this design's `scenarios/`
-  directory addition, needing its own justification since REQ-205's fixture is
-  otherwise frozen). Not resolved here — flagged so ELIXIR-DEV doesn't silently pick
-  one without recording it.
-- **OQ-1b** (from §0): whether `Letflow.Routers.Tasks`'s `:TasksComplete`
-  authorization policy requires the caller to be the task's current assignee (in
-  which case `claim_task/3` must precede `complete_task/3` for steps 2/3 of
-  `swiftroute-shipment-high-value-happy`) is not confirmed in this design session —
-  `Letflow.Api.Authorization`'s policy table for `:TasksComplete` was not read in
-  full. ELIXIR-DEV confirms before authoring those steps' exact HTTP-call sequence.
-- **OQ-2** (§3.2): the exact `GET /api/v1/tasks` query-param/response shape for
-  resolving a just-created `HUMAN_TASK`'s id by `instance_id` (needed to build steps
-  2/3's `action` path) is not re-derived from `lib/letflow/routers/tasks.ex`'s real
-  handler body in this design session — ELIXIR-DEV confirms directly.
-- **OQ-3**: how the ported `org_structure.yaml`'s actors get HTTP-bearer tokens
-  attached (the `actors` map's `%{"token" => ..., "tenant_slug" => ...}` shape,
-  per `Scenario`'s own moduledoc, §3.1 of REQ-205's design as extended by the real
-  shipped code) needs one `Letflow.Identity.create_token/3` call per named actor at
-  scenario-test `setup` time, mirroring `runner_test.exs`'s existing pattern
-  (`create_token(operator.id, %{roles: [...]}, prefix: schema_name)`) — the exact
-  `roles:` list value each actor needs (matching the process graph's `role:
-  role-ops-manager`/`role-ceo` attribute strings so `Letflow.Tasks`'s
-  `assignee_type == "ROLE"` claim/complete-scope resolution actually authorizes
-  them) is not confirmed against `Letflow.Engine`'s real HUMAN_TASK-creation code
-  path in this design session (which literal string it writes as `assignee_ref` for
-  a `role:`-attributed node). ELIXIR-DEV confirms this exact string before wiring
-  actor tokens.
+The prior draft of this design carried four open questions (OQ-1, OQ-1b, OQ-2, OQ-3),
+deferring each to ELIXIR-DEV. This rework resolves all four from material already
+read in the same session — no genuinely unknowable fact remained among them. Each is
+now a settled design decision, stated in place at its point of use above; this
+section is a pointer index, not a deferral list:
+
+- **OQ-1b (claim-before-complete precondition) — settled in §0**, by reading
+  `lib/letflow/api/authorization.ex`'s `evaluate_access/2`: `:AllowWithRowFilter`
+  applies only to `:TasksList`; `:TasksComplete` always yields `%AccessDecision{kind:
+  :Allow, task_scope: :all}`. Combined with the design's already-confirmed fact that
+  `Engine.complete_task/3` has no assignee precondition, claim is **not** required
+  before complete. §3.2's step table is authored as exactly one `POST .../complete`
+  dispatch per business step (no `claim` dispatches).
+- **OQ-2 (instance-scoped task lookup) — settled in §3.2**, by reading
+  `lib/letflow/routers/tasks.ex`'s `handle_list/3`: `GET /api/v1/tasks?
+  instance_id=<uuid>` (optionally `&status=PENDING`) is the real, shipped lookup
+  mechanism. §3.2's step table specifies this exact call for steps 2a/3a.
+- **OQ-3 (role-attributed task assignee resolution) — settled in §3.2**, by reading
+  `lib/letflow/engine/task_activation.ex`'s `resolve_assignee/1`: a role-attributed
+  `HUMAN_TASK`'s `assignee_ref` is the literal `role` attribute string
+  (`"role-ops-manager"`, `"role-ceo"`). Each scenario actor's token `roles:` list must
+  contain that exact string; §3.2's table states the concrete values.
+- **OQ-1 (no distinct CEO actor in the swiftroute fixture) — settled in §3.2, as a
+  should-fix**, by reading `test/fixtures/simulation/swiftroute/org_structure.yaml`
+  directly: confirmed no `role-ceo` group/actor exists (4 groups: `dept-mgmt`,
+  `dept-ops`, `dept-dispatch`, `dept-finance`). This design picks
+  `actor-swiftroute-alice` (dept-mgmt's sole member) as the CEO-role actor, granted
+  `roles: ["role-ceo"]` at scenario-test token-creation time — no `org_structure.yaml`
+  change needed, since role grants are a per-token/per-test concern, not a fixture-file
+  concern, keeping REQ-205's fixture frozen as intended.

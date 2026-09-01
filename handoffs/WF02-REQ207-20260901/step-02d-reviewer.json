@@ -1,0 +1,61 @@
+{
+  "handoff_id": "step02d-WF02-REQ207-20260901",
+  "run_id": "WF02-REQ207-20260901",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ207-20260901/step-02d-reviewer.json",
+  "created_at": "2026-09-01T07:56:33Z",
+  "started_at": "2026-09-01T07:56:33Z",
+  "completed_at": "2026-09-01T07:56:33Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-207"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ207-20260901/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ207-20260901/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "test/support/simulation/runner.ex",
+      "test/support/simulation/scenario_fixture.ex",
+      "test/letflow/simulation/req207_vortex_test.exs",
+      "test/fixtures/simulation/vortex/scenarios/*.yaml",
+      "test/reports/req207-vortex-scenario-findings.yaml",
+      "lib/letflow/design/req207-vortex-scenario-execution.md"
+    ],
+    "branch_name": "feature/WF02-REQ207-20260901"
+  },
+  "task": {
+    "description": "Idiom/scope gate on WF02-REQ207-20260901's implementation diff (commit 3d2d1a3e) per reviewer.md's four questions, with independent judgment on the SUB_PROCESS workaround, the audit_event_ordering extension, the scenario_fixture.ex closed-vocabulary extension, and the OQ-2/OQ-3 source-re-derivation discipline.",
+    "acceptance_criteria": [
+      "Idiomatic vs. crutch judged against real source (not the design doc's own framing alone)",
+      "Supervision integrity checked (N/A: no processes/supervisors touched)",
+      "Type-safety gaps noted if found (non-blocking)",
+      "Scope creep flagged if abstractions appear ahead of what's needed",
+      "docs/anti-patterns.md checked",
+      "PASS only if no genuine crutch, broken supervision, or scope creep found"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Diff is entirely test/test-support: test/support/simulation/runner.ex, test/support/simulation/scenario_fixture.ex, test/letflow/simulation/req207_vortex_test.exs, 4 new scenario YAML fixtures, test/reports/req207-vortex-scenario-findings.yaml. No lib/ or migration file touched (confirmed via git diff main...HEAD -- lib/, empty, same as SECURITY-REVIEWER's Step 2c finding). Supervision question is N/A -- no process/supervisor code in scope.\n\n1. SUB_PROCESS/HUMAN_TASK workaround (test-local, not touching lib/): idiomatic and honest, not a silent paper-over. Read the actual test module (req207_vortex_test.exs:213-228, the @simple_child_graph comment) and the design doc's §2.2/§2.3 rationale directly. The workaround is documented at three independent levels: (a) the module's own @moduledoc names the SERVICE_TASK limitation generally; (b) the @simple_child_graph comment names the specific Engine defect mechanism -- two Ecto.Multi steps both keyed {:task_records, parent_instance_id} colliding when a SUB_PROCESS child completes synchronously inside the parent's own hop-chain transaction (lib/letflow/engine.ex's append_sub_process_children_creation_multi/5 chaining into Letflow.Engine.SubProcess.append_start_multi/7's synchronous-completion branch), attributes it to REQ-062, states it is out of this requirement's scope to fix, and explicitly flags it for REVIEWER/a follow-up issue; (c) the findings report (test/reports/req207-vortex-scenario-findings.yaml) repeats the same mechanism in its notes field for a reader who only opens the report. This matches REQ-206's own SERVICE_TASK-elision precedent's discipline exactly (same 'why does this substitution exist, stated explicitly rather than left implicit' standard the design doc's own §2.2/§2.3 held itself to). A future reader is not misled: the substitution changes the test topology (a pending HUMAN_TASK child instead of a synchronously-completing one) but is called out as changing it, and the real Engine defect is independently confirmed as pre-existing by SECURITY-REVIEWER's own empty `git diff main...HEAD -- lib/` check. PASS on this point.\n\n2. :audit_event_ordering in runner.ex: genuine additive extension, not a crutch. Read both clauses side by side (runner.ex:561-596 for :audit_event, 597-621 for :audit_event_ordering). The diff actually improves on the existing pattern rather than merely mirroring it: it extracts the shared lookup logic into find_audit_entry/2 (used by both clauses) instead of duplicating the Audit.list_entries query/matching logic a second time -- the :audit_event clause itself was refactored to call the same shared helper, confirmed via diff that this is a faithful behavior-preserving extraction (SECURITY-REVIEWER's INV-8 check independently confirmed this too). The new clause follows the same 'always carry real queried state in observed, never infer PASS from absence of error' discipline the other three methods already establish -- observed always carries both entries (or nil for whichever wasn't found), never inferring :pass from partial success. Error handling uses a with/else chain routing every failure path (missing first/second arg, missing prefix, Audit.list_entries error) to an explicit {:error, reason} rather than a bare pattern match that could raise. This is cleaner than what it replaced, not a workaround. PASS.\n\n3. scenario_fixture.ex method-atom registration: same closed-vocabulary discipline as the existing @via_atoms/@severity_atoms/@check_atoms entries. Read scenario_fixture.ex:1-33 directly -- @method_atoms is a static compile-time map (not String.to_existing_atom/1, and the module's own moduledoc explains why: String.to_existing_atom/1 depends on runtime atom-table state, fragile under lazy module loading), and fetch_atom!/3 raises ArgumentError on an unrecognized value at load time. Adding \"audit_event_ordering\" => :audit_event_ordering is a pure one-line additive entry to that closed map -- no arbitrary atom creation from YAML content is possible either before or after this change. PASS.\n\n4. docs/anti-patterns.md's 'inheriting a claim from a record instead of re-deriving it from the source' entry, checked against this run's own OQ-2/OQ-3 resolutions: both are backed by actual source reads, not inherited claims. OQ-2 (req207_vortex_test.exs moduledoc lines 17-23): the design doc left this open (whether a by-parent-instance-id lookup exists); the test module states it was RESOLVED by reading both Letflow.Instances and Letflow.Engine this session and finding no such function, then resolving via a direct, narrowly-scoped Repo query against InstanceProjection.parent_instance_id (confirmed as a real, populated column set by Letflow.Engine.SubProcess.insert_child_instance_projection/8) -- a re-derivation, not an inherited assumption. OQ-3 (moduledoc lines 25-34) is the stronger case: the design doc named two candidate mechanisms without picking one; the test module states it resolved DIFFERENTLY than either candidate, after empirically finding InstanceProjection.current_nodes is unusable (Letflow.Engine.Transition's dispatch_end/3, transition.ex:373-379, unconditionally drops a token on END arrival, so current_nodes is always [] for every terminal END node alike -- 'confirmed empirically this session: both scenarios below hit this'), and instead used each scenario's own last real TASK_COMPLETED/SUB_PROCESS_COMPLETED event payload's activated_nodes field. Independently verified this field is real, not invented: grep confirms activated_nodes: Enum.map(final_instance_state.tokens, & &1.node_id) in both lib/letflow/engine.ex:2724 and lib/letflow/engine/sub_process.ex:1198 -- a genuine re-derivation sourced from real Engine code, exactly the discipline the anti-patterns entry requires (spend the one command it takes to check a checkable claim before building on it). No inherited-claim violation found.\n\nType-safety gaps (non-blocking): none new in this diff worth filing -- the :audit_event_ordering verification.method is closed-vocabulary via a struct @type union plus scenario_fixture.ex's static map, same enforcement mechanism as the other three methods; no new class of invalid state was introduced that a struct/Ecto.Enum change would make unrepresentable beyond what already applies to the other three methods.\n\nScope creep: none found. No new abstraction (behaviour, macro, generic plumbing) appears ahead of what this requirement's 3 real scenarios need -- the one design addition (:audit_event_ordering) is justified by a concrete requirement (AC2's ordering claim, which none of REQ-205/206's three existing methods can express), matches REQ-206's own precedent for additive Scenario/Runner extension, and the BLOCKED_ON_DEPENDENCY disposition for the 4th scenario deliberately does NOT build the entity/entity-query subsystem or speculative API-shape plumbing ahead of S5/S6 landing (design §4.2 explicitly declines to design that branch). docs/anti-patterns.md's own newly-added entry in this diff (a prose-only account of a prior sibling-session handoff-artifact gap for this exact run_id) has no code/security/idiom relevance and is correctly out of REVIEWER's scope.\n\nOUTSTANDING ITEM FOR ORCH (not a gate failure, escalation only): the pre-existing REQ-062 Engine defect (Ecto.Multi :task_records key collision on synchronously-completing SUB_PROCESS children) has NOT yet been filed under docs/issues/ -- both ELIXIR-DEV's report and SECURITY-REVIEWER's Step 2c handoff explicitly deferred filing to 'ORCH at Step Final' rather than self-assigning an ISS-NNNN id (per ISSUE_QUEUE.md's protocol: the discovering agent reports, only ORCH/letflow-queue allocates the id -- self-assigning would repeat the ISS-numbering-collision class already documented in docs/anti-patterns.md). REVIEWER independently confirms this finding is real and worth tracking: affected files lib/letflow/engine.ex (append_sub_process_children_creation_multi/5) and lib/letflow/engine/sub_process.ex (append_start_multi/7's synchronous-completion branch), title suggestion 'Ecto.Multi key collision ({:task_records, parent_instance_id}) when a SUB_PROCESS child completes synchronously in the same hop-chain transaction that spawned it'. OQ-5 (R-Co scenario-corpus reachability for the 4 real Vortex scenario YAMLs, same class as ISS-0388/ISS-0391) also remains unfiled and should be raised alongside it at Step Final.",
+    "idiom_findings": {
+      "sub_process_workaround": "Idiomatic, honestly documented at 3 levels (moduledoc, inline @simple_child_graph comment naming the exact Multi-collision mechanism, findings-report notes). Not a silent paper-over.",
+      "audit_event_ordering_extension": "Genuine additive extension; refactors the existing :audit_event clause to share find_audit_entry/2 rather than duplicating logic -- an improvement over the pre-existing pattern, not a crutch.",
+      "scenario_fixture_registration": "One-line addition to the existing closed-vocabulary compile-time map (@method_atoms), same fetch_atom!/ArgumentError discipline as the other 3 atom sets. No raw String.to_atom/1 anywhere.",
+      "oq2_oq3_resolution": "Both independently re-derived from real source this session (Letflow.Instances/Engine read for OQ-2; transition.ex:373-379 dispatch_end/3 and engine.ex:2724 / sub_process.ex:1198 activated_nodes construction read for OQ-3), not inherited from the design doc's own framing. Satisfies docs/anti-patterns.md's re-derivation discipline."
+    },
+    "artifacts_out": [
+      "handoffs/WF02-REQ207-20260901/step-02d-reviewer.json"
+    ],
+    "issues": [],
+    "next_action": "Route to TEST-DESIGNER (3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "commit_hash": null
+}

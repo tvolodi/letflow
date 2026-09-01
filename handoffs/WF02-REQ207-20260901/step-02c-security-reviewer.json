@@ -44,24 +44,10 @@
       "workaround_isolation_check": "Independently examined whether the test-local workaround (giving the sub-process child a pending HUMAN_TASK instead of a synchronously-completing START->END graph) introduces any tenant-isolation risk of its own: it does not. The workaround only changes which of two already-existing, already-reviewed process-graph shapes a single-tenant test scenario exercises -- it adds no new query, no new prefix-handling, no new cross-tenant code path. The child instance is created, addressed, and torn down entirely within the same single provisioned tenant schema as the rest of the scenario (same schema_name, same teardown call). No independent security concern found beyond ELIXIR-DEV's own characterization.",
       "oq5_finding": "MINOR, R-Co scenario-corpus reachability (OQ-5, same class as ISS-0388/ISS-0391). No security relevance -- this is a fixture-provenance/traceability gap (whether the 4 Vortex scenario YAMLs can be traced back to real R-Co source), not a data-exposure, injection, or secret-handling concern. Agrees with ELIXIR-DEV's characterization; no independent security angle found."
     },
-    "artifacts_out": [
-      "handoffs/WF02-REQ207-20260901/step-02c-security-reviewer.json"
-    ],
+    "artifacts_out": [],
     "issues": [],
     "next_action": "Route to REVIEWER (2d)"
   },
   "rework_count": 0,
-  "max_rework": 3,
-  "commit_hash": null,
-  "invariant_results": {
-    "INV-1": "APPLIES -- PASS",
-    "INV-2": "NOT-APPLICABLE (S4 not started)",
-    "INV-3": "NOT-APPLICABLE (S5 not started)",
-    "INV-4": "APPLIES -- PASS",
-    "INV-5": "NOT-APPLICABLE (S4 not started)",
-    "INV-6": "satisfied by this handoff",
-    "INV-7": "APPLIES -- PASS",
-    "INV-8": "APPLIES -- PASS",
-    "INV-9": "NOT-APPLICABLE (no outbound tenant-controlled URL in this diff)"
-  }
+  "max_rework": 3
 }

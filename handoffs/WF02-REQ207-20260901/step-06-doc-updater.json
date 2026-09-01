@@ -48,13 +48,11 @@
       "docs/requirements.yaml",
       "docs/status/requirement_status.v7.yaml",
       "docs/status/requirement_status.index.yaml",
-      "docs/migration/stage-7-simulation-uat-parity.md",
-      "handoffs/WF02-REQ207-20260901/step-06-doc-updater.json"
+      "docs/migration/stage-7-simulation-uat-parity.md"
     ],
     "issues": [],
     "next_action": "Route to ELIXIR-DEV for Step Final"
   },
   "rework_count": 0,
-  "max_rework": 3,
-  "commit_hash": null
+  "max_rework": 3
 }

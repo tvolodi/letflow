@@ -49,13 +49,10 @@
       "scenario_fixture_registration": "One-line addition to the existing closed-vocabulary compile-time map (@method_atoms), same fetch_atom!/ArgumentError discipline as the other 3 atom sets. No raw String.to_atom/1 anywhere.",
       "oq2_oq3_resolution": "Both independently re-derived from real source this session (Letflow.Instances/Engine read for OQ-2; transition.ex:373-379 dispatch_end/3 and engine.ex:2724 / sub_process.ex:1198 activated_nodes construction read for OQ-3), not inherited from the design doc's own framing. Satisfies docs/anti-patterns.md's re-derivation discipline."
     },
-    "artifacts_out": [
-      "handoffs/WF02-REQ207-20260901/step-02d-reviewer.json"
-    ],
+    "artifacts_out": [],
     "issues": [],
     "next_action": "Route to TEST-DESIGNER (3)"
   },
   "rework_count": 0,
-  "max_rework": 3,
-  "commit_hash": null
+  "max_rework": 3
 }

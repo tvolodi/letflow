@@ -78,13 +78,5 @@
     "next_action": "Route to SECURITY-REVIEWER (2c)"
   },
   "rework_count": 0,
-  "max_rework": 3,
-  "commit_hash": "f899274e",
-  "test_results": {
-    "command": "mix test test/letflow/simulation/req207_vortex_test.exs",
-    "tests_total": 4,
-    "tests_passed": 4,
-    "tests_failed": 0,
-    "output_tail": "Finished in 7.1 seconds (0.00s async, 7.1s sync)\n\nResult: 4 passed"
-  }
+  "max_rework": 3
 }

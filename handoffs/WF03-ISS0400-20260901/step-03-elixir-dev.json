@@ -1,0 +1,54 @@
+{
+  "handoff_id": "60425e0e-4e19-4140-9600-c1e3381fa506",
+  "run_id": "WF03-ISS0400-20260901",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0400-20260901/step-03-elixir-dev.json",
+  "created_at": "2026-09-01T17:16:31Z",
+  "started_at": "2026-09-01T17:16:31Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0400-nested-parallel-gateway-fix.md",
+      "lib/letflow/engine/transition.ex",
+      "docs/issues/ISS-0400.yaml"
+    ],
+    "owned_modules": ["lib/letflow/engine/transition.ex"]
+  },
+  "task": {
+    "description": "Implement the CODE-DESIGN-VALIDATOR-approved (PASS, rework iteration 1, re-gate PASS) fix design at lib/letflow/design/iss0400-nested-parallel-gateway-fix.md in lib/letflow/engine/transition.ex. The design specifies: collect_leaf_gateways/3's step-4 PARALLEL_GATEWAY clause now dispatches on gateway_role/2's existing classification -- :join/:pass_through keeps today's immediate-terminal body byte-for-byte unchanged (this is load-bearing: it is what keeps ISS-0398's own fix, and every one of its existing fixtures, unaffected); :split routes to a new private function resolve_nested_split/3, which resolves the nested split via the SAME leaf_search_state() the outer walk is already threading -- explicitly NOT resetting stack/stack_set/index/lowlink/next_index at this boundary (this was the exact mechanism that failed the design gate once at BLOCKER severity for causing infinite recursion; the design's final, twice-validated version shares state fully instead), then continues the walk from the inner join's own outgoing edge once resolved. Implement exactly what the design specifies -- read it in full, including the worked traces in sections 3.2 and the exact @spec given for resolve_nested_split/3. Do not deviate from the design's stated mechanism (particularly: do not reintroduce any reset of Tarjan bookkeeping at the resolve_nested_split/3 boundary -- that is precisely the defect the design gate caught and reworked away). If anything in the design turns out to be mechanically infeasible against real Elixir/the real existing code (the same class of finding that triggered ISS-0392's own design rework), report it honestly rather than forcing something that doesn't actually work, and flag it in your result rather than silently improvising a different mechanism.",
+    "acceptance_criteria": [
+      "collect_leaf_gateways/3's PARALLEL_GATEWAY dispatch matches the design's :join/:pass_through vs :split branching exactly, with the :join/:pass_through path unchanged from current behavior",
+      "resolve_nested_split/3 is implemented per the design's @spec and does not reset stack/stack_set/index/lowlink/next_index at its own boundary",
+      "mix compile --warnings-as-errors is clean",
+      "mix format --check-formatted is clean",
+      "Existing test/letflow/engine/parallel_gateway_test.exs suite still passes unchanged (non-regression of ISS-0398's own fix)",
+      "No changes outside lib/letflow/engine/transition.ex unless the design explicitly requires them"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "Not yet completed by the receiving agent.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0400-20260901",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0400-20260901",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Not yet dispatched"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

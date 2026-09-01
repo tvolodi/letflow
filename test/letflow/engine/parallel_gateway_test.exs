@@ -63,6 +63,67 @@ defmodule Letflow.Engine.ParallelGatewayTest do
     )
   end
 
+  # ISS-0398 regression fixture (lib/letflow/design/iss0398-walk-to-gateway-fix.md
+  # §4): a "split" PARALLEL_GATEWAY with 2 outgoing edges. Branch 0 is the
+  # original zero-hop shape (split -> join directly, kept as a control
+  # branch in the same fixture). Branch 1 passes through "gw", an
+  # EXCLUSIVE_GATEWAY with 2 outgoing edges, both of which reconverge on the
+  # same "join" node (the diamond shape from §2.4) -- this is the shape
+  # ISS-0398.yaml's own kyc-routing scenario has, and the one
+  # collect_leaf_gateways/3 must resolve where the old walk_to_gateway/3
+  # failed the whole split at instance-creation time.
+  defp branch_with_exclusive_gateway_graph do
+    graph(
+      [
+        node("split", :PARALLEL_GATEWAY),
+        node("gw", :EXCLUSIVE_GATEWAY),
+        node("route-a", :HUMAN_TASK),
+        node("route-b", :HUMAN_TASK),
+        node("join", :PARALLEL_GATEWAY),
+        node("e", :END)
+      ],
+      [
+        edge("e-split-0", "split", "join"),
+        edge("e-split-1", "split", "gw"),
+        edge("e-gw-a", "gw", "route-a"),
+        edge("e-gw-b", "gw", "route-b"),
+        edge("e-route-a-join", "route-a", "join"),
+        edge("e-route-b-join", "route-b", "join"),
+        edge("e-join-e", "join", "e")
+      ]
+    )
+  end
+
+  # ISS-0398 negative fixture (design doc §4): identical to
+  # branch_with_exclusive_gateway_graph/0's branch 1 except "route-b" dead-ends
+  # at a separate :END node "e2" instead of reconverging on "join". One of
+  # "gw"'s two paths reaches the real join, the other dead-ends -- the
+  # per-branch singleton-leaf-set rule (design doc §2.5) must still reject
+  # this branch as ambiguous, not accept it just because one of its paths
+  # happens to reach the right gateway.
+  defp ambiguous_branch_dead_ends_graph do
+    graph(
+      [
+        node("split", :PARALLEL_GATEWAY),
+        node("gw", :EXCLUSIVE_GATEWAY),
+        node("route-a", :HUMAN_TASK),
+        node("route-b", :HUMAN_TASK),
+        node("join", :PARALLEL_GATEWAY),
+        node("e", :END),
+        node("e2", :END)
+      ],
+      [
+        edge("e-split-0", "split", "join"),
+        edge("e-split-1", "split", "gw"),
+        edge("e-gw-a", "gw", "route-a"),
+        edge("e-gw-b", "gw", "route-b"),
+        edge("e-route-a-join", "route-a", "join"),
+        edge("e-route-b-dead", "route-b", "e2"),
+        edge("e-join-e", "join", "e")
+      ]
+    )
+  end
+
   # Runs the split dispatch once and returns {new_state, branch_ids} where
   # branch_ids is in edges_out declaration order (b0, b1, b2).
   defp do_split(g, initial_token_id \\ "t1") do
@@ -343,6 +404,40 @@ defmodule Letflow.Engine.ParallelGatewayTest do
       # left untouched.
       assert merge_events == []
       assert final_state.variables["x"] == "b"
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # ISS-0398 -- a fork branch containing a non-PARALLEL_GATEWAY branching
+  # node (an EXCLUSIVE_GATEWAY) before reaching its join must still resolve,
+  # per lib/letflow/design/iss0398-walk-to-gateway-fix.md §4.
+  # ---------------------------------------------------------------------
+
+  describe "transition/3 -- PARALLEL_GATEWAY split with an EXCLUSIVE_GATEWAY inside a branch (ISS-0398)" do
+    test "a branch that passes through an EXCLUSIVE_GATEWAY before reconverging on the join still resolves and splits successfully" do
+      g = branch_with_exclusive_gateway_graph()
+      state = instance_state([token("split", "t1")])
+
+      assert {:ok, new_state, [{:parallel_split, "t1", "split", branch_ids}]} =
+               Transition.transition(g, state, {:advance_token, "t1"})
+
+      assert length(branch_ids) == 2
+
+      assert %JoinCounter{} = counter = new_state.join_counters["join"]
+      assert counter.expected_from_branches == MapSet.new(branch_ids)
+
+      # Branch 1's new token lands on "gw" -- the split itself only ever
+      # advances each branch one hop to its own edge.target; the deeper
+      # subtree search is a pure lookahead and never advances any token.
+      assert Enum.map(new_state.tokens, & &1.node_id) |> Enum.sort() == ["gw", "join"]
+    end
+
+    test "a branch whose EXCLUSIVE_GATEWAY has one path reaching the join and another dead-ending still fails the whole split" do
+      g = ambiguous_branch_dead_ends_graph()
+      state = instance_state([token("split", "t1")])
+
+      assert {:error, {:no_matching_join_found, "split"}} =
+               Transition.transition(g, state, {:advance_token, "t1"})
     end
   end
 end

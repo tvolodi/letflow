@@ -798,9 +798,13 @@ defmodule Letflow.Engine.Transition do
     end
   end
 
-  # design doc §3.3 -- walks forward from each branch's own first edge target
-  # along single-outgoing-edge chains until a PARALLEL_GATEWAY node is
-  # reached; succeeds iff every branch agrees on the same such node.
+  # design doc (lib/letflow/design/iss0398-walk-to-gateway-fix.md) §2.5 -- for
+  # each split-edge's target, collect_leaf_gateways/3 explores every path
+  # forward through the branch's subtree; a branch resolves only if its leaf
+  # set is a singleton {:gateway, id} (any dead end, or any internal
+  # disagreement between its own paths, fails the branch). Cross-branch
+  # agreement (every branch must resolve to the *same* gateway id) is
+  # unchanged from the original design (req051 §3.3).
   @spec find_matching_join(Graph.t(), Node.t()) ::
           {:ok, join_node_id :: String.t()} | {:error, :no_matching_join}
   defp find_matching_join(definition_snapshot, node) do
@@ -808,15 +812,17 @@ defmodule Letflow.Engine.Transition do
 
     edges_out
     |> Enum.reduce_while({:ok, nil}, fn edge, {:ok, acc_join_id} ->
-      case walk_to_gateway(definition_snapshot, edge.target, MapSet.new()) do
-        {:ok, gateway_id} ->
+      leaves = collect_leaf_gateways(definition_snapshot, edge.target, MapSet.new())
+
+      case MapSet.to_list(leaves) do
+        [{:gateway, gateway_id}] ->
           cond do
             acc_join_id == nil -> {:cont, {:ok, gateway_id}}
             acc_join_id == gateway_id -> {:cont, {:ok, acc_join_id}}
             true -> {:halt, {:error, :no_matching_join}}
           end
 
-        :error ->
+        _not_a_singleton_gateway ->
           {:halt, {:error, :no_matching_join}}
       end
     end)
@@ -827,35 +833,50 @@ defmodule Letflow.Engine.Transition do
     end
   end
 
-  # Follows single-outgoing-edge chains from `node_id` until a
-  # PARALLEL_GATEWAY node is reached. `visited` guards against an infinite
-  # loop in a malformed graph. Returns :error if :END is reached first, if a
-  # node with more than one outgoing edge is encountered before any
-  # PARALLEL_GATEWAY, or if a cycle is detected.
-  @spec walk_to_gateway(Graph.t(), String.t(), MapSet.t(String.t())) ::
-          {:ok, String.t()} | :error
-  defp walk_to_gateway(definition_snapshot, node_id, visited) do
+  @type branch_leaf :: {:gateway, String.t()} | :dead_end
+
+  # design doc §2.2-2.4 -- explores every path forward from `node_id`,
+  # returning the set of leaves reached: {:gateway, id} for every
+  # PARALLEL_GATEWAY node reached (a terminal, never traversed past --
+  # §2.3's nested-PARALLEL_GATEWAY exclusion boundary), :dead_end for every
+  # path that hits a cycle, an unresolved node_id, or a node with zero
+  # outgoing edges (e.g. :END). At a branching node (out-degree > 1, in
+  # practice an EXCLUSIVE_GATEWAY), `visited` is copied -- not merged or
+  # threaded -- across sibling edges, so two paths that both pass through a
+  # shared downstream node (a diamond reconvergence) don't falsely trip each
+  # other's cycle guard (§2.4). Total and terminating: `visited` strictly
+  # grows along any single path, and the node set is finite.
+  @spec collect_leaf_gateways(Graph.t(), String.t(), MapSet.t(String.t())) ::
+          MapSet.t(branch_leaf())
+  defp collect_leaf_gateways(definition_snapshot, node_id, visited) do
     if MapSet.member?(visited, node_id) do
-      :error
+      MapSet.new([:dead_end])
     else
       case find_node(definition_snapshot.nodes, node_id) do
         nil ->
-          :error
+          MapSet.new([:dead_end])
 
         %Node{node_type: :PARALLEL_GATEWAY, id: gateway_id} ->
-          {:ok, gateway_id}
+          MapSet.new([{:gateway, gateway_id}])
 
         %Node{} = current_node ->
           case Enum.filter(definition_snapshot.edges, &(&1.source == current_node.id)) do
+            [] ->
+              MapSet.new([:dead_end])
+
             [single_edge] ->
-              walk_to_gateway(
+              collect_leaf_gateways(
                 definition_snapshot,
                 single_edge.target,
                 MapSet.put(visited, node_id)
               )
 
-            _other ->
-              :error
+            outgoing_edges ->
+              next_visited = MapSet.put(visited, node_id)
+
+              outgoing_edges
+              |> Enum.map(&collect_leaf_gateways(definition_snapshot, &1.target, next_visited))
+              |> Enum.reduce(&MapSet.union/2)
           end
       end
     end

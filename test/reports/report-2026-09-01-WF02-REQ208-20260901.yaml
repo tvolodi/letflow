@@ -1,0 +1,130 @@
+# Test run report — WF-02 Step 4 (REQ-208)
+
+requirement_id: REQ-208
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ208-20260901
+date_utc: 2026-09-01T12:07:00Z
+
+git:
+  branch: feature/WF02-REQ208-20260901
+  diff_vs_main_stat: >
+    Confirmed via `git diff origin/main...HEAD --stat`: 25 files changed,
+    3195 insertions(+), 11 deletions(-). Touches only:
+    docs/anti-patterns.md, docs/requirements.yaml,
+    docs/status/requirement_status.index.yaml,
+    docs/status/requirement_status.v7.yaml,
+    handoffs/WF02-REQ208-20260901/*, handoffs/orchestrator.log,
+    handoffs/registry.json,
+    lib/letflow/design/req208-meridian-scenario-execution.md,
+    test/fixtures/simulation/scenarios/{loan-origination-above-threshold,
+    loan-origination-below-threshold,regulatory-compliance-review-bafin}.yaml,
+    test/letflow/simulation/req208_meridian_test.exs,
+    test/reports/req208-meridian-scenario-findings.yaml,
+    test/specs/REQ-208.md, test/support/simulation/runner.ex,
+    test/support/simulation/scenario_fixture.ex.
+    Does NOT touch test/mix/tasks/letflow_check_toolchain_test.exs or any
+    other file behind a pre-existing failure.
+
+environment:
+  toolchain: "local, via `source ~/.asdf/asdf.sh` -- elixir 1.20.3-otp-29 / erlang 29.0.5 (matches .tool-versions pin)"
+  postgres_container: letflow-1-postgres-1 (brought up via `sudo -n docker compose up -d`; keycloak-1 also Running)
+  db_port: "LETFLOW_DB_PORT=5463 from untracked .env"
+  rustc_on_path: "absent -- System.cmd(\"rustc\", [\"--version\"]) raises :enoent, confirmed directly in test output"
+
+commands_run:
+  deps_get: "mix deps.get -> all dependencies fetched (network available in this environment)"
+  compile: "mix compile --warnings-as-errors --force -> 'Compiling 197 files (.ex)' / 'Generated letflow app', exit 0, zero warnings"
+  full_suite: "bash scripts/test_parallel.sh (N=8, derived from nproc)"
+  targeted_req208: "mix test test/letflow/simulation/req208_meridian_test.exs --no-color -> 'Result: 3 passed'"
+  targeted_simulation_dir: "mix test test/letflow/simulation/ --no-color -> 'Result: 28 passed' (REQ-205/206/207/208 combined)"
+  check_test: "mix letflow.check.test (full mix test subprocess + ISS-0069 dead-default-arg substring gate)"
+  toolchain_repro: "mix test test/mix/tasks/letflow_check_toolchain_test.exs -> 'Result: 32/34 passed' / 'Failed: 2 tests', both :enoent on System.cmd(\"rustc\", ...)"
+
+verdict: PASS (both full-suite failures are the pre-existing, documented rustc-absent-from-PATH CheckToolchainTest gap, entirely outside this branch's diff; REQ-208's own 3 tests pass; REQ-205/206/207/208 simulation suite combined is 28/28 green; compile clean)
+
+full_suite_result:
+  combined: "2994 tests, 6 properties, 2 failures (2998/3000 passed)"
+  per_partition:
+    - "partition 1: 349 tests, 0 properties, 0 failures, exit 0"
+    - "partition 2: 375 tests, 0 properties, 0 failures, exit 0"
+    - "partition 3: 448 tests, 2 properties, 0 failures, exit 0"
+    - "partition 4: 504 tests, 0 properties, 0 failures, exit 0"
+    - "partition 5: 342 tests, 0 properties, 0 failures, exit 0"
+    - "partition 6: 331 tests, 0 properties, 2 failures, exit 2"
+    - "partition 7: 344 tests, 0 properties, 0 failures, exit 0"
+    - "partition 8: 301 tests, 4 properties, 0 failures, exit 0"
+
+req208_own_tests:
+  file: test/letflow/simulation/req208_meridian_test.exs
+  result: "3 passed, 0 failures (Finished in 4.8 seconds)"
+
+req205_206_207_208_combined:
+  path: test/letflow/simulation/
+  result: "28 passed, 0 failures (Finished in 32.9 seconds)"
+  note: >
+    REQ-205's own coverage lives in test/letflow/simulation/runner_test.exs,
+    runner_template_and_outcomes_test.exs, and test/fixtures/simulation/
+    fixture_shape_test.exs (per test/specs/REQ-205.md) rather than a
+    req205_*.exs file; REQ-206 is req206_swiftroute_test.exs and REQ-207 is
+    req207_vortex_test.exs. Running the whole test/letflow/simulation/
+    directory exercises REQ-205/206/207/208 together: all green, additivity
+    confirmed.
+
+compile_warnings_as_errors:
+  command: "mix compile --warnings-as-errors --force"
+  output: "Compiling 197 files (.ex) / Generated letflow app"
+  exit_code: 0
+
+check_test_result:
+  command: "mix letflow.check.test"
+  underlying_mix_test: "Result: 3001/3003 passed (6/6 properties, 2995/2997 tests), 10 excluded / Failed: 2 tests"
+  raised: "mix letflow.check.test: FAILED -- underlying `mix test` run exited 2 (real test failure/error)."
+  note: >
+    This task raises on nonzero mix test exit before reaching its own
+    ISS-0069 substring check, so its own "OK -- no ... ISS-0069 warnings"
+    message was never printed. The 2 underlying failures are the same
+    rustc-absent CheckToolchainTest pair as the full-suite run above
+    (independently re-run test/mix/tasks/letflow_check_toolchain_test.exs
+    directly to confirm: same 2 failures, same :enoent stack trace).
+
+failures_detail:
+  - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+    file: test/mix/tasks/letflow_check_toolchain_test.exs:289
+    error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], stderr_to_stdout: true)"
+    diagnosis: >
+      rustc entirely absent from PATH in this sandbox (confirmed: `which
+      rustc` returns nothing). Same documented pre-existing environmental
+      gap referenced by REQ-206/207's own TEST-RUNNER reports. Confirmed
+      unrelated to this branch: `git diff origin/main...HEAD --stat` shows
+      REQ-208 never touches test/mix/tasks/letflow_check_toolchain_test.exs
+      or lib/mix/tasks/letflow.check_toolchain.ex.
+  - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+    file: test/mix/tasks/letflow_check_toolchain_test.exs:274
+    error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], stderr_to_stdout: true)"
+    diagnosis: "Same root cause and same pre-existing/unrelated-to-branch status as above."
+
+acceptance_criteria_verified:
+  - "AC (all 3 REQ-208 tests pass): PASS -- 3/3 in req208_meridian_test.exs"
+  - "AC (REQ-205/206/207's own tests still pass unchanged): PASS -- test/letflow/simulation/ combined 28/28 passed"
+  - "AC (no NEW failures vs. pre-existing baseline): PASS -- both full-suite failures map to test/mix/tasks/letflow_check_toolchain_test.exs, a file this branch's diff never touches (confirmed via git diff --stat and by independently reproducing the same :enoent rustc failure directly)"
+  - "AC (mix compile --warnings-as-errors exits 0): PASS -- 197 files compiled, 0 warnings"
+  - "AC (mix letflow.check.test run, not just plain mix test): PASS -- run to completion (1423.3s), same 2 pre-existing failures, no additional ISS-0069-class violation"
+
+summary: >
+  REQ-208's own 3 tests (test/letflow/simulation/req208_meridian_test.exs)
+  pass cleanly in 4.8s. The combined REQ-205/206/207/208 simulation suite
+  (test/letflow/simulation/) is 28/28 green, confirming REQ-208 did not
+  regress its predecessor requirements' tests. mix compile
+  --warnings-as-errors --force is clean (197 files, 0 warnings, exit 0).
+  The full suite via scripts/test_parallel.sh (N=8, derived from nproc)
+  reports 2998/3000 passed, 2 failures; mix letflow.check.test's own full
+  run (1423.3s) reports 3001/3003 passed, 2 failures -- the same 2 in both
+  runs. Both failures are the long-documented rustc-absent-from-PATH
+  CheckToolchainTest environmental gap (test/mix/tasks/letflow_check_toolchain_test.exs),
+  independently reproduced directly (`which rustc` empty; running that
+  test file alone gives the identical 2 failures with the identical
+  :enoent stack trace) and confirmed untouched by this branch's diff via
+  `git diff origin/main...HEAD --stat`. No new failure was introduced.
+  Recommendation: route to RELEASE-VALIDATOR (Step 5).

@@ -1,0 +1,152 @@
+run_id: WF02-REQ211-20260901
+date: "2026-09-01"
+agent: TEST-RUNNER
+requirement: REQ-211
+queue_task: 394
+github_issue: GH#774
+closes: [GH#769, ISS-0390]
+branch: main
+commit_tested: 8e6da088 (working-tree changes on top, not yet committed -- see index_verification below)
+
+index_verification:
+  performed: true
+  reason: >
+    TEST-DESIGN-VALIDATOR's gate run found and fixed a stale-empty-blob git-index
+    anomaly for two new files during its own run; ORCH re-staged both and reported
+    mix compile --warnings-as-errors clean. Verified independently before running
+    anything else, per dispatch instructions.
+  command_1: "git status --porcelain"
+  command_2: >
+    git ls-files -s lib/letflow/repository/attachments.ex
+    priv/repo/migrations/20260901000002_create_instance_attachments.exs
+  result:
+    lib/letflow/repository/attachments.ex: "100644 ce83b7f5ca6fd495b9062da82ff25b7cee33d321 0 -- real content blob, not e69de29b (empty)"
+    priv/repo/migrations/20260901000002_create_instance_attachments.exs: "100644 4686346018b29ee2c572cee4ff14251b061c141d 0 -- real content blob, not e69de29b (empty)"
+  conclusion: "PASS -- index reflects real file content on both files. Safe to proceed."
+
+toolchain:
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5], Elixir 1.20.3"
+  docker: "letflow-postgres-1 (already running), letflow-keycloak-1 (started this run)"
+  db_port_source: "default 5462 (no LETFLOW_DB_PORT override in .env)"
+
+req211_diff_scope:
+  command: "git diff HEAD --stat"
+  note: >
+    Working tree is on branch main with REQ-211 changes staged/unstaged rather
+    than committed to a feature branch (git diff main...HEAD returned empty since
+    HEAD == main); used git diff HEAD --stat instead to establish the diff footprint.
+  files:
+    - lib/letflow/repository.ex
+    - lib/letflow/repository/artifact.ex
+    - lib/letflow/repository/attachment.ex (new)
+    - lib/letflow/repository/attachments.ex (new)
+    - lib/letflow/tenant_provisioning.ex
+    - priv/repo/migrations/20260901000001_add_content_to_repository_artifacts.exs (new)
+    - priv/repo/migrations/20260901000002_create_instance_attachments.exs (new)
+    - test/letflow/repository/attachments_test.exs (new)
+    - test/letflow/support/tenant_fixture_test.exs
+    - test/support/tenant_fixture.ex
+    - lib/letflow/design/req211-instance-attachments-core.md (new, design doc)
+
+full_suite_run_1:
+  command: "sh scripts/test_parallel.sh"
+  partition_count: 16
+  partition_count_source: nproc
+  test_pool_size: 5
+  exit_code: 1
+  combined_result_line: "combined: 855 tests, 0 properties, 0 failures (855/855 passed)"
+  status: ABORTED_ENVIRONMENTAL
+  note: >
+    Partitions 1-4 ran and passed cleanly (855 tests total). Partitions 5-16 all
+    crashed before producing a Result: line (exit 1, "no Result: line in its log").
+    Confirmed root cause by reading partition-5.log directly: Postgrex.Error 42P07
+    duplicate_table on relation "secrets" during concurrent ecto.create/ecto.migrate
+    -- this matches this project's documented ISS-0219 signature exactly (nproc-derived
+    N=16 exceeding this host's Postgres/CPU capacity for concurrent migrate). Not a
+    code regression; not counted as a suite failure. Re-ran per README's documented
+    workaround (TEST_PARALLEL_N=4).
+
+full_suite_run_2:
+  command: "TEST_PARALLEL_N=4 sh scripts/test_parallel.sh"
+  partition_count: 4
+  partition_count_source: env override (TEST_PARALLEL_N, per README's documented ISS-0219 workaround)
+  test_pool_size: 21
+  exit_code: 0
+  combined_result_line: "combined: 3005 tests, 6 properties, 0 failures (3011/3011 passed)"
+  passed: 3011
+  failed: 0
+  skipped: 0
+  total: 3011
+  per_partition:
+    - partition: 1
+      tests: 688
+      properties: 1
+      failures: 0
+      exit: 0
+    - partition: 2
+      tests: 760
+      properties: 0
+      failures: 0
+      exit: 0
+    - partition: 3
+      tests: 766
+      properties: 4
+      failures: 0
+      exit: 0
+    - partition: 4
+      tests: 791
+      properties: 1
+      failures: 0
+      exit: 0
+
+isolated_reruns:
+  - file: test/letflow/repository/attachments_test.exs
+    command: "MIX_ENV=test MIX_TEST_PARTITION=iso1 mix test test/letflow/repository/attachments_test.exs"
+    result_line: "Result: 18 passed"
+    passed: 18
+    failed: 0
+    order_dependence_or_shared_fixture_issues: none_observed
+
+  - file: test/letflow/repository_test.exs
+    command: "MIX_ENV=test MIX_TEST_PARTITION=iso2 mix test test/letflow/repository_test.exs"
+    result_line: "Result: 28 passed"
+    passed: 28
+    failed: 0
+    order_dependence_or_shared_fixture_issues: none_observed
+
+  conclusion: >
+    Both files pass identically standalone and inside the full parallel run
+    (18 and 28 respectively in both contexts). No evidence of order-dependence
+    or shared-fixture leakage between these two files or with the rest of the suite.
+
+known_environmental_issues_checked:
+  - id: ISS-0219
+    description: "nproc-derived N (16) exceeds host Postgres/CPU capacity for concurrent ecto.create/migrate"
+    encountered_this_run: true
+    matched_signature: true
+    evidence: "partition-5.log: Postgrex.Error 42P07 duplicate_table relation \"secrets\" during migration"
+    action_taken: "re-ran with TEST_PARALLEL_N=4 per README workaround; result clean (0 failures)"
+    blocking: false
+
+  - id: CheckToolchainTest_rustc_absent
+    encountered_this_run: false
+
+  - id: wasm_hang_isolated_subprocess_flake
+    encountered_this_run: false
+
+failures_found: []
+
+verdict: PASS
+verdict_note: >
+  REQ-211's own test coverage (attachments_test.exs, 18 tests) and the adjacent
+  repository_test.exs (28 tests) both pass cleanly, standalone and as part of the
+  full 3011-test suite. The full suite is 100% green (3011/3011) once run at
+  TEST_PARALLEL_N=4, which is this project's own documented workaround for a
+  known, non-code-related host-capacity issue (ISS-0219) -- confirmed by reading
+  the actual crash log (Postgrex 42P07 during concurrent migration), not assumed
+  by pattern-matching alone. No pre-existing environmental failures (rustc-absent
+  toolchain check, :wasm_hang flake) were encountered in either run. Git index for
+  the two files flagged by TEST-DESIGN-VALIDATOR's gate run was independently
+  re-verified clean (real content blobs, not stale empty blobs) before any test
+  was run. No action required from ELIXIR-DEV; ready to proceed to
+  RELEASE-VALIDATOR.

@@ -1478,8 +1478,16 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 0
+    entries: 1
     note: >
+      Incremented to 1 by ORCH's Step-Final rebase of
+      feature/WF02-REQ211-20260901 onto main, appending REQ-211's own
+      done-event (originally written into the just-closed volume 7 before
+      this branch was rebased) as this volume's first entry. `grep -c "^  -
+      req:" docs/status/requirement_status.v8.yaml` = 1 on-disk entry. `wc`:
+      223 lines / 13574 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
+
       Opened by WF02-REQ208-20260901's own Step 6 DOC-UPDATER roll, successor
       to volume 7. Created with volume 7's header text verbatim (volume
       number, opening date and predecessor path updated) and an empty

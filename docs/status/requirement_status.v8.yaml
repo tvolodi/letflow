@@ -167,3 +167,57 @@
 
 
 history:
+  - req: REQ-211
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-01T14:06:49Z"
+    note: >
+      WF02-REQ211-20260901 done (queue task 394, GH#774, stage S6). No
+      started-event exists anywhere for this run -- gap flagged to ORCH
+      rather than fabricated here. Closes half of GH#769/ISS-0390 ("missing
+      attachment/document-upload subsystem", found during REQ-206's S7
+      SwiftRoute simulation batch); the other half, the HTTP route surface,
+      is REQ-212 (task 395, GH#775), still open -- letflow-queue task 390
+      (ISS-0390) is DELIBERATELY left open/locked and must NOT be released
+      yet, since releasing it now would prematurely close GH#769 while the
+      actual HTTP surface doesn't exist. New instance_attachments table
+      (tenant-scoped, tenant_id retained, instance_id required, per decision
+      0003-B) plus Letflow.Repository.Attachments context module (upload/2,
+      list/2, get/2, delete/2). Reuses REQ-202's repository_artifacts table
+      as the underlying byte store via a migration addendum adding a
+      `content :binary` column to that already-done REQ-202 table --
+      REVIEWER-approved schema change to a previously-shipped table, flagged
+      explicitly rather than silently made. Cross-module change to
+      lib/letflow/repository.ex: its private upsert_content/5 was widened to
+      a public upsert_content/6 so this requirement's upload/2 could reuse
+      REQ-202's existing hash-and-store path instead of forking a second
+      one; REQ-202's own 28/28 tests still pass unchanged. Path: 1
+      CODE-DESIGN-VALIDATOR rework round (a real byte-storage gap in the
+      design -- repository_artifacts had no binary payload column before
+      the migration addendum closed it). TEST-DESIGNER found and closed 2
+      real coverage gaps via mutation testing. ISS-0399/GH#781 filed for the
+      deliberately deferred antivirus/content-scanning follow-up named in
+      this requirement's own moduledoc, not silently omitted.
+      RELEASE-VALIDATOR independently re-verified all 11 acceptance criteria
+      PASS, and caught a genuine git-index staleness landmine before
+      signing off -- two files were staged as empty blobs despite correct
+      working-tree content; a fix was required and applied before the final
+      PASS. Full suite 3011/3011 (TEST_PARALLEL_N=4, documented ISS-0219
+      workaround). docs/migration/stage-6-operational-cross-cutting.md NOT
+      touched by this step: its line 108 "S6 is now complete" sentence,
+      written when REQ-199 landed 2026-08-31 (before REQ-211/REQ-212 were
+      discovered via REQ-206's S7 findings), is now stale -- flagged here as
+      a finding, per REQ-ANALYST's own note that this line is a historical
+      record not to silently edit, rather than corrected in this step.
+
+      NOTE ON VOLUME PLACEMENT: this entry originally landed in
+      requirement_status.v7.yaml (written before a sibling session's
+      WF02-REQ208-20260901 merged and closed volume 7 at 42 entries,
+      rolling to volume 8). ORCH's Step-Final rebase of
+      feature/WF02-REQ211-20260901 onto main found this and moved the entry
+      here, into the now-current volume 8, rather than reopening the
+      closed/frozen volume 7 -- matching the precedent this file's own
+      history already sets for a requirement whose append lands on a branch
+      that a concurrent merge later rolls out from under it. `grep -c "^  -
+      req:" docs/status/requirement_status.v8.yaml` = 1 on-disk entry, the
+      first in this volume.

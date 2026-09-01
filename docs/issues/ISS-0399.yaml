@@ -1,0 +1,31 @@
+id: ISS-0399
+title: "No content-scanning/antivirus pipeline for instance attachments (REQ-211 deferred follow-up)"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ211-20260901
+discovered_at: "2026-09-01T13:05:00Z"
+severity: MINOR
+tags: [security, attachments, s6, deferred]
+description: >
+  REQ-211 (Instance-attachment schema and core upload/download/list context
+  module, letflow-queue task 394, GH#774, closes GH#769/ISS-0390) deliberately
+  defers AV/content-scanning of uploaded attachment bytes, named explicitly as
+  a follow-up in its own moduledoc per its design
+  (lib/letflow/design/req211-instance-attachments-core.md §4.0 item 8) and
+  confirmed by REVIEWER at WF-02 step-02d. Filed now so this deferral is a
+  real tracked issue rather than only prose in a moduledoc, per that design's
+  own instruction to file it before the requirement is marked done. Not
+  currently a blocking concern -- uploads are tenant-scoped, size-capped at
+  25 MiB, and content_type is never trusted as validated -- but before this
+  subsystem is exposed to less-trusted upload sources (a public-facing route,
+  external integrations) a scanning pass should be designed and added.
+affected_files:
+  - lib/letflow/repository/attachments.ex
+related:
+  - REQ-211
+  - REQ-212
+source: >
+  lib/letflow/design/req211-instance-attachments-core.md §4.0 item 8;
+  REVIEWER handoff, WF02-REQ211-20260901 step-02d.
+queue_task_id: 399
+github_issue: 781
+status: open

@@ -37,6 +37,19 @@ defmodule Letflow.Repository do
   route or controller is added by this requirement -- see the design doc §8
   and REQ-202's own text for why the `/repository/artifacts` HTTP surface is
   out of scope for this batch.
+
+  ## REQ-211 cross-module change -- `upsert_content/6` is now public
+
+  Was `defp upsert_content/5`; REQ-211 (`lib/letflow/design/req211-instance-attachments-core.md`
+  §2A/§4.1 step 3, option (a)) changed it to a public, documented
+  `upsert_content/6` (added a required `content :: binary()` parameter,
+  writing it into the `content` column REQ-211's own migration addendum adds
+  to `repository_artifacts`) so `Letflow.Repository.Attachments.upload/2` can
+  share this exact upsert-by-hash path rather than duplicating it against
+  `Letflow.Repository.Artifact.changeset/2` directly. This is a REQ-211
+  requirement reaching into REQ-202's existing module -- flagged explicitly
+  for REVIEWER sign-off per the design doc, not a REQ-202-internal change.
+  `create/2`'s own external `@spec`/behavior is unchanged by this addition.
   """
 
   import Ecto.Query
@@ -124,22 +137,41 @@ defmodule Letflow.Repository do
         content_type,
         hash,
         byte_size,
+        canonical,
         @max_create_retries
       )
     end
   end
 
-  defp create_with_retries(_attrs, _prefix, _tenant_id, _content_type, _hash, _byte_size, 0) do
+  defp create_with_retries(
+         _attrs,
+         _prefix,
+         _tenant_id,
+         _content_type,
+         _hash,
+         _byte_size,
+         _canonical,
+         0
+       ) do
     {:error, :version_number_conflict}
   end
 
-  defp create_with_retries(attrs, prefix, tenant_id, content_type, hash, byte_size, retries_left) do
+  defp create_with_retries(
+         attrs,
+         prefix,
+         tenant_id,
+         content_type,
+         hash,
+         byte_size,
+         canonical,
+         retries_left
+       ) do
     artifact_kind = Map.fetch!(attrs, :artifact_kind)
     artifact_name = Map.fetch!(attrs, :artifact_name)
 
     result =
       Repo.transaction(fn ->
-        upsert_content(prefix, tenant_id, hash, content_type, byte_size)
+        upsert_content(prefix, tenant_id, hash, content_type, byte_size, canonical)
 
         {artifact_id, version_number} =
           next_version(prefix, artifact_kind, artifact_name)
@@ -178,6 +210,7 @@ defmodule Letflow.Repository do
             content_type,
             hash,
             byte_size,
+            canonical,
             retries_left - 1
           )
         else
@@ -186,12 +219,42 @@ defmodule Letflow.Repository do
     end
   end
 
-  defp upsert_content(prefix, tenant_id, hash, content_type, byte_size) do
+  @doc """
+  Upserts a `repository_artifacts` row keyed by `content_hash`
+  (`on_conflict: :nothing, conflict_target: :content_hash`) -- identical
+  content already present in this tenant's schema means no new row is
+  written (REPO-01's dedup, AC1). Shared between `create/2` (this module's
+  own `artifact_versions` write path) and `Letflow.Repository.Attachments.upload/2`
+  (REQ-211), per that requirement's design doc §4.1 step 3, option (a):
+  a single shared upsert path avoids two independently-maintained copies of
+  "how to upsert a `repository_artifacts` row" ever drifting apart.
+
+  `content` is the actual raw bytes stored into the `content :bytea` column
+  REQ-211's migration addendum added (`lib/letflow/design/req211-instance-attachments-core.md`
+  §2A) -- for `create/2`'s own callers this is the canonicalised form; for
+  `Letflow.Repository.Attachments.upload/2` it is the raw uploaded bytes
+  (attachments are never canonicalised, per that module's own moduledoc).
+
+  On a `content_hash` collision, this does NOT re-validate or overwrite the
+  existing row's `content_type`/`byte_size`/`content` -- "a hash collision
+  implies identical content by construction, so there is nothing to
+  reconcile" (design §4.2 step 3's own reasoning, carried over unchanged).
+  """
+  @spec upsert_content(
+          prefix :: String.t(),
+          tenant_id :: Ecto.UUID.t(),
+          hash :: binary(),
+          content_type :: String.t(),
+          byte_size :: non_neg_integer(),
+          content :: binary()
+        ) :: {:ok, Artifact.t()} | {:error, Ecto.Changeset.t()}
+  def upsert_content(prefix, tenant_id, hash, content_type, byte_size, content) do
     attrs = %{
       content_hash: hash,
       tenant_id: tenant_id,
       content_type: content_type,
-      byte_size: byte_size
+      byte_size: byte_size,
+      content: content
     }
 
     %Artifact{}

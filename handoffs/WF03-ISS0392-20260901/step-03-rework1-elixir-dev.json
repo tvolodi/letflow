@@ -1,0 +1,58 @@
+{
+  "handoff_id": "d8384671-092c-409d-9c38-9ad5301166d3",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0392-20260901/step-03-rework1-elixir-dev.json",
+  "created_at": "2026-09-01T10:46:44Z",
+  "started_at": "2026-09-01T10:46:44Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0392-multi-task-records-collision-fix.md",
+      "docs/issues/ISS-0392.yaml",
+      "handoffs/WF03-ISS0392-20260901/step-02b-regate-code-design-validator.json",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/sub_process.ex",
+      "lib/letflow/engine/task_activation.ex"
+    ],
+    "owned_modules": ["lib/letflow/engine.ex", "lib/letflow/engine/sub_process.ex"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: your prior attempt (step-03-elixir-dev.json) correctly stopped and reported that the original design's mechanism was mechanically infeasible rather than implementing something broken -- that was the right call, not a mistake, and this is not a rework of anything you did wrong. CODE-DESIGNER has since revised the design to Revision 2, a build-time skip/defer mechanism, and CODE-DESIGN-VALIDATOR independently re-verified it against real Ecto.Multi semantics and PASSED it (see step-02b-regate-code-design-validator.json). Read the CURRENT lib/letflow/design/iss0392-multi-task-records-collision-fix.md directly in full -- it is substantially different from what you read before (only build_task_activation_and_reconciliation_multi/3 changes to /4, adding a skip_task_activation?: boolean() parameter/predicate computed from prepared_children's already-known child_initial_state.status, decided before either Multi step is built). Implement this revised design exactly. If you find this revision is ALSO not mechanically sound once you're implementing it, stop and report that again rather than diverging -- but the design gate this time included an independent verification of the exact class of problem that broke the first attempt, so this should be implementable as specified.",
+    "acceptance_criteria": [
+      "Implementation matches the REVISED design's signature change exactly (build_task_activation_and_reconciliation_multi/3 -> /4 with the skip predicate, as specified in the current design doc)",
+      "A synchronously-completing SUB_PROCESS child no longer raises Ecto.Multi.merge_results/3's key-collision RuntimeError (verify with an ad-hoc/throwaway check before finishing, not just by inspection)",
+      "The async/queued SUB_PROCESS completion path's existing behavior is unchanged (no existing test in test/letflow/engine_sub_process_test.exs or test/letflow/engine_test.exs regresses)",
+      "mix compile --warnings-as-errors passes",
+      "mix format --check-formatted passes",
+      "No implementation deviates from the approved design without being flagged explicitly as an issue in result.issues"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

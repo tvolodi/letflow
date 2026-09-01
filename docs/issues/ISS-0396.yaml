@@ -1,0 +1,48 @@
+id: ISS-0396
+title: "Engine defect: Ecto.Multi :task_records collision when 2+ SUB_PROCESS children complete synchronously in the same hop-chain transaction"
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF03-ISS0392-20260901
+discovered_at: "2026-09-01T11:25:16Z"
+severity: MINOR
+tags: [engine, sub-process, ecto-multi, req-062, iss-0392-followup]
+description: >
+  Distinct from ISS-0392 (fixed in WF03-ISS0392-20260901). ISS-0392 fixed the
+  call(1)-vs-call(2) collision (the unconditional hop-chain task-activation
+  step vs. one synchronously-completing SUB_PROCESS child's completion
+  cascade, for the same parent_instance_id), via a build-time skip using
+  prepared_children's already-known child_initial_state.status (see
+  lib/letflow/design/iss0392-multi-task-records-collision-fix.md).
+
+  SECURITY-REVIEWER (WF03-ISS0392-20260901's step-03b) and REVIEWER
+  (step-03c) independently confirmed a second, still-unaddressed collision
+  class: when TWO OR MORE SUB_PROCESS children spawned in the same hop chain
+  (e.g. via a prior PARALLEL_GATEWAY split) each complete synchronously, each
+  one's own completion cascade independently attempts to append
+  {:task_records, parent_instance_id} for the SAME parent -- a
+  call(2)-vs-call(2) collision that ISS-0392's skip_task_activation?
+  predicate has no mechanism to prevent (it only gates the single
+  unconditional call(1) step against a colliding call(2), not multiple
+  call(2)-shaped cascades against each other).
+
+  Confirmed pre-existing (zero-diff in ISS-0392's own fix) and out of scope
+  for ISS-0392's own filed repro (single synchronous child only). Rolls back
+  cleanly on collision (no silent tenant-data loss) -- filed MINOR, not
+  MAJOR, per SECURITY-REVIEWER's own severity assessment.
+
+  Reproduction target: a parent hop chain with a PARALLEL_GATEWAY spawning
+  2+ SUB_PROCESS children, at least 2 of which have START->END
+  (synchronously-completing) child graphs, completing in the same parent
+  transaction.
+affected_files:
+  - lib/letflow/engine.ex
+  - lib/letflow/engine/sub_process.ex
+related:
+  - ISS-0392
+  - REQ-062
+source: >
+  handoffs/WF03-ISS0392-20260901/step-03b-security-reviewer.json
+  (result.issues[0]), handoffs/WF03-ISS0392-20260901/step-03c-reviewer.json
+  (independent confirmation of out-of-scope characterization).
+queue_task_id: 396
+github_issue: 776
+status: open

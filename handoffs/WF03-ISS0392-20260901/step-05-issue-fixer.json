@@ -1,0 +1,63 @@
+{
+  "handoff_id": "3e15884b-e304-47d5-bcde-159a9db22d0a",
+  "run_id": "WF03-ISS0392-20260901",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0392-20260901/step-05-issue-fixer.json",
+  "created_at": "2026-09-01T11:57:39Z",
+  "started_at": "2026-09-01T11:57:39Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0392.yaml",
+      "docs/issues/ISS-0396.yaml",
+      "test/specs/ISS-0392.md",
+      "handoffs/WF03-ISS0392-20260901/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0392-20260901/step-02-rework1-code-designer.json",
+      "handoffs/WF03-ISS0392-20260901/step-03-rework1-elixir-dev.json",
+      "handoffs/WF03-ISS0392-20260901/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0392-20260901/step-03c-reviewer.json",
+      "handoffs/WF03-ISS0392-20260901/step-04-test-designer.json",
+      "handoffs/WF03-ISS0392-20260901/step-04b-test-design-validator.json",
+      "handoffs/WF03-ISS0392-20260901/step-04c-test-runner.json",
+      "docs/agents/protocols/ISSUE_QUEUE.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0392-20260901 (checkout/pull it first). Close out ISS-0392: this run's root cause (Ecto.Multi :task_records key collision on a synchronously-completing SUB_PROCESS child) was genuinely fixed -- implementation PASSED SECURITY-REVIEWER and REVIEWER, a fail-then-pass regression test was written and independently re-verified by TEST-DESIGN-VALIDATOR, and the full suite passed 2999/2999 (TEST-RUNNER, test/reports/report-20260901-WF03-ISS0392-20260901.yaml). This is a genuine 'resolved' outcome per docs/agents/protocols/ISSUE_QUEUE.md's status vocabulary -- a defect existed and was removed, with a regression test proving it. Update docs/issues/ISS-0392.yaml: status: resolved, plus resolved_in_run:/resolved_at: (real UTC timestamp from the clock). Also add a brief resolution note citing the fix commit and the regression test file path. Per WF-03 Step 5's HARD evidence requirement, close GitHub issue #772 with gh issue close 772 --comment citing the exact required content: 'Fixed in <run-id>. See docs/issues/ISS-0392.yaml and the regression test at <test file path>.' -- do not omit the comment, and do not claim more than what was actually done. Note: docs/issues/ISS-0396.yaml already exists (ORCH registered it via letflow-queue as task 396/GH#776) for the distinct, still-open follow-up collision class (2+ concurrent synchronously-completing SUB_PROCESS children) that SECURITY-REVIEWER/REVIEWER found and confirmed out of scope for ISS-0392 -- do not close GH#776, and cross-reference ISS-0396 in ISS-0392's own resolution note (and vice versa if useful) so a future reader sees the relationship.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0392.yaml: status: resolved with resolved_in_run:/resolved_at: (real UTC clock timestamp, WF03-ISS0392-20260901), citing the fix commit and regression test path",
+      "gh issue close 772 --comment run with the exact required content pattern for a 'resolved' close: 'Fixed in WF03-ISS0392-20260901. See docs/issues/ISS-0392.yaml and the regression test at test/letflow/engine_sub_process_test.exs.'",
+      "docs/issues/ISS-0396.yaml left status: open, GH#776 left open -- not touched by this close",
+      "ISS-0392.yaml's resolution note cross-references ISS-0396 as the distinct follow-up",
+      "Handoff completed with status PASS, next_action: Route to Step Final"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

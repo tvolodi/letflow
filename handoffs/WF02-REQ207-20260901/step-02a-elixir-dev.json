@@ -1,0 +1,90 @@
+{
+  "handoff_id": "step02a-WF02-REQ207-20260901",
+  "run_id": "WF02-REQ207-20260901",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ207-20260901/step-02a-elixir-dev.json",
+  "created_at": "2026-09-01T07:50:57Z",
+  "started_at": "2026-09-01T07:50:57Z",
+  "completed_at": "2026-09-01T07:50:57Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-207"],
+    "issue_ids": [],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ207-20260901/step-00-git-setup.json",
+      "handoffs/WF02-REQ207-20260901/step-01-code-designer.json",
+      "handoffs/WF02-REQ207-20260901/step-01-code-designer-rework1.json",
+      "handoffs/WF02-REQ207-20260901/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ207-20260901/step-01b-code-design-validator-recheck1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req207-vortex-scenario-execution.md",
+      "docs/requirements.yaml#REQ-207",
+      "test/support/simulation/runner.ex",
+      "test/support/simulation/scenario_fixture.ex",
+      "test/letflow/simulation/req206_swiftroute_test.exs",
+      "lib/letflow/instances.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/sub_process.ex",
+      "lib/letflow/event_store/instance_projection.ex"
+    ],
+    "branch_name": "feature/WF02-REQ207-20260901"
+  },
+  "task": {
+    "description": "Implement REQ-207 per the CODE-DESIGN-VALIDATOR-approved design doc: author 4 Vortex scenario YAML fixtures, test-local simplified process graphs for the SERVICE_TASK gap (§2), a new :audit_event_ordering verification method on Runner (§3.2, the one real harness extension this requirement makes), the test module test/letflow/simulation/req207_vortex_test.exs (§5), and the findings report (§6) -- resolving OQ-2 (sub-process child lookup) and OQ-3 (terminal END node identity) against the real source, not guessed.",
+    "acceptance_criteria": [
+      "AC1: vortex-production-order-above-threshold executes end-to-end, all 4 expected outcomes verified against real queried state",
+      "AC2: vortex-supplier-quality-deviation-critical executes end-to-end, EO-001's ordering claim verified by real timestamp comparison via the new :audit_event_ordering method, sub-process spawn verified via a real child InstanceProjection row",
+      "AC3: vortex-supplier-quality-deviation-false-positive executes end-to-end, reaches end-false-positive specifically, verified by querying real event/state evidence distinguishing it from end-closed",
+      "AC4: vortex-entity-list-filter-and-page disposition determined by 3 live-re-derived signals, recorded BLOCKED_ON_DEPENDENCY (not UNBUILT_FEATURE), never loaded/run through Runner.run/1",
+      "AC5: report states a closed disposition for all 4 scenarios, no step or scenario left unaddressed",
+      "AC6: mix test / mix compile --warnings-as-errors pass, real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All 6 ACs met. Implemented per the design doc's sections with two deliberate, disclosed deviations from what the design guessed (both resolved against real source, not silently assumed):\n\n1. OQ-2 (sub-process child lookup): confirmed no by-parent-instance-id context function exists on Letflow.Instances/Letflow.Engine. Resolved via a direct, test-local Repo query against InstanceProjection.parent_instance_id (a real, populated column -- Letflow.Engine.SubProcess.insert_child_instance_projection/8 sets it on every sub-process child row) -- the narrowest read consistent with 'no context function exists yet.'\n\n2. OQ-3 (terminal END node identity): RE-RESOLVED DIFFERENTLY than either candidate the design named. Read lib/letflow/engine/transition.ex:373-379 (dispatch_end/3): a token is unconditionally dropped from instance_state.tokens the instant it reaches an END node. This means InstanceProjection.current_nodes -- the design's own first-named candidate -- is ALWAYS [] once status == :completed, for every terminal END node alike; it cannot distinguish end-false-positive from end-closed. Confirmed empirically this session (both scenarios' current_nodes were [] after completion, not [terminal_node_id] as guessed). The real, queryable distinguishing signal turned out to be each scenario's own last relevant TASK_COMPLETED/SUB_PROCESS_COMPLETED event payload's 'activated_nodes' field (via Letflow.Instances.history/3) -- for the false-positive scenario, severity-classification's own completion event shows activated_nodes == [] (direct route to end-false-positive); for the critical scenario, the SAME completion event shows activated_nodes == ['corrective-action-subprocess'] (non-terminal at that point), and the LATER SUB_PROCESS_COMPLETED event on the parent's own stream shows activated_nodes == [] once corrective-action-subprocess completes into end-closed. This is disclosed in the test module's own moduledoc and in both scenario YAMLs' comments, not silently substituted.\n\nAlso found and worked around a real, pre-existing Engine defect (REQ-062, out of this requirement's scope to fix, flagged not silently patched): a SUB_PROCESS child that completes SYNCHRONOUSLY within the same hop-chain transaction that spawned it causes two Ecto.Multi steps to collide on the same {:task_records, parent_instance_id} key (lib/letflow/engine.ex's append_sub_process_children_creation_multi/5 chaining into Letflow.Engine.SubProcess.append_start_multi/7's own maybe_chain_synchronous_completion/6 branch) -- raises 'cannot merge Multi' (Ecto.Multi.merge_results/3). Worked around test-locally, same class of workaround REQ-206 already used for the SERVICE_TASK gap: @simple_child_graph (the corrective-action-subprocess node's child definition) is START -> HUMAN_TASK -> END, not a synchronously-completing START -> END, so the child's own completion is driven independently (its own Letflow.Engine.complete_task/3 call, own transaction) rather than cascading inside the parent's hop-chain transaction. Documented in the test module with a full explanation; this is a real Engine gap someone should file a follow-up issue for, not this requirement's own defect.\n\nFiles delivered: 4 scenario YAMLs under test/fixtures/simulation/vortex/scenarios/ (production-order-above-threshold, supplier-quality-deviation-critical, supplier-quality-deviation-false-positive, entity-list-filter-and-page -- the last structurally complete but never loaded/run per §4.3). test/support/simulation/runner.ex extended with :audit_event_ordering (Scenario.expected_outcome().verification.method's 4th value, a new verify_outcome/2 clause, and a shared find_audit_entry/2 helper factored out of the existing :audit_event clause -- no behavior change to the 3 existing methods). test/support/simulation/scenario_fixture.ex's @method_atoms extended with 'audit_event_ordering' => :audit_event_ordering. test/letflow/simulation/req207_vortex_test.exs: 4 describe blocks mirroring req206_swiftroute_test.exs's structure (DataCase async: false, Sandbox :auto, TenantSlugFixture.unique_slug('req207'), teardown dropping the tenant schema), @simple_production_order_graph and @simple_supplier_deviation_graph as inline module attributes (not committed process_*.yaml files, matching REQ-206's @simple_approval_graph precedent). test/reports/req207-vortex-scenario-findings.yaml populated with real observed values from this session's own mix test run (real timestamps, real activated_nodes evidence, real disposition counts) -- no placeholders.\n\nGates: mix compile --warnings-as-errors -- clean, 0 warnings. mix format --check-formatted -- clean after one auto-format pass on the test file (list literals). Self-review: no tenant/user input string-interpolated into raw SQL (the one ~s(...) DROP SCHEMA interpolation is test-local schema_name from TenantProvisioning.schema_name_for_tenant/1, matching req206_swiftroute_test.exs's own established pattern verbatim, not new risk); no unresolved {:ok, _} = match on an external-I/O-reachable path (every new match in runner.ex is inside a with/case that routes failure to :fail with observed evidence, matching the existing 3 methods' discipline); no new public functions added (all new runner.ex/scenario_fixture.ex functions are private, no @doc gap). mix test test/letflow/simulation/req207_vortex_test.exs run against real Postgres (Docker letflow-2-postgres-1, port 5472, started this session -- was down at session start): 'Finished in 7.1 seconds (0.00s async, 7.1s sync)' / 'Result: 4 passed', 0 failures, real quoted output. Did not touch lib/letflow/process_instance.ex or README.md's state diagram (out of scope -- no state-machine shape changed). Concurrent-session check: git fetch + git log before AND immediately before push both showed origin/feature/WF02-REQ207-20260901 unchanged at 0888cfc8 (this run's own starting point) -- no sibling Step 2a work found; push was a clean fast-forward (0888cfc8..f899274e).",
+    "artifacts_out": [
+      "test/fixtures/simulation/vortex/scenarios/production-order-above-threshold.yaml",
+      "test/fixtures/simulation/vortex/scenarios/supplier-quality-deviation-critical.yaml",
+      "test/fixtures/simulation/vortex/scenarios/supplier-quality-deviation-false-positive.yaml",
+      "test/fixtures/simulation/vortex/scenarios/entity-list-filter-and-page.yaml",
+      "test/support/simulation/runner.ex",
+      "test/support/simulation/scenario_fixture.ex",
+      "test/letflow/simulation/req207_vortex_test.exs",
+      "test/reports/req207-vortex-scenario-findings.yaml"
+    ],
+    "issues": [
+      {
+        "id": null,
+        "severity": "MAJOR",
+        "title": "Pre-existing Engine defect (REQ-062): a synchronously-completing SUB_PROCESS child collides its own Ecto.Multi :task_records step against the parent hop-chain's own step for the same instance_id",
+        "detail": "lib/letflow/engine.ex's append_sub_process_children_creation_multi/5 (called from build_complete_task_tail_multi/6, the complete_task/3 hop-chain tail) appends SubProcess.append_start_multi/7 onto the SAME Multi that already appended build_task_activation_and_reconciliation_multi/3 for the parent's own instance_id. When the spawned child completes SYNCHRONOUSLY (its own advance_until_stable/4 reaches :completed inside prepare_child_activation/4, before any Multi step exists), append_start_multi/7's maybe_chain_synchronous_completion/6 branch chains append_completion_multi/5 -> build_completion_write_steps/12 -> TaskActivation.append_multi_from_existing_records(parent_instance_id, ...) (keyed {:task_records, parent_instance_id}) into the SAME transaction -- colliding with the parent hop-chain's own earlier {:task_records, parent_instance_id} step (via build_task_activation_and_reconciliation_multi/3). Raises RuntimeError 'cannot merge Multi; the following operations were found in both Ecto.Multi: [task_records: \"<parent_instance_id>\"]' (Ecto.Multi.merge_results/3), surfaced to the caller as Plug.Conn.WrapperError. Reproduced directly this session against a real running instance via POST /api/v1/tasks/:id/complete when the completing task's hop chain enters a SUB_PROCESS node whose child definition is a synchronously-completing START->END graph. Worked around test-locally (this requirement's own child definition uses a pending HUMAN_TASK instead, completed independently), but the underlying Engine code path is unfixed. Recommend filing a follow-up issue against REQ-062's own module (lib/letflow/engine.ex / lib/letflow/engine/sub_process.ex) at Step Final.",
+        "affected_requirement": "REQ-062"
+      },
+      {
+        "id": null,
+        "severity": "MINOR",
+        "title": "OQ-5 (design §7) still open: R-Co source reachability for the 4 real Vortex scenario YAMLs",
+        "detail": "Same class of gap ISS-0388 fixed for company/org/process fixtures, not yet fixed for scenario files. Design doc recommends filing a follow-up issue at Step Final naming test/fixtures/simulation/vortex/scenarios/*.yaml as the affected files, mirroring REQ-206's own recommended follow-up. Not filed by this handoff (ELIXIR-DEV scope is implementation, not issue-queue triage) -- flagged here so ORCH/Step Final can act on it.",
+        "affected_requirement": "REQ-207"
+      }
+    ],
+    "next_action": "Route to SECURITY-REVIEWER (2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "commit_hash": "f899274e",
+  "test_results": {
+    "command": "mix test test/letflow/simulation/req207_vortex_test.exs",
+    "tests_total": 4,
+    "tests_passed": 4,
+    "tests_failed": 0,
+    "output_tail": "Finished in 7.1 seconds (0.00s async, 7.1s sync)\n\nResult: 4 passed"
+  }
+}

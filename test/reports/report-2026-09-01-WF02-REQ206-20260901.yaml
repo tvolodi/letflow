@@ -1,0 +1,142 @@
+# Test run report — WF-02 Step 4 (REQ-206)
+
+requirement_id: REQ-206
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ206-20260901
+date_utc: 2026-09-01T05:55:00Z
+
+git:
+  branch: feature/WF02-REQ206-20260901
+  diff_vs_main_stat: >
+    Confirmed via `git diff origin/main...HEAD --stat`: 21 files changed,
+    2481 insertions(+), 12 deletions(-). Touches only:
+    handoffs/WF02-REQ206-20260901/*, handoffs/orchestrator.log,
+    handoffs/registry.json, lib/letflow/design/req206-swiftroute-scenario-execution.md,
+    test/fixtures/simulation/scenarios/{shipment-attach-delivery-note,
+    shipment-high-value-happy,shipment-ops-timeout-escalation,
+    tenant-onboarding-happy}.yaml, test/letflow/simulation/req206_swiftroute_test.exs,
+    test/support/simulation/runner.ex, test/support/simulation/scenario_fixture.ex.
+    Does NOT touch docs/status/requirement_status.v7.yaml,
+    test/docs/requirement_status_invariants_test.exs, or
+    test/mix/tasks/letflow_check_toolchain_test.exs.
+
+environment:
+  toolchain: "local, via `source ~/.asdf/asdf.sh` -- asdf current confirms elixir 1.20.3-otp-29 / erlang 29.0.5, both selected by this repo's own .tool-versions (exact pin match, not off-pin)"
+  postgres_container: letflow-1-postgres-1 (already Running via `sudo -n docker compose up -d`; keycloak-1 also Running)
+  db_port: "LETFLOW_DB_PORT=5463 from untracked .env"
+  rustc_on_path: "absent -- System.cmd(\"rustc\", [\"--version\"]) raises :enoent, confirmed directly in test output"
+
+commands_run:
+  compile: "mix compile --warnings-as-errors --force -> 'Compiling 180 files (.ex)' / 'Generated letflow app', exit 0, zero warnings"
+  full_suite: "TEST_PARALLEL_N=4 bash scripts/test_parallel.sh"
+  targeted: "mix test test/letflow/simulation/req206_swiftroute_test.exs --no-color -> 'Finished in 7.8 seconds' / 'Result: 6 passed'"
+  check_test: "mix letflow.check.test (full mix test subprocess + ISS-0069 dead-default-arg substring gate)"
+
+verdict: PASS (all 5 full-suite failures are pre-existing, documented, and outside this branch's diff; REQ-206's own 6 tests pass; compile clean; no ISS-0069 warning class present)
+
+full_suite_result:
+  combined: "2987 tests, 6 properties, 5 failures (2988/2993 passed)"
+  per_partition:
+    - "partition 1: 738 tests, 0 properties, 3 failures, exit 2"
+    - "partition 2: 737 tests, 2 properties, 0 failures, exit 0"
+    - "partition 3: 741 tests, 2 properties, 0 failures, exit 0"
+    - "partition 4: 771 tests, 2 properties, 2 failures, exit 2"
+
+req206_own_tests:
+  file: test/letflow/simulation/req206_swiftroute_test.exs
+  result: "6 passed, 0 failures (Finished in 7.8 seconds)"
+  tests:
+    - "swiftroute-tenant-onboarding-happy: EO-001..003 verified via Seed; all 5 gui steps DEFERRED_TO_S8"
+    - "swiftroute-shipment-high-value-happy: dispatcher -> ops-approve -> CEO co-sign; 4 expected_outcomes evaluated with evidence"
+    - "swiftroute-shipment-ops-timeout-escalation: step 1 :ok, step 2 :skip/:minor (advance-timer absent), step 3 :ok"
+    - "swiftroute-shipment-attach-delivery-note: disposition :unbuilt_feature; zero steps executed; R-Co evidence in notes"
+    - "UNIMPLEMENTED findings: advance-timer endpoint absent from Letflow.Router and Routers.Instances"
+    - "UNIMPLEMENTED findings: no attachment/document-upload routes in any lib/letflow/routers/ file"
+
+compile_warnings_as_errors:
+  command: "mix compile --warnings-as-errors --force"
+  output: "Compiling 180 files (.ex) / Generated letflow app"
+  exit_code: 0
+
+check_test_result:
+  command: "mix letflow.check.test"
+  underlying_mix_test: "Result: 2991/2996 passed (6/6 properties, 2985/2990 tests), 10 excluded / Failed: 5 tests"
+  raised: "mix letflow.check.test: FAILED -- underlying `mix test` run exited 2 (real test failure/error)."
+  note: >
+    This task raises on nonzero mix test exit BEFORE reaching its own
+    ISS-0069 substring check (see lib/mix/tasks/letflow.check.test.ex
+    run/1), so its own "OK -- no ... ISS-0069 warnings" message was never
+    printed. Independently verified the ISS-0069 substring
+    ("default values for the optional arguments") does not appear anywhere
+    in test_parallel.sh's 4 partition logs (grep, zero matches). All
+    warnings actually present across the 4 partition logs belong to
+    already-documented deferred classes (ExUnit.Case.register_test/4
+    deprecation -- ISS-0044 Group 1; redefining module
+    CreateEventTypeRegistry -- ISS-0044 Group 3; unused
+    alias/variable/function; a deliberately-mismatched-type negative test
+    in ModuleRegistry; an intentional never-matches clause in a
+    platform_test.exs negative-path test) -- none are the dead-default-arg
+    class this task specifically gates.
+
+failures_detail:
+  - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+    file: test/mix/tasks/letflow_check_toolchain_test.exs:289
+    error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], stderr_to_stdout: true)"
+    diagnosis: >
+      rustc entirely absent from PATH in this sandbox. Same documented
+      pre-existing environmental gap as test/reports/report-2026-08-30-WF03-ISS0378-20260830.yaml
+      and test/reports/report-2026-08-29-WF02-REQ181-20260829.yaml. Confirmed
+      unrelated to this branch: `git diff origin/main...HEAD --stat` shows
+      REQ-206 never touches test/mix/tasks/letflow_check_toolchain_test.exs
+      or lib/mix/tasks/letflow.check_toolchain.ex.
+  - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+    file: test/mix/tasks/letflow_check_toolchain_test.exs:274
+    error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], stderr_to_stdout: true)"
+    diagnosis: "Same root cause and same pre-existing/unrelated-to-branch status as above."
+  - test: "test A4a: every entry in every volume uses the documented req/event vocabulary (Letflow.Docs.RequirementStatusInvariantsTest)"
+    file: test/docs/requirement_status_invariants_test.exs:162
+    error: "assert drift == [] failed -- undeclared vocabulary violation at docs/status/requirement_status.v7.yaml:971, field req, value \"ISS-0388\""
+    diagnosis: >
+      Docs-status vocabulary drift in requirement_status.v7.yaml, entirely
+      unrelated to REQ-206's diff. `git diff origin/main...HEAD --stat`
+      confirms this branch never touches docs/status/requirement_status.v7.yaml
+      or test/docs/requirement_status_invariants_test.exs -- since the
+      branch made zero changes to either file, this failure's content is
+      byte-identical to whatever main already has, and is therefore
+      pre-existing by construction, not introduced here.
+  - test: "test A5: the on-disk vocabulary-anomaly set equals the index's declared set exactly ... (Letflow.Docs.RequirementStatusInvariantsTest)"
+    file: test/docs/requirement_status_invariants_test.exs:278
+    error: "assert on_disk == declared ... failed -- same ISS-0388 entry as A4a, undeclared in known_anomalies"
+    diagnosis: "Same root cause and same pre-existing/unrelated-to-branch status as A4a above."
+  - test: "test A9: every indexed volume's declared entries: count equals what is actually on disk (Letflow.Docs.RequirementStatusInvariantsTest)"
+    file: test/docs/requirement_status_invariants_test.exs:464
+    error: "assert mismatches == [] failed -- requirement_status.v7.yaml declared 35, actual 36"
+    diagnosis: "Same docs-status volume, same pre-existing/unrelated-to-branch status."
+
+acceptance_criteria_verified:
+  - "AC (all 6 REQ-206 tests pass): PASS -- 6/6 in req206_swiftroute_test.exs"
+  - "AC (no NEW failures vs. pre-existing baseline): PASS -- all 5 full-suite failures map to files this branch's diff never touches (git diff --stat confirms zero changes to those 3 files)"
+  - "AC (mix compile --warnings-as-errors exits 0): PASS -- 180 files compiled, 0 warnings"
+  - "AC (mix letflow.check.test run, ISS-0069 dead-default-arg class checked): verified via independent grep across all 4 full-suite partition logs -- zero occurrences of the gated substring"
+
+summary: >
+  REQ-206's own 6 tests (test/letflow/simulation/req206_swiftroute_test.exs)
+  pass cleanly in 7.8s. mix compile --warnings-as-errors is clean (180
+  files, 0 warnings). The full suite via scripts/test_parallel.sh
+  (TEST_PARALLEL_N=4) reports 2988/2993 passed, 5 failures, and mix
+  letflow.check.test's own full run reports 2991/2996 passed (10 excluded
+  by design -- wasm_hang tests deferred to that task's isolated second
+  subprocess, which this run never reached because the first subprocess
+  already failed on the 5 known pre-existing failures), 5 failures. Every
+  one of the 5 failures is independently confirmed pre-existing and
+  unrelated to REQ-206: 2 are the long-documented rustc-absent-from-PATH
+  CheckToolchainTest environmental gap (test/mix/tasks/letflow_check_toolchain_test.exs,
+  untouched by this branch), and 3 are a requirement_status.v7.yaml
+  docs-status vocabulary/count drift (test/docs/requirement_status_invariants_test.exs,
+  also untouched by this branch) -- confirmed via `git diff origin/main...HEAD
+  --stat`, which shows REQ-206's diff never modifies either file, so their
+  content on this branch is byte-identical to main's and any failure there
+  cannot have been introduced by REQ-206. No new failure was introduced.
+  Recommendation: route to RELEASE-VALIDATOR (Step 5).

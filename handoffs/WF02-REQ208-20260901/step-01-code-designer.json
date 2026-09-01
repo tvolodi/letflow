@@ -1,0 +1,44 @@
+{
+  "handoff_id": "WF02-REQ208-20260901-step-01",
+  "run_id": "WF02-REQ208-20260901",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ208-20260901/step-01-code-designer.json",
+  "created_at": "2026-09-01T09:52:00Z",
+  "started_at": "2026-09-01T09:52:00Z",
+  "completed_at": "2026-09-01T10:41:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-208"],
+    "issue_ids": ["ISS-0389", "ISS-0393"],
+    "artifacts_in": [
+      "docs/requirements.yaml#REQ-208",
+      "lib/letflow/design/req206-swiftroute-scenario-execution.md",
+      "lib/letflow/design/req207-vortex-scenario-execution.md",
+      "test/support/simulation/runner.ex",
+      "test/support/simulation/scenario_fixture.ex",
+      "test/fixtures/simulation/meridian/company.yaml",
+      "test/fixtures/simulation/meridian/org_structure.yaml",
+      "test/fixtures/simulation/meridian/process_claim_intake.yaml",
+      "test/fixtures/simulation/meridian/process_policy_binding.yaml",
+      "docs/issues/ISS-0389.yaml",
+      "docs/issues/ISS-0393.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ208-20260901"
+  },
+  "task": {
+    "description": "Design REQ-208: run Meridian's 3 simulation scenarios (loan-origination-above-threshold, loan-origination-below-threshold, regulatory-compliance-review-bafin) through REQ-205/206/207's shared harness. Design surface flagged in advance: (1) whether Runner's task_assigned method supports a negative (absence) assertion for EO-002; (2) whether Runner's disposition vocabulary has a BLOCKED status distinct from SKIP for the BaFin scenario's step 3 (same missing advance-timer capability as ISS-0389, no documented fallback unlike REQ-206's shipment-timeout scenario); (3) confirm REQ-199's actual status and state plainly whether its correlated-effect-ordering guarantees are genuinely exercised by this scenario's parallel-fork/quorum mechanism."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design doc written: lib/letflow/design/req208-meridian-scenario-execution.md (commit 0149ca5f, pushed to origin/feature/WF02-REQ208-20260901). Key findings and decisions: (1) test/fixtures/simulation/meridian/{company,org_structure,process_claim_intake,process_policy_binding}.yaml are all real, ISS-0388-ported content (confirmed by direct read) -- both real process fixtures already model exactly the two processes REQ-208's three scenarios need (Loan Origination for both loan scenarios, Regulatory Compliance Review for the BaFin scenario), so no new process fixture is authored, only REQ-206/207-style test-local SERVICE_TASK-elided simplified graphs (Section 3). (2) Confirmed no native multi-voter/quorum-counting primitive exists in Letflow.Engine (grep, zero hits) -- the real process fixture's own header comment already states 'multi-voter, mapped to HUMAN_TASK', so the single credit-committee-vote HUMAN_TASK node is modeled as recording an already-tallied 2-of-3 vote via its output_variables in one complete call; quorum is verified as an internal-consistency check on real queried state, not as engine-enforced quorum counting (Section 0.6). (3) Runner's task_assigned method confirmed NOT able to express absence (it requires resolving an existing task_ref) -- new verification method :no_task_of_type designed (Section 2.2), querying Tasks.list_tasks/2 across all statuses and asserting no item's node_id matches, satisfying EO-002's negative assertion against real queried state. (4) Confirmed Runner's disposition vocabulary has no BLOCKED value -- new :blocked step-level via/outcome value designed (Section 2.1), distinct from :skip: :skip is reserved for a scenario-documented fallback (REQ-206's precedent), :blocked is for an undocumented, genuinely unreachable capability gap (fixed severity :blocker, required blocked_by issue reference, e.g. 'ISS-0389' -- no new issue filed, ISS-0389 already names REQ-208 in its related field). (5) REQ-199 independently confirmed status: done (docs/requirements.yaml, verified this session) -- BUT a material caveat is stated regardless: Runner.run_steps/1 dispatches every step sequentially, so this scenario's own execution does not generate genuinely concurrent completions and therefore does not independently re-exercise REQ-199's ORD-01/02/03 guards under real concurrent load, only the parallel-fork/join graph's structural shape under one-at-a-time completions (Section 0.5) -- a follow-up issue recommendation is written (Section 7) since this is a new, non-duplicate finding (checked against ISS-0388/0389/0390/0391/0392/0393). (6) ISS-0389 (advance-timer, already names REQ-208) and ISS-0393 (scenario-corpus synthetic-fixture disclosure, already names REQ-208) both referenced as-is; no third duplicate filed. 3 authored synthetic scenario YAMLs specified (Section 1.1), header-disclosure convention matching REQ-206/207. All 6 acceptance criteria mapped to concrete design elements (Section 8), 3 open questions remaining are genuine implementation-time fact-checks (Section 9), not deferred design decisions. No implementation code in the doc -- one quoted real defp code fence from an earlier draft was found and rewritten to prose before commit, since the validator gate treats any function-body-shaped fence as a violation regardless of whether it is new code or quoted-as-evidence existing code.",
+    "routing_note": "Routes to Step 1b CODE-DESIGN-VALIDATOR for hard-gate review of lib/letflow/design/req208-meridian-scenario-execution.md against REQ-208's 6 acceptance criteria, no-implementation-code discipline, and the two novel design additions (:blocked step disposition, :no_task_of_type verification method)."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": []
+}

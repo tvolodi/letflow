@@ -11995,3 +11995,226 @@ requirements:
       - "the stage doc explicitly names the 18-file tests/simulation/scenarios/platform/ corpus as out of scope for this batch and records it as a named future follow-up, distinct from the 11 tenant-business scenarios this batch covered"
       - "the requirement states a factual pass/blocked assessment of S7's correctness-gate purpose given the findings, without itself declaring the stage done -- that determination is left to ORCH/RELEASE-VALIDATOR per docs/agents/ORCHESTRATOR.md §8"
     depends_on: [REQ-206, REQ-207, REQ-208, REQ-209]
+
+  - id: REQ-211
+    title: Instance-attachment schema and core upload/download/list context module (instance_attachments, no route)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    impl_order: 394  # letflow-queue task id, GH#774
+    description: >
+      Closes GH#769 / ISS-0390 ("Missing attachment/document-upload
+      subsystem"), filed by ELIXIR-DEV during REQ-206 (S7, the SwiftRoute
+      simulation batch, merged in PR #767) and independently reconfirmed by
+      RELEASE-VALIDATOR in that same run. REQ-206's own scenario
+      swiftroute-shipment-attach-delivery-note requires attaching a document
+      to a running workflow instance; it ran with disposition
+      UNBUILT_FEATURE and zero steps executed because no such API exists.
+      REQ-206 verified this two ways, both re-confirmed here rather than
+      inherited on faith (docs/anti-patterns.md's "Inheriting a claim from a
+      record instead of re-deriving it from the source"): (1) no
+      attachment-related route exists in any lib/letflow/routers/*.ex; (2)
+      R-Co's own src/ (c:\Users\tvolo\dev\ai-dala\R-Co\) has no
+      attachment/document-upload subsystem either -- its only "attach"/
+      "document" hits are src/db/partition_attach.zig (unrelated,
+      partition-table attachment) and various RFC 9457 "problem document"
+      / SolutionPack "pack document" occurrences, none of which is a
+      file-upload feature. This is genuinely new functionality, not a
+      missed port -- there is no R-Co source to port from and, unlike
+      REQ-176/181's DLQ/webhook cores, no already-shipped web/ SPA consumer
+      contract to build to either (verified: grep of "attach"/"upload"
+      across web/src/ shows one unrelated hit, web/src/api/onboarding.ts,
+      nothing attachment-shaped). Design this requirement's API and schema
+      from the scenario's own requirements and this project's established
+      per-tenant-schema conventions, not from a contract that doesn't exist
+      yet.
+      STAGE: S6 (Operational cross-cutting), not S7. Stage-7's own doc
+      states its stage is "explicitly a correctness gate on S4/S5/S6's
+      combined output, not new functionality" -- attachments are new
+      functionality, so S6 is the correct home, alongside this stage's
+      other new-subsystem work (DLQ, webhooks, artifact store, secrets).
+      REQ-210 (S7's aggregate parity report) explicitly states in its own
+      text: "no fix for any filed gap (those become their own future
+      requirements/issues)" -- this requirement and REQ-212 are that future
+      work.
+      RELATIONSHIP TO REQ-202's artifact store: REQ-202 (done) built a
+      content-addressed store (repository_artifacts + artifact_versions)
+      for NAMED, versioned artifacts keyed by (artifact_kind, artifact_name,
+      version_number) -- process definitions, forms, schemas, scripts. That
+      shape does not fit "N ad-hoc file attachments on one running
+      instance": attachments have no meaningful artifact_name/version
+      sequence, are not subject to REQ-202's canonicalise-and-dedup-by-hash
+      semantics (a delivery note PDF is binary content hashed by byte
+      identity only, which REQ-202 already supports for binary content --
+      but attachments still need their own listing/ownership table scoped
+      to an instance, which artifact_versions does not model). DECISION,
+      stated explicitly rather than silently inherited: reuse REQ-202's
+      `repository_artifacts` table (content_hash PK, dedup-by-hash) as the
+      underlying byte store for attachment content, hashed by byte identity
+      per REQ-202's existing binary-content rule (no canonicalisation
+      needed here, and none should be applied). Do NOT reuse
+      `artifact_versions` -- build a new `instance_attachments` table that
+      references `repository_artifacts.content_hash` (FK, ON DELETE
+      RESTRICT, same pattern as artifact_versions's own FK) instead of
+      duplicating byte storage. If, once building, this reuse turns out not
+      to fit cleanly, flag it in the PR for REVIEWER sign-off rather than
+      silently forking a second content-hash store.
+      SCHEMA: `instance_attachments`, living inside each tenant's Postgres
+      schema with a tenant_id column retained, per decision
+      0003-ecto-schema-strategy.md's Decision B -- same placement REQ-176's
+      dlq_entries and REQ-181's webhook_subscriptions use, and the natural
+      choice here since an attachment is tenant business data, not a
+      cross-tenant-shared artifact the way REQ-202 debated for its own
+      store. Fields: id (uuid pk), instance_id (references the owning
+      instance; required -- this table is instance-scoped only, no
+      unattached/orphan uploads), content_hash (binary, FK to
+      repository_artifacts.content_hash, ON DELETE RESTRICT), file_name
+      (string, the caller-supplied original filename, <=255), content_type
+      (string, e.g. "application/pdf"), byte_size (bigint, denormalized
+      from repository_artifacts for cheap listing), uploaded_by (uuid, the
+      authenticated user), description (text, nullable), created_at.
+      SECURITY -- THIS REQUIREMENT IS A TENANT-DATA PATH.
+      SECURITY-REVIEWER's hard gate (docs/agents/instructions/
+      security-invariants.md) applies exactly as it does to every other
+      tenant-data-path change in this project (REQ-176/178, REQ-181/182,
+      REQ-202/203 all went through it). Specific concerns to name for that
+      gate, not resolve here: (a) upload content must never be trusted for
+      its declared content_type -- a caller-supplied MIME type is metadata,
+      not a validated fact, and this requirement's context module must not
+      let anything downstream treat it as verified; (b) byte_size must be
+      independently measured from the actual uploaded bytes, never trusted
+      from a caller-supplied field, to prevent a mismatched-size record;
+      (c) an upload size ceiling must exist (name a concrete number in the
+      design artefact, e.g. matching any existing Plug/body-size limit
+      already configured in this project, or a new explicit one if none
+      exists) so this does not become an unbounded-storage DoS vector; (d)
+      repository_artifacts is a PER-TENANT-SCHEMA table (prefix: prefix(),
+      Decision B -- confirmed in
+      priv/repo/migrations/20260830030001_create_repository_artifacts.exs
+      and lib/letflow/design/req202-artifact-repository.md §1), so
+      content_hash dedup only ever happens within one tenant's own schema:
+      two different tenants uploading byte-identical files land in two
+      entirely separate per-tenant repository_artifacts rows (in separate
+      schemas), never one shared row -- state explicitly in the moduledoc
+      that no cross-tenant content sharing occurs, since REQ-202 deliberately
+      avoided a global, cross-tenant-shared store rather than accepting one.
+      CONTEXT MODULE: upload/2 (instance_id, file bytes, file_name,
+      content_type, uploaded_by -- hashes the bytes, upserts into
+      repository_artifacts per REQ-202's existing create path for binary
+      content, creates the instance_attachments row referencing that hash;
+      uploading byte-identical content twice for the same or a different
+      instance reuses the same repository_artifacts row and creates two
+      distinct instance_attachments rows, one per instance); list/2
+      (tenant-scoped, filtered by instance_id, cursor-paginated per
+      REQ-067's existing cursor contract, same shape REQ-176's list/2 and
+      REQ-202's version history already use); get/2 (tenant-scoped fetch of
+      one attachment's metadata plus a way to retrieve its bytes -- return
+      the content_hash and byte_size so a route layer can stream the bytes
+      back from repository_artifacts without this module re-reading the
+      full byte content into memory for a metadata-only call); delete/2
+      (tenant-scoped; removes the instance_attachments row only -- the
+      underlying repository_artifacts content row is NOT deleted, since
+      REQ-202's REPO-02 immutability rule and its ON DELETE RESTRICT FK
+      already forbid deleting a referenced content row, and another
+      attachment or artifact could share the same hash; state this
+      explicitly in the moduledoc as the reason delete/2 is a metadata-only
+      operation).
+      NOT IN THIS REQUIREMENT: no route or controller file (REQ-212); no
+      antivirus/content-scanning pipeline (name it as a named, deliberately
+      deferred follow-up in the moduledoc rather than silently omitting it
+      -- flag for a future issue if this becomes a real concern before S8);
+      no change to REQ-202's repository_artifacts/artifact_versions schema
+      or canonicaliser; no web/ frontend work (no SPA consumer exists yet
+      to build against -- FRONTEND-DEV's domain, and out of scope until a
+      later requirement adds the UI).
+    acceptance_criteria:
+      - "the instance_attachments table lives inside each tenant's Postgres schema with a tenant_id column retained and instance_id required (not nullable), matching decision 0003 Decision B's pattern -- verified by inspecting the migration"
+      - "upload/2 hashes the uploaded bytes independently of any caller-supplied content_type or byte_size field, creates or reuses a repository_artifacts row keyed by that hash (byte-identity hashing, no canonicalisation, per REQ-202's existing binary-content rule), and creates one instance_attachments row referencing it -- demonstrated by uploading byte-identical content under two different instance_id values and showing one repository_artifacts row but two instance_attachments rows"
+      - "byte_size stored on the instance_attachments row is independently measured from the actual uploaded byte content, not trusted from any caller-supplied field -- demonstrated by a test that supplies a mismatched declared size and asserts the stored value reflects the real byte count"
+      - "an upload exceeding a stated, concrete size ceiling (named in this requirement's own design artefact) is rejected before being persisted, with neither a repository_artifacts row nor an instance_attachments row created -- demonstrated by an over-limit upload attempt"
+      - "list/2 is tenant-scoped and filtered by instance_id, demonstrated by an attachment uploaded under tenant A / instance X being absent from a list/2 call scoped to tenant B, and absent from a list/2 call scoped to tenant A but a different instance_id"
+      - "list/2 supports cursor pagination per REQ-067's existing contract: given more attachments than one page, the first page's next_cursor, passed back in, returns the next distinct page with no repeated or skipped ids"
+      - "delete/2 removes the instance_attachments row such that a subsequent list/2 no longer includes it, while the underlying repository_artifacts content row is left untouched and remains referenced if another instance_attachments or artifact_versions row shares its hash -- demonstrated by deleting one of two attachments sharing a hash and confirming the repository_artifacts row and the other attachment both survive"
+      - "the moduledoc states explicitly that repository_artifacts is per-tenant-schema-scoped (Decision B) so content_hash dedup never crosses tenants, and states that no canonicalisation is applied to attachment bytes (byte-identity hashing only) -- demonstrated by two different tenants uploading byte-identical content and showing two independent repository_artifacts rows (one per tenant schema), not one shared row"
+      - "the moduledoc names content-scanning/antivirus as a deliberately deferred follow-up rather than silently omitting it"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-202, REQ-072, REQ-067]
+
+  - id: REQ-212
+    title: Instance-attachment route surface (POST/GET/DELETE /api/v1/instances/:id/attachments), AttachmentsManage-gated
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    impl_order: 395  # letflow-queue task id, GH#775
+    description: >
+      Route layer atop REQ-211's instance_attachments core, mirroring
+      REQ-176/178's DLQ core/route split and REQ-181/182's webhook
+      core/route split -- this project's established pattern for a
+      new-subsystem batch in S6. Closes the route half of GH#769 / ISS-0390
+      (see REQ-211's description for the full originating-issue context;
+      not restated here).
+      Unlike REQ-178/182, there is no existing web/ SPA consumer contract
+      to build the response shape against (verified in REQ-211: no
+      attachment-shaped API client exists under web/src/api/) and no R-Co
+      route to port either. This requirement therefore DEFINES the contract
+      rather than matching one -- state the chosen response shapes plainly
+      in the moduledoc so a future FRONTEND-DEV requirement has a real
+      contract to build against, the same way REQ-176/181's core modules
+      became the binding contract for REQ-178/182's routes.
+      ROUTES, mounted under REQ-070's instances sub-router (the resource is
+      instance-scoped, matching the existing /api/v1/instances/:id/*
+      shape other instance-scoped routes already use -- check REQ-070's
+      moduledoc for the sub-router this belongs in rather than adding a new
+      top-level sub-router for a three-route surface):
+      - POST /api/v1/instances/:id/attachments -- multipart file upload;
+      calls REQ-211's upload/2 with the path's :id as instance_id, the
+      authenticated caller as uploaded_by; returns the created attachment's
+      metadata (id, file_name, content_type, byte_size, created_at at
+      minimum) -- never the raw content_hash bytes in this response, only
+      the hash value itself if surfaced at all, since callers should
+      retrieve content via the GET-with-bytes route, not by being handed
+      the store's internal hash to correlate across attachments.
+      - GET /api/v1/instances/:id/attachments -- calls REQ-211's list/2
+      scoped to :id, cursor-paginated per REQ-067's contract, response
+      shaped {items: [...], next_cursor}, matching the {items, next_cursor}
+      convention REQ-178's DLQ route and REQ-202's version history already
+      use in this project.
+      - GET /api/v1/instances/:id/attachments/:attachment_id -- returns the
+      raw file bytes with the stored content_type as Content-Type and
+      file_name reflected in a Content-Disposition header, streamed from
+      repository_artifacts via REQ-211's get/2, not the JSON metadata shape
+      the list route returns (state this content-vs-metadata distinction
+      explicitly in the moduledoc, since it is easy to conflate the two
+      GET routes' response shapes).
+      - DELETE /api/v1/instances/:id/attachments/:attachment_id -- calls
+      REQ-211's delete/2.
+      AUTHORIZATION: introduces the AttachmentsManage permission
+      (upload/delete) and AttachmentsRead (list/download) into REQ-069's
+      Letflow.Api.Authorization matrix (REQ-069 is done; this requirement
+      extends its Permission enum the same deliberate, explicit way REQ-069
+      itself notes DlqOperate/WebhooksManage were ported ahead of their
+      consuming routes -- except here the permission is genuinely new, not
+      pre-ported, so state that distinction in the moduledoc). Tenant
+      scoping follows REQ-072's cross-tenant-404 mechanism: a real
+      attachment id or instance id belonging to another tenant returns 404,
+      never 403 (REQ-072's INV-5 rule). An attachment id that is real but
+      does not belong to the :id in the path (cross-instance, same tenant)
+      must also 404, not 403 and not silently served -- this is a distinct
+      check from tenant scoping and must not be skipped because the
+      request is already tenant-authorized.
+      NOT IN THIS REQUIREMENT: no change to REQ-211's schema or context
+      module; this is the route/controller layer only. No web/ frontend
+      work (named as future scope in REQ-211's description, not this
+      requirement's job either).
+    acceptance_criteria:
+      - "POST /api/v1/instances/:id/attachments accepts a multipart upload and returns a 2xx response whose body includes at minimum id, file_name, content_type, byte_size, created_at, verified against the shape stated in this requirement's own moduledoc since no external consumer contract exists to check against"
+      - "GET /api/v1/instances/:id/attachments returns a body shaped exactly {items: [...], next_cursor: string|null}, cursor-paginated, and honors instance-scoping -- an attachment uploaded to instance X is absent from a list call for instance Y even within the same tenant"
+      - "GET /api/v1/instances/:id/attachments/:attachment_id returns the raw uploaded bytes byte-for-byte identical to what was uploaded, with Content-Type matching the stored content_type and a Content-Disposition header carrying the stored file_name"
+      - "every route requires the AttachmentsManage (upload, delete) or AttachmentsRead (list, download) permission as appropriate from REQ-069's extended matrix -- a caller holding no role with the relevant permission receives 403 -- with one explicit test per route"
+      - "a caller from a different tenant naming a real instance id or attachment id belonging to another tenant receives 404, never 403, for every route -- explicit tests covering both the instance-id and attachment-id cases"
+      - "an attachment id that is real but belongs to a different instance than the one named in the path returns 404 even when both instance and attachment belong to the caller's own tenant -- an explicit test distinguishing this from the cross-tenant case"
+      - "DELETE /api/v1/instances/:id/attachments/:attachment_id against an already-deleted or non-existent attachment_id returns 404 rather than a duplicate success"
+      - "the moduledoc states plainly that no existing web/ SPA consumer or R-Co route contract exists for this surface, that this requirement defines the response shapes rather than matching one, and states the content-vs-metadata distinction between the two GET routes"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-211, REQ-069, REQ-072, REQ-070]

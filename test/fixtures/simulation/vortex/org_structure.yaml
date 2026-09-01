@@ -1,17 +1,73 @@
-# SYNTHETIC FIXTURE -- NOT ported from R-Co. See
-# test/fixtures/simulation/swiftroute/org_structure.yaml for the full explanation.
-# actor_id values are self-authored, not R-Co's real actor-vortex-* references.
+# Ported from R-Co tests/simulation/companies/vortex/org_structure.yaml (ISS-0388).
+# Format is Letflow's simplified seed schema. actor_id values are unchanged from
+# R-Co originals so REQ-206/207/208 scenario references stay stable.
 people:
-  - actor_id: actor-vortex-nia
-    username: vortex-nia
-    display_name: Nia Fontaine
-    email: nia@vortex.simulation.test
-  - actor_id: actor-vortex-omar
-    username: vortex-omar
-    display_name: Omar Haddad
-    email: omar@vortex.simulation.test
+  - actor_id: actor-vortex-dirk
+    username: dirk.haas
+    display_name: Dirk Haas
+    email: dirk.haas@vortex-mfg.example
+
+  - actor_id: actor-vortex-sabine
+    username: sabine.lehmann
+    display_name: Sabine Lehmann
+    email: sabine.lehmann@vortex-mfg.example
+
+  - actor_id: actor-vortex-karl
+    username: karl.fischer
+    display_name: Karl Fischer
+    email: karl.fischer@vortex-mfg.example
+
+  - actor_id: actor-vortex-nina
+    username: nina.brandt
+    display_name: Nina Brandt
+    email: nina.brandt@vortex-mfg.example
+
+  - actor_id: actor-vortex-felix
+    username: felix.wagner
+    display_name: Felix Wagner
+    email: felix.wagner@vortex-mfg.example
+
+  - actor_id: actor-vortex-anna
+    username: anna.schneider
+    display_name: Anna Schneider
+    email: anna.schneider@vortex-mfg.example
+
+  - actor_id: actor-vortex-max
+    username: max.braun
+    display_name: Max Braun
+    email: max.braun@vortex-mfg.example
+
+  - actor_id: actor-vortex-claudia
+    username: claudia.neumann
+    display_name: Claudia Neumann
+    email: claudia.neumann@vortex-mfg.example
+
+  - actor_id: actor-vortex-stefan
+    username: stefan.hoffmann
+    display_name: Stefan Hoffmann
+    email: stefan.hoffmann@vortex-mfg.example
 
 groups:
-  - name: vortex-planners
-    display_name: Production Planners
-    members: [actor-vortex-nia, actor-vortex-omar]
+  - name: dept-exec
+    display_name: Executive
+    members: [actor-vortex-dirk]
+
+  - name: dept-production
+    display_name: Production
+    members: [actor-vortex-sabine, actor-vortex-max, actor-vortex-claudia]
+
+  - name: dept-quality
+    display_name: Quality Assurance
+    members: [actor-vortex-karl, actor-vortex-nina]
+
+  - name: dept-procurement
+    display_name: Procurement
+    members: [actor-vortex-felix]
+
+  - name: dept-planning
+    display_name: Production Planning
+    members: [actor-vortex-anna]
+
+  - name: dept-finance
+    display_name: Finance & Controlling
+    members: [actor-vortex-stefan]

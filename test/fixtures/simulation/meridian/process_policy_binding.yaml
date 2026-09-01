@@ -1,16 +1,147 @@
-# SYNTHETIC FIXTURE -- NOT ported from R-Co. See
-# test/fixtures/simulation/swiftroute/process_route_approval.yaml for the full
-# explanation.
-name: meridian-policy-binding
-version: "1.0.0"
-description: Synthetic START -> END process (synchronous completion).
+# Ported from R-Co tests/simulation/companies/meridian/process_regulatory_compliance_review.yaml (ISS-0388).
+# Filename kept as process_policy_binding.yaml to avoid breaking test references.
+name: Regulatory Compliance Review
+version: "1.0"
+description: >
+  Periodic BaFin-mandated compliance review. Compliance Officer collects evidence;
+  Risk Manager evaluates. Critical findings spawn a remediation sub-process.
+  Exercises: timer boundary event, conditional sub-process, DLQ path.
 graph:
   nodes:
     - id: start
       node_type: START
-    - id: end
+    - id: evidence-collection
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-compliance-officer
+    - id: evidence-collection-timeout
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/reviews/{review_id}/flag
+        timeout_ms: 300000
+    - id: risk-evaluation
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-risk-manager
+    - id: risk-evaluation-timeout
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/reviews/{review_id}/flag
+        timeout_ms: 300000
+    - id: regulatory-auto-escalation
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /compliance/regulatory-notice
+        timeout_ms: 300000
+    - id: severity-routing
+      node_type: EXCLUSIVE_GATEWAY
+    - id: remediation-subprocess
+      node_type: SUB_PROCESS
+    - id: post-remediation-check
+      node_type: EXCLUSIVE_GATEWAY
+    - id: findings-sign-off
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-cro
+    - id: cro-sign-off-timeout
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/reviews/{review_id}/escalate
+        timeout_ms: 300000
+    - id: ceo-override
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-ceo
+    - id: archive-review
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /compliance/reviews/{review_id}/archive
+        timeout_ms: 300000
+    - id: reopen-review
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /compliance/reviews/{review_id}/reopen
+        timeout_ms: 300000
+    - id: end-closed
+      node_type: END
+    - id: end-reopened
       node_type: END
   edges:
-    - id: e1
+    - id: e0
       source: start
-      target: end
+      target: evidence-collection
+    - id: e1
+      source: evidence-collection
+      target: risk-evaluation
+    # on_timeout for evidence-collection
+    - id: timeout-evidence-collection
+      source: evidence-collection
+      target: evidence-collection-timeout
+    - id: e2
+      source: evidence-collection-timeout
+      target: risk-evaluation
+    - id: e3
+      source: risk-evaluation
+      target: severity-routing
+    # on_timeout for risk-evaluation
+    - id: timeout-risk-evaluation
+      source: risk-evaluation
+      target: risk-evaluation-timeout
+    - id: e4
+      source: risk-evaluation-timeout
+      target: severity-routing
+    - id: e5
+      source: regulatory-auto-escalation
+      target: end-closed
+    - id: e6
+      source: severity-routing
+      target: remediation-subprocess
+      condition: "variables.highest_severity == 'critical'"
+    - id: e7
+      source: severity-routing
+      target: findings-sign-off
+      condition: "variables.highest_severity == 'none' || variables.highest_severity == 'low' || variables.highest_severity == 'medium' || variables.highest_severity == 'high'"
+    - id: e8
+      source: remediation-subprocess
+      target: post-remediation-check
+    - id: e9
+      source: post-remediation-check
+      target: findings-sign-off
+      condition: "variables.remediation_status == 'resolved'"
+    - id: e10
+      source: post-remediation-check
+      target: regulatory-auto-escalation
+      condition: "variables.remediation_status == 'unresolved'"
+    - id: e11
+      source: findings-sign-off
+      target: archive-review
+      condition: "variables.cro_decision == 'sign_off'"
+    - id: e12
+      source: findings-sign-off
+      target: reopen-review
+      condition: "variables.cro_decision == 'reject_and_reopen'"
+    # on_timeout for findings-sign-off (also fallback)
+    - id: timeout-findings-sign-off
+      source: findings-sign-off
+      target: cro-sign-off-timeout
+    - id: e13
+      source: cro-sign-off-timeout
+      target: ceo-override
+    - id: e14
+      source: ceo-override
+      target: archive-review
+      condition: "variables.ceo_decision == 'sign_off'"
+    - id: e15
+      source: ceo-override
+      target: reopen-review
+      condition: "variables.ceo_decision == 'reject_and_reopen'"
+    # fallback for ceo-override
+    - id: fallback-ceo-override
+      source: ceo-override
+      target: archive-review
+    - id: e16
+      source: archive-review
+      target: end-closed
+    - id: e17
+      source: reopen-review
+      target: end-reopened

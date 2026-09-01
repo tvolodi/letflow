@@ -1,23 +1,216 @@
-# SYNTHETIC FIXTURE -- NOT ported from R-Co. See
-# test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml for the full
-# explanation.
-name: meridian-claim-intake
-version: "1.0.0"
-description: Synthetic START -> HUMAN_TASK -> END process for scenario harness smoke coverage.
+# Ported from R-Co tests/simulation/companies/meridian/process_loan_origination.yaml (ISS-0388).
+# Filename kept as process_claim_intake.yaml to avoid breaking test references.
+# Graph translated from R-Co's YAML format to Letflow's native schema.
+name: Loan Origination
+version: "1.0"
+description: >
+  Full SME loan origination flow. Three parallel assessment tracks (credit,
+  risk, KYC/AML). Standard path uses L1+L2 sign-off; large loans go to
+  Credit Committee (multi-voter, mapped to HUMAN_TASK). Exercises: parallel
+  fork-join, conditional authority routing, service-task core banking.
 graph:
   nodes:
     - id: start
       node_type: START
-    - id: review_task
+    - id: parallel-assessment-fork
+      node_type: PARALLEL_GATEWAY
+    - id: credit-memo-review
       node_type: HUMAN_TASK
       attributes:
-        role: adjuster
-    - id: end
+        role: role-credit-manager
+    - id: credit-memo-timeout
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/applications/{application_id}/flag
+        timeout_ms: 300000
+    - id: risk-assessment
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-risk-manager
+    - id: risk-assessment-timeout
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/applications/{application_id}/flag
+        timeout_ms: 300000
+    - id: kyc-aml-check
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /kyc/screen
+        timeout_ms: 300000
+    - id: kyc-manual-review
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-compliance-officer
+    - id: kyc-timeout
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/applications/{application_id}/flag
+        timeout_ms: 300000
+    - id: kyc-routing
+      node_type: EXCLUSIVE_GATEWAY
+    - id: assessment-join
+      node_type: PARALLEL_GATEWAY
+    - id: eligibility-gate
+      node_type: EXCLUSIVE_GATEWAY
+    - id: authority-routing
+      node_type: EXCLUSIVE_GATEWAY
+    - id: l1-approval
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-credit-manager
+    - id: l2-approval
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-credit-director
+    - id: credit-committee-vote
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-committee-member
+    - id: committee-timeout
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/applications/{application_id}/flag
+        timeout_ms: 300000
+    - id: create-facility
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /core-banking/facilities
+        timeout_ms: 300000
+    - id: disburse-loan
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-loan-ops
+    - id: decline-application
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /crm/applications/{application_id}/decline
+        timeout_ms: 300000
+    - id: end-disbursed
+      node_type: END
+    - id: end-declined
       node_type: END
   edges:
-    - id: e1
+    - id: e0
       source: start
-      target: review_task
+      target: parallel-assessment-fork
+    - id: e1
+      source: parallel-assessment-fork
+      target: credit-memo-review
     - id: e2
-      source: review_task
-      target: end
+      source: parallel-assessment-fork
+      target: risk-assessment
+    - id: e3
+      source: parallel-assessment-fork
+      target: kyc-aml-check
+    - id: e4
+      source: credit-memo-review
+      target: assessment-join
+    # on_timeout for credit-memo-review
+    - id: timeout-credit-memo-review
+      source: credit-memo-review
+      target: credit-memo-timeout
+    - id: e5
+      source: credit-memo-timeout
+      target: assessment-join
+    - id: e6
+      source: risk-assessment
+      target: assessment-join
+    # on_timeout for risk-assessment
+    - id: timeout-risk-assessment
+      source: risk-assessment
+      target: risk-assessment-timeout
+    - id: e7
+      source: risk-assessment-timeout
+      target: assessment-join
+    - id: e8
+      source: kyc-aml-check
+      target: kyc-routing
+    - id: e9
+      source: kyc-routing
+      target: assessment-join
+      condition: "variables.kyc_status == 'clear'"
+    - id: e10
+      source: kyc-routing
+      target: kyc-manual-review
+      condition: "variables.kyc_status == 'hit'"
+    - id: e11
+      source: kyc-routing
+      target: kyc-manual-review
+      condition: "variables.kyc_status == 'inconclusive'"
+    - id: e12
+      source: kyc-manual-review
+      target: assessment-join
+    # on_timeout for kyc-manual-review
+    - id: timeout-kyc-manual-review
+      source: kyc-manual-review
+      target: kyc-timeout
+    - id: e13
+      source: kyc-timeout
+      target: assessment-join
+    - id: e14
+      source: assessment-join
+      target: eligibility-gate
+    - id: e15
+      source: eligibility-gate
+      target: authority-routing
+      condition: "variables.credit_decision == 'pass' && variables.risk_rating != 'unacceptable'"
+    - id: e16
+      source: eligibility-gate
+      target: decline-application
+      condition: "variables.credit_decision == 'fail' || variables.risk_rating == 'unacceptable'"
+    - id: e17
+      source: authority-routing
+      target: l1-approval
+      condition: "variables.requested_amount_eur <= 500000"
+    - id: e18
+      source: authority-routing
+      target: credit-committee-vote
+      condition: "variables.requested_amount_eur > 500000"
+    - id: e19
+      source: l1-approval
+      target: l2-approval
+      condition: "variables.l1_decision == 'approve' || variables.l1_decision == 'escalate'"
+    - id: e20
+      source: l1-approval
+      target: decline-application
+      condition: "variables.l1_decision == 'reject'"
+    # fallback for l1-approval
+    - id: fallback-l1-approval
+      source: l1-approval
+      target: l2-approval
+    - id: e21
+      source: l2-approval
+      target: create-facility
+      condition: "variables.l2_decision == 'approve'"
+    - id: e22
+      source: l2-approval
+      target: decline-application
+      condition: "variables.l2_decision == 'reject'"
+    # fallback for l2-approval
+    - id: fallback-l2-approval
+      source: l2-approval
+      target: create-facility
+    - id: e23
+      source: credit-committee-vote
+      target: create-facility
+      condition: "variables.committee_outcome == 'approved'"
+    - id: e24
+      source: credit-committee-vote
+      target: decline-application
+      condition: "variables.committee_outcome == 'rejected'"
+    # on_timeout for credit-committee-vote (also fallback)
+    - id: timeout-credit-committee-vote
+      source: credit-committee-vote
+      target: committee-timeout
+    - id: e25
+      source: committee-timeout
+      target: decline-application
+    - id: e26
+      source: create-facility
+      target: disburse-loan
+    - id: e27
+      source: disburse-loan
+      target: end-disbursed
+    - id: e28
+      source: decline-application
+      target: end-declined

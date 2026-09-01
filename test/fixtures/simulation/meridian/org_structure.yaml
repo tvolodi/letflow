@@ -1,17 +1,74 @@
-# SYNTHETIC FIXTURE -- NOT ported from R-Co. See
-# test/fixtures/simulation/swiftroute/org_structure.yaml for the full explanation.
-# actor_id values are self-authored, not R-Co's real actor-meridian-* references.
+# Ported from R-Co tests/simulation/companies/meridian/org_structure.yaml (ISS-0388).
+# Format is Letflow's simplified seed schema. actor_id values are unchanged from
+# R-Co originals so REQ-206/207/208 scenario references stay stable.
 people:
-  - actor_id: actor-meridian-priya
-    username: meridian-priya
-    display_name: Priya Chandran
-    email: priya@meridian.simulation.test
-  - actor_id: actor-meridian-sam
-    username: meridian-sam
-    display_name: Sam Whitfield
-    email: sam@meridian.simulation.test
+  - actor_id: actor-meridian-eva
+    username: eva.kremer
+    display_name: Eva Kremer
+    email: eva.kremer@meridian-capital.example
+
+  - actor_id: actor-meridian-thomas
+    username: thomas.reiter
+    display_name: Thomas Reiter
+    email: thomas.reiter@meridian-capital.example
+
+  - actor_id: actor-meridian-julia
+    username: julia.hartmann
+    display_name: Julia Hartmann
+    email: julia.hartmann@meridian-capital.example
+
+  - actor_id: actor-meridian-ben
+    username: benjamin.koch
+    display_name: Benjamin Koch
+    email: benjamin.koch@meridian-capital.example
+
+  - actor_id: actor-meridian-sophie
+    username: sophie.weiss
+    display_name: Sophie Weiß
+    email: sophie.weiss@meridian-capital.example
+
+  - actor_id: actor-meridian-lars
+    username: lars.berger
+    display_name: Lars Berger
+    email: lars.berger@meridian-capital.example
+
+  - actor_id: actor-meridian-miriam
+    username: miriam.schaefer
+    display_name: Miriam Schäfer
+    email: miriam.schaefer@meridian-capital.example
+
+  - actor_id: actor-meridian-oliver
+    username: oliver.krug
+    display_name: Oliver Krug
+    email: oliver.krug@meridian-capital.example
+
+  - actor_id: actor-meridian-claudia
+    username: claudia.fuchs
+    display_name: Claudia Fuchs
+    email: claudia.fuchs@meridian-capital.example
+
+  - actor_id: actor-meridian-marcus
+    username: marcus.braun
+    display_name: Marcus Braun
+    email: marcus.braun@meridian-capital.example
 
 groups:
-  - name: meridian-adjusters
-    display_name: Claims Adjusters
-    members: [actor-meridian-priya, actor-meridian-sam]
+  - name: dept-exec
+    display_name: Executive Board
+    members: [actor-meridian-eva]
+
+  - name: dept-credit-de
+    display_name: Credit — Germany
+    members: [actor-meridian-julia, actor-meridian-ben, actor-meridian-sophie, actor-meridian-lars]
+
+  - name: dept-risk
+    display_name: Risk Management
+    members: [actor-meridian-thomas, actor-meridian-miriam, actor-meridian-oliver]
+
+  - name: dept-compliance
+    display_name: Compliance & Legal
+    members: [actor-meridian-claudia]
+
+  - name: dept-ops
+    display_name: Loan Operations
+    members: [actor-meridian-marcus]

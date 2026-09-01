@@ -1,19 +1,55 @@
-# SYNTHETIC FIXTURE -- NOT ported from R-Co. See company.yaml in this directory for
-# the full explanation (R-Co's tests/simulation/companies/swiftroute/org_structure.yaml
-# is unreachable from this sandbox). actor_id values below are self-authored, not
-# R-Co's real actor-swiftroute-* references -- do not treat them as stable across a
-# future real port.
+# Ported from R-Co tests/simulation/companies/swiftroute/org_structure.yaml (ISS-0388).
+# Format is Letflow's simplified seed schema. actor_id values are unchanged from
+# R-Co originals so REQ-206/207/208 scenario references stay stable.
 people:
-  - actor_id: actor-swiftroute-lena
-    username: swiftroute-lena
-    display_name: Lena Ostrowski
-    email: lena@swiftroute.simulation.test
+  - actor_id: actor-swiftroute-alice
+    username: alice.bauer
+    display_name: Alice Bauer
+    email: alice.bauer@swiftroute.example
+
   - actor_id: actor-swiftroute-marco
-    username: swiftroute-marco
-    display_name: Marco Delgado
-    email: marco@swiftroute.simulation.test
+    username: marco.stein
+    display_name: Marco Stein
+    email: marco.stein@swiftroute.example
+
+  - actor_id: actor-swiftroute-lena
+    username: lena.vogel
+    display_name: Lena Vogel
+    email: lena.vogel@swiftroute.example
+
+  - actor_id: actor-swiftroute-tobias
+    username: tobias.kern
+    display_name: Tobias Kern
+    email: tobias.kern@swiftroute.example
+
+  - actor_id: actor-swiftroute-jan
+    username: jan.mueller
+    display_name: Jan Müller
+    email: jan.mueller@swiftroute.example
+
+  - actor_id: actor-swiftroute-petra
+    username: petra.wolf
+    display_name: Petra Wolf
+    email: petra.wolf@swiftroute.example
+
+  - actor_id: actor-swiftroute-hans
+    username: hans.richter
+    display_name: Hans Richter
+    email: hans.richter@swiftroute.example
 
 groups:
-  - name: swiftroute-dispatchers
-    display_name: Dispatchers
-    members: [actor-swiftroute-lena, actor-swiftroute-marco]
+  - name: dept-mgmt
+    display_name: Management
+    members: [actor-swiftroute-alice]
+
+  - name: dept-ops
+    display_name: Operations
+    members: [actor-swiftroute-marco, actor-swiftroute-jan, actor-swiftroute-petra]
+
+  - name: dept-dispatch
+    display_name: Dispatch
+    members: [actor-swiftroute-lena, actor-swiftroute-tobias]
+
+  - name: dept-finance
+    display_name: Finance
+    members: [actor-swiftroute-hans]

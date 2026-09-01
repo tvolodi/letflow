@@ -1,6 +1,4 @@
-# SYNTHETIC FIXTURE -- NOT ported from R-Co. See
-# test/fixtures/simulation/swiftroute/company.yaml for the full explanation of why
-# (R-Co's tests/simulation/companies/vortex/ tree is unreachable from this sandbox).
+# Ported from R-Co tests/simulation/companies/vortex/company.yaml (ISS-0388).
 slug: vortex
-display_name: Vortex Manufacturing
+display_name: Vortex Manufacturing GmbH
 hostname: vortex.simulation.test

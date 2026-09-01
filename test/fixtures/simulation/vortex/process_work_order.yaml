@@ -1,23 +1,108 @@
-# SYNTHETIC FIXTURE -- NOT ported from R-Co. See
-# test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml for the full
-# explanation.
-name: vortex-work-order
-version: "1.0.0"
-description: Synthetic START -> HUMAN_TASK -> END process for scenario harness smoke coverage.
+# Ported from R-Co tests/simulation/companies/vortex/process_supplier_quality_deviation.yaml (ISS-0388).
+# Filename kept as process_work_order.yaml to avoid breaking test references.
+name: Supplier Quality Deviation
+version: "1.0"
+description: >
+  Raised when incoming goods fail inspection. Quality Manager classifies severity.
+  For CRITICAL a sub-process is spawned. Exercises: sub-process spawn,
+  severity-driven branching, compensation.
 graph:
   nodes:
     - id: start
       node_type: START
-    - id: plan_task
+    - id: quarantine-batch
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /mes/batches/{batch_ref}/quarantine
+        timeout_ms: 300000
+    - id: severity-classification
       node_type: HUMAN_TASK
       attributes:
-        role: planner
-    - id: end
+        role: role-quality-manager
+    - id: false-positive-check
+      node_type: EXCLUSIVE_GATEWAY
+    - id: release-quarantine
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /mes/batches/{batch_ref}/release
+        timeout_ms: 300000
+    - id: severity-routing
+      node_type: EXCLUSIVE_GATEWAY
+    - id: corrective-action-subprocess
+      node_type: SUB_PROCESS
+    - id: default-to-major
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/deviations/{deviation_id}/default-severity
+        timeout_ms: 300000
+    - id: supplier-warning
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /webhooks/supplier-warning
+        timeout_ms: 300000
+    - id: supplier-notification
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /webhooks/supplier-notify
+        timeout_ms: 300000
+    - id: close-deviation
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /quality/deviations/{deviation_id}/close
+        timeout_ms: 300000
+    - id: end-closed
+      node_type: END
+    - id: end-false-positive
       node_type: END
   edges:
-    - id: e1
+    - id: e0
       source: start
-      target: plan_task
+      target: quarantine-batch
+    - id: e1
+      source: quarantine-batch
+      target: severity-classification
     - id: e2
-      source: plan_task
-      target: end
+      source: severity-classification
+      target: false-positive-check
+    # on_timeout: default-to-major (also serves as fallback since e2 has no condition)
+    - id: timeout-severity-classification
+      source: severity-classification
+      target: default-to-major
+    - id: e3
+      source: false-positive-check
+      target: release-quarantine
+      condition: "variables.false_positive == true"
+    - id: e4
+      source: false-positive-check
+      target: severity-routing
+      condition: "variables.false_positive == false"
+    - id: e5
+      source: default-to-major
+      target: severity-routing
+    - id: e6
+      source: severity-routing
+      target: corrective-action-subprocess
+      condition: "variables.severity == 'critical'"
+    - id: e7
+      source: severity-routing
+      target: supplier-warning
+      condition: "variables.severity == 'major'"
+    - id: e8
+      source: severity-routing
+      target: supplier-notification
+      condition: "variables.severity == 'minor'"
+    - id: e9
+      source: corrective-action-subprocess
+      target: close-deviation
+    - id: e10
+      source: supplier-warning
+      target: close-deviation
+    - id: e11
+      source: supplier-notification
+      target: close-deviation
+    - id: e12
+      source: release-quarantine
+      target: end-false-positive
+    - id: e13
+      source: close-deviation
+      target: end-closed

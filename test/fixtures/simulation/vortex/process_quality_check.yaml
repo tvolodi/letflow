@@ -1,16 +1,103 @@
-# SYNTHETIC FIXTURE -- NOT ported from R-Co. See
-# test/fixtures/simulation/swiftroute/process_route_approval.yaml for the full
-# explanation.
-name: vortex-quality-check
-version: "1.0.0"
-description: Synthetic START -> END process (synchronous completion).
+# Ported from R-Co tests/simulation/companies/vortex/process_production_order_release.yaml (ISS-0388).
+# Filename kept as process_quality_check.yaml to avoid breaking test references.
+name: Production Order Release
+version: "1.0"
+description: >
+  Multi-level release gate for a new production order. Planner creates the order;
+  Production Manager reviews; if value > 10000 Financial Controller signs off.
+  Timer escalation to CEO. Exercises: sequential chain, timer escalation,
+  conditional branch.
 graph:
   nodes:
     - id: start
       node_type: START
-    - id: end
+    - id: capacity-review
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-production-manager
+    - id: escalate-to-ceo
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-ceo
+    - id: budget-gate
+      node_type: EXCLUSIVE_GATEWAY
+    - id: budget-approval
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-controller
+    - id: assign-line
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /mes/orders/{order_id}/assign
+        timeout_ms: 300000
+    - id: auto-reject-order
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /mes/orders/{order_id}/reject
+        timeout_ms: 300000
+    - id: notify-planner
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /webhooks/notify
+        timeout_ms: 300000
+    - id: end-released
+      node_type: END
+    - id: end-rejected
       node_type: END
   edges:
-    - id: e1
+    - id: e0
       source: start
-      target: end
+      target: capacity-review
+    - id: e1
+      source: capacity-review
+      target: budget-gate
+      condition: "variables.capacity_decision == 'approve'"
+    - id: e2
+      source: capacity-review
+      target: notify-planner
+      condition: "variables.capacity_decision == 'reject'"
+    # on_timeout for capacity-review (also fallback)
+    - id: timeout-capacity-review
+      source: capacity-review
+      target: escalate-to-ceo
+    - id: e3
+      source: escalate-to-ceo
+      target: budget-gate
+      condition: "variables.capacity_decision == 'approve'"
+    - id: e4
+      source: escalate-to-ceo
+      target: auto-reject-order
+      condition: "variables.capacity_decision == 'reject'"
+    # on_timeout for escalate-to-ceo (also fallback)
+    - id: timeout-escalate-to-ceo
+      source: escalate-to-ceo
+      target: auto-reject-order
+    - id: e5
+      source: budget-gate
+      target: budget-approval
+      condition: "variables.order_value_eur > 10000"
+    - id: e6
+      source: budget-gate
+      target: assign-line
+      condition: "variables.order_value_eur <= 10000"
+    - id: e7
+      source: budget-approval
+      target: assign-line
+      condition: "variables.budget_decision == 'approve'"
+    - id: e8
+      source: budget-approval
+      target: auto-reject-order
+      condition: "variables.budget_decision == 'reject'"
+    # on_timeout for budget-approval (also fallback)
+    - id: timeout-budget-approval
+      source: budget-approval
+      target: auto-reject-order
+    - id: e9
+      source: assign-line
+      target: notify-planner
+    - id: e10
+      source: notify-planner
+      target: end-released
+    - id: e11
+      source: auto-reject-order
+      target: end-rejected

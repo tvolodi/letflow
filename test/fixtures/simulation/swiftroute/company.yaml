@@ -1,16 +1,7 @@
-# SYNTHETIC FIXTURE -- NOT ported from R-Co.
-#
-# REQ-205 (lib/letflow/design/req205-simulation-harness-foundation.md) specifies
-# porting this file byte-for-byte from R-Co's
-# tests/simulation/companies/swiftroute/company.yaml (c:\Users\tvolo\dev\ai-dala\R-Co\).
-# That path is on a different (Windows) host, unreachable from this Linux sandbox --
-# confirmed this session (no /mnt/c mount, no R-Co checkout anywhere on this
-# filesystem, no prior session artefact carrying the real content). Fabricating
-# R-Co's actual fixture content would violate CLAUDE.md's "no speculation" rule, so
-# this file is self-authored data that exercises the same shape (slug/display_name/
-# hostname) Letflow.Simulation.Seed.seed_company/1 consumes. AC1 ("ported... from
-# R-Co's tests/simulation/companies/") is NOT satisfied by this file -- see the
-# REQ-205 handoff for the explicit gap statement.
+# Ported from R-Co tests/simulation/companies/swiftroute/company.yaml (ISS-0388).
+# Values reflect the real R-Co fixture; format is Letflow's simplified seed schema
+# (slug/display_name/hostname) rather than the full R-Co YAML, which carries
+# fields Letflow.Simulation.Seed does not consume.
 slug: swiftroute
-display_name: Swiftroute Logistics
+display_name: SwiftRoute Ltd
 hostname: swiftroute.simulation.test

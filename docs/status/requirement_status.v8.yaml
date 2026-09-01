@@ -240,3 +240,44 @@ history:
       sibling-session discretion rule; did NOT force-release task 398's
       lock, left to that session's own Step Final. Branched
       feature/WF03-ISS0400-20260901 from the updated main (58e3c64e).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-01T19:25:15Z"
+    note: >
+      WF03-ISS0400-20260901 done -- ISS-0400 resolved (queue task 400,
+      GH#784 closed). Fixed Letflow.Engine.Transition.collect_leaf_gateways/3
+      to resolve a PARALLEL_GATEWAY nested inside one branch of an outer
+      PARALLEL_GATEWAY split, explicitly out of scope in ISS-0398's own fix.
+      New resolve_nested_split/3 shares the outer walk's Tarjan-SCC traversal
+      state fully (no reset at that boundary) rather than the design's
+      original reset-based mechanism, which CODE-DESIGN-VALIDATOR correctly
+      FAILED at BLOCKER severity (rework 1/3) after constructing a concrete
+      infinite-recursion counterexample; the re-gate independently re-traced
+      the same counterexample against the revised design and passed. All
+      downstream gates PASS on first pass: SECURITY-REVIEWER (INV-8
+      DoS/resource-consumption framing independently re-derived, nesting
+      shares one Tarjan pass, no multiplicative cost), REVIEWER (idiom,
+      reuse of existing fold_outgoing_edges/4 and close_scc_or_defer/5, no
+      scope creep), TEST-DESIGNER's fail-then-pass regression tests (5
+      fixtures from the design's own section 4, 13/18 pre-fix, 18/18
+      post-fix, independently reproduced by TEST-DESIGN-VALIDATOR),
+      TEST-RUNNER full suite 3031/3031. Step Final: found and merged a
+      sibling session's own completed-but-unmerged ISS-0398 fix (PR #783,
+      commit 58e3c64e) as an unblocking prerequisite before branching, since
+      ISS-0400's own fix builds directly on collect_leaf_gateways/3;
+      resolved a genuine registry.json rebase conflict on the ISS-0398 entry
+      by keeping main's more current version (the sibling run had in fact
+      completed its own Step Final by then) and appending this run's own
+      entry. CI hit the documented wasm_hang isolation-subprocess flake
+      (ISS-0352, third recorded recurrence) on one of two duplicate runs;
+      structurally cleared as unrelated (branch touches only transition.ex
+      and ISS-0400 files, sibling duplicate CI run passed the identical
+      suite clean) per GIT_MERGE.md's precondition, recurrence noted on
+      ISS-0352.yaml, did not block merge. Also structurally cleared 2
+      pre-existing local full-suite failures (test/letflow/repository/attachments_test.exs:392,
+      confirmed failing on pre-ISS-0400 main independently -- filed as
+      ISS-0401/GH#785 for later diagnosis; and a known Lua executor timing
+      flake, confirmed clean 48/48 in isolation) before Step Final. PR #786
+      squash-merged as 6188191d. Queue task 400 released status: done.

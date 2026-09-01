@@ -83,4 +83,20 @@ source: >
   handoffs/WF02-REQ205-20260831/release-validation-report-20260831.md.
 queue_task_id: 388
 github_issue: 764
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0388-real-rco-fixtures-20260901
+resolved_at: "2026-09-01T02:08:10Z"
+resolution: >
+  Fixed by a sibling session with genuine R-Co filesystem access
+  (commit f7ffbeb6, PR #766, merged). All 12 fixture files under
+  test/fixtures/simulation/{swiftroute,vortex,meridian}/ replaced with
+  real content ported verbatim from R-Co's tests/simulation/companies/
+  tree: real display_names, all real people/actor_ids (7 swiftroute, 9
+  vortex, 10 meridian) matching R-Co's actual org structure, and real
+  process graphs translated to Letflow-native format. Confirmed
+  `Letflow.Simulation.Seed`/`Runner` needed zero code changes, per the
+  design's own prediction. GH#764 closed by the resolving session.
+  Queue task 388 reconciled to done by ORCH (2026-09-01) after
+  observing the queue still showed it open despite the merged fix and
+  closed GitHub issue -- the resolving session merged/closed by hand
+  without calling release_lock(status: "done").

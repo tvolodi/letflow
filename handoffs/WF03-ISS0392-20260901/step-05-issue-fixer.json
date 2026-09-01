@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0392-20260901/step-05-issue-fixer.json",
   "created_at": "2026-09-01T11:57:39Z",
   "started_at": "2026-09-01T11:57:39Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-01T11:59:04Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -45,18 +45,20 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "ISS-0392 confirmed genuinely resolved per the chain of handoffs: ELIXIR-DEV's e30873f8 implemented Revision 2 of lib/letflow/design/iss0392-multi-task-records-collision-fix.md (build-time skip_task_activation? predicate computed from prepared_children's already-known child_initial_state.status, omitting the hop-chain's own {:task_records, parent_instance_id} step when a spawned SUB_PROCESS child is already known to complete synchronously in the same transaction). Passed SECURITY-REVIEWER (INV-1/4/6/7/8, step-03b) and REVIEWER (idiom/scope, step-03c). TEST-DESIGNER wrote a fail-then-pass regression test in test/letflow/engine_sub_process_test.exs's 'ISS-0392' describe block, independently re-verified by TEST-DESIGN-VALIDATOR (step-04b). TEST-RUNNER's full-suite run (step-04c) confirmed 2999/2999 passed (test/reports/report-20260901-WF03-ISS0392-20260901.yaml), including the new ISS-0392 tests specifically re-run and passing. This meets ISSUE_QUEUE.md's 'resolved' bar exactly: a root cause was actually removed, proven by a regression test, not merely useful work shipped.\n\nUpdated docs/issues/ISS-0392.yaml: status: resolved, resolved_in_run: WF03-ISS0392-20260901, resolved_at: 2026-09-01T11:59:04Z, with a resolution note citing fix commit e30873f8, the regression test path (test/letflow/engine_sub_process_test.exs, 'ISS-0392' describe block), and cross-referencing docs/issues/ISS-0396.yaml (GH#776, still open) as the distinct call(2)-vs-call(2) follow-up collision class this fix does not address. ISS-0396.yaml itself already cross-references ISS-0392 in its own description (filed that way at discovery time), so no edit was needed there to close the loop in the other direction.\n\nClosed GitHub issue #772: `gh issue close 772 --comment \"Fixed in WF03-ISS0392-20260901. See docs/issues/ISS-0392.yaml and the regression test at test/letflow/engine_sub_process_test.exs.\"` -- exact comment content per ISSUE_QUEUE.md's 'resolved' close template. Verified via `gh issue view 772 --json state` -> CLOSED.\n\nDid NOT touch docs/issues/ISS-0396.yaml or GitHub issue #776 -- verified via `gh issue view 776 --json state` -> OPEN, and `git status` shows no modification to ISS-0396.yaml.",
+    "artifacts_out": [
+      "docs/issues/ISS-0392.yaml"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0392-20260901",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0392-20260901",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step Final"
   },
   "rework_count": 0,
   "max_rework": 3

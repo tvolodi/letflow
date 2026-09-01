@@ -316,13 +316,34 @@ defmodule Letflow.Routers.InstancesTest do
     end
   end
 
-  # ── AC5 -- no Repo/transition call in this module ──────────────────────────
+  # ── AC5 -- no Repo/transition call in REQ-079's own write handlers ─────────
 
   describe "AC5 -- structural" do
-    test "the router module contains no Repo or Transition call" do
+    # Scoped to REQ-079's own handle_create/2, handle_cancel/2,
+    # handle_reconstruct/2 (each mutates instance state and must delegate
+    # through Letflow.Engine, never touch Repo/Transition directly) rather
+    # than the whole file, since REQ-212 (a later, unrelated capability
+    # sharing this router module) legitimately added a direct
+    # `Repo.get(Letflow.Repository.Artifact, ...)` call in its own
+    # byte-content GET handler -- see that handler's own design
+    # (lib/letflow/design/req212-instance-attachments-routes.md §4), which
+    # requires exactly this second lookup and was reviewed/approved with it.
+    # A whole-file grep would now always fail regardless of whether
+    # REQ-079's own write-delegation invariant still holds, defeating the
+    # point of this check -- narrowed instead of removed, so it still
+    # catches a REQ-079 write handler regressing back to a direct Repo call.
+    test "REQ-079's create/cancel/reconstruct handlers contain no Repo or Transition call" do
       source = File.read!("lib/letflow/routers/instances.ex")
-      refute source =~ ~r/\bRepo\./
-      refute source =~ ~r/\bTransition\./
+
+      write_handlers =
+        Regex.run(
+          ~r/# ── POST \/instances\/:id\/rebind-pins.*?# ── GET \/instances\/:id \(design/s,
+          source
+        )
+        |> List.first()
+
+      refute write_handlers =~ ~r/\bRepo\./
+      refute write_handlers =~ ~r/\bTransition\./
     end
   end
 

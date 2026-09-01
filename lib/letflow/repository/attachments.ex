@@ -84,6 +84,7 @@ defmodule Letflow.Repository.Attachments do
   alias Letflow.Api.Pagination
   alias Letflow.Repo
   alias Letflow.Repository
+  alias Letflow.Repository.Artifact
   alias Letflow.Repository.Attachment
   alias Letflow.TenantProvisioning
 
@@ -280,6 +281,57 @@ defmodule Letflow.Repository.Attachments do
           nil -> {:error, :not_found}
           %Attachment{} = attachment -> {:ok, attachment}
         end
+    end
+  end
+
+  # ===========================================================================
+  # get_content/2 (REQ-212 addendum -- INV-RT-1)
+  # ===========================================================================
+
+  @doc """
+  Tenant-scoped fetch of one attachment's metadata AND its raw byte content
+  in one call -- the two-lookup mechanism this module's `get/2` moduledoc
+  already documents (metadata via `get/2`'s own query, then a second,
+  separate lookup against `repository_artifacts` keyed by the metadata row's
+  own `content_hash`, reading its `content` column).
+
+  Added as its own function, rather than left as two separate calls made
+  directly by REQ-212's route handler, because `Letflow.Api.AuthorizedRouter`
+  -based routers must never issue a `Repo.*` call directly (`INV-RT-1`, this
+  codebase's project-wide route-layer boundary enforced by
+  `test/letflow/routers/req078_supporting_routes_test.exs`'s
+  `T-19` test) -- the same conflict REQ-191/192 already hit and resolved the
+  same way (adding the needed read to the context module,
+  `Letflow.ServiceCatalog.list_all/1`, rather than querying from the
+  router). REQ-212's own design
+  (`lib/letflow/design/req212-instance-attachments-routes.md` §4) specified
+  the second `Repo.get(Letflow.Repository.Artifact, ...)` call as "this
+  route layer's job" without having checked INV-RT-1 against it -- this
+  function is that same mechanism, relocated into the context module it
+  belongs in per the project's actual, already-enforced convention. Not a
+  design change to the mechanism itself, only to which module issues the
+  `Repo` call.
+
+  A `nil` second-lookup result is a structural-invariant violation, not a
+  normal caller-facing error -- `instance_attachments.content_hash` has a
+  `null: false, references(:repository_artifacts, ..., on_delete: :restrict)`
+  FK, so a row returned by the first lookup is guaranteed by the database
+  itself to have a matching `repository_artifacts` row in the same tenant
+  schema. Surfaced as `{:error, :content_missing}` so the caller can map it
+  to a 500 (INV-4, no detail) rather than a 404, which would incorrectly
+  suggest the attachment itself doesn't exist.
+  """
+  @spec get_content(id :: String.t(), opts()) ::
+          {:ok, Attachment.t(), Artifact.t()}
+          | {:error, :invalid_id | :not_found | :content_missing}
+  def get_content(id, opts) when is_list(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    with {:ok, attachment} <- get(id, opts) do
+      case Repo.get(Artifact, attachment.content_hash, prefix: prefix) do
+        %Artifact{} = artifact -> {:ok, attachment, artifact}
+        nil -> {:error, :content_missing}
+      end
     end
   end
 

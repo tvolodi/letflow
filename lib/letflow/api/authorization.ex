@@ -43,6 +43,22 @@ defmodule Letflow.Api.Authorization do
   S4 route consumer today — runtime agent orchestration, the DLQ, and webhook
   dispatch are all deferred subsystems. Ported anyway so the matrix matches
   R-Co's exactly, and so a later reader doesn't have to rediscover the gap.
+
+  ## `AttachmentsManage`/`AttachmentsRead` (REQ-212) — genuinely new, not pre-ported
+
+  Unlike `DlqOperate`/`WebhooksManage` above (ported ahead of their consuming
+  routes, matching R-Co's matrix exactly even before any route consumed them),
+  `AttachmentsManage` and `AttachmentsRead` have **no R-Co counterpart at
+  all** — `instance_attachments` (REQ-211) is new functionality this
+  migration invents, not a ported R-Co subsystem. Added *for*
+  `Letflow.Routers.Instances`'s four `/instances/:id/attachments...` routes,
+  immediately consumed, never in a "ported but currently unreachable" state.
+  Two permissions, not one collapsed permission, is also a deliberate split
+  (unlike `DlqOperate`/`WebhooksManage`'s single-permission precedent):
+  `AttachmentsManage` gates upload/delete (mutation), `AttachmentsRead` gates
+  list/download (read) — REQ-212's own acceptance criteria require the split
+  kept, not collapsed. See design
+  `lib/letflow/design/req212-instance-attachments-routes.md` §6.
   """
 
   @type role ::
@@ -69,6 +85,8 @@ defmodule Letflow.Api.Authorization do
           | :WebhooksManage
           | :TenantsManage
           | :RolesManage
+          | :AttachmentsManage
+          | :AttachmentsRead
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -102,6 +120,8 @@ defmodule Letflow.Api.Authorization do
           | :AdminServicesRead
           | :TenantsManage
           | :RolesManage
+          | :AttachmentsManage
+          | :AttachmentsRead
           | :Unknown
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
@@ -124,14 +144,16 @@ defmodule Letflow.Api.Authorization do
     :MetricsRead,
     :WebhooksManage,
     :TenantsManage,
-    :RolesManage
+    :RolesManage,
+    :AttachmentsManage,
+    :AttachmentsRead
   ]
 
   @doc "All five `Role` values, R-Co's exact names. See `roles_from_strings/1` for untrusted-input conversion."
   @spec roles() :: [role()]
   def roles, do: @roles
 
-  @doc "All fifteen `Permission` values — R-Co's fourteen plus REQ-076's `:RolesManage`."
+  @doc "All seventeen `Permission` values — R-Co's fourteen plus REQ-076's `:RolesManage` plus REQ-212's `:AttachmentsManage`/`:AttachmentsRead`."
   @spec permissions() :: [permission()]
   def permissions, do: @permissions
 
@@ -344,6 +366,18 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("GET", "/roles"), do: :RolesManage
   def endpoint_policy_key("POST", "/roles"), do: :RolesManage
 
+  # REQ-212 — instance-attachment routes (Letflow.Routers.Instances), mounted
+  # under /instances/:id/attachments... See design §6.3.
+  def endpoint_policy_key("POST", "/instances/:id/attachments"), do: :AttachmentsManage
+
+  def endpoint_policy_key("DELETE", "/instances/:id/attachments/:attachment_id"),
+    do: :AttachmentsManage
+
+  def endpoint_policy_key("GET", "/instances/:id/attachments"), do: :AttachmentsRead
+
+  def endpoint_policy_key("GET", "/instances/:id/attachments/:attachment_id"),
+    do: :AttachmentsRead
+
   def endpoint_policy_key(_method, _path), do: :Unknown
 
   @doc """
@@ -431,6 +465,8 @@ defmodule Letflow.Api.Authorization do
 
   def required_permission(:TenantsManage), do: :TenantsManage
   def required_permission(:RolesManage), do: :RolesManage
+  def required_permission(:AttachmentsManage), do: :AttachmentsManage
+  def required_permission(:AttachmentsRead), do: :AttachmentsRead
 
   def required_permission(:Unknown), do: :MetricsRead
 
@@ -460,7 +496,8 @@ defmodule Letflow.Api.Authorization do
         :InstancesStart,
         :InstancesRead,
         :TasksRead,
-        :RolesManage
+        :RolesManage,
+        :AttachmentsRead
       ]
 
   def role_allows?(:PROCESS_OPERATOR, permission),
@@ -476,11 +513,20 @@ defmodule Letflow.Api.Authorization do
         :AuditRead,
         :DlqOperate,
         :MetricsRead,
-        :WebhooksManage
+        :WebhooksManage,
+        :AttachmentsManage,
+        :AttachmentsRead
       ]
 
   def role_allows?(:TASK_WORKER, permission),
-    do: permission in [:DefinitionsRead, :InstancesRead, :TasksRead, :TasksComplete]
+    do:
+      permission in [
+        :DefinitionsRead,
+        :InstancesRead,
+        :TasksRead,
+        :TasksComplete,
+        :AttachmentsRead
+      ]
 
   def role_allows?(:AGENT_RUNNER, _permission), do: false
 end

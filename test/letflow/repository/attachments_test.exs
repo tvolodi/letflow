@@ -376,17 +376,20 @@ defmodule Letflow.Repository.AttachmentsTest do
     end
   end
 
-  describe "AC10 -- no route/controller surface exists for instance attachments" do
-    test "no lib/letflow/routers/*.ex file references Letflow.Repository.Attachments" do
-      offending_files =
-        "lib/letflow/routers/**/*.ex"
-        |> Path.wildcard()
-        |> Enum.filter(&String.contains?(File.read!(&1), "Letflow.Repository.Attachments"))
-
-      assert offending_files == [],
-             "found router file(s) referencing Letflow.Repository.Attachments: #{inspect(offending_files)}"
-    end
-  end
+  # AC10's original test ("no lib/letflow/routers/*.ex file references
+  # Letflow.Repository.Attachments") asserted REQ-211's OWN scope boundary
+  # at the time it was written -- REQ-211's own description states the
+  # route/controller layer is explicitly out of REQ-211's scope and belongs
+  # to a future requirement (REQ-212). That guard was a temporal statement
+  # ("not yet, and not by this requirement"), not a permanent invariant that
+  # instance_attachments must never have a route surface at all. REQ-212 has
+  # now shipped `lib/letflow/routers/instances.ex`'s four
+  # `/instances/:id/attachments...` routes atop this exact context module,
+  # per design `lib/letflow/design/req212-instance-attachments-routes.md` --
+  # removed rather than kept failing, since a permanently-red test asserting
+  # the wrong thing is worse than no test. See
+  # `test/letflow/routers/req212_attachments_routes_test.exs` for the route
+  # layer's own coverage.
 
   describe "Repository.upsert_content/6 (option (a) shared upsert path)" do
     test "is a public function on Letflow.Repository" do

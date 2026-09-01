@@ -281,3 +281,42 @@ history:
       ISS-0401/GH#785 for later diagnosis; and a known Lua executor timing
       flake, confirmed clean 48/48 in isolation) before Step Final. PR #786
       squash-merged as 6188191d. Queue task 400 released status: done.
+
+  - req: REQ-212
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-01T19:33:20Z"
+    note: >
+      WF02-REQ212-20260901 done (queue task 395, GH#775, stage S6).
+      RELEASE-VALIDATOR independently confirmed all 9 acceptance criteria
+      PASS. Closes the route half of GH#769/ISS-0390 -- REQ-211 (task 394,
+      GH#774) already closed the core half, merged to main as PR #782. Both
+      halves of GH#769/ISS-0390 are now done in full: letflow-queue task
+      390 (ISS-0390) should now be released as done by ORCH at Step Final,
+      per the trigger REQ-211's own DOC-UPDATER note flagged to wait for.
+      4 new routes (POST/GET-list/GET-content/DELETE) on
+      Letflow.Routers.Instances. Multipart parser extension uses Plug's
+      per-parser {parser, opts} override -- a deliberate improvement over
+      the original design, leaving JSON's 2MB ceiling untouched while
+      giving multipart its own 25MB ceiling. AttachmentsManage/
+      AttachmentsRead new permissions added to REQ-069's matrix. get_content/2
+      added to REQ-211's Letflow.Repository.Attachments context module
+      (not the router) to satisfy this codebase's real INV-RT-1
+      no-Repo-calls-in-routers invariant -- a justified deviation from the
+      original design. Two distinct 404 checks (cross-tenant structural,
+      cross-instance-same-tenant explicit) verified on all
+      attachment_id-taking routes. TEST-DESIGNER found and closed 1 real
+      coverage gap via mutation testing (upload/2's own defense-in-depth
+      size check needed independent test coverage beyond the
+      Plug.Parsers-level rejection). CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER
+      and REVIEWER all passed clean on first attempt, zero rework rounds.
+      Full suite 3031/3031 (TEST_PARALLEL_N=4).
+      docs/migration/stage-6-operational-cross-cutting.md NOT edited by
+      this step: its line 107 "S6 is now complete" sentence predates
+      REQ-211/REQ-212's discovery (per REQ-ANALYST's own note, a historical
+      record not to silently edit); DOC-UPDATER flagged whether an
+      appended acknowledgement note was warranted rather than deciding
+      solo. ORCH decided yes at Step Final: appended a dated note
+      immediately after the "S6 is now complete" sentence (not an edit to
+      it) naming REQ-211/REQ-212 as a later-discovered subsystem in the
+      same stage.

@@ -108,6 +108,21 @@ RELEASE-VALIDATOR. **S6 is now complete.** REPO-05 (form-schema indexing)
 and the repository HTTP surface (REPO-11..14) remain deferred, per
 REQ-202's own description. Requirements, expanded in two batches:
 
+**Note added 2026-09-01, after the "S6 is now complete" line above was
+written (not an edit to it, per this doc's own convention of appending
+rather than rewriting a settled statement):** REQ-211 (instance-attachment
+schema and core module) and REQ-212 (instance-attachment route surface)
+were drafted and shipped after this line was written, closing GH#769/
+ISS-0390 ("missing attachment/document-upload subsystem"), a finding from
+REQ-206's S7 SwiftRoute simulation batch. Both are genuinely new
+functionality (no R-Co source, no existing SPA consumer contract) rather
+than a port, and both are S6-scoped per this doc's own "new subsystem, not
+correctness gate" placement rule — see REQ-211's requirement text in
+docs/requirements.yaml for the full placement rationale. This does not
+reopen or contradict the sentence above; S6's originally-scoped batches
+were and remain complete, and this is an additional, later-discovered
+subsystem in the same stage.
+
 **First batch (DLQ and webhooks):** REQ-176 (Dead-letter queue schema
 and core entry lifecycle, OBS-05 foundation); REQ-177 (Wire REQ-056's
 and REQ-061's existing hooks into the DLQ); REQ-178 (DLQ route layer

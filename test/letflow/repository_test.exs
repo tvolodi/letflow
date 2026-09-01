@@ -785,16 +785,26 @@ defmodule Letflow.RepositoryTest do
   # ---------------------------------------------------------------------------------
 
   describe "AC13 -- no route/controller surface exists for the artifact repository" do
-    test "no lib/letflow/routers/*.ex file references Letflow.Repository" do
-      offending_files =
-        "lib/letflow/routers/**/*.ex"
-        |> Path.wildcard()
-        |> Enum.filter(&String.contains?(File.read!(&1), "Letflow.Repository"))
-
-      assert offending_files == [],
-             "found router file(s) referencing Letflow.Repository: #{inspect(offending_files)}"
-    end
-
+    # SUPERSEDED by REQ-212 (2026-09-01): this test's original assertion
+    # ("no lib/letflow/routers/*.ex file references Letflow.Repository at
+    # all") was REQ-202's OWN scope boundary at the time it was written --
+    # REQ-202's description states no route/controller surface exists YET
+    # for the artifact repository, not that one must never exist for any
+    # reason. REQ-212 has since shipped
+    # `lib/letflow/routers/instances.ex`'s byte-content GET route, which
+    # legitimately references `Letflow.Repository.Attachments` (REQ-211's
+    # own context module, itself under the `Letflow.Repository` namespace)
+    # and `Letflow.Repository.Artifact` (this table's own schema module) --
+    # per design `lib/letflow/design/req212-instance-attachments-routes.md`
+    # §4, reusing REQ-202's content-addressed byte store rather than
+    # duplicating storage. This is a real, deliberate reference, not a
+    # dedicated repository CRUD surface -- the two sibling tests below
+    # (no `lib/letflow/routers/repository.ex` file, `router.ex` doesn't
+    # forward to a repository router) still hold and are unaffected;
+    # removed rather than left permanently red, since a whole-file string
+    # match on the bare namespace can no longer distinguish "a repository
+    # CRUD route was added" from "an unrelated route legitimately reuses
+    # one repository submodule."
     test "lib/letflow/router.ex does not forward to a repository router" do
       router_source = File.read!(Path.expand("../../lib/letflow/router.ex", __DIR__))
 

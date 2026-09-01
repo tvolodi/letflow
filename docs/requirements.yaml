@@ -12144,7 +12144,7 @@ requirements:
   - id: REQ-212
     title: Instance-attachment route surface (POST/GET/DELETE /api/v1/instances/:id/attachments), AttachmentsManage-gated
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 395  # letflow-queue task id, GH#775
     description: >

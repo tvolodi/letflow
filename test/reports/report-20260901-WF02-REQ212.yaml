@@ -1,0 +1,158 @@
+run_id: WF02-REQ212-20260901
+date: "2026-09-01"
+agent: TEST-RUNNER
+requirement: REQ-212
+queue_task: 395
+github_issue: GH#775
+closes: [GH#769, ISS-0390]
+branch: main
+commit_tested: 68683db6 (working-tree changes on top, not yet committed)
+
+toolchain:
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5], Elixir 1.20.3"
+  docker: "letflow-postgres-1 (already running), letflow-keycloak-1 (already running)"
+  db_port_source: "default 5462 (no LETFLOW_DB_PORT override in .env)"
+
+req212_diff_scope:
+  command: "git diff --stat"
+  files:
+    - lib/letflow/api/authorization.ex
+    - lib/letflow/plugs/api_pipeline.ex
+    - lib/letflow/repository/attachments.ex
+    - lib/letflow/routers/instances.ex
+    - test/letflow/api/authorization_test.exs
+    - test/letflow/repository/attachments_test.exs
+    - test/letflow/repository_test.exs
+    - test/letflow/routers/instances_test.exs
+    - test/letflow/simulation/req206_swiftroute_test.exs
+    - lib/letflow/design/req212-instance-attachments-routes.md (new, design doc)
+    - test/letflow/routers/req212_attachments_routes_test.exs (new)
+    - test/specs/REQ-212.md (new, test spec)
+
+full_suite_run:
+  command: "TEST_PARALLEL_N=4 sh scripts/test_parallel.sh"
+  reason_for_TEST_PARALLEL_N_4: >
+    ISS-0219 workaround per dispatch instructions -- nproc-derived N=16 on this
+    host is known to exceed Postgres/CPU capacity and crash every partition
+    during concurrent ecto.create/migrate with duplicate_table errors. Ran
+    directly with the documented override rather than hitting that failure
+    first.
+  partition_count: 4
+  partition_count_source: "env override (TEST_PARALLEL_N)"
+  test_pool_size: 21
+  exit_code: 0
+  combined_result_line: "combined: 3025 tests, 6 properties, 0 failures (3031/3031 passed)"
+  passed: 3031
+  failed: 0
+  skipped: 0
+  total: 3031
+  per_partition:
+    - partition: 1
+      tests: 762
+      properties: 0
+      failures: 0
+      exit: 0
+    - partition: 2
+      tests: 710
+      properties: 3
+      failures: 0
+      exit: 0
+    - partition: 3
+      tests: 799
+      properties: 2
+      failures: 0
+      exit: 0
+    - partition: 4
+      tests: 754
+      properties: 1
+      failures: 0
+      exit: 0
+
+isolated_reruns:
+  - file: test/letflow/routers/req212_attachments_routes_test.exs
+    command: "MIX_ENV=test mix test test/letflow/routers/req212_attachments_routes_test.exs --no-color"
+    result_line: "Result: 16 passed"
+    passed: 16
+    failed: 0
+    order_dependence_or_shared_fixture_issues: none_observed
+    note: "New test file for REQ-212's route surface (GET instance-attachments list route + cross-tenant/authz cases)."
+
+  - file: test/letflow/repository/attachments_test.exs
+    command: "MIX_ENV=test mix test test/letflow/repository/attachments_test.exs --no-color"
+    result_line: "Result: 17 passed"
+    passed: 17
+    failed: 0
+    order_dependence_or_shared_fixture_issues: none_observed
+    note: "Mechanically updated by ELIXIR-DEV/REVIEWER to reflect real route surface; confirmed no regression."
+
+  - file: test/letflow/repository_test.exs
+    command: "MIX_ENV=test mix test test/letflow/repository_test.exs --no-color"
+    result_line: "Result: 27 passed"
+    passed: 27
+    failed: 0
+    order_dependence_or_shared_fixture_issues: none_observed
+    note: "Mechanically updated; confirmed no regression."
+
+  - file: test/letflow/api/authorization_test.exs
+    command: "MIX_ENV=test mix test test/letflow/api/authorization_test.exs --no-color"
+    result_line: "Result: 28 passed"
+    passed: 28
+    failed: 0
+    order_dependence_or_shared_fixture_issues: none_observed
+    note: "Mechanically updated; confirmed no regression."
+
+  - file: test/letflow/routers/instances_test.exs
+    command: "MIX_ENV=test mix test test/letflow/routers/instances_test.exs --no-color"
+    result_line: "Result: 44 passed"
+    passed: 44
+    failed: 0
+    order_dependence_or_shared_fixture_issues: none_observed
+    note: "Mechanically updated; confirmed no regression."
+
+  - file: test/letflow/simulation/req206_swiftroute_test.exs
+    command: "MIX_ENV=test mix test test/letflow/simulation/req206_swiftroute_test.exs --no-color"
+    result_line: "Result: 5 passed"
+    passed: 5
+    failed: 0
+    order_dependence_or_shared_fixture_issues: none_observed
+    note: >
+      Mechanically updated by ELIXIR-DEV/REVIEWER to reflect real route surface
+      now existing for the S7 simulation harness's SwiftRoute scenario;
+      confirmed no regression.
+
+  conclusion: >
+    All six files pass identically standalone as they do inside the full
+    parallel run. No evidence of order-dependence or shared-fixture leakage
+    between req212_attachments_routes_test.exs and any of the five files
+    mechanically updated alongside it, nor with the rest of the suite.
+
+known_environmental_issues_checked:
+  - id: ISS-0219
+    description: "nproc-derived N exceeds host Postgres/CPU capacity for concurrent ecto.create/migrate"
+    encountered_this_run: false
+    matched_signature: not_applicable
+    action_taken: "Ran full suite directly with TEST_PARALLEL_N=4 per dispatch instructions, avoiding the crash rather than hitting and recovering from it."
+    blocking: false
+
+  - id: CheckToolchainTest_rustc_absent
+    encountered_this_run: false
+
+  - id: wasm_hang_isolated_subprocess_flake
+    encountered_this_run: false
+
+failures_found: []
+
+verdict: PASS
+verdict_note: >
+  Full suite is 100% green (3031/3031, 0 failures) at TEST_PARALLEL_N=4, this
+  project's documented workaround for the non-code-related ISS-0219 host-capacity
+  issue. REQ-212's own new route-surface test file
+  (test/letflow/routers/req212_attachments_routes_test.exs, 16 tests) passes both
+  inside the full run and standalone, with no order-dependence. The five files
+  mechanically updated by ELIXIR-DEV/REVIEWER to reflect the newly-real route
+  surface (attachments_test.exs, repository_test.exs, authorization_test.exs,
+  instances_test.exs, req206_swiftroute_test.exs) all pass cleanly standalone,
+  confirming no regression from those mechanical updates. No pre-existing
+  environmental failures (rustc-absent toolchain check, :wasm_hang flake) were
+  encountered in the full run or any isolated re-run. No action required from
+  ELIXIR-DEV/TEST-DESIGNER; ready to proceed to RELEASE-VALIDATOR.

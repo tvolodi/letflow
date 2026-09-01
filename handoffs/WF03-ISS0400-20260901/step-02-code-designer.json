@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0400-20260901/step-02-code-designer.json",
   "created_at": "2026-09-01T16:56:23Z",
   "started_at": "2026-09-01T17:05:26Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-01T17:20:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -36,19 +36,21 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "Not yet completed by the receiving agent (rework iteration 1).",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "REWORK ITERATION 1 complete. Replaced iteration 1's resolve_nested_split/3 reset discipline (index/lowlink/stack/stack_set/next_index reset before folding over the nested split's own branches) with full, unmodified state sharing at that boundary: resolve_nested_split/3 now threads the exact incoming leaf_search_state() -- all six fields, including stack/stack_set/index/lowlink/next_index -- through its own fold over the nested split's outgoing edges, exactly as an ordinary step-5 sibling-edge fold (fold_outgoing_edges/4) already threads state across any branching node's own children. reset_stack_bookkeeping/1 remains reserved exclusively for find_matching_join/2's own TOP-LEVEL per-branch reset (ISS-0398 design 2.2.3's unwound-stack proof, unchanged); resolve_nested_split/3 must never call it (design SS6 states this as an explicit ELIXIR-DEV invariant). Because stack_set is never wiped at this boundary, a live back-edge from inside a nested split's own branch into a still-open outer-walk ancestor is detected by the ordinary, unmodified step-2 on-stack check -- there is no nested-split-shaped blind spot left in the Tarjan machinery. Re-derived soundness with a full step-by-step trace against CODE-DESIGN-VALIDATOR's own exact counterexample graph (outer_split -> A -> inner_split, out_degree 2, split role; branch a: inner_split -> ia -> A closing the cycle; branch b: inner_split -> ib -> inner_join -> post -> outer_join) in design SS3.2: the walk visits A, inner_split, ia, ib, inner_join, post, outer_join each exactly once as a fresh exploration, resolve_nested_split/3 is entered exactly once (never re-entered), the back-edge ia->A is correctly detected on its first and only encounter via the unmodified step-2 check, the SCC {A, inner_split, ia} closes correctly at A (the true root, local_lowlink pulled to 0 by ia's back-edge), and the branch resolves to the correct singleton {:gateway,\"outer_join\"} -- explicit termination, no infinite regress. Reconciled the SS2.3/SS3.3 internal contradiction the validator found: both sections now describe the identical no-reset mechanism, with SS3.3 rewritten to distinguish a clean-closure dead-end verdict (unchanged from iteration 1) from an {:open, lowlink} propagation verdict (now explicitly the same step-5 propagation rule SS2.3 itself specifies, not a separately-asserted claim). SS3.4's termination argument, SS6's signature summary, and SS7's open questions updated to match. Replaced design SS4 fixture 3 (which exercised a different, non-matching cycle shape) with the validator's own exact counterexample graph as nested_split_ancestor_back_edge_graph/0 (positive case, resolves to {:ok,\"outer_join\"}, with an explicit non-regression assertion that the call completes at all in bounded time -- the direct regression check for the BLOCKER, since iteration 1's mechanism would never have returned on this fixture) plus nested_split_ancestor_back_edge_no_escape_graph/0 (fixture 3b, negative twin retaining the pure-cycle-no-escape coverage iteration 1's fixture 3 provided). Did not touch SS3.1 (memo-key soundness), SS3.4's @max_nodes arithmetic, the zero-split-role-fixtures claim, the :dead_end propagation choice for the clean-closure case, or fixtures 1/2/4 -- all independently verified sound by the validator and out of scope for this rework per the handoff's own instruction. No .ex implementation bodies added or present (only @spec/@type fences and prose, confirmed by direct re-read of the full file after editing).",
+    "artifacts_out": [
+      "lib/letflow/design/iss0400-nested-parallel-gateway-fix.md"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0400-20260901",
-      "commit_sha_list": [],
+      "commit_sha_list": ["3e411f316677449bddb6f2c78cf89943f1d621d3"],
       "remote_branch": "origin/feature/WF03-ISS0400-20260901",
-      "push_status": "skipped",
+      "push_status": "pushed",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Not yet dispatched"
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for re-gate (WF-03 Step 2b recheck 1) against the revised resolve_nested_split/3 mechanism in lib/letflow/design/iss0400-nested-parallel-gateway-fix.md."
   },
   "rework_count": 1,
   "max_rework": 3,

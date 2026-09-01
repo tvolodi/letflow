@@ -1,0 +1,57 @@
+{
+  "handoff_id": "4e2ff571-7414-42c8-b432-6e16ab09558f",
+  "run_id": "WF03-ISS0400-20260901",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0400-20260901/step-04b-test-design-validator.json",
+  "created_at": "2026-09-01T17:36:15Z",
+  "started_at": "2026-09-01T17:36:15Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/letflow/engine/parallel_gateway_test.exs",
+      "test/specs/ISS-0400.md",
+      "lib/letflow/design/iss0400-nested-parallel-gateway-fix.md",
+      "handoffs/WF03-ISS0400-20260901/step-04-test-designer.json",
+      "docs/issues/ISS-0400.yaml"
+    ],
+    "owned_modules": ["test/letflow/engine/parallel_gateway_test.exs"]
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's coverage for ISS-0400. TEST-DESIGNER reports a fail-then-pass proof via a throwaway git worktree at main (58e3c64e, pre-ISS-0400): 13/18 passed pre-fix (5 genuine failures matching the exact regression symptom), 18/18 passed post-fix. Do NOT accept this claim as reported -- independently reproduce at least the core discriminating case yourself: create your own throwaway git worktree at main (58e3c64e), copy only the new ISS-0400 test code (or the relevant describe blocks) into that pre-fix tree, run it, and confirm for yourself that it genuinely fails there with the same symptom TEST-DESIGNER reports, then confirm it passes on this branch. This is the standard 'apply the reported evidence yourself' rule for a fail-then-pass regression test (WF-03_issue_resolving.md's Step 4 section) -- accepting the reported pass counts is copying a claim, not validating one. Also verify: every acceptance criterion on step-04-test-designer.json's task block actually has a runnable test backing it (fixtures 1/2/3/3b/4 from design section 4), no skipped/pending coverage, fixtures are self-sufficient (no hidden dependency on test execution order or another test's side effects), and the existing 12 ISS-0398 tests are genuinely unchanged (diff them against main). Clean up any worktree you create when done.",
+    "acceptance_criteria": [
+      "At least one new ISS-0400 test independently re-run by you (not TEST-DESIGNER) against a fresh throwaway worktree at main (58e3c64e), confirmed to genuinely fail there with real quoted output",
+      "The same test independently re-run by you against this branch, confirmed to pass with real quoted output",
+      "Every one of design section 4's specified fixtures (1, 2, 3, 3b, 4) has a corresponding runnable test, none skipped",
+      "Fixtures confirmed self-sufficient (no shared mutable state, no execution-order dependency)",
+      "The existing 12 ISS-0398 tests are confirmed byte-identical to main's version (or explain any diff)",
+      "No worktree residue left behind",
+      "Verdict is PASS or FAIL with issues at BLOCKER/MAJOR/MINOR severity"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "Not yet completed by the receiving agent.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0400-20260901",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0400-20260901",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Not yet dispatched"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

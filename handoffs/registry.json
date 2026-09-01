@@ -3698,6 +3698,21 @@
       "released_lock": true,
       "last_known_step": "Step Final (ORCH: pushing/merging PR to main, queue task 382 to be released done)",
       "note": "S7 scenario-harness foundation: Letflow.Simulation.Seed (idempotent context-module-direct seeding) and Letflow.Simulation.Runner (4-phase execution: preconditions, api-via steps with {{produces.X}} template substitution, gui-via steps recorded DEFERRED_TO_S8, expected-outcome verification against real queried state), both test-support modules. Design reworked once (literal defmodule/defstruct code fences removed, replaced with markdown field tables; OQ-2 resolved by reading list_groups/1's real body). Implementation reworked once (TEST-DESIGNER found a real bug: audit_event's verify_outcome/2 clause skipped template substitution the other two methods got -- fixed, verified with new tests using a real runtime UUID). Added {:yaml_elixir, \"~> 2.11\", only: :test}, REVIEWER-signed-off per AC7. KNOWN CAVEAT, accepted by RELEASE-VALIDATOR: AC1's 12 fixture files are SYNTHETIC, not real R-Co content -- R-Co's source tree (Windows host path) is unreachable from this sandbox. Seed/Runner depend only on fixture shape, not R-Co-specific values, so this is a data-only gap, zero code change needed once real content lands -- but it's a HARD BLOCKING PREREQUISITE for REQ-206 (which carries real scenario YAML referencing specific actor_ids that won't resolve against synthetic fixtures). Follow-up issue filed (docs/issues/ISS-REQ205-fixture-porting.yaml, to be registered) for a host with R-Co access to port the real files before REQ-206 starts. Also fixed 7 handoff-schema violations in this run's OWN dispatched subagents' handoffs (not a sibling session this time)."
+    },
+    {
+      "run_id": "WF02-REQ206-20260901",
+      "requirement_id": "REQ-206",
+      "queue_task_id": 383,
+      "github_issue_number": 755,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "test/letflow/simulation"
+      ],
+      "started_at": "2026-09-01T02:57:49Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 (ORCH: branch created, entering Step 1 CODE-DESIGNER)",
+      "note": "Unblocked by ISS-0388's real fixture port (fix/ISS-0388-real-rco-fixtures-20260901, PR #766, merged by a sibling session with R-Co access). Runs REQ-205's harness against SwiftRoute's 4 real R-Co scenario YAMLs: tenant-onboarding-happy (gui-heavy, DEFERRED_TO_S8), shipment-high-value-happy (all api, real end-to-end), shipment-ops-timeout-escalation (step 2 SKIP/MINOR -- advance-timer endpoint doesn't exist, findable via grep, reported not built), shipment-attach-delivery-note (UNBUILT_FEATURE -- no attachment API in Letflow or R-Co, zero steps executed). Registered here explicitly at Step 00 per this session's established practice."
     }
   ]
 }

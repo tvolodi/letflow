@@ -7,9 +7,9 @@
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF03-ISS0400-20260901/step-02-code-designer.json",
   "created_at": "2026-09-01T16:56:23Z",
-  "started_at": "2026-09-01T16:56:23Z",
-  "completed_at": "2026-09-01T17:00:53Z",
-  "status": "COMPLETED",
+  "started_at": "2026-09-01T17:05:26Z",
+  "completed_at": null,
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -18,40 +18,50 @@
     "related_handoff_ids": [],
     "artifacts_in": [
       "handoffs/WF03-ISS0400-20260901/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0400-20260901/step-02b-code-design-validator.json",
+      "lib/letflow/design/iss0400-nested-parallel-gateway-fix.md",
       "lib/letflow/engine/transition.ex",
-      "lib/letflow/design/iss0398-walk-to-gateway-fix.md",
-      "docs/issues/ISS-0400.yaml"
+      "lib/letflow/design/iss0398-walk-to-gateway-fix.md"
     ],
     "owned_modules": ["lib/letflow/engine/transition.ex"]
   },
   "task": {
-    "description": "Design a fix for ISS-0400 based on ISSUE-FIXER's diagnosis in step-01-issue-fixer.json's result.summary (read it in full -- it names exact line numbers, functions, and the precise gap). In one sentence: collect_leaf_gateways/3's terminal clause (currently lines ~934-936 of lib/letflow/engine/transition.ex) treats every PARALLEL_GATEWAY node encountered as an immediate leaf, but a PARALLEL_GATEWAY that is itself a nested split (out-degree > 1, per the existing gateway_role/2 classification already used by dispatch_parallel_gateway/4) needs its own matching join recursively resolved first, with the outer walk then continuing from that inner join's own outgoing edge -- while a PARALLEL_GATEWAY that is actually a join/pass-through must keep today's immediate-terminal behavior unchanged (that is precisely what ISS-0398's fix depends on and must not regress). Your design must also state: (a) a termination argument for arbitrary nesting depth (the existing Tarjan-SCC memoization from ISS-0398 handles cycles for the OUTER walk -- state explicitly whether/how it composes with a RECURSIVE inner resolution without either infinite-looping or blowing the memo-key soundness ISS-0398's own design rework (CODE-DESIGN-VALIDATOR's memo-key-unsoundness catch, its BLOCKER-severity finding) already fixed once for the non-nested case -- read that finding via lib/letflow/design/iss0398-walk-to-gateway-fix.md before proposing a recursive call, since the same class of defect is the obvious risk here); (b) how a nested split's own resolution failure (e.g. no matching join found for the INNER split) should propagate to the outer branch's own find_matching_join/2 call -- as a distinct error reason, or folded into the existing :no_matching_join_found shape; (c) exact function signatures/@specs for whatever new or changed private function(s) this needs. Design artefact only -- no implementation code, no .ex function bodies (signatures/@specs and prose only, per WF-02 Step 1b check 2e).",
+    "description": "REWORK ITERATION 1: CODE-DESIGN-VALIDATOR FAILED this design at BLOCKER severity -- read its full result.summary in handoffs/WF03-ISS0400-20260901/step-02b-code-design-validator.json before changing anything. In one sentence: resolve_nested_split/3 as specified in your prior design (§2.3) resets index/lowlink/stack/stack_set/next_index before folding over the nested split's own branches, but that reset is only safe between TOP-LEVEL find_matching_join/2 branches (where a call's own stack is always fully unwound before returning, per ISS-0398 design §2.2.3) -- resolve_nested_split/3 instead fires MID-FLIGHT, from inside an already-open outer-walk call frame (the node leading into the nested split, e.g. A, has not returned), so wiping stack_set at that point destroys live back-edge detection for that still-in-progress ancestor. The validator constructed a concrete counterexample (outer_split -> A -> inner_split, with one inner branch looping back to A) and traced it step-by-step to a genuine infinite regress: A's back-edge to itself is no longer visible after the reset, so A is re-explored as fresh, re-recurses into inner_split, which re-triggers resolve_nested_split/3 again with another reset, forever. This also exposed an internal contradiction between design §2.3 (specifies a reset) and §3.3 (claims stack/stack_set are shared across the recursive boundary like memo is) -- the two describe incompatible algorithms; the validator's trace shows the reset (as literally specified) is what actually governs.\n\nYour rework must design a genuinely different mechanism for detecting a live back-edge from inside a nested split's own fold back to an outer-walk ancestor -- the validator's own summary suggests one direction (do NOT reset stack/stack_set/index/lowlink at the resolve_nested_split/3 boundary at all; only reset between find_matching_join/2's own TOP-LEVEL branches, where the unwound-stack proof actually applies; give each nested fold its own freshly-numbered index space that COMPOSES WITH, rather than replaces, the outer walk's live stack_set membership check) but you must design and re-prove it sound against this exact counterexample yourself, not merely re-assert the prior claim. Re-run your own worked trace against the validator's exact counterexample graph (outer_split -> A -> inner_split with the ia -> A back-edge, described in full in the validator's result.summary) and show explicitly, step by step, that the revised mechanism terminates and correctly detects the cycle. The validator's other findings (memo-key soundness for the non-cyclic case, the @max_nodes arithmetic, the zero-split-role-fixtures non-regression claim, the :dead_end propagation choice, and the absence of .ex bodies) were all independently verified SOUND and do not need to be redesigned -- only the stack/stack_set reset-vs-share mechanism at the resolve_nested_split/3 boundary needs to change. On finishing, flip status to COMPLETED and write your own result block as normal -- this is not a first dispatch, so do not treat 'claim by setting status to IN_PROGRESS only' as still in force; the handoff is already claimed and this is a real rework with a real result expected.",
     "acceptance_criteria": [
-      "Design states the exact modified clause/function and its new logic, as a signature/@spec plus prose, not an implementation body",
-      "Nested-split resolution is explicitly recursive-or-not, with the termination argument stated for arbitrary nesting depth",
-      "Design explicitly re-examines ISS-0398's own Tarjan-SCC memoization for compatibility with the proposed recursive/iterative approach, addressing the same memo-key-unsoundness risk class CODE-DESIGN-VALIDATOR already caught once on ISS-0398",
-      "Design states exactly how inner-split resolution failure propagates to the outer call, as a concrete error shape",
-      "Design explicitly confirms the existing non-nested PARALLEL_GATEWAY-as-join/pass-through path is unchanged (no regression of ISS-0398's own fix)",
-      "No .ex function bodies present in the design doc"
+      "The revised design explicitly does NOT reset stack/stack_set/index/lowlink at the resolve_nested_split/3 boundary in a way that destroys live back-edge detection for an outer-walk ancestor still on the call chain -- or uses some other mechanism that is explicitly proven not to, against the validator's exact counterexample",
+      "A step-by-step worked trace against the validator's own counterexample graph (outer_split -> A -> inner_split, inner branch looping back to A) is included, showing explicit termination and correct cycle detection under the revised mechanism",
+      "The revised design does not reintroduce the ISS-0398 memo-key-unsoundness defect class or the naive-visited-set-copy DoS defect class the validator confirmed were previously avoided",
+      "No .ex implementation bodies present in the design doc",
+      "Design doc explicitly reconciles or removes the prior §2.3/§3.3 internal contradiction the validator found"
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "Design written to lib/letflow/design/iss0400-nested-parallel-gateway-fix.md. Fix shape: collect_leaf_gateways/3's step-4 %Node{node_type: :PARALLEL_GATEWAY} clause (transition.ex:934-936) is split via the existing gateway_role/2 classification (transition.ex:730-741, reused verbatim): out_degree <= 1 (:join/:pass_through) keeps today's exact immediate-terminal body unchanged byte-for-byte (regression-safety-critical, confirmed in design §5 -- zero existing ISS-0398 fixture ever hits the new dispatch differently since none contains a nested :split-role PARALLEL_GATEWAY); out_degree > 1 (:split) is resolved via a new private function resolve_nested_split/3 (@spec Graph.t(), Node.t(), leaf_search_state() -> {leaf_search_result(), MapSet.t(branch_leaf()), leaf_search_state()}), which performs the same per-branch/cross-branch singleton-agreement fold find_matching_join/2 already does (reusing reset_stack_bookkeeping/1), then -- on success -- continues the walk from the inner join's own single outgoing edge's target via one more collect_leaf_gateways/3 call, returning that result as-is rather than stopping at the inner join (the diagnosis's explicit requirement). :combined_unsupported role folds into :dead_end (design open question #2, flagged for REVIEWER).\n\nRecursion is explicit and stated as genuinely recursive, not iterative-unrolled (design §2) -- arbitrary nesting depth is real (a nested split's own branch can itself contain a further-nested split).\n\nTermination for arbitrary depth (design §3.4): resolve_nested_split/3 introduces no new call shape -- every call it makes is an ordinary collect_leaf_gateways/3 call sharing the SAME state.memo, so ISS-0398 design §2.2.3's existing O(nodes+edges) bound already covers it without amending the counting argument; nesting depth itself is bounded by graph.ex's @max_nodes 500 (>= 3 new nodes per nesting level from gateway_role's own :split-requires-out_degree>1 definition, so depth <= 166) rather than assumed.\n\nMemo-key soundness re-examined against ISS-0398's own BLOCKER finding (design §3.1-3.2), not merely asserted: the key design choice is that resolve_nested_split/3 NEVER writes memo[gw_node.id] itself for the nested split's own node_id -- it is a pure pass-through of values already memoized under THEIR OWN node_ids by ordinary recursive collect_leaf_gateways/3 calls, so no new memo key is introduced and the ISS-0398 §2.2.1 counterexample shape (two entry points seeing different partial views of one memo key) cannot recur at this boundary. state.memo IS shared/threaded into the recursive call (rejected the alternative of a fresh isolated state per §3.2, since that would reopen the O(2^k) blowup class SECURITY-REVIEWER's INV-8 finding fixed) while index/lowlink/stack/stack_set/next_index reset before the nested split's own sibling branches, identical discipline to find_matching_join/2's own existing fold. A worked micro-example (design §3.2) traces ISSUE-FIXER's own repro-1 graph shape end-to-end through the new machinery, confirming it resolves to {:ok, \"outer_join\"} where today's code returns {:error, {:no_matching_join_found, \"outer_split\"}}.\n\nInner-resolution failure propagation (design §3.3): folded into the existing :dead_end branch_leaf() variant, not a new error-reason constructor -- justified on 3 grounds (find_matching_join/2's own external error shape already collapses every internal failure mode into one {:error, :no_matching_join} regardless of cause; :dead_end already unions correctly with sibling paths' own :dead_end results inside the same MapSet without a new case; no caller/acceptance-criterion needs the distinction). One stated exception: a live {:open, lowlink} result from a nested split's own branch reaching back into a still-open outer-walk ancestor propagates through unchanged (not forced to :dead_end prematurely) -- fixture 3 (design §4) exercises this.\n\nNon-regression of ISS-0398's own fix confirmed explicitly (design §5): the :join/:pass_through arm's body is byte-for-byte unchanged from today's shipped clause; dispatch_parallel_gateway/4's own RUNTIME dispatch path (separate from this lookahead-search fix) is untouched; find_matching_join/2's own external signature/agreement rule is untouched; every existing ISS-0398 fixture (three_branch_graph/0, branch_with_exclusive_gateway_graph/0, diamond_chain_graph/1, cyclic_escape_graph/0 and twin, pure_cycle_no_escape_graph/0) contains zero :split-role PARALLEL_GATEWAY nodes, so all hit the identical dispatch path as today.\n\n4 worked fixtures specified for TEST-DESIGNER (design §4): nested_parallel_split_graph/0 (core regression, ISSUE-FIXER's repro-1 shape), nested_split_dead_end_graph/0 (negative case), nested_split_reentrant_cycle_graph/0 (exercises the {:open,_}-propagation exception), doubly_nested_parallel_split_graph/0 (depth-2 confirmation).\n\nNo .ex function bodies present -- verified via grep for def/defp/case-do/Enum.reduce/Enum.map/Map.put patterns across the design doc, zero matches; only @spec fences and prose, matching ISS-0398's own design-doc convention. 3 open questions listed explicitly in §7 (fold-sharing between the two per-branch folds; whether :combined_unsupported deserves a distinct outcome; whether fixture 3 needs its own unit-level test) rather than silently resolved.",
-    "artifacts_out": [
-      "lib/letflow/design/iss0400-nested-parallel-gateway-fix.md"
-    ],
+    "status": "PARTIAL",
+    "summary": "Not yet completed by the receiving agent (rework iteration 1).",
+    "artifacts_out": [],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0400-20260901",
-      "commit_sha_list": ["b8eadb3822b150f992283774087dd5505c25f354"],
+      "commit_sha_list": [],
       "remote_branch": "origin/feature/WF03-ISS0400-20260901",
-      "push_status": "ok",
+      "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to CODE-DESIGN-VALIDATOR (WF-03 Step 2, same gate as WF-02 Step 1b)"
+    "next_action": "Not yet dispatched"
   },
-  "rework_count": 0,
-  "max_rework": 3
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-01T17:04:03Z",
+      "status": "FAIL",
+      "summary": "BLOCKER: resolve_nested_split/3's stack/stack_set reset at the resolve_nested_split/3 boundary destroys live back-edge detection for an outer-walk ancestor still on the call chain, causing genuine infinite recursion on a concrete counterexample graph (outer_split -> A -> inner_split, inner branch looping back to A). Internal contradiction found between design section 2.3 (specifies reset) and section 3.3 (claims sharing). Full trace and all other independently-verified-sound findings recorded in handoffs/WF03-ISS0400-20260901/step-02b-code-design-validator.json.",
+      "issues": [
+        "BLOCKER: resolve_nested_split/3 as specified never terminates on a legal graph shape where a nested split's own branch loops back to an ancestor still open on the outer walk's call chain."
+      ],
+      "next_action": "Rework CODE-DESIGNER: design a mechanism for the resolve_nested_split/3 boundary that does not destroy live back-edge detection for an in-progress outer-walk ancestor, and prove it sound against the validator's exact counterexample."
+    }
+  ]
 }

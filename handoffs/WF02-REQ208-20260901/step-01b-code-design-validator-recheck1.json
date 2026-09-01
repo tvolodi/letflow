@@ -1,0 +1,60 @@
+{
+  "handoff_id": "step01b-WF02-REQ208-20260901-recheck1",
+  "run_id": "WF02-REQ208-20260901",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ208-20260901/step-01b-code-design-validator-recheck1.json",
+  "created_at": "2026-09-01T10:08:31Z",
+  "started_at": "2026-09-01T10:08:31Z",
+  "completed_at": "2026-09-01T10:08:31Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-208"],
+    "issue_ids": ["ISS-0389", "ISS-0393"],
+    "artifacts_in": [
+      "lib/letflow/design/req208-meridian-scenario-execution.md",
+      "handoffs/WF02-REQ208-20260901/step-01-code-designer-rework1.json",
+      "handoffs/WF02-REQ208-20260901/step-01b-code-design-validator.json",
+      "lib/letflow/instances.ex",
+      "lib/letflow/event_store/instance_projection.ex",
+      "lib/letflow/engine.ex"
+    ],
+    "branch_name": "feature/WF02-REQ208-20260901"
+  },
+  "task": {
+    "description": "Rework re-check of lib/letflow/design/req208-meridian-scenario-execution.md against the prior FAIL's single Check-9 defect (§9 OQ-1 left open despite being resolvable via Instances.get_by_id/2's current_nodes field). Independently re-verify CODE-DESIGNER's rework claim rather than trusting its self-report."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified every claim in commit 7a2217f4 / handoff step-01-code-designer-rework1.json by reading source directly, not by trusting the self-report. (1) lib/letflow/instances.ex:53 read directly: `def get_by_id(id, opts) when is_list(opts)` returns `{:ok, %InstanceProjection{}}` via `Repo.get(InstanceProjection, id, prefix: prefix)` (nil -> {:error, :not_found}) -- confirmed exactly as claimed. (2) lib/letflow/event_store/instance_projection.ex:134 read directly: `field(:current_nodes, Letflow.EventStore.JSONArray, default: [])`; moduledoc lines 34-58 state verbatim 'current_nodes is a jsonb column holding a JSON array ... active token positions', distinguishing it from variables/error_detail's JSON objects -- confirmed. (3) lib/letflow/engine.ex read directly at all cited sites: line 1169 (`insert_instance_projection/8`'s attrs map, `current_nodes: current_node_ids`, feeding InstanceProjection.insert_changeset/2 at instance creation), line 1371 (`interpret_create_result/6`'s returned map, `current_nodes: current_node_ids`), line 2763 (`reconcile_projection/5`'s attrs map, `current_nodes: Enum.map(final_instance_state.tokens, & &1.node_id)`) -- and independently grepped all 7 occurrences of `current_nodes` in engine.ex, confirming `reconcile_projection/5` is called from two live transition call sites (lines 2008, 2453) in addition to being defined at 2754 -- i.e. genuinely populated at creation and on every subsequent transition/completion, not merely at one call site. All claims confirmed, no discrepancy. (4) Read the design's updated §4.1 outcome 1, §4.3 steps 1-2, and §9 OQ-1 directly: §4.1 adds current_nodes as an explicitly-labeled 'Corroborating instance_state check (OQ-1-resolved addition, not a replacement)' alongside (not instead of) the task-list query, correctly reasoned since AC1's literal wording requires the task-list mechanism; §4.3 step 2 now states current_nodes as the 'primary mechanism ... superseding the task-list-inference workaround', with the risk-evaluation task_assigned/PENDING check explicitly kept 'for its own distinct evidence (that a real task row was created and assigned to the correct role; current_nodes alone does not prove a task exists)' -- exactly the claimed split. §9 OQ-1 is rewritten to 'RESOLVED (independently confirmed this session by direct read, not deferred)' with the same three citations and an explicit no-knock-on-change statement for §2/§3/§6/§7/§8. (5) OQ-2 (R-Co-corpus fact for risk_rating's positive value, confirmed unreachable per §0.3's ISS-0393 finding, non-blocking since any non-'unacceptable' string satisfies the condition) and OQ-3 (page_size:100 margin check, already self-answered as sufficient for this requirement's own bounded scenarios, flagged only for future awareness) both meet this session's no-silent-deferral standard: each is either genuinely unreachable material or already-resolved-in-its-own-bullet, not a live ambiguity pushed onto ELIXIR-DEV. Independently diffed d93f0d22..7a2217f4 on the design file: the only sections touched are §4.1 (outcome 1), §4.3 (steps 1-2), and §9 (OQ-1 + closing paragraph) -- confirmed no other section needed a matching change: §2's :blocked/:no_task_of_type additions do not depend on how 'paused at node X' is verified; §3's graph shapes are unaffected; §6's report format and §7's follow-up issue text are unaffected; §8's AC map still cites the same sections (only the internal verification mechanism within those sections strengthened, not the AC-to-section mapping). (6) Re-scanned every code fence in the full file for `defmodule`/`defstruct`: zero matches (grep -n confirmed). Checks 1-8 from the prior FAIL pass (fixtures real, no native quorum primitive, task_assigned cannot express absence, no existing BLOCKED disposition, REQ-199 done + sequential-dispatch caveat accurate, ISS-0389/ISS-0393 referenced not duplicated, no implementation code, all 6 ACs mapped) were untouched by this rework and do not need re-verification per this task's own scoping. The prior Check-9 defect is fully resolved with no new discrepancy introduced. Design is APPROVED, no ambiguity remains for ELIXIR-DEV to guess at.",
+    "issues": [],
+    "routing_note": "Routes to Step 2a ELIXIR-DEV to implement lib/letflow/design/req208-meridian-scenario-execution.md as approved (both design iterations: base commit 0149ca5f plus rework commit 7a2217f4). All 8 prior checks plus this rework's Check 9 re-verification pass; no outstanding design gap."
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-01T11:40:00Z",
+      "status": "FAIL",
+      "summary": "Checks 1-8 PASS (fixtures real, no native quorum primitive, task_assigned cannot express absence, no existing BLOCKED disposition, REQ-199 done + sequential-dispatch caveat accurate, ISS-0389/ISS-0393 referenced not duplicated, no implementation code, all 6 ACs mapped). Check 9 FAILs: §9 OQ-1 (current-node lookup mechanism) is resolvable now by reading lib/letflow/event_store/instance_projection.ex (InstanceProjection.current_nodes, already the return type of a function this design already relies on) -- deferring it to ELIXIR-DEV repeats the exact class of gate failure REQ-206's own step-01b review established as non-negotiable.",
+      "issues": [
+        "§9 OQ-1 not resolved despite being reachable from material already cited in the design session"
+      ],
+      "next_action": "Rework CODE-DESIGNER"
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-01T10:08:31Z",
+      "status": "PASS",
+      "summary": "Independently re-verified (not trusted) that §9 OQ-1 is now resolved with real, checkable citations to lib/letflow/instances.ex:53, lib/letflow/event_store/instance_projection.ex:134/moduledoc, and lib/letflow/engine.ex ~1169/~1371/~2763 (plus live call sites at 2008/2453). §4.1/§4.3's updated verification mechanisms are consistent with the resolution, correctly split between AC1's task-list-literal requirement (current_nodes as corroborating evidence) and AC3's more permissive wording (current_nodes as primary mechanism, task_assigned kept for distinct evidence). OQ-2/OQ-3 remain legitimately deferred. No other section needed a matching change (diff-confirmed). Zero implementation code (re-scanned). No new discrepancy introduced by the rework.",
+      "issues": [],
+      "next_action": "Route to ELIXIR-DEV (Step 2a)"
+    }
+  ],
+  "not_agent_attested": false
+}

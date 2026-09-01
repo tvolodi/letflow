@@ -2411,8 +2411,27 @@ defmodule Letflow.Engine do
 
     parent_instance_id = normalized_changes.task.instance_id
 
+    # ISS-0392 fix (design doc §2.2/§2.4, Revision 2, build-time skip/defer):
+    # if any prepared_children entry's own graph already ran to completion
+    # synchronously (child_initial_state.status == :completed, resolved in
+    # plain Elixir by prepare_child_activation/4 before any Multi step for
+    # that child exists), that child's own completion cascade
+    # (SubProcess.maybe_chain_synchronous_completion/6 -> append_completion_multi/5
+    # -> build_completion_write_steps/12, appended below via
+    # append_sub_process_children_creation_multi/6) will append its own
+    # {:task_records, parent_instance_id} step for this SAME parent_instance_id
+    # -- colliding with the one build_task_activation_and_reconciliation_multi/4
+    # would otherwise append here. Per §2.3's dominance argument, call (2)'s
+    # diff strictly dominates call (1)'s, so call (1)'s task-activation step is
+    # skipped entirely (not built, then replaced -- Ecto.Multi has no such
+    # primitive, see design doc §2.1) whenever this predicate is true.
+    skip_task_activation? =
+      Enum.any?(prepared_children, fn {_parent_token_record_id, prepared} ->
+        prepared.child_initial_state.status == :completed
+      end)
+
     normalized_changes
-    |> build_task_activation_and_reconciliation_multi(completed_at, prefix)
+    |> build_task_activation_and_reconciliation_multi(completed_at, prefix, skip_task_activation?)
     |> Multi.merge(fn _changes ->
       # REQ-187 design doc §3.2 -- positioned immediately after
       # :token_reconciliation (the step that resolves real TokenRecord ids
@@ -2569,7 +2588,17 @@ defmodule Letflow.Engine do
   # reconciliation (design doc §8.2). Neither of these two steps' own
   # callback bodies reads from `changes` once called -- both close over
   # already-resolved plain values, matching each function's own @spec.
-  defp build_task_activation_and_reconciliation_multi(changes, completed_at, prefix) do
+  #
+  # ISS-0392 fix (design doc §2.5): gains `skip_task_activation? :: boolean()`
+  # as its 4th parameter. When true, the {:task_records, instance_id} step is
+  # omitted entirely (see maybe_append_task_activation_multi/7 below) --
+  # return type is unchanged, still a bare Multi.t().
+  defp build_task_activation_and_reconciliation_multi(
+         changes,
+         completed_at,
+         prefix,
+         skip_task_activation?
+       ) do
     %{
       task: task,
       snapshot_and_state: %{
@@ -2581,7 +2610,8 @@ defmodule Letflow.Engine do
     } = changes
 
     Multi.new()
-    |> TaskActivation.append_multi_from_existing_records(
+    |> maybe_append_task_activation_multi(
+      skip_task_activation?,
       task.instance_id,
       graph,
       seed_state.pending_task_nodes,
@@ -2589,6 +2619,43 @@ defmodule Letflow.Engine do
       prefix
     )
     |> reconcile_token_records(original_active_tokens, final_instance_state, completed_at, prefix)
+  end
+
+  # ISS-0392 fix (design doc §2.4) -- when skip_task_activation? is true, a
+  # synchronously-completing SUB_PROCESS child's own completion cascade is
+  # the sole appender of {:task_records, parent_instance_id} for this hop
+  # chain (see build_complete_task_tail_multi/6's own predicate comment
+  # above); this function must NOT append that step in that case. When
+  # false, behavior is byte-for-byte what this call did before this fix.
+  defp maybe_append_task_activation_multi(
+         multi,
+         true = _skip_task_activation?,
+         _instance_id,
+         _graph,
+         _previous_pending_task_nodes,
+         _final_instance_state,
+         _prefix
+       ) do
+    multi
+  end
+
+  defp maybe_append_task_activation_multi(
+         multi,
+         false = _skip_task_activation?,
+         instance_id,
+         graph,
+         previous_pending_task_nodes,
+         final_instance_state,
+         prefix
+       ) do
+    TaskActivation.append_multi_from_existing_records(
+      multi,
+      instance_id,
+      graph,
+      previous_pending_task_nodes,
+      final_instance_state,
+      prefix
+    )
   end
 
   # §8.2 -- new function. Advances/completes existing tokens rows to match

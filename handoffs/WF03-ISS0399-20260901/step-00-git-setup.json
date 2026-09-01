@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF03-ISS0399-20260901-step-00",
+  "run_id": "WF03-ISS0399-20260901",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0399-20260901/step-00-git-setup.json",
+  "created_at": "2026-09-01T17:05:00Z",
+  "started_at": "2026-09-01T17:05:00Z",
+  "completed_at": "2026-09-01T17:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0399"],
+    "artifacts_in": [],
+    "branch_name": "fix/ISS-0399-attachment-content-scanning-20260901"
+  },
+  "task": {
+    "description": "Git setup for ISS-0399: lock queue task, create fix branch from main."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Queue task 399 locked via get_next_task (agent_id: orch-ai-dala). depends_on: [394 (REQ-211)] confirmed done. Branch fix/ISS-0399-attachment-content-scanning-20260901 created from main, pushed."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

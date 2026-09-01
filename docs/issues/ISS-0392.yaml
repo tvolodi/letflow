@@ -1,0 +1,64 @@
+id: ISS-0392
+title: "Engine defect: Ecto.Multi :task_records key collision when a SUB_PROCESS child completes synchronously in the same hop-chain transaction"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ207-20260901
+discovered_at: "2026-09-01T07:26:00Z"
+severity: MAJOR
+tags: [engine, sub-process, ecto-multi, req-062]
+description: >
+  Found during REQ-207 (Vortex simulation scenario execution) implementation,
+  reproduced directly against a real running instance via
+  `POST /api/v1/tasks/:id/complete` when the completing task's hop chain
+  enters a SUB_PROCESS node whose child definition is a
+  synchronously-completing START->END graph.
+
+  `lib/letflow/engine.ex`'s `append_sub_process_children_creation_multi/5`
+  (called from `build_complete_task_tail_multi/6`, the `complete_task/3`
+  hop-chain tail) appends `SubProcess.append_start_multi/7` onto the SAME
+  `Ecto.Multi` that already appended
+  `build_task_activation_and_reconciliation_multi/3` for the parent's own
+  `instance_id`. When the spawned child completes SYNCHRONOUSLY (its own
+  `advance_until_stable/4` reaches `:completed` inside
+  `prepare_child_activation/4`, before any Multi step exists),
+  `append_start_multi/7`'s `maybe_chain_synchronous_completion/6` branch
+  chains `append_completion_multi/5` -> `build_completion_write_steps/12` ->
+  `TaskActivation.append_multi_from_existing_records(parent_instance_id, ...)`
+  (keyed `{:task_records, parent_instance_id}`) into the SAME transaction --
+  colliding with the parent hop-chain's own earlier
+  `{:task_records, parent_instance_id}` step.
+
+  Raises `RuntimeError` "cannot merge Multi; the following operations were
+  found in both Ecto.Multi: [task_records: \"<parent_instance_id>\"]"
+  (`Ecto.Multi.merge_results/3`), surfaced to the caller as
+  `Plug.Conn.WrapperError` (500).
+
+  Attributed to REQ-062's own module (`lib/letflow/engine.ex` /
+  `lib/letflow/engine/sub_process.ex`). Confirmed pre-existing (not
+  introduced by REQ-207's diff) by both SECURITY-REVIEWER and
+  RELEASE-VALIDATOR via `git diff main...HEAD -- lib/` showing zero changes
+  to the implicated files during REQ-207's implementation.
+
+  WORKAROUND USED IN REQ-207 (test-local only, not a fix): REQ-207's own
+  child process definition uses a pending HUMAN_TASK instead of a
+  synchronously-completing START->END graph, avoiding the collision entirely
+  by never triggering the synchronous-completion branch. Documented at three
+  levels in REQ-207's own artifacts (test module @moduledoc, inline
+  @simple_child_graph comment, findings report notes) per REVIEWER's Step 2d
+  confirmation. The underlying Engine defect remains unfixed.
+affected_files:
+  - lib/letflow/engine.ex
+  - lib/letflow/engine/sub_process.ex
+related:
+  - REQ-062
+  - REQ-207
+source: >
+  handoffs/WF02-REQ207-20260901/step-02a-elixir-dev.json (result.issues[0]),
+  handoffs/WF02-REQ207-20260901/step-02c-security-reviewer.json
+  (independent_findings_review.engine_defect_finding),
+  handoffs/WF02-REQ207-20260901/step-02d-reviewer.json (idiom_findings,
+  OUTSTANDING ITEM FOR ORCH note),
+  handoffs/WF02-REQ207-20260901/step-05-release-validator.json
+  (follow-up finding #1).
+queue_task_id: 392
+github_issue: 772
+status: open

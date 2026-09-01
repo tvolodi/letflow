@@ -1105,3 +1105,41 @@ history:
       self-authored/synthetic, disclosed in the design doc's own
       §0.2). docs/migration/stage-7-simulation-uat-parity.md updated to
       record REQ-207 done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-01T09:29:49Z"
+    note: >
+      WF02-REQ207-20260901 Step Final. PR #771 squash-merged to main at
+      e0b63918. CI backend gate initially failed on 8 new (un-grandfathered)
+      letflow.lint_handoffs violations, all in this run's own
+      handoffs/WF02-REQ207-20260901/*.json files (H3 non-schema top-level
+      keys -- commit_hash/test_results/invariant_results -- plus
+      ARTIFACTS_OUT_SELF_REF on 6 files listing themselves in their own
+      result.artifacts_out). Fixed directly (commit 60243347), re-verified
+      via mix letflow.lint_handoffs locally (0 new violations) before
+      re-pushing. A second, unrelated CI failure on the rebuilt run
+      (plugin_handler_test.exs's wasm_hang timeout-binding assertion,
+      30047ms >= 15000ms) was structurally attributed as a pre-existing,
+      unrelated timing flake (git diff main...HEAD touches zero
+      wasm/plugin_handler files; a sibling CI run on the same commit set
+      passed cleanly) and cleared by re-running just the failed job, which
+      passed. Queue task 384 released done (GH#756 closed). Filed both
+      follow-up findings RELEASE-VALIDATOR confirmed at Step 5: ISS-0392
+      (queue task 392, GH#772, Engine Ecto.Multi :task_records collision on
+      synchronously-completing SUB_PROCESS children, REQ-062) and ISS-0393
+      (queue task 393, GH#773, R-Co scenario-corpus reachability for the 4
+      real Vortex scenario YAMLs, same class as ISS-0388 but for
+      scenario-definition files specifically). docs/issues/ISS-0392.yaml and
+      ISS-0393.yaml created.
+
+      Also worth recording: this run's earlier steps (Step 1 rework, Step 1b
+      recheck) were independently duplicated by a concurrent sibling session
+      before this session's own dispatched agents completed -- in both
+      cases the dispatched agent detected the collision on push, verified
+      the sibling's fix was substantively equivalent, and discarded its own
+      redundant commit rather than force a competing version onto the
+      shared branch. No conflicting content ever landed; both instances
+      resolved cleanly with no ORCH intervention needed beyond noting it
+      here per the standing concurrent-session reporting convention.

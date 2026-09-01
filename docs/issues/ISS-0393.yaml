@@ -1,0 +1,53 @@
+id: ISS-0393
+title: "Port R-Co's tests/simulation/scenarios/*.yaml corpus (Vortex/SwiftRoute/Meridian scenario definitions) from real source, replacing self-authored synthetic fixtures"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ207-20260901
+discovered_at: "2026-09-01T08:20:00Z"
+severity: MINOR
+tags: [fixture-porting, needs-r-co-access, s7]
+description: >
+  Same class of gap ISS-0388 fixed for company/org/process fixtures
+  (`test/fixtures/simulation/{swiftroute,vortex,meridian}/
+  {company,org_structure,process_*}.yaml`), but NOT yet fixed for the
+  scenario-definition YAMLs themselves.
+
+  R-Co's `tests/simulation/scenarios/*.yaml` corpus (the actual scenario
+  files REQ-206/207/208 execute) remains unreachable from this sandbox
+  (confirmed during REQ-205, REQ-206, and REQ-207's design sessions --
+  `ls c:\Users\tvolo\dev\ai-dala\R-Co` returns "No such file or directory").
+
+  REQ-206 authored 4 self-authored/synthetic SwiftRoute scenario YAMLs and
+  REQ-207 authored 4 self-authored/synthetic Vortex scenario YAMLs, each
+  structurally faithful to their own requirement text's field-by-field
+  account (step counts, `via` values, business conditions) but NOT
+  byte-for-byte ports of R-Co's real scenario files -- both explicitly
+  disclosed this in their design docs
+  (`lib/letflow/design/req206-swiftroute-scenario-execution.md`,
+  `lib/letflow/design/req207-vortex-scenario-execution.md`). REQ-208
+  (Meridian) will likely need the same disclosure unless this is fixed
+  first.
+
+  Once R-Co becomes reachable from a session's environment (network access,
+  a mounted checkout, or similar), port
+  `tests/simulation/scenarios/vortex-*.yaml`, `swiftroute-*.yaml`, and
+  `meridian-*.yaml` verbatim into their respective
+  `test/fixtures/simulation/<company>/scenarios/` directories, replacing the
+  synthetic fixtures, and re-run REQ-206/207/208's test modules against the
+  real content to confirm no assertion depended on a synthetic-fixture-only
+  detail.
+affected_files:
+  - test/fixtures/simulation/swiftroute/scenarios/*.yaml
+  - test/fixtures/simulation/vortex/scenarios/*.yaml
+related:
+  - ISS-0388
+  - REQ-206
+  - REQ-207
+  - REQ-208
+source: >
+  lib/letflow/design/req207-vortex-scenario-execution.md (§0.2, §7 OQ-5),
+  handoffs/WF02-REQ207-20260901/step-02a-elixir-dev.json (result.issues[1]),
+  handoffs/WF02-REQ207-20260901/step-05-release-validator.json
+  (follow-up finding #2).
+queue_task_id: 393
+github_issue: 773
+status: open

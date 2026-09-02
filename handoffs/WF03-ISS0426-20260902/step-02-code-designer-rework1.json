@@ -1,0 +1,44 @@
+{
+  "handoff_id": "WF03-ISS0426-20260902-step-02-rework1",
+  "run_id": "WF03-ISS0426-20260902",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0426-20260902/step-02-code-designer-rework1.json",
+  "created_at": "2026-09-02T18:59:05Z",
+  "started_at": "2026-09-02T18:59:05Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0426"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0426-20260902/step-02b-code-design-validator.json",
+      "lib/letflow/design/iss426-wallclock-test-contention.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "docs/issues/ISS-0426.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0426-20260902",
+    "owned_modules": [
+      "lib/letflow/design/iss426-wallclock-test-contention.md"
+    ]
+  },
+  "task": {
+    "description": "REWORK 1 of the ISS-0426 fix design. CODE-DESIGN-VALIDATOR returned FAIL. Read its handoff (artifacts_in[0]) in full for the complete findings; this description states what must change to clear the gate.\n\nBLOCKING DEFECT -- OQ-2 is a design gap, not implementation latitude. Your design's synchronous seam bypasses Task.yield on the nil-heap-words path only. But lib/letflow/engine/lua/executor.ex:508-551 (run_with_heap_limit/5) carries its OWN hand-rolled wall-clock race: a bounded `receive ... after timeout_ms -> Process.exit(pid, :kill); {:error, {:wallclock_timeout, timeout_ms}}` built on :erlang.spawn_opt/2 instead of Task.Supervisor. ORCH has independently read executor.ex:508-551 and CONFIRMS the validator's finding: it is mechanistically the same race, and your seam does not address it. That leaves 4-5 call sites -- REQ-156 AC-1 (executor_test.exs:605), AC-2 (:644), and the heap-limited memory_result arms of the two mixed tests (:672, :910) -- still exposed to ISS-0426's exact failure mode after your fix ships. Your design's own section 7 defers this to ELIXIR-DEV; the gate's bar is 'unambiguous enough to build from', and a mechanism that does not know whether it covers 4 of its own Group 1 sites does not meet it.\n\nRESOLVE OQ-2 AS A CONCRETE DESIGN ELEMENT. Decide and specify how the heap-limited Group 1 sites stop racing the wall clock. Note the constraint that makes this non-trivial and must be respected: run_with_heap_limit/5's max_heap_size enforcement REQUIRES a separate process (the heap limit is a spawn_opt on that process), so a naive 'call it synchronously in the test process' does not transfer from the run_script/3 case. Design section 5.3's ordering argument -- that a :killed DOWN is observed strictly before the `after` clause can fire, which is what lets :memory_limit_exceeded be distinguished from a caller-issued kill -- is load-bearing for REQ-156's correctness and must survive whatever you propose. Options you might weigh (none prescribed): a seam that spawns with the heap limit but waits unboundedly (no `after`), so the memory-limit path is still exercised while the wall-clock branch is unreachable; routing those sites to Group 2 instead and accepting tag-isolation for them; or something better. State the coverage consequence of whichever you choose -- specifically, what REQ-156 property each affected test still proves.\n\nALSO REQUIRED (both non-blocking on their own, but fix them in this pass):\n  (i) Section 2.1's prose header claims '15 call sites across 10 tests', which is arithmetically wrong against your own table in the same section. The validator independently re-derived, from all 47 `test` declarations and all 31 `timeout_ms:` literals in the test file: 14 call sites across 11 tests for Group 1, and 11 Group-2-tagged tests (9 pure + 2 mixed) -- 22 tests total. Reconcile your prose to your table, using the count you can defend from the source.\n  (ii) Point 1 asked you to weigh the alternatives to a new production seam -- a test-support module, a @compile-guarded definition, or simply making run_script/3 public-with-@doc-false. The validator judged the seam substantively SOUND and verified the build_script_error/3 precedent (executor.ex:438-457) is accurately cited, so this is not a demand to change the approach: it is a demand to show the comparison you made, so the choice is reasoned on the record rather than asserted.\n\nUNCHANGED AND STILL BINDING: AC4 (no production timeout semantics changed, config/config.exs:17 untouched -- validator confirmed you are currently compliant, stay compliant); AC5 tag wiring mirroring :wasm_hang in both test_helper.exs and letflow.check.test.ex (validator confirmed CI genuinely reaches mix letflow.check.test via .github/workflows/ci.yml:126 -> mix letflow.check -> the mix.exs alias, so the tag approach is safe); the SCOPE BOUNDARY forbidding edits to the three wasm test files owned by the live run WF03-ISS0418-20260902; and the requirement that the fix be structurally verifiable rather than only statistically verifiable.\n\nDesign only -- still no implementation code. Update lib/letflow/design/iss426-wallclock-test-contention.md in place. Complete this handoff and commit both to branch feature/WF03-ISS0426-20260902. rework_count is 1 of max 3."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

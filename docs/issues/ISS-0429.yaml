@@ -1,0 +1,85 @@
+id: ISS-0429
+title: "Alert-hook delivery Process.sleeps inside the platform-wide Scheduler.Poller tick -- an unreachable webhook can stall every tenant's timers for minutes"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T18:48:01Z"
+severity: MAJOR
+tags: [otp, scheduler, availability, observability, blocking-call, s6]
+description: >
+  LIVE DEFECT on a production code path, traced end to end. Distinct from
+  ISS-0421 (which covers the Poller's serial per-tenant sweeps and tree
+  shape); this is a specific blocking call inside one of those sweeps,
+  with a far larger per-occurrence cost than any query.
+
+  THE CALL CHAIN, verified by reading each hop:
+    Letflow.Scheduler.Poller.handle_info(:tick, _)              (poller.ex:100-124)
+      -> maybe_run_alert_detection(schemas, ...)                (Enum.each over EVERY tenant schema)
+        -> Letflow.Obs.Alerts.build_context_and_detect/3        (alerts.ex:630)
+          -> fire_hooks/4                                       (alerts.ex:403)
+            -> deliver_with_retry/4                             (alerts.ex:422, 479)
+              -> Process.sleep(backoff_delay(attempt, policy))  (alerts.ex:517)
+
+  All of it runs SYNCHRONOUSLY on the single Scheduler.Poller GenServer.
+
+  THE MAGNITUDE. Default RetryPolicy (alerts.ex:92-95): max_attempts 3,
+  base_backoff_ms 1_000, max_backoff_ms 30_000,
+  delay(attempt) = min(base * multiplier^(attempt-1), max). A single
+  unreachable or slow alert-hook endpoint blocks the Poller for the sum
+  of its backoffs -- up to tens of seconds per hook -- and this runs PER
+  HOOK, PER TENANT, inside an Enum.each over every tenant schema. Several
+  tenants with hooks pointed at a dead endpoint can stall one tick for
+  minutes.
+
+  WHY SEVERE: a GenServer executing a callback processes NO other message
+  for the duration -- including its own next :tick. The Poller is the
+  platform-wide timer engine, so while it sleeps NO tenant's workflow
+  timers fire anywhere. A tenant-configured external HTTP endpoint being
+  slow therefore degrades core workflow execution for every tenant on the
+  node. The alert subsystem exists to REPORT degradation; here it causes
+  it. This is the same hazard ISS-0224 already fixed inside
+  Letflow.SandboxPool ("A GenServer executing a callback processes no
+  other message ... the pool's mailbox was frozen, including a parked
+  waiter's own timer message") -- same mistake, wider blast radius, missed
+  because that fix was scoped to the pool.
+
+  SECOND, LOWER-SEVERITY INSTANCE, same class: Letflow.Webhooks.deliver/3
+  (webhooks.ex:345) also calls Process.sleep(backoff_delay_ms(attempt))
+  inside attempt_loop, backoff :timer.seconds(2^(attempt-1)). Verified
+  currently LATENT -- no production caller of Webhooks.deliver/3 exists
+  outside webhooks.ex (only two moduledoc mentions in
+  webhooks/delivery.ex), so nothing blocks on it today. The shape is
+  already wrong and will bite whoever wires up REQ-183's dispatcher.
+
+  WHAT NOT TO DO: do not "fix" this by shortening backoffs -- the
+  retry/backoff behaviour is the intended semantics; the defect is doing
+  it synchronously on a shared, latency-critical process. Do not silently
+  change alert-delivery semantics (at-most-once emission via
+  check_and_record_emission/4, dedupe key, ordering) while relocating the
+  work.
+
+  SUGGESTED DIRECTION, not prescribed: move hook delivery off the Poller
+  -- a Task.Supervisor-backed dispatch, or a dedicated delivery process
+  with timer-message-driven retry instead of a blocking sleep, so the
+  Poller records what needs sending and returns immediately. ISS-0425 is
+  concurrently proposing the supervision-tree shape this would attach to;
+  reconcile rather than inventing a placement.
+affected_files:
+  - lib/letflow/obs/alerts.ex
+  - lib/letflow/scheduler/poller.ex
+  - lib/letflow/webhooks.ex
+related:
+  - ISS-0421
+  - ISS-0425
+  - ISS-0224
+  - REQ-183
+source: >
+  Self-audit of the architecture review's own recommendations, 2026-09-02,
+  prompted by the user asking whether every recommendation had actually
+  been filed. The first review mentioned the webhook Process.sleep in
+  prose and filed nothing; tracing it properly then revealed the far more
+  serious Alerts instance on the live Poller path. Call chain and retry
+  constants read directly from alerts.ex and poller.ex at filing time.
+queue_task_id: 429
+github_issue: 833
+
+status: open

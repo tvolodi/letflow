@@ -37,4 +37,18 @@ source: >
   ISS-0410/ISS-0409 as no_defect.
 queue_task_id: 414
 github_issue: 811
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0414-20260902
+resolved_at: "2026-09-02T15:30:00Z"
+resolution: >
+  CODE-DESIGNER designed (validated first attempt) and ELIXIR-DEV implemented
+  sweep_service_catalog_orphans/1 in test/support/tenant_schema_reaper.ex,
+  reusing the existing concurrent-invocation guard verbatim. No age threshold:
+  no service_catalog row is ever legitimately held open across a test-process
+  boundary. Unconditional delete + warn-log at both existing sweep boundary
+  points (before ExUnit.start(), inside after_suite/1); structurally
+  unreachable outside MIX_ENV=test; never raises (outer rescue returns
+  {:ok, %{deleted: 0}} on failure). 5 new tests in
+  test/support/service_catalog_reaper_test.exs. Passed SECURITY-REVIEWER and
+  REVIEWER on first attempt. Full suite: 3060/3062 (2 pre-existing unrelated
+  rustc-ENOENT failures). Merged via PR #818.

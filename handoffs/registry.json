@@ -3970,12 +3970,12 @@
       "issue_id": "ISS-0414",
       "queue_task_id": 414,
       "github_issue_number": 811,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [],
       "started_at": "2026-09-02T13:20:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to CODE-DESIGNER",
+      "lock_released_at": "2026-09-02T15:30:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- PR #818 merged to main, queue task 414 released done",
       "note": "WF-03 issue-resolving run for ISS-0414: service_catalog is this codebase's only table with no per-tenant-schema DROP SCHEMA CASCADE safety net, uniquely exposed to accumulating leftover rows from any interrupted/crashed mix test run. Root cause of ISS-0409/ISS-0410's own recurrence. Issue itself frames this as a design-worth-scoping question, not a pre-decided fix -- routing through a real CODE-DESIGNER pass rather than a direct action."
     }
   ]

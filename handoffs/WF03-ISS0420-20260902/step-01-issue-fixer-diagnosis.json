@@ -1,0 +1,39 @@
+{
+  "handoff_id": "WF03-ISS0420-20260902-step-01",
+  "run_id": "WF03-ISS0420-20260902",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0420-20260902/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-02T19:28:35Z",
+  "started_at": "2026-09-02T19:10:00Z",
+  "completed_at": "2026-09-02T19:28:35Z",
+  "status": "COMPLETED",
+  "priority": "MAJOR",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0420"],
+    "artifacts_in": [
+      "docs/issues/ISS-0420.yaml",
+      "mix.exs",
+      "mix.lock",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "lib/letflow/plugs/auth_pipeline.ex"
+    ],
+    "branch_name": "fix/ISS-0420-security-deps-oidcc-bandit-20260902"
+  },
+  "task": {
+    "description": "Diagnose and mechanically resolve ISS-0420: mix hex.audit reports 3 live security advisories on pinned production deps -- oidcc 3.8.0 (HIGH, EEF-CVE-2026-75759, in the auth path via lib/letflow/oidc/token_verifier/oidcc.ex's Oidcc.Token.validate_jwt/3), and bandit 1.12.4 (HIGH EEF-CVE-2026-74836 + MEDIUM EEF-CVE-2026-75484, HTTP/2 DoS/header-injection in the web tier). Step 0.5 registry lookup found no prior docs/issues/ entry for these advisory IDs or this symptom (no recurrence)."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Step 0.5: searched docs/issues/*.yaml for resolved entries matching oidcc/bandit/hex.audit/CVE-2026-75759/74836/75484 -- no match found. Not a recurrence; first time these advisories are addressed. ISS-0275 (referenced as 'related' in ISS-0420.yaml) is a different, unrelated issue -- checked its file, no shared root cause. Step 1 diagnosis, confirmed by direct reproduction (not from the issue report's prose): ran `mix hex.audit` in this checkout (Elixir 1.20.3/OTP 29 via asdf, network to hex.pm reachable from this sandbox unlike the README's general caveat) and it reported exactly the 3 advisories described: bandit 1.12.4 EEF-CVE-2026-75484 (MEDIUM), bandit 1.12.4 EEF-CVE-2026-74836 (HIGH), oidcc 3.8.0 EEF-CVE-2026-75759 (HIGH). Root cause is purely a stale pinned-version resolution, not a code defect: mix.lock resolved oidcc 3.8.0 and bandit 1.12.4 against mix.exs constraints {:ueberauth_oidcc, '~> 0.4'} (-> ueberauth_oidcc 0.4.2, which itself declares {:oidcc, '~> 3.2'}, i.e. >=3.2.0 <4.0.0) and {:bandit, '~> 1.5'} (i.e. >=1.5.0 <2.0.0after 1.x.x semver treatment: >=1.5.0 <2.0.0). Checked `mix hex.info oidcc` / `mix hex.info bandit` / `mix hex.info ueberauth_oidcc` against hex.pm directly: oidcc's latest release is 3.9.0 (2026-08-30, patched -- postdates the 3.8.0 advisory), bandit's latest is 1.12.5 (2026-08-20, patched). Critically: both patched versions (oidcc 3.9.0, bandit 1.12.5) already satisfy the EXISTING mix.exs/ueberauth_oidcc constraints (3.9.0 is within ueberauth_oidcc 0.4.2's own '~> 3.2' dependency declaration on oidcc; 1.12.5 is within mix.exs's own '~> 1.5' on bandit) -- so no mix.exs edit and no ueberauth_oidcc version bump were needed, confirmed by reading mix.lock's existing resolution and ueberauth_oidcc's hex.pm-declared dependency on oidcc before touching anything, per the task's explicit instruction not to guess this. Fix mechanism matched project convention (checked `git log -- mix.exs mix.lock`: prior dependency bumps in this repo are plain `mix deps.update <pkg>` runs that only touch mix.lock, no mix.exs edits, when the constraint already admits the newer version). Ran `mix deps.update oidcc bandit` (foreground): resolved and upgraded bandit 1.12.4 => 1.12.5, oidcc 3.8.0 => 3.9.0, all other deps unchanged. Diff is mix.lock lines 2 and 12 only (bandit and oidcc entries' version/hash fields) -- mix.exs untouched, verified via `git diff mix.exs` (empty). Re-ran `mix hex.audit` (foreground) post-upgrade: output is exactly 'No retired or security advisory packages found' -- all 3 advisories cleared. Ran `mix compile --warnings-as-errors --force` (foreground): clean recompile of oidcc (19 .erl + 16 .ex files), ueberauth_oidcc (11 .ex files), bandit (54 .ex files), and the letflow app itself (182 .ex files) -- 'Generated letflow app', zero warnings, exit 0. lib/letflow/oidc/token_verifier/oidcc.ex's calls (Oidcc.ClientContext.from_configuration_worker/4, Oidcc.Token.validate_jwt/3) compiled unchanged against oidcc 3.9.0 with no API break -- no source changes were needed in that module or in lib/letflow/plugs/auth_pipeline.ex. Ran the auth/HTTP-path test suite in the foreground (grepped test/ for files referencing Oidcc, AuthPipeline, or Bandit; excluded test/letflow/integration/keycloak_auth_pipeline_test.exs since it is @moduletag :keycloak and requires a live Keycloak container -- already excluded from the default `mix test` run via test/test_helper.exs's ExUnit.start(exclude: [:keycloak, :wasm_hang]), consistent with how this repo already treats that file): `mix test test/letflow/router_test.exs test/letflow/plugs/auth_pipeline_test.exs test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs test/letflow/plugs/api_pipeline_integration_test.exs test/letflow/api_token_auth_pipeline_test.exs test/letflow/application_test.exs test/letflow/api/authorization_test.exs test/letflow/api/authorization_ac9_test.exs test/letflow/api/keycloak_realm_audience_mapper_test.exs test/letflow/plugs/tenant_status_test.exs` against the already-running docker-compose postgres (letflow-1-postgres-1, port 5463, confirmed healthy via `sudo docker compose ps`) -- real output: 'Finished in 22.2 seconds (0.4s async, 21.8s sync)' / 'Result: 93 passed', 0 failures. This exercises Bandit (router_test.exs and application_test.exs boot the actual Bandit HTTP listener), AuthPipeline (both the OIDC and configurable/API-token verifier variants), and the authorization plug chain end to end against the new dependency versions. Also attempted the full `mix test` suite as an extra check beyond what was strictly required; it did not finish within a 580s external timeout wrapper (the wrapper's SIGTERM killed it, exit 143 -- not a test failure, and the buffered `| tail -40` pipe lost all output before the kill) -- did not re-attempt this since the scoped auth/HTTP-path run above already gives real, complete, foreground pass/fail evidence for every file this change can plausibly affect (oidcc, ueberauth_oidcc, bandit are each used in exactly one place in this codebase: the OIDC token verifier and the Bandit HTTP listener), and re-running the full suite would only re-verify unrelated modules this dependency bump cannot affect. Conclusion: this is a clean mechanical dependency-pin bump with no code changes, no mix.exs changes, no API breakage, and no test regressions -- routing to SECURITY-REVIEWER per the hard gate on tenant-data-path changes (every bearer token verification in Letflow.Plugs.AuthPipeline runs through the upgraded oidcc). SECURITY-REVIEWER should independently confirm that oidcc 3.9.0's fix for EEF-CVE-2026-75759 (nested-signature validation on encrypted ID tokens/JARM responses) does not require any new configuration on Letflow's side (e.g. a signing_algs or encryption-alg allowlist change) beyond the library-internal fix -- I did not evaluate that security property myself, per this role's scope boundary, only performed and verified the mechanical upgrade.",
+    "artifacts_out": [
+      "mix.lock"
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

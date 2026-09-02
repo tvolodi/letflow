@@ -1478,8 +1478,16 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 11
+    entries: 12
     note: >
+      Incremented to 12 by ORCH's WF03-ISS0404-20260902 done-event append
+      (SCOPE-CHANGE) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v8.yaml` = 12 on-disk entries, no roll
+      triggered (606 lines / well under the 1200-line/120000-byte ceiling).
+      Also filed ISS-0412 (queue task 412, GH#808) and ISS-0413 (queue task
+      413, GH#809) as incidental-finding follow-ups, not themselves
+      run-history events.
+
       Incremented to 11 by ORCH's WF03-ISS0408-20260902 done-event append
       (SCOPE-CHANGE) -- `grep -c "^  - req:"
       docs/status/requirement_status.v8.yaml` = 11 on-disk entries, no roll

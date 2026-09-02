@@ -562,3 +562,45 @@ history:
       as pre-existing, files untouched by this branch), filed rather than
       fixed per ISSUE_QUEUE.md scope discipline -- this run's job was
       ISS-0408, not a second incidental defect.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-02T12:54:21Z"
+    note: >
+      WF03-ISS0404-20260902: fixed ISS-0404 (test/letflow/scheduler_req188_test.exs
+      pinned a fixed historical git-commit-range, 746a3ac0..77637268, same
+      fragility class as ISS-0378). Full WF-03 pipeline run: ISSUE-FIXER
+      diagnosed root cause as an inherently one-time historical fact already
+      permanently discharged at REQ-188's own merge, verdict DELETE (not
+      structural replacement -- the only true structural alternative was
+      redundant with transition.ex's own moduledoc purity check). CODE-DESIGNER
+      -> CODE-DESIGN-VALIDATOR PASS. ELIXIR-DEV implemented (deleted the test
+      block, updated test/specs/REQ-188.md, appended a note to
+      docs/anti-patterns.md; lib/letflow/engine/transition.ex untouched) ->
+      SECURITY-REVIEWER PASS (no tenant-data path) -> REVIEWER PASS (no scope
+      creep, no lost AC coverage). TEST-DESIGNER produced a
+      structural-absence-plus-green-suite proof (fail-then-pass does not apply
+      to a pure deletion) -> TEST-DESIGN-VALIDATOR PASS (independently
+      reproduced, including extracting and running the pre-fix test against
+      post-fix code) -> TEST-RUNNER full suite 3054/3054 clean. Filed two
+      incidental findings as new issues, not blocking: ISS-0412 (queue task
+      412, GH#808, a flaky lint_handoffs.ex DateTime.compare/2 crash under
+      concurrent test runs) and ISS-0413 (queue task 413, GH#809, two other
+      tests using a live/resolved git ref -- a lesser, related fragility).
+      ISS-0404 closed status: resolved; GitHub issue #793 closed with
+      resolving-evidence comment. Queue task 404 released status: done. PR
+      #810 CI: Frontend gate PASS; Backend gate main suite PASS, isolated
+      wasm_hang subprocess failed 2/7 (host_api_write_test.exs,
+      call_timeout_test.exs) -- structurally attributed (route 1, per
+      core-directives.md) as the pre-existing, already-tracked GH#797/ISS-0406
+      flake: zero overlap between the failing files/WASM runtime code and this
+      branch's own diff (git diff --name-only origin/main...HEAD). PR #810
+      merged via squash (commit a09f15d0). Worktree-variant Step Final: GitHub
+      merge succeeded, local checkout side effect errored as documented
+      (main already checked out in primary worktree) -- verified via
+      gh pr view showing state MERGED before treating as PASS, then deleted
+      both branch refs explicitly and detached HEAD at fetched origin/main
+      per GIT_MERGE.md's worktree variant. Final verification: HEAD ==
+      origin/main (a09f15d0), git log shows the squash commit, clean working
+      tree.

@@ -513,3 +513,52 @@ history:
       entry already updates). No mix test/compile run: no lib/ or test/
       code touched by this step (docs-only), matching REQ-210's own scope
       declaration.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-02T10:58:39Z"
+    note: >
+      WF03-ISS0408-20260902 done (queue task 408, GH#800). Fixed
+      Letflow.Engine.Transition.fire_join/5 minting a synthetic non-UUID
+      token id for a freshly-joined PARALLEL_GATEWAY branch with no
+      persisted TokenRecord row, which TaskActivation.cast_token_record_id/1
+      correctly rejected -- blocking every join->HUMAN_TASK (and
+      TIMER-path-join) continuation scenario. Root cause traced (ISSUE-FIXER,
+      live repro against Postgres) one layer up from the symptom: the
+      complete_task/3 and timer_fired hop-chains had no insert step to
+      persist a real TokenRecord for a hop-chain-new join token before
+      task-activation/reconciliation ran against it. Fix (CODE-DESIGNER
+      design, CODE-DESIGN-VALIDATOR PASS) lives entirely in lib/letflow/engine.ex
+      -- inserts real TokenRecord rows for hop-chain-new tokens before those
+      two steps run, at both call sites, leaving
+      Transition.fire_join/5/TaskActivation.cast_token_record_id/1/
+      do_reconcile_token_records/5 unmodified. Surfaced a latent NOT NULL
+      mismatch on tokens.branch_id (join-merged tokens legitimately carry
+      branch_id: nil per REQ-051, never previously exercised) -- additive
+      migration 20260902000001_make_tokens_branch_id_nullable.exs, correctly
+      justified as a necessary consequence rather than scope creep (REVIEWER
+      confirmed). SECURITY-REVIEWER PASS (tenant-prefix threading, migration
+      safety, reconciliation-guard widening all verified against actual
+      code). REVIEWER PASS conditional on one one-line error-wrap fix
+      (applied, commit 74aba472). Regression test
+      test/letflow/iss0408_join_token_record_test.exs covers both call
+      sites, fail-then-pass independently reproduced by
+      TEST-DESIGN-VALIDATOR against pre-fix commit 751d5806 (exact
+      {:invalid_token_record_id, ...} error quoted both times). TEST-RUNNER:
+      3054/3058 -> 3057/3058 post-rebase, 0 failures attributable to this
+      branch (one pre-existing ServiceCatalogTest flake filed separately as
+      ISS-0409). PR #804 merged (squash 1b41d801). GitHub issue #800 closed
+      with resolving-evidence comment. Queue task 408 released status: done.
+      Local docs/issues/ISS-0408.yaml status: resolved, affected_files
+      corrected to match the actual diff (original filing's transition.ex/
+      task_activation.ex guess was wrong -- diagnosis found the real defect
+      site one layer up) with affected_files_note explaining why.
+
+      Also filed ISS-0409 (queue task 409, GH#805) for a pre-existing,
+      unrelated flake surfaced during this run's own Step Final mix test
+      runs: ServiceCatalogTest's REQ-192 pagination test fails in the full
+      suite but passes in isolation. Not blocking (structurally attributed
+      as pre-existing, files untouched by this branch), filed rather than
+      fixed per ISSUE_QUEUE.md scope discipline -- this run's job was
+      ISS-0408, not a second incidental defect.

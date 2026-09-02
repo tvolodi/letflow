@@ -445,7 +445,18 @@ defmodule Letflow.Engine.Wasm.HostApiWriteTest do
       assert HostApi.take_staged_writes() == %{}
     end
 
+    # ISS-0406/ISS-0352 recurrence mitigation: this test's own internal bound
+    # is a fixed 300ms wasmex GenServer.call timeout, so it normally
+    # completes in well under 2s. This exact test (host_api_write_test.exs:449)
+    # is the one that hit ExUnit's default 60_000ms per-test timeout on the
+    # ISS-0352/PR #780 recurrence -- not because the mechanism under test
+    # took 60s, but because CI-runner CPU scheduling contention delayed
+    # BEAM's own timer/message delivery to the caller. A raised @tag timeout
+    # tolerates that jitter without masking a genuine regression: if
+    # wasmex's client-side timeout ever stopped firing for real, this test
+    # would still eventually hit the (now-later) timeout and fail.
     @tag :wasm_hang
+    @tag timeout: 180_000
     test "REQ-170's wall-clock timeout abandons the staged write -- unreachable to any future caller, not process death (design §2.3/§9.1)" do
       {pid, store, memory} = start_instance("req172_write_then_hang.wat", ["var:write"])
 

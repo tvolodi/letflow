@@ -1,0 +1,45 @@
+{
+  "handoff_id": "WF03-ISS0426-20260902-step-03b",
+  "run_id": "WF03-ISS0426-20260902",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0426-20260902/step-03b-security-reviewer.json",
+  "created_at": "2026-09-02T20:49:08Z",
+  "started_at": "2026-09-02T20:49:08Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0426"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss426-wallclock-test-contention.md",
+      "handoffs/WF03-ISS0426-20260902/step-03-elixir-dev.json",
+      "docs/issues/ISS-0426.yaml",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/test_helper.exs",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "branch_name": "feature/WF03-ISS0426-20260902",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3 SECURITY GATE for ISS-0426. Apply your role's INV-1..INV-8 scope test and checks in full. This description names the run-specific risk that makes this review load-bearing rather than routine.\n\nWHY THIS TOUCHES YOUR SCOPE. The change adds two @doc false test-only seams to Letflow.Engine.Lua.Executor -- the module implementing REQ-155's LUA-10 layer-2 host-enforced wall-clock kill, which is a SECURITY CONTROL against untrusted tenant scripts. ISS-0426 is a test-infrastructure fix, and its own filing says explicitly: 'DO NOT change Letflow.Engine.Lua.Executor's production timeout semantics to fix a test-environment problem -- the wall-clock kill is a security control (LUA-10) and its behaviour under load is the thing being asserted.' Your job is to confirm that boundary held.\n\nTHE CENTRAL QUESTION: does adding a test-only bypass of the wall-clock kill to a security-relevant production module create a path by which the control can be evaded in production? Specifically:\n  1. run_script_sync/3 and run_with_heap_limit_sync/4 are PUBLIC functions (public with @doc false, not defp). Anything in the codebase -- or any future caller -- can call them, and they do NOT enforce the wall-clock kill. Assess whether that is an acceptable risk as shipped. Consider: is there any production call path that could reach them? Could a future non-test caller reasonably mistake them for the normal entry point? Is @doc false plus a comment sufficient, or does the module need a stronger guard? Note the design considered and rejected a @compile-guarded/test-only -env definition (design section 2.1.1a) -- judge whether that rejection is sound from a SECURITY standpoint specifically, which is a different question from the design ergonomics standpoint it was rejected on.\n  2. run_with_heap_limit_sync/4 waits UNBOUNDEDLY (its `after` clause is removed by design). Confirm the max_heap_size: %{kill: true} spawn_opt is retained so the MEMORY limit (REQ-156/LUA-09) still binds, and assess the availability risk of the unbounded wait -- the design's answer is a documented usage contract at executor.ex:601-612 rather than a mechanism. Judge whether a contract is adequate here given these are test-only entry points.\n  3. VERIFY -- do not accept -- that production semantics are untouched. ORCH has independently run `git diff main...HEAD --numstat -- lib/letflow/engine/lua/executor.ex` = 113 insertions, 0 deletions, and confirmed no removed lines at all. Re-derive this yourself and confirm execute_with_manifest/2,3, handle_yield_result/3 and run_with_heap_limit/5's own `after` clause are byte-for-byte unchanged, and that config/config.exs:17's production lua_wallclock_timeout_ms is untouched.\n  4. Confirm no tenant-data path, no API route, no migration, and no secrets handling is touched by this change (expected: none -- but confirm rather than assume).\n\nAlso assess the tagging change for a security-relevant failure mode: 11 tests that assert the LUA-10 wall-clock kill's behaviour are now EXCLUDED from a default `mix test` run and only execute inside `mix letflow.check.test`'s new isolated subprocess. If that wiring is wrong, the tests asserting a security control would silently stop running anywhere. ELIXIR-DEV reports `mix test --only lua_wallclock_race test/letflow/engine/lua/executor_test.exs` gives 'Result: 11 passed, 37 excluded'. Verify the tests still execute AND that CI reaches them (ORCH confirmed the chain .github/workflows/ci.yml:126 `mix letflow.check` -> mix.exs alias -> letflow.check.test).\n\nYou may READ anything. Do not edit lib/ or test/. Complete the handoff with a clear PASS/FAIL and per-item verdicts, then commit it to branch feature/WF03-ISS0426-20260902."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

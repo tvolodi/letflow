@@ -4046,14 +4046,14 @@
       "issue_id": "ISS-0433",
       "queue_task_id": 433,
       "github_issue_number": 838,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/scheduler/poller.ex"
       ],
       "started_at": "2026-09-02T20:26:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
+      "lock_released_at": "2026-09-02T20:35:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- diagnosis found nothing to convert, no_defect, queue task 433 released done",
       "note": "WF-03 issue-resolving run for ISS-0433: replace per-tick Application.get_env reads in Scheduler.Poller with :persistent_term, populated once at boot. Small, measurement-justified change per ISS-0432 profiling."
     }
   ]

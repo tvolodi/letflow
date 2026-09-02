@@ -35,4 +35,30 @@ source: >
   closing note (ISS-0432 itself carries no queue-task-shaped work).
 queue_task_id: 433
 github_issue: 838
-status: open
+status: no_defect
+verdict_in_run: WF03-ISS0433-20260902
+verdict_at: "2026-09-02T20:35:00Z"
+no_defect_evidence: >
+  ISSUE-FIXER read Letflow.Scheduler.Poller's full tick path and found
+  every Application.get_env call it reaches: :alert_hooks (poller.ex:149),
+  :ordering (poller.ex:219/234/249), and :scheduler (via
+  Letflow.Scheduler.scheduler_config/0, scheduler.ex:548, reached through
+  poll_interval_ms/0, jitter_ms/0, retention_enabled?/0,
+  retention_due?/1). All three are confirmed genuinely runtime-mutable,
+  not tick-invariant, by direct grep evidence of Application.put_env
+  calls with on_exit restore in test/letflow/obs/alerts_test.exs:43,
+  test/letflow/ordering_test.exs:40-41, and
+  test/letflow/scheduler_test.exs:194-201 /
+  test/letflow/scheduler/poller_test.exs:117-124. More decisively,
+  poller.ex's own moduledoc (lines 22-24) documents this as an
+  INTENTIONAL design property: "Config ... is read fresh on every tick,
+  so a runtime override ... takes effect on the very next tick" --
+  poller_test.exs's own AC8 test exists specifically to assert this.
+  Converting any of these three to a boot-time :persistent_term snapshot
+  would silently break that documented contract and its test until a
+  process restart -- exactly the case this issue's own acceptance
+  criteria said to exclude. Independently spot-checked by ORCH (read the
+  moduledoc directly) before closing. No code change made; nothing to
+  convert. Method limitation: this verdict covers only the Poller tick
+  path per this issue's own scope -- it says nothing about
+  Application.get_env usage elsewhere in the codebase.

@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0426-20260902-step-02b-regate",
+  "run_id": "WF03-ISS0426-20260902",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0426-20260902/step-02b-code-design-validator-regate.json",
+  "created_at": "2026-09-02T19:06:59Z",
+  "started_at": "2026-09-02T19:06:59Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0426"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss426-wallclock-test-contention.md",
+      "handoffs/WF03-ISS0426-20260902/step-02-code-designer-rework1.json",
+      "handoffs/WF03-ISS0426-20260902/step-02b-code-design-validator.json",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "docs/issues/ISS-0426.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0426-20260902",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "RE-GATE of the ISS-0426 design after rework 1. You FAILED the prior revision on OQ-2. CODE-DESIGNER has revised the design in place (lib/letflow/design/iss426-wallclock-test-contention.md, commit 201cdf68). Your job is to decide PASS or FAIL on the REVISED design.\n\nSCOPE OF THIS RE-GATE. You already verified and PASSED points 1, 4, 5 and 6 on the prior revision (seam soundness and the build_script_error/3 precedent; CI genuinely reaching mix letflow.check.test via ci.yml:126; AC4 compliance; the minimal/additive letflow.check.test.ex change). ORCH has independently re-confirmed the CI chain (.github/workflows/ci.yml:126 `mix letflow.check` -> mix.exs:91-108 alias list ending in `letflow.check.test`). Do not re-litigate those from scratch -- but DO confirm the rework did not disturb them, since the revision touched the scope header and sections 2.1, 3, 4 and 7, and now adds a SECOND seam to executor.ex.\n\nTHE THREE THINGS THAT MUST ACTUALLY CLEAR:\n\n1. OQ-2's RESOLUTION -- the blocking item. New section 2.1.2 proposes a second @doc false test-only seam mirroring run_with_heap_limit/5's spawn/monitor/receive shape with the `after` clause REMOVED ENTIRELY (unbounded wait on the three remaining receive clauses). Verify against executor.ex:508-551 that this is mechanically sound, and specifically adjudicate CODE-DESIGNER's two load-bearing claims:\n   (a) That removing the `after` clause PRESERVES the heap-kill mechanism, on the grounds that max_heap_size: %{kill: true} is enforced by the BEAM regardless of whether the caller is waiting. Confirm this is true, not merely plausible.\n   (b) That it STRENGTHENS design section 5.3's ordering argument, because with no caller-issued Process.exit(pid, :kill) possible on this path, every :killed DOWN is unconditionally the BEAM's own heap enforcement and no timing-order disambiguation is needed. Check this does not quietly WEAKEN REQ-156's guarantee instead: read section 5.3 and satisfy yourself that the distinction it draws is genuinely made unnecessary rather than merely made unobservable.\n   (c) THE DEADLOCK RISK, which the handoff raises as its own check and which the design must answer: an unbounded receive has NO timeout. Confirm the three remaining receive clauses are jointly EXHAUSTIVE over every way the spawned process can terminate -- normal reply, BEAM heap kill, and any other exit reason -- so a test using this seam cannot hang forever if the Lua VM neither replies nor dies. If a script can genuinely run unbounded (an infinite loop with no heap growth and no instruction budget), say what happens: does the instruction budget always bound it, or is a hang reachable? ExUnit's own per-test timeout is a backstop but a 60s hang is a materially worse failure mode than the flake being fixed, so if that is the outcome the design must say so and justify it.\n\n2. THE RECONCILED COUNTS. CODE-DESIGNER now reports Group 1 = 14 call sites across 11 tests (11 nil-heap sites in 9 tests via 2.1.1, 3 heap-limited sites in 2 tests via 2.1.2) and Group 2 = 11 tagged tests (9 pure + 2 mixed), and states this matches your own independently-derived count exactly. Confirm the revised section 2.1 table's rows and its new Mechanism column are correct against the source file -- in particular that rows 605 and 644 are the ONLY heap-limited entries in that table, and that the parenthetical arithmetic (11 rows, 14 call sites, with 253/605/861 each contributing 2 calls) actually adds up.\n\n3. THE MIXED TESTS (656, 887). The revision states their memory_result arms are mechanistically eligible for 2.1.2's seam, but deliberately leaves section 2.4's prior choice authoritative: tag-isolate the whole test rather than split mechanisms within one test body. Judge whether that is a defensible design decision or an inconsistency now that a mechanism for those arms demonstrably exists. Either verdict is acceptable if reasoned -- what you must not do is let it pass unexamined.\n\nALSO: the revision corrected a top-of-document scope header that had inaccurately claimed executor.ex was untouched. Confirm the header now accurately describes the TWO additive seams, and that section 3's four hard-constraint restatements are still true of the revised design (especially AC4 -- two new functions on a security-relevant module is more production surface than the prior revision proposed, so re-check that no EXISTING function's behavior changes and that run_with_heap_limit/5's own `after` clause survives byte-for-byte).\n\nRead any file. Do not edit lib/ or test/. Complete the handoff with a clear PASS/FAIL and per-item verdicts; on PASS set next_action to route to ELIXIR-DEV, on FAIL back to CODE-DESIGNER. Commit to branch feature/WF03-ISS0426-20260902. This is rework 1 of max 3 -- a second FAIL leaves one attempt before ORCH must escalate, so make any FAIL precise and exhaustive: list everything that must change, not just the first thing you find."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

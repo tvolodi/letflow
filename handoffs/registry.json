@@ -3892,14 +3892,14 @@
       "issue_id": "ISS-0396",
       "queue_task_id": 396,
       "github_issue_number": 776,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/engine.ex"
       ],
       "started_at": "2026-09-02T02:35:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
+      "lock_released_at": "2026-09-02T07:30:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final -- PR #798 squash-merged to main (13ab495c), queue task 396 released status: done, ISS-0407/0408 filed",
       "note": "WF-03 issue-resolving run for ISS-0396 (Ecto.Multi :task_records key collision when TWO OR MORE SUB_PROCESS children spawned in the same hop chain each complete synchronously -- each completion cascade independently attempts to append to the same Multi key). Distinct from ISS-0392 (already fixed, single-collision case). Locked task 396 directly via set_lock. No active run found. Touches lib/letflow/engine.ex, same file ISS-0397 (already merged) and ISS-0392 (already merged) both touched -- no current overlap since both are already landed on main."
     }
   ]

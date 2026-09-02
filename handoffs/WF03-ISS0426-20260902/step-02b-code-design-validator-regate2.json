@@ -1,0 +1,41 @@
+{
+  "handoff_id": "WF03-ISS0426-20260902-step-02b-regate2",
+  "run_id": "WF03-ISS0426-20260902",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0426-20260902/step-02b-code-design-validator-regate2.json",
+  "created_at": "2026-09-02T19:16:57Z",
+  "started_at": "2026-09-02T19:16:57Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0426"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss426-wallclock-test-contention.md",
+      "handoffs/WF03-ISS0426-20260902/step-02-code-designer-rework2.json",
+      "handoffs/WF03-ISS0426-20260902/step-02b-code-design-validator-regate.json",
+      "lib/letflow/engine/lua/executor.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0426-20260902",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "FINAL RE-GATE of the ISS-0426 design (rework 2, commit 740368dd). You have already PASSED everything except check 1(c), across two prior gate passes: 1(a), 1(b), the reconciled counts, the mixed-tests decision, the scope header and AC4 are all settled and MUST NOT be re-litigated. This re-gate has exactly ONE question, plus a scope-discipline confirmation.\n\nTHE ONE QUESTION -- does check 1(c) now clear? Your required fix was: state an explicit, binding usage contract on section 2.1.2's seam rather than leaving its safety as an observation about current usage. CODE-DESIGNER added section 2.1.2a ('Binding usage contract on this seam') and, for the sibling defect ORCH folded in, section 2.1.1b plus a two-row comparison table classifying section 2.1.1's seam as CATEGORICAL (mechanism-enforced) and section 2.1.2's as CONTRACTUAL (caller discipline). Judge whether the contract as written actually binds:\n  (a) Is it stated as a RULE a future caller must obey, not as a description of what today's callers happen to do?\n  (b) Does it state the failure mode concretely enough that someone who violates it will recognise what they broke?\n  (c) Is the contract text specified as something that lands in the seam's OWN @doc false -- so a future caller reading only the source, never this design doc, gets the rule? This was the substance of the finding: a design-doc-only contract does not bind a caller who never reads the design doc.\n  (d) Is the categorical-vs-contractual distinction in section 2.1.1b accurate? Specifically check the claim that Lua source can escape the OUTCOME of the :max_instructions counter (by pcall-catching the raised error) but cannot escape the counter INCREMENTING, and the stated `goto` caveat. If that claim is wrong the table misclassifies section 2.1.1's seam as safer than it is, which would be a worse defect than the one you FAILED on -- so verify it rather than accepting it.\n\nSCOPE-DISCIPLINE CONFIRMATION. The rework was instructed to change nothing else. CODE-DESIGNER reports it also made two small consistency touches adjacent to the fix (tightening section 2.1.2's 'not a live risk' bullet to point forward to the new contract, and adding one checklist item to section 4 so a validator can confirm the contract's presence as a one-time source read). Confirm via git diff (740368dd against its parent) that the revision is confined to the contract fix plus those two touches and the status line -- and that no seam mechanism, count, table row, tag-wiring detail, or the letflow.check.test.ex change moved. A rework that silently altered a gate-approved element is itself a FAIL.\n\nBIAS TOWARD CLOSING. This is rework 2 of max 3; a FAIL here leaves one attempt before ORCH must escalate per ORCHESTRATOR.md. The remaining defect class is documentation wording, not mechanism. If the contract binds and the distinction is accurate, PASS it -- do not hold the gate for stylistic preferences or for wording you would have phrased differently. If it genuinely does not bind, FAIL with the exact sentence(s) required, so rework 3 is a mechanical edit rather than another interpretation cycle.\n\nOn PASS set next_action to route to ELIXIR-DEV for implementation. Do not edit lib/ or test/. Commit your handoff to branch feature/WF03-ISS0426-20260902."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

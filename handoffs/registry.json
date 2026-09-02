@@ -3947,7 +3947,7 @@
       "started_at": "2026-09-02T11:07:00Z",
       "lock_released_at": "2026-09-02T12:30:00Z",
       "released_lock": true,
-      "last_known_step": "Step Final (ORCH direct action) -- fix completed, extended, and independently re-verified in a clean environment; pending PR/merge",
+      "last_known_step": "Step Final -- PR #815 squash-merged to main (a21703b4), queue task 409 released status: done, reconciled with sibling's no_defect verdict",
       "note": "WF-03 issue-resolving run for ISS-0409: test/letflow/service_catalog_test.exs's REQ-192 list_all/1 pagination correctness test fails when run as part of the full mix test suite but passes in isolation (service_catalog is a real global table, never rolled back/dropped). Two subagent attempts stalled on background full-suite runs before a third, narrower-scoped attempt landed a fix (setup-time Repo.delete_all). ORCH reviewed and found the fix incomplete -- neither test cleaned up its own rows afterward -- and extended it with on_exit cleanup matching this file's own established discipline. Verified in a clean environment after killing a contending concurrent agent's own mix test process (confirmed via TenantSchemaReaper's deferral log). Filed ISS-0416 for an unrelated, likely-contention-caused AC7 flake surfaced during verification."
     }
   ]

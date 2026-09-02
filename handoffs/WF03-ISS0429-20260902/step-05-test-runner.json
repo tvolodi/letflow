@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF03-ISS0429-20260902-step-05",
+  "run_id": "WF03-ISS0429-20260902",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0429-20260902/step-05-test-runner.json",
+  "created_at": "2026-09-02T21:30:39Z",
+  "started_at": "2026-09-02T21:20:00Z",
+  "completed_at": "2026-09-02T21:30:39Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0429"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0429-20260902/step-04-reviewer.json",
+      "lib/letflow/application.ex",
+      "lib/letflow/obs/alerts.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/webhooks.ex",
+      "test/letflow/obs/alerts_test.exs",
+      "test/letflow/scheduler/poller_test.exs"
+    ],
+    "branch_name": "fix/ISS-0429-poller-blocking-sleep-20260902"
+  },
+  "task": {
+    "description": "WF-03 Step 5: full-suite confirmation run of the ISS-0429 branch (Task.Supervisor-based async alert-hook delivery), the full mix test run that neither ELIXIR-DEV nor REVIEWER completed within their time budgets."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Ran `docker compose up -d` (via `sudo -n docker compose up -d`, this host's docker.sock requires sudo; both letflow-1-postgres-1 and letflow-1-keycloak-1 were already Up/healthy on port 5463 per this workspace's untracked .env LETFLOW_DB_PORT=5463) then `TEST_PARALLEL_N=4 scripts/test_parallel.sh` in the foreground, blocking for the full ~6m47s run, after `source ~/.asdf/asdf.sh` and `export WASMEX_BUILD=true`.\n\nActual combined output (verbatim from the aggregator):\n\n  test_parallel: N=4 (source: env override)\n  test_parallel: TEST_POOL_SIZE=21 (computed: N=4, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)\n  partition 1: 735 tests, 2 properties, 0 failures, exit 0\n  partition 2: 801 tests, 4 properties, 0 failures, exit 0\n  partition 3: 737 tests, 0 properties, 3 failures, exit 2\n  partition 4: 779 tests, 0 properties, 0 failures, exit 0\n  ---\n  combined: 3052 tests, 6 properties, 3 failures (3055/3058 passed)\n  real 6m46.938s\n\n3 failures total, all in partition 3, all pre-existing known failure classes unrelated to this branch's supervision-tree change (verified by reading partition-3.log directly, not inferred):\n\n1. `Mix.Tasks.Letflow.CheckToolchainTest` \"a matching rust pin reports OK with no mismatch\" (test/mix/tasks/letflow_check_toolchain_test.exs:274) -- `** (ErlangError) Erlang error: :enoent` from `System.cmd(\"rustc\", [\"--version\"])` at lib/system.ex:1141. Matches the documented rustc-ENOENT class (no rustc toolchain installed in this environment).\n2. `Mix.Tasks.Letflow.CheckToolchainTest` \"a mismatched rust pin reports a MISMATCH row naming expected and running\" (test/mix/tasks/letflow_check_toolchain_test.exs:289) -- same `:enoent` root cause as #1.\n3. `Letflow.Engine.Lua.ExecutorTest` \"global isolation (AC3) a global written in execution 1 is absent in execution 2\" (test/letflow/engine/lua/executor_test.exs:64) -- `right: {:error, {:wallclock_timeout, 5000}}` instead of `{:ok, _}`. Matches the documented Lua wall-clock-timeout-under-contention flake per docs/issues/ISS-0426.yaml (this test runs inside a 4-way-parallel partitioned run sharing host CPU, exactly the contention condition ISS-0426 describes).\n\nNone of the 3 failures touch `Letflow.Obs.Alerts`, `Letflow.Scheduler.Poller`, `Letflow.Application`, or any TaskSupervisor-related test -- confirmed by grepping partition-3.log for those names against the failure list, zero matches. All alerts_test.exs, poller_test.exs, and application-boot-ordering-relevant tests passed across all 4 partitions. No genuine regression attributable to this branch's `Letflow.Obs.Alerts.TaskSupervisor` addition or application.ex child-ordering change was found.\n\nVerdict: full-suite run confirms REVIEWER's targeted 28+41-test regression sweep -- 3055/3058 passing, 3 pre-existing/environmental failures unrelated to ISS-0429, 0 new regressions.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0429-20260902/step-05-test-runner.json"
+    ],
+    "next_action": "Route to ORCH. No rework needed -- ISS-0429 branch is full-suite clean modulo the 3 documented pre-existing failure classes (rustc-ENOENT x2, Lua wall-clock timeout under contention per ISS-0426). Safe to proceed to merge per ORCH's own discretion."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

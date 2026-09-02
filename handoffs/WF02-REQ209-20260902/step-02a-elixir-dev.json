@@ -44,7 +44,7 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ209-20260902",
-      "commit_sha_list": ["PENDING_COMMIT"],
+      "commit_sha_list": ["9219c2ad"],
       "remote_branch": "origin/feature/WF02-REQ209-20260902",
       "push_status": "pending",
       "pr_url": null,

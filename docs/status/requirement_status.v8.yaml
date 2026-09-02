@@ -367,3 +367,21 @@ history:
       3031/3031 clean. No CODE-DESIGNER/REVIEWER chain was needed given
       the sizing-rule qualification. GH#785 closed with evidence comment.
       Queue task 401 released status: done.
+
+  - req: REQ-209
+    event: started
+    agent: ORCH
+    at: "2026-09-02T02:33:20Z"
+    note: >
+      WF02-REQ209-20260902 started (queue task 386, GH#758, stage S7).
+      Ports R-Co's 15-entry condition-evaluation corpus
+      (tests/differential/corpus/conditions_v1.json) as an ExUnit
+      regression suite for Letflow.Engine.Expr. depends_on: [REQ-050,
+      REQ-197, REQ-198], all confirmed done. Locked directly via set_lock
+      rather than get_next_task: get_next_task was persistently returning
+      ISS-0402 (newest open issue, genuinely stuck on a needed product
+      decision that no agent can make -- see docs/issues/ISS-0402.yaml's
+      scoping_note) ahead of any requirement task via LIFO ordering;
+      released ISS-0402 back to open without status each time rather than
+      re-investigating a question already thoroughly diagnosed. Feature
+      branch feature/WF02-REQ209-20260902 created from main, pushed.

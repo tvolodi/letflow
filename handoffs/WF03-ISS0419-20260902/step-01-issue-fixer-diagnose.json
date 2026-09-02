@@ -1,0 +1,63 @@
+{
+  "handoff_id": "c3f2b2b5-7a3b-4f2f-ab30-2d4e6f7a8b02",
+  "run_id": "WF03-ISS0419-20260902",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0419-20260902/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-09-02T13:46:15Z",
+  "started_at": "2026-09-02T13:46:15Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0419.yaml",
+      ".github/workflows/ci.yml",
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "deps/rustler/lib/rustler/compiler.ex",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/anti-patterns.md",
+      "docs/migration/decisions/"
+    ],
+    "owned_modules": [
+      ".github/workflows/ci.yml"
+    ]
+  },
+  "task": {
+    "description": "This is WF-03 Steps 0.5 (registry lookup) + 1 (diagnose) combined into one handoff, both owned by ISSUE-FIXER. ISS-0419 (queue task 419, GH#817, already locked to ORCH's agent_id tvolodi-orch) asks: does `mix deps.get` silently defeat CI's actions/cache for wasmex's Cargo build output at deps/wasmex/native/wasmex/target/, given deps.get runs unconditionally on every CI run even on a cache hit?\n\nSTEP 0.5: grep docs/issues/*.yaml for status: resolved entries with similar symptoms before diagnosing fresh. Candidates already surfaced by ORCH's own search for 'wasmex|Rust|cargo|CARGO' (cite paths, do not have these restated to you -- open and read them yourself): docs/issues/ISS-0287.yaml, ISS-0352.yaml, ISS-0377.yaml, ISS-0380.yaml, ISS-0398.yaml, ISS-0406.yaml, ISS-0418.yaml. Note ISS-0418 is a SIBLING run in flight right now on a different worktree/branch (feature/WF03-ISS0418-20260902) -- it is the wasm_hang subprocess flake issue (ISS-0352/ISS-0406/ISS-0418 lineage), a DIFFERENT root cause (test subprocess hang, not build caching) -- do not treat it as a match, but note it in your summary so ORCH knows it was considered and ruled out as a duplicate.\n\nSTEP 1: DIAGNOSE, do not fix. You MUST empirically verify the caching question, not assume an answer -- No Speculation applies. Concretely:\n1. Read deps/rustler/lib/rustler/compiler.ex's compile_crate/3 and do_compile/2 to confirm (or correct) the claim that cargo runs via System.cmd with cd: config.path and no CARGO_TARGET_DIR override, so Cargo's target/ lands at deps/wasmex/native/wasmex/target/ by default.\n2. Read Mix.Tasks.Deps.Get's actual behavior (in your local Elixir/Mix installation's source, or via `mix help deps.get` / documentation, or by reading the installed hex/mix source) for what it does when a dependency directory already exists and matches the lockfile -- does it touch/re-fetch/re-link the directory contents at all in that case, or is it a true no-op?\n3. If you have a way to trigger or inspect a REAL CI run (gh workflow run / gh run list / gh run view against this repo's Actions), use it: add a temporary debug step to a throwaway branch/PR that lists deps/wasmex/native/wasmex/target/ (mtime, presence, file listing) before and after the mix deps.get step, and checks whether the subsequent mix letflow.check run's Rust compile output says 'Compiling wasmex' (cold rebuild) vs 'Fresh wasmex'/no recompile line (warm, cache survived) -- on a cache-hit run (i.e. a run where mix.lock is unchanged from a prior successful run, so actions/cache should hit). Remove the debug step before this run's own Step Final merge regardless of outcome -- do not leave debug-only CI steps in the merged version. If you cannot trigger/inspect a real CI run (no gh access, no network), state that plainly and reason as precisely as you can from (1) and (2) instead, citing exactly what you verified and what remains inferred rather than measured -- and say so explicitly per No Speculation's documented fallback.\n4. Also verify: does `CARGO_INCREMENTAL: 0` actually appear anywhere in .github/workflows/ci.yml right now? ORCH already checked this and found ZERO matches for CARGO_INCREMENTAL in the current ci.yml (grep, no output) -- the issue record and the originating task both assert it 'is set' on the backend gate step, but this appears to be a FALSE PREMISE per HANDOFF_PROTOCOL.md SS1.1 (a handoff's factual claims are checkable and may be wrong -- verify, don't inherit). Confirm this independently yourself (re-grep the file) and report plainly either way -- if it is genuinely absent, that whole thread of the issue (the CARGO_INCREMENTAL: 0 revisit) is moot and should be reported as such, not investigated further as if it existed.\n5. Root-cause conclusion: state plainly whether the cache is (a) genuinely being defeated (with the specific mechanism and evidence), or (b) working fine already and the 12-15 min runtime is dominated by something else (name what, with evidence) -- a reasoned 'working fine, no defect here' conclusion is a legitimate WF-03 Step 1 outcome, not a failure to find something.\n\nDo NOT implement any fix. Write your diagnosis into result.summary: root cause (not just symptom) or reasoned no-defect finding, affected files, and what a fix would need to change IF the cache is confirmed defeated. If no defect: state that explicitly and what a no_defect closure at Step 5 will need to cite (per ISSUE_QUEUE.md's no_defect evidence bar: first-hand measurement, specific mechanisms tested including ones ruled out, stated method limitations, run-id/timestamp).",
+    "acceptance_criteria": [
+      "Step 0.5: docs/issues/*.yaml searched for a resolved match; explicit statement of whether one was found, and explicit note that ISS-0418 was considered and is a different root cause",
+      "Step 1: deps/rustler/lib/rustler/compiler.ex's compile_crate/3 read directly and its CARGO_TARGET_DIR/cd: config.path behavior confirmed or corrected with the actual code quoted",
+      "Step 1: Mix.Tasks.Deps.Get's already-fetched-dependency behavior investigated and reported with evidence (source read, real command output, or explicit statement that this could not be verified and why)",
+      "Step 1: an attempt made to inspect or trigger real CI run evidence (gh run list/view, or a temporary debug-step CI run) OR an explicit, honest statement that this could not be done and why, with the reasoning-from-source-code fallback used instead and its limitations stated",
+      "Step 1: CARGO_INCREMENTAL: 0's actual presence or absence in the current .github/workflows/ci.yml independently re-verified and reported plainly (ORCH's own grep found zero matches -- confirm or correct this)",
+      "Step 1: a plain root-cause verdict stated -- cache genuinely defeated (with mechanism+evidence) vs. working fine (with evidence for what actually dominates the 12-15 min runtime)",
+      "No fix implemented in this step -- diagnosis only",
+      "result.status PASS with next_action naming the correct next step (CODE-DESIGNER for a real fix, or directly to Step 5 no_defect closure if Step 1 concludes no defect exists)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

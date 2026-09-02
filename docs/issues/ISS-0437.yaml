@@ -1,0 +1,41 @@
+id: ISS-0437
+title: "REQ-216's Letflow.Admission design implements permanent per-tenant-entry retention instead of the requirement text's own rolling-window semantics"
+discovered_by: CODE-DESIGN-VALIDATOR
+discovered_in_run: WF02-REQ216-20260902
+discovered_at: "2026-09-02T22:35:00Z"
+severity: MINOR
+tags: [admission-control, design-gap, s6]
+description: >
+  Found by CODE-DESIGN-VALIDATOR during REQ-216's design gate
+  (WF02-REQ216-20260902, rework cycle 1), flagged as a self-acknowledged
+  narrowing of REQ-216's own requirement text rather than left
+  undocumented, per core-directives.md's "No Issue Left Local-Only" rule.
+  REQ-216's own text describes per-tenant fair-share tracking against
+  tenants that have made an admission attempt in a rolling window, but
+  lib/letflow/design/req216-admission-control-core.md (OQ-2) implements
+  NO time-decay/eviction mechanism at all -- a tenant schema's entry in
+  the Admission GenServer's state.tenants map, once created on first
+  admission attempt, is retained indefinitely. Bounded only by
+  administratively-controlled tenant cardinality (decision 0006), not by
+  request volume or recency -- acceptable for REQ-216's own bounded
+  scope (explicitly stated in the design doc), but a real gap between
+  the requirement text's own language and what ships.
+  Scope for whoever picks this up: design and implement an actual
+  rolling-window eviction mechanism, or make an explicit decision that
+  unbounded retention is permanently acceptable given decision 0006's
+  tenant-cardinality bound, updating REQ-216's own design doc language to
+  match reality rather than leaving a stale rolling-window reference.
+affected_files:
+  - lib/letflow/design/req216-admission-control-core.md
+  - lib/letflow/admission.ex
+related:
+  - REQ-216
+  - ISS-0431
+source: >
+  handoffs/WF02-REQ216-20260902/step-01d-code-design-validator.json
+  (CODE-DESIGN-VALIDATOR's PASS verdict, carrying forward
+  CODE-DESIGNER's own escalation from
+  handoffs/WF02-REQ216-20260902/step-01c-code-designer-rework.json).
+queue_task_id: 437
+github_issue: 843
+status: open

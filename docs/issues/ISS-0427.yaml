@@ -97,3 +97,23 @@ queue_task_id: 427
 github_issue: 831
 
 status: open
+
+# ── Measurement correction, 2026-09-02T19:17:07Z (ORCH-adhoc-20260902) ──
+# Profiling in the same session (ISS-0432) found that ~92% of a DB round trip
+# on this dev host is Docker Desktop host<->container network overhead, NOT
+# Postgres and NOT the BEAM: Repo.query!("SELECT 1") costs 1186-1436 us from
+# the BEAM, while the identical query inside the Postgres container costs
+# 0.110-0.113 ms (psql \timing, same machine).
+#
+# CONSEQUENCE FOR THIS ISSUE: the 2259 ms migration-replay figure is a
+# 52-migration sequence each issuing several round trips, so it is dominated
+# by that overhead rather than by DDL execution time.
+#   * The 4.9x ratio (2259 ms replay vs 460 ms clone) REMAINS VALID -- both
+#     sides paid the same per-round-trip tax on the same host.
+#   * The ABSOLUTE numbers DO NOT transfer to CI or to a co-located
+#     production deployment, where the per-call cost should be ~0.11 ms.
+# Anyone sizing this work must re-measure on the target environment rather
+# than inheriting 2259 ms. The lever this issue attacks (fewer round trips
+# per schema) is if anything MORE clearly correct given this finding, since
+# round-trip count is what dominates.
+measurement_caveat_ref: ISS-0432

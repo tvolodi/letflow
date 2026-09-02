@@ -1,0 +1,86 @@
+id: ISS-0431
+title: "No admission control or backpressure anywhere: under load Letflow queues on the Ecto pool and times out instead of shedding cleanly"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T19:17:07Z"
+severity: MAJOR
+tags: [otp, availability, load-shedding, multi-tenancy, s6]
+description: >
+  Letflow has no bounded work queue, no admission control, and no load
+  shedding on any entry point. Under load, requests queue on the Ecto
+  pool (pool_size 10 by default, config/runtime.exs POOL_SIZE) until
+  DBConnection's queue_target/queue_interval produce timeouts. The
+  failure mode is slow uniform degradation into timeouts across every
+  tenant and endpoint at once, rather than fast rejection of excess work
+  with the remainder served correctly.
+
+  NOT HYPOTHETICAL FOR THIS PROJECT. ZIG_VS_ELIXIR_FINDINGS.md Race 3 hit
+  exactly this class: 200 simultaneous connections exhausting Postgres
+  max_connections=100, found via Postgres's own logs, fixed on the Zig
+  side with an atomic-CAS admission-control semaphore capping concurrency
+  at 40. That document explicitly records the Elixir side was NEVER
+  stress-tested for the equivalent failure mode -- an open question, not
+  a confirmed absence. This issue closes it.
+
+  ALREADY-OBSERVED SYMPTOMS, all the same root cause (unbounded demand on
+  a bounded connection resource), each solved LOCALLY:
+    * ISS-0194 -- N test partitions jointly exceeding max_connections;
+      mitigated by computing TEST_POOL_SIZE, i.e. capping demand.
+    * ISS-0219 -- nproc-derived partition count crashing every partition
+      at ecto.create/migrate (DBConnection.ConnectionError).
+    * ISS-0222 -- transient too_many_connections on a launch-time spike.
+    * ISS-0224 -- SandboxPool serialising its own DB work to
+      at-most-one-in-flight to keep peak checkouts at 2.
+  There is no GLOBAL mechanism and nothing at all on the HTTP entry path.
+
+  WHY THE BEAM MAKES THIS TRACTABLE: profiled 2026-09-02, a Repo round
+  trip costs 1186-1436 us from the BEAM (vs 0.110 ms in-container --
+  ~92% is Docker Desktop overhead, NOT a production number). A 3-query
+  transaction costs 6476 us over five round trips. The binding resource
+  is CONNECTION-HOLDING TIME, not CPU: the BEAM accepts far more
+  concurrent requests than the pool can serve, because accepting is
+  nearly free and holding a connection is not. Closing that gap is
+  exactly what admission control does -- and why "raise pool_size" is not
+  the fix: it moves the cliff, with max_connections the harder ceiling
+  behind it.
+
+  SCOPE: decide and implement bounded-concurrency/admission control for
+  work consuming a DB connection. Primary surface is the HTTP entry path
+  (Letflow.Plugs.ApiPipeline / Bandit); Poller's per-tenant sweeps and
+  future LISTEN/NOTIFY work (ISS-0430) are secondary surfaces to cover by
+  the same decision rather than each inventing its own cap, as has now
+  happened four times.
+
+  TO DECIDE, not prescribed: 503 + Retry-After or another shape; global
+  vs per-tenant vs both (a per-tenant cap is what stops one tenant's
+  burst starving all others -- arguably the more important property in a
+  multi-tenant BPM platform, and no existing mitigation provides it);
+  library vs a small hand-rolled semaphore, weighed against decision 0014
+  on new dependencies; and how the cap relates to pool_size and
+  max_connections so the three cannot drift as ISS-0194/0219/0222 show
+  they already do.
+
+  OUT OF SCOPE: raising pool_size as the primary fix; any change to the
+  row-based engine design (REQ-045).
+affected_files:
+  - lib/letflow/plugs/api_pipeline.ex
+  - lib/letflow/application.ex
+  - config/runtime.exs
+  - lib/letflow/scheduler/poller.ex
+related:
+  - ISS-0194
+  - ISS-0219
+  - ISS-0222
+  - ISS-0224
+  - ISS-0430
+  - ISS-0421
+source: >
+  User asked what more could be squeezed from the BEAM while keeping
+  Postgres for persistence. Absence verified by grep across lib/ and
+  config/; the prior-art Zig finding is quoted from the project's own
+  ZIG_VS_ELIXIR_FINDINGS.md Race 3 scorecard. Round-trip figures
+  profiled in the same session (full table in ISS-0432).
+queue_task_id: 431
+github_issue: 835
+
+status: open

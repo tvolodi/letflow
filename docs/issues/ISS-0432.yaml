@@ -1,0 +1,83 @@
+id: ISS-0432
+title: "Profiling result: the engine's lever is DB round-trip COUNT, not BEAM-side compute -- an ETS graph cache is refuted (17 us vs 1300 us) and repeated per-tick queries are the real target"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T19:17:07Z"
+severity: MINOR
+tags: [performance, profiling, refuted-optimisation, measurement-artifact, s6]
+description: >
+  MEASUREMENT-DRIVEN issue. Exists to record a REFUTED optimisation so
+  nobody spends a run on it, and to point effort at what the same
+  profiling shows is worth doing.
+
+  REFUTED: an ETS cache of the parsed definition graph.
+  Letflow.Engine.build_graph/1 calls Graph.from_map/1 on every engine
+  call (27 call sites; the per-instance-operation path is fetch_graph/2
+  at engine.ex:1788, reading the snapshot row then parsing it).
+  Definitions are immutable once promoted, so the cache would be
+  trivially correct. It is still not worth building.
+
+  PROFILED 2026-09-02, dev host (16-core Windows, Docker Desktop
+  Postgres), each figure warmed and repeated:
+    Graph.from_map,  7-node graph           2.8 us
+    Graph.from_map, 22-node graph           6.9 us
+    Graph.from_map, 52-node graph          17.3 us
+    :ets.lookup (read_concurrency)          0.137 us
+    Repo.query!("SELECT 1") from the BEAM   1186-1436 us (500 iters x3)
+    same SELECT 1 INSIDE the container      0.110-0.113 ms (psql timing)
+    Repo.transaction, 3 queries             6476 us (5 round trips)
+
+  Parsing a 52-node graph is ~1.2% of ONE round trip and ~0.26% of a
+  five-round-trip transaction. The cache would trade 17 us of compute for
+  a 0.137 us lookup against a 1300 us call it cannot avoid --
+  microseconds against milliseconds. DO NOT BUILD IT unless a future
+  profile shows graph sizes far beyond the 52-node case measured here.
+
+  SECOND, MORE IMPORTANT FINDING: ~92% of a DB call on this host is
+  host<->container network overhead, NOT Postgres and NOT the BEAM
+  (1.3 ms from the BEAM vs 0.11 ms in-container, same machine, same
+  query). A LOCAL DEV ARTIFACT of Docker Desktop on Windows with
+  port-forwarded 5432->5462. Consequences:
+    (a) Every timing measured on this host is inflated by it --
+        INCLUDING ISS-0427's 2259 ms tenant-schema provisioning, which is
+        52 migrations each issuing several round trips. ISS-0427's 4.9x
+        clone-vs-replay RATIO still holds (both sides paid the same tax)
+        but its ABSOLUTE numbers do not transfer to CI or production.
+    (b) A co-located production deployment should see ~0.11 ms, not
+        ~1.3 ms. Any optimisation justified by the 1.3 ms figure is
+        justified by a dev-environment artifact.
+
+  WHAT THE PROFILING DOES SUPPORT -- eliminate REPEATED, REDUNDANT round
+  trips rather than speeding up computation. Two concrete instances,
+  both to be confirmed before changing:
+    1. Scheduler.Poller.tenant_schemas/0 (poller.ex:162) issues a fresh
+       Repo.all over Registration EVERY tick; the result changes only on
+       tenant provisioning. Seven sweeps then iterate it (ISS-0421).
+    2. Config is re-read per tick via Application.get_env;
+       :persistent_term is the idiomatic zero-copy home for values that
+       effectively never change.
+  Neither is large alone. They are the SHAPE the evidence supports (fewer
+  calls) versus the shape it refutes (faster compute).
+
+  DO NOT let this become a general performance-tuning run. Deliverable is
+  small: record the refutation durably, and action only changes removing
+  round trips or re-reads, each justified by its own measurement.
+affected_files:
+  - lib/letflow/engine.ex
+  - lib/letflow/definitions/graph.ex
+  - lib/letflow/scheduler/poller.ex
+related:
+  - ISS-0427
+  - ISS-0421
+  - ISS-0430
+  - ISS-0431
+source: >
+  Profiling executed 2026-09-02 in response to the user asking for these
+  proposals to be designed and detailed, with profiling if required. All
+  figures measured via :timer.tc in MIX_ENV=test mix run against the real
+  modules, and via psql timing inside the Postgres container for the
+  in-container comparison.
+queue_task_id: 432
+github_issue: 836
+
+status: open

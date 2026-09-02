@@ -4029,15 +4029,15 @@
       "issue_id": "ISS-0420",
       "queue_task_id": 420,
       "github_issue_number": 824,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "mix.exs",
         "mix.lock"
       ],
       "started_at": "2026-09-02T19:30:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
+      "lock_released_at": "2026-09-02T20:25:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- PR #837 merged to main, queue task 420 released done",
       "note": "WF-03 issue-resolving run for ISS-0420: mix hex.audit reports 2 HIGH + 1 MEDIUM live security advisories against pinned oidcc (auth path, via ueberauth_oidcc) and bandit (HTTP server). User-requested priority pickup."
     }
   ]

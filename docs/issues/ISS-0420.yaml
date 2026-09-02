@@ -48,4 +48,27 @@ source: >
 queue_task_id: 420
 github_issue: 824
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0420-20260902
+resolved_at: "2026-09-02T20:25:00Z"
+resolution: >
+  Lockfile-only bump: oidcc 3.8.0 -> 3.9.0, bandit 1.12.4 -> 1.12.5. No
+  mix.exs constraint changes needed -- existing version ranges (oidcc ~>
+  3.2 via ueberauth_oidcc 0.4.2, bandit ~> 1.5) already admit the patched
+  releases. SECURITY-REVIEWER independently verified the oidcc fix by
+  reading the vendored patched source (deps/oidcc/src/oidcc_jwt_util.erl,
+  oidcc_token.erl) and confirming the nested-signature check lives
+  entirely inside the library's decode pipeline, unreachable-around from
+  Letflow's own call site (lib/letflow/oidc/token_verifier/oidcc.ex).
+  Read bandit's full 1.12.5 changelog and confirmed no other behavior
+  change requires adaptation in Letflow's Bandit child-spec config. Post-
+  fix mix hex.audit: "No retired or security advisory packages found".
+  mix compile --warnings-as-errors clean (no API breakage). Scoped auth/
+  HTTP-path tests (93) run independently twice; full suite 3055/3057 (2
+  pre-existing unrelated rustc-ENOENT failures). One MINOR non-blocking
+  follow-up recorded: no test fixture exercises an encrypted ID token/
+  JARM response (the exact class CVE-2026-75759 addressed) -- Letflow's
+  resource-server flow doesn't request encrypted tokens itself, so this
+  is a coverage-completeness suggestion, not a gate failure. Merged via
+  PR #837 (one wasm_hang-class CI flake on a duplicate run, re-ran clean,
+  unrelated to this change).

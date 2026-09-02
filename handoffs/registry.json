@@ -4015,12 +4015,12 @@
       "issue_id": "ISS-0412",
       "queue_task_id": 412,
       "github_issue_number": 808,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [],
       "started_at": "2026-09-02T16:10:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
+      "lock_released_at": "2026-09-02T16:50:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- PR #822 merged to main, queue task 412 released done",
       "note": "WF-03 issue-resolving run for ISS-0412: lib/mix/tasks/letflow.lint_handoffs.ex fetch_rule_commit_timestamp/0 mishandles a DateTime.from_iso8601/1 error tuple via blind elem(1) extraction, crashing DateTime.compare/2 under 16-way concurrent git invocation. Confirmed flaky (3053/3054 then 3054/3054 clean re-run)."
     }
   ]

@@ -31,4 +31,22 @@ source: >
   incidental finding during WF03-ISS0404-20260902's full-suite gate.
 queue_task_id: 412
 github_issue: 808
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0412-20260902
+resolved_at: "2026-09-02T16:50:00Z"
+resolution: >
+  ISSUE-FIXER replaced the blind DateTime.from_iso8601(out) |> elem(1)
+  extraction with an explicit {:ok, ts, _} -> ts / {:error, _} -> nil
+  match. nil reuses the caller's (created_at_after_rule?/1) already-correct
+  "floor unavailable, skip the advisory check" fallback -- structurally
+  identical to the existing git-exit-failure sentinel two lines below, not
+  a newly invented meaning. REVIEWER independently verified no other
+  DateTime.from_iso8601/1 error reason is being silently upgraded to
+  "ignore" and judged no new unit test was warranted (exhaustive 4-line
+  case-match over a private helper's two return shapes). Verified via 3
+  consecutive TEST_PARALLEL_N=16 scripts/test_parallel.sh runs (matching
+  the original repro condition) with zero recurrence across 48 partition
+  runs; TEST-RUNNER's own final confirmation hit this host's documented
+  N=16 Postgres connection-exhaustion cap (ISS-0219, not a regression) and
+  re-ran clean at N=4 (3055/3057, 2 pre-existing unrelated failures).
+  Merged via PR #822 (all 4 CI checks green, no flake).

@@ -1818,6 +1818,26 @@ a DB/clock/network dependency"), that broader property is already covered perman
 `transition.ex`'s own moduledoc "Purity (AC1)" section and its grep-checkable command --
 see `lib/letflow/design/iss0404-req188-transition-test-fix.md`.
 
+ISS-0413 found this pattern a fourth time (also a fifth, counting both files fixed in that
+run): `test/letflow/engine/wasm/host_api_write_test.exs`'s "lua/ untouched" live-ref
+`git diff` test (deleted outright by ISSUE-FIXER directly, since a structural sibling
+moduledoc-based test already covered the same intent two tests below it in the same
+`describe` block) and `test/letflow/engine/wasm/plugin_handler_test.exs`'s AC6
+"plugin_interface.ex is unmodified" live-ref `git diff --stat #{base_ref}...HEAD` test
+(deleted by CODE-DESIGNER, see `lib/letflow/design/iss0413-plugin-handler-test-fragility.md`).
+The second instance is worth its own note: REQ-165's own mutation-testing table
+(`test/specs/REQ-165.md`) was initially read as showing the git-diff test was load-bearing
+(it "caught" mutation #3, a `handle_yield_result/4` error-message edit) -- but re-reading the
+table's actual row wording showed mutation #3 was already independently caught by a
+content-level assertion (AC5's `reason =~ "did not respond within 100ms"` check) with "No
+test change needed" recorded at the time; the git-diff test's own row only noted it "would
+also have failed" once the mutation reached a diff, which is true of any diff-based check
+and is not evidence of independent discriminating power. **Lesson:** a citation of "this test
+caught mutation N" in a mutation-testing table should be checked against that row's exact
+wording before it is used to justify keeping a fragile test -- "would also have failed" and
+"was the catch" are different claims, and only the second one is a real coverage argument
+for keeping a test around.
+
 ## A validator's own free-text report file, named `step-*.md`, trips the H6 handoff lint
 
 **What happened.** REQ-178's CODE-DESIGN-VALIDATOR wrote its independent-verification writeup to

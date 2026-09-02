@@ -1,0 +1,41 @@
+{
+  "handoff_id": "WF03-ISS0413-20260902-step-01",
+  "run_id": "WF03-ISS0413-20260902",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0413-20260902/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-02T15:08:25Z",
+  "started_at": "2026-09-02T15:04:30Z",
+  "completed_at": "2026-09-02T15:08:25Z",
+  "status": "COMPLETED",
+  "priority": "MINOR",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0413"],
+    "artifacts_in": [
+      "docs/issues/ISS-0413.yaml",
+      "docs/anti-patterns.md",
+      "lib/letflow/design/iss0404-regression-verification.md",
+      "lib/letflow/design/req165-wasmex-process-boundary.md",
+      "test/letflow/engine/wasm/host_api_write_test.exs",
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "fix/ISS-0413-git-diff-live-ref-fragility-20260902"
+  },
+  "task": {
+    "description": "Diagnose whether host_api_write_test.exs:747 (AC7, lua/ untouched) and plugin_handler_test.exs:54 (AC6, plugin_interface.ex untouched) -- both live-moving-ref git-diff assertions -- warrant the structural-check-instead-of-git-diff treatment ISS-0404/ISS-0378 applied to the sibling fixed-SHA fragility class, and scope any warranted fix."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Two-part finding, asymmetric between the files -- one fixed directly (test-only, within ISSUE-FIXER's own authority), one routed to CODE-DESIGNER for a real design decision.\n\n1) The literal fragility ISS-0413 names (shallow checkout, neither origin/main nor main reachable) does NOT materialize in this project's real CI: .github/workflows/ci.yml's backend job pins actions/checkout@v4 with fetch-depth: 0 specifically because mix letflow.lint_handoffs already needs full git history (git merge-base --is-ancestor, git show) -- with fetch-depth 0, actions/checkout fetches all branches into refs/remotes/origin/*, so origin/main reliably resolves. Verified: git log 1979e29c..HEAD -- lib/letflow/engine/lua/ is empty (zero commits) and git log -- lib/letflow/engine/plugin_interface.ex shows no commits since before REQ-165 merged -- consistent with these tests having run green in real CI repeatedly since introduction, not merely in local dev sandboxes with a stray local `main` branch (the actual failure mode of the ORIGINAL git-diff anti-pattern entry, REQ-165/plugin_interface_ex's OWN test already carries the defensive origin/main-then-main fallback for exactly that reason, per its own code comment).\n\n2) However, investigating past the issue's literal framing surfaced the REAL, more serious defect: both tests are the same 'evergreen property asserted via a live-HEAD git diff' class documented in anti-patterns.md's later entry (\"git diff main...HEAD anti-pattern... proves ref-resolution alone does not fix the underlying defect... proving a supposedly permanent property via git diff/history is broken regardless of how carefully the ref is resolved\") that ISS-0378/ISS-0404 already fixed for application.ex and transition.ex. Because these tests live permanently in the merged suite, `git diff --stat \"#{base_ref}...HEAD\" -- <path>` runs on EVERY future PR's CI, not just the PR that introduced the test -- so any later, legitimate PR that needs to touch lib/letflow/engine/lua/ or lib/letflow/engine/plugin_interface.ex will fail this check even though the change is correct, exactly the failure mode that forced ISS-0378's emergency deletion of the application.ex test.\n\n3) The two files are NOT symmetric once you look for a structural-check replacement (Step 2's actual question):\n   - host_api_write_test.exs:734-757 (AC7, lua/ untouched): a STRUCTURAL SIBLING TEST already exists two tests below in the SAME describe block (moduledoc states decision 0014 (4) and 'does not modify lib/letflow/engine/lua/', lines 759-765 pre-fix) -- it already covers the documented intent without touching git at all. This is the exact shape ISS-0378/ISS-0404 resolved by deletion (redundant fragile check + an already-present structural check covering the same intent). FIXED DIRECTLY (test-file-only, within ISSUE-FIXER's granted authority for this issue): deleted the 'git diff --stat against lib/letflow/engine/lua/ is empty' test, kept the moduledoc structural test, added a comment citing this diagnosis and the ISS-0378/ISS-0404 precedent. mix compile --warnings-as-errors: clean, exit 0. mix test on both affected files: 'Finished in 0.5 seconds ... Result: 42 passed, 5 excluded' (excluded tags are :keycloak/:wasm_hang, pre-existing and unrelated), 0 failures.\n   - plugin_handler_test.exs:38-64 (AC6, plugin_interface.ex untouched): NO structural sibling exists anywhere in this 595-line file (checked every describe block; the closest, 'moduledoc content' at line 327, asserts PluginHandler's OWN moduledoc, not anything about plugin_interface.ex). Worse, REQ-165's own design doc (lib/letflow/design/req165-wasmex-process-boundary.md, mutation-testing table row 6 / T6) shows this exact git-diff test was load-bearing during development: it caught mutation #3 (an accidental temporary edit to plugin_interface.ex) that a colliding assertion (T3/AC5's error-message check) did NOT catch on its own. Deleting it outright, ISS-0378-style, would lose real discriminating power with no drop-in structural replacement -- 'plugin_interface.ex is unmodified' cannot be reduced to a behaviour_info(:callbacks)-style structural check without weakening what it proves (a callback-list check would not have caught mutation #3, which changed an error-message string inside handle_yield_result/4, not the callback surface). plugin_interface.ex is also architecturally more likely to be legitimately touched by a future requirement than lib/letflow/engine/lua/ is (lua/ is deliberately frozen post-REQ-172 per decision 0014(4); plugin_interface.ex is the live, shared behaviour contract every future plugin handler -- WASM or otherwise -- depends on), so the 'permanently unsatisfiable for a real future change' risk is higher here, not lower.\n\n4) NOT FIXED DIRECTLY, routed to CODE-DESIGNER: plugin_handler_test.exs's AC6 test needs a considered design decision, not a mechanical deletion -- options include (a) delete outright and accept the coverage loss (matches ISS-0378's poller precedent, needs its own design doc per that precedent even for a deletion-only fix), (b) keep the git-diff check as-is given it is not actually failing in real CI today (fetch-depth: 0 makes ref-resolution reliable) and accept the future-breakage risk as a known, documented trade-off exercised only WHEN a future PR legitimately needs to touch plugin_interface.ex (defer, don't fix speculatively), or (c) design a genuinely equivalent structural replacement if one exists that CODE-DESIGNER can identify (e.g., asserting specific line/behavior fingerprints of plugin_interface.ex's public surface, or moving the 'stable behaviour contract' proof onto an explicit contract test using PluginInterface's own behaviour reflection PLUS a content assertion on handle_yield_result's message strings) that would have caught mutation #3 without depending on git diff. This determination -- which trade-off is correct given REQ-165's own T6 mutation-testing evidence -- is a design judgment call, not a mechanical test edit, hence routed here rather than fixed directly or handed to TEST-DESIGNER.",
+    "artifacts_out": [
+      "test/letflow/engine/wasm/host_api_write_test.exs"
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

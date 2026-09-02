@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF03-ISS0413-20260902-step-03",
+  "run_id": "WF03-ISS0413-20260902",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0413-20260902/step-03-test-runner.json",
+  "created_at": "2026-09-02T15:25:00Z",
+  "started_at": "2026-09-02T15:10:00Z",
+  "completed_at": "2026-09-02T15:25:00Z",
+  "status": "COMPLETED",
+  "priority": "MINOR",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0413"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0413-20260902/step-02-reviewer.json",
+      "test/letflow/engine/wasm/host_api_write_test.exs",
+      "test/letflow/engine/wasm/plugin_handler_test.exs"
+    ],
+    "branch_name": "fix/ISS-0413-git-diff-live-ref-fragility-20260902"
+  },
+  "task": {
+    "description": "Broader confidence check before merge: run the full suite (scripts/test_parallel.sh) on branch fix/ISS-0413-git-diff-live-ref-fragility-20260902, beyond REVIEWER's already-passed targeted 2-file run, and report real pass/fail counts."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Ran `git pull` (already up to date with origin), started `letflow-1-postgres-1`/`letflow-1-keycloak-1` via `sudo docker compose up -d` (already running; port 5463 per this checkout's .env LETFLOW_DB_PORT=5463), `mix deps.get` (network available, all deps fetched clean), then `source ~/.asdf/asdf.sh && export WASMEX_BUILD=true && bash scripts/test_parallel.sh` run synchronously in the foreground to completion (~4 minutes wall clock, N=8 partitions derived from nproc). Never backgrounded, never used Monitor/run_in_background.\n\nExact combined output:\n```\ntest_parallel: N=8 (source: nproc)\npartition 1: 323 tests, 1 property, 0 failures, exit 0\npartition 2: 307 tests, 0 properties, 0 failures, exit 0\npartition 3: 396 tests, 0 properties, 2 failures, exit 2\npartition 4: 383 tests, 0 properties, 0 failures, exit 0\npartition 5: 412 tests, 1 property, 0 failures, exit 0\npartition 6: 494 tests, 4 properties, 0 failures, exit 0\npartition 7: 340 tests, 0 properties, 0 failures, exit 0\npartition 8: 396 tests, 0 properties, 0 failures, exit 0\n---\ncombined: 3051 tests, 6 properties, 2 failures (3055/3057 passed)\n```\n\nDiagnosis of the 2 failures (both in partition 3's log, both in Mix.Tasks.Letflow.CheckToolchainTest):\n  1) 'test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running' -- test/mix/tasks/letflow_check_toolchain_test.exs:289\n  2) 'test rust pin (REQ-165) a matching rust pin reports OK with no mismatch' -- test/mix/tasks/letflow_check_toolchain_test.exs:274\n  Both: `** (ErlangError) Erlang error: :enoent` from `System.cmd(\"rustc\", [\"--version\"], ...)` at lib/system.ex:1141, called via running_rust_raw/0 -> running_rust_version/0.\n  Verified directly: `which rustc` returns nothing on this host (`rustc: command not found`) -- rustc/cargo are simply absent from PATH in this sandboxed environment.\n\nThis is NOT the wasm_hang CI-only flake class (ISS-0352/ISS-0406 -- those are wasmex native-thread-pool exhaustion in wasm_hang-tagged tests; unrelated file, unrelated mechanism, and both of today's failures are in CheckToolchainTest, not any wasm test). It is also NOT a regression caused by this branch: `git diff main --stat` confirms this branch's only non-doc/non-handoff changes are test/letflow/engine/wasm/host_api_write_test.exs and test/letflow/engine/wasm/plugin_handler_test.exs -- it never touches test/mix/tasks/letflow_check_toolchain_test.exs or any rustc-detection code. This exact rustc-absent-from-PATH failure mode is an already-documented pre-existing environment gap: docs/issues/ISS-0398.yaml (status: resolved) explicitly notes 'both :enoent from System.cmd(\"rustc\", ...)' and 'rustc/cargo exist only under ~/.cargo/bin' on hosts where this occurs, and docs/issues/ISS-0381.yaml similarly references a 'documented pre-existing rustc-absent sandbox flake'.\n\nConclusion: 3055/3057 passed (2 failures), both attributable to a known, pre-existing, unrelated host-environment gap (rustc not on PATH), not to ISS-0413's changes. Combined with REVIEWER's independently-verified targeted run (41 passed, 5 excluded, 0 failures on the two files this branch actually touches, per handoffs/WF03-ISS0413-20260902/step-02-reviewer.json), this branch is clear to proceed toward merge from a test standpoint. No test or application code was modified by TEST-RUNNER in this step; no rework routed to ELIXIR-DEV since the two failures are environmental, not a code defect this branch introduced.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0413-20260902/step-03-test-runner.json"
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

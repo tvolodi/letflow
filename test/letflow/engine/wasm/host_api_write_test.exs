@@ -732,30 +732,18 @@ defmodule Letflow.Engine.Wasm.HostApiWriteTest do
   # ---------------------------------------------------------------------
 
   describe "AC7: no file under lib/letflow/engine/lua/ is modified by this requirement" do
-    test "git diff --stat against lib/letflow/engine/lua/ is empty" do
-      base_ref =
-        Enum.find(["origin/main", "main"], fn ref ->
-          match?(
-            {_, 0},
-            System.cmd("git", ["rev-parse", "--verify", ref], stderr_to_stdout: true)
-          )
-        end)
-
-      assert base_ref, "expected either 'origin/main' or 'main' to resolve as a git ref"
-
-      {output, 0} =
-        System.cmd("git", [
-          "diff",
-          "--stat",
-          "#{base_ref}...HEAD",
-          "--",
-          "lib/letflow/engine/lua/"
-        ])
-
-      assert String.trim(output) == "",
-             "expected no diff under lib/letflow/engine/lua/, got: #{output}"
-    end
-
+    # ISS-0413: the git-diff-against-a-live-ref version of this check (`git diff
+    # --stat "#{base_ref}...HEAD" -- lib/letflow/engine/lua/`) was removed here.
+    # Per docs/anti-patterns.md's "A test embeds `git diff main...HEAD` directly"
+    # entry and its ISS-0378/ISS-0404 precedent: even with defensive base_ref
+    # resolution (origin/main / main), a live-HEAD diff check is not an evergreen
+    # property -- it is permanently unsatisfiable for any later, legitimate PR
+    # that needs to touch lib/letflow/engine/lua/ (this suite runs on every future
+    # PR's CI, not just REQ-172's own). The structural check below (moduledoc
+    # discloses decision 0014 (4) and the "does not modify lib/letflow/engine/lua/"
+    # statement) already covers the same intent without depending on git history/
+    # ref resolution at test-run time, and is the only one of the two kept, per the
+    # same precedent as ISS-0378/ISS-0404's deletions.
     test "moduledoc states decision 0014 (4) and that this module never modifies lib/letflow/engine/lua/" do
       {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} = Code.fetch_docs(HostApi)
 

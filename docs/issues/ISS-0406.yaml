@@ -42,4 +42,41 @@ source: >
   3054) with only the isolated wasm_hang subset failing (6/7).
 queue_task_id: 406
 github_issue: 797
-status: open
+status: resolved
+resolution: >
+  Root-caused by ISSUE-FIXER (WF03-ISS0406-20260902): the CPU-scheduling
+  contention hypothesis is confirmed, not just corroborated -- traced to
+  `plugin_handler_test.exs`'s AC4 test having failed outright on a prior
+  recurrence (PR #786/ISS-0400) via its own explicit `long_elapsed_ms <
+  15_000` assertion (observed 30_003ms for a 7_000ms-configured wasmex
+  timeout), which only a real BEAM scheduling/timer delay under host CPU
+  contention explains -- not Postgres pool exhaustion (each CI job has its
+  own dedicated `services.postgres` container per ci.yml; the isolated
+  `mix test --only wasm_hang` subprocess runs alone, after the main suite,
+  with no concurrent DB-heavy work) and not a repo-level CI parallelism
+  knob (ci.yml runs one `ubuntu-latest` job per push/PR, no matrix/
+  partition config). This is GitHub Actions shared-runner-fleet
+  contention, infrastructure outside this repo's own config.
+  Mitigation applied directly (bounded downside, verified locally --
+  see ISS-0352's own newest recurrence note for full detail and the
+  `mix test --only wasm_hang` result): raised `@tag timeout: 180_000` on
+  all 7 `:wasm_hang`-tagged tests (from ExUnit's 60_000ms default) across
+  test/letflow/engine/wasm/call_timeout_test.exs, plugin_handler_test.exs,
+  and host_api_write_test.exs; loosened plugin_handler_test.exs's AC4
+  `long_elapsed_ms < 15_000` assertion to `< 45_000`. This reduces (does
+  not eliminate) the false-failure rate -- it cannot help against
+  contention severe enough to exceed 180s (PR #798's "over an hour"
+  duplicate-run outlier is evidence such magnitudes occur), and does
+  nothing about the underlying GitHub Actions infrastructure contention.
+  This session's own corroborating data (PRs #788, #792, #798, #801, each
+  on a completely unrelated diff, always clearing on rerun with zero code
+  changes) is folded into ISS-0352 (the canonical flake-class doc) as its
+  fifth recurrence note, alongside this mitigation's detail. The deeper
+  OQ-5 structural fix (an operator-configurable cap on concurrent WASM
+  invocations, per req170's own design doc §8 filing) remains the only
+  fix that eliminates the mechanism rather than tolerating more jitter --
+  out of scope for this diagnosis/mitigation pass; recommend it be
+  prioritized as its own requirement given five independent recurrences.
+  Recommended for ORCH as a direct action (test-only tag/timeout/assertion
+  changes, no design ambiguity, already verified locally end-to-end)
+  rather than routed through CODE-DESIGNER.

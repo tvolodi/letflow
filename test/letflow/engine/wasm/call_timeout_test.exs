@@ -61,7 +61,20 @@ defmodule Letflow.Engine.Wasm.CallTimeoutTest do
     # default; mix letflow.check.test runs it in its own dedicated,
     # short-lived BEAM node afterward) rather than leaking a thread into the
     # shared pool every other WASM NIF test in the same process depends on.
+    # ISS-0406/ISS-0352 recurrence mitigation: the internal bound this test
+    # waits on is a fixed 500ms/1_000ms wasmex GenServer.call timeout, so it
+    # normally completes in well under 2s. Recurring CI failures (PRs #780,
+    # #786, #790, #788, #792, #798, #801) hit ExUnit's default 60_000ms
+    # per-test timeout not because this mechanism took 60s on its own merits,
+    # but because host-level CPU scheduling contention on a busy/shared CI
+    # runner delayed BEAM's own timer/message delivery to the caller process.
+    # A raised @tag timeout tolerates that jitter without masking a genuine
+    # regression: if the wasmex client-side timeout mechanism itself ever
+    # broke and truly stopped firing, this test would still eventually hit
+    # the (now-later) timeout and fail -- it only buys headroom against
+    # scheduling delay, never against an undetected real hang.
     @tag :wasm_hang
+    @tag timeout: 180_000
     test "a timed-out call crashes the caller with an ordinary GenServer.call exit, not a clean {:error, _}" do
       {:ok, pid} = Wasmex.start_link(%{bytes: fixture_bytes("req170_hang.wat")})
 
@@ -137,7 +150,10 @@ defmodule Letflow.Engine.Wasm.CallTimeoutTest do
 
     # ISS-0352: genuinely, permanently hangs a wasmex native thread -- see
     # the tag note above.
+    # ISS-0406: raised @tag timeout -- see the mitigation note on this
+    # describe block's sibling test above (AC2).
     @tag :wasm_hang
+    @tag timeout: 180_000
     test "the outer Task.yield/2 timeout shape also classifies as :wall_clock_timeout" do
       hang_context =
         context(%{

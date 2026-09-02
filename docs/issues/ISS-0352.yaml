@@ -185,3 +185,71 @@ resolution: >
   only structural fix, and four independent recurrences in five days is
   itself evidence that fix should be prioritized rather than continuing
   to be deferred as a candidate follow-up.
+
+  Recurrence note (2026-09-02, WF03-ISS0406-20260902, filed as ISS-0406):
+  fifth recurrence, and the first at unusually high volume within one
+  short, multi-session-concurrent window. PR #795 (REQ-213, a pure
+  documentation change to two .claude/agents/*.md files, zero WASM/Engine
+  code touched) failed CI 4 times in a row between ~03:39Z-05:08Z on
+  2026-09-02, every time on the isolated `mix test --only wasm_hang`
+  subprocess only (main ~3050-test suite passed clean every run). A
+  concurrent sibling session's own unrelated branch
+  (feature/WF02-REQ209-20260902) hit the identical signature in the same
+  window. This ORCH session separately corroborated the same pattern
+  independently, across four more unrelated PRs in the same general
+  period: PR #788 (an Engine concurrency fix) hit 5 wasm_hang rounds, PR
+  #792 (another Engine fix) hit 5 rounds, PR #798 (a test-only fix) hit 2
+  rounds (one duplicate push-triggered run took over an hour), PR #801 (a
+  spec-only change) hit 3 rounds -- every one on a diff with zero overlap
+  with any wasm_hang-tagged test file, and every one cleared cleanly on
+  rerun with zero code changes. This volume of simultaneous, unrelated-diff
+  recurrences in one short window is itself strong evidence against a
+  per-test flakiness explanation and for genuine CI-runner resource
+  contention from many concurrent sessions' CI runs landing close together
+  (GitHub Actions shared-runner-fleet noisy-neighbor / host-level CPU
+  contention, not this repo's own job config -- this repo runs one
+  `ubuntu-latest` job per push/PR with no matrix/partition parallelism
+  knob that could itself be amplifying load; see ci.yml and
+  test/test_helper.exs, both re-checked in this session and unchanged
+  from the shape ISS-0352's own resolution already describes).
+
+  ISS-0406's diagnosis traced the mechanism further than prior recurrence
+  notes: `plugin_handler_test.exs`'s AC4 test
+  ("a 300ms timeout_ms binds sooner than a 7_000ms timeout_ms...") failed
+  outright on the PR #786/ISS-0400 recurrence not via ExUnit's 60_000ms
+  per-test timeout but via its own explicit `assert long_elapsed_ms <
+  15_000` assertion, observed at `long_elapsed_ms: 30_003`ms -- i.e. under
+  contention, actual BEAM scheduling/timer delivery for a call configured
+  with a 7_000ms wasmex-level timeout took over 4x longer than configured.
+  This is consistent with CPU-scheduling contention on a shared/oversubscribed
+  CI runner delaying the BEAM's own timer wheel and process scheduling, not
+  with Postgres connection-pool exhaustion (each CI job gets its own
+  dedicated `services.postgres` container per ci.yml, not a DB shared
+  across concurrent CI runs; and the isolated `:wasm_hang` subprocess runs
+  after the main suite, alone, with no other DB-heavy work concurrent
+  within that same subprocess).
+
+  Mitigation applied directly in this session (test/letflow/engine/wasm/
+  call_timeout_test.exs, plugin_handler_test.exs, host_api_write_test.exs):
+  added `@tag timeout: 180_000` (raised from ExUnit's 60_000ms default) to
+  all 7 `:wasm_hang`-tagged tests, and loosened
+  plugin_handler_test.exs's AC4 test's own `long_elapsed_ms < 15_000`
+  assertion to `< 45_000`. Both changes are bounded-downside: every one of
+  these tests waits on a fixed, short (100ms-7_000ms) internal timeout
+  bound under normal conditions, so a raised ceiling only absorbs
+  scheduling jitter -- if the timeout mechanism under test ever stopped
+  firing for real, the test would still eventually hit the (now-later)
+  timeout/assertion and fail, so no real hang-detection regression is
+  masked. Verified locally: isolated `mix test --only wasm_hang` --
+  `Result: 7 passed, 3058 excluded` in 18.3s; `mix compile
+  --warnings-as-errors` and `mix format --check-formatted` both clean.
+  This mitigation reduces (does not eliminate) the false-failure rate: it
+  cannot help against contention severe enough to blow past 180s (the "over
+  an hour" duplicate-run outlier on PR #798 is evidence such magnitudes do
+  occur), and does nothing about GitHub Actions' own shared-runner
+  contention, which is infrastructure outside this repo's config. The
+  deeper OQ-5 cap (`candidate_scope_for_whoever_picks_this_up` (c) above)
+  remains the only structural fix; this is the fifth independent
+  recurrence (PR #691, PR #780/ISS-0392, PR #786/ISS-0400, PR
+  #790/ISS-0401, and now this multi-PR window/ISS-0406) and the first to
+  ship even a partial, non-structural mitigation.

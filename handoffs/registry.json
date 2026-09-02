@@ -3883,8 +3883,11 @@
       "started_at": "2026-09-02T02:33:20Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to CODE-DESIGNER",
-      "note": "WF-02 requirement-implementation run for REQ-209: port R-Co's 15-entry condition-evaluation corpus as an ExUnit regression suite for Letflow.Engine.Expr. Locked directly via set_lock, bypassing get_next_task -- it was persistently returning ISS-0402 (newest open issue, genuinely stuck pending a product decision per its own scoping_note, not a defect to fix) ahead of any requirement task via LIFO ordering; released ISS-0402 back to open without status each time rather than re-investigating an already-thoroughly-diagnosed question. depends_on: [REQ-050, REQ-197, REQ-198], all confirmed done. No owned_modules overlap with any other active run at dispatch time (registry scan)."
+      "status": "COMPLETED",
+      "lock_released_at": "2026-09-02T04:11:08Z",
+      "released_lock": true,
+      "last_known_step": "Step Final -- PR #796 squash-merged to main (d9e3c26a), queue task 386 released status: done. Rebased cleanly onto origin/main (29 commits replayed, no conflicts). Full suite 3051/3051 both before and after rebase.",
+      "note": "WF-02 requirement-implementation run for REQ-209: port R-Co's 15-entry condition-evaluation corpus as an ExUnit regression suite for Letflow.Engine.Expr. Locked directly via set_lock, bypassing get_next_task -- it was persistently returning ISS-0402 (newest open issue, genuinely stuck pending a product decision per its own scoping_note, not a defect to fix) ahead of any requirement task via LIFO ordering; released ISS-0402 back to open without status each time rather than re-investigating an already-thoroughly-diagnosed question. depends_on: [REQ-050, REQ-197, REQ-198], all confirmed done. No owned_modules overlap with any other active run at dispatch time (registry scan). All 15 corpus entries classified EVALUATED (0 EXPECTED_UNSUPPORTED) by CODE-DESIGNER, independently re-derived twice more (CODE-DESIGN-VALIDATOR, RELEASE-VALIDATOR) against the real R-Co source and expr.ex's actual grammar boundary -- no misclassification found across all three passes. Test/fixture-only, zero lib/letflow/engine/expr.ex changes, confirmed by SECURITY-REVIEWER (out of scope), REVIEWER (no scope creep), and RELEASE-VALIDATOR (independent full-suite re-run plus byte-for-byte fixture diff plus manual hand-verification of 5 entries' CEL semantics). All gates PASS on first pass, zero rework rounds."
     }
   ]
 }

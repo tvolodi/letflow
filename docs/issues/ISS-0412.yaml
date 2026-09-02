@@ -1,0 +1,34 @@
+id: ISS-0412
+title: "lint_handoffs.ex fetch_rule_commit_timestamp/0 crashes under concurrent test runs (DateTime.from_iso8601 error tuple mishandled)"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0404-20260902
+discovered_at: "2026-09-02T12:13:11Z"
+severity: MINOR
+tags: [test-flake, ci, s6]
+description: >
+  lib/mix/tasks/letflow.lint_handoffs.ex:641-651 (fetch_rule_commit_timestamp/0)
+  shells out to `git show` and does `DateTime.from_iso8601(out) |> elem(1)`
+  with no error handling. Under 16-way concurrent git invocation
+  (scripts/test_parallel.sh, N=16 partitions) this occasionally yields
+  `{:error, :invalid_format}` from git output truncation/interleaving, and
+  `elem(1)` silently extracts the atom `:invalid_format` in place of a
+  DateTime, later crashing DateTime.compare/2 with a FunctionClauseError in
+  Mix.Tasks.Letflow.LintHandoffsTest (test/mix/tasks/letflow.lint_handoffs_test.exs:245).
+  Confirmed flaky, not deterministic: a full-suite run showed 3053/3054 pass
+  with this one failure, then an immediate unmodified re-run showed 3054/3054
+  clean. The test passes deterministically in isolation. Discovered
+  incidentally by TEST-RUNNER during WF03-ISS0404-20260902, unrelated to that
+  run's own change (a pure test-deletion in a different file, ISS-0404). Fix:
+  add proper error handling around DateTime.from_iso8601/1's result instead of
+  blind elem(1) extraction.
+affected_files:
+  - lib/mix/tasks/letflow.lint_handoffs.ex
+  - test/mix/tasks/letflow.lint_handoffs_test.exs
+related:
+  - ISS-0404
+source: >
+  test/reports/report-20260902-WF03-ISS0404-20260902.yaml, TEST-RUNNER's
+  incidental finding during WF03-ISS0404-20260902's full-suite gate.
+queue_task_id: 412
+github_issue: 808
+status: open

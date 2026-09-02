@@ -1,0 +1,45 @@
+{
+  "handoff_id": "WF03-ISS0426-20260902-step-02b",
+  "run_id": "WF03-ISS0426-20260902",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0426-20260902/step-02b-code-design-validator.json",
+  "created_at": "2026-09-02T18:53:54Z",
+  "started_at": "2026-09-02T18:53:54Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0426"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss426-wallclock-test-contention.md",
+      "handoffs/WF03-ISS0426-20260902/step-02-code-designer.json",
+      "handoffs/WF03-ISS0426-20260902/step-01-issue-fixer-diagnosis.json",
+      "docs/issues/ISS-0426.yaml",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/test_helper.exs",
+      "lib/mix/tasks/letflow.check.test.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0426-20260902",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 2 gate -- validate CODE-DESIGNER's design for ISS-0426 (lib/letflow/design/iss426-wallclock-test-contention.md). You are a HARD GATE: PASS or FAIL, and a FAIL routes back to CODE-DESIGNER for rework. Apply your own role's standard checks (every acceptance criterion covered, no implementation code, unambiguous enough to build from). This description names the run-specific points that most need your scrutiny -- it does not replace your checklist.\n\nSCRUTINISE THESE SPECIFICALLY:\n\n1. THE TEST-ONLY SEAM ON PRODUCTION CODE. The design adds a new `@doc false` test-only synchronous entry point to Letflow.Engine.Lua.Executor so Group 1 tests can call the private run_script/3 without going through Task.Supervisor.async_nolink/Task.yield. Adding production surface area purely to serve tests is a real design smell and needs to clear a bar. CODE-DESIGNER cites this file's OWN existing precedent: build_script_error/3 at executor.ex:449, a public-with-@doc-false function whose comment at line 438 justifies it via REQ-162 design section 4.2/AC3. ORCH has confirmed that precedent exists. YOUR job is to judge whether it genuinely LICENSES this new seam or is being stretched: read executor.ex:438-455 and REQ-162's design, and decide whether the new seam is the same KIND of thing. Consider explicitly whether a test-support module, a @compile-guarded definition, or simply making run_script/3 public-with-@doc-false would be cleaner, and whether the design's answer is reasoned or merely asserted.\n   CRITICAL SUB-CHECK: does the seam BYPASS the wall-clock kill for the paths under test? If Group 1 tests no longer exercise the Task/timeout wrapper at all, confirm the design states what is thereby NO LONGER covered by those tests, and that something else still covers the wrapper. A restructure that silently deletes coverage of REQ-155's LUA-10 layer-2 kill would be a worse defect than the flake it fixes. ISS-0426's own scope note warns that option (b) 'moves the threshold without removing the sensitivity' -- the mirror-image risk here is removing the sensitivity by removing the test.\n\n2. OPEN QUESTIONS LEFT TO ELIXIR-DEV. The design closes with OQ-1 (exact seam signature) and OQ-2 (whether the 2 max_heap_words-limited Group 1 sites need a different mechanism, since they route through run_with_heap_limit/5 rather than run_script/3). Your role's bar is 'unambiguous enough to build from'. Judge whether these are legitimate implementation latitude or whether OQ-2 in particular is an unresolved DESIGN question being passed downstream -- if the design does not know whether its own mechanism covers 2 of its 11 Group 1 sites, that is a design gap, not a build detail. Say which it is and FAIL if it is the latter.\n\n3. THE ENUMERATION'S CORRECTNESS. CODE-DESIGNER reports finding ISSUE-FIXER's enumeration incomplete: 5 additional Group-1-shaped call sites in the REQ-154 instruction-budget block, and 2 tests (executor_test.exs:656 and :887) that are internally MIXED (one Group-1-shaped call and one genuinely-racing Group-2 call in the same test body). ISS-0426's acceptance criterion 1 requires the enumeration be explicit and complete, with each test's timing assumption stated. VERIFY THE ENUMERATION YOURSELF against test/letflow/engine/lua/executor_test.exs -- do not accept either agent's count. Report the count you independently derive. The mixed tests are the highest-risk item: confirm the design says exactly what happens to a test whose two halves need opposite treatments, and that the answer does not lose either half's coverage.\n\n4. TAG WIRING (ISS-0426 AC5). The design adds @tag :lua_wallclock_race, excluded in test/test_helper.exs and run in a new isolated subprocess in lib/mix/tasks/letflow.check.test.ex (a sibling to run_wasm_hang_tests/0). Verify the wiring genuinely mirrors the :wasm_hang shape in BOTH files and that a plain `mix test` and CI both stay correct. Check the deliberate choice NOT to reuse the :wasm_hang tag is sound (CODE-DESIGNER's stated reason: same family, different root cause). Confirm CI actually invokes mix letflow.check.test -- read .github/workflows/ci.yml -- because if CI runs plain `mix test` instead, the newly tagged Group 2 tests would be SILENTLY EXCLUDED FROM CI ENTIRELY and never run anywhere. That would be a BLOCKER.\n\n5. HARD CONSTRAINT AC4. Confirm the design changes NO production timeout semantics: config/config.exs:17's 5_000 untouched, no production timeout constant raised or removed. This is REQ-155's LUA-10 security control.\n\n6. CONCURRENT-RUN CONTENTION. lib/mix/tasks/letflow.check.test.ex is also owned by the live run WF03-ISS0418-20260902. Verify the design's change there is genuinely minimal and additive as claimed (one new sibling function, one new call site, zero existing lines touched) -- a claim ORCH will rely on when sequencing the merge. If it is not, say so, because ORCH's merge plan depends on it.\n\nYou may READ any file. Do not edit lib/ or test/ -- your step writes only its own handoff (and you may amend the design ONLY if your role's instructions permit it; otherwise FAIL back to CODE-DESIGNER). Complete the handoff with a clear PASS/FAIL, your independently derived enumeration count, and per-point verdicts. Commit it to branch feature/WF03-ISS0426-20260902."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

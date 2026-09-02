@@ -1,0 +1,43 @@
+id: ISS-0404
+title: "test/letflow/scheduler_req188_test.exs:432-452 pins a fixed historical commit range (746a3ac0..77637268), same fragility class as ISS-0378"
+discovered_by: ORCH
+discovered_in_run: SCOPE-CHANGE-20260902
+discovered_at: "2026-09-02T03:24:29Z"
+severity: MINOR
+tags: [test-fragility, ci, s6]
+description: >
+  docs/anti-patterns.md's "A test scoped to one specific historical commit
+  SHA breaks the moment that commit is squash-merged away" entry documents
+  this exact instance in its own Recurrence section: "An identical,
+  still-open instance of this same pattern remains at
+  test/letflow/scheduler_req188_test.exs:432-452 as of this writing -- out
+  of scope for ISS-0378, flagged for a separate issue." Filing that
+  separate issue now, since no requirement or issue currently tracked it.
+  The test "lib/letflow/engine/transition.ex had zero diff across
+  REQ-188's own commit range (746a3ac0..77637268)" asserts a
+  `git diff --stat` over a fixed historical SHA range, first checking both
+  endpoint SHAs are resolvable via `git cat-file -e` -- a real guard
+  against the risk that makes this fragile: a shallow checkout (CI, a
+  subagent's isolated worktree) or a future history rewrite/aggressive
+  squash of old history would fail the test outright with a checkout-depth
+  assertion rather than a meaningful pass/fail about the property it was
+  built to prove (REQ-188 never touched transition.ex).
+  The anti-patterns entry's own prescribed mitigation is a structural check
+  instead of a git-history check: prove the underlying acceptance-criterion
+  property against the CURRENT shipped source, not a historical diff.
+  Whether the correct fix is a structural replacement or outright deletion
+  (mirroring ISS-0378's own resolution) is a judgment call for
+  ISSUE-FIXER's diagnosis, not pre-decided here.
+affected_files:
+  - test/letflow/scheduler_req188_test.exs
+related:
+  - REQ-188
+  - ISS-0378
+  - ISS-0398
+source: >
+  docs/anti-patterns.md, "A test scoped to one specific historical commit
+  SHA breaks the moment that commit is squash-merged away" entry,
+  Recurrence paragraph.
+queue_task_id: 404
+github_issue: 793
+status: open

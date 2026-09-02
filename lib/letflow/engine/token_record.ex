@@ -94,6 +94,19 @@ defmodule Letflow.Engine.TokenRecord do
 
   @doc """
   Structural changeset for creating a token row. Does no I/O.
+
+  `branch_id` is NOT in `validate_required/2` (ISS-0408 fix,
+  `priv/repo/migrations/20260902000001_make_tokens_branch_id_nullable.exs`):
+  `Letflow.Engine.Token.branch_id`'s own pure type has always been
+  `String.t() | nil` (REQ-044 §3), and REQ-051's `fire_join/5` construction
+  deliberately sets `branch_id: nil` on the token produced by a
+  PARALLEL_GATEWAY join firing (`req051-parallel-gateway-split-join.md`,
+  the `fire_join/5` section) -- a documented, on-record decision, not an
+  oversight. Every other token this changeset is used for still supplies a
+  non-nil `branch_id` (the root token's own instance_id-as-branch_id
+  convention, or a split-derived token's own derived id) -- this only
+  widens what the schema *accepts*, it does not change what any existing
+  caller *sends*.
   """
   @spec insert_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def insert_changeset(token, attrs) do
@@ -106,7 +119,7 @@ defmodule Letflow.Engine.TokenRecord do
       :parent_token_id,
       :gateway_id
     ])
-    |> validate_required([:instance_id, :node_id, :branch_id])
+    |> validate_required([:instance_id, :node_id])
   end
 
   @doc """

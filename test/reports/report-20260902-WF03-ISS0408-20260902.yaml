@@ -1,0 +1,208 @@
+run_id: WF03-ISS0408-20260902
+workflow_id: WF-03
+step: "04c"
+agent: TEST-RUNNER
+generated_at: "2026-09-02T09:20:42Z"
+branch: feature/WF03-ISS0408-20260902
+commit: 51a1b421
+
+pre_run_environment_note:
+  finding: >
+    Before running anything, found 4 erl.exe processes via `tasklist`. Two
+    (PIDs 40452/36128, started 2026-09-01 18:24) were ElixirLS (VS Code
+    extension) -- harmless, left running. Two others (PIDs 19420/40844,
+    started 2026-09-02 14:10:30/31, ~3 minutes before this task began) were
+    a live `mix letflow.check.test` process with a `mix test` subprocess
+    underneath it, running against the same shared test DB -- exactly the
+    stray-process collision class this task's own instructions warned
+    about (ISS-0110-class TenantSchemaReaper collisions).
+  verification: >
+    Walked the process tree via `Get-CimInstance Win32_Process` (ParentProcessId
+    chain): PID 19420 (letflow.check.test) <- sh.exe (PID 25532) <- PID 42432.
+    PID 42432 (the launching shell) no longer existed -- confirming this was
+    an orphaned tree, not a process belonging to any live session. PID 40844
+    (mix test) was a subprocess spawned by 19420 itself, not an independent
+    second run.
+  action: >
+    Killed the orphaned tree (PIDs 19420, 25532, 42724, 40844) via
+    Stop-Process -Force before starting any test run of my own, to prevent
+    it from colliding with this run's test DB usage. Left the two ElixirLS
+    erl.exe processes untouched (unrelated, harmless). Re-checked tasklist
+    afterward -- only the two ElixirLS processes remained.
+
+docker:
+  command: "docker compose ps"
+  finding: >
+    letflow-2-postgres-1 and letflow-2-keycloak-1 already Up (healthy),
+    25h uptime -- no `docker compose up -d` needed. Postgres mapped to
+    5472 (matches this workspace's untracked .env: LETFLOW_DB_PORT=5472,
+    isolating it from the sibling letflow workspace's 5462 instance).
+
+compile_check:
+  command: "mix compile --warnings-as-errors"
+  raw_output: "(no output -- clean compile, zero warnings, exit 0)"
+  result: PASS
+
+command: scripts/test_parallel.sh
+mechanism: >
+  Full suite run as N parallel `mix test --partitions N` processes; each
+  partition's own ExUnit Result:/Failed: summary line parsed and summed into
+  one combined total. Exit 0 iff every partition's *parsed* count shows 0
+  failures (parsed count authoritative, not each partition's raw process
+  exit code).
+
+partition_count:
+  N: 16
+  source: nproc auto-derivation (TEST_PARALLEL_N was unset). All 16
+    partitions completed cleanly with real per-partition Result:/Failed:
+    lines -- ISS-0219's connection-budget-exhaustion crash mode was not
+    encountered on this host at N=16, so no retry with a smaller
+    TEST_PARALLEL_N was needed.
+
+environment:
+  toolchain: local (Elixir/mix on PATH).
+  postgres: docker compose (letflow-2-postgres-1, letflow-2-keycloak-1) --
+    both already Running/healthy before this run.
+
+result:
+  status: PASS
+  combined_tests: 3048
+  combined_properties: 6
+  combined_total: 3054
+  combined_passed: 3054
+  combined_failures: 0
+  per_partition:
+    - {partition: 1, tests: 191, properties: 1, failures: 0, exit: 0}
+    - {partition: 2, tests: 128, properties: 0, failures: 0, exit: 0}
+    - {partition: 3, tests: 218, properties: 0, failures: 0, exit: 0}
+    - {partition: 4, tests: 181, properties: 0, failures: 0, exit: 0}
+    - {partition: 5, tests: 249, properties: 2, failures: 0, exit: 0}
+    - {partition: 6, tests: 209, properties: 0, failures: 0, exit: 0}
+    - {partition: 7, tests: 155, properties: 0, failures: 0, exit: 0}
+    - {partition: 8, tests: 233, properties: 0, failures: 0, exit: 0}
+    - {partition: 9, tests: 132, properties: 0, failures: 0, exit: 0}
+    - {partition: 10, tests: 179, properties: 0, failures: 0, exit: 0}
+    - {partition: 11, tests: 178, properties: 0, failures: 0, exit: 0}
+    - {partition: 12, tests: 203, properties: 0, failures: 0, exit: 0}
+    - {partition: 13, tests: 161, properties: 1, failures: 0, exit: 0}
+    - {partition: 14, tests: 281, properties: 2, failures: 0, exit: 0}
+    - {partition: 15, tests: 186, properties: 0, failures: 0, exit: 0}
+    - {partition: 16, tests: 164, properties: 0, failures: 0, exit: 0}
+
+raw_output: |
+  test_parallel: N=16 (source: nproc)
+  test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+  test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+  test_parallel: seeding 16 per-partition build paths from _build/test (sequential)
+  test_parallel: partition logs in /tmp/letflow_test_parallel.uDjYSr
+  test_parallel: TEST_PARALLEL_GROUP=tp1499 (shared by all 16 partitions)
+  partition 1: 191 tests, 1 property, 0 failures, exit 0
+  partition 2: 128 tests, 0 properties, 0 failures, exit 0
+  partition 3: 218 tests, 0 properties, 0 failures, exit 0
+  partition 4: 181 tests, 0 properties, 0 failures, exit 0
+  partition 5: 249 tests, 2 properties, 0 failures, exit 0
+  partition 6: 209 tests, 0 properties, 0 failures, exit 0
+  partition 7: 155 tests, 0 properties, 0 failures, exit 0
+  partition 8: 233 tests, 0 properties, 0 failures, exit 0
+  partition 9: 132 tests, 0 properties, 0 failures, exit 0
+  partition 10: 179 tests, 0 properties, 0 failures, exit 0
+  partition 11: 178 tests, 0 properties, 0 failures, exit 0
+  partition 12: 203 tests, 0 properties, 0 failures, exit 0
+  partition 13: 161 tests, 1 property, 0 failures, exit 0
+  partition 14: 281 tests, 2 properties, 0 failures, exit 0
+  partition 15: 186 tests, 0 properties, 0 failures, exit 0
+  partition 16: 164 tests, 0 properties, 0 failures, exit 0
+  ---
+  combined: 3048 tests, 6 properties, 0 failures (3054/3054 passed)
+
+iss_0408_targeted_check:
+  description: >
+    ExUnit partitioning does not print individual test names to the
+    partition logs, so the combined summary alone does not name which
+    partition drew test/letflow/iss0408_join_token_record_test.exs. Ran it
+    standalone immediately after the full-suite run, against the same live
+    Postgres/tenant infrastructure, to directly confirm the 2/2 pass count
+    the task asked for by name.
+  command: "mix test test/letflow/iss0408_join_token_record_test.exs --no-color"
+  raw_output: |
+    Finished in 3.3 seconds (0.00s async, 3.3s sync)
+    Result: 2 passed
+  result: >
+    2/2 passed, 0 failures. Confirms both the join->END-via-timer regression
+    scenario and the join->HUMAN_TASK continuation scenario this issue
+    describes now pass. Consistent with the 3054/3054 combined total from
+    the full parallel run (this file's 2 tests are part of that total,
+    inside whichever partition drew it).
+
+known_flake_classes_checked:
+  - id: ISS-0110
+    description: >
+      TenantSchemaReaper collisions from concurrent mix test/check.test
+      invocations racing against the same test DB. Directly relevant this
+      run -- see pre_run_environment_note above: found and killed one live
+      orphaned instance of exactly this collision class before starting my
+      own run. No TenantSchemaReaper-related failures appeared in either
+      the full-suite run or the standalone targeted run after cleanup.
+  - id: ISS-0219
+    description: >
+      scripts/test_parallel.sh auto-derived N (nproc) can exceed a host's
+      Postgres/connection budget, crashing all partitions before any
+      result. Not encountered -- ran at the nproc-derived N=16 and all 16
+      partitions completed with real per-partition Result:/Failed: lines
+      (TEST_POOL_SIZE auto-computed to 5, no connection exhaustion).
+  - id: ISS-0352
+    description: >
+      wasmex native-thread-pool exhaustion from genuinely-hung WASM guest
+      calls, structurally excluded via the :wasm_hang tag in
+      test/test_helper.exs. Not applicable -- no WASM files anywhere in
+      this branch's diff, and no hangs/timeouts occurred in either run.
+
+failure_attribution:
+  count: 0
+  note: >
+    Zero failures in the full-suite combined run (3054/3054 passed across
+    all 16 partitions) and zero failures in the targeted
+    iss0408_join_token_record_test.exs standalone re-run (2/2 passed).
+    Nothing to attribute, nothing to file as a new issue.
+
+diff_scope_reviewed:
+  application_code:
+    - lib/letflow/engine.ex
+    - lib/letflow/engine/token_record.ex
+    - lib/letflow/tenant_provisioning.ex
+    - priv/repo/migrations/20260902000001_make_tokens_branch_id_nullable.exs
+  test_code:
+    - test/letflow/engine/schemas_test.exs
+    - test/letflow/iss0408_join_token_record_test.exs
+  docs_only:
+    - docs/issues/ISS-0408.yaml
+    - lib/letflow/design/iss0408-join-token-record-insert-fix.md
+    - test/specs/ISS-0408.md
+  note: >
+    git diff --stat main...HEAD. All application and test files in scope
+    ran clean, both standalone and inside the combined full-suite run.
+
+    Discrepancy noted for RELEASE-VALIDATOR/ISSUE-FIXER awareness (not
+    itself a test failure, so not blocking this PASS): ISS-0408.yaml's own
+    affected_files lists lib/letflow/engine/transition.ex and
+    lib/letflow/engine/task_activation.ex, but the actual shipped fix on
+    this branch touches lib/letflow/engine.ex,
+    lib/letflow/engine/token_record.ex, lib/letflow/tenant_provisioning.ex,
+    and a new migration instead -- neither transition.ex nor
+    task_activation.ex appear in this branch's diff. The issue doc's
+    affected_files field appears stale relative to where the fix actually
+    landed; the design doc
+    (lib/letflow/design/iss0408-join-token-record-insert-fix.md) documents
+    the real approach taken (inserting a real TokenRecord for hop-chain-local
+    join tokens before task-activation/reconciliation, per its commit
+    messages). This is a documentation-accuracy note, not a code defect --
+    tests for the actual shipped behavior pass.
+
+working_tree:
+  note: >
+    git status clean before and after this run -- no leftover test
+    artifacts, no uncommitted changes. This report file is the only new
+    file this run adds.
+
+verdict: PASS
+next_action: Route to ISSUE-FIXER for Step 5 close-out.

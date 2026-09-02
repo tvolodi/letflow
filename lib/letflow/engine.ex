@@ -2037,14 +2037,47 @@ defmodule Letflow.Engine do
         {:advanced, final_instance_state, prepared_children} ->
           multi =
             Multi.new()
-            |> TaskActivation.append_multi_from_existing_records(
-              timer.instance_id,
-              graph,
-              seed_state.pending_task_nodes,
-              final_instance_state,
-              prefix
-            )
-            |> reconcile_token_records(original_active_tokens, final_instance_state, now, prefix)
+            |> Multi.merge(fn _changes ->
+              # ISS-0408 fix (design doc §3.5) -- identical restructuring to
+              # build_task_activation_and_reconciliation_multi/4: the insert
+              # step and its final_instance_state rewrite must run, inside
+              # the transaction, before append_multi_from_existing_records/6
+              # or reconcile_token_records/5 see final_instance_state, for
+              # the TIMER-path hop chain (a join can fire here too, when the
+              # join's last outstanding branch is satisfied by a timer
+              # firing rather than a task completing).
+              Multi.new()
+              |> Multi.run({:hop_chain_token_records, timer.instance_id}, fn repo, _changes ->
+                insert_hop_chain_new_token_records(
+                  repo,
+                  timer.instance_id,
+                  original_active_tokens,
+                  final_instance_state.tokens,
+                  prefix
+                )
+              end)
+              |> Multi.merge(fn changes ->
+                {id_map, hop_chain_new_records} =
+                  Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
+
+                resolved_final_instance_state = rewrite_token_ids(final_instance_state, id_map)
+
+                Multi.new()
+                |> TaskActivation.append_multi_from_existing_records(
+                  timer.instance_id,
+                  graph,
+                  seed_state.pending_task_nodes,
+                  resolved_final_instance_state,
+                  prefix
+                )
+                |> reconcile_token_records(
+                  hop_chain_new_records ++ original_active_tokens,
+                  resolved_final_instance_state,
+                  now,
+                  prefix
+                )
+              end)
+            end)
             |> Multi.merge(fn _changes ->
               id_map =
                 Map.new(prepared_timers, fn {token_id, _arm_attrs} -> {token_id, token_id} end)
@@ -2663,16 +2696,52 @@ defmodule Letflow.Engine do
       transition: final_instance_state
     } = changes
 
+    instance_id = task.instance_id
+
+    # ISS-0408 fix (design doc §3.4): the insert-hop-chain-new-token-records
+    # step and its final_instance_state rewrite must run, inside the
+    # transaction, before either maybe_append_task_activation_multi/7 or
+    # reconcile_token_records/5 sees final_instance_state -- both assume
+    # every token_id they see already names a real, persisted TokenRecord
+    # row, which is only true post-rewrite for a hop chain that fired a
+    # PARALLEL_GATEWAY join. Wrapped in one Multi.merge/2 so the rewritten
+    # state can be threaded as a plain local into both sibling steps rather
+    # than re-read from `changes`.
     Multi.new()
-    |> maybe_append_task_activation_multi(
-      skip_task_activation?,
-      task.instance_id,
-      graph,
-      seed_state.pending_task_nodes,
-      final_instance_state,
-      prefix
-    )
-    |> reconcile_token_records(original_active_tokens, final_instance_state, completed_at, prefix)
+    |> Multi.merge(fn _changes ->
+      Multi.new()
+      |> Multi.run({:hop_chain_token_records, instance_id}, fn repo, _changes ->
+        insert_hop_chain_new_token_records(
+          repo,
+          instance_id,
+          original_active_tokens,
+          final_instance_state.tokens,
+          prefix
+        )
+      end)
+      |> Multi.merge(fn changes ->
+        {id_map, hop_chain_new_records} =
+          Map.fetch!(changes, {:hop_chain_token_records, instance_id})
+
+        resolved_final_instance_state = rewrite_token_ids(final_instance_state, id_map)
+
+        Multi.new()
+        |> maybe_append_task_activation_multi(
+          skip_task_activation?,
+          instance_id,
+          graph,
+          seed_state.pending_task_nodes,
+          resolved_final_instance_state,
+          prefix
+        )
+        |> reconcile_token_records(
+          hop_chain_new_records ++ original_active_tokens,
+          resolved_final_instance_state,
+          completed_at,
+          prefix
+        )
+      end)
+    end)
   end
 
   # ISS-0392 fix (design doc §2.4) -- when skip_task_activation? is true, a
@@ -2710,6 +2779,113 @@ defmodule Letflow.Engine do
       final_instance_state,
       prefix
     )
+  end
+
+  # ISS-0408 fix (design doc §3.2) -- inserts a real TokenRecord row for
+  # every token in final_tokens that is genuinely new within this hop chain
+  # (i.e. its pure token_id is not one of original_active_tokens' own real,
+  # DB-loaded ids) -- today this is only ever a PARALLEL_GATEWAY join-merged
+  # token (Transition.fire_join/5's derived
+  # "<origin>/<join_node>/joined" string), minted before task-activation and
+  # token-reconciliation run so both see an already-real TokenRecord id,
+  # exactly as if the token had existed before this hop chain started.
+  #
+  # Returns BOTH the {synthetic_token_id => real_id} map (rewrite_token_ids/2's
+  # own input) AND the freshly-inserted [TokenRecord.t()] list itself --
+  # design doc §5.2 states do_reconcile_token_records/5's own `original_ids`
+  # membership guard should "just work" post-rewrite without being modified,
+  # but that guard is built strictly from whatever `original_tokens` list its
+  # caller passes it (engine.ex's own do_reconcile_token_records/5,
+  # unmodified per this design's own explicit instruction) -- a token this
+  # step JUST inserted is, definitionally, not a member of
+  # original_active_tokens (loaded at hop-chain-seed time, before this step
+  # ran). Reconciling that gap without editing do_reconcile_token_records/5
+  # itself means its caller (reconcile_token_records/5's own call site, both
+  # of them) must pass an original_tokens list that already includes these
+  # just-inserted records -- true and correct by the time reconciliation
+  # runs (later in the same transaction), not a widening of what "original"
+  # means, just an accurate accounting of what already exists in the DB at
+  # the point the guard actually executes.
+  #
+  # The empty-set case (the overwhelming majority of hop chains -- no join
+  # fired) returns {:ok, {%{}, []}} with no Repo call at all, matching
+  # insert_token_records/4's and TaskActivation.append_multi/6's own
+  # newly_pending == []/[]-clause fast paths.
+  @spec insert_hop_chain_new_token_records(
+          repo :: Ecto.Repo.t(),
+          instance_id :: Ecto.UUID.t(),
+          original_active_tokens :: [TokenRecord.t()],
+          final_tokens :: [Token.t()],
+          prefix :: String.t()
+        ) ::
+          {:ok, {%{optional(String.t()) => Ecto.UUID.t()}, [TokenRecord.t()]}}
+          | {:error, term()}
+  defp insert_hop_chain_new_token_records(
+         repo,
+         instance_id,
+         original_active_tokens,
+         final_tokens,
+         prefix
+       ) do
+    original_ids = MapSet.new(original_active_tokens, &to_string(&1.id))
+
+    hop_chain_new_tokens =
+      Enum.filter(final_tokens, &(not MapSet.member?(original_ids, &1.token_id)))
+
+    case hop_chain_new_tokens do
+      [] ->
+        {:ok, {%{}, []}}
+
+      _ ->
+        hop_chain_new_tokens
+        |> Enum.reduce_while({:ok, {%{}, []}}, fn %Token{} = token, {:ok, {id_map, records}} ->
+          case insert_token_record(repo, instance_id, token, prefix) do
+            {:ok, %TokenRecord{} = record} ->
+              {:cont, {:ok, {Map.put(id_map, token.token_id, record.id), [record | records]}}}
+
+            {:error, reason} ->
+              {:halt, {:error, reason}}
+          end
+        end)
+    end
+  end
+
+  # ISS-0408 fix (design doc §3.4) -- pure rewrite of final_instance_state's
+  # own .tokens list, replacing each synthetic (hop-chain-local-new)
+  # token_id with the real TokenRecord id insert_hop_chain_new_token_records/5
+  # just assigned it, stringified to match to_pure_token/1's own
+  # to_string(record.id) convention. id_map == %{} (no join fired this hop
+  # chain) is a no-op: instance_state is returned unchanged rather than
+  # rebuilding an identical tokens list.
+  @spec rewrite_token_ids(InstanceState.t(), %{optional(String.t()) => Ecto.UUID.t()}) ::
+          InstanceState.t()
+  defp rewrite_token_ids(%InstanceState{} = instance_state, id_map) when id_map == %{} do
+    instance_state
+  end
+
+  defp rewrite_token_ids(%InstanceState{} = instance_state, id_map) do
+    # Rewrites BOTH .tokens and .pending_task_nodes: dispatch_human_task/3
+    # (transition.ex:385-389) appends the just-dispatched Token struct (at
+    # whatever token_id it carried at dispatch time -- the synthetic
+    # join-derived id, for a join-then-HUMAN_TASK hop) to its own separate
+    # pending_task_nodes list, not a reference into .tokens -- so a token
+    # that is both the join's own final resting token AND newly-pending
+    # (the ISS-0408 scenario) has two independent copies of the same
+    # pre-rewrite token_id that both need the same substitution for
+    # TaskActivation.newly_pending_tokens/2's own diff (which reads
+    # .pending_task_nodes, not .tokens) to see a real id.
+    rewrite_one = fn %Token{} = token ->
+      case Map.fetch(id_map, token.token_id) do
+        {:ok, real_id} -> %Token{token | token_id: to_string(real_id)}
+        :error -> token
+      end
+    end
+
+    %InstanceState{
+      instance_state
+      | tokens: Enum.map(instance_state.tokens, rewrite_one),
+        pending_task_nodes: Enum.map(instance_state.pending_task_nodes, rewrite_one)
+    }
   end
 
   # §8.2 -- new function. Advances/completes existing tokens rows to match

@@ -3855,6 +3855,20 @@
       "released_lock": true,
       "last_known_step": "Step Final -- PR #792 squash-merged to main (651d6060), queue task 403 released status: done (CI hit the wasm_hang flake 5 times before clearing)",
       "note": "ISS-0403 (Letflow.SecretsTest property test's containment refute was a false-positive at short plaintext lengths -- coincidental substring containment, not a real ciphertext leak). Handled by ORCH directly per docs/agents/ORCHESTRATOR.md Section10's sizing-rule exception: single test file, no production code, no new public API, no migration, no supervision-tree touch, no tenant-data path. Raised the check's minimum plaintext length threshold from > 0 to >= 8 bytes with inline probability-math justification; added a dedicated regression test reproducing the exact originally-observed byte value (186) 20 times in a loop. Verified with 6 separate test runs across different --seed values, all green."
+    },
+    {
+      "run_id": "WF03-ISS0402-20260902",
+      "requirement_id": null,
+      "issue_id": "ISS-0402",
+      "queue_task_id": 402,
+      "github_issue_number": 789,
+      "status": "IN_PROGRESS",
+      "owned_modules": [],
+      "started_at": "2026-09-02T02:06:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
+      "note": "WF-03 issue-resolving run for ISS-0402: REQ-052's design doc cites the now-fixed join_counters persistence gap (ISS-0397) as the reason cancel_instance/3 never wires {:cancel_branch, _} for individual PARALLEL_GATEWAY fork branches. Filed by ORCH itself at ISS-0397's Step Final. ISSUE-FIXER to scope: whether branch-level cancellation should now be designed and implemented, or whether a second independent reason exists to leave it deferred."
     }
   ]
 }

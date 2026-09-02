@@ -695,3 +695,11 @@ history:
       fixed (the exact ISS-0277 failure mode). Queue task 411 released
       WITHOUT a status (stays open, immediately reclaimable) so it can be
       picked up again once REQ-214/REQ-215 land.
+  - req: REQ-216
+    event: started
+    agent: ORCH
+    at: "2026-09-02T22:45:00Z"
+    note: >
+      Admission-control core (closes ISS-0431 part 1). Queue task 434
+      (GH#839) locked. Branch feature/WF02-REQ216-20260902 created from
+      main. Dispatching Step 1 (CODE-DESIGNER).

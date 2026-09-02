@@ -1,0 +1,59 @@
+{
+  "handoff_id": "e5b4d4d7-9c5d-4b4d-cd52-4f6a8b9c0d14",
+  "run_id": "WF03-ISS0419-20260902",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0419-20260902/step-final-git-merge.json",
+  "created_at": "2026-09-02T13:57:57Z",
+  "started_at": "2026-09-02T13:57:57Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0419-20260902/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0419-20260902/step-05-issue-fixer-close.json",
+      "docs/issues/ISS-0419.yaml",
+      "docs/agents/protocols/GIT_MERGE.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run fn:git-merge per docs/agents/protocols/GIT_MERGE.md for run WF03-ISS0419-20260902, branch feature/WF03-ISS0419-20260902 (same branch you set up at Step 00). This run reached a no_defect verdict at Step 1/Step 5 -- NO CODE FILE was changed, only docs/issues/ISS-0419.yaml and this run's own handoffs/ files. This checkout IS a secondary git worktree (git worktree list shows 4 entries) -- you MUST use the 'Worktree variant' section at the bottom of GIT_MERGE.md for steps 8 and 9 (gh pr merge's local checkout side-effect will error here by design; verify merge success via `gh pr view <n> --json state,mergedAt` instead of trusting the error output, then detach-checkout origin/main rather than `git checkout main`).\n\nProcedure: verify current branch is feature/WF03-ISS0419-20260902; stage/commit any remaining uncommitted files by explicit filename (there should be none -- ISSUE-FIXER already committed and pushed everything at Step 5, confirmed by ORCH via `git status --porcelain` showing empty); fetch origin main and rebase onto it; since no code file changed in this branch, a rebase conflict is unlikely but if origin/main has since touched docs/issues/ISS-0419.yaml or any handoffs/WF03-ISS0419-20260902/* file, resolve per the protocol's conflict-handling section (composition, chronological order, never blind ours/theirs during rebase -- read that section, it is not restated here). After rebase, run `mix format --check-formatted` and `mix compile --warnings-as-errors` as the standard post-rebase sanity check (this run changed no .ex/.exs file, so these should pass trivially, but run them for real per this protocol -- do not skip because 'nothing should have changed'). You do NOT need to run the full `mix test` suite for this step's own attribution purposes since no code changed, but DO run it anyway per the protocol's literal step 5d (it is unconditional) and attribute any failures structurally per core-directives.md's Failure Attribution rule -- a known pre-existing flake (the wasm_hang subprocess flake, ISS-0352/ISS-0406/ISS-0418 lineage) is a documented, structurally-clearable pre-existing issue with ZERO file overlap with this branch's diff (this branch touches docs/issues/ISS-0419.yaml only) -- if you hit it, attribute it per that established precedent (PRs #795, #810) rather than treating it as this branch's regression.\n\nPush the branch (plain push first, --force-with-lease only if rejected as non-fast-forward). Create the PR with title 'fix: verify wasmex CI build-cache preservation -- no_defect, cache is not being defeated [WF03-ISS0419-20260902]' and a body summarizing: this run investigated ISS-0419's caching hypothesis and found NO DEFECT (cache is preserved correctly on cache-hit CI runs; wasmex is never recompiled when actions/cache restores deps/; the ~12-15 min runtime is dominated by the ExUnit suite itself, not wasmex rebuilding), cite the 3 real CI run ids inspected (33634490464, 33635645070, 33622754837), state that GitHub issue #817 is already closed with the no_defect comment, and that no code file was changed -- only docs/issues/ISS-0419.yaml. Include the standard Validation section (mix compile/format/test results, attribution route for any pre-existing failures, SECURITY-REVIEWER out of scope with reason: docs-only change, no tenant-data path). Wait for CI (backend + frontend jobs) to report green per the Precondition's definition (no failure attributable to this branch), then merge with `gh pr merge --squash --delete-branch`, verify via `gh pr view --json state,mergedAt` per the worktree variant, delete the remote+local branch refs explicitly, and finish with the worktree variant's step 9w (fetch + detached checkout at origin/main, verify HEAD matches origin/main).",
+    "acceptance_criteria": [
+      "git branch --show-current was feature/WF03-ISS0419-20260902 at the start of this step",
+      "rebase onto origin/main completed (no-op or resolved) with no lost content",
+      "mix format --check-formatted and mix compile --warnings-as-errors both pass after rebase",
+      "mix test run for real; any failures attributed structurally per core-directives.md, none unattributed",
+      "PR opened, title prefixed fix:, body includes the Validation section with real counts and attribution route",
+      "CI (backend + frontend) confirmed green (no attributable failure) via gh pr checks or gh run view before merging -- not assumed",
+      "gh pr merge --squash --delete-branch run; merge success verified via gh pr view --json state,mergedAt (worktree variant) even if the local checkout side-effect errors",
+      "remote and local feature branch refs both deleted explicitly per the worktree variant",
+      "final state verified via git rev-parse HEAD == git rev-parse origin/main, git log --oneline -1 shows the squash-merge commit, git status clean"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

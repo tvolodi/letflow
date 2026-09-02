@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF03-ISS0413-20260902-step-02",
+  "run_id": "WF03-ISS0413-20260902",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0413-20260902/step-02-reviewer.json",
+  "created_at": "2026-09-02T15:15:24Z",
+  "started_at": "2026-09-02T15:14:00Z",
+  "completed_at": "2026-09-02T15:15:24Z",
+  "status": "COMPLETED",
+  "priority": "MINOR",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0413"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0413-20260902/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0413-20260902/step-01b-code-designer.json",
+      "lib/letflow/design/iss0413-plugin-handler-test-fragility.md",
+      "test/specs/REQ-165.md",
+      "docs/anti-patterns.md",
+      "test/letflow/engine/wasm/host_api_write_test.exs",
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "lib/letflow/design/iss0404-regression-verification.md"
+    ],
+    "branch_name": "fix/ISS-0413-git-diff-live-ref-fragility-20260902"
+  },
+  "task": {
+    "description": "Hard-gate review of ISS-0413's deletion of two live-ref git-diff test assertions (host_api_write_test.exs AC7, plugin_handler_test.exs AC6), following the ISS-0378/ISS-0404 evergreen-property-via-git-diff anti-pattern precedent. Verify the mutation-table citation correction, check for lost coverage, check decision-record consistency, check scope, and independently confirm compile/format/test gates."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Verdict: PASS. All four review questions checked independently, not taken on either prior agent's word.\n\n1) Mutation-table citation correction (the load-bearing claim in lib/letflow/design/iss0413-plugin-handler-test-fragility.md sec 1): VERIFIED ACCURATE against test/specs/REQ-165.md lines 151-171 read directly. Row 3 of the mutation table states mutation #3 (handle_yield_result/4 timeout-message edit) was 'Caught by existing suite? Yes -- AC5's test asserts reason =~ \"did not respond within 100ms\" and failed immediately', action 'No test change needed' -- i.e. T3/AC5 caught it independently, with T6 (the git-diff test) not yet in play. Row 6 of the separate AC-coverage table only adds that T6 'would also have failed' once the mutation reached a diff -- a trivially-true statement about any diff-based check on a file that was just edited, not evidence of independent discriminating power. ISSUE-FIXER's original handoff had inverted this (framed T6 as catching what T3 missed); CODE-DESIGNER's correction is the accurate reading. This changes the decision correctly: no real coverage is lost by deleting T6.\n\n2) No other coverage lost: confirmed via the actual diffs (git diff cb72010e..HEAD) that both deleted blocks (host_api_write_test.exs's 'git diff --stat against lib/letflow/engine/lua/ is empty', plugin_handler_test.exs's 'git diff --stat against plugin_interface.ex is empty') were self-contained -- each read only local System.cmd/2,3 results into test-scoped variables, defined no helper function/module attribute/shared state referenced elsewhere, consistent with both agents' own inspection claims. host_api_write_test.exs retains its structural sibling test ('moduledoc states decision 0014 (4) and that this module never modifies lib/letflow/engine/lua/') immediately following the deleted block, covering the same intent without git. plugin_handler_test.exs retains T3/AC5's hang-timeout content assertion, which independently covers the one mutation (#3) T6 was ever shown to touch.\n\n3) Decision-record consistency: checked docs/migration/decisions/ for anything on test methodology. 0009-test-parallel-pool-sizing.md is the only test-adjacent record and concerns parallel DB-pool sizing, unrelated to assertion methodology -- no conflict. No decision record addresses git-diff-based test assertions; this change does not silently re-decide anything on record.\n\n4) Scope: git diff cb72010e..HEAD --stat confirms only test/letflow/engine/wasm/host_api_write_test.exs, test/letflow/engine/wasm/plugin_handler_test.exs, docs/anti-patterns.md (append-only recurrence note), the new design doc, and this run's handoffs changed. No production code, no unrelated test files, no requirements.yaml changes. Matches the ISS-0378/ISS-0404 precedent shape (deletion with a citation, no replacement machinery invented ahead of need -- correctly avoids scope creep in the other direction too, i.e. no speculative structural-check framework was built to replace T6 when none was warranted).\n\nIndependently re-ran, in the foreground, on branch fix/ISS-0413-git-diff-live-ref-fragility-20260902 after `git pull --ff-only` (already up to date):\n- `mix compile --warnings-as-errors`: clean, no output, exit 0.\n- `mix format --check-formatted`: clean, no output, exit 0.\n- `WASMEX_BUILD=true mix test test/letflow/engine/wasm/host_api_write_test.exs test/letflow/engine/wasm/plugin_handler_test.exs`: 'Finished in 0.6 seconds ... Result: 41 passed, 5 excluded' (excluded tags :keycloak/:wasm_hang, pre-existing/unrelated), 0 failures -- consistent with the expected count (ISSUE-FIXER's fix left 42 passed; CODE-DESIGNER's further deletion of one test brings it to 41, exactly as observed).\n\nNot a rework item, but noting for the record (not blocking PASS): this run is test-only and does not touch supervision, gen_statem usage, or introduce any new abstraction, so review items 1/2/4 (idiom, supervision, scope-creep-via-new-plumbing) are not applicable in the usual sense -- reviewed instead as 'does this deletion correctly follow the established ISS-0378/ISS-0404 precedent without inventing new machinery,' which it does. No type-safety gap applicable (no new transition logic). Routing to TEST-RUNNER per task instructions: this is a test-only change so no separate TEST-DESIGNER pass is needed; TEST-RUNNER should confirm the full targeted regression set plus a broader sweep before this proceeds toward merge.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0413-20260902/step-02-reviewer.json"
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

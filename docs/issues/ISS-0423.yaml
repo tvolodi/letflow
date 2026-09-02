@@ -113,3 +113,62 @@ discovered_side_effect:
       a wall-clock-sensitive Lua executor test. Filed separately as ISS-0426
       (queue task 426, GH#830) -- it must be fixed before parallel running is
       adopted as the default, or CI will look intermittently red.
+
+# ── Adoption feasibility probe, 2026-09-02T18:28:44Z (ORCH-adhoc-20260902) ──
+# Answers "how would we actually adopt each lever?" with measured numbers.
+# Status unchanged (open); this narrows the design space for CODE-DESIGNER.
+adoption_notes:
+  test_parallel_adoption_point: >
+    The adoption point is Mix.Tasks.Letflow.Check.Test (lib/mix/tasks/
+    letflow.check.test.ex), NOT .github/workflows/ci.yml. CI deliberately
+    runs exactly one `mix letflow.check` step (REQ-136's own stated design:
+    "hence exactly one `run: mix letflow.check` step below, and nothing
+    hand-rolled alongside it"), so switching the runner inside check.test
+    changes local and CI behaviour together with no workflow edit.
+    CONSTRAINT that must survive: check.test does not merely run the suite --
+    it CAPTURES combined stdout+stderr and fails if the ISS-0069 warning
+    substring ("default values for the optional arguments") appears anywhere,
+    and it runs a SECOND `mix test --only wasm_hang` subprocess in a fresh
+    BEAM (ISS-0352). scripts/test_parallel.sh writes each partition's output
+    to its own log file under a mktemp dir, so the substring check must be
+    re-pointed at those N logs rather than at one captured stream, or the
+    ISS-0069 gate silently stops gating.
+  ci_gives_almost_nothing: >
+    IMPORTANT NEGATIVE RESULT: .github/workflows/ci.yml runs on
+    `ubuntu-latest`, which is a 2-vCPU runner. test_parallel.sh derives N
+    from nproc, so N=2 there -- the 2.9x measured on this 16-core
+    workstation does NOT transfer to CI, and ISS-0219/ISS-0222 already
+    record that over-provisioning N relative to the host's CPU/Postgres
+    budget crashes partitions outright at ecto.create/migrate time. Worse,
+    parallel running is exactly what surfaces ISS-0426's wall-clock flake,
+    and a 2-vCPU runner contends harder than this workstation did. Adopting
+    the parallel runner is therefore primarily a LOCAL developer-loop and
+    self-hosted-runner win; treat any CI gain as unproven until measured on
+    the actual runner. Do not assume it speeds up the 12-15 min CI job.
+  template_schema_measured: >
+    MEASURED on the real 52-migration tenant schema (38 tables), same host,
+    letflow_test9:
+      - Ecto.Migrator.run replay:              2259 ms  (52 migrations, ~31 ms each)
+      - CREATE SCHEMA alone:                     36 ms
+      - clone via CREATE TABLE (LIKE ... INCLUDING ALL) x38 tables:
+                                                460 ms  (avg over 5 clones)
+    i.e. a 4.9x improvement per provisioning, ~1.8 s saved per test that
+    provisions a tenant. At 755 provisionings per suite run that is the
+    single largest remaining lever after parallelism.
+    METHOD LIMITATION, stated: an earlier attempt to benchmark a pg_dump
+    based clone measured 44 ms/clone on a TOY 2-table schema and 0 bytes on
+    the real one -- because `mix run` holds everything in an uncommitted
+    transaction even under Sandbox.mode(:auto), so the schema is invisible to
+    any external process (verified: 38 tables visible in-connection, 0 to a
+    separate psql). The 460 ms figure above is the trustworthy one; it was
+    measured entirely in-connection via Repo.query!. A pg_dump/template-database
+    approach may still beat 460 ms but CANNOT be benchmarked from inside a
+    sandboxed connection and was not measured.
+    DESIGN CONSTRAINT this implies: `LIKE ... INCLUDING ALL` copies columns,
+    defaults, indexes, constraints and identity/sequence definitions, but does
+    NOT copy foreign keys between tables (Postgres omits FK constraints from
+    LIKE). A correct implementation must either re-add FKs from the template's
+    catalog, or use a pg_dump/restore-based clone, or accept that the cloned
+    schema is not FK-identical -- the last is NOT acceptable, since
+    assert_schema_complete!/2 and several tests depend on real constraint
+    behaviour. Verify constraint parity against the template explicitly.

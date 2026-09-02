@@ -185,14 +185,27 @@ defmodule Letflow.Engine.SchemasTest do
   # ---------------------------------------------------------------------------------
 
   describe "Token.insert_changeset/2" do
-    test "requires instance_id, node_id, branch_id" do
+    test "requires instance_id, node_id" do
       changeset = Token.insert_changeset(%Token{}, %{})
       refute changeset.valid?
       errors = errors_on(changeset)
 
-      for field <- [:instance_id, :node_id, :branch_id] do
+      for field <- [:instance_id, :node_id] do
         assert Map.has_key?(errors, field), "expected #{field} to be required"
       end
+    end
+
+    # ISS-0408 fix -- branch_id is NOT required (relaxed from the original
+    # REQ-043 changeset by priv/repo/migrations/20260902000001_make_tokens_branch_id_nullable.exs):
+    # Letflow.Engine.Token.branch_id's own pure type has always been
+    # String.t() | nil (REQ-044 §3), and REQ-051's fire_join/5 deliberately
+    # produces branch_id: nil for a PARALLEL_GATEWAY join-merged token -- a
+    # real, on-record case this schema must accept, not an omission.
+    test "accepts a well-formed create with a nil branch_id (join-merged token, REQ-051)" do
+      attrs = Map.put(valid_token_attrs(), :branch_id, nil)
+      changeset = Token.insert_changeset(%Token{}, attrs)
+      assert changeset.valid?
+      refute Map.has_key?(errors_on(changeset), :branch_id)
     end
 
     test "accepts a well-formed create" do

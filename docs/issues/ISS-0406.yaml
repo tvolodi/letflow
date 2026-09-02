@@ -1,0 +1,45 @@
+id: ISS-0406
+title: "wasm_hang CI flake (ISS-0352) hit an unusually high rate during a multi-session-concurrent window on 2026-09-02, blocking a doc-only PR 4+ times"
+discovered_by: ORCH
+discovered_in_run: WF02-REQ213-20260902
+discovered_at: "2026-09-02T05:09:44Z"
+severity: MINOR
+tags: [ci, flake, wasm, s6]
+description: >
+  PR #795 (REQ-213, a pure documentation change to two .claude/agents/*.md
+  files, zero WASM/Engine code touched) failed CI 4 times in a row on
+  2026-09-02 between roughly 03:39Z and 05:08Z, every time on the same
+  isolated `mix test --only wasm_hang` subprocess suite (never the main
+  ~3050-test suite, which passed clean every single run). This is the
+  already-documented ISS-0352 flake class, but the recurrence rate in this
+  window was well beyond normal: 4-5 consecutive failures on an unrelated
+  branch. A concurrent sibling session's own unrelated branch
+  (feature/WF02-REQ209-20260902) hit the identical failure signature in the
+  same time window (multiple failed runs before eventually passing),
+  suggesting the CI runner was under real resource contention from the
+  number of simultaneously-active sibling sessions each pushing their own
+  PRs/reruns during this period, rather than each occurrence being an
+  independent, unrelated coincidence.
+  PR #795 was eventually merged via admin override (user-authorized) after
+  structural diff attribution (confirmed zero file overlap with any
+  wasm_hang-tagged test) and a parallel push-triggered CI run on the
+  identical commit passing clean once.
+  Filing this as a distinct data point on ISS-0352's own recurrence pattern
+  -- worth investigating whether the wasm_hang isolated-subprocess
+  mechanism has a resource-contention sensitivity (CPU/memory pressure from
+  many concurrent CI runners) that the existing ISS-0352 documentation
+  doesn't yet capture, separate from the flake's baseline single-run timing
+  sensitivity.
+affected_files:
+  - test/letflow/engine/wasm/plugin_handler_test.exs
+  - test/letflow/engine/wasm/host_api_write_test.exs
+related:
+  - ISS-0352
+  - REQ-213
+source: >
+  PR #795 CI runs 33587840358 (3 failed reruns) and 33592693185 (1 more
+  failed run post-rebase), all showing the main suite passing (3053-3054/
+  3054) with only the isolated wasm_hang subset failing (6/7).
+queue_task_id: 406
+github_issue: 797
+status: open

@@ -86,6 +86,33 @@ defmodule Letflow.TenantSchemaReaper do
   exactly as ISS-0110 specified. Likewise a genuinely nested invocation inside a
   `test_parallel.sh` run (ISS-0107's scenario) carries no group tag of its own, so it
   never matches the parent run's group and still correctly triggers deferral.
+
+  ## ISS-0414 -- a second, independent sweep for orphaned `service_catalog` rows
+
+  `sweep_service_catalog_orphans/1` is this module's second responsibility, added for
+  ISS-0414. See `lib/letflow/design/iss0414-service-catalog-safety-net.md` for the full
+  design and rationale.
+
+  `service_catalog` (`lib/letflow/service_catalog.ex`) is this codebase's only table
+  with no per-tenant-schema `DROP SCHEMA ... CASCADE` fallback -- a row left behind by
+  an interrupted test process (one that never reached its own `on_exit/1`) has no other
+  cleanup mechanism at all. The same suite-boundary argument as `sweep_orphans/2`'s own
+  applies here (before `ExUnit.start()`, and `ExUnit.after_suite/1` -- the two points
+  where "currently active, legitimately, for this invocation" is always the empty set),
+  but simpler: no `service_catalog` row is ever held open for a whole test's duration
+  the way a tenant schema is (every test that creates one deletes it in its own
+  `on_exit/1` -- confirmed by grepping every test file that touches
+  `Letflow.ServiceCatalog`), so there is no in-progress-row race to guard against and no
+  `min_age_seconds`-equivalent parameter -- finding ANY row at a boundary is itself the
+  anomaly, unconditionally.
+
+  This function reuses `current_application_name/1` and
+  `concurrent_invocation_present?/2` verbatim (same private helpers `sweep_orphans/2`
+  uses) rather than duplicating the `pg_stat_activity` check in a second module -- both
+  responsibilities live in this one file so that reuse is a same-module function call,
+  not a new cross-module dependency (design doc §2.2). It follows the identical
+  `try/rescue/after` failure-mode contract: never raises to its caller, restores
+  `Sandbox.mode(repo, :manual)` in an `after` block regardless of outcome.
   """
 
   require Logger
@@ -171,6 +198,77 @@ defmodule Letflow.TenantSchemaReaper do
         )
 
         {:ok, %{reclaimed: 0, skipped_invalid_format: 0}}
+    after
+      Sandbox.mode(repo, :manual)
+    end
+  end
+
+  @doc """
+  Reclaims every `service_catalog` row found at a suite boundary (before
+  `ExUnit.start()`, or in `ExUnit.after_suite/1`) -- but only once it has confirmed
+  (reusing the same ISS-0110/ISS-0217 check `sweep_orphans/2` uses) that no OTHER
+  `mix test` invocation is currently connected to this database at all. If one is, the
+  sweep defers entirely, touching nothing, exactly like `sweep_orphans/2`'s own
+  deferral. See the moduledoc's "ISS-0414" section and
+  `lib/letflow/design/iss0414-service-catalog-safety-net.md` for the full rationale --
+  in particular, why no `min_age_seconds`-equivalent parameter is needed here.
+
+  Never raises to its caller -- an outer failure (the `SELECT`/`DELETE` itself raising,
+  either `Sandbox.mode/2` call raising, or the concurrency check's own query raising) is
+  caught, logged at `:error`, and reported back as `{:ok, %{deleted: 0}}`; only the log
+  output distinguishes that case from a genuinely empty sweep.
+  """
+  @spec sweep_service_catalog_orphans(repo :: module()) ::
+          {:ok, %{deleted: non_neg_integer()}} | {:deferred, :concurrent_invocation}
+  def sweep_service_catalog_orphans(repo \\ Letflow.Repo) do
+    try do
+      Sandbox.mode(repo, :auto)
+
+      own_tag = current_application_name(repo)
+
+      if concurrent_invocation_present?(repo, own_tag) do
+        Logger.info(
+          "TenantSchemaReaper.sweep_service_catalog_orphans/1: deferring this sweep " <>
+            "entirely -- another mix test invocation (application_name != " <>
+            "#{inspect(own_tag)}) is currently connected to this database, and this " <>
+            "sweep has no per-row ownership tracking, so it cannot safely tell that " <>
+            "invocation's still-live service_catalog rows apart from a genuinely " <>
+            "orphaned one (ISS-0414). Retrying on the next boundary sweep."
+        )
+
+        {:deferred, :concurrent_invocation}
+      else
+        %{rows: rows} = repo.query!("SELECT service_id, scope FROM service_catalog")
+
+        case rows do
+          [] ->
+            {:ok, %{deleted: 0}}
+
+          rows ->
+            found =
+              rows
+              |> Enum.map(fn [service_id, scope] -> "#{service_id} (scope=#{scope})" end)
+              |> Enum.join(", ")
+
+            Logger.warning(
+              "TenantSchemaReaper.sweep_service_catalog_orphans/1: found #{length(rows)} " <>
+                "service_catalog row(s) at a suite boundary, where the correct content is " <>
+                "always empty (ISS-0414) -- deleting unconditionally: #{found}"
+            )
+
+            repo.query!("DELETE FROM service_catalog")
+
+            {:ok, %{deleted: length(rows)}}
+        end
+      end
+    rescue
+      exception ->
+        Logger.error(
+          "TenantSchemaReaper.sweep_service_catalog_orphans/1 aborted: " <>
+            Exception.format(:error, exception, __STACKTRACE__)
+        )
+
+        {:ok, %{deleted: 0}}
     after
       Sandbox.mode(repo, :manual)
     end

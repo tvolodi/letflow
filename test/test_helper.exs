@@ -1,5 +1,14 @@
 Letflow.TenantSchemaReaper.sweep_orphans()
 
+# ISS-0414: suite-boundary safety net against leftover `service_catalog` rows -- see
+# lib/letflow/design/iss0414-service-catalog-safety-net.md and
+# Letflow.TenantSchemaReaper's own moduledoc ("ISS-0414" section) for the full
+# rationale. Placed at the same two boundary points sweep_orphans/0 above already
+# uses, since test/test_helper.exs is the one call site every invocation shape this
+# project uses (plain `mix test`, `mix test <path>`, scripts/test_parallel.sh, `mix
+# letflow.check.test`) already loads.
+Letflow.TenantSchemaReaper.sweep_service_catalog_orphans(Letflow.Repo)
+
 # REQ-134: excludes test/letflow/integration/keycloak_auth_pipeline_test.exs
 # (@moduletag :keycloak) from every default invocation -- plain `mix test`, `mix test
 # <path>`, and each scripts/test_parallel.sh partition alike, since all three load this
@@ -23,4 +32,7 @@ Letflow.TenantSchemaReaper.sweep_orphans()
 # `mix test --include wasm_hang test/letflow/engine/wasm/`.
 ExUnit.start(exclude: [:keycloak, :wasm_hang])
 
-ExUnit.after_suite(fn _stats -> Letflow.TenantSchemaReaper.sweep_orphans() end)
+ExUnit.after_suite(fn _stats ->
+  Letflow.TenantSchemaReaper.sweep_orphans()
+  Letflow.TenantSchemaReaper.sweep_service_catalog_orphans(Letflow.Repo)
+end)

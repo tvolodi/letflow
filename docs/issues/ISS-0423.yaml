@@ -192,3 +192,16 @@ adoption_notes:
 # schema is available, ISS-0427's template decides HOW CHEAPLY one is made.
 split_out_to:
   - ISS-0427
+  - ISS-0428
+
+# ── Second scope split, 2026-09-02T18:40:41Z (ORCH-adhoc-20260902) ──
+# `adoption_notes.test_parallel_adoption_point` above describes wiring
+# scripts/test_parallel.sh into Mix.Tasks.Letflow.Check.Test, but no
+# acceptance criterion on THIS issue requires it either -- the same gap
+# that ISS-0427 was split out for. Filed separately:
+#
+#   ISS-0428 (queue task 428, GH#832) -- test_parallel.sh is wired into
+#   docs/agents/workflows/ by REQ-114 but NOT into mix letflow.check,
+#   check.test, mix.exs or ci.yml, so the gate every requirement and CI
+#   actually runs is still plain `mix test`. Carries the ISS-0069
+#   silent-gate-loss hazard and the 2-vCPU CI caveat as its own criteria.

@@ -1,0 +1,104 @@
+id: ISS-0428
+title: "scripts/test_parallel.sh is wired into the agent workflow docs but NOT into mix letflow.check -- the gate every requirement and CI actually runs is still plain `mix test`"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T18:40:41Z"
+severity: MINOR
+tags: [testing, performance, tooling, ci, adoption-gap, s6]
+description: >
+  A real adoption gap, found by checking rather than assuming, in answer
+  to the user asking whether parallel-runner adoption into
+  `mix letflow.check` was covered anywhere. It is not.
+
+  WHAT EXISTS ALREADY:
+    * REQ-113 (done, S4, queue 188 / GH#376) BUILT
+      scripts/test_parallel.sh -- N-way `mix test --partitions N`,
+      per-partition logs, aggregated counts, pool sizing against Postgres
+      max_connections (decision 0009-test-parallel-pool-sizing.md).
+    * REQ-114 (done, S4) WIRED IT IN -- but only into
+      docs/agents/workflows/. Verified: WF-02's Step 4 (TEST-RUNNER) and
+      Step 5 (RELEASE-VALIDATOR), plus WF-04's Step 1 and overview
+      diagram, all now name scripts/test_parallel.sh.
+    * ISS-0352 explicitly listed, as option (b) of its
+      candidate_scope_for_whoever_picks_this_up, "Have CI's mix
+      letflow.check invoke scripts/test_parallel.sh instead of plain mix
+      test". That issue was RESOLVED via option (a) instead (the
+      wasm_hang dedicated-subprocess split). Option (b) was never
+      actioned and is tracked nowhere.
+
+  WHAT IS STILL PLAIN `mix test`: Mix.Tasks.Letflow.Check.Test.run/1
+  (lib/mix/tasks/letflow.check.test.ex:77) calls
+  stream_and_capture("mix", ["test"]). Verified by grep: the string
+  "test_parallel" appears in NO lib/mix/tasks/*.ex, NOT in mix.exs, and
+  NOT in .github/workflows/*.yml. So the ACTUAL gate -- the one
+  `mix letflow.check` runs, the one CI runs, the one every WF-02/WF-03
+  run is blocked on -- never uses the parallel runner. Only agents
+  manually following the workflow prose do.
+
+  MEASURED IMPACT (this host, 16 cores, same commit): plain serial
+  `mix test` = 1805.1 s (3060 passed); `TEST_PARALLEL_N=6
+  scripts/test_parallel.sh` = 616 s wall clock. 2.9x on the developer
+  loop and on any self-hosted runner.
+
+  TWO CONSTRAINTS THAT MAKE THIS NON-TRIVIAL:
+
+  (1) THE ISS-0069 WARNING GATE WOULD SILENTLY STOP GATING. check.test
+  does not merely run the suite: it CAPTURES combined stdout+stderr and
+  fails if the substring "default values for the optional arguments"
+  appears anywhere (ISS-0069 Part 2), then runs a SECOND
+  `mix test --only wasm_hang` subprocess in a fresh BEAM (ISS-0352's own
+  fix). scripts/test_parallel.sh writes each partition's output to its
+  OWN log file under a mktemp dir and prints only aggregated counts to
+  stdout. Point the existing substring check at that aggregated stdout
+  and it finds nothing, forever, without ever failing -- the gate goes
+  permanently green while checking nothing. Any adoption MUST re-point
+  that check at the N per-partition logs and prove it still catches a
+  real occurrence.
+
+  (2) CI GAINS ARE UNPROVEN AND PLAUSIBLY NEGATIVE.
+  .github/workflows/ci.yml runs on ubuntu-latest = 2 vCPU;
+  test_parallel.sh derives N from nproc, so N=2 there and the 2.9x does
+  NOT transfer. ISS-0219 and ISS-0222 already record partitions crashing
+  outright (DBConnection.ConnectionError at ecto.create/migrate,
+  transient too_many_connections) when N exceeds a host's CPU/Postgres
+  budget. And parallel running is precisely what surfaces ISS-0426's
+  wall-clock contention flake, which a 2-vCPU runner would hit harder
+  than the 16-core host that found it. Adopting in CI without measuring
+  on the real runner risks trading a slow-but-green gate for a
+  fast-but-flaky one -- strictly worse in a humanless pipeline.
+
+  SUGGESTED SHAPE, not prescribed: make the runner selectable rather than
+  switched wholesale -- check.test uses the parallel runner when a real
+  signal says it is safe (env var, or derived N above a threshold) and
+  falls back to plain `mix test` otherwise, so the local loop and
+  self-hosted runners get the 2.9x while ubuntu-latest keeps today's
+  known-good behaviour until measured. A decided "local only, CI
+  unchanged" is a perfectly good outcome.
+
+  DEPENDENCY: ISS-0426 (wall-clock flakes under contention) should land
+  first, or any parallel adoption will look intermittently red for
+  reasons unrelated to the change.
+affected_files:
+  - lib/mix/tasks/letflow.check.test.ex
+  - scripts/test_parallel.sh
+  - .github/workflows/ci.yml
+related:
+  - REQ-113
+  - REQ-114
+  - ISS-0352
+  - ISS-0426
+  - ISS-0423
+  - ISS-0219
+  - ISS-0222
+source: >
+  User asked whether adopting scripts/test_parallel.sh into
+  `mix letflow.check` was covered by any requirement or issue. Checked
+  directly: REQ-113/REQ-114 (both done) cover building the script and
+  wiring it into docs/agents/workflows/ only; grep confirms no
+  lib/mix/tasks/, mix.exs or ci.yml reference. ISS-0352 named the
+  check-adoption as option (b) but resolved via option (a). Timings
+  measured in this same session on the same commit.
+queue_task_id: 428
+github_issue: 832
+
+status: open

@@ -28,6 +28,32 @@ This stage is explicitly a correctness gate on S4/S5/S6's combined
 output, not new functionality — it should be scoped after those
 stages, not before.
 
+**`tests/simulation/scenarios/platform/` — confirmed out of scope for this batch
+(REQ-210, verified 2026-09-02).** R-Co's source tree carries 18 platform-level scenario
+files at this path (re-counted directly this session: `platform-agent-artifact-
+resubmit-idempotent.yaml`, `platform-attachment-cross-tenant-probe.yaml`,
+`platform-definition-promotion-approved.yaml`, `platform-definition-promotion-conflict-
+rejected.yaml`, `platform-definition-promotion-rollback.yaml`, `platform-definition-
+type-error-blocked.yaml`, `platform-frontend-guard-selfcheck.yaml`, `platform-instance-
+pin-survives-catalog-change.yaml`, `platform-migration-partial-failure-resume.yaml`,
+`platform-out-of-order-effect-completion.yaml`, `platform-outbox-cap-backpressure.yaml`,
+`platform-partition-retention-drop.yaml`, `platform-renderer-permission-denied-
+surface.yaml`, `platform-sandbox-cross-tenant-probe.yaml`, `platform-template-update-
+conflict-resolution.yaml`, `platform-tenant-branding-applied.yaml`, `platform-tenant-
+switch-cache-isolation.yaml`, `platform-unsafe-migration-rejected.yaml` — 18 files, all
+18 confirmed tagged `platform_workflow: PW-NN` and `company_id: platform`). This is a
+distinct scenario set from the 11 tenant-business scenarios this batch (REQ-206/207/208)
+covers, both in origin (platform-operator/cross-tenant concerns — migration safety,
+outbox backpressure, tenant-isolation probes, promotion/rollback — rather than a single
+tenant's own business workflow) and in scope (it was never named in ORCH's own scoping
+of this batch). It is not silently covered by any of REQ-206/207/208/209's work, and it
+is not silently dropped: it is recorded here as a deliberate, sized-for-its-own-batch
+future follow-up, the same way MVP-1's cancellation and S9's own scoping are recorded as
+explicit decisions elsewhere in this project rather than left implicit
+(`docs/migration/README.md`'s "Requirement expansion" section). No requirement number is
+assigned to this follow-up as of this entry — a future REQ-ANALYST pass should size it
+as its own batch when S7 is revisited or extended.
+
 **REQ-205's harness is not `Letflow.Routers.SimulationTest`.** R-Co's
 `src/api/routes/simulation_test.zig` / `src/simulation/scenario_runner.zig`
 (the source `Letflow.Router`'s own "Deferred routes" table names against
@@ -202,5 +228,75 @@ making new ones.
 
 ## REVIEWER sign-off
 
-(Pending — REQ-210 records this stage's REVIEWER sign-off entry once
-the batch completes.)
+**2026-09-02 (REQ-210, WF02-REQ210-20260902).** S7's initial batch (REQ-205..REQ-210)
+is complete. This entry aggregates REQ-206/207/208/209's findings into one record, per
+REQ-210's own scope — see `lib/letflow/design/req210-s7-parity-report.md` for the full
+26-item aggregate table and finding-to-issue_ref confirmation this entry summarizes.
+
+**What passed.** 6 of 11 tenant-business scenarios ran to a clean `EXECUTED`
+disposition end to end, against real queried state, with no engine defect or missing
+capability in the path: `swiftroute-tenant-onboarding-happy` (api-equivalent
+provisioning), `swiftroute-shipment-high-value-happy` (full CEO co-sign chain),
+`vortex-production-order-above-threshold`, `vortex-supplier-quality-deviation-critical`
+(including its EO-001 audit-event-ordering assertion), `vortex-supplier-quality-
+deviation-false-positive` (confirmed reaching `end-false-positive` specifically), and
+`meridian-regulatory-compliance-review-bafin` (steps 1-3; its own graph never touches a
+`PARALLEL_GATEWAY`, so it did not hit the join-counters defect below). All 15 entries of
+the differential/condition-evaluation regression corpus (REQ-209) evaluated and matched
+their expected results exactly, zero `EXPECTED_UNSUPPORTED`, zero divergences,
+independently re-verified including 5 entries hand-checked against raw CEL semantics.
+
+**What was found broken (real Engine defects, not scenario-authoring gaps).** Three
+genuine, pre-existing Engine defects were surfaced by this batch's real-execution
+discipline (none introduced by S7's own diff — each confirmed pre-existing via
+`git diff main...HEAD` showing zero changes to the implicated files at time of
+discovery) and have SINCE BEEN FIXED, independently of this stage's own scope, before
+this sign-off entry was written: (1) `join_counters: %{}` hardcoded on every
+`complete_task/3` call, preventing any `PARALLEL_GATEWAY` join from firing across two
+separate task-completion HTTP calls — blocked both Meridian loan-origination scenarios'
+committee-vote/quorum/disbursement paths (`ISS-0397`, resolved); (2) `walk_to_gateway/3`
+failing any fork branch containing a multi-outgoing-edge node before reaching its join —
+blocked the Meridian committee scenario's original KYC-routing design (`ISS-0398`,
+resolved); (3) an `Ecto.Multi` `:task_records` key collision when a `SUB_PROCESS` child
+completes synchronously in the same hop-chain transaction — surfaced by Vortex's
+supplier-deviation scenarios (`ISS-0392`, single-child case, resolved; `ISS-0396`,
+2+-sibling case found during (1)'s own close-step, resolved).
+
+**What was deferred to S8.** Every `via: gui` step across all 11 scenarios —
+`swiftroute-tenant-onboarding-happy`'s 5 gui steps chief among them (its own Playwright
+spec file, `web/tests/e2e/pipelines/onboarding-wizard.pipeline.e2e.spec.ts`, is
+confirmed present in `web/` but not yet exercised, since S8's own web/-to-Letflow
+integration work has not started) — recorded `DEFERRED_TO_S8`, never silently skipped
+and never run as a substitute `api` step, per REQ-205's own harness contract.
+
+**What remains genuinely unbuilt or blocked, as of this entry.** (a)
+`swiftroute-shipment-attach-delivery-note` was `UNBUILT_FEATURE` at execution time
+(`ISS-0390`) — since resolved by REQ-211+REQ-212 (both merged), so this gap is now
+closed, though the scenario itself has not been re-run against the shipped attachment
+subsystem; that re-run is not part of REQ-210's own scope and is named as follow-up
+work below. (b) The `POST /api/v1/instances/:id/advance-timer` endpoint remains
+genuinely missing (`ISS-0389`, still open) — it blocks `swiftroute-shipment-ops-
+timeout-escalation`'s step 2 (documented `SKIP`/`MINOR` fallback) and
+`meridian-regulatory-compliance-review-bafin`'s step 4 (`BLOCKED`, no fallback in that
+scenario's own YAML) across two independent tenants, confirming this is a real
+cross-cutting gap rather than one scenario's edge case. (c)
+`vortex-entity-list-filter-and-page` remains `BLOCKED_ON_DEPENDENCY` on
+`Letflow.Routers.Entities`/`EntityQuery` (S5/S6 scope, not yet landed as of this entry
+— already documented in `lib/letflow/router.ex`'s own "Deferred routes" table, not a
+newly discovered gap). (d) Both Meridian loan-origination scenarios' committee-vote,
+quorum-2-of-3, and disbursement paths were never reached during their own original S7
+execution run (truncated by the now-resolved `join_counters` defect) — re-running them
+to actually exercise those paths against the fixed Engine is not part of REQ-210's own
+scope and is named as follow-up work below. (e) `test/fixtures/simulation/
+{swiftroute,vortex,meridian}/scenarios/*.yaml` remain disclosed-synthetic, not
+byte-for-byte ports of R-Co's real scenario corpus (`ISS-0391`/`ISS-0393`, both open,
+confirmed to be the same underlying gap with ISS-0393 carrying the superset scope —
+either can be picked up first, with the other closed as resolved-via-duplicate per
+ISS-0391's own `duplicate_note`).
+
+**Out of scope for this batch.** The 18-file `tests/simulation/scenarios/platform/`
+corpus — see the dedicated note below, in this file's own "Scope" section.
+
+**Correctness-gate assessment.** See `docs/agents/ORCHESTRATOR.md` §8 for the actual
+stage-gate determination; this entry states the factual basis only. Full reasoning:
+`lib/letflow/design/req210-s7-parity-report.md` §5.

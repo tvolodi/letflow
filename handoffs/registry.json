@@ -3915,7 +3915,7 @@
       "started_at": "2026-09-02T07:29:00Z",
       "lock_released_at": "2026-09-02T07:30:30Z",
       "released_lock": true,
-      "last_known_step": "Step Final (ORCH direct action per sizing rule) -- fix implemented and verified, pending PR/merge",
+      "last_known_step": "Step Final -- PR #801 squash-merged to main (84bc3200), queue task 407 released status: done",
       "note": "ISS-0407 (TaskActivation.append_multi_from_existing_records/7's key_disambiguator spec was looser than its real shape). Handled by ORCH directly per docs/agents/ORCHESTRATOR.md Section10's sizing-rule exception: single file, no runtime behavior change, pure @spec tightening from term() | nil to Ecto.UUID.t() | nil."
     }
   ]

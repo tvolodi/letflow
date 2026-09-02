@@ -385,3 +385,30 @@ history:
       released ISS-0402 back to open without status each time rather than
       re-investigating a question already thoroughly diagnosed. Feature
       branch feature/WF02-REQ209-20260902 created from main, pushed.
+
+  - req: REQ-209
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-02T03:45:16Z"
+    note: >
+      WF02-REQ209-20260902 done (queue task 386, GH#758, stage S7).
+      RELEASE-VALIDATOR independently re-verified all 6 acceptance criteria
+      PASS (full suite 3051/3051, mix compile --warnings-as-errors clean),
+      including a byte-diff of the ported 15-entry corpus against real
+      R-Co source and independent manual re-derivation of 5 entries'
+      expected results. Ports R-Co's tests/differential/corpus/conditions_v1.json
+      (15 entries) into test/fixtures/simulation/differential_corpus.json
+      as a regression/golden-value suite for Letflow.Engine.Expr, not a
+      differential one -- Letflow has no second (CEL) implementation to
+      diff against, per expr.ex's own EXP-102/AC11 moduledoc section.
+      One property-style ExUnit test (Enum.reduce/3 loop) iterates all 15
+      entries via translate_cel_to_expr/1 + evaluate; 0 EXPECTED_UNSUPPORTED
+      dispositions (all 15 evaluated-and-matched). No change to expr.ex's
+      grammar or supported-builtin set; test-infrastructure-only diff
+      (new fixture, new test file, design doc, spec, status/handoff
+      bookkeeping -- zero lib/ application code touched).
+      docs/migration/stage-7-simulation-uat-parity.md checked: it
+      references REQ-209 once (line 73), as prose explaining why the
+      corpus is a regression port rather than a differential one -- an
+      explanatory note, not a per-requirement status line item, so no
+      edit was warranted there.

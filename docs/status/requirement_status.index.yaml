@@ -1478,8 +1478,14 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 7
+    entries: 8
     note: >
+      Incremented to 8 by WF02-REQ209-20260902 (DOC-UPDATER)'s own REQ-209
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v8.yaml` = 8 on-disk entries, no
+      rebase conflict on this file. `wc`: 414 lines / 24895 bytes, well
+      under the 1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Incremented to 7 by ORCH's own WF02-REQ209-20260902 started-event
       append (Step 00) -- `grep -c "^  - req:"
       docs/status/requirement_status.v8.yaml` = 7 on-disk entries, no

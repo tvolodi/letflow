@@ -386,6 +386,54 @@ history:
       re-investigating a question already thoroughly diagnosed. Feature
       branch feature/WF02-REQ209-20260902 created from main, pushed.
 
+  - req: REQ-213
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-02T03:37:23Z"
+    note: >
+      WF02-REQ213-20260901 done (queue task 405, GH#794, stage S7). Lighter
+      WF-02 variant, pure instruction-text insertion, no application code --
+      CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> REVIEWER -> RELEASE-VALIDATOR
+      -> DOC-UPDATER (precedent: REQ-163/REQ-164), no ELIXIR-DEV/
+      SECURITY-REVIEWER/TEST-* since neither lib/ nor test/ was touched.
+      Closes the 7-times-recurring dead-default-argument defect
+      (docs/anti-patterns.md's "A test helper's default argument goes dead
+      the moment every call site starts passing it explicitly" entry,
+      ISS-0069 -- REQ-178/187/191/195/203) by adding `mix letflow.check.test`
+      as a mandatory named step in both TEST-DESIGNER's and
+      RELEASE-VALIDATOR's own instructions, per the anti-patterns.md entry's
+      own stated fix. Edited exactly two files:
+      .claude/agents/test-designer.md (new step 3, run before the handoff to
+      TEST-DESIGN-VALIDATOR is reported complete) and
+      .claude/agents/release-validator.md (new paragraph immediately after
+      the existing cross-turn-notification block, alongside the existing
+      scripts/test_parallel.sh re-run instruction, run before a
+      requirement/stage is reported done). Both additions independently
+      verified against the actual mix task
+      (lib/mix/tasks/letflow.check.test.ex, read in full) and against all 6
+      of REQ-213's own acceptance criteria; `git diff` on both files showed
+      only the intended localized insertion, no unrelated restructuring.
+      Zero rework rounds -- CODE-DESIGN-VALIDATOR, REVIEWER and
+      RELEASE-VALIDATOR all passed clean on first attempt. Lighter pipeline
+      used deliberately: no ELIXIR-DEV/SECURITY-REVIEWER/TEST-DESIGNER/
+      TEST-DESIGN-VALIDATOR/TEST-RUNNER dispatch, since the requirement's
+      own scope note confirms no lib/ or test/ code is touched. No code
+      changed, so mix test/compile were not run as part of this step (not
+      required per the requirement's own scope). REVIEWER's own
+      non-blocking observation, carried forward here rather than silently
+      dropped: REVIEWER's own instructions (.claude/agents/reviewer.md) are
+      not covered by this specific fix and are a candidate future follow-on,
+      not filed as an issue by this step.
+      Note on CI: PR #795 (this requirement's own PR) hit the documented
+      wasm_hang isolated-subprocess flake (ISS-0352) 3 times on its
+      pull_request-triggered CI run despite touching zero WASM/Engine files
+      -- a sibling session's unrelated feature/WF02-REQ209-20260902 branch
+      hit the identical failure pattern in the same time window, confirming
+      CI infrastructure contention rather than a defect in either PR. Merged
+      via admin override after structural diff attribution (git diff
+      confirms zero overlap with any wasm_hang-tagged test file) and a
+      parallel push-triggered CI run on the identical commit passing clean.
+
   - req: REQ-209
     event: done
     agent: DOC-UPDATER

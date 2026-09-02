@@ -39,6 +39,23 @@ expected — let the call simply take as long as it takes. See
 `docs/agents/instructions/core-directives.md`'s "No Background Wait For A Cross-Turn
 Notification" (ISS-0213, reinforced under ISS-0223 after this exact role hit the stall
 live).
+
+**Also independently run `mix letflow.check.test`** — not merely
+`scripts/test_parallel.sh` or a targeted `mix test <file>` — before reporting this
+requirement/stage as done. This is a separate, stricter check: Elixir's incremental
+compiler does not always force a fresh warnings-as-errors recompile of an
+already-compiled test module across separate `mix test` invocations within the same
+`_build` cache, so a dead default argument in a test helper (`docs/anti-patterns.md`'s
+"A test helper's default argument goes dead..." entry, ISS-0069 — recurred 7 times, most
+recently REQ-203, where it slipped past two TEST-DESIGN-VALIDATOR passes, two REVIEWER
+passes, and a RELEASE-VALIDATOR pass that ran `mix test <specific files>` and
+`scripts/test_parallel.sh` but not this task) can pass every other local check and still
+ship. `mix letflow.check.test` (`lib/mix/tasks/letflow.check.test.ex`) shells to a fresh
+`mix test` subprocess and greps its captured output for the fixed substring "default
+values for the optional arguments", failing even when the underlying run itself exited
+0. You are the last local checkpoint before a PR's own CI run — quote its real output,
+same as `scripts/test_parallel.sh`'s.
+
 For each requirement claimed `done` (WF-02) or every `done` requirement in the stage
 (WF-04), re-check its `acceptance_criteria` one by one against the actual current code
 and tests, not against what `docs/status/requirement_status.yaml`'s history narrates

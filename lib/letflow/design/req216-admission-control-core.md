@@ -36,18 +36,41 @@ Rejected alternative: a `GenServer` per pool (one process owning the global
 counter, one-per-tenant processes or a `DynamicSupervisor` owning per-tenant
 counters).
 
-Reasoning:
+**Atomicity algorithm (stated once, here, as the single source of truth —
+§8's traceability table for AC3 refers back to this paragraph rather than
+restating or hedging it):** a `{:tenant, schema}` call is handled as ONE
+`handle_call/3` clause that first EVALUATES both admission conditions as a
+pure, read-only computation against the current state — `global_in_use <
+global_cap` AND `tenant.in_use < per_tenant_cap` — WITHOUT mutating
+`global_in_use`, the tenant's `in_use`, or `refs` yet. Only if BOTH
+conditions hold does the same `handle_call/3` clause then mutate BOTH
+counters (increment `global_in_use`, increment the tenant's `in_use`) and
+insert the new ref into `refs`, all in that one callback invocation before
+returning `{:ok, ref}`. If either condition is false, the clause returns
+`{:error, :capacity}` immediately with ZERO mutation of any counter or of
+`refs` — neither counter was ever incremented, so **there is no rollback
+step anywhere in this design**: nothing is ever provisionally granted and
+then undone. (This design deliberately rejects the alternative two-phase
+"grant the per-tenant slot, then check global, then roll back the per-tenant
+grant if global fails" sequence — that shape is strictly more complex than
+check-both-then-mutate-both for no additional correctness benefit, since
+single-process atomicity already makes the read of both conditions and the
+mutation of both counters indivisible within one `handle_call/3`; a rollback
+step would only be needed if some observer could see the per-tenant grant
+before the global check ran, which cannot happen when both conditions are
+evaluated before either counter is touched.) This same order applies
+identically to `:global` calls, minus the per-tenant half of the condition.
+
+Reasoning for the single-process shape that makes this possible:
 
 - AC3 requires a `{:tenant, schema}` acquisition to check AND decrement
-  (`:global` cap and per-tenant cap) as a single atomic unit: succeed at the
-  per-tenant gate but fail at the global gate must roll back the per-tenant
-  grant with no observable window in which the per-tenant slot is held but
-  the global slot is not (and vice versa is impossible, since the global gate
-  is checked in the same admission decision). Two separate processes checking
-  two counters cannot make this atomic without a second coordination
-  mechanism (a lock, a two-phase commit, or funnelling one call through the
-  other) — which would just relocate the single serialization point this
-  design already gets for free from one `GenServer`'s mailbox.
+  (`:global` cap and per-tenant cap) as a single atomic unit, with no
+  observable window in which one counter reflects the grant and the other
+  does not. Two separate processes checking two counters cannot make this
+  atomic without a second coordination mechanism (a lock, a two-phase
+  commit, or funnelling one call through the other) — which would just
+  relocate the single serialization point this design already gets for free
+  from one `GenServer`'s mailbox.
 - `Letflow.SandboxPool` (REQ-039/ISS-0224, read in full) is itself prior art
   for exactly this reasoning: it is one process precisely because two callers
   racing for the last slot must never both win, and a single mailbox is what
@@ -189,6 +212,33 @@ changes — is what makes AC5's requirement (the cap recomputes as the tracked
 set changes) true by construction, with no second code path that could let a
 cached value drift out of sync with the live tenant count.
 
+**Invariant: recomputed caps gate only FUTURE decisions, never retroactively
+revoke an already-held admission.** Because the per-tenant cap is derived
+fresh on every `{:tenant, _}` `try_acquire/1` call rather than stored, the
+divisor (`map_size(tenants)`) can grow between two admissions held by the
+SAME tenant, shrinking that tenant's computed share below its current
+`in_use` count — e.g. tenant A holds 3 refs under a 3-tenant/10-cap split
+(`floor(10/3) = 3`); a 4th tenant then makes its own first attempt, and A's
+NEXT computed cap is `floor(10/4) = 2`, one below A's current `in_use`. This
+design states explicitly: a newly-recomputed cap is consulted ONLY at the
+moment of a NEW `try_acquire/1` decision for that tenant — it is never
+compared against, and never used to forcibly revoke, close, or invalidate,
+any `admission_ref()` issued under a previously-larger cap. Concretely:
+there is no mechanism anywhere in this design that walks `refs` after a
+recomputation and releases entries to bring a tenant back under its new
+cap, no error raised on that holder's own eventual `release/1` call (§2.1's
+ordinary idempotent-release rule applies to it exactly as to any other ref,
+with no "was this cap exceeded when issued" check), and no forced-release
+message sent to the holder's process. A tenant already sitting over its
+newly-shrunk share simply cannot successfully call `try_acquire/1` again
+(the `in_use < per_tenant_cap` condition in §1 evaluates false for it) until
+enough of its own `release/1` calls bring `in_use` back under the new,
+smaller cap — but every ref it already holds remains valid and freely
+releasable for its full natural lifetime. This is a deliberate design
+property (fairness is enforced prospectively, on new admission decisions
+only, never by retroactively clawing back a grant already made), not an
+unconsidered gap.
+
 ## 3. Lazy tenant-entry creation and unbounded-growth handling
 
 **Creation:** a `{:tenant, schema}` entry is created in `state.tenants` the
@@ -242,6 +292,33 @@ mechanism. Recorded as Open Question OQ-2 (§9): a real cardinality bound
 (time-windowed eviction, or an LRU cap on `map_size(state.tenants)`) is left
 for a follow-up requirement if unbounded growth is later observed to matter
 in practice.
+
+**This is a self-acknowledged narrowing of REQ-216's own requirement text,
+not a pre-existing exclusion the requirement text itself already carved
+out** (unlike OQ-5/tier-weighting, which ISS-0431's own decision text names
+as out of scope in its own words). The requirement text's decision-2
+paragraph explicitly says per-tenant tracking is scoped to "tenants that
+have made an admission attempt in a ROLLING WINDOW," and this design
+knowingly implements a permanent-retention approximation instead (§3
+above) with no time-decay mechanism at all. Per
+`docs/agents/instructions/core-directives.md`'s "No Issue Left Local-Only"
+rule, a self-acknowledged scope-narrowing like this may not be left as a
+design-doc-only Open Question with no further tracking — CODE-DESIGNER
+does not have the authority to register a queue/GitHub issue directly
+(`docs/agents/protocols/ISSUE_QUEUE.md` reserves `register_task` to ORCH).
+**This finding is therefore being reported to ORCH in this rework's
+handoff (`result.summary`) for `register_task` issue registration** —
+title/description/severity/affected-files to be filed as: "REQ-216's
+`Letflow.Admission` design implements permanent per-tenant-entry retention
+instead of the requirement text's own 'rolling window' semantics; no
+time-decay/eviction exists," severity minor (bounded by administratively-
+controlled tenant cardinality per §3's reasoning, not attacker- or
+request-volume-controlled), affected file
+`lib/letflow/design/req216-admission-control-core.md` (and, once
+implemented, `lib/letflow/admission.ex`). OQ-2 below records the technical
+open question for ELIXIR-DEV/a future requirement; this paragraph records
+that the SAME finding is also being escalated to ORCH as required by
+core-directives.md, so it does not stay local-only to this design doc.
 
 ## 4. Supervision-tree placement
 
@@ -373,7 +450,7 @@ does not survive a restart), for the same class of reason:
 |---|---|
 | AC1: `:global` admits up to `pool_size - reserved_headroom`, rejects beyond, both read from config, cap changes with `pool_size` override | §6 config surface; §2.2 `global_cap` computed once at `init/1` from `Application.fetch_env!(:letflow, Letflow.Repo)[:pool_size]` and `reserved_headroom` |
 | AC2: per-tenant cap enforced independently — A's exhaustion doesn't block B | §2.2 `tenants` map keyed by schema, each with its own `in_use`; §1 single-process atomicity keeps A's and B's counters independent within one admission decision |
-| AC3: `{:tenant, _}` also gated by the SAME global cap — a fresh tenant is rejected once global is exhausted despite zero per-tenant usage | §1 (why one process makes this atomic); §2.2 `global_in_use`/`global_cap` checked unconditionally on every `{:tenant, _}` call before/alongside the per-tenant check |
+| AC3: `{:tenant, _}` also gated by the SAME global cap — a fresh tenant is rejected once global is exhausted despite zero per-tenant usage | §1's atomicity algorithm paragraph: both conditions evaluated before either counter mutates; `global_in_use < global_cap` is checked unconditionally on every `{:tenant, _}` call as part of that same read-only evaluation, so exhausted global capacity rejects regardless of the tenant's own headroom |
 | AC4: `release/1` frees exactly one global unit and (for `{:tenant, _}`) one per-tenant unit | §2.1 `admission_ref()` carries `pool` so `release/1` knows exactly which counter(s) to decrement; §2.2 `refs` map is the authoritative membership set |
 | AC5: per-tenant cap = floor(global_cap / tracked_tenant_count), floor 1 (10/3→3, 2/5→1) | §2.2 per-tenant cap derivation: global cap divided (integer division) by the tracked-tenant count, floored at 1, recomputed fresh on every call, never cached |
 | AC6: `Letflow.Admission` present in `Letflow.Application`'s supervision tree; moduledoc states ordering dependency (or none) | §4 — child spec `{Letflow.Admission, []}`, explicit "no ordering dependency" statement and reasoning to appear verbatim in the module's `@moduledoc` |
@@ -390,7 +467,15 @@ does not survive a restart), for the same class of reason:
 - **OQ-2:** `state.tenants` entries for schemas that stop attempting
   admission are never evicted (§3) — a real time-windowed or LRU eviction
   mechanism is not implemented. Left open pending evidence this matters in
-  practice, given the low-cardinality bound described in §3.
+  practice, given the low-cardinality bound described in §3. UNLIKE OQ-1,
+  OQ-3, and OQ-4 below, this is a self-acknowledged NARROWING of REQ-216's
+  own requirement text (its decision-2 paragraph's "rolling window"
+  language), not a pre-existing exclusion the requirement text itself
+  already stated — per core-directives.md's "No Issue Left Local-Only," it
+  is being escalated to ORCH in this handoff's `result.summary` for
+  `register_task` issue registration (see §3's full escalation paragraph for
+  the proposed title/description/severity); it is not left as a design-doc-
+  only note.
 - **OQ-3:** a crash of `Letflow.Admission` forgets all in-flight admissions
   (§5) rather than persisting/reconciling them. Left open pending evidence
   that repeated crashes under load cause meaningful sustained

@@ -460,3 +460,56 @@ history:
       corpus is a regression port rather than a differential one -- an
       explanatory note, not a per-requirement status line item, so no
       edit was warranted there.
+
+  - req: REQ-210
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-02T09:43:51Z"
+    note: >
+      WF02-REQ210-20260902 done (queue task 387, GH#759, stage S7). Closes
+      S7's initial 6-requirement batch (REQ-205..REQ-210). Applied
+      CODE-DESIGNER's already-validated design
+      (lib/letflow/design/req210-s7-parity-report.md, passed CODE-DESIGN-
+      VALIDATOR/REVIEWER/RELEASE-VALIDATOR clean) to
+      docs/migration/stage-7-simulation-uat-parity.md: (1) REPLACED the
+      REVIEWER sign-off section's placeholder with a dated entry (verified
+      via git diff --numstat: 98 insertions / 2 deletions on this file,
+      confirming genuine replacement of the 2-line placeholder, not an
+      append-alongside); (2) added the 18-file
+      tests/simulation/scenarios/platform/ corpus as an explicit
+      out-of-scope/future-follow-up note in the Scope section. The 26-item
+      aggregate table (AC1) and finding-to-issue_ref confirmation table
+      (AC2) live in the design artefact itself
+      (lib/letflow/design/req210-s7-parity-report.md sections 1-2) per
+      this project's own established convention for report-only
+      requirements (REQ-164's decision content likewise lives in its own
+      lib/letflow/design/ artefact, not a separate docs/status/ or
+      test/reports/ file) -- no new file created, since the pre-validated
+      design doc already IS the deliverable content.
+      Aggregate findings: 4 real Engine defects found and resolved during
+      this batch (ISS-0392, ISS-0396, ISS-0397, ISS-0398). 2 Meridian
+      scenarios (loan-origination above/below threshold) and 1 SwiftRoute
+      scenario (attach-delivery-note) have fixed blockers but no confirmed
+      re-run yet -- a real, disclosed verification gap, stated explicitly
+      in the new sign-off entry rather than glossed over. ISS-0389
+      (advance-timer endpoint) remains open, blocking 2 tenant batches
+      (SwiftRoute step 2 SKIP fallback; Meridian BaFin step 4 hard BLOCKED).
+      The document-attachment subsystem gap (ISS-0390) is fully closed via
+      REQ-211/REQ-212 (both merged). The platform/ corpus (18 files) is
+      named as an explicit, deliberate future follow-up in both the Scope
+      section and the sign-off entry -- not silently dropped, no
+      requirement number assigned yet.
+      The gate-status assessment in the new sign-off entry ("Correctness-
+      gate assessment") is stated as a factual report only, explicitly
+      deferring the actual stage-gate determination to
+      docs/agents/ORCHESTRATOR.md §8 / ORCH+RELEASE-VALIDATOR -- DOC-UPDATER
+      does not declare S7's gate cleared or blocked here; ORCH still needs
+      to weigh this report and decide next.
+      docs/migration/README.md checked for a stage-tracking table needing
+      an S7 count/status update: none exists (README.md's own migration-
+      status pointer and docs/migration/README.md's own stage breakdown
+      contain no per-requirement-count tracking table to update -- S7's
+      status lives in stage-7-simulation-uat-parity.md itself, which this
+      entry already updates). No mix test/compile run: no lib/ or test/
+      code touched by this step (docs-only), matching REQ-210's own scope
+      declaration.

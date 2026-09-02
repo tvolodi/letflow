@@ -11922,7 +11922,7 @@ requirements:
   - id: REQ-210
     title: S7 stage-level parity report -- aggregate findings across REQ-206..209, file every open gap, and record the stage's REVIEWER sign-off entry
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S7
     impl_order: 387  # letflow-queue task id, GH#759
     description: >

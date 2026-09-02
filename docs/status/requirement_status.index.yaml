@@ -1478,8 +1478,16 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 9
+    entries: 10
     note: >
+      Incremented to 10 by WF02-REQ210-20260902 (DOC-UPDATER)'s own REQ-210
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v8.yaml` = 10 on-disk entries, no
+      rebase conflict on this file at the time it was written. `wc`: 515
+      lines / 31322 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Closes S7's initial 6-requirement
+      batch (REQ-205..REQ-210 all done).
+
       Incremented to 9 by ORCH's Step-Final rebase of
       feature/WF02-REQ213-20260902 onto main, which by then included a
       concurrent sibling session's WF02-REQ209-20260902 run (2 entries:

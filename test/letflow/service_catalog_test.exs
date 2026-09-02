@@ -764,7 +764,12 @@ defmodule Letflow.ServiceCatalogTest do
     # already discipline themselves to delete every row they create -- so the
     # fix is this describe block asserting its own precondition (an empty
     # table) rather than assuming it, per `test_developer_guide.md` §1's "No
-    # test pollution" / "doesn't depend on execution order" directive.
+    # test pollution" / "doesn't depend on execution order" directive. Each
+    # test below also cleans up its own created entries via `on_exit/1`
+    # (this file's own established discipline, see `cleanup_entry!/1`) so this
+    # describe block cannot become the NEXT run's source of stray rows --
+    # the `setup`-time wipe alone only guards against rows already left by a
+    # crashed prior run; it does not stop these tests from leaving new ones.
     setup do
       Repo.delete_all(Entry)
       :ok
@@ -772,6 +777,7 @@ defmodule Letflow.ServiceCatalogTest do
 
     test "next_cursor is non-nil while more rows remain, and nil on the final page" do
       entries = for _ <- 1..3, do: register!(%{scope: :global})
+      on_exit(fn -> Enum.each(entries, &cleanup_entry!(&1.service_id)) end)
       expected_ids = entries |> Enum.map(& &1.service_id) |> Enum.sort()
 
       assert {:ok, %{items: page1, next_cursor: cursor1}} =
@@ -792,6 +798,7 @@ defmodule Letflow.ServiceCatalogTest do
 
     test "next_cursor is nil on the first page when the full result set fits within page_size" do
       entry = register!(%{scope: :global})
+      on_exit(fn -> cleanup_entry!(entry.service_id) end)
 
       assert {:ok, %{items: items, next_cursor: nil}} = ServiceCatalog.list_all(%{page_size: 200})
       assert entry.service_id in Enum.map(items, & &1.service_id)
